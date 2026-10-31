@@ -1,0 +1,67 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <meta name="theme-color" content="#f4f6fb" />
+  <meta name="description" content="StudioKit：轻量、离线优先的浏览器单页工具集合。" />
+  <link rel="icon" href="./favicon.svg" type="image/svg+xml" />
+  <link rel="stylesheet" href="./shared/site.css" />
+  <title>StudioKit — Browser Tools</title>
+  <script src="./shared/home.js" defer></script>
+</head>
+<body>
+  <div class="studiokit-home">
+    <header class="sk-header">
+      <div class="sk-container sk-header-inner">
+        <span class="sk-brand-mark" aria-hidden="true"></span>
+        <div class="sk-brand-name"><strong>StudioKit</strong><span>PERSONAL BROWSER TOOLS</span></div>
+        <nav class="sk-header-links" aria-label="主导航">
+          <a href="#tools">工具</a>
+          <a href="#about">关于</a>
+        </nav>
+      </div>
+    </header>
+
+    <main class="sk-container">
+      <section class="sk-hero">
+        <div class="sk-eyebrow">A small toolkit for everyday making</div>
+        <h1>Small tools.<br /><span>Thoughtfully made.</span></h1>
+        <p class="sk-hero-copy">把常用的小工具放在一起。每个工具保持轻量、独立、开箱即用；尽可能在浏览器本地完成处理，不依赖账号和自建服务器。</p>
+        <div class="sk-hero-meta">
+          <span class="sk-meta-pill">无需账号</span>
+          <span class="sk-meta-pill">本地优先</span>
+          <span class="sk-meta-pill">单页 HTML</span>
+          <span class="sk-meta-pill">GitHub Pages</span>
+        </div>
+      </section>
+
+      <section id="tools" aria-labelledby="tools-title">
+        <div class="sk-section-head">
+          <div><h2 id="tools-title">工具箱</h2><p>独立工具，统一入口</p></div>
+          <p data-registry-status>正在读取工具列表…</p>
+        </div>
+        <div class="sk-tool-grid" data-tool-grid aria-live="polite"></div>
+      </section>
+
+      <section id="about" class="sk-about">
+        <div>
+          <h2>独立，而不是堆叠</h2>
+          <p>每个工具都保留自己的 HTML、状态和版本。共享层只提供门户、导航与少量通用规范，避免一个工具的迭代牵连其他工具。</p>
+        </div>
+        <div>
+          <h2>本地优先</h2>
+          <p>工具默认在浏览器中处理文件。GitHub Pages 只负责分发网页，不接收或保存你的编辑内容。需要迁移的数据由各工具提供显式导入 / 导出。</p>
+        </div>
+      </section>
+    </main>
+
+    <footer class="sk-footer">
+      <div class="sk-container sk-footer-inner">
+        <span>STUDIOKIT · PERSONAL TOOLBOX</span>
+        <span>Static by design · No account · No backend</span>
+      </div>
+    </footer>
+  </div>
+</body>
+</html>

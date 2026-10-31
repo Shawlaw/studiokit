@@ -1,0 +1,33 @@
+{
+  "schemaVersion": 1,
+  "tools": [
+    {
+      "id": "badge-studio",
+      "name": "Badge Studio",
+      "subtitle": "同心圆徽章工作台",
+      "description": "弧形文字排版、多方案管理、实时对比，以及透明 PNG / SVG 导出。",
+      "version": "2.2.1",
+      "status": "available",
+      "href": "./apps/badge-studio/",
+      "icon": "◎",
+      "tags": [
+        "设计",
+        "SVG",
+        "PNG"
+      ]
+    },
+    {
+      "id": "rounded-image",
+      "name": "Rounded Image",
+      "subtitle": "圆角图片编辑器",
+      "description": "预留给图片圆角、预览和导出工具；原始规格尚待恢复或重新定义。",
+      "version": "",
+      "status": "planned",
+      "icon": "▧",
+      "tags": [
+        "图片",
+        "导出"
+      ]
+    }
+  ]
+}

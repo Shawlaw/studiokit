@@ -1,0 +1,1538 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <meta name="description" content="纯前端同心圆徽章工作台：弧形文字、五区独立样式、吸附、阴影光泽、透明 PNG、SVG 和多方案叠加比较。" />
+  <meta name="theme-color" content="#ffffff" />
+  <link rel="stylesheet" href="../../shared/site.css" />
+  <script src="../../shared/site-shell.js" defer></script>
+  <title>同心圆徽章工作台 · Badge Studio</title>
+  <style>
+    :root{
+      --bg:#f5f7fb; --panel:#fff; --border:#d8deea; --text:#1f2937; --muted:#6b7280; --accent:#243B6B;
+      --chip:#eef3ff; --danger:#b42318;
+    }
+    *{box-sizing:border-box}
+    body{margin:0;font-family:system-ui,-apple-system,BlinkMacSystemFont,"Segoe UI",sans-serif;background:var(--bg);color:var(--text)}
+    .page{display:grid;grid-template-columns:420px 1fr;gap:18px;padding:18px;min-height:100vh}
+    .panel,.card{background:var(--panel);border:1px solid var(--border);border-radius:16px;box-shadow:0 8px 24px rgba(20,28,45,.06)}
+    .panel{padding:16px;overflow:auto;max-height:calc(100vh - 36px)}
+    .card{padding:16px}
+    h1{font-size:22px;margin:0 0 8px}
+    h2{font-size:16px;margin:0 0 12px}
+    h3{font-size:14px;margin:0 0 8px}
+    .subtitle,.hint{font-size:13px;line-height:1.5;color:var(--muted)}
+    .section{border-top:1px solid #eef1f6;padding-top:16px;margin-top:16px}
+    .section:first-of-type{border-top:0;padding-top:0;margin-top:0}
+    .grid{display:grid;grid-template-columns:1fr 1fr;gap:12px}
+    .field{display:flex;flex-direction:column;gap:6px;margin-bottom:12px}
+    .field label{font-size:13px;font-weight:700}
+    .field small{font-size:12px;color:var(--muted);line-height:1.45}
+    input[type=text],input[type=number],select,textarea{width:100%;padding:10px 12px;border:1px solid var(--border);border-radius:10px;font:inherit;background:#fff;color:inherit}
+    textarea{resize:vertical;min-height:70px}
+    input[type=color]{width:48px;height:38px;padding:0;border:1px solid var(--border);border-radius:10px;background:#fff}
+    input[type=range]{width:100%;accent-color:var(--accent)}
+    input[type=file]{width:100%}
+    .inline{display:flex;align-items:center;gap:10px}
+    .grow{flex:1}
+    .value-badge,.mono{font-family:ui-monospace,SFMono-Regular,Menlo,Consolas,monospace}
+    .value-badge{font-size:12px;color:var(--muted);min-width:64px;text-align:right}
+    .buttons{display:flex;flex-wrap:wrap;gap:10px}
+    button{border:0;border-radius:10px;padding:10px 14px;font:inherit;font-weight:700;cursor:pointer}
+    button.primary{background:var(--accent);color:#fff}
+    button.secondary{background:#eef3ff;color:#163057}
+    button.ghost{background:#f5f7fb;color:var(--text)}
+    button.danger{background:#fee4e2;color:var(--danger)}
+    button:disabled{opacity:.45;cursor:not-allowed}
+    .toolbar{display:flex;flex-wrap:wrap;align-items:center;gap:10px;justify-content:space-between}
+    .toolbar .buttons{flex-wrap:wrap}
+    .preview-wrap{border:1px dashed #cad3e4;border-radius:14px;overflow:auto;background:
+      linear-gradient(45deg,#eef2f8 25%,transparent 25%),
+      linear-gradient(-45deg,#eef2f8 25%,transparent 25%),
+      linear-gradient(45deg,transparent 75%,#eef2f8 75%),
+      linear-gradient(-45deg,transparent 75%,#eef2f8 75%);
+      background-size:28px 28px;background-position:0 0,0 14px,14px -14px,-14px 0;
+      min-height:430px;padding:20px;display:flex;align-items:center;justify-content:center}
+    #mainPreview{width:min(100%,760px);aspect-ratio:1/1;display:flex;align-items:center;justify-content:center}
+    #mainPreview svg{width:100%;height:auto;display:block}
+    .scheme-list{display:flex;flex-direction:column;gap:8px}
+    .scheme-item{border:1px solid var(--border);border-radius:12px;padding:10px;background:#fbfcfe}
+    .scheme-row{display:grid;grid-template-columns:auto 1fr auto;gap:8px;align-items:center}
+    .scheme-item.active{border-color:#b8c7ea;background:#f7faff}
+    .chip{display:inline-flex;align-items:center;gap:6px;font-size:12px;padding:4px 8px;border-radius:999px;background:var(--chip);color:#24406b}
+    .region-tabs{display:flex;flex-wrap:wrap;gap:8px;margin-bottom:12px}
+    .region-tab{padding:8px 12px;border-radius:999px;background:#f5f7fb;border:1px solid var(--border);cursor:pointer;font-size:13px;font-weight:700}
+    .region-tab.active{background:var(--chip);border-color:#bbcaec;color:#163057}
+    .mini-grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(220px,1fr));gap:14px}
+    .mini-card{border:1px solid var(--border);border-radius:14px;background:#fff;overflow:hidden}
+    .mini-head{display:flex;justify-content:space-between;align-items:center;padding:10px 12px;border-bottom:1px solid #edf1f6;font-size:13px}
+    .mini-body{padding:12px;background:
+      linear-gradient(45deg,#eef2f8 25%,transparent 25%),
+      linear-gradient(-45deg,#eef2f8 25%,transparent 25%),
+      linear-gradient(45deg,transparent 75%,#eef2f8 75%),
+      linear-gradient(-45deg,transparent 75%,#eef2f8 75%);
+      background-size:22px 22px;background-position:0 0,0 11px,11px -11px,-11px 0}
+    .mini-body svg{width:100%;display:block}
+    .overlay-wrap{position:relative;min-height:360px;border:1px dashed #cad3e4;border-radius:14px;overflow:hidden;background:
+      linear-gradient(45deg,#eef2f8 25%,transparent 25%),
+      linear-gradient(-45deg,#eef2f8 25%,transparent 25%),
+      linear-gradient(45deg,transparent 75%,#eef2f8 75%),
+      linear-gradient(-45deg,transparent 75%,#eef2f8 75%);
+      background-size:28px 28px;background-position:0 0,0 14px,14px -14px,-14px 0}
+    .overlay-layer{position:absolute;inset:0;display:flex;align-items:center;justify-content:center;mix-blend-mode:multiply;pointer-events:none}
+    .overlay-layer svg{width:min(100%,760px);height:auto}
+    .handle{cursor:move}
+    .notice{padding:10px 12px;border:1px solid #dfe7f5;background:#f7faff;border-radius:12px;font-size:13px;line-height:1.5;color:#24406b}
+    .footer-meta{font-size:12px;color:var(--muted)}
+    .two-col{display:grid;grid-template-columns:1fr 1fr;gap:16px}
+    @media (max-width:1080px){.page{grid-template-columns:1fr}.panel{max-height:none}.two-col{grid-template-columns:1fr}}
+
+    /* Release layout: independent settings rail + focused working area */
+    :root { --bg:#f3f5fa; --panel:#fff; --border:#e1e5ed; --text:#1d2940; --muted:#67758a; --accent:#254779; --chip:#eff3fa; }
+    html{scroll-behavior:smooth}
+    body{min-width:320px}
+    .site-header{height:72px;display:flex;align-items:center;gap:12px;padding:0 24px;background:#fff;border-bottom:1px solid var(--border)}
+    .brand-mark{width:39px;height:39px;border:6px solid #254779;border-radius:50%;position:relative;flex:none}
+    .brand-mark span{position:absolute;inset:9px;border-radius:50%;background:#254779}
+    .brand-copy{display:flex;gap:2px;flex-direction:column;line-height:1.2}
+    .brand-copy strong{font-size:16px;letter-spacing:.1px}
+    .brand-copy span{font-size:12px;color:var(--muted)}
+    .brand-copy small{font-size:10px;background:#edf2fb;border-radius:5px;padding:2px 5px;margin-left:5px;color:#254779}
+    .site-meta{display:flex;align-items:center;gap:20px;margin-left:auto;font-size:12px}
+    .site-meta a{color:#254779;text-decoration:none}
+    .privacy-indicator{color:#39705c}
+    .page{display:grid;grid-template-columns:minmax(350px,418px) minmax(0,1fr);gap:16px;min-height:calc(100vh - 72px - var(--studiokit-shellbar-h, 0px));padding:16px;align-items:start}
+    .panel{height:calc(100vh - 104px - var(--studiokit-shellbar-h, 0px));max-height:none;overflow-y:auto;overscroll-behavior:contain;scrollbar-gutter:stable;padding:18px;scroll-padding-top:20px}
+    .panel h1{font-size:20px;margin-bottom:5px}
+    .panel h2{font-size:15px}
+    .section{scroll-margin-top:18px}
+    .section h2{margin-bottom:12px}
+    .control-nav{position:sticky;top:-18px;z-index:8;display:flex;flex-wrap:wrap;gap:6px;padding:12px 0;background:#fff;border-bottom:1px solid #edf0f5;margin-bottom:10px}
+    .control-nav a{padding:6px 9px;border-radius:7px;background:#f1f4f8;font-size:12px;color:#47566e;text-decoration:none}
+    .control-nav a:hover{background:#e4ebf6;color:var(--accent)}
+    .field input[type=range]{min-width:0;flex:1}
+    .field input[type=number]{min-width:0}
+    input[type=text],input[type=number],select,textarea{min-width:0;max-width:100%;font-size:13px;line-height:1.3}
+    .scheme-row{grid-template-columns:20px minmax(0,1fr) auto}
+    .scheme-item{background:#fff}
+    .buttons button{font-size:12px}
+    button, .region-tab{transition:background-color .14s ease,border-color .14s ease,box-shadow .14s ease}
+    button:hover:not(:disabled){filter:brightness(.96)}
+    button:focus-visible,input:focus-visible,textarea:focus-visible,select:focus-visible,a:focus-visible{outline:2px solid #668ed3;outline-offset:2px}
+    .workspace{position:sticky;top:16px;height:calc(100vh - 104px - var(--studiokit-shellbar-h, 0px));overflow-y:auto;overflow-x:hidden;min-width:0;background:var(--panel);border:1px solid var(--border);border-radius:16px;box-shadow:0 8px 24px rgba(20,28,45,.06);padding:20px;scrollbar-gutter:stable}
+    .workspace-top{display:flex;align-items:center;justify-content:space-between;gap:14px;border-bottom:1px solid #e9edf3;padding-bottom:15px;margin-bottom:16px;flex-wrap:wrap}
+    .workspace-title{display:flex;flex-direction:column;gap:4px;min-width:160px}
+    .workspace-title strong{font-size:18px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;max-width:360px}
+    .workspace-title span{font-size:12px;color:var(--muted)}
+    .workspace-tabs{display:flex;gap:4px;background:#f1f4f8;padding:4px;border-radius:11px}
+    .workspace-tabs button{padding:9px 14px;background:transparent;color:#6b7890;font-size:13px;border-radius:8px}
+    .workspace-tabs button.active{background:#fff;color:#1f3c6e;box-shadow:0 1px 5px rgba(17,45,86,.10)}
+    .workspace-view{display:none;min-width:0}
+    .workspace-view.active{display:block}
+    .preview-toolbar{display:flex;align-items:center;justify-content:space-between;gap:12px;flex-wrap:wrap;margin-bottom:12px}
+    .preview-description{font-size:12px;line-height:1.6;color:var(--muted)}
+    .editor-actions{align-items:center}
+    .editor-actions .chip input{margin-right:7px}
+    .preview-wrap{min-height:0;padding:14px;max-height:calc(100vh - 290px);overflow:auto;aspect-ratio:1/1;width:min(100%,min(720px,calc(100vh - 290px)));margin:auto}
+    #mainPreview{width:100%;height:100%;aspect-ratio:1;min-width:0}
+    .workspace-footnote{font-size:12px;color:var(--muted);line-height:1.6;margin:12px 0 0}
+    .layout-warnings{font-size:12px;margin-top:12px;line-height:1.5;color:#9a5b1b}
+    .layout-warnings:empty{display:none}
+    .view-heading{display:flex;align-items:center;justify-content:space-between;gap:10px;flex-wrap:wrap;margin-bottom:10px}
+    .view-heading h2{margin:0}
+    .view-heading label{font-size:12px}
+    .mini-grid{grid-template-columns:repeat(auto-fit,minmax(220px,1fr))}
+    .mini-body{aspect-ratio:1}
+    .overlay-wrap{width:min(100%,720px);aspect-ratio:1;min-height:0;margin:auto}
+    .overlay-layer svg{width:100%;max-width:none}
+    .handle{touch-action:none;cursor:grab}
+    .handle:active{cursor:grabbing}
+    .handle circle:first-child{stroke-width:2.5}
+    .hint{line-height:1.6}
+    .footer-meta{line-height:1.6}
+    .section .notice{margin-top:10px}
+    .private-help{font-size:12px;color:var(--muted)}
+    @media(max-width:1080px){
+      .page{grid-template-columns:1fr}
+      .workspace{position:static;height:auto;overflow:visible;order:-1}
+      .panel{height:auto;overflow:visible;max-height:none}
+      .preview-wrap{max-height:none;width:min(100%,640px)}
+      .control-nav{top:0}
+    }
+    @media(max-width:620px){
+      .site-header{height:auto;min-height:63px;padding:10px 14px}
+      .site-meta{gap:10px}
+      .privacy-indicator{display:none}
+      .page{padding:9px;gap:10px}
+      .panel,.workspace{padding:14px;border-radius:12px}
+      .workspace-top{align-items:stretch}
+      .workspace-title{min-width:0}
+      .workspace-tabs{width:100%;justify-content:space-between}
+      .workspace-tabs button{flex:1;padding:10px 8px}
+      .grid{grid-template-columns:minmax(0,1fr) minmax(0,1fr);gap:9px}
+      .field>.inline{gap:5px}
+      .field .inline input[type=number]{width:72px!important}
+      .preview-wrap{padding:8px}
+      .view-heading .inline{width:100%}
+      .view-heading input[type=range]{width:100%;min-width:0;flex:1}
+    }
+    @media(max-width:390px){.grid{grid-template-columns:1fr}}
+    @media(prefers-reduced-motion:reduce){html{scroll-behavior:auto}button,.region-tab{transition:none}}
+  </style>
+</head>
+<body data-studiokit-app="badge-studio" data-studiokit-app-title="Badge Studio">
+  <noscript><p style="padding:16px;background:#fff3d6">此工具需要启用 JavaScript 才能使用预览与导出功能。</p></noscript>
+  <header class="site-header">
+    <div class="brand-mark" aria-hidden="true"><span></span></div>
+    <div class="brand-copy"><strong>Badge Studio</strong><span>同心圆徽章工作台 <small>v2.2.1</small></span></div>
+    <div class="site-meta"><span class="privacy-indicator">● 本地编辑 · 无需上传</span><a href="#control-export">导出作品</a><a href="#control-schemes">方案管理</a></div>
+  </header>
+  <div class="page">
+    <aside class="panel">
+      <h1>同心圆徽章工作台</h1>
+      <p class="subtitle">按实际字宽弧形排版 · 多方案设计与对比 · 透明 PNG / SVG 导出</p>
+      <nav class="control-nav" aria-label="编辑参数导航">
+        <a href="#control-content">内容</a><a href="#control-geometry">圆环</a><a href="#control-region">样式</a><a href="#control-snap">吸附</a><a href="#control-effects">效果</a><a href="#control-export">导出</a>
+      </nav>
+
+      <div class="section" id="control-schemes">
+        <div class="toolbar">
+          <h2>方案管理</h2>
+          <div class="buttons">
+            <button id="addSchemeBtn" class="secondary" type="button">新建方案</button>
+            <button id="duplicateSchemeBtn" class="ghost" type="button">复制当前</button>
+          </div>
+        </div>
+        <div class="scheme-list" id="schemeList"></div>
+        <div class="hint">每个方案都能独立保存文字、样式、导出尺寸等参数；勾选“对比”后会出现在并行预览与 overlay 预览中。</div>
+      </div>
+
+      <div class="section" id="control-content">
+        <h2>内容设置</h2>
+        <div class="grid">
+          <div class="field">
+            <label for="leftText">左侧固定文字（9 点位）</label>
+            <input id="leftText" type="text" />
+          </div>
+          <div class="field">
+            <label for="rightText">右侧固定文字（3 点位）</label>
+            <input id="rightText" type="text" />
+          </div>
+        </div>
+        <div class="field">
+          <label for="topText">上半圆文字</label>
+          <textarea id="topText"></textarea>
+          <small>会按字符真实宽度进行弧形排版，并以顶部中心对齐。</small>
+        </div>
+        <div class="field">
+          <label for="bottomText">下半圆文字</label>
+          <textarea id="bottomText"></textarea>
+          <small>当朝向模式使下半圆文字朝向圆心时，会自动反序渲染，避免你手工倒序输入。</small>
+        </div>
+        <div class="field">
+          <label for="centerText">中心文字</label>
+          <input id="centerText" type="text" />
+        </div>
+      </div>
+
+      <div class="section" id="control-geometry">
+        <h2>全局图形</h2>
+        <div class="grid">
+          <div class="field">
+            <label for="strokeColor">圆环颜色</label>
+            <div class="inline"><input id="strokeColor" type="color" /><input id="strokeColorText" class="mono grow" type="text" /></div>
+          </div>
+          <div class="field">
+            <label for="strokeWidth">圆环线宽</label>
+            <input id="strokeWidth" type="number" min="1" max="40" step="1" />
+          </div>
+        </div>
+        <div class="grid">
+          <div class="field">
+            <label for="outerDiameter">外圆直径</label>
+            <div class="inline"><input id="outerDiameter" type="range" min="100" max="760" step="1" /><span id="outerDiameterValue" class="value-badge"></span></div>
+          </div>
+          <div class="field">
+            <label for="innerDiameter">内圆直径</label>
+            <div class="inline"><input id="innerDiameter" type="range" min="60" max="700" step="1" /><span id="innerDiameterValue" class="value-badge"></span></div>
+          </div>
+        </div>
+        <div class="grid">
+          <div class="field">
+            <label for="ringRotation">整圈文字旋转（°）</label>
+            <div class="inline"><input id="ringRotation" type="range" min="-180" max="180" step="1" /><input id="ringRotationNumber" type="number" min="-180" max="180" step="1" style="width:86px;flex:none"></div>
+          </div>
+          <div class="field">
+            <label for="ringTextDirection">环绕文字朝向</label>
+            <select id="ringTextDirection">
+              <option value="lower-inward">下半圆朝向圆心（推荐）</option>
+              <option value="outward">全部朝外</option>
+              <option value="upper-inward">上半圆朝向圆心</option>
+              <option value="inward">全部朝向圆心</option>
+            </select>
+          </div>
+        </div>
+        <div class="field">
+          <label for="canvasSize">预览画布尺寸</label>
+          <div class="inline"><input id="canvasSize" type="range" min="300" max="1200" step="10" /><span id="canvasSizeValue" class="value-badge"></span></div>
+        </div>
+      </div>
+
+      <div class="section" id="control-region">
+        <div class="toolbar">
+          <h2>区域样式</h2>
+          <span class="chip">五区独立样式</span>
+        </div>
+        <div class="region-tabs" id="regionTabs"></div>
+        <div class="grid">
+          <div class="field">
+            <label for="regionFontFamily">字体</label>
+            <input id="regionFontFamily" type="text" />
+          </div>
+          <div class="field">
+            <label for="regionFontSize">字号</label>
+            <input id="regionFontSize" type="number" min="8" max="400" step="1" />
+          </div>
+        </div>
+        <div class="grid">
+          <div class="field">
+            <label for="regionColor">文字颜色</label>
+            <div class="inline"><input id="regionColor" type="color" /><input id="regionColorText" class="mono grow" type="text" /></div>
+          </div>
+          <div class="field">
+            <label>&nbsp;</label>
+            <label class="chip" style="width:max-content"><input id="regionBold" type="checkbox" style="margin-right:6px">加粗</label>
+          </div>
+        </div>
+        <div class="grid">
+          <div class="field">
+            <label for="regionOffsetX">水平偏移 X（px）</label>
+            <div class="inline"><input id="regionOffsetX" type="range" min="-300" max="300" step="1" /><input id="regionOffsetXNumber" type="number" min="-300" max="300" step="1" style="width:86px;flex:none"></div>
+          </div>
+          <div class="field">
+            <label for="regionOffsetY">垂直偏移 Y（px）</label>
+            <div class="inline"><input id="regionOffsetY" type="range" min="-300" max="300" step="1" /><input id="regionOffsetYNumber" type="number" min="-300" max="300" step="1" style="width:86px;flex:none"></div>
+          </div>
+        </div>
+        <div class="grid" id="arcFieldsWrap">
+          <div class="field">
+            <label for="regionSpacing">字间距倍率</label>
+            <input id="regionSpacing" type="number" min="0.4" max="4" step="0.05" />
+          </div>
+          <div class="field">
+            <label for="regionRadiusOffset">半径偏移（px）</label>
+            <input id="regionRadiusOffset" type="number" min="-200" max="200" step="1" />
+          </div>
+        </div>
+        <div class="buttons">
+          <button id="applyUploadedFontRegionBtn" class="secondary" type="button">当前区域使用上传字体</button>
+          <button id="resetRegionOffsetBtn" class="ghost" type="button">当前区域偏移归零</button>
+        </div>
+      </div>
+
+      <div class="section" id="control-font">
+        <h2>字体资源</h2>
+        <div class="field">
+          <label for="fontFile">上传自定义字体（全局共享）</label>
+          <input id="fontFile" type="file" accept=".ttf,.otf,.woff,.woff2" />
+          <small id="fontStatus">当前未上传自定义字体。</small>
+        </div>
+        <div class="buttons">
+          <button id="applyUploadedFontAllBtn" class="secondary" type="button">全部区域使用上传字体</button>
+          <button id="resetFontFamilyBtn" class="ghost" type="button">当前区域恢复默认字体</button>
+        </div>
+      </div>
+
+      <div class="section" id="control-snap">
+        <h2>拖拽吸附与参考线</h2>
+        <div class="grid">
+          <div class="field">
+            <label class="chip" style="width:max-content"><input id="snapEnabled" type="checkbox" style="margin-right:6px">启用拖拽吸附</label>
+            <small>按控制点真实位置吸附，不再仅按偏移量取整。</small>
+          </div>
+          <div class="field">
+            <label class="chip" style="width:max-content"><input id="showCenterGuides" type="checkbox" style="margin-right:6px">显示参考线</label>
+            <small>十字轴、圆周、四方向锚点及吸附线，仅预览显示。</small>
+          </div>
+        </div>
+        <div class="grid">
+          <div class="field">
+            <label for="snapStep">栅格步进（px）</label>
+            <input id="snapStep" type="number" min="1" max="50" step="1" />
+          </div>
+          <div class="field">
+            <label for="snapThreshold">吸附阈值（px）</label>
+            <input id="snapThreshold" type="number" min="1" max="50" step="1" />
+          </div>
+        </div>
+        <div class="grid">
+          <div class="field"><label class="chip"><input id="snapAxes" type="checkbox">圆心水平 / 垂直轴</label></div>
+          <div class="field"><label class="chip"><input id="snapPeers" type="checkbox">与其他文字锚点对齐</label></div>
+          <div class="field"><label class="chip"><input id="snapCardinals" type="checkbox">3 / 6 / 9 / 12 点位</label></div>
+          <div class="field"><label class="chip"><input id="snapRadii" type="checkbox">内外圆 / 文字弧线半径</label></div>
+        </div>
+        <small class="hint">拖动时优先命中位置型锚点，再判断圆周半径，最后可回退到像素栅格。辅助线与控制点不会导出。</small>
+      </div>
+
+      <div class="section" id="control-effects">
+        <h2>阴影 / 光泽效果</h2>
+        <div class="notice" style="margin-bottom:12px">应用于本方案的圆环与全部文字。阴影不包含操作控制点；光泽为可导出的金属感明暗渐变，不添加背景。</div>
+        <div class="grid">
+          <div class="field"><label class="chip"><input id="shadowEnabled" type="checkbox">启用投影</label></div>
+          <div class="field"><label class="chip"><input id="glossEnabled" type="checkbox">启用光泽渐变</label></div>
+        </div>
+        <div id="shadowControls">
+          <div class="grid">
+            <div class="field"><label for="shadowColor">阴影颜色</label><div class="inline"><input type="color" id="shadowColor"><input type="text" id="shadowColorText" class="mono grow"></div></div>
+            <div class="field"><label for="shadowOpacity">阴影不透明度（%）</label><input type="number" id="shadowOpacity" min="0" max="100" step="1"></div>
+          </div>
+          <div class="grid">
+            <div class="field"><label for="shadowBlur">模糊半径（px）</label><input type="number" id="shadowBlur" min="0" max="80" step="1"></div>
+            <div class="field"><label for="shadowOffsetX">水平偏移（px）</label><input type="number" id="shadowOffsetX" min="-100" max="100" step="1"></div>
+            <div class="field"><label for="shadowOffsetY">垂直偏移（px）</label><input type="number" id="shadowOffsetY" min="-100" max="100" step="1"></div>
+          </div>
+        </div>
+        <div id="glossControls">
+          <div class="grid">
+            <div class="field"><label for="glossStrength">光泽强度（%）</label><input type="range" id="glossStrength" min="0" max="100" step="1"></div>
+            <div class="field"><label for="glossAngle">入射方向（角度）</label><input type="number" id="glossAngle" min="-180" max="180" step="1"></div>
+          </div>
+        </div>
+        <div class="buttons"><button class="ghost" type="button" id="resetEffects">重置本方案效果</button></div>
+      </div>
+
+      <div class="section" id="control-export">
+        <h2>导出与配置</h2>
+        <div class="grid">
+          <div class="field"><label for="exportWidth">导出宽度</label><input id="exportWidth" type="number" min="64" max="8000" step="1" /></div>
+          <div class="field"><label for="exportHeight">导出高度</label><input id="exportHeight" type="number" min="64" max="8000" step="1" /></div>
+        </div>
+        <div class="field"><label for="fileName">导出文件名</label><input id="fileName" type="text" /></div>
+        <div class="buttons">
+          <button id="exportPngBtn" class="primary" type="button">导出透明 PNG</button>
+          <button id="exportSvgBtn" class="secondary" type="button">导出 SVG</button>
+          <button id="exportEmbeddedSvgBtn" class="secondary" type="button">导出兼容 SVG（内嵌字体）</button>
+        </div>
+        <div class="buttons" style="margin-top:10px">
+          <button id="exportBatchPngBtn" class="ghost" type="button">批量导出对比方案 PNG（ZIP）</button>
+          <button id="exportBatchSvgBtn" class="ghost" type="button">批量导出对比方案 SVG（ZIP）</button>
+        </div>
+        <div class="buttons" style="margin-top:10px">
+          <button id="exportConfigBtn" class="ghost" type="button">导出配置 JSON</button>
+          <button id="importConfigBtn" class="ghost" type="button">导入配置 JSON</button>
+          <input id="configFileInput" type="file" accept="application/json,.json" style="display:none">
+          <button id="clearAutosaveBtn" class="ghost" type="button">清除本地自动保存</button>
+        </div>
+        <div class="notice">配置文件包含 <strong>format / schemaVersion / appVersion</strong>；导入时会做版本迁移与缺省补值，并保留未知字段，方便后续前向兼容。<br>说明：浏览器原生能力难以把任意字体直接转成 SVG path，本工具提供的“兼容 SVG”会优先把你上传的字体数据内嵌进 SVG，以尽量减少换机跑版。</div>
+      </div>
+
+      <div class="section footer-meta">
+        自动保存：<span id="autosaveState">尚未保存</span><br/>
+        配置格式：Schema v3 · 应用版本 2.2.1
+      </div>
+    </aside>
+
+    <main class="workspace" id="workspace" aria-label="徽章工作区">
+      <div class="workspace-top">
+        <div class="workspace-title"><strong id="activeSchemeTitle">方案 1</strong><span id="workspaceStatus">实时预览</span></div>
+        <div class="workspace-tabs" id="workspaceTabs" role="tablist" aria-label="工作区视图">
+          <button type="button" data-view="edit" class="active" role="tab" aria-selected="true">编辑预览</button>
+          <button type="button" data-view="compare" role="tab" aria-selected="false">并排对比</button>
+          <button type="button" data-view="overlay" role="tab" aria-selected="false">叠加对比</button>
+        </div>
+      </div>
+      <section id="viewEdit" class="workspace-view active" role="tabpanel">
+        <div class="preview-toolbar">
+          <div class="preview-description">拖动蓝色控制点可以移动文字。仅预览显示辅助线和控制点，不会导出。</div>
+          <div class="buttons editor-actions">
+            <button id="undoBtn" class="ghost" type="button" title="Ctrl/⌘ + Z（编辑文字时使用输入框原生撤销）">撤销</button>
+            <button id="redoBtn" class="ghost" type="button" title="Ctrl/⌘ + Shift + Z / Ctrl + Y">重做</button>
+            <label class="chip"><input id="showHandles" type="checkbox" checked>控制点</label>
+          </div>
+        </div>
+        <div class="preview-wrap"><div id="mainPreview" aria-label="当前方案 SVG 实时预览"></div></div>
+        <div class="layout-warnings" id="layoutWarnings" role="status" aria-live="polite"></div>
+        <p class="workspace-footnote">棋盘格表示透明背景。字体依赖当前设备或上传字体；透明 PNG 不会额外添加白底。</p>
+      </section>
+      <section id="viewCompare" class="workspace-view" role="tabpanel" hidden>
+        <div class="view-heading"><h2>并排比较</h2><span id="compareCount" class="chip">0 个方案</span></div>
+        <p class="hint">左侧勾选「对比」的方案会出现在这里。可复制一份方案修改参数后立即比较。</p>
+        <div id="compareGrid" class="mini-grid"></div>
+      </section>
+      <section id="viewOverlay" class="workspace-view" role="tabpanel" hidden>
+        <div class="view-heading"><h2>Overlay 叠加比较</h2><div class="inline"><label for="overlayOpacity">单层不透明度</label><input id="overlayOpacity" type="range" min="0.1" max="1" step="0.05"><span id="overlayOpacityValue" class="value-badge"></span></div></div>
+        <p class="hint">方案叠加时按各自画布宽度等比例缩放并居中。比较绝对尺寸时，建议先把画布尺寸设为一致。</p>
+        <div id="overlayPreview" class="overlay-wrap"></div>
+      </section>
+    </main>
+  </div>
+
+  <script>
+  (() => {
+    const APP_FORMAT = 'concentric-badge-editor';
+    const SCHEMA_VERSION = 3;
+    const APP_VERSION = '2.2.1';
+    const AUTOSAVE_KEY = 'concentric_badge_editor_autosave_v2';
+    const DEFAULT_FONT = 'Arial, Helvetica, sans-serif';
+    const measureCanvas = document.createElement('canvas');
+    const measureCtx = measureCanvas.getContext('2d');
+    let regionEditorKey = 'top';
+    let historyUndo = [];
+    let historyRedo = [];
+    let saveTimer = null;
+    let dragState = null;
+    let dragGuides = null;
+    let ignoreControlSync = false;
+    let activeWorkspaceView = 'edit';
+    let lastHistoryToken = null;
+    let lastHistoryTime = 0;
+    const fontHistoryAssets = new Map();
+
+    const $ = (id) => document.getElementById(id);
+    const refs = {
+      schemeList: $('schemeList'), mainPreview: $('mainPreview'), compareGrid: $('compareGrid'), overlayPreview: $('overlayPreview'), compareCount: $('compareCount'),
+      leftText: $('leftText'), rightText: $('rightText'), topText: $('topText'), bottomText: $('bottomText'), centerText: $('centerText'),
+      strokeColor: $('strokeColor'), strokeColorText: $('strokeColorText'), strokeWidth: $('strokeWidth'),
+      outerDiameter: $('outerDiameter'), outerDiameterValue: $('outerDiameterValue'), innerDiameter: $('innerDiameter'), innerDiameterValue: $('innerDiameterValue'),
+      ringRotation: $('ringRotation'), ringRotationNumber: $('ringRotationNumber'), ringTextDirection: $('ringTextDirection'),
+      canvasSize: $('canvasSize'), canvasSizeValue: $('canvasSizeValue'),
+      regionTabs: $('regionTabs'), regionFontFamily: $('regionFontFamily'), regionFontSize: $('regionFontSize'), regionColor: $('regionColor'), regionColorText: $('regionColorText'), regionBold: $('regionBold'),
+      regionOffsetX: $('regionOffsetX'), regionOffsetXNumber: $('regionOffsetXNumber'), regionOffsetY: $('regionOffsetY'), regionOffsetYNumber: $('regionOffsetYNumber'),
+      regionSpacing: $('regionSpacing'), regionRadiusOffset: $('regionRadiusOffset'), arcFieldsWrap: $('arcFieldsWrap'),
+      fontFile: $('fontFile'), fontStatus: $('fontStatus'),
+      exportWidth: $('exportWidth'), exportHeight: $('exportHeight'), fileName: $('fileName'),
+      overlayOpacity: $('overlayOpacity'), overlayOpacityValue: $('overlayOpacityValue'), showHandles: $('showHandles'),
+      snapEnabled: $('snapEnabled'), showCenterGuides: $('showCenterGuides'), snapStep: $('snapStep'), snapThreshold: $('snapThreshold'),
+      snapAxes: $('snapAxes'), snapPeers: $('snapPeers'), snapCardinals: $('snapCardinals'), snapRadii: $('snapRadii'),
+      shadowEnabled: $('shadowEnabled'), shadowColor: $('shadowColor'), shadowColorText: $('shadowColorText'), shadowOpacity: $('shadowOpacity'), shadowBlur: $('shadowBlur'), shadowOffsetX: $('shadowOffsetX'), shadowOffsetY: $('shadowOffsetY'),
+      glossEnabled: $('glossEnabled'), glossStrength: $('glossStrength'), glossAngle: $('glossAngle'),
+      autosaveState: $('autosaveState'), configFileInput: $('configFileInput'),
+      undoBtn: $('undoBtn'), redoBtn: $('redoBtn'), workspaceTabs: $('workspaceTabs'), activeSchemeTitle: $('activeSchemeTitle'), layoutWarnings: $('layoutWarnings')
+    };
+
+    const REGION_META = {
+      top: { label: '上半圆', arc: true },
+      bottom: { label: '下半圆', arc: true },
+      left: { label: '左侧', arc: false },
+      right: { label: '右侧', arc: false },
+      center: { label: '中心', arc: false }
+    };
+
+    function uid(prefix='id') { return prefix + '_' + Math.random().toString(36).slice(2, 10); }
+    function deepClone(obj) { return JSON.parse(JSON.stringify(obj)); }
+    function nowISO() { return new Date().toISOString(); }
+    function clamp(v, min, max) { return Math.max(min, Math.min(max, v)); }
+    function cleanColor(v, fallback='#243B6B') { return /^#([0-9a-f]{3}|[0-9a-f]{6})$/i.test((v||'').trim()) ? v.trim() : fallback; }
+    function downloadBlob(blob, filename) { const url = URL.createObjectURL(blob); const a=document.createElement('a'); a.href=url; a.download=filename; document.body.appendChild(a); a.click(); a.remove(); setTimeout(() => URL.revokeObjectURL(url), 1500); }
+    function downloadText(text, filename, mime='text/plain;charset=utf-8') { downloadBlob(new Blob([text], {type:mime}), filename); }
+    function escapeXml(str) { return String(str).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;').replace(/'/g,'&apos;'); }
+
+    function hexRgb(color) {
+      let h = cleanColor(color).slice(1);
+      if (h.length === 3) h = h.split('').map(c => c + c).join('');
+      return [0,2,4].map(i => parseInt(h.slice(i,i+2),16));
+    }
+    function rgbHex(rgb) { return '#' + rgb.map(n => Math.round(clamp(n,0,255)).toString(16).padStart(2,'0')).join(''); }
+    function mixColor(color, target, ratio) {
+      const a = hexRgb(color), b = hexRgb(target), t = clamp(ratio,0,1);
+      return rgbHex(a.map((v,i) => v + (b[i] - v) * t));
+    }
+    function glossyStops(color, strength) {
+      const v = clamp(strength,0,1);
+      return [
+        [0, mixColor(color,'#ffffff',0.76*v)],
+        [0.25, mixColor(color,'#ffffff',0.34*v)],
+        [0.46, mixColor(color,'#ffffff',0.62*v)],
+        [0.64, color],
+        [1, mixColor(color,'#000000',0.42*v)]
+      ];
+    }
+    function gradientEnds(size, angle) {
+      const rad = (angle - 90) * Math.PI / 180, r=size*0.5, cx=size/2,cy=size/2;
+      return {x1:cx-Math.cos(rad)*r,y1:cy-Math.sin(rad)*r,x2:cx+Math.cos(rad)*r,y2:cy+Math.sin(rad)*r};
+    }
+    function normalizedEffects(scheme) {
+      const defaults=defaultEffects();
+      return { shadow: {...defaults.shadow,...(scheme.effects?.shadow||{})}, gloss:{...defaults.gloss,...(scheme.effects?.gloss||{})} };
+    }
+    function inkId(scheme, key) { return 'ink-' + String(scheme.id).replace(/[^a-zA-Z0-9_-]/g,'') + '-' + key; }
+
+    function defaultRegion(fontSize, bold=false, color='#243B6B', arc=false) {
+      return { fontFamily: DEFAULT_FONT, fontSize, bold, color, offsetX:0, offsetY:0, ...(arc ? { spacing: 1, radiusOffset: 0 } : {}) };
+    }
+
+    function defaultEffects() { return {
+      shadow: { enabled:false, color:'#142238', opacity:0.32, blur:10, offsetX:5, offsetY:7 },
+      gloss: { enabled:false, strength:0.55, angle:-45 }
+    }; }
+    function defaultSnapSettings() { return { snapEnabled:true, showCenterGuides:true, snapStep:5, snapThreshold:8, snapAxes:true, snapPeers:true, snapCardinals:true, snapRadii:true }; }
+
+    function createDefaultScheme(name='方案 1') {
+      return {
+        id: uid('scheme'),
+        name,
+        content: { leftText:'•', topText:'STUDIOKIT', rightText:'•', bottomText:'BADGE STUDIO', centerText:'◎' },
+        geometry: { canvasSize:800, outerDiameter:520, innerDiameter:260, strokeColor:'#243B6B', strokeWidth:8, ringRotation:0, ringTextDirection:'lower-inward' },
+        regions: {
+          top: defaultRegion(42, false, '#243B6B', true),
+          bottom: defaultRegion(42, false, '#243B6B', true),
+          left: defaultRegion(42, false, '#243B6B', false),
+          right: defaultRegion(42, false, '#243B6B', false),
+          center: defaultRegion(190, true, '#243B6B', false)
+        },
+        export: { width:2000, height:2000, fileName:'concentric-emblem' },
+        effects: defaultEffects(),
+        compareEnabled: true,
+        _unknown: {}
+      };
+    }
+
+    let state = {
+      format: APP_FORMAT,
+      schemaVersion: SCHEMA_VERSION,
+      appVersion: APP_VERSION,
+      global: { showHandles: true, overlayOpacity: 0.45, uploadedFont: null, uploadedFontFamily: '', ...defaultSnapSettings() },
+      schemes: [createDefaultScheme('方案 1')],
+      activeSchemeId: null,
+      _unknownRoot: {}
+    };
+    state.activeSchemeId = state.schemes[0].id;
+
+    function activeScheme() { return state.schemes.find(s => s.id === state.activeSchemeId) || state.schemes[0]; }
+    function compareSchemes() { return state.schemes.filter(s => s.compareEnabled); }
+    function fontSpec(region) { return `${region.bold ? 700 : 400} ${region.fontSize}px ${region.fontFamily || DEFAULT_FONT}`; }
+    function textRadius(scheme, regionKey) {
+      const base = (scheme.geometry.outerDiameter + scheme.geometry.innerDiameter) / 4;
+      const region = scheme.regions[regionKey];
+      return base + (region.radiusOffset || 0);
+    }
+    function isInward(angleDeg, mode) {
+      const rad = angleDeg * Math.PI / 180;
+      const below = Math.sin(rad) > 1e-8;
+      const above = Math.sin(rad) < -1e-8;
+      return mode === 'inward' || (mode === 'lower-inward' && below) || (mode === 'upper-inward' && above);
+    }
+    function measureChars(chars, region) {
+      measureCtx.font = fontSpec(region);
+      return chars.map(ch => {
+        const width = Math.max(4, measureCtx.measureText(ch === ' ' ? '\u00A0' : ch).width);
+        return { ch, width };
+      });
+    }
+    function arcGlyphs(scheme, regionKey) {
+      const region = scheme.regions[regionKey];
+      const source = scheme.content[regionKey + 'Text'] || '';
+      if (!source) return [];
+      let chars = Array.from(source);
+      const directionMode = scheme.geometry.ringTextDirection;
+      const inwardForRegion = regionKey === 'bottom' ? (directionMode === 'lower-inward' || directionMode === 'inward') : (directionMode === 'upper-inward' || directionMode === 'inward');
+      if (regionKey === 'bottom' && inwardForRegion) chars = chars.reverse();
+      const measured = measureChars(chars, region);
+      const gap = region.fontSize * 0.12 * region.spacing;
+      const totalLength = measured.reduce((sum, it) => sum + it.width, 0) + gap * Math.max(0, measured.length - 1);
+      const centerAngle = (regionKey === 'top' ? -90 : 90) + scheme.geometry.ringRotation;
+      const radius = Math.max(8, textRadius(scheme, regionKey));
+      let cursor = -totalLength / 2;
+      const cx = scheme.geometry.canvasSize / 2;
+      const cy = scheme.geometry.canvasSize / 2;
+      return measured.map((item, idx) => {
+        const centerLen = cursor + item.width / 2;
+        const angleOffset = centerLen / radius * 180 / Math.PI;
+        const angleDeg = centerAngle + angleOffset;
+        const rad = angleDeg * Math.PI / 180;
+        const inward = isInward(angleDeg, directionMode);
+        const x = cx + Math.cos(rad) * radius + region.offsetX;
+        const y = cy + Math.sin(rad) * radius + region.offsetY;
+        cursor += item.width + gap;
+        return { char:item.ch, x, y, angleDeg, rotation: angleDeg + 90 + (inward ? 180 : 0), inward, idx };
+      });
+    }
+    function sideLabel(scheme, sideKey) {
+      const region = scheme.regions[sideKey];
+      const cx = scheme.geometry.canvasSize / 2;
+      const cy = scheme.geometry.canvasSize / 2;
+      const angleDeg = (sideKey === 'left' ? 180 : 0) + scheme.geometry.ringRotation;
+      const rad = angleDeg * Math.PI / 180;
+      const radius = (scheme.geometry.outerDiameter + scheme.geometry.innerDiameter) / 4;
+      return {
+        text: scheme.content[sideKey + 'Text'] || '',
+        x: cx + Math.cos(rad) * radius + region.offsetX,
+        y: cy + Math.sin(rad) * radius + region.offsetY,
+        color: region.color,
+        region
+      };
+    }
+    function centerLabel(scheme) {
+      const region = scheme.regions.center;
+      const cx = scheme.geometry.canvasSize / 2;
+      const cy = scheme.geometry.canvasSize / 2 + region.fontSize * 0.12;
+      return { text: scheme.content.centerText || '', x: cx + region.offsetX, y: cy + region.offsetY, region };
+    }
+    function handlePositions(scheme) {
+      const cx = scheme.geometry.canvasSize / 2;
+      const cy = scheme.geometry.canvasSize / 2;
+      const topRegion = scheme.regions.top, bottomRegion = scheme.regions.bottom;
+      const tr = textRadius(scheme, 'top');
+      const br = textRadius(scheme, 'bottom');
+      const rot = scheme.geometry.ringRotation * Math.PI / 180;
+      const leftR = (scheme.geometry.outerDiameter + scheme.geometry.innerDiameter) / 4;
+      return {
+        top: { x: cx + Math.cos((-90 + scheme.geometry.ringRotation) * Math.PI/180) * tr + topRegion.offsetX, y: cy + Math.sin((-90 + scheme.geometry.ringRotation) * Math.PI/180) * tr + topRegion.offsetY },
+        bottom: { x: cx + Math.cos((90 + scheme.geometry.ringRotation) * Math.PI/180) * br + bottomRegion.offsetX, y: cy + Math.sin((90 + scheme.geometry.ringRotation) * Math.PI/180) * br + bottomRegion.offsetY },
+        left: { x: cx + Math.cos((180 + scheme.geometry.ringRotation) * Math.PI/180) * leftR + scheme.regions.left.offsetX, y: cy + Math.sin((180 + scheme.geometry.ringRotation) * Math.PI/180) * leftR + scheme.regions.left.offsetY },
+        right: { x: cx + Math.cos((0 + scheme.geometry.ringRotation) * Math.PI/180) * leftR + scheme.regions.right.offsetX, y: cy + Math.sin((0 + scheme.geometry.ringRotation) * Math.PI/180) * leftR + scheme.regions.right.offsetY },
+        center: { x: centerLabel(scheme).x, y: centerLabel(scheme).y }
+      };
+    }
+
+    function buildSvg(scheme, opts={}) {
+      const size = scheme.geometry.canvasSize;
+      const cx = size/2, cy = size/2;
+      const outerR = scheme.geometry.outerDiameter/2;
+      const innerR = scheme.geometry.innerDiameter/2;
+      const showHandles = !!opts.showHandles;
+      const handles = handlePositions(scheme);
+      const fx = normalizedEffects(scheme);
+      const glossOn = !!fx.gloss.enabled && fx.gloss.strength > 0;
+      const shadowOn = !!fx.shadow.enabled && fx.shadow.opacity > 0;
+      const gradEnds = gradientEnds(size, Number(fx.gloss.angle));
+      const colors = {ring:scheme.geometry.strokeColor,...Object.fromEntries(Object.entries(scheme.regions).map(([key,reg])=>[key,reg.color]))};
+      const gradientDefs = glossOn ? Object.entries(colors).map(([key,color])=> {
+        const stops=glossyStops(color, Number(fx.gloss.strength));
+        return `<linearGradient id="${inkId(scheme,key)}" gradientUnits="userSpaceOnUse" x1="${gradEnds.x1}" y1="${gradEnds.y1}" x2="${gradEnds.x2}" y2="${gradEnds.y2}">${stops.map(([pos,c])=>`<stop offset="${pos*100}%" stop-color="${c}"/>`).join('')}</linearGradient>`;
+      }).join('') : '';
+      const colorInk = (key, fallback) => glossOn ? `url(#${inkId(scheme,key)})` : escapeXml(fallback);
+      const shadowId = inkId(scheme,'shadow');
+      const filterDef = shadowOn ? `<filter id="${shadowId}" x="-75%" y="-75%" width="250%" height="250%" color-interpolation-filters="sRGB">
+        <feGaussianBlur in="SourceAlpha" stdDeviation="${Math.max(0,Number(fx.shadow.blur)) / 2}" result="blur"/>
+        <feOffset in="blur" dx="${Number(fx.shadow.offsetX)}" dy="${Number(fx.shadow.offsetY)}" result="offset"/>
+        <feFlood flood-color="${escapeXml(fx.shadow.color)}" flood-opacity="${clamp(Number(fx.shadow.opacity),0,1)}" result="shadowColor"/>
+        <feComposite in="shadowColor" in2="offset" operator="in" result="shadow"/>
+        <feMerge><feMergeNode in="shadow"/><feMergeNode in="SourceGraphic"/></feMerge>
+        </filter>` : '';
+      const embedFont = !!opts.embedFont;
+      const showGuides = !!opts.showGuides;
+      const fontDefs = (embedFont && state.global.uploadedFont && state.global.uploadedFont.dataUrl)
+        ? `<defs><style>@font-face { font-family: '${escapeXml(state.global.uploadedFont.family)}'; src: url('${escapeXml(state.global.uploadedFont.dataUrl)}'); }</style></defs>`
+        : '';
+      const guideSvg = showGuides ? (() => {
+        const lines=[];
+        if (state.global.showCenterGuides) {
+          lines.push(`<line x1="${cx}" y1="0" x2="${cx}" y2="${size}" stroke="#a2b4d4" stroke-width="1.2" stroke-dasharray="7 7"/>`);
+          lines.push(`<line x1="0" y1="${cy}" x2="${size}" y2="${cy}" stroke="#a2b4d4" stroke-width="1.2" stroke-dasharray="7 7"/>`);
+          [outerR,innerR,(outerR+innerR)/2].forEach(r=>lines.push(`<circle cx="${cx}" cy="${cy}" r="${r}" fill="none" stroke="#a2b4d4" stroke-opacity="0.45" stroke-width="1" stroke-dasharray="3 8"/>`));
+          const mid=(outerR+innerR)/2;
+          [[cx+mid,cy],[cx-mid,cy],[cx,cy+mid],[cx,cy-mid]].forEach(([x,y])=>lines.push(`<circle cx="${x}" cy="${y}" r="4" fill="#a2b4d4"/>`));
+        }
+        if (dragGuides) {
+          if (dragGuides.vertical!==null) lines.push(`<line x1="${dragGuides.vertical}" y1="0" x2="${dragGuides.vertical}" y2="${size}" stroke="#e28f29" stroke-width="1.8" stroke-dasharray="5 4"/>`);
+          if (dragGuides.horizontal!==null) lines.push(`<line x1="0" y1="${dragGuides.horizontal}" x2="${size}" y2="${dragGuides.horizontal}" stroke="#e28f29" stroke-width="1.8" stroke-dasharray="5 4"/>`);
+          if (dragGuides.radius!==null) lines.push(`<circle cx="${cx}" cy="${cy}" r="${dragGuides.radius}" fill="none" stroke="#e28f29" stroke-width="2" stroke-dasharray="5 5"/>`);
+          if (dragGuides.point) lines.push(`<circle cx="${dragGuides.point.x}" cy="${dragGuides.point.y}" r="9" fill="none" stroke="#e28f29" stroke-width="2"/>`);
+        }
+        return lines.join('');
+      })() : '';
+      const topGlyphs = arcGlyphs(scheme, 'top');
+      const bottomGlyphs = arcGlyphs(scheme, 'bottom');
+      const left = sideLabel(scheme, 'left');
+      const right = sideLabel(scheme, 'right');
+      const center = centerLabel(scheme);
+      const drawGlyph = (glyph, region, key) => `<text x="${glyph.x.toFixed(2)}" y="${glyph.y.toFixed(2)}" fill="${colorInk(key,region.color)}" font-family="${escapeXml(region.fontFamily)}" font-size="${region.fontSize}" font-weight="${region.bold ? 700 : 400}" text-anchor="middle" dominant-baseline="middle" transform="rotate(${glyph.rotation.toFixed(2)} ${glyph.x.toFixed(2)} ${glyph.y.toFixed(2)})">${escapeXml(glyph.char === ' ' ? '\u00A0' : glyph.char)}</text>`;
+      const drawSimple = (label, region, key) => label.text ? `<text x="${label.x.toFixed(2)}" y="${label.y.toFixed(2)}" fill="${colorInk(key,region.color)}" font-family="${escapeXml(region.fontFamily)}" font-size="${region.fontSize}" font-weight="${region.bold ? 700 : 400}" text-anchor="middle" dominant-baseline="middle">${escapeXml(label.text)}</text>` : '';
+      const handleSvg = showHandles ? Object.entries(handles).map(([key,p]) => `<g class="handle" data-handle="${key}"><circle cx="${p.x.toFixed(2)}" cy="${p.y.toFixed(2)}" r="12" fill="#ffffffcc" stroke="#2d4f8f" stroke-width="2" /><circle cx="${p.x.toFixed(2)}" cy="${p.y.toFixed(2)}" r="4" fill="#2d4f8f" /><text x="${(p.x+18).toFixed(2)}" y="${(p.y-16).toFixed(2)}" font-size="12" fill="#2d4f8f">${REGION_META[key].label || key}</text></g>`).join('') : '';
+      return `<?xml version="1.0" encoding="UTF-8"?>
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 ${size} ${size}" width="${opts.width || size}" height="${opts.height || size}" data-canvas-size="${size}">
+  ${fontDefs}
+  <defs>${gradientDefs}${filterDef}</defs>
+  <g>
+    ${guideSvg}
+    <g ${shadowOn ? `filter="url(#${shadowId})"` : ''}>
+      <circle cx="${cx}" cy="${cy}" r="${outerR}" fill="none" stroke="${colorInk('ring',scheme.geometry.strokeColor)}" stroke-width="${scheme.geometry.strokeWidth}" />
+      <circle cx="${cx}" cy="${cy}" r="${innerR}" fill="none" stroke="${colorInk('ring',scheme.geometry.strokeColor)}" stroke-width="${scheme.geometry.strokeWidth}" />
+      ${topGlyphs.map(g => drawGlyph(g, scheme.regions.top,'top')).join('')}
+      ${bottomGlyphs.map(g => drawGlyph(g, scheme.regions.bottom,'bottom')).join('')}
+      ${drawSimple(left, scheme.regions.left,'left')}
+      ${drawSimple(right, scheme.regions.right,'right')}
+      ${drawSimple(center, scheme.regions.center,'center')}
+    </g>
+    ${handleSvg}
+  </g>
+</svg>`;
+    }
+
+    function drawToCanvas(ctx, scheme, width, height) {
+      const size = scheme.geometry.canvasSize;
+      const scale = Math.min(width/size, height/size);
+      const dx = (width-size*scale)/2, dy = (height-size*scale)/2;
+      const cx=size/2, cy=size/2;
+      const fx=normalizedEffects(scheme);
+      function paintInk(target) {
+        target.save();
+        target.translate(dx,dy);
+        target.scale(scale,scale);
+        const style=(color) => {
+          if (!fx.gloss.enabled || fx.gloss.strength<=0) return color;
+          const g=gradientEnds(size,Number(fx.gloss.angle));
+          const grad=target.createLinearGradient(g.x1,g.y1,g.x2,g.y2);
+          glossyStops(color,Number(fx.gloss.strength)).forEach(([p,c])=>grad.addColorStop(p,c));
+          return grad;
+        };
+        target.strokeStyle=style(scheme.geometry.strokeColor);
+        target.lineWidth=scheme.geometry.strokeWidth;
+        for (const r of [scheme.geometry.outerDiameter/2,scheme.geometry.innerDiameter/2]) {
+          target.beginPath();target.arc(cx,cy,r,0,Math.PI*2);target.stroke();
+        }
+        const drawGlyphs=(list,region)=>{
+          target.font=fontSpec(region);target.fillStyle=style(region.color);target.textAlign='center';target.textBaseline='middle';
+          for (const glyph of list) {
+            target.save();target.translate(glyph.x,glyph.y);target.rotate(glyph.rotation*Math.PI/180);target.fillText(glyph.char,0,0);target.restore();
+          }
+        };
+        drawGlyphs(arcGlyphs(scheme,'top'),scheme.regions.top);
+        drawGlyphs(arcGlyphs(scheme,'bottom'),scheme.regions.bottom);
+        const simple=(label,region)=>{ if(!label.text)return;target.font=fontSpec(region);target.fillStyle=style(region.color);target.textAlign='center';target.textBaseline='middle';target.fillText(label.text,label.x,label.y); };
+        simple(sideLabel(scheme,'left'),scheme.regions.left);
+        simple(sideLabel(scheme,'right'),scheme.regions.right);
+        simple(centerLabel(scheme),scheme.regions.center);
+        target.restore();
+      }
+      if (fx.shadow.enabled && fx.shadow.opacity>0) {
+        const layer=document.createElement('canvas');layer.width=width;layer.height=height;
+        const layerCtx=layer.getContext('2d');
+        paintInk(layerCtx);
+        ctx.save();
+        const rgba=hexRgb(fx.shadow.color);
+        ctx.shadowColor=`rgba(${rgba[0]},${rgba[1]},${rgba[2]},${clamp(Number(fx.shadow.opacity),0,1)})`;
+        ctx.shadowBlur=Math.max(0,Number(fx.shadow.blur))*scale;
+        ctx.shadowOffsetX=Number(fx.shadow.offsetX)*scale;
+        ctx.shadowOffsetY=Number(fx.shadow.offsetY)*scale;
+        ctx.drawImage(layer,0,0);
+        ctx.restore();
+      } else paintInk(ctx);
+    }
+
+    function snapshot() {
+      const asset=state.global?.uploadedFont;
+      if (!asset?.dataUrl) return JSON.stringify(state);
+      fontHistoryAssets.set(asset.family,asset.dataUrl);
+      return JSON.stringify({...state,global:{...state.global,uploadedFont:{...asset,dataUrl:null}}});
+    }
+    function applySnapshot(json, opts={}) {
+      state=JSON.parse(json);
+      const asset=state.global?.uploadedFont;
+      if(asset && !asset.dataUrl && fontHistoryAssets.has(asset.family)) asset.dataUrl=fontHistoryAssets.get(asset.family);
+      if (!opts.skipRender) renderAll(true);
+    }
+    function recordHistory(token=null) {
+      const now=Date.now();
+      if (token && token===lastHistoryToken && now-lastHistoryTime<700) {lastHistoryTime=now;return;}
+      lastHistoryToken=token;lastHistoryTime=now;
+      historyUndo.push(snapshot()); if (historyUndo.length>100) historyUndo.shift();
+      historyRedo.length=0; updateUndoRedoButtons();
+    }
+    function withMutation(fn, opts={ history:true, render:true }) {
+      if (opts.history !== false) {
+        const el=document.activeElement;
+        const typing=el && ['INPUT','TEXTAREA'].includes(el.tagName) && el.id;
+        recordHistory(typing ? activeScheme().id+':'+regionEditorKey+':'+el.id : null);
+      }
+      fn(); if (opts.render!==false) renderAll(); scheduleAutosave();
+    }
+    function undo() { lastHistoryToken=null; if (!historyUndo.length) return; historyRedo.push(snapshot()); applySnapshot(historyUndo.pop()); updateUndoRedoButtons(); scheduleAutosave(); }
+    function redo() { lastHistoryToken=null; if (!historyRedo.length) return; historyUndo.push(snapshot()); applySnapshot(historyRedo.pop()); updateUndoRedoButtons(); scheduleAutosave(); }
+    function updateUndoRedoButtons() { refs.undoBtn.disabled = historyUndo.length === 0; refs.redoBtn.disabled = historyRedo.length === 0; }
+
+    function saveToLocalStorage() {
+      const payload = exportConfigObject();
+      try {
+        localStorage.setItem(AUTOSAVE_KEY, JSON.stringify(payload));
+        refs.autosaveState.textContent = '已自动保存 ' + new Date().toLocaleTimeString();
+      } catch(e) {
+        refs.autosaveState.textContent='自动保存不可用：请使用「导出配置 JSON」备份';
+        console.warn('LocalStorage unavailable or quota reached:',e);
+      }
+    }
+    function scheduleAutosave() { clearTimeout(saveTimer); saveTimer = setTimeout(saveToLocalStorage, 250); }
+    function clearAutosave() { try {localStorage.removeItem(AUTOSAVE_KEY);}catch(e){console.warn(e);} refs.autosaveState.textContent = '已清除'; }
+
+    function exportConfigObject() {
+      return {
+        format: APP_FORMAT,
+        schemaVersion: Math.max(SCHEMA_VERSION, Number(state.schemaVersion) || SCHEMA_VERSION),
+        appVersion: APP_VERSION,
+        exportedAt: nowISO(),
+        state: deepClone(state),
+        ...(state._unknownRoot || {})
+      };
+    }
+
+    async function applyUploadedFontAsset(data) {
+      if (!data || !data.dataUrl || !data.family) return;
+      try {
+        const face = new FontFace(data.family, `url(${data.dataUrl})`);
+        await face.load();
+        document.fonts.add(face);
+        state.global.uploadedFont = data;
+        state.global.uploadedFontFamily = data.family;
+        refs.fontStatus.textContent = `已载入字体：${data.name || data.family}`;
+      } catch (e) {
+        console.warn('load uploaded font failed', e);
+        refs.fontStatus.textContent = '字体载入失败，但配置已保留。';
+      }
+    }
+
+    function migrateV1ToV2(raw) {
+      const settings = raw.settings || {};
+      const scheme = createDefaultScheme('导入方案');
+      if ('leftFixedText' in settings) scheme.content.leftText = settings.leftFixedText;
+      if ('rightFixedText' in settings) scheme.content.rightText = settings.rightFixedText;
+      if ('topText' in settings) scheme.content.topText = settings.topText;
+      if ('bottomText' in settings) scheme.content.bottomText = settings.bottomText;
+      if ('centerText' in settings) scheme.content.centerText = settings.centerText;
+      if ('topLetterSpacing' in settings) scheme.regions.top.spacing = settings.topLetterSpacing;
+      if ('bottomLetterSpacing' in settings) scheme.regions.bottom.spacing = settings.bottomLetterSpacing;
+      if ('ringRotation' in settings) scheme.geometry.ringRotation = settings.ringRotation;
+      if ('ringTextDirection' in settings) scheme.geometry.ringTextDirection = settings.ringTextDirection;
+      if ('canvasSize' in settings) scheme.geometry.canvasSize = settings.canvasSize;
+      if ('outerDiameter' in settings) scheme.geometry.outerDiameter = settings.outerDiameter;
+      if ('innerDiameter' in settings) scheme.geometry.innerDiameter = settings.innerDiameter;
+      if ('strokeWidth' in settings) scheme.geometry.strokeWidth = settings.strokeWidth;
+      if ('mainColor' in settings) {
+        scheme.geometry.strokeColor = settings.mainColor;
+        for (const key of ['top','bottom','left','right','center']) scheme.regions[key].color = settings.mainColor;
+      }
+      if ('fontFamily' in settings) for (const key of ['top','bottom','left','right','center']) scheme.regions[key].fontFamily = settings.fontFamily;
+      if ('ringFontSize' in settings) for (const key of ['top','bottom','left','right']) scheme.regions[key].fontSize = settings.ringFontSize;
+      if ('centerFontSize' in settings) scheme.regions.center.fontSize = settings.centerFontSize;
+      if ('ringBold' in settings) for (const key of ['top','bottom','left','right']) scheme.regions[key].bold = !!settings.ringBold;
+      if ('centerBold' in settings) scheme.regions.center.bold = !!settings.centerBold;
+      if ('centerOffsetX' in settings) scheme.regions.center.offsetX = settings.centerOffsetX;
+      if ('centerOffsetY' in settings) scheme.regions.center.offsetY = settings.centerOffsetY;
+      if ('fileName' in settings) scheme.export.fileName = settings.fileName;
+      if ('exportWidth' in settings) scheme.export.width = settings.exportWidth;
+      if ('exportHeight' in settings) scheme.export.height = settings.exportHeight;
+      const nextState = {
+        format: APP_FORMAT,
+        schemaVersion: SCHEMA_VERSION,
+        appVersion: APP_VERSION,
+        global: { showHandles:true, overlayOpacity:0.45, uploadedFont:null, uploadedFontFamily:'', ...defaultSnapSettings() },
+        schemes: [scheme],
+        activeSchemeId: scheme.id,
+        _unknownRoot: {}
+      };
+      const assetFont = raw.assets && raw.assets.uploadedFont ? raw.assets.uploadedFont : null;
+      return { state: nextState, uploadedFont: assetFont };
+    }
+
+    function normaliseScheme(source, index, ids) {
+      if (!source || typeof source!=='object' || Array.isArray(source)) throw new Error('方案结构无效');
+      const d=createDefaultScheme('方案 '+(index+1));
+      const id=typeof source.id==='string' && /^[a-zA-Z0-9_-]{1,80}$/.test(source.id) && !ids.has(source.id) ? source.id : uid('scheme');
+      ids.add(id);
+      const text=(value,fallback,max=300)=>typeof value==='string'?value.slice(0,max):fallback;
+      const num=(v,fallback,low,high)=>typeof v==='number' && Number.isFinite(v)?clamp(v,low,high):fallback;
+      const content={...d.content,...(source.content||{})};
+      for(const k of Object.keys(d.content)) content[k]=text(source.content?.[k],d.content[k],400);
+      const rawG=source.geometry||{};
+      const geometry={...d.geometry,...rawG};
+      geometry.canvasSize=num(rawG.canvasSize,d.geometry.canvasSize,300,1200);
+      geometry.outerDiameter=num(rawG.outerDiameter,d.geometry.outerDiameter,100,760);
+      geometry.innerDiameter=num(rawG.innerDiameter,d.geometry.innerDiameter,20,700);
+      if(geometry.innerDiameter>=geometry.outerDiameter-16) geometry.innerDiameter=geometry.outerDiameter-16;
+      geometry.strokeColor=cleanColor(rawG.strokeColor,d.geometry.strokeColor);
+      geometry.strokeWidth=num(rawG.strokeWidth,d.geometry.strokeWidth,1,40);
+      geometry.ringRotation=num(rawG.ringRotation,0,-180,180);
+      geometry.ringTextDirection=['lower-inward','upper-inward','outward','inward'].includes(rawG.ringTextDirection)?rawG.ringTextDirection:d.geometry.ringTextDirection;
+      const regions={...source.regions};
+      for(const key of Object.keys(d.regions)) {
+        const r=source.regions?.[key]||{};
+        const def=d.regions[key];
+        regions[key]={...def,...r,
+          fontFamily:text(r.fontFamily,def.fontFamily,220),
+          fontSize:num(r.fontSize,def.fontSize,8,400),
+          bold:typeof r.bold==='boolean'?r.bold:def.bold,
+          color:cleanColor(r.color,def.color),
+          offsetX:num(r.offsetX,0,-300,300),offsetY:num(r.offsetY,0,-300,300)
+        };
+        if(REGION_META[key].arc) {
+          regions[key].spacing=num(r.spacing,1,.4,4);
+          regions[key].radiusOffset=num(r.radiusOffset,0,-200,200);
+        }
+      }
+      const rawE=source.export||{};
+      const exports={...d.export,...rawE,
+        width:num(rawE.width,d.export.width,64,8000),
+        height:num(rawE.height,d.export.height,64,8000),
+        fileName:text(rawE.fileName,d.export.fileName,160)
+      };
+      const rawFx=source.effects||{};
+      const defFx=defaultEffects();
+      const shadow={...defFx.shadow,...(rawFx.shadow||{})};
+      shadow.enabled=!!shadow.enabled;
+      shadow.color=cleanColor(shadow.color,defFx.shadow.color);
+      shadow.opacity=num(shadow.opacity,defFx.shadow.opacity,0,1);
+      shadow.blur=num(shadow.blur,defFx.shadow.blur,0,80);
+      shadow.offsetX=num(shadow.offsetX,defFx.shadow.offsetX,-100,100);
+      shadow.offsetY=num(shadow.offsetY,defFx.shadow.offsetY,-100,100);
+      const gloss={...defFx.gloss,...(rawFx.gloss||{})};
+      gloss.enabled=!!gloss.enabled;
+      gloss.strength=num(gloss.strength,defFx.gloss.strength,0,1);
+      gloss.angle=num(gloss.angle,defFx.gloss.angle,-180,180);
+      return {...source,id,name:text(source.name,d.name,120),content,geometry,regions,export:exports,
+        effects:{...rawFx,shadow,gloss}, compareEnabled:source.compareEnabled!==false};
+    }
+    function normaliseImportedState(imported) {
+      if(!imported || typeof imported!=='object' || !Array.isArray(imported.schemes) || !imported.schemes.length || imported.schemes.length>24)
+        throw new Error('配置中的方案数量无效（支持 1–24 个）');
+      const ids=new Set();
+      imported.schemes=imported.schemes.map((s,i)=>normaliseScheme(s,i,ids));
+      imported.global={...defaultSnapSettings(),...(imported.global||{})};
+      const g=imported.global;
+      const num=(v,fallback,lo,hi)=>typeof v==='number' && Number.isFinite(v)?clamp(v,lo,hi):fallback;
+      g.overlayOpacity=num(g.overlayOpacity,.45,.1,1);
+      g.snapStep=num(g.snapStep,5,1,50);
+      g.snapThreshold=num(g.snapThreshold,8,1,50);
+      g.showHandles=g.showHandles!==false;
+      for(const k of ['snapEnabled','showCenterGuides','snapAxes','snapPeers','snapCardinals','snapRadii'])g[k]=g[k]!==false;
+      const font=g.uploadedFont;
+      if(font && (typeof font.dataUrl!=='string' || font.dataUrl.length>16000000 || !/^data:(?:(?:font|application)\/[a-z0-9.+_-]+)?;base64,[A-Za-z0-9+/=]+$/i.test(font.dataUrl) || typeof font.family!=='string' || !/^[A-Za-z0-9_-]{1,100}$/.test(font.family)))
+        g.uploadedFont=null;
+      return imported;
+    }
+
+    async function importConfigObject(raw) {
+      if (!raw || raw.format !== APP_FORMAT) throw new Error('不是当前工具支持的配置格式');
+      if (raw.schemaVersion >= 2 && raw.state) {
+        const imported = deepClone(raw.state);
+        if (!Array.isArray(imported.schemes) || !imported.schemes.length) throw new Error('配置中没有可用方案');
+        // v2 -> v3: append only new effect/snap keys; retain all unknown fields.
+        state = normaliseImportedState(imported);
+        state.format = APP_FORMAT;
+        // If a newer schema is imported, retain its version and unknown fields when exporting.
+        state.schemaVersion = Math.max(SCHEMA_VERSION, Number(raw.schemaVersion) || SCHEMA_VERSION);
+        state.appVersion = APP_VERSION;
+        state._unknownRoot = Object.fromEntries(Object.entries(raw).filter(([k]) => !['format','schemaVersion','appVersion','exportedAt','state'].includes(k)));
+        if (!state.activeSchemeId || !state.schemes.some(s => s.id === state.activeSchemeId)) state.activeSchemeId = state.schemes[0].id;
+        await applyUploadedFontAsset(state.global.uploadedFont);
+      } else if (raw.schemaVersion === 1 || raw.settings) {
+        const migrated = migrateV1ToV2(raw);
+        state = normaliseImportedState(migrated.state);
+        if (migrated.uploadedFont) await applyUploadedFontAsset(migrated.uploadedFont);
+      } else {
+        throw new Error('无法识别该配置文件版本');
+      }
+      historyUndo.length = 0; historyRedo.length = 0; lastHistoryToken=null;
+      renderAll(true); scheduleAutosave();
+    }
+
+
+    function crc32(buf) {
+      let c = ~0; const table = crc32.table || (crc32.table = (() => { const t = new Uint32Array(256); for (let i=0;i<256;i++){ let c=i; for(let k=0;k<8;k++) c = (c & 1) ? (0xEDB88320 ^ (c >>> 1)) : (c >>> 1); t[i]=c>>>0; } return t; })());
+      for (let i = 0; i < buf.length; i++) c = table[(c ^ buf[i]) & 0xFF] ^ (c >>> 8);
+      return (~c) >>> 0;
+    }
+    function u16(n){ return [n & 255, (n>>>8)&255]; }
+    function u32(n){ return [n & 255, (n>>>8)&255, (n>>>16)&255, (n>>>24)&255]; }
+    async function createZip(files) {
+      const encoder = new TextEncoder();
+      const localParts = []; const centralParts = []; let offset = 0;
+      for (const file of files) {
+        const nameBytes = encoder.encode(file.name);
+        const dataBytes = file.data instanceof Uint8Array ? file.data : (typeof file.data === 'string' ? encoder.encode(file.data) : new Uint8Array(await file.data.arrayBuffer()));
+        const crc = crc32(dataBytes); const size = dataBytes.length;
+        const localHeader = new Uint8Array([
+          ...u32(0x04034b50), ...u16(20), ...u16(0x0800), ...u16(0), ...u16(0), ...u16(0), ...u32(crc), ...u32(size), ...u32(size), ...u16(nameBytes.length), ...u16(0),
+          ...nameBytes
+        ]);
+        localParts.push(localHeader, dataBytes);
+        const central = new Uint8Array([
+          ...u32(0x02014b50), ...u16(20), ...u16(20), ...u16(0x0800), ...u16(0), ...u16(0), ...u16(0), ...u32(crc), ...u32(size), ...u32(size), ...u16(nameBytes.length), ...u16(0), ...u16(0), ...u16(0), ...u16(0), ...u32(0), ...u32(offset),
+          ...nameBytes
+        ]);
+        centralParts.push(central);
+        offset += localHeader.length + dataBytes.length;
+      }
+      const centralSize = centralParts.reduce((s, p) => s + p.length, 0);
+      const end = new Uint8Array([
+        ...u32(0x06054b50), ...u16(0), ...u16(0), ...u16(files.length), ...u16(files.length), ...u32(centralSize), ...u32(offset), ...u16(0)
+      ]);
+      return new Blob([...localParts, ...centralParts, end], { type: 'application/zip' });
+    }
+    async function blobToUint8Array(blob) { return new Uint8Array(await blob.arrayBuffer()); }
+    function uniqueBatchName(scheme, extension, taken) {
+      const preferred=String(scheme.export.fileName || scheme.name || 'scheme').replace(/[\\/:*?"<>|]+/g,'_').trim() || 'scheme';
+      let candidate=preferred+'.'+extension, count=2;
+      while (taken.has(candidate.toLowerCase())) candidate=`${preferred}-${count++}.${extension}`;
+      taken.add(candidate.toLowerCase());
+      return candidate;
+    }
+
+
+    function renderSchemeList() {
+      refs.schemeList.innerHTML = state.schemes.map(s => `
+        <div class="scheme-item ${s.id===state.activeSchemeId?'active':''}">
+          <div class="scheme-row">
+            <input type="radio" name="activeScheme" ${s.id===state.activeSchemeId?'checked':''} data-action="set-active" data-id="${escapeXml(s.id)}" title="设为当前方案" />
+            <input type="text" value="${escapeXml(s.name)}" data-action="rename" data-id="${escapeXml(s.id)}" style="padding:8px 10px" />
+            <button type="button" class="danger" data-action="delete" data-id="${escapeXml(s.id)}" ${state.schemes.length===1?'disabled':''}>删除</button>
+          </div>
+          <div class="inline" style="margin-top:8px;justify-content:space-between">
+            <label class="chip"><input type="checkbox" ${s.compareEnabled?'checked':''} data-action="toggle-compare" data-id="${escapeXml(s.id)}" style="margin-right:6px">对比</label>
+            <div class="footer-meta">${escapeXml(s.content.centerText || '（无中心文字）')}</div>
+          </div>
+        </div>`).join('');
+    }
+
+    function renderRegionTabs() {
+      refs.regionTabs.innerHTML = Object.entries(REGION_META).map(([key, meta]) => `<button type="button" class="region-tab ${key===regionEditorKey?'active':''}" data-region-tab="${key}">${meta.label}</button>`).join('');
+    }
+
+    function syncFormFromState(force=false) {
+      const focused = document.activeElement;
+      const preserveEntry = !force && focused && ['INPUT','TEXTAREA'].includes(focused.tagName) &&
+        refs.schemeList && !refs.schemeList.contains(focused) ? {el:focused, value:focused.value} : null;
+      ignoreControlSync = true;
+      const s = activeScheme();
+      refs.leftText.value = s.content.leftText;
+      refs.rightText.value = s.content.rightText;
+      refs.topText.value = s.content.topText;
+      refs.bottomText.value = s.content.bottomText;
+      refs.centerText.value = s.content.centerText;
+      refs.strokeColor.value = cleanColor(s.geometry.strokeColor);
+      refs.strokeColorText.value = s.geometry.strokeColor;
+      refs.strokeWidth.value = s.geometry.strokeWidth;
+      refs.outerDiameter.value = s.geometry.outerDiameter; refs.outerDiameterValue.textContent = s.geometry.outerDiameter + ' px';
+      refs.innerDiameter.value = s.geometry.innerDiameter; refs.innerDiameterValue.textContent = s.geometry.innerDiameter + ' px';
+      refs.ringRotation.value = s.geometry.ringRotation; refs.ringRotationNumber.value = s.geometry.ringRotation;
+      refs.ringTextDirection.value = s.geometry.ringTextDirection;
+      refs.canvasSize.value = s.geometry.canvasSize; refs.canvasSizeValue.textContent = s.geometry.canvasSize + ' px';
+      refs.exportWidth.value = s.export.width; refs.exportHeight.value = s.export.height; refs.fileName.value = s.export.fileName;
+      refs.overlayOpacity.value = state.global.overlayOpacity; refs.overlayOpacityValue.textContent = Number(state.global.overlayOpacity).toFixed(2);
+      refs.showHandles.checked = state.global.showHandles;
+      refs.snapEnabled.checked = !!state.global.snapEnabled;
+      refs.showCenterGuides.checked = !!state.global.showCenterGuides;
+      refs.snapStep.value = state.global.snapStep || 5;
+      refs.snapThreshold.value = state.global.snapThreshold || 8;
+      ['snapAxes','snapPeers','snapCardinals','snapRadii'].forEach(id=>refs[id].checked=state.global[id]!==false);
+      const fx=normalizedEffects(s);
+      refs.shadowEnabled.checked=!!fx.shadow.enabled;refs.shadowColor.value=cleanColor(fx.shadow.color);refs.shadowColorText.value=fx.shadow.color;
+      refs.shadowOpacity.value=Math.round(Number(fx.shadow.opacity)*100);
+      refs.shadowBlur.value=fx.shadow.blur;refs.shadowOffsetX.value=fx.shadow.offsetX;refs.shadowOffsetY.value=fx.shadow.offsetY;
+      refs.glossEnabled.checked=!!fx.gloss.enabled;refs.glossStrength.value=Math.round(Number(fx.gloss.strength)*100);refs.glossAngle.value=fx.gloss.angle;
+      $('shadowControls').style.opacity=fx.shadow.enabled?'1':'0.6';
+      $('glossControls').style.opacity=fx.gloss.enabled?'1':'0.6';
+      const region = s.regions[regionEditorKey];
+      refs.regionFontFamily.value = region.fontFamily || DEFAULT_FONT;
+      refs.regionFontSize.value = region.fontSize;
+      refs.regionColor.value = cleanColor(region.color);
+      refs.regionColorText.value = region.color;
+      refs.regionBold.checked = !!region.bold;
+      refs.regionOffsetX.value = region.offsetX || 0; refs.regionOffsetXNumber.value = region.offsetX || 0;
+      refs.regionOffsetY.value = region.offsetY || 0; refs.regionOffsetYNumber.value = region.offsetY || 0;
+      const isArc = !!REGION_META[regionEditorKey].arc;
+      refs.arcFieldsWrap.style.display = isArc ? 'grid' : 'none';
+      refs.regionSpacing.value = isArc ? region.spacing : 1;
+      refs.regionRadiusOffset.value = isArc ? region.radiusOffset : 0;
+      refs.fontStatus.textContent = state.global.uploadedFont ? `已载入字体：${state.global.uploadedFont.name || state.global.uploadedFont.family}` : '当前未上传自定义字体。';
+      if (preserveEntry && preserveEntry.el.isConnected && preserveEntry.el.value !== preserveEntry.value) {
+        preserveEntry.el.value = preserveEntry.value;
+      }
+      ignoreControlSync = false;
+    }
+
+    function renderMainPreview() {
+      refs.mainPreview.innerHTML = buildSvg(activeScheme(), { showHandles: state.global.showHandles, showGuides: true });
+      bindSvgDrag();
+    }
+    function renderCompareViews() {
+      const list=compareSchemes();
+      refs.compareCount.textContent=`${list.length} 个方案`;
+      if(activeWorkspaceView==='compare') {
+        refs.compareGrid.innerHTML=list.map(s=>`<div class="mini-card"><div class="mini-head"><strong>${escapeXml(s.name)}</strong><span class="footer-meta">${escapeXml(s.content.centerText||'')}</span></div><div class="mini-body">${buildSvg(s,{showHandles:false,width:300,height:300})}</div></div>`).join('') || '<p class="hint">请在左侧勾选要对比的方案。</p>';
+      }
+      if(activeWorkspaceView==='overlay') {
+        refs.overlayPreview.innerHTML=list.length ? list.map(s=>`<div class="overlay-layer" style="opacity:${state.global.overlayOpacity}">${buildSvg(s,{showHandles:false,width:800,height:800})}</div>`).join('') : '<p class="hint" style="padding:18px">请在左侧勾选要叠加的方案。</p>';
+      }
+    }
+
+    function renderLayoutWarnings() {
+      const s=activeScheme();
+      const warnings=[];
+      for (const key of ['top','bottom']) {
+        const glyphs=arcGlyphs(s,key), label=REGION_META[key].label;
+        if (glyphs.length < 2) continue;
+        const span=Math.abs(glyphs.at(-1).angleDeg-glyphs[0].angleDeg);
+        if (span > 155) warnings.push(`${label}文字占据约 ${Math.round(span)}°，可能与左右固定文字重叠`);
+      }
+      const edgeMargin=s.geometry.outerDiameter/2 + s.geometry.strokeWidth/2;
+      if (edgeMargin > s.geometry.canvasSize/2) warnings.push('外圆超出画布边界，导出时可能被裁切');
+      refs.layoutWarnings.textContent=warnings.join(' · ');
+    }
+    function setWorkspaceView(view) {
+      if (!['edit','compare','overlay'].includes(view)) return;
+      const changed=activeWorkspaceView!==view;
+      activeWorkspaceView=view;
+      ['edit','compare','overlay'].forEach(name=>{
+        const el=$('view'+name[0].toUpperCase()+name.slice(1));
+        const active=name===view;
+        el.hidden=!active;
+        el.classList.toggle('active',active);
+      });
+      refs.workspaceTabs.querySelectorAll('[data-view]').forEach(btn=>{
+        const active=btn.dataset.view===view;
+        btn.classList.toggle('active',active);
+        btn.setAttribute('aria-selected',String(active));
+      });
+      if(changed) renderCompareViews();
+    }
+    function renderAll(force=false) {
+      renderSchemeList();
+      renderRegionTabs();
+      syncFormFromState(force);
+      renderMainPreview();
+      renderCompareViews();
+      updateUndoRedoButtons();
+      refs.activeSchemeTitle.textContent=activeScheme().name;
+      renderLayoutWarnings();
+      setWorkspaceView(activeWorkspaceView);
+    }
+
+    function snapHandlePoint(scheme, key, rawX, rawY) {
+      const config=state.global;
+      const cx=scheme.geometry.canvasSize/2, cy=cx;
+      const threshold=clamp(Number(config.snapThreshold)||8,1,50);
+      const step=clamp(Number(config.snapStep)||5,1,50);
+      const positions=handlePositions(scheme);
+      const candidates=[];
+      const add=(x,y,label,priority=0)=>candidates.push({x,y,label,priority});
+      if (config.snapCardinals) {
+        const radii=[textRadius(scheme,'top'),textRadius(scheme,'bottom'),
+          (scheme.geometry.innerDiameter+scheme.geometry.outerDiameter)/4];
+        radii.forEach((r,i)=>{
+          add(cx+r,cy,'3点',2);add(cx-r,cy,'9点',2);
+          add(cx,cy-r,'12点',2);add(cx,cy+r,'6点',2);
+        });
+      }
+      if (config.snapPeers) {
+        Object.entries(positions).filter(([k])=>k!==key).forEach(([k,p])=>add(p.x,p.y,'对齐 '+REGION_META[k].label,1));
+      }
+      if (config.snapAxes) add(cx,cy,'圆心',0);
+      // Full 2D anchors take precedence over any single-axis or radial alignment.
+      let full=null;
+      for (const p of candidates) {
+        const d=Math.hypot(rawX-p.x,rawY-p.y);
+        if (d<=threshold && (!full || p.priority<full.priority || (p.priority===full.priority && d<full.distance))) full={...p,distance:d};
+      }
+      if (full) return {x:full.x,y:full.y,guide:{vertical:full.x,horizontal:full.y,radius:null,point:{x:full.x,y:full.y},label:full.label}};
+      let x=rawX,y=rawY;
+      let vx=null,hy=null,radial=null;
+      const xCandidates=[],yCandidates=[];
+      if (config.snapAxes) {xCandidates.push({v:cx,p:0});yCandidates.push({v:cy,p:0});}
+      if (config.snapPeers) Object.entries(positions).filter(([k])=>k!==key).forEach(([k,p])=>{
+        xCandidates.push({v:p.x,p:1});yCandidates.push({v:p.y,p:1});
+      });
+      if (config.snapCardinals) {
+        const rs=[textRadius(scheme,'top'),textRadius(scheme,'bottom'),(scheme.geometry.innerDiameter+scheme.geometry.outerDiameter)/4];
+        for (const r of rs) {
+          xCandidates.push({v:cx+r,p:2},{v:cx-r,p:2});
+          yCandidates.push({v:cy+r,p:2},{v:cy-r,p:2});
+        }
+      }
+      function closest(list,value) {
+        const hits=list.map(c=>({...c,d:Math.abs(c.v-value)})).filter(c=>c.d<=threshold).sort((a,b)=>a.p-b.p||a.d-b.d);
+        return hits[0]||null;
+      }
+      const sx=closest(xCandidates,x),sy=closest(yCandidates,y);
+      if (sx) {x=sx.v;vx=x;}
+      if (sy) {y=sy.v;hy=y;}
+      if (config.snapRadii && key!=='center' && !sx && !sy) {
+        const radius=Math.hypot(x-cx,y-cy);
+        const options=[scheme.geometry.innerDiameter/2,scheme.geometry.outerDiameter/2,
+          (scheme.geometry.innerDiameter+scheme.geometry.outerDiameter)/4,
+          textRadius(scheme,'top'),textRadius(scheme,'bottom')];
+        const best=options.map(r=>({r,d:Math.abs(r-radius)})).sort((a,b)=>a.d-b.d)[0];
+        if (best && best.d<=threshold && radius>1) {
+          x=cx+(x-cx)*best.r/radius;
+          y=cy+(y-cy)*best.r/radius;
+          radial=best.r;
+        }
+      }
+      // Grid is a last-resort fallback, not a higher priority than semantic guides.
+      if (!sx && radial===null) {
+        const gx=Math.round(x/step)*step;
+        if (Math.abs(gx-x)<=threshold/2) x=gx;
+      }
+      if (!sy && radial===null) {
+        const gy=Math.round(y/step)*step;
+        if (Math.abs(gy-y)<=threshold/2) y=gy;
+      }
+      return {x,y,guide:{vertical:vx,horizontal:hy,radius:radial,point:null}};
+    }
+
+    function bindSvgDrag() {
+      const svg=refs.mainPreview.querySelector('svg');
+      if (!svg) return;
+      svg.querySelectorAll('[data-handle]').forEach(node=>{
+        node.addEventListener('pointerdown',e=>{
+          if (e.button!==0) return;
+          const key=node.getAttribute('data-handle');
+          regionEditorKey=key;
+          renderRegionTabs();syncFormFromState();
+          const p=svg.createSVGPoint();p.x=e.clientX;p.y=e.clientY;
+          const at=p.matrixTransform(svg.getScreenCTM().inverse());
+          const anchors=handlePositions(activeScheme());
+          const region=activeScheme().regions[key];
+          dragState={key,startPointer:at,startAnchor:anchors[key],startX:Number(region.offsetX)||0,startY:Number(region.offsetY)||0,started:false};
+          e.preventDefault();
+        });
+      });
+    }
+    window.addEventListener('pointermove',e=>{
+      if (!dragState) return;
+      const svg=refs.mainPreview.querySelector('svg');
+      if (!svg) return;
+      const p=svg.createSVGPoint();p.x=e.clientX;p.y=e.clientY;
+      const loc=p.matrixTransform(svg.getScreenCTM().inverse());
+      const dX=loc.x-dragState.startPointer.x,dY=loc.y-dragState.startPointer.y;
+      if (!dragState.started) {
+        if (Math.hypot(dX,dY)<1) return;
+        recordHistory();dragState.started=true;
+      }
+      const scheme=activeScheme(),reg=scheme.regions[dragState.key];
+      const rawX=dragState.startAnchor.x+dX,rawY=dragState.startAnchor.y+dY;
+      const snap=state.global.snapEnabled ? snapHandlePoint(scheme,dragState.key,rawX,rawY)
+        : {x:rawX,y:rawY,guide:null};
+      reg.offsetX=clamp(Math.round(dragState.startX+snap.x-dragState.startAnchor.x),-300,300);
+      reg.offsetY=clamp(Math.round(dragState.startY+snap.y-dragState.startAnchor.y),-300,300);
+      dragGuides=snap.guide;
+      renderAll();
+    });
+    window.addEventListener('pointerup',()=>{
+      if (!dragState) return;
+      const changed=dragState.started;
+      dragState=null;dragGuides=null;renderAll();
+      if(changed) scheduleAutosave();
+    });
+
+    function bindBasicInputs() {
+      const bindContent = (id, pathKey) => $(id).addEventListener('input', () => { if (ignoreControlSync) return; withMutation(() => { activeScheme().content[pathKey] = $(id).value; }, { history:true }); });
+      bindContent('leftText', 'leftText'); bindContent('rightText', 'rightText'); bindContent('topText', 'topText'); bindContent('bottomText', 'bottomText'); bindContent('centerText', 'centerText');
+
+      refs.strokeColor.addEventListener('input', () => { if (ignoreControlSync) return; withMutation(() => { activeScheme().geometry.strokeColor = refs.strokeColor.value; }, {history:true}); });
+      refs.strokeColorText.addEventListener('input', () => { if (ignoreControlSync) return; withMutation(() => { const v = cleanColor(refs.strokeColorText.value, activeScheme().geometry.strokeColor); activeScheme().geometry.strokeColor = v; }, {history:true}); });
+      refs.strokeWidth.addEventListener('input', () => { if (ignoreControlSync) return; withMutation(() => { activeScheme().geometry.strokeWidth = clamp(Number(refs.strokeWidth.value)||8, 1, 40); }, {history:true}); });
+      ['outerDiameter','innerDiameter','canvasSize'].forEach(id => {
+        $(id).addEventListener('input', () => {
+          if (ignoreControlSync) return;
+          withMutation(() => {
+            const g = activeScheme().geometry;
+            g[id] = Number($(id).value) || g[id];
+            if (g.innerDiameter >= g.outerDiameter - 16) g.innerDiameter = Math.max(20, g.outerDiameter - 16);
+          }, {history:true});
+        });
+      });
+      refs.ringRotation.addEventListener('input', () => { if (ignoreControlSync) return; withMutation(() => { activeScheme().geometry.ringRotation = clamp(Number(refs.ringRotation.value)||0, -180, 180); }, {history:true}); });
+      refs.ringRotationNumber.addEventListener('input', () => { if (ignoreControlSync || refs.ringRotationNumber.value==='') return; withMutation(() => { activeScheme().geometry.ringRotation = clamp(Number(refs.ringRotationNumber.value)||0, -180, 180); }, {history:true}); });
+      refs.ringTextDirection.addEventListener('change', () => { if (ignoreControlSync) return; withMutation(() => { activeScheme().geometry.ringTextDirection = refs.ringTextDirection.value; }, {history:true}); });
+      refs.exportWidth.addEventListener('input', () => { if (ignoreControlSync) return; withMutation(() => { activeScheme().export.width = clamp(Number(refs.exportWidth.value)||2000, 64, 8000); }, {history:true}); });
+      refs.exportHeight.addEventListener('input', () => { if (ignoreControlSync) return; withMutation(() => { activeScheme().export.height = clamp(Number(refs.exportHeight.value)||2000, 64, 8000); }, {history:true}); });
+      refs.fileName.addEventListener('input', () => { if (ignoreControlSync) return; withMutation(() => { activeScheme().export.fileName = refs.fileName.value || 'concentric-emblem'; }, {history:true}); });
+      refs.overlayOpacity.addEventListener('input', () => { if (ignoreControlSync) return; withMutation(() => { state.global.overlayOpacity = Number(refs.overlayOpacity.value) || .45; }, {history:true}); });
+      refs.showHandles.addEventListener('change', () => { if (ignoreControlSync) return; withMutation(() => { state.global.showHandles = refs.showHandles.checked; }, {history:true}); });
+      refs.snapEnabled.addEventListener('change', () => { if (ignoreControlSync) return; withMutation(() => { state.global.snapEnabled = refs.snapEnabled.checked; }, {history:true}); });
+      refs.showCenterGuides.addEventListener('change', () => { if (ignoreControlSync) return; withMutation(() => { state.global.showCenterGuides = refs.showCenterGuides.checked; }, {history:true}); });
+      refs.snapStep.addEventListener('input', () => { if (ignoreControlSync) return; withMutation(() => { state.global.snapStep = clamp(Number(refs.snapStep.value)||5, 1, 50); }, {history:true}); });
+      refs.snapThreshold.addEventListener('input', () => { if (ignoreControlSync) return; withMutation(() => { state.global.snapThreshold = clamp(Number(refs.snapThreshold.value)||8, 1, 50); }, {history:true}); });
+      ['snapAxes','snapPeers','snapCardinals','snapRadii'].forEach(id => {
+        refs[id].addEventListener('change',()=>withMutation(()=>{state.global[id]=refs[id].checked;}));
+      });
+      ['shadowEnabled','glossEnabled'].forEach(id=>refs[id].addEventListener('change',()=>withMutation(()=>{
+        const fx=activeScheme().effects;
+        fx[id==='shadowEnabled'?'shadow':'gloss'].enabled=refs[id].checked;
+      })));
+      const shadowFieldMap={shadowOpacity:'opacity',shadowBlur:'blur',shadowOffsetX:'offsetX',shadowOffsetY:'offsetY'};
+      Object.entries(shadowFieldMap).forEach(([id,key])=>refs[id].addEventListener('input',()=>{
+        if(ignoreControlSync||refs[id].value==='')return;
+        withMutation(()=>activeScheme().effects.shadow[key]=key==='opacity' ? clamp(Number(refs[id].value)/100,0,1) : clamp(Number(refs[id].value),key==='blur'?0:-100,key==='blur'?80:100));
+      }));
+      refs.shadowColor.addEventListener('input',()=>withMutation(()=>activeScheme().effects.shadow.color=refs.shadowColor.value));
+      refs.shadowColorText.addEventListener('change',()=>withMutation(()=>activeScheme().effects.shadow.color=cleanColor(refs.shadowColorText.value)));
+      refs.glossStrength.addEventListener('input',()=>withMutation(()=>activeScheme().effects.gloss.strength=Number(refs.glossStrength.value)/100));
+      refs.glossAngle.addEventListener('input',()=>{
+        if(refs.glossAngle.value==='')return;
+        withMutation(()=>activeScheme().effects.gloss.angle=clamp(Number(refs.glossAngle.value),-180,180));
+      });
+      $('resetEffects').addEventListener('click',()=>withMutation(()=>{activeScheme().effects=defaultEffects();}));
+    }
+
+    function bindRegionControls() {
+      refs.regionTabs.addEventListener('click', (e) => {
+        const btn = e.target.closest('[data-region-tab]'); if (!btn) return;
+        regionEditorKey = btn.getAttribute('data-region-tab'); renderAll();
+      });
+      const getRegion = () => activeScheme().regions[regionEditorKey];
+      refs.regionFontFamily.addEventListener('input', () => { if (ignoreControlSync) return; withMutation(() => { getRegion().fontFamily = refs.regionFontFamily.value || DEFAULT_FONT; }, {history:true}); });
+      refs.regionFontSize.addEventListener('input', () => { if (ignoreControlSync) return; withMutation(() => { getRegion().fontSize = clamp(Number(refs.regionFontSize.value)||12, 8, 400); }, {history:true}); });
+      refs.regionColor.addEventListener('input', () => { if (ignoreControlSync) return; withMutation(() => { getRegion().color = refs.regionColor.value; }, {history:true}); });
+      refs.regionColorText.addEventListener('input', () => { if (ignoreControlSync) return; withMutation(() => { getRegion().color = cleanColor(refs.regionColorText.value, getRegion().color); }, {history:true}); });
+      refs.regionBold.addEventListener('change', () => { if (ignoreControlSync) return; withMutation(() => { getRegion().bold = refs.regionBold.checked; }, {history:true}); });
+      [['regionOffsetX','regionOffsetXNumber','offsetX'], ['regionOffsetY','regionOffsetYNumber','offsetY']].forEach(([sliderId,numId,key]) => {
+        $(sliderId).addEventListener('input', () => { if (ignoreControlSync) return; withMutation(() => { getRegion()[key] = clamp(Number($(sliderId).value)||0, -300, 300); }, {history:true}); });
+        $(numId).addEventListener('input', () => { if (ignoreControlSync || $(numId).value==='') return; withMutation(() => { getRegion()[key] = clamp(Number($(numId).value)||0, -300, 300); }, {history:true}); });
+      });
+      refs.regionSpacing.addEventListener('input', () => { if (ignoreControlSync) return; withMutation(() => { if (REGION_META[regionEditorKey].arc) getRegion().spacing = clamp(Number(refs.regionSpacing.value)||1, .4, 4); }, {history:true}); });
+      refs.regionRadiusOffset.addEventListener('input', () => { if (ignoreControlSync) return; withMutation(() => { if (REGION_META[regionEditorKey].arc) getRegion().radiusOffset = clamp(Number(refs.regionRadiusOffset.value)||0, -200, 200); }, {history:true}); });
+    }
+
+    function bindSchemeManager() {
+      $('addSchemeBtn').addEventListener('click', () => { if(state.schemes.length>=24)return alert('最多支持 24 个方案。'); withMutation(() => {
+        const scheme = createDefaultScheme('方案 ' + (state.schemes.length + 1));
+        // inherit uploaded font names/usage not forced
+        state.schemes.push(scheme); state.activeSchemeId = scheme.id;
+      }); });
+      $('duplicateSchemeBtn').addEventListener('click', () => { if(state.schemes.length>=24)return alert('最多支持 24 个方案。'); withMutation(() => {
+        const copy = deepClone(activeScheme()); copy.id = uid('scheme'); copy.name = activeScheme().name + ' 副本'; state.schemes.push(copy); state.activeSchemeId = copy.id;
+      }); });
+      refs.schemeList.addEventListener('click', (e) => {
+        const action = e.target.getAttribute('data-action'); const id = e.target.getAttribute('data-id'); if (!action || !id) return;
+        if (action === 'set-active') return withMutation(() => { state.activeSchemeId = id; }, {history:false});
+        if (action === 'delete') return withMutation(() => {
+          if (state.schemes.length === 1) return;
+          state.schemes = state.schemes.filter(s => s.id !== id);
+          if (!state.schemes.some(s => s.id === state.activeSchemeId)) state.activeSchemeId = state.schemes[0].id;
+        });
+      });
+      refs.schemeList.addEventListener('change', (e) => {
+        const action = e.target.getAttribute('data-action'); const id = e.target.getAttribute('data-id'); if (!action || !id) return;
+        if (action === 'rename') { renderSchemeList(); renderCompareViews(); return; }
+        if (action === 'toggle-compare') return withMutation(() => { const s = state.schemes.find(x => x.id === id); if (s) s.compareEnabled = e.target.checked; }, {history:true});
+        if (action === 'set-active') return withMutation(() => { state.activeSchemeId = id; }, {history:false});
+      });
+      refs.schemeList.addEventListener('input', (e) => {
+        const action = e.target.getAttribute('data-action'); const id = e.target.getAttribute('data-id');
+        if (action === 'rename' && id) {
+          const scheme = state.schemes.find(x => x.id === id);
+          if (!scheme) return;
+          if (!e.target.dataset.renameStarted) { recordHistory('rename:'+id); e.target.dataset.renameStarted = '1'; }
+          scheme.name = e.target.value.slice(0,120) || '未命名方案';
+          refs.activeSchemeTitle.textContent = activeScheme().name;
+          renderCompareViews(); scheduleAutosave();
+        }
+      });
+    }
+
+    function bindFontAndExport() {
+      refs.fontFile.addEventListener('change', async () => {
+        const file = refs.fontFile.files && refs.fontFile.files[0]; if (!file) return;
+        if(file.size>10*1024*1024){alert('字体文件超过 10 MB，请选择更小的字体。');refs.fontFile.value='';return;}
+        const reader = new FileReader();
+        reader.onload = async () => {
+          const family = 'UploadedFont_' + Date.now();
+          const data = { name: file.name, family, dataUrl: reader.result };
+          withMutation(() => { state.global.uploadedFont = data; state.global.uploadedFontFamily = family; }, {history:true, render:false});
+          await applyUploadedFontAsset(data); renderAll(); scheduleAutosave();
+        };
+        reader.readAsDataURL(file);
+      });
+      $('applyUploadedFontRegionBtn').addEventListener('click', () => {
+        if (!state.global.uploadedFontFamily) return alert('请先上传字体文件。');
+        withMutation(() => { activeScheme().regions[regionEditorKey].fontFamily = `'${state.global.uploadedFontFamily}', ${DEFAULT_FONT}`; });
+      });
+      $('applyUploadedFontAllBtn').addEventListener('click', () => {
+        if (!state.global.uploadedFontFamily) return alert('请先上传字体文件。');
+        withMutation(() => { for (const key of Object.keys(activeScheme().regions)) activeScheme().regions[key].fontFamily = `'${state.global.uploadedFontFamily}', ${DEFAULT_FONT}`; });
+      });
+      $('resetFontFamilyBtn').addEventListener('click', () => withMutation(() => { activeScheme().regions[regionEditorKey].fontFamily = DEFAULT_FONT; }));
+      $('resetRegionOffsetBtn').addEventListener('click', () => withMutation(() => { const r = activeScheme().regions[regionEditorKey]; r.offsetX = 0; r.offsetY = 0; if (REGION_META[regionEditorKey].arc) r.radiusOffset = 0; }));
+      $('exportSvgBtn').addEventListener('click', () => {
+        const s = activeScheme();
+        downloadText(buildSvg(s, { showHandles:false, width:s.export.width, height:s.export.height }), `${s.export.fileName || 'concentric-emblem'}.svg`, 'image/svg+xml;charset=utf-8');
+      });
+      $('exportEmbeddedSvgBtn').addEventListener('click', () => {
+        const s = activeScheme();
+        downloadText(buildSvg(s, { showHandles:false, width:s.export.width, height:s.export.height, embedFont:true }), `${s.export.fileName || 'concentric-emblem'}-embedded-font.svg`, 'image/svg+xml;charset=utf-8');
+      });
+      $('exportPngBtn').addEventListener('click', async () => {
+        const s = activeScheme();
+        await document.fonts.ready;
+        const canvas = document.createElement('canvas');
+        canvas.width = s.export.width; canvas.height = s.export.height;
+        const ctx = canvas.getContext('2d'); ctx.clearRect(0,0,canvas.width,canvas.height);
+        drawToCanvas(ctx, s, canvas.width, canvas.height);
+        const blob = await new Promise(resolve => canvas.toBlob(resolve, 'image/png'));
+        if (!blob) return alert('PNG 导出失败');
+        downloadBlob(blob, `${s.export.fileName || 'concentric-emblem'}.png`);
+      });
+      $('exportBatchPngBtn').addEventListener('click', async () => {
+        const list = compareSchemes();
+        if (!list.length) return alert('请至少勾选一个对比方案。');
+        await document.fonts.ready;
+        const files = []; const usedNames = new Set();
+        for (const s of list) {
+          const canvas = document.createElement('canvas');
+          canvas.width = s.export.width; canvas.height = s.export.height;
+          const ctx = canvas.getContext('2d'); ctx.clearRect(0,0,canvas.width,canvas.height);
+          drawToCanvas(ctx, s, canvas.width, canvas.height);
+          const blob = await new Promise(resolve => canvas.toBlob(resolve, 'image/png'));
+          if (!blob) continue;
+          files.push({ name: uniqueBatchName(s,'png',usedNames), data: await blobToUint8Array(blob) });
+        }
+        const zip = await createZip(files);
+        downloadBlob(zip, 'concentric-badge-png-batch.zip');
+      });
+      $('exportBatchSvgBtn').addEventListener('click', async () => {
+        const list = compareSchemes();
+        if (!list.length) return alert('请至少勾选一个对比方案。');
+        const usedNames = new Set();
+        const files = list.map(s => ({ name: uniqueBatchName(s,'svg',usedNames), data: buildSvg(s, { showHandles:false, width:s.export.width, height:s.export.height, embedFont:true }) }));
+        const zip = await createZip(files);
+        downloadBlob(zip, 'concentric-badge-svg-batch.zip');
+      });
+      $('exportConfigBtn').addEventListener('click', () => {
+        downloadText(JSON.stringify(exportConfigObject(), null, 2), `concentric-badge-config-v${SCHEMA_VERSION}.json`, 'application/json;charset=utf-8');
+      });
+      $('importConfigBtn').addEventListener('click', () => refs.configFileInput.click());
+      refs.configFileInput.addEventListener('change', async () => {
+        const file = refs.configFileInput.files && refs.configFileInput.files[0]; if (!file) return;
+        const text = await file.text();
+        try {
+          const raw = JSON.parse(text);
+          if (!confirm('导入配置会覆盖当前编辑状态，是否继续？')) return;
+          await importConfigObject(raw);
+        } catch (e) {
+          alert('导入失败：' + e.message);
+        } finally {
+          refs.configFileInput.value = '';
+        }
+      });
+      $('clearAutosaveBtn').addEventListener('click', () => { if (confirm('确认清除当前工具在浏览器中的自动保存记录吗？')) clearAutosave(); });
+    }
+
+    function bindUndoRedoAndKeys() {
+      refs.undoBtn.addEventListener('click', undo); refs.redoBtn.addEventListener('click', redo);
+      refs.workspaceTabs.addEventListener('click', e=>{
+        const btn=e.target.closest('[data-view]');
+        if(btn) setWorkspaceView(btn.dataset.view);
+      });
+      window.addEventListener('keydown', (e) => {
+        if (e.target && e.target.closest('input, textarea, [contenteditable="true"]')) return;
+        const cmd = e.ctrlKey || e.metaKey;
+        if (cmd && e.key.toLowerCase() === 'z' && !e.shiftKey) { e.preventDefault(); undo(); }
+        if (cmd && (e.key.toLowerCase() === 'y' || (e.key.toLowerCase() === 'z' && e.shiftKey))) { e.preventDefault(); redo(); }
+      });
+    }
+
+    async function boot() {
+      bindBasicInputs(); bindRegionControls(); bindSchemeManager(); bindFontAndExport(); bindUndoRedoAndKeys();
+      let saved=null; try {saved=localStorage.getItem(AUTOSAVE_KEY);} catch(e){console.warn('LocalStorage unavailable',e);}
+      if (saved) {
+        try { await importConfigObject(JSON.parse(saved)); refs.autosaveState.textContent = '已从本地自动恢复'; }
+        catch (e) { console.warn('autosave restore failed', e); renderAll(); }
+      } else { renderAll(); }
+    }
+    boot();
+  })();
+  </script>
+</body>
+</html>

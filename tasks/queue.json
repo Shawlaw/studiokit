@@ -1,0 +1,132 @@
+{
+  "schemaVersion": 1,
+  "project": "StudioKit",
+  "tasks": [
+    {
+      "id": "T001",
+      "title": "审计启动包、仓库结构与路径约定",
+      "kind": "agent",
+      "status": "DONE",
+      "dependsOn": [],
+      "ownerAuthorizationRequired": false,
+      "acceptance": [
+        "确认目录结构与 AGENTS.md 一致",
+        "确认 Badge Studio 为 2.2.0 / Schema v3",
+        "确认旧自动保存 key 未变化",
+        "确认 Git 工作树与 remote 状态已记录"
+      ],
+      "claimedAt": "2026-10-31T16:31:42+00:00",
+      "completedAt": "2026-10-31T16:33:04+00:00",
+      "evidence": "structure matches AGENTS.md; APP_VERSION 2.2.0 / SCHEMA_VERSION 3 verified at apps/badge-studio/index.html:474-475; AUTOSAVE_KEY concentric_badge_editor_autosave_v2 unchanged at line 476; git: NOT a repo yet, no remote"
+    },
+    {
+      "id": "T002",
+      "title": "执行校验、构建与脚手架测试并修复问题",
+      "kind": "agent",
+      "status": "DONE",
+      "dependsOn": [
+        "T001"
+      ],
+      "ownerAuthorizationRequired": false,
+      "acceptance": [
+        "python tools/validate_site.py 通过",
+        "python tools/build_site.py 通过",
+        "Node 可用时两个共享 JS 文件 node --check 通过",
+        "新工具脚手架在临时副本中创建成功且未污染主工作树"
+      ],
+      "claimedAt": "2026-10-31T16:33:04+00:00",
+      "completedAt": "2026-10-31T16:33:04+00:00",
+      "evidence": "validate_site.py PASS; build_site.py PASS (dist allowlist clean); node --check shared/home.js + site-shell.js OK on Node v25.8.1; new_tool.py scaffold verified in temp copy only"
+    },
+    {
+      "id": "T003",
+      "title": "独立发布前审查",
+      "kind": "review",
+      "status": "DONE",
+      "dependsOn": [
+        "T002"
+      ],
+      "ownerAuthorizationRequired": false,
+      "acceptance": [
+        "审查路径、资源加载、隐私、XSS、存储兼容与发布白名单",
+        "Blocker / Major 已修复或有 Owner 接受记录",
+        "明确说明是否独立 Reviewer 或 self-review"
+      ],
+      "claimedAt": "2026-10-31T16:33:04+00:00",
+      "completedAt": "2026-10-31T16:44:27+00:00",
+      "evidence": "independent reviewer agent: APPROVE-WITH-NOTES, 0 blocker / 0 major / 2 minor; both minors fixed (shellbar CSS var + registry version chip) and browser-verified; runtime checks passed desktop 1280x800 + narrow 375x667, no overflow, no 404"
+    },
+    {
+      "id": "T004",
+      "title": "准备首个提交并核验提交内容",
+      "kind": "agent",
+      "status": "DONE",
+      "dependsOn": [
+        "T003"
+      ],
+      "ownerAuthorizationRequired": false,
+      "acceptance": [
+        "git diff --check 通过",
+        "无秘密、dist、缓存或无关文件进入提交",
+        "Conventional Commit 已创建或 PR 已准备"
+      ],
+      "claimedAt": "2026-10-31T16:44:27+00:00",
+      "completedAt": "2026-10-31T16:45:04+00:00",
+      "evidence": "commit 5fc840b on flash/bootstrap-baseline (37 files, 3192 insertions); git diff --check clean; no dist/cache/secrets staged; local only, not pushed"
+    },
+    {
+      "id": "T005",
+      "title": "首次 GitHub Pages 发布与线上验证",
+      "kind": "agent",
+      "status": "READY",
+      "dependsOn": [
+        "T004"
+      ],
+      "ownerAuthorizationRequired": true,
+      "acceptance": [
+        "目标仓库 URL 与可见性由 Owner 确认",
+        "Owner 提供 OWNER_AUTHORIZATION: PUBLISH_TO_MAIN",
+        "GitHub Pages Source 为 GitHub Actions",
+        "main 部署工作流成功且线上门户和 Badge Studio 可访问"
+      ]
+    },
+    {
+      "id": "T006",
+      "title": "替换默认徽章示例文字为中性项目内容并升版 2.2.1",
+      "kind": "agent",
+      "status": "DONE",
+      "dependsOn": [
+        "T004"
+      ],
+      "ownerAuthorizationRequired": false,
+      "acceptance": [
+        "默认方案不含个人信息（中性示例 STUDIOKIT/BADGE STUDIO/◎），且原始个人示例不出现在任何提交历史",
+        "Badge Studio 版本 2.2.1 且注册表、README、CHANGELOG、BASELINE、AGENTS、validate_site 断言全链同步",
+        "绘制、Schema v3、自动保存键与导入导出逻辑不变",
+        "静态校验与浏览器渲染验证通过"
+      ],
+      "claimedAt": "2026-10-31T16:45:00+00:00",
+      "completedAt": "2026-10-31T16:53:04+00:00",
+      "evidence": "Owner 指令；validate_site.py/build_site.py/node --check PASS；fresh-origin 浏览器验证：上弧 STUDIOKIT、下弧 BADGE STUDIO、中心 ◎，品牌角标 v2.2.1；历史重建为单一根提交并经对象级验证不含原始个人示例"
+    },
+    {
+      "id": "T007",
+      "title": "全仓库个人信息泄漏审计与处置",
+      "kind": "agent",
+      "status": "DONE",
+      "dependsOn": [
+        "T006"
+      ],
+      "ownerAuthorizationRequired": false,
+      "acceptance": [
+        "文件内容层面：邮箱/手机/身份证/用户名/本机路径/base64/版权头/注释与字符串字面量全量扫描零命中",
+        "Git 元数据：refs/stash/notes/config 检查；提交身份处置经 Owner 决策",
+        "BASELINE.md 溯源信息处置经 Owner 决策并执行",
+        "静态校验通过"
+      ],
+      "claimedAt": "2026-11-01T01:35:00+00:00",
+      "completedAt": "2026-11-01T01:43:45+00:00",
+      "evidence": "37 文件全量扫描零泄漏；唯一发现为提交元数据身份 Shawlaw <Shawlaw@126.com>，Owner 决定保持现状（记录为已接受风险）；BASELINE.md 导入溯源段（zip 名+SHA-256）按 Owner 决定整体删除，只留当前版本事实；validate PASS"
+    }
+  ]
+}
