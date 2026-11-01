@@ -11,6 +11,7 @@
 | T005 | agent | 首次 GitHub Pages 发布与线上验证 | DONE | T004 | Owner 提供 remote 并授权 PUBLISH_TO_MAIN；提交 `16b750e`；Actions run `41262967540` 成功；线上 https://shawlaw.github.io/StudioKit/ 验证通过 |
 | T006 | agent | 替换默认徽章示例文字为中性项目内容并升版 2.2.1 | DONE | T004 | Owner 指令；默认内容改为 STUDIOKIT/BADGE STUDIO/◎；原始个人示例不出现在任何提交历史；版本全链同步；浏览器验证通过 |
 | T007 | agent | 全仓库个人信息泄漏审计与处置 | DONE | T006 | 内容层零泄漏（邮箱/手机/身份证/用户名/路径/base64/注释全查）；Git 提交身份经 Owner 决定保持现状；BASELINE.md 溯源段按 Owner 决定整体删除 |
+| T008 | agent | 小写 URL /studiokit 可访问（仓库改名） | DONE | T005 | 仓库改名 Shawlaw/StudioKit→studiokit；https://shawlaw.github.io/studiokit 301→200；浏览器级验证通过；旧混合大小写 URL 不被 Pages 重定向（已记录，无外部链接影响） |
 
 ## 任务命令
 

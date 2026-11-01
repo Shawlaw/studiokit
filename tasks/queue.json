@@ -131,6 +131,25 @@
       "claimedAt": "2026-11-01T01:35:00+00:00",
       "completedAt": "2026-11-01T01:43:45+00:00",
       "evidence": "37 文件全量扫描零泄漏；唯一发现为提交元数据身份 Shawlaw <Shawlaw@126.com>，Owner 决定保持现状（记录为已接受风险）；BASELINE.md 导入溯源段（zip 名+SHA-256）按 Owner 决定整体删除，只留当前版本事实；validate PASS"
+    },
+    {
+      "id": "T008",
+      "title": "小写 URL shawlaw.github.io/studiokit 可访问（仓库改名）",
+      "kind": "agent",
+      "status": "DONE",
+      "dependsOn": [
+        "T005"
+      ],
+      "ownerAuthorizationRequired": false,
+      "acceptance": [
+        "https://shawlaw.github.io/studiokit 可访问（301 → /studiokit/）",
+        "门户与 Badge Studio 在小写 URL 下浏览器级验证通过",
+        "git remote 更新为改名后地址且推送/拉取正常",
+        "旧混合大小写 Pages URL 的状态如实记录"
+      ],
+      "claimedAt": "2026-11-01T01:58:00+00:00",
+      "completedAt": "2026-11-01T02:02:09+00:00",
+      "evidence": "Owner 指令要求小写链接可访问；实测 Pages 路径区分大小写（/studiokit 404）；仓库改名 StudioKit→studiokit（gh api PATCH）；传播后 /studiokit 301→/studiokit/ 200，子页面与资源 200；浏览器验证门户注册表加载、Badge Studio v2.2.1 中性默认、零 404、零溢出；remote 已更新为 git@github.com:Shawlaw/studiokit.git；注意：GitHub Pages 在改名后不重定向旧大小写 URL（/StudioKit/ 现 404），发布时间极短且无外部链接，影响为零"
     }
   ]
 }
