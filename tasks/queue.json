@@ -78,7 +78,7 @@
       "id": "T005",
       "title": "首次 GitHub Pages 发布与线上验证",
       "kind": "agent",
-      "status": "READY",
+      "status": "DONE",
       "dependsOn": [
         "T004"
       ],
@@ -88,7 +88,11 @@
         "Owner 提供 OWNER_AUTHORIZATION: PUBLISH_TO_MAIN",
         "GitHub Pages Source 为 GitHub Actions",
         "main 部署工作流成功且线上门户和 Badge Studio 可访问"
-      ]
+      ],
+      "claimedAt": "2026-11-01T01:53:48+00:00",
+      "ownerAuthorizationVerifiedByAgentFlag": true,
+      "completedAt": "2026-11-01T01:56:20+00:00",
+      "evidence": "OWNER_AUTHORIZATION granted in-task; pushed 16b750e to main; Actions run 41262967540 success (validate+build+deploy); live https://shawlaw.github.io/StudioKit/ verified: portal registry loads, badge card v2.2.1, shell nav round-trip, neutral defaults, zero failed resources, no overflow"
     },
     {
       "id": "T006",
