@@ -150,6 +150,25 @@
       "claimedAt": "2026-11-01T01:58:00+00:00",
       "completedAt": "2026-11-01T02:02:09+00:00",
       "evidence": "Owner 指令要求小写链接可访问；实测 Pages 路径区分大小写（/studiokit 404）；仓库改名 StudioKit→studiokit（gh api PATCH）；传播后 /studiokit 301→/studiokit/ 200，子页面与资源 200；浏览器验证门户注册表加载、Badge Studio v2.2.1 中性默认、零 404、零溢出；remote 已更新为 git@github.com:Shawlaw/studiokit.git；注意：GitHub Pages 在改名后不重定向旧大小写 URL（/StudioKit/ 现 404），发布时间极短且无外部链接，影响为零"
+    },
+    {
+      "id": "T009",
+      "title": "门户按 let-UI-speak-for-itself 原则去除冗余文案",
+      "kind": "agent",
+      "status": "DONE",
+      "dependsOn": [
+        "T008"
+      ],
+      "ownerAuthorizationRequired": false,
+      "acceptance": [
+        "hero/关于区块/顶栏导航/装饰英文标语移除，四重信息重复消除",
+        "工具卡片、注册表状态与单行页脚保留且功能正常",
+        "site.css 死样式清理，行为层 home.js/site-shell.js 零改动",
+        "本地与线上验证通过后经 Owner 授权推送部署"
+      ],
+      "claimedAt": "2026-11-01T02:05:00+00:00",
+      "completedAt": "2026-11-01T02:32:33+00:00",
+      "evidence": "提交 65e63b8（index.html +36/-32 净 -26 行、site.css 清理死样式，合计 +6/-52）；本地 1280x800 与 375x667 验证通过；Owner 授权推送；Actions run 41265543819 success；线上 https://shawlaw.github.io/studiokit/ 复测：hero/关于/导航 0 残留、2 卡片渲染、v2.2.1、注册表加载、页高 816px、零 404、零溢出"
     }
   ]
 }
