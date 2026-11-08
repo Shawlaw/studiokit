@@ -1,0 +1,594 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <meta name="description" content="层塔：钟摆叠箱子物理游戏，街机厅小游戏，本地即玩。" />
+  <meta name="theme-color" content="#0b1020" />
+  <link rel="stylesheet" href="../../../shared/site.css" />
+  <link rel="stylesheet" href="../arcade.css" />
+  <script src="../../../shared/site-shell.js" defer></script>
+  <script src="../engine.js"></script>
+  <title>层塔 · 街机厅 · StudioKit</title>
+</head>
+<body class="arcade-body" data-studiokit-app="arcade" data-studiokit-app-title="街机厅 Arcade" style="--ac-accent:#e5941b; --card-accent:#e5941b">
+  <noscript><p class="ac-noscript">此游戏需要启用 JavaScript 才能运行。</p></noscript>
+  <main class="game-page">
+    <header class="game-topbar">
+      <a class="ac-back" href="../index.html">‹ 街机厅</a>
+      <h1 class="game-title">🏗 层塔</h1>
+      <div class="game-hud">
+        <span>分数 <strong data-hud-score>0</strong></span>
+        <span>层数 <strong data-hud-floor>0</strong></span>
+        <span>最高 <strong data-hud-high>0</strong></span>
+      </div>
+      <button type="button" class="ac-icon-btn" data-mute aria-label="切换音效">🔊</button>
+    </header>
+    <div class="stage-wrap">
+      <div class="stage-box">
+        <canvas class="game-canvas" aria-label="层塔游戏画面"></canvas>
+        <div class="overlay" data-overlay hidden>
+          <div class="overlay-panel">
+            <h2 data-ov-title>层塔</h2>
+            <p data-ov-text">钟摆叠箱子</p>
+            <button type="button" class="ac-btn" data-ov-btn>开始游戏</button>
+          </div>
+        </div>
+      </div>
+    </div>
+    <p class="game-hint">看准时机点击 / 空格松手 · 越偏心塔越晃 · 完美对齐有连击加成 · P 暂停</p>
+  </main>
+  <script>
+    (() => {
+      'use strict';
+      const A = window.Arcade;
+      const { clamp, lerp, rand, TAU } = A.utils;
+
+      const W = 420;
+      const H = 740;
+      const BOX_W = 64;
+      const BOX_H = 40;
+      const GRAVITY = 1300;
+      const PIVOT_X = W / 2;
+      const PIVOT_Y = 64; /* 屏幕坐标：吊臂固定点 */
+      const PEND_LEN = 135;
+      const LEAN_LIMIT = 0.35; /* 弧度，超过即倒塌 */
+      const BASE_Y = 0; /* 地面（世界坐标） */
+
+      const canvas = document.querySelector('.game-canvas');
+      const stage = A.createStage(canvas, W, H);
+      const ctx = stage.ctx;
+      const input = A.createInput(canvas);
+      A.installSfxUnlock();
+
+      const dom = {
+        overlay: document.querySelector('[data-overlay]'),
+        ovTitle: document.querySelector('[data-ov-title]'),
+        ovText: document.querySelector('[data-ov-text]'),
+        ovBtn: document.querySelector('[data-ov-btn]'),
+        hudScore: document.querySelector('[data-hud-score]'),
+        hudFloor: document.querySelector('[data-hud-floor]'),
+        hudHigh: document.querySelector('[data-hud-high]'),
+        mute: document.querySelector('[data-mute]'),
+      };
+
+      const particles = A.createParticles();
+
+      /* 塔的箱体（世界坐标，y 为箱顶） */
+      let boxes = [];
+      /* 活动下落箱（世界坐标，y 为箱顶） */
+      let drop = null;
+      /* 摆 */
+      const pend = { angle: 0.95, vel: 0, length: PEND_LEN, gravity: 1500, damping: 0.006 };
+      let pendHasBox = true;
+      let pendReload = 0;
+      /* 塔倾斜（弹簧摆模型） */
+      let towerLean = 0;
+      let leanVel = 0;
+      let camY = -474;
+      let score = 0;
+      let perfectCombo = 0;
+      let state = 'ready';
+      let recordSaved = false;
+      let collapseTimer = 0;
+      let collapsed = []; /* 倒塌后的散落箱 */
+      let flash = 0;
+      let leanMeter = 0;
+
+      const high = A.Progress.get('pendulum-tower').high;
+      dom.hudHigh.textContent = String(high);
+
+      function towerTop() {
+        return boxes[boxes.length - 1];
+      }
+      function currentTargetCam() {
+        return towerTop().y - 430;
+      }
+      function pendulumBoxScreen() {
+        /* 摆锤端挂的箱子（屏幕坐标） */
+        const ang = pend.angle;
+        const px = PIVOT_X + Math.sin(ang) * pend.length;
+        const py = PIVOT_Y + Math.cos(ang) * pend.length;
+        return { x: px, y: py, angle: ang };
+      }
+
+      /* ---------- 流程 ---------- */
+      function reset() {
+        boxes = [];
+        collapsed = [];
+        drop = null;
+        pend.angle = rand(0.75, 1.05) * (Math.random() > 0.5 ? 1 : -1);
+        pend.vel = 0;
+        pendHasBox = true;
+        pendReload = 0;
+        towerLean = 0;
+        leanVel = 0;
+        camY = -474;
+        score = 0;
+        perfectCombo = 0;
+        recordSaved = false;
+        collapseTimer = 0;
+        flash = 0;
+        particles.clear();
+        /* 基座 */
+        boxes.push({ x: W / 2 - 55, y: -44, w: 110, h: 44, base: true });
+        boxes.push({ x: W / 2 - BOX_W / 2, y: -44 - BOX_H, w: BOX_W, h: BOX_H });
+        syncHud();
+      }
+
+      function syncHud() {
+        dom.hudScore.textContent = String(score);
+        dom.hudFloor.textContent = String(Math.max(0, boxes.length - 2));
+      }
+
+      function showOverlay(title, text, btn, onBtn) {
+        dom.ovTitle.textContent = title;
+        dom.ovText.innerHTML = text;
+        dom.ovBtn.textContent = btn;
+        dom.overlay.hidden = false;
+        dom.ovBtn.onclick = () => {
+          A.Sfx.play('ui');
+          onBtn();
+        };
+      }
+
+      function startGame() {
+        reset();
+        state = 'playing';
+        dom.overlay.hidden = true;
+        loop.resume();
+      }
+
+      function finishRun(title, subtitle) {
+        state = 'over';
+        A.Sfx.play('over');
+        let rec = null;
+        if (!recordSaved) {
+          rec = A.Progress.recordPlay('pendulum-tower', score);
+          recordSaved = true;
+          dom.hudHigh.textContent = String(Math.max(high, score));
+        }
+        showOverlay(
+          title,
+          `<span class="ac-score">${score}</span>` +
+            (rec && rec.isNewHigh ? '<span class="ac-newhigh">★ 新纪录</span><br/>' : '') +
+            subtitle +
+            ` · ${Math.max(0, boxes.length - 2)} 层`,
+          '再来一局',
+          startGame
+        );
+      }
+
+      function gameOver() {
+        loop.pause();
+        finishRun('工程结束', '最终得分');
+      }
+
+      function pauseByUser() {
+        if (state !== 'playing') return;
+        loop.pause();
+        state = 'paused';
+        showOverlay('已暂停', '吊臂停住了。', '继续', () => {
+          state = 'playing';
+          dom.overlay.hidden = true;
+          loop.resume();
+        });
+      }
+
+      /* ---------- 松手放箱 ---------- */
+      function releaseBox() {
+        if (!pendHasBox || drop) return;
+        const p = pendulumBoxScreen();
+        pendHasBox = false;
+        pendReload = 0.55;
+        drop = {
+          x: p.x - BOX_W / 2,
+          y: p.y + camY - BOX_H / 2, /* 世界坐标：摆锤端点为箱中心 */
+          w: BOX_W,
+          h: BOX_H,
+          vy: 60,
+          prevBottom: 0,
+          landed: false,
+          squash: 0,
+        };
+        drop.prevBottom = drop.y + drop.h;
+        A.Sfx.play('ui');
+      }
+
+      function settleDrop() {
+        const top = towerTop();
+        const overlap = Math.min(drop.x + drop.w, top.x + top.w) - Math.max(drop.x, top.x);
+        const e = drop.x + drop.w / 2 - (top.x + top.w / 2); /* 偏心距 */
+
+        if (overlap >= BOX_W * 0.85) {
+          /* 完美对齐：吸附 */
+          drop.x = top.x;
+          perfectCombo += 1;
+          score += 10 + perfectCombo * 10;
+          flash = 0.5;
+          A.Sfx.play('perfect');
+          particles.emit(drop.x + drop.w / 2, drop.y, {
+            count: A.reducedMotion ? 8 : 22,
+            speed: [60, 220],
+            angle: [Math.PI * 1.05, Math.PI * 1.95],
+            life: [0.3, 0.7],
+            size: [2, 4],
+            colors: ['#ffd23f', '#ffffff'],
+            gravity: 500,
+          });
+          leanVel += e * 0.0006;
+        } else if (overlap > 6) {
+          perfectCombo = 0;
+          score += 10;
+          A.Sfx.play('land');
+          particles.emit(drop.x + drop.w / 2, drop.y + drop.h, {
+            count: 6,
+            speed: [30, 120],
+            angle: [Math.PI * 0.1, Math.PI * 0.9],
+            life: [0.2, 0.5],
+            size: [2, 4],
+            colors: ['#c9a06b', '#8a6a43'],
+            gravity: 600,
+          });
+          /* 偏心力矩：塔越高越不稳 */
+          const n = boxes.length - 1;
+          leanVel += e * 0.0011 * (1 + n * 0.028);
+        } else {
+          /* 完全错过 */
+          perfectCombo = 0;
+          drop.missed = true;
+        }
+
+        if (!drop.missed) {
+          drop.y = top.y - drop.h;
+          boxes.push({ x: drop.x, y: drop.y, w: drop.w, h: drop.h });
+          drop.squash = 0.25;
+          drop = null;
+          syncHud();
+        }
+      }
+
+      function startCollapse() {
+        state = 'collapse';
+        collapseTimer = 1.5;
+        A.Sfx.play('crash');
+        shakeVal = A.reducedMotion ? 0 : 9;
+        /* 塔箱转为散落刚体（世界坐标） */
+        const dir = towerLean > 0 ? 1 : -1;
+        boxes.forEach((b, i) => {
+          collapsed.push({
+            x: b.x,
+            y: b.y,
+            w: b.w,
+            h: b.h,
+            vx: dir * rand(30, 140) * (i / boxes.length),
+            vy: rand(-60, -10),
+            rot: 0,
+            vr: dir * rand(0.6, 2.4),
+            base: b.base,
+          });
+        });
+        boxes = [];
+      }
+
+      let shakeVal = 0;
+
+      /* ---------- 更新 ---------- */
+      function update(dt) {
+        particles.update(dt);
+        flash = Math.max(0, flash - dt);
+        shakeVal = Math.max(0, shakeVal - dt * 20);
+        leanMeter = clamp(Math.abs(towerLean) / LEAN_LIMIT, 0, 1);
+
+        if (state === 'collapse') {
+          collapseTimer -= dt;
+          collapsed.forEach((b) => {
+            b.vy += GRAVITY * dt;
+            b.x += b.vx * dt;
+            b.y += b.vy * dt;
+            b.rot += b.vr * dt;
+          });
+          if (collapseTimer <= 0) {
+            gameOver();
+          }
+          return;
+        }
+        if (state !== 'playing') {
+          input.endFrame();
+          return;
+        }
+
+        /* 单摆 */
+        A.Physics.pendulumStep(pend, dt);
+        if (!pendHasBox) {
+          pendReload -= dt;
+          if (pendReload <= 0) pendHasBox = true;
+        }
+
+        /* 塔倾斜弹簧模型 */
+        const stiffness = 6.2;
+        const damp = 0.9;
+        const leanAcc = -stiffness * towerLean - damp * leanVel;
+        leanVel += leanAcc * dt;
+        towerLean += leanVel * dt;
+        if (Math.abs(towerLean) > LEAN_LIMIT) {
+          startCollapse();
+          return;
+        }
+
+        /* 下落箱 */
+        if (drop) {
+          drop.prevBottom = drop.y + drop.h;
+          drop.vy += GRAVITY * dt;
+          drop.y += drop.vy * dt;
+          drop.squash = Math.max(0, drop.squash - dt);
+          const top = towerTop();
+          if (drop.missed) {
+            /* 错过的箱子砸到地面弹开 */
+            if (drop.y + drop.h >= BASE_Y) {
+              particles.emit(drop.x + drop.w / 2, BASE_Y, {
+                count: 14,
+                speed: [40, 200],
+                angle: [Math.PI * 1.1, Math.PI * 1.9],
+                life: [0.3, 0.7],
+                size: [2, 5],
+                colors: ['#c9a06b', '#7a5222', '#ffffff'],
+                gravity: 700,
+              });
+              A.Sfx.play('explode');
+              drop = null;
+              state = 'over';
+              finishRun('地基失守', '箱子完全落空 · 最终得分');
+              return;
+            }
+          } else if (drop.vy > 0 && drop.prevBottom <= top.y + 1 && drop.y + drop.h >= top.y) {
+            settleDrop();
+          }
+          if (drop && drop.y > camY + H + 120) {
+            /* 超出屏幕仍未接触（极端侧偏） */
+            drop = null;
+            state = 'over';
+            finishRun('地基失守', '箱子完全落空 · 最终得分');
+            return;
+          }
+        }
+
+        /* 松手输入 */
+        if (input.pointer.wentDown || input.isDown(' ')) {
+          if (!input.pointer.wentDown) {
+            /* 键盘空格用边沿检测 */
+            if (!update._space) {
+              update._space = true;
+              releaseBox();
+            }
+          } else {
+            releaseBox();
+          }
+        } else {
+          update._space = false;
+        }
+
+        /* 相机平滑追踪 */
+        camY = lerp(camY, currentTargetCam(), Math.min(1, 4 * dt));
+
+        input.endFrame();
+      }
+
+      /* ---------- 渲染 ---------- */
+      function drawCrate(x, y, w, h, opts) {
+        const o = Object.assign({ squash: 0, alpha: 1 }, opts);
+        ctx.save();
+        ctx.globalAlpha = o.alpha;
+        const sy = 1 - o.squash * 0.4;
+        const sx = 1 + o.squash * 0.4;
+        ctx.translate(x + w / 2, y + h);
+        ctx.scale(sx, sy);
+        ctx.translate(-(x + w / 2), -(y + h));
+        ctx.fillStyle = '#c9884b';
+        ctx.fillRect(x, y, w, h);
+        ctx.strokeStyle = '#7a5222';
+        ctx.lineWidth = 3;
+        ctx.strokeRect(x + 1.5, y + 1.5, w - 3, h - 3);
+        ctx.lineWidth = 2;
+        ctx.strokeStyle = 'rgba(122,82,34,0.75)';
+        ctx.beginPath();
+        ctx.moveTo(x + 4, y + 4);
+        ctx.lineTo(x + w - 4, y + h - 4);
+        ctx.moveTo(x + w - 4, y + 4);
+        ctx.lineTo(x + 4, y + h - 4);
+        ctx.stroke();
+        ctx.fillStyle = 'rgba(255,220,160,0.28)';
+        ctx.fillRect(x + 4, y + 4, w - 8, 4);
+        ctx.restore();
+      }
+
+      function drawSky() {
+        const bg = ctx.createLinearGradient(0, 0, 0, H);
+        bg.addColorStop(0, '#2c2560');
+        bg.addColorStop(0.55, '#7a4a86');
+        bg.addColorStop(1, '#e08d5a');
+        ctx.fillStyle = bg;
+        ctx.fillRect(0, 0, W, H);
+        /* 落日 */
+        ctx.fillStyle = 'rgba(255,214,150,0.85)';
+        ctx.beginPath();
+        ctx.arc(W / 2, H - 210, 64, 0, TAU);
+        ctx.fill();
+        /* 远景城市剪影（视差） */
+        const par = (camY * 0.18) % 260;
+        ctx.fillStyle = 'rgba(30,20,50,0.55)';
+        for (let k = -1; k < 4; k++) {
+          const rowY = 470 + k * 260 + par;
+          for (let b = 0; b < 7; b++) {
+            const bw = 44 + ((b * 37) % 30);
+            const bh = 60 + ((b * 53 + k * 31) % 110);
+            ctx.fillRect(b * 62 - 10, rowY - bh, bw, bh);
+          }
+        }
+      }
+
+      function render() {
+        stage.beginFrame();
+        ctx.save();
+        if (shakeVal > 0) ctx.translate(rand(-shakeVal, shakeVal), rand(-shakeVal, shakeVal));
+        drawSky();
+
+        /* ---- 世界坐标层 ---- */
+        ctx.save();
+        ctx.translate(0, -camY);
+
+        /* 地面 */
+        ctx.fillStyle = '#3a2f28';
+        ctx.fillRect(-40, BASE_Y, W + 80, 60);
+        ctx.fillStyle = '#4d4036';
+        ctx.fillRect(-40, BASE_Y, W + 80, 6);
+
+        /* 塔：绕基座中心旋转 towerLean */
+        if (boxes.length) {
+          ctx.save();
+          const pivot = boxes[0];
+          ctx.translate(pivot.x + pivot.w / 2, pivot.y + pivot.h);
+          ctx.rotate(towerLean);
+          ctx.translate(-(pivot.x + pivot.w / 2), -(pivot.y + pivot.h));
+          boxes.forEach((b, i) => {
+            if (b.base) {
+              ctx.fillStyle = '#6b7590';
+              ctx.fillRect(b.x, b.y, b.w, b.h);
+              ctx.fillStyle = '#8b96b3';
+              ctx.fillRect(b.x, b.y, b.w, 6);
+            } else {
+              drawCrate(b.x, b.y, b.w, b.h, {});
+            }
+          });
+          ctx.restore();
+        }
+
+        /* 倒塌散落箱 */
+        collapsed.forEach((b) => {
+          ctx.save();
+          ctx.translate(b.x + b.w / 2, b.y + b.h / 2);
+          ctx.rotate(b.rot);
+          ctx.translate(-(b.x + b.w / 2), -(b.y + b.h / 2));
+          drawCrate(b.x, b.y, b.w, b.h, {});
+          ctx.restore();
+        });
+
+        /* 下落箱 */
+        if (drop) drawCrate(drop.x, drop.y, drop.w, drop.h, { squash: drop.squash });
+
+        particles.draw(ctx);
+        ctx.restore();
+
+        /* ---- 屏幕坐标层：吊臂 ---- */
+        ctx.strokeStyle = '#3b466f';
+        ctx.lineWidth = 6;
+        ctx.beginPath();
+        ctx.moveTo(PIVOT_X - 130, PIVOT_Y - 26);
+        ctx.lineTo(PIVOT_X + 130, PIVOT_Y - 26);
+        ctx.stroke();
+        ctx.fillStyle = '#2a3358';
+        ctx.fillRect(PIVOT_X - 150, PIVOT_Y - 34, 24, 16);
+        ctx.fillRect(PIVOT_X + 126, PIVOT_Y - 34, 24, 16);
+
+        const pb = pendulumBoxScreen();
+        ctx.strokeStyle = pendHasBox ? '#d8dcf0' : 'rgba(216,220,240,0.35)';
+        ctx.lineWidth = 2;
+        ctx.setLineDash(pendHasBox ? [] : [4, 6]);
+        ctx.beginPath();
+        ctx.moveTo(PIVOT_X, PIVOT_Y);
+        ctx.lineTo(pb.x, pb.y);
+        ctx.stroke();
+        ctx.setLineDash([]);
+        ctx.fillStyle = '#e8ecff';
+        ctx.beginPath();
+        ctx.arc(PIVOT_X, PIVOT_Y, 5, 0, TAU);
+        ctx.fill();
+
+        if (pendHasBox && (state === 'playing' || state === 'paused')) {
+          ctx.save();
+          ctx.translate(pb.x, pb.y);
+          ctx.rotate(pb.angle * 0.35);
+          drawCrate(-BOX_W / 2, -BOX_H / 2, BOX_W, BOX_H, {});
+          ctx.restore();
+        }
+
+        /* 完美闪光 */
+        if (flash > 0) {
+          ctx.fillStyle = `rgba(255,220,110,${flash * 0.35})`;
+          ctx.fillRect(0, 0, W, H);
+        }
+
+        /* HUD：倾斜警示条 */
+        if (state === 'playing' || state === 'paused') {
+          const bw = 150;
+          ctx.fillStyle = 'rgba(10,14,30,0.5)';
+          A.draw.roundRect(ctx, W / 2 - bw / 2, H - 30, bw, 10, 5);
+          ctx.fill();
+          const mid = W / 2;
+          ctx.fillStyle = leanMeter > 0.7 ? '#ff5d5d' : leanMeter > 0.4 ? '#ffd23f' : '#63d68c';
+          const dir = towerLean >= 0 ? 1 : -1;
+          A.draw.roundRect(ctx, dir > 0 ? mid : mid - (bw / 2 - 4) * leanMeter, H - 28, (bw / 2 - 4) * leanMeter, 6, 3);
+          if ((bw / 2 - 4) * leanMeter > 2) ctx.fill();
+          A.draw.label(ctx, '平稳', mid - bw / 2 - 22, H - 25, { font: '10px system-ui', color: '#93a0c8' });
+          A.draw.label(ctx, '倒塌', mid + bw / 2 + 22, H - 25, { font: '10px system-ui', color: '#93a0c8' });
+        }
+
+        A.draw.label(ctx, 'SCORE ' + score, 12, 20, { align: 'left', font: 'bold 14px system-ui', color: '#ffd23f' });
+        if (perfectCombo >= 2) {
+          A.draw.label(ctx, 'PERFECT ×' + perfectCombo, W - 12, 20, { align: 'right', font: 'bold 13px system-ui', color: '#63d68c' });
+        }
+        ctx.restore();
+      }
+
+      /* ---------- 输入与循环 ---------- */
+      window.addEventListener('keydown', (e) => {
+        if (e.key === 'p' || e.key === 'P' || e.key === 'Escape') {
+          if (state === 'playing') pauseByUser();
+        }
+      });
+
+      const loop = A.createLoop({
+        update,
+        render,
+        onAutoPause() {
+          if (state === 'playing') pauseByUser();
+        },
+      });
+
+      function syncMute() {
+        dom.mute.textContent = A.Sfx.muted ? '🔇' : '🔊';
+      }
+      dom.mute.addEventListener('click', () => {
+        A.Sfx.setMuted(!A.Sfx.muted);
+        syncMute();
+      });
+      syncMute();
+
+      reset();
+      state = 'ready';
+      showOverlay('层塔', '钟摆叠箱：看准时机松手。<br/>偏心会让高塔晃动甚至倒塌<br/>完美对齐 = 连击加成', '开始游戏', startGame);
+      loop.start();
+    })();
+  </script>
+</body>
+</html>
