@@ -1,0 +1,557 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no, viewport-fit=cover" />
+  <meta name="description" content="打地鼠：45 秒限时连击，地鼠越冒越快，炸弹与金鼠混在其中，适合地铁通勤的竖屏反应小游戏。" />
+  <meta name="theme-color" content="#0b1020" />
+  <link rel="stylesheet" href="../../../shared/site.css" />
+  <link rel="stylesheet" href="../arcade.css" />
+  <script src="../../../shared/site-shell.js" defer></script>
+  <script src="../engine.js"></script>
+  <title>打地鼠 · 街机厅 · StudioKit</title>
+</head>
+<body class="arcade-body" data-studiokit-app="arcade" data-studiokit-app-title="街机厅 Arcade" style="--ac-accent:#ff9a3d; --card-accent:#ff9a3d">
+  <noscript><p class="ac-noscript">此游戏需要启用 JavaScript 才能运行。</p></noscript>
+  <main class="game-page">
+    <header class="game-topbar">
+      <a class="ac-back" href="../index.html">‹ 街机厅</a>
+      <h1 class="game-title">🔨 打地鼠</h1>
+      <div class="game-hud">
+        <span>分数 <strong data-hud-score>0</strong></span>
+        <span>最高 <strong data-hud-high>0</strong></span>
+      </div>
+      <button type="button" class="ac-icon-btn" data-pause aria-label="暂停游戏" title="暂停游戏（P / Esc）">⏸</button>
+      <button type="button" class="ac-icon-btn" data-mute aria-label="切换音效">🔊</button>
+    </header>
+    <div class="stage-wrap">
+      <div class="stage-box">
+        <canvas class="game-canvas" aria-label="打地鼠游戏画面"></canvas>
+        <div class="overlay" data-overlay hidden>
+          <div class="overlay-panel">
+            <h2 data-ov-title>打地鼠</h2>
+            <p data-ov-text>45 秒连击敲地鼠</p>
+            <button type="button" class="ac-btn" data-ov-btn>开始游戏</button>
+            <button type="button" class="ac-btn ac-btn-secondary" data-ov-btn2 hidden>重新开始</button>
+          </div>
+        </div>
+      </div>
+    </div>
+    <p class="game-hint">点击地鼠得分 · 连击有倍率 · 金鼠 +50 · 别敲炸弹 · 数字键 1–9 也能敲 · P / Esc 暂停</p>
+  </main>
+  <script>
+    (() => {
+      'use strict';
+      const A = window.Arcade;
+      const { clamp, rand, randInt, TAU } = A.utils;
+
+      const W = 420;
+      const H = 740;
+      const ROUND_TIME = 45;
+      const HOLE_R = 40;
+      const HOLES = [];
+      for (let r = 0; r < 3; r++) {
+        for (let c = 0; c < 3; c++) {
+          HOLES.push({ x: 90 + c * 120, y: 300 + r * 130 });
+        }
+      }
+
+      const canvas = document.querySelector('.game-canvas');
+      const stage = A.createStage(canvas, W, H);
+      const ctx = stage.ctx;
+      const input = A.createInput(canvas);
+      A.installSfxUnlock();
+
+      const dom = {
+        overlay: document.querySelector('[data-overlay]'),
+        ovTitle: document.querySelector('[data-ov-title]'),
+        ovText: document.querySelector('[data-ov-text]'),
+        ovBtn: document.querySelector('[data-ov-btn]'),
+        ovBtn2: document.querySelector('[data-ov-btn2]'),
+        hudScore: document.querySelector('[data-hud-score]'),
+        hudHigh: document.querySelector('[data-hud-high]'),
+        pause: document.querySelector('[data-pause]'),
+        mute: document.querySelector('[data-mute]'),
+      };
+      const ui = A.createOverlayUi(dom);
+      const particles = A.createParticles();
+
+      let slots = HOLES.map(() => null);
+      let timeLeft = ROUND_TIME;
+      let elapsed = 0;
+      let score = 0;
+      let combo = 0;
+      let comboTimer = 0;
+      let hearts = 3;
+      let spawnTimer = 0.5;
+      let state = 'ready';
+      let recordSaved = false;
+      let shake = 0;
+      let lastPointer = { x: W / 2, y: H / 2 };
+      let hitFlash = 0;
+
+      const high = A.Progress.get('mole-whack').high;
+      dom.hudHigh.textContent = String(high);
+
+      function difficulty() {
+        return clamp(elapsed / ROUND_TIME, 0, 1);
+      }
+
+      function reset() {
+        slots = HOLES.map(() => null);
+        timeLeft = ROUND_TIME;
+        elapsed = 0;
+        score = 0;
+        combo = 0;
+        comboTimer = 0;
+        hearts = 3;
+        spawnTimer = 0.5;
+        shake = 0;
+        hitFlash = 0;
+        recordSaved = false;
+        particles.clear();
+        syncHud();
+      }
+
+      function syncHud() {
+        dom.hudScore.textContent = String(score);
+      }
+
+      function startGame() {
+        autosave.clear();
+        reset();
+        state = 'playing';
+        ui.hide();
+        loop.resume();
+        pauseUi.sync();
+        autosave.saveNow();
+      }
+
+      function resumeGame() {
+        if (state !== 'paused') return;
+        state = 'playing';
+        ui.hide();
+        loop.resume();
+        pauseUi.sync();
+      }
+
+      function finish() {
+        if (state === 'over') return;
+        state = 'over';
+        autosave.clear();
+        A.Sfx.play('over');
+        let rec = null;
+        if (!recordSaved) {
+          rec = A.Progress.recordPlay('mole-whack', score);
+          recordSaved = true;
+          dom.hudHigh.textContent = String(Math.max(high, score));
+        }
+        loop.pause();
+        ui.show({
+          title: hearts <= 0 ? '被炸弹炸晕了' : '时间到',
+          text:
+            `<span class="ac-score">${score}</span>` +
+            (rec && rec.isNewHigh ? '<span class="ac-newhigh">★ 新纪录</span><br/>' : '') +
+            `45 秒得分 · 最高 ${Math.max(high, score)}`,
+          btn: '再来一局',
+          onBtn: startGame,
+        });
+        pauseUi.sync();
+      }
+
+      function pauseByUser() {
+        if (state !== 'playing') return;
+        loop.pause();
+        state = 'paused';
+        autosave.saveNow();
+        ui.show({ title: '已暂停', text: '地鼠也躲起来了。<br/>局内进度已保存。', btn: '继续', onBtn: resumeGame });
+        pauseUi.sync();
+      }
+
+      function showStart() {
+        ui.show({
+          title: '打地鼠',
+          text: '45 秒内敲中更多地鼠。<br/>连击有倍率 · 金鼠 +50<br/>炸弹会扣心并倒扣 3 秒',
+          btn: '开始游戏',
+          onBtn: startGame,
+        });
+      }
+
+      function spawnMole() {
+        const empty = [];
+        slots.forEach((m, i) => {
+          if (!m) empty.push(i);
+        });
+        if (!empty.length) return;
+        const index = empty[randInt(0, empty.length - 1)];
+        const roll = Math.random();
+        const bombChance = 0.05 + difficulty() * 0.2;
+        const goldChance = 0.07;
+        const type = roll < bombChance ? 'bomb' : roll < bombChance + goldChance ? 'gold' : 'mole';
+        const life = Math.max(0.58, 1.2 - difficulty() * 0.55) * rand(0.9, 1.15);
+        slots[index] = { type, age: 0, life, hit: false, wobble: rand(0, TAU) };
+      }
+
+      function hitSlot(index) {
+        if (state !== 'playing') return;
+        const mole = slots[index];
+        if (!mole || mole.hit || mole.age < 0.1) return;
+        mole.hit = true;
+        mole.life = Math.min(mole.life, mole.age + 0.08);
+        const hx = HOLES[index].x;
+        const hy = HOLES[index].y - 20;
+        lastPointer = { x: hx, y: hy };
+        hitFlash = 1;
+        if (mole.type === 'bomb') {
+          hearts -= 1;
+          combo = 0;
+          comboTimer = 0;
+          timeLeft = Math.max(0, timeLeft - 3);
+          shake = A.reducedMotion ? 0 : 10;
+          A.Sfx.play('explode');
+          particles.emit(hx, hy, {
+            count: A.reducedMotion ? 10 : 26,
+            speed: [60, 260],
+            life: [0.3, 0.7],
+            size: [2, 5],
+            colors: ['#ff5d5d', '#ff9a3d', '#ffffff'],
+            gravity: 180,
+          });
+          if (hearts <= 0) finish();
+        } else if (mole.type === 'gold') {
+          combo += 1;
+          comboTimer = 2.4;
+          score += 50 + combo * 5;
+          A.Sfx.play('perfect');
+          particles.emit(hx, hy, {
+            count: A.reducedMotion ? 6 : 18,
+            speed: [30, 180],
+            life: [0.25, 0.6],
+            size: [2, 4],
+            colors: ['#ffd23f', '#fff3c4', '#ffffff'],
+            gravity: 100,
+          });
+        } else {
+          combo += 1;
+          comboTimer = 2.2;
+          score += 10 + combo * 5;
+          A.Sfx.play('bell', Math.min(combo, 12));
+          particles.emit(hx, hy, {
+            count: A.reducedMotion ? 4 : 10,
+            speed: [30, 140],
+            life: [0.2, 0.5],
+            size: [2, 4],
+            colors: ['#c9884b', '#ffd23f', '#ffffff'],
+            gravity: 200,
+          });
+        }
+        syncHud();
+      }
+
+      function update(dt) {
+        particles.update(dt);
+        shake = Math.max(0, shake - dt * 28);
+        hitFlash = Math.max(0, hitFlash - dt * 6);
+        if (state !== 'playing') {
+          input.endFrame();
+          return;
+        }
+        autosave.tick(dt);
+        elapsed += dt;
+        timeLeft = Math.max(0, timeLeft - dt);
+        if (comboTimer > 0) {
+          comboTimer -= dt;
+          if (comboTimer <= 0) combo = 0;
+        }
+
+        spawnTimer -= dt;
+        if (spawnTimer <= 0) {
+          spawnMole();
+          spawnTimer = Math.max(0.34, 1.0 - difficulty() * 0.62) * rand(0.82, 1.18);
+        }
+
+        slots.forEach((mole, index) => {
+          if (!mole) return;
+          mole.age += dt;
+          if (mole.age > mole.life + 0.25) {
+            slots[index] = null;
+          }
+        });
+
+        if (input.pointer.wentDown) {
+          lastPointer = { x: input.pointer.x, y: input.pointer.y };
+          let best = -1;
+          let bestDist = Infinity;
+          HOLES.forEach((hole, i) => {
+            const d = Math.hypot(input.pointer.x - hole.x, input.pointer.y - hole.y);
+            if (d < HOLE_R + 22 && d < bestDist) {
+              bestDist = d;
+              best = i;
+            }
+          });
+          if (best >= 0) hitSlot(best);
+        }
+
+        if (timeLeft <= 0) {
+          finish();
+          input.endFrame();
+          return;
+        }
+        input.endFrame();
+      }
+
+      function serialize() {
+        if (state !== 'playing' && state !== 'paused') return null;
+        return {
+          slots: slots.map((m) => (m ? { type: m.type, age: m.age, life: m.life, hit: m.hit } : null)),
+          timeLeft,
+          elapsed,
+          score,
+          combo,
+          comboTimer,
+          hearts,
+          spawnTimer,
+        };
+      }
+
+      function restore(data) {
+        if (!data || !Array.isArray(data.slots) || data.slots.length !== HOLES.length) return false;
+        try {
+          reset();
+          slots = data.slots.map((m) => {
+            if (!m || ['mole', 'bomb', 'gold'].indexOf(m.type) === -1) return null;
+            return {
+              type: m.type,
+              age: Math.max(0, Number(m.age) || 0),
+              life: Math.max(0.2, Number(m.life) || 0.8),
+              hit: !!m.hit,
+              wobble: 0,
+            };
+          });
+          timeLeft = clamp(Number(data.timeLeft) || ROUND_TIME, 0.1, ROUND_TIME);
+          elapsed = Math.max(0, Number(data.elapsed) || 0);
+          score = Math.max(0, Number(data.score) || 0);
+          combo = Math.max(0, Number(data.combo) || 0);
+          comboTimer = Math.max(0, Number(data.comboTimer) || 0);
+          hearts = clamp(Number(data.hearts) || 3, 1, 3);
+          spawnTimer = Number(data.spawnTimer) || 0.5;
+          recordSaved = false;
+          state = 'playing';
+          syncHud();
+          return true;
+        } catch (err) {
+          return false;
+        }
+      }
+
+      const autosave = A.createRunAutosave('mole-whack', serialize, {
+        every: 3,
+        meta: () => ({ score, summary: `得分 ${score} · 连击 ${combo} · 剩余 ${Math.ceil(timeLeft)}s` }),
+      });
+
+      window.addEventListener('keydown', (e) => {
+        const n = Number(e.key);
+        if (Number.isInteger(n) && n >= 1 && n <= 9) hitSlot(n - 1);
+      });
+
+      function drawMole(mole, index) {
+        const hole = HOLES[index];
+        const rise = Math.min(1, mole.age * 8) * (mole.hit ? Math.max(0, 1 - (mole.age - mole.life) * 12) : 1);
+        if (rise <= 0) return;
+        const y = hole.y + 24 - rise * 56;
+        ctx.save();
+        ctx.translate(hole.x, y);
+        if (mole.type === 'bomb') {
+          ctx.fillStyle = '#2b2b36';
+          ctx.beginPath();
+          ctx.arc(0, 0, 26, 0, TAU);
+          ctx.fill();
+          ctx.strokeStyle = '#ff9a3d';
+          ctx.lineWidth = 3;
+          ctx.beginPath();
+          ctx.moveTo(10, -22);
+          ctx.quadraticCurveTo(20, -36, 26, -30);
+          ctx.stroke();
+          ctx.fillStyle = '#ffd23f';
+          ctx.beginPath();
+          ctx.arc(27, -31, 3 + Math.sin(performance.now() / 90) * 1.2, 0, TAU);
+          ctx.fill();
+          ctx.fillStyle = '#ffffff';
+          ctx.beginPath();
+          ctx.arc(-8, -4, 3.5, 0, TAU);
+          ctx.arc(8, -4, 3.5, 0, TAU);
+          ctx.fill();
+          ctx.fillStyle = '#2b2b36';
+          ctx.beginPath();
+          ctx.arc(-8, -4, 1.6, 0, TAU);
+          ctx.arc(8, -4, 1.6, 0, TAU);
+          ctx.fill();
+        } else {
+          const body = mole.type === 'gold' ? '#ffd23f' : '#b8793d';
+          const dark = mole.type === 'gold' ? '#c9970f' : '#8a5527';
+          ctx.fillStyle = body;
+          ctx.beginPath();
+          ctx.arc(0, 0, 27, 0, TAU);
+          ctx.fill();
+          ctx.fillStyle = dark;
+          ctx.beginPath();
+          ctx.ellipse(-18, -18, 7, 9, -0.5, 0, TAU);
+          ctx.fill();
+          ctx.beginPath();
+          ctx.ellipse(18, -18, 7, 9, 0.5, 0, TAU);
+          ctx.fill();
+          ctx.fillStyle = '#2b2118';
+          ctx.beginPath();
+          ctx.arc(-9, -4, 3, 0, TAU);
+          ctx.arc(9, -4, 3, 0, TAU);
+          ctx.fill();
+          ctx.fillStyle = '#f5c542';
+          ctx.beginPath();
+          ctx.arc(0, 6, 5, 0, TAU);
+          ctx.fill();
+          ctx.strokeStyle = dark;
+          ctx.lineWidth = 2;
+          ctx.beginPath();
+          ctx.moveTo(-8, 14);
+          ctx.quadraticCurveTo(0, 18, 8, 14);
+          ctx.stroke();
+          if (mole.type === 'gold') {
+            ctx.fillStyle = 'rgba(255,255,255,0.7)';
+            ctx.beginPath();
+            ctx.arc(-4, -16, 4, 0, TAU);
+            ctx.fill();
+          }
+        }
+        ctx.restore();
+      }
+
+      function render() {
+        stage.beginFrame();
+        ctx.save();
+        if (shake > 0) ctx.translate(rand(-shake, shake), rand(-shake, shake));
+        const bg = ctx.createLinearGradient(0, 0, 0, H);
+        bg.addColorStop(0, '#1a3a2a');
+        bg.addColorStop(1, '#2e5c3c');
+        ctx.fillStyle = bg;
+        ctx.fillRect(0, 0, W, H);
+
+        ctx.fillStyle = 'rgba(255, 240, 200, 0.08)';
+        for (let i = 0; i < 30; i++) {
+          ctx.beginPath();
+          ctx.arc((i * 73) % W, (i * 137) % H, 2 + (i % 3), 0, TAU);
+          ctx.fill();
+        }
+
+        HOLES.forEach((hole, index) => {
+          ctx.fillStyle = 'rgba(20, 30, 20, 0.65)';
+          ctx.beginPath();
+          ctx.ellipse(hole.x, hole.y + 20, HOLE_R + 6, 18, 0, 0, TAU);
+          ctx.fill();
+          ctx.fillStyle = '#101a12';
+          ctx.beginPath();
+          ctx.ellipse(hole.x, hole.y + 16, HOLE_R, 14, 0, 0, TAU);
+          ctx.fill();
+          ctx.strokeStyle = 'rgba(180, 220, 160, 0.2)';
+          ctx.lineWidth = 2;
+          ctx.beginPath();
+          ctx.ellipse(hole.x, hole.y + 12, HOLE_R - 4, 10, 0, 0, TAU);
+          ctx.stroke();
+          if (slots[index]) drawMole(slots[index], index);
+          ctx.fillStyle = 'rgba(40, 60, 36, 0.9)';
+          ctx.beginPath();
+          ctx.ellipse(hole.x, hole.y + 24, HOLE_R, 12, 0, 0, Math.PI);
+          ctx.fill();
+          A.draw.label(ctx, String(index + 1), hole.x - HOLE_R + 4, hole.y - 22, {
+            font: '10px system-ui',
+            color: 'rgba(220,235,210,0.35)',
+          });
+        });
+
+        particles.draw(ctx);
+
+        /* 锤子 */
+        const hx = lastPointer.x + 14;
+        const hy = lastPointer.y - 10;
+        ctx.save();
+        ctx.translate(hx, hy);
+        ctx.rotate(-0.5 + hitFlash * 0.7);
+        ctx.fillStyle = '#8a5a33';
+        ctx.fillRect(-3, 0, 6, 30);
+        ctx.fillStyle = '#c9cfe0';
+        A.draw.roundRect(ctx, -16, -12, 32, 16, 5);
+        ctx.fill();
+        ctx.restore();
+
+        A.draw.label(ctx, 'SCORE ' + score, 12, 24, { align: 'left', font: 'bold 15px system-ui', color: '#ffd23f' });
+        A.draw.label(ctx, Math.ceil(timeLeft) + 's', W - 12, 24, { align: 'right', font: 'bold 16px system-ui', color: timeLeft < 10 ? '#ff5d5d' : '#eef1ff' });
+        A.draw.label(ctx, 'COMBO ×' + Math.max(1, combo), W / 2, 24, { font: 'bold 13px system-ui', color: '#63d68c' });
+        for (let i = 0; i < hearts; i++) {
+          ctx.fillStyle = '#ff5d7a';
+          ctx.beginPath();
+          ctx.arc(20 + i * 17, 52, 5, 0, TAU);
+          ctx.fill();
+        }
+        A.draw.label(ctx, '难度 ' + Math.round(difficulty() * 100) + '%', W - 12, 52, {
+          align: 'right',
+          font: '11px system-ui',
+          color: '#c9d8c0',
+        });
+        ctx.restore();
+      }
+
+      const loop = A.createLoop({
+        update,
+        render,
+        onAutoPause() {
+          if (state === 'playing') pauseByUser();
+        },
+      });
+
+      const pauseUi = A.bindPause({
+        button: dom.pause,
+        pause: pauseByUser,
+        resume: resumeGame,
+        isPlaying: () => state === 'playing',
+        isPaused: () => state === 'paused',
+      });
+
+      function syncMute() {
+        dom.mute.textContent = A.Sfx.muted ? '🔇' : '🔊';
+      }
+      dom.mute.addEventListener('click', () => {
+        A.Sfx.setMuted(!A.Sfx.muted);
+        syncMute();
+      });
+      syncMute();
+
+      reset();
+      state = 'ready';
+      const saved = autosave.load();
+      if (saved) {
+        A.showResumePrompt(ui, saved, {
+          name: '打地鼠',
+          onResume: () => {
+            if (restore(saved.data)) {
+              state = 'playing';
+              ui.hide();
+              loop.resume();
+              pauseUi.sync();
+              autosave.saveNow();
+            } else {
+              autosave.clear();
+              showStart();
+            }
+          },
+          onRestart: () => {
+            autosave.clear();
+            showStart();
+          },
+        });
+      } else {
+        showStart();
+      }
+      loop.start();
+    })();
+  </script>
+</body>
+</html>

@@ -3,7 +3,7 @@
 <head>
   <meta charset="utf-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no, viewport-fit=cover" />
-  <meta name="description" content="影跃：忍者无尽上跳平台游戏，街机厅小游戏，本地即玩。" />
+  <meta name="description" content="影跃：忍者无尽上跳平台游戏，平台落点保证可达，越往高处越容易出现移动与易碎平台，街机厅小游戏，本地即玩。" />
   <meta name="theme-color" content="#0b1020" />
   <link rel="stylesheet" href="../../../shared/site.css" />
   <link rel="stylesheet" href="../arcade.css" />
@@ -21,6 +21,7 @@
         <span>高度 <strong data-hud-score>0</strong>m</span>
         <span>最高 <strong data-hud-high>0</strong>m</span>
       </div>
+      <button type="button" class="ac-icon-btn" data-pause aria-label="暂停游戏" title="暂停游戏（P / Esc）">⏸</button>
       <button type="button" class="ac-icon-btn" data-mute aria-label="切换音效">🔊</button>
     </header>
     <div class="stage-wrap">
@@ -31,11 +32,12 @@
             <h2 data-ov-title>影跃</h2>
             <p data-ov-text>忍者无尽上跳</p>
             <button type="button" class="ac-btn" data-ov-btn>开始游戏</button>
+            <button type="button" class="ac-btn ac-btn-secondary" data-ov-btn2 hidden>重新开始</button>
           </div>
         </div>
       </div>
     </div>
-    <p class="game-hint">←→ / A D 或触摸左右半屏移动 · 触墙反弹 · P 或 Esc 暂停</p>
+    <p class="game-hint">←→ / A D 或触摸左右半屏移动 · 触墙反弹 · 平台落点保证可达 · P / Esc 暂停</p>
   </main>
   <script>
     (() => {
@@ -60,17 +62,21 @@
         ovTitle: document.querySelector('[data-ov-title]'),
         ovText: document.querySelector('[data-ov-text]'),
         ovBtn: document.querySelector('[data-ov-btn]'),
+        ovBtn2: document.querySelector('[data-ov-btn2]'),
         hudScore: document.querySelector('[data-hud-score]'),
         hudHigh: document.querySelector('[data-hud-high]'),
+        pause: document.querySelector('[data-pause]'),
         mute: document.querySelector('[data-mute]'),
       };
+      const ui = A.createOverlayUi(dom);
 
       const particles = A.createParticles();
 
       const player = { x: W / 2 - 13, y: H - 120, w: 26, h: 30, vx: 0, vy: 0, face: 1, prevBottom: 0, jumpTimer: 0 };
       let platforms = [];
-      let camY = 0;          /* 相机：屏幕顶部的世界坐标 */
-      let topY = 0;          /* 本局到达的最高点（世界坐标，越小越高） */
+      let camY = 0;
+      let topY = 0;
+      let startY = 0;
       let state = 'ready';
       let recordSaved = false;
       let score = 0;
@@ -83,9 +89,9 @@
         return y - camY;
       }
 
-      /* ---------- 平台生成 ---------- */
+      /* ---------- 平台生成：横向距离受控，保证每一跳都够得着 ---------- */
       function makePlatform(x, y, kind) {
-        const w = kind === 'fragile' ? rand(70, 96) : rand(78, 112);
+        const w = kind === 'fragile' ? rand(74, 100) : rand(82, 118);
         return {
           x: clamp(x, 6, W - w - 6),
           y,
@@ -101,26 +107,34 @@
       }
 
       function platformChance(y) {
-        /* 越高越容易出现移动 / 易碎平台 */
         const t = clamp(-y / 12000, 0, 1);
         const r = Math.random();
-        if (r < 0.06 + t * 0.10) return 'fragile';
-        if (r < 0.16 + t * 0.24) return 'moving';
+        if (r < 0.05 + t * 0.10) return 'fragile';
+        if (r < 0.14 + t * 0.24) return 'moving';
         return 'normal';
       }
 
+      function addPlatformAbove(highest) {
+        const t = clamp(-highest.y / 12000, 0, 1);
+        const gap = rand(64, 98 + t * 26);
+        const y = highest.y - gap;
+        /* 从上一块平台中心出发，横向偏移最多 150px；跳跃滞空足够覆盖。 */
+        const prevCenter = highest.x + highest.w / 2;
+        const nextW = rand(74, 118);
+        const center = clamp(prevCenter + rand(-150, 150), nextW / 2 + 8, W - nextW / 2 - 8);
+        const p = makePlatform(center - nextW / 2, y, platformChance(y));
+        p.w = nextW;
+        return p;
+      }
+
       function ensurePlatforms() {
-        /* 从最高平台上方持续补平台，直到超过生成线 */
-        let highest = platforms.length ? platforms[platforms.length - 1].y : camY + H;
+        let highest = platforms.length ? platforms[platforms.length - 1] : null;
         const genLine = camY - 80;
-        while (highest > genLine) {
-          const gap = rand(68, 118);
-          const y = highest - gap;
-          const x = rand(6, W - 100);
-          platforms.push(makePlatform(x, y, platformChance(y)));
-          highest = y;
+        while (!highest || highest.y > genLine) {
+          const p = highest ? addPlatformAbove(highest) : makePlatform(rand(6, W - 120), camY - 100, 'normal');
+          platforms.push(p);
+          highest = p;
         }
-        /* 清理掉出屏幕下方的平台 */
         while (platforms.length && platforms[0].y > camY + H + 40) platforms.shift();
       }
 
@@ -128,7 +142,6 @@
       function reset() {
         platforms = [];
         camY = 0;
-        topY = 0;
         score = 0;
         recordSaved = false;
         player.x = W / 2 - player.w / 2;
@@ -136,13 +149,17 @@
         player.vx = 0;
         player.vy = 0;
         player.face = 1;
+        player.jumpTimer = 0;
+        startY = player.y;
+        topY = player.y;
         particles.clear();
-        /* 起始大地面 */
-        platforms.push({ x: 40, y: H - 60, w: W - 80, h: 12, kind: 'normal', dir: 1, speed: 0, broken: false, breakTimer: 0, phase: 0 });
-        let y = H - 60;
-        while (y > -80) {
-          y -= rand(68, 110);
-          platforms.push(makePlatform(rand(6, W - 110), y, 'normal'));
+        const ground = { x: 40, y: H - 60, w: W - 80, h: 12, kind: 'normal', dir: 1, speed: 0, broken: false, breakTimer: 0, phase: 0 };
+        platforms.push(ground);
+        let highest = ground;
+        while (highest.y > -80) {
+          const p = addPlatformAbove(highest);
+          platforms.push(p);
+          highest = p;
         }
         syncHud();
       }
@@ -151,55 +168,141 @@
         dom.hudScore.textContent = String(score);
       }
 
-      function showOverlay(title, text, btn, onBtn) {
-        dom.ovTitle.textContent = title;
-        dom.ovText.innerHTML = text;
-        dom.ovBtn.textContent = btn;
-        dom.overlay.hidden = false;
-        dom.ovBtn.onclick = () => {
-          A.Sfx.play('ui');
-          onBtn();
-        };
-      }
-
       function startGame() {
+        autosave.clear();
         reset();
         state = 'playing';
-        dom.overlay.hidden = true;
+        ui.hide();
         loop.resume();
+        pauseUi.sync();
+        autosave.saveNow();
+      }
+
+      function resumeGame() {
+        if (state !== 'paused') return;
+        state = 'playing';
+        ui.hide();
+        loop.resume();
+        pauseUi.sync();
       }
 
       function gameOver() {
+        if (state === 'over') return;
         state = 'over';
         A.Sfx.play('over');
+        autosave.clear();
+        let rec = null;
         if (!recordSaved) {
-          const rec = A.Progress.recordPlay('shadow-leap', score);
+          rec = A.Progress.recordPlay('shadow-leap', score);
           recordSaved = true;
           dom.hudHigh.textContent = String(Math.max(high, score));
-          loop.pause();
-          showOverlay(
-            '坠落',
-            `<span class="ac-score">${score}m</span>` +
-              (rec.isNewHigh ? '<span class="ac-newhigh">★ 新纪录</span><br/>' : '') +
-              `攀升高度 · 最高 ${Math.max(high, score)}m`,
-            '再来一局',
-            startGame
-          );
-          return;
         }
         loop.pause();
+        ui.show({
+          title: '坠落',
+          text:
+            `<span class="ac-score">${score}m</span>` +
+            (rec && rec.isNewHigh ? '<span class="ac-newhigh">★ 新纪录</span><br/>' : '') +
+            `攀升高度 · 最高 ${Math.max(high, score)}m`,
+          btn: '再来一局',
+          onBtn: startGame,
+        });
+        pauseUi.sync();
       }
 
       function pauseByUser() {
         if (state !== 'playing') return;
         loop.pause();
         state = 'paused';
-        showOverlay('已暂停', '影子随时待命。', '继续', () => {
-          state = 'playing';
-          dom.overlay.hidden = true;
-          loop.resume();
+        autosave.saveNow();
+        ui.show({
+          title: '已暂停',
+          text: '影子随时待命。<br/>局内进度已保存，可以随时离开。',
+          btn: '继续',
+          onBtn: resumeGame,
+        });
+        pauseUi.sync();
+      }
+
+      function showStart() {
+        ui.show({
+          title: '影跃',
+          text: '无尽上跳：踩平台起跳，触墙反弹。<br/>紫色平台会移动 · 白色平台踩一次就碎<br/>平台落点保证可达，越往高处越难',
+          btn: '开始游戏',
+          onBtn: startGame,
         });
       }
+
+      /* ---------- 局内存档 ---------- */
+      function serialize() {
+        if (state !== 'playing' && state !== 'paused') return null;
+        return {
+          player: {
+            x: player.x,
+            y: player.y,
+            vx: player.vx,
+            vy: player.vy,
+            face: player.face,
+          },
+          platforms: platforms.map((p) => ({
+            x: p.x,
+            y: p.y,
+            w: p.w,
+            kind: p.kind,
+            dir: p.dir,
+            speed: p.speed,
+            broken: p.broken,
+            breakTimer: p.breakTimer,
+            phase: p.phase,
+          })),
+          camY,
+          topY,
+          startY,
+          score,
+        };
+      }
+
+      function restore(data) {
+        if (!data || !data.player || !Array.isArray(data.platforms) || !data.platforms.length) return false;
+        try {
+          reset();
+          platforms = data.platforms
+            .filter((p) => p && isFinite(p.x) && isFinite(p.y) && isFinite(p.w))
+            .map((p) => ({
+              x: Number(p.x),
+              y: Number(p.y),
+              w: clamp(Number(p.w), 40, W - 12),
+              h: 12,
+              kind: ['normal', 'moving', 'fragile'].indexOf(p.kind) !== -1 ? p.kind : 'normal',
+              dir: p.dir === -1 ? -1 : 1,
+              speed: Number(p.speed) || 0,
+              broken: !!p.broken,
+              breakTimer: Number(p.breakTimer) || 0,
+              phase: Number(p.phase) || 0,
+            }))
+            .sort((a, b) => b.y - a.y);
+          if (!platforms.length) return false;
+          player.x = clamp(Number(data.player.x) || W / 2, -player.w / 2, W - player.w / 2);
+          player.y = Number(data.player.y) || H - 160;
+          player.vx = Number(data.player.vx) || 0;
+          player.vy = Number(data.player.vy) || 0;
+          player.face = data.player.face === -1 ? -1 : 1;
+          camY = Number(data.camY) || 0;
+          topY = Number(data.topY) || player.y;
+          startY = Number(data.startY) || player.y;
+          score = Math.max(0, Number(data.score) || 0);
+          recordSaved = false;
+          syncHud();
+          return true;
+        } catch (err) {
+          return false;
+        }
+      }
+
+      const autosave = A.createRunAutosave('shadow-leap', serialize, {
+        every: 4,
+        meta: () => ({ score, summary: `高度 ${score}m · 最高 ${Math.max(high, score)}m` }),
+      });
 
       /* ---------- 更新 ---------- */
       function update(dt) {
@@ -209,6 +312,7 @@
           input.endFrame();
           return;
         }
+        autosave.tick(dt);
 
         /* 水平控制 */
         const ACC = 2400;
@@ -254,9 +358,7 @@
               p.dir = -1;
             }
           }
-          if (p.broken) {
-            p.breakTimer -= dt;
-          }
+          if (p.broken) p.breakTimer -= dt;
         });
         platforms = platforms.filter((p) => !(p.broken && p.breakTimer <= 0));
 
@@ -287,14 +389,12 @@
 
         /* 相机跟随：玩家越过中线以上时上移 */
         const line = camY + H * 0.42;
-        if (player.y < line) {
-          camY -= line - player.y;
-        }
+        if (player.y < line) camY -= line - player.y;
 
-        /* 分数 = 最大攀升高度（米） */
+        /* 分数 = 从起点算起的最大攀升高度（米） */
         if (player.y < topY) {
           topY = player.y;
-          const meters = Math.floor(-topY / 10);
+          const meters = Math.max(0, Math.floor((startY - topY) / 10));
           if (meters > score) {
             score = meters;
             syncHud();
@@ -303,8 +403,11 @@
 
         ensurePlatforms();
 
-        /* 掉出底部 */
-        if (player.y > camY + H + 30) gameOver();
+        if (player.y > camY + H + 30) {
+          gameOver();
+          input.endFrame();
+          return;
+        }
         input.endFrame();
       }
 
@@ -325,7 +428,6 @@
           ctx.fill();
           ctx.fillStyle = '#e6ccff';
           ctx.fillRect(p.x + 3, y + 2, p.w - 6, 2);
-          /* 侧向小箭头指示 */
           ctx.fillStyle = 'rgba(230,204,255,0.8)';
           const ax = p.dir > 0 ? p.x + p.w - 8 : p.x + 4;
           ctx.beginPath();
@@ -335,7 +437,6 @@
           ctx.closePath();
           ctx.fill();
         } else {
-          /* fragile */
           ctx.strokeStyle = '#cfd8f2';
           ctx.lineWidth = 2;
           ctx.setLineDash(p.broken ? [3, 5] : []);
@@ -360,11 +461,9 @@
         ctx.translate(player.x + player.w / 2, y + player.h / 2);
         const squash = clamp(1 - player.vy / -2600, 0.82, 1.18);
         ctx.scale(player.face >= 0 ? 1 : -1, 1);
-        /* 身体 */
         ctx.fillStyle = '#232842';
         A.draw.roundRect(ctx, -9, -12 * squash, 18, 22 * squash, 6);
         ctx.fill();
-        /* 围巾 */
         ctx.fillStyle = '#e0567f';
         const flutter = Math.sin(performance.now() / 90) * 3;
         ctx.beginPath();
@@ -373,13 +472,11 @@
         ctx.lineTo(-8, -3 * squash);
         ctx.closePath();
         ctx.fill();
-        /* 头 / 面罩 */
         ctx.fillStyle = '#2c3352';
         A.draw.roundRect(ctx, -8, -22 * squash, 16, 13, 5);
         ctx.fill();
         ctx.fillStyle = '#ffd23f';
         ctx.fillRect(-1, -18 * squash, 7, 3.4);
-        /* 束带 */
         ctx.fillStyle = '#e0567f';
         ctx.fillRect(-9, 2 * squash, 18, 3);
         ctx.restore();
@@ -387,7 +484,6 @@
 
       function render() {
         stage.beginFrame();
-        /* 背景：夜色渐变 + 远山视差 */
         const bg = ctx.createLinearGradient(0, 0, 0, H);
         bg.addColorStop(0, '#170f2e');
         bg.addColorStop(0.6, '#1d1638');
@@ -395,7 +491,6 @@
         ctx.fillStyle = bg;
         ctx.fillRect(0, 0, W, H);
 
-        /* 远景月亮 */
         ctx.fillStyle = 'rgba(255,236,180,0.9)';
         ctx.beginPath();
         ctx.arc(340, 110, 30, 0, TAU);
@@ -405,7 +500,6 @@
         ctx.arc(328, 100, 26, 0, TAU);
         ctx.fill();
 
-        /* 视差远山 */
         const par = (camY * 0.25) % (H + 200);
         ctx.fillStyle = 'rgba(12,10,30,0.8)';
         for (let k = -1; k < 2; k++) {
@@ -422,7 +516,6 @@
           ctx.fill();
         }
 
-        /* 高度标尺（每 50m 一条虚线） */
         const meterLines = 20;
         ctx.strokeStyle = 'rgba(147,160,200,0.14)';
         ctx.lineWidth = 1;
@@ -454,19 +547,20 @@
         });
       }
 
-      /* ---------- 输入与循环 ---------- */
-      window.addEventListener('keydown', (e) => {
-        if (e.key === 'p' || e.key === 'P' || e.key === 'Escape') {
-          if (state === 'playing') pauseByUser();
-        }
-      });
-
       const loop = A.createLoop({
         update,
         render,
         onAutoPause() {
           if (state === 'playing') pauseByUser();
         },
+      });
+
+      const pauseUi = A.bindPause({
+        button: dom.pause,
+        pause: pauseByUser,
+        resume: resumeGame,
+        isPlaying: () => state === 'playing',
+        isPaused: () => state === 'paused',
       });
 
       function syncMute() {
@@ -480,7 +574,30 @@
 
       reset();
       state = 'ready';
-      showOverlay('影跃', '无尽上跳：踩平台起跳，触墙反弹。<br/>紫色平台会移动 · 白色平台踩一次就碎', '开始游戏', startGame);
+      const saved = autosave.load();
+      if (saved) {
+        A.showResumePrompt(ui, saved, {
+          name: '影跃',
+          onResume: () => {
+            if (restore(saved.data)) {
+              state = 'playing';
+              ui.hide();
+              loop.resume();
+              pauseUi.sync();
+              autosave.saveNow();
+            } else {
+              autosave.clear();
+              showStart();
+            }
+          },
+          onRestart: () => {
+            autosave.clear();
+            showStart();
+          },
+        });
+      } else {
+        showStart();
+      }
       loop.start();
     })();
   </script>

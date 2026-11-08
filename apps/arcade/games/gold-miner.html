@@ -3,7 +3,7 @@
 <head>
   <meta charset="utf-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no, viewport-fit=cover" />
-  <meta name="description" content="黄金矿工：摆钩挖金物理游戏，街机厅小游戏，本地即玩。" />
+  <meta name="description" content="黄金矿工：摆钩挖金物理游戏，第一关钟摆较慢并随关卡逐步加速，街机厅小游戏，本地即玩。" />
   <meta name="theme-color" content="#0b1020" />
   <link rel="stylesheet" href="../../../shared/site.css" />
   <link rel="stylesheet" href="../arcade.css" />
@@ -21,6 +21,7 @@
         <span>$<strong data-hud-score>0</strong></span>
         <span>最高 <strong data-hud-high>0</strong></span>
       </div>
+      <button type="button" class="ac-icon-btn" data-pause aria-label="暂停游戏" title="暂停游戏（P / Esc）">⏸</button>
       <button type="button" class="ac-icon-btn" data-mute aria-label="切换音效">🔊</button>
     </header>
     <div class="stage-wrap">
@@ -31,11 +32,12 @@
             <h2 data-ov-title>黄金矿工</h2>
             <p data-ov-text>摆钩挖金</p>
             <button type="button" class="ac-btn" data-ov-btn>开始游戏</button>
+            <button type="button" class="ac-btn ac-btn-secondary" data-ov-btn2 hidden>重新开始</button>
           </div>
         </div>
       </div>
     </div>
-    <p class="game-hint">看准角度点击 / 空格放钩 · 重物拉得慢 · 别碰炸药 · 每关限时达标 · P 暂停</p>
+    <p class="game-hint">看准角度点击 / 空格放钩 · 第一关摆速较慢，逐关加快 · 重物拉得慢 · 别碰炸药 · 限时达标过关 · P / Esc 暂停</p>
   </main>
   <script>
     (() => {
@@ -62,14 +64,16 @@
         ovTitle: document.querySelector('[data-ov-title]'),
         ovText: document.querySelector('[data-ov-text]'),
         ovBtn: document.querySelector('[data-ov-btn]'),
+        ovBtn2: document.querySelector('[data-ov-btn2]'),
         hudScore: document.querySelector('[data-hud-score]'),
         hudHigh: document.querySelector('[data-hud-high]'),
+        pause: document.querySelector('[data-pause]'),
         mute: document.querySelector('[data-mute]'),
       };
+      const ui = A.createOverlayUi(dom);
 
       const particles = A.createParticles();
 
-      /* ---------- 物品类型 ---------- */
       const TYPES = {
         goldS: { r: 9, value: 50, weight: 2, label: '小金' },
         goldM: { r: 14, value: 150, weight: 4, label: '中金' },
@@ -80,8 +84,8 @@
         tnt: { r: 11, value: 0, weight: 0, label: '炸药' },
       };
 
-      const pend = { angle: 0.9, vel: 0, length: MIN_LEN, gravity: 1400, damping: 0 };
-      let clawState = 'swing'; /* swing | extend | retract */
+      const pend = { angle: 0.9, vel: 0, length: MIN_LEN, gravity: 520, damping: 0 };
+      let clawState = 'swing';
       let items = [];
       let holding = null;
       let money = 0;
@@ -93,11 +97,21 @@
       let state = 'ready';
       let recordSaved = false;
       let spaceWasDown = false;
-      let clawOpen = 0; /* 张合动画 0~1 */
+      let clawOpen = 0;
 
       const high = A.Progress.get('gold-miner').high;
       dom.hudHigh.textContent = String(high);
 
+      /* 摆速随关卡提高：第一关慢，之后逐关加速。 */
+      function swingGravity(lv) {
+        return Math.min(1500, 520 + Math.max(0, lv - 1) * 130);
+      }
+      function levelTime(lv) {
+        return Math.max(40, LEVEL_TIME - (lv - 1) * 3);
+      }
+      function targetFor(lv) {
+        return 650 + (lv - 1) * 550;
+      }
       function clawTip() {
         return {
           x: PIVOT.x + Math.sin(pend.angle) * pend.length,
@@ -107,9 +121,6 @@
       function retractSpeed() {
         if (!holding) return 840;
         return clamp(200 + 2600 / holding.weight, 200, 840);
-      }
-      function targetFor(lv) {
-        return 650 + (lv - 1) * 550;
       }
 
       function makeDirt() {
@@ -153,20 +164,21 @@
         });
       }
 
-      /* ---------- 流程 ---------- */
       function reset() {
         money = 0;
         level = 1;
         target = targetFor(1);
-        timeLeft = LEVEL_TIME;
+        timeLeft = levelTime(1);
         floaters = [];
         recordSaved = false;
         particles.clear();
         pend.angle = rand(0.75, 0.95) * (Math.random() > 0.5 ? 1 : -1);
         pend.vel = 0;
         pend.length = MIN_LEN;
+        pend.gravity = swingGravity(1);
         clawState = 'swing';
         clawOpen = 0;
+        spaceWasDown = false;
         makeDirt();
         spawnItems();
         syncHud();
@@ -176,27 +188,29 @@
         dom.hudScore.textContent = String(Math.floor(money));
       }
 
-      function showOverlay(title, text, btn, onBtn) {
-        dom.ovTitle.textContent = title;
-        dom.ovText.innerHTML = text;
-        dom.ovBtn.textContent = btn;
-        dom.overlay.hidden = false;
-        dom.ovBtn.onclick = () => {
-          A.Sfx.play('ui');
-          onBtn();
-        };
-      }
-
       function startGame() {
+        autosave.clear();
         reset();
         state = 'playing';
-        dom.overlay.hidden = true;
+        ui.hide();
         loop.resume();
+        pauseUi.sync();
+        autosave.saveNow();
+      }
+
+      function resumeGame() {
+        if (state !== 'paused') return;
+        state = 'playing';
+        ui.hide();
+        loop.resume();
+        pauseUi.sync();
       }
 
       function gameOver() {
+        if (state === 'over') return;
         state = 'over';
         A.Sfx.play('over');
+        autosave.clear();
         const total = Math.floor(money);
         let rec = null;
         if (!recordSaved) {
@@ -205,33 +219,56 @@
           dom.hudHigh.textContent = String(Math.max(high, total));
         }
         loop.pause();
-        showOverlay(
-          '收工',
-          `<span class="ac-score">$${total}</span>` +
+        ui.show({
+          title: '收工',
+          text:
+            `<span class="ac-score">$${total}</span>` +
             (rec && rec.isNewHigh ? '<span class="ac-newhigh">★ 新纪录</span><br/>' : '') +
             `第 ${level} 关 · 目标 $${target} 未达成 · 最高 $${Math.max(high, total)}`,
-          '再来一局',
-          startGame
-        );
+          btn: '再来一局',
+          onBtn: startGame,
+        });
+        pauseUi.sync();
       }
 
       function nextLevel() {
         level += 1;
         target = targetFor(level);
-        timeLeft = LEVEL_TIME;
+        timeLeft = levelTime(level);
+        pend.gravity = swingGravity(level);
+        pend.angle = rand(0.75, 0.95) * (Math.random() > 0.5 ? 1 : -1);
+        pend.vel = 0;
+        pend.length = MIN_LEN;
+        clawState = 'swing';
+        clawOpen = 0;
+        holding = null;
+        spaceWasDown = false;
         spawnItems();
         A.Sfx.play('perfect');
         floaters.push({ text: '达标！进入第 ' + level + ' 关', x: W / 2, y: 320, life: 1.6, maxLife: 1.6, color: '#63d68c', big: true });
+        syncHud();
       }
 
       function pauseByUser() {
         if (state !== 'playing') return;
         loop.pause();
         state = 'paused';
-        showOverlay('已暂停', '矿场午休。', '继续', () => {
-          state = 'playing';
-          dom.overlay.hidden = true;
-          loop.resume();
+        autosave.saveNow();
+        ui.show({
+          title: '已暂停',
+          text: '矿场午休。<br/>局内进度已保存，可以随时离开。',
+          btn: '继续',
+          onBtn: resumeGame,
+        });
+        pauseUi.sync();
+      }
+
+      function showStart() {
+        ui.show({
+          title: '黄金矿工',
+          text: '摆钩挖金：限时内赚到目标金额。<br/>第一关摆速较慢，之后逐关加速<br/>钻石最值钱 · 石头死沉 · 炸药会炸掉周围',
+          btn: '开始游戏',
+          onBtn: startGame,
         });
       }
 
@@ -292,6 +329,76 @@
         syncHud();
       }
 
+      /* ---------- 局内存档 ---------- */
+      function serialize() {
+        if (state !== 'playing' && state !== 'paused') return null;
+        return {
+          items: items.map((o) => ({ type: o.type, x: o.x, y: o.y, wob: o.wob })),
+          holdingIndex: holding ? items.indexOf(holding) : -1,
+          money,
+          level,
+          target,
+          timeLeft,
+          pend: { angle: pend.angle, vel: pend.vel, length: pend.length, gravity: pend.gravity },
+          clawState,
+          clawOpen,
+          dirt,
+        };
+      }
+
+      function restore(data) {
+        if (!data || !Array.isArray(data.items)) return false;
+        try {
+          reset();
+          items = data.items
+            .filter((o) => o && TYPES[o.type] && isFinite(o.x) && isFinite(o.y))
+            .map((o) => ({
+              type: o.type,
+              x: clamp(Number(o.x), 0, W),
+              y: clamp(Number(o.y), 0, H),
+              r: TYPES[o.type].r,
+              value: TYPES[o.type].value,
+              weight: TYPES[o.type].weight,
+              wob: Number(o.wob) || 0,
+            }));
+          money = Math.max(0, Number(data.money) || 0);
+          level = Math.max(1, Number(data.level) || 1);
+          target = Math.max(1, Number(data.target) || targetFor(level));
+          timeLeft = clamp(Number(data.timeLeft) || levelTime(level), 0.1, levelTime(level));
+          if (data.pend && isFinite(data.pend.angle)) {
+            pend.angle = Number(data.pend.angle);
+            pend.vel = Number(data.pend.vel) || 0;
+            pend.length = clamp(Number(data.pend.length) || MIN_LEN, MIN_LEN, 800);
+            pend.gravity = Number(data.pend.gravity) || swingGravity(level);
+          }
+          clawState = ['swing', 'extend', 'retract'].indexOf(data.clawState) !== -1 ? data.clawState : 'swing';
+          clawOpen = clamp(Number(data.clawOpen) || 0, 0, 1);
+          if (Array.isArray(data.dirt) && data.dirt.length) {
+            dirt = data.dirt
+              .filter((d) => d && isFinite(d.x) && isFinite(d.y))
+              .map((d) => ({ x: Number(d.x), y: Number(d.y), r: Number(d.r) || 3, shade: Number(d.shade) || 0.08 }));
+          }
+          const hi = Number(data.holdingIndex);
+          if (clawState === 'retract' && Number.isInteger(hi) && hi >= 0 && hi < items.length) {
+            holding = items[hi];
+          } else {
+            holding = null;
+            if (clawState === 'retract') clawState = 'swing';
+          }
+          recordSaved = false;
+          spaceWasDown = false;
+          syncHud();
+          return true;
+        } catch (err) {
+          return false;
+        }
+      }
+
+      const autosave = A.createRunAutosave('gold-miner', serialize, {
+        every: 4,
+        meta: () => ({ score: Math.floor(money), summary: `$${Math.floor(money)} · 第 ${level} 关 · 目标 $${target}` }),
+      });
+
       /* ---------- 更新 ---------- */
       function update(dt) {
         particles.update(dt);
@@ -305,23 +412,20 @@
           input.endFrame();
           return;
         }
-
+        autosave.tick(dt);
         timeLeft -= dt;
 
-        /* 摆动 / 伸缩状态机 */
         if (clawState === 'swing') {
           A.Physics.pendulumStep(pend, dt);
           pend.length = MIN_LEN;
           clawOpen = lerp(clawOpen, 0.35, Math.min(1, 10 * dt));
-          /* 放钩输入 */
           const spaceNow = input.isDown(' ');
-          if ((input.pointer.wentDown || (spaceNow && !spaceWasDown))) releaseClaw();
+          if (input.pointer.wentDown || (spaceNow && !spaceWasDown)) releaseClaw();
           spaceWasDown = spaceNow;
         } else if (clawState === 'extend') {
           pend.length += EXTEND_SPEED * dt;
           clawOpen = lerp(clawOpen, 1, Math.min(1, 10 * dt));
           const tip = clawTip();
-          /* 抓取检测 */
           for (const o of items) {
             if (A.Physics.circleCircle(tip.x, tip.y, CLAW_R, o.x, o.y, o.r)) {
               if (o.type === 'tnt') {
@@ -335,7 +439,6 @@
               break;
             }
           }
-          /* 出界收回 */
           if (clawState === 'extend' && (tip.x < 12 || tip.x > W - 12 || tip.y > H - 10)) {
             clawState = 'retract';
           }
@@ -348,7 +451,6 @@
           }
         }
 
-        /* 计时结束 */
         if (timeLeft <= 0) {
           timeLeft = 0;
           if (money >= target) {
@@ -364,13 +466,11 @@
 
       /* ---------- 渲染 ---------- */
       function drawBackground() {
-        /* 天空 */
         const sky = ctx.createLinearGradient(0, 0, 0, 180);
         sky.addColorStop(0, '#ffd9a0');
         sky.addColorStop(1, '#f2b46b');
         ctx.fillStyle = sky;
         ctx.fillRect(0, 0, W, 180);
-        /* 云 */
         ctx.fillStyle = 'rgba(255,255,255,0.5)';
         [
           [60, 40, 26],
@@ -382,13 +482,11 @@
           ctx.arc(x, y, r, 0, TAU);
           ctx.fill();
         });
-        /* 土层 */
         const soil = ctx.createLinearGradient(0, 180, 0, H);
         soil.addColorStop(0, '#8a5a33');
         soil.addColorStop(1, '#5c3a20');
         ctx.fillStyle = soil;
         ctx.fillRect(0, 180, W, H - 180);
-        /* 草线 */
         ctx.fillStyle = '#4f8a3d';
         ctx.fillRect(0, 168, W, 12);
         dirt.forEach((d) => {
@@ -402,16 +500,13 @@
       function drawMiner() {
         ctx.save();
         ctx.translate(PIVOT.x, PIVOT.y - 4);
-        /* 身体 */
         ctx.fillStyle = '#3d5a9c';
         A.draw.roundRect(ctx, -12, -12, 24, 26, 7);
         ctx.fill();
-        /* 头 */
         ctx.fillStyle = '#f0c8a0';
         ctx.beginPath();
         ctx.arc(0, -22, 10, 0, TAU);
         ctx.fill();
-        /* 安全帽 */
         ctx.fillStyle = '#f5c542';
         ctx.beginPath();
         ctx.arc(0, -24, 11, Math.PI, 0);
@@ -422,20 +517,15 @@
 
       function drawClaw() {
         const tip = clawTip();
-        /* 绳 */
         ctx.strokeStyle = '#2c2018';
         ctx.lineWidth = 3;
         ctx.beginPath();
         ctx.moveTo(PIVOT.x, PIVOT.y);
         ctx.lineTo(tip.x, tip.y);
         ctx.stroke();
-        /* 抓到的物品贴在爪后 */
         if (holding) {
-          const t = TYPES[holding.type];
           drawItem({ ...holding, x: tip.x, y: tip.y + holding.r * 0.4 });
-          void t;
         }
-        /* 爪两瓣 */
         const ang = pend.angle;
         const open = clawOpen;
         ctx.save();
@@ -477,7 +567,6 @@
           ctx.strokeStyle = '#9c7420';
           ctx.lineWidth = 1.6;
           ctx.stroke();
-          /* 闪光 */
           ctx.fillStyle = 'rgba(255,255,255,0.75)';
           ctx.fillRect(-o.r * 0.45, -o.r * 0.45, o.r * 0.28, o.r * 0.28);
         } else if (o.type === 'diamond') {
@@ -510,7 +599,6 @@
           ctx.lineWidth = 1.5;
           ctx.stroke();
         } else {
-          /* tnt */
           ctx.fillStyle = '#d8443f';
           A.draw.roundRect(ctx, -o.r * 0.75, -o.r, o.r * 1.5, o.r * 2, 3);
           ctx.fill();
@@ -520,7 +608,6 @@
           ctx.fillStyle = '#f0f2fa';
           ctx.fillRect(-o.r * 0.75, -o.r * 0.35, o.r * 1.5, o.r * 0.55);
           A.draw.label(ctx, 'TNT', 0, -o.r * 0.08, { font: `bold ${Math.max(7, o.r * 0.6)}px system-ui`, color: '#d8443f' });
-          /* 引线 */
           ctx.strokeStyle = '#2c2018';
           ctx.beginPath();
           ctx.moveTo(0, -o.r);
@@ -542,7 +629,6 @@
         drawMiner();
         drawClaw();
 
-        /* 飘字 */
         floaters.forEach((f) => {
           A.draw.label(ctx, f.text, clamp(f.x, 40, W - 40), f.y, {
             font: f.big ? 'bold 18px system-ui' : 'bold 14px system-ui',
@@ -551,13 +637,15 @@
           });
         });
 
-        /* HUD */
         A.draw.label(ctx, `$${Math.floor(money)} / $${target}`, 12, 24, {
           align: 'left',
           font: 'bold 14px system-ui',
           color: money >= target ? '#63d68c' : '#ffd23f',
         });
-        A.draw.label(ctx, '第 ' + level + ' 关', W / 2, 24, { font: 'bold 12px system-ui', color: '#6b4a2c' });
+        A.draw.label(ctx, '第 ' + level + ' 关 · 摆速 ' + (pend.gravity / 520).toFixed(1) + '×', W / 2, 24, {
+          font: 'bold 12px system-ui',
+          color: '#6b4a2c',
+        });
         const urgent = timeLeft < 10;
         A.draw.label(ctx, Math.ceil(timeLeft) + 's', W - 12, 24, {
           align: 'right',
@@ -566,19 +654,20 @@
         });
       }
 
-      /* ---------- 输入与循环 ---------- */
-      window.addEventListener('keydown', (e) => {
-        if (e.key === 'p' || e.key === 'P' || e.key === 'Escape') {
-          if (state === 'playing') pauseByUser();
-        }
-      });
-
       const loop = A.createLoop({
         update,
         render,
         onAutoPause() {
           if (state === 'playing') pauseByUser();
         },
+      });
+
+      const pauseUi = A.bindPause({
+        button: dom.pause,
+        pause: pauseByUser,
+        resume: resumeGame,
+        isPlaying: () => state === 'playing',
+        isPaused: () => state === 'paused',
       });
 
       function syncMute() {
@@ -592,7 +681,30 @@
 
       reset();
       state = 'ready';
-      showOverlay('黄金矿工', '摆钩挖金：60 秒内赚到目标金额。<br/>钻石最值钱 · 石头不值钱还死沉<br/>炸药会炸掉周围一切', '开始游戏', startGame);
+      const saved = autosave.load();
+      if (saved) {
+        A.showResumePrompt(ui, saved, {
+          name: '黄金矿工',
+          onResume: () => {
+            if (restore(saved.data)) {
+              state = 'playing';
+              ui.hide();
+              loop.resume();
+              pauseUi.sync();
+              autosave.saveNow();
+            } else {
+              autosave.clear();
+              showStart();
+            }
+          },
+          onRestart: () => {
+            autosave.clear();
+            showStart();
+          },
+        });
+      } else {
+        showStart();
+      }
       loop.start();
     })();
   </script>

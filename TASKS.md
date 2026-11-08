@@ -15,6 +15,8 @@
 | T009 | agent | 门户去冗余文案（let UI speak for itself） | DONE | T008 | 提交 `65e63b8`；hero/关于/导航/英文标语移除，页脚压缩为单行；run `41265543819` 成功；线上复测零冗余零溢出零 404 |
 | T010 | agent | 街机厅 Arcade：竖屏物理小游戏合集 | DONE | T009 | 本地分支 `feat/arcade-hall` 9 提交；中心页 + engine.js + 4 游戏（星海突击/影跃/层塔/雪铃）+ 自研物理与合成音效；registry `draft` v0.1.0 待 Owner 验收；validate/build/node 全过；浏览器实测可玩与窄屏通过；仅本地未推送 |
 | T011 | agent | 街机厅增补 GBA 经典三连 + 移动端触控适配 | DONE | T010 | 俄罗斯方块/极速车道/黄金矿工接入，升版 0.2.0；全部游戏 PC+触摸双输入、viewport/滚动/选中触控加固；8 页面 375px 无溢出；浏览器实测三游戏（128 分/287m/$865 超标）通过 |
+| T012 | agent | 街机厅 0.3.0：13 款竖屏游戏、局内进度恢复、搜索筛选与人工反馈修复 | DONE | T011 | 新增 6 游戏；RunSave 局内档；搜索/筛选/续玩；雪铃可达、矿工/层塔摆速、星海 4 Buff、方块触屏面板；validate/build/34 项 CDP 冒烟全过 |
+| T013 | agent | 街机厅 0.3.0 发布：推送 main 并验证 GitHub Pages | READY | T012 | 当前任务 Owner 已明确要求推送部署；待推送后核验 Actions 与线上版本 |
 
 ## 任务命令
 

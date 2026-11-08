@@ -210,6 +210,46 @@
       "claimedAt": "2026-11-08T16:00:00+00:00",
       "completedAt": "2026-11-08T16:40:00+00:00",
       "evidence": "Owner 口头需求（GBA 经典复刻 + PC/移动双端可玩 + 验证后推送部署）；提交 044f97c（三游戏+清单+文档）与 681409d（移动端触控加固）；新增引号校验即刻抓到 road-rush data-ov-text 同类笔误并修复；浏览器实测：俄罗斯方块渲染（井/下落块/幽灵/NEXT/面板）+ 连续硬降 4 次 score 128；极速车道行驶 287m/167km/h、透视公路/红白路肩/落日远山/NPC 车渲染正常；黄金矿工随机节奏 10 钩 $865 超第 1 关目标（$650），矿工/钩爪/金块/钻石/石头/TNT/HUD 渲染正常——首测 0 分系固定间隔与单摆周期锁相致大摆角出钩全空，属测试方法问题非游戏缺陷；8 页面 375px 全扫描无溢出（舞台统一 296x522，中心页单列 336）；触摸输入说明：所有游戏触摸分区/拖动/半屏/点击放钩走 Pointer Events（与鼠标同源已验证），viewport 加 maximum-scale=1 + user-scalable=no + viewport-fit=cover，body 加 overscroll-behavior:contain + user-select:none + touch-action:manipulation"
+    },
+    {
+      "id": "T012",
+      "title": "街机厅 0.3.0：13 款竖屏游戏、局内进度恢复、搜索筛选与人工反馈修复",
+      "kind": "agent",
+      "status": "DONE",
+      "dependsOn": [
+        "T011"
+      ],
+      "ownerAuthorizationRequired": false,
+      "acceptance": [
+        "新增 6 款竖屏碎片时间游戏（memory-flip / merge-2048 / brick-breaker / gravity-flip / snake-run / mole-whack），GAMES 扩至 13 款，registry/engine/README/CHANGELOG 版本 0.3.0 同步",
+        "每款游戏由简到难，顶栏暂停按钮 + P/Esc + 失焦自动暂停，局内进度自动保存并支持「继续上次 / 重新开始」",
+        "中心页搜索、类型筛选、只看玩过、五种排序、继续上次区域与含局内进度的导出/导入",
+        "人工反馈修复：雪铃首排铃铛可达、黄金矿工/层塔钟摆由慢到快、星海突击四种弹种 Buff、俄罗斯方块移动端按钮面板",
+        "validate_site.py / build_site.py / node --check / 无头浏览器 34 项冒烟测试通过，14 页 375px 无横向溢出"
+      ],
+      "claimedAt": "2026-11-08T16:20:00+00:00",
+      "completedAt": "2026-11-08T16:45:00+00:00",
+      "evidence": "引擎 0.3.0：RunSave（studiokit:arcade:runs:v1）、createRunAutosave、createOverlayUi、bindPause、showResumePrompt；13 款游戏全部接入暂停/自动暂停/续玩；中心页搜索/筛选/排序/续玩/备份；tools/arcade_smoke.mjs 使用 Node + 本机 Chrome CDP，34/34 通过（门户卡片、13 卡、搜索、筛选、13 款开始/暂停/存档/续玩、关键交互、星海 4 Buff、自然结算、375px 14 页、俄罗斯方块触屏面板）；validate/build 通过；人工反馈 1-5 已修复并验证"
+    },
+    {
+      "id": "T013",
+      "title": "街机厅 0.3.0 发布：推送 main 并验证 GitHub Pages",
+      "kind": "agent",
+      "status": "IN_PROGRESS",
+      "dependsOn": [
+        "T012"
+      ],
+      "ownerAuthorizationRequired": true,
+      "acceptance": [
+        "当前任务 Owner 明确要求提交并推送远端触发 GitHub Pages",
+        "main 推送成功且 Actions validate + deploy 成功",
+        "线上 https://shawlaw.github.io/studiokit/apps/arcade/ 可访问，显示 v0.3.0 / 13 款游戏",
+        "线上至少抽检 3 款新游戏页面 HTTP 200 且无资源 404"
+      ],
+      "claimedAt": "2026-11-08T16:48:08+00:00",
+      "completedAt": null,
+      "evidence": "",
+      "ownerAuthorizationVerifiedByAgentFlag": true
     }
   ]
 }

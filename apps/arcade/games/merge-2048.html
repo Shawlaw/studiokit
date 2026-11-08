@@ -1,0 +1,532 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no, viewport-fit=cover" />
+  <meta name="description" content="2048 合成：滑动数字方块，合成 2048，支持撤销一步与局内进度恢复，适合地铁通勤的竖屏益智小游戏。" />
+  <meta name="theme-color" content="#0b1020" />
+  <link rel="stylesheet" href="../../../shared/site.css" />
+  <link rel="stylesheet" href="../arcade.css" />
+  <script src="../../../shared/site-shell.js" defer></script>
+  <script src="../engine.js"></script>
+  <title>2048 合成 · 街机厅 · StudioKit</title>
+</head>
+<body class="arcade-body" data-studiokit-app="arcade" data-studiokit-app-title="街机厅 Arcade" style="--ac-accent:#f2b33d; --card-accent:#f2b33d">
+  <noscript><p class="ac-noscript">此游戏需要启用 JavaScript 才能运行。</p></noscript>
+  <main class="game-page">
+    <header class="game-topbar">
+      <a class="ac-back" href="../index.html">‹ 街机厅</a>
+      <h1 class="game-title">🔢 2048 合成</h1>
+      <div class="game-hud">
+        <span>分数 <strong data-hud-score>0</strong></span>
+        <span>最高 <strong data-hud-high>0</strong></span>
+      </div>
+      <button type="button" class="ac-icon-btn" data-undo aria-label="撤销一步" title="撤销一步（Z）">↶</button>
+      <button type="button" class="ac-icon-btn" data-pause aria-label="暂停游戏" title="暂停游戏（P / Esc）">⏸</button>
+      <button type="button" class="ac-icon-btn" data-mute aria-label="切换音效">🔊</button>
+    </header>
+    <div class="stage-wrap">
+      <div class="stage-box">
+        <canvas class="game-canvas" aria-label="2048 合成游戏画面"></canvas>
+        <div class="overlay" data-overlay hidden>
+          <div class="overlay-panel">
+            <h2 data-ov-title>2048 合成</h2>
+            <p data-ov-text>滑动数字，合成 2048</p>
+            <button type="button" class="ac-btn" data-ov-btn>开始游戏</button>
+            <button type="button" class="ac-btn ac-btn-secondary" data-ov-btn2 hidden>重新开始</button>
+          </div>
+        </div>
+      </div>
+    </div>
+    <p class="game-hint">方向键 / WASD 或滑动屏幕移动 · 同数相撞合并 · Z / ↶ 撤销一步 · 达成 2048 后仍可继续 · P / Esc 暂停</p>
+  </main>
+  <script>
+    (() => {
+      'use strict';
+      const A = window.Arcade;
+      const { clamp, rand, TAU } = A.utils;
+
+      const W = 420;
+      const H = 740;
+      const N = 4;
+      const CELL = 84;
+      const GAP = 10;
+      const BOARD_W = N * CELL + (N - 1) * GAP;
+      const BOARD_X = (W - BOARD_W) / 2;
+      const BOARD_Y = 184;
+
+      const canvas = document.querySelector('.game-canvas');
+      const stage = A.createStage(canvas, W, H);
+      const ctx = stage.ctx;
+      const input = A.createInput(canvas);
+      A.installSfxUnlock();
+
+      const dom = {
+        overlay: document.querySelector('[data-overlay]'),
+        ovTitle: document.querySelector('[data-ov-title]'),
+        ovText: document.querySelector('[data-ov-text]'),
+        ovBtn: document.querySelector('[data-ov-btn]'),
+        ovBtn2: document.querySelector('[data-ov-btn2]'),
+        hudScore: document.querySelector('[data-hud-score]'),
+        hudHigh: document.querySelector('[data-hud-high]'),
+        pause: document.querySelector('[data-pause]'),
+        undo: document.querySelector('[data-undo]'),
+        mute: document.querySelector('[data-mute]'),
+      };
+      const ui = A.createOverlayUi(dom);
+
+      const COLORS = {
+        2: ['#eee8da', '#6b6357'],
+        4: ['#ede0c8', '#6b6357'],
+        8: ['#f2b179', '#ffffff'],
+        16: ['#f59563', '#ffffff'],
+        32: ['#f67c5f', '#ffffff'],
+        64: ['#f65e3b', '#ffffff'],
+        128: ['#edcf72', '#ffffff'],
+        256: ['#edcc61', '#ffffff'],
+        512: ['#edc850', '#ffffff'],
+        1024: ['#edc53f', '#ffffff'],
+        2048: ['#edc22e', '#ffffff'],
+        4096: ['#3c3a32', '#ffffff'],
+      };
+
+      let board = [];
+      let score = 0;
+      let moves = 0;
+      let won = false;
+      let nextId = 1;
+      let undoStack = [];
+      let moveLock = 0;
+      let state = 'ready';
+      let recordSaved = false;
+      let swipeStart = null;
+      let keyWasDown = {};
+      let lastBest = 0;
+
+      const high = A.Progress.get('merge-2048').high;
+      dom.hudHigh.textContent = String(high);
+
+      function emptyBoard() {
+        return Array.from({ length: N }, () => new Array(N).fill(null));
+      }
+
+      function allTiles() {
+        const out = [];
+        for (let r = 0; r < N; r++) for (let c = 0; c < N; c++) if (board[r][c]) out.push(board[r][c]);
+        return out;
+      }
+
+      function bestTile() {
+        let best = 0;
+        allTiles().forEach((t) => (best = Math.max(best, t.value)));
+        return best;
+      }
+
+      function spawnTile() {
+        const empty = [];
+        for (let r = 0; r < N; r++) for (let c = 0; c < N; c++) if (!board[r][c]) empty.push([r, c]);
+        if (!empty.length) return null;
+        const [r, c] = empty[Math.floor(Math.random() * empty.length)];
+        const tile = {
+          id: nextId++,
+          value: Math.random() < 0.9 ? 2 : 4,
+          r,
+          c,
+          pr: r,
+          pc: c,
+          anim: 1,
+          pop: 1,
+        };
+        board[r][c] = tile;
+        return tile;
+      }
+
+      function syncHud() {
+        dom.hudScore.textContent = String(score);
+      }
+
+      function reset() {
+        board = emptyBoard();
+        score = 0;
+        moves = 0;
+        won = false;
+        nextId = 1;
+        undoStack = [];
+        moveLock = 0;
+        swipeStart = null;
+        recordSaved = false;
+        lastBest = 0;
+        spawnTile();
+        spawnTile();
+        syncHud();
+      }
+
+      function startGame() {
+        autosave.clear();
+        reset();
+        state = 'playing';
+        ui.hide();
+        loop.resume();
+        pauseUi.sync();
+        autosave.saveNow();
+      }
+
+      function resumeGame() {
+        if (state !== 'paused') return;
+        state = 'playing';
+        ui.hide();
+        loop.resume();
+        pauseUi.sync();
+      }
+
+      function finish(win) {
+        if (state === 'over') return;
+        state = 'over';
+        autosave.clear();
+        A.Sfx.play(win ? 'perfect' : 'over');
+        let rec = null;
+        if (!recordSaved) {
+          rec = A.Progress.recordPlay('merge-2048', score);
+          recordSaved = true;
+          dom.hudHigh.textContent = String(Math.max(A.Progress.get('merge-2048').high, score));
+        }
+        loop.pause();
+        ui.show({
+          title: win ? '2048 达成！' : '棋盘满了',
+          text:
+            `<span class="ac-score">${score}</span>` +
+            (rec && rec.isNewHigh ? '<span class="ac-newhigh">★ 新纪录</span><br/>' : '') +
+            `${moves} 步 · 最大方块 ${bestTile()}${win ? ' · 可以继续挑战更高数字' : ''}`,
+          btn: win ? '继续挑战' : '再来一局',
+          onBtn: win ? () => { state = 'playing'; ui.hide(); loop.resume(); pauseUi.sync(); } : startGame,
+        });
+        pauseUi.sync();
+      }
+
+      function pauseByUser() {
+        if (state !== 'playing') return;
+        loop.pause();
+        state = 'paused';
+        autosave.saveNow();
+        ui.show({ title: '已暂停', text: '数字先停一停。<br/>局内进度已保存。', btn: '继续', onBtn: resumeGame });
+        pauseUi.sync();
+      }
+
+      function showStart() {
+        ui.show({
+          title: '2048 合成',
+          text: '滑动 / 方向键移动所有方块。<br/>同数相撞合并，目标 2048<br/>一步可撤销 · 达成后仍可继续挑战',
+          btn: '开始游戏',
+          onBtn: startGame,
+        });
+      }
+
+      function snapshot() {
+        return {
+          values: board.map((row) => row.map((t) => (t ? t.value : 0))),
+          score,
+          won,
+          moves,
+        };
+      }
+
+      function serialize() {
+        if (state !== 'playing' && state !== 'paused') return null;
+        return {
+          board: board.map((row) => row.map((t) => (t ? t.value : 0))),
+          score,
+          moves,
+          won,
+          undo: undoStack.slice(-3),
+        };
+      }
+
+      function restore(data) {
+        if (!data || !Array.isArray(data.board) || data.board.length !== N) return false;
+        try {
+          reset();
+          const values = data.board;
+          if (values.some((row) => !Array.isArray(row) || row.length !== N)) return false;
+          board = emptyBoard();
+          nextId = 1;
+          for (let r = 0; r < N; r++) {
+            for (let c = 0; c < N; c++) {
+              const v = Number(values[r][c]);
+              if (v >= 2 && (v & (v - 1)) === 0) {
+                board[r][c] = { id: nextId++, value: v, r, c, pr: r, pc: c, anim: 1, pop: 0 };
+              }
+            }
+          }
+          score = Math.max(0, Number(data.score) || 0);
+          moves = Math.max(0, Number(data.moves) || 0);
+          won = !!data.won;
+          undoStack = Array.isArray(data.undo) ? data.undo.filter((s) => s && Array.isArray(s.values)) : [];
+          recordSaved = false;
+          state = 'playing';
+          syncHud();
+          return true;
+        } catch (err) {
+          return false;
+        }
+      }
+
+      const autosave = A.createRunAutosave('merge-2048', serialize, {
+        every: 3,
+        meta: () => ({ score, summary: `得分 ${score} · ${moves} 步 · 最大 ${bestTile()}` }),
+      });
+
+      function lineCoords(dir, index, step) {
+        if (dir === 'left') return { r: index, c: step };
+        if (dir === 'right') return { r: index, c: N - 1 - step };
+        if (dir === 'up') return { r: step, c: index };
+        return { r: N - 1 - step, c: index };
+      }
+
+      function move(dir) {
+        if (state !== 'playing' || moveLock > 0) return false;
+        const before = snapshot();
+        allTiles().forEach((t) => {
+          t.merged = false;
+        });
+        let moved = false;
+        const newBoard = emptyBoard();
+
+        for (let index = 0; index < N; index++) {
+          const line = [];
+          for (let step = 0; step < N; step++) {
+            const { r, c } = lineCoords(dir, index, step);
+            if (board[r][c]) line.push(board[r][c]);
+          }
+          const merged = [];
+          for (let i = 0; i < line.length; i++) {
+            const a = line[i];
+            const b = line[i + 1];
+            if (b && a.value === b.value) {
+              a.value *= 2;
+              a.pop = 1;
+              a.merged = true;
+              score += a.value;
+              if (a.value >= 2048 && !won) {
+                won = true;
+                score += 2048;
+                A.Sfx.play('perfect');
+              }
+              merged.push(a);
+              i++;
+            } else {
+              merged.push(a);
+            }
+          }
+          merged.forEach((tile, step) => {
+            const { r, c } = lineCoords(dir, index, step);
+            if (tile.r !== r || tile.c !== c || tile.merged) moved = true;
+            tile.pr = tile.r;
+            tile.pc = tile.c;
+            tile.r = r;
+            tile.c = c;
+            tile.anim = 0;
+            newBoard[r][c] = tile;
+          });
+        }
+
+        if (!moved) {
+          board = newBoard;
+          if (isGameOver()) finish(false);
+          return false;
+        }
+        undoStack.push(before);
+        if (undoStack.length > 3) undoStack.shift();
+        board = newBoard;
+        moves += 1;
+        moveLock = 0.09;
+        spawnTile();
+        syncHud();
+        A.Sfx.play('land');
+        if (isGameOver()) finish(false);
+        return true;
+      }
+
+      function isGameOver() {
+        if (allTiles().length < N * N) return false;
+        for (let r = 0; r < N; r++) {
+          for (let c = 0; c < N; c++) {
+            const t = board[r][c];
+            if (!t) return false;
+            if (c + 1 < N && board[r][c + 1] && board[r][c + 1].value === t.value) return false;
+            if (r + 1 < N && board[r + 1][c] && board[r + 1][c].value === t.value) return false;
+          }
+        }
+        return true;
+      }
+
+      function undo() {
+        if (state !== 'playing' || !undoStack.length) return;
+        const snap = undoStack.pop();
+        board = emptyBoard();
+        nextId = 1;
+        for (let r = 0; r < N; r++) {
+          for (let c = 0; c < N; c++) {
+            const v = Number(snap.values[r] && snap.values[r][c]);
+            if (v >= 2) board[r][c] = { id: nextId++, value: v, r, c, pr: r, pc: c, anim: 1, pop: 0 };
+          }
+        }
+        score = Math.max(0, Number(snap.score) || 0);
+        moves = Math.max(0, Number(snap.moves) || moves - 1);
+        won = !!snap.won;
+        syncHud();
+        A.Sfx.play('ui');
+      }
+
+      function handleSwipe(dx, dy) {
+        if (Math.abs(dx) < 22 && Math.abs(dy) < 22) return;
+        if (Math.abs(dx) > Math.abs(dy)) move(dx > 0 ? 'right' : 'left');
+        else move(dy > 0 ? 'down' : 'up');
+      }
+
+      function update(dt) {
+        moveLock = Math.max(0, moveLock - dt);
+        for (const t of allTiles()) {
+          t.anim = Math.min(1, t.anim + dt * 9);
+          t.pop = Math.max(0, t.pop - dt * 3);
+        }
+        if (state !== 'playing') {
+          input.endFrame();
+          return;
+        }
+        autosave.tick(dt);
+        const keys = { left: ['ArrowLeft', 'a'], right: ['ArrowRight', 'd'], up: ['ArrowUp', 'w'], down: ['ArrowDown', 's'] };
+        Object.keys(keys).forEach((dir) => {
+          const down = input.isDown(...keys[dir]);
+          if (down && !keyWasDown[dir]) move(dir);
+          keyWasDown[dir] = down;
+        });
+        if (input.pointer.wentDown) swipeStart = { x: input.pointer.x, y: input.pointer.y };
+        if (input.pointer.wentUp && swipeStart) {
+          handleSwipe(input.pointer.x - swipeStart.x, input.pointer.y - swipeStart.y);
+          swipeStart = null;
+        }
+        input.endFrame();
+      }
+
+      function drawTile(tile, x, y, w, h) {
+        const colors = COLORS[tile.value] || COLORS[4096];
+        const pop = 1 + tile.pop * 0.06;
+        ctx.save();
+        ctx.translate(x + w / 2, y + h / 2);
+        ctx.scale(pop, pop);
+        A.draw.roundRect(ctx, -w / 2, -h / 2, w, h, 9);
+        ctx.fillStyle = colors[0];
+        ctx.fill();
+        A.draw.label(ctx, String(tile.value), 0, 1, {
+          font: `bold ${tile.value >= 1000 ? 22 : tile.value >= 100 ? 26 : 30}px system-ui, sans-serif`,
+          color: colors[1],
+        });
+        ctx.restore();
+      }
+
+      function render() {
+        stage.beginFrame();
+        const bg = ctx.createLinearGradient(0, 0, 0, H);
+        bg.addColorStop(0, '#211a12');
+        bg.addColorStop(1, '#302417');
+        ctx.fillStyle = bg;
+        ctx.fillRect(0, 0, W, H);
+
+        A.draw.label(ctx, 'SCORE ' + score, 12, 24, { align: 'left', font: 'bold 15px system-ui', color: '#ffd23f' });
+        A.draw.label(ctx, '最大 ' + bestTile(), W - 12, 24, { align: 'right', font: 'bold 15px system-ui', color: '#eef1ff' });
+        A.draw.label(ctx, '步数 ' + moves + ' · 撤销 ' + undoStack.length + '/3', W / 2, 52, {
+          font: '12px system-ui',
+          color: '#c9b99f',
+        });
+        A.draw.label(ctx, won ? '已达成 2048，继续挑战！' : '目标 2048', W / 2, 82, {
+          font: 'bold 14px system-ui',
+          color: won ? '#63d68c' : '#f2b33d',
+        });
+
+        ctx.fillStyle = 'rgba(20, 14, 8, 0.55)';
+        A.draw.roundRect(ctx, BOARD_X - 8, BOARD_Y - 8, BOARD_W + 16, BOARD_W + 16, 14);
+        ctx.fill();
+        for (let r = 0; r < N; r++) {
+          for (let c = 0; c < N; c++) {
+            const x = BOARD_X + c * (CELL + GAP);
+            const y = BOARD_Y + r * (CELL + GAP);
+            ctx.fillStyle = 'rgba(255, 245, 230, 0.08)';
+            A.draw.roundRect(ctx, x, y, CELL, CELL, 9);
+            ctx.fill();
+          }
+        }
+
+        const ordered = allTiles().slice().sort((a, b) => a.id - b.id);
+        ordered.forEach((tile) => {
+          const x = BOARD_X + (tile.pc + (tile.c - tile.pc) * tile.anim) * (CELL + GAP);
+          const y = BOARD_Y + (tile.pr + (tile.r - tile.pr) * tile.anim) * (CELL + GAP);
+          drawTile(tile, x, y, CELL, CELL);
+        });
+
+        A.draw.label(ctx, '同数相撞合并 · 一步可撤销', W / 2, BOARD_Y + BOARD_W + 48, {
+          font: '12px system-ui',
+          color: 'rgba(201,185,159,0.7)',
+        });
+      }
+
+      const loop = A.createLoop({
+        update,
+        render,
+        onAutoPause() {
+          if (state === 'playing') pauseByUser();
+        },
+      });
+
+      const pauseUi = A.bindPause({
+        button: dom.pause,
+        pause: pauseByUser,
+        resume: resumeGame,
+        isPlaying: () => state === 'playing',
+        isPaused: () => state === 'paused',
+      });
+
+      dom.undo.addEventListener('click', undo);
+      window.addEventListener('keydown', (e) => {
+        if (e.key === 'z' || e.key === 'Z') undo();
+      });
+
+      function syncMute() {
+        dom.mute.textContent = A.Sfx.muted ? '🔇' : '🔊';
+      }
+      dom.mute.addEventListener('click', () => {
+        A.Sfx.setMuted(!A.Sfx.muted);
+        syncMute();
+      });
+      syncMute();
+
+      reset();
+      state = 'ready';
+      const saved = autosave.load();
+      if (saved) {
+        A.showResumePrompt(ui, saved, {
+          name: '2048 合成',
+          onResume: () => {
+            if (restore(saved.data)) {
+              state = 'playing';
+              ui.hide();
+              loop.resume();
+              pauseUi.sync();
+              autosave.saveNow();
+            } else {
+              autosave.clear();
+              showStart();
+            }
+          },
+          onRestart: () => {
+            autosave.clear();
+            showStart();
+          },
+        });
+      } else {
+        showStart();
+      }
+      loop.start();
+    })();
+  </script>
+</body>
+</html>

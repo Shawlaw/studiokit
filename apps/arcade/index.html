@@ -3,7 +3,7 @@
 <head>
   <meta charset="utf-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no, viewport-fit=cover" />
-  <meta name="description" content="街机厅 Arcade：纵版射击、忍跳、叠塔、跳铃铛等竖屏街机小游戏合集，本地即开即玩，自带轻量物理引擎。" />
+  <meta name="description" content="街机厅 Arcade：13 款竖屏街机小游戏合集，由简到难，随时暂停，局内进度本地自动保存，适合地铁通勤的碎片时间。" />
   <meta name="theme-color" content="#0b1020" />
   <link rel="stylesheet" href="../../shared/site.css" />
   <link rel="stylesheet" href="./arcade.css" />
@@ -17,19 +17,47 @@
     <header class="hall-head">
       <div>
         <h1>🕹 街机厅 Arcade</h1>
-        <p class="hall-sub">竖屏街机小游戏合集 · 本地即开即玩 · 自研轻量物理引擎 · v<span data-hall-version>0.1.0</span></p>
+        <p class="hall-sub">竖屏街机小游戏合集 · 由简到难 · 随时暂停 · 局内进度本地自动保存 · v<span data-hall-version>0.3.0</span></p>
       </div>
       <div class="hall-stats">
         <span>累计游玩 <strong data-stat-plays>0</strong> 局</span>
         <span>游戏 <strong data-stat-games>0</strong> 款</span>
+        <span>待续玩 <strong data-stat-runs>0</strong></span>
       </div>
     </header>
+
+    <section class="hall-controls" aria-label="搜索与筛选游戏">
+      <label class="hall-search">
+        <span class="hall-search-icon" aria-hidden="true">🔍</span>
+        <input type="search" data-search placeholder="搜索游戏、类型或玩法…" autocomplete="off" aria-label="搜索游戏" />
+      </label>
+      <div class="hall-filter" data-filters role="group" aria-label="按类型筛选"></div>
+      <label class="hall-toggle">
+        <input type="checkbox" data-only-progress />
+        只看玩过
+      </label>
+      <select class="hall-sort" data-sort aria-label="游戏排序">
+        <option value="recommend">推荐顺序（由简到难）</option>
+        <option value="difficulty">难度：由简到难</option>
+        <option value="recent">最近游玩</option>
+        <option value="high">最高分</option>
+        <option value="name">名称</option>
+      </select>
+      <button type="button" class="ac-btn-ghost" data-clear-filters hidden>清除筛选</button>
+    </section>
+    <p class="hall-result" data-result-count></p>
+
+    <section class="hall-resume" data-resume-section hidden aria-label="继续上次进度">
+      <h2>继续上次</h2>
+      <div class="hall-resume-list" data-resume-list></div>
+      <div class="hall-resume-more" data-resume-more></div>
+    </section>
 
     <section class="hall-grid" data-hall-grid aria-label="游戏列表"></section>
 
     <section class="hall-manage" aria-label="进度管理">
       <h2>进度管理</h2>
-      <p class="hall-manage-note" data-manage-note>最高分与游玩记录只保存在此浏览器的 localStorage 中，不会上传任何服务器。</p>
+      <p class="hall-manage-note" data-manage-note>最高分、游玩记录与局内进度只保存在此浏览器的 localStorage 中，不会上传任何服务器。</p>
       <button type="button" class="ac-btn-ghost" data-export>导出备份（JSON）</button>
       <button type="button" class="ac-btn-ghost" data-import-btn>导入备份</button>
       <input type="file" accept=".json,application/json" data-import-file hidden />
@@ -37,8 +65,9 @@
     </section>
 
     <footer class="hall-foot">
-      <p>操作方式：桌面用键盘（方向键 / A D / 空格 / P 暂停），手机直接触摸或拖动。音效由 WebAudio 实时合成，可在每个游戏页右上角静音。</p>
-      <p>物理效果（重力、碰撞、单摆、塔体倾斜）由 apps/arcade/engine.js 自研实现，无任何外部依赖或网络请求。</p>
+      <p>操作方式：桌面用键盘（方向键 / A D / 空格 / P 暂停），手机直接触摸或拖动；每个游戏右上角都有暂停按钮。</p>
+      <p>每款游戏都从轻松开局，随分数、关卡或时间逐步加速；离开页面会自动暂停并保存局内进度，下次打开可继续。</p>
+      <p>物理与绘制由 apps/arcade/engine.js 自研实现，无任何外部依赖或网络请求。</p>
     </footer>
   </main>
   <script>
@@ -51,26 +80,50 @@
         version: document.querySelector('[data-hall-version]'),
         statPlays: document.querySelector('[data-stat-plays]'),
         statGames: document.querySelector('[data-stat-games]'),
+        statRuns: document.querySelector('[data-stat-runs]'),
         manageNote: document.querySelector('[data-manage-note]'),
         exportBtn: document.querySelector('[data-export]'),
         importBtn: document.querySelector('[data-import-btn]'),
         importFile: document.querySelector('[data-import-file]'),
         resetAll: document.querySelector('[data-reset-all]'),
+        search: document.querySelector('[data-search]'),
+        filters: document.querySelector('[data-filters]'),
+        onlyProgress: document.querySelector('[data-only-progress]'),
+        sort: document.querySelector('[data-sort]'),
+        clearFilters: document.querySelector('[data-clear-filters]'),
+        resultCount: document.querySelector('[data-result-count]'),
+        resumeSection: document.querySelector('[data-resume-section]'),
+        resumeList: document.querySelector('[data-resume-list]'),
+        resumeMore: document.querySelector('[data-resume-more]'),
       };
 
+      const DEFAULT_NOTE = '最高分、游玩记录与局内进度只保存在此浏览器的 localStorage 中，不会上传任何服务器。';
+      const GAME_BY_ID = {};
+      A.GAMES.forEach((g, index) => {
+        GAME_BY_ID[g.id] = g;
+        g.__order = index;
+      });
+      const CATEGORIES = ['全部'].concat(Array.from(new Set(A.GAMES.map((g) => g.category))));
+      const state = { query: '', category: '全部', onlyProgress: false, sort: 'recommend', resumeExpanded: false };
       let noteTimer = 0;
 
       function relTime(iso) {
-        if (!iso) return '未游玩';
-        const t = new Date(iso).getTime();
-        if (Number.isNaN(t)) return '未游玩';
-        const diff = Date.now() - t;
-        if (diff < 60 * 1000) return '刚刚';
-        if (diff < 60 * 60 * 1000) return Math.floor(diff / 60000) + ' 分钟前';
-        if (diff < 24 * 60 * 60 * 1000) return Math.floor(diff / 3600000) + ' 小时前';
-        if (diff < 7 * 24 * 60 * 60 * 1000) return Math.floor(diff / 86400000) + ' 天前';
-        const d = new Date(t);
-        return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
+        return A.formatSavedAt(iso);
+      }
+
+      function difficultyName(level) {
+        return A.DIFFICULTY_NAMES[level] || '适中';
+      }
+
+      function dots(level) {
+        const box = document.createElement('span');
+        box.className = 'hall-dots';
+        for (let i = 1; i <= 4; i++) {
+          const dot = document.createElement('span');
+          dot.className = 'hall-dot' + (i <= level ? ' is-on' : '');
+          box.appendChild(dot);
+        }
+        return box;
       }
 
       function note(text, sticky) {
@@ -78,9 +131,218 @@
         clearTimeout(noteTimer);
         if (!sticky) {
           noteTimer = setTimeout(() => {
-            dom.manageNote.textContent = '最高分与游玩记录只保存在此浏览器的 localStorage 中，不会上传任何服务器。';
-          }, 3200);
+            dom.manageNote.textContent = DEFAULT_NOTE;
+          }, 3600);
         }
+      }
+
+      function runFor(gameId) {
+        return A.RunSave.get(gameId);
+      }
+
+      function matches(game) {
+        if (state.category !== '全部' && game.category !== state.category) return false;
+        if (state.onlyProgress) {
+          const rec = A.Progress.get(game.id);
+          if (!rec.plays && !runFor(game.id)) return false;
+        }
+        if (!state.query) return true;
+        const haystack = [game.name, game.tagline, game.how, game.category, game.id]
+          .concat(game.tags || [])
+          .join(' ')
+          .toLowerCase();
+        return haystack.indexOf(state.query) !== -1;
+      }
+
+      function sortedGames() {
+        const games = A.GAMES.filter(matches);
+        const mode = state.sort;
+        games.sort((a, b) => {
+          if (mode === 'difficulty' || mode === 'recommend') {
+            if (a.difficulty !== b.difficulty) return a.difficulty - b.difficulty;
+            return a.__order - b.__order;
+          }
+          if (mode === 'recent') {
+            const ta = new Date(A.Progress.get(a.id).lastAt || 0).getTime() || 0;
+            const tb = new Date(A.Progress.get(b.id).lastAt || 0).getTime() || 0;
+            if (ta !== tb) return tb - ta;
+            return a.__order - b.__order;
+          }
+          if (mode === 'high') {
+            const ha = A.Progress.get(a.id).high;
+            const hb = A.Progress.get(b.id).high;
+            if (ha !== hb) return hb - ha;
+            return a.__order - b.__order;
+          }
+          return a.name.localeCompare(b.name, 'zh-CN');
+        });
+        return games;
+      }
+
+      function makeChip(label, count) {
+        const btn = document.createElement('button');
+        btn.type = 'button';
+        btn.className = 'hall-chip' + (state.category === label ? ' is-active' : '');
+        btn.dataset.category = label;
+        btn.setAttribute('aria-pressed', String(state.category === label));
+        btn.textContent = label;
+        if (count != null) {
+          const span = document.createElement('span');
+          span.className = 'hall-chip-count';
+          span.textContent = String(count);
+          btn.appendChild(span);
+        }
+        btn.addEventListener('click', () => {
+          state.category = label;
+          render();
+        });
+        return btn;
+      }
+
+      function renderFilters() {
+        dom.filters.replaceChildren();
+        dom.filters.appendChild(makeChip('全部', A.GAMES.length));
+        CATEGORIES.slice(1).forEach((cat) => {
+          const count = A.GAMES.filter((g) => g.category === cat).length;
+          dom.filters.appendChild(makeChip(cat, count));
+        });
+      }
+
+      function renderResume() {
+        const runs = A.RunSave.all();
+        const entries = Object.keys(runs)
+          .map((id) => ({ game: GAME_BY_ID[id], run: runs[id] }))
+          .filter((item) => item.game)
+          .sort((a, b) => new Date(b.run.savedAt || 0) - new Date(a.run.savedAt || 0));
+        dom.statRuns.textContent = String(entries.length);
+        dom.resumeMore.replaceChildren();
+        if (!entries.length) {
+          state.resumeExpanded = false;
+          dom.resumeSection.hidden = true;
+          dom.resumeList.replaceChildren();
+          return;
+        }
+        dom.resumeSection.hidden = false;
+        dom.resumeList.replaceChildren();
+        const visible = state.resumeExpanded ? entries : entries.slice(0, 6);
+        visible.forEach(({ game, run }) => {
+          const link = document.createElement('a');
+          link.className = 'hall-resume-card';
+          link.href = './games/' + game.file;
+          link.setAttribute('aria-label', '继续游戏：' + game.name);
+          const icon = document.createElement('span');
+          icon.className = 'hall-resume-icon';
+          icon.textContent = game.icon;
+          const body = document.createElement('span');
+          body.className = 'hall-resume-body';
+          const name = document.createElement('span');
+          name.className = 'hall-resume-name';
+          name.textContent = game.name;
+          const meta = document.createElement('span');
+          meta.className = 'hall-resume-meta';
+          meta.textContent = (run.summary || '上次进度') + ' · ' + relTime(run.savedAt);
+          body.append(name, meta);
+          const go = document.createElement('span');
+          go.className = 'hall-resume-go';
+          go.textContent = '继续 ›';
+          link.append(icon, body, go);
+          dom.resumeList.appendChild(link);
+        });
+        if (entries.length > 6) {
+          const more = document.createElement('button');
+          more.type = 'button';
+          more.className = 'ac-btn-ghost';
+          more.textContent = state.resumeExpanded ? '收起' : `查看全部 ${entries.length} 条`;
+          more.addEventListener('click', () => {
+            state.resumeExpanded = !state.resumeExpanded;
+            renderResume();
+          });
+          dom.resumeMore.appendChild(more);
+        }
+      }
+
+      function renderCard(game, rec, run) {
+        const card = document.createElement('article');
+        card.className = 'hall-card' + (run ? ' is-resumable' : '');
+        card.style.setProperty('--card-accent', game.accent);
+
+        const link = document.createElement('a');
+        link.className = 'hall-card-link';
+        link.href = './games/' + game.file;
+        link.setAttribute('aria-label', '打开游戏：' + game.name);
+        card.appendChild(link);
+
+        const top = document.createElement('div');
+        top.className = 'hall-card-top';
+        const icon = document.createElement('span');
+        icon.className = 'hall-icon';
+        icon.textContent = game.icon;
+        const titleBox = document.createElement('div');
+        titleBox.className = 'hall-titlebox';
+        const h2 = document.createElement('h2');
+        h2.textContent = game.name;
+        const tagline = document.createElement('div');
+        tagline.className = 'hall-tagline';
+        tagline.textContent = game.tagline;
+        titleBox.append(h2, tagline);
+        top.append(icon, titleBox);
+        card.appendChild(top);
+
+        const badges = document.createElement('div');
+        badges.className = 'hall-badges';
+        const diff = document.createElement('span');
+        diff.className = 'hall-difficulty';
+        diff.append(dots(game.difficulty), document.createTextNode(difficultyName(game.difficulty)));
+        const session = document.createElement('span');
+        session.className = 'hall-session';
+        session.textContent = '⏱ ' + game.session;
+        badges.append(diff, session);
+        if (run) {
+          const saveBadge = document.createElement('span');
+          saveBadge.className = 'hall-save-badge';
+          saveBadge.textContent = '● 有未完成进度';
+          badges.appendChild(saveBadge);
+        }
+        card.appendChild(badges);
+
+        const tags = document.createElement('div');
+        tags.className = 'hall-tags';
+        [game.category].concat(game.tags).slice(0, 3).forEach((t) => {
+          const tag = document.createElement('span');
+          tag.className = 'hall-tag';
+          tag.textContent = t;
+          tags.appendChild(tag);
+        });
+        card.appendChild(tags);
+
+        const meta = document.createElement('div');
+        meta.className = 'hall-meta';
+        const high = document.createElement('span');
+        high.className = 'hall-high';
+        high.innerHTML = '最高 <strong></strong>';
+        high.querySelector('strong').textContent = String(rec.high);
+        const last = document.createElement('span');
+        last.textContent = `${rec.plays} 局 · ${relTime(rec.lastAt)}`;
+        meta.append(high, last);
+        card.appendChild(meta);
+
+        const clear = document.createElement('button');
+        clear.type = 'button';
+        clear.className = 'hall-card-clear';
+        clear.textContent = '✕';
+        clear.title = run ? '清除此游戏的记录与未完成进度' : '清除此游戏记录';
+        clear.setAttribute('aria-label', '清除此游戏记录：' + game.name);
+        clear.addEventListener('click', () => {
+          const extra = run ? '以及未完成的局内进度' : '';
+          if (window.confirm(`清除「${game.name}」的最高分、游玩记录${extra}？此操作不可恢复。`)) {
+            A.Progress.resetGame(game.id);
+            A.Sfx.play('ui');
+            note(`已清除「${game.name}」的记录${run ? '与局内进度' : ''}。`);
+            render();
+          }
+        });
+        card.appendChild(clear);
+        return card;
       }
 
       function render() {
@@ -89,80 +351,64 @@
         dom.version.textContent = A.version;
         dom.statGames.textContent = String(A.GAMES.length);
 
-        dom.grid.innerHTML = '';
-        A.GAMES.forEach((g) => {
-          const rec = progress.games[g.id] || { high: 0, plays: 0, lastAt: null };
-          totalPlays += Number(rec.plays) || 0;
+        renderFilters();
+        renderResume();
 
-          const card = document.createElement('article');
-          card.className = 'hall-card';
-          card.style.setProperty('--card-accent', g.accent);
-
-          const link = document.createElement('a');
-          link.className = 'hall-card-link';
-          link.href = './games/' + g.file;
-          link.setAttribute('aria-label', '打开游戏：' + g.name);
-          card.appendChild(link);
-
-          const top = document.createElement('div');
-          top.className = 'hall-card-top';
-          const icon = document.createElement('span');
-          icon.className = 'hall-icon';
-          icon.textContent = g.icon;
-          const titleBox = document.createElement('div');
-          const h2 = document.createElement('h2');
-          h2.textContent = g.name;
-          const tagline = document.createElement('div');
-          tagline.className = 'hall-tagline';
-          tagline.textContent = g.tagline + ' · ' + g.how;
-          titleBox.append(h2, tagline);
-          top.append(icon, titleBox);
-          card.appendChild(top);
-
-          const tags = document.createElement('div');
-          tags.className = 'hall-tags';
-          g.tags.forEach((t) => {
-            const tag = document.createElement('span');
-            tag.className = 'hall-tag';
-            tag.textContent = t;
-            tags.appendChild(tag);
+        const games = sortedGames();
+        dom.grid.replaceChildren();
+        if (!games.length) {
+          const empty = document.createElement('div');
+          empty.className = 'hall-empty';
+          const strong = document.createElement('strong');
+          strong.textContent = '没有匹配的游戏';
+          const p = document.createElement('span');
+          p.textContent = '换个关键词，或清除筛选条件试试。';
+          empty.append(strong, p);
+          dom.grid.appendChild(empty);
+        } else {
+          games.forEach((game) => {
+            const rec = progress.games[game.id] || { high: 0, plays: 0, lastAt: null };
+            totalPlays += Number(rec.plays) || 0;
+            dom.grid.appendChild(renderCard(game, rec, runFor(game.id)));
           });
-          card.appendChild(tags);
-
-          const meta = document.createElement('div');
-          meta.className = 'hall-meta';
-          const high = document.createElement('span');
-          high.className = 'hall-high';
-          high.innerHTML = '最高 <strong></strong>';
-          high.querySelector('strong').textContent = String(rec.high);
-          const last = document.createElement('span');
-          last.textContent = `${rec.plays} 局 · ${relTime(rec.lastAt)}`;
-          meta.append(high, last);
-          card.appendChild(meta);
-
-          const clear = document.createElement('button');
-          clear.type = 'button';
-          clear.className = 'hall-card-clear';
-          clear.textContent = '✕';
-          clear.title = '清除此游戏记录';
-          clear.setAttribute('aria-label', '清除此游戏记录：' + g.name);
-          clear.addEventListener('click', () => {
-            if (window.confirm(`清除「${g.name}」的最高分与游玩记录？此操作不可恢复。`)) {
-              A.Progress.resetGame(g.id);
-              A.Sfx.play('ui');
-              note(`已清除「${g.name}」的记录。`);
-              render();
-            }
-          });
-          card.appendChild(clear);
-
-          dom.grid.appendChild(card);
-        });
+        }
 
         dom.statPlays.textContent = String(totalPlays);
+        const hasFilter = !!state.query || state.category !== '全部' || state.onlyProgress;
+        dom.clearFilters.hidden = !hasFilter;
+        dom.resultCount.innerHTML = '';
+        const count = document.createElement('span');
+        count.append(document.createTextNode('显示 '), document.createElement('strong'), document.createTextNode(` / ${A.GAMES.length} 款`));
+        count.querySelector('strong').textContent = String(games.length);
+        const hint = document.createElement('span');
+        hint.textContent = ' · 默认按难度由简到难排列';
+        dom.resultCount.append(count, hint);
       }
 
-      /* 导出备份 */
+      dom.search.addEventListener('input', () => {
+        state.query = dom.search.value.trim().toLowerCase();
+        render();
+      });
+      dom.onlyProgress.addEventListener('change', () => {
+        state.onlyProgress = dom.onlyProgress.checked;
+        render();
+      });
+      dom.sort.addEventListener('change', () => {
+        state.sort = dom.sort.value;
+        render();
+      });
+      dom.clearFilters.addEventListener('click', () => {
+        state.query = '';
+        state.category = '全部';
+        state.onlyProgress = false;
+        dom.search.value = '';
+        dom.onlyProgress.checked = false;
+        dom.sort.value = 'recommend';
+        state.sort = 'recommend';
+        render();
+      });
+
+      /* 导出备份（含最高分、游玩记录与局内进度） */
       dom.exportBtn.addEventListener('click', () => {
         const text = A.Progress.exportText();
         const blob = new Blob([text], { type: 'application/json' });
@@ -174,7 +420,7 @@
         a.click();
         a.remove();
         setTimeout(() => URL.revokeObjectURL(url), 2000);
-        note('已导出备份文件（studiokit-arcade-progress.json）。');
+        note('已导出备份文件（studiokit-arcade-progress.json），包含最高分与局内进度。');
       });
 
       /* 导入备份 */
@@ -187,7 +433,8 @@
         reader.onload = () => {
           const result = A.Progress.importText(String(reader.result));
           if (result.ok) {
-            note(`导入成功，恢复了 ${result.count} 款游戏的记录。`);
+            const runText = result.runCount ? `，含 ${result.runCount} 条局内进度` : '';
+            note(`导入成功，恢复了 ${result.count} 款游戏的记录${runText}。`);
             render();
           } else {
             note(`导入失败：${result.reason}`, true);
@@ -199,9 +446,9 @@
 
       /* 清除全部 */
       dom.resetAll.addEventListener('click', () => {
-        if (window.confirm('清除全部游戏的最高分与游玩记录？此操作不可恢复。')) {
+        if (window.confirm('清除全部游戏的最高分、游玩记录与未完成的局内进度？此操作不可恢复。')) {
           A.Progress.resetAll();
-          note('已清除全部记录。');
+          note('已清除全部记录与局内进度。');
           render();
         }
       });

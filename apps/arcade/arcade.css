@@ -105,6 +105,8 @@ body.arcade-body {
   cursor: pointer;
 }
 .ac-icon-btn:hover { border-color: var(--ac-accent); }
+.ac-icon-btn:disabled { opacity: 0.35; cursor: default; border-color: var(--ac-line); }
+.ac-icon-btn[data-pause] { font-size: 13px; min-width: 32px; }
 
 /* 竖屏舞台：高度由视口与最大宽度共同约束（不依赖父级高度，避免循环依赖），比例永不破坏 */
 .stage-wrap {
@@ -205,6 +207,15 @@ canvas.game-canvas {
 }
 .ac-btn:hover { filter: brightness(1.15); }
 .ac-btn:focus-visible { outline: 2px solid var(--ac-ink); outline-offset: 2px; }
+.ac-btn-secondary {
+  border-color: var(--ac-line);
+  background: transparent;
+  color: var(--ac-muted);
+  font-size: 13px;
+  padding: 8px 18px;
+  margin-left: 8px;
+}
+.ac-btn-secondary:hover { color: var(--ac-ink); border-color: var(--ac-accent); filter: none; }
 
 .game-hint {
   margin: 0;
@@ -212,6 +223,49 @@ canvas.game-canvas {
   font-size: 12px;
   text-align: center;
   line-height: 1.6;
+}
+
+/* ---------- 触屏操作面板（俄罗斯方块等需要精确操作的回合） ---------- */
+
+.touch-pad {
+  display: none;
+  width: min(420px, 100%);
+  grid-template-columns: repeat(5, minmax(0, 1fr));
+  gap: 8px;
+  margin: 2px auto 0;
+}
+.touch-btn {
+  appearance: none;
+  min-height: 52px;
+  padding: 4px 0;
+  border: 1px solid var(--ac-line);
+  border-radius: 12px;
+  background: linear-gradient(180deg, var(--ac-panel-2), var(--ac-panel));
+  color: var(--ac-ink);
+  font-size: 24px;
+  font-weight: 700;
+  line-height: 1;
+  cursor: pointer;
+  touch-action: none;
+  -webkit-user-select: none;
+  user-select: none;
+  -webkit-tap-highlight-color: transparent;
+}
+.touch-btn:active,
+.touch-btn.is-held {
+  background: linear-gradient(180deg, rgba(124, 92, 255, 0.5), rgba(124, 92, 255, 0.22));
+  border-color: var(--ac-accent);
+  transform: translateY(1px);
+}
+.touch-btn-hard {
+  color: var(--ac-accent);
+  border-color: rgba(255, 210, 63, 0.45);
+}
+.touch-btn:disabled { opacity: 0.35; cursor: default; }
+.touch-btn:focus-visible { outline: 2px solid var(--ac-accent); outline-offset: 2px; }
+
+@media (hover: none), (max-width: 620px) {
+  .touch-pad { display: grid; }
 }
 
 /* ---------- 街机厅中心页 ---------- */
@@ -235,6 +289,129 @@ canvas.game-canvas {
 }
 .hall-stats strong { color: var(--ac-accent); font-size: 16px; }
 
+/* ---------- 搜索 / 筛选 / 排序 ---------- */
+
+.hall-controls {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 10px;
+  align-items: center;
+  margin: 0 0 12px;
+}
+.hall-search {
+  flex: 1 1 230px;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  min-width: 0;
+  padding: 8px 12px;
+  background: var(--ac-panel);
+  border: 1px solid var(--ac-line);
+  border-radius: 12px;
+}
+.hall-search-icon { color: var(--ac-muted); font-size: 14px; line-height: 1; }
+.hall-search input {
+  flex: 1;
+  min-width: 0;
+  padding: 0;
+  background: transparent;
+  border: 0;
+  outline: none;
+  color: var(--ac-ink);
+  font: inherit;
+  font-size: 14px;
+}
+.hall-search input::placeholder { color: var(--ac-muted); }
+.hall-search:focus-within { border-color: var(--ac-accent); }
+
+.hall-filter { display: flex; flex-wrap: wrap; gap: 6px; }
+.hall-chip {
+  appearance: none;
+  padding: 5px 11px;
+  border: 1px solid var(--ac-line);
+  border-radius: 999px;
+  background: transparent;
+  color: var(--ac-muted);
+  font-size: 12px;
+  cursor: pointer;
+}
+.hall-chip:hover { color: var(--ac-ink); border-color: var(--ac-accent); }
+.hall-chip.is-active {
+  color: #0b1020;
+  background: var(--ac-accent);
+  border-color: var(--ac-accent);
+  font-weight: 700;
+}
+.hall-chip .hall-chip-count { opacity: 0.7; margin-left: 3px; font-variant-numeric: tabular-nums; }
+
+.hall-toggle {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  color: var(--ac-muted);
+  font-size: 13px;
+  cursor: pointer;
+  user-select: none;
+}
+.hall-toggle input { accent-color: var(--ac-accent); width: 15px; height: 15px; margin: 0; }
+
+.hall-sort {
+  padding: 7px 10px;
+  border: 1px solid var(--ac-line);
+  border-radius: 10px;
+  background: var(--ac-panel);
+  color: var(--ac-ink);
+  font: inherit;
+  font-size: 13px;
+  cursor: pointer;
+}
+.hall-sort:focus-visible, .hall-chip:focus-visible, .hall-toggle input:focus-visible { outline: 2px solid var(--ac-accent); outline-offset: 2px; }
+
+.hall-result { margin: 0 0 12px; color: var(--ac-muted); font-size: 12px; font-variant-numeric: tabular-nums; }
+.hall-result strong { color: var(--ac-ink); }
+.hall-empty {
+  grid-column: 1 / -1;
+  padding: 34px 16px;
+  text-align: center;
+  color: var(--ac-muted);
+  font-size: 14px;
+  border: 1px dashed var(--ac-line);
+  border-radius: 14px;
+}
+.hall-empty strong { display: block; margin-bottom: 4px; color: var(--ac-ink); }
+
+/* ---------- 继续上次 ---------- */
+
+.hall-resume {
+  margin: 0 0 18px;
+  padding: 14px;
+  background: linear-gradient(180deg, rgba(255, 210, 63, 0.08), transparent), var(--ac-panel);
+  border: 1px solid rgba(255, 210, 63, 0.32);
+  border-radius: 16px;
+}
+.hall-resume[hidden] { display: none; }
+.hall-resume h2 { margin: 0 0 10px; font-size: 15px; color: var(--ac-accent); }
+.hall-resume-list { display: grid; grid-template-columns: repeat(auto-fill, minmax(230px, 1fr)); gap: 10px; }
+.hall-resume-card {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 10px 12px;
+  color: var(--ac-ink);
+  text-decoration: none;
+  background: rgba(11, 16, 32, 0.45);
+  border: 1px solid var(--ac-line);
+  border-radius: 12px;
+  transition: border-color 0.15s ease, transform 0.15s ease;
+}
+.hall-resume-card:hover { border-color: var(--ac-accent); transform: translateY(-1px); }
+.hall-resume-icon { font-size: 22px; line-height: 1; }
+.hall-resume-body { min-width: 0; flex: 1; }
+.hall-resume-name { display: block; font-size: 14px; font-weight: 700; }
+.hall-resume-meta { display: block; color: var(--ac-muted); font-size: 11px; margin-top: 2px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.hall-resume-go { color: var(--ac-accent); font-size: 12px; white-space: nowrap; }
+.hall-resume-more { margin-top: 10px; }
+
 .hall-grid {
   display: grid;
   grid-template-columns: repeat(auto-fill, minmax(220px, 1fr));
@@ -245,7 +422,7 @@ canvas.game-canvas {
   display: flex;
   flex-direction: column;
   gap: 8px;
-  padding: 16px;
+  padding: 16px 38px 16px 16px;
   background: var(--ac-panel);
   border: 1px solid var(--ac-line);
   border-radius: 16px;
@@ -292,6 +469,32 @@ canvas.game-canvas {
 .hall-card .hall-icon { font-size: 26px; line-height: 1; }
 .hall-card h2 { margin: 0; font-size: 17px; }
 .hall-card .hall-tagline { color: var(--ac-muted); font-size: 12px; }
+.hall-card .hall-titlebox { min-width: 0; }
+.hall-badges {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 6px 10px;
+  font-size: 11px;
+  color: var(--ac-muted);
+}
+.hall-difficulty { display: inline-flex; align-items: center; gap: 5px; }
+.hall-dots { display: inline-flex; gap: 2px; }
+.hall-dot { width: 6px; height: 6px; border-radius: 50%; background: var(--ac-line); }
+.hall-dot.is-on { background: var(--card-accent, var(--ac-accent)); }
+.hall-session { white-space: nowrap; }
+.hall-save-badge {
+  display: inline-flex;
+  align-items: center;
+  gap: 3px;
+  padding: 1px 7px;
+  border-radius: 999px;
+  color: var(--ac-accent);
+  border: 1px solid rgba(255, 210, 63, 0.4);
+  background: rgba(255, 210, 63, 0.1);
+  font-size: 10px;
+  white-space: nowrap;
+}
 .hall-card .hall-meta {
   margin-top: auto;
   display: flex;
@@ -346,6 +549,20 @@ canvas.game-canvas {
   .hall-stats { margin-left: 0; width: 100%; }
   .game-title { font-size: 15px; }
   .game-hud { gap: 6px; font-size: 12px; }
+  .hall-search { flex-basis: 100%; }
+  .hall-resume-list { grid-template-columns: 1fr; }
+}
+
+@media (max-width: 420px) {
+  .game-topbar { gap: 6px; }
+  .game-title { font-size: 14px; }
+  .game-hud { gap: 4px; font-size: 11px; }
+  .game-hud strong { font-size: 13px; }
+  .game-hud [data-hud-buff] { display: none; }
+  .ac-icon-btn { padding: 4px 6px; }
+  .ac-back { padding: 5px 4px; font-size: 13px; }
+  .overlay-panel { padding: 22px 18px 20px; }
+  .overlay-panel .ac-btn-secondary { display: block; margin: 8px auto 0; }
 }
 
 @media (prefers-reduced-motion: reduce) {

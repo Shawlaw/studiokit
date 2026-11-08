@@ -1,0 +1,498 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no, viewport-fit=cover" />
+  <meta name="description" content="记忆翻牌：翻牌配对，5 个关卡牌数逐渐增加、预览时间逐渐缩短，适合地铁通勤的竖屏小游戏。" />
+  <meta name="theme-color" content="#0b1020" />
+  <link rel="stylesheet" href="../../../shared/site.css" />
+  <link rel="stylesheet" href="../arcade.css" />
+  <script src="../../../shared/site-shell.js" defer></script>
+  <script src="../engine.js"></script>
+  <title>记忆翻牌 · 街机厅 · StudioKit</title>
+</head>
+<body class="arcade-body" data-studiokit-app="arcade" data-studiokit-app-title="街机厅 Arcade" style="--ac-accent:#5ad1a0; --card-accent:#5ad1a0">
+  <noscript><p class="ac-noscript">此游戏需要启用 JavaScript 才能运行。</p></noscript>
+  <main class="game-page">
+    <header class="game-topbar">
+      <a class="ac-back" href="../index.html">‹ 街机厅</a>
+      <h1 class="game-title">🃏 记忆翻牌</h1>
+      <div class="game-hud">
+        <span>分数 <strong data-hud-score>0</strong></span>
+        <span>最高 <strong data-hud-high>0</strong></span>
+      </div>
+      <button type="button" class="ac-icon-btn" data-pause aria-label="暂停游戏" title="暂停游戏（P / Esc）">⏸</button>
+      <button type="button" class="ac-icon-btn" data-mute aria-label="切换音效">🔊</button>
+    </header>
+    <div class="stage-wrap">
+      <div class="stage-box">
+        <canvas class="game-canvas" aria-label="记忆翻牌游戏画面"></canvas>
+        <div class="overlay" data-overlay hidden>
+          <div class="overlay-panel">
+            <h2 data-ov-title>记忆翻牌</h2>
+            <p data-ov-text>翻牌配对</p>
+            <button type="button" class="ac-btn" data-ov-btn>开始游戏</button>
+            <button type="button" class="ac-btn ac-btn-secondary" data-ov-btn2 hidden>重新开始</button>
+          </div>
+        </div>
+      </div>
+    </div>
+    <p class="game-hint">点击翻牌，两张相同即配对 · 每关先亮牌预览，关卡越高牌越多、预览越短 · P / Esc 暂停</p>
+  </main>
+  <script>
+    (() => {
+      'use strict';
+      const A = window.Arcade;
+      const { clamp, rand, TAU } = A.utils;
+
+      const W = 420;
+      const H = 740;
+      const canvas = document.querySelector('.game-canvas');
+      const stage = A.createStage(canvas, W, H);
+      const ctx = stage.ctx;
+      const input = A.createInput(canvas);
+      A.installSfxUnlock();
+
+      const dom = {
+        overlay: document.querySelector('[data-overlay]'),
+        ovTitle: document.querySelector('[data-ov-title]'),
+        ovText: document.querySelector('[data-ov-text]'),
+        ovBtn: document.querySelector('[data-ov-btn]'),
+        ovBtn2: document.querySelector('[data-ov-btn2]'),
+        hudScore: document.querySelector('[data-hud-score]'),
+        hudHigh: document.querySelector('[data-hud-high]'),
+        pause: document.querySelector('[data-pause]'),
+        mute: document.querySelector('[data-mute]'),
+      };
+      const ui = A.createOverlayUi(dom);
+
+      const SYMBOLS = ['🍎', '🍋', '🍇', '🍒', '🥝', '🍑', '🍉', '🍊', '🥥', '🍍', '🫐', '🥕', '🌽', '🍄', '🌻', '🐳', '🐙', '🦊', '🐼', '🦉', '⭐', '🌙', '☀️', '🔥'];
+      const LEVELS = [
+        { cols: 3, rows: 2, preview: 2.4 },
+        { cols: 4, rows: 3, preview: 2.0 },
+        { cols: 4, rows: 4, preview: 1.6 },
+        { cols: 5, rows: 4, preview: 1.2 },
+        { cols: 6, rows: 4, preview: 0.9 },
+      ];
+      const BOARD = { x: 26, y: 168, w: W - 52, h: 448 };
+
+      let cards = [];
+      let layout = null;
+      let level = 1;
+      let score = 0;
+      let moves = 0;
+      let elapsed = 0;
+      let previewTimer = 0;
+      let mismatchTimer = 0;
+      let flippedIds = [];
+      let levelClearTimer = 0;
+      let state = 'ready';
+      let recordSaved = false;
+      let lastTap = 0;
+
+      const high = A.Progress.get('memory-flip').high;
+      dom.hudHigh.textContent = String(high);
+
+      function levelConfig(lv) {
+        return LEVELS[clamp(lv - 1, 0, LEVELS.length - 1)];
+      }
+
+      function computeLayout(cfg) {
+        const gap = Math.max(6, Math.min(12, Math.floor(360 / Math.max(cfg.cols, cfg.rows) / 12)));
+        const cw = (BOARD.w - gap * (cfg.cols - 1)) / cfg.cols;
+        const ch = Math.min(cw * 1.08, (BOARD.h - gap * (cfg.rows - 1)) / cfg.rows);
+        const totalW = cw * cfg.cols + gap * (cfg.cols - 1);
+        const totalH = ch * cfg.rows + gap * (cfg.rows - 1);
+        return {
+          gap,
+          cw,
+          ch,
+          x: BOARD.x + (BOARD.w - totalW) / 2,
+          y: BOARD.y + (BOARD.h - totalH) / 2,
+        };
+      }
+
+      function cardRect(card) {
+        const l = layout;
+        return {
+          x: l.x + card.c * (l.cw + l.gap),
+          y: l.y + card.r * (l.ch + l.gap),
+          w: l.cw,
+          h: l.ch,
+        };
+      }
+
+      function buildLevel(lv) {
+        const cfg = levelConfig(lv);
+        const pairs = (cfg.cols * cfg.rows) / 2;
+        const pool = SYMBOLS.slice();
+        for (let i = pool.length - 1; i > 0; i--) {
+          const j = Math.floor(Math.random() * (i + 1));
+          [pool[i], pool[j]] = [pool[j], pool[i]];
+        }
+        const symbols = [];
+        for (let i = 0; i < pairs; i++) symbols.push(pool[i % pool.length], pool[i % pool.length]);
+        for (let i = symbols.length - 1; i > 0; i--) {
+          const j = Math.floor(Math.random() * (i + 1));
+          [symbols[i], symbols[j]] = [symbols[j], symbols[i]];
+        }
+        layout = computeLayout(cfg);
+        cards = symbols.map((symbol, index) => ({
+          id: index,
+          symbol,
+          r: Math.floor(index / cfg.cols),
+          c: index % cfg.cols,
+          matched: false,
+          pop: 0,
+        }));
+        previewTimer = cfg.preview;
+        mismatchTimer = 0;
+        flippedIds = [];
+        levelClearTimer = 0;
+      }
+
+      function reset() {
+        level = 1;
+        score = 0;
+        moves = 0;
+        elapsed = 0;
+        recordSaved = false;
+        buildLevel(1);
+        syncHud();
+      }
+
+      function syncHud() {
+        dom.hudScore.textContent = String(score);
+      }
+
+      function startGame() {
+        autosave.clear();
+        reset();
+        state = 'playing';
+        ui.hide();
+        loop.resume();
+        pauseUi.sync();
+        autosave.saveNow();
+      }
+
+      function resumeGame() {
+        if (state !== 'paused') return;
+        state = 'playing';
+        ui.hide();
+        loop.resume();
+        pauseUi.sync();
+      }
+
+      function finish(won) {
+        if (state === 'over') return;
+        state = 'over';
+        autosave.clear();
+        A.Sfx.play(won ? 'perfect' : 'over');
+        let rec = null;
+        if (!recordSaved) {
+          rec = A.Progress.recordPlay('memory-flip', score);
+          recordSaved = true;
+          dom.hudHigh.textContent = String(Math.max(high, score));
+        }
+        loop.pause();
+        const text = won
+          ? `<span class="ac-score">${score}</span>` +
+            (rec && rec.isNewHigh ? '<span class="ac-newhigh">★ 新纪录</span><br/>' : '') +
+            `全部 5 关完成 · ${moves} 次翻牌 · 用时 ${fmtTime(elapsed)}`
+          : `<span class="ac-score">${score}</span>` +
+            (rec && rec.isNewHigh ? '<span class="ac-newhigh">★ 新纪录</span><br/>' : '') +
+            `第 ${level} 关 · ${moves} 次翻牌`;
+        ui.show({ title: won ? '全部通关！' : '游戏结束', text, btn: '再来一局', onBtn: startGame });
+        pauseUi.sync();
+      }
+
+      function pauseByUser() {
+        if (state !== 'playing') return;
+        loop.pause();
+        state = 'paused';
+        autosave.saveNow();
+        ui.show({ title: '已暂停', text: '牌面已盖好，等你回来。<br/>局内进度已保存。', btn: '继续', onBtn: resumeGame });
+        pauseUi.sync();
+      }
+
+      function showStart() {
+        ui.show({
+          title: '记忆翻牌',
+          text: '点开两张牌找相同图案。<br/>每关开始会先亮牌预览<br/>5 关逐渐加牌、缩短预览时间',
+          btn: '开始游戏',
+          onBtn: startGame,
+        });
+      }
+
+      function fmtTime(sec) {
+        const s = Math.max(0, Math.floor(sec));
+        return String(Math.floor(s / 60)).padStart(2, '0') + ':' + String(s % 60).padStart(2, '0');
+      }
+
+      function serialize() {
+        if (state !== 'playing' && state !== 'paused') return null;
+        return {
+          level,
+          score,
+          moves,
+          elapsed,
+          previewTimer,
+          mismatchTimer,
+          flippedIds: flippedIds.slice(),
+          cards: cards.map((c) => ({ symbol: c.symbol, matched: c.matched })),
+        };
+      }
+
+      function restore(data) {
+        if (!data || !Array.isArray(data.cards) || !data.cards.length) return false;
+        try {
+          const lv = clamp(Number(data.level) || 1, 1, LEVELS.length);
+          const cfg = levelConfig(lv);
+          if (data.cards.length !== cfg.cols * cfg.rows) return false;
+          reset();
+          level = lv;
+          layout = computeLayout(cfg);
+          cards = data.cards.map((c, index) => ({
+            id: index,
+            symbol: typeof c.symbol === 'string' ? c.symbol : '❔',
+            r: Math.floor(index / cfg.cols),
+            c: index % cfg.cols,
+            matched: !!c.matched,
+            pop: 0,
+          }));
+          score = Math.max(0, Number(data.score) || 0);
+          moves = Math.max(0, Number(data.moves) || 0);
+          elapsed = Math.max(0, Number(data.elapsed) || 0);
+          previewTimer = Math.max(0, Number(data.previewTimer) || 0);
+          mismatchTimer = Math.max(0, Number(data.mismatchTimer) || 0);
+          flippedIds = Array.isArray(data.flippedIds) ? data.flippedIds.filter((id) => Number.isInteger(id) && cards[id]) : [];
+          levelClearTimer = 0;
+          recordSaved = false;
+          syncHud();
+          return true;
+        } catch (err) {
+          return false;
+        }
+      }
+
+      const autosave = A.createRunAutosave('memory-flip', serialize, {
+        every: 3,
+        meta: () => ({ score, summary: `第 ${level} 关 · ${moves} 次翻牌 · ${score} 分` }),
+      });
+
+      function reveal(card) {
+        if (card.matched) return;
+        if (previewTimer > 0 || mismatchTimer > 0 || flippedIds.length >= 2) return;
+        if (flippedIds.indexOf(card.id) !== -1) return;
+        flippedIds.push(card.id);
+        card.pop = 1;
+        A.Sfx.play('ui');
+        if (flippedIds.length === 2) {
+          const a = cards[flippedIds[0]];
+          const b = cards[flippedIds[1]];
+          moves += 1;
+          if (a.symbol === b.symbol) {
+            a.matched = true;
+            b.matched = true;
+            score += 100 + level * 20;
+            flippedIds = [];
+            syncHud();
+            A.Sfx.play('perfect');
+            if (cards.every((c) => c.matched)) {
+              levelClearTimer = 1.35;
+              state = 'levelclear';
+              A.Sfx.play('spring');
+            }
+          } else {
+            mismatchTimer = 0.72;
+            A.Sfx.play('land');
+          }
+        }
+      }
+
+      function handleTap(x, y) {
+        if (state !== 'playing') return;
+        for (const card of cards) {
+          const rect = cardRect(card);
+          if (x >= rect.x && x <= rect.x + rect.w && y >= rect.y && y <= rect.y + rect.h) {
+            reveal(card);
+            return;
+          }
+        }
+      }
+
+      function update(dt) {
+        for (const card of cards) card.pop = Math.max(0, card.pop - dt * 4);
+        if (state === 'levelclear') {
+          levelClearTimer -= dt;
+          if (levelClearTimer <= 0) {
+            if (level >= LEVELS.length) {
+              finish(true);
+            } else {
+              level += 1;
+              score += 100;
+              buildLevel(level);
+              state = 'playing';
+              autosave.saveNow();
+              syncHud();
+            }
+          }
+          input.endFrame();
+          return;
+        }
+        if (state !== 'playing') {
+          input.endFrame();
+          return;
+        }
+        autosave.tick(dt);
+        elapsed += dt;
+        if (previewTimer > 0) previewTimer = Math.max(0, previewTimer - dt);
+        if (mismatchTimer > 0) {
+          mismatchTimer -= dt;
+          if (mismatchTimer <= 0) {
+            flippedIds = [];
+            mismatchTimer = 0;
+          }
+        }
+        if (input.pointer.wentDown) handleTap(input.pointer.x, input.pointer.y);
+        input.endFrame();
+      }
+
+      function drawCard(card) {
+        const rect = cardRect(card);
+        const revealed = card.matched || previewTimer > 0 || flippedIds.indexOf(card.id) !== -1 || state === 'levelclear';
+        const pop = 1 + card.pop * 0.06;
+        ctx.save();
+        ctx.translate(rect.x + rect.w / 2, rect.y + rect.h / 2);
+        ctx.scale(pop, pop);
+        ctx.translate(-rect.w / 2, -rect.h / 2);
+        A.draw.roundRect(ctx, 0, 0, rect.w, rect.h, Math.min(12, rect.w * 0.16));
+        if (revealed) {
+          ctx.fillStyle = card.matched ? 'rgba(90,209,160,0.2)' : '#f3f6ff';
+          ctx.fill();
+          ctx.strokeStyle = card.matched ? '#5ad1a0' : '#b9c8ec';
+          ctx.lineWidth = 2;
+          ctx.stroke();
+          A.draw.label(ctx, card.symbol, rect.w / 2, rect.h / 2 + 1, {
+            font: `${Math.floor(Math.min(rect.w, rect.h) * 0.46)}px system-ui, sans-serif`,
+            color: '#1a2140',
+          });
+        } else {
+          const g = ctx.createLinearGradient(0, 0, rect.w, rect.h);
+          g.addColorStop(0, '#253566');
+          g.addColorStop(1, '#182448');
+          ctx.fillStyle = g;
+          ctx.fill();
+          ctx.strokeStyle = '#3f5188';
+          ctx.lineWidth = 1.5;
+          ctx.stroke();
+          ctx.fillStyle = 'rgba(90,209,160,0.5)';
+          ctx.font = `${Math.floor(Math.min(rect.w, rect.h) * 0.3)}px system-ui`;
+          ctx.textAlign = 'center';
+          ctx.textBaseline = 'middle';
+          ctx.fillText('?', rect.w / 2, rect.h / 2 + 1);
+        }
+        ctx.restore();
+      }
+
+      function render() {
+        stage.beginFrame();
+        const bg = ctx.createLinearGradient(0, 0, 0, H);
+        bg.addColorStop(0, '#0b1328');
+        bg.addColorStop(1, '#12213d');
+        ctx.fillStyle = bg;
+        ctx.fillRect(0, 0, W, H);
+        for (let i = 0; i < 40; i++) {
+          const x = ((i * 97) % W);
+          const y = ((i * 53) % H);
+          ctx.fillStyle = i % 3 === 0 ? 'rgba(90,209,160,0.35)' : 'rgba(147,160,200,0.22)';
+          ctx.fillRect(x, y, 2, 2);
+        }
+
+        A.draw.label(ctx, 'LEVEL ' + level + ' / ' + LEVELS.length, 12, 24, {
+          align: 'left',
+          font: 'bold 14px system-ui',
+          color: '#5ad1a0',
+        });
+        A.draw.label(ctx, 'SCORE ' + score, W - 12, 24, { align: 'right', font: 'bold 14px system-ui', color: '#ffd23f' });
+        A.draw.label(ctx, '翻牌 ' + moves + ' · ' + fmtTime(elapsed), W / 2, 52, {
+          font: '12px system-ui',
+          color: '#93a0c8',
+        });
+        if (previewTimer > 0) {
+          A.draw.label(ctx, '记住牌面 ' + previewTimer.toFixed(1) + 's', W / 2, 84, {
+            font: 'bold 15px system-ui',
+            color: '#ffd23f',
+          });
+        } else if (mismatchTimer > 0) {
+          A.draw.label(ctx, '不匹配，再看一眼…', W / 2, 84, { font: '13px system-ui', color: '#ff9a9a' });
+        } else {
+          A.draw.label(ctx, '点开两张相同的牌', W / 2, 84, { font: '13px system-ui', color: '#93a0c8' });
+        }
+
+        cards.forEach(drawCard);
+
+        if (state === 'levelclear') {
+          A.draw.label(ctx, '第 ' + level + ' 关完成', W / 2, 654, {
+            font: 'bold 22px system-ui',
+            color: '#5ad1a0',
+          });
+        }
+      }
+
+      const loop = A.createLoop({
+        update,
+        render,
+        onAutoPause() {
+          if (state === 'playing') pauseByUser();
+        },
+      });
+
+      const pauseUi = A.bindPause({
+        button: dom.pause,
+        pause: pauseByUser,
+        resume: resumeGame,
+        isPlaying: () => state === 'playing',
+        isPaused: () => state === 'paused',
+      });
+
+      function syncMute() {
+        dom.mute.textContent = A.Sfx.muted ? '🔇' : '🔊';
+      }
+      dom.mute.addEventListener('click', () => {
+        A.Sfx.setMuted(!A.Sfx.muted);
+        syncMute();
+      });
+      syncMute();
+
+      reset();
+      state = 'ready';
+      const saved = autosave.load();
+      if (saved) {
+        A.showResumePrompt(ui, saved, {
+          name: '记忆翻牌',
+          onResume: () => {
+            if (restore(saved.data)) {
+              state = 'playing';
+              ui.hide();
+              loop.resume();
+              pauseUi.sync();
+              autosave.saveNow();
+            } else {
+              autosave.clear();
+              showStart();
+            }
+          },
+          onRestart: () => {
+            autosave.clear();
+            showStart();
+          },
+        });
+      } else {
+        showStart();
+      }
+      loop.start();
+    })();
+  </script>
+</body>
+</html>

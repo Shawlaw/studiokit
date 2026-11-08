@@ -21,6 +21,7 @@
         <span>距离 <strong data-hud-score>0</strong>m</span>
         <span>最高 <strong data-hud-high>0</strong>m</span>
       </div>
+      <button type="button" class="ac-icon-btn" data-pause aria-label="暂停游戏" title="暂停游戏（P / Esc）">⏸</button>
       <button type="button" class="ac-icon-btn" data-mute aria-label="切换音效">🔊</button>
     </header>
     <div class="stage-wrap">
@@ -31,6 +32,7 @@
             <h2 data-ov-title>极速车道</h2>
             <p data-ov-text>n 路赛车避障</p>
             <button type="button" class="ac-btn" data-ov-btn>开始游戏</button>
+            <button type="button" class="ac-btn ac-btn-secondary" data-ov-btn2 hidden>重新开始</button>
           </div>
         </div>
       </div>
@@ -65,10 +67,13 @@
         ovTitle: document.querySelector('[data-ov-title]'),
         ovText: document.querySelector('[data-ov-text]'),
         ovBtn: document.querySelector('[data-ov-btn]'),
+        ovBtn2: document.querySelector('[data-ov-btn2]'),
         hudScore: document.querySelector('[data-hud-score]'),
         hudHigh: document.querySelector('[data-hud-high]'),
+        pause: document.querySelector('[data-pause]'),
         mute: document.querySelector('[data-mute]'),
       };
+      const ui = A.createOverlayUi(dom);
 
       const particles = A.createParticles();
 
@@ -88,6 +93,10 @@
       function laneCenterX(lane, u) {
         const half = roadHalfAt(u);
         return CX + half * 2 * ((lane + 0.5) / LANES - 0.5);
+      }
+      function dividerX(k, u) {
+        const half = roadHalfAt(u);
+        return CX + half * 2 * (k / LANES - 0.5);
       }
 
       const player = { x: CX, vx: 0, tilt: 0, invul: 0 };
@@ -139,27 +148,36 @@
         dom.hudScore.textContent = String(Math.floor(dist));
       }
 
-      function showOverlay(title, text, btn, onBtn) {
-        dom.ovTitle.textContent = title;
-        dom.ovText.innerHTML = text;
-        dom.ovBtn.textContent = btn;
-        dom.overlay.hidden = false;
-        dom.ovBtn.onclick = () => {
-          A.Sfx.play('ui');
-          onBtn();
-        };
+      function showOverlay(title, text, btn, onBtn, btn2, onBtn2) {
+        ui.show({ title, text, btn, onBtn, btn2, onBtn2 });
+      }
+      function hideOverlay() {
+        ui.hide();
       }
 
       function startGame() {
+        autosave.clear();
         reset();
         state = 'playing';
-        dom.overlay.hidden = true;
+        hideOverlay();
         loop.resume();
+        pauseUi.sync();
+        autosave.saveNow();
+      }
+
+      function resumeGame() {
+        if (state !== 'paused') return;
+        state = 'playing';
+        hideOverlay();
+        loop.resume();
+        pauseUi.sync();
       }
 
       function gameOver() {
+        if (state === 'over') return;
         state = 'over';
         A.Sfx.play('over');
+        autosave.clear();
         const finalDist = Math.floor(dist);
         let rec = null;
         if (!recordSaved) {
@@ -176,18 +194,84 @@
           '再来一局',
           startGame
         );
+        pauseUi.sync();
       }
 
       function pauseByUser() {
         if (state !== 'playing') return;
         loop.pause();
         state = 'paused';
-        showOverlay('已暂停', '引擎怠速中。', '继续', () => {
-          state = 'playing';
-          dom.overlay.hidden = true;
-          loop.resume();
-        });
+        autosave.saveNow();
+        showOverlay('已暂停', '引擎怠速中。<br/>局内进度已保存，可以随时离开。', '继续', resumeGame);
+        pauseUi.sync();
       }
+
+      function showStart() {
+        showOverlay(
+          '极速车道',
+          '四车道赛车避障：车流越来越快。<br/>生命 ×3 · 撞车会大幅减速<br/>速度随行驶距离逐步提升',
+          '开始游戏',
+          startGame
+        );
+      }
+
+      /* ---------- 局内存档 ---------- */
+      function serialize() {
+        if (state !== 'playing' && state !== 'paused') return null;
+        return {
+          cars: cars.map((c) => ({ lane: c.lane, z: c.z, own: c.own, w: c.w, h: c.h, truck: c.truck, color: c.color, passed: c.passed })),
+          props: props.map((p) => ({ z: p.z, side: p.side, kind: p.kind })),
+          speed,
+          dist,
+          lives,
+          spawnTimer,
+          dashOffset,
+          player: { x: player.x, vx: player.vx, tilt: player.tilt, invul: player.invul },
+        };
+      }
+
+      function restore(data) {
+        if (!data || !Array.isArray(data.cars) || !data.player) return false;
+        try {
+          reset();
+          cars = data.cars
+            .filter((c) => c && isFinite(c.z) && isFinite(c.lane))
+            .map((c) => ({
+              lane: clamp(Math.round(Number(c.lane)), 0, LANES - 1),
+              z: clamp(Number(c.z), -0.2, 1.2),
+              own: clamp(Number(c.own) || 0.2, 0.02, 0.6),
+              w: Number(c.w) || 40,
+              h: Number(c.h) || 62,
+              truck: !!c.truck,
+              color: typeof c.color === 'string' ? c.color : CAR_COLORS[0],
+              passed: !!c.passed,
+            }));
+          props = Array.isArray(data.props)
+            ? data.props
+                .filter((p) => p && isFinite(p.z))
+                .map((p) => ({ z: clamp(Number(p.z), 0, 1), side: p.side === -1 ? -1 : 1, kind: p.kind === 1 ? 1 : 0 }))
+            : [];
+          speed = clamp(Number(data.speed) || 0.28, 0.2, 1);
+          dist = Math.max(0, Number(data.dist) || 0);
+          lives = clamp(Number(data.lives) || 3, 1, 3);
+          spawnTimer = Number(data.spawnTimer) || 0.8;
+          dashOffset = Number(data.dashOffset) || 0;
+          player.x = clamp(Number(data.player.x) || CX, CX - 150, CX + 150);
+          player.vx = Number(data.player.vx) || 0;
+          player.tilt = Number(data.player.tilt) || 0;
+          player.invul = Number(data.player.invul) || 0;
+          recordSaved = false;
+          syncHud();
+          return true;
+        } catch (err) {
+          return false;
+        }
+      }
+
+      const autosave = A.createRunAutosave('road-rush', serialize, {
+        every: 4,
+        meta: () => ({ score: Math.floor(dist), summary: `${Math.floor(dist)}m · ${Math.round(speed * 360)}km/h` }),
+      });
 
       function spawnCar() {
         /* 保证不会四车道同时封死：近段(z<0.55)已有车道 + 新车 < 4 */
@@ -219,6 +303,7 @@
           input.endFrame();
           return;
         }
+        autosave.tick(dt);
 
         /* 加速曲线 */
         speed = Math.min(1, speed + 0.02 * dt + 0.004 * dt);
@@ -392,8 +477,8 @@
             if (zB <= zA) continue;
             const wA = 3 * scaleAt(uOf(zA)) * 1.4;
             const wB = 3 * scaleAt(uOf(zB)) * 1.4;
-            const xA = laneCenterX(lane, uOf(zA));
-            const xB = laneCenterX(lane, uOf(zB));
+            const xA = dividerX(lane, uOf(zA));
+            const xB = dividerX(lane, uOf(zB));
             ctx.beginPath();
             ctx.moveTo(xA - wA / 2, yAt(uOf(zA)));
             ctx.lineTo(xA + wA / 2, yAt(uOf(zA)));
@@ -543,18 +628,20 @@
       }
 
       /* ---------- 输入与循环 ---------- */
-      window.addEventListener('keydown', (e) => {
-        if (e.key === 'p' || e.key === 'P' || e.key === 'Escape') {
-          if (state === 'playing') pauseByUser();
-        }
-      });
-
       const loop = A.createLoop({
         update,
         render,
         onAutoPause() {
           if (state === 'playing') pauseByUser();
         },
+      });
+
+      const pauseUi = A.bindPause({
+        button: dom.pause,
+        pause: pauseByUser,
+        resume: resumeGame,
+        isPlaying: () => state === 'playing',
+        isPaused: () => state === 'paused',
       });
 
       function syncMute() {
@@ -568,7 +655,30 @@
 
       reset();
       state = 'ready';
-      showOverlay('极速车道', 'n 路赛车避障：车流越来越快。<br/>生命 ×3 · 撞车会大幅减速', '开始游戏', startGame);
+      const saved = autosave.load();
+      if (saved) {
+        A.showResumePrompt(ui, saved, {
+          name: '极速车道',
+          onResume: () => {
+            if (restore(saved.data)) {
+              state = 'playing';
+              hideOverlay();
+              loop.resume();
+              pauseUi.sync();
+              autosave.saveNow();
+            } else {
+              autosave.clear();
+              showStart();
+            }
+          },
+          onRestart: () => {
+            autosave.clear();
+            showStart();
+          },
+        });
+      } else {
+        showStart();
+      }
       loop.start();
     })();
   </script>

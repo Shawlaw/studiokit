@@ -1,0 +1,537 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no, viewport-fit=cover" />
+  <meta name="description" content="重力翻转：一键翻转重力，在上下尖刺之间穿行，速度由慢到快，适合地铁通勤的竖屏一键小游戏。" />
+  <meta name="theme-color" content="#0b1020" />
+  <link rel="stylesheet" href="../../../shared/site.css" />
+  <link rel="stylesheet" href="../arcade.css" />
+  <script src="../../../shared/site-shell.js" defer></script>
+  <script src="../engine.js"></script>
+  <title>重力翻转 · 街机厅 · StudioKit</title>
+</head>
+<body class="arcade-body" data-studiokit-app="arcade" data-studiokit-app-title="街机厅 Arcade" style="--ac-accent:#9b7cff; --card-accent:#9b7cff">
+  <noscript><p class="ac-noscript">此游戏需要启用 JavaScript 才能运行。</p></noscript>
+  <main class="game-page">
+    <header class="game-topbar">
+      <a class="ac-back" href="../index.html">‹ 街机厅</a>
+      <h1 class="game-title">🌀 重力翻转</h1>
+      <div class="game-hud">
+        <span>距离 <strong data-hud-score>0</strong>m</span>
+        <span>最高 <strong data-hud-high>0</strong>m</span>
+      </div>
+      <button type="button" class="ac-icon-btn" data-pause aria-label="暂停游戏" title="暂停游戏（P / Esc）">⏸</button>
+      <button type="button" class="ac-icon-btn" data-mute aria-label="切换音效">🔊</button>
+    </header>
+    <div class="stage-wrap">
+      <div class="stage-box">
+        <canvas class="game-canvas" aria-label="重力翻转游戏画面"></canvas>
+        <div class="overlay" data-overlay hidden>
+          <div class="overlay-panel">
+            <h2 data-ov-title>重力翻转</h2>
+            <p data-ov-text>一键翻转重力躲尖刺</p>
+            <button type="button" class="ac-btn" data-ov-btn>开始游戏</button>
+            <button type="button" class="ac-btn ac-btn-secondary" data-ov-btn2 hidden>重新开始</button>
+          </div>
+        </div>
+      </div>
+    </div>
+    <p class="game-hint">点击 / 空格翻转重力 · 在上下障碍之间穿行 · 吃星星加分 · 速度会越来越快 · P / Esc 暂停</p>
+  </main>
+  <script>
+    (() => {
+      'use strict';
+      const A = window.Arcade;
+      const { clamp, lerp, rand, randInt, TAU } = A.utils;
+
+      const W = 420;
+      const H = 740;
+      const CEILING = 50;
+      const FLOOR = H - 46;
+      const PLAYER_X = 112;
+      const PLAYER_W = 24;
+      const PLAYER_H = 28;
+      const GRAVITY = 2100;
+      const MAX_VY = 880;
+
+      const canvas = document.querySelector('.game-canvas');
+      const stage = A.createStage(canvas, W, H);
+      const ctx = stage.ctx;
+      const input = A.createInput(canvas);
+      A.installSfxUnlock();
+
+      const dom = {
+        overlay: document.querySelector('[data-overlay]'),
+        ovTitle: document.querySelector('[data-ov-title]'),
+        ovText: document.querySelector('[data-ov-text]'),
+        ovBtn: document.querySelector('[data-ov-btn]'),
+        ovBtn2: document.querySelector('[data-ov-btn2]'),
+        hudScore: document.querySelector('[data-hud-score]'),
+        hudHigh: document.querySelector('[data-hud-high]'),
+        pause: document.querySelector('[data-pause]'),
+        mute: document.querySelector('[data-mute]'),
+      };
+      const ui = A.createOverlayUi(dom);
+      const particles = A.createParticles();
+
+      const player = { x: PLAYER_X, y: FLOOR - PLAYER_H / 2, vy: 0, gravityDir: 1, invul: 0, squish: 0 };
+      let obstacles = [];
+      let coins = [];
+      let speed = 170;
+      let dist = 0;
+      let lives = 3;
+      let elapsed = 0;
+      let spawnTimer = 0.8;
+      let shake = 0;
+      let state = 'ready';
+      let recordSaved = false;
+      let spaceWasDown = false;
+      let parallax = 0;
+
+      const high = A.Progress.get('gravity-flip').high;
+      dom.hudHigh.textContent = String(high);
+
+      function difficulty() {
+        return clamp(elapsed / 75, 0, 1);
+      }
+
+      function reset() {
+        obstacles = [];
+        coins = [];
+        speed = 170;
+        dist = 0;
+        lives = 3;
+        elapsed = 0;
+        spawnTimer = 0.8;
+        shake = 0;
+        parallax = 0;
+        recordSaved = false;
+        spaceWasDown = false;
+        player.y = FLOOR - PLAYER_H / 2;
+        player.vy = 0;
+        player.gravityDir = 1;
+        player.invul = 0;
+        player.squish = 0;
+        particles.clear();
+        syncHud();
+      }
+
+      function syncHud() {
+        dom.hudScore.textContent = String(Math.floor(dist));
+      }
+
+      function startGame() {
+        autosave.clear();
+        reset();
+        state = 'playing';
+        ui.hide();
+        loop.resume();
+        pauseUi.sync();
+        autosave.saveNow();
+      }
+
+      function resumeGame() {
+        if (state !== 'paused') return;
+        state = 'playing';
+        ui.hide();
+        loop.resume();
+        pauseUi.sync();
+      }
+
+      function finish() {
+        if (state === 'over') return;
+        state = 'over';
+        autosave.clear();
+        A.Sfx.play('over');
+        const finalDist = Math.floor(dist);
+        let rec = null;
+        if (!recordSaved) {
+          rec = A.Progress.recordPlay('gravity-flip', finalDist);
+          recordSaved = true;
+          dom.hudHigh.textContent = String(Math.max(high, finalDist));
+        }
+        loop.pause();
+        ui.show({
+          title: '撞上障碍',
+          text:
+            `<span class="ac-score">${finalDist}m</span>` +
+            (rec && rec.isNewHigh ? '<span class="ac-newhigh">★ 新纪录</span><br/>' : '') +
+            `飞行距离 · 最高 ${Math.max(high, finalDist)}m`,
+          btn: '再来一局',
+          onBtn: startGame,
+        });
+        pauseUi.sync();
+      }
+
+      function pauseByUser() {
+        if (state !== 'playing') return;
+        loop.pause();
+        state = 'paused';
+        autosave.saveNow();
+        ui.show({ title: '已暂停', text: '重力也停住了。<br/>局内进度已保存，可以随时离开。', btn: '继续', onBtn: resumeGame });
+        pauseUi.sync();
+      }
+
+      function showStart() {
+        ui.show({
+          title: '重力翻转',
+          text: '点击 / 空格翻转重力。<br/>在上下障碍之间穿行，吃星星加分<br/>速度由慢到快 · 生命 ×3',
+          btn: '开始游戏',
+          onBtn: startGame,
+        });
+      }
+
+      function flip() {
+        if (state !== 'playing') return;
+        player.gravityDir *= -1;
+        player.vy *= 0.25;
+        player.squish = 1;
+        A.Sfx.play('jump');
+        particles.emit(player.x, player.y, {
+          count: A.reducedMotion ? 3 : 8,
+          speed: [20, 100],
+          life: [0.15, 0.35],
+          size: [1.5, 3],
+          colors: ['#9b7cff', '#ffffff'],
+        });
+      }
+
+      function spawnObstacle() {
+        const side = Math.random() < 0.5 ? 'floor' : 'ceiling';
+        const h = rand(48, 64 + difficulty() * 78);
+        const w = rand(34, 48);
+        const x = W + 30;
+        obstacles.push({ x, w, h, side, passed: false });
+        /* 一对星星：放在障碍之后的中间区域。 */
+        if (Math.random() < 0.65) {
+          coins.push({ x: x + w + rand(50, 110), y: rand(CEILING + 70, FLOOR - 70), r: 9, spin: rand(0, TAU) });
+        }
+      }
+
+      function hitPlayer(obstacle) {
+        if (player.invul > 0) return;
+        lives -= 1;
+        player.invul = 1.6;
+        player.vy = 0;
+        player.gravityDir = 1;
+        player.y = clamp(player.y, CEILING + PLAYER_H / 2 + 10, FLOOR - PLAYER_H / 2 - 10);
+        obstacle.dead = true;
+        shake = A.reducedMotion ? 0 : 8;
+        A.Sfx.play('explode');
+        particles.emit(player.x, player.y, {
+          count: A.reducedMotion ? 8 : 20,
+          speed: [40, 200],
+          life: [0.25, 0.6],
+          size: [2, 4],
+          colors: ['#9b7cff', '#ff5d7a', '#ffffff'],
+          gravity: 200,
+        });
+        if (lives <= 0) finish();
+      }
+
+      function update(dt) {
+        particles.update(dt);
+        shake = Math.max(0, shake - dt * 26);
+        if (state !== 'playing') {
+          input.endFrame();
+          return;
+        }
+        autosave.tick(dt);
+        elapsed += dt;
+        speed = Math.min(430, 170 + elapsed * 3.4);
+        parallax = (parallax + speed * dt * 0.25) % W;
+        dist += speed * dt / 10;
+        syncHud();
+
+        const spaceNow = input.isDown(' ');
+        if (input.pointer.wentDown || (spaceNow && !spaceWasDown)) flip();
+        spaceWasDown = spaceNow;
+
+        player.vy = clamp(player.vy + player.gravityDir * GRAVITY * dt, -MAX_VY, MAX_VY);
+        player.y += player.vy * dt;
+        player.squish = Math.max(0, player.squish - dt * 4);
+        player.invul = Math.max(0, player.invul - dt);
+
+        if (player.y + PLAYER_H / 2 > FLOOR) {
+          player.y = FLOOR - PLAYER_H / 2;
+          player.vy = 0;
+        } else if (player.y - PLAYER_H / 2 < CEILING) {
+          player.y = CEILING + PLAYER_H / 2;
+          player.vy = 0;
+        }
+
+        spawnTimer -= dt;
+        if (spawnTimer <= 0) {
+          spawnObstacle();
+          spawnTimer = rand(0.9, 1.35) - difficulty() * 0.25;
+          spawnTimer = Math.max(0.55, spawnTimer) * (170 / speed);
+        }
+
+        const hb = { x: player.x - PLAYER_W / 2 + 3, y: player.y - PLAYER_H / 2 + 3, w: PLAYER_W - 6, h: PLAYER_H - 6 };
+        for (let i = obstacles.length - 1; i >= 0; i--) {
+          const o = obstacles[i];
+          o.x -= speed * dt;
+          if (o.x + o.w < -20 || o.dead) {
+            obstacles.splice(i, 1);
+            continue;
+          }
+          const box = o.side === 'floor' ? { x: o.x, y: FLOOR - o.h, w: o.w, h: o.h } : { x: o.x, y: CEILING, w: o.w, h: o.h };
+          if (player.invul <= 0 && A.Physics.aabbOverlap(hb, box)) hitPlayer(o);
+          if (!o.passed && o.x + o.w < player.x - PLAYER_W / 2) {
+            o.passed = true;
+            dist += 4;
+          }
+        }
+
+        for (let i = coins.length - 1; i >= 0; i--) {
+          const c = coins[i];
+          c.x -= speed * dt;
+          c.spin += dt * 4;
+          if (c.x < -20) {
+            coins.splice(i, 1);
+            continue;
+          }
+          if (Math.hypot(c.x - player.x, c.y - player.y) < 22) {
+            dist += 25;
+            syncHud();
+            A.Sfx.play('bell', 3);
+            particles.emit(c.x, c.y, {
+              count: A.reducedMotion ? 4 : 10,
+              speed: [30, 140],
+              life: [0.2, 0.5],
+              size: [1.5, 3],
+              colors: ['#ffd23f', '#fff3c4', '#ffffff'],
+            });
+            coins.splice(i, 1);
+          }
+        }
+        input.endFrame();
+      }
+
+      function serialize() {
+        if (state !== 'playing' && state !== 'paused') return null;
+        return {
+          player: { y: player.y, vy: player.vy, gravityDir: player.gravityDir, invul: player.invul },
+          obstacles: obstacles.map((o) => ({ x: o.x, w: o.w, h: o.h, side: o.side, passed: o.passed })),
+          coins: coins.map((c) => ({ x: c.x, y: c.y, spin: c.spin })),
+          speed,
+          dist,
+          lives,
+          elapsed,
+          spawnTimer,
+        };
+      }
+
+      function restore(data) {
+        if (!data || !data.player || !Array.isArray(data.obstacles)) return false;
+        try {
+          reset();
+          player.y = clamp(Number(data.player.y) || FLOOR - PLAYER_H / 2, CEILING + PLAYER_H / 2, FLOOR - PLAYER_H / 2);
+          player.vy = Number(data.player.vy) || 0;
+          player.gravityDir = data.player.gravityDir === -1 ? -1 : 1;
+          player.invul = Number(data.player.invul) || 0;
+          obstacles = data.obstacles
+            .filter((o) => o && isFinite(o.x) && isFinite(o.h))
+            .map((o) => ({
+              x: Number(o.x),
+              w: clamp(Number(o.w) || 40, 24, 70),
+              h: clamp(Number(o.h) || 60, 30, 180),
+              side: o.side === 'ceiling' ? 'ceiling' : 'floor',
+              passed: !!o.passed,
+            }));
+          coins = Array.isArray(data.coins)
+            ? data.coins.filter((c) => c && isFinite(c.x) && isFinite(c.y)).map((c) => ({ x: Number(c.x), y: Number(c.y), r: 9, spin: Number(c.spin) || 0 }))
+            : [];
+          speed = clamp(Number(data.speed) || 170, 150, 430);
+          dist = Math.max(0, Number(data.dist) || 0);
+          lives = clamp(Number(data.lives) || 3, 1, 3);
+          elapsed = Math.max(0, Number(data.elapsed) || 0);
+          spawnTimer = Number(data.spawnTimer) || 0.8;
+          recordSaved = false;
+          syncHud();
+          return true;
+        } catch (err) {
+          return false;
+        }
+      }
+
+      const autosave = A.createRunAutosave('gravity-flip', serialize, {
+        every: 4,
+        meta: () => ({ score: Math.floor(dist), summary: `${Math.floor(dist)}m · 生命 ${lives}` }),
+      });
+
+      function drawPlayer() {
+        if (player.invul > 0 && Math.floor(player.invul * 12) % 2 === 0) return;
+        ctx.save();
+        ctx.translate(player.x, player.y);
+        const sq = 1 + player.squish * 0.18;
+        ctx.scale(1 / sq, sq);
+        ctx.fillStyle = '#e8e2ff';
+        A.draw.roundRect(ctx, -PLAYER_W / 2, -PLAYER_H / 2, PLAYER_W, PLAYER_H, 7);
+        ctx.fill();
+        ctx.strokeStyle = '#9b7cff';
+        ctx.lineWidth = 2;
+        ctx.stroke();
+        ctx.fillStyle = '#2a1f52';
+        const eyeY = player.gravityDir > 0 ? 2 : -2;
+        ctx.beginPath();
+        ctx.arc(-5, eyeY, 2.2, 0, TAU);
+        ctx.fill();
+        ctx.beginPath();
+        ctx.arc(5, eyeY, 2.2, 0, TAU);
+        ctx.fill();
+        ctx.restore();
+      }
+
+      function render() {
+        stage.beginFrame();
+        ctx.save();
+        if (shake > 0) ctx.translate(rand(-shake, shake), rand(-shake, shake));
+        const bg = ctx.createLinearGradient(0, 0, 0, H);
+        bg.addColorStop(0, '#0d0a24');
+        bg.addColorStop(0.5, '#1a1440');
+        bg.addColorStop(1, '#0d0a24');
+        ctx.fillStyle = bg;
+        ctx.fillRect(0, 0, W, H);
+
+        /* 视差星点 */
+        for (let i = 0; i < 36; i++) {
+          const x = ((i * 89 + parallax * (i % 3 + 1)) % (W + 20)) - 10;
+          const y = 60 + ((i * 137) % (H - 120));
+          ctx.fillStyle = i % 4 === 0 ? 'rgba(155,124,255,0.5)' : 'rgba(147,160,200,0.28)';
+          ctx.fillRect(x, y, 2, 2);
+        }
+
+        /* 上下边界 */
+        ctx.fillStyle = '#241a4d';
+        ctx.fillRect(0, 0, W, CEILING);
+        ctx.fillStyle = '#6a4fd0';
+        ctx.fillRect(0, CEILING - 4, W, 4);
+        ctx.fillStyle = '#241a4d';
+        ctx.fillRect(0, FLOOR, W, H - FLOOR);
+        ctx.fillStyle = '#6a4fd0';
+        ctx.fillRect(0, FLOOR, W, 4);
+
+        /* 尖刺 */
+        ctx.fillStyle = 'rgba(155,124,255,0.45)';
+        for (let x = (parallax * 0.5) % 28 - 28; x < W; x += 28) {
+          ctx.beginPath();
+          ctx.moveTo(x, FLOOR);
+          ctx.lineTo(x + 9, FLOOR - 12);
+          ctx.lineTo(x + 18, FLOOR);
+          ctx.closePath();
+          ctx.fill();
+          ctx.beginPath();
+          ctx.moveTo(x, CEILING);
+          ctx.lineTo(x + 9, CEILING + 12);
+          ctx.lineTo(x + 18, CEILING);
+          ctx.closePath();
+          ctx.fill();
+        }
+
+        obstacles.forEach((o) => {
+          const y = o.side === 'floor' ? FLOOR - o.h : CEILING;
+          const g = ctx.createLinearGradient(o.x, 0, o.x + o.w, 0);
+          g.addColorStop(0, '#ff5d7a');
+          g.addColorStop(1, '#9b7cff');
+          ctx.fillStyle = g;
+          A.draw.roundRect(ctx, o.x, y, o.w, o.h, 5);
+          ctx.fill();
+          ctx.fillStyle = 'rgba(255,255,255,0.28)';
+          for (let k = 0; k < o.h; k += 14) {
+            ctx.fillRect(o.x + 4, y + k + 4, o.w - 8, 4);
+          }
+        });
+
+        coins.forEach((c) => {
+          ctx.save();
+          ctx.translate(c.x, c.y);
+          ctx.rotate(c.spin);
+          ctx.fillStyle = '#ffd23f';
+          ctx.beginPath();
+          for (let k = 0; k < 5; k++) {
+            const ang = -Math.PI / 2 + (k * TAU) / 5;
+            const px = Math.cos(ang) * 9;
+            const py = Math.sin(ang) * 9;
+            if (k === 0) ctx.moveTo(px, py);
+            else ctx.lineTo(px, py);
+            const ang2 = ang + TAU / 10;
+            ctx.lineTo(Math.cos(ang2) * 4, Math.sin(ang2) * 4);
+          }
+          ctx.closePath();
+          ctx.fill();
+          ctx.restore();
+        });
+
+        particles.draw(ctx);
+        drawPlayer();
+
+        A.draw.label(ctx, 'SCORE ' + Math.floor(dist), 12, 24, { align: 'left', font: 'bold 14px system-ui', color: '#ffd23f' });
+        A.draw.label(ctx, Math.round(speed) + ' px/s', W - 12, 24, { align: 'right', font: '12px system-ui', color: '#93a0c8' });
+        for (let i = 0; i < lives; i++) {
+          ctx.fillStyle = '#ff5d7a';
+          ctx.beginPath();
+          ctx.arc(20 + i * 17, 48, 5, 0, TAU);
+          ctx.fill();
+        }
+        A.draw.label(ctx, player.gravityDir > 0 ? '重力 ↓' : '重力 ↑', W / 2, 48, { font: '12px system-ui', color: '#9b7cff' });
+        ctx.restore();
+      }
+
+      const loop = A.createLoop({
+        update,
+        render,
+        onAutoPause() {
+          if (state === 'playing') pauseByUser();
+        },
+      });
+
+      const pauseUi = A.bindPause({
+        button: dom.pause,
+        pause: pauseByUser,
+        resume: resumeGame,
+        isPlaying: () => state === 'playing',
+        isPaused: () => state === 'paused',
+      });
+
+      function syncMute() {
+        dom.mute.textContent = A.Sfx.muted ? '🔇' : '🔊';
+      }
+      dom.mute.addEventListener('click', () => {
+        A.Sfx.setMuted(!A.Sfx.muted);
+        syncMute();
+      });
+      syncMute();
+
+      reset();
+      state = 'ready';
+      const saved = autosave.load();
+      if (saved) {
+        A.showResumePrompt(ui, saved, {
+          name: '重力翻转',
+          onResume: () => {
+            if (restore(saved.data)) {
+              state = 'playing';
+              ui.hide();
+              loop.resume();
+              pauseUi.sync();
+              autosave.saveNow();
+            } else {
+              autosave.clear();
+              showStart();
+            }
+          },
+          onRestart: () => {
+            autosave.clear();
+            showStart();
+          },
+        });
+      } else {
+        showStart();
+      }
+      loop.start();
+    })();
+  </script>
+</body>
+</html>

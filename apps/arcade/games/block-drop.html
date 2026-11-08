@@ -21,6 +21,7 @@
         <span>分数 <strong data-hud-score>0</strong></span>
         <span>最高 <strong data-hud-high>0</strong></span>
       </div>
+      <button type="button" class="ac-icon-btn" data-pause aria-label="暂停游戏" title="暂停游戏（P / Esc）">⏸</button>
       <button type="button" class="ac-icon-btn" data-mute aria-label="切换音效">🔊</button>
     </header>
     <div class="stage-wrap">
@@ -31,11 +32,19 @@
             <h2 data-ov-title>俄罗斯方块</h2>
             <p data-ov-text>经典落块消除</p>
             <button type="button" class="ac-btn" data-ov-btn>开始游戏</button>
+            <button type="button" class="ac-btn ac-btn-secondary" data-ov-btn2 hidden>重新开始</button>
           </div>
         </div>
       </div>
     </div>
-    <p class="game-hint">←→ 移动 · ↑ 旋转 · ↓ 软降 · 空格硬降 · P 暂停 ｜ 触摸：左右侧按住移动 · 中间点按旋转 · 底部按住软降</p>
+    <div class="touch-pad" data-touch-pad aria-label="触屏操作面板">
+      <button type="button" class="touch-btn" data-touch="left" aria-label="左移">←</button>
+      <button type="button" class="touch-btn" data-touch="rotate" aria-label="旋转">↻</button>
+      <button type="button" class="touch-btn" data-touch="right" aria-label="右移">→</button>
+      <button type="button" class="touch-btn" data-touch="soft" aria-label="软降">↓</button>
+      <button type="button" class="touch-btn touch-btn-hard" data-touch="hard" aria-label="硬降">⤓</button>
+    </div>
+    <p class="game-hint">←→ 移动 · ↑ 旋转 · ↓ 软降 · 空格硬降 · P 暂停 ｜ 触屏可直接使用下方按钮，按住 ← → ↓ 连续操作</p>
   </main>
   <script>
     (() => {
@@ -66,10 +75,13 @@
         ovTitle: document.querySelector('[data-ov-title]'),
         ovText: document.querySelector('[data-ov-text]'),
         ovBtn: document.querySelector('[data-ov-btn]'),
+        ovBtn2: document.querySelector('[data-ov-btn2]'),
         hudScore: document.querySelector('[data-hud-score]'),
         hudHigh: document.querySelector('[data-hud-high]'),
+        pause: document.querySelector('[data-pause]'),
         mute: document.querySelector('[data-mute]'),
       };
+      const ui = A.createOverlayUi(dom);
 
       const PIECES = {
         I: { m: [[0, 0, 0, 0], [1, 1, 1, 1], [0, 0, 0, 0], [0, 0, 0, 0]], color: '#41d9d9' },
@@ -109,6 +121,9 @@
       let clearing = null;
       let state = 'ready';
       let recordSaved = false;
+      let touchLeft = false;
+      let touchRight = false;
+      let touchSoft = false;
 
       const high = A.Progress.get('block-drop').high;
       dom.hudHigh.textContent = String(high);
@@ -213,27 +228,38 @@
         syncHud();
       }
 
-      function showOverlay(title, text, btn, onBtn) {
-        dom.ovTitle.textContent = title;
-        dom.ovText.innerHTML = text;
-        dom.ovBtn.textContent = btn;
-        dom.overlay.hidden = false;
-        dom.ovBtn.onclick = () => {
-          A.Sfx.play('ui');
-          onBtn();
-        };
+      function showOverlay(title, text, btn, onBtn, btn2, onBtn2) {
+        ui.show({ title, text, btn, onBtn, btn2, onBtn2 });
+      }
+      function hideOverlay() {
+        ui.hide();
       }
 
       function startGame() {
+        autosave.clear();
         reset();
         state = 'playing';
-        dom.overlay.hidden = true;
+        hideOverlay();
         loop.resume();
+        pauseUi.sync();
+        syncTouchPad();
+        autosave.saveNow();
+      }
+
+      function resumeGame() {
+        if (state !== 'paused') return;
+        state = 'playing';
+        hideOverlay();
+        loop.resume();
+        pauseUi.sync();
+        syncTouchPad();
       }
 
       function gameOver() {
+        if (state === 'over') return;
         state = 'over';
         A.Sfx.play('over');
+        autosave.clear();
         let rec = null;
         if (!recordSaved) {
           rec = A.Progress.recordPlay('block-drop', score);
@@ -249,22 +275,164 @@
           '再来一局',
           startGame
         );
+        pauseUi.sync();
+        syncTouchPad();
       }
 
       function pauseByUser() {
         if (state !== 'playing') return;
         loop.pause();
         state = 'paused';
-        showOverlay('已暂停', '方块悬停在半空。', '继续', () => {
-          state = 'playing';
-          dom.overlay.hidden = true;
-          loop.resume();
+        autosave.saveNow();
+        showOverlay('已暂停', '方块悬停在半空。<br/>局内进度已保存，可以随时离开。', '继续', resumeGame);
+        pauseUi.sync();
+        syncTouchPad();
+      }
+
+      function showStart() {
+        showOverlay(
+          '俄罗斯方块',
+          '经典落块消除：凑满一行即消除。<br/>一次消 4 行（Tetris）得分 ×8<br/>等级越高下落越快 · 随时可暂停',
+          '开始游戏',
+          startGame
+        );
+      }
+
+      /* ---------- 触屏按钮面板：按住左右 / 软降，点按旋转 / 硬降 ---------- */
+      function syncTouchPad() {
+        const buttons = document.querySelectorAll('[data-touch]');
+        if (state !== 'playing') {
+          touchLeft = false;
+          touchRight = false;
+          touchSoft = false;
+        }
+        buttons.forEach((btn) => {
+          btn.disabled = state !== 'playing';
+          if (state !== 'playing') btn.classList.remove('is-held');
         });
       }
 
+      function bindTouchPad() {
+        const pad = document.querySelector('[data-touch-pad]');
+        if (!pad) return;
+        pad.querySelectorAll('[data-touch]').forEach((btn) => {
+          const action = btn.dataset.touch;
+          const release = () => {
+            if (action === 'left') touchLeft = false;
+            if (action === 'right') touchRight = false;
+            if (action === 'soft') touchSoft = false;
+            btn.classList.remove('is-held');
+          };
+          btn.addEventListener('pointerdown', (e) => {
+            e.preventDefault();
+            if (state !== 'playing') return;
+            if (action === 'rotate') {
+              tryRotate();
+              return;
+            }
+            if (action === 'hard') {
+              hardDrop();
+              return;
+            }
+            if (action === 'left') touchLeft = true;
+            if (action === 'right') touchRight = true;
+            if (action === 'soft') touchSoft = true;
+            btn.classList.add('is-held');
+            try {
+              btn.setPointerCapture(e.pointerId);
+            } catch (err) {
+              /* 忽略捕获失败 */
+            }
+          });
+          btn.addEventListener('pointerup', release);
+          btn.addEventListener('pointercancel', release);
+          btn.addEventListener('lostpointercapture', release);
+          btn.addEventListener('contextmenu', (e) => e.preventDefault());
+        });
+        window.addEventListener('blur', () => {
+          touchLeft = false;
+          touchRight = false;
+          touchSoft = false;
+          pad.querySelectorAll('.is-held').forEach((b) => b.classList.remove('is-held'));
+        });
+        syncTouchPad();
+      }
+
+      /* ---------- 局内存档 ---------- */
+      function serialize() {
+        if (state !== 'playing' && state !== 'paused') return null;
+        return {
+          board: board.map((row) => row.slice()),
+          cur: cur
+            ? {
+                key: cur.key,
+                m: cur.m.map((row) => row.slice()),
+                color: cur.color,
+                x: cur.x,
+                y: cur.y,
+              }
+            : null,
+          bag: bag.slice(),
+          nextKey,
+          score,
+          lines,
+          level,
+          dropTimer,
+          lockTimer,
+          lockResets,
+          grounded,
+        };
+      }
+
+      function restore(data) {
+        if (!data || !Array.isArray(data.board) || data.board.length !== ROWS) return false;
+        try {
+          reset();
+          const nextBoard = data.board.map((row) => (Array.isArray(row) ? row.slice(0, COLS) : new Array(COLS).fill(null)));
+          if (nextBoard.some((row) => row.length !== COLS)) return false;
+          board = nextBoard;
+          if (data.cur && PIECES[data.cur.key] && Array.isArray(data.cur.m)) {
+            cur = {
+              key: data.cur.key,
+              m: data.cur.m.map((row) => row.map((v) => (v ? 1 : 0))),
+              color: PIECES[data.cur.key].color,
+              x: clamp(Number(data.cur.x) || 0, -2, COLS),
+              y: clamp(Number(data.cur.y) || 0, -2, ROWS),
+            };
+          } else {
+            cur = null;
+            spawn();
+          }
+          bag = Array.isArray(data.bag) ? data.bag.filter((k) => PIECES[k]) : [];
+          nextKey = PIECES[data.nextKey] ? data.nextKey : nextPieceKey();
+          score = Math.max(0, Number(data.score) || 0);
+          lines = Math.max(0, Number(data.lines) || 0);
+          level = Math.max(1, Number(data.level) || 1);
+          dropTimer = Number(data.dropTimer) || 0;
+          lockTimer = Number(data.lockTimer) || 0;
+          lockResets = Number(data.lockResets) || 0;
+          grounded = !!data.grounded;
+          clearing = null;
+          recordSaved = false;
+          spaceWasDown = false;
+          upWasDown = false;
+          state = 'playing';
+          syncHud();
+          syncTouchPad();
+          return true;
+        } catch (err) {
+          return false;
+        }
+      }
+
+      const autosave = A.createRunAutosave('block-drop', serialize, {
+        every: 4,
+        meta: () => ({ score, summary: `得分 ${score} · ${lines} 行 · Lv.${level}` }),
+      });
+
       /* ---------- 操作 ---------- */
       function tryMove(dx) {
-        if (!cur) return;
+        if (state !== 'playing' || !cur) return;
         if (!collides(cur.m, cur.x + dx, cur.y)) {
           cur.x += dx;
           if (grounded && lockResets < LOCK_RESETS) {
@@ -275,7 +443,7 @@
         }
       }
       function tryRotate() {
-        if (!cur) return;
+        if (state !== 'playing' || !cur) return;
         const rm = rotateCW(cur.m);
         for (const [kx, ky] of KICKS) {
           if (!collides(rm, cur.x + kx, cur.y + ky)) {
@@ -292,7 +460,7 @@
         }
       }
       function hardDrop() {
-        if (!cur) return;
+        if (state !== 'playing' || !cur) return;
         const gy = ghostY();
         score += (gy - cur.y) * 2;
         cur.y = gy;
@@ -366,11 +534,12 @@
           input.endFrame();
           return;
         }
+        autosave.tick(dt);
 
         const tz = touchZones();
-        const leftHeld = input.isDown('ArrowLeft', 'a') || tz.left;
-        const rightHeld = input.isDown('ArrowRight', 'd') || tz.right;
-        softHeld = input.isDown('ArrowDown', 's') || tz.soft;
+        const leftHeld = input.isDown('ArrowLeft', 'a') || tz.left || touchLeft;
+        const rightHeld = input.isDown('ArrowRight', 'd') || tz.right || touchRight;
+        softHeld = input.isDown('ArrowDown', 's') || tz.soft || touchSoft;
 
         /* DAS 横移 */
         let dir = 0;
@@ -583,18 +752,20 @@
       }
 
       /* ---------- 输入与循环 ---------- */
-      window.addEventListener('keydown', (e) => {
-        if (e.key === 'p' || e.key === 'P' || e.key === 'Escape') {
-          if (state === 'playing') pauseByUser();
-        }
-      });
-
       const loop = A.createLoop({
         update,
         render,
         onAutoPause() {
           if (state === 'playing') pauseByUser();
         },
+      });
+
+      const pauseUi = A.bindPause({
+        button: dom.pause,
+        pause: pauseByUser,
+        resume: resumeGame,
+        isPlaying: () => state === 'playing',
+        isPaused: () => state === 'paused',
       });
 
       function syncMute() {
@@ -608,7 +779,31 @@
 
       reset();
       state = 'ready';
-      showOverlay('俄罗斯方块', '经典落块消除：凑满一行即消除。<br/>一次消 4 行（Tetris）得分 ×8', '开始游戏', startGame);
+      bindTouchPad();
+      const saved = autosave.load();
+      if (saved) {
+        A.showResumePrompt(ui, saved, {
+          name: '俄罗斯方块',
+          onResume: () => {
+            if (restore(saved.data)) {
+              state = 'playing';
+              hideOverlay();
+              loop.resume();
+              pauseUi.sync();
+              autosave.saveNow();
+            } else {
+              autosave.clear();
+              showStart();
+            }
+          },
+          onRestart: () => {
+            autosave.clear();
+            showStart();
+          },
+        });
+      } else {
+        showStart();
+      }
       loop.start();
     })();
   </script>

@@ -1,0 +1,593 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no, viewport-fit=cover" />
+  <meta name="description" content="贪吃蛇：吃果实变长，速度逐渐加快并出现障碍，支持方向键 / 滑动与局内进度恢复，竖屏街机小游戏。" />
+  <meta name="theme-color" content="#0b1020" />
+  <link rel="stylesheet" href="../../../shared/site.css" />
+  <link rel="stylesheet" href="../arcade.css" />
+  <script src="../../../shared/site-shell.js" defer></script>
+  <script src="../engine.js"></script>
+  <title>贪吃蛇 · 街机厅 · StudioKit</title>
+</head>
+<body class="arcade-body" data-studiokit-app="arcade" data-studiokit-app-title="街机厅 Arcade" style="--ac-accent:#66d36e; --card-accent:#66d36e">
+  <noscript><p class="ac-noscript">此游戏需要启用 JavaScript 才能运行。</p></noscript>
+  <main class="game-page">
+    <header class="game-topbar">
+      <a class="ac-back" href="../index.html">‹ 街机厅</a>
+      <h1 class="game-title">🐍 贪吃蛇</h1>
+      <div class="game-hud">
+        <span>分数 <strong data-hud-score>0</strong></span>
+        <span>最高 <strong data-hud-high>0</strong></span>
+      </div>
+      <button type="button" class="ac-icon-btn" data-pause aria-label="暂停游戏" title="暂停游戏（P / Esc）">⏸</button>
+      <button type="button" class="ac-icon-btn" data-mute aria-label="切换音效">🔊</button>
+    </header>
+    <div class="stage-wrap">
+      <div class="stage-box">
+        <canvas class="game-canvas" aria-label="贪吃蛇游戏画面"></canvas>
+        <div class="overlay" data-overlay hidden>
+          <div class="overlay-panel">
+            <h2 data-ov-title>贪吃蛇</h2>
+            <p data-ov-text>吃果实，别咬到自己</p>
+            <button type="button" class="ac-btn" data-ov-btn>开始游戏</button>
+            <button type="button" class="ac-btn ac-btn-secondary" data-ov-btn2 hidden>重新开始</button>
+          </div>
+        </div>
+      </div>
+    </div>
+    <p class="game-hint">方向键 / WASD 或滑动转向 · 吃果实变长 · 每吃几个果实会加速并出现障碍 · 生命 ×3 · P / Esc 暂停</p>
+  </main>
+  <script>
+    (() => {
+      'use strict';
+      const A = window.Arcade;
+      const { clamp, rand, randInt, TAU } = A.utils;
+
+      const W = 420;
+      const H = 740;
+      const N = 18;
+      const CELL = 18;
+      const BOARD = N * CELL;
+      const BOARD_X = (W - BOARD) / 2;
+      const BOARD_Y = 190;
+
+      const canvas = document.querySelector('.game-canvas');
+      const stage = A.createStage(canvas, W, H);
+      const ctx = stage.ctx;
+      const input = A.createInput(canvas);
+      A.installSfxUnlock();
+
+      const dom = {
+        overlay: document.querySelector('[data-overlay]'),
+        ovTitle: document.querySelector('[data-ov-title]'),
+        ovText: document.querySelector('[data-ov-text]'),
+        ovBtn: document.querySelector('[data-ov-btn]'),
+        ovBtn2: document.querySelector('[data-ov-btn2]'),
+        hudScore: document.querySelector('[data-hud-score]'),
+        hudHigh: document.querySelector('[data-hud-high]'),
+        pause: document.querySelector('[data-pause]'),
+        mute: document.querySelector('[data-mute]'),
+      };
+      const ui = A.createOverlayUi(dom);
+      const particles = A.createParticles();
+
+      let snake = [];
+      let dir = { x: 1, y: 0 };
+      let nextDir = { x: 1, y: 0 };
+      let food = null;
+      let golden = null;
+      let goldenTimer = 0;
+      let obstacles = [];
+      let score = 0;
+      let foodsEaten = 0;
+      let lives = 3;
+      let stepTimer = 0;
+      let stepInterval = 0.19;
+      let stun = 0;
+      let invul = 0;
+      let state = 'ready';
+      let recordSaved = false;
+      let swipeStart = null;
+      let keyWasDown = {};
+
+      const high = A.Progress.get('snake-run').high;
+      dom.hudHigh.textContent = String(high);
+
+      function cellFree(x, y) {
+        if (x < 0 || y < 0 || x >= N || y >= N) return false;
+        if (snake.some((s) => s.x === x && s.y === y)) return false;
+        if (food && food.x === x && food.y === y) return false;
+        if (golden && golden.x === x && golden.y === y) return false;
+        if (obstacles.some((o) => o.x === x && o.y === y)) return false;
+        return true;
+      }
+
+      function randomFreeCell() {
+        for (let tries = 0; tries < 200; tries++) {
+          const x = randInt(0, N - 1);
+          const y = randInt(0, N - 1);
+          if (cellFree(x, y)) return { x, y };
+        }
+        return null;
+      }
+
+      function spawnFood() {
+        const cell = randomFreeCell();
+        if (cell) food = cell;
+      }
+
+      function spawnGolden() {
+        const cell = randomFreeCell();
+        if (cell) golden = { ...cell, phase: 0 };
+        goldenTimer = 6;
+      }
+
+      function addObstacles(count) {
+        for (let i = 0; i < count; i++) {
+          const cell = randomFreeCell();
+          if (cell) obstacles.push(cell);
+        }
+      }
+
+      function resetSnake() {
+        snake = [
+          { x: Math.floor(N / 2), y: Math.floor(N / 2) },
+          { x: Math.floor(N / 2) - 1, y: Math.floor(N / 2) },
+          { x: Math.floor(N / 2) - 2, y: Math.floor(N / 2) },
+        ];
+        dir = { x: 1, y: 0 };
+        nextDir = { x: 1, y: 0 };
+        stepTimer = 0;
+      }
+
+      function reset() {
+        obstacles = [];
+        score = 0;
+        foodsEaten = 0;
+        lives = 3;
+        stepInterval = 0.19;
+        stun = 0;
+        invul = 0;
+        golden = null;
+        goldenTimer = 0;
+        recordSaved = false;
+        swipeStart = null;
+        resetSnake();
+        food = null;
+        spawnFood();
+        particles.clear();
+        syncHud();
+      }
+
+      function syncHud() {
+        dom.hudScore.textContent = String(score);
+      }
+
+      function startGame() {
+        autosave.clear();
+        reset();
+        state = 'playing';
+        ui.hide();
+        loop.resume();
+        pauseUi.sync();
+        autosave.saveNow();
+      }
+
+      function resumeGame() {
+        if (state !== 'paused') return;
+        state = 'playing';
+        ui.hide();
+        loop.resume();
+        pauseUi.sync();
+      }
+
+      function finish() {
+        if (state === 'over') return;
+        state = 'over';
+        autosave.clear();
+        A.Sfx.play('over');
+        let rec = null;
+        if (!recordSaved) {
+          rec = A.Progress.recordPlay('snake-run', score);
+          recordSaved = true;
+          dom.hudHigh.textContent = String(Math.max(high, score));
+        }
+        loop.pause();
+        ui.show({
+          title: '游戏结束',
+          text:
+            `<span class="ac-score">${score}</span>` +
+            (rec && rec.isNewHigh ? '<span class="ac-newhigh">★ 新纪录</span><br/>' : '') +
+            `吃到 ${foodsEaten} 个果实 · 最高 ${Math.max(high, score)}`,
+          btn: '再来一局',
+          onBtn: startGame,
+        });
+        pauseUi.sync();
+      }
+
+      function pauseByUser() {
+        if (state !== 'playing') return;
+        loop.pause();
+        state = 'paused';
+        autosave.saveNow();
+        ui.show({ title: '已暂停', text: '蛇停住了。<br/>局内进度已保存，可以随时离开。', btn: '继续', onBtn: resumeGame });
+        pauseUi.sync();
+      }
+
+      function showStart() {
+        ui.show({
+          title: '贪吃蛇',
+          text: '吃果实变长，别撞墙、别咬到自己。<br/>每吃几个果实会加速并出现障碍<br/>生命 ×3 · 支持方向键 / 滑动',
+          btn: '开始游戏',
+          onBtn: startGame,
+        });
+      }
+
+      function loseLife() {
+        if (invul > 0) return;
+        lives -= 1;
+        invul = 1.4;
+        stun = 0.9;
+        A.Sfx.play('explode');
+        particles.emit(BOARD_X + snake[0].x * CELL + CELL / 2, BOARD_Y + snake[0].y * CELL + CELL / 2, {
+          count: A.reducedMotion ? 8 : 20,
+          speed: [40, 200],
+          life: [0.25, 0.6],
+          size: [2, 4],
+          colors: ['#66d36e', '#ff5d7a', '#ffffff'],
+          gravity: 100,
+        });
+        if (lives <= 0) {
+          finish();
+          return;
+        }
+        resetSnake();
+        obstacles = obstacles.filter((o) => Math.abs(o.x - Math.floor(N / 2)) > 4 || Math.abs(o.y - Math.floor(N / 2)) > 4);
+        food = null;
+        golden = null;
+        spawnFood();
+      }
+
+      function stepSnake() {
+        dir = nextDir;
+        const head = snake[0];
+        const nx = head.x + dir.x;
+        const ny = head.y + dir.y;
+
+        if (nx < 0 || ny < 0 || nx >= N || ny >= N) {
+          loseLife();
+          return;
+        }
+        if (obstacles.some((o) => o.x === nx && o.y === ny)) {
+          loseLife();
+          return;
+        }
+        const bodyLimit = snake.length - 1;
+        for (let i = 0; i < bodyLimit; i++) {
+          if (snake[i].x === nx && snake[i].y === ny) {
+            loseLife();
+            return;
+          }
+        }
+
+        snake.unshift({ x: nx, y: ny });
+        let ate = false;
+        if (food && food.x === nx && food.y === ny) {
+          score += 10;
+          foodsEaten += 1;
+          ate = true;
+          A.Sfx.play('bell', Math.min(foodsEaten, 12));
+          spawnFood();
+          if (foodsEaten % 5 === 0) spawnGolden();
+          if (foodsEaten % 5 === 0) addObstacles(2);
+          stepInterval = Math.max(0.085, 0.19 - foodsEaten * 0.006);
+        }
+        if (golden && golden.x === nx && golden.y === ny) {
+          score += 30;
+          foodsEaten += 1;
+          ate = true;
+          golden = null;
+          A.Sfx.play('perfect');
+          particles.emit(BOARD_X + nx * CELL + CELL / 2, BOARD_Y + ny * CELL + CELL / 2, {
+            count: A.reducedMotion ? 6 : 16,
+            speed: [30, 160],
+            life: [0.25, 0.6],
+            size: [2, 4],
+            colors: ['#ffd23f', '#fff3c4', '#ffffff'],
+            gravity: 120,
+          });
+        }
+        if (!ate) snake.pop();
+        syncHud();
+      }
+
+      function handleSwipe(dx, dy) {
+        if (Math.abs(dx) < 20 && Math.abs(dy) < 20) return;
+        const want = Math.abs(dx) > Math.abs(dy) ? { x: dx > 0 ? 1 : -1, y: 0 } : { x: 0, y: dy > 0 ? 1 : -1 };
+        if (want.x === -dir.x && want.y === -dir.y) return;
+        nextDir = want;
+      }
+
+      function normalizeDir(value) {
+        if (!value || !isFinite(value.x) || !isFinite(value.y)) return null;
+        if (Math.abs(value.x) >= Math.abs(value.y)) return { x: value.x >= 0 ? 1 : -1, y: 0 };
+        return { x: 0, y: value.y >= 0 ? 1 : -1 };
+      }
+
+      function update(dt) {
+        particles.update(dt);
+        if (state !== 'playing') {
+          input.endFrame();
+          return;
+        }
+        autosave.tick(dt);
+        stun = Math.max(0, stun - dt);
+        invul = Math.max(0, invul - dt);
+        if (goldenTimer > 0) {
+          goldenTimer -= dt;
+          if (goldenTimer <= 0) golden = null;
+        }
+
+        const keys = { left: ['ArrowLeft', 'a'], right: ['ArrowRight', 'd'], up: ['ArrowUp', 'w'], down: ['ArrowDown', 's'] };
+        Object.keys(keys).forEach((key) => {
+          const down = input.isDown(...keys[key]);
+          if (down && !keyWasDown[key]) {
+            const want = { left: { x: -1, y: 0 }, right: { x: 1, y: 0 }, up: { x: 0, y: -1 }, down: { x: 0, y: 1 } }[key];
+            if (!(want.x === -dir.x && want.y === -dir.y)) nextDir = want;
+          }
+          keyWasDown[key] = down;
+        });
+        if (input.pointer.wentDown) swipeStart = { x: input.pointer.x, y: input.pointer.y };
+        if (input.pointer.wentUp && swipeStart) {
+          handleSwipe(input.pointer.x - swipeStart.x, input.pointer.y - swipeStart.y);
+          swipeStart = null;
+        }
+
+        if (stun <= 0) {
+          stepTimer += dt;
+          while (stepTimer >= stepInterval) {
+            stepTimer -= stepInterval;
+            stepSnake();
+            if (state !== 'playing') break;
+          }
+        }
+        input.endFrame();
+      }
+
+      function serialize() {
+        if (state !== 'playing' && state !== 'paused') return null;
+        return {
+          snake: snake.map((s) => ({ x: s.x, y: s.y })),
+          dir,
+          nextDir,
+          food,
+          golden: golden ? { x: golden.x, y: golden.y } : null,
+          goldenTimer,
+          obstacles: obstacles.map((o) => ({ x: o.x, y: o.y })),
+          score,
+          foodsEaten,
+          lives,
+          stepTimer,
+          stepInterval,
+          stun,
+          invul,
+        };
+      }
+
+      function restore(data) {
+        if (!data || !Array.isArray(data.snake) || data.snake.length < 2) return false;
+        try {
+          reset();
+          snake = data.snake
+            .filter((s) => s && Number.isInteger(s.x) && Number.isInteger(s.y) && s.x >= 0 && s.y >= 0 && s.x < N && s.y < N)
+            .map((s) => ({ x: s.x, y: s.y }));
+          if (snake.length < 2) return false;
+          dir = normalizeDir(data.dir) || { x: 1, y: 0 };
+          nextDir = normalizeDir(data.nextDir) || { ...dir };
+          food = data.food && Number.isInteger(data.food.x) ? { x: data.food.x, y: data.food.y } : null;
+          golden = data.golden && Number.isInteger(data.golden.x) ? { x: data.golden.x, y: data.golden.y, phase: 0 } : null;
+          goldenTimer = Math.max(0, Number(data.goldenTimer) || 0);
+          obstacles = Array.isArray(data.obstacles)
+            ? data.obstacles.filter((o) => o && Number.isInteger(o.x) && Number.isInteger(o.y) && o.x >= 0 && o.y >= 0 && o.x < N && o.y < N).map((o) => ({ x: o.x, y: o.y }))
+            : [];
+          score = Math.max(0, Number(data.score) || 0);
+          foodsEaten = Math.max(0, Number(data.foodsEaten) || 0);
+          lives = clamp(Number(data.lives) || 3, 1, 3);
+          stepTimer = Number(data.stepTimer) || 0;
+          stepInterval = clamp(Number(data.stepInterval) || 0.19, 0.08, 0.25);
+          stun = Math.max(0, Number(data.stun) || 0);
+          invul = Math.max(0, Number(data.invul) || 0);
+          recordSaved = false;
+          state = 'playing';
+          syncHud();
+          return true;
+        } catch (err) {
+          return false;
+        }
+      }
+
+      const autosave = A.createRunAutosave('snake-run', serialize, {
+        every: 3,
+        meta: () => ({ score, summary: `得分 ${score} · 长度 ${snake.length} · 生命 ${lives}` }),
+      });
+
+      function drawSnake() {
+        snake.forEach((s, i) => {
+          const x = BOARD_X + s.x * CELL;
+          const y = BOARD_Y + s.y * CELL;
+          const isHead = i === 0;
+          const t = i / Math.max(1, snake.length);
+          ctx.fillStyle = isHead ? '#9bf0a4' : `hsl(${128 + t * 16}, ${58 - t * 20}%, ${54 - t * 16}%)`;
+          A.draw.roundRect(ctx, x + 1, y + 1, CELL - 2, CELL - 2, isHead ? 7 : 4);
+          ctx.fill();
+          if (isHead) {
+            ctx.fillStyle = '#16351c';
+            const ex = dir.x * 3;
+            const ey = dir.y * 3;
+            ctx.beginPath();
+            ctx.arc(x + CELL / 2 + ex - 4, y + CELL / 2 + ey - 4, 2, 0, TAU);
+            ctx.fill();
+            ctx.beginPath();
+            ctx.arc(x + CELL / 2 + ex + 4, y + CELL / 2 + ey - 4, 2, 0, TAU);
+            ctx.fill();
+          }
+        });
+      }
+
+      function drawFood(item, isGolden) {
+        const x = BOARD_X + item.x * CELL + CELL / 2;
+        const y = BOARD_Y + item.y * CELL + CELL / 2;
+        const pulse = 1 + Math.sin(performance.now() / 220) * 0.08;
+        ctx.save();
+        ctx.translate(x, y);
+        ctx.scale(pulse, pulse);
+        if (isGolden) {
+          ctx.fillStyle = '#ffd23f';
+          ctx.beginPath();
+          for (let k = 0; k < 5; k++) {
+            const ang = -Math.PI / 2 + (k * TAU) / 5;
+            const px = Math.cos(ang) * 8;
+            const py = Math.sin(ang) * 8;
+            if (k === 0) ctx.moveTo(px, py);
+            else ctx.lineTo(px, py);
+            const ang2 = ang + TAU / 10;
+            ctx.lineTo(Math.cos(ang2) * 3.5, Math.sin(ang2) * 3.5);
+          }
+          ctx.closePath();
+          ctx.fill();
+        } else {
+          ctx.fillStyle = '#ff5d6b';
+          ctx.beginPath();
+          ctx.arc(0, 1, 7, 0, TAU);
+          ctx.fill();
+          ctx.fillStyle = '#66d36e';
+          ctx.beginPath();
+          ctx.ellipse(2, -7, 4, 2.4, -0.5, 0, TAU);
+          ctx.fill();
+        }
+        ctx.restore();
+      }
+
+      function render() {
+        stage.beginFrame();
+        const bg = ctx.createLinearGradient(0, 0, 0, H);
+        bg.addColorStop(0, '#0a1810');
+        bg.addColorStop(1, '#10251a');
+        ctx.fillStyle = bg;
+        ctx.fillRect(0, 0, W, H);
+
+        ctx.fillStyle = 'rgba(8, 20, 14, 0.7)';
+        A.draw.roundRect(ctx, BOARD_X - 8, BOARD_Y - 8, BOARD + 16, BOARD + 16, 14);
+        ctx.fill();
+        ctx.strokeStyle = 'rgba(102,211,110,0.25)';
+        ctx.lineWidth = 2;
+        ctx.strokeRect(BOARD_X - 2, BOARD_Y - 2, BOARD + 4, BOARD + 4);
+
+        for (let x = 0; x <= N; x++) {
+          ctx.strokeStyle = 'rgba(102,211,110,0.07)';
+          ctx.lineWidth = 1;
+          ctx.beginPath();
+          ctx.moveTo(BOARD_X + x * CELL, BOARD_Y);
+          ctx.lineTo(BOARD_X + x * CELL, BOARD_Y + BOARD);
+          ctx.stroke();
+        }
+        for (let y = 0; y <= N; y++) {
+          ctx.strokeStyle = 'rgba(102,211,110,0.07)';
+          ctx.beginPath();
+          ctx.moveTo(BOARD_X, BOARD_Y + y * CELL);
+          ctx.lineTo(BOARD_X + BOARD, BOARD_Y + y * CELL);
+          ctx.stroke();
+        }
+
+        obstacles.forEach((o) => {
+          const x = BOARD_X + o.x * CELL;
+          const y = BOARD_Y + o.y * CELL;
+          ctx.fillStyle = '#4a5268';
+          A.draw.roundRect(ctx, x + 1, y + 1, CELL - 2, CELL - 2, 4);
+          ctx.fill();
+          ctx.fillStyle = '#6b7590';
+          ctx.fillRect(x + 4, y + 4, CELL - 8, 3);
+        });
+
+        if (food) drawFood(food, false);
+        if (golden) drawFood(golden, true);
+        drawSnake();
+        particles.draw(ctx);
+
+        A.draw.label(ctx, 'SCORE ' + score, 12, 24, { align: 'left', font: 'bold 14px system-ui', color: '#ffd23f' });
+        A.draw.label(ctx, '长度 ' + snake.length + ' · ' + (1 / stepInterval).toFixed(1) + ' 格/秒', W / 2, 24, {
+          font: '12px system-ui',
+          color: '#93a0c8',
+        });
+        for (let i = 0; i < lives; i++) {
+          ctx.fillStyle = '#ff5d7a';
+          ctx.beginPath();
+          ctx.arc(W - 20 - i * 17, 24, 5, 0, TAU);
+          ctx.fill();
+        }
+        if (invul > 0) {
+          A.draw.label(ctx, '无敌 ' + invul.toFixed(1) + 's', W / 2, 52, { font: '12px system-ui', color: '#66d36e' });
+        }
+        if (goldenTimer > 0) {
+          A.draw.label(ctx, '★ 金果实 ' + goldenTimer.toFixed(1) + 's', W / 2, 52, { font: '12px system-ui', color: '#ffd23f' });
+        }
+      }
+
+      const loop = A.createLoop({
+        update,
+        render,
+        onAutoPause() {
+          if (state === 'playing') pauseByUser();
+        },
+      });
+
+      const pauseUi = A.bindPause({
+        button: dom.pause,
+        pause: pauseByUser,
+        resume: resumeGame,
+        isPlaying: () => state === 'playing',
+        isPaused: () => state === 'paused',
+      });
+
+      function syncMute() {
+        dom.mute.textContent = A.Sfx.muted ? '🔇' : '🔊';
+      }
+      dom.mute.addEventListener('click', () => {
+        A.Sfx.setMuted(!A.Sfx.muted);
+        syncMute();
+      });
+      syncMute();
+
+      reset();
+      state = 'ready';
+      const saved = autosave.load();
+      if (saved) {
+        A.showResumePrompt(ui, saved, {
+          name: '贪吃蛇',
+          onResume: () => {
+            if (restore(saved.data)) {
+              state = 'playing';
+              ui.hide();
+              loop.resume();
+              pauseUi.sync();
+              autosave.saveNow();
+            } else {
+              autosave.clear();
+              showStart();
+            }
+          },
+          onRestart: () => {
+            autosave.clear();
+            showStart();
+          },
+        });
+      } else {
+        showStart();
+      }
+      loop.start();
+    })();
+  </script>
+</body>
+</html>

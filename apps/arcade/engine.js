@@ -7,10 +7,12 @@
 (() => {
   'use strict';
 
-  const ARCADE_VERSION = '0.2.0';
+  const ARCADE_VERSION = '0.3.0';
   const PROGRESS_KEY = 'studiokit:arcade:progress:v1';
   const PREFS_KEY = 'studiokit:arcade:prefs:v1';
+  const RUNS_KEY = 'studiokit:arcade:runs:v1';
   const PROGRESS_SCHEMA = 1;
+  const RUN_SCHEMA = 1;
   const EXPORT_FORMAT = 'studiokit-arcade-progress';
 
   /* ----------------------------------------------------------
@@ -19,14 +21,134 @@
    * ---------------------------------------------------------- */
   const GAMES = [
     {
+      id: 'memory-flip',
+      file: 'memory-flip.html',
+      name: '记忆翻牌',
+      tagline: '翻牌配对，记住位置',
+      icon: '🃏',
+      accent: '#5ad1a0',
+      category: '益智',
+      difficulty: 1,
+      session: '2–5 分钟',
+      tags: ['记忆', '配对'],
+      how: '点开两张牌找相同图案；配对成功即锁定，关卡越高牌越多。',
+    },
+    {
+      id: 'merge-2048',
+      file: 'merge-2048.html',
+      name: '2048 合成',
+      tagline: '滑动数字，合成 2048',
+      icon: '🔢',
+      accent: '#f2b33d',
+      category: '益智',
+      difficulty: 1,
+      session: '3–8 分钟',
+      tags: ['数字', '合成'],
+      how: '上下左右滑动 / 方向键移动方块；同数相撞合并，一步可撤销。',
+    },
+    {
+      id: 'snowbells',
+      file: 'snowbells.html',
+      name: '雪铃',
+      tagline: '兔子跳铃铛',
+      icon: '🐰',
+      accent: '#2fa8a0',
+      category: '休闲',
+      difficulty: 2,
+      session: '1–3 分钟',
+      tags: ['弹跳', '连击'],
+      how: '←→ 或触摸左右半屏移动，踩中铃铛向上弹；连击有倍率加成。',
+    },
+    {
+      id: 'brick-breaker',
+      file: 'brick-breaker.html',
+      name: '砖块计划',
+      tagline: '挡板反弹，打碎砖墙',
+      icon: '🧱',
+      accent: '#4fc3f7',
+      category: '消除',
+      difficulty: 2,
+      session: '2–5 分钟',
+      tags: ['打砖块', '反弹'],
+      how: '拖动 / ←→ 移动挡板，点击 / 空格发球；接住道具，逐关加速。',
+    },
+    {
+      id: 'gravity-flip',
+      file: 'gravity-flip.html',
+      name: '重力翻转',
+      tagline: '一键翻转重力躲尖刺',
+      icon: '🌀',
+      accent: '#9b7cff',
+      category: '反应',
+      difficulty: 2,
+      session: '1–2 分钟',
+      tags: ['一键', '反应'],
+      how: '点击 / 空格翻转重力，在上下尖刺之间穿行；速度会越来越快。',
+    },
+    {
+      id: 'snake-run',
+      file: 'snake-run.html',
+      name: '贪吃蛇',
+      tagline: '吃果实，别咬到自己',
+      icon: '🐍',
+      accent: '#66d36e',
+      category: '反应',
+      difficulty: 2,
+      session: '2–5 分钟',
+      tags: ['经典', '贪吃'],
+      how: '方向键 / WASD 或滑动转向；吃果实变长，越吃越快。',
+    },
+    {
+      id: 'mole-whack',
+      file: 'mole-whack.html',
+      name: '打地鼠',
+      tagline: '45 秒连击敲地鼠',
+      icon: '🔨',
+      accent: '#ff9a3d',
+      category: '反应',
+      difficulty: 2,
+      session: '1 分钟',
+      tags: ['连击', '限时'],
+      how: '点击冒头的地鼠得分，连击有倍率；别敲炸弹，也别放跑金鼠。',
+    },
+    {
+      id: 'block-drop',
+      file: 'block-drop.html',
+      name: '俄罗斯方块',
+      tagline: '经典落块消除',
+      icon: '🧊',
+      accent: '#7c5cff',
+      category: '消除',
+      difficulty: 3,
+      session: '3–8 分钟',
+      tags: ['消除', '经典'],
+      how: '←→ 移动 · ↑ 旋转 · ↓ 软降 · 空格硬降；触摸分区操作。',
+    },
+    {
       id: 'star-raid',
       file: 'star-raid.html',
       name: '星海突击',
       tagline: '雷电式纵版射击',
       icon: '🚀',
       accent: '#4f7cff',
+      category: '动作',
+      difficulty: 3,
+      session: '2–4 分钟',
       tags: ['射击', '弹幕'],
-      how: '拖动 / ←→ 移动，自动开火；躲开敌机与弹幕。',
+      how: '拖动 / ←→ 移动，自动开火；吃散射 / 激光 / 追踪 / 速射 Buff 切换弹种。',
+    },
+    {
+      id: 'road-rush',
+      file: 'road-rush.html',
+      name: '极速车道',
+      tagline: '四车道赛车避障',
+      icon: '🏎',
+      accent: '#ff7847',
+      category: '竞速',
+      difficulty: 3,
+      session: '1–3 分钟',
+      tags: ['赛车', '竞速'],
+      how: '←→ 或触摸左右半屏变道；躲开车流，速度会越来越快。',
     },
     {
       id: 'shadow-leap',
@@ -35,6 +157,9 @@
       tagline: '忍者无尽上跳',
       icon: '🥷',
       accent: '#e0567f',
+      category: '动作',
+      difficulty: 4,
+      session: '2–5 分钟',
       tags: ['跳跃', '平台'],
       how: '←→ 或触摸左右半屏横移，触墙反弹；别掉出屏幕底部。',
     },
@@ -45,38 +170,11 @@
       tagline: '钟摆叠箱子',
       icon: '🏗',
       accent: '#e5941b',
+      category: '物理',
+      difficulty: 4,
+      session: '2–4 分钟',
       tags: ['物理', '叠塔'],
       how: '看准摆动时机，点击 / 空格松手落箱；偏心会让塔倾斜倒塌。',
-    },
-    {
-      id: 'snowbells',
-      file: 'snowbells.html',
-      name: '雪铃',
-      tagline: '兔子跳铃铛',
-      icon: '🐰',
-      accent: '#2fa8a0',
-      tags: ['弹跳', '连击'],
-      how: '←→ 或触摸左右半屏移动，踩中铃铛向上弹；连击有倍率加成。',
-    },
-    {
-      id: 'block-drop',
-      file: 'block-drop.html',
-      name: '俄罗斯方块',
-      tagline: '经典落块消除',
-      icon: '🧱',
-      accent: '#7c5cff',
-      tags: ['消除', '经典'],
-      how: '←→ 移动 · ↑ 旋转 · ↓ 软降 · 空格硬降；触摸分区操作。',
-    },
-    {
-      id: 'road-rush',
-      file: 'road-rush.html',
-      name: '极速车道',
-      tagline: 'n 路赛车避障',
-      icon: '🏎',
-      accent: '#ff7847',
-      tags: ['赛车', '竞速'],
-      how: '←→ 或触摸左右半屏变道；躲开车流，速度会越来越快。',
     },
     {
       id: 'gold-miner',
@@ -85,10 +183,15 @@
       tagline: '摆钩挖金',
       icon: '⛏',
       accent: '#f5c542',
+      category: '物理',
+      difficulty: 4,
+      session: '3–6 分钟',
       tags: ['物理', '关卡'],
       how: '看准角度点击 / 空格放钩；重物拉得慢，限时达标进入下一关。',
     },
   ];
+
+  const DIFFICULTY_NAMES = { 1: '轻松', 2: '适中', 3: '挑战', 4: '硬核' };
 
   /* ----------------------------------------------------------
    * 数学工具
@@ -121,6 +224,125 @@
   }
 
   /* ----------------------------------------------------------
+   * 局内进度存档（每个游戏一条，独立于最高分记录）
+   * 只存 JSON 可序列化的快照；游戏恢复时仍会做字段校验。
+   * ---------------------------------------------------------- */
+  function readRunMap() {
+    const raw = safeGetJSON(RUNS_KEY);
+    if (!raw || typeof raw !== 'object' || raw.schemaVersion !== RUN_SCHEMA || !raw.games || typeof raw.games !== 'object') {
+      return {};
+    }
+    const out = {};
+    Object.keys(raw.games).forEach((id) => {
+      const rec = raw.games[id];
+      if (!rec || typeof rec !== 'object' || !rec.data || typeof rec.data !== 'object') return;
+      out[id] = {
+        savedAt: typeof rec.savedAt === 'string' ? rec.savedAt : null,
+        score: Number(rec.score) || 0,
+        summary: typeof rec.summary === 'string' ? rec.summary : '',
+        data: rec.data,
+      };
+    });
+    return out;
+  }
+
+  const RunSave = {
+    schema: RUN_SCHEMA,
+    all() {
+      return readRunMap();
+    },
+    get(gameId) {
+      return readRunMap()[gameId] || null;
+    },
+    has(gameId) {
+      return !!this.get(gameId);
+    },
+    count() {
+      return Object.keys(readRunMap()).length;
+    },
+    save(gameId, data, meta) {
+      if (!data || typeof data !== 'object') return false;
+      const all = readRunMap();
+      all[gameId] = {
+        savedAt: new Date().toISOString(),
+        score: Number(meta && meta.score) || 0,
+        summary: String((meta && meta.summary) || ''),
+        data,
+      };
+      return safeSetJSON(RUNS_KEY, { schemaVersion: RUN_SCHEMA, games: all });
+    },
+    clear(gameId) {
+      const all = readRunMap();
+      if (!all[gameId]) return;
+      delete all[gameId];
+      safeSetJSON(RUNS_KEY, { schemaVersion: RUN_SCHEMA, games: all });
+    },
+    clearAll() {
+      try {
+        localStorage.removeItem(RUNS_KEY);
+      } catch (err) {
+        /* 忽略存储不可用 */
+      }
+    },
+    importMap(games) {
+      if (!games || typeof games !== 'object') return 0;
+      const out = {};
+      Object.keys(games).forEach((id) => {
+        const rec = games[id];
+        if (!rec || typeof rec !== 'object' || !rec.data || typeof rec.data !== 'object') return;
+        out[id] = {
+          savedAt: typeof rec.savedAt === 'string' ? rec.savedAt : null,
+          score: Number(rec.score) || 0,
+          summary: typeof rec.summary === 'string' ? rec.summary : '',
+          data: rec.data,
+        };
+      });
+      safeSetJSON(RUNS_KEY, { schemaVersion: RUN_SCHEMA, games: out });
+      return Object.keys(out).length;
+    },
+  };
+
+  /* 游戏内的低频自动存档：默认每 4 秒落一次，暂停/离开时手动 saveNow。 */
+  function createRunAutosave(gameId, serialize, opts) {
+    const o = opts || {};
+    const every = o.every || 4;
+    let acc = 0;
+    function write() {
+      let data = null;
+      try {
+        data = serialize();
+      } catch (err) {
+        return false;
+      }
+      if (!data || typeof data !== 'object') return false;
+      let meta = o.meta;
+      if (typeof meta === 'function') {
+        try {
+          meta = meta();
+        } catch (err) {
+          meta = null;
+        }
+      }
+      return RunSave.save(gameId, data, meta || {});
+    }
+    return {
+      tick(dt) {
+        acc += dt;
+        if (acc < every) return;
+        acc = 0;
+        write();
+      },
+      saveNow: write,
+      load() {
+        return RunSave.get(gameId);
+      },
+      clear() {
+        RunSave.clear(gameId);
+      },
+    };
+  }
+
+  /* ----------------------------------------------------------
    * 进度（全部游戏共用一个 key，中心页一次读出即可管理）
    * ---------------------------------------------------------- */
   const Progress = {
@@ -141,17 +363,19 @@
           high: Number(rec.high) || 0,
           plays: Number(rec.plays) || 0,
           lastAt: rec.lastAt || null,
+          lastScore: Number(rec.lastScore) || 0,
         };
       }
-      return { high: 0, plays: 0, lastAt: null };
+      return { high: 0, plays: 0, lastAt: null, lastScore: 0 };
     },
     recordPlay(gameId, score) {
       const data = this.load();
-      const rec = data.games[gameId] || { high: 0, plays: 0, lastAt: null };
+      const rec = data.games[gameId] || { high: 0, plays: 0, lastAt: null, lastScore: 0 };
       rec.plays += 1;
       rec.lastAt = new Date().toISOString();
-      const isNewHigh = score > rec.high;
-      if (isNewHigh) rec.high = score;
+      rec.lastScore = Number(score) || 0;
+      const isNewHigh = score > (Number(rec.high) || 0);
+      if (isNewHigh) rec.high = Number(score) || 0;
       data.games[gameId] = rec;
       this.save(data);
       return { isNewHigh, high: rec.high, plays: rec.plays };
@@ -160,9 +384,11 @@
       const data = this.load();
       delete data.games[gameId];
       this.save(data);
+      RunSave.clear(gameId);
     },
     resetAll() {
       this.save({ schemaVersion: PROGRESS_SCHEMA, games: {} });
+      RunSave.clearAll();
     },
     exportText() {
       const payload = {
@@ -171,6 +397,7 @@
         appVersion: ARCADE_VERSION,
         exportedAt: new Date().toISOString(),
         state: this.load().games,
+        runs: RunSave.all(),
       };
       return JSON.stringify(payload, null, 2);
     },
@@ -192,10 +419,14 @@
           high: Number(rec.high) || 0,
           plays: Number(rec.plays) || 0,
           lastAt: rec.lastAt || null,
+          lastScore: Number(rec.lastScore) || 0,
         };
       });
       this.save({ schemaVersion: PROGRESS_SCHEMA, games });
-      return { ok: true, count: Object.keys(games).length };
+      /* 新备份包含局内存档；旧备份没有 runs 字段时保留当前局内存档。 */
+      let runCount = 0;
+      if (parsed.runs && typeof parsed.runs === 'object') runCount = RunSave.importMap(parsed.runs);
+      return { ok: true, count: Object.keys(games).length, runCount };
     },
   };
 
@@ -706,10 +937,120 @@
     },
   };
 
+  /* ----------------------------------------------------------
+   * 通用 UI 小工具：覆盖层 / 暂停按钮 / 续玩提示
+   * ---------------------------------------------------------- */
+  function escapeHtml(value) {
+    return String(value == null ? '' : value)
+      .replace(/&/g, '&amp;')
+      .replace(/</g, '&lt;')
+      .replace(/>/g, '&gt;')
+      .replace(/"/g, '&quot;')
+      .replace(/'/g, '&#39;');
+  }
+
+  function formatSavedAt(iso) {
+    if (!iso) return '未游玩';
+    const t = new Date(iso).getTime();
+    if (Number.isNaN(t)) return '未游玩';
+    const diff = Math.max(0, Date.now() - t);
+    if (diff < 60 * 1000) return '刚刚';
+    if (diff < 60 * 60 * 1000) return Math.floor(diff / 60000) + ' 分钟前';
+    if (diff < 24 * 60 * 60 * 1000) return Math.floor(diff / 3600000) + ' 小时前';
+    if (diff < 7 * 24 * 60 * 60 * 1000) return Math.floor(diff / 86400000) + ' 天前';
+    const d = new Date(t);
+    return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
+  }
+
+  function createOverlayUi(dom) {
+    function hide() {
+      dom.overlay.hidden = true;
+    }
+    function show(opts) {
+      const o = opts || {};
+      dom.ovTitle.textContent = o.title || '';
+      dom.ovText.innerHTML = o.text || '';
+      dom.ovBtn.textContent = o.btn || '开始游戏';
+      dom.ovBtn.onclick = () => {
+        Sfx.play('ui');
+        if (o.onBtn) o.onBtn();
+      };
+      if (dom.ovBtn2) {
+        const hasSecond = !!o.btn2;
+        dom.ovBtn2.hidden = !hasSecond;
+        dom.ovBtn2.textContent = o.btn2 || '';
+        dom.ovBtn2.onclick = hasSecond
+          ? () => {
+              Sfx.play('ui');
+              if (o.onBtn2) o.onBtn2();
+            }
+          : null;
+      }
+      dom.overlay.hidden = false;
+    }
+    return {
+      show,
+      hide,
+      get visible() {
+        return !dom.overlay.hidden;
+      },
+    };
+  }
+
+  /* 顶栏暂停按钮 + P / Esc 快捷键；按钮在非游玩态自动禁用。 */
+  function bindPause(opts) {
+    const button = opts.button;
+    function sync() {
+      if (!button) return;
+      const paused = !!opts.isPaused();
+      const playing = !!opts.isPlaying();
+      button.disabled = !paused && !playing;
+      button.textContent = paused ? '▶' : '⏸';
+      button.setAttribute('aria-label', paused ? '继续游戏' : '暂停游戏');
+      button.title = paused ? '继续游戏（P / Esc）' : '暂停游戏（P / Esc）';
+    }
+    if (button) {
+      button.addEventListener('click', () => {
+        if (opts.isPaused()) opts.resume();
+        else if (opts.isPlaying()) opts.pause();
+        sync();
+      });
+    }
+    if (opts.keyboard !== false) {
+      window.addEventListener('keydown', (e) => {
+        if (e.repeat) return;
+        if (e.key === 'p' || e.key === 'P' || e.key === 'Escape') {
+          if (opts.isPaused()) opts.resume();
+          else if (opts.isPlaying()) opts.pause();
+          sync();
+        }
+      });
+    }
+    sync();
+    return { sync };
+  }
+
+  function showResumePrompt(ui, saved, opts) {
+    const o = opts || {};
+    const summary = saved && saved.summary ? '<br/>' + escapeHtml(saved.summary) : '';
+    ui.show({
+      title: '继续上次？',
+      text:
+        `${o.name ? escapeHtml(o.name) + ' ' : ''}的局内进度已自动保存在本机。` +
+        `<br/>保存于 ${escapeHtml(formatSavedAt(saved && saved.savedAt))}${summary}`,
+      btn: '继续上次',
+      onBtn: o.onResume,
+      btn2: '重新开始',
+      onBtn2: o.onRestart,
+    });
+  }
+
   window.Arcade = {
     version: ARCADE_VERSION,
     GAMES,
+    DIFFICULTY_NAMES,
     Progress,
+    RunSave,
     Prefs,
     Sfx,
     installSfxUnlock,
@@ -718,6 +1059,12 @@
     createLoop,
     createParticles,
     createStarfield,
+    createRunAutosave,
+    createOverlayUi,
+    bindPause,
+    showResumePrompt,
+    formatSavedAt,
+    escapeHtml,
     Physics,
     draw,
     utils: { TAU, clamp, lerp, rand, randInt, pick },

@@ -7,6 +7,9 @@ venv/
 # Build output
 dist/
 
+# Local test artifacts
+test-artifacts/
+
 # Editors / OS
 .DS_Store
 Thumbs.db

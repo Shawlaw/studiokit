@@ -19,6 +19,9 @@ REQUIRED = [
     'apps/arcade/games/pendulum-tower.html', 'apps/arcade/games/snowbells.html',
     'apps/arcade/games/block-drop.html', 'apps/arcade/games/road-rush.html',
     'apps/arcade/games/gold-miner.html',
+    'apps/arcade/games/memory-flip.html', 'apps/arcade/games/merge-2048.html',
+    'apps/arcade/games/brick-breaker.html', 'apps/arcade/games/gravity-flip.html',
+    'apps/arcade/games/snake-run.html', 'apps/arcade/games/mole-whack.html',
     'templates/single-page-tool/index.html', 'tools/build_site.py', 'tools/new_tool.py'
 ]
 
@@ -132,6 +135,24 @@ def validate(root=ROOT):
             ok = fail('Badge Studio legacy autosave key changed; requires migration review') and ok
         if 'data-studiokit-app="badge-studio"' not in source:
             ok = fail('Badge Studio page is missing StudioKit shell metadata') and ok
+
+    arcade_engine = root / 'apps/arcade/engine.js'
+    if arcade_engine.exists():
+        source = arcade_engine.read_text(encoding='utf-8')
+        if "const ARCADE_VERSION = '0.3.0'" not in source:
+            ok = fail('Arcade ARCADE_VERSION drifted; update registry/README/CHANGELOG together') and ok
+        if source.count("file: '") < 13:
+            ok = fail('Arcade GAMES list should contain at least 13 games') and ok
+        if "const RUNS_KEY = 'studiokit:arcade:runs:v1'" not in source:
+            ok = fail('Arcade run-save key changed; requires migration review') and ok
+        if registry_path.exists():
+            try:
+                registry = json.loads(registry_path.read_text(encoding='utf-8'))
+                arcade = next((t for t in registry.get('tools', []) if t.get('id') == 'arcade'), None)
+                if arcade and arcade.get('version') != '0.3.0':
+                    ok = fail('Arcade registry version must match engine 0.3.0') and ok
+            except Exception:
+                pass
 
     template = root / 'templates/single-page-tool/index.html'
     if template.exists():

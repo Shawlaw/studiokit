@@ -3,7 +3,7 @@
 <head>
   <meta charset="utf-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no, viewport-fit=cover" />
-  <meta name="description" content="星海突击：雷电式纵版弹幕射击，街机厅小游戏，本地即玩。" />
+  <meta name="description" content="星海突击：雷电式纵版弹幕射击，可吃散射 / 激光 / 追踪 / 速射四种弹种 Buff，街机厅小游戏，本地即玩。" />
   <meta name="theme-color" content="#0b1020" />
   <link rel="stylesheet" href="../../../shared/site.css" />
   <link rel="stylesheet" href="../arcade.css" />
@@ -20,7 +20,9 @@
       <div class="game-hud">
         <span>分数 <strong data-hud-score>0</strong></span>
         <span>最高 <strong data-hud-high>0</strong></span>
+        <span data-hud-buff hidden>弹种 <strong data-hud-weapon>普通</strong></span>
       </div>
+      <button type="button" class="ac-icon-btn" data-pause aria-label="暂停游戏" title="暂停游戏（P / Esc）">⏸</button>
       <button type="button" class="ac-icon-btn" data-mute aria-label="切换音效">🔊</button>
     </header>
     <div class="stage-wrap">
@@ -31,11 +33,12 @@
             <h2 data-ov-title>星海突击</h2>
             <p data-ov-text>纵版弹幕射击</p>
             <button type="button" class="ac-btn" data-ov-btn>开始游戏</button>
+            <button type="button" class="ac-btn ac-btn-secondary" data-ov-btn2 hidden>重新开始</button>
           </div>
         </div>
       </div>
     </div>
-    <p class="game-hint">拖动或 ←→↑↓ / WASD 移动 · 自动开火 · P 或 Esc 暂停</p>
+    <p class="game-hint">拖动或 ←→↑↓ / WASD 移动 · 自动开火 · 吃下 Buff 切换弹种 · P / Esc 暂停</p>
   </main>
   <script>
     (() => {
@@ -56,10 +59,15 @@
         ovTitle: document.querySelector('[data-ov-title]'),
         ovText: document.querySelector('[data-ov-text]'),
         ovBtn: document.querySelector('[data-ov-btn]'),
+        ovBtn2: document.querySelector('[data-ov-btn2]'),
         hudScore: document.querySelector('[data-hud-score]'),
         hudHigh: document.querySelector('[data-hud-high]'),
+        hudBuff: document.querySelector('[data-hud-buff]'),
+        hudWeapon: document.querySelector('[data-hud-weapon]'),
+        pause: document.querySelector('[data-pause]'),
         mute: document.querySelector('[data-mute]'),
       };
+      const ui = A.createOverlayUi(dom);
 
       const stars = A.createStarfield(W, H);
       const particles = A.createParticles();
@@ -68,6 +76,7 @@
       let bullets = [];
       let enemies = [];
       let shots = [];
+      let pickups = [];
       let floaters = [];
       let score = 0;
       let lives = 3;
@@ -76,8 +85,22 @@
       let state = 'ready';
       let recordSaved = false;
       let dragOffset = null;
+      let nextUid = 1;
+      let pickupPity = 0;
+      let weapon = 'normal';
+      let weaponTimer = 0;
       const high = A.Progress.get('star-raid').high;
       dom.hudHigh.textContent = String(high);
+
+      /* ---------- 弹种 Buff ---------- */
+      const WEAPONS = {
+        normal: { name: '普通', color: '#e8f4ff', duration: 0, interval: 0.13 },
+        spread: { name: '散射', color: '#7cf5b2', duration: 12, interval: 0.16 },
+        laser: { name: '激光', color: '#ff86c8', duration: 10, interval: 0.24 },
+        homing: { name: '追踪', color: '#ffd23f', duration: 11, interval: 0.2 },
+        rapid: { name: '速射', color: '#63d68c', duration: 9, interval: 0.065 },
+      };
+      const PICKUP_TYPES = ['spread', 'laser', 'homing', 'rapid'];
 
       /* ---------- 敌机类型 ---------- */
       const KINDS = {
@@ -103,6 +126,7 @@
         if (lv >= 4 && roll > 0.95) kind = 'tank';
         const def = KINDS[kind];
         const e = {
+          uid: nextUid++,
           kind,
           x: rand(30, W - 30 - def.w),
           y: -def.h - 6,
@@ -139,6 +163,7 @@
         bullets = [];
         enemies = [];
         shots = [];
+        pickups = [];
         floaters = [];
         score = 0;
         lives = 3;
@@ -146,6 +171,10 @@
         shake = 0;
         recordSaved = false;
         dragOffset = null;
+        nextUid = 1;
+        pickupPity = 0;
+        weapon = 'normal';
+        weaponTimer = 0;
         player.x = W / 2;
         player.y = H - 90;
         player.cool = 0;
@@ -156,56 +185,192 @@
 
       function syncHud() {
         dom.hudScore.textContent = String(score);
-      }
-
-      function showOverlay(title, text, btn, onBtn) {
-        dom.ovTitle.textContent = title;
-        dom.ovText.innerHTML = text;
-        dom.ovBtn.textContent = btn;
-        dom.overlay.hidden = false;
-        dom.ovBtn.onclick = () => {
-          A.Sfx.play('ui');
-          onBtn();
-        };
-      }
-      function hideOverlay() {
-        dom.overlay.hidden = true;
+        if (weapon === 'normal' || weaponTimer <= 0) {
+          dom.hudBuff.hidden = true;
+        } else {
+          dom.hudBuff.hidden = false;
+          dom.hudWeapon.textContent = WEAPONS[weapon].name + ' ' + Math.ceil(weaponTimer) + 's';
+        }
       }
 
       function startGame() {
+        autosave.clear();
         reset();
         state = 'playing';
-        hideOverlay();
+        ui.hide();
         loop.resume();
+        pauseUi.sync();
+        autosave.saveNow();
+      }
+
+      function resumeGame() {
+        if (state !== 'paused') return;
+        state = 'playing';
+        ui.hide();
+        loop.resume();
+        pauseUi.sync();
       }
 
       function gameOver() {
+        if (state === 'over') return;
         state = 'over';
         A.Sfx.play('over');
+        autosave.clear();
         const rec = recordSaved ? null : A.Progress.recordPlay('star-raid', score);
         recordSaved = true;
         dom.hudHigh.textContent = String(Math.max(high, score));
         loop.pause();
-        showOverlay(
-          '机体损毁',
-          `<span class="ac-score">${score}</span>` +
+        ui.show({
+          title: '机体损毁',
+          text:
+            `<span class="ac-score">${score}</span>` +
             (rec && rec.isNewHigh ? '<span class="ac-newhigh">★ 新纪录</span><br/>' : '') +
             `击坠得分 · 最高 ${Math.max(high, score)}`,
-          '再来一局',
-          startGame
-        );
+          btn: '再来一局',
+          onBtn: startGame,
+        });
+        pauseUi.sync();
       }
 
       function pauseByUser() {
         if (state !== 'playing') return;
         loop.pause();
         state = 'paused';
-        showOverlay('已暂停', '休息一下，敌人不会等太久。', '继续', () => {
-          state = 'playing';
-          hideOverlay();
-          loop.resume();
+        autosave.saveNow();
+        ui.show({
+          title: '已暂停',
+          text: '休息一下，敌人不会等太久。<br/>局内进度已保存，可以随时离开。',
+          btn: '继续',
+          onBtn: resumeGame,
+        });
+        pauseUi.sync();
+      }
+
+      function showStart() {
+        ui.show({
+          title: '星海突击',
+          text: '纵版弹幕射击：击落敌机，躲开弹幕。<br/>吃下 <b>散射 / 激光 / 追踪 / 速射</b> 切换弹种<br/>生命 ×3 · 越往后越凶猛',
+          btn: '开始游戏',
+          onBtn: startGame,
         });
       }
+
+      /* ---------- 局内存档 ---------- */
+      function serialize() {
+        if (state !== 'playing' && state !== 'paused') return null;
+        return {
+          player: { x: player.x, y: player.y, invul: player.invul },
+          bullets: bullets.map((b) => ({
+            x: b.x,
+            y: b.y,
+            vx: b.vx,
+            vy: b.vy,
+            r: b.r,
+            dmg: b.dmg,
+            pierce: !!b.pierce,
+            laser: !!b.laser,
+            homing: !!b.homing,
+            hitIds: Array.isArray(b.hitIds) ? b.hitIds.slice() : [],
+          })),
+          enemies: enemies.map((e) => ({
+            uid: e.uid,
+            kind: e.kind,
+            x: e.x,
+            y: e.y,
+            hp: e.hp,
+            vy: e.vy,
+            t: e.t,
+            fireTimer: e.fireTimer,
+            baseX: e.baseX,
+            vx: e.vx,
+          })),
+          shots,
+          pickups,
+          score,
+          lives,
+          spawnTimer,
+          nextUid,
+          pickupPity,
+          weapon,
+          weaponTimer,
+        };
+      }
+
+      function restore(data) {
+        if (!data || !data.player || !Array.isArray(data.enemies)) return false;
+        try {
+          reset();
+          player.x = clamp(Number(data.player.x) || W / 2, 20, W - 20);
+          player.y = clamp(Number(data.player.y) || H - 90, 380, H - 30);
+          player.invul = Number(data.player.invul) || 0;
+          bullets = (data.bullets || []).filter((b) => b && isFinite(b.x) && isFinite(b.y)).map((b) => ({
+            x: Number(b.x) || 0,
+            y: Number(b.y) || 0,
+            vx: Number(b.vx) || 0,
+            vy: Number(b.vy) || -640,
+            r: Number(b.r) || 3,
+            dmg: Number(b.dmg) || 1,
+            pierce: !!b.pierce,
+            laser: !!b.laser,
+            homing: !!b.homing,
+            hitIds: Array.isArray(b.hitIds) ? b.hitIds.slice() : [],
+          }));
+          enemies = data.enemies
+            .filter((e) => e && KINDS[e.kind] && isFinite(e.x) && isFinite(e.y))
+            .map((e) => ({
+              uid: Number(e.uid) || nextUid++,
+              kind: e.kind,
+              x: Number(e.x) || 0,
+              y: Number(e.y) || 0,
+              w: KINDS[e.kind].w,
+              h: KINDS[e.kind].h,
+              hp: Number(e.hp) || 1,
+              score: KINDS[e.kind].score,
+              color: KINDS[e.kind].color,
+              vy: Number(e.vy) || 100,
+              t: Number(e.t) || 0,
+              fireTimer: Number(e.fireTimer) || 1,
+              baseX: Number(e.baseX) || 0,
+              vx: Number(e.vx) || 0,
+            }));
+          shots = (data.shots || []).filter((s) => s && isFinite(s.x) && isFinite(s.y)).map((s) => ({
+            x: Number(s.x) || 0,
+            y: Number(s.y) || 0,
+            vx: Number(s.vx) || 0,
+            vy: Number(s.vy) || 0,
+            r: Number(s.r) || 4,
+          }));
+          pickups = (data.pickups || []).filter((p) => p && WEAPONS[p.type]).map((p) => ({
+            x: Number(p.x) || W / 2,
+            y: Number(p.y) || 0,
+            vy: Number(p.vy) || 70,
+            r: 15,
+            type: p.type,
+            spin: Number(p.spin) || 0,
+          }));
+          score = Math.max(0, Number(data.score) || 0);
+          lives = clamp(Number(data.lives) || 3, 1, 5);
+          spawnTimer = Number(data.spawnTimer) || 0.4;
+          nextUid = Math.max(nextUid, Number(data.nextUid) || 1);
+          pickupPity = Number(data.pickupPity) || 0;
+          weapon = WEAPONS[data.weapon] ? data.weapon : 'normal';
+          weaponTimer = Math.max(0, Number(data.weaponTimer) || 0);
+          if (weapon === 'normal') weaponTimer = 0;
+          recordSaved = false;
+          syncHud();
+          return true;
+        } catch (err) {
+          return false;
+        }
+      }
+
+      const autosave = A.createRunAutosave('star-raid', serialize, {
+        every: 4,
+        meta: () => ({
+          score,
+          summary: `得分 ${score} · 生命 ${lives} · ${WEAPONS[weapon].name}弹`,
+        }),
+      });
 
       /* ---------- 更新 ---------- */
       function update(dt) {
@@ -217,12 +382,60 @@
           input.endFrame();
           return;
         }
-
+        autosave.tick(dt);
         updatePlayer(dt);
         updateEnemies(dt);
         updateBullets(dt);
+        updatePickups(dt);
         collide();
         input.endFrame();
+      }
+
+      function fire() {
+        const spec = WEAPONS[weapon];
+        player.cool = spec.interval;
+        if (weapon === 'spread') {
+          [-0.24, 0, 0.24].forEach((ang) => {
+            bullets.push({
+              x: player.x,
+              y: player.y - 14,
+              vx: Math.sin(ang) * 560,
+              vy: -Math.cos(ang) * 560,
+              r: 3.2,
+              dmg: 1,
+            });
+          });
+        } else if (weapon === 'laser') {
+          bullets.push({
+            x: player.x,
+            y: player.y - 22,
+            vx: 0,
+            vy: -980,
+            r: 5,
+            dmg: 2,
+            pierce: true,
+            laser: true,
+            hitIds: [],
+          });
+        } else if (weapon === 'homing') {
+          [-9, 9].forEach((dx) => {
+            bullets.push({
+              x: player.x + dx,
+              y: player.y - 12,
+              vx: rand(-60, 60),
+              vy: -480,
+              r: 4,
+              dmg: 1.4,
+              homing: true,
+            });
+          });
+        } else if (weapon === 'rapid') {
+          bullets.push({ x: player.x, y: player.y - 15, vx: 0, vy: -780, r: 2.5, dmg: 1 });
+        } else {
+          bullets.push({ x: player.x - 10, y: player.y - 14, vx: 0, vy: -640, r: 3, dmg: 1 });
+          bullets.push({ x: player.x + 10, y: player.y - 14, vx: 0, vy: -640, r: 3, dmg: 1 });
+        }
+        A.Sfx.play('shoot');
       }
 
       function updatePlayer(dt) {
@@ -246,13 +459,19 @@
         player.y = clamp(player.y, 380, H - 30);
         player.invul = Math.max(0, player.invul - dt);
 
-        player.cool -= dt;
-        if (player.cool <= 0) {
-          player.cool = 0.13;
-          bullets.push({ x: player.x - 10, y: player.y - 14, vy: -640, r: 3 });
-          bullets.push({ x: player.x + 10, y: player.y - 14, vy: -640, r: 3 });
-          A.Sfx.play('shoot');
+        if (weapon !== 'normal') {
+          weaponTimer = Math.max(0, weaponTimer - dt);
+          if (weaponTimer <= 0) {
+            weapon = 'normal';
+            addFloater(player.x, player.y - 30, '弹种结束', '#93a0c8');
+            syncHud();
+          } else {
+            syncHud();
+          }
         }
+
+        player.cool -= dt;
+        if (player.cool <= 0) fire();
       }
 
       function updateEnemies(dt) {
@@ -296,14 +515,67 @@
       function updateBullets(dt) {
         for (let i = bullets.length - 1; i >= 0; i--) {
           const b = bullets[i];
-          b.y += b.vy * dt;
-          if (b.y < -20) bullets.splice(i, 1);
+          if (b.homing) {
+            let best = null;
+            let bestD = Infinity;
+            for (const e of enemies) {
+              const d = (e.x + e.w / 2 - b.x) ** 2 + (e.y + e.h / 2 - b.y) ** 2;
+              if (d < bestD) {
+                bestD = d;
+                best = e;
+              }
+            }
+            if (best) {
+              const tx = best.x + best.w / 2 - b.x;
+              const ty = best.y + best.h / 2 - b.y;
+              const len = Math.hypot(tx, ty) || 1;
+              b.vx += (tx / len) * 1500 * dt;
+              b.vy += (ty / len) * 1500 * dt;
+              const sp = Math.hypot(b.vx, b.vy) || 1;
+              const targetSpeed = 560;
+              b.vx = (b.vx / sp) * targetSpeed;
+              b.vy = (b.vy / sp) * targetSpeed;
+            }
+          }
+          b.x += (b.vx || 0) * dt;
+          b.y += (b.vy || 0) * dt;
+          if (b.y < -30 || b.y > H + 30 || b.x < -30 || b.x > W + 30) bullets.splice(i, 1);
         }
         for (let i = shots.length - 1; i >= 0; i--) {
           const s = shots[i];
           s.x += s.vx * dt;
           s.y += s.vy * dt;
           if (s.y > H + 20 || s.y < -20 || s.x < -20 || s.x > W + 20) shots.splice(i, 1);
+        }
+      }
+
+      function updatePickups(dt) {
+        for (let i = pickups.length - 1; i >= 0; i--) {
+          const p = pickups[i];
+          p.y += p.vy * dt;
+          p.spin += dt * 3;
+          /* 靠近玩家时轻微吸附，避免辛苦打出的 Buff 从旁边滑走。 */
+          if (p.y > H * 0.55) p.x += clamp(player.x - p.x, -80 * dt, 80 * dt);
+          const box = { x: p.x - p.r, y: p.y - p.r, w: p.r * 2, h: p.r * 2 };
+          const hb = { x: player.x - 20, y: player.y - 20, w: 40, h: 40 };
+          if (A.Physics.aabbOverlap(hb, box)) {
+            weapon = p.type;
+            weaponTimer = WEAPONS[p.type].duration;
+            syncHud();
+            A.Sfx.play('perfect');
+            addFloater(player.x, player.y - 34, WEAPONS[p.type].name + '弹！', WEAPONS[p.type].color);
+            particles.emit(p.x, p.y, {
+              count: A.reducedMotion ? 6 : 18,
+              speed: [40, 180],
+              life: [0.25, 0.6],
+              size: [2, 4],
+              colors: [WEAPONS[p.type].color, '#ffffff'],
+              gravity: 80,
+            });
+            pickups.splice(i, 1);
+            continue;
+          }
+          if (p.y > H + 30) pickups.splice(i, 1);
         }
       }
 
@@ -317,6 +589,21 @@
           f.y -= 34 * dt;
           if (f.life <= 0) floaters.splice(i, 1);
         }
+      }
+
+      function dropPickup(e) {
+        let type = PICKUP_TYPES[randInt(0, PICKUP_TYPES.length - 1)];
+        if (type === weapon) type = PICKUP_TYPES[(PICKUP_TYPES.indexOf(type) + 1) % PICKUP_TYPES.length];
+        pickups.push({
+          x: clamp(e.x + e.w / 2, 24, W - 24),
+          y: e.y + e.h / 2,
+          vy: 72,
+          r: 15,
+          type,
+          spin: 0,
+        });
+        pickupPity = 0;
+        A.Sfx.play('bell', 8);
       }
 
       function killEnemy(e, idx) {
@@ -334,6 +621,8 @@
         });
         A.Sfx.play(e.kind === 'tank' ? 'explode' : 'hit');
         if (e.kind === 'tank') shake = A.reducedMotion ? 0 : 5;
+        pickupPity += 1;
+        if (Math.random() < (e.kind === 'tank' ? 0.8 : 0.1) || pickupPity >= 12) dropPickup(e);
       }
 
       function hitPlayer() {
@@ -350,9 +639,7 @@
           colors: ['#4f7cff', '#ffffff', '#ffd23f'],
           gravity: 100,
         });
-        if (lives <= 0) {
-          gameOver();
-        }
+        if (lives <= 0) gameOver();
       }
 
       function collide() {
@@ -361,10 +648,15 @@
           const e = enemies[i];
           for (let j = bullets.length - 1; j >= 0; j--) {
             const b = bullets[j];
-            if (A.Physics.circleBox(b.x, b.y, b.r + 2, e)) {
-              bullets.splice(j, 1);
-              e.hp -= 1;
-              particles.emit(b.x, b.y, { count: 3, speed: [20, 90], life: [0.1, 0.3], size: [1.5, 3], colors: ['#ffffff'] });
+            if (b.hitIds && b.hitIds.indexOf(e.uid) !== -1) continue;
+            if (A.Physics.circleBox(b.x, b.y, (b.r || 3) + 2, e)) {
+              e.hp -= b.dmg || 1;
+              particles.emit(b.x, b.y, { count: 3, speed: [20, 90], life: [0.1, 0.3], size: [1.5, 3], colors: [WEAPONS[weapon].color] });
+              if (b.pierce) {
+                b.hitIds.push(e.uid);
+              } else {
+                bullets.splice(j, 1);
+              }
               if (e.hp <= 0) {
                 killEnemy(e, i);
                 break;
@@ -395,6 +687,16 @@
         if (player.invul > 0 && Math.floor(player.invul * 12) % 2 === 0) return;
         ctx.save();
         ctx.translate(player.x, player.y);
+        const spec = WEAPONS[weapon];
+        if (weapon !== 'normal') {
+          ctx.strokeStyle = spec.color;
+          ctx.globalAlpha = 0.45 + Math.sin(performance.now() / 120) * 0.15;
+          ctx.lineWidth = 2;
+          ctx.beginPath();
+          ctx.arc(0, 0, 22, 0, TAU);
+          ctx.stroke();
+          ctx.globalAlpha = 1;
+        }
         /* 喷焰 */
         const flame = 8 + Math.sin(performance.now() / 40) * 4;
         ctx.fillStyle = '#ffb43d';
@@ -406,7 +708,7 @@
         ctx.fill();
         /* 机体 */
         ctx.fillStyle = '#e8eeff';
-        ctx.strokeStyle = '#4f7cff';
+        ctx.strokeStyle = spec.color;
         ctx.lineWidth = 2;
         ctx.beginPath();
         ctx.moveTo(0, -17);
@@ -418,7 +720,7 @@
         ctx.closePath();
         ctx.fill();
         ctx.stroke();
-        ctx.fillStyle = '#4f7cff';
+        ctx.fillStyle = spec.color;
         ctx.beginPath();
         ctx.arc(0, -2, 3.4, 0, TAU);
         ctx.fill();
@@ -478,6 +780,45 @@
         ctx.restore();
       }
 
+      function drawPickup(p) {
+        const spec = WEAPONS[p.type];
+        ctx.save();
+        ctx.translate(p.x, p.y);
+        ctx.rotate(Math.sin(p.spin) * 0.25);
+        ctx.fillStyle = 'rgba(8,12,26,0.9)';
+        A.draw.roundRect(ctx, -p.r, -p.r, p.r * 2, p.r * 2, 7);
+        ctx.fill();
+        ctx.strokeStyle = spec.color;
+        ctx.lineWidth = 2;
+        ctx.stroke();
+        ctx.fillStyle = spec.color;
+        A.draw.label(ctx, spec.name.charAt(0), 0, 1, { font: 'bold 13px system-ui', color: spec.color });
+        ctx.restore();
+      }
+
+      function drawBullets() {
+        bullets.forEach((b) => {
+          if (b.laser) {
+            ctx.fillStyle = 'rgba(255,134,200,0.3)';
+            ctx.fillRect(b.x - 5, b.y - 16, 10, 32);
+            ctx.fillStyle = '#ff86c8';
+            ctx.fillRect(b.x - 2, b.y - 18, 4, 34);
+          } else if (b.homing) {
+            ctx.fillStyle = '#ffd23f';
+            ctx.beginPath();
+            ctx.arc(b.x, b.y, b.r, 0, TAU);
+            ctx.fill();
+            ctx.fillStyle = '#fff6cf';
+            ctx.beginPath();
+            ctx.arc(b.x, b.y, b.r * 0.45, 0, TAU);
+            ctx.fill();
+          } else {
+            ctx.fillStyle = weapon === 'spread' ? '#7cf5b2' : '#e8f4ff';
+            ctx.fillRect(b.x - 1.5, b.y - 7, 3, 12);
+          }
+        });
+      }
+
       function render() {
         stage.beginFrame();
         ctx.save();
@@ -494,11 +835,8 @@
         particles.draw(ctx);
 
         enemies.forEach(drawEnemy);
-
-        ctx.fillStyle = '#e8f4ff';
-        bullets.forEach((b) => {
-          ctx.fillRect(b.x - 1.5, b.y - 7, 3, 12);
-        });
+        pickups.forEach(drawPickup);
+        drawBullets();
         shots.forEach((s) => {
           ctx.fillStyle = '#ff86c8';
           ctx.beginPath();
@@ -536,22 +874,30 @@
           ctx.fill();
           ctx.restore();
         }
+        if (weapon !== 'normal' && weaponTimer > 0) {
+          A.draw.label(ctx, WEAPONS[weapon].name + ' ' + Math.ceil(weaponTimer) + 's', W / 2, 42, {
+            font: 'bold 13px system-ui, sans-serif',
+            color: WEAPONS[weapon].color,
+          });
+        }
         ctx.restore();
       }
 
       /* ---------- 输入与循环 ---------- */
-      window.addEventListener('keydown', (e) => {
-        if (e.key === 'p' || e.key === 'P' || e.key === 'Escape') {
-          if (state === 'playing') pauseByUser();
-        }
-      });
-
       const loop = A.createLoop({
         update,
         render,
         onAutoPause() {
           if (state === 'playing') pauseByUser();
         },
+      });
+
+      const pauseUi = A.bindPause({
+        button: dom.pause,
+        pause: pauseByUser,
+        resume: resumeGame,
+        isPlaying: () => state === 'playing',
+        isPaused: () => state === 'paused',
       });
 
       function syncMute() {
@@ -565,7 +911,49 @@
 
       reset();
       state = 'ready';
-      showOverlay('星海突击', '纵版弹幕射击：击落敌机，躲开弹幕。<br/>生命 ×3 · 越往后越凶猛', '开始游戏', startGame);
+      if (location.hash === '#test') {
+        window.__arcadeTest = {
+          giveBuff(type) {
+            if (!WEAPONS[type] || type === 'normal') return false;
+            weapon = type;
+            weaponTimer = WEAPONS[type].duration;
+            syncHud();
+            return true;
+          },
+          spawnPickup(type) {
+            if (!WEAPONS[type] || type === 'normal') return false;
+            pickups.push({ x: player.x, y: player.y - 44, vy: 120, r: 15, type, spin: 0 });
+            return true;
+          },
+          info() {
+            return { weapon, weaponTimer, pickups: pickups.length, score, lives };
+          },
+        };
+      }
+      const saved = autosave.load();
+      if (saved) {
+        A.showResumePrompt(ui, saved, {
+          name: '星海突击',
+          onResume: () => {
+            if (restore(saved.data)) {
+              state = 'playing';
+              ui.hide();
+              loop.resume();
+              pauseUi.sync();
+              autosave.saveNow();
+            } else {
+              autosave.clear();
+              showStart();
+            }
+          },
+          onRestart: () => {
+            autosave.clear();
+            showStart();
+          },
+        });
+      } else {
+        showStart();
+      }
       loop.start();
     })();
   </script>

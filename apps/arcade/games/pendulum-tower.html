@@ -3,7 +3,7 @@
 <head>
   <meta charset="utf-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no, viewport-fit=cover" />
-  <meta name="description" content="层塔：钟摆叠箱子物理游戏，街机厅小游戏，本地即玩。" />
+  <meta name="description" content="层塔：钟摆叠箱子物理游戏，钟摆从慢到快逐层加速，偏心会让塔倾斜倒塌，街机厅小游戏，本地即玩。" />
   <meta name="theme-color" content="#0b1020" />
   <link rel="stylesheet" href="../../../shared/site.css" />
   <link rel="stylesheet" href="../arcade.css" />
@@ -22,6 +22,7 @@
         <span>层数 <strong data-hud-floor>0</strong></span>
         <span>最高 <strong data-hud-high>0</strong></span>
       </div>
+      <button type="button" class="ac-icon-btn" data-pause aria-label="暂停游戏" title="暂停游戏（P / Esc）">⏸</button>
       <button type="button" class="ac-icon-btn" data-mute aria-label="切换音效">🔊</button>
     </header>
     <div class="stage-wrap">
@@ -32,11 +33,12 @@
             <h2 data-ov-title>层塔</h2>
             <p data-ov-text>钟摆叠箱子</p>
             <button type="button" class="ac-btn" data-ov-btn>开始游戏</button>
+            <button type="button" class="ac-btn ac-btn-secondary" data-ov-btn2 hidden>重新开始</button>
           </div>
         </div>
       </div>
     </div>
-    <p class="game-hint">看准时机点击 / 空格松手 · 越偏心塔越晃 · 完美对齐有连击加成 · P 暂停</p>
+    <p class="game-hint">看准时机点击 / 空格松手 · 钟摆逐层加速 · 越偏心塔越晃 · 完美对齐有连击 · P / Esc 暂停</p>
   </main>
   <script>
     (() => {
@@ -50,10 +52,10 @@
       const BOX_H = 40;
       const GRAVITY = 1300;
       const PIVOT_X = W / 2;
-      const PIVOT_Y = 64; /* 屏幕坐标：吊臂固定点 */
+      const PIVOT_Y = 64;
       const PEND_LEN = 135;
-      const LEAN_LIMIT = 0.35; /* 弧度，超过即倒塌 */
-      const BASE_Y = 0; /* 地面（世界坐标） */
+      const LEAN_LIMIT = 0.35;
+      const BASE_Y = 0;
 
       const canvas = document.querySelector('.game-canvas');
       const stage = A.createStage(canvas, W, H);
@@ -66,23 +68,22 @@
         ovTitle: document.querySelector('[data-ov-title]'),
         ovText: document.querySelector('[data-ov-text]'),
         ovBtn: document.querySelector('[data-ov-btn]'),
+        ovBtn2: document.querySelector('[data-ov-btn2]'),
         hudScore: document.querySelector('[data-hud-score]'),
         hudFloor: document.querySelector('[data-hud-floor]'),
         hudHigh: document.querySelector('[data-hud-high]'),
+        pause: document.querySelector('[data-pause]'),
         mute: document.querySelector('[data-mute]'),
       };
+      const ui = A.createOverlayUi(dom);
 
       const particles = A.createParticles();
 
-      /* 塔的箱体（世界坐标，y 为箱顶） */
       let boxes = [];
-      /* 活动下落箱（世界坐标，y 为箱顶） */
       let drop = null;
-      /* 摆 */
-      const pend = { angle: 0.95, vel: 0, length: PEND_LEN, gravity: 1500, damping: 0.006 };
+      const pend = { angle: 0.95, vel: 0, length: PEND_LEN, gravity: 680, damping: 0.006 };
       let pendHasBox = true;
       let pendReload = 0;
-      /* 塔倾斜（弹簧摆模型） */
       let towerLean = 0;
       let leanVel = 0;
       let camY = -474;
@@ -91,12 +92,23 @@
       let state = 'ready';
       let recordSaved = false;
       let collapseTimer = 0;
-      let collapsed = []; /* 倒塌后的散落箱 */
+      let collapsed = [];
       let flash = 0;
       let leanMeter = 0;
+      let shakeVal = 0;
+      let floorsReached = 0;
 
       const high = A.Progress.get('pendulum-tower').high;
       dom.hudHigh.textContent = String(high);
+
+      /* 钟摆速度随层数递增：低层慢悠悠，高层明显加速。 */
+      function swingGravity(floors) {
+        return Math.min(1700, 680 + Math.max(0, floors) * 34);
+      }
+
+      function updateSwingDifficulty() {
+        pend.gravity = swingGravity(floorsReached);
+      }
 
       function towerTop() {
         return boxes[boxes.length - 1];
@@ -105,7 +117,6 @@
         return towerTop().y - 430;
       }
       function pendulumBoxScreen() {
-        /* 摆锤端挂的箱子（屏幕坐标） */
         const ang = pend.angle;
         const px = PIVOT_X + Math.sin(ang) * pend.length;
         const py = PIVOT_Y + Math.cos(ang) * pend.length;
@@ -119,6 +130,7 @@
         drop = null;
         pend.angle = rand(0.75, 1.05) * (Math.random() > 0.5 ? 1 : -1);
         pend.vel = 0;
+        pend.gravity = swingGravity(0);
         pendHasBox = true;
         pendReload = 0;
         towerLean = 0;
@@ -129,58 +141,64 @@
         recordSaved = false;
         collapseTimer = 0;
         flash = 0;
+        shakeVal = 0;
+        floorsReached = 0;
         particles.clear();
-        /* 基座 */
         boxes.push({ x: W / 2 - 55, y: -44, w: 110, h: 44, base: true });
         boxes.push({ x: W / 2 - BOX_W / 2, y: -44 - BOX_H, w: BOX_W, h: BOX_H });
         syncHud();
       }
 
       function syncHud() {
+        floorsReached = Math.max(0, boxes.length - 2);
         dom.hudScore.textContent = String(score);
-        dom.hudFloor.textContent = String(Math.max(0, boxes.length - 2));
-      }
-
-      function showOverlay(title, text, btn, onBtn) {
-        dom.ovTitle.textContent = title;
-        dom.ovText.innerHTML = text;
-        dom.ovBtn.textContent = btn;
-        dom.overlay.hidden = false;
-        dom.ovBtn.onclick = () => {
-          A.Sfx.play('ui');
-          onBtn();
-        };
+        dom.hudFloor.textContent = String(floorsReached);
       }
 
       function startGame() {
+        autosave.clear();
         reset();
         state = 'playing';
-        dom.overlay.hidden = true;
+        ui.hide();
         loop.resume();
+        pauseUi.sync();
+        autosave.saveNow();
+      }
+
+      function resumeGame() {
+        if (state !== 'paused') return;
+        state = 'playing';
+        ui.hide();
+        loop.resume();
+        pauseUi.sync();
       }
 
       function finishRun(title, subtitle) {
+        if (state === 'over') return;
         state = 'over';
         A.Sfx.play('over');
+        autosave.clear();
         let rec = null;
         if (!recordSaved) {
           rec = A.Progress.recordPlay('pendulum-tower', score);
           recordSaved = true;
           dom.hudHigh.textContent = String(Math.max(high, score));
         }
-        showOverlay(
+        loop.pause();
+        ui.show({
           title,
-          `<span class="ac-score">${score}</span>` +
+          text:
+            `<span class="ac-score">${score}</span>` +
             (rec && rec.isNewHigh ? '<span class="ac-newhigh">★ 新纪录</span><br/>' : '') +
             subtitle +
-            ` · ${Math.max(0, boxes.length - 2)} 层`,
-          '再来一局',
-          startGame
-        );
+            ` · ${floorsReached} 层`,
+          btn: '再来一局',
+          onBtn: startGame,
+        });
+        pauseUi.sync();
       }
 
       function gameOver() {
-        loop.pause();
         finishRun('工程结束', '最终得分');
       }
 
@@ -188,12 +206,99 @@
         if (state !== 'playing') return;
         loop.pause();
         state = 'paused';
-        showOverlay('已暂停', '吊臂停住了。', '继续', () => {
-          state = 'playing';
-          dom.overlay.hidden = true;
-          loop.resume();
+        autosave.saveNow();
+        ui.show({
+          title: '已暂停',
+          text: '吊臂停住了。<br/>局内进度已保存，可以随时离开。',
+          btn: '继续',
+          onBtn: resumeGame,
+        });
+        pauseUi.sync();
+      }
+
+      function showStart() {
+        ui.show({
+          title: '层塔',
+          text: '钟摆叠箱：看准时机松手。<br/>钟摆会随层数慢慢加速<br/>偏心会让高塔晃动甚至倒塌 · 完美对齐有连击',
+          btn: '开始游戏',
+          onBtn: startGame,
         });
       }
+
+      /* ---------- 局内存档 ---------- */
+      function serialize() {
+        if (state !== 'playing' && state !== 'paused') return null;
+        return {
+          boxes: boxes.map((b) => ({ x: b.x, y: b.y, w: b.w, h: b.h, base: !!b.base })),
+          drop: drop
+            ? { x: drop.x, y: drop.y, w: drop.w, h: drop.h, vy: drop.vy, prevBottom: drop.prevBottom, missed: !!drop.missed, squash: drop.squash }
+            : null,
+          pend: { angle: pend.angle, vel: pend.vel, length: pend.length, gravity: pend.gravity, damping: pend.damping },
+          pendHasBox,
+          pendReload,
+          towerLean,
+          leanVel,
+          camY,
+          score,
+          perfectCombo,
+          floorsReached,
+        };
+      }
+
+      function restore(data) {
+        if (!data || !Array.isArray(data.boxes) || data.boxes.length < 2) return false;
+        try {
+          reset();
+          boxes = data.boxes
+            .filter((b) => b && isFinite(b.x) && isFinite(b.y) && isFinite(b.w) && isFinite(b.h))
+            .map((b) => ({
+              x: Number(b.x),
+              y: Number(b.y),
+              w: clamp(Number(b.w), 20, 200),
+              h: clamp(Number(b.h), 12, 80),
+              base: !!b.base,
+            }));
+          if (boxes.length < 2) return false;
+          if (data.drop && isFinite(data.drop.x) && isFinite(data.drop.y)) {
+            drop = {
+              x: Number(data.drop.x),
+              y: Number(data.drop.y),
+              w: BOX_W,
+              h: BOX_H,
+              vy: Number(data.drop.vy) || 0,
+              prevBottom: Number(data.drop.prevBottom) || 0,
+              missed: !!data.drop.missed,
+              squash: Number(data.drop.squash) || 0,
+            };
+          } else {
+            drop = null;
+          }
+          if (data.pend && isFinite(data.pend.angle)) {
+            pend.angle = Number(data.pend.angle);
+            pend.vel = Number(data.pend.vel) || 0;
+            pend.length = PEND_LEN;
+            pend.gravity = Number(data.pend.gravity) || swingGravity(0);
+          }
+          pendHasBox = data.pendHasBox !== false;
+          pendReload = Number(data.pendReload) || 0;
+          towerLean = Number(data.towerLean) || 0;
+          leanVel = Number(data.leanVel) || 0;
+          camY = Number(data.camY) || -474;
+          score = Math.max(0, Number(data.score) || 0);
+          perfectCombo = Math.max(0, Number(data.perfectCombo) || 0);
+          recordSaved = false;
+          syncHud();
+          updateSwingDifficulty();
+          return true;
+        } catch (err) {
+          return false;
+        }
+      }
+
+      const autosave = A.createRunAutosave('pendulum-tower', serialize, {
+        every: 4,
+        meta: () => ({ score, summary: `得分 ${score} · ${floorsReached} 层` }),
+      });
 
       /* ---------- 松手放箱 ---------- */
       function releaseBox() {
@@ -203,7 +308,7 @@
         pendReload = 0.55;
         drop = {
           x: p.x - BOX_W / 2,
-          y: p.y + camY - BOX_H / 2, /* 世界坐标：摆锤端点为箱中心 */
+          y: p.y + camY - BOX_H / 2,
           w: BOX_W,
           h: BOX_H,
           vy: 60,
@@ -218,10 +323,9 @@
       function settleDrop() {
         const top = towerTop();
         const overlap = Math.min(drop.x + drop.w, top.x + top.w) - Math.max(drop.x, top.x);
-        const e = drop.x + drop.w / 2 - (top.x + top.w / 2); /* 偏心距 */
+        const e = drop.x + drop.w / 2 - (top.x + top.w / 2);
 
         if (overlap >= BOX_W * 0.85) {
-          /* 完美对齐：吸附 */
           drop.x = top.x;
           perfectCombo += 1;
           score += 10 + perfectCombo * 10;
@@ -250,11 +354,9 @@
             colors: ['#c9a06b', '#8a6a43'],
             gravity: 600,
           });
-          /* 偏心力矩：塔越高越不稳 */
           const n = boxes.length - 1;
           leanVel += e * 0.0011 * (1 + n * 0.028);
         } else {
-          /* 完全错过 */
           perfectCombo = 0;
           drop.missed = true;
         }
@@ -265,15 +367,16 @@
           drop.squash = 0.25;
           drop = null;
           syncHud();
+          updateSwingDifficulty();
         }
       }
 
       function startCollapse() {
         state = 'collapse';
         collapseTimer = 1.5;
+        autosave.clear();
         A.Sfx.play('crash');
         shakeVal = A.reducedMotion ? 0 : 9;
-        /* 塔箱转为散落刚体（世界坐标） */
         const dir = towerLean > 0 ? 1 : -1;
         boxes.forEach((b, i) => {
           collapsed.push({
@@ -291,8 +394,6 @@
         boxes = [];
       }
 
-      let shakeVal = 0;
-
       /* ---------- 更新 ---------- */
       function update(dt) {
         particles.update(dt);
@@ -308,24 +409,22 @@
             b.y += b.vy * dt;
             b.rot += b.vr * dt;
           });
-          if (collapseTimer <= 0) {
-            gameOver();
-          }
+          if (collapseTimer <= 0) gameOver();
+          input.endFrame();
           return;
         }
         if (state !== 'playing') {
           input.endFrame();
           return;
         }
+        autosave.tick(dt);
 
-        /* 单摆 */
         A.Physics.pendulumStep(pend, dt);
         if (!pendHasBox) {
           pendReload -= dt;
           if (pendReload <= 0) pendHasBox = true;
         }
 
-        /* 塔倾斜弹簧模型 */
         const stiffness = 6.2;
         const damp = 0.9;
         const leanAcc = -stiffness * towerLean - damp * leanVel;
@@ -336,7 +435,6 @@
           return;
         }
 
-        /* 下落箱 */
         if (drop) {
           drop.prevBottom = drop.y + drop.h;
           drop.vy += GRAVITY * dt;
@@ -344,7 +442,6 @@
           drop.squash = Math.max(0, drop.squash - dt);
           const top = towerTop();
           if (drop.missed) {
-            /* 错过的箱子砸到地面弹开 */
             if (drop.y + drop.h >= BASE_Y) {
               particles.emit(drop.x + drop.w / 2, BASE_Y, {
                 count: 14,
@@ -357,38 +454,26 @@
               });
               A.Sfx.play('explode');
               drop = null;
-              state = 'over';
               finishRun('地基失守', '箱子完全落空 · 最终得分');
+              input.endFrame();
               return;
             }
           } else if (drop.vy > 0 && drop.prevBottom <= top.y + 1 && drop.y + drop.h >= top.y) {
             settleDrop();
           }
           if (drop && drop.y > camY + H + 120) {
-            /* 超出屏幕仍未接触（极端侧偏） */
             drop = null;
-            state = 'over';
             finishRun('地基失守', '箱子完全落空 · 最终得分');
+            input.endFrame();
             return;
           }
         }
 
-        /* 松手输入 */
-        if (input.pointer.wentDown || input.isDown(' ')) {
-          if (!input.pointer.wentDown) {
-            /* 键盘空格用边沿检测 */
-            if (!update._space) {
-              update._space = true;
-              releaseBox();
-            }
-          } else {
-            releaseBox();
-          }
-        } else {
-          update._space = false;
-        }
+        /* 松手输入（指针边沿 / 空格边沿） */
+        const spaceNow = input.isDown(' ');
+        if (input.pointer.wentDown || (spaceNow && !update._space)) releaseBox();
+        update._space = spaceNow;
 
-        /* 相机平滑追踪 */
         camY = lerp(camY, currentTargetCam(), Math.min(1, 4 * dt));
 
         input.endFrame();
@@ -429,12 +514,10 @@
         bg.addColorStop(1, '#e08d5a');
         ctx.fillStyle = bg;
         ctx.fillRect(0, 0, W, H);
-        /* 落日 */
         ctx.fillStyle = 'rgba(255,214,150,0.85)';
         ctx.beginPath();
         ctx.arc(W / 2, H - 210, 64, 0, TAU);
         ctx.fill();
-        /* 远景城市剪影（视差） */
         const par = (camY * 0.18) % 260;
         ctx.fillStyle = 'rgba(30,20,50,0.55)';
         for (let k = -1; k < 4; k++) {
@@ -453,24 +536,21 @@
         if (shakeVal > 0) ctx.translate(rand(-shakeVal, shakeVal), rand(-shakeVal, shakeVal));
         drawSky();
 
-        /* ---- 世界坐标层 ---- */
         ctx.save();
         ctx.translate(0, -camY);
 
-        /* 地面 */
         ctx.fillStyle = '#3a2f28';
         ctx.fillRect(-40, BASE_Y, W + 80, 60);
         ctx.fillStyle = '#4d4036';
         ctx.fillRect(-40, BASE_Y, W + 80, 6);
 
-        /* 塔：绕基座中心旋转 towerLean */
         if (boxes.length) {
           ctx.save();
           const pivot = boxes[0];
           ctx.translate(pivot.x + pivot.w / 2, pivot.y + pivot.h);
           ctx.rotate(towerLean);
           ctx.translate(-(pivot.x + pivot.w / 2), -(pivot.y + pivot.h));
-          boxes.forEach((b, i) => {
+          boxes.forEach((b) => {
             if (b.base) {
               ctx.fillStyle = '#6b7590';
               ctx.fillRect(b.x, b.y, b.w, b.h);
@@ -483,7 +563,6 @@
           ctx.restore();
         }
 
-        /* 倒塌散落箱 */
         collapsed.forEach((b) => {
           ctx.save();
           ctx.translate(b.x + b.w / 2, b.y + b.h / 2);
@@ -493,13 +572,12 @@
           ctx.restore();
         });
 
-        /* 下落箱 */
         if (drop) drawCrate(drop.x, drop.y, drop.w, drop.h, { squash: drop.squash });
 
         particles.draw(ctx);
         ctx.restore();
 
-        /* ---- 屏幕坐标层：吊臂 ---- */
+        /* 吊臂 */
         ctx.strokeStyle = '#3b466f';
         ctx.lineWidth = 6;
         ctx.beginPath();
@@ -532,13 +610,11 @@
           ctx.restore();
         }
 
-        /* 完美闪光 */
         if (flash > 0) {
           ctx.fillStyle = `rgba(255,220,110,${flash * 0.35})`;
           ctx.fillRect(0, 0, W, H);
         }
 
-        /* HUD：倾斜警示条 */
         if (state === 'playing' || state === 'paused') {
           const bw = 150;
           ctx.fillStyle = 'rgba(10,14,30,0.5)';
@@ -554,18 +630,15 @@
         }
 
         A.draw.label(ctx, 'SCORE ' + score, 12, 20, { align: 'left', font: 'bold 14px system-ui', color: '#ffd23f' });
+        A.draw.label(ctx, '第 ' + floorsReached + ' 层 · 摆速 ' + (pend.gravity / 680).toFixed(1) + '×', W / 2, 44, {
+          font: '11px system-ui',
+          color: 'rgba(238,241,255,0.55)',
+        });
         if (perfectCombo >= 2) {
           A.draw.label(ctx, 'PERFECT ×' + perfectCombo, W - 12, 20, { align: 'right', font: 'bold 13px system-ui', color: '#63d68c' });
         }
         ctx.restore();
       }
-
-      /* ---------- 输入与循环 ---------- */
-      window.addEventListener('keydown', (e) => {
-        if (e.key === 'p' || e.key === 'P' || e.key === 'Escape') {
-          if (state === 'playing') pauseByUser();
-        }
-      });
 
       const loop = A.createLoop({
         update,
@@ -573,6 +646,14 @@
         onAutoPause() {
           if (state === 'playing') pauseByUser();
         },
+      });
+
+      const pauseUi = A.bindPause({
+        button: dom.pause,
+        pause: pauseByUser,
+        resume: resumeGame,
+        isPlaying: () => state === 'playing',
+        isPaused: () => state === 'paused',
       });
 
       function syncMute() {
@@ -586,7 +667,30 @@
 
       reset();
       state = 'ready';
-      showOverlay('层塔', '钟摆叠箱：看准时机松手。<br/>偏心会让高塔晃动甚至倒塌<br/>完美对齐 = 连击加成', '开始游戏', startGame);
+      const saved = autosave.load();
+      if (saved) {
+        A.showResumePrompt(ui, saved, {
+          name: '层塔',
+          onResume: () => {
+            if (restore(saved.data)) {
+              state = 'playing';
+              ui.hide();
+              loop.resume();
+              pauseUi.sync();
+              autosave.saveNow();
+            } else {
+              autosave.clear();
+              showStart();
+            }
+          },
+          onRestart: () => {
+            autosave.clear();
+            showStart();
+          },
+        });
+      } else {
+        showStart();
+      }
       loop.start();
     })();
   </script>

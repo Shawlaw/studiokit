@@ -3,7 +3,7 @@
 <head>
   <meta charset="utf-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no, viewport-fit=cover" />
-  <meta name="description" content="雪铃：兔子跳铃铛连击游戏，街机厅小游戏，本地即玩。" />
+  <meta name="description" content="雪铃：兔子跳铃铛连击游戏，铃铛落点保证可跳达，连击越高铃音越高，街机厅小游戏，本地即玩。" />
   <meta name="theme-color" content="#0b1020" />
   <link rel="stylesheet" href="../../../shared/site.css" />
   <link rel="stylesheet" href="../arcade.css" />
@@ -21,6 +21,7 @@
         <span>分数 <strong data-hud-score>0</strong></span>
         <span>最高 <strong data-hud-high>0</strong></span>
       </div>
+      <button type="button" class="ac-icon-btn" data-pause aria-label="暂停游戏" title="暂停游戏（P / Esc）">⏸</button>
       <button type="button" class="ac-icon-btn" data-mute aria-label="切换音效">🔊</button>
     </header>
     <div class="stage-wrap">
@@ -31,11 +32,12 @@
             <h2 data-ov-title>雪铃</h2>
             <p data-ov-text>兔子跳铃铛</p>
             <button type="button" class="ac-btn" data-ov-btn>开始游戏</button>
+            <button type="button" class="ac-btn ac-btn-secondary" data-ov-btn2 hidden>重新开始</button>
           </div>
         </div>
       </div>
     </div>
-    <p class="game-hint">←→ / A D 或触摸左右半屏移动 · 踩铃铛连跳 · 连击越高铃音越高、得分越多 · P 暂停</p>
+    <p class="game-hint">←→ / A D 或触摸左右半屏移动 · 踩铃铛连跳 · 铃铛落点保证可跳达 · 连击越高得分越多 · P / Esc 暂停</p>
   </main>
   <script>
     (() => {
@@ -49,6 +51,7 @@
       const BOUNCE_V = -655;
       const PLAYER_R = 13;
       const BELL_R = 9;
+      const MAX_JUMP_RISE = (BOUNCE_V * BOUNCE_V) / (2 * GRAVITY); /* ≈159px */
 
       const canvas = document.querySelector('.game-canvas');
       const stage = A.createStage(canvas, W, H);
@@ -61,26 +64,31 @@
         ovTitle: document.querySelector('[data-ov-title]'),
         ovText: document.querySelector('[data-ov-text]'),
         ovBtn: document.querySelector('[data-ov-btn]'),
+        ovBtn2: document.querySelector('[data-ov-btn2]'),
         hudScore: document.querySelector('[data-hud-score]'),
         hudHigh: document.querySelector('[data-hud-high]'),
+        pause: document.querySelector('[data-pause]'),
         mute: document.querySelector('[data-mute]'),
       };
+      const ui = A.createOverlayUi(dom);
 
       const particles = A.createParticles();
 
       const player = { x: W / 2, y: H - 150, vx: 0, vy: 0, face: 1, prevBottom: 0, onPad: true };
       let bells = [];
       let rings = [];
-      let pad = null; /* 起始雪台 */
+      let pad = null;
       let camY = 0;
       let genY = 0;
       let topY = 0;
+      let startY = 0;
       let combo = 0;
       let bellScore = 0;
       let score = 0;
       let state = 'ready';
       let recordSaved = false;
       let snow = [];
+      let prevXs = [];
 
       const high = A.Progress.get('snowbells').high;
       dom.hudHigh.textContent = String(high);
@@ -90,29 +98,43 @@
       }
 
       function heightScore() {
-        return Math.max(0, Math.floor(-topY / 10));
+        return Math.max(0, Math.floor((startY - topY) / 10));
       }
       function syncHud() {
         score = bellScore + heightScore();
         dom.hudScore.textContent = String(score);
       }
 
-      /* ---------- 铃铛生成 ---------- */
+      /* ---------- 铃铛生成：每一排都从上一排可达位置出发 ---------- */
       function ensureBells() {
         const genLine = camY - 120;
         while (genY > genLine) {
-          genY -= rand(92, 124);
-          const depth = -genY;
-          const density = clamp(1 - depth / 26000, 0.55, 1); /* 越高越稀疏 */
-          const count = Math.random() < density * 0.72 ? 2 : 1;
-          const xs = [];
-          for (let i = 0; i < count; i++) {
-            let x = rand(24, W - 24);
-            let tries = 0;
-            while (xs.some((ox) => Math.abs(ox - x) < 64) && tries++ < 6) x = rand(24, W - 24);
-            xs.push(x);
-            bells.push({ x, y: genY, r: BELL_R, phase: rand(0, TAU) });
+          const firstRow = prevXs.length === 0;
+          const depth = Math.max(0, -genY);
+          const density = clamp(1 - depth / 26000, 0.58, 1);
+          /* 第一排固定两颗居中铃铛，保证从雪台起跳就能踩到。 */
+          const gap = firstRow ? rand(78, 98) : rand(88, Math.min(118, MAX_JUMP_RISE - 26));
+          genY -= gap;
+
+          let xs;
+          if (firstRow) {
+            /* 第一颗正对雪台中心，起跳必中；第二颗在可达范围内提供选择。 */
+            xs = [W / 2, W / 2 + 82];
+          } else {
+            const anchor = prevXs[randInt(0, prevXs.length - 1)];
+            const spread = 96;
+            const x1 = clamp(anchor + rand(-spread, spread), 26, W - 26);
+            xs = [x1];
+            const count = Math.random() < density * 0.72 ? 2 : 1;
+            if (count === 2) {
+              const dir = Math.random() < 0.5 ? -1 : 1;
+              let x2 = clamp(x1 + dir * rand(72, 96), 26, W - 26);
+              if (Math.abs(x2 - x1) < 56) x2 = clamp(x1 - dir * 84, 26, W - 26);
+              if (Math.abs(x2 - x1) >= 56) xs.push(x2);
+            }
           }
+          xs.forEach((x) => bells.push({ x, y: genY, r: BELL_R, phase: rand(0, TAU) }));
+          prevXs = xs;
         }
         bells = bells.filter((b) => b.y < camY + H + 200);
       }
@@ -122,43 +144,47 @@
         bells = [];
         rings = [];
         camY = 0;
-        genY = H - 190;
-        topY = 0;
+        genY = H - 120;
         combo = 0;
         bellScore = 0;
         recordSaved = false;
+        prevXs = [];
         player.x = W / 2;
         player.y = H - 150;
         player.vx = 0;
         player.vy = 0;
         player.onPad = true;
+        startY = player.y;
+        topY = player.y;
         pad = { x: W / 2 - 60, y: H - 100, w: 120, h: 14 };
         particles.clear();
         ensureBells();
         syncHud();
       }
 
-      function showOverlay(title, text, btn, onBtn) {
-        dom.ovTitle.textContent = title;
-        dom.ovText.innerHTML = text;
-        dom.ovBtn.textContent = btn;
-        dom.overlay.hidden = false;
-        dom.ovBtn.onclick = () => {
-          A.Sfx.play('ui');
-          onBtn();
-        };
-      }
-
       function startGame() {
+        autosave.clear();
         reset();
         state = 'playing';
-        dom.overlay.hidden = true;
+        ui.hide();
         loop.resume();
+        pauseUi.sync();
+        autosave.saveNow();
+      }
+
+      function resumeGame() {
+        if (state !== 'paused') return;
+        state = 'playing';
+        ui.hide();
+        loop.resume();
+        pauseUi.sync();
       }
 
       function gameOver() {
+        if (state === 'over') return;
         state = 'over';
         A.Sfx.play('over');
+        autosave.clear();
         syncHud();
         let rec = null;
         if (!recordSaved) {
@@ -167,26 +193,94 @@
           dom.hudHigh.textContent = String(Math.max(high, score));
         }
         loop.pause();
-        showOverlay(
-          '坠入雪夜',
-          `<span class="ac-score">${score}</span>` +
+        ui.show({
+          title: '坠入雪夜',
+          text:
+            `<span class="ac-score">${score}</span>` +
             (rec && rec.isNewHigh ? '<span class="ac-newhigh">★ 新纪录</span><br/>' : '') +
             `铃铛分 ${bellScore} + 高度 ${heightScore()} · 最高 ${Math.max(high, score)}`,
-          '再来一局',
-          startGame
-        );
+          btn: '再来一局',
+          onBtn: startGame,
+        });
+        pauseUi.sync();
       }
 
       function pauseByUser() {
         if (state !== 'playing') return;
         loop.pause();
         state = 'paused';
-        showOverlay('已暂停', '铃铛在夜色中等你。', '继续', () => {
-          state = 'playing';
-          dom.overlay.hidden = true;
-          loop.resume();
+        autosave.saveNow();
+        ui.show({
+          title: '已暂停',
+          text: '铃铛在夜色中等你。<br/>局内进度已保存，可以随时离开。',
+          btn: '继续',
+          onBtn: resumeGame,
+        });
+        pauseUi.sync();
+      }
+
+      function showStart() {
+        ui.show({
+          title: '雪铃',
+          text: '兔子跳铃铛：踩中铃铛向上弹。<br/>每排铃铛都从上一排可达位置生成<br/>连击越高，铃音越高、得分越多',
+          btn: '开始游戏',
+          onBtn: startGame,
         });
       }
+
+      /* ---------- 局内存档 ---------- */
+      function serialize() {
+        if (state !== 'playing' && state !== 'paused') return null;
+        return {
+          player: { x: player.x, y: player.y, vx: player.vx, vy: player.vy, face: player.face, onPad: player.onPad, lastBellY: player.lastBellY },
+          bells: bells.map((b) => ({ x: b.x, y: b.y, phase: b.phase })),
+          pad,
+          camY,
+          genY,
+          topY,
+          startY,
+          combo,
+          bellScore,
+          prevXs,
+        };
+      }
+
+      function restore(data) {
+        if (!data || !data.player || !Array.isArray(data.bells)) return false;
+        try {
+          reset();
+          bells = data.bells
+            .filter((b) => b && isFinite(b.x) && isFinite(b.y))
+            .map((b) => ({ x: clamp(Number(b.x), 20, W - 20), y: Number(b.y), r: BELL_R, phase: Number(b.phase) || 0 }));
+          player.x = clamp(Number(data.player.x) || W / 2, PLAYER_R, W - PLAYER_R);
+          player.y = Number(data.player.y) || H - 150;
+          player.vx = Number(data.player.vx) || 0;
+          player.vy = Number(data.player.vy) || 0;
+          player.face = data.player.face === -1 ? -1 : 1;
+          player.onPad = !!data.player.onPad;
+          player.lastBellY = typeof data.player.lastBellY === 'number' && isFinite(data.player.lastBellY) ? Number(data.player.lastBellY) : null;
+          if (data.pad && isFinite(data.pad.x)) {
+            pad = { x: Number(data.pad.x), y: Number(data.pad.y), w: Number(data.pad.w) || 120, h: 14 };
+          }
+          camY = Number(data.camY) || 0;
+          genY = Number(data.genY) || H - 120;
+          startY = Number(data.startY) || player.y;
+          topY = Number(data.topY) || player.y;
+          combo = Math.max(0, Number(data.combo) || 0);
+          bellScore = Math.max(0, Number(data.bellScore) || 0);
+          prevXs = Array.isArray(data.prevXs) ? data.prevXs.filter((x) => isFinite(x)) : [];
+          recordSaved = false;
+          syncHud();
+          return true;
+        } catch (err) {
+          return false;
+        }
+      }
+
+      const autosave = A.createRunAutosave('snowbells', serialize, {
+        every: 4,
+        meta: () => ({ score, summary: `得分 ${score} · 连击 ${combo}` }),
+      });
 
       /* ---------- 更新 ---------- */
       function update(dt) {
@@ -211,8 +305,8 @@
           input.endFrame();
           return;
         }
+        autosave.tick(dt);
 
-        /* 水平控制 */
         const ACC = 2100;
         const MAX_VX = 250;
         let dir = 0;
@@ -235,12 +329,10 @@
           player.vx = 0;
         }
 
-        /* 重力 */
         player.prevBottom = player.y + PLAYER_R;
         player.vy = Math.min(950, player.vy + GRAVITY * dt);
         player.y += player.vy * dt;
 
-        /* 起始雪台：站立自动弹跳 */
         if (pad && player.onPad) {
           if (player.vy > 0 && player.x > pad.x - 6 && player.x < pad.x + pad.w + 6) {
             if (player.prevBottom <= pad.y + 2 && player.y + PLAYER_R >= pad.y) {
@@ -252,7 +344,6 @@
           }
         }
 
-        /* 铃铛碰撞（下落中踩中反弹） */
         if (player.vy > 40) {
           for (const b of bells) {
             if (Math.abs(b.y - player.y) > 40) continue;
@@ -278,13 +369,9 @@
           }
         }
 
-        /* 连击中断：从本次连击最高点大幅下落说明 miss */
-        if (combo > 0 && player.vy > 0 && player.lastBellY != null && player.y - player.lastBellY > 380) {
-          combo = 0;
-        }
+        if (combo > 0 && player.vy > 0 && player.lastBellY != null && player.y - player.lastBellY > 380) combo = 0;
         if (combo > 0) player.lastBellY = Math.min(player.lastBellY, player.y);
 
-        /* 相机只上不下 */
         const line = camY + H * 0.42;
         if (player.y < line) camY -= line - player.y;
 
@@ -295,9 +382,9 @@
 
         ensureBells();
 
-        /* 掉出屏幕底 */
         if (player.y > camY + H + 30) {
           gameOver();
+          input.endFrame();
           return;
         }
         input.endFrame();
@@ -310,14 +397,12 @@
         const bob = Math.sin(b.phase + performance.now() / 700) * 2;
         ctx.save();
         ctx.translate(b.x, y + bob);
-        /* 挂绳 */
         ctx.strokeStyle = 'rgba(147,160,200,0.4)';
         ctx.lineWidth = 1;
         ctx.beginPath();
         ctx.moveTo(0, -b.r - bob);
         ctx.lineTo(0, -34);
         ctx.stroke();
-        /* 铃身 */
         const g = ctx.createRadialGradient(-3, -3, 1, 0, 0, b.r + 2);
         g.addColorStop(0, '#ffe9a3');
         g.addColorStop(1, '#e8b83a');
@@ -328,7 +413,6 @@
         ctx.strokeStyle = '#9c7420';
         ctx.lineWidth = 1.4;
         ctx.stroke();
-        /* 铃口 */
         ctx.fillStyle = '#9c7420';
         ctx.beginPath();
         ctx.arc(0, b.r - 2, 2.4, 0, TAU);
@@ -343,7 +427,6 @@
         const stretch = clamp(1 + player.vy / -3200, 0.85, 1.15);
         ctx.scale(1, stretch);
         ctx.scale(player.face >= 0 ? 1 : -1, 1);
-        /* 耳朵 */
         ctx.fillStyle = '#f4f6ff';
         ctx.strokeStyle = '#c9cfe8';
         ctx.lineWidth = 1.4;
@@ -362,14 +445,12 @@
         ctx.beginPath();
         ctx.ellipse(5, -14, 1.6, 6, 0.25, 0, TAU);
         ctx.fill();
-        /* 身体 */
         ctx.fillStyle = '#f4f6ff';
         ctx.beginPath();
         ctx.arc(0, 0, PLAYER_R, 0, TAU);
         ctx.fill();
         ctx.strokeStyle = '#c9cfe8';
         ctx.stroke();
-        /* 表情 */
         ctx.fillStyle = '#2c3352';
         ctx.beginPath();
         ctx.arc(4.5, -3, 1.6, 0, TAU);
@@ -382,7 +463,6 @@
         ctx.beginPath();
         ctx.arc(7, 1.5, 2.6, 0.15, Math.PI - 0.15);
         ctx.stroke();
-        /* 腮红 */
         ctx.fillStyle = 'rgba(255,180,200,0.7)';
         ctx.beginPath();
         ctx.arc(2, 1.5, 2, 0, TAU);
@@ -392,7 +472,6 @@
 
       function render() {
         stage.beginFrame();
-        /* 夜空 */
         const bg = ctx.createLinearGradient(0, 0, 0, H);
         bg.addColorStop(0, '#0c1230');
         bg.addColorStop(0.7, '#1b2c55');
@@ -400,7 +479,6 @@
         ctx.fillStyle = bg;
         ctx.fillRect(0, 0, W, H);
 
-        /* 月亮 */
         ctx.fillStyle = 'rgba(245,248,255,0.95)';
         ctx.beginPath();
         ctx.arc(340, 96, 34, 0, TAU);
@@ -410,7 +488,6 @@
         ctx.arc(352, 90, 30, 0, TAU);
         ctx.fill();
 
-        /* 远处雪坡（视差） */
         const par = (camY * 0.2) % (H + 300);
         ctx.fillStyle = 'rgba(226,236,255,0.10)';
         for (let k = -1; k < 2; k++) {
@@ -427,7 +504,6 @@
 
         bells.forEach(drawBell);
 
-        /* 起始雪台（世界坐标，随相机走） */
         if (pad) {
           const py = pad.y - camY;
           if (py > -40 && py < H + 40) {
@@ -439,7 +515,6 @@
           }
         }
 
-        /* 连击波纹（屏幕坐标） */
         rings.forEach((r) => {
           ctx.strokeStyle = `rgba(255,210,63,${(r.life / r.maxLife) * 0.7})`;
           ctx.lineWidth = 2;
@@ -451,7 +526,6 @@
         particles.draw(ctx);
         drawRabbit();
 
-        /* 飘雪（前景） */
         ctx.fillStyle = 'rgba(240,246,255,0.8)';
         snow.forEach((s) => {
           ctx.globalAlpha = 0.35 + (s.s / 2.6) * 0.5;
@@ -465,19 +539,20 @@
         }
       }
 
-      /* ---------- 输入与循环 ---------- */
-      window.addEventListener('keydown', (e) => {
-        if (e.key === 'p' || e.key === 'P' || e.key === 'Escape') {
-          if (state === 'playing') pauseByUser();
-        }
-      });
-
       const loop = A.createLoop({
         update,
         render,
         onAutoPause() {
           if (state === 'playing') pauseByUser();
         },
+      });
+
+      const pauseUi = A.bindPause({
+        button: dom.pause,
+        pause: pauseByUser,
+        resume: resumeGame,
+        isPlaying: () => state === 'playing',
+        isPaused: () => state === 'paused',
       });
 
       function syncMute() {
@@ -491,7 +566,30 @@
 
       reset();
       state = 'ready';
-      showOverlay('雪铃', '兔子跳铃铛：踩中铃铛向上弹。<br/>连击越高，铃音越高、得分越多<br/>掉出屏幕就结束了', '开始游戏', startGame);
+      const saved = autosave.load();
+      if (saved) {
+        A.showResumePrompt(ui, saved, {
+          name: '雪铃',
+          onResume: () => {
+            if (restore(saved.data)) {
+              state = 'playing';
+              ui.hide();
+              loop.resume();
+              pauseUi.sync();
+              autosave.saveNow();
+            } else {
+              autosave.clear();
+              showStart();
+            }
+          },
+          onRestart: () => {
+            autosave.clear();
+            showStart();
+          },
+        });
+      } else {
+        showStart();
+      }
       loop.start();
     })();
   </script>
