@@ -235,7 +235,7 @@
       "id": "T013",
       "title": "街机厅 0.3.0 发布：推送 main 并验证 GitHub Pages",
       "kind": "agent",
-      "status": "IN_PROGRESS",
+      "status": "DONE",
       "dependsOn": [
         "T012"
       ],
@@ -247,8 +247,8 @@
         "线上至少抽检 3 款新游戏页面 HTTP 200 且无资源 404"
       ],
       "claimedAt": "2026-11-08T16:48:08+00:00",
-      "completedAt": null,
-      "evidence": "",
+      "completedAt": "2026-11-08T16:51:17+00:00",
+      "evidence": "Owner 当前任务明确要求推送部署；main 推送 aba11a9；Actions run 42501786872 全成功（Validate and build / Deploy StudioKit）；线上 https://shawlaw.github.io/studiokit/apps/arcade/ 200，无头 Chrome 执行后 13 张游戏卡与 v0.3.0 可见；engine.js 线上 ARCADE_VERSION 0.3.0、GAMES 13；registry arcade status=available version=0.3.0；13 款游戏页全部 HTTP 200；本地 34/34 CDP 冒烟通过",
       "ownerAuthorizationVerifiedByAgentFlag": true
     }
   ]
