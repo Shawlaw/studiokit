@@ -169,6 +169,27 @@
       "claimedAt": "2026-11-01T02:05:00+00:00",
       "completedAt": "2026-11-01T02:32:33+00:00",
       "evidence": "提交 65e63b8（index.html +36/-32 净 -26 行、site.css 清理死样式，合计 +6/-52）；本地 1280x800 与 375x667 验证通过；Owner 授权推送；Actions run 41265543819 success；线上 https://shawlaw.github.io/studiokit/ 复测：hero/关于/导航 0 残留、2 卡片渲染、v2.2.1、注册表加载、页高 816px、零 404、零溢出"
+    },
+    {
+      "id": "T010",
+      "title": "街机厅 Arcade：竖屏物理小游戏合集（中心页 + 4 游戏 + 自研引擎）",
+      "kind": "agent",
+      "status": "DONE",
+      "dependsOn": [
+        "T009"
+      ],
+      "ownerAuthorizationRequired": false,
+      "acceptance": [
+        "apps/arcade/ 含中心页、engine.js、arcade.css 与 4 款游戏页（star-raid / shadow-leap / pendulum-tower / snowbells），registry 登记 draft v0.1.0",
+        "自研轻量物理（重力、AABB/圆碰撞、单向平台、单摆积分、偏心塔倾力矩）与 WebAudio 合成音效，零外部依赖零网络请求",
+        "localStorage 全部使用 studiokit:arcade: 命名空间；中心页支持记录展示/清除/导出/导入",
+        "validate_site.py（扩展为 apps/**/*.html 全深度扫描 + 属性引号检查）与 build_site.py 通过；node --check 全部 JS 通过",
+        "浏览器实测：4 游戏可玩（开始/得分/结束/重开）、记录回写中心页、shellbar 与页内返回导航闭环、375px 窄屏无溢出",
+        "仅本地分支 feat/arcade-hall 提交，未推送/未合并/未发布"
+      ],
+      "claimedAt": "2026-11-08T15:00:00+00:00",
+      "completedAt": "2026-11-08T15:45:00+00:00",
+      "evidence": "Owner 口头需求（街机小游戏子页面）；9 个本地提交于 feat/arcade-hall；validate PASS + build PASS（dist 白名单含 apps 整目录）+ node --check engine.js/site-shell.js/home.js OK；引擎冒烟单测（recordPlay 高分/导入导出、oneWayLanding、pendulumStep）通过；IAB 浏览器实测：中心页 4 卡片渲染、星海突击自动开火得 30 分 + P 暂停 + blur 自动暂停、层塔空格放箱 miss → 地基失守 → progress key 写入 plays:1、影跃键盘移动 → 坠落结束、雪铃铃铛/兔子/浮台渲染正常、雪铃页『返回街机厅』导航闭环、中心页累计 2 局与相对时间显示、清除层塔记录后 2→1 局、375px 中心页单列无溢出且游戏页舞台 296x522 比例正确；测试中发现并修复 2 个缺陷（stage-box 高度百分比循环依赖致画布撑满、pendulum-tower data-ov-text 属性多余引号致页面 JS 静默挂掉）并将引号检查固化进 validate_site.py；site-shell.js 返回链接改为按脚本 URL 推导（badge-studio 行为不变）；未浏览器验证项：文件导入（IAB 不支持文件选择）、音频（自动化环境不可听）、导出下载落盘——已注明；registry 保持 draft 待 Owner 试玩验收后转 available"
     }
   ]
 }

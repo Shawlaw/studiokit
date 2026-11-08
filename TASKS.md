@@ -13,6 +13,7 @@
 | T007 | agent | 全仓库个人信息泄漏审计与处置 | DONE | T006 | 内容层零泄漏（邮箱/手机/身份证/用户名/路径/base64/注释全查）；Git 提交身份经 Owner 决定保持现状；BASELINE.md 溯源段按 Owner 决定整体删除 |
 | T008 | agent | 小写 URL /studiokit 可访问（仓库改名） | DONE | T005 | 仓库改名 Shawlaw/StudioKit→studiokit；https://shawlaw.github.io/studiokit 301→200；浏览器级验证通过；旧混合大小写 URL 不被 Pages 重定向（已记录，无外部链接影响） |
 | T009 | agent | 门户去冗余文案（let UI speak for itself） | DONE | T008 | 提交 `65e63b8`；hero/关于/导航/英文标语移除，页脚压缩为单行；run `41265543819` 成功；线上复测零冗余零溢出零 404 |
+| T010 | agent | 街机厅 Arcade：竖屏物理小游戏合集 | DONE | T009 | 本地分支 `feat/arcade-hall` 9 提交；中心页 + engine.js + 4 游戏（星海突击/影跃/层塔/雪铃）+ 自研物理与合成音效；registry `draft` v0.1.0 待 Owner 验收；validate/build/node 全过；浏览器实测可玩与窄屏通过；仅本地未推送 |
 
 ## 任务命令
 
