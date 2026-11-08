@@ -1,0 +1,576 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <meta name="description" content="极速车道：n 路赛车避障竞速游戏，街机厅小游戏，本地即玩。" />
+  <meta name="theme-color" content="#0b1020" />
+  <link rel="stylesheet" href="../../../shared/site.css" />
+  <link rel="stylesheet" href="../arcade.css" />
+  <script src="../../../shared/site-shell.js" defer></script>
+  <script src="../engine.js"></script>
+  <title>极速车道 · 街机厅 · StudioKit</title>
+</head>
+<body class="arcade-body" data-studiokit-app="arcade" data-studiokit-app-title="街机厅 Arcade" style="--ac-accent:#ff7847; --card-accent:#ff7847">
+  <noscript><p class="ac-noscript">此游戏需要启用 JavaScript 才能运行。</p></noscript>
+  <main class="game-page">
+    <header class="game-topbar">
+      <a class="ac-back" href="../index.html">‹ 街机厅</a>
+      <h1 class="game-title">🏎 极速车道</h1>
+      <div class="game-hud">
+        <span>距离 <strong data-hud-score>0</strong>m</span>
+        <span>最高 <strong data-hud-high>0</strong>m</span>
+      </div>
+      <button type="button" class="ac-icon-btn" data-mute aria-label="切换音效">🔊</button>
+    </header>
+    <div class="stage-wrap">
+      <div class="stage-box">
+        <canvas class="game-canvas" aria-label="极速车道游戏画面"></canvas>
+        <div class="overlay" data-overlay hidden>
+          <div class="overlay-panel">
+            <h2 data-ov-title>极速车道</h2>
+            <p data-ov-text>n 路赛车避障</p>
+            <button type="button" class="ac-btn" data-ov-btn>开始游戏</button>
+          </div>
+        </div>
+      </div>
+    </div>
+    <p class="game-hint">←→ / A D 或触摸左右半屏变道 · 车速会越来越快 · P 暂停</p>
+  </main>
+  <script>
+    (() => {
+      'use strict';
+      const A = window.Arcade;
+      const { clamp, lerp, rand, randInt, TAU } = A.utils;
+
+      const W = 420;
+      const H = 740;
+      const HORIZON = 236;
+      const ROAD_BOTTOM = 744;
+      const ROAD_W_FAR = 54;
+      const ROAD_W_NEAR = 336;
+      const CX = W / 2;
+      const LANES = 4;
+      const PLAYER_Y = 636;
+      const PERSP = 2.6; /* 透视曲线指数 */
+
+      const canvas = document.querySelector('.game-canvas');
+      const stage = A.createStage(canvas, W, H);
+      const ctx = stage.ctx;
+      const input = A.createInput(canvas);
+      A.installSfxUnlock();
+
+      const dom = {
+        overlay: document.querySelector('[data-overlay]'),
+        ovTitle: document.querySelector('[data-ov-title]'),
+        ovText: document.querySelector('[data-ov-text]'),
+        ovBtn: document.querySelector('[data-ov-btn]'),
+        hudScore: document.querySelector('[data-hud-score]'),
+        hudHigh: document.querySelector('[data-hud-high]'),
+        mute: document.querySelector('[data-mute]'),
+      };
+
+      const particles = A.createParticles();
+
+      /* z ∈ [0(玩家处), 1(地平线)] → 屏幕 u（0 地平线 1 底部） */
+      function uOf(z) {
+        return 1 - z;
+      }
+      function scaleAt(u) {
+        return Math.pow(u, PERSP);
+      }
+      function yAt(u) {
+        return HORIZON + (ROAD_BOTTOM - HORIZON) * Math.pow(u, PERSP);
+      }
+      function roadHalfAt(u) {
+        return lerp(ROAD_W_FAR, ROAD_W_NEAR, Math.pow(u, PERSP)) / 2;
+      }
+      function laneCenterX(lane, u) {
+        const half = roadHalfAt(u);
+        return CX + half * 2 * ((lane + 0.5) / LANES - 0.5);
+      }
+
+      const player = { x: CX, vx: 0, tilt: 0, invul: 0 };
+      let cars = [];
+      let props = [];
+      let speed = 0.28; /* 归一化速度 0~1 */
+      let dist = 0;
+      let lives = 3;
+      let spawnTimer = 0.8;
+      let dashOffset = 0;
+      let state = 'ready';
+      let recordSaved = false;
+      let shake = 0;
+      let exhaustTimer = 0;
+
+      const high = A.Progress.get('road-rush').high;
+      dom.hudHigh.textContent = String(high);
+
+      const CAR_COLORS = ['#e05656', '#4f7cff', '#3fbf7f', '#f2d13d', '#c06bff', '#ff9a3d'];
+      const CAR_KINDS = [
+        { w: 40, h: 62, own: [0.14, 0.3], color: null }, /* 慢车 */
+        { w: 40, h: 62, own: [0.34, 0.48], color: null }, /* 中速 */
+        { w: 44, h: 78, own: [0.05, 0.14], color: '#9aa6c8', truck: true }, /* 卡车慢大 */
+      ];
+
+      /* ---------- 流程 ---------- */
+      function reset() {
+        cars = [];
+        props = [];
+        for (let i = 0; i < 10; i++) {
+          props.push({ z: i / 10 + rand(0, 0.05), side: i % 2 === 0 ? -1 : 1, kind: randInt(0, 1) });
+        }
+        player.x = CX;
+        player.vx = 0;
+        player.tilt = 0;
+        player.invul = 0;
+        speed = 0.28;
+        dist = 0;
+        lives = 3;
+        spawnTimer = 0.8;
+        dashOffset = 0;
+        shake = 0;
+        recordSaved = false;
+        particles.clear();
+        syncHud();
+      }
+
+      function syncHud() {
+        dom.hudScore.textContent = String(Math.floor(dist));
+      }
+
+      function showOverlay(title, text, btn, onBtn) {
+        dom.ovTitle.textContent = title;
+        dom.ovText.innerHTML = text;
+        dom.ovBtn.textContent = btn;
+        dom.overlay.hidden = false;
+        dom.ovBtn.onclick = () => {
+          A.Sfx.play('ui');
+          onBtn();
+        };
+      }
+
+      function startGame() {
+        reset();
+        state = 'playing';
+        dom.overlay.hidden = true;
+        loop.resume();
+      }
+
+      function gameOver() {
+        state = 'over';
+        A.Sfx.play('over');
+        const finalDist = Math.floor(dist);
+        let rec = null;
+        if (!recordSaved) {
+          rec = A.Progress.recordPlay('road-rush', finalDist);
+          recordSaved = true;
+          dom.hudHigh.textContent = String(Math.max(high, finalDist));
+        }
+        loop.pause();
+        showOverlay(
+          '车辆损毁',
+          `<span class="ac-score">${finalDist}m</span>` +
+            (rec && rec.isNewHigh ? '<span class="ac-newhigh">★ 新纪录</span><br/>' : '') +
+            `行驶距离 · 最高 ${Math.max(high, finalDist)}m`,
+          '再来一局',
+          startGame
+        );
+      }
+
+      function pauseByUser() {
+        if (state !== 'playing') return;
+        loop.pause();
+        state = 'paused';
+        showOverlay('已暂停', '引擎怠速中。', '继续', () => {
+          state = 'playing';
+          dom.overlay.hidden = true;
+          loop.resume();
+        });
+      }
+
+      function spawnCar() {
+        /* 保证不会四车道同时封死：近段(z<0.55)已有车道 + 新车 < 4 */
+        const nearLanes = new Set(cars.filter((c) => c.z < 0.55).map((c) => c.lane));
+        if (nearLanes.size >= LANES - 1) return;
+        let lane = randInt(0, LANES - 1);
+        let tries = 0;
+        while (nearLanes.has(lane) && tries++ < 8) lane = randInt(0, LANES - 1);
+        if (nearLanes.has(lane)) return;
+        const kindIdx = speed > 0.55 && Math.random() > 0.85 ? 2 : randInt(0, 1);
+        const k = CAR_KINDS[kindIdx];
+        cars.push({
+          lane,
+          z: 1,
+          own: rand(k.own[0], k.own[1]),
+          w: k.w,
+          h: k.h,
+          truck: !!k.truck,
+          color: k.truck ? k.color : CAR_COLORS[randInt(0, CAR_COLORS.length - 1)],
+          passed: false,
+        });
+      }
+
+      /* ---------- 更新 ---------- */
+      function update(dt) {
+        particles.update(dt);
+        shake = Math.max(0, shake - dt * 20);
+        if (state !== 'playing') {
+          input.endFrame();
+          return;
+        }
+
+        /* 加速曲线 */
+        speed = Math.min(1, speed + 0.02 * dt + 0.004 * dt);
+        const kmh = speed * 360;
+        const mps = kmh / 3.6;
+        dist += mps * dt;
+        syncHud();
+
+        /* 玩家横移 */
+        let dir = 0;
+        if (input.isDown('ArrowLeft', 'a')) dir -= 1;
+        if (input.isDown('ArrowRight', 'd')) dir += 1;
+        if (input.pointer.down) dir = input.pointer.x < W / 2 ? -1 : 1;
+        player.vx = lerp(player.vx, dir * 300, Math.min(1, 12 * dt));
+        player.x += player.vx * dt;
+        const halfRoadNear = roadHalfAt(uOf(0)) - 24;
+        player.x = clamp(player.x, CX - halfRoadNear + 22, CX + halfRoadNear - 22);
+        player.tilt = lerp(player.tilt, clamp(player.vx / 300, -1, 1) * 0.14, Math.min(1, 10 * dt));
+        player.invul = Math.max(0, player.invul - dt);
+
+        /* 车道虚线滚动 */
+        dashOffset = (dashOffset + speed * dt * 2.2) % (1 / 7);
+
+        /* 敌车 */
+        spawnTimer -= dt;
+        if (spawnTimer <= 0) {
+          spawnTimer = lerp(1.15, 0.52, speed);
+          spawnCar();
+          if (speed > 0.7 && Math.random() > 0.6) spawnCar();
+        }
+        const playerBox = { x: player.x - 19, y: PLAYER_Y - 26, w: 38, h: 54 };
+        for (let i = cars.length - 1; i >= 0; i--) {
+          const c = cars[i];
+          c.z -= ((speed - c.own) * dt) / 0.9;
+          if (c.z < -0.14) {
+            cars.splice(i, 1);
+            continue;
+          }
+          /* 超车计分提示（可选不做） */
+          if (!c.passed && c.z < -0.02) c.passed = true;
+          /* 碰撞（玩家段） */
+          if (c.z < 0.07 && c.z > -0.07 && player.invul <= 0) {
+            const u = uOf(Math.max(c.z, 0));
+            const sc = scaleAt(u);
+            const cx2 = laneCenterX(c.lane, u);
+            const cw = c.w * sc;
+            const ch = c.h * sc;
+            const box = { x: cx2 - cw / 2, y: yAt(u) - ch, w: cw, h: ch };
+            if (A.Physics.aabbOverlap(playerBox, box)) {
+              hitPlayer(c, i);
+            }
+          }
+        }
+
+        /* 路边装饰 */
+        props.forEach((p) => {
+          p.z -= speed * dt / 0.9;
+          if (p.z < 0) {
+            p.z += 1;
+            p.side = Math.random() > 0.5 ? 1 : -1;
+            p.kind = randInt(0, 1);
+          }
+        });
+
+        /* 排气粒子 */
+        exhaustTimer -= dt;
+        if (exhaustTimer <= 0 && !A.reducedMotion) {
+          exhaustTimer = 0.06;
+          particles.emit(player.x + rand(-10, 10), PLAYER_Y + 30, {
+            count: 1,
+            speed: [10, 40],
+            angle: [Math.PI * 0.35, Math.PI * 0.65],
+            life: [0.2, 0.4],
+            size: [2, 4],
+            colors: ['rgba(200,205,230,0.5)'],
+          });
+        }
+
+        input.endFrame();
+      }
+
+      function hitPlayer(c, idx) {
+        cars.splice(idx, 1);
+        lives -= 1;
+        speed = Math.max(0.2, speed * 0.45);
+        player.invul = 1.9;
+        shake = A.reducedMotion ? 0 : 9;
+        A.Sfx.play('explode');
+        particles.emit(player.x, PLAYER_Y, {
+          count: 26,
+          speed: [60, 280],
+          life: [0.3, 0.8],
+          size: [2, 5],
+          colors: ['#ff7847', '#ffd23f', '#ffffff'],
+          gravity: 60,
+        });
+        if (lives <= 0) {
+          gameOver();
+        }
+      }
+
+      /* ---------- 渲染 ---------- */
+      function drawSky() {
+        const sky = ctx.createLinearGradient(0, 0, 0, HORIZON + 60);
+        sky.addColorStop(0, '#2c1a4d');
+        sky.addColorStop(0.7, '#c4557a');
+        sky.addColorStop(1, '#ffb46b');
+        ctx.fillStyle = sky;
+        ctx.fillRect(0, 0, W, HORIZON + 60);
+        /* 落日 */
+        ctx.fillStyle = 'rgba(255,235,190,0.95)';
+        ctx.beginPath();
+        ctx.arc(CX, HORIZON - 26, 34, 0, TAU);
+        ctx.fill();
+        /* 远山 */
+        ctx.fillStyle = 'rgba(40,22,64,0.8)';
+        ctx.beginPath();
+        ctx.moveTo(0, HORIZON);
+        ctx.lineTo(70, HORIZON - 46);
+        ctx.lineTo(150, HORIZON - 12);
+        ctx.lineTo(250, HORIZON - 60);
+        ctx.lineTo(340, HORIZON - 18);
+        ctx.lineTo(420, HORIZON - 38);
+        ctx.lineTo(420, HORIZON + 4);
+        ctx.lineTo(0, HORIZON + 4);
+        ctx.closePath();
+        ctx.fill();
+      }
+
+      function drawRoad() {
+        /* 草地 */
+        const grass = ctx.createLinearGradient(0, HORIZON, 0, H);
+        grass.addColorStop(0, '#27502f');
+        grass.addColorStop(1, '#1c3a24');
+        ctx.fillStyle = grass;
+        ctx.fillRect(0, HORIZON, W, H - HORIZON);
+
+        /* 路面梯形（含路肩） */
+        function roadPoly(uTop, uBottom, halfMargin) {
+          const x1 = CX - roadHalfAt(uBottom) * halfMargin;
+          const x2 = CX + roadHalfAt(uBottom) * halfMargin;
+          const x3 = CX + roadHalfAt(uTop) * halfMargin;
+          const x4 = CX - roadHalfAt(uTop) * halfMargin;
+          ctx.beginPath();
+          ctx.moveTo(x1, yAt(uBottom));
+          ctx.lineTo(x2, yAt(uBottom));
+          ctx.lineTo(x3, yAt(uTop));
+          ctx.lineTo(x4, yAt(uTop));
+          ctx.closePath();
+        }
+        /* 路肩红白条（z 空间按 dashOffset 滚动） */
+        const segLen = 1 / 8;
+        for (let i = -1; i < 9; i++) {
+          const zA = clamp(i / 8 + dashOffset * 0.9, 0, 1);
+          const zB = clamp(zA + segLen / 2, 0, 1);
+          if (zB <= zA) continue;
+          ctx.fillStyle = i % 2 === 0 ? '#d8443f' : '#f0f2fa';
+          roadPoly(uOf(zB), uOf(zA), 1.08);
+          ctx.fill();
+        }
+        /* 主路面 */
+        ctx.fillStyle = '#3a3f52';
+        roadPoly(0, 1, 1);
+        ctx.fill();
+        /* 中央车道虚线 ×3 */
+        ctx.fillStyle = 'rgba(240,242,250,0.85)';
+        for (let lane = 1; lane < LANES; lane++) {
+          for (let i = 0; i < 8; i++) {
+            const zA = clamp(i / 8 + dashOffset, 0, 1);
+            const zB = clamp(zA + 0.05, 0, 1);
+            if (zB <= zA) continue;
+            const wA = 3 * scaleAt(uOf(zA)) * 1.4;
+            const wB = 3 * scaleAt(uOf(zB)) * 1.4;
+            const xA = laneCenterX(lane, uOf(zA));
+            const xB = laneCenterX(lane, uOf(zB));
+            ctx.beginPath();
+            ctx.moveTo(xA - wA / 2, yAt(uOf(zA)));
+            ctx.lineTo(xA + wA / 2, yAt(uOf(zA)));
+            ctx.moveTo(xB + wB / 2, yAt(uOf(zB)));
+            ctx.lineTo(xB - wB / 2, yAt(uOf(zB)));
+            ctx.closePath();
+            ctx.fill();
+          }
+        }
+        /* 路缘白线 */
+        ctx.fillStyle = 'rgba(240,242,250,0.9)';
+        ctx.beginPath();
+        ctx.moveTo(CX - roadHalfAt(1) * 0.96, yAt(1));
+        ctx.lineTo(CX - roadHalfAt(1) * 0.99, yAt(1));
+        ctx.lineTo(CX - roadHalfAt(0) * 0.94, yAt(0));
+        ctx.lineTo(CX - roadHalfAt(0) * 0.9, yAt(0));
+        ctx.closePath();
+        ctx.fill();
+        ctx.beginPath();
+        ctx.moveTo(CX + roadHalfAt(1) * 0.99, yAt(1));
+        ctx.lineTo(CX + roadHalfAt(1) * 0.96, yAt(1));
+        ctx.lineTo(CX + roadHalfAt(0) * 0.9, yAt(0));
+        ctx.lineTo(CX + roadHalfAt(0) * 0.94, yAt(0));
+        ctx.closePath();
+        ctx.fill();
+      }
+
+      function drawProp(p) {
+        const u = uOf(clamp(p.z, 0, 1));
+        const sc = scaleAt(u);
+        const y = yAt(u);
+        const half = roadHalfAt(u);
+        const x = CX + (p.side > 0 ? 1 : -1) * (half + 26 * sc + 10 * sc);
+        if (p.kind === 0) {
+          /* 树 */
+          const th = 66 * sc;
+          ctx.fillStyle = '#3a2a20';
+          ctx.fillRect(x - 3 * sc, y - th * 0.4, 6 * sc, th * 0.4);
+          ctx.fillStyle = '#2e6b3e';
+          ctx.beginPath();
+          ctx.moveTo(x, y - th);
+          ctx.lineTo(x + 16 * sc, y - th * 0.32);
+          ctx.lineTo(x - 16 * sc, y - th * 0.32);
+          ctx.closePath();
+          ctx.fill();
+        } else {
+          /* 里程牌 */
+          const ph = 46 * sc;
+          ctx.fillStyle = '#8d94ad';
+          ctx.fillRect(x - 2 * sc, y - ph, 4 * sc, ph);
+          ctx.fillStyle = '#2f7d4f';
+          ctx.fillRect(x - 12 * sc, y - ph - 16 * sc, 24 * sc, 18 * sc);
+        }
+      }
+
+      function drawCar(x, yBottom, w, h, color, truck, tilt, isPlayer) {
+        ctx.save();
+        ctx.translate(x, yBottom);
+        if (tilt) ctx.rotate(tilt);
+        /* 阴影 */
+        ctx.fillStyle = 'rgba(0,0,0,0.35)';
+        ctx.beginPath();
+        ctx.ellipse(0, -2, w * 0.55, h * 0.09, 0, 0, TAU);
+        ctx.fill();
+        if (truck) {
+          /* 车厢 */
+          ctx.fillStyle = '#b7c0d8';
+          ctx.fillRect(-w / 2, -h, w, h * 0.62);
+          ctx.strokeStyle = '#7d8aa8';
+          ctx.strokeRect(-w / 2 + 2, -h + 2, w - 4, h * 0.62 - 4);
+          /* 车头 */
+          ctx.fillStyle = color;
+          A.draw.roundRect(ctx, -w / 2 + 2, -h * 0.38, w - 4, h * 0.38, 6);
+          ctx.fill();
+        } else {
+          /* 车身 */
+          ctx.fillStyle = color;
+          A.draw.roundRect(ctx, -w / 2, -h, w, h * 0.86, 8);
+          ctx.fill();
+          /* 车窗 */
+          ctx.fillStyle = 'rgba(20,26,48,0.85)';
+          A.draw.roundRect(ctx, -w * 0.32, -h * 0.92, w * 0.64, h * 0.3, 4);
+          ctx.fill();
+          A.draw.roundRect(ctx, -w * 0.3, -h * 0.55, w * 0.6, h * 0.22, 3);
+          ctx.fill();
+          /* 尾灯 */
+          if (isPlayer) {
+            ctx.fillStyle = '#ff5d5d';
+            ctx.fillRect(-w / 2 + 2, -h * 0.26, 6, 4);
+            ctx.fillRect(w / 2 - 8, -h * 0.26, 6, 4);
+          } else {
+            ctx.fillStyle = '#ffd23f';
+            ctx.fillRect(-w / 2 + 2, -h * 0.28, 6, 4);
+            ctx.fillRect(w / 2 - 8, -h * 0.28, 6, 4);
+          }
+        }
+        ctx.restore();
+      }
+
+      function render() {
+        stage.beginFrame();
+        ctx.save();
+        if (shake > 0) ctx.translate(rand(-shake, shake), rand(-shake, shake));
+        drawSky();
+        drawRoad();
+
+        /* 路边装饰（远→近） */
+        props
+          .slice()
+          .sort((a, b) => b.z - a.z)
+          .forEach(drawProp);
+
+        /* 敌车（远→近） */
+        cars
+          .slice()
+          .sort((a, b) => b.z - a.z)
+          .forEach((c) => {
+            const u = uOf(clamp(c.z, 0, 1));
+            const sc = scaleAt(u);
+            drawCar(laneCenterX(c.lane, u), yAt(u), c.w * sc, c.h * sc, c.color, c.truck, 0, false);
+          });
+
+        particles.draw(ctx);
+
+        /* 玩家车 */
+        if ((state === 'playing' || state === 'paused') && !(player.invul > 0 && Math.floor(player.invul * 12) % 2 === 0)) {
+          drawCar(player.x, PLAYER_Y + 30, 40, 62, '#ff7847', false, player.tilt, true);
+        }
+
+        /* HUD */
+        A.draw.label(ctx, Math.floor(dist) + ' m', 12, 22, { align: 'left', font: 'bold 15px system-ui', color: '#ffd23f' });
+        const kmh = Math.round(speed * 360);
+        A.draw.label(ctx, kmh + ' km/h', W - 14, 22, { align: 'right', font: 'bold 15px system-ui', color: '#eef1ff' });
+        for (let i = 0; i < lives; i++) {
+          ctx.save();
+          ctx.translate(W - 24 - i * 18, 44);
+          ctx.fillStyle = '#ff7847';
+          ctx.beginPath();
+          ctx.moveTo(0, -6);
+          ctx.lineTo(6, 6);
+          ctx.lineTo(-6, 6);
+          ctx.closePath();
+          ctx.fill();
+          ctx.restore();
+        }
+        ctx.restore();
+      }
+
+      /* ---------- 输入与循环 ---------- */
+      window.addEventListener('keydown', (e) => {
+        if (e.key === 'p' || e.key === 'P' || e.key === 'Escape') {
+          if (state === 'playing') pauseByUser();
+        }
+      });
+
+      const loop = A.createLoop({
+        update,
+        render,
+        onAutoPause() {
+          if (state === 'playing') pauseByUser();
+        },
+      });
+
+      function syncMute() {
+        dom.mute.textContent = A.Sfx.muted ? '🔇' : '🔊';
+      }
+      dom.mute.addEventListener('click', () => {
+        A.Sfx.setMuted(!A.Sfx.muted);
+        syncMute();
+      });
+      syncMute();
+
+      reset();
+      state = 'ready';
+      showOverlay('极速车道', 'n 路赛车避障：车流越来越快。<br/>生命 ×3 · 撞车会大幅减速', '开始游戏', startGame);
+      loop.start();
+    })();
+  </script>
+</body>
+</html>

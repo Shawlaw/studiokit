@@ -7,7 +7,7 @@
 (() => {
   'use strict';
 
-  const ARCADE_VERSION = '0.1.0';
+  const ARCADE_VERSION = '0.2.0';
   const PROGRESS_KEY = 'studiokit:arcade:progress:v1';
   const PREFS_KEY = 'studiokit:arcade:prefs:v1';
   const PROGRESS_SCHEMA = 1;
@@ -57,6 +57,36 @@
       accent: '#2fa8a0',
       tags: ['弹跳', '连击'],
       how: '←→ 或触摸左右半屏移动，踩中铃铛向上弹；连击有倍率加成。',
+    },
+    {
+      id: 'block-drop',
+      file: 'block-drop.html',
+      name: '俄罗斯方块',
+      tagline: '经典落块消除',
+      icon: '🧱',
+      accent: '#7c5cff',
+      tags: ['消除', '经典'],
+      how: '←→ 移动 · ↑ 旋转 · ↓ 软降 · 空格硬降；触摸分区操作。',
+    },
+    {
+      id: 'road-rush',
+      file: 'road-rush.html',
+      name: '极速车道',
+      tagline: 'n 路赛车避障',
+      icon: '🏎',
+      accent: '#ff7847',
+      tags: ['赛车', '竞速'],
+      how: '←→ 或触摸左右半屏变道；躲开车流，速度会越来越快。',
+    },
+    {
+      id: 'gold-miner',
+      file: 'gold-miner.html',
+      name: '黄金矿工',
+      tagline: '摆钩挖金',
+      icon: '⛏',
+      accent: '#f5c542',
+      tags: ['物理', '关卡'],
+      how: '看准角度点击 / 空格放钩；重物拉得慢，限时达标进入下一关。',
     },
   ];
 

@@ -1,0 +1,616 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <meta name="description" content="俄罗斯方块：经典落块消除游戏，街机厅小游戏，本地即玩。" />
+  <meta name="theme-color" content="#0b1020" />
+  <link rel="stylesheet" href="../../../shared/site.css" />
+  <link rel="stylesheet" href="../arcade.css" />
+  <script src="../../../shared/site-shell.js" defer></script>
+  <script src="../engine.js"></script>
+  <title>俄罗斯方块 · 街机厅 · StudioKit</title>
+</head>
+<body class="arcade-body" data-studiokit-app="arcade" data-studiokit-app-title="街机厅 Arcade" style="--ac-accent:#7c5cff; --card-accent:#7c5cff">
+  <noscript><p class="ac-noscript">此游戏需要启用 JavaScript 才能运行。</p></noscript>
+  <main class="game-page">
+    <header class="game-topbar">
+      <a class="ac-back" href="../index.html">‹ 街机厅</a>
+      <h1 class="game-title">🧱 俄罗斯方块</h1>
+      <div class="game-hud">
+        <span>分数 <strong data-hud-score>0</strong></span>
+        <span>最高 <strong data-hud-high>0</strong></span>
+      </div>
+      <button type="button" class="ac-icon-btn" data-mute aria-label="切换音效">🔊</button>
+    </header>
+    <div class="stage-wrap">
+      <div class="stage-box">
+        <canvas class="game-canvas" aria-label="俄罗斯方块游戏画面"></canvas>
+        <div class="overlay" data-overlay hidden>
+          <div class="overlay-panel">
+            <h2 data-ov-title>俄罗斯方块</h2>
+            <p data-ov-text>经典落块消除</p>
+            <button type="button" class="ac-btn" data-ov-btn>开始游戏</button>
+          </div>
+        </div>
+      </div>
+    </div>
+    <p class="game-hint">←→ 移动 · ↑ 旋转 · ↓ 软降 · 空格硬降 · P 暂停 ｜ 触摸：左右侧按住移动 · 中间点按旋转 · 底部按住软降</p>
+  </main>
+  <script>
+    (() => {
+      'use strict';
+      const A = window.Arcade;
+      const { clamp } = A.utils;
+
+      const W = 420;
+      const H = 740;
+      const COLS = 10;
+      const ROWS = 20;
+      const CELL = 24;
+      const WELL_X = 30;
+      const WELL_Y = 120;
+      const DAS = 0.17;
+      const ARR = 0.05;
+      const LOCK_DELAY = 0.5;
+      const LOCK_RESETS = 15;
+
+      const canvas = document.querySelector('.game-canvas');
+      const stage = A.createStage(canvas, W, H);
+      const ctx = stage.ctx;
+      const input = A.createInput(canvas);
+      A.installSfxUnlock();
+
+      const dom = {
+        overlay: document.querySelector('[data-overlay]'),
+        ovTitle: document.querySelector('[data-ov-title]'),
+        ovText: document.querySelector('[data-ov-text]'),
+        ovBtn: document.querySelector('[data-ov-btn]'),
+        hudScore: document.querySelector('[data-hud-score]'),
+        hudHigh: document.querySelector('[data-hud-high]'),
+        mute: document.querySelector('[data-mute]'),
+      };
+
+      const PIECES = {
+        I: { m: [[0, 0, 0, 0], [1, 1, 1, 1], [0, 0, 0, 0], [0, 0, 0, 0]], color: '#41d9d9' },
+        O: { m: [[1, 1], [1, 1]], color: '#f2d13d' },
+        T: { m: [[0, 1, 0], [1, 1, 1], [0, 0, 0]], color: '#b06bff' },
+        S: { m: [[0, 1, 1], [1, 1, 0], [0, 0, 0]], color: '#5fd068' },
+        Z: { m: [[1, 1, 0], [0, 1, 1], [0, 0, 0]], color: '#ff5d6b' },
+        J: { m: [[1, 0, 0], [1, 1, 1], [0, 0, 0]], color: '#5a8dff' },
+        L: { m: [[0, 0, 1], [1, 1, 1], [0, 0, 0]], color: '#ff9a3d' },
+      };
+      const KICKS = [
+        [0, 0],
+        [-1, 0],
+        [1, 0],
+        [-2, 0],
+        [2, 0],
+        [0, -1],
+      ];
+
+      let board = [];
+      let cur = null;
+      let bag = [];
+      let nextKey = null;
+      let score = 0;
+      let lines = 0;
+      let level = 1;
+      let dropTimer = 0;
+      let lockTimer = 0;
+      let lockResets = 0;
+      let grounded = false;
+      let dasDir = 0;
+      let dasTimer = 0;
+      let arrTimer = 0;
+      let softHeld = false;
+      let spaceWasDown = false;
+      let upWasDown = false;
+      let clearing = null;
+      let state = 'ready';
+      let recordSaved = false;
+
+      const high = A.Progress.get('block-drop').high;
+      dom.hudHigh.textContent = String(high);
+
+      /* ---------- 工具 ---------- */
+      function rotateCW(m) {
+        const n = m.length;
+        const out = [];
+        for (let r = 0; r < n; r++) {
+          out.push([]);
+          for (let c = 0; c < n; c++) out[r].push(m[n - 1 - c][r]);
+        }
+        return out;
+      }
+      function collides(m, px, py) {
+        for (let r = 0; r < m.length; r++) {
+          for (let c = 0; c < m.length; c++) {
+            if (!m[r][c]) continue;
+            const bx = px + c;
+            const by = py + r;
+            if (bx < 0 || bx >= COLS || by >= ROWS) return true;
+            if (by >= 0 && board[by][bx]) return true;
+          }
+        }
+        return false;
+      }
+      function pullBag() {
+        const keys = Object.keys(PIECES);
+        for (let i = keys.length - 1; i > 0; i--) {
+          const j = Math.floor(Math.random() * (i + 1));
+          [keys[i], keys[j]] = [keys[j], keys[i]];
+        }
+        bag = keys;
+      }
+      function nextPieceKey() {
+        if (!bag.length) pullBag();
+        return bag.pop();
+      }
+      function spawn() {
+        const key = nextKey || nextPieceKey();
+        nextKey = nextPieceKey();
+        const def = PIECES[key];
+        cur = {
+          key,
+          m: def.m.map((row) => row.slice()),
+          color: def.color,
+          x: Math.floor((COLS - def.m.length) / 2),
+          y: -1,
+        };
+        grounded = false;
+        lockTimer = 0;
+        lockResets = 0;
+        dropTimer = 0;
+        if (collides(cur.m, cur.x, cur.y + 1)) {
+          /* 出生即重叠：先尝试再抬一格 */
+          if (!collides(cur.m, cur.x, cur.y)) cur.y -= 1;
+          else {
+            gameOver();
+          }
+        }
+      }
+      function ghostY() {
+        let y = cur.y;
+        while (!collides(cur.m, cur.x, y + 1)) y++;
+        return y;
+      }
+      function gravSec() {
+        return Math.max(0.06, 0.8 * Math.pow(0.85, level - 1));
+      }
+      function syncHud() {
+        dom.hudScore.textContent = String(score);
+      }
+      function levelUp() {
+        const lv = 1 + Math.floor(lines / 10);
+        if (lv > level) {
+          level = lv;
+          A.Sfx.play('spring');
+        }
+      }
+
+      /* ---------- 流程 ---------- */
+      function reset() {
+        board = [];
+        for (let r = 0; r < ROWS; r++) board.push(new Array(COLS).fill(null));
+        bag = [];
+        nextKey = nextPieceKey();
+        score = 0;
+        lines = 0;
+        level = 1;
+        dropTimer = 0;
+        lockTimer = 0;
+        lockResets = 0;
+        grounded = false;
+        dasDir = 0;
+        dasTimer = 0;
+        arrTimer = 0;
+        clearing = null;
+        recordSaved = false;
+        spaceWasDown = false;
+        upWasDown = false;
+        spawn();
+        syncHud();
+      }
+
+      function showOverlay(title, text, btn, onBtn) {
+        dom.ovTitle.textContent = title;
+        dom.ovText.innerHTML = text;
+        dom.ovBtn.textContent = btn;
+        dom.overlay.hidden = false;
+        dom.ovBtn.onclick = () => {
+          A.Sfx.play('ui');
+          onBtn();
+        };
+      }
+
+      function startGame() {
+        reset();
+        state = 'playing';
+        dom.overlay.hidden = true;
+        loop.resume();
+      }
+
+      function gameOver() {
+        state = 'over';
+        A.Sfx.play('over');
+        let rec = null;
+        if (!recordSaved) {
+          rec = A.Progress.recordPlay('block-drop', score);
+          recordSaved = true;
+          dom.hudHigh.textContent = String(Math.max(high, score));
+        }
+        loop.pause();
+        showOverlay(
+          '游戏结束',
+          `<span class="ac-score">${score}</span>` +
+            (rec && rec.isNewHigh ? '<span class="ac-newhigh">★ 新纪录</span><br/>' : '') +
+            `${lines} 行 · Lv.${level} · 最高 ${Math.max(high, score)}`,
+          '再来一局',
+          startGame
+        );
+      }
+
+      function pauseByUser() {
+        if (state !== 'playing') return;
+        loop.pause();
+        state = 'paused';
+        showOverlay('已暂停', '方块悬停在半空。', '继续', () => {
+          state = 'playing';
+          dom.overlay.hidden = true;
+          loop.resume();
+        });
+      }
+
+      /* ---------- 操作 ---------- */
+      function tryMove(dx) {
+        if (!cur) return;
+        if (!collides(cur.m, cur.x + dx, cur.y)) {
+          cur.x += dx;
+          if (grounded && lockResets < LOCK_RESETS) {
+            lockTimer = 0;
+            lockResets++;
+          }
+          A.Sfx.play('ui');
+        }
+      }
+      function tryRotate() {
+        if (!cur) return;
+        const rm = rotateCW(cur.m);
+        for (const [kx, ky] of KICKS) {
+          if (!collides(rm, cur.x + kx, cur.y + ky)) {
+            cur.m = rm;
+            cur.x += kx;
+            cur.y += ky;
+            if (grounded && lockResets < LOCK_RESETS) {
+              lockTimer = 0;
+              lockResets++;
+            }
+            A.Sfx.play('hit');
+            return;
+          }
+        }
+      }
+      function hardDrop() {
+        if (!cur) return;
+        const gy = ghostY();
+        score += (gy - cur.y) * 2;
+        cur.y = gy;
+        lockPiece();
+        syncHud();
+      }
+      function lockPiece() {
+        for (let r = 0; r < cur.m.length; r++) {
+          for (let c = 0; c < cur.m.length; c++) {
+            if (cur.m[r][c]) {
+              const by = cur.y + r;
+              const bx = cur.x + c;
+              if (by >= 0) board[by][bx] = cur.color;
+            }
+          }
+        }
+        /* 找满行 */
+        const full = [];
+        for (let r = 0; r < ROWS; r++) {
+          if (board[r].every((v) => v)) full.push(r);
+        }
+        if (full.length) {
+          clearing = { rows: full, timer: 0.22 };
+          state = 'clearing';
+          A.Sfx.play(full.length >= 4 ? 'perfect' : 'land');
+        } else {
+          A.Sfx.play('land');
+          cur = null;
+          spawn();
+        }
+      }
+      function applyClear() {
+        const n = clearing.rows.length;
+        clearing.rows
+          .slice()
+          .sort((a, b) => a - b)
+          .forEach((r) => {
+            board.splice(r, 1);
+            board.unshift(new Array(COLS).fill(null));
+          });
+        score += [0, 100, 300, 500, 800][n] * level;
+        lines += n;
+        levelUp();
+        syncHud();
+        clearing = null;
+        cur = null;
+        state = 'playing';
+        spawn();
+      }
+
+      /* ---------- 更新 ---------- */
+      function touchZones() {
+        const p = input.pointer;
+        const down = p.down;
+        return {
+          left: down && p.x < 140 && p.y < 555,
+          right: down && p.x > 280 && p.y < 555,
+          soft: down && p.y >= 555,
+          rotateTap: p.wentDown && p.x >= 140 && p.x <= 280 && p.y < 555,
+        };
+      }
+
+      function update(dt) {
+        if (state === 'clearing') {
+          clearing.timer -= dt;
+          if (clearing.timer <= 0) applyClear();
+          input.endFrame();
+          return;
+        }
+        if (state !== 'playing') {
+          input.endFrame();
+          return;
+        }
+
+        const tz = touchZones();
+        const leftHeld = input.isDown('ArrowLeft', 'a') || tz.left;
+        const rightHeld = input.isDown('ArrowRight', 'd') || tz.right;
+        softHeld = input.isDown('ArrowDown', 's') || tz.soft;
+
+        /* DAS 横移 */
+        let dir = 0;
+        if (leftHeld && !rightHeld) dir = -1;
+        else if (rightHeld && !leftHeld) dir = 1;
+        if (dir !== 0) {
+          if (dir !== dasDir) {
+            dasDir = dir;
+            dasTimer = 0;
+            arrTimer = 0;
+            tryMove(dir);
+          } else {
+            dasTimer += dt;
+            if (dasTimer >= DAS) {
+              arrTimer += dt;
+              while (arrTimer >= ARR) {
+                arrTimer -= ARR;
+                tryMove(dir);
+              }
+            }
+          }
+        } else {
+          dasDir = 0;
+        }
+
+        /* 旋转（键盘 ↑ + 触摸中列点按） */
+        const upNow = input.isDown('ArrowUp', 'w');
+        if ((upNow && !upWasDown) || tz.rotateTap) tryRotate();
+        upWasDown = upNow;
+
+        /* 硬降（空格边沿） */
+        const spaceNow = input.isDown(' ');
+        if (spaceNow && !spaceWasDown) hardDrop();
+        spaceWasDown = spaceNow;
+        if (state !== 'playing') {
+          input.endFrame();
+          return;
+        }
+
+        /* 重力 + 软降 */
+        const interval = softHeld ? 0.04 : gravSec();
+        dropTimer += dt;
+        while (dropTimer >= interval) {
+          dropTimer -= interval;
+          if (!collides(cur.m, cur.x, cur.y + 1)) {
+            cur.y++;
+            if (softHeld) {
+              score += 1;
+              syncHud();
+            }
+            grounded = false;
+          } else {
+            break;
+          }
+        }
+
+        /* 着地与锁定延迟 */
+        grounded = collides(cur.m, cur.x, cur.y + 1);
+        if (grounded) {
+          lockTimer += dt;
+          if (lockTimer >= LOCK_DELAY) lockPiece();
+        } else {
+          lockTimer = 0;
+        }
+        input.endFrame();
+      }
+
+      /* ---------- 渲染 ---------- */
+      function drawCell(x, y, color, size) {
+        const s = size || CELL;
+        ctx.fillStyle = color;
+        ctx.fillRect(x + 1, y + 1, s - 2, s - 2);
+        ctx.fillStyle = 'rgba(255,255,255,0.28)';
+        ctx.fillRect(x + 1, y + 1, s - 2, 3);
+        ctx.fillRect(x + 1, y + 1, 3, s - 2);
+        ctx.fillStyle = 'rgba(0,0,0,0.28)';
+        ctx.fillRect(x + 1, y + s - 4, s - 2, 3);
+        ctx.fillRect(x + s - 4, y + 1, 3, s - 2);
+      }
+
+      function drawMini(m, color, cx, cy, size) {
+        /* 居中画 4 格预览 */
+        let minR = 9;
+        let maxR = -1;
+        let minC = 9;
+        let maxC = -1;
+        m.forEach((row, r) =>
+          row.forEach((v, c) => {
+            if (v) {
+              minR = Math.min(minR, r);
+              maxR = Math.max(maxR, r);
+              minC = Math.min(minC, c);
+              maxC = Math.max(maxC, c);
+            }
+          })
+        );
+        const w = (maxC - minC + 1) * size;
+        const h = (maxR - minR + 1) * size;
+        const ox = cx - w / 2;
+        const oy = cy - h / 2;
+        m.forEach((row, r) =>
+          row.forEach((v, c) => {
+            if (v) drawCell(ox + (c - minC) * size, oy + (r - minR) * size, color, size);
+          })
+        );
+      }
+
+      function render() {
+        stage.beginFrame();
+        const bg = ctx.createLinearGradient(0, 0, 0, H);
+        bg.addColorStop(0, '#0e0a24');
+        bg.addColorStop(1, '#181243');
+        ctx.fillStyle = bg;
+        ctx.fillRect(0, 0, W, H);
+
+        /* 井背景与网格 */
+        ctx.fillStyle = '#0a0819';
+        ctx.fillRect(WELL_X, WELL_Y, COLS * CELL, ROWS * CELL);
+        ctx.strokeStyle = 'rgba(124,92,255,0.14)';
+        ctx.lineWidth = 1;
+        for (let c = 1; c < COLS; c++) {
+          ctx.beginPath();
+          ctx.moveTo(WELL_X + c * CELL + 0.5, WELL_Y);
+          ctx.lineTo(WELL_X + c * CELL + 0.5, WELL_Y + ROWS * CELL);
+          ctx.stroke();
+        }
+        for (let r = 1; r < ROWS; r++) {
+          ctx.beginPath();
+          ctx.moveTo(WELL_X, WELL_Y + r * CELL + 0.5);
+          ctx.lineTo(WELL_X + COLS * CELL, WELL_Y + r * CELL + 0.5);
+          ctx.stroke();
+        }
+
+        /* 已锁定块（含消行闪白） */
+        const flashRows = clearing ? clearing.rows : [];
+        for (let r = 0; r < ROWS; r++) {
+          for (let c = 0; c < COLS; c++) {
+            const v = board[r][c];
+            if (!v) continue;
+            const x = WELL_X + c * CELL;
+            const y = WELL_Y + r * CELL;
+            if (flashRows.includes(r) && Math.floor(clearing.timer * 20) % 2 === 0) {
+              ctx.fillStyle = '#ffffff';
+              ctx.fillRect(x + 1, y + 1, CELL - 2, CELL - 2);
+            } else {
+              drawCell(x, y, v);
+            }
+          }
+        }
+
+        /* 幽灵块 + 当前方块 */
+        if (cur && (state === 'playing' || state === 'paused')) {
+          const gy = ghostY();
+          cur.m.forEach((row, r) =>
+            row.forEach((v, c) => {
+              if (!v) return;
+              const gx = WELL_X + (cur.x + c) * CELL;
+              const gyy = WELL_Y + (gy + r) * CELL;
+              if (gyy >= WELL_Y) {
+                ctx.strokeStyle = 'rgba(238,241,255,0.28)';
+                ctx.lineWidth = 1.5;
+                ctx.strokeRect(gx + 2.5, gyy + 2.5, CELL - 5, CELL - 5);
+              }
+            })
+          );
+          cur.m.forEach((row, r) =>
+            row.forEach((v, c) => {
+              if (!v) return;
+              const y = WELL_Y + (cur.y + r) * CELL;
+              if (y >= WELL_Y) drawCell(WELL_X + (cur.x + c) * CELL, y, cur.color);
+            })
+          );
+        }
+
+        /* 井边框 */
+        ctx.strokeStyle = '#4a3f8f';
+        ctx.lineWidth = 2;
+        ctx.strokeRect(WELL_X - 1, WELL_Y - 1, COLS * CELL + 2, ROWS * CELL + 2);
+
+        /* 右侧信息栏 */
+        const px = 292;
+        ctx.fillStyle = 'rgba(124,92,255,0.10)';
+        A.draw.roundRect(ctx, px, WELL_Y, 100, 118, 10);
+        ctx.fill();
+        A.draw.label(ctx, 'NEXT', px + 50, WELL_Y + 20, { font: 'bold 12px system-ui', color: '#93a0c8' });
+        if (nextKey) drawMini(PIECES[nextKey].m, PIECES[nextKey].color, px + 50, WELL_Y + 68, 18);
+
+        const infoY = WELL_Y + 142;
+        ctx.fillStyle = 'rgba(124,92,255,0.10)';
+        A.draw.roundRect(ctx, px, infoY, 100, 168, 10);
+        ctx.fill();
+        A.draw.label(ctx, '分数', px + 50, infoY + 22, { font: '12px system-ui', color: '#93a0c8' });
+        A.draw.label(ctx, String(score), px + 50, infoY + 48, { font: 'bold 20px system-ui', color: '#ffd23f' });
+        A.draw.label(ctx, '行数', px + 50, infoY + 80, { font: '12px system-ui', color: '#93a0c8' });
+        A.draw.label(ctx, String(lines), px + 50, infoY + 102, { font: 'bold 16px system-ui', color: '#eef1ff' });
+        A.draw.label(ctx, '等级', px + 50, infoY + 130, { font: '12px system-ui', color: '#93a0c8' });
+        A.draw.label(ctx, 'Lv.' + level, px + 50, infoY + 152, { font: 'bold 16px system-ui', color: '#7c5cff' });
+
+        /* 井顶标题 */
+        A.draw.label(ctx, 'BLOCK DROP', W / 2, 70, {
+          font: 'bold 22px system-ui',
+          color: 'rgba(238,241,255,0.2)',
+        });
+        /* 触摸软降区提示（仅触摸指针不可判断，统一画淡提示） */
+        if (state === 'playing') {
+          ctx.fillStyle = 'rgba(124,92,255,0.06)';
+          ctx.fillRect(0, 555, W, H - 555);
+          A.draw.label(ctx, '按住此区 = 软降', W / 2, 690, { font: '10px system-ui', color: 'rgba(147,160,200,0.4)' });
+        }
+      }
+
+      /* ---------- 输入与循环 ---------- */
+      window.addEventListener('keydown', (e) => {
+        if (e.key === 'p' || e.key === 'P' || e.key === 'Escape') {
+          if (state === 'playing') pauseByUser();
+        }
+      });
+
+      const loop = A.createLoop({
+        update,
+        render,
+        onAutoPause() {
+          if (state === 'playing') pauseByUser();
+        },
+      });
+
+      function syncMute() {
+        dom.mute.textContent = A.Sfx.muted ? '🔇' : '🔊';
+      }
+      dom.mute.addEventListener('click', () => {
+        A.Sfx.setMuted(!A.Sfx.muted);
+        syncMute();
+      });
+      syncMute();
+
+      reset();
+      state = 'ready';
+      showOverlay('俄罗斯方块', '经典落块消除：凑满一行即消除。<br/>一次消 4 行（Tetris）得分 ×8', '开始游戏', startGame);
+      loop.start();
+    })();
+  </script>
+</body>
+</html>

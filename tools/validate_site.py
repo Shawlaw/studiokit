@@ -17,6 +17,8 @@ REQUIRED = [
     'apps/arcade/engine.js', 'apps/arcade/arcade.css',
     'apps/arcade/games/star-raid.html', 'apps/arcade/games/shadow-leap.html',
     'apps/arcade/games/pendulum-tower.html', 'apps/arcade/games/snowbells.html',
+    'apps/arcade/games/block-drop.html', 'apps/arcade/games/road-rush.html',
+    'apps/arcade/games/gold-miner.html',
     'templates/single-page-tool/index.html', 'tools/build_site.py', 'tools/new_tool.py'
 ]
 
