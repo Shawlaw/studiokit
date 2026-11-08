@@ -100,18 +100,26 @@ body.arcade-body {
 }
 .ac-icon-btn:hover { border-color: var(--ac-accent); }
 
-/* 竖屏舞台：高度优先，宽度按 420/740 比例推导，永不变形 */
+/* 竖屏舞台：高度由视口与最大宽度共同约束（不依赖父级高度，避免循环依赖），比例永不破坏 */
 .stage-wrap {
   flex: 1 1 auto;
   min-height: 0;
   width: 100%;
   display: flex;
   justify-content: center;
-  align-items: center;
+  align-items: flex-start;
 }
 .stage-box {
   position: relative;
-  height: min(100%, calc(min(520px, 100vw - 24px) * 740 / 420));
+  height: min(
+    calc(100vh - var(--studiokit-shellbar-h, 0px) - 160px),
+    calc(min(520px, 100vw - 24px) * 740 / 420)
+  );
+  /* 支持 dvh 的浏览器用动态视口高度覆盖（移动端地址栏收放更准确） */
+  height: min(
+    calc(100dvh - var(--studiokit-shellbar-h, 0px) - 160px),
+    calc(min(520px, 100vw - 24px) * 740 / 420)
+  );
   aspect-ratio: 420 / 740;
   border-radius: 14px;
   overflow: hidden;

@@ -22,8 +22,12 @@ REQUIRED = [
 
 class RefParser(HTMLParser):
     def __init__(self):
-        super().__init__(); self.refs = []; self.external_assets = []
+        super().__init__(); self.refs = []; self.external_assets = []; self.bad_attrs = []
     def handle_starttag(self, tag, attrs):
+        for name, _ in attrs:
+            # 属性名中出现引号（如 data-ov-text" 的笔误）会让 querySelector 静默失配，页面 JS 挂掉
+            if '"' in name or "'" in name:
+                self.bad_attrs.append(f'<{tag}> {name}')
         attrs = dict(attrs)
         for key in ('href', 'src'):
             value = attrs.get(key)
@@ -66,6 +70,8 @@ def check_html(path, root):
             ok = fail(f'{rel}: missing local reference {ref} -> {target.relative_to(root.resolve())}') and ok
     for ref in parser.external_assets:
         ok = fail(f'{rel}: external runtime asset is not allowed by default: {ref}') and ok
+    for bad in parser.bad_attrs:
+        ok = fail(f'{rel}: malformed attribute name (stray quote): {bad}') and ok
     return ok
 
 
