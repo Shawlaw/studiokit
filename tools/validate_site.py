@@ -13,6 +13,10 @@ REQUIRED = [
     'index.html', '.nojekyll', 'favicon.svg',
     'shared/site.css', 'shared/home.js', 'shared/site-shell.js', 'shared/tool-registry.json',
     'apps/badge-studio/index.html', 'apps/badge-studio/README.md', 'apps/badge-studio/CHANGELOG.md',
+    'apps/arcade/index.html', 'apps/arcade/README.md', 'apps/arcade/CHANGELOG.md',
+    'apps/arcade/engine.js', 'apps/arcade/arcade.css',
+    'apps/arcade/games/star-raid.html', 'apps/arcade/games/shadow-leap.html',
+    'apps/arcade/games/pendulum-tower.html', 'apps/arcade/games/snowbells.html',
     'templates/single-page-tool/index.html', 'tools/build_site.py', 'tools/new_tool.py'
 ]
 
@@ -107,7 +111,7 @@ def validate(root=ROOT):
 
     html_files = [root / 'index.html']
     apps = root / 'apps'
-    if apps.exists(): html_files += sorted(apps.glob('*/index.html'))
+    if apps.exists(): html_files += sorted(apps.glob('**/*.html'))
     for path in html_files:
         if path.exists(): ok = check_html(path, root) and ok
 
