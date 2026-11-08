@@ -28,6 +28,21 @@
         "图片",
         "导出"
       ]
+    },
+    {
+      "id": "arcade",
+      "name": "街机厅 Arcade",
+      "subtitle": "竖屏街机小游戏合集",
+      "description": "纵版射击、忍跳、叠塔、跳铃铛等竖屏街机小游戏，本地即开即玩，自带轻量物理引擎。",
+      "version": "0.1.0",
+      "status": "draft",
+      "href": "./apps/arcade/",
+      "icon": "🕹",
+      "tags": [
+        "游戏",
+        "物理",
+        "离线"
+      ]
     }
   ]
 }
