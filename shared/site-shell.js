@@ -10,7 +10,9 @@
 
   const home = document.createElement('a');
   home.className = 'studiokit-shell-home';
-  home.href = '../../index.html';
+  // 从脚本自身 URL 推导站点根，兼容任意深度的工具子页面（如 apps/<id>/games/*.html）。
+  const scriptUrl = document.currentScript && document.currentScript.src;
+  home.href = scriptUrl ? new URL('../../index.html', scriptUrl).href : '../../index.html';
   home.textContent = 'StudioKit';
 
   const separator = document.createElement('span');
