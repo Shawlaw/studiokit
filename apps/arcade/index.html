@@ -3,30 +3,211 @@
 <head>
   <meta charset="utf-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1" />
-  <meta name="description" content="竖屏街机小游戏合集：本地即开即玩，自带轻量物理引擎。" />
-  <meta name="theme-color" content="#ffffff" />
+  <meta name="description" content="街机厅 Arcade：纵版射击、忍跳、叠塔、跳铃铛等竖屏街机小游戏合集，本地即开即玩，自带轻量物理引擎。" />
+  <meta name="theme-color" content="#0b1020" />
   <link rel="stylesheet" href="../../shared/site.css" />
+  <link rel="stylesheet" href="./arcade.css" />
   <script src="../../shared/site-shell.js" defer></script>
+  <script src="./engine.js"></script>
   <title>街机厅 Arcade · StudioKit</title>
-  <style>
-    :root { color-scheme: light; }
-    * { box-sizing: border-box; }
-    body { margin: 0; color: #1d2940; background: #f4f6fb; font-family: system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif; }
-    .tool-page { width: min(980px, calc(100% - 32px)); margin: 36px auto; }
-    .tool-panel { padding: 24px; border: 1px solid #e1e5ed; border-radius: 16px; background: #fff; box-shadow: 0 8px 24px rgba(20,28,45,.05); }
-    .tool-panel h1 { margin: 0 0 8px; font-size: 24px; }
-    .tool-panel p { color: #68758b; line-height: 1.7; }
-    .placeholder { margin-top: 20px; padding: 24px; border: 1px dashed #cbd5e3; border-radius: 12px; color: #718096; text-align: center; }
-  </style>
 </head>
-<body data-studiokit-app="arcade" data-studiokit-app-title="街机厅 Arcade">
-  <main class="tool-page">
-    <section class="tool-panel">
-      <p>STUDIOKIT TOOL · v0.1.0</p>
-      <h1>街机厅 Arcade</h1>
-      <p>竖屏街机小游戏合集：本地即开即玩，自带轻量物理引擎。</p>
-      <div class="placeholder">工具页面骨架已创建。请在这里实现独立的工具 UI 与业务逻辑，再将注册表状态改为 available。</div>
+<body class="arcade-body" data-studiokit-app="arcade" data-studiokit-app-title="街机厅 Arcade">
+  <noscript><p class="ac-noscript">街机厅的游戏需要启用 JavaScript 才能运行。</p></noscript>
+  <main class="hall-page">
+    <header class="hall-head">
+      <div>
+        <h1>🕹 街机厅 Arcade</h1>
+        <p class="hall-sub">竖屏街机小游戏合集 · 本地即开即玩 · 自研轻量物理引擎 · v<span data-hall-version>0.1.0</span></p>
+      </div>
+      <div class="hall-stats">
+        <span>累计游玩 <strong data-stat-plays>0</strong> 局</span>
+        <span>游戏 <strong data-stat-games>0</strong> 款</span>
+      </div>
+    </header>
+
+    <section class="hall-grid" data-hall-grid aria-label="游戏列表"></section>
+
+    <section class="hall-manage" aria-label="进度管理">
+      <h2>进度管理</h2>
+      <p class="hall-manage-note" data-manage-note>最高分与游玩记录只保存在此浏览器的 localStorage 中，不会上传任何服务器。</p>
+      <button type="button" class="ac-btn-ghost" data-export>导出备份（JSON）</button>
+      <button type="button" class="ac-btn-ghost" data-import-btn>导入备份</button>
+      <input type="file" accept=".json,application/json" data-import-file hidden />
+      <button type="button" class="ac-btn-ghost ac-danger" data-reset-all>清除全部记录</button>
     </section>
+
+    <footer class="hall-foot">
+      <p>操作方式：桌面用键盘（方向键 / A D / 空格 / P 暂停），手机直接触摸或拖动。音效由 WebAudio 实时合成，可在每个游戏页右上角静音。</p>
+      <p>物理效果（重力、碰撞、单摆、塔体倾斜）由 apps/arcade/engine.js 自研实现，无任何外部依赖或网络请求。</p>
+    </footer>
   </main>
+  <script>
+    (() => {
+      'use strict';
+      const A = window.Arcade;
+
+      const dom = {
+        grid: document.querySelector('[data-hall-grid]'),
+        version: document.querySelector('[data-hall-version]'),
+        statPlays: document.querySelector('[data-stat-plays]'),
+        statGames: document.querySelector('[data-stat-games]'),
+        manageNote: document.querySelector('[data-manage-note]'),
+        exportBtn: document.querySelector('[data-export]'),
+        importBtn: document.querySelector('[data-import-btn]'),
+        importFile: document.querySelector('[data-import-file]'),
+        resetAll: document.querySelector('[data-reset-all]'),
+      };
+
+      let noteTimer = 0;
+
+      function relTime(iso) {
+        if (!iso) return '未游玩';
+        const t = new Date(iso).getTime();
+        if (Number.isNaN(t)) return '未游玩';
+        const diff = Date.now() - t;
+        if (diff < 60 * 1000) return '刚刚';
+        if (diff < 60 * 60 * 1000) return Math.floor(diff / 60000) + ' 分钟前';
+        if (diff < 24 * 60 * 60 * 1000) return Math.floor(diff / 3600000) + ' 小时前';
+        if (diff < 7 * 24 * 60 * 60 * 1000) return Math.floor(diff / 86400000) + ' 天前';
+        const d = new Date(t);
+        return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
+      }
+
+      function note(text, sticky) {
+        dom.manageNote.textContent = text;
+        clearTimeout(noteTimer);
+        if (!sticky) {
+          noteTimer = setTimeout(() => {
+            dom.manageNote.textContent = '最高分与游玩记录只保存在此浏览器的 localStorage 中，不会上传任何服务器。';
+          }, 3200);
+        }
+      }
+
+      function render() {
+        const progress = A.Progress.load();
+        let totalPlays = 0;
+        dom.version.textContent = A.version;
+        dom.statGames.textContent = String(A.GAMES.length);
+
+        dom.grid.innerHTML = '';
+        A.GAMES.forEach((g) => {
+          const rec = progress.games[g.id] || { high: 0, plays: 0, lastAt: null };
+          totalPlays += Number(rec.plays) || 0;
+
+          const card = document.createElement('article');
+          card.className = 'hall-card';
+          card.style.setProperty('--card-accent', g.accent);
+
+          const link = document.createElement('a');
+          link.className = 'hall-card-link';
+          link.href = './games/' + g.file;
+          link.setAttribute('aria-label', '打开游戏：' + g.name);
+          card.appendChild(link);
+
+          const top = document.createElement('div');
+          top.className = 'hall-card-top';
+          const icon = document.createElement('span');
+          icon.className = 'hall-icon';
+          icon.textContent = g.icon;
+          const titleBox = document.createElement('div');
+          const h2 = document.createElement('h2');
+          h2.textContent = g.name;
+          const tagline = document.createElement('div');
+          tagline.className = 'hall-tagline';
+          tagline.textContent = g.tagline + ' · ' + g.how;
+          titleBox.append(h2, tagline);
+          top.append(icon, titleBox);
+          card.appendChild(top);
+
+          const tags = document.createElement('div');
+          tags.className = 'hall-tags';
+          g.tags.forEach((t) => {
+            const tag = document.createElement('span');
+            tag.className = 'hall-tag';
+            tag.textContent = t;
+            tags.appendChild(tag);
+          });
+          card.appendChild(tags);
+
+          const meta = document.createElement('div');
+          meta.className = 'hall-meta';
+          const high = document.createElement('span');
+          high.className = 'hall-high';
+          high.innerHTML = '最高 <strong></strong>';
+          high.querySelector('strong').textContent = String(rec.high);
+          const last = document.createElement('span');
+          last.textContent = `${rec.plays} 局 · ${relTime(rec.lastAt)}`;
+          meta.append(high, last);
+          card.appendChild(meta);
+
+          const clear = document.createElement('button');
+          clear.type = 'button';
+          clear.className = 'hall-card-clear';
+          clear.textContent = '✕';
+          clear.title = '清除此游戏记录';
+          clear.setAttribute('aria-label', '清除此游戏记录：' + g.name);
+          clear.addEventListener('click', () => {
+            if (window.confirm(`清除「${g.name}」的最高分与游玩记录？此操作不可恢复。`)) {
+              A.Progress.resetGame(g.id);
+              A.Sfx.play('ui');
+              note(`已清除「${g.name}」的记录。`);
+              render();
+            }
+          });
+          card.appendChild(clear);
+
+          dom.grid.appendChild(card);
+        });
+
+        dom.statPlays.textContent = String(totalPlays);
+      }
+
+      /* 导出备份 */
+      dom.exportBtn.addEventListener('click', () => {
+        const text = A.Progress.exportText();
+        const blob = new Blob([text], { type: 'application/json' });
+        const url = URL.createObjectURL(blob);
+        const a = document.createElement('a');
+        a.href = url;
+        a.download = 'studiokit-arcade-progress.json';
+        document.body.appendChild(a);
+        a.click();
+        a.remove();
+        setTimeout(() => URL.revokeObjectURL(url), 2000);
+        note('已导出备份文件（studiokit-arcade-progress.json）。');
+      });
+
+      /* 导入备份 */
+      dom.importBtn.addEventListener('click', () => dom.importFile.click());
+      dom.importFile.addEventListener('change', () => {
+        const file = dom.importFile.files && dom.importFile.files[0];
+        dom.importFile.value = '';
+        if (!file) return;
+        const reader = new FileReader();
+        reader.onload = () => {
+          const result = A.Progress.importText(String(reader.result));
+          if (result.ok) {
+            note(`导入成功，恢复了 ${result.count} 款游戏的记录。`);
+            render();
+          } else {
+            note(`导入失败：${result.reason}`, true);
+          }
+        };
+        reader.onerror = () => note('导入失败：文件读取出错。', true);
+        reader.readAsText(file);
+      });
+
+      /* 清除全部 */
+      dom.resetAll.addEventListener('click', () => {
+        if (window.confirm('清除全部游戏的最高分与游玩记录？此操作不可恢复。')) {
+          A.Progress.resetAll();
+          note('已清除全部记录。');
+          render();
+        }
+      });
+
+      render();
+    })();
+  </script>
 </body>
 </html>
