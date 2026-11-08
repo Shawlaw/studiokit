@@ -14,6 +14,7 @@
 | T008 | agent | 小写 URL /studiokit 可访问（仓库改名） | DONE | T005 | 仓库改名 Shawlaw/StudioKit→studiokit；https://shawlaw.github.io/studiokit 301→200；浏览器级验证通过；旧混合大小写 URL 不被 Pages 重定向（已记录，无外部链接影响） |
 | T009 | agent | 门户去冗余文案（let UI speak for itself） | DONE | T008 | 提交 `65e63b8`；hero/关于/导航/英文标语移除，页脚压缩为单行；run `41265543819` 成功；线上复测零冗余零溢出零 404 |
 | T010 | agent | 街机厅 Arcade：竖屏物理小游戏合集 | DONE | T009 | 本地分支 `feat/arcade-hall` 9 提交；中心页 + engine.js + 4 游戏（星海突击/影跃/层塔/雪铃）+ 自研物理与合成音效；registry `draft` v0.1.0 待 Owner 验收；validate/build/node 全过；浏览器实测可玩与窄屏通过；仅本地未推送 |
+| T011 | agent | 街机厅增补 GBA 经典三连 + 移动端触控适配 | DONE | T010 | 俄罗斯方块/极速车道/黄金矿工接入，升版 0.2.0；全部游戏 PC+触摸双输入、viewport/滚动/选中触控加固；8 页面 375px 无溢出；浏览器实测三游戏（128 分/287m/$865 超标）通过 |
 
 ## 任务命令
 

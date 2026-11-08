@@ -190,6 +190,26 @@
       "claimedAt": "2026-11-08T15:00:00+00:00",
       "completedAt": "2026-11-08T15:45:00+00:00",
       "evidence": "Owner 口头需求（街机小游戏子页面）；9 个本地提交于 feat/arcade-hall；validate PASS + build PASS（dist 白名单含 apps 整目录）+ node --check engine.js/site-shell.js/home.js OK；引擎冒烟单测（recordPlay 高分/导入导出、oneWayLanding、pendulumStep）通过；IAB 浏览器实测：中心页 4 卡片渲染、星海突击自动开火得 30 分 + P 暂停 + blur 自动暂停、层塔空格放箱 miss → 地基失守 → progress key 写入 plays:1、影跃键盘移动 → 坠落结束、雪铃铃铛/兔子/浮台渲染正常、雪铃页『返回街机厅』导航闭环、中心页累计 2 局与相对时间显示、清除层塔记录后 2→1 局、375px 中心页单列无溢出且游戏页舞台 296x522 比例正确；测试中发现并修复 2 个缺陷（stage-box 高度百分比循环依赖致画布撑满、pendulum-tower data-ov-text 属性多余引号致页面 JS 静默挂掉）并将引号检查固化进 validate_site.py；site-shell.js 返回链接改为按脚本 URL 推导（badge-studio 行为不变）；未浏览器验证项：文件导入（IAB 不支持文件选择）、音频（自动化环境不可听）、导出下载落盘——已注明；registry 保持 draft 待 Owner 试玩验收后转 available"
+    },
+    {
+      "id": "T011",
+      "title": "街机厅增补 GBA 经典复刻三连：俄罗斯方块 / 极速车道 / 黄金矿工 + 移动端触控适配",
+      "kind": "agent",
+      "status": "DONE",
+      "dependsOn": [
+        "T010"
+      ],
+      "ownerAuthorizationRequired": false,
+      "acceptance": [
+        "三款新游戏（block-drop / road-rush / gold-miner）接入 engine.js GAMES 清单与中心页，工具升版 0.2.0（registry/engine/README/CHANGELOG 同步）",
+        "每款含开始/游玩/计分/结束/重开完整闭环，且 progress 写入 studiokit:arcade:progress:v1",
+        "所有游戏 PC 键盘与移动端触摸双输入可用；viewport 禁缩放、防下拉刷新/长按选中、canvas touch-action:none",
+        "全部 8 个页面 375px 窄屏无横向溢出、舞台比例正确",
+        "validate_site.py / build_site.py / node --check 全部通过（新游戏页纳入必备清单与全深度扫描）"
+      ],
+      "claimedAt": "2026-11-08T16:00:00+00:00",
+      "completedAt": "2026-11-08T16:40:00+00:00",
+      "evidence": "Owner 口头需求（GBA 经典复刻 + PC/移动双端可玩 + 验证后推送部署）；提交 044f97c（三游戏+清单+文档）与 681409d（移动端触控加固）；新增引号校验即刻抓到 road-rush data-ov-text 同类笔误并修复；浏览器实测：俄罗斯方块渲染（井/下落块/幽灵/NEXT/面板）+ 连续硬降 4 次 score 128；极速车道行驶 287m/167km/h、透视公路/红白路肩/落日远山/NPC 车渲染正常；黄金矿工随机节奏 10 钩 $865 超第 1 关目标（$650），矿工/钩爪/金块/钻石/石头/TNT/HUD 渲染正常——首测 0 分系固定间隔与单摆周期锁相致大摆角出钩全空，属测试方法问题非游戏缺陷；8 页面 375px 全扫描无溢出（舞台统一 296x522，中心页单列 336）；触摸输入说明：所有游戏触摸分区/拖动/半屏/点击放钩走 Pointer Events（与鼠标同源已验证），viewport 加 maximum-scale=1 + user-scalable=no + viewport-fit=cover，body 加 overscroll-behavior:contain + user-select:none + touch-action:manipulation"
     }
   ]
 }
