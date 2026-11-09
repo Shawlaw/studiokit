@@ -102,6 +102,18 @@
         const half = roadHalfAt(u);
         return CX + half * 2 * (k / LANES - 0.5);
       }
+      function nearestLane(x) {
+        let best = 1;
+        let bestDistance = Infinity;
+        for (let lane = 0; lane < LANES; lane++) {
+          const d = Math.abs(x - laneCenterX(lane, uOf(0)));
+          if (d < bestDistance) {
+            bestDistance = d;
+            best = lane;
+          }
+        }
+        return best;
+      }
 
       const player = { x: CX, lane: 1, vx: 0, tilt: 0, invul: 0 };
       let cars = [];
@@ -117,7 +129,7 @@
       let exhaustTimer = 0;
       let keyWasDown = {};
 
-      const high = A.Progress.get('road-rush').high;
+      let high = A.Progress.get('road-rush').high;
       dom.hudHigh.textContent = String(high);
 
       const CAR_COLORS = ['#e05656', '#4f7cff', '#3fbf7f', '#f2d13d', '#c06bff', '#ff9a3d'];
@@ -146,6 +158,7 @@
         dashOffset = 0;
         shake = 0;
         recordSaved = false;
+        keyWasDown = {};
         particles.clear();
         syncHud();
       }
@@ -189,7 +202,7 @@
         const finalDist = Math.floor(dist);
         let rec = null;
         if (!recordSaved) {
-          rec = A.Progress.recordPlay('road-rush', finalDist);
+          rec = A.Progress.recordPlay('road-rush', finalDist); if (rec) high = rec.high;
           recordSaved = true;
           dom.hudHigh.textContent = String(Math.max(high, finalDist));
         }
@@ -296,7 +309,7 @@
           dashOffset = Number(data.dashOffset) || 0;
           player.x = clamp(Number(data.player.x) || laneCenterX(1, uOf(0)), CX - 150, CX + 150);
           const savedLane = Number(data.player.lane);
-          player.lane = Number.isFinite(savedLane) ? clamp(Math.round(savedLane), 0, LANES - 1) : 1;
+          player.lane = Number.isFinite(savedLane) ? clamp(Math.round(savedLane), 0, LANES - 1) : nearestLane(player.x);
           player.vx = Number(data.player.vx) || 0;
           player.tilt = Number(data.player.tilt) || 0;
           player.invul = Number(data.player.invul) || 0;
@@ -336,10 +349,31 @@
         return out;
       }
 
+      /* 未来 2.4s 内，玩家当前/相邻车道必须始终留有一条可躲避车道。 */
+      function futureSafe(extra) {
+        const list = extra ? cars.concat(extra) : cars;
+        for (let t = 0; t <= 2.4; t += 0.1) {
+          const danger = [false, false, false, false];
+          for (const car of list) {
+            const z = car.z - ((speed - car.own) / 0.9) * t;
+            if (z > -0.08 && z < 0.5) danger[car.lane] = true;
+          }
+          let escape = false;
+          const from = Math.max(0, player.lane - 1);
+          const to = Math.min(LANES - 1, player.lane + 1);
+          for (let lane = from; lane <= to; lane++) {
+            if (!danger[lane]) escape = true;
+          }
+          if (!escape) return false;
+        }
+        return true;
+      }
+
       function spawnCar() {
         if (cars.length >= 18) return;
         for (let attempt = 0; attempt < 14; attempt++) {
           const lane = randInt(0, LANES - 1);
+          if (cars.some((c) => c.lane === lane && c.z > 0.9)) continue;
           const kindIdx = speed > 0.55 && Math.random() > 0.85 ? 2 : randInt(0, 1);
           const k = CAR_KINDS[kindIdx];
           const candidate = {
@@ -355,7 +389,7 @@
           const safe = safeLaneList(candidate);
           /* 保留一条玩家在 1.2 秒内（最多两车道）能到达的安全走廊。 */
           const reachable = safe.some((l) => Math.abs(l - player.lane) <= 2);
-          if (reachable) {
+          if (reachable && futureSafe(candidate)) {
             cars.push(candidate);
             return;
           }
@@ -733,12 +767,14 @@
           },
           stressSpawn(count) {
             let violations = 0;
+            let spawned = 0;
             for (let i = 0; i < (count || 100); i++) {
+              const before = cars.length;
               spawnCar();
-              const safe = safeLaneList();
-              if (!safe.some((l) => Math.abs(l - player.lane) <= 2)) violations += 1;
+              if (cars.length > before) spawned += 1;
+              if (!futureSafe(null)) violations += 1;
             }
-            return { violations, cars: cars.length, safe: safeLaneList() };
+            return { violations, spawned, cars: cars.length, safe: safeLaneList() };
           },
         };
       }

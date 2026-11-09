@@ -11,7 +11,7 @@
   <script src="../engine.js"></script>
   <title>黄金矿工 · 街机厅 · StudioKit</title>
 </head>
-<body class="arcade-body has-extra-controls" data-studiokit-app="arcade" data-studiokit-app-title="街机厅 Arcade" style="--ac-accent:#f5c542; --card-accent:#f5c542">
+<body class="arcade-body has-subhud" data-studiokit-app="arcade" data-studiokit-app-title="街机厅 Arcade" style="--ac-accent:#f5c542; --card-accent:#f5c542">
   <noscript><p class="ac-noscript">此游戏需要启用 JavaScript 才能运行。</p></noscript>
   <main class="game-page">
     <header class="game-topbar">
@@ -24,6 +24,11 @@
       <button type="button" class="ac-icon-btn" data-pause aria-label="暂停游戏" title="暂停游戏（P / Esc）">⏸</button>
       <button type="button" class="ac-icon-btn" data-mute aria-label="切换音效">🔊</button>
     </header>
+    <div class="game-subhud" aria-live="polite">
+      <span>目标 <strong data-hud-target>650</strong></span>
+      <span>第 <strong data-hud-level>1</strong> 关</span>
+      <span>剩余 <strong data-hud-time>60</strong>s</span>
+    </div>
     <div class="stage-wrap">
       <div class="stage-box">
         <canvas class="game-canvas" aria-label="黄金矿工游戏画面"></canvas>
@@ -75,6 +80,9 @@
         ovBtn2: document.querySelector('[data-ov-btn2]'),
         hudScore: document.querySelector('[data-hud-score]'),
         hudHigh: document.querySelector('[data-hud-high]'),
+        hudTarget: document.querySelector('[data-hud-target]'),
+        hudLevel: document.querySelector('[data-hud-level]'),
+        hudTime: document.querySelector('[data-hud-time]'),
         pause: document.querySelector('[data-pause]'),
         mute: document.querySelector('[data-mute]'),
         cashout: document.querySelector('[data-cashout]'),
@@ -99,6 +107,7 @@
       let holding = null;
       let money = 0;
       let level = 1;
+      let levelStartMoney = 0;
       let target = 650;
       let timeLeft = 60;
       let floaters = [];
@@ -108,7 +117,7 @@
       let spaceWasDown = false;
       let clawOpen = 0;
 
-      const high = A.Progress.get('gold-miner').high;
+      let high = A.Progress.get('gold-miner').high;
       dom.hudHigh.textContent = String(high);
 
       /* 每关有独立目标、时长、物品池、危险物与摆速；前 5 关机制不同。 */
@@ -169,6 +178,9 @@
         for (let tries = 0; tries < 70; tries++) {
           const x = rand(30 + t.r, W - 30 - t.r);
           const y = rand(215 + t.r, H - 24 - t.r);
+          /* 只放在摆钩实际可达的角度锥内，避免“看得到够不着”。 */
+          const angle = Math.abs(Math.atan2(x - PIVOT.x, y - PIVOT.y));
+          if (angle > 0.9) continue;
           const ok = items.every((o) => Math.hypot(o.x - x, o.y - y) > o.r + t.r + 14);
           if (ok) {
             items.push({ type, x, y, r: t.r, value: t.value, weight: t.weight, wob: rand(0, TAU) });
@@ -186,12 +198,13 @@
           for (let n = 0; n < spec.pool[type]; n++) placeItem(type);
         });
 
-        /* 可行性保底：已放置物品价值必须明显高于目标，避免“目标不可达”。 */
+        /* 可行性保底：本关物品价值必须明显高于本关目标，避免“目标不可达”。 */
+        const levelTarget = levelSpec(level).target;
         let guard = 0;
-        while (totalItemValue() < target * 1.25 && guard++ < 10) {
+        while (totalItemValue() < levelTarget * 1.25 && guard++ < 10) {
           placeItem(Math.random() < 0.55 ? 'goldL' : 'diamond');
         }
-        if (totalItemValue() < target * 1.25 || items.length < 4) {
+        if (totalItemValue() < levelTarget * 1.25 || items.length < 4) {
           const fallback = [
             ['diamond', PIVOT.x, 430],
             ['goldL', PIVOT.x - 120, 540],
@@ -200,7 +213,7 @@
           ];
           fallback.forEach(([type, x, y]) => {
             const t = TYPES[type];
-            if (!items.some((o) => Math.hypot(o.x - x, o.y - y) < 30)) {
+            if (!items.some((o) => Math.hypot(o.x - x, o.y - y) < o.r + t.r + 6)) {
               items.push({ type, x, y, r: t.r, value: t.value, weight: t.weight, wob: rand(0, TAU) });
             }
           });
@@ -210,12 +223,14 @@
       function reset() {
         money = 0;
         level = 1;
+        levelStartMoney = 0;
         target = targetFor(1);
         timeLeft = levelTime(1);
         floaters = [];
         recordSaved = false;
+        lastHudTime = -1;
         particles.clear();
-        pend.angle = rand(0.75, 0.95) * (Math.random() > 0.5 ? 1 : -1);
+        pend.angle = rand(0.92, 1.0) * (Math.random() > 0.5 ? 1 : -1);
         pend.vel = 0;
         pend.length = MIN_LEN;
         pend.gravity = swingGravity(1);
@@ -229,11 +244,22 @@
 
       function syncHud() {
         dom.hudScore.textContent = String(Math.floor(money));
+        dom.hudTarget.textContent = '$' + target;
+        dom.hudLevel.textContent = String(level);
+        syncTimerHud();
         syncCashout();
       }
 
+      let lastHudTime = -1;
+      function syncTimerHud() {
+        const shown = Math.ceil(Math.max(0, timeLeft));
+        if (shown === lastHudTime) return;
+        lastHudTime = shown;
+        dom.hudTime.textContent = String(shown);
+      }
+
       function syncCashout() {
-        dom.cashout.hidden = !(state === 'playing' && money >= target);
+        dom.cashout.hidden = !(state === 'playing' && clawState === 'swing' && money >= target);
       }
 
       function startGame() {
@@ -264,7 +290,7 @@
         const total = Math.floor(money);
         let rec = null;
         if (!recordSaved) {
-          rec = A.Progress.recordPlay('gold-miner', total);
+          rec = A.Progress.recordPlay('gold-miner', total); if (rec) high = rec.high;
           recordSaved = true;
           dom.hudHigh.textContent = String(Math.max(high, total));
         }
@@ -283,11 +309,12 @@
       }
 
       function nextLevel() {
+        levelStartMoney = money;
         level += 1;
-        target = targetFor(level);
+        target = levelStartMoney + levelSpec(level).target;
         timeLeft = levelTime(level);
         pend.gravity = swingGravity(level);
-        pend.angle = rand(0.75, 0.95) * (Math.random() > 0.5 ? 1 : -1);
+        pend.angle = rand(0.92, 1.0) * (Math.random() > 0.5 ? 1 : -1);
         pend.vel = 0;
         pend.length = MIN_LEN;
         clawState = 'swing';
@@ -301,7 +328,7 @@
       }
 
       function cashOut() {
-        if (state !== 'playing' || money < target) return;
+        if (state !== 'playing' || clawState !== 'swing' || money < target) return;
         const bonus = Math.floor(timeLeft * 4);
         money += bonus;
         floaters.push({
@@ -345,6 +372,7 @@
       function releaseClaw() {
         if (clawState !== 'swing') return;
         clawState = 'extend';
+        syncCashout();
         A.Sfx.play('jump');
       }
 
@@ -375,6 +403,7 @@
         });
         holding = null;
         clawState = 'retract';
+        syncCashout();
       }
 
       function cashIn() {
@@ -407,6 +436,7 @@
           holdingIndex: holding ? items.indexOf(holding) : -1,
           money,
           level,
+          levelStartMoney,
           target,
           timeLeft,
           pend: { angle: pend.angle, vel: pend.vel, length: pend.length, gravity: pend.gravity },
@@ -434,6 +464,9 @@
           money = Math.max(0, Number(data.money) || 0);
           level = Math.max(1, Number(data.level) || 1);
           target = Math.max(1, Number(data.target) || targetFor(level));
+          levelStartMoney = Number.isFinite(Number(data.levelStartMoney))
+            ? Math.max(0, Number(data.levelStartMoney))
+            : Math.max(0, target - levelSpec(level).target);
           timeLeft = clamp(Number(data.timeLeft) || levelTime(level), 0.1, levelTime(level));
           if (data.pend && isFinite(data.pend.angle)) {
             pend.angle = Number(data.pend.angle);
@@ -486,6 +519,7 @@
         }
         autosave.tick(dt);
         timeLeft -= dt;
+        syncTimerHud();
 
         if (clawState === 'swing') {
           A.Physics.pendulumStep(pend, dt);

@@ -90,7 +90,7 @@
       let lastPointer = { x: W / 2, y: H / 2 };
       let hitFlash = 0;
 
-      const high = A.Progress.get('mole-whack').high;
+      let high = A.Progress.get('mole-whack').high;
       dom.hudHigh.textContent = String(high);
 
       function difficulty() {
@@ -142,7 +142,7 @@
         A.Sfx.play('over');
         let rec = null;
         if (!recordSaved) {
-          rec = A.Progress.recordPlay('mole-whack', score);
+          rec = A.Progress.recordPlay('mole-whack', score); if (rec) high = rec.high;
           recordSaved = true;
           dom.hudHigh.textContent = String(Math.max(high, score));
         }

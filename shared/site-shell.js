@@ -10,9 +10,14 @@
 
   const home = document.createElement('a');
   home.className = 'studiokit-shell-home';
-  // 从脚本自身 URL 推导站点根，兼容任意深度的工具子页面（如 apps/<id>/games/*.html）。
+  // 脚本位于站点根下的 shared/，上升一级即站点根；兼容任意深度的工具子页面。
   const scriptUrl = document.currentScript && document.currentScript.src;
-  home.href = scriptUrl ? new URL('../../index.html', scriptUrl).href : '../../index.html';
+  function fallbackHome() {
+    const marker = location.pathname.indexOf('/apps/');
+    if (marker >= 0) return location.pathname.slice(0, marker + 1) + 'index.html';
+    return './index.html';
+  }
+  home.href = scriptUrl ? new URL('../index.html', scriptUrl).href : fallbackHome();
   home.textContent = 'StudioKit';
 
   const separator = document.createElement('span');

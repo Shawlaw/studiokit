@@ -106,7 +106,7 @@
       let spaceWasDown = false;
       let lastLevelConfig = null;
 
-      const high = A.Progress.get('brick-breaker').high;
+      let high = A.Progress.get('brick-breaker').high;
       dom.hudHigh.textContent = String(high);
 
       function levelConfig(lv) {
@@ -206,7 +206,7 @@
         A.Sfx.play(win ? 'perfect' : 'over');
         let rec = null;
         if (!recordSaved) {
-          rec = A.Progress.recordPlay('brick-breaker', score);
+          rec = A.Progress.recordPlay('brick-breaker', score); if (rec) high = rec.high;
           recordSaved = true;
           dom.hudHigh.textContent = String(Math.max(high, score));
         }

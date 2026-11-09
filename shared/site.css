@@ -48,7 +48,7 @@ a.tool-card:hover .tool-open-hint { opacity: 1; transform: translateX(0); }
 .sk-footer { padding: 22px 0 34px; border-top: 1px solid var(--sk-line); color: #8792a4; font-size: 11px; }
 .sk-footer-inner { display: flex; justify-content: space-between; gap: 16px; }
 
-.studiokit-shellbar { min-height: 38px; display: flex; align-items: center; gap: 9px; padding: 0 20px; border-bottom: 1px solid #e6eaf1; background: #f8f9fc; color: #738097; font: 12px/1.3 system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif; }
+.studiokit-shellbar { min-height: 38px; display: flex; align-items: center; gap: 9px; padding: env(safe-area-inset-top) max(20px, env(safe-area-inset-right)) 0 max(20px, env(safe-area-inset-left)); border-bottom: 1px solid #e6eaf1; background: #f8f9fc; color: #738097; font: 12px/1.3 system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif; }
 .studiokit-shell-home { color: #31568c !important; font-weight: 750; text-decoration: none; }
 .studiokit-shell-home:hover { text-decoration: underline; }
 .studiokit-shell-separator { color: #a8b1c0; }
@@ -63,7 +63,7 @@ a.tool-card:hover .tool-open-hint { opacity: 1; transform: translateX(0); }
   .tool-card { min-height: 220px; padding: 19px; }
   .sk-section-head { align-items: start; flex-direction: column; gap: 6px; }
   .sk-footer-inner { flex-direction: column; }
-  .studiokit-shellbar { padding: 0 12px; }
+  .studiokit-shellbar { padding: env(safe-area-inset-top) max(12px, env(safe-area-inset-right)) 0 max(12px, env(safe-area-inset-left)); }
   .studiokit-shell-note { display: none; }
 }
 @media (prefers-reduced-motion: reduce) {

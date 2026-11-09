@@ -90,7 +90,7 @@
       let snow = [];
       let prevXs = [];
 
-      const high = A.Progress.get('snowbells').high;
+      let high = A.Progress.get('snowbells').high;
       dom.hudHigh.textContent = String(high);
 
       for (let i = 0; i < 60; i++) {
@@ -188,7 +188,7 @@
         syncHud();
         let rec = null;
         if (!recordSaved) {
-          rec = A.Progress.recordPlay('snowbells', score);
+          rec = A.Progress.recordPlay('snowbells', score); if (rec) high = rec.high;
           recordSaved = true;
           dom.hudHigh.textContent = String(Math.max(high, score));
         }

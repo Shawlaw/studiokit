@@ -434,7 +434,8 @@
           const result = A.Progress.importText(String(reader.result));
           if (result.ok) {
             const runText = result.runCount ? `，含 ${result.runCount} 条局内进度` : '';
-            note(`导入成功，恢复了 ${result.count} 款游戏的记录${runText}。`);
+            const skipText = result.runSkipped ? `，跳过 ${result.runSkipped} 条无效进度` : '';
+            note(`导入成功，恢复了 ${result.count} 款游戏的记录${runText}${skipText}。`);
             render();
           } else {
             note(`导入失败：${result.reason}`, true);

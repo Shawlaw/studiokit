@@ -9,6 +9,7 @@ dist/
 
 # Local test artifacts
 test-artifacts/
+.zcode/
 
 # Editors / OS
 .DS_Store

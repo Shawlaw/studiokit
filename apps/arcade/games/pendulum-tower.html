@@ -99,7 +99,7 @@
       let floorsReached = 0;
       let feedback = null;
 
-      const high = A.Progress.get('pendulum-tower').high;
+      let high = A.Progress.get('pendulum-tower').high;
       dom.hudHigh.textContent = String(high);
 
       /* 钟摆速度随层数递增：低层慢悠悠，高层明显加速。 */
@@ -182,7 +182,7 @@
         autosave.clear();
         let rec = null;
         if (!recordSaved) {
-          rec = A.Progress.recordPlay('pendulum-tower', score);
+          rec = A.Progress.recordPlay('pendulum-tower', score); if (rec) high = rec.high;
           recordSaved = true;
           dom.hudHigh.textContent = String(Math.max(high, score));
         }
@@ -347,7 +347,7 @@
         } else if (overlap > 6) {
           perfectCombo = 0;
           score += 10;
-          feedback = { text: '普通落点 +10', color: '#93a0c8', life: 0.9 };
+          feedback = { text: '普通落点 +10', color: '#93a0c8', life: 1.1 };
           A.Sfx.play('land');
           particles.emit(drop.x + drop.w / 2, drop.y + drop.h, {
             count: 6,
@@ -359,7 +359,7 @@
             gravity: 600,
           });
           const n = boxes.length - 1;
-          leanVel += e * 0.0011 * (1 + n * 0.028);
+          leanVel += e * 0.01 * (1 + n * 0.022);
         } else {
           perfectCombo = 0;
           drop.missed = true;

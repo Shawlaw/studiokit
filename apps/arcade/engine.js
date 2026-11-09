@@ -222,6 +222,21 @@
       return false;
     }
   }
+  function safeGetRaw(key) {
+    try {
+      return localStorage.getItem(key);
+    } catch (err) {
+      return null;
+    }
+  }
+  function safeRestoreRaw(key, raw) {
+    try {
+      if (raw === null) localStorage.removeItem(key);
+      else localStorage.setItem(key, raw);
+    } catch (err) {
+      /* 回滚失败时只能保留当前值 */
+    }
+  }
 
   /* ----------------------------------------------------------
    * 局内进度存档（每个游戏一条，独立于最高分记录）
@@ -232,7 +247,7 @@
     if (!raw || typeof raw !== 'object' || raw.schemaVersion !== RUN_SCHEMA || !raw.games || typeof raw.games !== 'object') {
       return {};
     }
-    const out = {};
+    const out = Object.create(null);
     Object.keys(raw.games).forEach((id) => {
       const rec = raw.games[id];
       if (!rec || typeof rec !== 'object' || !rec.data || typeof rec.data !== 'object') return;
@@ -285,11 +300,27 @@
       }
     },
     importMap(games) {
-      if (!games || typeof games !== 'object') return 0;
-      const out = {};
+      if (!games || typeof games !== 'object') return { ok: true, count: 0, skipped: 0 };
+      const validIds = new Set(GAMES.map((g) => g.id));
+      const out = Object.create(null);
+      let skipped = 0;
       Object.keys(games).forEach((id) => {
         const rec = games[id];
-        if (!rec || typeof rec !== 'object' || !rec.data || typeof rec.data !== 'object') return;
+        if (!validIds.has(id) || !rec || typeof rec !== 'object' || !rec.data || typeof rec.data !== 'object') {
+          skipped += 1;
+          return;
+        }
+        let encoded;
+        try {
+          encoded = JSON.stringify(rec.data);
+        } catch (err) {
+          skipped += 1;
+          return;
+        }
+        if (encoded.length > 256 * 1024) {
+          skipped += 1;
+          return;
+        }
         out[id] = {
           savedAt: typeof rec.savedAt === 'string' ? rec.savedAt : null,
           score: Number(rec.score) || 0,
@@ -297,8 +328,13 @@
           data: rec.data,
         };
       });
-      safeSetJSON(RUNS_KEY, { schemaVersion: RUN_SCHEMA, games: out });
-      return Object.keys(out).length;
+      const count = Object.keys(out).length;
+      if (count === 0) {
+        /* 全部条目都无效时不要覆盖当前局内档。 */
+        return { ok: true, count: 0, skipped };
+      }
+      const ok = safeSetJSON(RUNS_KEY, { schemaVersion: RUN_SCHEMA, games: out });
+      return { ok, count, skipped };
     },
   };
 
@@ -349,12 +385,17 @@
     load() {
       const data = safeGetJSON(PROGRESS_KEY);
       if (data && typeof data === 'object' && data.schemaVersion === PROGRESS_SCHEMA && data.games && typeof data.games === 'object') {
-        return data;
+        const games = Object.create(null);
+        Object.keys(data.games).forEach((id) => {
+          const rec = data.games[id];
+          if (rec && typeof rec === 'object' && !Array.isArray(rec)) games[id] = rec;
+        });
+        return { schemaVersion: PROGRESS_SCHEMA, games };
       }
-      return { schemaVersion: PROGRESS_SCHEMA, games: {} };
+      return { schemaVersion: PROGRESS_SCHEMA, games: Object.create(null) };
     },
     save(data) {
-      safeSetJSON(PROGRESS_KEY, data);
+      return safeSetJSON(PROGRESS_KEY, data);
     },
     get(gameId) {
       const rec = this.load().games[gameId];
@@ -371,10 +412,11 @@
     recordPlay(gameId, score) {
       const data = this.load();
       const rec = data.games[gameId] || { high: 0, plays: 0, lastAt: null, lastScore: 0 };
-      rec.plays += 1;
+      rec.plays = (Number(rec.plays) || 0) + 1;
+      rec.high = Number(rec.high) || 0;
       rec.lastAt = new Date().toISOString();
       rec.lastScore = Number(score) || 0;
-      const isNewHigh = score > (Number(rec.high) || 0);
+      const isNewHigh = Number(score) > rec.high;
       if (isNewHigh) rec.high = Number(score) || 0;
       data.games[gameId] = rec;
       this.save(data);
@@ -411,7 +453,7 @@
       if (!parsed || parsed.format !== EXPORT_FORMAT || parsed.schemaVersion !== PROGRESS_SCHEMA || !parsed.state || typeof parsed.state !== 'object') {
         return { ok: false, reason: '不是街机厅进度备份文件' };
       }
-      const games = {};
+      const games = Object.create(null);
       Object.keys(parsed.state).forEach((id) => {
         const rec = parsed.state[id];
         if (!rec || typeof rec !== 'object') return;
@@ -422,11 +464,24 @@
           lastScore: Number(rec.lastScore) || 0,
         };
       });
-      this.save({ schemaVersion: PROGRESS_SCHEMA, games });
+      const prevProgress = safeGetRaw(PROGRESS_KEY);
+      const prevRuns = safeGetRaw(RUNS_KEY);
+      const progressSaved = this.save({ schemaVersion: PROGRESS_SCHEMA, games });
+      if (!progressSaved) return { ok: false, reason: '浏览器存储已满或不可用' };
       /* 新备份包含局内存档；旧备份没有 runs 字段时保留当前局内存档。 */
       let runCount = 0;
-      if (parsed.runs && typeof parsed.runs === 'object') runCount = RunSave.importMap(parsed.runs);
-      return { ok: true, count: Object.keys(games).length, runCount };
+      let runSkipped = 0;
+      if (parsed.runs && typeof parsed.runs === 'object') {
+        const imported = RunSave.importMap(parsed.runs);
+        if (!imported.ok) {
+          safeRestoreRaw(PROGRESS_KEY, prevProgress);
+          safeRestoreRaw(RUNS_KEY, prevRuns);
+          return { ok: false, reason: '浏览器存储已满或不可用' };
+        }
+        runCount = imported.count;
+        runSkipped = imported.skipped;
+      }
+      return { ok: true, count: Object.keys(games).length, runCount, runSkipped };
     },
   };
 
@@ -661,7 +716,8 @@
       updatePosition(e);
     }
     function onPointerUp(e) {
-      if (pointer.id !== null && e.pointerId !== pointer.id) return;
+      if (pointer.id === null) return;
+      if (e.pointerId !== pointer.id) return;
       updatePosition(e);
       pointer.down = false;
       pointer.wentUp = true;
@@ -669,7 +725,8 @@
       pointer.id = null;
     }
     function onPointerCancel(e) {
-      if (pointer.id !== null && e.pointerId !== pointer.id) return;
+      if (pointer.id === null) return;
+      if (e.pointerId !== pointer.id) return;
       pointer.down = false;
       pointer.wentUp = false;
       pointer.wentCancel = true;
@@ -685,6 +742,10 @@
     canvas.addEventListener('pointermove', onPointerMove);
     canvas.addEventListener('pointerup', onPointerUp);
     canvas.addEventListener('pointercancel', onPointerCancel);
+    /* 捕获失败或指针在画布外抬起/移动时，仍要更新/释放按住状态，避免粘键。 */
+    window.addEventListener('pointermove', onPointerMove);
+    window.addEventListener('pointerup', onPointerUp);
+    window.addEventListener('pointercancel', onPointerCancel);
     canvas.style.touchAction = 'none';
 
     return {
@@ -706,6 +767,9 @@
         canvas.removeEventListener('pointermove', onPointerMove);
         canvas.removeEventListener('pointerup', onPointerUp);
         canvas.removeEventListener('pointercancel', onPointerCancel);
+        window.removeEventListener('pointermove', onPointerMove);
+        window.removeEventListener('pointerup', onPointerUp);
+        window.removeEventListener('pointercancel', onPointerCancel);
       },
     };
   }
@@ -757,12 +821,18 @@
     let running = false;
     let userPaused = false;
     let autoPaused = false;
+    let lastPausedRender = 0;
 
     function frame(now) {
       if (!running) return;
       const delta = Math.min(maxDelta, (now - last) / 1000);
       last = now;
       if (userPaused || autoPaused) {
+        /* 暂停时 resize 会重建 canvas 像素缓冲；低频重绘保证不出现空白画布。 */
+        if (now - lastPausedRender > 200) {
+          lastPausedRender = now;
+          render();
+        }
         rafId = requestAnimationFrame(frame);
         return;
       }
@@ -807,7 +877,7 @@
     };
 
     function onWindowBlur() {
-      if (!running || userPaused) return;
+      if (!running || userPaused || autoPaused) return;
       autoPaused = true;
       if (onAutoPause) onAutoPause();
     }
@@ -1030,11 +1100,29 @@
   }
 
   function createOverlayUi(dom) {
+    let previousFocus = null;
+    if (dom.overlay) {
+      dom.overlay.setAttribute('role', 'dialog');
+      dom.overlay.setAttribute('aria-modal', 'true');
+      if (dom.ovTitle) {
+        if (!dom.ovTitle.id) dom.ovTitle.id = 'arcade-overlay-title';
+        dom.overlay.setAttribute('aria-labelledby', dom.ovTitle.id);
+      }
+    }
     function hide() {
       dom.overlay.hidden = true;
+      if (previousFocus && typeof previousFocus.focus === 'function') {
+        try {
+          previousFocus.focus({ preventScroll: true });
+        } catch (err) {
+          /* 忽略焦点恢复失败 */
+        }
+      }
+      previousFocus = null;
     }
     function show(opts) {
       const o = opts || {};
+      if (dom.overlay.hidden) previousFocus = document.activeElement;
       dom.ovTitle.textContent = o.title || '';
       dom.ovText.innerHTML = o.text || '';
       dom.ovBtn.textContent = o.btn || '开始游戏';
@@ -1054,6 +1142,11 @@
           : null;
       }
       dom.overlay.hidden = false;
+      try {
+        dom.ovBtn.focus({ preventScroll: true });
+      } catch (err) {
+        /* 忽略焦点设置失败 */
+      }
     }
     return {
       show,
@@ -1086,6 +1179,11 @@
     if (opts.keyboard !== false) {
       window.addEventListener('keydown', (e) => {
         if (e.repeat) return;
+        const target = e.target;
+        if (target && target.tagName) {
+          const tag = target.tagName.toLowerCase();
+          if (tag === 'input' || tag === 'textarea' || tag === 'select' || target.isContentEditable) return;
+        }
         if (e.key === 'p' || e.key === 'P' || e.key === 'Escape') {
           if (opts.isPaused()) opts.resume();
           else if (opts.isPlaying()) opts.pause();

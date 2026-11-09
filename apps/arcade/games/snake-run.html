@@ -92,7 +92,7 @@
       let swipeStart = null;
       let keyWasDown = {};
 
-      const high = A.Progress.get('snake-run').high;
+      let high = A.Progress.get('snake-run').high;
       dom.hudHigh.textContent = String(high);
 
       function cellFree(x, y) {
@@ -190,7 +190,7 @@
         A.Sfx.play('over');
         let rec = null;
         if (!recordSaved) {
-          rec = A.Progress.recordPlay('snake-run', score);
+          rec = A.Progress.recordPlay('snake-run', score); if (rec) high = rec.high;
           recordSaved = true;
           dom.hudHigh.textContent = String(Math.max(high, score));
         }

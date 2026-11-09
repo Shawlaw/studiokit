@@ -90,7 +90,7 @@
       let weapon = 'normal';
       let weaponTimer = 0;
       let elapsed = 0;
-      const high = A.Progress.get('star-raid').high;
+      let high = A.Progress.get('star-raid').high;
       dom.hudHigh.textContent = String(high);
 
       /* ---------- 弹种 Buff ---------- */
@@ -235,7 +235,7 @@
         state = 'over';
         A.Sfx.play('over');
         autosave.clear();
-        const rec = recordSaved ? null : A.Progress.recordPlay('star-raid', score);
+        const rec = recordSaved ? null : A.Progress.recordPlay('star-raid', score); if (rec) high = rec.high;
         recordSaved = true;
         dom.hudHigh.textContent = String(Math.max(high, score));
         loop.pause();
@@ -498,6 +498,7 @@
 
       function updateEnemies(dt) {
         const wave = waveInfo();
+        if (shots.length > wave.maxShots) shots.length = wave.maxShots;
         spawnTimer -= dt;
         if (!wave.phase.rest && enemies.length < wave.maxEnemies) {
           if (spawnTimer <= 0) {
@@ -698,7 +699,7 @@
         const hb = { x: player.x - 9, y: player.y - 8, w: 18, h: 16 };
         for (let i = enemies.length - 1; i >= 0; i--) {
           const e = enemies[i];
-          if (A.Physics.aabbOverlap(hb, e)) {
+          if (player.invul <= 0 && A.Physics.aabbOverlap(hb, e)) {
             killEnemy(e, i, false);
             hitPlayer();
           }

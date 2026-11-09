@@ -89,7 +89,7 @@
       let spaceWasDown = false;
       let parallax = 0;
 
-      const high = A.Progress.get('gravity-flip').high;
+      let high = A.Progress.get('gravity-flip').high;
       dom.hudHigh.textContent = String(high);
 
       function difficulty() {
@@ -147,7 +147,7 @@
         const finalDist = Math.floor(dist);
         let rec = null;
         if (!recordSaved) {
-          rec = A.Progress.recordPlay('gravity-flip', finalDist);
+          rec = A.Progress.recordPlay('gravity-flip', finalDist); if (rec) high = rec.high;
           recordSaved = true;
           dom.hudHigh.textContent = String(Math.max(high, finalDist));
         }

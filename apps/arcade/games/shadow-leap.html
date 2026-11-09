@@ -83,7 +83,7 @@
       let hintTimer = 0;
       let generatedCount = 0;
 
-      const high = A.Progress.get('shadow-leap').high;
+      let high = A.Progress.get('shadow-leap').high;
       dom.hudHigh.textContent = String(high);
 
       function worldToScreenY(y) {
@@ -99,8 +99,9 @@
           w,
           h: 12,
           kind: kind || 'normal',
-          dir: Math.random() > 0.5 ? 1 : -1,
-          speed: rand(34, 58),
+          baseX: clamp(x, 6, W - w - 6),
+          range: kind === 'moving' ? rand(18, 30) : 0,
+          speed: kind === 'moving' ? rand(0.8, 1.4) : 0,
           broken: false,
           breakTimer: 0,
           phase: rand(0, TAU),
@@ -108,9 +109,9 @@
       }
 
       function platformChance(y, index) {
-        /* 前 8 块保持静态宽平台，让玩家先学会起跳；之后才引入机制。 */
-        if (index < 8) return 'normal';
-        if (index < 12) return Math.random() < 0.16 ? 'moving' : 'normal';
+        /* 前 8 块生成平台保持静态宽平台，让玩家先学会起跳；之后才引入机制。 */
+        if (index <= 8) return 'normal';
+        if (index <= 12) return Math.random() < 0.16 ? 'moving' : 'normal';
         const t = clamp(-y / 12000, 0, 1);
         const r = Math.random();
         if (r < 0.05 + t * 0.10) return 'fragile';
@@ -139,13 +140,15 @@
         const gap = rand(62, 92 + t * 26);
         const y = highest.y - gap;
         const prevCenter = highest.x + highest.w / 2;
-        const nextW = rand(74, 118);
         /* 只用保守滞空时间计算可达横向距离，再留 18px 安全余量。 */
         const reach = Math.max(42, maxRunDistance(descentTimeForGap(gap)) - 18);
         const offset = clamp(reach, 42, 120);
-        const center = clamp(prevCenter + rand(-offset, offset), nextW / 2 + 8, W - nextW / 2 - 8);
         generatedCount += 1;
+        const nextW = generatedCount <= 8 ? rand(100, 118) : rand(74, 118);
         const kind = platformChance(y, generatedCount);
+        /* 移动平台会在飞行期间继续横移，进一步收紧落点偏移。 */
+        const safeOffset = kind === 'moving' ? Math.min(offset, 90) : offset;
+        const center = clamp(prevCenter + rand(-safeOffset, safeOffset), nextW / 2 + 8, W - nextW / 2 - 8);
         const p = makePlatform(center - nextW / 2, y, kind);
         p.w = nextW;
         return p;
@@ -178,7 +181,7 @@
         topY = player.y;
         generatedCount = 0;
         particles.clear();
-        const ground = { x: 40, y: H - 60, w: W - 80, h: 12, kind: 'normal', dir: 1, speed: 0, broken: false, breakTimer: 0, phase: 0 };
+        const ground = { x: 40, y: H - 60, w: W - 80, h: 12, kind: 'normal', speed: 0, broken: false, breakTimer: 0, phase: 0 };
         platforms.push(ground);
         let highest = ground;
         while (highest.y > -80) {
@@ -218,7 +221,7 @@
         autosave.clear();
         let rec = null;
         if (!recordSaved) {
-          rec = A.Progress.recordPlay('shadow-leap', score);
+          rec = A.Progress.recordPlay('shadow-leap', score); if (rec) high = rec.high;
           recordSaved = true;
           dom.hudHigh.textContent = String(Math.max(high, score));
         }
@@ -274,7 +277,8 @@
             y: p.y,
             w: p.w,
             kind: p.kind,
-            dir: p.dir,
+            baseX: p.baseX,
+            range: p.range,
             speed: p.speed,
             broken: p.broken,
             breakTimer: p.breakTimer,
@@ -300,8 +304,9 @@
               w: clamp(Number(p.w), 40, W - 12),
               h: 12,
               kind: ['normal', 'moving', 'fragile'].indexOf(p.kind) !== -1 ? p.kind : 'normal',
-              dir: p.dir === -1 ? -1 : 1,
-              speed: Number(p.speed) || 0,
+              baseX: Number.isFinite(Number(p.baseX)) ? Number(p.baseX) : Number(p.x),
+              range: clamp(Number(p.range) || (p.kind === 'moving' ? 18 : 0), 0, 32),
+              speed: p.kind === 'moving' ? (Number(p.speed) > 5 ? 1 : clamp(Number(p.speed) || 1, 0.6, 1.6)) : 0,
               broken: !!p.broken,
               breakTimer: Number(p.breakTimer) || 0,
               phase: Number(p.phase) || 0,
@@ -376,14 +381,8 @@
         /* 平台行为 */
         platforms.forEach((p) => {
           if (p.kind === 'moving') {
-            p.x += p.dir * p.speed * dt;
-            if (p.x < 4) {
-              p.x = 4;
-              p.dir = 1;
-            } else if (p.x + p.w > W - 4) {
-              p.x = W - 4 - p.w;
-              p.dir = -1;
-            }
+            p.phase += p.speed * dt;
+            p.x = clamp(p.baseX + Math.sin(p.phase) * p.range, 4, W - p.w - 4);
           }
           if (p.broken) p.breakTimer -= dt;
         });
@@ -456,11 +455,12 @@
           ctx.fillStyle = '#e6ccff';
           ctx.fillRect(p.x + 3, y + 2, p.w - 6, 2);
           ctx.fillStyle = 'rgba(230,204,255,0.8)';
-          const ax = p.dir > 0 ? p.x + p.w - 8 : p.x + 4;
+          const movingDir = Math.cos(p.phase) >= 0 ? 1 : -1;
+          const ax = movingDir > 0 ? p.x + p.w - 8 : p.x + 4;
           ctx.beginPath();
           ctx.moveTo(ax, y + p.h / 2);
-          ctx.lineTo(ax + p.dir * 5, y + p.h / 2 - 3);
-          ctx.lineTo(ax + p.dir * 5, y + p.h / 2 + 3);
+          ctx.lineTo(ax + movingDir * 5, y + p.h / 2 - 3);
+          ctx.lineTo(ax + movingDir * 5, y + p.h / 2 + 3);
           ctx.closePath();
           ctx.fill();
         } else {
@@ -606,7 +606,7 @@
           info() {
             return {
               score,
-              platforms: platforms.map((p) => ({ x: p.x, y: p.y, w: p.w, kind: p.kind, broken: p.broken })),
+              platforms: platforms.map((p) => ({ x: p.x, y: p.y, w: p.w, kind: p.kind, range: p.range, broken: p.broken })),
             };
           },
         };

@@ -125,7 +125,7 @@
       let touchRight = false;
       let touchSoft = false;
 
-      const high = A.Progress.get('block-drop').high;
+      let high = A.Progress.get('block-drop').high;
       dom.hudHigh.textContent = String(high);
 
       /* ---------- 工具 ---------- */
@@ -178,11 +178,8 @@
         lockResets = 0;
         dropTimer = 0;
         if (collides(cur.m, cur.x, cur.y + 1)) {
-          /* 出生即重叠：先尝试再抬一格 */
-          if (!collides(cur.m, cur.x, cur.y)) cur.y -= 1;
-          else {
-            gameOver();
-          }
+          /* 出生位置已与棋盘重叠：直接顶部失败，不静默丢弃方块。 */
+          gameOver();
         }
       }
       function ghostY() {
@@ -224,6 +221,9 @@
         recordSaved = false;
         spaceWasDown = false;
         upWasDown = false;
+        touchLeft = false;
+        touchRight = false;
+        touchSoft = false;
         spawn();
         syncHud();
       }
@@ -262,7 +262,7 @@
         autosave.clear();
         let rec = null;
         if (!recordSaved) {
-          rec = A.Progress.recordPlay('block-drop', score);
+          rec = A.Progress.recordPlay('block-drop', score); if (rec) high = rec.high;
           recordSaved = true;
           dom.hudHigh.textContent = String(Math.max(high, score));
         }
@@ -681,7 +681,7 @@
             if (!v) continue;
             const x = WELL_X + c * CELL;
             const y = WELL_Y + r * CELL;
-            if (flashRows.includes(r) && Math.floor(clearing.timer * 20) % 2 === 0) {
+            if (!A.reducedMotion && flashRows.includes(r) && Math.floor(clearing.timer * 20) % 2 === 0) {
               ctx.fillStyle = '#ffffff';
               ctx.fillRect(x + 1, y + 1, CELL - 2, CELL - 2);
             } else {
@@ -810,6 +810,17 @@
             state = 'playing';
             hardDrop();
             return true;
+          },
+          topOutScenario() {
+            board = [];
+            for (let r = 0; r < ROWS; r++) board.push(new Array(COLS).fill('#7c5cff'));
+            cur = null;
+            score = 0;
+            lines = 0;
+            recordSaved = true;
+            state = 'playing';
+            spawn();
+            return state;
           },
         };
       }

@@ -90,7 +90,7 @@
       let recordSaved = false;
       let lastTap = 0;
 
-      const high = A.Progress.get('memory-flip').high;
+      let high = A.Progress.get('memory-flip').high;
       dom.hudHigh.textContent = String(high);
 
       function levelConfig(lv) {
@@ -190,7 +190,7 @@
         A.Sfx.play(won ? 'perfect' : 'over');
         let rec = null;
         if (!recordSaved) {
-          rec = A.Progress.recordPlay('memory-flip', score);
+          rec = A.Progress.recordPlay('memory-flip', score); if (rec) high = rec.high;
           recordSaved = true;
           dom.hudHigh.textContent = String(Math.max(high, score));
         }
@@ -361,7 +361,7 @@
       function drawCard(card) {
         const rect = cardRect(card);
         const revealed = card.matched || previewTimer > 0 || flippedIds.indexOf(card.id) !== -1 || state === 'levelclear';
-        const pop = 1 + card.pop * 0.06;
+        const pop = A.reducedMotion ? 1 : 1 + card.pop * 0.06;
         ctx.save();
         ctx.translate(rect.x + rect.w / 2, rect.y + rect.h / 2);
         ctx.scale(pop, pop);

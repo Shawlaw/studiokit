@@ -11,7 +11,7 @@
   <script src="../engine.js"></script>
   <title>2048 合成 · 街机厅 · StudioKit</title>
 </head>
-<body class="arcade-body" data-studiokit-app="arcade" data-studiokit-app-title="街机厅 Arcade" style="--ac-accent:#f2b33d; --card-accent:#f2b33d">
+<body class="arcade-body has-undo" data-studiokit-app="arcade" data-studiokit-app-title="街机厅 Arcade" style="--ac-accent:#f2b33d; --card-accent:#f2b33d">
   <noscript><p class="ac-noscript">此游戏需要启用 JavaScript 才能运行。</p></noscript>
   <main class="game-page">
     <header class="game-topbar">
@@ -19,7 +19,7 @@
       <h1 class="game-title">🔢 2048 合成</h1>
       <div class="game-hud">
         <span>分数 <strong data-hud-score>0</strong></span>
-        <span>最高 <strong data-hud-high>0</strong></span>
+        <span class="hud-high-wrap">最高 <strong data-hud-high>0</strong></span>
       </div>
       <button type="button" class="ac-icon-btn" data-undo aria-label="撤销一步" title="撤销一步（Z）">↶</button>
       <button type="button" class="ac-icon-btn" data-pause aria-label="暂停游戏" title="暂停游戏（P / Esc）">⏸</button>
@@ -103,7 +103,7 @@
       let keyWasDown = {};
       let lastBest = 0;
 
-      const high = A.Progress.get('merge-2048').high;
+      let high = A.Progress.get('merge-2048').high;
       dom.hudHigh.textContent = String(high);
 
       function emptyBoard() {
@@ -186,7 +186,7 @@
         A.Sfx.play(win ? 'perfect' : 'over');
         let rec = null;
         if (!recordSaved) {
-          rec = A.Progress.recordPlay('merge-2048', score);
+          rec = A.Progress.recordPlay('merge-2048', score); if (rec) high = rec.high;
           recordSaved = true;
           dom.hudHigh.textContent = String(Math.max(A.Progress.get('merge-2048').high, score));
         }
@@ -386,8 +386,8 @@
       function update(dt) {
         moveLock = Math.max(0, moveLock - dt);
         for (const t of allTiles()) {
-          t.anim = Math.min(1, t.anim + dt * 9);
-          t.pop = Math.max(0, t.pop - dt * 3);
+          t.anim = A.reducedMotion ? 1 : Math.min(1, t.anim + dt * 9);
+          t.pop = A.reducedMotion ? 0 : Math.max(0, t.pop - dt * 3);
         }
         if (state !== 'playing') {
           input.endFrame();

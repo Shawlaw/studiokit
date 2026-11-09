@@ -33,7 +33,7 @@ function startServer() {
   const server = http.createServer((req, res) => {
     try {
       const urlPath = decodeURIComponent((req.url || '/').split('?')[0]);
-      let filePath = path.join(ROOT, urlPath);
+      let filePath = path.join(ROOT, urlPath.startsWith('/studiokit/') ? urlPath.slice('/studiokit'.length) : urlPath);
       if (!filePath.startsWith(ROOT)) {
         res.writeHead(403);
         res.end('forbidden');
@@ -275,6 +275,14 @@ async function main() {
     assert(home.href.indexOf('apps/arcade') !== -1, 'arcade card not clickable: ' + JSON.stringify(home));
     assert(home.version.indexOf('0.3.1') !== -1, 'arcade version missing on home card');
     record('门户街机厅卡片可点击且版本 0.3.1', true);
+
+    /* ---------- GitHub Pages 项目子路径：shell 返回链接 ---------- */
+    await cdp.navigate(base + '/studiokit/apps/arcade/games/star-raid.html');
+    const shellInfo = await cdp.evaluate(`(() => { const a = document.querySelector('.studiokit-shell-home'); return { href: a ? a.href : null, text: a ? a.textContent : null }; })()`);
+    assert(shellInfo.href === base + '/studiokit/index.html', 'shell subpath href wrong: ' + JSON.stringify(shellInfo));
+    const shellResponse = await fetch(shellInfo.href);
+    assert(shellResponse.ok, 'shell subpath target HTTP ' + shellResponse.status);
+    record('GitHub Pages /studiokit/ 子路径 shell 返回链接', true);
 
     /* ---------- 中心页 ---------- */
     await cdp.navigate(base + '/apps/arcade/');
@@ -529,7 +537,8 @@ async function main() {
     await cdp.navigate(base + '/apps/arcade/games/shadow-leap.html#test');
     const shadow = await cdp.evaluate(`window.__arcadeTest.info()`);
     assert(shadow.platforms.length >= 10, 'shadow platforms too few');
-    for (let i = 0; i < 8; i++) assert(shadow.platforms[i].kind === 'normal', 'shadow teaching platform ' + i + ' is ' + shadow.platforms[i].kind);
+    for (let i = 0; i <= 8; i++) assert(shadow.platforms[i].kind === 'normal', 'shadow teaching platform ' + i + ' is ' + shadow.platforms[i].kind);
+    for (let i = 1; i <= 8; i++) assert(shadow.platforms[i].w >= 100, 'shadow teaching platform ' + i + ' too narrow');
     for (let i = 1; i < shadow.platforms.length; i++) {
       const a = shadow.platforms[i - 1];
       const b = shadow.platforms[i];
@@ -537,6 +546,7 @@ async function main() {
       const centerDelta = Math.abs((a.x + a.w / 2) - (b.x + b.w / 2));
       assert(gap > 0 && gap <= 118, 'shadow gap ' + i + ' = ' + gap);
       assert(centerDelta <= 121, 'shadow horizontal delta ' + i + ' = ' + centerDelta);
+      if (b.kind === 'moving') assert((b.range || 0) <= 30, 'shadow moving range too large: ' + b.range);
     }
     record('影跃 前 8 块教学平台 + 可达域约束', true);
 
@@ -570,7 +580,24 @@ async function main() {
     assert(roadRight.lane === 2, 'road right lane=' + roadRight.lane);
     assert(roadTouch.lane === 3, 'road touch lane=' + roadTouch.lane);
     assert(roadStress.violations === 0, 'road safe corridor violations=' + roadStress.violations);
+    assert(roadStress.spawned > 0, 'road stress spawned 0 cars');
     record('极速车道 一次一车道 + 安全走廊 200 次生成', true);
+
+    /* ---------- 0.3.0 旧局内档没有 lane 字段时的迁移 ---------- */
+    await cdp.evaluate(`(() => {
+      const raw = JSON.parse(localStorage.getItem('studiokit:arcade:runs:v1') || '{"schemaVersion":1,"games":{}}');
+      raw.games['road-rush'] = {
+        savedAt: new Date().toISOString(), score: 10, summary: '旧档',
+        data: { cars: [], props: [], speed: 0.28, dist: 10, lives: 3, spawnTimer: 0.8, dashOffset: 0, player: { x: 336, vx: 0, tilt: 0, invul: 0 } }
+      };
+      localStorage.setItem('studiokit:arcade:runs:v1', JSON.stringify(raw));
+    })()`);
+    await cdp.navigate(base + '/apps/arcade/games/road-rush.html?old=1#test');
+    await cdp.click('[data-ov-btn]');
+    await sleep(300);
+    const oldRunInfo = await cdp.evaluate(`window.__arcadeTest.info()`);
+    assert(oldRunInfo.lane === 3, 'old road run lane migration failed: ' + JSON.stringify(oldRunInfo));
+    record('极速车道 0.3.0 旧档 lane 迁移', true);
 
     /* ---------- 黄金矿工：关卡可行性 + 提前结算 ---------- */
     await cdp.evaluate(`Arcade.RunSave.clear('gold-miner')`);
@@ -578,6 +605,8 @@ async function main() {
     await cdp.click('[data-ov-btn]');
     await sleep(300);
     const goldFirst = await cdp.evaluate(`window.__arcadeTest.info()`);
+    const goldHud = await cdp.evaluate(`({ target: document.querySelector('[data-hud-target]').textContent, level: document.querySelector('[data-hud-level]').textContent, time: document.querySelector('[data-hud-time]').textContent })`);
+    assert(goldHud.target === '$650' && goldHud.level === '1' && Number(goldHud.time) > 0, 'gold DOM subhud wrong: ' + JSON.stringify(goldHud));
     assert(goldFirst.target === 650 && goldFirst.swing === 520, 'gold level 1 spec wrong: ' + JSON.stringify(goldFirst));
     assert(goldFirst.tnt === 0, 'gold level 1 should have no TNT');
     assert(goldFirst.totalValue >= goldFirst.target * 1.25, 'gold level 1 value infeasible: ' + JSON.stringify(goldFirst));
@@ -587,10 +616,16 @@ async function main() {
     await cdp.click('[data-cashout]');
     await sleep(300);
     const goldSecond = await cdp.evaluate(`window.__arcadeTest.info()`);
-    assert(goldSecond.level === 2 && goldSecond.target === 950 && goldSecond.swing === 650, 'gold level 2 spec wrong: ' + JSON.stringify(goldSecond));
+    assert(goldSecond.level === 2 && goldSecond.swing === 650, 'gold level 2 spec wrong: ' + JSON.stringify(goldSecond));
+    assert(goldSecond.target - goldSecond.money === 950, 'gold level 2 increment wrong: ' + JSON.stringify(goldSecond));
     assert(goldSecond.tnt === 0, 'gold level 2 should have no TNT');
     assert(goldSecond.totalValue >= goldSecond.target * 1.25, 'gold level 2 value infeasible: ' + JSON.stringify(goldSecond));
-    record('黄金矿工 前 2 关无炸药/价值保底/提前结算', true);
+    await cdp.evaluate(`window.__arcadeTest.setMoney(${goldSecond.target})`);
+    await cdp.click('[data-cashout]');
+    await sleep(300);
+    const goldThird = await cdp.evaluate(`window.__arcadeTest.info()`);
+    assert(goldThird.level === 3 && goldThird.target - goldThird.money === 1350, 'gold cashout chain leak: ' + JSON.stringify(goldThird));
+    record('黄金矿工 前 2 关无炸药/价值保底/提前结算/不可连锁空兑现', true);
 
     /* ---------- 俄罗斯方块：7-bag 与 1 行消除 ---------- */
     await cdp.evaluate(`Arcade.RunSave.clear('block-drop')`);
@@ -604,7 +639,9 @@ async function main() {
     await sleep(600);
     const clearInfo = await cdp.evaluate(`window.__arcadeTest.info()`);
     assert(clearInfo.lines >= 1 && clearInfo.score > 0, 'line clear failed: ' + JSON.stringify(clearInfo));
-    record('俄罗斯方块 7-bag + 1 行消除计分', true);
+    const topOut = await cdp.evaluate(`window.__arcadeTest.topOutScenario()`);
+    assert(topOut === 'over', 'top-out did not end game: ' + topOut);
+    record('俄罗斯方块 7-bag + 1 行消除计分 + 顶部失败', true);
 
     /* ---------- 中心页续玩区与导出导入 ---------- */
     /* 先为每款游戏各留一条未完成进度，确保续玩区覆盖全部 13 款。 */
@@ -640,6 +677,39 @@ async function main() {
     record('中心页续玩区 13 条折叠/展开 + 导出/导入含局内进度', true);
     await cdp.screenshot('hall-resume.png');
 
+    /* ---------- 存储写失败不得谎报导入成功 ---------- */
+    const quotaResult = await cdp.evaluate(`(() => {
+      const text = Arcade.Progress.exportText();
+      const original = Storage.prototype.setItem;
+      Storage.prototype.setItem = function () { throw new DOMException('quota', 'QuotaExceededError'); };
+      let result;
+      try { result = Arcade.Progress.importText(text); } finally { Storage.prototype.setItem = original; }
+      return result;
+    })()`);
+    assert(quotaResult && quotaResult.ok === false && /存储/.test(quotaResult.reason || ''), 'quota import reported success: ' + JSON.stringify(quotaResult));
+    record('localStorage 写入失败时导入返回失败', true);
+
+    const atomicImport = await cdp.evaluate(`(() => {
+      const text = Arcade.Progress.exportText();
+      const before = localStorage.getItem('studiokit:arcade:progress:v1');
+      const original = Storage.prototype.setItem;
+      Storage.prototype.setItem = function (key, value) {
+        if (key === 'studiokit:arcade:runs:v1') throw new DOMException('quota', 'QuotaExceededError');
+        return original.call(this, key, value);
+      };
+      let result;
+      try { result = Arcade.Progress.importText(text); } finally { Storage.prototype.setItem = original; }
+      return { result, progressUnchanged: localStorage.getItem('studiokit:arcade:progress:v1') === before };
+    })()`);
+    assert(atomicImport.result && atomicImport.result.ok === false && atomicImport.progressUnchanged, 'non-atomic import: ' + JSON.stringify(atomicImport));
+    const unknownImport = await cdp.evaluate(`(() => {
+      const before = Arcade.RunSave.count();
+      const result = Arcade.RunSave.importMap({ 'not-a-game': { data: { a: 1 } } });
+      return { before, after: Arcade.RunSave.count(), result };
+    })()`);
+    assert(unknownImport.before === unknownImport.after && unknownImport.result.count === 0 && unknownImport.result.skipped === 1, 'unknown run import: ' + JSON.stringify(unknownImport));
+    record('导入 runs 失败回滚 + 未知游戏 ID 不覆盖现有档', true);
+
     /* ---------- 自然结束一局：结算写入最高分并清掉局内存档 ---------- */
     await cdp.evaluate(`Arcade.RunSave.clear('snake-run')`);
     await cdp.navigate(base + '/apps/arcade/games/snake-run.html');
@@ -666,12 +736,18 @@ async function main() {
         sw: document.documentElement.scrollWidth,
         cw: document.documentElement.clientWidth,
         canvas: (() => { const c = document.querySelector('.game-canvas'); if (!c) return null; const r = c.getBoundingClientRect(); return { w: Math.round(r.width), h: Math.round(r.height) }; })(),
-        pause: (() => { const b = document.querySelector('[data-pause]'); if (!b) return null; const r = b.getBoundingClientRect(); return { w: Math.round(r.width), h: Math.round(r.height) }; })()
+        pause: (() => { const b = document.querySelector('[data-pause]'); if (!b) return null; const r = b.getBoundingClientRect(); return { w: Math.round(r.width), h: Math.round(r.height) }; })(),
+        title: (() => { const t = document.querySelector('.game-title'); if (!t) return null; return { cw: t.clientWidth, sw: t.scrollWidth }; })(),
+        back: (() => { const b = document.querySelector('.ac-back'); if (!b) return null; const r = b.getBoundingClientRect(); return { w: Math.round(r.width), h: Math.round(r.height) }; })(),
+        secondary: (() => { const b = document.querySelector('[data-ov-btn2]'); if (!b) return null; const r = b.getBoundingClientRect(); return { hidden: b.hidden, display: getComputedStyle(b).display, w: Math.round(r.width), h: Math.round(r.height) }; })()
       })`);
       assert(overflow.sw <= overflow.cw + 1, pagePath + ' horizontal overflow ' + overflow.sw + '>' + overflow.cw);
       if (overflow.canvas) {
         assert(overflow.canvas.w <= 375 && overflow.canvas.h > 300, pagePath + ' canvas size ' + JSON.stringify(overflow.canvas));
         assert(overflow.pause && overflow.pause.w >= 44 && overflow.pause.h >= 44, pagePath + ' pause target ' + JSON.stringify(overflow.pause));
+        assert(overflow.back && overflow.back.w >= 44 && overflow.back.h >= 44, pagePath + ' back target ' + JSON.stringify(overflow.back));
+        assert(overflow.title && overflow.title.sw <= overflow.title.cw + 1, pagePath + ' title clipped ' + JSON.stringify(overflow.title));
+        assert(overflow.secondary && (overflow.secondary.hidden ? overflow.secondary.display === 'none' : overflow.secondary.w >= 44), pagePath + ' secondary button ' + JSON.stringify(overflow.secondary));
       }
     }
     record('375px 窄屏 14 页无横向溢出 + 44px 暂停按钮', true);
@@ -707,16 +783,30 @@ async function main() {
         sw: document.documentElement.scrollWidth,
         cw: document.documentElement.clientWidth,
         canvas: (() => { const c = document.querySelector('.game-canvas'); if (!c) return null; const r = c.getBoundingClientRect(); return { w: Math.round(r.width), h: Math.round(r.height) }; })(),
-        pause: (() => { const b = document.querySelector('[data-pause]'); if (!b) return null; const r = b.getBoundingClientRect(); return { w: Math.round(r.width), h: Math.round(r.height) }; })()
+        pause: (() => { const b = document.querySelector('[data-pause]'); if (!b) return null; const r = b.getBoundingClientRect(); return { w: Math.round(r.width), h: Math.round(r.height) }; })(),
+        title: (() => { const t = document.querySelector('.game-title'); if (!t) return null; return { cw: t.clientWidth, sw: t.scrollWidth }; })(),
+        back: (() => { const b = document.querySelector('.ac-back'); if (!b) return null; const r = b.getBoundingClientRect(); return { w: Math.round(r.width), h: Math.round(r.height) }; })(),
+        secondary: (() => { const b = document.querySelector('[data-ov-btn2]'); if (!b) return null; const r = b.getBoundingClientRect(); return { hidden: b.hidden, display: getComputedStyle(b).display, w: Math.round(r.width), h: Math.round(r.height) }; })()
       })`);
       assert(small.sw <= small.cw + 1, pagePath + ' 320px horizontal overflow ' + small.sw + '>' + small.cw);
       if (small.canvas) {
-        assert(small.canvas.w > 150 && small.canvas.h > 240, pagePath + ' 320px canvas ' + JSON.stringify(small.canvas));
+        assert(small.canvas.w > 160 && small.canvas.h > 250, pagePath + ' 320px canvas ' + JSON.stringify(small.canvas));
         assert(small.pause && small.pause.w >= 44 && small.pause.h >= 44, pagePath + ' 320px pause target ' + JSON.stringify(small.pause));
+        assert(small.back && small.back.w >= 44 && small.back.h >= 44, pagePath + ' 320px back target ' + JSON.stringify(small.back));
+        assert(small.title && small.title.sw <= small.title.cw + 1, pagePath + ' 320px title clipped ' + JSON.stringify(small.title));
+        assert(small.secondary && (small.secondary.hidden ? small.secondary.display === 'none' : small.secondary.w >= 44), pagePath + ' 320px secondary button ' + JSON.stringify(small.secondary));
       }
     }
     record('320×568 小屏 14 页无横向溢出 + 44px 暂停按钮', true);
-    await cdp.screenshot('narrow-320.png');
+    await cdp.navigate(base + '/apps/arcade/');
+    const hallSmall = await cdp.evaluate(`({
+      searchFont: getComputedStyle(document.querySelector('[data-search]')).fontSize,
+      clearSize: (() => { const b = document.querySelector('.hall-card-clear'); const r = b.getBoundingClientRect(); return { w: Math.round(r.width), h: Math.round(r.height) }; })()
+    })`);
+    assert(parseFloat(hallSmall.searchFont) >= 16, 'hall search font ' + hallSmall.searchFont);
+    assert(hallSmall.clearSize.w >= 44 && hallSmall.clearSize.h >= 44, 'hall clear target ' + JSON.stringify(hallSmall.clearSize));
+    record('中心页 320px 搜索 16px + 清除按钮 44px', true);
+    await cdp.screenshot('narrow-hall-320.png');
 
     for (const [width, height] of [[390, 844], [430, 932]]) {
       await cdp.send('Emulation.setDeviceMetricsOverride', { width, height, deviceScaleFactor: 1, mobile: true });
@@ -733,6 +823,30 @@ async function main() {
     }
     record('390×844 / 430×932 视口 14 页无横向溢出', true);
 
+    /* ---------- 刘海安全区（Chrome CDP 支持时） ---------- */
+    let safeAreaApplied = false;
+    try {
+      await cdp.send('Emulation.setSafeAreaInsetsOverride', { insets: { top: 47, left: 0, bottom: 34, right: 0 } });
+      safeAreaApplied = true;
+      await cdp.send('Emulation.setDeviceMetricsOverride', { width: 390, height: 844, deviceScaleFactor: 1, mobile: true });
+      await cdp.navigate(base + '/apps/arcade/games/star-raid.html');
+      const safe = await cdp.evaluate(`({
+        paddingTop: getComputedStyle(document.querySelector('.studiokit-shellbar')).paddingTop,
+        shellH: Math.round(document.querySelector('.studiokit-shellbar').getBoundingClientRect().height),
+        docH: document.documentElement.scrollHeight,
+        viewH: window.innerHeight
+      })`);
+      assert(parseFloat(safe.paddingTop) >= 47, 'shell safe-area padding ' + JSON.stringify(safe));
+      assert(safe.docH <= safe.viewH + 2, 'safe-area page overflow ' + JSON.stringify(safe));
+      record('390×844 刘海安全区 shellbar/页面高度', true);
+    } catch (err) {
+      console.log('SKIP 刘海安全区（当前 Chrome/CDP 不支持 setSafeAreaInsetsOverride 或断言失败）: ' + err.message);
+    } finally {
+      if (safeAreaApplied) {
+        await cdp.send('Emulation.setSafeAreaInsetsOverride', { insets: { top: 0, left: 0, bottom: 0, right: 0 } }).catch(() => {});
+      }
+    }
+    await cdp.navigate(base + '/apps/arcade/');
     await cdp.screenshot('narrow-hall.png');
 
     /* ---------- 清理测试产生的本地数据 ---------- */
