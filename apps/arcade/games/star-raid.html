@@ -2,7 +2,7 @@
 <html lang="zh-CN">
 <head>
   <meta charset="utf-8" />
-  <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no, viewport-fit=cover" />
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
   <meta name="description" content="星海突击：雷电式纵版弹幕射击，可吃散射 / 激光 / 追踪 / 速射四种弹种 Buff，街机厅小游戏，本地即玩。" />
   <meta name="theme-color" content="#0b1020" />
   <link rel="stylesheet" href="../../../shared/site.css" />
@@ -44,7 +44,7 @@
     (() => {
       'use strict';
       const A = window.Arcade;
-      const { clamp, rand, randInt, TAU } = A.utils;
+      const { clamp, rand, randInt, pick, TAU } = A.utils;
 
       const W = 420;
       const H = 740;
@@ -89,6 +89,7 @@
       let pickupPity = 0;
       let weapon = 'normal';
       let weaponTimer = 0;
+      let elapsed = 0;
       const high = A.Progress.get('star-raid').high;
       dom.hudHigh.textContent = String(high);
 
@@ -110,21 +111,38 @@
         tank: { w: 54, h: 44, hp: 6, score: 80, color: '#ff5d7a', speed: [38, 50] },
       };
 
-      function level() {
-        return 1 + Math.floor(score / 150);
-      }
-      function speedFactor() {
-        return 1 + (level() - 1) * 0.05;
+      /* ---------- 波次：让难度以可读的阶段递进，而不是只看分数 ---------- */
+      const WAVES = [
+        { name: '巡逻', at: 0, spawn: 1.2, speed: 1.0, kinds: ['drone'], fire: false, maxEnemies: 7, maxShots: 0 },
+        { name: '俯冲', at: 20, spawn: 1.05, speed: 1.08, kinds: ['drone', 'diver'], fire: false, maxEnemies: 8, maxShots: 0 },
+        { name: '弹幕', at: 45, spawn: 0.94, speed: 1.15, kinds: ['drone', 'diver', 'sine'], fire: true, maxEnemies: 9, maxShots: 12 },
+        { name: '精英', at: 75, spawn: 0.84, speed: 1.22, kinds: ['drone', 'diver', 'sine', 'tank'], fire: true, maxEnemies: 10, maxShots: 18 },
+        { name: '休整', at: 95, spawn: 1.7, speed: 0.92, kinds: ['drone'], fire: false, maxEnemies: 5, maxShots: 0, rest: true },
+      ];
+      const WAVE_CYCLE = 103;
+
+      function waveInfo() {
+        const cycle = Math.floor(elapsed / WAVE_CYCLE);
+        const t = elapsed % WAVE_CYCLE;
+        let phase = WAVES[0];
+        for (let i = 0; i < WAVES.length; i++) {
+          if (t >= WAVES[i].at) phase = WAVES[i];
+        }
+        return {
+          cycle,
+          phase,
+          label: 'W' + (cycle + 1) + ' ' + phase.name,
+          scale: 1 + cycle * 0.12,
+          maxEnemies: Math.min(14, phase.maxEnemies + cycle * 2),
+          maxShots: Math.min(26, phase.maxShots + cycle * 2),
+        };
       }
 
       function spawnEnemy() {
-        const lv = level();
-        const roll = Math.random();
-        let kind = 'drone';
-        if (lv >= 2 && roll > 0.72) kind = 'diver';
-        if (lv >= 3 && roll > 0.86) kind = 'sine';
-        if (lv >= 4 && roll > 0.95) kind = 'tank';
-        const def = KINDS[kind];
+        const wave = waveInfo();
+        const defs = wave.phase.kinds.map((k) => KINDS[k]);
+        const def = pick(defs);
+        const kind = Object.keys(KINDS).find((k) => KINDS[k] === def) || 'drone';
         const e = {
           uid: nextUid++,
           kind,
@@ -132,12 +150,12 @@
           y: -def.h - 6,
           w: def.w,
           h: def.h,
-          hp: def.hp + (kind === 'tank' ? Math.floor(lv / 4) : 0),
+          hp: def.hp + (kind === 'tank' ? Math.min(4, wave.cycle * 2) : 0),
           score: def.score,
           color: def.color,
-          vy: rand(def.speed[0], def.speed[1]) * speedFactor(),
+          vy: rand(def.speed[0], def.speed[1]) * wave.phase.speed * (1 + wave.cycle * 0.06),
           t: rand(0, 10),
-          fireTimer: rand(0.8, 2.2),
+          fireTimer: wave.phase.fire ? rand(0.8, 2.2) : 999,
           baseX: 0,
           vx: 0,
         };
@@ -175,6 +193,7 @@
         pickupPity = 0;
         weapon = 'normal';
         weaponTimer = 0;
+        elapsed = 0;
         player.x = W / 2;
         player.y = H - 90;
         player.cool = 0;
@@ -293,6 +312,7 @@
           pickupPity,
           weapon,
           weaponTimer,
+          elapsed,
         };
       }
 
@@ -356,6 +376,7 @@
           weapon = WEAPONS[data.weapon] ? data.weapon : 'normal';
           weaponTimer = Math.max(0, Number(data.weaponTimer) || 0);
           if (weapon === 'normal') weaponTimer = 0;
+          elapsed = Math.max(0, Number(data.elapsed) || 0);
           recordSaved = false;
           syncHud();
           return true;
@@ -368,7 +389,7 @@
         every: 4,
         meta: () => ({
           score,
-          summary: `得分 ${score} · 生命 ${lives} · ${WEAPONS[weapon].name}弹`,
+          summary: `得分 ${score} · ${waveInfo().label} · 生命 ${lives}`,
         }),
       });
 
@@ -383,6 +404,7 @@
           return;
         }
         autosave.tick(dt);
+        elapsed += dt;
         updatePlayer(dt);
         updateEnemies(dt);
         updateBullets(dt);
@@ -475,12 +497,15 @@
       }
 
       function updateEnemies(dt) {
+        const wave = waveInfo();
         spawnTimer -= dt;
-        const interval = Math.max(0.38, 1.15 - (level() - 1) * 0.07);
-        if (spawnTimer <= 0) {
-          spawnTimer = interval;
-          spawnEnemy();
-          if (level() >= 5 && Math.random() > 0.7) spawnEnemy();
+        if (!wave.phase.rest && enemies.length < wave.maxEnemies) {
+          if (spawnTimer <= 0) {
+            spawnTimer = wave.phase.spawn / wave.scale;
+            spawnEnemy();
+          }
+        } else if (spawnTimer < 0.2) {
+          spawnTimer = 0.2;
         }
 
         for (let i = enemies.length - 1; i >= 0; i--) {
@@ -493,17 +518,18 @@
           } else if (e.kind === 'diver') {
             e.x += e.vx * dt;
           }
-          if (e.kind === 'sine' || e.kind === 'tank') {
+          if (wave.phase.fire && (e.kind === 'sine' || e.kind === 'tank')) {
             e.fireTimer -= dt;
             if (e.fireTimer <= 0 && e.y > 0 && e.y < H - 260) {
               e.fireTimer = e.kind === 'tank' ? rand(1.6, 2.4) : rand(2.0, 3.2);
-              const spd = 170 + level() * 6;
+              const spd = 165 + wave.cycle * 14;
               if (e.kind === 'tank') {
                 for (let k = -1; k <= 1; k++) {
+                  if (shots.length >= wave.maxShots) break;
                   const ang = Math.atan2(player.y - e.y, player.x - e.x) + k * 0.38;
                   shots.push({ x: e.x + e.w / 2, y: e.y + e.h, vx: Math.cos(ang) * spd, vy: Math.sin(ang) * spd, r: 4 });
                 }
-              } else {
+              } else if (shots.length < wave.maxShots) {
                 enemyShot(e, spd);
               }
             }
@@ -606,11 +632,17 @@
         A.Sfx.play('bell', 8);
       }
 
-      function killEnemy(e, idx) {
+      function killEnemy(e, idx, award) {
         enemies.splice(idx, 1);
-        score += e.score;
-        syncHud();
-        addFloater(e.x + e.w / 2, e.y, '+' + e.score, '#ffd23f');
+        if (award !== false) {
+          score += e.score;
+          syncHud();
+          addFloater(e.x + e.w / 2, e.y, '+' + e.score, '#ffd23f');
+          pickupPity += 1;
+          if (Math.random() < (e.kind === 'tank' ? 0.8 : 0.1) || pickupPity >= 12) dropPickup(e);
+        } else {
+          addFloater(e.x + e.w / 2, e.y, '撞毁', '#ff9a9a');
+        }
         particles.emit(e.x + e.w / 2, e.y + e.h / 2, {
           count: A.reducedMotion ? 6 : 16,
           speed: [40, 220],
@@ -621,8 +653,6 @@
         });
         A.Sfx.play(e.kind === 'tank' ? 'explode' : 'hit');
         if (e.kind === 'tank') shake = A.reducedMotion ? 0 : 5;
-        pickupPity += 1;
-        if (Math.random() < (e.kind === 'tank' ? 0.8 : 0.1) || pickupPity >= 12) dropPickup(e);
       }
 
       function hitPlayer() {
@@ -669,7 +699,7 @@
         for (let i = enemies.length - 1; i >= 0; i--) {
           const e = enemies[i];
           if (A.Physics.aabbOverlap(hb, e)) {
-            killEnemy(e, i);
+            killEnemy(e, i, false);
             hitPlayer();
           }
         }
@@ -861,7 +891,11 @@
 
         /* 画布内 HUD */
         A.draw.label(ctx, 'SCORE ' + score, 12, 20, { align: 'left', font: 'bold 14px system-ui, sans-serif', color: '#ffd23f' });
-        A.draw.label(ctx, 'LV ' + level(), W / 2, 20, { font: 'bold 12px system-ui, sans-serif', color: '#93a0c8' });
+        const wave = waveInfo();
+        A.draw.label(ctx, wave.label, W / 2, 20, {
+          font: 'bold 12px system-ui, sans-serif',
+          color: wave.phase.rest ? '#63d68c' : '#93a0c8',
+        });
         for (let i = 0; i < lives; i++) {
           ctx.save();
           ctx.translate(W - 20 - i * 18, 20);
@@ -926,7 +960,45 @@
             return true;
           },
           info() {
-            return { weapon, weaponTimer, pickups: pickups.length, score, lives };
+            const wave = waveInfo();
+            return {
+              weapon,
+              weaponTimer,
+              pickups: pickups.length,
+              score,
+              lives,
+              elapsed,
+              wave: wave.label,
+              maxEnemies: wave.maxEnemies,
+              maxShots: wave.maxShots,
+              shots: shots.length,
+              enemies: enemies.length,
+            };
+          },
+          setElapsed(seconds) {
+            elapsed = Math.max(0, Number(seconds) || 0);
+            return waveInfo().label;
+          },
+          forceBodyCollision() {
+            bullets = [];
+            player.cool = 999;
+            enemies.push({
+              uid: nextUid++,
+              kind: 'drone',
+              x: player.x - 15,
+              y: player.y - 12,
+              w: 30,
+              h: 24,
+              hp: 1,
+              score: 10,
+              color: '#c06bff',
+              vy: 0,
+              t: 0,
+              fireTimer: 999,
+              baseX: player.x - 15,
+              vx: 0,
+            });
+            return true;
           },
         };
       }

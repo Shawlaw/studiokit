@@ -2,7 +2,7 @@
 <html lang="zh-CN">
 <head>
   <meta charset="utf-8" />
-  <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no, viewport-fit=cover" />
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
   <meta name="description" content="影跃：忍者无尽上跳平台游戏，平台落点保证可达，越往高处越容易出现移动与易碎平台，街机厅小游戏，本地即玩。" />
   <meta name="theme-color" content="#0b1020" />
   <link rel="stylesheet" href="../../../shared/site.css" />
@@ -81,6 +81,7 @@
       let recordSaved = false;
       let score = 0;
       let hintTimer = 0;
+      let generatedCount = 0;
 
       const high = A.Progress.get('shadow-leap').high;
       dom.hudHigh.textContent = String(high);
@@ -99,14 +100,17 @@
           h: 12,
           kind: kind || 'normal',
           dir: Math.random() > 0.5 ? 1 : -1,
-          speed: rand(40, 80),
+          speed: rand(34, 58),
           broken: false,
           breakTimer: 0,
           phase: rand(0, TAU),
         };
       }
 
-      function platformChance(y) {
+      function platformChance(y, index) {
+        /* 前 8 块保持静态宽平台，让玩家先学会起跳；之后才引入机制。 */
+        if (index < 8) return 'normal';
+        if (index < 12) return Math.random() < 0.16 ? 'moving' : 'normal';
         const t = clamp(-y / 12000, 0, 1);
         const r = Math.random();
         if (r < 0.05 + t * 0.10) return 'fragile';
@@ -114,15 +118,35 @@
         return 'normal';
       }
 
+      /* 保守水平可达距离：从静止起跑，忽略“已经在跑”的乐观情况。 */
+      function maxRunDistance(t) {
+        const ACC = 2400;
+        const MAX_VX = 265;
+        const tAcc = MAX_VX / ACC;
+        if (t <= tAcc) return 0.5 * ACC * t * t;
+        return 0.5 * ACC * tAcc * tAcc + MAX_VX * (t - tAcc);
+      }
+
+      function descentTimeForGap(gap) {
+        const v = Math.abs(JUMP_V);
+        const disc = v * v - 2 * GRAVITY * gap;
+        if (disc <= 0) return 0;
+        return (v + Math.sqrt(disc)) / GRAVITY;
+      }
+
       function addPlatformAbove(highest) {
         const t = clamp(-highest.y / 12000, 0, 1);
-        const gap = rand(64, 98 + t * 26);
+        const gap = rand(62, 92 + t * 26);
         const y = highest.y - gap;
-        /* 从上一块平台中心出发，横向偏移最多 150px；跳跃滞空足够覆盖。 */
         const prevCenter = highest.x + highest.w / 2;
         const nextW = rand(74, 118);
-        const center = clamp(prevCenter + rand(-150, 150), nextW / 2 + 8, W - nextW / 2 - 8);
-        const p = makePlatform(center - nextW / 2, y, platformChance(y));
+        /* 只用保守滞空时间计算可达横向距离，再留 18px 安全余量。 */
+        const reach = Math.max(42, maxRunDistance(descentTimeForGap(gap)) - 18);
+        const offset = clamp(reach, 42, 120);
+        const center = clamp(prevCenter + rand(-offset, offset), nextW / 2 + 8, W - nextW / 2 - 8);
+        generatedCount += 1;
+        const kind = platformChance(y, generatedCount);
+        const p = makePlatform(center - nextW / 2, y, kind);
         p.w = nextW;
         return p;
       }
@@ -152,6 +176,7 @@
         player.jumpTimer = 0;
         startY = player.y;
         topY = player.y;
+        generatedCount = 0;
         particles.clear();
         const ground = { x: 40, y: H - 60, w: W - 80, h: 12, kind: 'normal', dir: 1, speed: 0, broken: false, breakTimer: 0, phase: 0 };
         platforms.push(ground);
@@ -259,6 +284,7 @@
           topY,
           startY,
           score,
+          generatedCount,
         };
       }
 
@@ -291,6 +317,7 @@
           topY = Number(data.topY) || player.y;
           startY = Number(data.startY) || player.y;
           score = Math.max(0, Number(data.score) || 0);
+          generatedCount = Math.max(0, Number(data.generatedCount) || platforms.length - 1);
           recordSaved = false;
           syncHud();
           return true;
@@ -574,6 +601,16 @@
 
       reset();
       state = 'ready';
+      if (location.hash === '#test') {
+        window.__arcadeTest = {
+          info() {
+            return {
+              score,
+              platforms: platforms.map((p) => ({ x: p.x, y: p.y, w: p.w, kind: p.kind, broken: p.broken })),
+            };
+          },
+        };
+      }
       const saved = autosave.load();
       if (saved) {
         A.showResumePrompt(ui, saved, {

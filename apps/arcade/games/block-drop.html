@@ -2,7 +2,7 @@
 <html lang="zh-CN">
 <head>
   <meta charset="utf-8" />
-  <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no, viewport-fit=cover" />
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
   <meta name="description" content="俄罗斯方块：经典落块消除游戏，街机厅小游戏，本地即玩。" />
   <meta name="theme-color" content="#0b1020" />
   <link rel="stylesheet" href="../../../shared/site.css" />
@@ -11,7 +11,7 @@
   <script src="../engine.js"></script>
   <title>俄罗斯方块 · 街机厅 · StudioKit</title>
 </head>
-<body class="arcade-body" data-studiokit-app="arcade" data-studiokit-app-title="街机厅 Arcade" style="--ac-accent:#7c5cff; --card-accent:#7c5cff">
+<body class="arcade-body has-extra-controls" data-studiokit-app="arcade" data-studiokit-app-title="街机厅 Arcade" style="--ac-accent:#7c5cff; --card-accent:#7c5cff">
   <noscript><p class="ac-noscript">此游戏需要启用 JavaScript 才能运行。</p></noscript>
   <main class="game-page">
     <header class="game-topbar">
@@ -780,6 +780,39 @@
       reset();
       state = 'ready';
       bindTouchPad();
+      if (location.hash === '#test') {
+        window.__arcadeTest = {
+          info() {
+            return {
+              score,
+              lines,
+              level,
+              state,
+              curKey: cur ? cur.key : null,
+              nextKey,
+              bag: bag.slice(),
+            };
+          },
+          lineClearScenario() {
+            board = [];
+            for (let r = 0; r < ROWS; r++) board.push(new Array(COLS).fill(null));
+            for (let c = 0; c < 6; c++) board[ROWS - 1][c] = '#7c5cff';
+            cur = {
+              key: 'I',
+              m: PIECES.I.m.map((row) => row.slice()),
+              color: PIECES.I.color,
+              x: 6,
+              y: ROWS - 2,
+            };
+            grounded = false;
+            lockTimer = 0;
+            lockResets = 0;
+            state = 'playing';
+            hardDrop();
+            return true;
+          },
+        };
+      }
       const saved = autosave.load();
       if (saved) {
         A.showResumePrompt(ui, saved, {

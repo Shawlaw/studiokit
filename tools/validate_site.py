@@ -139,7 +139,7 @@ def validate(root=ROOT):
     arcade_engine = root / 'apps/arcade/engine.js'
     if arcade_engine.exists():
         source = arcade_engine.read_text(encoding='utf-8')
-        if "const ARCADE_VERSION = '0.3.0'" not in source:
+        if "const ARCADE_VERSION = '0.3.1'" not in source:
             ok = fail('Arcade ARCADE_VERSION drifted; update registry/README/CHANGELOG together') and ok
         if source.count("file: '") < 13:
             ok = fail('Arcade GAMES list should contain at least 13 games') and ok
@@ -149,8 +149,8 @@ def validate(root=ROOT):
             try:
                 registry = json.loads(registry_path.read_text(encoding='utf-8'))
                 arcade = next((t for t in registry.get('tools', []) if t.get('id') == 'arcade'), None)
-                if arcade and arcade.get('version') != '0.3.0':
-                    ok = fail('Arcade registry version must match engine 0.3.0') and ok
+                if arcade and arcade.get('version') != '0.3.1':
+                    ok = fail('Arcade registry version must match engine 0.3.1') and ok
             except Exception:
                 pass
 

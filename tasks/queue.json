@@ -250,6 +250,26 @@
       "completedAt": "2026-11-08T16:51:17+00:00",
       "evidence": "Owner 当前任务明确要求推送部署；main 推送 aba11a9；Actions run 42501786872 全成功（Validate and build / Deploy StudioKit）；线上 https://shawlaw.github.io/studiokit/apps/arcade/ 200，无头 Chrome 执行后 13 张游戏卡与 v0.3.0 可见；engine.js 线上 ARCADE_VERSION 0.3.0、GAMES 13；registry arcade status=available version=0.3.0；13 款游戏页全部 HTTP 200；本地 34/34 CDP 冒烟通过",
       "ownerAuthorizationVerifiedByAgentFlag": true
+    },
+    {
+      "id": "T014",
+      "title": "街机厅 0.3.1：按游戏性评审包优化公平性、输入与移动端布局",
+      "kind": "agent",
+      "status": "DONE",
+      "dependsOn": [
+        "T013"
+      ],
+      "ownerAuthorizationRequired": false,
+      "acceptance": [
+        "共享输入修复多指归属、pointercancel、blur/visibility 清理与可编辑控件键盘拦截",
+        "雪铃同一铃铛只计分一次；影跃平台可达域与前 8 块教学平台；星海 4 阶段波次与撞机不得分",
+        "极速车道一次一车道、真实车道边界与 1.2s 安全走廊；层塔前 3 层落点提示；黄金矿工前 5 关配置/价值保底/提前结算",
+        "暂停按钮 44px、320/375/390/430 视口无横向溢出、移除全页缩放限制、safe-area 内边距",
+        "validate_site.py / build_site.py / node --check / 43 项无头浏览器测试通过；旧进度 key 与 13 款游戏回归"
+      ],
+      "claimedAt": "2026-11-09T00:15:00+00:00",
+      "completedAt": "2026-11-09T00:55:00+00:00",
+      "evidence": "版本 0.3.1；共享 createInput 支持 active pointerId/取消/失焦；雪铃 consumed 与波纹世界坐标；影跃保守可达域+前 8 块静态教学；星海 4 波次+休整+敌机/敌弹上限+撞机不计分；极速车道离散变道+安全走廊+车道线修正；层塔落点投影/反馈/统一暂停；黄金矿工 levelSpec/价值保底/前 2 关无炸药/提前结算；俄罗斯方块 7-bag/消行测试；43/43 CDP 通过；320/375/390/430 全页无横向溢出；未执行真实 iOS/Android 真机与 5000/10000 种子穷举，保留为 UNVERIFIED"
     }
   ]
 }

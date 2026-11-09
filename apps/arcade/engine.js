@@ -7,7 +7,7 @@
 (() => {
   'use strict';
 
-  const ARCADE_VERSION = '0.3.0';
+  const ARCADE_VERSION = '0.3.1';
   const PROGRESS_KEY = 'studiokit:arcade:progress:v1';
   const PREFS_KEY = 'studiokit:arcade:prefs:v1';
   const RUNS_KEY = 'studiokit:arcade:runs:v1';
@@ -568,21 +568,53 @@
   function createInput(canvas) {
     const keys = new Set();
     const BLOCKED = new Set(['ArrowUp', 'ArrowDown', 'ArrowLeft', 'ArrowRight', ' ', 'Spacebar']);
-    const pointer = { x: 0, y: 0, down: false, wentDown: false, wentUp: false };
+    const pointer = {
+      x: 0,
+      y: 0,
+      startX: 0,
+      startY: 0,
+      dx: 0,
+      dy: 0,
+      down: false,
+      wentDown: false,
+      wentUp: false,
+      wentCancel: false,
+      moved: false,
+      id: null,
+      type: '',
+    };
 
     function normKey(e) {
       return e.key.length === 1 ? e.key.toLowerCase() : e.key;
     }
+    function isEditableTarget(target) {
+      if (!target || !target.tagName) return false;
+      const tag = target.tagName.toLowerCase();
+      return tag === 'input' || tag === 'textarea' || tag === 'select' || target.isContentEditable;
+    }
     function onKeyDown(e) {
+      if (isEditableTarget(e.target)) return;
       if (BLOCKED.has(e.key)) e.preventDefault();
       keys.add(normKey(e));
     }
     function onKeyUp(e) {
       keys.delete(normKey(e));
     }
+    function clearPointer() {
+      pointer.down = false;
+      pointer.wentDown = false;
+      pointer.wentUp = false;
+      pointer.wentCancel = false;
+      pointer.moved = false;
+      pointer.id = null;
+      pointer.type = '';
+    }
     function onBlur() {
       keys.clear();
-      pointer.down = false;
+      clearPointer();
+    }
+    function onVisibility() {
+      if (document.hidden) onBlur();
     }
     function toLogicalX(clientX) {
       const rect = canvas.getBoundingClientRect();
@@ -592,34 +624,67 @@
       const rect = canvas.getBoundingClientRect();
       return rect.height > 0 ? ((clientY - rect.top) / rect.height) * canvas.__arcadeLogicalH : 0;
     }
+    function updatePosition(e) {
+      pointer.x = toLogicalX(e.clientX);
+      pointer.y = toLogicalY(e.clientY);
+      pointer.dx = pointer.x - pointer.startX;
+      pointer.dy = pointer.y - pointer.startY;
+      if (Math.abs(pointer.dx) > 4 || Math.abs(pointer.dy) > 4) pointer.moved = true;
+    }
     function onPointerDown(e) {
+      /* 只让第一根手指拥有指针；第二根手指不能劫持拖动坐标。 */
+      if (pointer.id !== null && pointer.id !== e.pointerId) return;
+      if (e.button != null && e.button !== 0) return;
       e.preventDefault();
+      pointer.id = e.pointerId;
+      pointer.type = e.pointerType || 'mouse';
+      pointer.down = true;
+      pointer.wentDown = true;
+      pointer.wentUp = false;
+      pointer.wentCancel = false;
+      pointer.moved = false;
+      pointer.x = toLogicalX(e.clientX);
+      pointer.y = toLogicalY(e.clientY);
+      pointer.startX = pointer.x;
+      pointer.startY = pointer.y;
+      pointer.dx = 0;
+      pointer.dy = 0;
       try {
         canvas.setPointerCapture(e.pointerId);
       } catch (err) {
         /* 忽略捕获失败 */
       }
-      pointer.down = true;
-      pointer.wentDown = true;
-      pointer.x = toLogicalX(e.clientX);
-      pointer.y = toLogicalY(e.clientY);
     }
     function onPointerMove(e) {
-      pointer.x = toLogicalX(e.clientX);
-      pointer.y = toLogicalY(e.clientY);
+      if (pointer.id !== null && e.pointerId !== pointer.id) return;
+      if (pointer.id === null) return;
+      updatePosition(e);
     }
     function onPointerUp(e) {
+      if (pointer.id !== null && e.pointerId !== pointer.id) return;
+      updatePosition(e);
       pointer.down = false;
       pointer.wentUp = true;
+      pointer.wentCancel = false;
+      pointer.id = null;
+    }
+    function onPointerCancel(e) {
+      if (pointer.id !== null && e.pointerId !== pointer.id) return;
+      pointer.down = false;
+      pointer.wentUp = false;
+      pointer.wentCancel = true;
+      pointer.moved = false;
+      pointer.id = null;
     }
 
     window.addEventListener('keydown', onKeyDown);
     window.addEventListener('keyup', onKeyUp);
     window.addEventListener('blur', onBlur);
+    document.addEventListener('visibilitychange', onVisibility);
     canvas.addEventListener('pointerdown', onPointerDown);
     canvas.addEventListener('pointermove', onPointerMove);
     canvas.addEventListener('pointerup', onPointerUp);
-    canvas.addEventListener('pointercancel', onPointerUp);
+    canvas.addEventListener('pointercancel', onPointerCancel);
     canvas.style.touchAction = 'none';
 
     return {
@@ -630,15 +695,17 @@
       endFrame() {
         pointer.wentDown = false;
         pointer.wentUp = false;
+        pointer.wentCancel = false;
       },
       destroy() {
         window.removeEventListener('keydown', onKeyDown);
         window.removeEventListener('keyup', onKeyUp);
         window.removeEventListener('blur', onBlur);
+        document.removeEventListener('visibilitychange', onVisibility);
         canvas.removeEventListener('pointerdown', onPointerDown);
         canvas.removeEventListener('pointermove', onPointerMove);
         canvas.removeEventListener('pointerup', onPointerUp);
-        canvas.removeEventListener('pointercancel', onPointerUp);
+        canvas.removeEventListener('pointercancel', onPointerCancel);
       },
     };
   }

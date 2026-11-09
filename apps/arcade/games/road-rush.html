@@ -2,7 +2,7 @@
 <html lang="zh-CN">
 <head>
   <meta charset="utf-8" />
-  <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no, viewport-fit=cover" />
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
   <meta name="description" content="极速车道：n 路赛车避障竞速游戏，街机厅小游戏，本地即玩。" />
   <meta name="theme-color" content="#0b1020" />
   <link rel="stylesheet" href="../../../shared/site.css" />
@@ -11,7 +11,7 @@
   <script src="../engine.js"></script>
   <title>极速车道 · 街机厅 · StudioKit</title>
 </head>
-<body class="arcade-body" data-studiokit-app="arcade" data-studiokit-app-title="街机厅 Arcade" style="--ac-accent:#ff7847; --card-accent:#ff7847">
+<body class="arcade-body has-extra-controls" data-studiokit-app="arcade" data-studiokit-app-title="街机厅 Arcade" style="--ac-accent:#ff7847; --card-accent:#ff7847">
   <noscript><p class="ac-noscript">此游戏需要启用 JavaScript 才能运行。</p></noscript>
   <main class="game-page">
     <header class="game-topbar">
@@ -37,7 +37,11 @@
         </div>
       </div>
     </div>
-    <p class="game-hint">←→ / A D 或触摸左右半屏变道 · 车速会越来越快 · P 暂停</p>
+    <div class="touch-pad road-pad" data-touch-pad aria-label="赛车变道操作面板">
+      <button type="button" class="touch-btn" data-touch="left" aria-label="向左变道">←</button>
+      <button type="button" class="touch-btn" data-touch="right" aria-label="向右变道">→</button>
+    </div>
+    <p class="game-hint">←→ / A D 或点击左右按钮变道 · 一次操作移动一条车道 · 车速会越来越快 · P / Esc 暂停</p>
   </main>
   <script>
     (() => {
@@ -99,7 +103,7 @@
         return CX + half * 2 * (k / LANES - 0.5);
       }
 
-      const player = { x: CX, vx: 0, tilt: 0, invul: 0 };
+      const player = { x: CX, lane: 1, vx: 0, tilt: 0, invul: 0 };
       let cars = [];
       let props = [];
       let speed = 0.28; /* 归一化速度 0~1 */
@@ -111,6 +115,7 @@
       let recordSaved = false;
       let shake = 0;
       let exhaustTimer = 0;
+      let keyWasDown = {};
 
       const high = A.Progress.get('road-rush').high;
       dom.hudHigh.textContent = String(high);
@@ -129,7 +134,8 @@
         for (let i = 0; i < 10; i++) {
           props.push({ z: i / 10 + rand(0, 0.05), side: i % 2 === 0 ? -1 : 1, kind: randInt(0, 1) });
         }
-        player.x = CX;
+        player.x = laneCenterX(1, uOf(0));
+        player.lane = 1;
         player.vx = 0;
         player.tilt = 0;
         player.invul = 0;
@@ -162,6 +168,7 @@
         hideOverlay();
         loop.resume();
         pauseUi.sync();
+        syncTouchPad();
         autosave.saveNow();
       }
 
@@ -171,6 +178,7 @@
         hideOverlay();
         loop.resume();
         pauseUi.sync();
+        syncTouchPad();
       }
 
       function gameOver() {
@@ -195,6 +203,7 @@
           startGame
         );
         pauseUi.sync();
+        syncTouchPad();
       }
 
       function pauseByUser() {
@@ -204,15 +213,44 @@
         autosave.saveNow();
         showOverlay('已暂停', '引擎怠速中。<br/>局内进度已保存，可以随时离开。', '继续', resumeGame);
         pauseUi.sync();
+        syncTouchPad();
       }
 
       function showStart() {
         showOverlay(
           '极速车道',
-          '四车道赛车避障：车流越来越快。<br/>生命 ×3 · 撞车会大幅减速<br/>速度随行驶距离逐步提升',
+          '四车道赛车避障：车流越来越快。<br/>点击左右按钮或 ←→ 一次变一条车道<br/>生命 ×3 · 撞车会大幅减速',
           '开始游戏',
           startGame
         );
+      }
+
+      function changeLane(delta) {
+        if (state !== 'playing') return;
+        const next = clamp(player.lane + delta, 0, LANES - 1);
+        if (next === player.lane) return;
+        player.lane = next;
+        A.Sfx.play('ui');
+      }
+
+      function syncTouchPad() {
+        document.querySelectorAll('[data-touch]').forEach((btn) => {
+          btn.disabled = state !== 'playing';
+        });
+      }
+
+      function bindTouchPad() {
+        const pad = document.querySelector('[data-touch-pad]');
+        if (!pad) return;
+        pad.querySelectorAll('[data-touch]').forEach((btn) => {
+          btn.addEventListener('pointerdown', (e) => {
+            e.preventDefault();
+            if (state !== 'playing') return;
+            changeLane(btn.dataset.touch === 'left' ? -1 : 1);
+          });
+          btn.addEventListener('contextmenu', (e) => e.preventDefault());
+        });
+        syncTouchPad();
       }
 
       /* ---------- 局内存档 ---------- */
@@ -226,7 +264,7 @@
           lives,
           spawnTimer,
           dashOffset,
-          player: { x: player.x, vx: player.vx, tilt: player.tilt, invul: player.invul },
+          player: { x: player.x, lane: player.lane, vx: player.vx, tilt: player.tilt, invul: player.invul },
         };
       }
 
@@ -256,12 +294,15 @@
           lives = clamp(Number(data.lives) || 3, 1, 3);
           spawnTimer = Number(data.spawnTimer) || 0.8;
           dashOffset = Number(data.dashOffset) || 0;
-          player.x = clamp(Number(data.player.x) || CX, CX - 150, CX + 150);
+          player.x = clamp(Number(data.player.x) || laneCenterX(1, uOf(0)), CX - 150, CX + 150);
+          const savedLane = Number(data.player.lane);
+          player.lane = Number.isFinite(savedLane) ? clamp(Math.round(savedLane), 0, LANES - 1) : 1;
           player.vx = Number(data.player.vx) || 0;
           player.tilt = Number(data.player.tilt) || 0;
           player.invul = Number(data.player.invul) || 0;
           recordSaved = false;
           syncHud();
+          syncTouchPad();
           return true;
         } catch (err) {
           return false;
@@ -273,26 +314,52 @@
         meta: () => ({ score: Math.floor(dist), summary: `${Math.floor(dist)}m · ${Math.round(speed * 360)}km/h` }),
       });
 
+      function laneClearTime(lane, extra) {
+        let min = Infinity;
+        const consider = (car) => {
+          if (!car || car.lane !== lane || car.own >= speed) return;
+          const closing = (speed - car.own) / 0.9;
+          if (closing <= 0) return;
+          const t = Math.max(0, car.z) / closing;
+          if (t < min) min = t;
+        };
+        cars.forEach(consider);
+        if (extra) consider(extra);
+        return min;
+      }
+
+      function safeLaneList(extra) {
+        const out = [];
+        for (let lane = 0; lane < LANES; lane++) {
+          if (laneClearTime(lane, extra) > 1.2) out.push(lane);
+        }
+        return out;
+      }
+
       function spawnCar() {
-        /* 保证不会四车道同时封死：近段(z<0.55)已有车道 + 新车 < 4 */
-        const nearLanes = new Set(cars.filter((c) => c.z < 0.55).map((c) => c.lane));
-        if (nearLanes.size >= LANES - 1) return;
-        let lane = randInt(0, LANES - 1);
-        let tries = 0;
-        while (nearLanes.has(lane) && tries++ < 8) lane = randInt(0, LANES - 1);
-        if (nearLanes.has(lane)) return;
-        const kindIdx = speed > 0.55 && Math.random() > 0.85 ? 2 : randInt(0, 1);
-        const k = CAR_KINDS[kindIdx];
-        cars.push({
-          lane,
-          z: 1,
-          own: rand(k.own[0], k.own[1]),
-          w: k.w,
-          h: k.h,
-          truck: !!k.truck,
-          color: k.truck ? k.color : CAR_COLORS[randInt(0, CAR_COLORS.length - 1)],
-          passed: false,
-        });
+        if (cars.length >= 18) return;
+        for (let attempt = 0; attempt < 14; attempt++) {
+          const lane = randInt(0, LANES - 1);
+          const kindIdx = speed > 0.55 && Math.random() > 0.85 ? 2 : randInt(0, 1);
+          const k = CAR_KINDS[kindIdx];
+          const candidate = {
+            lane,
+            z: 1,
+            own: rand(k.own[0], k.own[1]),
+            w: k.w,
+            h: k.h,
+            truck: !!k.truck,
+            color: k.truck ? k.color : CAR_COLORS[randInt(0, CAR_COLORS.length - 1)],
+            passed: false,
+          };
+          const safe = safeLaneList(candidate);
+          /* 保留一条玩家在 1.2 秒内（最多两车道）能到达的安全走廊。 */
+          const reachable = safe.some((l) => Math.abs(l - player.lane) <= 2);
+          if (reachable) {
+            cars.push(candidate);
+            return;
+          }
+        }
       }
 
       /* ---------- 更新 ---------- */
@@ -312,16 +379,19 @@
         dist += mps * dt;
         syncHud();
 
-        /* 玩家横移 */
-        let dir = 0;
-        if (input.isDown('ArrowLeft', 'a')) dir -= 1;
-        if (input.isDown('ArrowRight', 'd')) dir += 1;
-        if (input.pointer.down) dir = input.pointer.x < W / 2 ? -1 : 1;
-        player.vx = lerp(player.vx, dir * 300, Math.min(1, 12 * dt));
-        player.x += player.vx * dt;
-        const halfRoadNear = roadHalfAt(uOf(0)) - 24;
-        player.x = clamp(player.x, CX - halfRoadNear + 22, CX + halfRoadNear - 22);
-        player.tilt = lerp(player.tilt, clamp(player.vx / 300, -1, 1) * 0.14, Math.min(1, 10 * dt));
+        /* 玩家变道：一次按键/点击移动一条车道，x 只做短过渡动画。 */
+        const leftNow = input.isDown('ArrowLeft', 'a');
+        const rightNow = input.isDown('ArrowRight', 'd');
+        if (leftNow && !keyWasDown.left) changeLane(-1);
+        if (rightNow && !keyWasDown.right) changeLane(1);
+        keyWasDown.left = leftNow;
+        keyWasDown.right = rightNow;
+        if (input.pointer.wentDown) changeLane(input.pointer.x < W / 2 ? -1 : 1);
+        const targetX = laneCenterX(player.lane, uOf(0));
+        const prevX = player.x;
+        player.x = lerp(player.x, targetX, Math.min(1, 16 * dt));
+        player.vx = dt > 0 ? (player.x - prevX) / dt : 0;
+        player.tilt = lerp(player.tilt, clamp(player.vx / 420, -1, 1) * 0.14, Math.min(1, 10 * dt));
         player.invul = Math.max(0, player.invul - dt);
 
         /* 车道虚线滚动 */
@@ -482,7 +552,7 @@
             ctx.beginPath();
             ctx.moveTo(xA - wA / 2, yAt(uOf(zA)));
             ctx.lineTo(xA + wA / 2, yAt(uOf(zA)));
-            ctx.moveTo(xB + wB / 2, yAt(uOf(zB)));
+            ctx.lineTo(xB + wB / 2, yAt(uOf(zB)));
             ctx.lineTo(xB - wB / 2, yAt(uOf(zB)));
             ctx.closePath();
             ctx.fill();
@@ -655,6 +725,23 @@
 
       reset();
       state = 'ready';
+      bindTouchPad();
+      if (location.hash === '#test') {
+        window.__arcadeTest = {
+          info() {
+            return { lane: player.lane, x: player.x, speed, cars: cars.length, safe: safeLaneList() };
+          },
+          stressSpawn(count) {
+            let violations = 0;
+            for (let i = 0; i < (count || 100); i++) {
+              spawnCar();
+              const safe = safeLaneList();
+              if (!safe.some((l) => Math.abs(l - player.lane) <= 2)) violations += 1;
+            }
+            return { violations, cars: cars.length, safe: safeLaneList() };
+          },
+        };
+      }
       const saved = autosave.load();
       if (saved) {
         A.showResumePrompt(ui, saved, {

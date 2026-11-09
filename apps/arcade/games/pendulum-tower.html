@@ -2,7 +2,7 @@
 <html lang="zh-CN">
 <head>
   <meta charset="utf-8" />
-  <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no, viewport-fit=cover" />
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
   <meta name="description" content="层塔：钟摆叠箱子物理游戏，钟摆从慢到快逐层加速，偏心会让塔倾斜倒塌，街机厅小游戏，本地即玩。" />
   <meta name="theme-color" content="#0b1020" />
   <link rel="stylesheet" href="../../../shared/site.css" />
@@ -97,6 +97,7 @@
       let leanMeter = 0;
       let shakeVal = 0;
       let floorsReached = 0;
+      let feedback = null;
 
       const high = A.Progress.get('pendulum-tower').high;
       dom.hudHigh.textContent = String(high);
@@ -143,6 +144,7 @@
         flash = 0;
         shakeVal = 0;
         floorsReached = 0;
+        feedback = null;
         particles.clear();
         boxes.push({ x: W / 2 - 55, y: -44, w: 110, h: 44, base: true });
         boxes.push({ x: W / 2 - BOX_W / 2, y: -44 - BOX_H, w: BOX_W, h: BOX_H });
@@ -330,6 +332,7 @@
           perfectCombo += 1;
           score += 10 + perfectCombo * 10;
           flash = 0.5;
+          feedback = { text: '完美对齐 +' + (10 + perfectCombo * 10), color: '#ffd23f', life: 1.1 };
           A.Sfx.play('perfect');
           particles.emit(drop.x + drop.w / 2, drop.y, {
             count: A.reducedMotion ? 8 : 22,
@@ -344,6 +347,7 @@
         } else if (overlap > 6) {
           perfectCombo = 0;
           score += 10;
+          feedback = { text: '普通落点 +10', color: '#93a0c8', life: 0.9 };
           A.Sfx.play('land');
           particles.emit(drop.x + drop.w / 2, drop.y + drop.h, {
             count: 6,
@@ -359,6 +363,7 @@
         } else {
           perfectCombo = 0;
           drop.missed = true;
+          feedback = { text: '落空！', color: '#ff5d5d', life: 1.1 };
         }
 
         if (!drop.missed) {
@@ -399,6 +404,10 @@
         particles.update(dt);
         flash = Math.max(0, flash - dt);
         shakeVal = Math.max(0, shakeVal - dt * 20);
+        if (feedback) {
+          feedback.life -= dt;
+          if (feedback.life <= 0) feedback = null;
+        }
         leanMeter = clamp(Math.abs(towerLean) / LEAN_LIMIT, 0, 1);
 
         if (state === 'collapse') {
@@ -608,6 +617,38 @@
           ctx.rotate(pb.angle * 0.35);
           drawCrate(-BOX_W / 2, -BOX_H / 2, BOX_W, BOX_H, {});
           ctx.restore();
+        }
+
+        /* 前 3 层落点投影：只教对齐，不改变物理与计分。 */
+        if (state === 'playing' && pendHasBox && floorsReached < 3) {
+          const top = towerTop();
+          const topScreenY = top.y - camY;
+          const overlap = Math.min(pb.x + BOX_W / 2, top.x + top.w) - Math.max(pb.x - BOX_W / 2, top.x);
+          const aligned = overlap >= BOX_W * 0.85;
+          ctx.save();
+          ctx.strokeStyle = aligned ? 'rgba(99,214,140,0.8)' : 'rgba(255,210,63,0.65)';
+          ctx.lineWidth = 1.5;
+          ctx.setLineDash([5, 5]);
+          ctx.beginPath();
+          ctx.moveTo(pb.x, pb.y + BOX_H / 2);
+          ctx.lineTo(pb.x, topScreenY);
+          ctx.stroke();
+          ctx.setLineDash([]);
+          ctx.fillStyle = aligned ? 'rgba(99,214,140,0.55)' : 'rgba(255,210,63,0.45)';
+          ctx.fillRect(top.x, topScreenY - 5, top.w, 5);
+          A.draw.label(ctx, aligned ? '对齐' : '左右微调', pb.x, Math.max(88, topScreenY - 18), {
+            font: 'bold 12px system-ui',
+            color: aligned ? '#63d68c' : '#ffd23f',
+          });
+          ctx.restore();
+        }
+
+        if (feedback) {
+          A.draw.label(ctx, feedback.text, W / 2, 112, {
+            font: 'bold 18px system-ui',
+            color: feedback.color,
+            alpha: clamp(feedback.life / 1.1, 0, 1),
+          });
         }
 
         if (flash > 0) {

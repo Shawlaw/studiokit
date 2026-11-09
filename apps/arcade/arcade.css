@@ -51,7 +51,8 @@ body.arcade-body {
   gap: 8px;
   min-height: calc(100vh - var(--studiokit-shellbar-h, 0px));
   min-height: calc(100dvh - var(--studiokit-shellbar-h, 0px));
-  padding: 10px 12px 14px;
+  padding: max(10px, env(safe-area-inset-top)) max(12px, env(safe-area-inset-right))
+    max(14px, env(safe-area-inset-bottom)) max(12px, env(safe-area-inset-left));
 }
 
 .game-topbar {
@@ -95,10 +96,15 @@ body.arcade-body {
 .game-hud strong { color: var(--ac-ink); font-size: 15px; }
 
 .ac-icon-btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-width: 44px;
+  min-height: 44px;
   background: var(--ac-panel);
   border: 1px solid var(--ac-line);
   color: var(--ac-ink);
-  border-radius: 8px;
+  border-radius: 10px;
   padding: 5px 8px;
   font-size: 14px;
   line-height: 1;
@@ -106,7 +112,7 @@ body.arcade-body {
 }
 .ac-icon-btn:hover { border-color: var(--ac-accent); }
 .ac-icon-btn:disabled { opacity: 0.35; cursor: default; border-color: var(--ac-line); }
-.ac-icon-btn[data-pause] { font-size: 13px; min-width: 32px; }
+.ac-icon-btn[data-pause] { font-size: 15px; min-width: 44px; min-height: 44px; }
 
 /* 竖屏舞台：高度由视口与最大宽度共同约束（不依赖父级高度，避免循环依赖），比例永不破坏 */
 .stage-wrap {
@@ -158,6 +164,9 @@ canvas.game-canvas {
   padding: 26px 26px 24px;
   margin: 0 16px;
   max-width: 340px;
+  max-height: calc(100% - 16px);
+  overflow-y: auto;
+  -webkit-overflow-scrolling: touch;
   background: var(--ac-panel);
   border: 1px solid var(--ac-line);
   border-radius: 16px;
@@ -216,6 +225,14 @@ canvas.game-canvas {
   margin-left: 8px;
 }
 .ac-btn-secondary:hover { color: var(--ac-ink); border-color: var(--ac-accent); filter: none; }
+.ac-cashout {
+  width: min(420px, 100%);
+  min-height: 44px;
+  padding: 8px 16px;
+  font-size: 13px;
+  letter-spacing: 0.5px;
+}
+.ac-cashout[hidden] { display: none; }
 
 .game-hint {
   margin: 0;
@@ -234,6 +251,7 @@ canvas.game-canvas {
   gap: 8px;
   margin: 2px auto 0;
 }
+.touch-pad.road-pad { grid-template-columns: repeat(2, minmax(0, 1fr)); }
 .touch-btn {
   appearance: none;
   min-height: 52px;
@@ -266,6 +284,12 @@ canvas.game-canvas {
 
 @media (hover: none), (max-width: 620px) {
   .touch-pad { display: grid; }
+  body.has-extra-controls .stage-box {
+    height: min(
+      calc(100dvh - var(--studiokit-shellbar-h, 0px) - 214px),
+      calc(min(520px, 100vw - 24px) * 740 / 420)
+    );
+  }
 }
 
 /* ---------- 街机厅中心页 ---------- */
@@ -273,7 +297,8 @@ canvas.game-canvas {
 .hall-page {
   max-width: 1020px;
   margin: 0 auto;
-  padding: 26px 18px 40px;
+  padding: max(26px, env(safe-area-inset-top)) max(18px, env(safe-area-inset-right))
+    max(40px, env(safe-area-inset-bottom)) max(18px, env(safe-area-inset-left));
 }
 
 .hall-head { display: flex; flex-wrap: wrap; align-items: flex-end; gap: 12px; margin-bottom: 18px; }
@@ -545,7 +570,7 @@ canvas.game-canvas {
 /* ---------- 窄屏与可访问性 ---------- */
 
 @media (max-width: 620px) {
-  .hall-page { padding: 18px 12px 32px; }
+  .hall-page { padding: max(18px, env(safe-area-inset-top)) max(12px, env(safe-area-inset-right)) max(32px, env(safe-area-inset-bottom)) max(12px, env(safe-area-inset-left)); }
   .hall-stats { margin-left: 0; width: 100%; }
   .game-title { font-size: 15px; }
   .game-hud { gap: 6px; font-size: 12px; }
@@ -563,6 +588,34 @@ canvas.game-canvas {
   .ac-back { padding: 5px 4px; font-size: 13px; }
   .overlay-panel { padding: 22px 18px 20px; }
   .overlay-panel .ac-btn-secondary { display: block; margin: 8px auto 0; }
+}
+
+@media (max-width: 360px) {
+  .game-page { gap: 6px; padding-left: max(8px, env(safe-area-inset-left)); padding-right: max(8px, env(safe-area-inset-right)); }
+  .game-topbar { gap: 4px; }
+  .game-title { font-size: 13px; letter-spacing: 0; }
+  .game-hud { gap: 3px; font-size: 10px; }
+  .game-hud strong { font-size: 12px; }
+  .ac-back { font-size: 12px; padding: 4px 2px; }
+  .ac-icon-btn { min-width: 44px; min-height: 44px; padding: 3px 4px; }
+  .game-hint { font-size: 11px; }
+  .overlay-panel { padding: 14px 14px 12px; margin: 0 8px; }
+  .overlay-panel h2 { font-size: 18px; }
+  .overlay-panel p { font-size: 12px; line-height: 1.5; margin-bottom: 10px; }
+  .overlay-panel .ac-btn { font-size: 13px; padding: 8px 16px; }
+  .overlay-panel .ac-btn-secondary { margin-top: 6px; }
+  .stage-box {
+    height: min(
+      calc(100dvh - var(--studiokit-shellbar-h, 0px) - 172px),
+      calc(min(520px, 100vw - 16px) * 740 / 420)
+    );
+  }
+  body.has-extra-controls .stage-box {
+    height: min(
+      calc(100dvh - var(--studiokit-shellbar-h, 0px) - 218px),
+      calc(min(520px, 100vw - 16px) * 740 / 420)
+    );
+  }
 }
 
 @media (prefers-reduced-motion: reduce) {

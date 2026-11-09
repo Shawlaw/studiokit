@@ -2,7 +2,7 @@
 <html lang="zh-CN">
 <head>
   <meta charset="utf-8" />
-  <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no, viewport-fit=cover" />
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
   <meta name="description" content="雪铃：兔子跳铃铛连击游戏，铃铛落点保证可跳达，连击越高铃音越高，街机厅小游戏，本地即玩。" />
   <meta name="theme-color" content="#0b1020" />
   <link rel="stylesheet" href="../../../shared/site.css" />
@@ -133,7 +133,7 @@
               if (Math.abs(x2 - x1) >= 56) xs.push(x2);
             }
           }
-          xs.forEach((x) => bells.push({ x, y: genY, r: BELL_R, phase: rand(0, TAU) }));
+          xs.forEach((x) => bells.push({ x, y: genY, r: BELL_R, phase: rand(0, TAU), consumed: false }));
           prevXs = xs;
         }
         bells = bells.filter((b) => b.y < camY + H + 200);
@@ -233,7 +233,7 @@
         if (state !== 'playing' && state !== 'paused') return null;
         return {
           player: { x: player.x, y: player.y, vx: player.vx, vy: player.vy, face: player.face, onPad: player.onPad, lastBellY: player.lastBellY },
-          bells: bells.map((b) => ({ x: b.x, y: b.y, phase: b.phase })),
+          bells: bells.map((b) => ({ x: b.x, y: b.y, phase: b.phase, consumed: !!b.consumed })),
           pad,
           camY,
           genY,
@@ -251,7 +251,7 @@
           reset();
           bells = data.bells
             .filter((b) => b && isFinite(b.x) && isFinite(b.y))
-            .map((b) => ({ x: clamp(Number(b.x), 20, W - 20), y: Number(b.y), r: BELL_R, phase: Number(b.phase) || 0 }));
+            .map((b) => ({ x: clamp(Number(b.x), 20, W - 20), y: Number(b.y), r: BELL_R, phase: Number(b.phase) || 0, consumed: !!b.consumed }));
           player.x = clamp(Number(data.player.x) || W / 2, PLAYER_R, W - PLAYER_R);
           player.y = Number(data.player.y) || H - 150;
           player.vx = Number(data.player.vx) || 0;
@@ -346,15 +346,17 @@
 
         if (player.vy > 40) {
           for (const b of bells) {
+            if (b.consumed) continue;
             if (Math.abs(b.y - player.y) > 40) continue;
             if (A.Physics.circleCircle(player.x, player.y, PLAYER_R, b.x, b.y, b.r)) {
+              b.consumed = true;
               combo += 1;
               const gain = 10 * combo;
               bellScore += gain;
               player.vy = BOUNCE_V;
               player.lastBellY = player.y;
               A.Sfx.play('bell', combo);
-              rings.push({ x: b.x, y: b.y - camY, r: BELL_R + 4, life: 0.5, maxLife: 0.5 });
+              rings.push({ x: b.x, y: b.y, r: BELL_R + 4, life: 0.5, maxLife: 0.5 });
               particles.emit(b.x, b.y, {
                 count: A.reducedMotion ? 4 : 10,
                 speed: [30, 140],
@@ -396,6 +398,7 @@
         if (y < -20 || y > H + 20) return;
         const bob = Math.sin(b.phase + performance.now() / 700) * 2;
         ctx.save();
+        ctx.globalAlpha = b.consumed ? 0.28 : 1;
         ctx.translate(b.x, y + bob);
         ctx.strokeStyle = 'rgba(147,160,200,0.4)';
         ctx.lineWidth = 1;
@@ -516,10 +519,12 @@
         }
 
         rings.forEach((r) => {
+          const y = r.y - camY;
+          if (y < -20 || y > H + 20) return;
           ctx.strokeStyle = `rgba(255,210,63,${(r.life / r.maxLife) * 0.7})`;
           ctx.lineWidth = 2;
           ctx.beginPath();
-          ctx.arc(r.x, r.y, r.r, 0, TAU);
+          ctx.arc(r.x, y, r.r, 0, TAU);
           ctx.stroke();
         });
 
@@ -566,6 +571,27 @@
 
       reset();
       state = 'ready';
+      if (location.hash === '#test') {
+        window.__arcadeTest = {
+          info() {
+            return {
+              score,
+              bellScore,
+              combo,
+              consumed: bells.map((b) => !!b.consumed),
+              player: { x: player.x, y: player.y, vy: player.vy },
+            };
+          },
+          forceHit(index) {
+            const b = bells[index];
+            if (!b) return false;
+            player.x = b.x;
+            player.y = b.y;
+            player.vy = 120;
+            return true;
+          },
+        };
+      }
       const saved = autosave.load();
       if (saved) {
         A.showResumePrompt(ui, saved, {

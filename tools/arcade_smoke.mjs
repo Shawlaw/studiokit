@@ -273,8 +273,8 @@ async function main() {
     })()`);
     assert(home.cards >= 2, 'home cards=' + home.cards);
     assert(home.href.indexOf('apps/arcade') !== -1, 'arcade card not clickable: ' + JSON.stringify(home));
-    assert(home.version.indexOf('0.3.0') !== -1, 'arcade version missing on home card');
-    record('门户街机厅卡片可点击且版本 0.3.0', true);
+    assert(home.version.indexOf('0.3.1') !== -1, 'arcade version missing on home card');
+    record('门户街机厅卡片可点击且版本 0.3.1', true);
 
     /* ---------- 中心页 ---------- */
     await cdp.navigate(base + '/apps/arcade/');
@@ -284,10 +284,10 @@ async function main() {
       cards: document.querySelectorAll('.hall-card').length,
       runs: window.Arcade && Arcade.RunSave.count()
     })`);
-    assert(hallInfo.version === '0.3.0', 'version is ' + hallInfo.version);
+    assert(hallInfo.version === '0.3.1', 'version is ' + hallInfo.version);
     assert(hallInfo.games === 13, 'game count is ' + hallInfo.games);
     assert(hallInfo.cards === 13, 'card count is ' + hallInfo.cards);
-    record('中心页 13 款游戏与版本 0.3.0', true);
+    record('中心页 13 款游戏与版本 0.3.1', true);
 
     await cdp.evaluate(`(() => { const i = document.querySelector('[data-search]'); i.value = '雪铃'; i.dispatchEvent(new Event('input', { bubbles: true })); })()`);
     await sleep(120);
@@ -304,6 +304,43 @@ async function main() {
     record('中心页类型筛选「反应」', true);
     await cdp.evaluate(`(() => { const chip = [...document.querySelectorAll('.hall-chip')].find((c) => c.dataset.category === '全部'); chip && chip.click(); })()`);
     await cdp.screenshot('hall.png');
+
+    /* ---------- 共享输入层：多指归属 / 取消 / 失焦 ---------- */
+    const inputTest = await cdp.evaluate(`(() => {
+      const c = document.createElement('canvas');
+      c.style.cssText = 'position:fixed;left:0;top:0;width:420px;height:740px;';
+      document.body.appendChild(c);
+      c.__arcadeLogicalW = 420;
+      c.__arcadeLogicalH = 740;
+      const inp = Arcade.createInput(c);
+      const fire = (type, id, x, y) => c.dispatchEvent(new PointerEvent(type, {
+        pointerId: id, pointerType: 'touch', isPrimary: id === 1,
+        clientX: x, clientY: y, bubbles: true, cancelable: true, button: 0
+      }));
+      fire('pointerdown', 1, 100, 100);
+      const first = { x: inp.pointer.x, y: inp.pointer.y, id: inp.pointer.id };
+      fire('pointerdown', 2, 300, 300);
+      fire('pointermove', 2, 320, 320);
+      const afterSecond = { x: inp.pointer.x, y: inp.pointer.y, id: inp.pointer.id };
+      fire('pointerup', 2);
+      const secondUp = { down: inp.pointer.down, wentUp: inp.pointer.wentUp };
+      fire('pointermove', 1, 140, 120);
+      const firstMove = { x: inp.pointer.x, y: inp.pointer.y, dx: inp.pointer.dx };
+      fire('pointercancel', 1);
+      const canceled = { down: inp.pointer.down, wentCancel: inp.pointer.wentCancel, wentUp: inp.pointer.wentUp };
+      fire('pointerdown', 3, 200, 200);
+      window.dispatchEvent(new Event('blur'));
+      const blurred = { down: inp.pointer.down, id: inp.pointer.id };
+      inp.destroy();
+      c.remove();
+      return { first, afterSecond, secondUp, firstMove, canceled, blurred };
+    })()`);
+    assert(Math.abs(inputTest.afterSecond.x - inputTest.first.x) < 0.01 && Math.abs(inputTest.afterSecond.y - inputTest.first.y) < 0.01, 'second pointer hijacked position: ' + JSON.stringify(inputTest));
+    assert(inputTest.secondUp.down === true && inputTest.secondUp.wentUp === false, 'second pointer up leaked: ' + JSON.stringify(inputTest.secondUp));
+    assert(inputTest.firstMove.x > 130 && inputTest.firstMove.dx > 30, 'first pointer move failed: ' + JSON.stringify(inputTest.firstMove));
+    assert(inputTest.canceled.down === false && inputTest.canceled.wentCancel === true && inputTest.canceled.wentUp === false, 'cancel semantics wrong: ' + JSON.stringify(inputTest.canceled));
+    assert(inputTest.blurred.down === false && inputTest.blurred.id === null, 'blur did not clear pointer: ' + JSON.stringify(inputTest.blurred));
+    record('共享输入 多指归属/取消/失焦', true);
 
     /* ---------- 每个游戏的基础闭环 ---------- */
     const games = await cdp.evaluate(`Arcade.GAMES.map((g) => ({ id: g.id, file: g.file, name: g.name }))`);
@@ -397,6 +434,7 @@ async function main() {
       'pendulum-tower': async () => {
         await cdp.click('[data-ov-btn]');
         await sleep(700);
+        await cdp.screenshot('tower-hint.png');
         await cdp.tap(210, 350);
         await sleep(900);
       },
@@ -454,6 +492,120 @@ async function main() {
     assert(pickupInfo.weapon === 'spread', 'star-raid pickup not collected: ' + JSON.stringify(pickupInfo));
     record('星海突击 散射/激光/追踪/速射 Buff + 实际拾取', true);
 
+    /* ---------- 星海突击 波次与撞机计分分离 ---------- */
+    const waveLabels = [];
+    for (const sec of [0, 21, 46, 76, 96, 104]) {
+      await cdp.evaluate(`window.__arcadeTest.setElapsed(${sec})`);
+      await sleep(40);
+      waveLabels.push((await cdp.evaluate(`window.__arcadeTest.info()`)).wave);
+    }
+    assert(waveLabels.join('|') === 'W1 巡逻|W1 俯冲|W1 弹幕|W1 精英|W1 休整|W2 巡逻', 'wave labels: ' + waveLabels.join('|'));
+    await cdp.evaluate(`window.__arcadeTest.setElapsed(0)`);
+    const beforeCrash = await cdp.evaluate(`window.__arcadeTest.info()`);
+    await cdp.evaluate(`window.__arcadeTest.forceBodyCollision()`);
+    await sleep(260);
+    const afterCrash = await cdp.evaluate(`window.__arcadeTest.info()`);
+    assert(afterCrash.score === beforeCrash.score, 'body crash awarded score: ' + JSON.stringify({ beforeCrash, afterCrash }));
+    assert(afterCrash.lives === beforeCrash.lives - 1, 'body crash life count wrong: ' + JSON.stringify({ beforeCrash, afterCrash }));
+    record('星海突击 4 阶段波次/休整/撞机不得分', true);
+
+    /* ---------- 雪铃：同一铃铛只奖励一次 ---------- */
+    await cdp.evaluate(`Arcade.RunSave.clear('snowbells')`);
+    await cdp.navigate(base + '/apps/arcade/games/snowbells.html#test');
+    await cdp.click('[data-ov-btn]');
+    await sleep(300);
+    await cdp.evaluate(`window.__arcadeTest.forceHit(0)`);
+    await sleep(260);
+    const snowFirst = await cdp.evaluate(`window.__arcadeTest.info()`);
+    await cdp.evaluate(`window.__arcadeTest.forceHit(0)`);
+    await sleep(260);
+    const snowSecond = await cdp.evaluate(`window.__arcadeTest.info()`);
+    assert(snowFirst.bellScore > 0, 'snowbells first hit scored 0');
+    assert(snowSecond.bellScore === snowFirst.bellScore, 'snowbells same bell rescored: ' + JSON.stringify({ snowFirst, snowSecond }));
+    assert(snowSecond.consumed[0] === true, 'snowbells consumed flag missing');
+    record('雪铃 同一铃铛一局只计分一次', true);
+
+    /* ---------- 影跃：前 8 块教学平台与结构可达域 ---------- */
+    await cdp.navigate(base + '/apps/arcade/games/shadow-leap.html#test');
+    const shadow = await cdp.evaluate(`window.__arcadeTest.info()`);
+    assert(shadow.platforms.length >= 10, 'shadow platforms too few');
+    for (let i = 0; i < 8; i++) assert(shadow.platforms[i].kind === 'normal', 'shadow teaching platform ' + i + ' is ' + shadow.platforms[i].kind);
+    for (let i = 1; i < shadow.platforms.length; i++) {
+      const a = shadow.platforms[i - 1];
+      const b = shadow.platforms[i];
+      const gap = a.y - b.y;
+      const centerDelta = Math.abs((a.x + a.w / 2) - (b.x + b.w / 2));
+      assert(gap > 0 && gap <= 118, 'shadow gap ' + i + ' = ' + gap);
+      assert(centerDelta <= 121, 'shadow horizontal delta ' + i + ' = ' + centerDelta);
+    }
+    record('影跃 前 8 块教学平台 + 可达域约束', true);
+
+    /* ---------- 极速车道：离散变道与安全走廊 ---------- */
+    await cdp.evaluate(`Arcade.RunSave.clear('road-rush')`);
+    await cdp.navigate(base + '/apps/arcade/games/road-rush.html#test');
+    await cdp.click('[data-ov-btn]');
+    await sleep(220);
+    const roadStart = await cdp.evaluate(`window.__arcadeTest.info()`);
+    await cdp.key('ArrowLeft', 'down');
+    await sleep(120);
+    await cdp.key('ArrowLeft', 'up');
+    await sleep(160);
+    const roadLeft = await cdp.evaluate(`window.__arcadeTest.info()`);
+    await cdp.key('ArrowRight', 'down');
+    await sleep(120);
+    await cdp.key('ArrowRight', 'up');
+    await sleep(160);
+    await cdp.key('ArrowRight', 'down');
+    await sleep(120);
+    await cdp.key('ArrowRight', 'up');
+    await sleep(160);
+    const roadRight = await cdp.evaluate(`window.__arcadeTest.info()`);
+    await cdp.buttonPointer('[data-touch="right"]', 'pointerdown');
+    await cdp.buttonPointer('[data-touch="right"]', 'pointerup');
+    await sleep(120);
+    const roadTouch = await cdp.evaluate(`window.__arcadeTest.info()`);
+    const roadStress = await cdp.evaluate(`window.__arcadeTest.stressSpawn(200)`);
+    assert(roadStart.lane === 1, 'road start lane=' + roadStart.lane);
+    assert(roadLeft.lane === 0, 'road left lane=' + roadLeft.lane);
+    assert(roadRight.lane === 2, 'road right lane=' + roadRight.lane);
+    assert(roadTouch.lane === 3, 'road touch lane=' + roadTouch.lane);
+    assert(roadStress.violations === 0, 'road safe corridor violations=' + roadStress.violations);
+    record('极速车道 一次一车道 + 安全走廊 200 次生成', true);
+
+    /* ---------- 黄金矿工：关卡可行性 + 提前结算 ---------- */
+    await cdp.evaluate(`Arcade.RunSave.clear('gold-miner')`);
+    await cdp.navigate(base + '/apps/arcade/games/gold-miner.html#test');
+    await cdp.click('[data-ov-btn]');
+    await sleep(300);
+    const goldFirst = await cdp.evaluate(`window.__arcadeTest.info()`);
+    assert(goldFirst.target === 650 && goldFirst.swing === 520, 'gold level 1 spec wrong: ' + JSON.stringify(goldFirst));
+    assert(goldFirst.tnt === 0, 'gold level 1 should have no TNT');
+    assert(goldFirst.totalValue >= goldFirst.target * 1.25, 'gold level 1 value infeasible: ' + JSON.stringify(goldFirst));
+    await cdp.evaluate(`window.__arcadeTest.setMoney(${goldFirst.target})`);
+    const cashVisible = await cdp.evaluate(`!document.querySelector('[data-cashout]').hidden`);
+    assert(cashVisible, 'gold cashout button not shown');
+    await cdp.click('[data-cashout]');
+    await sleep(300);
+    const goldSecond = await cdp.evaluate(`window.__arcadeTest.info()`);
+    assert(goldSecond.level === 2 && goldSecond.target === 950 && goldSecond.swing === 650, 'gold level 2 spec wrong: ' + JSON.stringify(goldSecond));
+    assert(goldSecond.tnt === 0, 'gold level 2 should have no TNT');
+    assert(goldSecond.totalValue >= goldSecond.target * 1.25, 'gold level 2 value infeasible: ' + JSON.stringify(goldSecond));
+    record('黄金矿工 前 2 关无炸药/价值保底/提前结算', true);
+
+    /* ---------- 俄罗斯方块：7-bag 与 1 行消除 ---------- */
+    await cdp.evaluate(`Arcade.RunSave.clear('block-drop')`);
+    await cdp.navigate(base + '/apps/arcade/games/block-drop.html#test');
+    await cdp.click('[data-ov-btn]');
+    await sleep(200);
+    const bagInfo = await cdp.evaluate(`window.__arcadeTest.info()`);
+    const bagPieces = [bagInfo.curKey, bagInfo.nextKey].concat(bagInfo.bag);
+    assert(bagPieces.length === 7 && new Set(bagPieces).size === 7, '7-bag invalid: ' + JSON.stringify(bagInfo));
+    await cdp.evaluate(`window.__arcadeTest.lineClearScenario()`);
+    await sleep(600);
+    const clearInfo = await cdp.evaluate(`window.__arcadeTest.info()`);
+    assert(clearInfo.lines >= 1 && clearInfo.score > 0, 'line clear failed: ' + JSON.stringify(clearInfo));
+    record('俄罗斯方块 7-bag + 1 行消除计分', true);
+
     /* ---------- 中心页续玩区与导出导入 ---------- */
     /* 先为每款游戏各留一条未完成进度，确保续玩区覆盖全部 13 款。 */
     for (const game of games) {
@@ -510,13 +662,19 @@ async function main() {
     const pages = ['/apps/arcade/', ...games.map((g) => '/apps/arcade/games/' + g.file)];
     for (const pagePath of pages) {
       await cdp.navigate(base + pagePath);
-      const overflow = await cdp.evaluate(`({ sw: document.documentElement.scrollWidth, cw: document.documentElement.clientWidth, canvas: (() => { const c = document.querySelector('.game-canvas'); if (!c) return null; const r = c.getBoundingClientRect(); return { w: Math.round(r.width), h: Math.round(r.height) }; })() })`);
+      const overflow = await cdp.evaluate(`({
+        sw: document.documentElement.scrollWidth,
+        cw: document.documentElement.clientWidth,
+        canvas: (() => { const c = document.querySelector('.game-canvas'); if (!c) return null; const r = c.getBoundingClientRect(); return { w: Math.round(r.width), h: Math.round(r.height) }; })(),
+        pause: (() => { const b = document.querySelector('[data-pause]'); if (!b) return null; const r = b.getBoundingClientRect(); return { w: Math.round(r.width), h: Math.round(r.height) }; })()
+      })`);
       assert(overflow.sw <= overflow.cw + 1, pagePath + ' horizontal overflow ' + overflow.sw + '>' + overflow.cw);
       if (overflow.canvas) {
         assert(overflow.canvas.w <= 375 && overflow.canvas.h > 300, pagePath + ' canvas size ' + JSON.stringify(overflow.canvas));
+        assert(overflow.pause && overflow.pause.w >= 44 && overflow.pause.h >= 44, pagePath + ' pause target ' + JSON.stringify(overflow.pause));
       }
     }
-    record('375px 窄屏 14 页无横向溢出', true);
+    record('375px 窄屏 14 页无横向溢出 + 44px 暂停按钮', true);
 
     /* ---------- 俄罗斯方块触屏控制面板 ---------- */
     await cdp.navigate(base + '/apps/arcade/games/block-drop.html');
@@ -540,6 +698,40 @@ async function main() {
     if (cdp.errors.length) throw new Error('touch pad console errors: ' + cdp.errors.join(' | '));
     record('俄罗斯方块 375px 触屏按钮面板可操作', true);
     await cdp.screenshot('touch-block-drop.png');
+
+    /* ---------- 320px 小屏：安全区/暂停/画布不裁切 ---------- */
+    await cdp.send('Emulation.setDeviceMetricsOverride', { width: 320, height: 568, deviceScaleFactor: 1, mobile: true });
+    for (const pagePath of pages) {
+      await cdp.navigate(base + pagePath);
+      const small = await cdp.evaluate(`({
+        sw: document.documentElement.scrollWidth,
+        cw: document.documentElement.clientWidth,
+        canvas: (() => { const c = document.querySelector('.game-canvas'); if (!c) return null; const r = c.getBoundingClientRect(); return { w: Math.round(r.width), h: Math.round(r.height) }; })(),
+        pause: (() => { const b = document.querySelector('[data-pause]'); if (!b) return null; const r = b.getBoundingClientRect(); return { w: Math.round(r.width), h: Math.round(r.height) }; })()
+      })`);
+      assert(small.sw <= small.cw + 1, pagePath + ' 320px horizontal overflow ' + small.sw + '>' + small.cw);
+      if (small.canvas) {
+        assert(small.canvas.w > 150 && small.canvas.h > 240, pagePath + ' 320px canvas ' + JSON.stringify(small.canvas));
+        assert(small.pause && small.pause.w >= 44 && small.pause.h >= 44, pagePath + ' 320px pause target ' + JSON.stringify(small.pause));
+      }
+    }
+    record('320×568 小屏 14 页无横向溢出 + 44px 暂停按钮', true);
+    await cdp.screenshot('narrow-320.png');
+
+    for (const [width, height] of [[390, 844], [430, 932]]) {
+      await cdp.send('Emulation.setDeviceMetricsOverride', { width, height, deviceScaleFactor: 1, mobile: true });
+      for (const pagePath of pages) {
+        await cdp.navigate(base + pagePath);
+        const metrics = await cdp.evaluate(`({
+          sw: document.documentElement.scrollWidth,
+          cw: document.documentElement.clientWidth,
+          pause: (() => { const b = document.querySelector('[data-pause]'); if (!b) return null; const r = b.getBoundingClientRect(); return { w: Math.round(r.width), h: Math.round(r.height) }; })()
+        })`);
+        assert(metrics.sw <= metrics.cw + 1, pagePath + ' ' + width + 'px overflow ' + metrics.sw + '>' + metrics.cw);
+        if (metrics.pause) assert(metrics.pause.w >= 44 && metrics.pause.h >= 44, pagePath + ' ' + width + 'px pause target');
+      }
+    }
+    record('390×844 / 430×932 视口 14 页无横向溢出', true);
 
     await cdp.screenshot('narrow-hall.png');
 

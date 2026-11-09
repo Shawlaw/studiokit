@@ -2,7 +2,7 @@
 <html lang="zh-CN">
 <head>
   <meta charset="utf-8" />
-  <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no, viewport-fit=cover" />
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
   <meta name="description" content="黄金矿工：摆钩挖金物理游戏，第一关钟摆较慢并随关卡逐步加速，街机厅小游戏，本地即玩。" />
   <meta name="theme-color" content="#0b1020" />
   <link rel="stylesheet" href="../../../shared/site.css" />
@@ -11,7 +11,7 @@
   <script src="../engine.js"></script>
   <title>黄金矿工 · 街机厅 · StudioKit</title>
 </head>
-<body class="arcade-body" data-studiokit-app="arcade" data-studiokit-app-title="街机厅 Arcade" style="--ac-accent:#f5c542; --card-accent:#f5c542">
+<body class="arcade-body has-extra-controls" data-studiokit-app="arcade" data-studiokit-app-title="街机厅 Arcade" style="--ac-accent:#f5c542; --card-accent:#f5c542">
   <noscript><p class="ac-noscript">此游戏需要启用 JavaScript 才能运行。</p></noscript>
   <main class="game-page">
     <header class="game-topbar">
@@ -37,7 +37,8 @@
         </div>
       </div>
     </div>
-    <p class="game-hint">看准角度点击 / 空格放钩 · 第一关摆速较慢，逐关加快 · 重物拉得慢 · 别碰炸药 · 限时达标过关 · P / Esc 暂停</p>
+    <button type="button" class="ac-btn ac-cashout" data-cashout hidden>达标 · 立即进入下一关</button>
+    <p class="game-hint">看准角度点击 / 空格放钩 · 第一关摆速较慢，逐关加快 · 达标可提前结算 · 重物拉得慢 · 别碰炸药 · P / Esc 暂停</p>
   </main>
   <script>
     (() => {
@@ -50,8 +51,15 @@
       const PIVOT = { x: 210, y: 104 };
       const MIN_LEN = 88;
       const EXTEND_SPEED = 560;
-      const LEVEL_TIME = 60;
       const CLAW_R = 12;
+
+      const LEVEL_SPECS = [
+        { target: 650, time: 60, swing: 520, theme: '教学：金块与钻石', pool: { goldS: 3, goldM: 3, goldL: 2, diamond: 2, rockS: 2, rockL: 1, tnt: 0 } },
+        { target: 950, time: 60, swing: 650, theme: '稳定练习：更高目标', pool: { goldS: 3, goldM: 3, goldL: 2, diamond: 2, rockS: 2, rockL: 1, tnt: 0 } },
+        { target: 1350, time: 58, swing: 780, theme: '第一颗炸药', pool: { goldS: 3, goldM: 3, goldL: 2, diamond: 2, rockS: 2, rockL: 2, tnt: 1 } },
+        { target: 1800, time: 55, swing: 910, theme: '高价值与高风险', pool: { goldS: 2, goldM: 3, goldL: 3, diamond: 2, rockS: 2, rockL: 2, tnt: 3 } },
+        { target: 2300, time: 52, swing: 1040, theme: '限时冲刺', pool: { goldS: 2, goldM: 3, goldL: 3, diamond: 3, rockS: 2, rockL: 2, tnt: 4 } },
+      ];
 
       const canvas = document.querySelector('.game-canvas');
       const stage = A.createStage(canvas, W, H);
@@ -69,6 +77,7 @@
         hudHigh: document.querySelector('[data-hud-high]'),
         pause: document.querySelector('[data-pause]'),
         mute: document.querySelector('[data-mute]'),
+        cashout: document.querySelector('[data-cashout]'),
       };
       const ui = A.createOverlayUi(dom);
 
@@ -91,7 +100,7 @@
       let money = 0;
       let level = 1;
       let target = 650;
-      let timeLeft = LEVEL_TIME;
+      let timeLeft = 60;
       let floaters = [];
       let dirt = [];
       let state = 'ready';
@@ -102,15 +111,27 @@
       const high = A.Progress.get('gold-miner').high;
       dom.hudHigh.textContent = String(high);
 
-      /* 摆速随关卡提高：第一关慢，之后逐关加速。 */
+      /* 每关有独立目标、时长、物品池、危险物与摆速；前 5 关机制不同。 */
+      function levelSpec(lv) {
+        if (lv <= LEVEL_SPECS.length) return LEVEL_SPECS[lv - 1];
+        const base = LEVEL_SPECS[LEVEL_SPECS.length - 1];
+        const extra = lv - LEVEL_SPECS.length;
+        return {
+          target: base.target + extra * 650,
+          time: Math.max(40, base.time - extra * 2),
+          swing: Math.min(1500, base.swing + extra * 70),
+          theme: '无尽矿场',
+          pool: { ...base.pool, tnt: Math.min(6, base.pool.tnt + extra) },
+        };
+      }
       function swingGravity(lv) {
-        return Math.min(1500, 520 + Math.max(0, lv - 1) * 130);
+        return levelSpec(lv).swing;
       }
       function levelTime(lv) {
-        return Math.max(40, LEVEL_TIME - (lv - 1) * 3);
+        return levelSpec(lv).time;
       }
       function targetFor(lv) {
-        return 650 + (lv - 1) * 550;
+        return levelSpec(lv).target;
       }
       function clawTip() {
         return {
@@ -135,33 +156,55 @@
         }
       }
 
+      function itemValue(o) {
+        return o.type === 'goldS' || o.type === 'goldM' || o.type === 'goldL' || o.type === 'diamond' ? o.value : 0;
+      }
+
+      function totalItemValue() {
+        return items.reduce((sum, o) => sum + itemValue(o), 0);
+      }
+
+      function placeItem(type) {
+        const t = TYPES[type];
+        for (let tries = 0; tries < 70; tries++) {
+          const x = rand(30 + t.r, W - 30 - t.r);
+          const y = rand(215 + t.r, H - 24 - t.r);
+          const ok = items.every((o) => Math.hypot(o.x - x, o.y - y) > o.r + t.r + 14);
+          if (ok) {
+            items.push({ type, x, y, r: t.r, value: t.value, weight: t.weight, wob: rand(0, TAU) });
+            return true;
+          }
+        }
+        return false;
+      }
+
       function spawnItems() {
         items = [];
         holding = null;
-        const plan = [
-          ['goldS', 3],
-          ['goldM', 3],
-          ['goldL', 2],
-          ['diamond', 2],
-          ['rockS', 3],
-          ['rockL', 2],
-          ['tnt', 2],
-        ];
-        plan.forEach(([type, count]) => {
-          for (let n = 0; n < count; n++) {
-            const t = TYPES[type];
-            let placed = false;
-            for (let tries = 0; tries < 70 && !placed; tries++) {
-              const x = rand(30 + t.r, W - 30 - t.r);
-              const y = rand(215 + t.r, H - 24 - t.r);
-              const ok = items.every((o) => Math.hypot(o.x - x, o.y - y) > o.r + t.r + 14);
-              if (ok) {
-                items.push({ type, x, y, r: t.r, value: t.value, weight: t.weight, wob: rand(0, TAU) });
-                placed = true;
-              }
-            }
-          }
+        const spec = levelSpec(level);
+        Object.keys(spec.pool).forEach((type) => {
+          for (let n = 0; n < spec.pool[type]; n++) placeItem(type);
         });
+
+        /* 可行性保底：已放置物品价值必须明显高于目标，避免“目标不可达”。 */
+        let guard = 0;
+        while (totalItemValue() < target * 1.25 && guard++ < 10) {
+          placeItem(Math.random() < 0.55 ? 'goldL' : 'diamond');
+        }
+        if (totalItemValue() < target * 1.25 || items.length < 4) {
+          const fallback = [
+            ['diamond', PIVOT.x, 430],
+            ['goldL', PIVOT.x - 120, 540],
+            ['goldM', PIVOT.x + 120, 540],
+            ['goldS', PIVOT.x, 620],
+          ];
+          fallback.forEach(([type, x, y]) => {
+            const t = TYPES[type];
+            if (!items.some((o) => Math.hypot(o.x - x, o.y - y) < 30)) {
+              items.push({ type, x, y, r: t.r, value: t.value, weight: t.weight, wob: rand(0, TAU) });
+            }
+          });
+        }
       }
 
       function reset() {
@@ -186,6 +229,11 @@
 
       function syncHud() {
         dom.hudScore.textContent = String(Math.floor(money));
+        syncCashout();
+      }
+
+      function syncCashout() {
+        dom.cashout.hidden = !(state === 'playing' && money >= target);
       }
 
       function startGame() {
@@ -195,6 +243,7 @@
         ui.hide();
         loop.resume();
         pauseUi.sync();
+        syncCashout();
         autosave.saveNow();
       }
 
@@ -204,6 +253,7 @@
         ui.hide();
         loop.resume();
         pauseUi.sync();
+        syncCashout();
       }
 
       function gameOver() {
@@ -229,6 +279,7 @@
           onBtn: startGame,
         });
         pauseUi.sync();
+        syncCashout();
       }
 
       function nextLevel() {
@@ -249,6 +300,24 @@
         syncHud();
       }
 
+      function cashOut() {
+        if (state !== 'playing' || money < target) return;
+        const bonus = Math.floor(timeLeft * 4);
+        money += bonus;
+        floaters.push({
+          text: '提前结算 +$' + bonus,
+          x: W / 2,
+          y: 280,
+          life: 1.4,
+          maxLife: 1.4,
+          color: '#ffd23f',
+          big: true,
+        });
+        A.Sfx.play('bell', 5);
+        nextLevel();
+        autosave.saveNow();
+      }
+
       function pauseByUser() {
         if (state !== 'playing') return;
         loop.pause();
@@ -261,12 +330,13 @@
           onBtn: resumeGame,
         });
         pauseUi.sync();
+        syncCashout();
       }
 
       function showStart() {
         ui.show({
           title: '黄金矿工',
-          text: '摆钩挖金：限时内赚到目标金额。<br/>第一关摆速较慢，之后逐关加速<br/>钻石最值钱 · 石头死沉 · 炸药会炸掉周围',
+          text: '摆钩挖金：限时内赚到目标金额。<br/>第一关摆速较慢，之后逐关加速<br/>达标后可点击下方按钮提前进入下一关',
           btn: '开始游戏',
           onBtn: startGame,
         });
@@ -387,7 +457,9 @@
           }
           recordSaved = false;
           spaceWasDown = false;
+          state = 'playing';
           syncHud();
+          syncCashout();
           return true;
         } catch (err) {
           return false;
@@ -669,6 +741,7 @@
         isPlaying: () => state === 'playing',
         isPaused: () => state === 'paused',
       });
+      dom.cashout.addEventListener('click', cashOut);
 
       function syncMute() {
         dom.mute.textContent = A.Sfx.muted ? '🔇' : '🔊';
@@ -681,6 +754,29 @@
 
       reset();
       state = 'ready';
+      if (location.hash === '#test') {
+        window.__arcadeTest = {
+          info() {
+            return {
+              money,
+              target,
+              level,
+              timeLeft,
+              totalValue: totalItemValue(),
+              items: items.length,
+              tnt: items.filter((o) => o.type === 'tnt').length,
+              swing: pend.gravity,
+              spec: levelSpec(level),
+              cashoutHidden: dom.cashout.hidden,
+            };
+          },
+          setMoney(value) {
+            money = Math.max(0, Number(value) || 0);
+            syncHud();
+            syncCashout();
+          },
+        };
+      }
       const saved = autosave.load();
       if (saved) {
         A.showResumePrompt(ui, saved, {
