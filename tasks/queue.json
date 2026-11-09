@@ -308,7 +308,26 @@
       ],
       "claimedAt": "2026-11-09T05:20:00+00:00",
       "completedAt": "2026-11-09T05:30:00+00:00",
-      "evidence": "黄金矿工 render 跳过 holding 原位置绘制，drawClaw 只在钩爪处绘制被夹物；#test 钩子 grabFirst + gold-held.png 验证；记忆翻牌 LEVELS 改为 6 关 3x2/4x2/4x3/4x4/5x4/6x4，preview 3.2/3.0/2.7/2.4/2.1/1.8，mismatch 0.95→0.75，finish 文案动态 LEVELS.length；51/51 CDP 通过（新增记忆 6 关、夹取跟随）；本地提交未推送，线上仍 0.3.1"
+      "evidence": "黄金矿工 render 跳过 holding 原位置绘制，drawClaw 只在钩爪处绘制被夹物；#test 钩子 grabFirst + gold-held.png 验证；记忆翻牌 LEVELS 改为 6 关 3x2/4x2/4x3/4x4/5x4/6x4，preview 3.2/3.0/2.7/2.4/2.1/1.8，mismatch 0.95→0.75，finish 文案动态 LEVELS.length；51/51 CDP 通过（新增记忆 6 关、夹取跟随）；提交 2df2dbd 经 T017 fast-forward 合入 main 并发布，线上 0.3.2"
+    },
+    {
+      "id": "T017",
+      "title": "街机厅 0.3.2 发布：fast-forward 合入 main 并验证 Pages",
+      "kind": "agent",
+      "status": "DONE",
+      "dependsOn": [
+        "T016"
+      ],
+      "ownerAuthorizationRequired": true,
+      "ownerAuthorizationVerifiedByAgentFlag": true,
+      "acceptance": [
+        "Owner 明确要求“提交发布推送”后，将 0.3.2 提交 fast-forward 合入 main 并推送",
+        "main 推送后 Actions validate + deploy 成功",
+        "线上 0.3.2 / 13 卡 / 黄金矿工与记忆翻牌修复实际生效"
+      ],
+      "claimedAt": "2026-11-09T13:25:00+00:00",
+      "completedAt": "2026-11-09T13:29:30+00:00",
+      "evidence": "发布前复跑 51/51 CDP、validate_site.py、build_site.py、node --check 全通过；main fast-forward d958772→2df2dbd 并 push；Actions run 42625773149 validate+build+deploy 全成功（13:28:23→13:29:05Z）；线上 https://shawlaw.github.io/studiokit/apps/arcade/ HTTP 200、版本 0.3.2、13 张 hall-card、registry available 0.3.2；无头 Chrome 对线上 9/9 检查通过（中心页渲染、矿工夹中物挂钩爪且不复制、记忆 6 关 6→24 张、三页无 JS 报错）。真机 iOS/Android 仍 UNVERIFIED"
     }
   ]
 }
