@@ -270,6 +270,26 @@
       "claimedAt": "2026-11-09T00:15:00+00:00",
       "completedAt": "2026-11-09T00:55:00+00:00",
       "evidence": "版本 0.3.1；共享 createInput 支持 active pointerId/取消/失焦；雪铃 consumed 与波纹世界坐标；影跃保守可达域+前 8 块静态教学+移动平台小幅振荡；星海 4 波次+休整+敌机/敌弹上限+撞机不计分；极速车道离散变道+生成时 2.4s 安全走廊+车道线修正；层塔落点投影/反馈/统一暂停/偏心倒塌可达；黄金矿工 levelSpec/本关价值保底/前 2 关无炸药/提前结算且不可连锁；俄罗斯方块 7-bag/消行/顶部失败测试；独立 Reviewer A/B/C/D 复核后无剩余 Blocker/Major；49/49 CDP 通过；320/375/390/430 全页无横向溢出；未执行真实 iOS/Android 真机与 5000/10000 种子穷举，保留为 UNVERIFIED"
+    },
+    {
+      "id": "T015",
+      "title": "街机厅 0.3.1 发布：独立审核后 fast-forward 合入 main 并验证 Pages",
+      "kind": "agent",
+      "status": "DONE",
+      "dependsOn": [
+        "T014"
+      ],
+      "ownerAuthorizationRequired": true,
+      "ownerAuthorizationVerifiedByAgentFlag": true,
+      "acceptance": [
+        "当前任务 Owner 明确要求多 subagent 独立审核、修复后 12:00 以后提交并 fast-forward 合并 main 推送发布",
+        "独立 Reviewer A/B/C/D 复核无剩余 Blocker/Major",
+        "49 项 CDP 测试、validate_site.py、build_site.py、node --check 全部通过",
+        "main 推送后 Actions validate + deploy 成功，线上 0.3.1 / 13 卡 / 子路径 shell 链接正确"
+      ],
+      "claimedAt": "2026-11-09T05:00:00+00:00",
+      "completedAt": "2026-11-09T05:05:00+00:00",
+      "evidence": "独立 Reviewer A（共享引擎/生命周期）、B（玩法数学/种子）、C（移动端布局/触控）、D（数据/安全/发布）审核；B 复跑影跃 800000 跳、极速 500 seeds×300s、矿工连锁 cashout、层塔 ODE 均 PASS；C 复核 merge 标题/空按钮/gold 画布/返回链接/子 HUD/安全区；A/D 复核输入、旧档迁移、配额回滚、shell 子路径。修复后 49/49 CDP、validate/build/node --check 通过；提交 54079cf + 793a6fd，main fast-forward 697448e→793a6fd；Actions run 42565028915 全成功；线上 https://shawlaw.github.io/studiokit/apps/arcade/ 13 卡/v0.3.1，star-raid shell href=https://shawlaw.github.io/studiokit/index.html，registry available v0.3.1。真机 iOS/Android 与 5000/10000 种子穷举仍 UNVERIFIED"
     }
   ]
 }

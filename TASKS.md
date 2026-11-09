@@ -18,6 +18,7 @@
 | T012 | agent | 街机厅 0.3.0：13 款竖屏游戏、局内进度恢复、搜索筛选与人工反馈修复 | DONE | T011 | 新增 6 游戏；RunSave 局内档；搜索/筛选/续玩；雪铃可达、矿工/层塔摆速、星海 4 Buff、方块触屏面板；validate/build/34 项 CDP 冒烟全过 |
 | T013 | agent | 街机厅 0.3.0 发布：推送 main 并验证 GitHub Pages | DONE | T012 | 推送 `aba11a9`；Actions run `42501786872` 成功；线上 13 卡/v0.3.0/registry available；13 游戏页 200 |
 | T014 | agent | 街机厅 0.3.1：按游戏性评审包优化公平性、输入与移动端布局 | DONE | T013 | 输入多指/取消、雪铃去重、影跃可达、星海波次、赛车安全走廊、矿工关卡、44px 暂停；49/49 CDP；真机/大规模种子 UNVERIFIED |
+| T015 | agent | 街机厅 0.3.1 发布：独立审核后 fast-forward 合入 main 并验证 Pages | DONE | T014 | Reviewer A/B/C/D 复核无 Blocker/Major；`793a6fd` ff 合入 main；Actions `42565028915` 成功；线上 0.3.1/13 卡/子路径 shell 正确 |
 
 ## 任务命令
 
