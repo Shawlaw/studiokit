@@ -273,8 +273,8 @@ async function main() {
     })()`);
     assert(home.cards >= 2, 'home cards=' + home.cards);
     assert(home.href.indexOf('apps/arcade') !== -1, 'arcade card not clickable: ' + JSON.stringify(home));
-    assert(home.version.indexOf('0.3.1') !== -1, 'arcade version missing on home card');
-    record('门户街机厅卡片可点击且版本 0.3.1', true);
+    assert(home.version.indexOf('0.3.2') !== -1, 'arcade version missing on home card');
+    record('门户街机厅卡片可点击且版本 0.3.2', true);
 
     /* ---------- GitHub Pages 项目子路径：shell 返回链接 ---------- */
     await cdp.navigate(base + '/studiokit/apps/arcade/games/star-raid.html');
@@ -292,10 +292,10 @@ async function main() {
       cards: document.querySelectorAll('.hall-card').length,
       runs: window.Arcade && Arcade.RunSave.count()
     })`);
-    assert(hallInfo.version === '0.3.1', 'version is ' + hallInfo.version);
+    assert(hallInfo.version === '0.3.2', 'version is ' + hallInfo.version);
     assert(hallInfo.games === 13, 'game count is ' + hallInfo.games);
     assert(hallInfo.cards === 13, 'card count is ' + hallInfo.cards);
-    record('中心页 13 款游戏与版本 0.3.1', true);
+    record('中心页 13 款游戏与版本 0.3.2', true);
 
     await cdp.evaluate(`(() => { const i = document.querySelector('[data-search]'); i.value = '雪铃'; i.dispatchEvent(new Event('input', { bubbles: true })); })()`);
     await sleep(120);
@@ -533,6 +533,22 @@ async function main() {
     assert(snowSecond.consumed[0] === true, 'snowbells consumed flag missing');
     record('雪铃 同一铃铛一局只计分一次', true);
 
+    /* ---------- 记忆翻牌：6 关渐进配置 ---------- */
+    await cdp.evaluate(`Arcade.RunSave.clear('memory-flip')`);
+    await cdp.navigate(base + '/apps/arcade/games/memory-flip.html#test');
+    await cdp.click('[data-ov-btn]');
+    await sleep(200);
+    const memory1 = await cdp.evaluate(`window.__arcadeTest.info()`);
+    await cdp.evaluate(`window.__arcadeTest.setLevel(2)`);
+    const memory2 = await cdp.evaluate(`window.__arcadeTest.info()`);
+    await cdp.evaluate(`window.__arcadeTest.setLevel(6)`);
+    const memory6 = await cdp.evaluate(`window.__arcadeTest.info()`);
+    assert(memory1.totalLevels === 6 && memory1.cards === 6, 'memory level 1 config: ' + JSON.stringify(memory1));
+    assert(memory2.cards === 8, 'memory level 2 config: ' + JSON.stringify(memory2));
+    assert(memory6.cards === 24 && memory6.previewTimer > 0, 'memory level 6 config: ' + JSON.stringify(memory6));
+    await cdp.screenshot('memory-level6.png');
+    record('记忆翻牌 6 关由少到多（6→8→24 张）', true);
+
     /* ---------- 影跃：前 8 块教学平台与结构可达域 ---------- */
     await cdp.navigate(base + '/apps/arcade/games/shadow-leap.html#test');
     const shadow = await cdp.evaluate(`window.__arcadeTest.info()`);
@@ -626,6 +642,18 @@ async function main() {
     const goldThird = await cdp.evaluate(`window.__arcadeTest.info()`);
     assert(goldThird.level === 3 && goldThird.target - goldThird.money === 1350, 'gold cashout chain leak: ' + JSON.stringify(goldThird));
     record('黄金矿工 前 2 关无炸药/价值保底/提前结算/不可连锁空兑现', true);
+
+    /* ---------- 黄金矿工：夹中物品跟随钩爪（渲染不再重复原物） ---------- */
+    await cdp.evaluate(`Arcade.RunSave.clear('gold-miner')`);
+    await cdp.navigate(base + '/apps/arcade/games/gold-miner.html#test');
+    await cdp.click('[data-ov-btn]');
+    await sleep(220);
+    await cdp.evaluate(`window.__arcadeTest.grabFirst()`);
+    await sleep(120);
+    const held = await cdp.evaluate(`window.__arcadeTest.info()`);
+    assert(held.holding && held.holding !== 'tnt', 'gold grab failed: ' + JSON.stringify(held));
+    await cdp.screenshot('gold-held.png');
+    record('黄金矿工 夹中物品跟随钩爪', true);
 
     /* ---------- 俄罗斯方块：7-bag 与 1 行消除 ---------- */
     await cdp.evaluate(`Arcade.RunSave.clear('block-drop')`);

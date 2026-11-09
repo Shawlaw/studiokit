@@ -730,7 +730,9 @@
       function render() {
         stage.beginFrame();
         drawBackground();
-        items.forEach(drawItem);
+        items.forEach((o) => {
+          if (o !== holding) drawItem(o);
+        });
         particles.draw(ctx);
         drawMiner();
         drawClaw();
@@ -801,6 +803,7 @@
               tnt: items.filter((o) => o.type === 'tnt').length,
               swing: pend.gravity,
               spec: levelSpec(level),
+              holding: holding ? holding.type : null,
               cashoutHidden: dom.cashout.hidden,
             };
           },
@@ -808,6 +811,17 @@
             money = Math.max(0, Number(value) || 0);
             syncHud();
             syncCashout();
+          },
+          grabFirst() {
+            const item = items.find((o) => o.type !== 'tnt');
+            if (!item) return false;
+            holding = item;
+            clawState = 'retract';
+            pend.angle = 0.55;
+            pend.length = 300;
+            clawOpen = 0;
+            syncHud();
+            return true;
           },
         };
       }

@@ -68,11 +68,12 @@
 
       const SYMBOLS = ['🍎', '🍋', '🍇', '🍒', '🥝', '🍑', '🍉', '🍊', '🥥', '🍍', '🫐', '🥕', '🌽', '🍄', '🌻', '🐳', '🐙', '🦊', '🐼', '🦉', '⭐', '🌙', '☀️', '🔥'];
       const LEVELS = [
-        { cols: 3, rows: 2, preview: 2.4 },
-        { cols: 4, rows: 3, preview: 2.0 },
-        { cols: 4, rows: 4, preview: 1.6 },
-        { cols: 5, rows: 4, preview: 1.2 },
-        { cols: 6, rows: 4, preview: 0.9 },
+        { cols: 3, rows: 2, preview: 3.2 },
+        { cols: 4, rows: 2, preview: 3.0 },
+        { cols: 4, rows: 3, preview: 2.7 },
+        { cols: 4, rows: 4, preview: 2.4 },
+        { cols: 5, rows: 4, preview: 2.1 },
+        { cols: 6, rows: 4, preview: 1.8 },
       ];
       const BOARD = { x: 26, y: 168, w: W - 52, h: 448 };
 
@@ -198,7 +199,7 @@
         const text = won
           ? `<span class="ac-score">${score}</span>` +
             (rec && rec.isNewHigh ? '<span class="ac-newhigh">★ 新纪录</span><br/>' : '') +
-            `全部 5 关完成 · ${moves} 次翻牌 · 用时 ${fmtTime(elapsed)}`
+            `全部 ${LEVELS.length} 关完成 · ${moves} 次翻牌 · 用时 ${fmtTime(elapsed)}`
           : `<span class="ac-score">${score}</span>` +
             (rec && rec.isNewHigh ? '<span class="ac-newhigh">★ 新纪录</span><br/>' : '') +
             `第 ${level} 关 · ${moves} 次翻牌`;
@@ -218,7 +219,7 @@
       function showStart() {
         ui.show({
           title: '记忆翻牌',
-          text: '点开两张牌找相同图案。<br/>每关开始会先亮牌预览<br/>5 关逐渐加牌、缩短预览时间',
+          text: '点开两张牌找相同图案。<br/>每关开始会先亮牌预览<br/>6 关由少到多、预览时间逐步缩短',
           btn: '开始游戏',
           onBtn: startGame,
         });
@@ -304,7 +305,7 @@
               A.Sfx.play('spring');
             }
           } else {
-            mismatchTimer = 0.72;
+            mismatchTimer = Math.max(0.7, 0.95 - (level - 1) * 0.04);
             A.Sfx.play('land');
           }
         }
@@ -467,6 +468,21 @@
 
       reset();
       state = 'ready';
+      if (location.hash === '#test') {
+        window.__arcadeTest = {
+          info() {
+            return { level, totalLevels: LEVELS.length, cards: cards.length, previewTimer, score, moves };
+          },
+          setLevel(value) {
+            level = clamp(Number(value) || 1, 1, LEVELS.length);
+            buildLevel(level);
+            state = 'playing';
+            ui.hide();
+            syncHud();
+            return true;
+          },
+        };
+      }
       const saved = autosave.load();
       if (saved) {
         A.showResumePrompt(ui, saved, {

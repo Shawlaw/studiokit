@@ -290,6 +290,25 @@
       "claimedAt": "2026-11-09T05:00:00+00:00",
       "completedAt": "2026-11-09T05:05:00+00:00",
       "evidence": "独立 Reviewer A（共享引擎/生命周期）、B（玩法数学/种子）、C（移动端布局/触控）、D（数据/安全/发布）审核；B 复跑影跃 800000 跳、极速 500 seeds×300s、矿工连锁 cashout、层塔 ODE 均 PASS；C 复核 merge 标题/空按钮/gold 画布/返回链接/子 HUD/安全区；A/D 复核输入、旧档迁移、配额回滚、shell 子路径。修复后 49/49 CDP、validate/build/node --check 通过；提交 54079cf + 793a6fd，main fast-forward 697448e→793a6fd；Actions run 42565028915 全成功；线上 https://shawlaw.github.io/studiokit/apps/arcade/ 13 卡/v0.3.1，star-raid shell href=https://shawlaw.github.io/studiokit/index.html，registry available v0.3.1。真机 iOS/Android 与 5000/10000 种子穷举仍 UNVERIFIED"
+    },
+    {
+      "id": "T016",
+      "title": "街机厅 0.3.2：修复黄金矿工夹取显示与记忆翻牌难度曲线",
+      "kind": "agent",
+      "status": "DONE",
+      "dependsOn": [
+        "T015"
+      ],
+      "ownerAuthorizationRequired": false,
+      "acceptance": [
+        "黄金矿工夹中的物品随钩爪回收，原位置不再重复绘制",
+        "记忆翻牌改为 6 关由少到多（6→8→12→16→20→24 张），预览 3.2→1.8 秒平滑递减，低关不匹配停留延长",
+        "validate_site.py / build_site.py / node --check / 51 项 CDP 测试通过",
+        "版本 0.3.2 同步 engine/registry/index/README/CHANGELOG/validate/smoke"
+      ],
+      "claimedAt": "2026-11-09T05:20:00+00:00",
+      "completedAt": "2026-11-09T05:30:00+00:00",
+      "evidence": "黄金矿工 render 跳过 holding 原位置绘制，drawClaw 只在钩爪处绘制被夹物；#test 钩子 grabFirst + gold-held.png 验证；记忆翻牌 LEVELS 改为 6 关 3x2/4x2/4x3/4x4/5x4/6x4，preview 3.2/3.0/2.7/2.4/2.1/1.8，mismatch 0.95→0.75，finish 文案动态 LEVELS.length；51/51 CDP 通过（新增记忆 6 关、夹取跟随）；本地提交未推送，线上仍 0.3.1"
     }
   ]
 }

@@ -19,6 +19,7 @@
 | T013 | agent | 街机厅 0.3.0 发布：推送 main 并验证 GitHub Pages | DONE | T012 | 推送 `aba11a9`；Actions run `42501786872` 成功；线上 13 卡/v0.3.0/registry available；13 游戏页 200 |
 | T014 | agent | 街机厅 0.3.1：按游戏性评审包优化公平性、输入与移动端布局 | DONE | T013 | 输入多指/取消、雪铃去重、影跃可达、星海波次、赛车安全走廊、矿工关卡、44px 暂停；49/49 CDP；真机/大规模种子 UNVERIFIED |
 | T015 | agent | 街机厅 0.3.1 发布：独立审核后 fast-forward 合入 main 并验证 Pages | DONE | T014 | Reviewer A/B/C/D 复核无 Blocker/Major；`793a6fd` ff 合入 main；Actions `42565028915` 成功；线上 0.3.1/13 卡/子路径 shell 正确 |
+| T016 | agent | 街机厅 0.3.2：修复矿工夹取显示与记忆翻牌难度曲线 | DONE | T015 | 夹中物仅随钩爪绘制；记忆 6 关 6→24 张、预览 3.2→1.8s；51/51 CDP；本地提交未推送 |
 
 ## 任务命令
 
