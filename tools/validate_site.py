@@ -139,18 +139,26 @@ def validate(root=ROOT):
     arcade_engine = root / 'apps/arcade/engine.js'
     if arcade_engine.exists():
         source = arcade_engine.read_text(encoding='utf-8')
-        if "const ARCADE_VERSION = '0.3.2'" not in source:
+        if "const ARCADE_VERSION = '0.4.0'" not in source:
             ok = fail('Arcade ARCADE_VERSION drifted; update registry/README/CHANGELOG together') and ok
         if source.count("file: '") < 13:
             ok = fail('Arcade GAMES list should contain at least 13 games') and ok
         if "const RUNS_KEY = 'studiokit:arcade:runs:v1'" not in source:
             ok = fail('Arcade run-save key changed; requires migration review') and ok
+        if 'function installDisplayMode' not in source:
+            ok = fail('Arcade fullscreen/immersive helper is missing') and ok
+        gold_miner = root / 'apps/arcade/games/gold-miner.html'
+        if gold_miner.exists():
+            gold_source = gold_miner.read_text(encoding='utf-8')
+            for marker in ('data-toolbelt', 'data-tool="aim"', 'AIM_EXTEND_SPEED', 'winchArmed'):
+                if marker not in gold_source:
+                    ok = fail(f'Gold miner 0.4.0 marker missing: {marker}') and ok
         if registry_path.exists():
             try:
                 registry = json.loads(registry_path.read_text(encoding='utf-8'))
                 arcade = next((t for t in registry.get('tools', []) if t.get('id') == 'arcade'), None)
-                if arcade and arcade.get('version') != '0.3.2':
-                    ok = fail('Arcade registry version must match engine 0.3.2') and ok
+                if arcade and arcade.get('version') != '0.4.0':
+                    ok = fail('Arcade registry version must match engine 0.4.0') and ok
             except Exception:
                 pass
 

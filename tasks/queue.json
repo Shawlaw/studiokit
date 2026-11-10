@@ -328,6 +328,46 @@
       "claimedAt": "2026-11-09T13:25:00+00:00",
       "completedAt": "2026-11-09T13:29:30+00:00",
       "evidence": "发布前复跑 51/51 CDP、validate_site.py、build_site.py、node --check 全通过；main fast-forward d958772→2df2dbd 并 push；Actions run 42625773149 validate+build+deploy 全成功（13:28:23→13:29:05Z）；线上 https://shawlaw.github.io/studiokit/apps/arcade/ HTTP 200、版本 0.3.2、13 张 hall-card、registry available 0.3.2；无头 Chrome 对线上 9/9 检查通过（中心页渲染、矿工夹中物挂钩爪且不复制、记忆 6 关 6→24 张、三页无 JS 报错）。真机 iOS/Android 仍 UNVERIFIED"
+    },
+    {
+      "id": "T018",
+      "title": "街机厅 0.4.0：全屏沉浸游玩 + 黄金矿工摆速与限量道具",
+      "kind": "agent",
+      "status": "DONE",
+      "dependsOn": [
+        "T017"
+      ],
+      "ownerAuthorizationRequired": false,
+      "acceptance": [
+        "13 款游戏共享全屏入口；支持原生 Fullscreen API，不支持时退化为 CSS 沉浸布局",
+        "375/390/430 与 320 窄屏下画布放大且无横向溢出，safe-area 不压刘海",
+        "黄金矿工首关摆速 520→300，逐关 380/470/580/700，道具条 2/1/1 初始补给",
+        "指哪打哪/加时/绞盘可用、限量、可存档恢复；TNT 不可锁定且不扣次数",
+        "validate_site.py / build_site.py / node --check / arcade_smoke.mjs 全部通过",
+        "版本 0.4.0 同步 engine/registry/index/README/CHANGELOG/validate/smoke/设计文档"
+      ],
+      "claimedAt": "2026-11-10T14:40:00+00:00",
+      "completedAt": "2026-11-10T15:00:00+00:00",
+      "evidence": "engine.js 新增 installDisplayMode（原生全屏 + CSS 沉浸 + prefs.immersive 记忆 + 键盘 F + safe-area 布局）；arcade.css 新增沉浸布局/道具条/Toast/横屏提示；13 个游戏页返回链接改为可折叠标签；gold-miner 摆速 300/380/470/580/700、动态物品下限、道具 2/1/1、每关补给、指哪打哪直线抓取、加时 +10s、绞盘 980、tools/winchArmed 写入既有 Schema v1；validate_site.py 与 smoke 版本/标记同步。实测 57/57 CDP 通过（含全屏画布 250×441→349×615、HUD 隐藏、偏好记忆与下次自动恢复、道具消耗/存档恢复、TNT 不可锁定、动态物品下限、达标按钮不压道具条、320/375/390/430 无溢出、390×844 刘海全屏）；validate/build/node --check 全过；截图 immersive-gold.png / gold-375-normal.png / gold-aim.png。仅本地工作树，未提交/推送/发布；iOS 真机与原生全屏仍 UNVERIFIED"
+    },
+    {
+      "id": "T019",
+      "title": "街机厅 0.4.0 发布：提交并推送 main，验证 GitHub Pages",
+      "kind": "agent",
+      "status": "IN_PROGRESS",
+      "dependsOn": [
+        "T018"
+      ],
+      "ownerAuthorizationRequired": true,
+      "ownerAuthorizationVerifiedByAgentFlag": true,
+      "acceptance": [
+        "Owner 2026-11-10 明确指令：测试验证完就推送发布",
+        "发布前 57/57 CDP、validate_site.py、build_site.py、node --check 全部通过",
+        "提交时间符合 commit-time-policy（工作日 19:03–次日 01:08 窗口）",
+        "main 推送后 Actions validate + deploy 成功",
+        "线上 0.4.0 / 13 卡 / 全屏按钮与矿工道具实际生效"
+      ],
+      "claimedAt": "2026-11-10T15:31:00+00:00"
     }
   ]
 }

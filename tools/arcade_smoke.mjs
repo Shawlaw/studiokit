@@ -273,8 +273,8 @@ async function main() {
     })()`);
     assert(home.cards >= 2, 'home cards=' + home.cards);
     assert(home.href.indexOf('apps/arcade') !== -1, 'arcade card not clickable: ' + JSON.stringify(home));
-    assert(home.version.indexOf('0.3.2') !== -1, 'arcade version missing on home card');
-    record('门户街机厅卡片可点击且版本 0.3.2', true);
+    assert(home.version.indexOf('0.4.0') !== -1, 'arcade version missing on home card');
+    record('门户街机厅卡片可点击且版本 0.4.0', true);
 
     /* ---------- GitHub Pages 项目子路径：shell 返回链接 ---------- */
     await cdp.navigate(base + '/studiokit/apps/arcade/games/star-raid.html');
@@ -292,10 +292,10 @@ async function main() {
       cards: document.querySelectorAll('.hall-card').length,
       runs: window.Arcade && Arcade.RunSave.count()
     })`);
-    assert(hallInfo.version === '0.3.2', 'version is ' + hallInfo.version);
+    assert(hallInfo.version === '0.4.0', 'version is ' + hallInfo.version);
     assert(hallInfo.games === 13, 'game count is ' + hallInfo.games);
     assert(hallInfo.cards === 13, 'card count is ' + hallInfo.cards);
-    record('中心页 13 款游戏与版本 0.3.2', true);
+    record('中心页 13 款游戏与版本 0.4.0', true);
 
     await cdp.evaluate(`(() => { const i = document.querySelector('[data-search]'); i.value = '雪铃'; i.dispatchEvent(new Event('input', { bubbles: true })); })()`);
     await sleep(120);
@@ -623,25 +623,66 @@ async function main() {
     const goldFirst = await cdp.evaluate(`window.__arcadeTest.info()`);
     const goldHud = await cdp.evaluate(`({ target: document.querySelector('[data-hud-target]').textContent, level: document.querySelector('[data-hud-level]').textContent, time: document.querySelector('[data-hud-time]').textContent })`);
     assert(goldHud.target === '$650' && goldHud.level === '1' && Number(goldHud.time) > 0, 'gold DOM subhud wrong: ' + JSON.stringify(goldHud));
-    assert(goldFirst.target === 650 && goldFirst.swing === 520, 'gold level 1 spec wrong: ' + JSON.stringify(goldFirst));
+    assert(goldFirst.target === 650 && goldFirst.swing === 300, 'gold level 1 spec wrong: ' + JSON.stringify(goldFirst));
     assert(goldFirst.tnt === 0, 'gold level 1 should have no TNT');
     assert(goldFirst.totalValue >= goldFirst.target * 1.25, 'gold level 1 value infeasible: ' + JSON.stringify(goldFirst));
     await cdp.evaluate(`window.__arcadeTest.setMoney(${goldFirst.target})`);
     const cashVisible = await cdp.evaluate(`!document.querySelector('[data-cashout]').hidden`);
     assert(cashVisible, 'gold cashout button not shown');
+    const cashLayout = await cdp.evaluate(`(() => {
+      const c = document.querySelector('[data-cashout]').getBoundingClientRect();
+      const t = document.querySelector('[data-toolbelt]').getBoundingClientRect();
+      const s = document.querySelector('.stage-box').getBoundingClientRect();
+      return { cashBottom: Math.round(c.bottom), toolTop: Math.round(t.top), w: Math.round(c.width), stageW: Math.round(s.width) };
+    })()`);
+    assert(cashLayout.cashBottom <= cashLayout.toolTop + 1 && cashLayout.w <= cashLayout.stageW, 'gold cashout overlaps toolbelt: ' + JSON.stringify(cashLayout));
+    await cdp.screenshot('gold-cashout.png');
     await cdp.click('[data-cashout]');
     await sleep(300);
     const goldSecond = await cdp.evaluate(`window.__arcadeTest.info()`);
-    assert(goldSecond.level === 2 && goldSecond.swing === 650, 'gold level 2 spec wrong: ' + JSON.stringify(goldSecond));
+    assert(goldSecond.level === 2 && goldSecond.swing === 380, 'gold level 2 spec wrong: ' + JSON.stringify(goldSecond));
     assert(goldSecond.target - goldSecond.money === 950, 'gold level 2 increment wrong: ' + JSON.stringify(goldSecond));
     assert(goldSecond.tnt === 0, 'gold level 2 should have no TNT');
     assert(goldSecond.totalValue >= goldSecond.target * 1.25, 'gold level 2 value infeasible: ' + JSON.stringify(goldSecond));
+    assert(
+      goldSecond.tools.aim === 3 && goldSecond.tools.time === 2 && goldSecond.tools.winch === 1,
+      'gold level 2 tool grants wrong: ' + JSON.stringify(goldSecond.tools)
+    );
     await cdp.evaluate(`window.__arcadeTest.setMoney(${goldSecond.target})`);
     await cdp.click('[data-cashout]');
     await sleep(300);
     const goldThird = await cdp.evaluate(`window.__arcadeTest.info()`);
     assert(goldThird.level === 3 && goldThird.target - goldThird.money === 1350, 'gold cashout chain leak: ' + JSON.stringify(goldThird));
-    record('黄金矿工 前 2 关无炸药/价值保底/提前结算/不可连锁空兑现', true);
+    assert(
+      goldThird.tools.aim === 3 && goldThird.tools.time === 2 && goldThird.tools.winch === 2,
+      'gold level 3 tool grants wrong: ' + JSON.stringify(goldThird.tools)
+    );
+    /* 指哪打哪不能锁定炸药，且不能扣次数（用 #test 钩子补一颗，避免物品池随机未生成）。 */
+    const tntSpot = await cdp.evaluate(`(() => {
+      const info = window.__arcadeTest.info();
+      for (let y = 240; y <= 600; y += 10) {
+        for (let x = 30; x <= 390; x += 10) {
+          if (info.itemList.every((o) => Math.hypot(o.x - x, o.y - y) > 90)) return { x, y };
+        }
+      }
+      return null;
+    })()`);
+    assert(tntSpot, 'gold no empty spot for TNT test');
+    await cdp.evaluate(`window.__arcadeTest.addTnt(${tntSpot.x}, ${tntSpot.y})`);
+    await cdp.click('[data-tool="aim"]');
+    await sleep(80);
+    const tntAim = await cdp.evaluate(`(() => {
+      const info = window.__arcadeTest.info();
+      const tnt = info.itemList.filter((o) => o.type === 'tnt').sort((a, b) => Math.hypot(a.x - ${tntSpot.x}, a.y - ${tntSpot.y}) - Math.hypot(b.x - ${tntSpot.x}, b.y - ${tntSpot.y}))[0];
+      if (!tnt) return { missing: true };
+      const ok = window.__arcadeTest.aimAt(tnt.x, tnt.y);
+      const after = window.__arcadeTest.info();
+      return { ok, armed: after.aimArmed, aim: after.tools.aim };
+    })()`);
+    assert(!tntAim.missing, 'gold test TNT missing');
+    assert(tntAim.ok === false && tntAim.armed === true && tntAim.aim === 3, 'gold TNT aim must not consume: ' + JSON.stringify(tntAim));
+    await cdp.click('[data-tool="aim"]');
+    record('黄金矿工 前 2 关无炸药/价值保底/提前结算/道具补给/炸药不可锁定', true);
 
     /* ---------- 黄金矿工：夹中物品跟随钩爪（渲染不再重复原物） ---------- */
     await cdp.evaluate(`Arcade.RunSave.clear('gold-miner')`);
@@ -654,6 +695,177 @@ async function main() {
     assert(held.holding && held.holding !== 'tnt', 'gold grab failed: ' + JSON.stringify(held));
     await cdp.screenshot('gold-held.png');
     record('黄金矿工 夹中物品跟随钩爪', true);
+
+    /* ---------- 黄金矿工：限量道具 ---------- */
+    await cdp.evaluate(`Arcade.RunSave.clear('gold-miner')`);
+    await cdp.navigate(base + '/apps/arcade/games/gold-miner.html#test');
+    await cdp.click('[data-ov-btn]');
+    await sleep(320);
+    let goldTools = await cdp.evaluate(`window.__arcadeTest.info()`);
+    assert(
+      goldTools.tools.aim === 2 && goldTools.tools.time === 1 && goldTools.tools.winch === 1,
+      'gold initial tools wrong: ' + JSON.stringify(goldTools.tools)
+    );
+    const timeBefore = goldTools.timeLeft;
+    await cdp.click('[data-tool="time"]');
+    await sleep(140);
+    goldTools = await cdp.evaluate(`window.__arcadeTest.info()`);
+    assert(
+      goldTools.tools.time === 0 && goldTools.timeLeft >= timeBefore + 9,
+      'gold time tool failed: ' + JSON.stringify({ before: timeBefore, after: goldTools.timeLeft, tools: goldTools.tools })
+    );
+    await cdp.click('[data-tool="aim"]');
+    await sleep(90);
+    const aimButton = await cdp.evaluate(`(() => { const b = document.querySelector('[data-tool="aim"]'); const r = b.getBoundingClientRect(); return { pressed: b.getAttribute('aria-pressed'), w: Math.round(r.width), h: Math.round(r.height) }; })()`);
+    assert(aimButton.pressed === 'true' && aimButton.w >= 44 && aimButton.h >= 44, 'gold aim arm failed: ' + JSON.stringify(aimButton));
+    const aimTarget = await cdp.evaluate(`(() => { const info = window.__arcadeTest.info(); return info.itemList.find((o) => o.type === 'diamond' || o.type.indexOf('gold') === 0) || null; })()`);
+    assert(aimTarget, 'gold no aimable item');
+    await cdp.pointer(aimTarget.x, aimTarget.y, 'pointermove');
+    await sleep(140);
+    await cdp.screenshot('gold-aim.png');
+    await cdp.tap(aimTarget.x, aimTarget.y);
+    await sleep(320);
+    goldTools = await cdp.evaluate(`window.__arcadeTest.info()`);
+    assert(goldTools.tools.aim === 1, 'gold aim charge not consumed: ' + JSON.stringify(goldTools.tools));
+    assert(
+      goldTools.aimTarget === aimTarget.type ||
+        goldTools.holding === aimTarget.type ||
+        goldTools.clawState === 'retract' ||
+        goldTools.clawState === 'extend' ||
+        goldTools.money > 0,
+      'gold aim shot not started: ' +
+        JSON.stringify({ state: goldTools.clawState, target: goldTools.aimTarget, holding: goldTools.holding, money: goldTools.money })
+    );
+    /* 等钩爪回到摆动，再用绞盘并立刻暂停，避免入账把上弦状态消耗掉。 */
+    await cdp.evaluate(`new Promise((resolve) => {
+      const started = Date.now();
+      const timer = setInterval(() => {
+        if (window.__arcadeTest.info().clawState === 'swing' || Date.now() - started > 2500) {
+          clearInterval(timer);
+          resolve(true);
+        }
+      }, 50);
+    })`);
+    const winchState = await cdp.evaluate(`(() => {
+      document.querySelector('[data-tool="winch"]').click();
+      const info = window.__arcadeTest.info();
+      return { tools: info.tools, armed: info.winchArmed };
+    })()`);
+    assert(
+      winchState.tools.winch === 0 && winchState.armed === true,
+      'gold winch failed: ' + JSON.stringify(winchState)
+    );
+    record('黄金矿工 道具初始 2/1/1、加时 +10s、指哪打哪消耗、绞盘上弦', true);
+
+    /* ---------- 黄金矿工：道具状态暂停保存 / 刷新恢复 ---------- */
+    await cdp.click('[data-pause]');
+    await sleep(220);
+    const savedTools = await cdp.evaluate(`(() => {
+      const rec = Arcade.RunSave.get('gold-miner');
+      return rec ? { tools: rec.data.tools, winch: rec.data.winchArmed } : null;
+    })()`);
+    assert(
+      savedTools && savedTools.tools.aim === 1 && savedTools.tools.time === 0 && savedTools.tools.winch === 0 && savedTools.winch === true,
+      'gold tools autosave wrong: ' + JSON.stringify(savedTools)
+    );
+    await cdp.navigate(base + '/apps/arcade/games/gold-miner.html#test');
+    await cdp.click('[data-ov-btn]');
+    await sleep(300);
+    const restoredTools = await cdp.evaluate(`window.__arcadeTest.info()`);
+    assert(
+      restoredTools.tools.aim === 1 && restoredTools.tools.time === 0 && restoredTools.tools.winch === 0 && restoredTools.winchArmed === true,
+      'gold tools restore wrong: ' + JSON.stringify({ tools: restoredTools.tools, armed: restoredTools.winchArmed })
+    );
+    record('黄金矿工 道具状态暂停保存 / 刷新继续恢复', true);
+
+    /* ---------- 全屏 / 沉浸模式 ---------- */
+    await cdp.evaluate(`Arcade.RunSave.clear('gold-miner')`);
+    await cdp.send('Emulation.setDeviceMetricsOverride', { width: 375, height: 667, deviceScaleFactor: 1, mobile: true });
+    await cdp.navigate(base + '/apps/arcade/games/gold-miner.html');
+    const inlineFs = await cdp.evaluate(`(() => {
+      const b = document.querySelector('[data-fullscreen-inline]');
+      if (!b) return null;
+      const r = b.getBoundingClientRect();
+      return { hidden: b.hidden, w: Math.round(r.width), h: Math.round(r.height) };
+    })()`);
+    assert(inlineFs && !inlineFs.hidden && inlineFs.h >= 44, 'overlay fullscreen entry ' + JSON.stringify(inlineFs));
+    /* 清除存档后仍可能被运行中的自动存档写回；若出现续玩提示，显式重新开始，保证截图是初始补给。 */
+    await cdp.evaluate(`(() => {
+      const title = document.querySelector('[data-ov-title]');
+      if (title && title.textContent.indexOf('继续上次') !== -1) {
+        const restart = document.querySelector('[data-ov-btn2]');
+        if (restart) restart.click();
+      }
+    })()`);
+    await sleep(120);
+    await cdp.click('[data-ov-btn]');
+    await sleep(260);
+    await cdp.screenshot('gold-375-normal.png');
+    const fsBefore = await cdp.evaluate(`(() => {
+      const c = document.querySelector('.game-canvas').getBoundingClientRect();
+      const b = document.querySelector('[data-fullscreen]').getBoundingClientRect();
+      return {
+        h: Math.round(c.height), w: Math.round(c.width),
+        btnW: Math.round(b.width), btnH: Math.round(b.height),
+        shell: getComputedStyle(document.querySelector('.studiokit-shellbar')).display,
+        active: document.body.classList.contains('arcade-immersive')
+      };
+    })()`);
+    assert(fsBefore.btnW >= 44 && fsBefore.btnH >= 44, 'fullscreen target ' + JSON.stringify(fsBefore));
+    await cdp.click('[data-fullscreen]');
+    await sleep(500);
+    const fsAfter = await cdp.evaluate(`(() => {
+      const c = document.querySelector('.game-canvas').getBoundingClientRect();
+      return {
+        h: Math.round(c.height), w: Math.round(c.width),
+        active: document.body.classList.contains('arcade-immersive'),
+        shell: getComputedStyle(document.querySelector('.studiokit-shellbar')).display,
+        title: getComputedStyle(document.querySelector('.game-title')).display,
+        hud: getComputedStyle(document.querySelector('.game-hud')).display,
+        hint: getComputedStyle(document.querySelector('.game-hint')).display,
+        pref: Arcade.Prefs.load().immersive,
+        ratio: c.width / c.height,
+        toastBottom: (() => { const t = document.querySelector('.ac-toast'); return t ? Math.round(t.getBoundingClientRect().bottom) : null; })(),
+        toolbeltTop: (() => { const t = document.querySelector('[data-toolbelt]'); return t ? Math.round(t.getBoundingClientRect().top) : null; })()
+      };
+    })()`);
+    assert(
+      fsAfter.active && fsAfter.shell === 'none' && fsAfter.title !== 'none' && fsAfter.hud === 'none' && fsAfter.hint === 'none',
+      'immersive layout wrong: ' + JSON.stringify(fsAfter)
+    );
+    assert(
+      fsAfter.h > fsBefore.h + 60 && Math.abs(fsAfter.ratio - 420 / 740) < 0.02,
+      'immersive canvas wrong: ' + JSON.stringify({ before: fsBefore, after: fsAfter })
+    );
+    assert(fsAfter.pref === true, 'immersive pref not saved');
+    if (fsAfter.toastBottom !== null) {
+      assert(fsAfter.toastBottom <= fsAfter.toolbeltTop + 1, 'immersive toast covers toolbelt: ' + JSON.stringify(fsAfter));
+    }
+    await cdp.screenshot('immersive-gold-toast.png');
+    await cdp.evaluate(`(() => { const t = document.querySelector('.ac-toast'); if (t) t.remove(); })()`);
+    await sleep(100);
+    await cdp.screenshot('immersive-gold.png');
+    await cdp.click('[data-fullscreen]');
+    await sleep(600);
+    const fsExit = await cdp.evaluate(`(() => {
+      const c = document.querySelector('.game-canvas').getBoundingClientRect();
+      return { active: document.body.classList.contains('arcade-immersive'), h: Math.round(c.height), pref: Arcade.Prefs.load().immersive };
+    })()`);
+    assert(!fsExit.active && fsExit.h <= fsBefore.h + 2 && fsExit.pref === false, 'immersive exit wrong: ' + JSON.stringify({ before: fsBefore, after: fsExit }));
+    record('全屏/沉浸模式 画布放大 + HUD 隐藏 + 偏好记忆 + 退出恢复', true);
+
+    /* 偏好记忆：上次全屏后，下次在开始/继续弹层按下按钮应自动恢复。 */
+    await cdp.click('[data-fullscreen]');
+    await sleep(360);
+    await cdp.navigate(base + '/apps/arcade/games/gold-miner.html?autofs=1');
+    await sleep(220);
+    await cdp.buttonPointer('[data-ov-btn]', 'pointerdown');
+    await sleep(360);
+    const autoFs = await cdp.evaluate(`({ active: document.body.classList.contains('arcade-immersive'), pref: Arcade.Prefs.load().immersive })`);
+    assert(autoFs.active && autoFs.pref === true, 'immersive auto-restore failed: ' + JSON.stringify(autoFs));
+    await cdp.click('[data-fullscreen]');
+    await sleep(300);
+    record('全屏偏好记忆：下次点开始自动恢复', true);
 
     /* ---------- 俄罗斯方块：7-bag 与 1 行消除 ---------- */
     await cdp.evaluate(`Arcade.RunSave.clear('block-drop')`);
@@ -767,7 +979,8 @@ async function main() {
         pause: (() => { const b = document.querySelector('[data-pause]'); if (!b) return null; const r = b.getBoundingClientRect(); return { w: Math.round(r.width), h: Math.round(r.height) }; })(),
         title: (() => { const t = document.querySelector('.game-title'); if (!t) return null; return { cw: t.clientWidth, sw: t.scrollWidth }; })(),
         back: (() => { const b = document.querySelector('.ac-back'); if (!b) return null; const r = b.getBoundingClientRect(); return { w: Math.round(r.width), h: Math.round(r.height) }; })(),
-        secondary: (() => { const b = document.querySelector('[data-ov-btn2]'); if (!b) return null; const r = b.getBoundingClientRect(); return { hidden: b.hidden, display: getComputedStyle(b).display, w: Math.round(r.width), h: Math.round(r.height) }; })()
+        secondary: (() => { const b = document.querySelector('[data-ov-btn2]'); if (!b) return null; const r = b.getBoundingClientRect(); return { hidden: b.hidden, display: getComputedStyle(b).display, w: Math.round(r.width), h: Math.round(r.height) }; })(),
+        toolbelt: (() => { const t = document.querySelector('[data-toolbelt]'); if (!t) return null; const r = t.getBoundingClientRect(); return { w: Math.round(r.width), h: Math.round(r.height), btns: [...t.querySelectorAll('.tool-btn')].map((b) => { const br = b.getBoundingClientRect(); return { w: Math.round(br.width), h: Math.round(br.height) }; }) }; })()
       })`);
       assert(overflow.sw <= overflow.cw + 1, pagePath + ' horizontal overflow ' + overflow.sw + '>' + overflow.cw);
       if (overflow.canvas) {
@@ -776,9 +989,13 @@ async function main() {
         assert(overflow.back && overflow.back.w >= 44 && overflow.back.h >= 44, pagePath + ' back target ' + JSON.stringify(overflow.back));
         assert(overflow.title && overflow.title.sw <= overflow.title.cw + 1, pagePath + ' title clipped ' + JSON.stringify(overflow.title));
         assert(overflow.secondary && (overflow.secondary.hidden ? overflow.secondary.display === 'none' : overflow.secondary.w >= 44), pagePath + ' secondary button ' + JSON.stringify(overflow.secondary));
+        if (overflow.toolbelt) {
+          assert(overflow.toolbelt.w <= overflow.canvas.w + 1, pagePath + ' toolbelt width ' + JSON.stringify(overflow.toolbelt));
+          assert(overflow.toolbelt.btns.length === 3 && overflow.toolbelt.btns.every((b) => b.h >= 44 && b.w > 40), pagePath + ' toolbelt buttons ' + JSON.stringify(overflow.toolbelt.btns));
+        }
       }
     }
-    record('375px 窄屏 14 页无横向溢出 + 44px 暂停按钮', true);
+    record('375px 窄屏 14 页无横向溢出 + 44px 暂停按钮 + 矿工道具条', true);
 
     /* ---------- 俄罗斯方块触屏控制面板 ---------- */
     await cdp.navigate(base + '/apps/arcade/games/block-drop.html');
@@ -814,7 +1031,8 @@ async function main() {
         pause: (() => { const b = document.querySelector('[data-pause]'); if (!b) return null; const r = b.getBoundingClientRect(); return { w: Math.round(r.width), h: Math.round(r.height) }; })(),
         title: (() => { const t = document.querySelector('.game-title'); if (!t) return null; return { cw: t.clientWidth, sw: t.scrollWidth }; })(),
         back: (() => { const b = document.querySelector('.ac-back'); if (!b) return null; const r = b.getBoundingClientRect(); return { w: Math.round(r.width), h: Math.round(r.height) }; })(),
-        secondary: (() => { const b = document.querySelector('[data-ov-btn2]'); if (!b) return null; const r = b.getBoundingClientRect(); return { hidden: b.hidden, display: getComputedStyle(b).display, w: Math.round(r.width), h: Math.round(r.height) }; })()
+        secondary: (() => { const b = document.querySelector('[data-ov-btn2]'); if (!b) return null; const r = b.getBoundingClientRect(); return { hidden: b.hidden, display: getComputedStyle(b).display, w: Math.round(r.width), h: Math.round(r.height) }; })(),
+        toolbelt: (() => { const t = document.querySelector('[data-toolbelt]'); if (!t) return null; const r = t.getBoundingClientRect(); return { w: Math.round(r.width), h: Math.round(r.height), btns: [...t.querySelectorAll('.tool-btn')].map((b) => { const br = b.getBoundingClientRect(); return { w: Math.round(br.width), h: Math.round(br.height) }; }) }; })()
       })`);
       assert(small.sw <= small.cw + 1, pagePath + ' 320px horizontal overflow ' + small.sw + '>' + small.cw);
       if (small.canvas) {
@@ -823,9 +1041,31 @@ async function main() {
         assert(small.back && small.back.w >= 44 && small.back.h >= 44, pagePath + ' 320px back target ' + JSON.stringify(small.back));
         assert(small.title && small.title.sw <= small.title.cw + 1, pagePath + ' 320px title clipped ' + JSON.stringify(small.title));
         assert(small.secondary && (small.secondary.hidden ? small.secondary.display === 'none' : small.secondary.w >= 44), pagePath + ' 320px secondary button ' + JSON.stringify(small.secondary));
+        if (small.toolbelt) {
+          assert(small.toolbelt.w <= small.canvas.w + 1, pagePath + ' 320px toolbelt width ' + JSON.stringify(small.toolbelt));
+          assert(small.toolbelt.btns.length === 3 && small.toolbelt.btns.every((b) => b.h >= 44 && b.w > 40), pagePath + ' 320px toolbelt buttons ' + JSON.stringify(small.toolbelt.btns));
+        }
       }
     }
-    record('320×568 小屏 14 页无横向溢出 + 44px 暂停按钮', true);
+    record('320×568 小屏 14 页无横向溢出 + 44px 暂停按钮 + 矿工道具条', true);
+
+    /* 320px 上道具条占画布比例最大：物品不能被压在道具条后面。 */
+    await cdp.navigate(base + '/apps/arcade/games/gold-miner.html?itemfloor=1#test');
+    const itemSafety = await cdp.evaluate(`(() => {
+      const info = window.__arcadeTest.info();
+      const c = document.querySelector('.game-canvas').getBoundingClientRect();
+      const t = document.querySelector('[data-toolbelt]').getBoundingClientRect();
+      const barTopLogical = ((t.top - c.top) / c.height) * 740;
+      return {
+        items: info.itemList.length,
+        floor: Math.round(info.itemFloor),
+        barTop: Math.round(barTopLogical),
+        lowest: Math.round(Math.max(...info.itemList.map((o) => o.y + o.r)))
+      };
+    })()`);
+    assert(itemSafety.items > 0 && itemSafety.lowest <= itemSafety.barTop - 2, 'gold items under toolbelt: ' + JSON.stringify(itemSafety));
+    await cdp.screenshot('gold-320.png');
+    record('320px 矿工物品不被道具条遮挡', true);
     await cdp.navigate(base + '/apps/arcade/');
     const hallSmall = await cdp.evaluate(`({
       searchFont: getComputedStyle(document.querySelector('[data-search]')).fontSize,
@@ -867,6 +1107,29 @@ async function main() {
       assert(parseFloat(safe.paddingTop) >= 47, 'shell safe-area padding ' + JSON.stringify(safe));
       assert(safe.docH <= safe.viewH + 2, 'safe-area page overflow ' + JSON.stringify(safe));
       record('390×844 刘海安全区 shellbar/页面高度', true);
+
+      /* 全屏时顶栏与画布同样要避开刘海/底部安全区。 */
+      await cdp.navigate(base + '/apps/arcade/games/gold-miner.html');
+      await cdp.click('[data-fullscreen]');
+      await sleep(420);
+      const safeFs = await cdp.evaluate(`(() => {
+        const c = document.querySelector('.game-canvas').getBoundingClientRect();
+        const t = document.querySelector('[data-toolbelt]').getBoundingClientRect();
+        return {
+          active: document.body.classList.contains('arcade-immersive'),
+          top: Math.round(c.top),
+          bottom: Math.round(c.bottom),
+          toolBottom: Math.round(t.bottom),
+          vh: window.innerHeight,
+          topPad: parseFloat(getComputedStyle(document.querySelector('.game-topbar')).paddingTop),
+          docH: document.documentElement.scrollHeight
+        };
+      })()`);
+      assert(safeFs.active && safeFs.topPad >= 47 && safeFs.top >= 47, 'safe-area fullscreen top ' + JSON.stringify(safeFs));
+      assert(safeFs.toolBottom <= safeFs.vh + 1 && safeFs.docH <= safeFs.vh + 2, 'safe-area fullscreen bottom ' + JSON.stringify(safeFs));
+      record('390×844 刘海安全区 全屏画布不压刘海/不溢出', true);
+      await cdp.click('[data-fullscreen]');
+      await sleep(300);
     } catch (err) {
       console.log('SKIP 刘海安全区（当前 Chrome/CDP 不支持 setSafeAreaInsetsOverride 或断言失败）: ' + err.message);
     } finally {

@@ -21,6 +21,8 @@
 | T015 | agent | 街机厅 0.3.1 发布：独立审核后 fast-forward 合入 main 并验证 Pages | DONE | T014 | Reviewer A/B/C/D 复核无 Blocker/Major；`793a6fd` ff 合入 main；Actions `42565028915` 成功；线上 0.3.1/13 卡/子路径 shell 正确 |
 | T016 | agent | 街机厅 0.3.2：修复矿工夹取显示与记忆翻牌难度曲线 | DONE | T015 | 夹中物仅随钩爪绘制；记忆 6 关 6→24 张、预览 3.2→1.8s；51/51 CDP；提交 `2df2dbd` 已发布 |
 | T017 | agent | 街机厅 0.3.2 发布：fast-forward 合入 main 并验证 Pages | DONE | T016 | `2df2dbd` ff 合入 main；Actions `42625773149` 成功；线上 0.3.2/13 卡，无头 Chrome 9/9 通过 |
+| T018 | agent | 街机厅 0.4.0：全屏沉浸游玩 + 黄金矿工摆速与限量道具 | DONE | T017 | 全屏/CSS 降级/偏好记忆；矿工摆速 300 起、道具 2/1/1、指哪打哪/加时/绞盘；57/57 CDP、validate/build 全过；仅本地未发布 |
+| T019 | agent | 街机厅 0.4.0 发布：提交并推送 main，验证 GitHub Pages | IN_PROGRESS | T018 | Owner 已明确授权；发布前 57/57；待推送/部署 |
 
 ## 任务命令
 

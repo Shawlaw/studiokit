@@ -7,7 +7,7 @@
 (() => {
   'use strict';
 
-  const ARCADE_VERSION = '0.3.2';
+  const ARCADE_VERSION = '0.4.0';
   const PROGRESS_KEY = 'studiokit:arcade:progress:v1';
   const PREFS_KEY = 'studiokit:arcade:prefs:v1';
   const RUNS_KEY = 'studiokit:arcade:runs:v1';
@@ -187,7 +187,7 @@
       difficulty: 4,
       session: '3–6 分钟',
       tags: ['物理', '关卡'],
-      how: '看准角度点击 / 空格放钩；重物拉得慢，限时达标进入下一关。',
+      how: '看准角度点击 / 空格放钩；重物拉得慢；1/2/3 使用限量道具；限时达标进入下一关。',
     },
   ];
 
@@ -491,7 +491,8 @@
   const Prefs = {
     load() {
       const data = safeGetJSON(PREFS_KEY);
-      return Object.assign({ muted: false }, data && typeof data === 'object' ? data : {});
+      /* immersive 为 0.4.0 新增字段；旧偏好对象缺少该字段时按关闭处理。 */
+      return Object.assign({ muted: false, immersive: false }, data && typeof data === 'object' ? data : {});
     },
     save(prefs) {
       safeSetJSON(PREFS_KEY, prefs);
@@ -635,6 +636,7 @@
       wentUp: false,
       wentCancel: false,
       moved: false,
+      seen: false,
       id: null,
       type: '',
     };
@@ -682,6 +684,7 @@
     function updatePosition(e) {
       pointer.x = toLogicalX(e.clientX);
       pointer.y = toLogicalY(e.clientY);
+      pointer.seen = true;
       pointer.dx = pointer.x - pointer.startX;
       pointer.dy = pointer.y - pointer.startY;
       if (Math.abs(pointer.dx) > 4 || Math.abs(pointer.dy) > 4) pointer.moved = true;
@@ -698,6 +701,7 @@
       pointer.wentUp = false;
       pointer.wentCancel = false;
       pointer.moved = false;
+      pointer.seen = true;
       pointer.x = toLogicalX(e.clientX);
       pointer.y = toLogicalY(e.clientY);
       pointer.startX = pointer.x;
@@ -804,6 +808,8 @@
     };
     stage.fit();
     window.addEventListener('resize', () => stage.fit());
+    /* 移动端旋转/全屏切换后，部分浏览器会在 resize 之后才稳定视口尺寸。 */
+    window.addEventListener('orientationchange', () => setTimeout(() => stage.fit(), 140));
     if (typeof ResizeObserver !== 'undefined') {
       const ro = new ResizeObserver(() => stage.fit());
       ro.observe(canvas);
@@ -1210,8 +1216,258 @@
     });
   }
 
+  /* ----------------------------------------------------------
+   * 全屏 / 沉浸模式（0.4.0）
+   * - 有原生 Fullscreen API 时请求整页全屏；没有或被拒绝时退化为纯 CSS 沉浸。
+   * - 只有游戏页（存在 .game-page）会自动安装，中心页不受影响。
+   * - 记住用户选择：下次从开始/继续弹层进入时自动恢复，减少重复点击。
+   * ---------------------------------------------------------- */
+  function showArcadeToast(text, duration) {
+    if (!document.body) return;
+    const el = document.createElement('div');
+    el.className = 'ac-toast';
+    el.setAttribute('role', 'status');
+    el.textContent = text;
+    document.body.appendChild(el);
+    requestAnimationFrame(() => el.classList.add('is-in'));
+    setTimeout(() => {
+      el.classList.remove('is-in');
+      setTimeout(() => el.remove(), 260);
+    }, duration || 3800);
+  }
+
+  let displayMode = null;
+  let displayAutoInstalled = false;
+
+  function installDisplayMode() {
+    if (displayMode) return displayMode;
+    const gamePage = document.querySelector('.game-page');
+    if (!gamePage) return null;
+    const topbar = gamePage.querySelector('.game-topbar');
+    const overlayPanel = gamePage.querySelector('.overlay-panel');
+    const docEl = document.documentElement;
+
+    let active = false;
+    let nativeActive = false;
+    let opToken = 0;
+    let fallbackNotified = false;
+
+    const topButton = document.createElement('button');
+    topButton.type = 'button';
+    topButton.className = 'ac-icon-btn ac-fs-btn';
+    topButton.dataset.fullscreen = '';
+    if (topbar) {
+      const pause = topbar.querySelector('[data-pause]');
+      topbar.insertBefore(topButton, pause || null);
+    }
+
+    const inlineButton = document.createElement('button');
+    inlineButton.type = 'button';
+    inlineButton.className = 'ac-fs-inline';
+    inlineButton.dataset.fullscreenInline = '';
+    inlineButton.textContent = '⛶ 全屏模式';
+    if (overlayPanel) {
+      overlayPanel.appendChild(inlineButton);
+      inlineButton.hidden = false;
+    }
+
+    function fsElement() {
+      return document.fullscreenElement || document.webkitFullscreenElement || null;
+    }
+
+    function sync() {
+      docEl.classList.toggle('arcade-immersive', active);
+      document.body.classList.toggle('arcade-immersive', active);
+      topButton.textContent = active ? '⤡' : '⛶';
+      topButton.setAttribute('aria-label', active ? '退出全屏模式' : '进入全屏模式');
+      topButton.setAttribute('aria-pressed', String(active));
+      topButton.title = active ? '退出全屏模式（F）' : '进入全屏模式（F）';
+      inlineButton.hidden = active;
+      /* 尺寸切换后 ResizeObserver 会重算；再补两次 resize，覆盖 Safari 的延迟视口更新。 */
+      setTimeout(() => window.dispatchEvent(new Event('resize')), 60);
+      setTimeout(() => window.dispatchEvent(new Event('resize')), 280);
+    }
+
+    function savePref(value) {
+      const prefs = Prefs.load();
+      prefs.immersive = !!value;
+      Prefs.save(prefs);
+    }
+
+    function isAppleTouch() {
+      const ua = navigator.userAgent || '';
+      if (/iP(hone|ad|od)/.test(ua)) return true;
+      return navigator.platform === 'MacIntel' && (navigator.maxTouchPoints || 0) > 1;
+    }
+
+    function lockOrientation() {
+      try {
+        const so = window.screen && window.screen.orientation;
+        if (so && typeof so.lock === 'function') {
+          const result = so.lock('portrait');
+          if (result && typeof result.catch === 'function') result.catch(() => {});
+        }
+      } catch (err) {
+        /* 桌面浏览器 / 未获授权时忽略 */
+      }
+    }
+
+    function unlockOrientation() {
+      try {
+        const so = window.screen && window.screen.orientation;
+        if (so && typeof so.unlock === 'function') so.unlock();
+      } catch (err) {
+        /* 忽略 */
+      }
+    }
+
+    function exitNative() {
+      const fn = document.exitFullscreen || document.webkitExitFullscreen;
+      if (!fn) return;
+      try {
+        const result = fn.call(document);
+        if (result && typeof result.catch === 'function') result.catch(() => {});
+      } catch (err) {
+        /* 忽略 */
+      }
+    }
+
+    async function enter() {
+      if (active) return;
+      const token = ++opToken;
+      active = true;
+      sync();
+      const request = docEl.requestFullscreen || docEl.webkitRequestFullscreen;
+      if (request) {
+        try {
+          const result = request.call(docEl, { navigationUI: 'hide' });
+          if (result && typeof result.then === 'function') await result;
+          nativeActive = !!fsElement();
+        } catch (err) {
+          nativeActive = false;
+        }
+      }
+      if (token !== opToken) {
+        /* 请求期间用户已经退出，避免把状态又切回全屏。 */
+        if (fsElement()) exitNative();
+        return;
+      }
+      if (!nativeActive && !fallbackNotified) {
+        fallbackNotified = true;
+        showArcadeToast(
+          isAppleTouch()
+            ? '已进入沉浸模式；iOS 浏览器暂不支持网页全屏，可「添加到主屏幕」获得更纯粹的显示。'
+            : '已进入沉浸模式（当前浏览器不支持网页全屏）。',
+          4600
+        );
+      }
+      lockOrientation();
+      savePref(true);
+    }
+
+    function exit() {
+      opToken++;
+      const wasNative = nativeActive || !!fsElement();
+      active = false;
+      nativeActive = false;
+      sync();
+      savePref(false);
+      if (wasNative) exitNative();
+      unlockOrientation();
+    }
+
+    function toggle() {
+      if (active) exit();
+      else enter();
+    }
+
+    function onFullscreenChange() {
+      const el = fsElement();
+      if (el) {
+        nativeActive = true;
+        if (!active) {
+          active = true;
+          sync();
+          savePref(true);
+        }
+        return;
+      }
+      if (!nativeActive) return;
+      nativeActive = false;
+      if (active) {
+        active = false;
+        sync();
+        savePref(false);
+        unlockOrientation();
+      }
+    }
+
+    topButton.addEventListener('click', toggle);
+    inlineButton.addEventListener('click', toggle);
+    document.addEventListener('fullscreenchange', onFullscreenChange);
+    document.addEventListener('webkitfullscreenchange', onFullscreenChange);
+
+    window.addEventListener('keydown', (e) => {
+      if (e.repeat || e.metaKey || e.ctrlKey || e.altKey) return;
+      if (e.key !== 'f' && e.key !== 'F') return;
+      const target = e.target;
+      if (target && target.tagName) {
+        const tag = target.tagName.toLowerCase();
+        if (tag === 'input' || tag === 'textarea' || tag === 'select' || target.isContentEditable) return;
+      }
+      e.preventDefault();
+      toggle();
+    });
+
+    /* 记住全屏选择：在开始/继续弹层上点按钮时自动恢复（同一用户手势内请求）。 */
+    if (overlayPanel) {
+      overlayPanel.addEventListener(
+        'pointerdown',
+        (e) => {
+          if (active) return;
+          const target = e.target;
+          if (target && target.closest && target.closest('[data-fullscreen-inline]')) return;
+          if (Prefs.load().immersive) enter();
+        },
+        true
+      );
+    }
+
+    sync();
+    displayMode = {
+      enter,
+      exit,
+      toggle,
+      element: gamePage,
+      get active() {
+        return active;
+      },
+      get native() {
+        return nativeActive;
+      },
+    };
+    return displayMode;
+  }
+
+  function autoInstallDisplayMode() {
+    if (displayAutoInstalled) return;
+    displayAutoInstalled = true;
+    installDisplayMode();
+  }
+
+  if (document.readyState === 'loading') {
+    document.addEventListener('DOMContentLoaded', autoInstallDisplayMode, { once: true });
+  } else {
+    autoInstallDisplayMode();
+  }
+
   window.Arcade = {
     version: ARCADE_VERSION,
+    get displayMode() {
+      return displayMode;
+    },
+    installDisplayMode,
+    showToast: showArcadeToast,
     GAMES,
     DIFFICULTY_NAMES,
     Progress,
