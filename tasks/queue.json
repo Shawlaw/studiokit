@@ -354,7 +354,7 @@
       "id": "T019",
       "title": "街机厅 0.4.0 发布：提交并推送 main，验证 GitHub Pages",
       "kind": "agent",
-      "status": "IN_PROGRESS",
+      "status": "DONE",
       "dependsOn": [
         "T018"
       ],
@@ -367,7 +367,9 @@
         "main 推送后 Actions validate + deploy 成功",
         "线上 0.4.0 / 13 卡 / 全屏按钮与矿工道具实际生效"
       ],
-      "claimedAt": "2026-11-10T15:31:00+00:00"
+      "claimedAt": "2026-11-10T15:31:00+00:00",
+      "completedAt": "2026-11-10T15:47:00+00:00",
+      "evidence": "Owner 2026-11-10 明确指令“测试验证完就推送发布”；发布前复跑 57/57 CDP、validate_site.py、build_site.py、node --check 全通过；提交 49bc1aa（author/committer 2026-11-10T23:36:17+08:00，commit-time-policy 校验 OK）fast-forward 合入 main 并 push；Actions run 42846474565 validate+build+deploy 全成功；线上 https://shawlaw.github.io/studiokit/apps/arcade/ HTTP 200、0.4.0、13 张 hall-card，registry 与 engine 均为 0.4.0，gold-miner 页面含 data-toolbelt，无头 Chrome 线上运行时 8/8：fullscreen 按钮注入、画布 248×439→348×614、shell 隐藏、标题保留、pref 写入、退出恢复、无 JS 错误。iOS/Android 真机与原生全屏仍 UNVERIFIED。"
     }
   ]
 }
