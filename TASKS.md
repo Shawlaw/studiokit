@@ -23,6 +23,7 @@
 | T017 | agent | 街机厅 0.3.2 发布：fast-forward 合入 main 并验证 Pages | DONE | T016 | `2df2dbd` ff 合入 main；Actions `42625773149` 成功；线上 0.3.2/13 卡，无头 Chrome 9/9 通过 |
 | T018 | agent | 街机厅 0.4.0：全屏沉浸游玩 + 黄金矿工摆速与限量道具 | DONE | T017 | 全屏/CSS 降级/偏好记忆；矿工摆速 300 起、道具 2/1/1、指哪打哪/加时/绞盘；57/57 CDP、validate/build 全过；仅本地未发布 |
 | T019 | agent | 街机厅 0.4.0 发布：提交并推送 main，验证 GitHub Pages | DONE | T018 | `49bc1aa` ff 合入 main；Actions `42846474565` 成功；线上 0.4.0/13 卡/全屏与道具可用；57/57 CDP |
+| T020 | agent | 根目录文档同步 Arcade 0.4.0 与当前发布状态 | DONE | T019 | README/CHANGELOG/START-HERE/AGENTS/CONTRIBUTING + docs；链接/validate/build/node 全过；docs-only；Owner 已授权推送 |
 
 ## 任务命令
 

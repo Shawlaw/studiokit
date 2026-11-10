@@ -1,5 +1,7 @@
 # Flash Agent Bootstrap Prompt — StudioKit
 
+> 历史脚本：StudioKit 已完成首次建仓与发布。当前状态、工具版本和发布流程见 `START-HERE.md`、`TASKS.md` 和 `docs/RELEASE-RUNBOOK.md`；本 Prompt 仅用于复现最初的启动审计流程。
+
 你是 StudioKit 的 Flash 级执行 Agent。目标是完成启动包审计、验证、首个提交，并在 Owner 提供目标仓库与明确发布授权后完成 GitHub Pages 首次发布。
 
 ## 必须先读

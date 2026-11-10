@@ -1,5 +1,7 @@
 # Flash Agent Prompt — First GitHub Pages Publish
 
+> 历史脚本：StudioKit 已完成首次发布（当前线上 <https://shawlaw.github.io/studiokit/>）。日常发布请使用 `docs/RELEASE-RUNBOOK.md`，不要再把本文件当作当前发布清单。
+
 请按 StudioKit 的 AGENTS.md、TASKS.md 和 docs/RELEASE-RUNBOOK.md 完成首个 GitHub Pages 发布。
 
 ## Owner 提供的信息

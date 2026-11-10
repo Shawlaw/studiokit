@@ -370,6 +370,26 @@
       "claimedAt": "2026-11-10T15:31:00+00:00",
       "completedAt": "2026-11-10T15:47:00+00:00",
       "evidence": "Owner 2026-11-10 明确指令“测试验证完就推送发布”；发布前复跑 57/57 CDP、validate_site.py、build_site.py、node --check 全通过；提交 49bc1aa（author/committer 2026-11-10T23:36:17+08:00，commit-time-policy 校验 OK）fast-forward 合入 main 并 push；Actions run 42846474565 validate+build+deploy 全成功；线上 https://shawlaw.github.io/studiokit/apps/arcade/ HTTP 200、0.4.0、13 张 hall-card，registry 与 engine 均为 0.4.0，gold-miner 页面含 data-toolbelt，无头 Chrome 线上运行时 8/8：fullscreen 按钮注入、画布 248×439→348×614、shell 隐藏、标题保留、pref 写入、退出恢复、无 JS 错误。iOS/Android 真机与原生全屏仍 UNVERIFIED。"
+    },
+    {
+      "id": "T020",
+      "title": "根目录文档同步 Arcade 0.4.0 与当前发布状态",
+      "kind": "agent",
+      "status": "DONE",
+      "dependsOn": [
+        "T019"
+      ],
+      "ownerAuthorizationRequired": false,
+      "acceptance": [
+        "README/START-HERE/CHANGELOG/CONTRIBUTING/AGENTS 反映当前 0.4.0 与线上状态",
+        "docs 下 ARCHITECTURE/ROADMAP/BASELINE/RELEASE-RUNBOOK/DECISIONS/ADD-A-TOOL 同步",
+        "上游 Badge Studio 说明与历史 Prompt 加注，避免被误读为当前基线",
+        "validate_site.py / build_site.py / node --check 通过",
+        "文档相对链接可解析；docs-only 变更不包含站点资源改动"
+      ],
+      "claimedAt": "2026-11-10T16:05:00+00:00",
+      "completedAt": "2026-11-10T16:10:00+00:00",
+      "evidence": "README、START-HERE、CHANGELOG、AGENTS、CONTRIBUTING 与 docs/ARCHITECTURE、ROADMAP、BASELINE、RELEASE-RUNBOOK、DECISIONS、ADD-A-TOOL 同步到 Arcade 0.4.0 / 当前线上状态；Badge Studio 上游说明与历史 Prompt 加注，避免误读为当前基线；12 个 Markdown 文件的相对链接全部可解析；validate_site.py、build_site.py、node --check 全部通过。docs-only，未改动站点运行时资源；Owner 已明确授权推送；提交在 docs/root-docs-0.4.0 分支，按发布流程 fast-forward 到 main 并触发 Pages 部署。"
     }
   ]
 }

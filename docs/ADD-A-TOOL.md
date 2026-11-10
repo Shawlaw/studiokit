@@ -3,7 +3,7 @@
 ## 方式 A：从模板新建
 
 ```powershell
-python tools/new_tool.py --id my-tool --name "My Tool" --description "一句话说明" --icon "◇"
+py -3 tools/new_tool.py --id my-tool --name "My Tool" --description "一句话说明" --icon "◇"
 ```
 
 规则：
@@ -34,6 +34,13 @@ python tools/new_tool.py --id my-tool --name "My Tool" --description "一句话�
 7. 创建 `README.md` 和 `CHANGELOG.md`。
 8. 在 `shared/tool-registry.json` 中把状态从 `draft` 改为 `available`，并设置 `href` 为 `./apps/<id>/`。
 
+多页面工具（参考 `apps/arcade/`）可以在工具目录下放子页面，但要注意：
+
+- 注册表只登记入口 `href`，不要为每个子页面单独建工具卡片。
+- 子页面的共享资源深度按实际层级写，例如 `apps/arcade/games/x.html` 使用 `../../../shared/site.css`。
+- 工具自己的运行时可以留在工具目录（如 `apps/arcade/engine.js`），不要因为“共享”就提升到全站 `shared/`。
+- 子页面仍需设置 `data-studiokit-app` / `data-studiokit-app-title`，共享 shell 才能正确返回门户。
+
 ## 验收
 
 - [ ] 门户卡片能打开工具。
@@ -42,6 +49,7 @@ python tools/new_tool.py --id my-tool --name "My Tool" --description "一句话�
 - [ ] 桌面端与移动端布局可用。
 - [ ] 核心功能、导入/导出、自动保存通过。
 - [ ] 无未经批准的网络请求、埋点或第三方依赖。
-- [ ] `python tools/validate_site.py` 通过。
-- [ ] `python tools/build_site.py` 通过。
+- [ ] `py -3 tools/validate_site.py` 通过。
+- [ ] `py -3 tools/build_site.py` 通过。
 - [ ] 注册表状态、版本、文档一致。
+- [ ] 有交互逻辑时，桌面与 320/375/390/430px 窄屏都实际验证；有移动端特殊能力时说明降级路径。

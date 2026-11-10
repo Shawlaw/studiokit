@@ -8,7 +8,8 @@
 - 每个工具独立放在 `apps/<tool-id>/`，默认入口为 `index.html`。
 - 首页工具清单唯一来源为 `shared/tool-registry.json`。
 - 共享运行时仅限 `shared/site.css` 与 `shared/site-shell.js`；不要引入大型框架。
-- 当前 Badge Studio 版本为 2.2.1，配置 Schema 为 v3。
+- 当前 Badge Studio 版本为 2.2.1，配置 Schema 为 v3，基线见 `docs/BASELINE.md`。
+- 当前 Arcade 版本为 0.4.0（13 款游戏）；其运行时 `apps/arcade/engine.js` 是工具内共享，不要提升为全站 shared；设计与回滚见 `apps/arcade/DESIGN-0.4.0.md`。
 - Rounded Image 尚未实现，不得假设旧功能、控件或参数。
 
 ## 2. 不可破坏的约束
@@ -27,13 +28,14 @@
 ## 3. 标准执行流程
 
 1. `git status --short --branch`，确认工作树与分支；不覆盖未知改动。
-2. 阅读 `TASKS.md`，用 `python tools/agentctl.py next` 获取任务。
+2. 阅读 `TASKS.md`，用 `python tools/agentctl.py next` 获取任务。Windows 本机若 `python` 指向 2.x，统一改用 `py -3`。
 3. 先复现，再修改；新增行为必须有可验证的验收条件。
 4. 执行：
    - `python tools/validate_site.py`
    - `python tools/build_site.py`
    - `node --check shared/home.js`（若 Node 可用）
    - `node --check shared/site-shell.js`（若 Node 可用）
+   - Arcade 改动：`node --check apps/arcade/engine.js` + `node tools/arcade_smoke.mjs`（需要本机 Chrome）
 5. 检查 `git diff --check`、`git diff --stat`、完整 diff。
 6. 任务完成后更新 `tasks/queue.json` 与 `TASKS.md`，记录证据和未解决项。
 7. 提交前确认没有 `dist/`、缓存、私密数据或无关文件。
@@ -49,7 +51,7 @@
 
 ## 5. 新工具接入
 
-- 优先运行 `python tools/new_tool.py --id <slug> --name "..." --description "..."`。
+- 优先运行 `python tools/new_tool.py --id <slug> --name "..." --description "..."`（Windows 用 `py -3`）。
 - ID 使用小写 kebab-case，创建后不得随意改名（会改变 URL）。
 - 将工具完整 HTML 放入 `apps/<id>/index.html`；共享 shell 只负责返回门户，不侵入工具业务 UI。
 - 首页注册表状态按 `draft` → `available` 变化；未验收工具不得标为 `available`。
@@ -61,6 +63,7 @@
 - 任务验收条件逐项通过。
 - 静态校验与构建成功。
 - 受影响工具在桌面与窄屏布局检查通过。
+- Arcade 改动通过 `arcade_smoke.mjs`（或明确记录为何无法运行）与 320/375/390/430px 布局检查。
 - 导入/导出、自动保存和配置兼容性无回归（适用时）。
 - 文档、注册表、版本和任务状态同步。
 - Diff 干净；提交信息清晰；没有未经授权的发布动作。

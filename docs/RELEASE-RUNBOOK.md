@@ -1,6 +1,15 @@
 # Release Runbook
 
-## 一次性仓库设置
+## 当前发布状态
+
+- 仓库：<https://github.com/Shawlaw/studiokit>
+- 线上：<https://shawlaw.github.io/studiokit/>
+- 最近发布：Arcade `0.4.0`（2026-11-10）
+  - 功能提交 `49bc1aa`，任务归档 `1b9ce14`
+  - Actions `42846474565`、`42848635797` 均 validate + build + deploy 成功
+- Pages Source：GitHub Actions（`.github/workflows/pages.yml`）
+
+## 首次仓库设置（已完成，保留备查）
 
 1. 在 GitHub 创建目标仓库，并确认仓库名称与可见性（Public / Private）。不要把密钥或个人数据放进仓库。
 2. 将 StudioKit 源码推送到 `main`。
@@ -15,14 +24,22 @@
 
 ## 发布前检查
 
+Windows 上若 `python` 指向 2.x，使用 `py -3`；CI 使用 Python 3.12。
+
 ```powershell
-python tools/validate_site.py
-python tools/build_site.py
+py -3 tools/validate_site.py
+py -3 tools/build_site.py
 node --check shared/home.js
 node --check shared/site-shell.js
+node --check apps/arcade/engine.js
+node tools/arcade_smoke.mjs   # 需要本机 Chrome；当前 57 项
 git diff --check
 git status --short
 ```
+
+涉及 Arcade 的发布还应查看 `apps/arcade/DESIGN-0.4.0.md` 和 `apps/arcade/README.md` 的已知边界。
+
+如果本机/团队启用了 `commit-time-policy`，推送前运行对应检查器；本文不复制其时间窗口细节，避免规则漂移。
 
 ## Agent 授权边界
 
@@ -43,12 +60,14 @@ OWNER_AUTHORIZATION: PUBLISH_TO_MAIN
 
 ## 发布后验证
 
-1. 检查 GitHub Actions 中 `Deploy StudioKit` 工作流的最终状态为成功。
+1. 检查 GitHub Actions 中 `Validate and build` 与 `Deploy StudioKit` 均为成功。
 2. 从部署日志获取 Pages URL，不要猜 URL。
-3. 访问门户首页，确认工具卡片加载。
-4. 打开 Badge Studio，确认共享导航、预览和导出正常。
-5. 检查浏览器控制台无资源 404 / JavaScript 错误。
-6. 记录 commit SHA、Actions run URL、最终 Pages URL 和验证结果。
+3. 访问门户首页，确认工具卡片加载、Badge Studio 与街机厅入口可点击。
+4. 打开 Arcade 中心页，确认版本与工具注册表一致（当前 0.4.0 / 13 款）。
+5. 打开 Badge Studio，确认共享导航、预览和导出正常。
+6. 打开黄金矿工，确认 `⛶` 全屏按钮、道具条和暂停/继续可用；手机上至少检查 375px 宽度下的道具条和全屏降级。
+7. 检查浏览器控制台无资源 404 / JavaScript 错误（`favicon.ico` 自动请求的 404 可忽略）。
+8. 记录 commit SHA、Actions run URL、最终 Pages URL 和验证结果。
 
 如果 Pages 未启用或认证缺失，明确报告阻塞点，不要宣称已发布。
 
@@ -56,4 +75,5 @@ OWNER_AUTHORIZATION: PUBLISH_TO_MAIN
 
 - 优先通过 revert 已发布提交回滚，不要 force-push。
 - 如果只是单个工具有问题，可先将注册表状态改为 `draft` 或 `planned`，但要确保门户仍可加载。
-- 数据格式或 localStorage key 变更必须先有迁移与回滚策略。
+- Arcade 的道具/全屏出现阻断问题时，可先回退 `prefs.immersive` 的默认读取或禁用全屏入口；局内档中的 `tools` / `winchArmed` 是追加字段，旧代码会忽略，不需要数据迁移。
+- 数据格式或 localStorage key 变更必须先有迁移与回滚策略；不要为了回滚删除用户数据。
