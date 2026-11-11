@@ -4,9 +4,9 @@
 
 - **线上站点：** <https://shawlaw.github.io/studiokit/>
 - **仓库：** <https://github.com/Shawlaw/studiokit>
-- **已发布工具：** Badge Studio `2.2.1`、街机厅 Arcade `0.5.0`（13 款竖屏小游戏）
+- **已发布工具：** Badge Studio `2.2.1`、街机厅 Arcade `0.5.1`（13 款竖屏小游戏）
 - **规划中：** Rounded Image（尚未实现；等待原始需求/规格，不凭空复刻）
-- **最近发布：** 2026-11-11，Arcade 0.5.0；提交 `b8abe41`（功能）与 `c8c049d`（矿工摆钩修复），Actions `42974993445` 成功
+- **最近发布：** 2026-11-11，Arcade 0.5.1（游玩计时连续性修复）；提交 `6739521`，Actions `43008560646` 成功
 
 首次建仓与首次发布的完整步骤保留在 [`docs/RELEASE-RUNBOOK.md`](docs/RELEASE-RUNBOOK.md)；`prompts/` 下的启动/发布 Prompt 是历史脚本，不再代表当前流程。
 

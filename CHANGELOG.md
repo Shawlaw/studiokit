@@ -2,6 +2,25 @@
 
 StudioKit 门户本身没有独立的 semver；以下按仓库里程碑与工具版本记录。各工具的详细变更见 `apps/<tool>/CHANGELOG.md`。
 
+## Arcade 0.5.1 — 2026-11-11
+
+### Fixed
+- 游玩统计在连续游玩超过 15 秒后停止累计：15 秒定时落盘关闭了当前时间片却没有重新开启，导致第一次落盘后必须暂停/切后台/重新聚焦才继续计时。现在每次落盘后立即开启下一段时间片；暂停、失焦、后台、开始界面仍不计时。
+- 修复前的历史统计不会自动补回；需要干净数据时可清除对应游戏记录。
+
+### Changed
+- Service Worker 缓存版本升至 `0.5.1`，已安装 PWA 会获取新的 `engine.js`，不会继续使用 0.5.0 的旧缓存。
+- 数据 Schema 不变：仍为 `studiokit:arcade:playtime:v1`（Schema v1）及既有 progress/runs/prefs key。
+
+### Verification
+- `validate_site.py` / `build_site.py` / `node --check` 通过。
+- `arcade_smoke.mjs` 63/63，新增连续游玩 17 秒的回归检查（手动 flush 后 ≥16 秒）。
+- 线上 0.5.1 无头浏览器验证：13 卡、PWA installability 0 错误、缓存键 `studiokit-arcade-0.5.1-v1`、预载 24/24、连续游玩 17 秒实测 `17012ms`、矿工连续瞄准与零 JS 错误均通过。
+
+### Release
+- 提交 `6739521`；Actions `43008560646` validate + build + deploy 成功。
+- 线上 <https://shawlaw.github.io/studiokit/apps/arcade/> 已更新到 0.5.1。iOS/Android 真机安装、系统分享面板与原生全屏仍 UNVERIFIED。
+
 ## Arcade 0.5.0 — 2026-11-11
 
 ### Added

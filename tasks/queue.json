@@ -450,6 +450,45 @@
       "claimedAt": "2026-11-11T06:38:00+00:00",
       "completedAt": "2026-11-11T06:55:00+00:00",
       "evidence": "Owner 2026-11-11 明确指令“都可以直接提交发布上线”；发布前 validate_site.py/build_site.py/node --check 通过，arcade_smoke 63/63；b8abe41 + c8c049d fast-forward 合入 main 并 push；Actions 42974993445 validate+build+deploy 全成功；线上 https://shawlaw.github.io/studiokit/apps/arcade/ HTTP 200、0.5.0、13 卡、registry 0.5.0、manifest Content-Type application/manifest+json、SW scope /studiokit/apps/arcade/；无头 Chrome 线上运行时 8/8：13 卡/统计/分享/安装入口、manifest 0 错误、installability 0 错误、SW 注册、预载 24/24、断网提示文案、矿工连续 3 轮瞄准后 state=swing/delta≈0.405、零 JS 错误。iOS/Android 真机安装、系统分享面板与原生全屏仍 UNVERIFIED；发布后文档同步随后推送。 因首轮提交时间落在未来，按 Owner 指令将 b13c200/0d7ad4f 重写为 b8abe41（2026-11-11 12:41:17 +0800）与 c8c049d（13:05:43 +0800），force-with-lease 推送后新 run 42974993445 成功；文档同步随后提交。"
+    },
+    {
+      "id": "T024",
+      "title": "修复游玩统计连续游玩超过 15 秒后停止累计",
+      "kind": "agent",
+      "status": "DONE",
+      "dependsOn": [
+        "T023"
+      ],
+      "ownerAuthorizationRequired": false,
+      "acceptance": [
+        "复现：连续游玩超过 15 秒，第一次定时落盘后 session 不再累计，统计只剩约 15 秒",
+        "修复：每次 tick flush 后立即 startSegment，持续游玩连续计时",
+        "新增连续游玩 17 秒回归检查（flush 后 ≥16 秒），arcade_smoke 63/63",
+        "版本升至 0.5.1，SW 缓存版本同步，避免旧 engine.js 缓存"
+      ],
+      "claimedAt": "2026-11-11T10:50:00+00:00",
+      "completedAt": "2026-11-11T11:05:00+00:00",
+      "evidence": "根因：Playtime.install 的 15s setInterval 只调用 flushTime()，而 flushTime 关闭当前 segment 后没有重新 startSegment；第一次写盘后持续游玩不再累计，必须等暂停/失焦/重新聚焦。修复：tick 在 flushTime() 后调用 startSegment()。smoke 新增连续 17s 游玩 + 手动 flush 断言 ≥16000ms；本地 63/63；版本 0.5.1、SW VERSION 0.5.1；提交 6739521。"
+    },
+    {
+      "id": "T025",
+      "title": "Arcade 0.5.1 发布：推送 main 并验证 GitHub Pages",
+      "kind": "agent",
+      "status": "DONE",
+      "dependsOn": [
+        "T024"
+      ],
+      "ownerAuthorizationRequired": true,
+      "ownerAuthorizationVerifiedByAgentFlag": true,
+      "acceptance": [
+        "Owner 2026-11-11 明确指令：可以提交发布",
+        "发布前 validate/build/node --check 与 arcade_smoke 63/63 通过",
+        "main 推送后 Actions validate + build + deploy 成功",
+        "线上 0.5.1 / 13 卡 / 连续游玩 17 秒实测 ≥16 秒 / SW 缓存 0.5.1 / 预载 24-24"
+      ],
+      "claimedAt": "2026-11-11T11:05:00+00:00",
+      "completedAt": "2026-11-11T11:20:00+00:00",
+      "evidence": "Owner 2026-11-11 明确指令“可以 提交发布吧”；发布前 validate_site.py/build_site.py/node --check 通过，arcade_smoke 63/63；提交 6739521 推送 main；Actions 43008560646 validate+build+deploy 全成功；线上 https://shawlaw.github.io/studiokit/apps/arcade/ 0.5.1；无头 Chrome 线上 10/10：13 卡/统计/分享/安装入口、manifest 0 错误、installability 0 错误、SW scope、预载 24/24、缓存键 studiokit-arcade-0.5.1-v1、连续游玩 17 秒实测 17012ms、矿工连续瞄准、零 JS 错误。iOS/Android 真机安装、系统分享面板与原生全屏仍 UNVERIFIED；发布后文档同步随后推送。"
     }
   ]
 }

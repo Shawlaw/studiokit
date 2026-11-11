@@ -4,11 +4,12 @@
 
 - 仓库：<https://github.com/Shawlaw/studiokit>
 - 线上：<https://shawlaw.github.io/studiokit/>
-- 最近发布：Arcade `0.5.0`（2026-11-11）
-  - 功能提交 `b8abe41`，摆钩修复 `c8c049d`
-  - Actions `42974993445` validate + build + deploy 成功
-  - 线上验证：13 卡 / PWA 可安装 / 预载 24 项 / 断网回归 / 矿工连续瞄准后恢复摆动
-- 上一个发布：Arcade `0.4.0`（2026-11-10），提交 `49bc1aa`，Actions `42846474565` 成功
+- 最近发布：Arcade `0.5.1`（2026-11-11）
+  - 计时修复提交 `6739521`
+  - Actions `43008560646` validate + build + deploy 成功
+  - 线上验证：13 卡 / PWA 可安装 / 预载 24 项 / 断网回归 / 矿工连续瞄准 / 连续游玩 17 秒实测 17012ms
+- 上一个发布：Arcade `0.5.0`（2026-11-11），功能 `b8abe41` + 摆钩修复 `c8c049d`，Actions `42974993445` 成功
+- 更早发布：Arcade `0.4.0`（2026-11-10），提交 `49bc1aa`，Actions `42846474565` 成功
 - Pages Source：GitHub Actions（`.github/workflows/pages.yml`）
 
 ## 首次仓库设置（已完成，保留备查）
@@ -66,7 +67,7 @@ OWNER_AUTHORIZATION: PUBLISH_TO_MAIN
 1. 检查 GitHub Actions 中 `Validate and build` 与 `Deploy StudioKit` 均为成功。
 2. 从部署日志获取 Pages URL，不要猜 URL。
 3. 访问门户首页，确认工具卡片加载、Badge Studio 与街机厅入口可点击。
-4. 打开 Arcade 中心页，确认版本与工具注册表一致（0.5.0 / 13 款），并检查：
+4. 打开 Arcade 中心页，确认版本与工具注册表一致（0.5.1 / 13 款），并检查：
    - 「游玩统计」有数据或空状态文案；开一局后返回中心页，累计时长/轮次增加，展开能看到轮次明细。
    - 「分享给朋友」能调起系统分享或复制链接；游戏开始/暂停弹层内「分享给朋友」分享当前游戏深链。
    - 「安装到桌面」按平台给出安装提示（Chrome/Edge 可触发原生安装，iOS 给出添加到主屏幕说明）。

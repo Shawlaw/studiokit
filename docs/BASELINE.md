@@ -14,7 +14,7 @@ Current Badge Studio baseline facts:
 
 Current Arcade baseline facts:
 
-- App version: `0.5.0`（`apps/arcade/engine.js` 的 `ARCADE_VERSION` 与注册表保持一致；2026-11-11 已发布）
+- App version: `0.5.1`（`apps/arcade/engine.js` 的 `ARCADE_VERSION` 与注册表保持一致；2026-11-11 已发布）
 - Registry entry: `shared/tool-registry.json` → `id: "arcade"`，`href: "./apps/arcade/"`
 - Games: 13（清单唯一来源是 `engine.js` 顶部的 `GAMES` 数组）
 - Run state schema: `v1`（`studiokit:arcade:runs:v1`）
@@ -23,6 +23,7 @@ Current Arcade baseline facts:
 - Preferences key: `studiokit:arcade:prefs:v1`；字段 `muted`、`immersive`
 - 0.4.0 的黄金矿工道具状态是局内档 `data` 的追加字段（`tools` / `winchArmed`），不新增 localStorage key，不改变 Schema 版本
 - 0.5.0 的游玩统计按游戏保存总时长、完成轮次、最近 30 轮与最近 120 天日汇总；备份新增可选 `playtime` 字段，旧备份兼容
+- 0.5.1 修复连续游玩超过 15 秒后计时停止：每次定时落盘后重新开启时间片；Service Worker 缓存版本同步升至 0.5.1
 - 全屏/沉浸模式：原生 Fullscreen API 优先，不支持时使用 CSS 沉浸；iPhone Safari 不支持网页元素全屏，**真机与原生全屏仍未验证**
 - PWA/离线：manifest + `apps/arcade/sw.js`，作用域 `apps/arcade/`；显式预载 24 项（11 外壳 + 13 游戏），断网回归已自动化；**iOS/Android 真机安装与系统分享面板仍未验证**
 - Automated coverage: `node tools/arcade_smoke.mjs` 63/63（需要本机 Chrome）

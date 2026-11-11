@@ -27,6 +27,8 @@
 | T021 | agent | 街机厅 0.5.0：游玩统计、分享、PWA 安装与离线预载 | DONE | T020 | playtime:v1 独立 Schema；统计/分享/预载 UI；manifest+SW+图标；62/62 CDP（含断网）；validate/build/node 全过；后续随 T023 发布 |
 | T022 | agent | 黄金矿工连续使用指哪打哪后钩爪停摆修复 | DONE | T021 | 根因：正下方目标摆角/角速度归零；修复：最小角速度 + 收钩/旧档恢复兜底；连续 3 轮回归；63/63 CDP；commit `c8c049d` |
 | T023 | agent | Arcade 0.5.0 发布：推送 main 并验证 GitHub Pages | DONE | T022 | Owner 明确指令“都可以直接提交发布上线”；`b8abe41`+`c8c049d` ff 合入 main；Actions `42974993445` 成功；线上 0.5.0/13 卡/PWA/预载 24-24/矿工连续瞄准通过 |
+| T024 | agent | 修复游玩统计连续游玩超过 15 秒后停止累计 | DONE | T023 | 根因：tick flush 后未重新开启时间片；修复 startSegment；新增 17 秒连续游玩回归；63/63；版本 0.5.1；commit `6739521` |
+| T025 | agent | Arcade 0.5.1 发布：推送 main 并验证 GitHub Pages | DONE | T024 | Owner 明确指令“可以 提交发布吧”；`6739521` 推送 main；Actions `43008560646` 成功；线上 0.5.1/连续游玩 17 秒 17012ms/SW 缓存 0.5.1/预载 24-24 |
 
 ## 任务命令
 
