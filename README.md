@@ -3,9 +3,9 @@
 **StudioKit** 是一个面向个人使用的静态网页工具集合。一个 GitHub 仓库承载多个彼此独立的单页 HTML 工具，通过统一首页、轻量共享外壳和 GitHub Pages 发布。
 
 - **线上站点：** <https://shawlaw.github.io/studiokit/>
-- **当前工具：** Badge Studio `2.2.1`；街机厅 Arcade `0.6.1`（13 款竖屏小游戏；本地热修，待验收发布）
+- **当前工具：** Badge Studio `2.2.1`；街机厅 Arcade `0.6.1`（13 款竖屏小游戏，已发布）
 - **计划中的工具：** Rounded Image（尚未实现，等待原始需求/规格）
-- **最近发布：** 2026-11-12，Arcade 0.6.0（星海 Boss/叠加/全屏移动、矿工瞄准线、显式全屏）；0.6.1 热修已在本地通过 66 项检查，未提交/未推送
+- **最近发布：** 2026-11-12，Arcade 0.6.1（Boss 入场碰撞热修 + 0.6.0 星海 Boss/叠加/全屏移动、矿工瞄准线、显式全屏）
 - **运行方式：** 纯静态文件；无后端、无账号、无构建依赖、无第三方 CDN
 
 ## 目录结构
@@ -22,7 +22,7 @@ StudioKit/
 │   │   ├── index.html
 │   │   ├── README.md
 │   │   └── CHANGELOG.md
-│   └── arcade/                      # 街机厅，本地 v0.6.1（线上 0.6.0）
+│   └── arcade/                      # 街机厅，当前 v0.6.1
 │       ├── index.html               # 游戏中心页（统计/分享/安装/预载）
 │       ├── engine.js                # 街机专用共享运行时
 │       ├── arcade.css               # 街机专用样式
@@ -150,8 +150,8 @@ https://<github-user>.github.io/<repository-name>/
 
 ## 当前状态
 
-- 线上已发布：Badge Studio `2.2.1`、街机厅 Arcade `0.6.0`。
-- 本地待发布：街机厅 Arcade `0.6.1`（星海 30 秒关卡 Boss/弹种叠加/全屏移动、Boss 入场碰撞修复、黄金矿工瞄准线与摆幅修复、点开始不再自动全屏），已通过 66 项无头浏览器检查。
+- 线上已发布：Badge Studio `2.2.1`、街机厅 Arcade `0.6.1`（星海 30 秒关卡 Boss/弹种叠加/全屏移动、Boss 入场碰撞修复、黄金矿工瞄准线与摆幅修复、点开始不再自动全屏）。
+- Arcade 0.6.1 已通过 66 项本地无头浏览器检查，并完成线上运行时验证。
 - 规划中：Rounded Image（等待原始需求/规格，不凭空复刻）。
 - 任务、证据和未决项见 [`TASKS.md`](TASKS.md)；后续方向见 [`docs/ROADMAP.md`](docs/ROADMAP.md)。
 - Arcade 的玩法、数据键和已知边界见 [`apps/arcade/README.md`](apps/arcade/README.md)。

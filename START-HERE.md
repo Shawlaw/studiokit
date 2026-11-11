@@ -4,10 +4,9 @@
 
 - **线上站点：** <https://shawlaw.github.io/studiokit/>
 - **仓库：** <https://github.com/Shawlaw/studiokit>
-- **已发布工具：** Badge Studio `2.2.1`、街机厅 Arcade `0.6.0`（13 款竖屏小游戏）
-- **本地待发布：** 街机厅 Arcade `0.6.1`（Boss 入场碰撞修复 + 0.6.0 星海 Boss/叠加/全屏移动、矿工瞄准线/摆幅、显式全屏），66/66 CDP 通过，未提交/未推送
+- **已发布工具：** Badge Studio `2.2.1`、街机厅 Arcade `0.6.1`（13 款竖屏小游戏）
 - **规划中：** Rounded Image（尚未实现；等待原始需求/规格，不凭空复刻）
-- **最近发布：** 2026-11-12，Arcade 0.6.0（星海 Boss/叠加/全屏移动、矿工瞄准线）；提交 `6debd77`，Actions `43057971576` 成功
+- **最近发布：** 2026-11-12，Arcade 0.6.1（Boss 入场碰撞热修）；提交 `6debd77`（0.6.0）+ `1c9501e`（0.6.1），Actions `43060497094` 成功
 
 首次建仓与首次发布的完整步骤保留在 [`docs/RELEASE-RUNBOOK.md`](docs/RELEASE-RUNBOOK.md)；`prompts/` 下的启动/发布 Prompt 是历史脚本，不再代表当前流程。
 

@@ -508,7 +508,27 @@
       ],
       "claimedAt": "2026-11-11T15:00:00+00:00",
       "completedAt": "2026-11-11T16:10:00+00:00",
-      "evidence": "黄金矿工：pend/clawAngle 分离，tryAimAt 不再改 pend.angle/vel；新增 aimLineActive/$2 每秒计费/虚线+命中圈/旧档字段。星海：level/stageTime/boss 状态、30s Boss、血条/三阶段弹幕、清关+1 命/3 Buff；buffs 叠加与旧单弹种迁移；PLAYER_MIN_Y=46 全屏纵向移动。全屏：移除 overlay pointerdown 自动 enter。中心页续玩卡 min-width:0 修复 320px。arcade_smoke 66/66（新增能量、瞄准线、叠加、Boss、全屏移动、显式全屏）；validate/build/node 通过；版本 0.6.0，本地工作树未提交/未推送，线上仍 0.5.1。"
+      "evidence": "黄金矿工：pend/clawAngle 分离，tryAimAt 不再改 pend.angle/vel；新增 aimLineActive/$2 每秒计费/虚线+命中圈/旧档字段。星海：level/stageTime/boss 状态、30s Boss、血条/三阶段弹幕、清关+1 命/3 Buff；buffs 叠加与旧单弹种迁移；PLAYER_MIN_Y=46 全屏纵向移动。全屏：移除 overlay pointerdown 自动 enter。中心页续玩卡 min-width:0 修复 320px。arcade_smoke 66/66（新增能量、瞄准线、叠加、Boss、全屏移动、显式全屏）；validate/build/node 通过；版本 0.6.0 已由 T027 发布；后续 0.6.1 热修修复 Boss 入场碰撞。"
+    },
+    {
+      "id": "T027",
+      "title": "Arcade 0.6.1 发布：Boss 入场碰撞热修并验证 Pages",
+      "kind": "agent",
+      "status": "DONE",
+      "dependsOn": [
+        "T026"
+      ],
+      "ownerAuthorizationRequired": true,
+      "ownerAuthorizationVerifiedByAgentFlag": true,
+      "acceptance": [
+        "Owner 明确指令：全都弄完自测完后就提交推送发布",
+        "发布前 66/66 CDP、validate_site.py、build_site.py、node --check 全部通过",
+        "0.6.0 先发布（6debd77 / 43057971576），再发布 0.6.1 Boss 入场碰撞热修（1c9501e / 43060497094）",
+        "线上 0.6.1：Boss 入场无碰撞、清关生命 3→4、叠加/移动/瞄准线/显式全屏/WEB 缓存 0.6.1 全部通过"
+      ],
+      "claimedAt": "2026-11-11T16:10:00+00:00",
+      "completedAt": "2026-11-11T16:48:00+00:00",
+      "evidence": "Owner 2026-11-12 明确指令“全都弄完自测完后就提交推送发布”；0.6.0 功能提交 6debd77 推送 main，Actions 43057971576 成功；线上验证时发现 Boss 入场穿过贴顶玩家导致碰撞，补丁 1c9501e（0.6.1，Boss y<100 不入碰撞、y>=104 才发弹，清关断言生命+1）推送，Actions 43060497094 成功；线上 0.6.1 无头 Chrome 全部通过：13 卡、PWA installability 0 错误、缓存键 studiokit-arcade-0.6.1-v1、预载 24/24、四弹种叠加一轮 9 发（激光/追踪/散射）、玩家 y=46 全屏移动、Boss 清关 stage 2 且 lives 3→4、瞄准线 2.2s 扣费、点开始不自动全屏、连续游玩 17013ms、零 JS 错误。iOS/Android 真机安装、系统分享面板与原生全屏仍 UNVERIFIED；发布后文档同步随后推送。"
     }
   ]
 }

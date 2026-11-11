@@ -9,7 +9,7 @@
 - 首页工具清单唯一来源为 `shared/tool-registry.json`。
 - 共享运行时仅限 `shared/site.css` 与 `shared/site-shell.js`；不要引入大型框架。
 - 当前 Badge Studio 版本为 2.2.1，配置 Schema 为 v3，基线见 `docs/BASELINE.md`。
-- 当前 Arcade 版本为 0.6.1（13 款游戏，本地热修；线上为 0.6.0）；其运行时 `apps/arcade/engine.js` 是工具内共享，不要提升为全站 shared；设计与回滚见 `apps/arcade/DESIGN-0.4.0.md`、`apps/arcade/DESIGN-0.5.0.md` 与 `apps/arcade/DESIGN-0.6.0.md`。
+- 当前 Arcade 版本为 0.6.1（13 款游戏，已发布）；其运行时 `apps/arcade/engine.js` 是工具内共享，不要提升为全站 shared；设计与回滚见 `apps/arcade/DESIGN-0.4.0.md`、`apps/arcade/DESIGN-0.5.0.md` 与 `apps/arcade/DESIGN-0.6.0.md`。
 - Arcade 的离线能力仅限同源缓存：`apps/arcade/sw.js` 作用域为 `apps/arcade/`，可缓存 `shared/site.css` 与 `shared/site-shell.js`；不得借此引入远程资源、分析或后端。
 - Rounded Image 尚未实现，不得假设旧功能、控件或参数。
 

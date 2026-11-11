@@ -2,7 +2,7 @@
 
 StudioKit 门户本身没有独立的 semver；以下按仓库里程碑与工具版本记录。各工具的详细变更见 `apps/<tool>/CHANGELOG.md`。
 
-## Arcade 0.6.1 — 2026-11-12（本地热修）
+## Arcade 0.6.1 — 2026-11-12
 
 ### Fixed
 - 星海突击：Boss 从顶部入场穿过时不再与贴顶玩家发生机体碰撞，入场完成前也不会发射弹幕；避免刚进入 Boss 战就被无预警撞掉一条命。
@@ -10,9 +10,12 @@ StudioKit 门户本身没有独立的 semver；以下按仓库里程碑与工具
 
 ### Changed
 - `ARCADE_VERSION` / Service Worker 缓存版本升至 `0.6.1`，已安装 PWA 会获取修复后的引擎。
-- 线上 0.6.0 已于 2026-11-12 发布（提交 `6debd77`，Actions `43057971576`）；本热修待发布。
 
-## Arcade 0.6.0 — 2026-11-11（本地待发布）
+### Release
+- 提交 `1c9501e`；Actions `43060497094` validate + build + deploy 成功。
+- 线上 <https://shawlaw.github.io/studiokit/apps/arcade/> 验证 0.6.1：Boss 清关生命 3→4、入场无碰撞、叠加/移动/瞄准线/显式全屏与缓存 0.6.1 均通过；iOS/Android 真机仍 UNVERIFIED。
+
+## Arcade 0.6.0 — 2026-11-12
 
 ### Added
 - 星海突击：每 30 秒普通波次后进入关卡 Boss 战，Boss 有独立血条与三档火力，击破后生命 +1、掉落 3 份 Buff 并进入下一关。
@@ -28,7 +31,11 @@ StudioKit 门户本身没有独立的 semver；以下按仓库里程碑与工具
 ### Verification
 - `validate_site.py` / `build_site.py` / `node --check` 通过。
 - `arcade_smoke.mjs` 66/66：新增矿工摆动能量、瞄准线计费、星海弹种叠加、Boss 清关、全屏移动、点开始不自动全屏与 320px 道具条宽度检查。
-- 仅本地工作树，未提交/未推送；线上仍为 0.5.1。iOS/Android 真机、系统分享与原生全屏仍 UNVERIFIED。
+- 线上 0.6.0 无头浏览器验证：13 卡、PWA installability 0 错误、缓存键 `studiokit-arcade-0.6.0-v1`、预载 24/24、叠加/移动/Boss/瞄准线/显式全屏与零 JS 错误通过；iOS/Android 真机、系统分享与原生全屏仍 UNVERIFIED。
+
+### Release
+- 提交 `6debd77`；Actions `43057971576` validate + build + deploy 成功。
+- 线上 <https://shawlaw.github.io/studiokit/apps/arcade/> 已更新到 0.6.0。
 
 ## Arcade 0.5.1 — 2026-11-11
 
