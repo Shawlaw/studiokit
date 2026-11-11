@@ -274,8 +274,8 @@ async function main() {
     })()`);
     assert(home.cards >= 2, 'home cards=' + home.cards);
     assert(home.href.indexOf('apps/arcade') !== -1, 'arcade card not clickable: ' + JSON.stringify(home));
-    assert(home.version.indexOf('0.5.0') !== -1, 'arcade version missing on home card');
-    record('门户街机厅卡片可点击且版本 0.5.0', true);
+    assert(home.version.indexOf('0.5.1') !== -1, 'arcade version missing on home card');
+    record('门户街机厅卡片可点击且版本 0.5.1', true);
 
     /* ---------- GitHub Pages 项目子路径：shell 返回链接 ---------- */
     await cdp.navigate(base + '/studiokit/apps/arcade/games/star-raid.html');
@@ -293,10 +293,10 @@ async function main() {
       cards: document.querySelectorAll('.hall-card').length,
       runs: window.Arcade && Arcade.RunSave.count()
     })`);
-    assert(hallInfo.version === '0.5.0', 'version is ' + hallInfo.version);
+    assert(hallInfo.version === '0.5.1', 'version is ' + hallInfo.version);
     assert(hallInfo.games === 13, 'game count is ' + hallInfo.games);
     assert(hallInfo.cards === 13, 'card count is ' + hallInfo.cards);
-    record('中心页 13 款游戏与版本 0.5.0', true);
+    record('中心页 13 款游戏与版本 0.5.1', true);
 
     await cdp.evaluate(`(() => { const i = document.querySelector('[data-search]'); i.value = '雪铃'; i.dispatchEvent(new Event('input', { bubbles: true })); })()`);
     await sleep(120);
@@ -1031,6 +1031,15 @@ async function main() {
     assert(timeAfterBlur - timeAfterResume <= 260, 'window blur time leaked into playtime: ' + JSON.stringify({ timeAfterResume, timeAfterBlur }));
     assert(timeAfterFocus - timeAfterBlur >= 650, 'resume after blur not recorded: ' + JSON.stringify({ timeAfterBlur, timeAfterFocus }));
 
+    /* 连续游玩超过一个 15s 落盘周期：第一次落盘后必须自动开启下一段时间片。 */
+    await cdp.evaluate(`Arcade.Playtime.resetAll()`);
+    await cdp.navigate(base + '/apps/arcade/games/block-drop.html');
+    await cdp.click('[data-ov-btn]');
+    await sleep(17000);
+    await cdp.evaluate(`Arcade.Playtime.flush()`);
+    const continuousTime = await cdp.evaluate(`Arcade.Playtime.stats().totalMs`);
+    assert(continuousTime >= 16000, 'continuous playtime undercounted after first flush: ' + continuousTime);
+
     await cdp.evaluate(`Arcade.Playtime.resetAll()`);
     await cdp.navigate(base + '/apps/arcade/games/snake-run.html');
     await cdp.click('[data-ov-btn]');
@@ -1428,7 +1437,7 @@ async function main() {
       version: window.Arcade && Arcade.version,
       title: document.title
     })`);
-    assert(offlineHall.cards === 13 && offlineHall.version === '0.5.0', 'offline hall failed: ' + JSON.stringify(offlineHall));
+    assert(offlineHall.cards === 13 && offlineHall.version === '0.5.1', 'offline hall failed: ' + JSON.stringify(offlineHall));
     const offlineStatus = await cdp.evaluate(`(async () => {
       try {
         await Arcade.Offline.register();
@@ -1450,7 +1459,7 @@ async function main() {
       overlay: !!document.querySelector('[data-overlay]'),
       version: window.Arcade && window.Arcade.version
     })`);
-    assert(offlineGame.hasArcade && offlineGame.overlay && offlineGame.version === '0.5.0', 'offline game failed: ' + JSON.stringify(offlineGame));
+    assert(offlineGame.hasArcade && offlineGame.overlay && offlineGame.version === '0.5.1', 'offline game failed: ' + JSON.stringify(offlineGame));
     await cdp.navigate(base + '/apps/arcade/games/not-preloaded.html');
     const offlineMissing = await cdp.text('body');
     assert(offlineMissing && offlineMissing.includes('还没有预载'), 'offline missing page: ' + String(offlineMissing).slice(0, 120));

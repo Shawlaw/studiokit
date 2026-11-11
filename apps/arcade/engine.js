@@ -7,7 +7,7 @@
 (() => {
   'use strict';
 
-  const ARCADE_VERSION = '0.5.0';
+  const ARCADE_VERSION = '0.5.1';
   const PROGRESS_KEY = 'studiokit:arcade:progress:v1';
   const PREFS_KEY = 'studiokit:arcade:prefs:v1';
   const RUNS_KEY = 'studiokit:arcade:runs:v1';
@@ -595,7 +595,10 @@
       window.addEventListener('pagehide', flushTime);
       window.addEventListener('beforeunload', flushTime);
       tickTimer = setInterval(() => {
-        if (!overlayOpen && visible && focused) flushTime();
+        if (overlayOpen || !visible || !focused) return;
+        flushTime();
+        /* flushTime 会关闭当前时间片；持续游玩时必须立即开启下一段，否则第一次 15s 落盘后不再计时。 */
+        startSegment();
       }, PLAYTIME_TICK_MS);
     }
 
