@@ -106,13 +106,33 @@ body.arcade-body {
   width: min(520px, 100%);
   display: flex;
   justify-content: center;
+  align-items: center;
   flex-wrap: wrap;
-  gap: 4px 14px;
-  color: var(--ac-muted);
+  gap: 4px 12px;
+  color: #a9b5d8;
   font-size: 12px;
   font-variant-numeric: tabular-nums;
 }
 .game-subhud strong { color: var(--ac-ink); font-size: 13px; }
+
+/* 黄金矿工的“目标”是每关最关键的数字：用暖金描边突出，避免和关卡/倒计时混在一起。 */
+.game-subhud .subhud-target {
+  display: inline-flex;
+  align-items: baseline;
+  gap: 5px;
+  padding: 0 9px 1px;
+  border-radius: 999px;
+  border: 1px solid rgba(245, 197, 66, 0.34);
+  background: rgba(245, 197, 66, 0.1);
+  color: #ffd77a;
+  line-height: 1.25;
+  white-space: nowrap;
+}
+.game-subhud .subhud-target strong {
+  color: #ffe08a;
+  font-size: 14px;
+  font-weight: 800;
+}
 
 .ac-icon-btn {
   display: inline-flex;

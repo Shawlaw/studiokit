@@ -25,7 +25,7 @@
       <button type="button" class="ac-icon-btn" data-mute aria-label="切换音效">🔊</button>
     </header>
     <div class="game-subhud" aria-live="polite">
-      <span>目标 <strong data-hud-target>650</strong></span>
+      <span class="subhud-target">目标 <strong data-hud-target>$650</strong></span>
       <span>第 <strong data-hud-level>1</strong> 关</span>
       <span>剩余 <strong data-hud-time>60</strong>s</span>
     </div>
@@ -198,8 +198,15 @@
       function levelTime(lv) {
         return levelSpec(lv).time;
       }
+      /* 瞄准线按秒扣费会留下小数；目标金额统一取整，避免 HUD/结算出现长小数。 */
+      function wholeAmount(value) {
+        return Math.max(0, Math.floor(Number(value) || 0));
+      }
+      function wholeTarget(value) {
+        return Math.max(1, Math.round(Number(value) || 0));
+      }
       function targetFor(lv) {
-        return levelSpec(lv).target;
+        return wholeTarget(levelSpec(lv).target);
       }
       function clawTip() {
         return {
@@ -579,9 +586,10 @@
       }
 
       function nextLevel() {
-        levelStartMoney = money;
+        /* 以 HUD 上显示的整数金额作为本关起点，目标金额保持整数。 */
+        levelStartMoney = wholeAmount(money);
         level += 1;
-        target = levelStartMoney + levelSpec(level).target;
+        target = levelStartMoney + wholeTarget(levelSpec(level).target);
         timeLeft = levelTime(level);
         pend.gravity = swingGravity(level);
         pend.angle = rand(0.92, 1.0) * (Math.random() > 0.5 ? 1 : -1);
@@ -764,9 +772,10 @@
             }));
           money = Math.max(0, Number(data.money) || 0);
           level = Math.max(1, Number(data.level) || 1);
-          target = Math.max(1, Number(data.target) || targetFor(level));
+          /* 旧档可能存了带小数的目标（瞄准线扣费），恢复时统一取整。 */
+          target = wholeTarget(Number(data.target) || targetFor(level));
           levelStartMoney = Number.isFinite(Number(data.levelStartMoney))
-            ? Math.max(0, Number(data.levelStartMoney))
+            ? wholeAmount(Number(data.levelStartMoney))
             : Math.max(0, target - levelSpec(level).target);
           timeLeft = clamp(Number(data.timeLeft) || levelTime(level), 0.1, levelTime(level) + TIME_BONUS);
           if (data.pend && isFinite(data.pend.angle)) {
@@ -1202,20 +1211,40 @@
           });
         });
 
-        A.draw.label(ctx, `$${Math.floor(money)} / $${target}` + (aimLineActive ? `  -$${AIM_LINE_COST_PER_SEC}/s` : ''), 12, 24, {
+        drawHud();
+      }
+
+      /* 画布顶部是浅色天空，直接用黄字会看不清；先铺一层深色渐隐再画 HUD。 */
+      function drawHud() {
+        const shade = ctx.createLinearGradient(0, 0, 0, 56);
+        shade.addColorStop(0, 'rgba(7, 11, 22, 0.82)');
+        shade.addColorStop(0.7, 'rgba(7, 11, 22, 0.4)');
+        shade.addColorStop(1, 'rgba(7, 11, 22, 0)');
+        ctx.fillStyle = shade;
+        ctx.fillRect(0, 0, W, 56);
+
+        const done = money >= target;
+        A.draw.label(ctx, `$${Math.floor(money)} / $${target}`, 12, 23, {
           align: 'left',
-          font: 'bold 14px system-ui',
-          color: money >= target ? '#63d68c' : '#ffd23f',
+          font: 'bold 15px system-ui',
+          color: done ? '#7ff0a4' : '#ffe08a',
         });
-        A.draw.label(ctx, '第 ' + level + ' 关 · 摆速 ' + (pend.gravity / SWING_BASE).toFixed(1) + '×', W / 2, 24, {
+        if (aimLineActive) {
+          A.draw.label(ctx, `瞄准线 -$${AIM_LINE_COST_PER_SEC}/s`, 12, 42, {
+            align: 'left',
+            font: 'bold 11px system-ui',
+            color: '#7ce8e0',
+          });
+        }
+        A.draw.label(ctx, '第 ' + level + ' 关 · 摆速 ' + (pend.gravity / SWING_BASE).toFixed(1) + '×', W / 2, 23, {
           font: 'bold 12px system-ui',
-          color: '#6b4a2c',
+          color: '#e8dcc4',
         });
         const urgent = timeLeft < 10;
-        A.draw.label(ctx, Math.ceil(timeLeft) + 's', W - 12, 24, {
+        A.draw.label(ctx, Math.ceil(timeLeft) + 's', W - 12, 23, {
           align: 'right',
           font: 'bold 15px system-ui',
-          color: urgent ? (Math.floor(timeLeft * 4) % 2 === 0 ? '#d8443f' : '#ffb0a0') : '#6b4a2c',
+          color: urgent ? (Math.floor(timeLeft * 4) % 2 === 0 ? '#ff8f86' : '#ffd0c8') : '#f6ead0',
         });
       }
 

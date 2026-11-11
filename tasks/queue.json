@@ -529,6 +529,25 @@
       "claimedAt": "2026-11-11T16:10:00+00:00",
       "completedAt": "2026-11-11T16:48:00+00:00",
       "evidence": "Owner 2026-11-12 明确指令“全都弄完自测完后就提交推送发布”；0.6.0 功能提交 6debd77 推送 main，Actions 43057971576 成功；线上验证时发现 Boss 入场穿过贴顶玩家导致碰撞，补丁 1c9501e（0.6.1，Boss y<100 不入碰撞、y>=104 才发弹，清关断言生命+1）推送，Actions 43060497094 成功；线上 0.6.1 无头 Chrome 全部通过：13 卡、PWA installability 0 错误、缓存键 studiokit-arcade-0.6.1-v1、预载 24/24、四弹种叠加一轮 9 发（激光/追踪/散射）、玩家 y=46 全屏移动、Boss 清关 stage 2 且 lives 3→4、瞄准线 2.2s 扣费、点开始不自动全屏、连续游玩 17013ms、零 JS 错误。iOS/Android 真机安装、系统分享面板与原生全屏仍 UNVERIFIED；发布后文档同步随后推送。"
+    },
+    {
+      "id": "T028",
+      "title": "黄金矿工目标金额取整与目标 HUD 可读性优化",
+      "kind": "agent",
+      "status": "DONE",
+      "dependsOn": [
+        "T027"
+      ],
+      "ownerAuthorizationRequired": false,
+      "acceptance": [
+        "目标金额与 HUD 显示始终为整数；旧档中的小数目标恢复时取整",
+        "画布顶部 HUD 在浅色天空下保持可读；DOM 子 HUD 的目标金额有明确强调",
+        "arcade_smoke.mjs 增加小数余额进入下一关的目标取整回归",
+        "validate_site.py / build_site.py / node --check 通过；仅本地未发布"
+      ],
+      "claimedAt": "2026-11-12T01:01:00+00:00",
+      "completedAt": "2026-11-12T01:10:27+00:00",
+      "evidence": "根因：aimLineActive 按秒扣 $2/s 让 money 变成小数，nextLevel 直接 levelStartMoney + spec.target 把小数带进目标；已用 #test 钩子复现 target=1828.37 / HUD $1828.37。修复：wholeAmount/wholeTarget 统一取整，nextLevel 以 HUD 整数金额起算，restore 兼容旧小数目标；画布顶部增加深色渐隐并改用高对比浅色 HUD，瞄准线费用独立一行；DOM 子 HUD 目标改为金色胶囊 + 14px 数字。arcade_smoke 66/66（含小数余额提前结算目标取整回归）；validate_site.py / build_site.py / node --check 全过；320/375/390/430 无横向溢出截图复核；已本地提交，未升版本、未推送、未发布。"
     }
   ]
 }

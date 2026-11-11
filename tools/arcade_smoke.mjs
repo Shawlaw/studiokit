@@ -720,7 +720,16 @@ async function main() {
     assert(!tntAim.missing, 'gold test TNT missing');
     assert(tntAim.ok === false && tntAim.armed === true && tntAim.aim === 3, 'gold TNT aim must not consume: ' + JSON.stringify(tntAim));
     await cdp.click('[data-tool="aim"]');
-    record('黄金矿工 前 2 关无炸药/价值保底/提前结算/道具补给/炸药不可锁定', true);
+    /* 瞄准线按秒扣费后余额可能带小数；提前结算进入下一关时目标必须仍为整数。 */
+    const fractionalStart = await cdp.evaluate(`__arcadeTest.info()`);
+    await cdp.evaluate(`__arcadeTest.setMoney(${fractionalStart.target} + 0.37)`);
+    await cdp.evaluate(`document.querySelector('[data-cashout]').click()`);
+    await sleep(260);
+    const roundedTarget = await cdp.evaluate(`({ info: __arcadeTest.info(), hud: document.querySelector('[data-hud-target]').textContent })`);
+    assert(Number.isInteger(roundedTarget.info.target), 'gold target kept decimals: ' + JSON.stringify(roundedTarget));
+    assert(roundedTarget.info.target === Math.floor(roundedTarget.info.money) + roundedTarget.info.spec.target, 'gold target increment drifted: ' + JSON.stringify(roundedTarget));
+    assert(roundedTarget.hud === '$' + roundedTarget.info.target, 'gold target HUD not integer: ' + JSON.stringify(roundedTarget));
+    record('黄金矿工 前 2 关无炸药/价值保底/提前结算/道具补给/炸药不可锁定/目标取整', true);
 
     /* ---------- 黄金矿工：夹中物品跟随钩爪（渲染不再重复原物） ---------- */
     await cdp.evaluate(`Arcade.RunSave.clear('gold-miner')`);
