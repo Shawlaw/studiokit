@@ -489,6 +489,26 @@
       "claimedAt": "2026-11-11T11:05:00+00:00",
       "completedAt": "2026-11-11T11:20:00+00:00",
       "evidence": "Owner 2026-11-11 明确指令“可以 提交发布吧”；发布前 validate_site.py/build_site.py/node --check 通过，arcade_smoke 63/63；提交 6739521 推送 main；Actions 43008560646 validate+build+deploy 全成功；线上 https://shawlaw.github.io/studiokit/apps/arcade/ 0.5.1；无头 Chrome 线上 10/10：13 卡/统计/分享/安装入口、manifest 0 错误、installability 0 错误、SW scope、预载 24/24、缓存键 studiokit-arcade-0.5.1-v1、连续游玩 17 秒实测 17012ms、矿工连续瞄准、零 JS 错误。iOS/Android 真机安装、系统分享面板与原生全屏仍 UNVERIFIED；发布后文档同步随后推送。"
+    },
+    {
+      "id": "T026",
+      "title": "街机厅 0.6.0：星海 Boss/弹种叠加/全屏移动 + 矿工瞄准线/摆幅修复 + 显式全屏",
+      "kind": "agent",
+      "status": "DONE",
+      "dependsOn": [
+        "T025"
+      ],
+      "ownerAuthorizationRequired": false,
+      "acceptance": [
+        "黄金矿工瞄准只改钩爪朝向，连续瞄准后摆角/角速度能量不衰减；新增连续 3 轮能量回归",
+        "黄金矿工新增按秒 $2 的瞄准线道具，可开关、余额不足自动关闭、暂停不计费",
+        "星海突击每 30 秒关卡 Boss、Boss 血条/火力阶段/清关进关；弹种可叠加；玩家整屏纵向移动",
+        "点开始/继续不再自动进入全屏，只有显式全屏入口生效",
+        "arcade_smoke 66/66、validate/build/node --check 通过；版本 0.6.0 本地待发布"
+      ],
+      "claimedAt": "2026-11-11T15:00:00+00:00",
+      "completedAt": "2026-11-11T16:10:00+00:00",
+      "evidence": "黄金矿工：pend/clawAngle 分离，tryAimAt 不再改 pend.angle/vel；新增 aimLineActive/$2 每秒计费/虚线+命中圈/旧档字段。星海：level/stageTime/boss 状态、30s Boss、血条/三阶段弹幕、清关+1 命/3 Buff；buffs 叠加与旧单弹种迁移；PLAYER_MIN_Y=46 全屏纵向移动。全屏：移除 overlay pointerdown 自动 enter。中心页续玩卡 min-width:0 修复 320px。arcade_smoke 66/66（新增能量、瞄准线、叠加、Boss、全屏移动、显式全屏）；validate/build/node 通过；版本 0.6.0，本地工作树未提交/未推送，线上仍 0.5.1。"
     }
   ]
 }

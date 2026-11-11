@@ -3,9 +3,9 @@
 **StudioKit** 是一个面向个人使用的静态网页工具集合。一个 GitHub 仓库承载多个彼此独立的单页 HTML 工具，通过统一首页、轻量共享外壳和 GitHub Pages 发布。
 
 - **线上站点：** <https://shawlaw.github.io/studiokit/>
-- **当前工具：** Badge Studio `2.2.1`；街机厅 Arcade `0.5.1`（13 款竖屏小游戏，已发布）
+- **当前工具：** Badge Studio `2.2.1`；街机厅 Arcade `0.6.0`（13 款竖屏小游戏；本地迭代，待验收发布）
 - **计划中的工具：** Rounded Image（尚未实现，等待原始需求/规格）
-- **最近发布：** 2026-11-11，Arcade 0.5.1（修复连续游玩超过 15 秒后游玩时长停止累计）
+- **最近发布：** 2026-11-11，Arcade 0.5.1（游玩计时连续性修复）；0.6.0 已在本地通过 66 项检查，未提交/未推送
 - **运行方式：** 纯静态文件；无后端、无账号、无构建依赖、无第三方 CDN
 
 ## 目录结构
@@ -22,7 +22,7 @@ StudioKit/
 │   │   ├── index.html
 │   │   ├── README.md
 │   │   └── CHANGELOG.md
-│   └── arcade/                      # 街机厅，当前 v0.5.1
+│   └── arcade/                      # 街机厅，本地 v0.6.0（线上 0.5.1）
 │       ├── index.html               # 游戏中心页（统计/分享/安装/预载）
 │       ├── engine.js                # 街机专用共享运行时
 │       ├── arcade.css               # 街机专用样式
@@ -32,6 +32,7 @@ StudioKit/
 │       ├── games/*.html             # 13 款独立游戏页
 │       ├── DESIGN-0.4.0.md          # 全屏/道具设计与回滚说明
 │       ├── DESIGN-0.5.0.md          # 统计/分享/PWA/离线设计与回滚说明
+│       ├── DESIGN-0.6.0.md          # 星海 Boss/叠加、矿工瞄准线与全屏说明
 │       ├── README.md
 │       └── CHANGELOG.md
 ├── templates/single-page-tool/      # 新工具模板
@@ -115,7 +116,7 @@ node --check apps/arcade/sw.js
 node tools/arcade_smoke.mjs
 ```
 
-`arcade_smoke.mjs` 需要本机 Chrome，会启动临时静态服务器与无头浏览器；当前覆盖 63 项检查（全屏/沉浸、道具与存档、游玩计时与轮次、分享、PWA 安装清单、离线预载/断网、320–430px 布局、子路径和刘海安全区）。
+`arcade_smoke.mjs` 需要本机 Chrome，会启动临时静态服务器与无头浏览器；当前覆盖 66 项检查（显式全屏、道具/瞄准线/摆动能量、星海 Boss/弹种叠加/全屏移动、存档、游玩计时与轮次、分享、PWA 安装清单、离线预载/断网、320–430px 布局、子路径和刘海安全区）。
 
 构建产物位于 `dist/`。它只包含要发布的网站资源，不包含 Agent Prompt、任务队列、内部文档和开发脚本。
 
@@ -149,8 +150,8 @@ https://<github-user>.github.io/<repository-name>/
 
 ## 当前状态
 
-- 线上已发布：Badge Studio `2.2.1`、街机厅 Arcade `0.5.1`（游玩统计、分享、PWA 安装、离线预载、黄金矿工摆钩修复、游玩计时连续性修复）。
-- Arcade 0.5.1 已通过 63 项本地无头浏览器检查；线上验证 13 卡、PWA 可安装、预载 24/24、断网回归、矿工连续瞄准与连续游玩 17 秒计时（实测 17012ms）通过。
+- 线上已发布：Badge Studio `2.2.1`、街机厅 Arcade `0.5.1`。
+- 本地待发布：街机厅 Arcade `0.6.0`（星海 30 秒关卡 Boss/弹种叠加/全屏移动、黄金矿工瞄准线与摆幅修复、点开始不再自动全屏），已通过 66 项无头浏览器检查。
 - 规划中：Rounded Image（等待原始需求/规格，不凭空复刻）。
 - 任务、证据和未决项见 [`TASKS.md`](TASKS.md)；后续方向见 [`docs/ROADMAP.md`](docs/ROADMAP.md)。
 - Arcade 的玩法、数据键和已知边界见 [`apps/arcade/README.md`](apps/arcade/README.md)。

@@ -7,7 +7,7 @@
 (() => {
   'use strict';
 
-  const ARCADE_VERSION = '0.5.1';
+  const ARCADE_VERSION = '0.6.0';
   const PROGRESS_KEY = 'studiokit:arcade:progress:v1';
   const PREFS_KEY = 'studiokit:arcade:prefs:v1';
   const RUNS_KEY = 'studiokit:arcade:runs:v1';
@@ -1632,7 +1632,8 @@
    * 全屏 / 沉浸模式（0.4.0）
    * - 有原生 Fullscreen API 时请求整页全屏；没有或被拒绝时退化为纯 CSS 沉浸。
    * - 只有游戏页（存在 .game-page）会自动安装，中心页不受影响。
-   * - 记住用户选择：下次从开始/继续弹层进入时自动恢复，减少重复点击。
+   * - 全屏只由显式入口触发（⛶ / F / 弹层按钮）；点开始/继续不会自动进入全屏。
+ *   prefs.immersive 仍记录上次选择，避免把“点开始”误当成全屏指令。
    * ---------------------------------------------------------- */
   function showArcadeToast(text, duration) {
     if (!document.body) return;
@@ -2112,20 +2113,6 @@
       e.preventDefault();
       toggle();
     });
-
-    /* 记住全屏选择：在开始/继续弹层上点按钮时自动恢复（同一用户手势内请求）。 */
-    if (overlayPanel) {
-      overlayPanel.addEventListener(
-        'pointerdown',
-        (e) => {
-          if (active) return;
-          const target = e.target;
-          if (target && target.closest && target.closest('[data-fullscreen-inline], [data-share-inline]')) return;
-          if (Prefs.load().immersive) enter();
-        },
-        true
-      );
-    }
 
     sync();
     displayMode = {

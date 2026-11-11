@@ -40,7 +40,7 @@
             <button type="button" class="ac-btn ac-btn-secondary" data-ov-btn2 hidden>重新开始</button>
           </div>
         </div>
-        <div class="toolbelt" data-toolbelt aria-label="道具（快捷键 1 / 2 / 3）">
+        <div class="toolbelt" data-toolbelt aria-label="道具（快捷键 1 / 2 / 3 / 4）">
           <button type="button" class="tool-btn" data-tool="aim" aria-pressed="false" aria-label="指哪打哪，剩余 2 次（快捷键 1）" title="指哪打哪（1）：点选金块或钻石">
             <span class="tool-icon" aria-hidden="true">🎯</span>
             <span class="tool-name">指哪打哪</span>
@@ -56,11 +56,16 @@
             <span class="tool-name">强力绞盘</span>
             <span class="tool-count" data-tool-count aria-hidden="true">1</span>
           </button>
+          <button type="button" class="tool-btn" data-tool="line" aria-pressed="false" aria-label="瞄准线，开启后每秒扣 2 美元（快捷键 4）" title="瞄准线（4）：显示挖取方向与命中物，每秒 $2">
+            <span class="tool-icon" aria-hidden="true">📐</span>
+            <span class="tool-name">瞄准线</span>
+            <span class="tool-count tool-rate" data-tool-count aria-hidden="true">$2/s</span>
+          </button>
         </div>
         <button type="button" class="ac-btn ac-cashout" data-cashout hidden>达标 · 立即进入下一关</button>
       </div>
     </div>
-    <p class="game-hint">看准角度点击 / 空格放钩 · 第一关摆速较慢，逐关加快 · 达标可提前结算 · 重物拉得慢 · 别碰炸药 · 道具 1/2/3 · P / Esc 暂停</p>
+    <p class="game-hint">看准角度点击 / 空格放钩 · 第一关摆速较慢，逐关加快 · 达标可提前结算 · 重物拉得慢 · 别碰炸药 · 道具 1/2/3/4 · P / Esc 暂停</p>
   </main>
   <script>
     (() => {
@@ -80,6 +85,7 @@
       const AIM_EXTEND_SPEED = 900;
       const AIM_TAP_RADIUS = 56;
       const AIM_RESUME_VEL = 0.9;
+      const AIM_LINE_COST_PER_SEC = 2;
       const WINCH_SPEED = 980;
       const TIME_BONUS = 10;
       const TOOL_CAPS = { aim: 3, time: 2, winch: 2 };
@@ -127,6 +133,7 @@
         toolAim: document.querySelector('[data-tool="aim"]'),
         toolTime: document.querySelector('[data-tool="time"]'),
         toolWinch: document.querySelector('[data-tool="winch"]'),
+        toolLine: document.querySelector('[data-tool="line"]'),
       };
       const ui = A.createOverlayUi(dom);
 
@@ -143,6 +150,8 @@
       };
 
       const pend = { angle: 0.9, vel: 0, length: MIN_LEN, gravity: 520, damping: 0 };
+      /* 摆角（pend）与钩爪朝向（clawAngle）分离：瞄准时只改朝向，不打断摆动能量。 */
+      let clawAngle = pend.angle;
       let clawState = 'swing';
       let items = [];
       let holding = null;
@@ -163,6 +172,8 @@
       let aimArmed = false;
       let aimTarget = null;
       let winchArmed = false;
+      let aimLineActive = false;
+      let lastMoneyShown = -1;
       let itemFloor = H - 130;
 
       let high = A.Progress.get('gold-miner').high;
@@ -192,8 +203,8 @@
       }
       function clawTip() {
         return {
-          x: PIVOT.x + Math.sin(pend.angle) * pend.length,
-          y: PIVOT.y + Math.cos(pend.angle) * pend.length,
+          x: PIVOT.x + Math.sin(clawAngle) * pend.length,
+          y: PIVOT.y + Math.cos(clawAngle) * pend.length,
         };
       }
       function retractSpeed() {
@@ -228,6 +239,14 @@
         dom.toolTime.setAttribute('aria-label', '加时 10 秒，剩余 ' + tools.time + ' 次（快捷键 2）');
         dom.toolWinch.setAttribute('aria-label', '强力绞盘，剩余 ' + tools.winch + ' 次（快捷键 3）');
         dom.toolAim.title = aimArmed ? '取消瞄准（1）' : '指哪打哪（1）：点选金块或钻石';
+        if (dom.toolLine) {
+          dom.toolLine.setAttribute('aria-pressed', String(aimLineActive));
+          dom.toolLine.classList.toggle('is-armed', aimLineActive);
+          dom.toolLine.setAttribute('aria-label', aimLineActive
+            ? '瞄准线已开启，每秒扣 $' + AIM_LINE_COST_PER_SEC + '，点击关闭（快捷键 4）'
+            : '瞄准线，开启后每秒扣 $' + AIM_LINE_COST_PER_SEC + '（快捷键 4）');
+          dom.toolLine.title = aimLineActive ? '关闭瞄准线（4）' : '瞄准线（4）：显示挖取方向与命中物，每秒 $' + AIM_LINE_COST_PER_SEC;
+        }
       }
 
       function grantTools(lv) {
@@ -243,8 +262,32 @@
         syncTools();
       }
 
+      function toggleAimLine() {
+        if (state !== 'playing') return false;
+        if (aimLineActive) {
+          aimLineActive = false;
+          A.Sfx.play('ui');
+          toolHint('瞄准线已关闭');
+          syncTools();
+          autosave.saveNow();
+          return true;
+        }
+        if (money < AIM_LINE_COST_PER_SEC) {
+          toolHint('先挖到 $' + AIM_LINE_COST_PER_SEC + ' 再开瞄准线', '#ff9a9d');
+          return false;
+        }
+        aimLineActive = true;
+        aimArmed = false;
+        A.Sfx.play('spring');
+        toolHint('瞄准线开启：每秒 -$' + AIM_LINE_COST_PER_SEC, '#ffd23f');
+        syncTools();
+        autosave.saveNow();
+        return true;
+      }
+
       function useTool(name) {
         if (state !== 'playing') return false;
+        if (name === 'line') return toggleAimLine();
         if (name === 'aim') {
           if (aimArmed) {
             aimArmed = false;
@@ -333,9 +376,8 @@
         tools.aim -= 1;
         aimArmed = false;
         aimTarget = target;
-        pend.angle = Math.atan2(target.x - PIVOT.x, target.y - PIVOT.y);
-        /* 目标在正下方时摆角为 0；必须给一个同侧最小角速度，否则收钩后会停在垂直平衡位。 */
-        pend.vel = (target.x >= PIVOT.x ? 1 : -1) * AIM_RESUME_VEL;
+        /* 只改变钩爪伸出的朝向，保留当前摆角/角速度；收钩后继续原来的摆动幅度与速度。 */
+        clawAngle = Math.atan2(target.x - PIVOT.x, target.y - PIVOT.y);
         pend.length = MIN_LEN;
         clawState = 'extend';
         clawOpen = 1;
@@ -448,6 +490,7 @@
         pend.vel = 0;
         pend.length = MIN_LEN;
         pend.gravity = swingGravity(1);
+        clawAngle = pend.angle;
         clawState = 'swing';
         clawOpen = 0;
         spaceWasDown = false;
@@ -457,6 +500,7 @@
         aimArmed = false;
         aimTarget = null;
         winchArmed = false;
+        aimLineActive = false;
         syncTools();
         makeDirt();
         spawnItems();
@@ -464,7 +508,8 @@
       }
 
       function syncHud() {
-        dom.hudScore.textContent = String(Math.floor(money));
+        lastMoneyShown = Math.floor(money);
+        dom.hudScore.textContent = String(lastMoneyShown);
         dom.hudTarget.textContent = '$' + target;
         dom.hudLevel.textContent = String(level);
         syncTimerHud();
@@ -508,6 +553,7 @@
         state = 'over';
         aimArmed = false;
         aimTarget = null;
+        aimLineActive = false;
         syncTools();
         A.Sfx.play('over');
         autosave.clear();
@@ -541,6 +587,7 @@
         pend.angle = rand(0.92, 1.0) * (Math.random() > 0.5 ? 1 : -1);
         pend.vel = 0;
         pend.length = MIN_LEN;
+        clawAngle = pend.angle;
         clawState = 'swing';
         clawOpen = 0;
         holding = null;
@@ -603,6 +650,7 @@
 
       function releaseClaw() {
         if (clawState !== 'swing') return;
+        clawAngle = pend.angle;
         clawState = 'extend';
         syncCashout();
         A.Sfx.play('jump');
@@ -647,6 +695,7 @@
           pend.angle = 0.16 * dir;
           pend.vel = AIM_RESUME_VEL * dir;
         }
+        clawAngle = pend.angle;
       }
 
       function cashIn() {
@@ -687,11 +736,13 @@
           target,
           timeLeft,
           pend: { angle: pend.angle, vel: pend.vel, length: pend.length, gravity: pend.gravity },
+          clawAngle,
           clawState,
           clawOpen,
           dirt,
           tools: { aim: tools.aim, time: tools.time, winch: tools.winch },
           winchArmed,
+          aimLineActive,
         };
       }
 
@@ -724,6 +775,8 @@
             pend.length = clamp(Number(data.pend.length) || MIN_LEN, MIN_LEN, 800);
             pend.gravity = Number(data.pend.gravity) || swingGravity(level);
           }
+          /* 旧档没有 clawAngle：伸钩方向回退到当时保存的摆角。 */
+          clawAngle = isFinite(data.clawAngle) ? Number(data.clawAngle) : pend.angle;
           clawState = ['swing', 'extend', 'retract'].indexOf(data.clawState) !== -1 ? data.clawState : 'swing';
           clawOpen = clamp(Number(data.clawOpen) || 0, 0, 1);
           if (Array.isArray(data.dirt) && data.dirt.length) {
@@ -744,6 +797,7 @@
             tools.winch = clamp(Math.floor(Number(data.tools.winch) || 0), 0, TOOL_CAPS.winch);
           }
           winchArmed = !!data.winchArmed;
+          aimLineActive = !!data.aimLineActive && money >= AIM_LINE_COST_PER_SEC;
           /* 旧档可能保存了摆角 0 / 角速度 0 的“停摆”状态；恢复时补起步能量。 */
           if (clawState === 'swing') ensureSwing();
           aimArmed = false;
@@ -781,10 +835,20 @@
         autosave.tick(dt);
         timeLeft -= dt;
         syncTimerHud();
+        if (aimLineActive) {
+          money = Math.max(0, money - AIM_LINE_COST_PER_SEC * dt);
+          if (Math.floor(money) !== lastMoneyShown) syncHud();
+          if (money <= 0) {
+            aimLineActive = false;
+            syncTools();
+            toolHint('余额不足，瞄准线已关闭', '#ff9a9d');
+          }
+        }
 
         if (clawState === 'swing') {
           A.Physics.pendulumStep(pend, dt);
           pend.length = MIN_LEN;
+          clawAngle = pend.angle;
           clawOpen = lerp(clawOpen, 0.35, Math.min(1, 10 * dt));
           if (aimArmed) {
             /* 瞄准期间不按摆角放钩；点击画布直接锁定物品。 */
@@ -916,7 +980,7 @@
         if (holding) {
           drawItem({ ...holding, x: tip.x, y: tip.y + holding.r * 0.4 });
         }
-        const ang = pend.angle;
+        const ang = clawAngle;
         const open = clawOpen;
         ctx.save();
         ctx.translate(tip.x, tip.y);
@@ -1011,6 +1075,65 @@
         ctx.restore();
       }
 
+      function aimLineHit() {
+        const sin = Math.sin(clawAngle);
+        const cos = Math.cos(clawAngle);
+        let best = null;
+        let bestT = Infinity;
+        items.forEach((o) => {
+          const dx = o.x - PIVOT.x;
+          const dy = o.y - PIVOT.y;
+          const t = dx * sin + dy * cos;
+          if (t < MIN_LEN || t > 900) return;
+          const px = PIVOT.x + sin * t;
+          const py = PIVOT.y + cos * t;
+          if (Math.hypot(o.x - px, o.y - py) <= o.r + CLAW_R * 0.35 && t < bestT) {
+            best = o;
+            bestT = t;
+          }
+        });
+        return best ? { item: best, t: bestT } : null;
+      }
+
+      function drawAimLine() {
+        if (!aimLineActive || state !== 'playing') return;
+        const hit = aimLineHit();
+        const t = hit ? hit.t : 900;
+        const sin = Math.sin(clawAngle);
+        const cos = Math.cos(clawAngle);
+        const ex = PIVOT.x + sin * t;
+        const ey = PIVOT.y + cos * t;
+        ctx.save();
+        ctx.beginPath();
+        ctx.rect(0, 0, W, H);
+        ctx.clip();
+        ctx.setLineDash([9, 8]);
+        ctx.lineDashOffset = -(performance.now() / 60) % 17;
+        ctx.strokeStyle = hit && hit.item.type === 'tnt' ? 'rgba(255,93,107,0.9)' : 'rgba(255,210,63,0.8)';
+        ctx.lineWidth = 2;
+        ctx.beginPath();
+        ctx.moveTo(PIVOT.x, PIVOT.y);
+        ctx.lineTo(ex, ey);
+        ctx.stroke();
+        ctx.setLineDash([]);
+        if (hit) {
+          const o = hit.item;
+          const tnt = o.type === 'tnt';
+          const pulse = 0.5 + 0.5 * Math.sin(performance.now() / 180);
+          ctx.strokeStyle = tnt ? `rgba(255,93,107,${0.6 + pulse * 0.4})` : `rgba(255,210,63,${0.6 + pulse * 0.4})`;
+          ctx.lineWidth = 2;
+          ctx.beginPath();
+          ctx.arc(o.x, o.y, o.r + 7 + pulse * 3, 0, TAU);
+          ctx.stroke();
+          const label = tnt ? '炸药！' : '+$' + o.value;
+          A.draw.label(ctx, label, o.x, o.y - o.r - 14, {
+            font: 'bold 12px system-ui, sans-serif',
+            color: tnt ? '#ff9a9d' : '#ffd23f',
+          });
+        }
+        ctx.restore();
+      }
+
       function drawAimAssist() {
         if (!aimArmed) return;
         const pointer = aimPointer;
@@ -1066,6 +1189,7 @@
           if (o !== holding) drawItem(o);
         });
         particles.draw(ctx);
+        drawAimLine();
         drawAimAssist();
         drawMiner();
         drawClaw();
@@ -1078,7 +1202,7 @@
           });
         });
 
-        A.draw.label(ctx, `$${Math.floor(money)} / $${target}`, 12, 24, {
+        A.draw.label(ctx, `$${Math.floor(money)} / $${target}` + (aimLineActive ? `  -$${AIM_LINE_COST_PER_SEC}/s` : ''), 12, 24, {
           align: 'left',
           font: 'bold 14px system-ui',
           color: money >= target ? '#63d68c' : '#ffd23f',
@@ -1116,6 +1240,7 @@
         dom.toolAim.addEventListener('click', () => useTool('aim'));
         dom.toolTime.addEventListener('click', () => useTool('time'));
         dom.toolWinch.addEventListener('click', () => useTool('winch'));
+        if (dom.toolLine) dom.toolLine.addEventListener('click', () => useTool('line'));
       }
       window.addEventListener('keydown', (e) => {
         if (e.repeat || e.metaKey || e.ctrlKey || e.altKey) return;
@@ -1124,7 +1249,7 @@
           const tag = target.tagName.toLowerCase();
           if (tag === 'input' || tag === 'textarea' || tag === 'select' || target.isContentEditable) return;
         }
-        const tool = { '1': 'aim', '2': 'time', '3': 'winch' }[e.key];
+        const tool = { '1': 'aim', '2': 'time', '3': 'winch', '4': 'line' }[e.key];
         if (!tool) return;
         e.preventDefault();
         useTool(tool);
@@ -1166,10 +1291,13 @@
               cashoutHidden: dom.cashout.hidden,
               clawState,
               angle: pend.angle,
+              clawAngle,
               vel: pend.vel,
               length: pend.length,
               tools: { aim: tools.aim, time: tools.time, winch: tools.winch },
               winchArmed,
+              aimLineActive,
+              aimLineCost: AIM_LINE_COST_PER_SEC,
               aimArmed,
               aimTarget: aimTarget ? aimTarget.type : null,
               itemFloor,
@@ -1233,6 +1361,7 @@
             holding = item;
             clawState = 'retract';
             pend.angle = 0.55;
+            clawAngle = 0.55;
             pend.length = 300;
             clawOpen = 0;
             syncHud();

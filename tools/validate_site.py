@@ -15,6 +15,7 @@ REQUIRED = [
     'apps/badge-studio/index.html', 'apps/badge-studio/README.md', 'apps/badge-studio/CHANGELOG.md',
     'apps/arcade/index.html', 'apps/arcade/README.md', 'apps/arcade/CHANGELOG.md',
     'apps/arcade/DESIGN-0.4.0.md', 'apps/arcade/DESIGN-0.5.0.md',
+    'apps/arcade/DESIGN-0.6.0.md',
     'apps/arcade/engine.js', 'apps/arcade/arcade.css', 'apps/arcade/sw.js',
     'apps/arcade/manifest.webmanifest',
     'apps/arcade/icons/icon-192.png', 'apps/arcade/icons/icon-512.png',
@@ -143,7 +144,7 @@ def validate(root=ROOT):
     arcade_engine = root / 'apps/arcade/engine.js'
     if arcade_engine.exists():
         source = arcade_engine.read_text(encoding='utf-8')
-        if "const ARCADE_VERSION = '0.5.1'" not in source:
+        if "const ARCADE_VERSION = '0.6.0'" not in source:
             ok = fail('Arcade ARCADE_VERSION drifted; update registry/README/CHANGELOG together') and ok
         if source.count("file: '") < 13:
             ok = fail('Arcade GAMES list should contain at least 13 games') and ok
@@ -155,7 +156,7 @@ def validate(root=ROOT):
             ok = fail('Arcade fullscreen/immersive helper is missing') and ok
         for marker in ('const Playtime =', 'function formatDuration', 'const Share =', 'const Offline =', 'arcade-precache'):
             if marker not in source:
-                ok = fail(f'Arcade 0.5.1 marker missing in engine.js: {marker}') and ok
+                ok = fail(f'Arcade 0.6.0 marker missing in engine.js: {marker}') and ok
         gold_miner = root / 'apps/arcade/games/gold-miner.html'
         if gold_miner.exists():
             gold_source = gold_miner.read_text(encoding='utf-8')
@@ -167,11 +168,11 @@ def validate(root=ROOT):
             index_source = arcade_index.read_text(encoding='utf-8')
             for marker in ('rel="manifest"', 'data-playtime-section', 'data-offline', 'data-install', 'data-share'):
                 if marker not in index_source:
-                    ok = fail(f'Arcade hub 0.5.1 marker missing: {marker}') and ok
+                    ok = fail(f'Arcade hub 0.6.0 marker missing: {marker}') and ok
         arcade_sw = root / 'apps/arcade/sw.js'
         if arcade_sw.exists():
             sw_source = arcade_sw.read_text(encoding='utf-8')
-            for marker in ("const VERSION = '0.5.1'", 'arcade-precache', 'skipWaiting', 'clients.claim'):
+            for marker in ("const VERSION = '0.6.0'", 'arcade-precache', 'skipWaiting', 'clients.claim'):
                 if marker not in sw_source:
                     ok = fail(f'Arcade service worker marker missing: {marker}') and ok
         manifest = root / 'apps/arcade/manifest.webmanifest'
@@ -192,8 +193,8 @@ def validate(root=ROOT):
             try:
                 registry = json.loads(registry_path.read_text(encoding='utf-8'))
                 arcade = next((t for t in registry.get('tools', []) if t.get('id') == 'arcade'), None)
-                if arcade and arcade.get('version') != '0.5.1':
-                    ok = fail('Arcade registry version must match engine 0.5.1') and ok
+                if arcade and arcade.get('version') != '0.6.0':
+                    ok = fail('Arcade registry version must match engine 0.6.0') and ok
             except Exception:
                 pass
 

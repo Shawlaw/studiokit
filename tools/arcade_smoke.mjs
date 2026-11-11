@@ -274,8 +274,8 @@ async function main() {
     })()`);
     assert(home.cards >= 2, 'home cards=' + home.cards);
     assert(home.href.indexOf('apps/arcade') !== -1, 'arcade card not clickable: ' + JSON.stringify(home));
-    assert(home.version.indexOf('0.5.1') !== -1, 'arcade version missing on home card');
-    record('门户街机厅卡片可点击且版本 0.5.1', true);
+    assert(home.version.indexOf('0.6.0') !== -1, 'arcade version missing on home card');
+    record('门户街机厅卡片可点击且版本 0.6.0', true);
 
     /* ---------- GitHub Pages 项目子路径：shell 返回链接 ---------- */
     await cdp.navigate(base + '/studiokit/apps/arcade/games/star-raid.html');
@@ -293,10 +293,10 @@ async function main() {
       cards: document.querySelectorAll('.hall-card').length,
       runs: window.Arcade && Arcade.RunSave.count()
     })`);
-    assert(hallInfo.version === '0.5.1', 'version is ' + hallInfo.version);
+    assert(hallInfo.version === '0.6.0', 'version is ' + hallInfo.version);
     assert(hallInfo.games === 13, 'game count is ' + hallInfo.games);
     assert(hallInfo.cards === 13, 'card count is ' + hallInfo.cards);
-    record('中心页 13 款游戏与版本 0.5.1', true);
+    record('中心页 13 款游戏与版本 0.6.0', true);
 
     await cdp.evaluate(`(() => { const i = document.querySelector('[data-search]'); i.value = '雪铃'; i.dispatchEvent(new Event('input', { bubbles: true })); })()`);
     await sleep(120);
@@ -479,7 +479,7 @@ async function main() {
       record(`${game.name} 关键交互`, true);
     }
 
-    /* ---------- 星海突击四种弹种 Buff ---------- */
+    /* ---------- 星海突击四种弹种 Buff：可叠加 ---------- */
     await cdp.evaluate(`window.Arcade && Arcade.RunSave.clear('star-raid')`);
     await cdp.navigate(base + '/apps/arcade/games/star-raid.html#test');
     await cdp.click('[data-ov-btn]');
@@ -487,19 +487,28 @@ async function main() {
     for (const type of ['spread', 'laser', 'homing', 'rapid']) {
       const ok = await cdp.evaluate(`window.__arcadeTest && window.__arcadeTest.giveBuff(${JSON.stringify(type)})`);
       assert(ok, 'star-raid test hook missing');
-      await sleep(500);
+      await sleep(120);
       const info = await cdp.evaluate(`window.__arcadeTest.info()`);
-      assert(info.weapon === type, `star-raid buff ${type} not active: ` + JSON.stringify(info));
+      assert(info.buffs[type] > 0, `star-raid buff ${type} not active: ` + JSON.stringify(info));
       const buffHud = await cdp.text('[data-hud-weapon]');
       assert(buffHud && buffHud.length > 0, 'star-raid buff HUD missing');
-      await cdp.screenshot('buff-' + type + '.png');
     }
-    await cdp.evaluate(`window.__arcadeTest.giveBuff('normal')`);
+    const stacked = await cdp.evaluate(`window.__arcadeTest.info()`);
+    assert(
+      stacked.weapon.split('+').length === 4 && stacked.buffs.spread > 0 && stacked.buffs.laser > 0 && stacked.buffs.homing > 0 && stacked.buffs.rapid > 0,
+      'star-raid buffs did not stack: ' + JSON.stringify(stacked)
+    );
+    const stackedHud = await cdp.text('[data-hud-weapon]');
+    assert(['散', '激', '追', '速'].every((name) => stackedHud.includes(name)), 'stacked HUD missing: ' + stackedHud);
+    const volley = await cdp.evaluate(`window.__arcadeTest.fireNow()`);
+    assert(volley.added >= 8 && volley.laser && volley.homing >= 2 && volley.spread >= 3, 'stacked volley incomplete: ' + JSON.stringify(volley));
+    await cdp.screenshot('buff-stacked.png');
+    await cdp.evaluate(`window.__arcadeTest.clearBuffs()`);
     await cdp.evaluate(`window.__arcadeTest.spawnPickup('spread')`);
     await sleep(900);
     const pickupInfo = await cdp.evaluate(`window.__arcadeTest.info()`);
-    assert(pickupInfo.weapon === 'spread', 'star-raid pickup not collected: ' + JSON.stringify(pickupInfo));
-    record('星海突击 散射/激光/追踪/速射 Buff + 实际拾取', true);
+    assert(pickupInfo.buffs.spread > 0, 'star-raid pickup not collected: ' + JSON.stringify(pickupInfo));
+    record('星海突击 四种弹种叠加 + 实际拾取', true);
 
     /* ---------- 星海突击 波次与撞机计分分离 ---------- */
     const waveLabels = [];
@@ -517,6 +526,33 @@ async function main() {
     assert(afterCrash.score === beforeCrash.score, 'body crash awarded score: ' + JSON.stringify({ beforeCrash, afterCrash }));
     assert(afterCrash.lives === beforeCrash.lives - 1, 'body crash life count wrong: ' + JSON.stringify({ beforeCrash, afterCrash }));
     record('星海突击 4 阶段波次/休整/撞机不得分', true);
+
+    /* ---------- 星海突击：关卡 Boss + 全屏移动 ---------- */
+    await cdp.evaluate(`Arcade.RunSave.clear('star-raid')`);
+    await cdp.navigate(base + '/apps/arcade/games/star-raid.html#test');
+    await cdp.click('[data-ov-btn]');
+    await sleep(250);
+    const bossSpawn = await cdp.evaluate(`window.__arcadeTest.spawnBossNow()`);
+    assert(
+      bossSpawn.stage === 1 && bossSpawn.bossActive && bossSpawn.bossHp === bossSpawn.bossMaxHp && bossSpawn.bossHp > 0,
+      'star-raid boss spawn failed: ' + JSON.stringify(bossSpawn)
+    );
+    await cdp.screenshot('star-boss.png');
+    await cdp.evaluate(`window.__arcadeTest.setPlayer(210, 420)`);
+    await cdp.key('ArrowUp', 'down');
+    await sleep(1300);
+    await cdp.key('ArrowUp', 'up');
+    await sleep(100);
+    const movedInfo = await cdp.evaluate(`window.__arcadeTest.info()`);
+    assert(movedInfo.player.y <= 80, 'star-raid player cannot move to top: ' + JSON.stringify(movedInfo.player));
+    const bossCleared = await cdp.evaluate(`window.__arcadeTest.damageBoss(999999)`);
+    assert(
+      bossCleared.stage === 2 && !bossCleared.bossActive && bossCleared.bossHp === 0 && bossCleared.score >= bossSpawn.score + 500,
+      'star-raid boss clear failed: ' + JSON.stringify({ before: bossSpawn, after: bossCleared })
+    );
+    const stageHud = await cdp.text('[data-hud-stage]');
+    assert(stageHud === '2', 'star-raid stage HUD: ' + stageHud);
+    record('星海突击 关卡 Boss + 全屏移动 + 清关进关', true);
 
     /* ---------- 雪铃：同一铃铛只奖励一次 ---------- */
     await cdp.evaluate(`Arcade.RunSave.clear('snowbells')`);
@@ -795,17 +831,69 @@ async function main() {
       assert(before.clawState === 'swing', `round ${round} did not return to swing: ` + JSON.stringify(before));
       await sleep(450);
       const after = await cdp.evaluate(`window.__arcadeTest.info()`);
-      const delta = Math.abs(after.angle - before.angle);
+      /* 采样点可能正好在摆幅端点：角度变化小但角速度会反向，合并判定更稳。 */
+      const motion = Math.abs(after.angle - before.angle) + Math.abs(after.vel - before.vel) * 0.25;
       swingSamples.push({
         round,
         before: { angle: before.angle, vel: before.vel },
         after: { angle: after.angle, vel: after.vel },
-        delta,
+        motion,
       });
       assert(after.clawState === 'swing', `round ${round} state changed: ` + JSON.stringify(after));
-      assert(delta > 0.04, 'claw stopped swinging after aim: ' + JSON.stringify(swingSamples[swingSamples.length - 1]));
+      assert(motion > 0.06, 'claw stopped swinging after aim: ' + JSON.stringify(swingSamples[swingSamples.length - 1]));
     }
     record('黄金矿工 连续指哪打哪后摆钩恢复左右摆动', true);
+
+    /* ---------- 黄金矿工：瞄准只改钩爪朝向，不打断摆动能量 ---------- */
+    await cdp.evaluate(`Arcade.RunSave.clear('gold-miner')`);
+    await cdp.navigate(base + '/apps/arcade/games/gold-miner.html#test');
+    await cdp.click('[data-ov-btn]');
+    await sleep(220);
+    const energySamples = [];
+    for (let round = 0; round < 3; round++) {
+      await cdp.evaluate(`__arcadeTest.clearItems(); __arcadeTest.refillTools(); __arcadeTest.addGold(210, 520);`);
+      await sleep(140);
+      const before = await cdp.evaluate(`__arcadeTest.info()`);
+      const beforeEnergy = 0.5 * before.vel * before.vel + (before.swing / before.length) * (1 - Math.cos(before.angle));
+      const ready = await cdp.evaluate(`__arcadeTest.useToolNow('aim')`);
+      const aimed = await cdp.evaluate(`__arcadeTest.aimAt(210, 520)`);
+      assert(ready && aimed && before.clawState === 'swing', 'aim energy setup failed: ' + JSON.stringify({ before, ready, aimed }));
+      await sleep(2300);
+      const after = await cdp.evaluate(`__arcadeTest.info()`);
+      const afterEnergy = 0.5 * after.vel * after.vel + (after.swing / after.length) * (1 - Math.cos(after.angle));
+      const drift = Math.abs(afterEnergy - beforeEnergy) / Math.max(0.001, beforeEnergy);
+      energySamples.push({
+        round,
+        before: Number(beforeEnergy.toFixed(3)),
+        after: Number(afterEnergy.toFixed(3)),
+        drift: Number(drift.toFixed(3)),
+        clawAngle: Number(after.clawAngle.toFixed(3)),
+      });
+      assert(after.clawState === 'swing', `round ${round} not swinging: ` + JSON.stringify(after));
+      assert(drift < 0.15, 'aim drained swing energy: ' + JSON.stringify(energySamples[energySamples.length - 1]));
+    }
+    record('黄金矿工 连续瞄准后摆幅/能量不衰减', true);
+
+    /* ---------- 黄金矿工：瞄准线按秒计费 ---------- */
+    await cdp.evaluate(`Arcade.RunSave.clear('gold-miner')`);
+    await cdp.navigate(base + '/apps/arcade/games/gold-miner.html#test');
+    await cdp.click('[data-ov-btn]');
+    await sleep(220);
+    const lineOn = await cdp.evaluate(`(() => { __arcadeTest.setMoney(100); const ok = __arcadeTest.useToolNow('line'); return { ok, info: __arcadeTest.info() }; })()`);
+    assert(lineOn.ok && lineOn.info.aimLineActive && lineOn.info.aimLineCost === 2, 'gold aim line did not enable: ' + JSON.stringify(lineOn));
+    await sleep(2200);
+    const lineAfter = await cdp.evaluate(`__arcadeTest.info()`);
+    assert(lineAfter.aimLineActive && lineAfter.money < lineOn.info.money - 2, 'gold aim line did not charge: ' + JSON.stringify({ before: lineOn.info.money, after: lineAfter.money }));
+    await cdp.screenshot('gold-aim-line.png');
+    const lineOff = await cdp.evaluate(`(() => { const ok = __arcadeTest.useToolNow('line'); return { ok, info: __arcadeTest.info() }; })()`);
+    assert(lineOff.ok && !lineOff.info.aimLineActive, 'gold aim line did not toggle off: ' + JSON.stringify(lineOff));
+    const moneyOff = lineOff.info.money;
+    await sleep(900);
+    const lineStopped = await cdp.evaluate(`__arcadeTest.info()`);
+    assert(Math.abs(lineStopped.money - moneyOff) < 0.3, 'gold aim line charged after off: ' + JSON.stringify({ before: moneyOff, after: lineStopped.money }));
+    const poor = await cdp.evaluate(`(() => { __arcadeTest.setMoney(0); const ok = __arcadeTest.useToolNow('line'); return { ok, info: __arcadeTest.info() }; })()`);
+    assert(!poor.ok && !poor.info.aimLineActive, 'gold aim line enabled without funds: ' + JSON.stringify(poor));
+    record('黄金矿工 瞄准线开启/按秒扣费/关闭', true);
 
     /* ---------- 全屏 / 沉浸模式 ---------- */
     await cdp.evaluate(`Arcade.RunSave.clear('gold-miner')`);
@@ -883,7 +971,7 @@ async function main() {
     assert(!fsExit.active && fsExit.h <= fsBefore.h + 2 && fsExit.pref === false, 'immersive exit wrong: ' + JSON.stringify({ before: fsBefore, after: fsExit }));
     record('全屏/沉浸模式 画布放大 + HUD 隐藏 + 偏好记忆 + 退出恢复', true);
 
-    /* 偏好记忆：上次全屏后，下次在开始/继续弹层按下按钮应自动恢复。 */
+    /* 点开始/继续不得被上次的全屏偏好劫持为“自动全屏”。 */
     await cdp.click('[data-fullscreen]');
     await sleep(360);
     await cdp.navigate(base + '/apps/arcade/games/gold-miner.html?autofs=1');
@@ -891,10 +979,8 @@ async function main() {
     await cdp.buttonPointer('[data-ov-btn]', 'pointerdown');
     await sleep(360);
     const autoFs = await cdp.evaluate(`({ active: document.body.classList.contains('arcade-immersive'), pref: Arcade.Prefs.load().immersive })`);
-    assert(autoFs.active && autoFs.pref === true, 'immersive auto-restore failed: ' + JSON.stringify(autoFs));
-    await cdp.click('[data-fullscreen]');
-    await sleep(300);
-    record('全屏偏好记忆：下次点开始自动恢复', true);
+    assert(!autoFs.active && autoFs.pref === true, 'fullscreen hijacked start/resume: ' + JSON.stringify(autoFs));
+    record('全屏不再因点开始/继续自动触发', true);
 
     /* ---------- 俄罗斯方块：7-bag 与 1 行消除 ---------- */
     await cdp.evaluate(`Arcade.RunSave.clear('block-drop')`);
@@ -1193,7 +1279,7 @@ async function main() {
         assert(overflow.secondary && (overflow.secondary.hidden ? overflow.secondary.display === 'none' : overflow.secondary.w >= 44), pagePath + ' secondary button ' + JSON.stringify(overflow.secondary));
         if (overflow.toolbelt) {
           assert(overflow.toolbelt.w <= overflow.canvas.w + 1, pagePath + ' toolbelt width ' + JSON.stringify(overflow.toolbelt));
-          assert(overflow.toolbelt.btns.length === 3 && overflow.toolbelt.btns.every((b) => b.h >= 44 && b.w > 40), pagePath + ' toolbelt buttons ' + JSON.stringify(overflow.toolbelt.btns));
+          assert(overflow.toolbelt.btns.length === 4 && overflow.toolbelt.btns.every((b) => b.h >= 44 && b.w > 40), pagePath + ' toolbelt buttons ' + JSON.stringify(overflow.toolbelt.btns));
         }
       }
     }
@@ -1236,6 +1322,23 @@ async function main() {
         secondary: (() => { const b = document.querySelector('[data-ov-btn2]'); if (!b) return null; const r = b.getBoundingClientRect(); return { hidden: b.hidden, display: getComputedStyle(b).display, w: Math.round(r.width), h: Math.round(r.height) }; })(),
         toolbelt: (() => { const t = document.querySelector('[data-toolbelt]'); if (!t) return null; const r = t.getBoundingClientRect(); return { w: Math.round(r.width), h: Math.round(r.height), btns: [...t.querySelectorAll('.tool-btn')].map((b) => { const br = b.getBoundingClientRect(); return { w: Math.round(br.width), h: Math.round(br.height) }; }) }; })()
       })`);
+      if (small.sw > small.cw + 1) {
+        const offenders = await cdp.evaluate(`(() => {
+          const width = document.documentElement.clientWidth;
+          return [...document.querySelectorAll('body *')].map((el) => {
+            const r = el.getBoundingClientRect();
+            const cs = getComputedStyle(el);
+            return {
+              tag: el.tagName.toLowerCase(),
+              cls: String(el.className || '').slice(0, 90),
+              text: (el.textContent || '').trim().slice(0, 60),
+              left: Math.round(r.left), right: Math.round(r.right), width: Math.round(r.width),
+              sw: el.scrollWidth, cw: el.clientWidth, display: cs.display,
+            };
+          }).filter((x) => x.display !== 'none' && (x.right > width + 1 || x.sw > x.cw + 1 || x.left < -1)).slice(0, 20);
+        })()`);
+        console.log('320 OVERFLOW OFFENDERS', pagePath, JSON.stringify(offenders));
+      }
       assert(small.sw <= small.cw + 1, pagePath + ' 320px horizontal overflow ' + small.sw + '>' + small.cw);
       if (small.canvas) {
         assert(small.canvas.w > 160 && small.canvas.h > 250, pagePath + ' 320px canvas ' + JSON.stringify(small.canvas));
@@ -1245,7 +1348,7 @@ async function main() {
         assert(small.secondary && (small.secondary.hidden ? small.secondary.display === 'none' : small.secondary.w >= 44), pagePath + ' 320px secondary button ' + JSON.stringify(small.secondary));
         if (small.toolbelt) {
           assert(small.toolbelt.w <= small.canvas.w + 1, pagePath + ' 320px toolbelt width ' + JSON.stringify(small.toolbelt));
-          assert(small.toolbelt.btns.length === 3 && small.toolbelt.btns.every((b) => b.h >= 44 && b.w > 40), pagePath + ' 320px toolbelt buttons ' + JSON.stringify(small.toolbelt.btns));
+          assert(small.toolbelt.btns.length === 4 && small.toolbelt.btns.every((b) => b.h >= 44 && b.w > 40), pagePath + ' 320px toolbelt buttons ' + JSON.stringify(small.toolbelt.btns));
         }
       }
     }
@@ -1437,7 +1540,7 @@ async function main() {
       version: window.Arcade && Arcade.version,
       title: document.title
     })`);
-    assert(offlineHall.cards === 13 && offlineHall.version === '0.5.1', 'offline hall failed: ' + JSON.stringify(offlineHall));
+    assert(offlineHall.cards === 13 && offlineHall.version === '0.6.0', 'offline hall failed: ' + JSON.stringify(offlineHall));
     const offlineStatus = await cdp.evaluate(`(async () => {
       try {
         await Arcade.Offline.register();
@@ -1459,7 +1562,7 @@ async function main() {
       overlay: !!document.querySelector('[data-overlay]'),
       version: window.Arcade && window.Arcade.version
     })`);
-    assert(offlineGame.hasArcade && offlineGame.overlay && offlineGame.version === '0.5.1', 'offline game failed: ' + JSON.stringify(offlineGame));
+    assert(offlineGame.hasArcade && offlineGame.overlay && offlineGame.version === '0.6.0', 'offline game failed: ' + JSON.stringify(offlineGame));
     await cdp.navigate(base + '/apps/arcade/games/not-preloaded.html');
     const offlineMissing = await cdp.text('body');
     assert(offlineMissing && offlineMissing.includes('还没有预载'), 'offline missing page: ' + String(offlineMissing).slice(0, 120));

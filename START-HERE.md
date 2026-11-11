@@ -5,6 +5,7 @@
 - **线上站点：** <https://shawlaw.github.io/studiokit/>
 - **仓库：** <https://github.com/Shawlaw/studiokit>
 - **已发布工具：** Badge Studio `2.2.1`、街机厅 Arcade `0.5.1`（13 款竖屏小游戏）
+- **本地待发布：** 街机厅 Arcade `0.6.0`（星海 Boss/弹种叠加/全屏移动、黄金矿工瞄准线与摆幅修复、显式全屏），66/66 CDP 通过，未提交/未推送
 - **规划中：** Rounded Image（尚未实现；等待原始需求/规格，不凭空复刻）
 - **最近发布：** 2026-11-11，Arcade 0.5.1（游玩计时连续性修复）；提交 `6739521`，Actions `43008560646` 成功
 
