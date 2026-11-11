@@ -24,7 +24,9 @@
 | T018 | agent | 街机厅 0.4.0：全屏沉浸游玩 + 黄金矿工摆速与限量道具 | DONE | T017 | 全屏/CSS 降级/偏好记忆；矿工摆速 300 起、道具 2/1/1、指哪打哪/加时/绞盘；57/57 CDP、validate/build 全过；仅本地未发布 |
 | T019 | agent | 街机厅 0.4.0 发布：提交并推送 main，验证 GitHub Pages | DONE | T018 | `49bc1aa` ff 合入 main；Actions `42846474565` 成功；线上 0.4.0/13 卡/全屏与道具可用；57/57 CDP |
 | T020 | agent | 根目录文档同步 Arcade 0.4.0 与当前发布状态 | DONE | T019 | README/CHANGELOG/START-HERE/AGENTS/CONTRIBUTING + docs；链接/validate/build/node 全过；docs-only；Owner 已授权推送 |
-| T021 | agent | 街机厅 0.5.0：游玩统计、分享、PWA 安装与离线预载 | DONE | T020 | playtime:v1 独立 Schema；统计/分享/预载 UI；manifest+SW+图标；62/62 CDP（含断网）；validate/build/node 全过；仅本地未发布 |
+| T021 | agent | 街机厅 0.5.0：游玩统计、分享、PWA 安装与离线预载 | DONE | T020 | playtime:v1 独立 Schema；统计/分享/预载 UI；manifest+SW+图标；62/62 CDP（含断网）；validate/build/node 全过；后续随 T023 发布 |
+| T022 | agent | 黄金矿工连续使用指哪打哪后钩爪停摆修复 | DONE | T021 | 根因：正下方目标摆角/角速度归零；修复：最小角速度 + 收钩/旧档恢复兜底；连续 3 轮回归；63/63 CDP；commit `c8c049d` |
+| T023 | agent | Arcade 0.5.0 发布：推送 main 并验证 GitHub Pages | DONE | T022 | Owner 明确指令“都可以直接提交发布上线”；`b8abe41`+`c8c049d` ff 合入 main；Actions `42974993445` 成功；线上 0.5.0/13 卡/PWA/预载 24-24/矿工连续瞄准通过 |
 
 ## 任务命令
 

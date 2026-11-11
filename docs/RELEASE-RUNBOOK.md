@@ -4,10 +4,11 @@
 
 - 仓库：<https://github.com/Shawlaw/studiokit>
 - 线上：<https://shawlaw.github.io/studiokit/>
-- 最近发布：Arcade `0.4.0`（2026-11-10）
-  - 功能提交 `49bc1aa`，任务归档 `1b9ce14`
-  - Actions `42846474565`、`42848635797` 均 validate + build + deploy 成功
-- 本地待发布：Arcade `0.5.0`（游玩统计 / 分享 / PWA / 离线预载），分支 `feat/arcade-0.5.0-playtime-pwa`，63/63 CDP 通过
+- 最近发布：Arcade `0.5.0`（2026-11-11）
+  - 功能提交 `b8abe41`，摆钩修复 `c8c049d`
+  - Actions `42974993445` validate + build + deploy 成功
+  - 线上验证：13 卡 / PWA 可安装 / 预载 24 项 / 断网回归 / 矿工连续瞄准后恢复摆动
+- 上一个发布：Arcade `0.4.0`（2026-11-10），提交 `49bc1aa`，Actions `42846474565` 成功
 - Pages Source：GitHub Actions（`.github/workflows/pages.yml`）
 
 ## 首次仓库设置（已完成，保留备查）

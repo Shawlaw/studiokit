@@ -3,9 +3,9 @@
 **StudioKit** 是一个面向个人使用的静态网页工具集合。一个 GitHub 仓库承载多个彼此独立的单页 HTML 工具，通过统一首页、轻量共享外壳和 GitHub Pages 发布。
 
 - **线上站点：** <https://shawlaw.github.io/studiokit/>
-- **当前工具：** Badge Studio `2.2.1`；街机厅 Arcade `0.5.0`（13 款竖屏小游戏；本地工作树，待验收发布）
+- **当前工具：** Badge Studio `2.2.1`；街机厅 Arcade `0.5.0`（13 款竖屏小游戏，已发布）
 - **计划中的工具：** Rounded Image（尚未实现，等待原始需求/规格）
-- **最近发布：** 2026-11-10，Arcade 0.4.0（全屏沉浸 + 黄金矿工限量道具）；0.5.0 已通过本地测试，尚未推送
+- **最近发布：** 2026-11-11，Arcade 0.5.0（游玩统计 + 分享 + PWA/离线预载 + 黄金矿工摆钩修复）
 - **运行方式：** 纯静态文件；无后端、无账号、无构建依赖、无第三方 CDN
 
 ## 目录结构
@@ -149,8 +149,8 @@ https://<github-user>.github.io/<repository-name>/
 
 ## 当前状态
 
-- 线上已发布：Badge Studio `2.2.1`、街机厅 Arcade `0.4.0`。
-- 本地待发布：街机厅 Arcade `0.5.0`（游玩统计、分享、PWA 安装、离线预载），已通过 63 项无头浏览器检查。
+- 线上已发布：Badge Studio `2.2.1`、街机厅 Arcade `0.5.0`（游玩统计、分享、PWA 安装、离线预载、黄金矿工摆钩修复）。
+- Arcade 0.5.0 已通过 63 项本地无头浏览器检查；线上验证 13 卡、PWA 可安装、预载 24/24、断网回归与矿工连续瞄准通过。
 - 规划中：Rounded Image（等待原始需求/规格，不凭空复刻）。
 - 任务、证据和未决项见 [`TASKS.md`](TASKS.md)；后续方向见 [`docs/ROADMAP.md`](docs/ROADMAP.md)。
 - Arcade 的玩法、数据键和已知边界见 [`apps/arcade/README.md`](apps/arcade/README.md)。

@@ -2,7 +2,7 @@
 
 StudioKit 门户本身没有独立的 semver；以下按仓库里程碑与工具版本记录。各工具的详细变更见 `apps/<tool>/CHANGELOG.md`。
 
-## Arcade 0.5.0 — 2026-11-11（本地待发布）
+## Arcade 0.5.0 — 2026-11-11
 
 ### Added
 - 游玩统计：中心页累计/今日/近 7 天时长、完成轮次、7 日柱状图、分游戏时长与最近 30 轮明细；只统计真实游玩时间（暂停/切后台/开始界面不计）。
@@ -22,7 +22,12 @@ StudioKit 门户本身没有独立的 semver；以下按仓库里程碑与工具
 ### Verification
 - `validate_site.py` / `build_site.py` / `node --check` 通过。
 - `arcade_smoke.mjs` 63/63：计时与暂停排除、轮次明细、汇总展开、备份兼容、分享兜底、manifest/SW、预载 24 项、停服务器后的中心页/游戏离线打开与未预载提示、矿工连续瞄准三次后恢复摆动。
-- 仅本地分支 `feat/arcade-0.5.0-playtime-pwa`，未推送/未发布；线上仍为 0.4.0。iOS/Android 真机安装、系统分享面板与原生全屏仍 UNVERIFIED。
+- 线上运行时验证：13 卡 / PWA 可安装（installability 0 错误）/ SW scope `/studiokit/apps/arcade/` / 预载 24-24 / 矿工连续三轮瞄准后摆角变化 0.4+ / 零 JS 错误。
+
+### Release
+- 功能提交 `b8abe41`、摆钩修复 `c8c049d` fast-forward 合入 `main`。
+- Actions `42974993445` validate + build + deploy 成功。
+- 线上 <https://shawlaw.github.io/studiokit/apps/arcade/> 验证 0.5.0；iOS/Android 真机安装、系统分享面板与原生全屏仍 UNVERIFIED。
 
 ## Arcade 0.4.0 — 2026-11-10
 

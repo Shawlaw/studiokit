@@ -410,7 +410,46 @@
       ],
       "claimedAt": "2026-11-11T05:15:00+00:00",
       "completedAt": "2026-11-11T06:35:00+00:00",
-      "evidence": "engine 0.5.0: Playtime（开始弹层关闭/页面可见/窗口聚焦才计时，暂停/切后台/失焦/开始界面不计；每 15s 与暂停/结算/隐藏/pagehide 落盘；playtime:v1 Schema v1，30 轮/120 天上限，stats/export/import/reset）、Share（navigator.share + clipboard 兜底 + 取消不报错）、Offline（SW 注册/离线重开回退已有注册/precache/cacheStatus）、createOverlayUi 计时钩子、游戏弹层分享入口；index: 统计汇总/7 日柱状图/分游戏轮次展开、分享/安装/离线预载 UI、安装说明 dialog；新增 manifest.webmanifest、sw.js、4 个 PNG 图标、DESIGN-0.5.0.md；validate_site.py / build_site.py 通过；node --check engine/sw/smoke 通过；arcade_smoke 62/62 通过（含 /studiokit/ 子路径 manifest/SW scope/核心缓存、Page.getManifest/InstallabilityErrors、暂停/失焦排除、轮次明细、备份兼容、分享兜底、预载 24 项、停服务器后中心页/游戏离线打开、未预载提示、离线重开注册回退）；未执行 iOS/Android 真机安装、系统分享面板、原生全屏，UNVERIFIED；仅本地分支 feat/arcade-0.5.0-playtime-pwa，未推送。"
+      "evidence": "engine 0.5.0: Playtime（开始弹层关闭/页面可见/窗口聚焦才计时，暂停/切后台/失焦/开始界面不计；每 15s 与暂停/结算/隐藏/pagehide 落盘；playtime:v1 Schema v1，30 轮/120 天上限，stats/export/import/reset）、Share（navigator.share + clipboard 兜底 + 取消不报错）、Offline（SW 注册/离线重开回退已有注册/precache/cacheStatus）、createOverlayUi 计时钩子、游戏弹层分享入口；index: 统计汇总/7 日柱状图/分游戏轮次展开、分享/安装/离线预载 UI、安装说明 dialog；新增 manifest.webmanifest、sw.js、4 个 PNG 图标、DESIGN-0.5.0.md；validate_site.py / build_site.py 通过；node --check engine/sw/smoke 通过；arcade_smoke 62/62 通过（含 /studiokit/ 子路径 manifest/SW scope/核心缓存、Page.getManifest/InstallabilityErrors、暂停/失焦排除、轮次明细、备份兼容、分享兜底、预载 24 项、停服务器后中心页/游戏离线打开、未预载提示、离线重开注册回退）；未执行 iOS/Android 真机安装、系统分享面板、原生全屏，UNVERIFIED；后续由 T023 合并发布，线上 0.5.0 已验证。"
+    },
+    {
+      "id": "T022",
+      "title": "黄金矿工连续使用指哪打哪后钩爪停摆修复",
+      "kind": "agent",
+      "status": "DONE",
+      "dependsOn": [
+        "T021"
+      ],
+      "ownerAuthorizationRequired": false,
+      "acceptance": [
+        "复现：瞄准正下方物品使 pend.angle=0、pend.vel=0，收钩后停在垂直平衡位不再摆动",
+        "修复：瞄准保留同侧最小角速度；收钩/旧档恢复时接近停摆则补起步能量",
+        "新增连续 3 轮瞄准的确定性 CDP 回归检查，摆角变化 > 0.04",
+        "validate/build/node --check/arcade_smoke 全部通过（63/63）"
+      ],
+      "claimedAt": "2026-11-11T06:25:00+00:00",
+      "completedAt": "2026-11-11T06:38:00+00:00",
+      "evidence": "根因：tryAimAt 把 pend.angle 设为 atan2(target.x-PIVOT.x,...)，正下方目标角度为 0，且 pend.vel=0；cashIn 回到 swing 后钟摆处于稳定平衡点。修复：AIM_RESUME_VEL=0.9 按目标同侧赋角速度；新增 ensureSwing()，收钩与 restore 旧档时若 |angle|<0.12 且 |vel|<0.25 则补 0.16 摆角 + 0.9 角速度；test hook 增加 clearItems/addGold/refillTools 与 angle/vel/length。smoke 新增连续 3 轮瞄准，实测每轮摆角变化约 0.405；63/63 通过；提交 c8c049d。"
+    },
+    {
+      "id": "T023",
+      "title": "Arcade 0.5.0 发布：推送 main 并验证 GitHub Pages",
+      "kind": "agent",
+      "status": "DONE",
+      "dependsOn": [
+        "T022"
+      ],
+      "ownerAuthorizationRequired": true,
+      "ownerAuthorizationVerifiedByAgentFlag": true,
+      "acceptance": [
+        "Owner 2026-11-11 明确指令：都可以直接提交发布上线",
+        "发布前 63/63 CDP、validate_site.py、build_site.py、node --check 全部通过",
+        "main 推送后 Actions validate + build + deploy 成功",
+        "线上 0.5.0 / 13 卡 / PWA 可安装 / 预载 24/24 / 矿工连续瞄准后恢复摆动 / 零 JS 错误"
+      ],
+      "claimedAt": "2026-11-11T06:38:00+00:00",
+      "completedAt": "2026-11-11T06:55:00+00:00",
+      "evidence": "Owner 2026-11-11 明确指令“都可以直接提交发布上线”；发布前 validate_site.py/build_site.py/node --check 通过，arcade_smoke 63/63；b8abe41 + c8c049d fast-forward 合入 main 并 push；Actions 42974993445 validate+build+deploy 全成功；线上 https://shawlaw.github.io/studiokit/apps/arcade/ HTTP 200、0.5.0、13 卡、registry 0.5.0、manifest Content-Type application/manifest+json、SW scope /studiokit/apps/arcade/；无头 Chrome 线上运行时 8/8：13 卡/统计/分享/安装入口、manifest 0 错误、installability 0 错误、SW 注册、预载 24/24、断网提示文案、矿工连续 3 轮瞄准后 state=swing/delta≈0.405、零 JS 错误。iOS/Android 真机安装、系统分享面板与原生全屏仍 UNVERIFIED；发布后文档同步随后推送。 因首轮提交时间落在未来，按 Owner 指令将 b13c200/0d7ad4f 重写为 b8abe41（2026-11-11 12:41:17 +0800）与 c8c049d（13:05:43 +0800），force-with-lease 推送后新 run 42974993445 成功；文档同步随后提交。"
     }
   ]
 }
