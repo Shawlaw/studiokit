@@ -7,13 +7,32 @@
 (() => {
   'use strict';
 
-  const ARCADE_VERSION = '0.4.0';
+  const ARCADE_VERSION = '0.5.0';
   const PROGRESS_KEY = 'studiokit:arcade:progress:v1';
   const PREFS_KEY = 'studiokit:arcade:prefs:v1';
   const RUNS_KEY = 'studiokit:arcade:runs:v1';
+  const PLAYTIME_KEY = 'studiokit:arcade:playtime:v1';
   const PROGRESS_SCHEMA = 1;
   const RUN_SCHEMA = 1;
+  const PLAYTIME_SCHEMA = 1;
   const EXPORT_FORMAT = 'studiokit-arcade-progress';
+
+  /* 引擎脚本自身的目录（apps/arcade/），用于子路径部署、分享链接与 Service Worker。 */
+  const ARCADE_BASE = (() => {
+    try {
+      if (document.currentScript && document.currentScript.src) return new URL('.', document.currentScript.src);
+    } catch (err) {
+      /* 回退到路径推断 */
+    }
+    const path = location.pathname;
+    const marker = path.indexOf('/apps/arcade/');
+    const basePath = marker >= 0 ? path.slice(0, marker + '/apps/arcade/'.length) : path.slice(0, path.lastIndexOf('/') + 1);
+    try {
+      return new URL(basePath, location.origin);
+    } catch (err) {
+      return new URL('./', location.href);
+    }
+  })();
 
   /* ----------------------------------------------------------
    * 游戏清单（街机厅中心页与各游戏页共用的唯一来源）
@@ -379,6 +398,359 @@
   }
 
   /* ----------------------------------------------------------
+   * 游玩时长 / 轮次统计（0.5.0）
+   * - 只累计真正处于游玩态的时间：开始/暂停弹层关闭且页面可见；
+   *   暂停、切后台、停在开始界面都不计时。
+   * - 每款游戏记录总时长、完成轮次、最近 30 轮明细与最近 120 天日汇总。
+   * - 新增独立 key，既有 progress/runs 的 key 与 Schema 不变。
+   * ---------------------------------------------------------- */
+  const PLAYTIME_ROUNDS = 30;
+  const PLAYTIME_DAYS = 120;
+  const PLAYTIME_TICK_MS = 15000;
+
+  function pad2(value) {
+    return String(value).padStart(2, '0');
+  }
+
+  function localDateKey(date) {
+    return `${date.getFullYear()}-${pad2(date.getMonth() + 1)}-${pad2(date.getDate())}`;
+  }
+
+  function dayOffsetKey(offset) {
+    const d = new Date();
+    d.setHours(12, 0, 0, 0);
+    d.setDate(d.getDate() + offset);
+    return localDateKey(d);
+  }
+
+  function detectCurrentGame() {
+    let pathname = location.pathname;
+    try {
+      pathname = decodeURIComponent(pathname);
+    } catch (err) {
+      /* 保留原始路径 */
+    }
+    const marker = pathname.lastIndexOf('/games/');
+    if (marker < 0) return null;
+    const file = pathname.slice(marker + '/games/'.length);
+    return GAMES.find((g) => g.file === file) || null;
+  }
+
+  function sanitizePlayRec(rec) {
+    if (!rec || typeof rec !== 'object') return null;
+    const msValue = Number(rec.ms);
+    const countValue = Number(rec.count);
+    const out = {
+      ms: Number.isFinite(msValue) ? Math.max(0, Math.round(msValue)) : 0,
+      count: Number.isFinite(countValue) ? Math.max(0, Math.floor(countValue)) : 0,
+      lastAt: typeof rec.lastAt === 'string' ? rec.lastAt : null,
+      days: Object.create(null),
+      rounds: [],
+    };
+    if (rec.days && typeof rec.days === 'object') {
+      Object.keys(rec.days).forEach((key) => {
+        if (!/^\d{4}-\d{2}-\d{2}$/.test(key)) return;
+        const value = Number(rec.days[key]);
+        const ms = Number.isFinite(value) ? Math.max(0, Math.round(value)) : 0;
+        if (ms > 0) out.days[key] = ms;
+      });
+    }
+    if (Array.isArray(rec.rounds)) {
+      rec.rounds.slice(0, PLAYTIME_ROUNDS).forEach((round) => {
+        if (!round || typeof round !== 'object' || typeof round.at !== 'string') return;
+        const roundMs = Number(round.ms);
+        const roundScore = Number(round.score);
+        out.rounds.push({
+          at: round.at,
+          ms: Number.isFinite(roundMs) ? Math.max(0, Math.round(roundMs)) : 0,
+          score: Number.isFinite(roundScore) ? roundScore : 0,
+          newHigh: !!round.newHigh,
+        });
+      });
+    }
+    const dayKeys = Object.keys(out.days).sort();
+    if (dayKeys.length > PLAYTIME_DAYS) {
+      dayKeys.slice(0, dayKeys.length - PLAYTIME_DAYS).forEach((key) => delete out.days[key]);
+    }
+    out.count = Math.max(out.count, out.rounds.length);
+    return out;
+  }
+
+  function readPlaytime() {
+    const raw = safeGetJSON(PLAYTIME_KEY);
+    const data = { schemaVersion: PLAYTIME_SCHEMA, games: Object.create(null), updatedAt: null };
+    if (!raw || typeof raw !== 'object' || raw.schemaVersion !== PLAYTIME_SCHEMA || !raw.games || typeof raw.games !== 'object') {
+      return data;
+    }
+    const validIds = new Set(GAMES.map((g) => g.id));
+    Object.keys(raw.games).forEach((id) => {
+      if (!validIds.has(id)) return;
+      const rec = sanitizePlayRec(raw.games[id]);
+      if (rec) data.games[id] = rec;
+    });
+    data.updatedAt = typeof raw.updatedAt === 'string' ? raw.updatedAt : null;
+    return data;
+  }
+
+  const Playtime = (() => {
+    const currentGame = detectCurrentGame();
+    let overlayOpen = true;
+    let visible = !document.hidden;
+    let focused = true;
+    let segStart = 0;
+    let sessionMs = 0;
+    let roundMs = 0;
+    let installed = false;
+    let tickTimer = 0;
+
+    function closeSegment() {
+      if (!segStart) return;
+      const delta = Math.max(0, performance.now() - segStart);
+      segStart = 0;
+      sessionMs += delta;
+      roundMs += delta;
+    }
+
+    function startSegment() {
+      if (!currentGame || overlayOpen || !visible || !focused || segStart) return;
+      segStart = performance.now();
+    }
+
+    function pruneDays(rec) {
+      const keys = Object.keys(rec.days).sort();
+      if (keys.length <= PLAYTIME_DAYS) return;
+      keys.slice(0, keys.length - PLAYTIME_DAYS).forEach((key) => delete rec.days[key]);
+    }
+
+    function blankRec() {
+      return { ms: 0, count: 0, lastAt: null, days: Object.create(null), rounds: [] };
+    }
+
+    function addTime(ms) {
+      if (!currentGame || ms <= 0) return;
+      const data = readPlaytime();
+      const rec = data.games[currentGame.id] || blankRec();
+      const now = new Date();
+      rec.ms += ms;
+      const dayKey = localDateKey(now);
+      rec.days[dayKey] = (Number(rec.days[dayKey]) || 0) + ms;
+      rec.lastAt = now.toISOString();
+      pruneDays(rec);
+      data.games[currentGame.id] = rec;
+      data.updatedAt = now.toISOString();
+      safeSetJSON(PLAYTIME_KEY, data);
+    }
+
+    function flushTime() {
+      closeSegment();
+      const ms = Math.floor(sessionMs);
+      if (ms <= 0) return;
+      sessionMs -= ms;
+      addTime(ms);
+    }
+
+    function setOverlayVisible(value) {
+      const open = !!value;
+      if (open === overlayOpen) return;
+      overlayOpen = open;
+      if (open) flushTime();
+      else startSegment();
+    }
+
+    function recordRound(gameId, score, isNewHigh) {
+      if (!currentGame || gameId !== currentGame.id) return;
+      closeSegment();
+      flushTime();
+      const duration = Math.max(0, Math.round(roundMs));
+      roundMs = 0;
+      const data = readPlaytime();
+      const rec = data.games[currentGame.id] || blankRec();
+      const now = new Date();
+      rec.count += 1;
+      rec.lastAt = now.toISOString();
+      rec.rounds.unshift({ at: rec.lastAt, ms: duration, score: Number(score) || 0, newHigh: !!isNewHigh });
+      if (rec.rounds.length > PLAYTIME_ROUNDS) rec.rounds.length = PLAYTIME_ROUNDS;
+      data.games[currentGame.id] = rec;
+      data.updatedAt = now.toISOString();
+      safeSetJSON(PLAYTIME_KEY, data);
+    }
+
+    function install() {
+      if (installed || !currentGame) return;
+      installed = true;
+      document.addEventListener('visibilitychange', () => {
+        visible = !document.hidden;
+        if (!visible) flushTime();
+        else if (!overlayOpen) startSegment();
+      });
+      /* createLoop 在窗口失焦时也会自动暂停；计时必须跟随同一语义。 */
+      window.addEventListener('blur', () => {
+        focused = false;
+        flushTime();
+      });
+      window.addEventListener('focus', () => {
+        focused = true;
+        if (!overlayOpen && visible) startSegment();
+      });
+      window.addEventListener('pagehide', flushTime);
+      window.addEventListener('beforeunload', flushTime);
+      tickTimer = setInterval(() => {
+        if (!overlayOpen && visible && focused) flushTime();
+      }, PLAYTIME_TICK_MS);
+    }
+
+    function stats() {
+      const data = readPlaytime();
+      const dayKeys = [];
+      for (let i = 6; i >= 0; i--) dayKeys.push(dayOffsetKey(-i));
+      const todayKey = dayKeys[dayKeys.length - 1];
+      let totalMs = 0;
+      let todayMs = 0;
+      let weekMs = 0;
+      let rounds = 0;
+      const games = [];
+      GAMES.forEach((game, order) => {
+        const rec = data.games[game.id];
+        if (!rec) return;
+        let gameToday = 0;
+        let gameWeek = 0;
+        dayKeys.forEach((key) => {
+          const ms = Number(rec.days[key]) || 0;
+          if (key === todayKey) gameToday = ms;
+          gameWeek += ms;
+        });
+        totalMs += rec.ms;
+        todayMs += gameToday;
+        weekMs += gameWeek;
+        rounds += rec.count;
+        games.push({
+          id: game.id,
+          game,
+          order,
+          ms: rec.ms,
+          count: rec.count,
+          lastAt: rec.lastAt,
+          todayMs: gameToday,
+          weekMs: gameWeek,
+          rounds: rec.rounds.slice(),
+        });
+      });
+      games.sort((a, b) => b.ms - a.ms || a.order - b.order);
+      const daily = dayKeys.map((key) => {
+        let ms = 0;
+        GAMES.forEach((game) => {
+          const rec = data.games[game.id];
+          if (rec) ms += Number(rec.days[key]) || 0;
+        });
+        return { key, ms };
+      });
+      return { totalMs, todayMs, weekMs, rounds, games, daily, updatedAt: data.updatedAt };
+    }
+
+    function resetGame(gameId) {
+      const data = readPlaytime();
+      if (!data.games[gameId]) return;
+      delete data.games[gameId];
+      data.updatedAt = new Date().toISOString();
+      safeSetJSON(PLAYTIME_KEY, data);
+    }
+
+    function resetAll() {
+      try {
+        localStorage.removeItem(PLAYTIME_KEY);
+      } catch (err) {
+        /* 忽略存储不可用 */
+      }
+    }
+
+    function exportData() {
+      const data = readPlaytime();
+      const games = Object.create(null);
+      Object.keys(data.games).forEach((id) => {
+        games[id] = data.games[id];
+      });
+      return { schemaVersion: PLAYTIME_SCHEMA, games, updatedAt: data.updatedAt };
+    }
+
+    function importData(payload) {
+      if (!payload || typeof payload !== 'object' || payload.schemaVersion !== PLAYTIME_SCHEMA || !payload.games || typeof payload.games !== 'object') {
+        return { ok: true, count: 0, skipped: true };
+      }
+      const validIds = new Set(GAMES.map((g) => g.id));
+      const games = Object.create(null);
+      let skipped = 0;
+      Object.keys(payload.games).forEach((id) => {
+        if (!validIds.has(id)) {
+          skipped += 1;
+          return;
+        }
+        const rec = sanitizePlayRec(payload.games[id]);
+        if (!rec) {
+          skipped += 1;
+          return;
+        }
+        games[id] = rec;
+      });
+      const ok = safeSetJSON(PLAYTIME_KEY, { schemaVersion: PLAYTIME_SCHEMA, games, updatedAt: new Date().toISOString() });
+      return { ok, count: Object.keys(games).length, skipped };
+    }
+
+    install();
+
+    return {
+      schema: PLAYTIME_SCHEMA,
+      currentGame,
+      setOverlayVisible,
+      recordRound,
+      stats,
+      resetGame,
+      resetAll,
+      exportData,
+      importData,
+      flush: flushTime,
+      get tracking() {
+        return !!currentGame;
+      },
+      get timer() {
+        return tickTimer;
+      },
+    };
+  })();
+
+  function formatDuration(ms) {
+    const raw = Number(ms) || 0;
+    if (raw <= 0) return '0 分钟';
+    const sec = Math.max(0, Math.round(raw / 1000));
+    if (sec < 10) return '不足 10 秒';
+    if (sec < 60) return sec + ' 秒';
+    const min = Math.floor(sec / 60);
+    if (min < 60) return min + ' 分钟';
+    const hours = Math.floor(min / 60);
+    const restMin = min % 60;
+    if (hours < 24) return restMin ? `${hours} 小时 ${restMin} 分` : `${hours} 小时`;
+    const days = Math.floor(hours / 24);
+    const restHours = hours % 24;
+    return restHours ? `${days} 天 ${restHours} 小时` : `${days} 天`;
+  }
+
+  function formatClock(ms) {
+    const sec = Math.max(0, Math.round((Number(ms) || 0) / 1000));
+    const hours = Math.floor(sec / 3600);
+    const mins = Math.floor((sec % 3600) / 60);
+    const rest = sec % 60;
+    return hours ? `${hours}:${pad2(mins)}:${pad2(rest)}` : `${pad2(mins)}:${pad2(rest)}`;
+  }
+
+  function formatRoundAt(iso) {
+    const time = new Date(iso).getTime();
+    if (Number.isNaN(time)) return '';
+    const d = new Date(time);
+    const now = new Date();
+    const prefix = d.getFullYear() === now.getFullYear() ? '' : d.getFullYear() + '-';
+    return `${prefix}${pad2(d.getMonth() + 1)}-${pad2(d.getDate())} ${pad2(d.getHours())}:${pad2(d.getMinutes())}`;
+  }
+
+  /* ----------------------------------------------------------
    * 进度（全部游戏共用一个 key，中心页一次读出即可管理）
    * ---------------------------------------------------------- */
   const Progress = {
@@ -420,6 +792,7 @@
       if (isNewHigh) rec.high = Number(score) || 0;
       data.games[gameId] = rec;
       this.save(data);
+      Playtime.recordRound(gameId, score, isNewHigh);
       return { isNewHigh, high: rec.high, plays: rec.plays };
     },
     resetGame(gameId) {
@@ -427,10 +800,12 @@
       delete data.games[gameId];
       this.save(data);
       RunSave.clear(gameId);
+      Playtime.resetGame(gameId);
     },
     resetAll() {
       this.save({ schemaVersion: PROGRESS_SCHEMA, games: {} });
       RunSave.clearAll();
+      Playtime.resetAll();
     },
     exportText() {
       const payload = {
@@ -440,6 +815,7 @@
         exportedAt: new Date().toISOString(),
         state: this.load().games,
         runs: RunSave.all(),
+        playtime: Playtime.exportData(),
       };
       return JSON.stringify(payload, null, 2);
     },
@@ -466,6 +842,7 @@
       });
       const prevProgress = safeGetRaw(PROGRESS_KEY);
       const prevRuns = safeGetRaw(RUNS_KEY);
+      const prevPlaytime = safeGetRaw(PLAYTIME_KEY);
       const progressSaved = this.save({ schemaVersion: PROGRESS_SCHEMA, games });
       if (!progressSaved) return { ok: false, reason: '浏览器存储已满或不可用' };
       /* 新备份包含局内存档；旧备份没有 runs 字段时保留当前局内存档。 */
@@ -476,12 +853,25 @@
         if (!imported.ok) {
           safeRestoreRaw(PROGRESS_KEY, prevProgress);
           safeRestoreRaw(RUNS_KEY, prevRuns);
+          safeRestoreRaw(PLAYTIME_KEY, prevPlaytime);
           return { ok: false, reason: '浏览器存储已满或不可用' };
         }
         runCount = imported.count;
         runSkipped = imported.skipped;
       }
-      return { ok: true, count: Object.keys(games).length, runCount, runSkipped };
+      /* 0.5.0 备份包含游玩时长；旧备份没有 playtime 字段时保留当前统计。 */
+      let playtimeCount = 0;
+      if (parsed.playtime && typeof parsed.playtime === 'object') {
+        const imported = Playtime.importData(parsed.playtime);
+        if (!imported.ok) {
+          safeRestoreRaw(PROGRESS_KEY, prevProgress);
+          safeRestoreRaw(RUNS_KEY, prevRuns);
+          safeRestoreRaw(PLAYTIME_KEY, prevPlaytime);
+          return { ok: false, reason: '浏览器存储已满或不可用' };
+        }
+        playtimeCount = imported.count;
+      }
+      return { ok: true, count: Object.keys(games).length, runCount, runSkipped, playtimeCount };
     },
   };
 
@@ -1105,7 +1495,7 @@
     return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
   }
 
-  function createOverlayUi(dom) {
+  function createOverlayUiBase(dom) {
     let previousFocus = null;
     if (dom.overlay) {
       dom.overlay.setAttribute('role', 'dialog');
@@ -1159,6 +1549,25 @@
       hide,
       get visible() {
         return !dom.overlay.hidden;
+      },
+    };
+  }
+
+  /* 在共享弹层上挂接游玩计时：弹层关闭=开始计时，弹层打开=暂停计时。 */
+  function createOverlayUi(dom) {
+    const ui = createOverlayUiBase(dom);
+    /* 初始保持“弹层打开”，由 show/hide 显式切换；避免把页面上屏前的初始化间隙计入游玩。 */
+    return {
+      show(opts) {
+        ui.show(opts);
+        Playtime.setOverlayVisible(true);
+      },
+      hide() {
+        ui.hide();
+        Playtime.setOverlayVisible(false);
+      },
+      get visible() {
+        return ui.visible;
       },
     };
   }
@@ -1235,6 +1644,288 @@
       setTimeout(() => el.remove(), 260);
     }, duration || 3800);
   }
+
+  /* ----------------------------------------------------------
+   * 分享（0.5.0）
+   * - 优先系统分享面板（navigator.share），不支持或失败时复制链接。
+   * - 只分享公开 URL 与推荐文案，不读取、不上传最高分或游玩记录。
+   * ---------------------------------------------------------- */
+  function copyText(text) {
+    const fallback = () => {
+      try {
+        const area = document.createElement('textarea');
+        area.value = text;
+        area.setAttribute('readonly', 'readonly');
+        area.style.cssText = 'position:fixed;left:-9999px;top:0;opacity:0;';
+        document.body.appendChild(area);
+        area.select();
+        area.setSelectionRange(0, area.value.length);
+        const ok = document.execCommand('copy');
+        area.remove();
+        return ok;
+      } catch (err) {
+        return false;
+      }
+    };
+    if (navigator.clipboard && typeof navigator.clipboard.writeText === 'function') {
+      try {
+        return navigator.clipboard.writeText(text).then(
+          () => true,
+          () => fallback()
+        );
+      } catch (err) {
+        return Promise.resolve(fallback());
+      }
+    }
+    return Promise.resolve(fallback());
+  }
+
+  const Share = {
+    get canNative() {
+      return typeof navigator.share === 'function';
+    },
+    hubUrl() {
+      return new URL('./', ARCADE_BASE).href;
+    },
+    gameUrl(game) {
+      return new URL('./games/' + game.file, ARCADE_BASE).href;
+    },
+    async open(payload) {
+      if (typeof navigator.share === 'function') {
+        try {
+          await navigator.share(payload);
+          return { ok: true, mode: 'native' };
+        } catch (err) {
+          if (err && (err.name === 'AbortError' || err.name === 'NotAllowedError')) {
+            return { ok: false, aborted: true };
+          }
+        }
+      }
+      try {
+        const copied = await copyText(payload.text + '\n' + payload.url);
+        return { ok: copied, mode: 'copy' };
+      } catch (err) {
+        return { ok: false, mode: 'copy' };
+      }
+    },
+    shareHub() {
+      const url = this.hubUrl();
+      return this.open({
+        title: '街机厅 Arcade · StudioKit',
+        text: '推荐你玩 StudioKit 街机厅：13 款竖屏小游戏，打开即玩，无需登录，还能预载到本地离线玩。',
+        url,
+      });
+    },
+    shareGame(game) {
+      const url = this.gameUrl(game);
+      return this.open({
+        title: `${game.name} · 街机厅 Arcade`,
+        text: `推荐你玩「${game.name}」：${game.tagline}。13 款竖屏小游戏，打开即玩，可离线预载。`,
+        url,
+      });
+    },
+  };
+
+  function installShareInline() {
+    const panel = document.querySelector('.game-page .overlay-panel');
+    const game = detectCurrentGame();
+    if (!panel || !game || panel.querySelector('[data-share-inline]')) return;
+    const button = document.createElement('button');
+    button.type = 'button';
+    button.className = 'ac-fs-inline ac-share-inline';
+    button.dataset.shareInline = '';
+    button.textContent = '↗ 分享给朋友';
+    panel.appendChild(button);
+    button.addEventListener('click', async () => {
+      const result = await Share.shareGame(game);
+      if (result.aborted) return;
+      if (result.ok) {
+        showArcadeToast(result.mode === 'copy' ? '游戏链接已复制，发给朋友即可。' : '已打开系统分享。');
+      } else {
+        showArcadeToast('分享没有成功，请手动复制地址栏链接。');
+      }
+    });
+  }
+
+  /* ----------------------------------------------------------
+   * 离线缓存（0.5.0）
+   * - 任意 Arcade 页面都会注册 apps/arcade/sw.js；中心页负责“预载全部游戏”UI。
+   * - 核心外壳在 SW 安装时缓存；13 款游戏由用户点按钮后逐项缓存并反馈进度。
+   * - file:// 或非安全上下文自动降级为 unsupported，不抛错、不影响游戏。
+   * ---------------------------------------------------------- */
+  const Offline = (() => {
+    const supported =
+      typeof navigator !== 'undefined' &&
+      'serviceWorker' in navigator &&
+      (location.protocol === 'https:' || location.protocol === 'http:');
+    const CORE_PATHS = [
+      './',
+      './index.html',
+      './engine.js',
+      './arcade.css',
+      './manifest.webmanifest',
+      './icons/icon-192.png',
+      './icons/icon-512.png',
+      './icons/maskable-512.png',
+      './icons/apple-touch-icon.png',
+      '../../shared/site.css',
+      '../../shared/site-shell.js',
+    ];
+    let registerPromise = null;
+
+    function absolute(path) {
+      return new URL(path, ARCADE_BASE).href;
+    }
+
+    function coreUrls() {
+      return CORE_PATHS.map(absolute);
+    }
+
+    function gameUrls() {
+      return GAMES.map((game) => absolute('./games/' + game.file));
+    }
+
+    function preloadUrls() {
+      return Array.from(new Set(coreUrls().concat(gameUrls())));
+    }
+
+    function register() {
+      if (!supported) return Promise.reject(new Error('service worker unsupported'));
+      if (registerPromise) return registerPromise;
+      const scriptUrl = absolute('./sw.js');
+      registerPromise = navigator.serviceWorker
+        .register(scriptUrl, { scope: ARCADE_BASE.pathname })
+        .then((registration) => {
+          try {
+            const update = registration.update();
+            if (update && typeof update.catch === 'function') update.catch(() => {});
+          } catch (err) {
+            /* 更新检查失败不影响当前注册 */
+          }
+          return registration;
+        })
+        .catch(async (err) => {
+          registerPromise = null;
+          /* 离线重开时更新检查可能失败；已有注册仍可继续服务当前页面。 */
+          try {
+            const existing = await navigator.serviceWorker.getRegistration(ARCADE_BASE.href);
+            if (existing) return existing;
+          } catch (lookupError) {
+            /* 忽略查询失败，保留原始错误 */
+          }
+          throw err;
+        });
+      return registerPromise;
+    }
+
+    function activeRegistration() {
+      const ready = navigator.serviceWorker.ready;
+      const timeout = new Promise((_, reject) => {
+        setTimeout(() => reject(new Error('arcade service worker not ready')), 12000);
+      });
+      return Promise.race([ready, timeout]).then(() =>
+        navigator.serviceWorker.getRegistration(ARCADE_BASE.href).then((registration) => {
+          if (!registration) throw new Error('arcade service worker not registered');
+          return registration;
+        })
+      );
+    }
+
+    function precache(urls, onEvent) {
+      return activeRegistration().then(
+        (registration) =>
+          new Promise((resolve, reject) => {
+            const target = registration.active || registration.waiting || registration.installing;
+            if (!target) {
+              reject(new Error('service worker is not active'));
+              return;
+            }
+            const channel = new MessageChannel();
+            let settled = false;
+            const timer = setTimeout(() => {
+              if (settled) return;
+              settled = true;
+              channel.port1.close();
+              reject(new Error('precache timeout'));
+            }, 180000);
+            function finish(payload) {
+              if (settled) return;
+              settled = true;
+              clearTimeout(timer);
+              channel.port1.close();
+              resolve(payload);
+            }
+            channel.port1.onmessage = (event) => {
+              const message = event.data || {};
+              if (message.type === 'arcade-precache-progress') {
+                if (onEvent) onEvent(message);
+              } else if (message.type === 'arcade-precache-done') {
+                finish(message);
+              }
+            };
+            target.postMessage({ type: 'arcade-precache', urls }, [channel.port2]);
+          })
+      );
+    }
+
+    async function cacheStatus() {
+      const blank = {
+        supported,
+        cached: 0,
+        total: 0,
+        coreCached: 0,
+        coreTotal: 0,
+        gamesCached: 0,
+        gamesTotal: GAMES.length,
+      };
+      if (!supported || typeof caches === 'undefined') return blank;
+      await activeRegistration();
+      const core = coreUrls();
+      const games = gameUrls();
+      const hits = await Promise.all(
+        core.concat(games).map((url) =>
+          caches
+            .match(url, { ignoreSearch: true })
+            .then((response) => !!response)
+            .catch(() => false)
+        )
+      );
+      const coreCached = hits.slice(0, core.length).filter(Boolean).length;
+      const gamesCached = hits.slice(core.length).filter(Boolean).length;
+      return {
+        supported,
+        cached: coreCached + gamesCached,
+        total: core.length + games.length,
+        coreCached,
+        coreTotal: core.length,
+        gamesCached,
+        gamesTotal: games.length,
+      };
+    }
+
+    function autoRegister() {
+      if (!supported) return;
+      register().catch(() => {
+        /* 离线不可用不应影响在线游玩 */
+      });
+    }
+
+    if (document.readyState === 'loading') {
+      document.addEventListener('DOMContentLoaded', autoRegister, { once: true });
+    } else {
+      autoRegister();
+    }
+
+    return {
+      supported,
+      register,
+      precache,
+      cacheStatus,
+      preloadUrls,
+      coreUrls,
+      gameUrls,
+    };
+  })();
 
   let displayMode = null;
   let displayAutoInstalled = false;
@@ -1426,7 +2117,7 @@
         (e) => {
           if (active) return;
           const target = e.target;
-          if (target && target.closest && target.closest('[data-fullscreen-inline]')) return;
+          if (target && target.closest && target.closest('[data-fullscreen-inline], [data-share-inline]')) return;
           if (Prefs.load().immersive) enter();
         },
         true
@@ -1453,6 +2144,7 @@
     if (displayAutoInstalled) return;
     displayAutoInstalled = true;
     installDisplayMode();
+    installShareInline();
   }
 
   if (document.readyState === 'loading') {
@@ -1468,10 +2160,14 @@
     },
     installDisplayMode,
     showToast: showArcadeToast,
+    baseUrl: ARCADE_BASE.href,
     GAMES,
     DIFFICULTY_NAMES,
     Progress,
     RunSave,
+    Playtime,
+    Share,
+    Offline,
     Prefs,
     Sfx,
     installSfxUnlock,
@@ -1485,6 +2181,9 @@
     bindPause,
     showResumePrompt,
     formatSavedAt,
+    formatDuration,
+    formatClock,
+    formatRoundAt,
     escapeHtml,
     Physics,
     draw,

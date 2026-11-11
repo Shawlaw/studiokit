@@ -14,7 +14,11 @@ REQUIRED = [
     'shared/site.css', 'shared/home.js', 'shared/site-shell.js', 'shared/tool-registry.json',
     'apps/badge-studio/index.html', 'apps/badge-studio/README.md', 'apps/badge-studio/CHANGELOG.md',
     'apps/arcade/index.html', 'apps/arcade/README.md', 'apps/arcade/CHANGELOG.md',
-    'apps/arcade/engine.js', 'apps/arcade/arcade.css',
+    'apps/arcade/DESIGN-0.4.0.md', 'apps/arcade/DESIGN-0.5.0.md',
+    'apps/arcade/engine.js', 'apps/arcade/arcade.css', 'apps/arcade/sw.js',
+    'apps/arcade/manifest.webmanifest',
+    'apps/arcade/icons/icon-192.png', 'apps/arcade/icons/icon-512.png',
+    'apps/arcade/icons/maskable-512.png', 'apps/arcade/icons/apple-touch-icon.png',
     'apps/arcade/games/star-raid.html', 'apps/arcade/games/shadow-leap.html',
     'apps/arcade/games/pendulum-tower.html', 'apps/arcade/games/snowbells.html',
     'apps/arcade/games/block-drop.html', 'apps/arcade/games/road-rush.html',
@@ -139,26 +143,57 @@ def validate(root=ROOT):
     arcade_engine = root / 'apps/arcade/engine.js'
     if arcade_engine.exists():
         source = arcade_engine.read_text(encoding='utf-8')
-        if "const ARCADE_VERSION = '0.4.0'" not in source:
+        if "const ARCADE_VERSION = '0.5.0'" not in source:
             ok = fail('Arcade ARCADE_VERSION drifted; update registry/README/CHANGELOG together') and ok
         if source.count("file: '") < 13:
             ok = fail('Arcade GAMES list should contain at least 13 games') and ok
         if "const RUNS_KEY = 'studiokit:arcade:runs:v1'" not in source:
             ok = fail('Arcade run-save key changed; requires migration review') and ok
+        if "const PLAYTIME_KEY = 'studiokit:arcade:playtime:v1'" not in source:
+            ok = fail('Arcade playtime key changed; requires migration review') and ok
         if 'function installDisplayMode' not in source:
             ok = fail('Arcade fullscreen/immersive helper is missing') and ok
+        for marker in ('const Playtime =', 'function formatDuration', 'const Share =', 'const Offline =', 'arcade-precache'):
+            if marker not in source:
+                ok = fail(f'Arcade 0.5.0 marker missing in engine.js: {marker}') and ok
         gold_miner = root / 'apps/arcade/games/gold-miner.html'
         if gold_miner.exists():
             gold_source = gold_miner.read_text(encoding='utf-8')
             for marker in ('data-toolbelt', 'data-tool="aim"', 'AIM_EXTEND_SPEED', 'winchArmed'):
                 if marker not in gold_source:
                     ok = fail(f'Gold miner 0.4.0 marker missing: {marker}') and ok
+        arcade_index = root / 'apps/arcade/index.html'
+        if arcade_index.exists():
+            index_source = arcade_index.read_text(encoding='utf-8')
+            for marker in ('rel="manifest"', 'data-playtime-section', 'data-offline', 'data-install', 'data-share'):
+                if marker not in index_source:
+                    ok = fail(f'Arcade hub 0.5.0 marker missing: {marker}') and ok
+        arcade_sw = root / 'apps/arcade/sw.js'
+        if arcade_sw.exists():
+            sw_source = arcade_sw.read_text(encoding='utf-8')
+            for marker in ("const VERSION = '0.5.0'", 'arcade-precache', 'skipWaiting', 'clients.claim'):
+                if marker not in sw_source:
+                    ok = fail(f'Arcade service worker marker missing: {marker}') and ok
+        manifest = root / 'apps/arcade/manifest.webmanifest'
+        if manifest.exists():
+            try:
+                data = json.loads(manifest.read_text(encoding='utf-8'))
+                if data.get('start_url') != './' or data.get('scope') != './':
+                    ok = fail('Arcade manifest start_url/scope must stay relative (./)') and ok
+                if data.get('display') != 'standalone':
+                    ok = fail('Arcade manifest display must be standalone') and ok
+                sizes = {icon.get('sizes') for icon in data.get('icons', [])}
+                for size in ('192x192', '512x512'):
+                    if size not in sizes:
+                        ok = fail(f'Arcade manifest missing {size} icon') and ok
+            except Exception as exc:
+                ok = fail(f'cannot parse Arcade manifest: {exc}') and ok
         if registry_path.exists():
             try:
                 registry = json.loads(registry_path.read_text(encoding='utf-8'))
                 arcade = next((t for t in registry.get('tools', []) if t.get('id') == 'arcade'), None)
-                if arcade and arcade.get('version') != '0.4.0':
-                    ok = fail('Arcade registry version must match engine 0.4.0') and ok
+                if arcade and arcade.get('version') != '0.5.0':
+                    ok = fail('Arcade registry version must match engine 0.5.0') and ok
             except Exception:
                 pass
 

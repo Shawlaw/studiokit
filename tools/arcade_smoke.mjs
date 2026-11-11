@@ -23,6 +23,7 @@ const MIME = {
   '.js': 'text/javascript; charset=utf-8',
   '.css': 'text/css; charset=utf-8',
   '.json': 'application/json; charset=utf-8',
+  '.webmanifest': 'application/manifest+json; charset=utf-8',
   '.svg': 'image/svg+xml',
   '.png': 'image/png',
   '.jpg': 'image/jpeg',
@@ -229,7 +230,7 @@ function assert(condition, message) {
 
 async function main() {
   fs.mkdirSync(ARTIFACTS, { recursive: true });
-  const server = await startServer();
+  let server = await startServer();
   const profile = fs.mkdtempSync(path.join(os.tmpdir(), 'studiokit-arcade-'));
   const chrome = spawn(
     CHROME,
@@ -273,8 +274,8 @@ async function main() {
     })()`);
     assert(home.cards >= 2, 'home cards=' + home.cards);
     assert(home.href.indexOf('apps/arcade') !== -1, 'arcade card not clickable: ' + JSON.stringify(home));
-    assert(home.version.indexOf('0.4.0') !== -1, 'arcade version missing on home card');
-    record('门户街机厅卡片可点击且版本 0.4.0', true);
+    assert(home.version.indexOf('0.5.0') !== -1, 'arcade version missing on home card');
+    record('门户街机厅卡片可点击且版本 0.5.0', true);
 
     /* ---------- GitHub Pages 项目子路径：shell 返回链接 ---------- */
     await cdp.navigate(base + '/studiokit/apps/arcade/games/star-raid.html');
@@ -292,10 +293,10 @@ async function main() {
       cards: document.querySelectorAll('.hall-card').length,
       runs: window.Arcade && Arcade.RunSave.count()
     })`);
-    assert(hallInfo.version === '0.4.0', 'version is ' + hallInfo.version);
+    assert(hallInfo.version === '0.5.0', 'version is ' + hallInfo.version);
     assert(hallInfo.games === 13, 'game count is ' + hallInfo.games);
     assert(hallInfo.cards === 13, 'card count is ' + hallInfo.cards);
-    record('中心页 13 款游戏与版本 0.4.0', true);
+    record('中心页 13 款游戏与版本 0.5.0', true);
 
     await cdp.evaluate(`(() => { const i = document.querySelector('[data-search]'); i.value = '雪铃'; i.dispatchEvent(new Event('input', { bubbles: true })); })()`);
     await sleep(120);
@@ -967,6 +968,170 @@ async function main() {
     record('贪吃蛇 自然结束/记录写入/局内档清理', true);
     await cdp.screenshot('gameover-snake.png');
 
+    /* ---------- 游玩时长：游玩计时、暂停不计时、轮次明细 ---------- */
+    await cdp.evaluate(`Arcade.Playtime.resetAll()`);
+    await cdp.navigate(base + '/apps/arcade/games/block-drop.html');
+    await sleep(1200);
+    const idleTime = await cdp.evaluate(`Arcade.Playtime.stats().totalMs`);
+    assert(idleTime === 0, 'start overlay time counted as playtime: ' + idleTime);
+    await cdp.click('[data-ov-btn]');
+    await sleep(1400);
+    await cdp.evaluate(`Arcade.Playtime.flush()`);
+    const timeAfterPlay = await cdp.evaluate(`Arcade.Playtime.stats().totalMs`);
+    await cdp.click('[data-pause]');
+    await sleep(1600);
+    await cdp.evaluate(`Arcade.Playtime.flush()`);
+    const timeAfterPause = await cdp.evaluate(`Arcade.Playtime.stats().totalMs`);
+    await cdp.click('[data-ov-btn]');
+    await sleep(1200);
+    await cdp.evaluate(`Arcade.Playtime.flush()`);
+    const timeAfterResume = await cdp.evaluate(`Arcade.Playtime.stats().totalMs`);
+    assert(timeAfterPlay >= 800, 'playtime not recorded: ' + timeAfterPlay);
+    assert(timeAfterPause - timeAfterPlay <= 260, 'paused time leaked into playtime: ' + JSON.stringify({ timeAfterPlay, timeAfterPause }));
+    assert(timeAfterResume - timeAfterPause >= 700, 'resumed time not recorded: ' + JSON.stringify({ timeAfterPause, timeAfterResume }));
+
+    await cdp.evaluate(`window.dispatchEvent(new Event('blur'))`);
+    await sleep(1300);
+    await cdp.evaluate(`Arcade.Playtime.flush()`);
+    const timeAfterBlur = await cdp.evaluate(`Arcade.Playtime.stats().totalMs`);
+    await cdp.evaluate(`window.dispatchEvent(new Event('focus'))`);
+    await sleep(200);
+    await cdp.click('[data-ov-btn]');
+    await sleep(1100);
+    await cdp.evaluate(`Arcade.Playtime.flush()`);
+    const timeAfterFocus = await cdp.evaluate(`Arcade.Playtime.stats().totalMs`);
+    assert(timeAfterBlur - timeAfterResume <= 260, 'window blur time leaked into playtime: ' + JSON.stringify({ timeAfterResume, timeAfterBlur }));
+    assert(timeAfterFocus - timeAfterBlur >= 650, 'resume after blur not recorded: ' + JSON.stringify({ timeAfterBlur, timeAfterFocus }));
+
+    await cdp.evaluate(`Arcade.Playtime.resetAll()`);
+    await cdp.navigate(base + '/apps/arcade/games/snake-run.html');
+    await cdp.click('[data-ov-btn]');
+    await sleep(9000);
+    const playStats = await cdp.evaluate(`(() => {
+      const s = Arcade.Playtime.stats();
+      return {
+        total: s.totalMs,
+        today: s.todayMs,
+        week: s.weekMs,
+        rounds: s.rounds,
+        games: s.games.map((g) => ({ id: g.id, ms: g.ms, count: g.count, rounds: g.rounds }))
+      };
+    })()`);
+    assert(playStats.games.length === 1 && playStats.games[0].id === 'snake-run', 'playtime game row: ' + JSON.stringify(playStats.games));
+    assert(playStats.games[0].ms >= 5000, 'snake playtime too small: ' + JSON.stringify(playStats.games[0]));
+    assert(playStats.games[0].count >= 1 && playStats.games[0].rounds.length >= 1, 'round not recorded: ' + JSON.stringify(playStats.games[0]));
+    const lastRound = playStats.games[0].rounds[0];
+    assert(lastRound.ms >= 5000 && typeof lastRound.at === 'string' && lastRound.score >= 0, 'round detail invalid: ' + JSON.stringify(lastRound));
+    assert(playStats.today > 0 && playStats.week >= playStats.today && playStats.total >= playStats.games[0].ms, 'playtime summary invalid: ' + JSON.stringify(playStats));
+    record('游玩统计 计时/暂停排除/轮次写入', true);
+
+    /* ---------- 中心页统计汇总、分游戏轮次展开、导出导入兼容 ---------- */
+    await cdp.navigate(base + '/apps/arcade/');
+    const statsUi = await cdp.evaluate(`(() => ({
+      total: document.querySelector('[data-pt-total]').textContent,
+      today: document.querySelector('[data-pt-today]').textContent,
+      rounds: document.querySelector('[data-pt-rounds]').textContent,
+      headerTime: document.querySelector('[data-stat-time]').textContent,
+      bars: document.querySelectorAll('.hall-pt-day').length,
+      rows: document.querySelectorAll('.hall-pt-game').length,
+      exportHasPlaytime: Arcade.Progress.exportText().includes('"playtime"')
+    }))()`);
+    assert(statsUi.total !== '0 分钟' && statsUi.today !== '0 分钟', 'stats summary empty: ' + JSON.stringify(statsUi));
+    assert(statsUi.headerTime === statsUi.total, 'header playtime mismatch: ' + JSON.stringify(statsUi));
+    assert(Number(statsUi.rounds) >= 1 && statsUi.bars === 7 && statsUi.rows >= 1, 'stats layout: ' + JSON.stringify(statsUi));
+    assert(statsUi.exportHasPlaytime, 'export missing playtime');
+    await cdp.evaluate(`(() => {
+      const row = [...document.querySelectorAll('.hall-pt-game')].find((el) => el.textContent.includes('贪吃蛇'));
+      if (row) row.querySelector('.hall-pt-toggle').click();
+    })()`);
+    await sleep(120);
+    const roundUi = await cdp.evaluate(`(() => {
+      const row = [...document.querySelectorAll('.hall-pt-game')].find((el) => el.textContent.includes('贪吃蛇'));
+      if (!row) return null;
+      const toggle = row.querySelector('.hall-pt-toggle');
+      const list = row.querySelector('.hall-pt-rounds');
+      return {
+        expanded: toggle && toggle.getAttribute('aria-expanded'),
+        hidden: list ? list.hidden : true,
+        items: list ? list.querySelectorAll('li:not(.hall-pt-round-more)').length : 0,
+        text: row.textContent
+      };
+    })()`);
+    assert(roundUi && roundUi.expanded === 'true' && roundUi.hidden === false && roundUi.items >= 1, 'round detail not expanded: ' + JSON.stringify(roundUi));
+    assert(roundUi.text.includes('新纪录') || roundUi.items >= 1, 'round row text missing');
+    await cdp.evaluate(`document.querySelector('[data-playtime-section]').scrollIntoView({ block: 'start' })`);
+    await sleep(150);
+    await cdp.screenshot('stats-hub.png');
+    await cdp.evaluate(`window.scrollTo(0, 0)`);
+
+    const exported = await cdp.evaluate(`Arcade.Progress.exportText()`);
+    const backup = JSON.parse(exported);
+    assert(backup.playtime && backup.playtime.schemaVersion === 1, 'playtime backup schema missing');
+    await cdp.evaluate(`Arcade.Playtime.resetAll()`);
+    const clearedStats = await cdp.evaluate(`Arcade.Playtime.stats()`);
+    assert(clearedStats.totalMs === 0 && clearedStats.games.length === 0, 'playtime reset failed');
+    const importResult = await cdp.evaluate(`Arcade.Progress.importText(${JSON.stringify(exported)})`);
+    const restoredStats = await cdp.evaluate(`Arcade.Playtime.stats()`);
+    assert(importResult.ok && importResult.playtimeCount === 1 && restoredStats.totalMs > 0 && restoredStats.games.length === 1, 'playtime import failed: ' + JSON.stringify({ importResult, restoredStats }));
+    const oldBackup = JSON.parse(exported);
+    delete oldBackup.playtime;
+    const oldImport = await cdp.evaluate(`Arcade.Progress.importText(${JSON.stringify(JSON.stringify(oldBackup))})`);
+    const preservedStats = await cdp.evaluate(`Arcade.Playtime.stats()`);
+    assert(oldImport.ok && preservedStats.totalMs === restoredStats.totalMs, 'old backup did not preserve playtime: ' + JSON.stringify({ oldImport, preservedStats }));
+    await cdp.evaluate(`Arcade.Progress.resetGame('snake-run')`);
+    const resetStats = await cdp.evaluate(`Arcade.Playtime.stats()`);
+    assert(resetStats.games.length === 0 && resetStats.totalMs === 0, 'resetGame did not clear playtime: ' + JSON.stringify(resetStats));
+    /* 恢复统计，让后续 320/375 布局测试覆盖“有数据的统计面板”而不是空状态。 */
+    await cdp.evaluate(`Arcade.Progress.importText(${JSON.stringify(exported)})`);
+    record('中心页统计汇总/轮次展开 + 备份导入兼容 + 单游戏清除', true);
+
+    /* ---------- 分享：合集/单游戏深链 + 剪贴板兜底 ---------- */
+    const shareUrls = await cdp.evaluate(`({
+      hub: Arcade.Share.hubUrl(),
+      game: Arcade.Share.gameUrl(Arcade.GAMES.find((g) => g.id === 'gold-miner'))
+    })`);
+    assert(new URL(shareUrls.hub).pathname.endsWith('/apps/arcade/'), 'hub share url: ' + shareUrls.hub);
+    assert(new URL(shareUrls.game).pathname.endsWith('/apps/arcade/games/gold-miner.html'), 'game share url: ' + shareUrls.game);
+    const fallbackShare = await cdp.evaluate(`(async () => {
+      let propertyError = '';
+      try {
+        Object.defineProperty(navigator, 'share', { value: undefined, configurable: true });
+        Object.defineProperty(navigator, 'clipboard', {
+          value: { writeText: (text) => { window.__arcadeCopied = text; return Promise.resolve(); } },
+          configurable: true
+        });
+      } catch (err) {
+        propertyError = String(err);
+      }
+      const result = await Arcade.Share.shareHub();
+      return { result, copied: window.__arcadeCopied || '', propertyError };
+    })()`);
+    assert(!fallbackShare.propertyError, 'share stubs failed: ' + fallbackShare.propertyError);
+    assert(fallbackShare.result.ok && fallbackShare.result.mode === 'copy', 'copy fallback result: ' + JSON.stringify(fallbackShare.result));
+    assert(fallbackShare.copied.includes('/apps/arcade/'), 'copied text missing hub url: ' + fallbackShare.copied);
+
+    await cdp.navigate(base + '/apps/arcade/games/gold-miner.html');
+    const nativeShare = await cdp.evaluate(`(async () => {
+      const payloads = [];
+      try {
+        Object.defineProperty(navigator, 'share', {
+          value: (payload) => { payloads.push(payload); return Promise.resolve(); },
+          configurable: true
+        });
+      } catch (err) {
+        return { error: String(err) };
+      }
+      const button = document.querySelector('[data-share-inline]');
+      if (!button) return { missing: true };
+      button.click();
+      await new Promise((resolve) => setTimeout(resolve, 80));
+      return { payloads, toast: (document.querySelector('.ac-toast') || {}).textContent || '' };
+    })()`);
+    assert(!nativeShare.error && !nativeShare.missing, 'in-game share button: ' + JSON.stringify(nativeShare));
+    assert(nativeShare.payloads.length === 1, 'native share not invoked: ' + JSON.stringify(nativeShare));
+    assert(nativeShare.payloads[0].url.includes('/apps/arcade/games/gold-miner.html') && nativeShare.payloads[0].title.includes('黄金矿工'), 'native share payload: ' + JSON.stringify(nativeShare.payloads[0]));
+    record('分享 合集/单游戏深链 + 复制兜底', true);
+
     /* ---------- 375px 窄屏无横向溢出 ---------- */
     await cdp.send('Emulation.setDeviceMetricsOverride', { width: 375, height: 667, deviceScaleFactor: 1, mobile: true });
     const pages = ['/apps/arcade/', ...games.map((g) => '/apps/arcade/games/' + g.file)];
@@ -1075,6 +1240,9 @@ async function main() {
     assert(hallSmall.clearSize.w >= 44 && hallSmall.clearSize.h >= 44, 'hall clear target ' + JSON.stringify(hallSmall.clearSize));
     record('中心页 320px 搜索 16px + 清除按钮 44px', true);
     await cdp.screenshot('narrow-hall-320.png');
+    await cdp.evaluate(`document.querySelector('[data-playtime-section]').scrollIntoView({ block: 'start' })`);
+    await sleep(150);
+    await cdp.screenshot('stats-hub-320.png');
 
     for (const [width, height] of [[390, 844], [430, 932]]) {
       await cdp.send('Emulation.setDeviceMetricsOverride', { width, height, deviceScaleFactor: 1, mobile: true });
@@ -1140,6 +1308,128 @@ async function main() {
     await cdp.navigate(base + '/apps/arcade/');
     await cdp.screenshot('narrow-hall.png');
 
+    /* ---------- PWA manifest / Service Worker / 预载 / 断网回归 ---------- */
+    await cdp.send('Network.enable');
+
+    /* GitHub Pages 项目子路径：manifest、SW 作用域与核心缓存都必须跟随 /studiokit/ 前缀。 */
+    await cdp.navigate(base + '/studiokit/apps/arcade/');
+    let subpathCore = null;
+    for (let i = 0; i < 40; i++) {
+      subpathCore = await cdp.evaluate(`Arcade.Offline.cacheStatus()`);
+      if (subpathCore.coreCached >= subpathCore.coreTotal) break;
+      await sleep(250);
+    }
+    const subpathManifest = await cdp.evaluate(`({
+      href: (document.querySelector('link[rel="manifest"]') || {}).href || '',
+      base: Arcade.baseUrl
+    })`);
+    const subpathScope = await cdp.evaluate(`navigator.serviceWorker.getRegistration().then((reg) => (reg ? reg.scope : ''))`);
+    assert(subpathManifest.href.includes('/studiokit/apps/arcade/manifest.webmanifest'), 'subpath manifest href: ' + JSON.stringify(subpathManifest));
+    assert(subpathManifest.base.includes('/studiokit/apps/arcade/'), 'subpath engine base: ' + JSON.stringify(subpathManifest));
+    assert(subpathScope.includes('/studiokit/apps/arcade/'), 'subpath sw scope: ' + subpathScope);
+    assert(subpathCore && subpathCore.coreCached >= subpathCore.coreTotal, 'subpath core cache: ' + JSON.stringify(subpathCore));
+
+    await cdp.navigate(base + '/apps/arcade/');
+    const manifestInfo = await cdp.evaluate(`(async () => {
+      const link = document.querySelector('link[rel="manifest"]');
+      if (!link) return { missing: true };
+      const response = await fetch(link.href);
+      const data = await response.json();
+      const iconResponses = await Promise.all((data.icons || []).map((icon) => fetch(new URL(icon.src, link.href))));
+      const registration = await navigator.serviceWorker.getRegistration();
+      return {
+        status: response.status,
+        name: data.name,
+        display: data.display,
+        start: data.start_url,
+        scope: data.scope,
+        icons: data.icons.length,
+        iconStatuses: iconResponses.map((item) => item.status),
+        supported: Arcade.Offline.supported,
+        registration: !!registration
+      };
+    })()`);
+    assert(manifestInfo.status === 200 && manifestInfo.display === 'standalone', 'manifest invalid: ' + JSON.stringify(manifestInfo));
+    assert(manifestInfo.icons >= 3 && manifestInfo.iconStatuses.every((status) => status === 200), 'manifest icons: ' + JSON.stringify(manifestInfo));
+    assert(manifestInfo.supported && manifestInfo.registration, 'service worker not registered: ' + JSON.stringify(manifestInfo));
+    const appManifest = await cdp.send('Page.getAppManifest');
+    assert(!appManifest.errors || appManifest.errors.length === 0, 'manifest parse errors: ' + JSON.stringify(appManifest.errors));
+    let installabilityErrors = null;
+    try {
+      const installability = await cdp.send('Page.getInstallabilityErrors');
+      installabilityErrors = installability.installabilityErrors || [];
+    } catch (err) {
+      installabilityErrors = null;
+    }
+    if (installabilityErrors) {
+      assert(installabilityErrors.length === 0, 'PWA installability errors: ' + JSON.stringify(installabilityErrors));
+    }
+    let coreStatus = null;
+    for (let i = 0; i < 40; i++) {
+      coreStatus = await cdp.evaluate(`Arcade.Offline.cacheStatus()`);
+      if (coreStatus.coreCached >= coreStatus.coreTotal) break;
+      await sleep(250);
+    }
+    assert(coreStatus && coreStatus.coreCached >= coreStatus.coreTotal, 'core cache incomplete: ' + JSON.stringify(coreStatus));
+    const preloadUrls = await cdp.evaluate(`Arcade.Offline.preloadUrls()`);
+    assert(preloadUrls.length === coreStatus.total, 'preload url count: ' + JSON.stringify({ urls: preloadUrls.length, status: coreStatus }));
+    const precacheResult = await cdp.evaluate(`Arcade.Offline.precache(Arcade.Offline.preloadUrls())`);
+    assert(precacheResult && precacheResult.total === preloadUrls.length && precacheResult.failed === 0, 'precache failed: ' + JSON.stringify(precacheResult));
+    const allCached = await cdp.evaluate(`Arcade.Offline.cacheStatus()`);
+    assert(allCached.gamesCached === 13 && allCached.cached === allCached.total, 'precache incomplete: ' + JSON.stringify(allCached));
+    await cdp.navigate(base + '/apps/arcade/');
+    await sleep(450);
+    const offlineUi = await cdp.evaluate(`({
+      text: document.querySelector('[data-offline]').textContent,
+      status: document.querySelector('[data-offline-status]').textContent
+    })`);
+    assert(offlineUi.text.includes('已预载'), 'offline button did not update: ' + JSON.stringify(offlineUi));
+    assert(offlineUi.status.includes('断网'), 'offline status missing: ' + JSON.stringify(offlineUi));
+    if (cdp.errors.length) throw new Error('PWA hub console errors: ' + cdp.errors.join(' | '));
+    record('PWA manifest + 核心缓存 + 13 款游戏预载', true);
+
+    /* 真正停掉静态服务器，确保命中的只能是 Service Worker 缓存。 */
+    server.close();
+    if (typeof server.closeAllConnections === 'function') server.closeAllConnections();
+    await sleep(350);
+    server = null;
+    await cdp.navigate(base + '/apps/arcade/');
+    await sleep(500);
+    const offlineHall = await cdp.evaluate(`({
+      cards: document.querySelectorAll('.hall-card').length,
+      version: window.Arcade && Arcade.version,
+      title: document.title
+    })`);
+    assert(offlineHall.cards === 13 && offlineHall.version === '0.5.0', 'offline hall failed: ' + JSON.stringify(offlineHall));
+    const offlineStatus = await cdp.evaluate(`(async () => {
+      try {
+        await Arcade.Offline.register();
+        const status = await Arcade.Offline.cacheStatus();
+        return { ok: true, status };
+      } catch (err) {
+        return { ok: false, error: String(err) };
+      }
+    })()`);
+    assert(offlineStatus.ok && offlineStatus.status.gamesCached === 13, 'offline cache status failed: ' + JSON.stringify(offlineStatus));
+    const offlineUiText = await cdp.evaluate(`({
+      button: document.querySelector('[data-offline]').textContent,
+      status: document.querySelector('[data-offline-status]').textContent
+    })`);
+    assert(offlineUiText.button.includes('已预载') && offlineUiText.status.includes('断网'), 'offline hub ui: ' + JSON.stringify(offlineUiText));
+    await cdp.navigate(base + '/apps/arcade/games/gold-miner.html');
+    const offlineGame = await cdp.evaluate(`({
+      hasArcade: !!window.Arcade,
+      overlay: !!document.querySelector('[data-overlay]'),
+      version: window.Arcade && window.Arcade.version
+    })`);
+    assert(offlineGame.hasArcade && offlineGame.overlay && offlineGame.version === '0.5.0', 'offline game failed: ' + JSON.stringify(offlineGame));
+    await cdp.navigate(base + '/apps/arcade/games/not-preloaded.html');
+    const offlineMissing = await cdp.text('body');
+    assert(offlineMissing && offlineMissing.includes('还没有预载'), 'offline missing page: ' + String(offlineMissing).slice(0, 120));
+    server = await startServer();
+    record('断网后中心页/已预载游戏可开，未预载页显示提示', true);
+    await cdp.navigate(base + '/apps/arcade/');
+
     /* ---------- 清理测试产生的本地数据 ---------- */
     await cdp.evaluate(`localStorage.clear()`);
   } finally {
@@ -1149,7 +1439,7 @@ async function main() {
     } catch (err) {
       /* ignore */
     }
-    server.close();
+    if (server) server.close();
     await sleep(300);
     try {
       fs.rmSync(profile, { recursive: true, force: true });

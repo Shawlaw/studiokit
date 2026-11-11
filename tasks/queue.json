@@ -390,6 +390,27 @@
       "claimedAt": "2026-11-10T16:05:00+00:00",
       "completedAt": "2026-11-10T16:10:00+00:00",
       "evidence": "README、START-HERE、CHANGELOG、AGENTS、CONTRIBUTING 与 docs/ARCHITECTURE、ROADMAP、BASELINE、RELEASE-RUNBOOK、DECISIONS、ADD-A-TOOL 同步到 Arcade 0.4.0 / 当前线上状态；Badge Studio 上游说明与历史 Prompt 加注，避免误读为当前基线；12 个 Markdown 文件的相对链接全部可解析；validate_site.py、build_site.py、node --check 全部通过。docs-only，未改动站点运行时资源；Owner 已明确授权推送；提交在 docs/root-docs-0.4.0 分支，按发布流程 fast-forward 到 main 并触发 Pages 部署。"
+    },
+    {
+      "id": "T021",
+      "title": "街机厅 0.5.0：游玩统计、分享、PWA 安装与离线预载",
+      "kind": "agent",
+      "status": "DONE",
+      "dependsOn": [
+        "T020"
+      ],
+      "ownerAuthorizationRequired": false,
+      "acceptance": [
+        "中心页统计累计/今日/近7天时长与完成轮次，按游戏展示并可展开最近轮次；暂停/后台/开始界面不计时",
+        "新增 studiokit:arcade:playtime:v1（Schema v1），既有 progress/runs/prefs key 与 Schema 不变；导出/导入兼容旧备份",
+        "中心页与游戏弹层支持分享合集/单游戏深链，系统分享优先、剪贴板兜底，不上传成绩",
+        "manifest/sw/icons 使中心页可安装；显式预载 11 项外壳 + 13 款游戏后断网可开，未预载页给提示",
+        "validate_site.py / build_site.py / node --check 全部通过；arcade_smoke.mjs 62/62 通过",
+        "版本、注册表、README/CHANGELOG/DESIGN、根文档与任务队列同步；仅本地分支，未推送/未发布"
+      ],
+      "claimedAt": "2026-11-11T05:15:00+00:00",
+      "completedAt": "2026-11-11T06:35:00+00:00",
+      "evidence": "engine 0.5.0: Playtime（开始弹层关闭/页面可见/窗口聚焦才计时，暂停/切后台/失焦/开始界面不计；每 15s 与暂停/结算/隐藏/pagehide 落盘；playtime:v1 Schema v1，30 轮/120 天上限，stats/export/import/reset）、Share（navigator.share + clipboard 兜底 + 取消不报错）、Offline（SW 注册/离线重开回退已有注册/precache/cacheStatus）、createOverlayUi 计时钩子、游戏弹层分享入口；index: 统计汇总/7 日柱状图/分游戏轮次展开、分享/安装/离线预载 UI、安装说明 dialog；新增 manifest.webmanifest、sw.js、4 个 PNG 图标、DESIGN-0.5.0.md；validate_site.py / build_site.py 通过；node --check engine/sw/smoke 通过；arcade_smoke 62/62 通过（含 /studiokit/ 子路径 manifest/SW scope/核心缓存、Page.getManifest/InstallabilityErrors、暂停/失焦排除、轮次明细、备份兼容、分享兜底、预载 24 项、停服务器后中心页/游戏离线打开、未预载提示、离线重开注册回退）；未执行 iOS/Android 真机安装、系统分享面板、原生全屏，UNVERIFIED；仅本地分支 feat/arcade-0.5.0-playtime-pwa，未推送。"
     }
   ]
 }

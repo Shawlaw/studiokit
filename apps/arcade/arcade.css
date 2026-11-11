@@ -350,7 +350,9 @@ body.has-subhud .stage-box {
 .hall-stats {
   margin-left: auto;
   display: flex;
-  gap: 14px;
+  flex-wrap: wrap;
+  justify-content: flex-end;
+  gap: 6px 14px;
   color: var(--ac-muted);
   font-size: 13px;
   font-variant-numeric: tabular-nums;
@@ -610,15 +612,232 @@ body.has-subhud .stage-box {
 
 .hall-foot { margin-top: 22px; color: var(--ac-muted); font-size: 12px; line-height: 1.8; }
 
+/* ---------- 分享 / 安装 / 离线预载（0.5.0） ---------- */
+
+.hall-utility {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px;
+  margin: 0 0 16px;
+  padding: 10px 12px;
+  background: linear-gradient(180deg, rgba(79, 195, 247, 0.07), transparent), var(--ac-panel);
+  border: 1px solid var(--ac-line);
+  border-radius: 14px;
+}
+.hall-action { min-height: 38px; }
+.hall-action:disabled { opacity: 0.55; cursor: default; }
+.hall-utility-status {
+  flex: 1 1 260px;
+  min-width: 0;
+  color: var(--ac-muted);
+  font-size: 12px;
+  line-height: 1.5;
+}
+.hall-offline-progress {
+  flex: 1 1 100%;
+  height: 6px;
+  overflow: hidden;
+  border-radius: 999px;
+  background: rgba(11, 16, 32, 0.7);
+  border: 1px solid var(--ac-line);
+}
+.hall-offline-progress[hidden] { display: none; }
+.hall-offline-bar {
+  display: block;
+  width: 0;
+  height: 100%;
+  background: linear-gradient(90deg, #4fc3f7, var(--ac-accent));
+  border-radius: inherit;
+  transition: width 0.2s ease;
+}
+
+/* ---------- 游玩统计（0.5.0） ---------- */
+
+.hall-playtime {
+  margin: 0 0 18px;
+  padding: 16px;
+  background: linear-gradient(180deg, rgba(79, 195, 247, 0.06), transparent), var(--ac-panel);
+  border: 1px solid var(--ac-line);
+  border-radius: 16px;
+}
+.hall-section-head {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 8px;
+  margin-bottom: 12px;
+}
+.hall-section-head h2 { margin: 0; font-size: 15px; color: var(--ac-accent); }
+.hall-section-head p { margin: 3px 0 0; color: var(--ac-muted); font-size: 11px; }
+.hall-section-note {
+  padding: 1px 8px;
+  border: 1px solid var(--ac-line);
+  border-radius: 999px;
+  color: var(--ac-muted);
+  font-size: 10px;
+  white-space: nowrap;
+}
+.hall-pt-summary {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: 8px;
+  margin-bottom: 12px;
+}
+.hall-pt-cell {
+  display: flex;
+  flex-direction: column;
+  gap: 3px;
+  padding: 10px 12px;
+  background: rgba(11, 16, 32, 0.45);
+  border: 1px solid var(--ac-line);
+  border-radius: 12px;
+}
+.hall-pt-cell span { color: var(--ac-muted); font-size: 11px; white-space: nowrap; }
+.hall-pt-cell strong {
+  color: var(--ac-ink);
+  font-size: 15px;
+  font-variant-numeric: tabular-nums;
+  white-space: nowrap;
+}
+.hall-pt-daily {
+  display: grid;
+  grid-template-columns: repeat(7, minmax(0, 1fr));
+  gap: 6px;
+  margin-bottom: 12px;
+  padding: 10px 8px 8px;
+  background: rgba(11, 16, 32, 0.32);
+  border: 1px solid var(--ac-line);
+  border-radius: 12px;
+}
+.hall-pt-day {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 4px;
+  min-width: 0;
+}
+.hall-pt-barwrap {
+  display: flex;
+  align-items: flex-end;
+  width: 100%;
+  height: 34px;
+  border-radius: 5px;
+  background: rgba(255, 255, 255, 0.035);
+  overflow: hidden;
+}
+.hall-pt-bar {
+  width: 100%;
+  min-height: 2px;
+  border-radius: 5px 5px 0 0;
+  background: linear-gradient(180deg, var(--ac-accent), #4fc3f7);
+}
+.hall-pt-bar.is-empty { background: var(--ac-line); }
+.hall-pt-daylabel { color: var(--ac-muted); font-size: 10px; line-height: 1; }
+.hall-pt-dayval {
+  max-width: 100%;
+  overflow: hidden;
+  color: var(--ac-muted);
+  font-size: 9px;
+  line-height: 1.2;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.hall-pt-games { display: flex; flex-direction: column; gap: 8px; }
+.hall-pt-game {
+  padding: 10px 12px;
+  background: rgba(11, 16, 32, 0.42);
+  border: 1px solid var(--ac-line);
+  border-left: 3px solid var(--card-accent, var(--ac-accent));
+  border-radius: 12px;
+}
+.hall-pt-game-head { display: flex; align-items: center; gap: 10px; }
+.hall-pt-icon { font-size: 20px; line-height: 1; }
+.hall-pt-info { display: flex; flex-direction: column; gap: 1px; min-width: 0; flex: 1; }
+.hall-pt-info strong { font-size: 13px; }
+.hall-pt-info span {
+  overflow: hidden;
+  color: var(--ac-muted);
+  font-size: 11px;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.hall-pt-toggle {
+  flex: 0 0 auto;
+  min-height: 34px;
+  padding: 6px 10px;
+  background: transparent;
+  border: 1px solid var(--ac-line);
+  border-radius: 9px;
+  color: var(--ac-muted);
+  font: inherit;
+  font-size: 11px;
+  cursor: pointer;
+}
+.hall-pt-toggle:hover,
+.hall-pt-toggle:focus-visible { color: var(--ac-ink); border-color: var(--card-accent, var(--ac-accent)); }
+.hall-pt-norounds { color: var(--ac-muted); font-size: 10px; white-space: nowrap; }
+.hall-pt-rounds {
+  list-style: none;
+  margin: 10px 0 0;
+  padding: 8px 0 0;
+  border-top: 1px dashed var(--ac-line);
+}
+.hall-pt-rounds[hidden] { display: none; }
+.hall-pt-rounds li {
+  display: grid;
+  grid-template-columns: minmax(86px, 1fr) 58px minmax(64px, auto) auto;
+  gap: 8px;
+  align-items: baseline;
+  padding: 4px 0;
+  color: var(--ac-muted);
+  font-size: 11px;
+  font-variant-numeric: tabular-nums;
+}
+.hall-pt-rounds li + li { border-top: 1px solid rgba(43, 53, 87, 0.5); }
+.hall-pt-round-when { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.hall-pt-round-dur { color: var(--ac-ink); }
+.hall-pt-round-score { color: var(--ac-ink); text-align: right; white-space: nowrap; }
+.hall-pt-round-high { color: var(--ac-accent); font-size: 10px; white-space: nowrap; }
+.hall-pt-round-more { display: block !important; grid-template-columns: none !important; color: var(--ac-muted); font-size: 10px; text-align: center; }
+.hall-pt-empty { margin: 4px 0 0; color: var(--ac-muted); font-size: 12px; line-height: 1.6; }
+.hall-pt-empty[hidden] { display: none; }
+
+/* ---------- 安装说明对话框 ---------- */
+
+.ac-dialog {
+  width: min(420px, calc(100vw - 32px));
+  padding: 0;
+  border: 1px solid var(--ac-line);
+  border-radius: 16px;
+  background: var(--ac-panel);
+  color: var(--ac-ink);
+  box-shadow: 0 24px 70px rgba(0, 0, 0, 0.55);
+}
+.ac-dialog::backdrop { background: rgba(4, 7, 16, 0.72); backdrop-filter: blur(3px); }
+.ac-dialog-inner { padding: 22px; text-align: center; }
+.ac-dialog h2 { margin: 0 0 8px; font-size: 18px; color: var(--ac-accent); }
+.ac-dialog p { margin: 0 0 16px; color: var(--ac-muted); font-size: 13px; line-height: 1.7; white-space: pre-line; }
+.ac-dialog .ac-btn { min-width: 120px; }
+.ac-share-inline { border-style: solid; }
+
 /* ---------- 窄屏与可访问性 ---------- */
 
 @media (max-width: 620px) {
   .hall-page { padding: 18px max(12px, env(safe-area-inset-right)) max(32px, env(safe-area-inset-bottom)) max(12px, env(safe-area-inset-left)); }
-  .hall-stats { margin-left: 0; width: 100%; }
+  .hall-stats { margin-left: 0; width: 100%; justify-content: flex-start; }
   .game-title { font-size: 15px; }
   .game-hud { gap: 6px; font-size: 12px; }
   .hall-search { flex-basis: 100%; }
   .hall-resume-list { grid-template-columns: 1fr; }
+  .hall-pt-summary { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+  .hall-pt-rounds li { grid-template-columns: minmax(72px, 1fr) 48px auto; }
+  .hall-pt-round-high { grid-column: 2 / 4; justify-self: end; }
+  .hall-pt-dayval { display: none; }
+  .hall-utility-status { flex-basis: 100%; }
+  .hall-action { flex: 1 1 auto; min-height: 44px; }
+  .hall-pt-toggle { min-height: 44px; }
 }
 
 /* 全屏按钮加入后，460px 以下的顶栏需要更紧凑：返回链接只留箭头，标题保持完整可读。 */
@@ -635,6 +854,15 @@ body.has-subhud .stage-box {
   .ac-icon-btn { padding: 4px 6px; }
   .overlay-panel { padding: 22px 18px 20px; }
   .overlay-panel .ac-btn-secondary { display: block; margin: 8px auto 0; }
+  .hall-pt-cell { padding: 8px 10px; }
+  .hall-pt-cell strong { font-size: 14px; }
+  .hall-pt-daily { gap: 3px; padding: 8px 4px 6px; }
+  .hall-pt-game-head { flex-wrap: wrap; }
+  .hall-pt-info { flex: 1 1 150px; }
+  .hall-pt-toggle { margin-left: auto; }
+  .hall-pt-norounds { display: none; }
+  .hall-pt-rounds li { font-size: 10px; }
+  .ac-dialog-inner { padding: 18px; }
 }
 
 @media (max-width: 430px) {
@@ -686,6 +914,7 @@ body.has-subhud .stage-box {
 @media (prefers-reduced-motion: reduce) {
   .hall-card { transition: none; }
   .ac-btn, .ac-icon-btn { transition: none; }
+  .hall-offline-bar { transition: none; }
 }
 
 /* ==========================================================

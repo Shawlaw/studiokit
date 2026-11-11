@@ -3,8 +3,14 @@
 <head>
   <meta charset="utf-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
-  <meta name="description" content="街机厅 Arcade：13 款竖屏街机小游戏合集，由简到难，随时暂停，局内进度本地自动保存，适合地铁通勤的碎片时间。" />
+  <meta name="description" content="街机厅 Arcade：13 款竖屏街机小游戏合集，由简到难，随时暂停，局内进度本地自动保存；支持游玩时长/轮次统计、分享、安装到桌面与离线预载。" />
   <meta name="theme-color" content="#0b1020" />
+  <link rel="manifest" href="./manifest.webmanifest" />
+  <link rel="icon" type="image/png" sizes="192x192" href="./icons/icon-192.png" />
+  <link rel="apple-touch-icon" sizes="180x180" href="./icons/apple-touch-icon.png" />
+  <meta name="apple-mobile-web-app-capable" content="yes" />
+  <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
+  <meta name="apple-mobile-web-app-title" content="街机厅" />
   <link rel="stylesheet" href="../../shared/site.css" />
   <link rel="stylesheet" href="./arcade.css" />
   <script src="../../shared/site-shell.js" defer></script>
@@ -17,14 +23,25 @@
     <header class="hall-head">
       <div>
         <h1>🕹 街机厅 Arcade</h1>
-        <p class="hall-sub">竖屏街机小游戏合集 · 由简到难 · 全屏沉浸 · 限量道具 · 随时暂停 · 局内进度本地自动保存 · v<span data-hall-version>0.4.0</span></p>
+        <p class="hall-sub">竖屏街机小游戏合集 · 由简到难 · 全屏沉浸 · 限量道具 · 游玩统计 · 分享 · 离线预载 · v<span data-hall-version>0.5.0</span></p>
       </div>
       <div class="hall-stats">
+        <span>累计时长 <strong data-stat-time>0 分钟</strong></span>
         <span>累计游玩 <strong data-stat-plays>0</strong> 局</span>
         <span>游戏 <strong data-stat-games>0</strong> 款</span>
         <span>待续玩 <strong data-stat-runs>0</strong></span>
       </div>
     </header>
+
+    <div class="hall-utility" aria-label="分享与离线应用">
+      <button type="button" class="ac-btn-ghost hall-action" data-share>↗ 分享给朋友</button>
+      <button type="button" class="ac-btn-ghost hall-action" data-install>📲 安装到桌面</button>
+      <button type="button" class="ac-btn-ghost hall-action" data-offline>⇩ 预载全部游戏</button>
+      <span class="hall-utility-status" data-offline-status role="status">正在检查离线支持…</span>
+      <div class="hall-offline-progress" data-offline-progress hidden role="progressbar" aria-label="离线预载进度" aria-valuemin="0" aria-valuemax="100">
+        <span class="hall-offline-bar" data-offline-bar></span>
+      </div>
+    </div>
 
     <section class="hall-controls" aria-label="搜索与筛选游戏">
       <label class="hall-search">
@@ -53,11 +70,30 @@
       <div class="hall-resume-more" data-resume-more></div>
     </section>
 
+    <section class="hall-playtime" data-playtime-section aria-labelledby="hall-playtime-title">
+      <div class="hall-section-head">
+        <div>
+          <h2 id="hall-playtime-title">游玩统计</h2>
+          <p>只统计实际游玩时间：暂停、切到后台、停在开始界面都不计入。</p>
+        </div>
+        <span class="hall-section-note">本机记录</span>
+      </div>
+      <div class="hall-pt-summary">
+        <div class="hall-pt-cell"><span>累计时长</span><strong data-pt-total>0 分钟</strong></div>
+        <div class="hall-pt-cell"><span>今日</span><strong data-pt-today>0 分钟</strong></div>
+        <div class="hall-pt-cell"><span>近 7 天</span><strong data-pt-week>0 分钟</strong></div>
+        <div class="hall-pt-cell"><span>完成轮次</span><strong data-pt-rounds>0</strong></div>
+      </div>
+      <div class="hall-pt-daily" data-pt-daily role="img" aria-label="近 7 天每日游玩时长"></div>
+      <div class="hall-pt-games" data-pt-games></div>
+      <p class="hall-pt-empty" data-pt-empty hidden>还没有游玩记录。任意开一局，回来这里就能看到累计时长、每款游戏和每一轮的明细。</p>
+    </section>
+
     <section class="hall-grid" data-hall-grid aria-label="游戏列表"></section>
 
     <section class="hall-manage" aria-label="进度管理">
       <h2>进度管理</h2>
-      <p class="hall-manage-note" data-manage-note>最高分、游玩记录与局内进度只保存在此浏览器的 localStorage 中，不会上传任何服务器。</p>
+      <p class="hall-manage-note" data-manage-note>最高分、游玩时长、轮次明细与局内进度只保存在此浏览器的 localStorage 中，不会上传任何服务器。</p>
       <button type="button" class="ac-btn-ghost" data-export>导出备份（JSON）</button>
       <button type="button" class="ac-btn-ghost" data-import-btn>导入备份</button>
       <input type="file" accept=".json,application/json" data-import-file hidden />
@@ -68,8 +104,17 @@
       <p>操作方式：桌面用键盘（方向键 / A D / 空格 / P 暂停），手机直接触摸或拖动；每个游戏右上角都有暂停按钮。</p>
       <p>点右上角 ⛶ 或按 F 进入全屏沉浸；手机浏览器不支持网页全屏时会自动切换为沉浸布局。黄金矿工另有 1 / 2 / 3 三种限量道具。</p>
       <p>每款游戏都从轻松开局，随分数、关卡或时间逐步加速；离开页面会自动暂停并保存局内进度，下次打开可继续。</p>
+      <p>「预载全部游戏」会把中心页、引擎与 13 款游戏写入浏览器缓存；之后即使断网，也能从桌面图标或本页直接进入。首次预载需要联网，游戏更新后重新预载即可。</p>
       <p>物理与绘制由 apps/arcade/engine.js 自研实现，无任何外部依赖或网络请求。</p>
     </footer>
+
+    <dialog class="ac-dialog" data-install-dialog aria-labelledby="install-title">
+      <form method="dialog" class="ac-dialog-inner">
+        <h2 id="install-title">安装到桌面</h2>
+        <p data-install-text></p>
+        <button type="submit" class="ac-btn" value="close">知道了</button>
+      </form>
+    </dialog>
   </main>
   <script>
     (() => {
@@ -82,6 +127,22 @@
         statPlays: document.querySelector('[data-stat-plays]'),
         statGames: document.querySelector('[data-stat-games]'),
         statRuns: document.querySelector('[data-stat-runs]'),
+        statTime: document.querySelector('[data-stat-time]'),
+        share: document.querySelector('[data-share]'),
+        install: document.querySelector('[data-install]'),
+        offline: document.querySelector('[data-offline]'),
+        offlineStatus: document.querySelector('[data-offline-status]'),
+        offlineProgress: document.querySelector('[data-offline-progress]'),
+        offlineBar: document.querySelector('[data-offline-bar]'),
+        installDialog: document.querySelector('[data-install-dialog]'),
+        installText: document.querySelector('[data-install-text]'),
+        ptTotal: document.querySelector('[data-pt-total]'),
+        ptToday: document.querySelector('[data-pt-today]'),
+        ptWeek: document.querySelector('[data-pt-week]'),
+        ptRounds: document.querySelector('[data-pt-rounds]'),
+        ptDaily: document.querySelector('[data-pt-daily]'),
+        ptGames: document.querySelector('[data-pt-games]'),
+        ptEmpty: document.querySelector('[data-pt-empty]'),
         manageNote: document.querySelector('[data-manage-note]'),
         exportBtn: document.querySelector('[data-export]'),
         importBtn: document.querySelector('[data-import-btn]'),
@@ -98,7 +159,7 @@
         resumeMore: document.querySelector('[data-resume-more]'),
       };
 
-      const DEFAULT_NOTE = '最高分、游玩记录与局内进度只保存在此浏览器的 localStorage 中，不会上传任何服务器。';
+      const DEFAULT_NOTE = '最高分、游玩时长、轮次明细与局内进度只保存在此浏览器的 localStorage 中，不会上传任何服务器。';
       const GAME_BY_ID = {};
       A.GAMES.forEach((g, index) => {
         GAME_BY_ID[g.id] = g;
@@ -335,7 +396,7 @@
         clear.setAttribute('aria-label', '清除此游戏记录：' + game.name);
         clear.addEventListener('click', () => {
           const extra = run ? '以及未完成的局内进度' : '';
-          if (window.confirm(`清除「${game.name}」的最高分、游玩记录${extra}？此操作不可恢复。`)) {
+          if (window.confirm(`清除「${game.name}」的最高分、游玩时长、轮次明细${extra}？此操作不可恢复。`)) {
             A.Progress.resetGame(game.id);
             A.Sfx.play('ui');
             note(`已清除「${game.name}」的记录${run ? '与局内进度' : ''}。`);
@@ -346,6 +407,128 @@
         return card;
       }
 
+      const statsExpanded = new Set();
+
+      function scoreText(score) {
+        return (Number(score) || 0).toLocaleString('zh-CN') + ' 分';
+      }
+
+      function renderPlaytime() {
+        const stats = A.Playtime.stats();
+        dom.statTime.textContent = A.formatDuration(stats.totalMs);
+        dom.ptTotal.textContent = A.formatDuration(stats.totalMs);
+        dom.ptToday.textContent = A.formatDuration(stats.todayMs);
+        dom.ptWeek.textContent = A.formatDuration(stats.weekMs);
+        dom.ptRounds.textContent = String(stats.rounds);
+
+        dom.ptDaily.replaceChildren();
+        const max = Math.max(1, ...stats.daily.map((day) => day.ms));
+        const weekLabels = ['日', '一', '二', '三', '四', '五', '六'];
+        stats.daily.forEach((day) => {
+          const cell = document.createElement('div');
+          cell.className = 'hall-pt-day';
+          const barWrap = document.createElement('div');
+          barWrap.className = 'hall-pt-barwrap';
+          const bar = document.createElement('div');
+          bar.className = 'hall-pt-bar' + (day.ms ? '' : ' is-empty');
+          bar.style.height = (day.ms ? Math.max(6, (day.ms / max) * 100) : 3).toFixed(1) + '%';
+          bar.title = `${day.key} · ${A.formatDuration(day.ms)}`;
+          barWrap.appendChild(bar);
+          const date = new Date(day.key + 'T12:00:00');
+          const label = document.createElement('span');
+          label.className = 'hall-pt-daylabel';
+          label.textContent = Number.isNaN(date.getTime()) ? day.key.slice(5) : '周' + weekLabels[date.getDay()];
+          const value = document.createElement('span');
+          value.className = 'hall-pt-dayval';
+          value.textContent = day.ms ? A.formatDuration(day.ms) : '—';
+          cell.append(barWrap, label, value);
+          dom.ptDaily.appendChild(cell);
+        });
+
+        dom.ptGames.replaceChildren();
+        dom.ptEmpty.hidden = stats.games.length > 0;
+        stats.games.forEach((entry) => {
+          const game = entry.game;
+          const row = document.createElement('article');
+          row.className = 'hall-pt-game';
+          row.style.setProperty('--card-accent', game.accent);
+
+          const head = document.createElement('div');
+          head.className = 'hall-pt-game-head';
+          const icon = document.createElement('span');
+          icon.className = 'hall-pt-icon';
+          icon.textContent = game.icon;
+          const info = document.createElement('div');
+          info.className = 'hall-pt-info';
+          const name = document.createElement('strong');
+          name.textContent = game.name;
+          const meta = document.createElement('span');
+          const bits = [A.formatDuration(entry.ms), `${entry.count} 轮`];
+          if (entry.lastAt) {
+            const relative = A.formatSavedAt(entry.lastAt);
+            bits.push(relative === '刚刚' ? '刚刚' : '最近 ' + relative);
+          }
+          meta.textContent = bits.join(' · ');
+          info.append(name, meta);
+          head.append(icon, info);
+
+          const rounds = entry.rounds || [];
+          if (!rounds.length) {
+            const empty = document.createElement('span');
+            empty.className = 'hall-pt-norounds';
+            empty.textContent = '还没有完成的轮次';
+            head.appendChild(empty);
+            row.appendChild(head);
+            dom.ptGames.appendChild(row);
+            return;
+          }
+
+          const expanded = statsExpanded.has(game.id);
+          const toggle = document.createElement('button');
+          toggle.type = 'button';
+          toggle.className = 'hall-pt-toggle';
+          toggle.setAttribute('aria-expanded', String(expanded));
+          toggle.textContent = expanded ? '收起轮次 ▴' : `轮次 ${entry.count} ▾`;
+          const list = document.createElement('ol');
+          list.className = 'hall-pt-rounds';
+          list.hidden = !expanded;
+          rounds.forEach((round) => {
+            const item = document.createElement('li');
+            const when = document.createElement('span');
+            when.className = 'hall-pt-round-when';
+            when.textContent = A.formatRoundAt(round.at);
+            const duration = document.createElement('span');
+            duration.className = 'hall-pt-round-dur';
+            duration.textContent = A.formatClock(round.ms);
+            const score = document.createElement('span');
+            score.className = 'hall-pt-round-score';
+            score.textContent = scoreText(round.score);
+            item.append(when, duration, score);
+            if (round.newHigh) {
+              const high = document.createElement('span');
+              high.className = 'hall-pt-round-high';
+              high.textContent = '★ 新纪录';
+              item.appendChild(high);
+            }
+            list.appendChild(item);
+          });
+          if (entry.count > rounds.length) {
+            const noteItem = document.createElement('li');
+            noteItem.className = 'hall-pt-round-more';
+            noteItem.textContent = `仅显示最近 ${rounds.length} 轮`;
+            list.appendChild(noteItem);
+          }
+          toggle.addEventListener('click', () => {
+            if (statsExpanded.has(game.id)) statsExpanded.delete(game.id);
+            else statsExpanded.add(game.id);
+            renderPlaytime();
+          });
+          head.appendChild(toggle);
+          row.append(head, list);
+          dom.ptGames.appendChild(row);
+        });
+      }
+
       function render() {
         const progress = A.Progress.load();
         let totalPlays = 0;
@@ -354,6 +537,7 @@
 
         renderFilters();
         renderResume();
+        renderPlaytime();
 
         const games = sortedGames();
         dom.grid.replaceChildren();
@@ -421,7 +605,7 @@
         a.click();
         a.remove();
         setTimeout(() => URL.revokeObjectURL(url), 2000);
-        note('已导出备份文件（studiokit-arcade-progress.json），包含最高分与局内进度。');
+        note('已导出备份文件（studiokit-arcade-progress.json），包含最高分、游玩时长、轮次与局内进度。');
       });
 
       /* 导入备份 */
@@ -435,8 +619,9 @@
           const result = A.Progress.importText(String(reader.result));
           if (result.ok) {
             const runText = result.runCount ? `，含 ${result.runCount} 条局内进度` : '';
+            const statText = result.playtimeCount ? `，含 ${result.playtimeCount} 款游戏的时长统计` : '';
             const skipText = result.runSkipped ? `，跳过 ${result.runSkipped} 条无效进度` : '';
-            note(`导入成功，恢复了 ${result.count} 款游戏的记录${runText}${skipText}。`);
+            note(`导入成功，恢复了 ${result.count} 款游戏的记录${statText}${runText}${skipText}。`);
             render();
           } else {
             note(`导入失败：${result.reason}`, true);
@@ -448,10 +633,193 @@
 
       /* 清除全部 */
       dom.resetAll.addEventListener('click', () => {
-        if (window.confirm('清除全部游戏的最高分、游玩记录与未完成的局内进度？此操作不可恢复。')) {
+        if (window.confirm('清除全部游戏的最高分、游玩时长、轮次明细与未完成的局内进度？此操作不可恢复。')) {
           A.Progress.resetAll();
-          note('已清除全部记录与局内进度。');
+          note('已清除全部记录、时长统计与局内进度。');
           render();
+        }
+      });
+
+      /* ---------- 分享 ---------- */
+      dom.share.addEventListener('click', async () => {
+        const result = await A.Share.shareHub();
+        if (result.aborted) return;
+        if (result.ok) {
+          A.showToast(result.mode === 'copy' ? '街机厅链接已复制，发给朋友即可。' : '已打开系统分享。');
+        } else {
+          A.showToast('分享没有成功，请手动复制地址栏链接。');
+        }
+      });
+
+      /* ---------- 安装到桌面（PWA） ---------- */
+      let deferredInstall = null;
+      let installedApp = window.matchMedia('(display-mode: standalone)').matches || window.navigator.standalone === true;
+      function syncInstallButton() {
+        if (installedApp) {
+          dom.install.textContent = '✓ 已作为应用打开';
+          dom.install.disabled = true;
+          return;
+        }
+        dom.install.textContent = deferredInstall ? '📲 安装到桌面' : '📲 安装/添加到桌面';
+      }
+      function isAppleTouch() {
+        const ua = navigator.userAgent || '';
+        if (/iP(hone|ad|od)/.test(ua)) return true;
+        return navigator.platform === 'MacIntel' && (navigator.maxTouchPoints || 0) > 1;
+      }
+      function showInstallHelp() {
+        let text;
+        if (isAppleTouch()) {
+          text = '在 Safari 中点击「分享」按钮，然后选择「添加到主屏幕」。安装后可以像 App 一样从主屏幕打开，并配合离线预载断网游玩。';
+        } else if (/Android/i.test(navigator.userAgent || '')) {
+          text = '在浏览器菜单（⋮）中选择「安装应用」或「添加到主屏幕」。安装后可以像 App 一样从桌面打开。';
+        } else {
+          text = '在浏览器地址栏右侧点击安装图标，或打开浏览器菜单选择「安装 街机厅」/「创建快捷方式」。安装后可以像桌面应用一样打开。';
+        }
+        dom.installText.textContent = text;
+        if (dom.installDialog && typeof dom.installDialog.showModal === 'function') {
+          dom.installDialog.showModal();
+        } else {
+          window.alert(text);
+        }
+      }
+      window.addEventListener('beforeinstallprompt', (event) => {
+        event.preventDefault();
+        deferredInstall = event;
+        syncInstallButton();
+      });
+      window.addEventListener('appinstalled', () => {
+        deferredInstall = null;
+        installedApp = true;
+        syncInstallButton();
+        A.showToast('已安装到桌面，下次可从主屏幕直接打开。');
+      });
+      dom.install.addEventListener('click', async () => {
+        if (deferredInstall) {
+          const prompt = deferredInstall;
+          deferredInstall = null;
+          try {
+            await prompt.prompt();
+            const choice = await prompt.userChoice;
+            if (choice && choice.outcome === 'accepted') {
+              A.showToast('安装请求已提交，请在系统提示中确认。');
+            } else {
+              A.showToast('已取消安装，可随时再点「安装/添加到桌面」。');
+            }
+          } catch (err) {
+            showInstallHelp();
+          }
+          syncInstallButton();
+          return;
+        }
+        showInstallHelp();
+      });
+      syncInstallButton();
+
+      /* ---------- 离线预载 ---------- */
+      const offlineState = { busy: false };
+      function setOfflineBar(done, total) {
+        const percent = total > 0 ? Math.min(100, Math.round((done / total) * 100)) : 0;
+        dom.offlineProgress.hidden = false;
+        dom.offlineBar.style.width = percent + '%';
+        dom.offlineProgress.setAttribute('aria-valuenow', String(percent));
+      }
+      function hideOfflineBar() {
+        dom.offlineProgress.hidden = true;
+        dom.offlineBar.style.width = '0%';
+        dom.offlineProgress.removeAttribute('aria-valuenow');
+      }
+      function renderOfflineStatus(status, suffix) {
+        const tail = suffix ? ' · ' + suffix : '';
+        if (!status.supported) {
+          dom.offline.disabled = true;
+          dom.offline.textContent = '⇩ 离线预载不可用';
+          dom.offlineStatus.textContent = '当前环境不支持 Service Worker（需要 HTTPS 或 localhost），仍可正常在线游玩。';
+          return;
+        }
+        dom.offline.disabled = false;
+        if (status.gamesCached >= status.gamesTotal && status.gamesTotal > 0) {
+          dom.offline.textContent = '✓ 已预载，可离线游玩';
+          dom.offlineStatus.textContent = `中心页与 ${status.gamesTotal} 款游戏已缓存；断网后仍可从桌面图标或本页进入。${tail}`;
+        } else if (status.gamesCached > 0) {
+          dom.offline.textContent = `⇩ 继续预载（${status.gamesCached}/${status.gamesTotal}）`;
+          dom.offlineStatus.textContent = `已缓存 ${status.gamesCached}/${status.gamesTotal} 款游戏；未缓存的游戏断网时无法打开。${tail}`;
+        } else if (status.coreCached >= status.coreTotal && status.coreTotal > 0) {
+          dom.offline.textContent = '⇩ 预载全部游戏';
+          dom.offlineStatus.textContent = '中心页外壳已离线可用；预载 13 款游戏后断网也能直接开玩。' + tail;
+        } else {
+          dom.offline.textContent = '⇩ 预载全部游戏';
+          dom.offlineStatus.textContent = '正在准备离线缓存…' + tail;
+        }
+      }
+      async function refreshOfflineStatus() {
+        if (offlineState.busy) return;
+        if (!A.Offline.supported) {
+          renderOfflineStatus({ supported: false });
+          return;
+        }
+        try {
+          await A.Offline.register();
+          const status = await A.Offline.cacheStatus();
+          let suffix = '';
+          if (navigator.storage && typeof navigator.storage.estimate === 'function') {
+            try {
+              const estimate = await navigator.storage.estimate();
+              const mb = (Number(estimate.usage) || 0) / (1024 * 1024);
+              if (mb >= 0.1) suffix = `站点缓存约 ${mb.toFixed(mb >= 10 ? 0 : 1)} MB`;
+            } catch (err) {
+              /* 忽略容量估算失败 */
+            }
+          }
+          renderOfflineStatus(status, suffix);
+        } catch (err) {
+          dom.offline.disabled = true;
+          dom.offline.textContent = '⇩ 离线预载不可用';
+          dom.offlineStatus.textContent = '离线缓存注册失败，可刷新页面后重试；在线游玩不受影响。';
+        }
+      }
+      dom.offline.addEventListener('click', async () => {
+        if (offlineState.busy) return;
+        if (!A.Offline.supported) {
+          A.showToast('当前环境不支持离线缓存，请用 HTTPS 或 localhost 打开。');
+          return;
+        }
+        offlineState.busy = true;
+        dom.offline.disabled = true;
+        dom.offline.textContent = '⇩ 正在预载…';
+        dom.offlineStatus.textContent = '正在把中心页、引擎与 13 款游戏写入浏览器缓存，请保持联网…';
+        setOfflineBar(0, 1);
+        try {
+          const urls = A.Offline.preloadUrls();
+          const result = await A.Offline.precache(urls, (progress) => {
+            setOfflineBar(progress.done, progress.total);
+            dom.offline.textContent = `⇩ 预载中 ${progress.done}/${progress.total}`;
+          });
+          const status = await A.Offline.cacheStatus();
+          if (result.failed > 0) {
+            renderOfflineStatus(status);
+            A.showToast(`预载完成，但有 ${result.failed} 项失败；联网后可再点一次补全。`);
+          } else {
+            renderOfflineStatus(status);
+            A.showToast(`已预载 ${result.total} 项资源；现在断网也能游玩。`);
+          }
+        } catch (err) {
+          dom.offline.textContent = '⇩ 预载失败，重试';
+          dom.offlineStatus.textContent = '预载没有完成；请确认联网与浏览器允许 Service Worker 后重试。';
+          A.showToast('预载失败，请检查网络后重试。');
+        } finally {
+          offlineState.busy = false;
+          dom.offline.disabled = !A.Offline.supported;
+          hideOfflineBar();
+        }
+      });
+      refreshOfflineStatus();
+
+      window.addEventListener('pageshow', () => render());
+      document.addEventListener('visibilitychange', () => {
+        if (!document.hidden) {
+          render();
+          refreshOfflineStatus();
         }
       });
 

@@ -7,6 +7,7 @@
 - 最近发布：Arcade `0.4.0`（2026-11-10）
   - 功能提交 `49bc1aa`，任务归档 `1b9ce14`
   - Actions `42846474565`、`42848635797` 均 validate + build + deploy 成功
+- 本地待发布：Arcade `0.5.0`（游玩统计 / 分享 / PWA / 离线预载），分支 `feat/arcade-0.5.0-playtime-pwa`，62/62 CDP 通过
 - Pages Source：GitHub Actions（`.github/workflows/pages.yml`）
 
 ## 首次仓库设置（已完成，保留备查）
@@ -32,12 +33,13 @@ py -3 tools/build_site.py
 node --check shared/home.js
 node --check shared/site-shell.js
 node --check apps/arcade/engine.js
-node tools/arcade_smoke.mjs   # 需要本机 Chrome；当前 57 项
+node --check apps/arcade/sw.js
+node tools/arcade_smoke.mjs   # 需要本机 Chrome；当前 62 项，含 PWA/断网回归
 git diff --check
 git status --short
 ```
 
-涉及 Arcade 的发布还应查看 `apps/arcade/DESIGN-0.4.0.md` 和 `apps/arcade/README.md` 的已知边界。
+涉及 Arcade 的发布还应查看 `apps/arcade/DESIGN-0.4.0.md`、`apps/arcade/DESIGN-0.5.0.md` 和 `apps/arcade/README.md` 的已知边界。PWA/离线检查必须在 HTTPS 或 `localhost` 下进行；`file://` 与明文局域网 HTTP 不注册 Service Worker。
 
 如果本机/团队启用了 `commit-time-policy`，推送前运行对应检查器；本文不复制其时间窗口细节，避免规则漂移。
 
@@ -63,10 +65,14 @@ OWNER_AUTHORIZATION: PUBLISH_TO_MAIN
 1. 检查 GitHub Actions 中 `Validate and build` 与 `Deploy StudioKit` 均为成功。
 2. 从部署日志获取 Pages URL，不要猜 URL。
 3. 访问门户首页，确认工具卡片加载、Badge Studio 与街机厅入口可点击。
-4. 打开 Arcade 中心页，确认版本与工具注册表一致（当前 0.4.0 / 13 款）。
+4. 打开 Arcade 中心页，确认版本与工具注册表一致（0.5.0 / 13 款），并检查：
+   - 「游玩统计」有数据或空状态文案；开一局后返回中心页，累计时长/轮次增加，展开能看到轮次明细。
+   - 「分享给朋友」能调起系统分享或复制链接；游戏开始/暂停弹层内「分享给朋友」分享当前游戏深链。
+   - 「安装到桌面」按平台给出安装提示（Chrome/Edge 可触发原生安装，iOS 给出添加到主屏幕说明）。
+   - 「预载全部游戏」显示进度；完成后断网刷新中心页仍能打开，已预载游戏可进入，未预载页显示离线提示。
 5. 打开 Badge Studio，确认共享导航、预览和导出正常。
 6. 打开黄金矿工，确认 `⛶` 全屏按钮、道具条和暂停/继续可用；手机上至少检查 375px 宽度下的道具条和全屏降级。
-7. 检查浏览器控制台无资源 404 / JavaScript 错误（`favicon.ico` 自动请求的 404 可忽略）。
+7. 检查浏览器控制台无资源 404 / JavaScript 错误（`favicon.ico` 自动请求的 404 可忽略）。Service Worker 缓存旧版本时，使用 DevTools → Application → Service Workers 注销并清除 Storage 后复测。
 8. 记录 commit SHA、Actions run URL、最终 Pages URL 和验证结果。
 
 如果 Pages 未启用或认证缺失，明确报告阻塞点，不要宣称已发布。

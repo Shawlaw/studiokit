@@ -4,7 +4,8 @@
 
 - **线上站点：** <https://shawlaw.github.io/studiokit/>
 - **仓库：** <https://github.com/Shawlaw/studiokit>
-- **已发布工具：** Badge Studio `2.2.1`、街机厅 Arcade `0.4.0`（13 款竖屏小游戏）
+- **线上已发布：** Badge Studio `2.2.1`、街机厅 Arcade `0.4.0`（13 款竖屏小游戏）
+- **本地待发布：** 街机厅 Arcade `0.5.0`（游玩统计、分享、PWA 安装、离线预载），已通过 62 项无头浏览器检查
 - **规划中：** Rounded Image（尚未实现；等待原始需求/规格，不凭空复刻）
 - **最近发布：** 2026-11-10，Arcade 0.4.0；提交 `49bc1aa`，Actions `42846474565` 成功
 
@@ -23,6 +24,7 @@
 4. 发布后要求 Agent 返回 commit SHA、Actions run URL、Pages URL，并实际验证门户、Badge Studio 和街机厅。
 5. 不要把 Token、Cookie 或个人数据放进仓库或 Prompt 文件。
 6. Arcade 的 iOS/Android 真机试玩和原生全屏仍未验证；涉及移动端体验的改动请要求 Agent 说明降级路径。
+7. PWA 安装与离线预载只在 HTTPS 或 `localhost` 生效；`file://` 或明文 HTTP 局域网地址只能在线游玩。iOS 安装靠「分享 → 添加到主屏幕」，没有自动安装提示。
 
 ## 给 Agent
 
