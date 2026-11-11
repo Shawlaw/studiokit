@@ -779,6 +779,34 @@ async function main() {
     );
     record('黄金矿工 道具状态暂停保存 / 刷新继续恢复', true);
 
+    /* ---------- 黄金矿工：连续“指哪打哪”后摆钩必须恢复 ---------- */
+    await cdp.evaluate(`Arcade.RunSave.clear('gold-miner')`);
+    await cdp.navigate(base + '/apps/arcade/games/gold-miner.html#test');
+    await cdp.click('[data-ov-btn]');
+    await sleep(180);
+    const swingSamples = [];
+    for (let round = 0; round < 3; round++) {
+      await cdp.evaluate(`window.__arcadeTest.clearItems(); window.__arcadeTest.refillTools(); window.__arcadeTest.addGold(210, 520);`);
+      const toolReady = await cdp.evaluate(`window.__arcadeTest.useToolNow('aim')`);
+      const aimed = await cdp.evaluate(`window.__arcadeTest.aimAt(210, 520)`);
+      assert(toolReady && aimed, 'aim tool failed, round ' + round);
+      await sleep(2300);
+      const before = await cdp.evaluate(`window.__arcadeTest.info()`);
+      assert(before.clawState === 'swing', `round ${round} did not return to swing: ` + JSON.stringify(before));
+      await sleep(450);
+      const after = await cdp.evaluate(`window.__arcadeTest.info()`);
+      const delta = Math.abs(after.angle - before.angle);
+      swingSamples.push({
+        round,
+        before: { angle: before.angle, vel: before.vel },
+        after: { angle: after.angle, vel: after.vel },
+        delta,
+      });
+      assert(after.clawState === 'swing', `round ${round} state changed: ` + JSON.stringify(after));
+      assert(delta > 0.04, 'claw stopped swinging after aim: ' + JSON.stringify(swingSamples[swingSamples.length - 1]));
+    }
+    record('黄金矿工 连续指哪打哪后摆钩恢复左右摆动', true);
+
     /* ---------- 全屏 / 沉浸模式 ---------- */
     await cdp.evaluate(`Arcade.RunSave.clear('gold-miner')`);
     await cdp.send('Emulation.setDeviceMetricsOverride', { width: 375, height: 667, deviceScaleFactor: 1, mobile: true });

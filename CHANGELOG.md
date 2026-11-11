@@ -16,9 +16,12 @@ StudioKit 门户本身没有独立的 semver；以下按仓库里程碑与工具
 - `ARCADE_VERSION`、注册表、README/CHANGELOG 同步到 0.5.0；既有 progress/runs/prefs key 与 Schema 不变。
 - 单游戏清除/全部清除同步清理游玩统计；导入失败回滚 progress/runs/playtime 三个 key。
 
+### Fixed
+- 黄金矿工：连续使用「指哪打哪」锁定正下方物品后，摆角被设为 0、角速度清零，收钩回到摆动状态会停在垂直平衡位不再左右摆动。现在瞄准时保留同侧最小角速度，收钩和旧档恢复时也会补起步能量。
+
 ### Verification
 - `validate_site.py` / `build_site.py` / `node --check` 通过。
-- `arcade_smoke.mjs` 62/62：计时与暂停排除、轮次明细、汇总展开、备份兼容、分享兜底、manifest/SW、预载 24 项、停服务器后的中心页/游戏离线打开与未预载提示。
+- `arcade_smoke.mjs` 63/63：计时与暂停排除、轮次明细、汇总展开、备份兼容、分享兜底、manifest/SW、预载 24 项、停服务器后的中心页/游戏离线打开与未预载提示、矿工连续瞄准三次后恢复摆动。
 - 仅本地分支 `feat/arcade-0.5.0-playtime-pwa`，未推送/未发布；线上仍为 0.4.0。iOS/Android 真机安装、系统分享面板与原生全屏仍 UNVERIFIED。
 
 ## Arcade 0.4.0 — 2026-11-10

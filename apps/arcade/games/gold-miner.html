@@ -79,6 +79,7 @@
       const SWING_BASE = 300;
       const AIM_EXTEND_SPEED = 900;
       const AIM_TAP_RADIUS = 56;
+      const AIM_RESUME_VEL = 0.9;
       const WINCH_SPEED = 980;
       const TIME_BONUS = 10;
       const TOOL_CAPS = { aim: 3, time: 2, winch: 2 };
@@ -333,7 +334,8 @@
         aimArmed = false;
         aimTarget = target;
         pend.angle = Math.atan2(target.x - PIVOT.x, target.y - PIVOT.y);
-        pend.vel = 0;
+        /* 目标在正下方时摆角为 0；必须给一个同侧最小角速度，否则收钩后会停在垂直平衡位。 */
+        pend.vel = (target.x >= PIVOT.x ? 1 : -1) * AIM_RESUME_VEL;
         pend.length = MIN_LEN;
         clawState = 'extend';
         clawOpen = 1;
@@ -637,6 +639,16 @@
         syncCashout();
       }
 
+      /* 回到摆动状态时兜底：接近垂直且几乎无角速度时补一点起步能量。 */
+      function ensureSwing() {
+        clawState = 'swing';
+        if (Math.abs(pend.angle) < 0.12 && Math.abs(pend.vel) < 0.25) {
+          const dir = pend.angle < 0 ? -1 : 1;
+          pend.angle = 0.16 * dir;
+          pend.vel = AIM_RESUME_VEL * dir;
+        }
+      }
+
       function cashIn() {
         if (holding) {
           const val = holding.value;
@@ -659,7 +671,7 @@
           items = items.filter((o) => o !== holding);
           holding = null;
         }
-        clawState = 'swing';
+        ensureSwing();
         syncHud();
       }
 
@@ -732,6 +744,8 @@
             tools.winch = clamp(Math.floor(Number(data.tools.winch) || 0), 0, TOOL_CAPS.winch);
           }
           winchArmed = !!data.winchArmed;
+          /* 旧档可能保存了摆角 0 / 角速度 0 的“停摆”状态；恢复时补起步能量。 */
+          if (clawState === 'swing') ensureSwing();
           aimArmed = false;
           aimTarget = null;
           syncTools();
@@ -1151,6 +1165,9 @@
               holding: holding ? holding.type : null,
               cashoutHidden: dom.cashout.hidden,
               clawState,
+              angle: pend.angle,
+              vel: pend.vel,
+              length: pend.length,
               tools: { aim: tools.aim, time: tools.time, winch: tools.winch },
               winchArmed,
               aimArmed,
@@ -1182,6 +1199,33 @@
             money = Math.max(0, Number(value) || 0);
             syncHud();
             syncCashout();
+          },
+          clearItems() {
+            items = [];
+            holding = null;
+            syncCashout();
+            return true;
+          },
+          addGold(x, y) {
+            const t = TYPES.goldM;
+            items.push({
+              type: 'goldM',
+              x: Number(x) || PIVOT.x,
+              y: Number(y) || 520,
+              r: t.r,
+              value: t.value,
+              weight: t.weight,
+              wob: 0,
+            });
+            syncCashout();
+            return true;
+          },
+          refillTools() {
+            tools.aim = TOOL_CAPS.aim;
+            tools.time = TOOL_CAPS.time;
+            tools.winch = TOOL_CAPS.winch;
+            syncTools();
+            return true;
           },
           grabFirst() {
             const item = items.find((o) => o.type !== 'tnt');

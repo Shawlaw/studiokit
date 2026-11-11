@@ -7,7 +7,7 @@
 - 最近发布：Arcade `0.4.0`（2026-11-10）
   - 功能提交 `49bc1aa`，任务归档 `1b9ce14`
   - Actions `42846474565`、`42848635797` 均 validate + build + deploy 成功
-- 本地待发布：Arcade `0.5.0`（游玩统计 / 分享 / PWA / 离线预载），分支 `feat/arcade-0.5.0-playtime-pwa`，62/62 CDP 通过
+- 本地待发布：Arcade `0.5.0`（游玩统计 / 分享 / PWA / 离线预载），分支 `feat/arcade-0.5.0-playtime-pwa`，63/63 CDP 通过
 - Pages Source：GitHub Actions（`.github/workflows/pages.yml`）
 
 ## 首次仓库设置（已完成，保留备查）
@@ -34,7 +34,7 @@ node --check shared/home.js
 node --check shared/site-shell.js
 node --check apps/arcade/engine.js
 node --check apps/arcade/sw.js
-node tools/arcade_smoke.mjs   # 需要本机 Chrome；当前 62 项，含 PWA/断网回归
+node tools/arcade_smoke.mjs   # 需要本机 Chrome；当前 63 项，含 PWA/断网回归
 git diff --check
 git status --short
 ```

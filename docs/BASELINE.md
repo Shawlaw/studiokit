@@ -25,7 +25,7 @@ Current Arcade baseline facts:
 - 0.5.0 的游玩统计按游戏保存总时长、完成轮次、最近 30 轮与最近 120 天日汇总；备份新增可选 `playtime` 字段，旧备份兼容
 - 全屏/沉浸模式：原生 Fullscreen API 优先，不支持时使用 CSS 沉浸；iPhone Safari 不支持网页元素全屏，**真机与原生全屏仍未验证**
 - PWA/离线：manifest + `apps/arcade/sw.js`，作用域 `apps/arcade/`；显式预载 24 项（11 外壳 + 13 游戏），断网回归已自动化；**iOS/Android 真机安装与系统分享面板仍未验证**
-- Automated coverage: `node tools/arcade_smoke.mjs` 62/62（需要本机 Chrome）
+- Automated coverage: `node tools/arcade_smoke.mjs` 63/63（需要本机 Chrome）
 - Design/rollback reference: `apps/arcade/DESIGN-0.4.0.md`、`apps/arcade/DESIGN-0.5.0.md`
 - Arcade README/CHANGELOG: `apps/arcade/README.md`、`apps/arcade/CHANGELOG.md`
 

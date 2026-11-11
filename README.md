@@ -115,7 +115,7 @@ node --check apps/arcade/sw.js
 node tools/arcade_smoke.mjs
 ```
 
-`arcade_smoke.mjs` 需要本机 Chrome，会启动临时静态服务器与无头浏览器；当前覆盖 62 项检查（全屏/沉浸、道具与存档、游玩计时与轮次、分享、PWA 安装清单、离线预载/断网、320–430px 布局、子路径和刘海安全区）。
+`arcade_smoke.mjs` 需要本机 Chrome，会启动临时静态服务器与无头浏览器；当前覆盖 63 项检查（全屏/沉浸、道具与存档、游玩计时与轮次、分享、PWA 安装清单、离线预载/断网、320–430px 布局、子路径和刘海安全区）。
 
 构建产物位于 `dist/`。它只包含要发布的网站资源，不包含 Agent Prompt、任务队列、内部文档和开发脚本。
 
@@ -150,7 +150,7 @@ https://<github-user>.github.io/<repository-name>/
 ## 当前状态
 
 - 线上已发布：Badge Studio `2.2.1`、街机厅 Arcade `0.4.0`。
-- 本地待发布：街机厅 Arcade `0.5.0`（游玩统计、分享、PWA 安装、离线预载），已通过 62 项无头浏览器检查。
+- 本地待发布：街机厅 Arcade `0.5.0`（游玩统计、分享、PWA 安装、离线预载），已通过 63 项无头浏览器检查。
 - 规划中：Rounded Image（等待原始需求/规格，不凭空复刻）。
 - 任务、证据和未决项见 [`TASKS.md`](TASKS.md)；后续方向见 [`docs/ROADMAP.md`](docs/ROADMAP.md)。
 - Arcade 的玩法、数据键和已知边界见 [`apps/arcade/README.md`](apps/arcade/README.md)。
