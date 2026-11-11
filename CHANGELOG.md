@@ -2,6 +2,16 @@
 
 StudioKit 门户本身没有独立的 semver；以下按仓库里程碑与工具版本记录。各工具的详细变更见 `apps/<tool>/CHANGELOG.md`。
 
+## Arcade 0.6.1 — 2026-11-12（本地热修）
+
+### Fixed
+- 星海突击：Boss 从顶部入场穿过时不再与贴顶玩家发生机体碰撞，入场完成前也不会发射弹幕；避免刚进入 Boss 战就被无预警撞掉一条命。
+- 回归：Boss 清关断言增加生命 +1 校验，`arcade_smoke.mjs` 仍为 66/66。
+
+### Changed
+- `ARCADE_VERSION` / Service Worker 缓存版本升至 `0.6.1`，已安装 PWA 会获取修复后的引擎。
+- 线上 0.6.0 已于 2026-11-12 发布（提交 `6debd77`，Actions `43057971576`）；本热修待发布。
+
 ## Arcade 0.6.0 — 2026-11-11（本地待发布）
 
 ### Added

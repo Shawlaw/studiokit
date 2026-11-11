@@ -273,7 +273,7 @@
         }
 
         b.fireTimer -= dt;
-        if (b.fireTimer <= 0 && b.y > 30) {
+        if (b.fireTimer <= 0 && b.y >= 104) {
           bossFire(b);
           b.fireTimer = ratio < 0.3 ? 0.72 : ratio < 0.6 ? 0.95 : 1.25;
         }
@@ -921,7 +921,8 @@
           const e = enemies[i];
           if (!A.Physics.aabbOverlap(hb, e)) continue;
           if (e.kind === 'boss') {
-            if (player.invul <= 0) hitPlayer();
+            /* Boss 入场穿过顶部时不应撞伤贴顶玩家；完全进入后再启用机体碰撞。 */
+            if (e.y >= 100 && player.invul <= 0) hitPlayer();
             continue;
           }
           if (player.invul <= 0) {
