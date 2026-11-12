@@ -30,11 +30,25 @@
   current.textContent = body.dataset.studiokitAppTitle || body.dataset.studiokitApp;
   current.setAttribute('aria-current', 'page');
 
+  const actions = document.createElement('span');
+  actions.className = 'studiokit-shell-actions';
+
   const note = document.createElement('span');
   note.className = 'studiokit-shell-note';
   note.textContent = 'LOCAL-FIRST TOOLS';
 
-  bar.append(home, separator, current, note);
+  // 源码入口：与门户页脚保持同一个地址，validate_site.py 会校验两处一致。
+  const source = document.createElement('a');
+  source.className = 'studiokit-shell-source';
+  source.href = 'https://github.com/Shawlaw/studiokit';
+  source.target = '_blank';
+  source.rel = 'noopener noreferrer';
+  source.textContent = '源码 ↗';
+  source.title = '在 GitHub 查看 StudioKit 源码';
+  source.setAttribute('aria-label', '在 GitHub 查看 StudioKit 源码（新窗口打开）');
+
+  actions.append(note, source);
+  bar.append(home, separator, current, actions);
   body.insertBefore(bar, body.firstChild);
   document.documentElement.style.setProperty(
     '--studiokit-shellbar-h',

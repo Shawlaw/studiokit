@@ -3,6 +3,7 @@
 **StudioKit** 是一个面向个人使用的静态网页工具集合。一个 GitHub 仓库承载多个彼此独立的单页 HTML 工具，通过统一首页、轻量共享外壳和 GitHub Pages 发布。
 
 - **线上站点：** <https://shawlaw.github.io/studiokit/>
+- **源码：** <https://github.com/Shawlaw/studiokit>（MIT 许可）
 - **当前工具：** Badge Studio `2.2.1`；街机厅 Arcade `0.6.1`（13 款竖屏小游戏，已发布）
 - **计划中的工具：** Rounded Image（尚未实现，等待原始需求/规格）
 - **最近发布：** 2026-11-12，Arcade 0.6.1（Boss 入场碰撞热修 + 0.6.0 星海 Boss/叠加/全屏移动、矿工瞄准线、显式全屏）
@@ -13,6 +14,7 @@
 ```text
 StudioKit/
 ├── index.html                       # StudioKit 门户首页
+├── LICENSE                          # MIT 许可证
 ├── shared/
 │   ├── site.css                     # 门户 + 工具顶部导航样式
 │   ├── site-shell.js                # 工具页统一返回 StudioKit 导航
@@ -155,3 +157,11 @@ https://<github-user>.github.io/<repository-name>/
 - 规划中：Rounded Image（等待原始需求/规格，不凭空复刻）。
 - 任务、证据和未决项见 [`TASKS.md`](TASKS.md)；后续方向见 [`docs/ROADMAP.md`](docs/ROADMAP.md)。
 - Arcade 的玩法、数据键和已知边界见 [`apps/arcade/README.md`](apps/arcade/README.md)。
+
+## 许可
+
+- 代码、文档与站点样式采用 [MIT 许可证](LICENSE)：可以自由使用、修改、分发和商用，只需保留版权与许可声明。
+- 许可允许商业使用，包括在部署方自己的站点上展示广告；是否展示广告由部署方决定。
+- 「StudioKit」名称、徽标与站点视觉标识不随 MIT 授权。基于本项目搭建的站点请使用自己的名称与标识，避免用户误认为官方版本。
+- 街机厅各游戏为自研代码与自绘图形，未引入第三方素材；玩法规则本身通常不受版权保护，但若游戏名称与现有商业作品重名（例如「俄罗斯方块」「黄金矿工」），相关商标风险由使用与部署方自行评估。
+- 变更授权需要全体版权人同意。目前版权人为单一作者，可直接替换根目录 `LICENSE`，并同步更新本文件、[`docs/DECISIONS.md`](docs/DECISIONS.md) 与 [`CHANGELOG.md`](CHANGELOG.md)。

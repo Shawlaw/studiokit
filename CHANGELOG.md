@@ -2,6 +2,24 @@
 
 StudioKit 门户本身没有独立的 semver；以下按仓库里程碑与工具版本记录。各工具的详细变更见 `apps/<tool>/CHANGELOG.md`。
 
+## Site — 2026-11-12
+
+### Added
+- 根目录新增 `LICENSE`（MIT，Copyright (c) 2026 Shawlaw）；README 增加源码入口与「许可」说明（含品牌/商标保留与商业使用边界）。
+- 门户页头与所有工具页的共享导航条新增「源码」链接，指向 <https://github.com/Shawlaw/studiokit>，新标签页打开并带 `rel="noopener noreferrer"`。
+
+### Changed
+- `shared/site-shell.js`：右侧改为操作区容器；窄屏只隐藏 `LOCAL-FIRST TOOLS` 标语，源码链接保留；工具名过长时省略，不再撑宽导航条。
+- `tools/validate_site.py`：`LICENSE` 纳入必检文件，新增 MIT 文本、两处源码链接与 `rel=noopener` 校验。
+- `docs/DECISIONS.md`：新增 ADR-0005，记录 MIT 取舍、商标保留与后续换协议的前提。
+- `docs/ARCHITECTURE.md`：补充共享 shell 现在同时提供源码入口。
+
+### Verification
+- `validate_site.py` / `build_site.py` / `node --check shared/site-shell.js` / `node --check shared/home.js` 通过。
+- `arcade_smoke.mjs` 66/66（含 320/375/390/430 无横向溢出与刘海安全区 shellbar 高度）。
+- CDP 实测 320/390/430：shellbar 高度 38px、`scrollWidth` 等于 `innerWidth`，门户/徽章工作台/街机厅/黄金矿工页链接 `href`、`target="_blank"`、`rel="noopener noreferrer"` 正确；截图复核页头与导航条排版。
+- 仅本地提交，未推送、未发布。
+
 ## Arcade 0.6.1 — 2026-11-12
 
 ### Fixed

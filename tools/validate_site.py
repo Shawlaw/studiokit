@@ -10,7 +10,7 @@ import sys
 
 ROOT = Path(__file__).resolve().parents[1]
 REQUIRED = [
-    'index.html', '.nojekyll', 'favicon.svg',
+    'index.html', '.nojekyll', 'favicon.svg', 'LICENSE',
     'shared/site.css', 'shared/home.js', 'shared/site-shell.js', 'shared/tool-registry.json',
     'apps/badge-studio/index.html', 'apps/badge-studio/README.md', 'apps/badge-studio/CHANGELOG.md',
     'apps/arcade/index.html', 'apps/arcade/README.md', 'apps/arcade/CHANGELOG.md',
@@ -197,6 +197,22 @@ def validate(root=ROOT):
                     ok = fail('Arcade registry version must match engine 0.6.1') and ok
             except Exception:
                 pass
+
+    license_path = root / 'LICENSE'
+    if license_path.exists():
+        license_text = license_path.read_text(encoding='utf-8')
+        if 'MIT License' not in license_text or 'Copyright (c)' not in license_text:
+            ok = fail('LICENSE must keep the MIT license text and a copyright line') and ok
+
+    repo_url = 'https://github.com/Shawlaw/studiokit'
+    for rel_path in ('index.html', 'shared/site-shell.js'):
+        path = root / rel_path
+        if path.exists():
+            source = path.read_text(encoding='utf-8')
+            if repo_url not in source:
+                ok = fail(f'{rel_path}: GitHub source link must point to {repo_url}') and ok
+            if 'noopener' not in source:
+                ok = fail(f'{rel_path}: external source link must set rel=noopener') and ok
 
     template = root / 'templates/single-page-tool/index.html'
     if template.exists():

@@ -10,7 +10,7 @@ StudioKit 将多个轻量单页 HTML 工具集中到一个 GitHub Pages 站点�
 - `shared/tool-registry.json`：工具卡片与路由注册表，门户的唯一数据源。
 - `shared/home.js`：读取注册表并渲染首页卡片。
 - `shared/site.css`：门户样式和带 `studiokit-` 前缀的共享导航样式。
-- `shared/site-shell.js`：仅为工具页注入返回门户的导航条；从自身脚本 URL 推导站点根，兼容任意深度的子页面。
+- `shared/site-shell.js`：仅为工具页注入返回门户的导航条（含 GitHub 源码入口）；从自身脚本 URL 推导站点根，兼容任意深度的子页面。
 - `apps/<id>/index.html`：独立工具页面，工具自己的 CSS/JS/状态留在应用内。
 - `apps/arcade/`：街机厅例外，一个工具内含中心页 + 多款游戏页：
   - `index.html`：中心页（搜索/筛选/续玩/游玩统计/分享/安装/离线预载/进度管理）。

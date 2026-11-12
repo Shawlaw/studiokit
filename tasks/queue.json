@@ -569,6 +569,25 @@
       "claimedAt": "2026-11-12T01:20:00+00:00",
       "completedAt": "2026-11-12T01:50:00+00:00",
       "evidence": "参考官方 Tetris 手游的滑动优先、俄罗斯方块环游记的左手方向/右手动作布局与经典掌机 D-pad 布局，将俄罗斯方块五键横排改为 2+3 双手分区：左 ← / →，右 ↻ / ↓加速 / ⇓落底；按钮增至 64px（320px 下 58px），图标 + 文字，组内 7px、组间 14px；右手加速可与左手横移双指同按。两个下降键明确区分：加速 0.06s/格逐格下落、按住青色高亮、不立即锁定；落底为实心金色按钮，点按立即锁定并触发 150ms 下沉/金色边框脉冲、slam 音效与支持设备的 16ms 轻震（reduced-motion 关闭动画）。移除画布左右半屏/中列/底部隐藏触控区与“按住此区=软降”提示，画布只做显示；DAS/ARR 自动连移静音；触屏/键盘提示按设备拆成单行。arcade_smoke 66/66（新增顺序/标签/尺寸/分组、加速不锁定/落底锁定+脉冲类、软硬样式差异、多指同按、画布不劫持、320/390/430 与底部安全区断言，总数仍 66）；validate_site.py / build_site.py / node --check 全过；320/375/390/430 与 CSS 沉浸截图复核；未改 Schema/localStorage、未升版本、已本地提交、未推送、未发布。"
+    },
+    {
+      "id": "T030",
+      "title": "开源协议（MIT）与页面 GitHub 源码入口",
+      "kind": "agent",
+      "status": "DONE",
+      "dependsOn": [
+        "T029"
+      ],
+      "ownerAuthorizationRequired": false,
+      "acceptance": [
+        "根目录新增 MIT LICENSE；README 说明许可范围、品牌/商标保留与商业使用（含广告）边界",
+        "门户页头与所有工具页 shellbar 提供 GitHub 源码链接，新标签打开并带 rel=noopener noreferrer",
+        "320/375/390/430 下 shellbar 不换行不溢出且高度不变；validate/build/node --check/arcade_smoke 全过",
+        "仅本地提交：不推送、不改 Schema/localStorage、不升工具版本"
+      ],
+      "claimedAt": "2026-11-12T03:45:00+00:00",
+      "completedAt": "2026-11-12T03:55:00+00:00",
+      "evidence": "Owner 询问开源协议与页面源码入口，并说明后期可能挂少量广告；建议并采用 MIT（与 Owner 其他公开仓库 LogcatX/DeskFoundry/QuotaBarWin 一致，MIT 允许自有站点广告，且不阻止他人复用），品牌名与视觉标识保留。新增 LICENSE（MIT，Copyright (c) 2026 Shawlaw）；README 顶部加源码入口、末尾加「许可」节（品牌/商标保留、玩法参考对象的商标风险、换协议前提）；docs/DECISIONS.md 新增 ADR-0005。页面：index.html 页头品牌右侧新增「源码 GitHub ↗」（窄屏仍可见）；shared/site-shell.js 在 shellbar 右侧新增「源码 ↗」（target=_blank + rel=noopener noreferrer + aria-label），site.css 新增 .sk-source/.studiokit-shell-source/.studiokit-shell-actions 样式，窄屏只隐藏 LOCAL-FIRST TOOLS、保留源码链接，工具名过长改为省略号。validate_site.py 将 LICENSE 纳入必检并校验 MIT 文本、两处链接与 noopener；validate_site.py / build_site.py / node --check shared/site-shell.js / node --check shared/home.js 全过；arcade_smoke 66/66（含 320/375/390/430 无横向溢出与安全区 shellbar）；CDP 实测 320/390/430 的 shellbar 高度 38px、scrollWidth 等于 innerWidth，门户/Badge Studio/街机厅/黄金矿工页链接 href、target、rel 正确；截图复核页头与导航条。仅本地提交，未推送、未发布。"
     }
   ]
 }
