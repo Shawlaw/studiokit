@@ -35,7 +35,7 @@
 | T029 | agent | 街机厅俄罗斯方块触屏按钮分区与交互优化 | DONE | T028 | 左手横移 2 大键 + 右手旋转/加速/落底 3 键；图标+文字、64/58px；加速逐格不锁定、落底实心金色+立即锁定+脉冲/轻震；移除画布隐藏触控区；自动连移静音；多指同按；66/66 CDP；320/375/390/430+沉浸+安全区；已由 T031 双端发布 |
 | T030 | agent | 开源协议（MIT）与页面 GitHub 源码入口 | DONE | T029 | MIT LICENSE + README 许可说明 + ADR-0005；门户页头与 shellbar「源码」链接（noopener）；validate/build/node --check 全过；arcade_smoke 66/66；320/390/430 无溢出、shellbar 38px；已由 T031 双端发布 |
 | T031 | agent | 双目标发布：GitHub Pages + Cloudflare Pages 与 Arcade 0.6.2 | DONE | T030 | `0159437` 推送 main；Actions `43155182519` 四 job 全成功；verify 11/11 文件一致；双端 Arcade 0.6.2 / Badge 2.2.1；CF 项目 studiokit；Token 仅存 GitHub Secrets |
-| T032 | agent | Arcade 0.7.0：全游戏趣味性、可选道具与适度游玩优化 | DONE | T031 | 13 款各 2 个主动道具（矿工保留 4 + 两项重平衡）、7 类自然收尾、20 分钟一次性提醒、中心页 🎲；共享 createToolbelt；validate/build/node --check 全过；arcade_smoke 85/85（含 13 款旧档补给、320/375/390/430、PWA/断网）；仅本地分支，未推送/未发布；真机 UNVERIFIED |
+| T032 | agent | Arcade 0.7.0：全游戏趣味性、可选道具与适度游玩优化 | DONE | T031 | 13 款各 2 个主动道具（矿工保留 4 + 两项重平衡）、7 类自然收尾、20 分钟一次性提醒、中心页 🎲；共享 createToolbelt；validate/build/node --check 全过；arcade_smoke 85/85（含 13 款旧档补给、320/375/390/430、PWA/断网）；本地提交 `0eebc79`（feat/arcade-pure-joy），未推送/未发布；真机 UNVERIFIED |
 
 ## 任务命令
 

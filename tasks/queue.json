@@ -629,7 +629,7 @@
       ],
       "claimedAt": "2026-11-12T15:11:00+00:00",
       "completedAt": "2026-11-12T16:01:57+00:00",
-      "evidence": "0.7.0 local batch: 13 games x 2 active tools (gold-miner keeps 4 + 2 rebalances), 7 natural endings, one-shot 20min break reminder, hub random pick, shared createToolbelt; review fixes: in-canvas toolbars moved below stage (320/landscape no overlap), old endless saves stay endless via shortRun (road/gravity/snake), brick tool-wide survives ball loss, 2048 win bonus once, star CLEAR restored after refresh, pendulum guide consumes on release, gold winch aria; validate_site.py + build_site.py + node --check PASS; arcade_smoke.mjs 85/85 twice; git diff --check clean; not pushed/not released; iOS/Android real-device play and native fullscreen remain UNVERIFIED"
+      "evidence": "Local commit 0eebc79 on feat/arcade-pure-joy (not pushed, not released). 0.7.0: 13 games x 2 active tools (gold-miner keeps 4 + 2 rebalances), 7 natural endings, one-shot 20min visible-only break reminder, hub random pick, shared createToolbelt; review fixes: toolbars below stage (320/landscape no overlap), old endless saves stay endless via shortRun (road/gravity/snake), brick tool-wide survives ball loss, 2048 win bonus once, star CLEAR restored after refresh, pendulum guide consumes on release, gold winch aria, deferred reminder while hidden; validate_site.py + build_site.py + node --check PASS; arcade_smoke.mjs 85/85 (two consecutive green runs); verify_deploy.py now covers 24 files; iOS/Android real-device play and native fullscreen remain UNVERIFIED"
     }
   ]
 }
