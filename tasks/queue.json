@@ -630,6 +630,26 @@
       "claimedAt": "2026-11-12T15:11:00+00:00",
       "completedAt": "2026-11-12T16:01:57+00:00",
       "evidence": "Local commit 0eebc79 on feat/arcade-pure-joy (not pushed, not released). 0.7.0: 13 games x 2 active tools (gold-miner keeps 4 + 2 rebalances), 7 natural endings, one-shot 20min visible-only break reminder, hub random pick, shared createToolbelt; review fixes: toolbars below stage (320/landscape no overlap), old endless saves stay endless via shortRun (road/gravity/snake), brick tool-wide survives ball loss, 2048 win bonus once, star CLEAR restored after refresh, pendulum guide consumes on release, gold winch aria, deferred reminder while hidden; validate_site.py + build_site.py + node --check PASS; arcade_smoke.mjs 85/85 (two consecutive green runs); verify_deploy.py now covers 24 files; iOS/Android real-device play and native fullscreen remain UNVERIFIED"
+    },
+    {
+      "id": "T033",
+      "title": "Arcade 0.7.0 发布：试玩截图复核、推送 main 并双端验证",
+      "kind": "agent",
+      "status": "IN_PROGRESS",
+      "dependsOn": [
+        "T032"
+      ],
+      "ownerAuthorizationRequired": true,
+      "acceptance": [
+        "Owner 当前任务明确指令：自己 mock 截图与试玩确认 UI 无问题后提交推送并发布到 GitHub Pages 与 Cloudflare Pages",
+        "全部 UI 截图/试玩复核通过；发现的问题已修复并复跑 validate_site.py / build_site.py / node --check / arcade_smoke.mjs",
+        "提交遵循 commit-time-policy；feat/arcade-pure-joy fast-forward 合入 main 并推送 origin",
+        "Actions 的 Validate and build / Deploy GitHub Pages / Deploy Cloudflare Pages / Verify both deployments 四个 job 全部成功",
+        "tools/verify_deploy.py 对两端逐文件校验通过（24 个关键文件），线上 Arcade 0.7.0 / 13 款 / PWA 与离线可用",
+        "TASKS.md 与 tasks/queue.json 记录 commit SHA、Actions run 与双端验证证据"
+      ],
+      "claimedAt": "2026-11-12T17:49:05+00:00",
+      "ownerAuthorizationVerifiedByAgentFlag": true
     }
   ]
 }

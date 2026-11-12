@@ -1367,6 +1367,9 @@ body.has-game-tools:not(.arcade-immersive) .stage-box {
   margin: 2px auto 0;
   width: min(520px, 100%);
 }
+/* 画布外道具空间充足：显示图标 + 名称 + 次数，避免新玩家只看到两个符号。 */
+.joy-tools-below .tool-btn .tool-name { display: inline; font-size: 11px; }
+.joy-tools-below .tool-btn { gap: 4px; }
 body.has-joy-row:not(.arcade-immersive) .stage-box {
   height: min(
     calc(100dvh - var(--studiokit-shellbar-h, 0px) - 226px - env(safe-area-inset-bottom, 0px)),
