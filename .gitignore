@@ -7,6 +7,9 @@ venv/
 # Build output
 dist/
 
+# Cloudflare / Wrangler local state
+.wrangler/
+
 # Local test artifacts
 test-artifacts/
 .zcode/

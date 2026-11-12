@@ -34,3 +34,10 @@
 - **Decision:** 根目录 `LICENSE` 采用 MIT（Copyright (c) 2026 Shawlaw），覆盖代码、文档与站点样式；「StudioKit」名称、徽标和站点视觉标识不随代码授权。
 - **Reason:** 项目是公开的个人工具集合，MIT 与 Owner 其他公开仓库（LogcatX、DeskFoundry、QuotaBarWin）一致，复用与学习成本最低。MIT 允许商业使用，可支撑未来在自有站点展示少量广告，同时不阻止他人复用。Arcade 各游戏是自研实现与自绘图形，玩法参考对象不构成这些代码的版权障碍。
 - **Consequence:** 任何人可复制、修改并以自有名义部署（包括加广告），版权无法阻止换皮克隆，只能靠名称与标识区分官方版本。若之后确实需要限制商业再分发，只能在仍是单一版权人时改为 AGPL-3.0 或非商业许可（后者不再符合 OSI 开源定义），并同步更新 README、LICENSE 与 GitHub 的协议识别。
+
+## ADR-0006: Dual hosting on GitHub Pages and Cloudflare Pages
+
+- **Status:** Accepted
+- **Decision:** 一次构建的 `dist/` 同时部署到 GitHub Pages 项目站点与 Cloudflare Pages 项目 `studiokit`。`push main` 触发同一个 workflow：构建一次，两个部署 job 并行，最后由 `tools/verify_deploy.py` 校验两个 origin 的逐文件哈希与版本一致。Cloudflare 使用 Direct Upload（`wrangler pages deploy`），不接 Git 集成；自定义域名以后单独绑定到 Cloudflare。
+- **Reason:** 站点全部使用相对路径，同一份静态产物天然适配 GitHub Pages 子路径与 Cloudflare 根路径，应用代码不需要分叉。Direct Upload 复用 GitHub Actions 已通过的构建结果，避免第二套构建环境和两套校验结论；Cloudflare 作为独立的第二入口，降低单一托管故障的影响。
+- **Consequence:** 两个部署不是事务性的：任一 job 失败都可能出现一端新、一端旧，必须用 `Re-run failed jobs` 修复，不能推空提交重试。两个域名是独立 origin，localStorage/SW/PWA 不互通。CI 需要 Pages Edit 的 API Token（只放 GitHub Secrets）。本地 Windows 构建为 CRLF，CI Linux 为 LF，校验脚本按文本换行归一化比较；发布以 CI 产物为准。

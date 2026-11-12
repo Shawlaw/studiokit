@@ -2,6 +2,27 @@
 
 StudioKit 门户本身没有独立的 semver；以下按仓库里程碑与工具版本记录。各工具的详细变更见 `apps/<tool>/CHANGELOG.md`。
 
+## Arcade 0.6.2 — 2026-11-12
+
+### Fixed
+- 黄金矿工：目标金额统一取整。瞄准线按秒扣费会留下小数，之前提前结算进入下一关时会把小数带进目标，HUD/结算出现很长的数字；现在关卡起点按 HUD 显示的整数金额计算，旧档中的小数目标在恢复时也会取整。
+- 黄金矿工 HUD 可读性：画布顶部增加深色渐隐背景，金额/关卡/倒计时改用高对比浅色；DOM 子 HUD 的「目标」改为金色胶囊并放大数字，窄屏下仍保持单行。
+- 俄罗斯方块：触屏按钮从五键等宽横排改为左右手分区——左手 `←` / `→` 大键横移，右手 `↻` 旋转、`↓` 加速、`⇓` 落底；按钮增高到 64px（320px 下 58px），加入图标 + 文字标签、分组间距与落底实心金色强调，支持左手横移与右手加速双指同按。
+- 俄罗斯方块：`加速` 按住按 0.06s/格逐格下落、不立即锁定；`落底` 点按立即锁定并触发短促下沉/金色脉冲/低沉音效，支持的设备附带 16ms 轻震；提示统一为“↓ 按住加速 · ⇓ 点按落底”。
+- 俄罗斯方块：移除画布隐藏触摸区（左右半屏横移、中列旋转、底部软降）；点按/按住画布不再误移动或误软降。DAS/ARR 自动连移不再逐格播放 UI 音效。
+
+### Changed
+- `ARCADE_VERSION`、`shared/tool-registry.json`、中心页版本号与 Service Worker 缓存统一升至 `0.6.2`；已安装 PWA 会获取新引擎。
+- 新增 `apps/arcade/DESIGN-block-controls.md`，记录触屏按钮布局、兼容与回滚边界。
+
+### Verification
+- `validate_site.py` / `build_site.py` / `node --check`（home、site-shell、engine、sw）通过。
+- `arcade_smoke.mjs` 66/66：覆盖按钮顺序/标签/尺寸/分组、多指同按、画布不劫持、黄金矿工目标取整、320/375/390/430 与安全区。
+- GitHub Pages 与 Cloudflare Pages 双端逐文件 SHA-256 一致；线上运行时验证结果见 T031。
+
+### Release
+- 本批次通过 `.github/workflows/deploy.yml` 一次构建、双端部署；提交与 Actions run 在发布后补记到 `TASKS.md` 的 T031。
+
 ## Site — 2026-11-12
 
 ### Added
@@ -18,7 +39,7 @@ StudioKit 门户本身没有独立的 semver；以下按仓库里程碑与工具
 - `validate_site.py` / `build_site.py` / `node --check shared/site-shell.js` / `node --check shared/home.js` 通过。
 - `arcade_smoke.mjs` 66/66（含 320/375/390/430 无横向溢出与刘海安全区 shellbar 高度）。
 - CDP 实测 320/390/430：shellbar 高度 38px、`scrollWidth` 等于 `innerWidth`，门户/徽章工作台/街机厅/黄金矿工页链接 `href`、`target="_blank"`、`rel="noopener noreferrer"` 正确；截图复核页头与导航条排版。
-- 仅本地提交，未推送、未发布。
+- 仅本地提交，未推送、未发布；随 Arcade 0.6.2 一并推送并发布到 GitHub Pages 与 Cloudflare Pages。
 
 ## Arcade 0.6.1 — 2026-11-12
 

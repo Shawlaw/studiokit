@@ -1,12 +1,12 @@
 # StudioKit
 
-**StudioKit** 是一个面向个人使用的静态网页工具集合。一个 GitHub 仓库承载多个彼此独立的单页 HTML 工具，通过统一首页、轻量共享外壳和 GitHub Pages 发布。
+**StudioKit** 是一个面向个人使用的静态网页工具集合。一个 GitHub 仓库承载多个彼此独立的单页 HTML 工具，通过统一首页、轻量共享外壳，同时发布到 GitHub Pages 与 Cloudflare Pages。
 
-- **线上站点：** <https://shawlaw.github.io/studiokit/>
+- **线上站点：** <https://shawlaw.github.io/studiokit/> · <https://studiokit.pages.dev/>
 - **源码：** <https://github.com/Shawlaw/studiokit>（MIT 许可）
-- **当前工具：** Badge Studio `2.2.1`；街机厅 Arcade `0.6.1`（13 款竖屏小游戏，已发布）
+- **当前工具：** Badge Studio `2.2.1`；街机厅 Arcade `0.6.2`（13 款竖屏小游戏，本次发布）
 - **计划中的工具：** Rounded Image（尚未实现，等待原始需求/规格）
-- **最近发布：** 2026-11-12，Arcade 0.6.1（Boss 入场碰撞热修 + 0.6.0 星海 Boss/叠加/全屏移动、矿工瞄准线、显式全屏）
+- **最近发布：** 2026-11-12，Arcade 0.6.2（黄金矿工目标金额取整、俄罗斯方块左右手分区触屏按钮、加速/落底区分）
 - **运行方式：** 纯静态文件；无后端、无账号、无构建依赖、无第三方 CDN
 
 ## 目录结构
@@ -24,7 +24,7 @@ StudioKit/
 │   │   ├── index.html
 │   │   ├── README.md
 │   │   └── CHANGELOG.md
-│   └── arcade/                      # 街机厅，当前 v0.6.1
+│   └── arcade/                      # 街机厅，当前 v0.6.2
 │       ├── index.html               # 游戏中心页（统计/分享/安装/预载）
 │       ├── engine.js                # 街机专用共享运行时
 │       ├── arcade.css               # 街机专用样式
@@ -43,11 +43,12 @@ StudioKit/
 │   ├── validate_site.py             # 静态结构/本地资源/注册表检查
 │   ├── build_site.py                # 生成仅含网站文件的 dist/
 │   ├── arcade_smoke.mjs             # 街机无头浏览器冒烟测试
+│   ├── verify_deploy.py             # 双端发布后的逐文件/版本校验
 │   └── agentctl.py                  # 轻量任务队列命令
 ├── tasks/queue.json                 # 机器可读任务队列
 ├── prompts/                         # 历史首次启动/首次发布 Prompt
 ├── docs/                             # 架构、路线、基线、发布与决策文档
-└── .github/workflows/pages.yml      # GitHub Actions 自动部署 Pages
+└── .github/workflows/deploy.yml     # GitHub Actions 双端自动部署
 ```
 
 先看 [`START-HERE.md`](START-HERE.md) 了解当前状态与 Agent 协作方式。
@@ -122,24 +123,27 @@ node tools/arcade_smoke.mjs
 
 构建产物位于 `dist/`。它只包含要发布的网站资源，不包含 Agent Prompt、任务队列、内部文档和开发脚本。
 
-## GitHub Pages 发布
+## 发布（GitHub Pages + Cloudflare Pages）
 
-站点已上线：<https://shawlaw.github.io/studiokit/>。
+站点已上线：
 
-1. 推送到 `main` 后，`.github/workflows/pages.yml` 会执行校验、构建并部署到 GitHub Pages。
-2. 在 Actions 中确认 `Validate and build` 与 `Deploy StudioKit` 均成功。
-3. 打开 Pages URL，验证门户卡片、Badge Studio 和街机厅实际可访问。
-4. 首次建仓、Pages Source 设置和完整发布边界见 [`docs/RELEASE-RUNBOOK.md`](docs/RELEASE-RUNBOOK.md)。
+- GitHub Pages：<https://shawlaw.github.io/studiokit/>
+- Cloudflare Pages：<https://studiokit.pages.dev/>
 
-项目站点 URL 形如：
+1. 推送到 `main` 后，`.github/workflows/deploy.yml` 会执行一次校验/构建，把同一份 `dist/` 并行部署到 GitHub Pages 与 Cloudflare Pages。
+2. Actions 中应有 `Validate and build`、`Deploy GitHub Pages`、`Deploy Cloudflare Pages`、`Verify both deployments` 四个 job 成功。
+3. 发布后用 `py -3 tools/verify_deploy.py --base <Pages URL> --base <Cloudflare URL>` 复核：逐文件 SHA-256 一致，且 Arcade / Badge 版本与注册表一致。
+4. Cloudflare 侧项目为 `studiokit`（Production branch `main`），Secrets 为 `CLOUDFLARE_API_TOKEN` / `CLOUDFLARE_ACCOUNT_ID`，Variable 为 `CF_PAGES_URL`。完整设置、半发布恢复与回滚见 [`docs/RELEASE-RUNBOOK.md`](docs/RELEASE-RUNBOOK.md)。
+
+GitHub Pages 项目站点 URL 形如：
 
 ```text
 https://<github-user>.github.io/<repository-name>/
 ```
 
-所有页面内的本地资源引用均使用相对路径，支持项目站点的仓库前缀。
+Cloudflare Pages 部署在域名根路径（当前为 `studiokit.pages.dev`，以后可绑定自定义域名）。所有页面内的本地资源引用均使用相对路径，因此同一份 `dist/` 能同时适配子路径与根路径。
 
-**发布边界：** Agent 可以在授权范围内完成代码、测试、构建、提交和发布准备。推送到 `main` 或触发公开部署前，必须确认目标仓库、仓库可见性和 Owner 授权。具体流程见 [`docs/RELEASE-RUNBOOK.md`](docs/RELEASE-RUNBOOK.md)。
+**发布边界：** Agent 可以在授权范围内完成代码、测试、构建、提交和发布准备。推送到 `main` 或触发公开部署前，必须确认目标仓库、仓库可见性和 Owner 授权；一次授权覆盖两个部署目标，不能只发一端就宣称完成。具体流程见 [`docs/RELEASE-RUNBOOK.md`](docs/RELEASE-RUNBOOK.md)。
 
 ## 设计原则
 
@@ -148,12 +152,12 @@ https://<github-user>.github.io/<repository-name>/
 - 各工具独立版本号、配置 Schema 和本地存储命名空间。
 - 共享层只负责门户、导航和稳定的通用样式；不要为了抽象而抽象。
 - 原工具的配置格式、导入导出行为和用户本地数据必须优先兼容。
-- GitHub Pages 只托管静态文件；不会替工具保存编辑数据。
+- GitHub Pages / Cloudflare Pages 只托管静态文件；不会替工具保存编辑数据。
 
 ## 当前状态
 
-- 线上已发布：Badge Studio `2.2.1`、街机厅 Arcade `0.6.1`（星海 30 秒关卡 Boss/弹种叠加/全屏移动、Boss 入场碰撞修复、黄金矿工瞄准线与摆幅修复、点开始不再自动全屏）。
-- Arcade 0.6.1 已通过 66 项本地无头浏览器检查，并完成线上运行时验证。
+- 本次发布：Badge Studio `2.2.1`、街机厅 Arcade `0.6.2`（黄金矿工目标金额取整与 HUD 可读性、俄罗斯方块左右手分区触屏按钮、加速/落底区分；含 0.6.1 Boss 入场碰撞修复）。
+- Arcade 0.6.2 已通过 66 项本地无头浏览器检查，双端一致性验证在发布后执行。
 - 规划中：Rounded Image（等待原始需求/规格，不凭空复刻）。
 - 任务、证据和未决项见 [`TASKS.md`](TASKS.md)；后续方向见 [`docs/ROADMAP.md`](docs/ROADMAP.md)。
 - Arcade 的玩法、数据键和已知边界见 [`apps/arcade/README.md`](apps/arcade/README.md)。

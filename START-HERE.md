@@ -2,11 +2,11 @@
 
 ## 当前状态
 
-- **线上站点：** <https://shawlaw.github.io/studiokit/>
+- **线上站点：** <https://shawlaw.github.io/studiokit/> · <https://studiokit.pages.dev/>
 - **仓库：** <https://github.com/Shawlaw/studiokit>
-- **已发布工具：** Badge Studio `2.2.1`、街机厅 Arcade `0.6.1`（13 款竖屏小游戏）
+- **本次发布工具：** Badge Studio `2.2.1`、街机厅 Arcade `0.6.2`（13 款竖屏小游戏）
 - **规划中：** Rounded Image（尚未实现；等待原始需求/规格，不凭空复刻）
-- **最近发布：** 2026-11-12，Arcade 0.6.1（Boss 入场碰撞热修）；提交 `6debd77`（0.6.0）+ `1c9501e`（0.6.1），Actions `43060497094` 成功
+- **最近发布：** 2026-11-12，Arcade 0.6.2（黄金矿工目标取整、俄罗斯方块触屏按钮分区、加速/落底区分）；GitHub Pages 与 Cloudflare Pages 双端发布
 
 首次建仓与首次发布的完整步骤保留在 [`docs/RELEASE-RUNBOOK.md`](docs/RELEASE-RUNBOOK.md)；`prompts/` 下的启动/发布 Prompt 是历史脚本，不再代表当前流程。
 

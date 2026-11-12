@@ -14,7 +14,7 @@ Current Badge Studio baseline facts:
 
 Current Arcade baseline facts:
 
-- App version: `0.6.1`（`apps/arcade/engine.js` 的 `ARCADE_VERSION` 与注册表保持一致；2026-11-12 已发布）
+- App version: `0.6.2`（`apps/arcade/engine.js` 的 `ARCADE_VERSION` 与注册表保持一致；2026-11-12 本次发布）
 - Registry entry: `shared/tool-registry.json` → `id: "arcade"`，`href: "./apps/arcade/"`
 - Games: 13（清单唯一来源是 `engine.js` 顶部的 `GAMES` 数组）
 - Run state schema: `v1`（`studiokit:arcade:runs:v1`）
@@ -26,6 +26,7 @@ Current Arcade baseline facts:
 - 0.5.1 修复连续游玩超过 15 秒后计时停止：每次定时落盘后重新开启时间片；Service Worker 缓存版本同步升至 0.5.1
 - 0.6.0 已发布：星海突击每 30 秒关卡后 Boss 战、弹种可叠加、玩家全屏纵向移动；黄金矿工摆角/钩爪朝向分离（瞄准不损耗摆动能量）与按秒 $2 瞄准线；移除点开始/继续自动全屏。局内档仍为 `runs:v1` Schema v1，新增字段只写在 `data` 内
 - 0.6.1 已发布：Boss 入场穿过顶部时关闭机体碰撞与弹幕，避免贴顶玩家被撞；SW 缓存版本升至 0.6.1；提交 1c9501e，Actions 43060497094
+- 0.6.2 本次发布：黄金矿工目标金额统一取整（含旧小数档恢复），HUD 顶部深色渐隐与金色目标胶囊；俄罗斯方块触屏按钮改为左右手分区，`加速`按住逐格下落、`落底`点按立即锁定，画布不再劫持触摸；SW 缓存升至 0.6.2；T031 双端发布
 - 全屏/沉浸模式：原生 Fullscreen API 优先，不支持时使用 CSS 沉浸；iPhone Safari 不支持网页元素全屏，**真机与原生全屏仍未验证**
 - PWA/离线：manifest + `apps/arcade/sw.js`，作用域 `apps/arcade/`；显式预载 24 项（11 外壳 + 13 游戏），断网回归已自动化；**iOS/Android 真机安装与系统分享面板仍未验证**
 - Automated coverage: `node tools/arcade_smoke.mjs` 66/66（需要本机 Chrome）

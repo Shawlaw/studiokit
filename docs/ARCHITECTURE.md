@@ -59,4 +59,10 @@ GitHub Pages 项目站点会部署在 `/<repository>/` 子路径下。所有站�
 
 ## 部署
 
-GitHub Actions 执行：静态验证 → 构建 `dist/` → 上传 Pages artifact → 部署 Pages。只部署 `main` 分支；Pull Request 仅执行验证和构建，不发布。当前线上地址：<https://shawlaw.github.io/studiokit/>。
+GitHub Actions 执行：静态验证 → 构建一次 `dist/` → 同一份 artifact 并行部署到 GitHub Pages 与 Cloudflare Pages → `tools/verify_deploy.py` 对两个 origin 做逐文件 SHA-256 与版本一致性校验。
+
+- GitHub Pages 项目站点：<https://shawlaw.github.io/studiokit/>（子路径 `/studiokit/`）。
+- Cloudflare Pages：<https://studiokit.pages.dev/>（根路径；项目 `studiokit`，Production branch `main`；以后可绑定自定义域名）。
+- 只部署 `main` 分支；Pull Request 仅执行验证和构建，不发布。
+- 所有站内资源使用相对路径，`site-shell.js` / `engine.js` 从脚本 URL 推导站点根，因此同一份 `dist/` 同时适配子路径和根路径。
+- 两个域名是独立 origin：localStorage、Service Worker 缓存和已安装 PWA 互不共享；切换主域名时用户需要导出/导入本地数据。
