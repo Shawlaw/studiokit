@@ -50,17 +50,17 @@
         <button type="button" class="touch-btn block-btn" data-touch="rotate" aria-label="顺时针旋转">
           <span class="block-btn-glyph" aria-hidden="true">↻</span><span class="block-btn-label">旋转</span>
         </button>
-        <button type="button" class="touch-btn block-btn" data-touch="soft" aria-label="软降，按住连续下落">
-          <span class="block-btn-glyph" aria-hidden="true">↓</span><span class="block-btn-label">软降</span>
+        <button type="button" class="touch-btn block-btn" data-touch="soft" aria-label="按住加速下落，不会立即锁定">
+          <span class="block-btn-glyph" aria-hidden="true">↓</span><span class="block-btn-label">加速</span>
         </button>
-        <button type="button" class="touch-btn block-btn touch-btn-hard" data-touch="hard" aria-label="硬降到底">
-          <span class="block-btn-glyph" aria-hidden="true">⤓</span><span class="block-btn-label">硬降</span>
+        <button type="button" class="touch-btn block-btn touch-btn-hard block-btn-hard" data-touch="hard" aria-label="点按直接落底并锁定">
+          <span class="block-btn-glyph" aria-hidden="true">⇓</span><span class="block-btn-label">落底</span>
         </button>
       </div>
     </div>
     <p class="game-hint block-hint">
-      <span class="hint-touch">按住 ← → ↓ 连续操作 · 点击旋转 / 硬降</span>
-      <span class="hint-keyboard">←→ 移动 · ↑ 旋转 · ↓ 软降 · 空格硬降 · P 暂停</span>
+      <span class="hint-touch">按住 ← → 移动 · ↓ 按住加速 · ⇓ 点按落底</span>
+      <span class="hint-keyboard">←→ 移动 · ↑ 旋转 · ↓ 加速 · 空格落底 · P 暂停</span>
     </p>
   </main>
   <script>
@@ -78,10 +78,12 @@
       const WELL_Y = 120;
       const DAS = 0.17;
       const ARR = 0.05;
+      const SOFT_DROP_SEC = 0.06;
       const LOCK_DELAY = 0.5;
       const LOCK_RESETS = 15;
 
       const canvas = document.querySelector('.game-canvas');
+      const stageBox = document.querySelector('.stage-box');
       const stage = A.createStage(canvas, W, H);
       const ctx = stage.ctx;
       const input = A.createInput(canvas);
@@ -141,6 +143,7 @@
       let touchLeft = false;
       let touchRight = false;
       let touchSoft = false;
+      let slamTimer = 0;
 
       let high = A.Progress.get('block-drop').high;
       dom.hudHigh.textContent = String(high);
@@ -220,6 +223,11 @@
 
       /* ---------- 流程 ---------- */
       function reset() {
+        if (slamTimer) {
+          clearTimeout(slamTimer);
+          slamTimer = 0;
+        }
+        if (stageBox) stageBox.classList.remove('is-hard-drop');
         board = [];
         for (let r = 0; r < ROWS; r++) board.push(new Array(COLS).fill(null));
         bag = [];
@@ -477,15 +485,36 @@
           }
         }
       }
+      /* 落底与普通落地用不同的视听反馈：轻震 + 金色边框脉冲 + 更低的 slam 音效。 */
+      function hardDropFeedback() {
+        if (stageBox) {
+          stageBox.classList.remove('is-hard-drop');
+          void stageBox.offsetWidth;
+          stageBox.classList.add('is-hard-drop');
+          clearTimeout(slamTimer);
+          slamTimer = setTimeout(() => {
+            stageBox.classList.remove('is-hard-drop');
+            slamTimer = 0;
+          }, 180);
+        }
+        if (!A.Sfx.muted && typeof navigator.vibrate === 'function') {
+          try {
+            navigator.vibrate(16);
+          } catch (err) {
+            /* 忽略振动失败 */
+          }
+        }
+      }
       function hardDrop() {
         if (state !== 'playing' || !cur) return;
         const gy = ghostY();
         score += (gy - cur.y) * 2;
         cur.y = gy;
-        lockPiece();
+        hardDropFeedback();
+        lockPiece(true);
         syncHud();
       }
-      function lockPiece() {
+      function lockPiece(hard) {
         for (let r = 0; r < cur.m.length; r++) {
           for (let c = 0; c < cur.m.length; c++) {
             if (cur.m[r][c]) {
@@ -505,7 +534,7 @@
           state = 'clearing';
           A.Sfx.play(full.length >= 4 ? 'perfect' : 'land');
         } else {
-          A.Sfx.play('land');
+          A.Sfx.play(hard ? 'slam' : 'land');
           cur = null;
           spawn();
         }
@@ -585,8 +614,8 @@
           return;
         }
 
-        /* 重力 + 软降 */
-        const interval = softHeld ? 0.04 : gravSec();
+        /* 重力 + 软降：软降是“加速”，仍逐格下落；落底键才会立即锁定。 */
+        const interval = softHeld ? SOFT_DROP_SEC : gravSec();
         dropTimer += dt;
         while (dropTimer >= interval) {
           dropTimer -= interval;
@@ -791,6 +820,7 @@
               curKey: cur ? cur.key : null,
               curX: cur ? cur.x : null,
               curY: cur ? cur.y : null,
+              filled: board.reduce((n, row) => n + row.filter(Boolean).length, 0),
               nextKey,
               bag: bag.slice(),
             };

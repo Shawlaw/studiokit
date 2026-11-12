@@ -1312,6 +1312,10 @@ async function main() {
         hintLines: (() => { const h = document.querySelector('.block-hint'); return Math.round(h.getBoundingClientRect().height / parseFloat(getComputedStyle(h).lineHeight)); })(),
         touchHint: getComputedStyle(document.querySelector('.hint-touch')).display,
         keyboardHint: getComputedStyle(document.querySelector('.hint-keyboard')).display,
+        softBg: getComputedStyle(document.querySelector('[data-touch="soft"]')).backgroundImage,
+        hardBg: getComputedStyle(document.querySelector('[data-touch="hard"]')).backgroundImage,
+        softColor: getComputedStyle(document.querySelector('[data-touch="soft"]')).color,
+        hardColor: getComputedStyle(document.querySelector('[data-touch="hard"]')).color,
         vw: innerWidth,
         vh: innerHeight,
         docH: document.documentElement.scrollHeight,
@@ -1319,8 +1323,9 @@ async function main() {
     })()`);
     assert(padLayout.display === 'flex', 'touch pad display=' + padLayout.display);
     assert(padLayout.order.join(',') === 'left,right,rotate,soft,hard', 'touch pad order=' + padLayout.order.join(','));
-    assert(padLayout.labels.every((s) => s.trim().length >= 2), 'touch pad labels=' + JSON.stringify(padLayout.labels));
+    assert(padLayout.labels.join(',') === '左移,右移,旋转,加速,落底', 'touch pad labels=' + JSON.stringify(padLayout.labels));
     assert(padLayout.sizes.every((b) => b.h >= 56 && b.w >= 52), 'touch targets too small: ' + JSON.stringify(padLayout.sizes));
+    assert(padLayout.softBg !== padLayout.hardBg && padLayout.softColor !== padLayout.hardColor, 'soft/hard styles not distinct: ' + JSON.stringify({ softBg: padLayout.softBg, hardBg: padLayout.hardBg, softColor: padLayout.softColor, hardColor: padLayout.hardColor }));
     assert(padLayout.groups.length === 2 && padLayout.groups[0].right + 8 <= padLayout.groups[1].x, 'touch groups not separated: ' + JSON.stringify(padLayout.groups));
     assert(padLayout.sizes[4].right <= padLayout.vw && padLayout.sizes[4].bottom <= padLayout.vh, 'pad clipped: ' + JSON.stringify(padLayout));
     assert(padLayout.hintLines === 1 && padLayout.touchHint !== 'none' && padLayout.keyboardHint === 'none', 'touch hint wrong: ' + JSON.stringify(padLayout));
@@ -1328,12 +1333,23 @@ async function main() {
 
     await cdp.click('[data-ov-btn]');
     await sleep(220);
+    const beforeSoft = await cdp.evaluate(`window.__arcadeTest.info()`);
+    await cdp.buttonPointer('[data-touch="soft"]', 'pointerdown');
+    await sleep(180);
+    await cdp.buttonPointer('[data-touch="soft"]', 'pointerup');
+    const afterSoft = await cdp.evaluate(`window.__arcadeTest.info()`);
+    assert(afterSoft.curY > beforeSoft.curY, 'soft drop did not move piece: ' + JSON.stringify({ before: beforeSoft, after: afterSoft }));
+    assert(afterSoft.filled === 0 && afterSoft.state === 'playing', 'soft drop locked immediately: ' + JSON.stringify(afterSoft));
+    assert(afterSoft.score > beforeSoft.score, 'soft drop did not score: ' + JSON.stringify({ before: beforeSoft, after: afterSoft }));
     await cdp.buttonPointer('[data-touch="hard"]', 'pointerdown');
+    const slamActive = await cdp.evaluate(`document.querySelector('.stage-box').classList.contains('is-hard-drop')`);
     await cdp.buttonPointer('[data-touch="hard"]', 'pointerup');
+    assert(slamActive, 'hard drop slam feedback missing');
     await sleep(350);
+    const afterHard = await cdp.evaluate(`window.__arcadeTest.info()`);
+    assert(afterHard.filled >= 4, 'hard drop did not lock: ' + JSON.stringify(afterHard));
     const touchScore = Number(await cdp.text('[data-hud-score]'));
     assert(touchScore > 0, 'touch hard-drop score=' + touchScore);
-    const afterHard = await cdp.evaluate(`window.__arcadeTest.info()`);
     /* 左手横移 + 右手软降可以同时按住（两根手指），这是左右分区的主要收益。 */
     await cdp.buttonPointer('[data-touch="left"]', 'pointerdown', 11);
     await cdp.buttonPointer('[data-touch="soft"]', 'pointerdown', 12);

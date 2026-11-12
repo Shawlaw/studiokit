@@ -374,13 +374,38 @@ body.has-subhud .stage-box {
 }
 .block-pad .block-btn:active .block-btn-label,
 .block-pad .block-btn.is-held .block-btn-label { color: var(--ac-ink); }
-.block-pad .block-btn-hard {
-  border-color: rgba(255, 210, 63, 0.55);
-  background: linear-gradient(180deg, rgba(255, 210, 63, 0.18), rgba(255, 210, 63, 0.05));
-  color: var(--ac-accent);
+/* 软降是“按住加速”，用青色表示正在持续输入；落底是“点按锁定”，用实心金色和上方箭头区分。 */
+.block-pad .block-btn[data-touch="soft"].is-held {
+  background: linear-gradient(180deg, rgba(65, 217, 217, 0.36), rgba(65, 217, 217, 0.14));
+  border-color: #41d9d9;
 }
-.block-pad .block-btn-hard .block-btn-label { color: var(--ac-accent); }
+.block-pad .block-btn[data-touch="soft"].is-held .block-btn-label { color: #b8ffff; }
+.block-pad .block-btn-hard {
+  border-color: #ffe08a;
+  background: linear-gradient(180deg, #ffe27a, #f2bd2a);
+  color: #241800;
+  box-shadow: 0 2px 0 rgba(0, 0, 0, 0.22), inset 0 1px 0 rgba(255, 255, 255, 0.45);
+}
+.block-pad .block-btn-hard .block-btn-label { color: #3a2800; }
+.block-pad .block-btn-hard:active {
+  background: linear-gradient(180deg, #fff0b0, #ffd23f);
+  border-color: #fff7d6;
+  color: #1c1200;
+}
+.block-pad .block-btn-hard:active .block-btn-label { color: #1c1200; }
 .block-hint .hint-touch { display: none; }
+
+/* 落底时给画布一个短促的下沉 + 金色边框脉冲；普通软降落地不触发。 */
+@keyframes block-drop-slam {
+  0% { transform: translateY(0); }
+  28% { transform: translateY(3px); }
+  60% { transform: translateY(-1px); }
+  100% { transform: translateY(0); }
+}
+.stage-box.is-hard-drop {
+  animation: block-drop-slam 150ms ease-out;
+  box-shadow: 0 18px 44px rgba(0, 0, 0, 0.45), 0 0 0 2px rgba(255, 210, 63, 0.5);
+}
 
 @media (hover: none), (max-width: 620px) {
   .touch-pad { display: grid; }
@@ -987,6 +1012,10 @@ body.has-subhud .stage-box {
   .hall-card { transition: none; }
   .ac-btn, .ac-icon-btn { transition: none; }
   .hall-offline-bar { transition: none; }
+  .stage-box.is-hard-drop {
+    animation: none;
+    box-shadow: 0 18px 44px rgba(0, 0, 0, 0.45);
+  }
 }
 
 /* ==========================================================

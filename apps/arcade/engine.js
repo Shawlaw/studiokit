@@ -961,6 +961,10 @@
       },
       jump: () => tone({ freq: 300, endFreq: 680, dur: 0.12, vol: 0.07 }),
       land: () => tone({ freq: 190, endFreq: 95, dur: 0.08, type: 'triangle', vol: 0.09 }),
+      slam: () => {
+        tone({ freq: 125, endFreq: 48, dur: 0.18, type: 'sawtooth', vol: 0.1 });
+        noise({ dur: 0.1, vol: 0.12, cutoff: 650 });
+      },
       spring: () => tone({ freq: 420, endFreq: 1050, dur: 0.16, vol: 0.09 }),
       bell: (step) => {
         const f = 660 * Math.pow(1.0595, clamp(step || 0, 0, 24));
