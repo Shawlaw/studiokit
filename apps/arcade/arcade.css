@@ -338,8 +338,55 @@ body.has-subhud .stage-box {
 .touch-btn:disabled { opacity: 0.35; cursor: default; }
 .touch-btn:focus-visible { outline: 2px solid var(--ac-accent); outline-offset: 2px; }
 
+/* 俄罗斯方块：按手分区。左手只负责横移，右手负责旋转/软降/硬降，避免五个等宽键挤成一排。 */
+.block-pad {
+  align-items: stretch;
+  justify-content: space-between;
+  gap: 14px;
+}
+.block-pad-group {
+  display: flex;
+  min-width: 0;
+  gap: 7px;
+}
+.block-pad-move { flex: 2 1 0; }
+.block-pad-action { flex: 3 1 0; }
+.block-pad .block-btn {
+  flex: 1 1 0;
+  min-width: 0;
+  min-height: 64px;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 3px;
+  padding: 6px 2px 5px;
+  border-radius: 14px;
+  font-size: 22px;
+}
+.block-btn-glyph { font-size: 23px; line-height: 1; }
+.block-btn-label {
+  font-size: 10px;
+  line-height: 1;
+  font-weight: 600;
+  letter-spacing: 0.5px;
+  color: var(--ac-muted);
+}
+.block-pad .block-btn:active .block-btn-label,
+.block-pad .block-btn.is-held .block-btn-label { color: var(--ac-ink); }
+.block-pad .block-btn-hard {
+  border-color: rgba(255, 210, 63, 0.55);
+  background: linear-gradient(180deg, rgba(255, 210, 63, 0.18), rgba(255, 210, 63, 0.05));
+  color: var(--ac-accent);
+}
+.block-pad .block-btn-hard .block-btn-label { color: var(--ac-accent); }
+.block-hint .hint-touch { display: none; }
+
 @media (hover: none), (max-width: 620px) {
   .touch-pad { display: grid; }
+  .touch-pad.block-pad { display: flex; }
+  .block-hint .hint-touch { display: inline; }
+  .block-hint .hint-keyboard { display: none; }
   .ac-back { display: inline-flex; align-items: center; min-height: 44px; }
   body.has-extra-controls .stage-box {
     height: min(
@@ -903,6 +950,10 @@ body.has-subhud .stage-box {
   .ac-back { font-size: 12px; padding: 4px 2px; }
   .ac-icon-btn { min-width: 44px; min-height: 44px; padding: 3px 4px; }
   .game-hint { font-size: 11px; }
+  .block-pad { gap: 10px; }
+  .block-pad-group { gap: 5px; }
+  .block-pad .block-btn { min-height: 58px; border-radius: 12px; }
+  .block-btn-glyph { font-size: 21px; }
   .overlay-panel { padding: 14px 14px 12px; margin: 0 8px; }
   .overlay-panel h2 { font-size: 18px; }
   .overlay-panel p { font-size: 12px; line-height: 1.5; margin-bottom: 10px; }

@@ -548,6 +548,26 @@
       "claimedAt": "2026-11-12T01:01:00+00:00",
       "completedAt": "2026-11-12T01:10:27+00:00",
       "evidence": "根因：aimLineActive 按秒扣 $2/s 让 money 变成小数，nextLevel 直接 levelStartMoney + spec.target 把小数带进目标；已用 #test 钩子复现 target=1828.37 / HUD $1828.37。修复：wholeAmount/wholeTarget 统一取整，nextLevel 以 HUD 整数金额起算，restore 兼容旧小数目标；画布顶部增加深色渐隐并改用高对比浅色 HUD，瞄准线费用独立一行；DOM 子 HUD 目标改为金色胶囊 + 14px 数字。arcade_smoke 66/66（含小数余额提前结算目标取整回归）；validate_site.py / build_site.py / node --check 全过；320/375/390/430 无横向溢出截图复核；已本地提交，未升版本、未推送、未发布。"
+    },
+    {
+      "id": "T029",
+      "title": "街机厅俄罗斯方块触屏按钮分区与交互优化",
+      "kind": "agent",
+      "status": "DONE",
+      "dependsOn": [
+        "T028"
+      ],
+      "ownerAuthorizationRequired": false,
+      "acceptance": [
+        "触屏按钮按手分区：左手横移、右手旋转/软降/硬降，按钮至少 56px 高并带文字标签",
+        "移除画布隐藏触摸区，点按/按住画布不移动、不软降、不旋转",
+        "支持左手横移与右手软降双指同按；DAS/ARR 自动连移不再逐格播放提示音",
+        "320/375/390/430、CSS 沉浸与底部安全区下按钮完整可点；arcade_smoke 66/66、validate/build/node --check 通过",
+        "仅本地未发布：不改 Schema/localStorage，不升版本、不推送"
+      ],
+      "claimedAt": "2026-11-12T01:20:00+00:00",
+      "completedAt": "2026-11-12T01:50:00+00:00",
+      "evidence": "参考官方 Tetris 手游的滑动优先、俄罗斯方块环游记的左手方向/右手动作布局与经典掌机 D-pad 布局，将俄罗斯方块五键横排改为 2+3 双手分区：左 ← / →，右 ↻ / ↓ / ⤓；按钮增至 64px（320px 下 58px），图标 + 文字，组内 7px、组间 14px；右手软降可与左手横移双指同按。移除画布左右半屏/中列/底部隐藏触控区与“按住此区=软降”提示，画布只做显示；DAS/ARR 自动连移静音；触屏/键盘提示按设备拆成单行。arcade_smoke 66/66（新增顺序/标签/尺寸/分组、多指同按、画布不劫持、320/390/430 与底部安全区断言，总数仍 66）；validate_site.py / build_site.py / node --check 全过；320/375/390/430 与 CSS 沉浸截图复核；未改 Schema/localStorage、未升版本、已本地提交、未推送、未发布。"
     }
   ]
 }

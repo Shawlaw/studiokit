@@ -37,14 +37,31 @@
         </div>
       </div>
     </div>
-    <div class="touch-pad" data-touch-pad aria-label="触屏操作面板">
-      <button type="button" class="touch-btn" data-touch="left" aria-label="左移">←</button>
-      <button type="button" class="touch-btn" data-touch="rotate" aria-label="旋转">↻</button>
-      <button type="button" class="touch-btn" data-touch="right" aria-label="右移">→</button>
-      <button type="button" class="touch-btn" data-touch="soft" aria-label="软降">↓</button>
-      <button type="button" class="touch-btn touch-btn-hard" data-touch="hard" aria-label="硬降">⤓</button>
+    <div class="touch-pad block-pad" data-touch-pad aria-label="俄罗斯方块触屏操作面板">
+      <div class="block-pad-group block-pad-move" role="group" aria-label="左右移动">
+        <button type="button" class="touch-btn block-btn" data-touch="left" aria-label="左移，按住连续移动">
+          <span class="block-btn-glyph" aria-hidden="true">←</span><span class="block-btn-label">左移</span>
+        </button>
+        <button type="button" class="touch-btn block-btn" data-touch="right" aria-label="右移，按住连续移动">
+          <span class="block-btn-glyph" aria-hidden="true">→</span><span class="block-btn-label">右移</span>
+        </button>
+      </div>
+      <div class="block-pad-group block-pad-action" role="group" aria-label="旋转与下落">
+        <button type="button" class="touch-btn block-btn" data-touch="rotate" aria-label="顺时针旋转">
+          <span class="block-btn-glyph" aria-hidden="true">↻</span><span class="block-btn-label">旋转</span>
+        </button>
+        <button type="button" class="touch-btn block-btn" data-touch="soft" aria-label="软降，按住连续下落">
+          <span class="block-btn-glyph" aria-hidden="true">↓</span><span class="block-btn-label">软降</span>
+        </button>
+        <button type="button" class="touch-btn block-btn touch-btn-hard" data-touch="hard" aria-label="硬降到底">
+          <span class="block-btn-glyph" aria-hidden="true">⤓</span><span class="block-btn-label">硬降</span>
+        </button>
+      </div>
     </div>
-    <p class="game-hint">←→ 移动 · ↑ 旋转 · ↓ 软降 · 空格硬降 · P 暂停 ｜ 触屏可直接使用下方按钮，按住 ← → ↓ 连续操作</p>
+    <p class="game-hint block-hint">
+      <span class="hint-touch">按住 ← → ↓ 连续操作 · 点击旋转 / 硬降</span>
+      <span class="hint-keyboard">←→ 移动 · ↑ 旋转 · ↓ 软降 · 空格硬降 · P 暂停</span>
+    </p>
   </main>
   <script>
     (() => {
@@ -431,7 +448,7 @@
       });
 
       /* ---------- 操作 ---------- */
-      function tryMove(dx) {
+      function tryMove(dx, silent) {
         if (state !== 'playing' || !cur) return;
         if (!collides(cur.m, cur.x + dx, cur.y)) {
           cur.x += dx;
@@ -439,7 +456,8 @@
             lockTimer = 0;
             lockResets++;
           }
-          A.Sfx.play('ui');
+          /* 按住 DAS/ARR 自动连移时不再逐格播放提示音，避免每秒约 20 次的叠音。 */
+          if (!silent) A.Sfx.play('ui');
         }
       }
       function tryRotate() {
@@ -512,17 +530,6 @@
       }
 
       /* ---------- 更新 ---------- */
-      function touchZones() {
-        const p = input.pointer;
-        const down = p.down;
-        return {
-          left: down && p.x < 140 && p.y < 555,
-          right: down && p.x > 280 && p.y < 555,
-          soft: down && p.y >= 555,
-          rotateTap: p.wentDown && p.x >= 140 && p.x <= 280 && p.y < 555,
-        };
-      }
-
       function update(dt) {
         if (state === 'clearing') {
           clearing.timer -= dt;
@@ -536,10 +543,9 @@
         }
         autosave.tick(dt);
 
-        const tz = touchZones();
-        const leftHeld = input.isDown('ArrowLeft', 'a') || tz.left || touchLeft;
-        const rightHeld = input.isDown('ArrowRight', 'd') || tz.right || touchRight;
-        softHeld = input.isDown('ArrowDown', 's') || tz.soft || touchSoft;
+        const leftHeld = input.isDown('ArrowLeft', 'a') || touchLeft;
+        const rightHeld = input.isDown('ArrowRight', 'd') || touchRight;
+        softHeld = input.isDown('ArrowDown', 's') || touchSoft;
 
         /* DAS 横移 */
         let dir = 0;
@@ -557,7 +563,7 @@
               arrTimer += dt;
               while (arrTimer >= ARR) {
                 arrTimer -= ARR;
-                tryMove(dir);
+                tryMove(dir, true);
               }
             }
           }
@@ -565,9 +571,9 @@
           dasDir = 0;
         }
 
-        /* 旋转（键盘 ↑ + 触摸中列点按） */
+        /* 旋转（键盘 ↑；触屏用独立的旋转按钮） */
         const upNow = input.isDown('ArrowUp', 'w');
-        if ((upNow && !upWasDown) || tz.rotateTap) tryRotate();
+        if (upNow && !upWasDown) tryRotate();
         upWasDown = upNow;
 
         /* 硬降（空格边沿） */
@@ -743,12 +749,6 @@
           font: 'bold 22px system-ui',
           color: 'rgba(238,241,255,0.2)',
         });
-        /* 触摸软降区提示（仅触摸指针不可判断，统一画淡提示） */
-        if (state === 'playing') {
-          ctx.fillStyle = 'rgba(124,92,255,0.06)';
-          ctx.fillRect(0, 555, W, H - 555);
-          A.draw.label(ctx, '按住此区 = 软降', W / 2, 690, { font: '10px system-ui', color: 'rgba(147,160,200,0.4)' });
-        }
       }
 
       /* ---------- 输入与循环 ---------- */
@@ -789,6 +789,8 @@
               level,
               state,
               curKey: cur ? cur.key : null,
+              curX: cur ? cur.x : null,
+              curY: cur ? cur.y : null,
               nextKey,
               bag: bag.slice(),
             };

@@ -192,11 +192,11 @@ class CDP {
     await this.pointer(x, y, 'pointerup');
   }
 
-  async buttonPointer(selector, type = 'pointerdown') {
+  async buttonPointer(selector, type = 'pointerdown', pointerId = 1) {
     const ok = await this.evaluate(`(() => {
       const el = document.querySelector(${JSON.stringify(selector)});
       if (!el) return false;
-      el.dispatchEvent(new PointerEvent(${JSON.stringify(type)}, { pointerId: 1, pointerType: 'touch', isPrimary: true, bubbles: true, cancelable: true }));
+      el.dispatchEvent(new PointerEvent(${JSON.stringify(type)}, { pointerId: ${pointerId}, pointerType: 'touch', isPrimary: ${pointerId} === 1, bubbles: true, cancelable: true }));
       return true;
     })()`);
     if (!ok) throw new Error('button not found: ' + selector);
@@ -1295,10 +1295,37 @@ async function main() {
     }
     record('375px 窄屏 14 页无横向溢出 + 44px 暂停按钮 + 矿工道具条', true);
 
-    /* ---------- 俄罗斯方块触屏控制面板 ---------- */
-    await cdp.navigate(base + '/apps/arcade/games/block-drop.html');
-    const padVisible = await cdp.evaluate(`(() => { const p = document.querySelector('[data-touch-pad]'); return p ? getComputedStyle(p).display : 'missing'; })()`);
-    assert(padVisible === 'grid', 'touch pad display=' + padVisible);
+    /* ---------- 俄罗斯方块触屏控制面板：双手分区 + 画布不再劫持触摸 ---------- */
+    await cdp.evaluate(`Arcade.RunSave.clear('block-drop')`);
+    await cdp.navigate(base + '/apps/arcade/games/block-drop.html#test');
+    const padLayout = await cdp.evaluate(`(() => {
+      const pad = document.querySelector('[data-touch-pad]');
+      const rect = (el) => { const r = el.getBoundingClientRect(); return { x: Math.round(r.x), y: Math.round(r.y), w: Math.round(r.width), h: Math.round(r.height), right: Math.round(r.right), bottom: Math.round(r.bottom) }; };
+      const groups = [...pad.querySelectorAll('.block-pad-group')].map(rect);
+      const btns = [...pad.querySelectorAll('[data-touch]')];
+      return {
+        display: getComputedStyle(pad).display,
+        order: btns.map((b) => b.dataset.touch),
+        labels: btns.map((b) => (b.querySelector('.block-btn-label') || {}).textContent || ''),
+        sizes: btns.map(rect),
+        groups,
+        hintLines: (() => { const h = document.querySelector('.block-hint'); return Math.round(h.getBoundingClientRect().height / parseFloat(getComputedStyle(h).lineHeight)); })(),
+        touchHint: getComputedStyle(document.querySelector('.hint-touch')).display,
+        keyboardHint: getComputedStyle(document.querySelector('.hint-keyboard')).display,
+        vw: innerWidth,
+        vh: innerHeight,
+        docH: document.documentElement.scrollHeight,
+      };
+    })()`);
+    assert(padLayout.display === 'flex', 'touch pad display=' + padLayout.display);
+    assert(padLayout.order.join(',') === 'left,right,rotate,soft,hard', 'touch pad order=' + padLayout.order.join(','));
+    assert(padLayout.labels.every((s) => s.trim().length >= 2), 'touch pad labels=' + JSON.stringify(padLayout.labels));
+    assert(padLayout.sizes.every((b) => b.h >= 56 && b.w >= 52), 'touch targets too small: ' + JSON.stringify(padLayout.sizes));
+    assert(padLayout.groups.length === 2 && padLayout.groups[0].right + 8 <= padLayout.groups[1].x, 'touch groups not separated: ' + JSON.stringify(padLayout.groups));
+    assert(padLayout.sizes[4].right <= padLayout.vw && padLayout.sizes[4].bottom <= padLayout.vh, 'pad clipped: ' + JSON.stringify(padLayout));
+    assert(padLayout.hintLines === 1 && padLayout.touchHint !== 'none' && padLayout.keyboardHint === 'none', 'touch hint wrong: ' + JSON.stringify(padLayout));
+    assert(padLayout.docH <= padLayout.vh + 1, 'block-drop vertical overflow: ' + padLayout.docH + '>' + padLayout.vh);
+
     await cdp.click('[data-ov-btn]');
     await sleep(220);
     await cdp.buttonPointer('[data-touch="hard"]', 'pointerdown');
@@ -1306,16 +1333,37 @@ async function main() {
     await sleep(350);
     const touchScore = Number(await cdp.text('[data-hud-score]'));
     assert(touchScore > 0, 'touch hard-drop score=' + touchScore);
-    await cdp.buttonPointer('[data-touch="left"]', 'pointerdown');
+    const afterHard = await cdp.evaluate(`window.__arcadeTest.info()`);
+    /* 左手横移 + 右手软降可以同时按住（两根手指），这是左右分区的主要收益。 */
+    await cdp.buttonPointer('[data-touch="left"]', 'pointerdown', 11);
+    await cdp.buttonPointer('[data-touch="soft"]', 'pointerdown', 12);
     await sleep(320);
-    await cdp.buttonPointer('[data-touch="left"]', 'pointerup');
+    await cdp.buttonPointer('[data-touch="left"]', 'pointerup', 11);
+    await cdp.buttonPointer('[data-touch="soft"]', 'pointerup', 12);
+    const afterLeft = await cdp.evaluate(`window.__arcadeTest.info()`);
+    assert(afterLeft.curX !== afterHard.curX, 'left button did not move piece: ' + JSON.stringify({ before: afterHard, after: afterLeft }));
+    assert(afterLeft.score > afterHard.score, 'left+soft multi-touch did not soft-drop: ' + JSON.stringify({ before: afterHard, after: afterLeft }));
     await cdp.buttonPointer('[data-touch="rotate"]', 'pointerdown');
     await cdp.buttonPointer('[data-touch="rotate"]', 'pointerup');
-    await cdp.buttonPointer('[data-touch="soft"]', 'pointerdown');
-    await sleep(260);
-    await cdp.buttonPointer('[data-touch="soft"]', 'pointerup');
+
+    /* 画布旧触控区已移除：点按/按住画布不得移动、软降或旋转。 */
+    await cdp.evaluate(`Arcade.RunSave.clear('block-drop')`);
+    await cdp.navigate(base + '/apps/arcade/games/block-drop.html#test');
+    await cdp.click('[data-ov-btn]');
+    await sleep(220);
+    const canvasBefore = await cdp.evaluate(`window.__arcadeTest.info()`);
+    await cdp.tap(60, 300);
+    await sleep(220);
+    const afterLeftTap = await cdp.evaluate(`window.__arcadeTest.info()`);
+    assert(afterLeftTap.curX === canvasBefore.curX, 'canvas left tap moved piece: ' + JSON.stringify({ before: canvasBefore, after: afterLeftTap }));
+    await cdp.pointer(210, 680, 'pointerdown');
+    await sleep(320);
+    await cdp.pointer(210, 680, 'pointerup');
+    await sleep(100);
+    const afterCanvasHold = await cdp.evaluate(`window.__arcadeTest.info()`);
+    assert(afterCanvasHold.score === canvasBefore.score, 'canvas bottom hold still soft-drops: ' + JSON.stringify({ before: canvasBefore, after: afterCanvasHold }));
     if (cdp.errors.length) throw new Error('touch pad console errors: ' + cdp.errors.join(' | '));
-    record('俄罗斯方块 375px 触屏按钮面板可操作', true);
+    record('俄罗斯方块 375px 双手按钮面板 + 画布触摸区不再误触', true);
     await cdp.screenshot('touch-block-drop.png');
 
     /* ---------- 320px 小屏：安全区/暂停/画布不裁切 ---------- */
@@ -1330,7 +1378,8 @@ async function main() {
         title: (() => { const t = document.querySelector('.game-title'); if (!t) return null; return { cw: t.clientWidth, sw: t.scrollWidth }; })(),
         back: (() => { const b = document.querySelector('.ac-back'); if (!b) return null; const r = b.getBoundingClientRect(); return { w: Math.round(r.width), h: Math.round(r.height) }; })(),
         secondary: (() => { const b = document.querySelector('[data-ov-btn2]'); if (!b) return null; const r = b.getBoundingClientRect(); return { hidden: b.hidden, display: getComputedStyle(b).display, w: Math.round(r.width), h: Math.round(r.height) }; })(),
-        toolbelt: (() => { const t = document.querySelector('[data-toolbelt]'); if (!t) return null; const r = t.getBoundingClientRect(); return { w: Math.round(r.width), h: Math.round(r.height), btns: [...t.querySelectorAll('.tool-btn')].map((b) => { const br = b.getBoundingClientRect(); return { w: Math.round(br.width), h: Math.round(br.height) }; }) }; })()
+        toolbelt: (() => { const t = document.querySelector('[data-toolbelt]'); if (!t) return null; const r = t.getBoundingClientRect(); return { w: Math.round(r.width), h: Math.round(r.height), btns: [...t.querySelectorAll('.tool-btn')].map((b) => { const br = b.getBoundingClientRect(); return { w: Math.round(br.width), h: Math.round(br.height) }; }) }; })(),
+        blockPad: (() => { const p = document.querySelector('.block-pad'); if (!p || getComputedStyle(p).display === 'none') return null; const r = p.getBoundingClientRect(); return { right: Math.round(r.right), bottom: Math.round(r.bottom), docH: document.documentElement.scrollHeight, vh: innerHeight, btns: [...p.querySelectorAll('[data-touch]')].map((b) => { const br = b.getBoundingClientRect(); return { w: Math.round(br.width), h: Math.round(br.height) }; }) }; })()
       })`);
       if (small.sw > small.cw + 1) {
         const offenders = await cdp.evaluate(`(() => {
@@ -1359,6 +1408,11 @@ async function main() {
         if (small.toolbelt) {
           assert(small.toolbelt.w <= small.canvas.w + 1, pagePath + ' 320px toolbelt width ' + JSON.stringify(small.toolbelt));
           assert(small.toolbelt.btns.length === 4 && small.toolbelt.btns.every((b) => b.h >= 44 && b.w > 40), pagePath + ' 320px toolbelt buttons ' + JSON.stringify(small.toolbelt.btns));
+        }
+        if (small.blockPad) {
+          assert(small.blockPad.btns.length === 5 && small.blockPad.btns.every((b) => b.h >= 56 && b.w >= 52), pagePath + ' 320px block pad buttons ' + JSON.stringify(small.blockPad.btns));
+          assert(small.blockPad.right <= small.cw + 1 && small.blockPad.bottom <= small.blockPad.vh + 1, pagePath + ' 320px block pad clipped ' + JSON.stringify(small.blockPad));
+          assert(small.blockPad.docH <= small.blockPad.vh + 1, pagePath + ' 320px block pad page overflow ' + JSON.stringify(small.blockPad));
         }
       }
     }
@@ -1401,10 +1455,16 @@ async function main() {
         const metrics = await cdp.evaluate(`({
           sw: document.documentElement.scrollWidth,
           cw: document.documentElement.clientWidth,
-          pause: (() => { const b = document.querySelector('[data-pause]'); if (!b) return null; const r = b.getBoundingClientRect(); return { w: Math.round(r.width), h: Math.round(r.height) }; })()
+          pause: (() => { const b = document.querySelector('[data-pause]'); if (!b) return null; const r = b.getBoundingClientRect(); return { w: Math.round(r.width), h: Math.round(r.height) }; })(),
+          blockPad: (() => { const p = document.querySelector('.block-pad'); if (!p || getComputedStyle(p).display === 'none') return null; const r = p.getBoundingClientRect(); return { right: Math.round(r.right), bottom: Math.round(r.bottom), docH: document.documentElement.scrollHeight, vh: innerHeight, btns: [...p.querySelectorAll('[data-touch]')].map((b) => { const br = b.getBoundingClientRect(); return { w: Math.round(br.width), h: Math.round(br.height) }; }) }; })()
         })`);
         assert(metrics.sw <= metrics.cw + 1, pagePath + ' ' + width + 'px overflow ' + metrics.sw + '>' + metrics.cw);
         if (metrics.pause) assert(metrics.pause.w >= 44 && metrics.pause.h >= 44, pagePath + ' ' + width + 'px pause target');
+        if (metrics.blockPad) {
+          assert(metrics.blockPad.btns.length === 5 && metrics.blockPad.btns.every((b) => b.h >= 56 && b.w >= 52), pagePath + ' ' + width + 'px block pad buttons ' + JSON.stringify(metrics.blockPad.btns));
+          assert(metrics.blockPad.right <= metrics.cw + 1 && metrics.blockPad.bottom <= metrics.blockPad.vh + 1, pagePath + ' ' + width + 'px block pad clipped ' + JSON.stringify(metrics.blockPad));
+          assert(metrics.blockPad.docH <= metrics.blockPad.vh + 1, pagePath + ' ' + width + 'px block pad page overflow ' + JSON.stringify(metrics.blockPad));
+        }
       }
     }
     record('390×844 / 430×932 视口 14 页无横向溢出', true);
@@ -1424,7 +1484,26 @@ async function main() {
       })`);
       assert(parseFloat(safe.paddingTop) >= 47, 'shell safe-area padding ' + JSON.stringify(safe));
       assert(safe.docH <= safe.viewH + 2, 'safe-area page overflow ' + JSON.stringify(safe));
-      record('390×844 刘海安全区 shellbar/页面高度', true);
+
+      /* 俄罗斯方块在底部 Home Indicator 安全区下：按钮面板与提示不能被推出视口。 */
+      await cdp.navigate(base + '/apps/arcade/games/block-drop.html');
+      const safeBlock = await cdp.evaluate(`(() => {
+        const p = document.querySelector('.block-pad');
+        const h = document.querySelector('.block-hint');
+        const pr = p.getBoundingClientRect();
+        const hr = h.getBoundingClientRect();
+        return {
+          docH: document.documentElement.scrollHeight,
+          viewH: innerHeight,
+          padH: Math.round(pr.height),
+          hintBottom: Math.round(hr.bottom),
+          pagePadBottom: getComputedStyle(document.querySelector('.game-page')).paddingBottom,
+        };
+      })()`);
+      assert(safeBlock.docH <= safeBlock.viewH + 2, 'block-drop safe-area overflow: ' + JSON.stringify(safeBlock));
+      assert(safeBlock.padH >= 56, 'block-drop safe-area pad height: ' + JSON.stringify(safeBlock));
+      assert(safeBlock.hintBottom <= safeBlock.viewH - parseFloat(safeBlock.pagePadBottom) + 1, 'block-drop hint inside safe area: ' + JSON.stringify(safeBlock));
+      record('390×844 刘海安全区 shellbar/页面高度 + 方块按钮面板', true);
 
       /* 全屏时顶栏与画布同样要避开刘海/底部安全区。 */
       await cdp.navigate(base + '/apps/arcade/games/gold-miner.html');
