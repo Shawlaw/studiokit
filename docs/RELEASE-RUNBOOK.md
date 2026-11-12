@@ -5,7 +5,11 @@
 - 仓库：<https://github.com/Shawlaw/studiokit>
 - GitHub Pages：<https://shawlaw.github.io/studiokit/>
 - Cloudflare Pages：<https://studiokit.pages.dev/>
-- 最近发布：Arcade `0.6.2`（2026-11-12，已发布）
+- 最近发布：Arcade `0.7.0`（2026-11-13，已发布）
+  - 批次内容：T032 全游戏主动道具/自然收尾/一次性 20 分钟提醒/随机入口、T033 试玩截图复核与发布
+  - 提交 `34f03df`；Actions `43274342320` 四个 job 均成功
+  - 双端验证：`tools/verify_deploy.py` 24/24 文件 SHA-256 一致，Arcade `0.7.0` / Badge `2.2.1`
+- 上一个发布：Arcade `0.6.2`（2026-11-12，已发布）
   - 批次内容：T028 黄金矿工目标取整/HUD、T029 俄罗斯方块左右手触屏按钮、T030 MIT 与源码入口、T031 双端发布
   - 提交 `0159437`；Actions `43155182519` 四个 job 均成功
   - 双端验证：`tools/verify_deploy.py` 当时覆盖的 11 个文件 SHA-256 一致，Arcade `0.6.2` / Badge `2.2.1`（0.7.0 起校验清单扩为 24 个文件）

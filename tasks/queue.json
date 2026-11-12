@@ -635,7 +635,7 @@
       "id": "T033",
       "title": "Arcade 0.7.0 发布：试玩截图复核、推送 main 并双端验证",
       "kind": "agent",
-      "status": "IN_PROGRESS",
+      "status": "DONE",
       "dependsOn": [
         "T032"
       ],
@@ -649,7 +649,9 @@
         "TASKS.md 与 tasks/queue.json 记录 commit SHA、Actions run 与双端验证证据"
       ],
       "claimedAt": "2026-11-12T17:49:05+00:00",
-      "ownerAuthorizationVerifiedByAgentFlag": true
+      "ownerAuthorizationVerifiedByAgentFlag": true,
+      "completedAt": "2026-11-12T18:01:06+00:00",
+      "evidence": "Owner explicit in-task instruction to self-play/screenshot then commit+push+release to GitHub Pages and Cloudflare Pages. Playtest: all 13 games started and played in headless Chrome at 420x900 plus 320/375/390/430 and 667x375 landscape; screenshots reviewed, no overflow/console errors; fixed external joy-tool labels and hint shortcuts in commit 34f03df. Local checks: validate_site.py / build_site.py / node --check PASS; arcade_smoke.mjs 85/85. Pushed main 34f03df via HTTPS; Actions run 43274342320 all four jobs success (Validate and build / Deploy GitHub Pages / Deploy Cloudflare Pages / Verify both deployments). verify_deploy.py: 24/24 files identical across GH Pages and Cloudflare, arcade 0.7.0 / badge 2.2.1. Live headless Chrome on both origins: hub 0.7.0/13 cards/random entry/SW cache studiokit-arcade-0.7.0-v1, sample games show joy tools (gold-miner 4), hints mention 道具, zero console errors. iOS/Android real-device play, native fullscreen and system share remain UNVERIFIED."
     }
   ]
 }

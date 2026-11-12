@@ -2,7 +2,7 @@
 
 StudioKit 门户本身没有独立的 semver；以下按仓库里程碑与工具版本记录。各工具的详细变更见 `apps/<tool>/CHANGELOG.md`。
 
-## Arcade 0.7.0 — 2026-11-12（本地分支，未发布）
+## Arcade 0.7.0 — 2026-11-13（已发布）
 
 ### Added
 - 13 款游戏全部增加由玩家主动使用的局内道具（每款 2 个；黄金矿工保留原有 4 个并重新平衡），共享 `A.createToolbelt` 统一 UI、次数、禁用态与可选快捷键；没有商店、货币、签到、每日奖励或付费抽奖。
@@ -21,7 +21,8 @@ StudioKit 门户本身没有独立的 semver；以下按仓库里程碑与工具
 ### Verification
 - `validate_site.py` / `build_site.py` / `node --check` 与扩展后的 `arcade_smoke.mjs` 通过（共享道具栏、一次性提醒、随机入口、13 款道具真实效果、13 款旧档补给、320/375/390/430 + 横屏 + 安全区、PWA/断网），套件连续两次 85/85。
 - 独立复审提出的两个 Major（画布内道具栏遮挡、旧无尽档被强制收尾）已修复并加入回归；`verify_deploy.py` 双端校验清单扩到 24 个文件。
-- 仅本地分支；未经 Owner 授权未推送、未发布。iOS/Android 真机试玩与原生全屏仍 UNVERIFIED。
+- 提交 `34f03df` 推送 `main`；Actions `43274342320` 的 Validate and build / Deploy GitHub Pages / Deploy Cloudflare Pages / Verify both deployments 全部成功。
+- GitHub Pages <https://shawlaw.github.io/studiokit/> 与 Cloudflare Pages <https://studiokit.pages.dev/> 双端 24/24 关键文件 SHA-256 一致；线上 Arcade `0.7.0` / Badge `2.2.1`。iOS/Android 真机试玩与原生全屏仍 UNVERIFIED。
 
 ## Arcade 0.6.2 — 2026-11-12
 

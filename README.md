@@ -4,9 +4,9 @@
 
 - **线上站点：** <https://shawlaw.github.io/studiokit/> · <https://studiokit.pages.dev/>
 - **源码：** <https://github.com/Shawlaw/studiokit>（MIT 许可）
-- **当前工具：** Badge Studio `2.2.1`；街机厅 Arcade `0.7.0`（13 款竖屏小游戏，本地优化版，尚未发布）
+- **当前工具：** Badge Studio `2.2.1`；街机厅 Arcade `0.7.0`（13 款竖屏小游戏，已发布）
 - **计划中的工具：** Rounded Image（尚未实现，等待原始需求/规格）
-- **最近发布：** 2026-11-12，Arcade 0.6.2（黄金矿工目标金额取整、俄罗斯方块左右手分区触屏按钮、加速/落底区分）；0.7.0 仅在本地分支，未推送
+- **最近发布：** 2026-11-13，Arcade 0.7.0（13 款主动道具、自然收尾、一次性 20 分钟提醒与随机入口；GitHub Pages + Cloudflare Pages 双端）
 - **运行方式：** 纯静态文件；无后端、无账号、无构建依赖、无第三方 CDN
 
 ## 目录结构
@@ -24,7 +24,7 @@ StudioKit/
 │   │   ├── index.html
 │   │   ├── README.md
 │   │   └── CHANGELOG.md
-│   └── arcade/                      # 街机厅，当前 v0.7.0（本地）
+│   └── arcade/                      # 街机厅，当前 v0.7.0（已发布）
 │       ├── index.html               # 游戏中心页（统计/分享/安装/预载）
 │       ├── engine.js                # 街机专用共享运行时
 │       ├── arcade.css               # 街机专用样式
@@ -157,10 +157,9 @@ Cloudflare Pages 部署在域名根路径（当前为 `studiokit.pages.dev`，�
 
 ## 当前状态
 
-- 已发布：Badge Studio `2.2.1`、街机厅 Arcade `0.6.2`（黄金矿工目标金额取整与 HUD 可读性、俄罗斯方块左右手分区触屏按钮、加速/落底区分；含 0.6.1 Boss 入场碰撞修复）。
-- 本地分支：Arcade `0.7.0` 为 13 款游戏补充主动道具、自然终点与一次性 20 分钟休息提醒；没有签到、每日奖励或付费抽奖，尚未推送/发布。
-- Arcade 0.6.2 已通过 66 项本地无头浏览器检查，并完成 GitHub Pages 与 Cloudflare Pages 双端逐文件校验。
-- Arcade 0.7.0（本地分支）已通过 85 项无头浏览器检查、`validate_site.py`、`build_site.py` 与全部 `node --check`；未推送、未发布，真机 iOS/Android 试玩仍为 UNVERIFIED。
+- 已发布：Badge Studio `2.2.1`、街机厅 Arcade `0.7.0`（13 款游戏各 2 个主动道具、7 类自然收尾、一次性 20 分钟提醒与中心页随机入口；没有签到、每日奖励或付费抽奖）。
+- Arcade 0.7.0 已通过 85 项本地无头浏览器检查、`validate_site.py`、`build_site.py` 与全部 `node --check`；GitHub Pages 与 Cloudflare Pages 双端 24/24 关键文件一致，线上版本 `0.7.0`。
+- 真机 iOS/Android 试玩、原生全屏与系统分享面板仍为 UNVERIFIED。
 - 规划中：Rounded Image（等待原始需求/规格，不凭空复刻）。
 - 任务、证据和未决项见 [`TASKS.md`](TASKS.md)；后续方向见 [`docs/ROADMAP.md`](docs/ROADMAP.md)。
 - Arcade 的玩法、数据键和已知边界见 [`apps/arcade/README.md`](apps/arcade/README.md)。

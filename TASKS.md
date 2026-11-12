@@ -36,7 +36,7 @@
 | T030 | agent | 开源协议（MIT）与页面 GitHub 源码入口 | DONE | T029 | MIT LICENSE + README 许可说明 + ADR-0005；门户页头与 shellbar「源码」链接（noopener）；validate/build/node --check 全过；arcade_smoke 66/66；320/390/430 无溢出、shellbar 38px；已由 T031 双端发布 |
 | T031 | agent | 双目标发布：GitHub Pages + Cloudflare Pages 与 Arcade 0.6.2 | DONE | T030 | `0159437` 推送 main；Actions `43155182519` 四 job 全成功；verify 11/11 文件一致；双端 Arcade 0.6.2 / Badge 2.2.1；CF 项目 studiokit；Token 仅存 GitHub Secrets |
 | T032 | agent | Arcade 0.7.0：全游戏趣味性、可选道具与适度游玩优化 | DONE | T031 | 13 款各 2 个主动道具（矿工保留 4 + 两项重平衡）、7 类自然收尾、20 分钟一次性提醒、中心页 🎲；共享 createToolbelt；validate/build/node --check 全过；arcade_smoke 85/85（含 13 款旧档补给、320/375/390/430+横屏、PWA/断网）；本地提交 `0eebc79`（feat/arcade-pure-joy），未推送/未发布；真机 UNVERIFIED |
-| T033 | agent | Arcade 0.7.0 发布：试玩截图复核、推送 main 并双端验证 | IN_PROGRESS | T032 | Owner 当前任务明确授权发布；13 页试玩截图与多宽度布局复核通过；UI 提示/道具标签修复后 smoke 85/85；待推送并校验双端 |
+| T033 | agent | Arcade 0.7.0 发布：试玩截图复核、推送 main 并双端验证 | DONE | T032 | Owner 当前任务明确授权发布；13 页自动试玩+截图复核（320/375/390/430/横屏）无 UI 阻塞，修复道具标签与提示文案后 commit `34f03df` 推送 main；Actions `43274342320` 四 job 成功；verify_deploy 24/24 双端一致，线上 0.7.0；发布后文档同步提交已推送；真机 iOS/Android 仍 UNVERIFIED |
 
 ## 任务命令
 
