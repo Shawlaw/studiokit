@@ -88,6 +88,13 @@
         ['#b06bff', '#2a0d4a'],
       ];
       const POWER_TYPES = ['wide', 'slow', 'life'];
+      const TOOL_START = { wide: 1, smash: 1 };
+      const TOOL_CAPS = { wide: 1, smash: 1 };
+      const WIDE_DURATION = 10;
+      const SMASH_HITS = 3;
+      const FINAL_LEVEL = 3;
+      const tools = { wide: TOOL_START.wide, smash: TOOL_START.smash };
+      let smashHits = 0;
 
       let bricks = [];
       let paddle = { x: W / 2 - 48, y: PADDLE_Y, w: 96, h: 14, baseW: 96 };
@@ -98,6 +105,8 @@
       let level = 1;
       let launched = false;
       let wideTimer = 0;
+      /* 区分“主动宽板”与掉落拾取：主动买的效果不因失球被清零。 */
+      let wideFromTool = false;
       let slowTimer = 0;
       let levelClearTimer = 0;
       let shake = 0;
@@ -162,10 +171,14 @@
         lives = 3;
         level = 1;
         wideTimer = 0;
+        wideFromTool = false;
         slowTimer = 0;
         levelClearTimer = 0;
         shake = 0;
         pickups = [];
+        tools.wide = TOOL_START.wide;
+        tools.smash = TOOL_START.smash;
+        smashHits = 0;
         particles.clear();
         recordSaved = false;
         spaceWasDown = false;
@@ -188,6 +201,7 @@
         ui.hide();
         loop.resume();
         pauseUi.sync();
+        joyTools.sync();
         autosave.saveNow();
       }
 
@@ -197,11 +211,14 @@
         ui.hide();
         loop.resume();
         pauseUi.sync();
+        joyTools.sync();
       }
 
       function finish(win) {
         if (state === 'over') return;
         state = 'over';
+        smashHits = 0;
+        joyTools.sync();
         autosave.clear();
         A.Sfx.play(win ? 'perfect' : 'over');
         let rec = null;
@@ -227,6 +244,7 @@
         if (state !== 'playing') return;
         loop.pause();
         state = 'paused';
+        joyTools.sync();
         autosave.saveNow();
         ui.show({ title: '已暂停', text: '球停在半空。<br/>局内进度已保存，可以随时离开。', btn: '继续', onBtn: resumeGame });
         pauseUi.sync();
@@ -263,19 +281,21 @@
         });
       }
 
-      function collectPickup(p) {
-        if (p.type === 'wide') {
-          wideTimer = 10;
+      function activatePower(type, x, y) {
+        if (type === 'wide') {
+          wideTimer = WIDE_DURATION;
+          wideFromTool = false;
           paddle.w = levelConfig(level).paddleW + 30;
+          paddle.x = clamp(paddle.x, FIELD.x + 6, FIELD.x + FIELD.w - paddle.w - 6);
           A.Sfx.play('spring');
-        } else if (p.type === 'slow') {
+        } else if (type === 'slow') {
           slowTimer = 8;
           A.Sfx.play('bell', 2);
         } else {
           lives = Math.min(5, lives + 1);
           A.Sfx.play('perfect');
         }
-        particles.emit(p.x, p.y, {
+        particles.emit(x, y, {
           count: A.reducedMotion ? 5 : 14,
           speed: [30, 150],
           life: [0.25, 0.6],
@@ -285,7 +305,16 @@
         });
       }
 
+      function collectPickup(p) {
+        activatePower(p.type, p.x, p.y);
+      }
+
       function hitBrick(brick) {
+        const smashed = smashHits > 0;
+        if (smashed) {
+          brick.hp = 1;
+          smashHits -= 1;
+        }
         brick.hp -= 1;
         if (brick.hp <= 0) {
           brick.alive = false;
@@ -304,15 +333,21 @@
         } else {
           A.Sfx.play('ui');
         }
+        if (smashed) {
+          joyTools.sync();
+          autosave.saveNow();
+        }
       }
 
       function loseBall() {
         lives -= 1;
         A.Sfx.play('over');
-        wideTimer = 0;
+        /* 主动宽板是花次数买的，失球不清零；拾取来的宽板按原规则清掉。 */
+        if (!wideFromTool) wideTimer = 0;
         slowTimer = 0;
         resetBall();
         syncHud();
+        joyTools.sync();
         if (lives <= 0) finish(false);
       }
 
@@ -379,16 +414,24 @@
         if (state === 'levelclear') {
           levelClearTimer -= dt;
           if (levelClearTimer <= 0) {
-            level += 1;
-            score += 100 + lives * 40;
-            spawnBricks();
-            wideTimer = 0;
-            slowTimer = 0;
-            pickups = [];
-            resetBall();
-            state = 'playing';
-            autosave.saveNow();
-            syncHud();
+            if (level === FINAL_LEVEL) {
+              score += 100 + lives * 40;
+              syncHud();
+              finish(true);
+            } else {
+              level += 1;
+              score += 100 + lives * 40;
+              spawnBricks();
+              wideTimer = 0;
+              wideFromTool = false;
+              slowTimer = 0;
+              pickups = [];
+              resetBall();
+              state = 'playing';
+              joyTools.sync();
+              autosave.saveNow();
+              syncHud();
+            }
           }
           input.endFrame();
           return;
@@ -401,7 +444,12 @@
 
         if (wideTimer > 0) {
           wideTimer -= dt;
-          if (wideTimer <= 0) paddle.w = levelConfig(level).paddleW;
+          if (wideTimer <= 0) {
+            wideTimer = 0;
+            wideFromTool = false;
+            paddle.w = levelConfig(level).paddleW;
+            joyTools.sync();
+          }
         }
         if (slowTimer > 0) slowTimer -= dt;
 
@@ -440,6 +488,7 @@
           state = 'levelclear';
           levelClearTimer = 1.5;
           pickups = [];
+          joyTools.sync();
           A.Sfx.play('perfect');
         }
         input.endFrame();
@@ -458,6 +507,9 @@
           launched,
           wideTimer,
           slowTimer,
+          wideFromTool,
+          tools: { wide: tools.wide, smash: tools.smash },
+          smashHits,
         };
       }
 
@@ -490,8 +542,14 @@
           ball.vx = Number(data.ball.vx) || 0;
           ball.vy = Number(data.ball.vy) || 0;
           launched = !!data.launched;
-          wideTimer = Math.max(0, Number(data.wideTimer) || 0);
+          wideTimer = clamp(Number(data.wideTimer) || 0, 0, WIDE_DURATION);
+          wideFromTool = !!data.wideFromTool && wideTimer > 0;
           slowTimer = Math.max(0, Number(data.slowTimer) || 0);
+          if (data.tools && typeof data.tools === 'object') {
+            tools.wide = Number.isFinite(Number(data.tools.wide)) ? clamp(Math.floor(Number(data.tools.wide)), 0, TOOL_CAPS.wide) : TOOL_START.wide;
+            tools.smash = Number.isFinite(Number(data.tools.smash)) ? clamp(Math.floor(Number(data.tools.smash)), 0, TOOL_CAPS.smash) : TOOL_START.smash;
+          }
+          smashHits = clamp(Math.floor(Number(data.smashHits) || 0), 0, SMASH_HITS);
           pickups = Array.isArray(data.pickups)
             ? data.pickups.filter((p) => p && POWER_TYPES.indexOf(p.type) !== -1).map((p) => ({
                 x: Number(p.x) || W / 2,
@@ -504,6 +562,7 @@
             : [];
           recordSaved = false;
           state = 'playing';
+          joyTools.sync();
           syncHud();
           return true;
         } catch (err) {
@@ -515,6 +574,42 @@
         every: 4,
         meta: () => ({ score, summary: `得分 ${score} · 第 ${level} 关 · 生命 ${lives}` }),
       });
+
+      function useTool(id) {
+        if (state !== 'playing') return false;
+        if (id === 'wide') {
+          if (tools.wide <= 0 || wideTimer > 0) {
+            A.showToast(wideTimer > 0 ? '宽板效果正在进行' : '主动宽板已经用过啦');
+            return false;
+          }
+          tools.wide -= 1;
+          activatePower('wide', paddle.x + paddle.w / 2, paddle.y - 18);
+          wideFromTool = true;
+          A.showToast('宽板 10 秒！');
+          autosave.saveNow();
+          joyTools.sync();
+          return true;
+        }
+        if (id === 'smash') {
+          if (tools.smash <= 0 || smashHits > 0) {
+            A.showToast(smashHits > 0 ? '重锤球还剩 ' + smashHits + ' 次击碎' : '重锤球已经用过啦');
+            return false;
+          }
+          tools.smash -= 1;
+          smashHits = SMASH_HITS;
+          A.Sfx.play('perfect');
+          A.showToast('接下来 3 次砖碰直接击碎！');
+          autosave.saveNow();
+          joyTools.sync();
+          return true;
+        }
+        return false;
+      }
+
+      const joyTools = A.createToolbelt([
+        { id: 'wide', icon: '↔', name: '主动宽板', description: '立即加宽挡板 10 秒', getCount: () => tools.wide, use: () => useTool('wide'), active: () => wideTimer > 0 },
+        { id: 'smash', icon: '🔨', name: '重锤球', description: '接下来三次砖碰直接击碎', getCount: () => tools.smash, use: () => useTool('smash'), active: () => smashHits > 0 },
+      ], { isPlaying: () => state === 'playing', keys: ['1', '2'], label: '砖块计划道具', placement: 'below' });
 
       function drawBrick(b) {
         if (!b.alive) return;
@@ -598,6 +693,9 @@
         if (slowTimer > 0) {
           A.draw.label(ctx, '减速 ' + Math.ceil(slowTimer) + 's', 12, 70, { align: 'left', font: '11px system-ui', color: '#b06bff' });
         }
+        if (smashHits > 0) {
+          A.draw.label(ctx, '重锤 ×' + smashHits, W - 12, 52, { align: 'right', font: 'bold 11px system-ui', color: '#ffd23f' });
+        }
         if (state === 'levelclear') {
           A.draw.label(ctx, '第 ' + level + ' 关完成', W / 2, 620, { font: 'bold 22px system-ui', color: '#5ad1a0' });
         }
@@ -631,6 +729,73 @@
 
       reset();
       state = 'ready';
+      joyTools.sync();
+      if (location.hash === '#test') {
+        window.__arcadeTest = {
+          info() {
+            return {
+              state,
+              level,
+              score,
+              lives,
+              launched,
+              wideTimer,
+              slowTimer,
+              smashHits,
+              tools: { wide: tools.wide, smash: tools.smash },
+              paddle: { x: paddle.x, w: paddle.w },
+              bricks: bricks.map((b) => ({ hp: b.hp, maxHp: b.maxHp, alive: b.alive })),
+            };
+          },
+          joyInfo() {
+            return {
+              tools: { wide: tools.wide, smash: tools.smash },
+              wideTimer,
+              smashHits,
+              paddle: { x: paddle.x, w: paddle.w },
+              level,
+              state,
+              bricks: bricks.map((b) => ({ hp: b.hp, maxHp: b.maxHp, alive: b.alive })),
+            };
+          },
+          useJoyTool(id) {
+            const button = joyTools.buttons[id];
+            if (!button) return false;
+            button.click();
+            return true;
+          },
+          setLevel(value) {
+            level = clamp(Math.floor(Number(value) || 1), 1, 99);
+            spawnBricks();
+            resetBall();
+            state = 'playing';
+            ui.hide();
+            loop.resume();
+            pauseUi.sync();
+            joyTools.sync();
+            return true;
+          },
+          hitBrickNow(index) {
+            const brick = bricks[Number(index)];
+            if (!brick || !brick.alive) return false;
+            hitBrick(brick);
+            return true;
+          },
+          clearLevelNow() {
+            bricks.forEach((b) => { b.alive = false; });
+            pickups = [];
+            state = 'levelclear';
+            levelClearTimer = 0.01;
+            joyTools.sync();
+            return true;
+          },
+          loseBallNow() {
+            if (state !== 'playing') return false;
+            loseBall();
+            return true;
+          },
+        };
+      }
       const saved = autosave.load();
       if (saved) {
         A.showResumePrompt(ui, saved, {
@@ -641,6 +806,7 @@
               ui.hide();
               loop.resume();
               pauseUi.sync();
+              joyTools.sync();
               autosave.saveNow();
             } else {
               autosave.clear();

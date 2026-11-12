@@ -8,7 +8,8 @@
 - 最近发布：Arcade `0.6.2`（2026-11-12，已发布）
   - 批次内容：T028 黄金矿工目标取整/HUD、T029 俄罗斯方块左右手触屏按钮、T030 MIT 与源码入口、T031 双端发布
   - 提交 `0159437`；Actions `43155182519` 四个 job 均成功
-  - 双端验证：`tools/verify_deploy.py` 11/11 文件 SHA-256 一致，Arcade `0.6.2` / Badge `2.2.1`
+  - 双端验证：`tools/verify_deploy.py` 当时覆盖的 11 个文件 SHA-256 一致，Arcade `0.6.2` / Badge `2.2.1`（0.7.0 起校验清单扩为 24 个文件）
+- 本地待发布：Arcade `0.7.0`（全游戏主动道具、自然收尾与一次性 20 分钟提醒），仅在 `feat/arcade-pure-joy`，未推送；本次发布前必须按本 runbook 全量复跑并补齐 13 款游戏页与 `arcade.css` 的双端校验
 - 上一个发布：Arcade `0.6.1`（2026-11-12），提交 `1c9501e`，Actions `43060497094` 成功
 - 部署目标：
   - GitHub Pages：GitHub Actions（`.github/workflows/deploy.yml`）
@@ -51,7 +52,7 @@ node --check shared/home.js
 node --check shared/site-shell.js
 node --check apps/arcade/engine.js
 node --check apps/arcade/sw.js
-node tools/arcade_smoke.mjs   # 需要本机 Chrome；当前 66 项，含 PWA/断网回归
+node tools/arcade_smoke.mjs   # 需要本机 Chrome；0.7.0 批次当前 85 项，含 PWA/断网与 13 款旧档回归
 git diff --check
 git status --short
 ```
@@ -62,7 +63,7 @@ git status --short
 py -3 "$env:USERPROFILE\.agents\skills\commit-time-policy\check.py" origin/main..HEAD
 ```
 
-涉及 Arcade 的发布还应查看 `apps/arcade/DESIGN-0.4.0.md`、`DESIGN-0.5.0.md`、`DESIGN-0.6.0.md` 和 `DESIGN-block-controls.md`。PWA/离线检查必须在 HTTPS 或 `localhost` 下进行；`file://` 与明文局域网 HTTP 不注册 Service Worker。
+涉及 Arcade 的发布还应查看 `apps/arcade/DESIGN-0.4.0.md`、`DESIGN-0.5.0.md`、`DESIGN-0.6.0.md`、`DESIGN-0.7.0.md` 和 `DESIGN-block-controls.md`。PWA/离线检查必须在 HTTPS 或 `localhost` 下进行；`file://` 与明文局域网 HTTP 不注册 Service Worker。
 
 本地 Windows 构建会把文本文件写成 CRLF，CI 的 Linux checkout 是 LF。`verify_deploy.py` 在比较前统一换行，但正式发布以 CI artifact 为准；不要用本地 `dist/` 覆盖 CI 产物。
 
@@ -98,12 +99,14 @@ OWNER_AUTHORIZATION: PUBLISH_TO_MAIN
      --retries 15 --delay 8
    ```
 
-   预期：两个 URL 的 11 个关键文件哈希一致，Arcade 版本为 `0.6.2`，Badge 为 `2.2.1`，manifest 为 `application/manifest+json`。
+   预期：两个 URL 的 24 个关键文件哈希一致（含 13 款游戏页与 `arcade.css`），Arcade 版本为 `0.7.0`，Badge 为 `2.2.1`，manifest 为 `application/manifest+json`。
 4. 打开两个门户，确认工具卡片加载、源码链接、Badge Studio 与街机厅入口可点击。
-5. 打开 Arcade 中心页，确认线上版本 `0.6.2` / 13 款，并检查：
-   - 黄金矿工：目标金额为整数；顶部 HUD 在浅色天空下可读；进入下一关不会出现小数目标。
-   - 俄罗斯方块：左手 `←` / `→`、右手 `↻` / `↓加速` / `⇓落底`；按住加速逐格下落、落底立即锁定；点按画布不会移动或下落。
-   - `游玩统计`、`分享`、`安装到桌面`、`预载全部游戏` 的既有行为无回归；SW 缓存键为 `studiokit-arcade-0.6.2-v1`。
+5. 打开 Arcade 中心页，确认线上版本 `0.7.0` / 13 款，并检查：
+   - 每款游戏都有 2 个主动道具按钮（黄金矿工保留 4 个），按钮在画布外/内均不遮挡核心操作；无签到、每日奖励或付费抽奖入口。
+   - 中心页「惊喜一下」可随机打开一款，返回后再点不会立刻重复；页脚显示「快乐约定」。
+   - `游玩统计`、`分享`、`安装到桌面`、`预载全部游戏` 的既有行为无回归；SW 缓存键为 `studiokit-arcade-0.7.0-v1`。
+   - 自然收尾：2048 达成、砖块第 3 关、重力 3000m、贪吃蛇 20 果实、方块 40 行、星海 Boss CLEAR、赛车 5000m 至少抽测 3 项。
+   - 暂停后继续、刷新续玩与旧档（缺新字段）恢复至少抽测 3 款；道具次数与计时不丢失、不翻倍。
 6. 打开 Badge Studio，确认共享导航、预览和导出正常。
 7. 检查浏览器控制台无资源 404 / JavaScript 错误（`favicon.ico` 自动请求的 404 可忽略）。Service Worker 缓存旧版本时，使用 DevTools → Application → Service Workers 注销并清除 Storage 后复测。
 8. 记录 commit SHA、Actions run URL、两个最终 URL 和验证结果到 `TASKS.md` 与 `tasks/queue.json`。

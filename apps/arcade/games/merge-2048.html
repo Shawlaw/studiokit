@@ -90,10 +90,19 @@
         4096: ['#3c3a32', '#ffffff'],
       };
 
+      const TOOL_START = { hammer: 2, upgrade: 1 };
+      const TOOL_CAPS = { hammer: 2, upgrade: 1 };
+      const HAMMER_MAX_VALUE = 64;
+      const UPGRADE_MAX_VALUE = 256;
+      const tools = { hammer: TOOL_START.hammer, upgrade: TOOL_START.upgrade };
+      let armedTool = null;
+
       let board = [];
       let score = 0;
       let moves = 0;
       let won = false;
+      /* 首次合成 2048 的奖励只发一次；撤销后再合 2048 不重复加分/弹层。 */
+      let winBonusClaimed = false;
       let nextId = 1;
       let undoStack = [];
       let moveLock = 0;
@@ -150,10 +159,14 @@
         score = 0;
         moves = 0;
         won = false;
+        winBonusClaimed = false;
         nextId = 1;
         undoStack = [];
         moveLock = 0;
         swipeStart = null;
+        tools.hammer = TOOL_START.hammer;
+        tools.upgrade = TOOL_START.upgrade;
+        armedTool = null;
         recordSaved = false;
         lastBest = 0;
         spawnTile();
@@ -168,6 +181,7 @@
         ui.hide();
         loop.resume();
         pauseUi.sync();
+        joyTools.sync();
         autosave.saveNow();
       }
 
@@ -177,11 +191,14 @@
         ui.hide();
         loop.resume();
         pauseUi.sync();
+        joyTools.sync();
       }
 
       function finish(win) {
         if (state === 'over') return;
         state = 'over';
+        armedTool = null;
+        joyTools.sync();
         autosave.clear();
         A.Sfx.play(win ? 'perfect' : 'over');
         let rec = null;
@@ -198,7 +215,15 @@
             (rec && rec.isNewHigh ? '<span class="ac-newhigh">★ 新纪录</span><br/>' : '') +
             `${moves} 步 · 最大方块 ${bestTile()}${win ? ' · 可以继续挑战更高数字' : ''}`,
           btn: win ? '继续挑战' : '再来一局',
-          onBtn: win ? () => { state = 'playing'; ui.hide(); loop.resume(); pauseUi.sync(); } : startGame,
+          onBtn: win ? () => {
+            state = 'playing';
+            armedTool = null;
+            ui.hide();
+            loop.resume();
+            pauseUi.sync();
+            joyTools.sync();
+            autosave.saveNow();
+          } : startGame,
         });
         pauseUi.sync();
       }
@@ -207,6 +232,7 @@
         if (state !== 'playing') return;
         loop.pause();
         state = 'paused';
+        joyTools.sync();
         autosave.saveNow();
         ui.show({ title: '已暂停', text: '数字先停一停。<br/>局内进度已保存。', btn: '继续', onBtn: resumeGame });
         pauseUi.sync();
@@ -221,13 +247,26 @@
         });
       }
 
+      function restoreToolCounts(value) {
+        if (!value || typeof value !== 'object') return;
+        tools.hammer = Number.isFinite(Number(value.hammer)) ? clamp(Math.floor(Number(value.hammer)), 0, TOOL_CAPS.hammer) : TOOL_START.hammer;
+        tools.upgrade = Number.isFinite(Number(value.upgrade)) ? clamp(Math.floor(Number(value.upgrade)), 0, TOOL_CAPS.upgrade) : TOOL_START.upgrade;
+      }
+
       function snapshot() {
         return {
           values: board.map((row) => row.map((t) => (t ? t.value : 0))),
           score,
           won,
           moves,
+          tools: { hammer: tools.hammer, upgrade: tools.upgrade },
+          winBonusClaimed,
         };
+      }
+
+      function pushUndo(snap) {
+        undoStack.push(snap);
+        if (undoStack.length > 3) undoStack.shift();
       }
 
       function serialize() {
@@ -237,6 +276,9 @@
           score,
           moves,
           won,
+          tools: { hammer: tools.hammer, upgrade: tools.upgrade },
+          armedTool,
+          winBonusClaimed,
           undo: undoStack.slice(-3),
         };
       }
@@ -260,9 +302,13 @@
           score = Math.max(0, Number(data.score) || 0);
           moves = Math.max(0, Number(data.moves) || 0);
           won = !!data.won;
+          winBonusClaimed = !!data.winBonusClaimed;
           undoStack = Array.isArray(data.undo) ? data.undo.filter((s) => s && Array.isArray(s.values)) : [];
+          restoreToolCounts(data.tools);
+          armedTool = (data.armedTool === 'hammer' || data.armedTool === 'upgrade') && tools[data.armedTool] > 0 ? data.armedTool : null;
           recordSaved = false;
           state = 'playing';
+          joyTools.sync();
           syncHud();
           return true;
         } catch (err) {
@@ -275,6 +321,79 @@
         meta: () => ({ score, summary: `得分 ${score} · ${moves} 步 · 最大 ${bestTile()}` }),
       });
 
+      function useTool(id) {
+        if (state !== 'playing' || (id !== 'hammer' && id !== 'upgrade')) return false;
+        if (armedTool === id) {
+          armedTool = null;
+          A.showToast('已取消道具选择');
+          autosave.saveNow();
+          joyTools.sync();
+          return true;
+        }
+        if (tools[id] <= 0) {
+          A.showToast('这个道具已经用完啦');
+          return false;
+        }
+        armedTool = id;
+        A.Sfx.play('ui');
+        A.showToast(id === 'hammer' ? '点选一个 64 或更小的方块' : '点选一个 256 或更小的方块');
+        autosave.saveNow();
+        joyTools.sync();
+        return true;
+      }
+
+      function applyJoyToolAt(r, c) {
+        if (state !== 'playing' || moveLock > 0 || !armedTool) return false;
+        const tile = board[r] && board[r][c];
+        if (!tile) {
+          A.showToast('请点选一个数字方块');
+          return false;
+        }
+        const id = armedTool;
+        if (id === 'hammer' && tile.value > HAMMER_MAX_VALUE) {
+          A.showToast('小锤只清理 64 或更小的方块');
+          return false;
+        }
+        if (id === 'upgrade' && tile.value > UPGRADE_MAX_VALUE) {
+          A.showToast('升一级最多用于 256 方块');
+          return false;
+        }
+        const before = snapshot();
+        if (id === 'hammer') {
+          board[r][c] = null;
+        } else {
+          tile.value *= 2;
+          tile.anim = 1;
+          tile.pop = 1;
+        }
+        tools[id] -= 1;
+        armedTool = null;
+        pushUndo(before);
+        A.Sfx.play(id === 'hammer' ? 'hit' : 'perfect');
+        A.showToast(id === 'hammer' ? '小锤清理完成' : '方块升一级！');
+        syncHud();
+        joyTools.sync();
+        autosave.saveNow();
+        if (isGameOver()) finish(false);
+        return true;
+      }
+
+      function handleBoardPoint(x, y) {
+        if (!armedTool) return false;
+        const c = Math.floor((x - BOARD_X) / (CELL + GAP));
+        const r = Math.floor((y - BOARD_Y) / (CELL + GAP));
+        if (r < 0 || r >= N || c < 0 || c >= N) return false;
+        const localX = x - BOARD_X - c * (CELL + GAP);
+        const localY = y - BOARD_Y - r * (CELL + GAP);
+        if (localX < 0 || localX > CELL || localY < 0 || localY > CELL) return false;
+        return applyJoyToolAt(r, c);
+      }
+
+      const joyTools = A.createToolbelt([
+        { id: 'hammer', icon: '🧹', name: '小锤', description: '移除一个不超过 64 的方块', getCount: () => tools.hammer, use: () => useTool('hammer'), active: () => armedTool === 'hammer' },
+        { id: 'upgrade', icon: '✨', name: '升一级', description: '将一个不超过 256 的方块翻倍', getCount: () => tools.upgrade, use: () => useTool('upgrade'), active: () => armedTool === 'upgrade' },
+      ], { isPlaying: () => state === 'playing', keys: ['1', '2'], label: '2048 道具', placement: 'below' });
+
       function lineCoords(dir, index, step) {
         if (dir === 'left') return { r: index, c: step };
         if (dir === 'right') return { r: index, c: N - 1 - step };
@@ -285,6 +404,7 @@
       function move(dir) {
         if (state !== 'playing' || moveLock > 0) return false;
         const before = snapshot();
+        let justWon = false;
         allTiles().forEach((t) => {
           t.merged = false;
         });
@@ -308,7 +428,11 @@
               score += a.value;
               if (a.value >= 2048 && !won) {
                 won = true;
-                score += 2048;
+                justWon = true;
+                if (!winBonusClaimed) {
+                  winBonusClaimed = true;
+                  score += 2048;
+                }
                 A.Sfx.play('perfect');
               }
               merged.push(a);
@@ -334,15 +458,15 @@
           if (isGameOver()) finish(false);
           return false;
         }
-        undoStack.push(before);
-        if (undoStack.length > 3) undoStack.shift();
+        pushUndo(before);
         board = newBoard;
         moves += 1;
         moveLock = 0.09;
         spawnTile();
         syncHud();
         A.Sfx.play('land');
-        if (isGameOver()) finish(false);
+        if (justWon) finish(true);
+        else if (isGameOver()) finish(false);
         return true;
       }
 
@@ -373,7 +497,12 @@
         score = Math.max(0, Number(snap.score) || 0);
         moves = Math.max(0, Number(snap.moves) || moves - 1);
         won = !!snap.won;
+        winBonusClaimed = !!snap.winBonusClaimed;
+        restoreToolCounts(snap.tools);
+        armedTool = null;
         syncHud();
+        joyTools.sync();
+        autosave.saveNow();
         A.Sfx.play('ui');
       }
 
@@ -402,7 +531,10 @@
         });
         if (input.pointer.wentDown) swipeStart = { x: input.pointer.x, y: input.pointer.y };
         if (input.pointer.wentUp && swipeStart) {
-          handleSwipe(input.pointer.x - swipeStart.x, input.pointer.y - swipeStart.y);
+          const dx = input.pointer.x - swipeStart.x;
+          const dy = input.pointer.y - swipeStart.y;
+          if (armedTool && Math.abs(dx) < 22 && Math.abs(dy) < 22) handleBoardPoint(input.pointer.x, input.pointer.y);
+          else handleSwipe(dx, dy);
           swipeStart = null;
         }
         input.endFrame();
@@ -501,6 +633,78 @@
 
       reset();
       state = 'ready';
+      joyTools.sync();
+      if (location.hash === '#test') {
+        window.__arcadeTest = {
+          info() {
+            return {
+              state,
+              score,
+              moves,
+              won,
+              best: bestTile(),
+              board: board.map((row) => row.map((t) => (t ? t.value : 0))),
+              undo: undoStack.length,
+              tools: { hammer: tools.hammer, upgrade: tools.upgrade },
+              armedTool,
+            };
+          },
+          joyInfo() {
+            return {
+              tools: { hammer: tools.hammer, upgrade: tools.upgrade },
+              armedTool,
+              won,
+              state,
+              undo: undoStack.length,
+              board: board.map((row) => row.map((t) => (t ? t.value : 0))),
+            };
+          },
+          useJoyTool(id) {
+            const button = joyTools.buttons[id];
+            if (!button) return false;
+            button.click();
+            return true;
+          },
+          setBoard(values) {
+            if (!Array.isArray(values) || values.length !== N || values.some((row) => !Array.isArray(row) || row.length !== N)) return false;
+            const valid = values.every((row) => row.every((value) => value === 0 || (Number.isInteger(value) && value >= 2 && (value & (value - 1)) === 0)));
+            if (!valid) return false;
+            board = emptyBoard();
+            nextId = 1;
+            for (let r = 0; r < N; r++) {
+              for (let c = 0; c < N; c++) {
+                const value = values[r][c];
+                if (value) board[r][c] = { id: nextId++, value, r, c, pr: r, pc: c, anim: 1, pop: 0 };
+              }
+            }
+            score = 0;
+            moves = 0;
+            won = false;
+            undoStack = [];
+            recordSaved = false;
+            moveLock = 0;
+            armedTool = null;
+            state = 'playing';
+            ui.hide();
+            loop.resume();
+            pauseUi.sync();
+            joyTools.sync();
+            syncHud();
+            return true;
+          },
+          tapTile(r, c) {
+            return applyJoyToolAt(Number(r), Number(c));
+          },
+          moveNow(dir) {
+            moveLock = 0;
+            return move(dir);
+          },
+          undoNow() {
+            undo();
+            return true;
+          },
+        };
+      }
       const saved = autosave.load();
       if (saved) {
         A.showResumePrompt(ui, saved, {
@@ -511,6 +715,7 @@
               ui.hide();
               loop.resume();
               pauseUi.sync();
+              joyTools.sync();
               autosave.saveNow();
             } else {
               autosave.clear();

@@ -4,9 +4,9 @@
 
 - **线上站点：** <https://shawlaw.github.io/studiokit/> · <https://studiokit.pages.dev/>
 - **源码：** <https://github.com/Shawlaw/studiokit>（MIT 许可）
-- **当前工具：** Badge Studio `2.2.1`；街机厅 Arcade `0.6.2`（13 款竖屏小游戏，已发布）
+- **当前工具：** Badge Studio `2.2.1`；街机厅 Arcade `0.7.0`（13 款竖屏小游戏，本地优化版，尚未发布）
 - **计划中的工具：** Rounded Image（尚未实现，等待原始需求/规格）
-- **最近发布：** 2026-11-12，Arcade 0.6.2（黄金矿工目标金额取整、俄罗斯方块左右手分区触屏按钮、加速/落底区分）
+- **最近发布：** 2026-11-12，Arcade 0.6.2（黄金矿工目标金额取整、俄罗斯方块左右手分区触屏按钮、加速/落底区分）；0.7.0 仅在本地分支，未推送
 - **运行方式：** 纯静态文件；无后端、无账号、无构建依赖、无第三方 CDN
 
 ## 目录结构
@@ -24,7 +24,7 @@ StudioKit/
 │   │   ├── index.html
 │   │   ├── README.md
 │   │   └── CHANGELOG.md
-│   └── arcade/                      # 街机厅，当前 v0.6.2
+│   └── arcade/                      # 街机厅，当前 v0.7.0（本地）
 │       ├── index.html               # 游戏中心页（统计/分享/安装/预载）
 │       ├── engine.js                # 街机专用共享运行时
 │       ├── arcade.css               # 街机专用样式
@@ -35,6 +35,7 @@ StudioKit/
 │       ├── DESIGN-0.4.0.md          # 全屏/道具设计与回滚说明
 │       ├── DESIGN-0.5.0.md          # 统计/分享/PWA/离线设计与回滚说明
 │       ├── DESIGN-0.6.0.md          # 星海 Boss/叠加、矿工瞄准线与全屏说明
+│       ├── DESIGN-0.7.0.md          # 全游戏道具、短局目标与适度游玩设计
 │       ├── README.md
 │       └── CHANGELOG.md
 ├── templates/single-page-tool/      # 新工具模板
@@ -119,7 +120,7 @@ node --check apps/arcade/sw.js
 node tools/arcade_smoke.mjs
 ```
 
-`arcade_smoke.mjs` 需要本机 Chrome，会启动临时静态服务器与无头浏览器；当前覆盖 66 项检查（显式全屏、道具/瞄准线/摆动能量、星海 Boss/弹种叠加/全屏移动、存档、游玩计时与轮次、分享、PWA 安装清单、离线预载/断网、320–430px 布局、子路径和刘海安全区）。
+`arcade_smoke.mjs` 需要本机 Chrome，会启动临时静态服务器与无头浏览器；当前覆盖 85 项检查（显式全屏、共享道具栏与 20 分钟提醒、13 款道具真实效果与旧档恢复、星海 Boss/弹种叠加、存档与游玩计时、分享、PWA 安装清单、离线预载/断网、320–430px 布局、子路径和刘海安全区）。
 
 构建产物位于 `dist/`。它只包含要发布的网站资源，不包含 Agent Prompt、任务队列、内部文档和开发脚本。
 
@@ -157,7 +158,9 @@ Cloudflare Pages 部署在域名根路径（当前为 `studiokit.pages.dev`，�
 ## 当前状态
 
 - 已发布：Badge Studio `2.2.1`、街机厅 Arcade `0.6.2`（黄金矿工目标金额取整与 HUD 可读性、俄罗斯方块左右手分区触屏按钮、加速/落底区分；含 0.6.1 Boss 入场碰撞修复）。
+- 本地分支：Arcade `0.7.0` 为 13 款游戏补充主动道具、自然终点与一次性 20 分钟休息提醒；没有签到、每日奖励或付费抽奖，尚未推送/发布。
 - Arcade 0.6.2 已通过 66 项本地无头浏览器检查，并完成 GitHub Pages 与 Cloudflare Pages 双端逐文件校验。
+- Arcade 0.7.0（本地分支）已通过 85 项无头浏览器检查、`validate_site.py`、`build_site.py` 与全部 `node --check`；未推送、未发布，真机 iOS/Android 试玩仍为 UNVERIFIED。
 - 规划中：Rounded Image（等待原始需求/规格，不凭空复刻）。
 - 任务、证据和未决项见 [`TASKS.md`](TASKS.md)；后续方向见 [`docs/ROADMAP.md`](docs/ROADMAP.md)。
 - Arcade 的玩法、数据键和已知边界见 [`apps/arcade/README.md`](apps/arcade/README.md)。

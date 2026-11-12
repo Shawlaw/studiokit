@@ -11,7 +11,7 @@
   <script src="../engine.js"></script>
   <title>层塔 · 街机厅 · StudioKit</title>
 </head>
-<body class="arcade-body" data-studiokit-app="arcade" data-studiokit-app-title="街机厅 Arcade" style="--ac-accent:#e5941b; --card-accent:#e5941b">
+<body class="arcade-body has-extra-controls has-game-tools" data-studiokit-app="arcade" data-studiokit-app-title="街机厅 Arcade" style="--ac-accent:#e5941b; --card-accent:#e5941b">
   <noscript><p class="ac-noscript">此游戏需要启用 JavaScript 才能运行。</p></noscript>
   <main class="game-page">
     <header class="game-topbar">
@@ -38,7 +38,11 @@
         </div>
       </div>
     </div>
-    <p class="game-hint">看准时机点击 / 空格松手 · 钟摆逐层加速 · 越偏心塔越晃 · 完美对齐有连击 · P / Esc 暂停</p>
+    <div class="touch-pad game-tools" aria-label="可选道具（快捷键 1 / 2）">
+      <button type="button" class="touch-btn" data-joy-tool="guide" aria-label="垂线预览，剩余 3 次（快捷键 1）"><span aria-hidden="true">📐</span> 垂线 <strong data-joy-count>3</strong></button>
+      <button type="button" class="touch-btn" data-joy-tool="brace" aria-label="配重，剩余 2 次（快捷键 2）"><span aria-hidden="true">⚖️</span> 配重 <strong data-joy-count>2</strong></button>
+    </div>
+    <p class="game-hint">看准时机点击 / 空格松手 · 1 垂线 / 2 配重 · 完美对齐有连击 · P / Esc 暂停</p>
   </main>
   <script>
     (() => {
@@ -56,6 +60,10 @@
       const PEND_LEN = 135;
       const LEAN_LIMIT = 0.35;
       const BASE_Y = 0;
+      const JOY_START = { guide: 3, brace: 2 };
+      const JOY_CAPS = { guide: 3, brace: 2 };
+      const BRACE_MIN_LEAN = 0.015;
+      const BRACE_MIN_VEL = 0.04;
 
       const canvas = document.querySelector('.game-canvas');
       const stage = A.createStage(canvas, W, H);
@@ -76,6 +84,10 @@
         mute: document.querySelector('[data-mute]'),
       };
       const ui = A.createOverlayUi(dom);
+      const joyButtons = {
+        guide: document.querySelector('[data-joy-tool="guide"]'),
+        brace: document.querySelector('[data-joy-tool="brace"]'),
+      };
 
       const particles = A.createParticles();
 
@@ -98,6 +110,8 @@
       let shakeVal = 0;
       let floorsReached = 0;
       let feedback = null;
+      const tools = { guide: JOY_START.guide, brace: JOY_START.brace };
+      let guideArmed = false;
 
       let high = A.Progress.get('pendulum-tower').high;
       dom.hudHigh.textContent = String(high);
@@ -124,6 +138,63 @@
         return { x: px, y: py, angle: ang };
       }
 
+      /* ---------- 每局主动道具 ---------- */
+      function canBrace() {
+        return Math.abs(towerLean) > BRACE_MIN_LEAN || Math.abs(leanVel) > BRACE_MIN_VEL;
+      }
+      function syncJoyTools() {
+        Object.keys(joyButtons).forEach((id) => {
+          const button = joyButtons[id];
+          const active = id === 'guide' && guideArmed;
+          const usable = id === 'guide'
+            ? floorsReached >= 3 && pendHasBox && !drop && !guideArmed
+            : canBrace();
+          const name = id === 'guide' ? '垂线预览' : '配重';
+          const detail = id === 'guide' ? '显示下一箱落点投影' : '当前倾斜减半、角速度降至 25%';
+          button.querySelector('[data-joy-count]').textContent = String(tools[id]);
+          button.disabled = state !== 'playing' || tools[id] <= 0 || !usable;
+          button.classList.toggle('is-armed', active);
+          button.setAttribute('aria-pressed', String(active));
+          button.setAttribute('aria-label', name + '，' + detail + '，剩余 ' + tools[id] + ' 次（快捷键 ' + (id === 'guide' ? '1' : '2') + '）');
+        });
+      }
+      function useJoy(id) {
+        if (state !== 'playing' || !Object.prototype.hasOwnProperty.call(tools, id) || tools[id] <= 0) return false;
+        if (id === 'guide') {
+          if (floorsReached < 3 || !pendHasBox || drop || guideArmed) return false;
+          /* 次数在真正释放时扣；武装后放弃（暂停/离开）不会白白消耗。 */
+          guideArmed = true;
+          A.Sfx.play('spring');
+        } else if (id === 'brace') {
+          if (!canBrace()) return false;
+          tools.brace -= 1;
+          towerLean *= 0.5;
+          leanVel *= 0.25;
+          feedback = { text: '配重稳住！', color: '#7ce8e0', life: 1.1 };
+          A.Sfx.play('land');
+        } else {
+          return false;
+        }
+        syncJoyTools();
+        autosave.saveNow();
+        return true;
+      }
+      Object.keys(joyButtons).forEach((id) => {
+        joyButtons[id].addEventListener('click', () => useJoy(id));
+      });
+      window.addEventListener('keydown', (e) => {
+        if (e.repeat || e.metaKey || e.ctrlKey || e.altKey) return;
+        const target = e.target;
+        if (target && target.tagName) {
+          const tag = target.tagName.toLowerCase();
+          if (tag === 'input' || tag === 'textarea' || tag === 'select' || target.isContentEditable) return;
+        }
+        const id = { '1': 'guide', '2': 'brace' }[e.key];
+        if (!id) return;
+        e.preventDefault();
+        useJoy(id);
+      });
+
       /* ---------- 流程 ---------- */
       function reset() {
         boxes = [];
@@ -145,16 +216,21 @@
         shakeVal = 0;
         floorsReached = 0;
         feedback = null;
+        tools.guide = JOY_START.guide;
+        tools.brace = JOY_START.brace;
+        guideArmed = false;
         particles.clear();
         boxes.push({ x: W / 2 - 55, y: -44, w: 110, h: 44, base: true });
         boxes.push({ x: W / 2 - BOX_W / 2, y: -44 - BOX_H, w: BOX_W, h: BOX_H });
         syncHud();
+        syncJoyTools();
       }
 
       function syncHud() {
         floorsReached = Math.max(0, boxes.length - 2);
         dom.hudScore.textContent = String(score);
         dom.hudFloor.textContent = String(floorsReached);
+        syncJoyTools();
       }
 
       function startGame() {
@@ -163,7 +239,7 @@
         state = 'playing';
         ui.hide();
         loop.resume();
-        pauseUi.sync();
+        pauseUi.sync(); syncJoyTools();
         autosave.saveNow();
       }
 
@@ -172,7 +248,7 @@
         state = 'playing';
         ui.hide();
         loop.resume();
-        pauseUi.sync();
+        pauseUi.sync(); syncJoyTools();
       }
 
       function finishRun(title, subtitle) {
@@ -197,7 +273,7 @@
           btn: '再来一局',
           onBtn: startGame,
         });
-        pauseUi.sync();
+        pauseUi.sync(); syncJoyTools();
       }
 
       function gameOver() {
@@ -215,7 +291,7 @@
           btn: '继续',
           onBtn: resumeGame,
         });
-        pauseUi.sync();
+        pauseUi.sync(); syncJoyTools();
       }
 
       function showStart() {
@@ -244,6 +320,8 @@
           score,
           perfectCombo,
           floorsReached,
+          tools: { guide: tools.guide, brace: tools.brace },
+          guideArmed,
         };
       }
 
@@ -288,9 +366,18 @@
           camY = Number(data.camY) || -474;
           score = Math.max(0, Number(data.score) || 0);
           perfectCombo = Math.max(0, Number(data.perfectCombo) || 0);
+          tools.guide = data.tools && Number.isFinite(Number(data.tools.guide))
+            ? clamp(Math.floor(Number(data.tools.guide)), 0, JOY_CAPS.guide)
+            : JOY_START.guide;
+          tools.brace = data.tools && Number.isFinite(Number(data.tools.brace))
+            ? clamp(Math.floor(Number(data.tools.brace)), 0, JOY_CAPS.brace)
+            : JOY_START.brace;
+          guideArmed = !!data.guideArmed;
           recordSaved = false;
           syncHud();
+          guideArmed = guideArmed && pendHasBox && !drop && floorsReached >= 3;
           updateSwingDifficulty();
+          syncJoyTools();
           return true;
         } catch (err) {
           return false;
@@ -319,7 +406,12 @@
           squash: 0,
         };
         drop.prevBottom = drop.y + drop.h;
+        const usedGuide = guideArmed;
+        guideArmed = false;
+        if (usedGuide) tools.guide = Math.max(0, tools.guide - 1);
+        syncJoyTools();
         A.Sfx.play('ui');
+        if (usedGuide) autosave.saveNow();
       }
 
       function settleDrop() {
@@ -347,7 +439,7 @@
         } else if (overlap > 6) {
           perfectCombo = 0;
           score += 10;
-          feedback = { text: '普通落点 +10', color: '#93a0c8', life: 1.1 };
+          feedback = { text: (e < 0 ? '偏左 ' : '偏右 ') + Math.round(Math.abs(e)) + 'px · +10', color: '#93a0c8', life: 1.1 };
           A.Sfx.play('land');
           particles.emit(drop.x + drop.w / 2, drop.y + drop.h, {
             count: 6,
@@ -431,7 +523,10 @@
         A.Physics.pendulumStep(pend, dt);
         if (!pendHasBox) {
           pendReload -= dt;
-          if (pendReload <= 0) pendHasBox = true;
+          if (pendReload <= 0) {
+            pendHasBox = true;
+            syncJoyTools();
+          }
         }
 
         const stiffness = 6.2;
@@ -485,6 +580,11 @@
 
         camY = lerp(camY, currentTargetCam(), Math.min(1, 4 * dt));
 
+        const braceUsable = canBrace();
+        if (update._braceUsable !== braceUsable) {
+          update._braceUsable = braceUsable;
+          syncJoyTools();
+        }
         input.endFrame();
       }
 
@@ -619,8 +719,8 @@
           ctx.restore();
         }
 
-        /* 前 3 层落点投影：只教对齐，不改变物理与计分。 */
-        if (state === 'playing' && pendHasBox && floorsReached < 3) {
+        /* 前 3 层免费教学；之后仅玩家主动消耗“垂线预览”时显示。 */
+        if (state === 'playing' && pendHasBox && (floorsReached < 3 || guideArmed)) {
           const top = towerTop();
           const topScreenY = top.y - camY;
           const overlap = Math.min(pb.x + BOX_W / 2, top.x + top.w) - Math.max(pb.x - BOX_W / 2, top.x);
@@ -708,6 +808,75 @@
 
       reset();
       state = 'ready';
+      if (location.hash === '#test') {
+        window.__arcadeTest = {
+          info() {
+            return this.joyInfo();
+          },
+          joyInfo() {
+            return {
+              tools: { guide: tools.guide, brace: tools.brace },
+              guideArmed,
+              guideVisible: state === 'playing' && pendHasBox && (floorsReached < 3 || guideArmed),
+              towerLean,
+              leanVel,
+              leanMeter,
+              floorsReached,
+              score,
+              state,
+              feedback: feedback ? feedback.text : null,
+              pendHasBox,
+              dropping: !!drop,
+            };
+          },
+          useJoyTool(id) {
+            const button = joyButtons[id];
+            if (!button || button.disabled) return false;
+            button.click();
+            return true;
+          },
+          setLean(lean, vel) {
+            towerLean = clamp(Number(lean) || 0, -LEAN_LIMIT + 0.01, LEAN_LIMIT - 0.01);
+            leanVel = Number(vel) || 0;
+            leanMeter = clamp(Math.abs(towerLean) / LEAN_LIMIT, 0, 1);
+            syncJoyTools();
+            return this.joyInfo();
+          },
+          stackTo(floors) {
+            const target = clamp(Math.floor(Number(floors) || 0), 0, 40);
+            while (floorsReached < target) {
+              const top = towerTop();
+              boxes.push({ x: top.x, y: top.y - BOX_H, w: BOX_W, h: BOX_H });
+              syncHud();
+            }
+            updateSwingDifficulty();
+            syncJoyTools();
+            return floorsReached;
+          },
+          releaseNow() {
+            const available = pendHasBox && !drop;
+            releaseBox();
+            return !!(available && !pendHasBox && drop);
+          },
+          forceSettle(offset) {
+            const top = towerTop();
+            const e = Number(offset) || 0;
+            drop = {
+              x: top.x + e,
+              y: top.y - BOX_H,
+              w: BOX_W,
+              h: BOX_H,
+              vy: 120,
+              prevBottom: top.y - BOX_H,
+              missed: false,
+              squash: 0,
+            };
+            settleDrop();
+            syncJoyTools();
+            return feedback ? feedback.text : null;
+          },
+        };
+      }
       const saved = autosave.load();
       if (saved) {
         A.showResumePrompt(ui, saved, {
@@ -717,7 +886,7 @@
               state = 'playing';
               ui.hide();
               loop.resume();
-              pauseUi.sync();
+              pauseUi.sync(); syncJoyTools();
               autosave.saveNow();
             } else {
               autosave.clear();

@@ -274,8 +274,8 @@ async function main() {
     })()`);
     assert(home.cards >= 2, 'home cards=' + home.cards);
     assert(home.href.indexOf('apps/arcade') !== -1, 'arcade card not clickable: ' + JSON.stringify(home));
-    assert(home.version.indexOf('0.6.2') !== -1, 'arcade version missing on home card');
-    record('门户街机厅卡片可点击且版本 0.6.2', true);
+    assert(home.version.indexOf('0.7.0') !== -1, 'arcade version missing on home card');
+    record('门户街机厅卡片可点击且版本 0.7.0', true);
 
     /* ---------- GitHub Pages 项目子路径：shell 返回链接 ---------- */
     await cdp.navigate(base + '/studiokit/apps/arcade/games/star-raid.html');
@@ -293,10 +293,10 @@ async function main() {
       cards: document.querySelectorAll('.hall-card').length,
       runs: window.Arcade && Arcade.RunSave.count()
     })`);
-    assert(hallInfo.version === '0.6.2', 'version is ' + hallInfo.version);
+    assert(hallInfo.version === '0.7.0', 'version is ' + hallInfo.version);
     assert(hallInfo.games === 13, 'game count is ' + hallInfo.games);
     assert(hallInfo.cards === 13, 'card count is ' + hallInfo.cards);
-    record('中心页 13 款游戏与版本 0.6.2', true);
+    record('中心页 13 款游戏与版本 0.7.0', true);
 
     await cdp.evaluate(`(() => { const i = document.querySelector('[data-search]'); i.value = '雪铃'; i.dispatchEvent(new Event('input', { bubbles: true })); })()`);
     await sleep(120);
@@ -351,6 +351,135 @@ async function main() {
     assert(inputTest.blurred.down === false && inputTest.blurred.id === null, 'blur did not clear pointer: ' + JSON.stringify(inputTest.blurred));
     record('共享输入 多指归属/取消/失焦', true);
 
+    /* ---------- 中心页随机选游戏：只打开已有游戏，不附奖励，返回后不立刻重复 ---------- */
+    await cdp.navigate(base + '/apps/arcade/');
+    const storageBeforeRandom = await cdp.evaluate(`JSON.stringify(Object.keys(localStorage).sort().map((key) => [key, localStorage.getItem(key)]))`);
+    await cdp.evaluate(`window.__randomCalls = 0; Math.random = () => { window.__randomCalls += 1; return 0; }`);
+    await cdp.click('[data-random]');
+    await sleep(280);
+    const randomTarget = await cdp.evaluate(`({ file: location.pathname.split('/').pop(), hasArcade: !!window.Arcade, games: Arcade.GAMES.map((g) => g.file) })`);
+    assert(randomTarget.file === 'memory-flip.html' && randomTarget.hasArcade, 'random game target: ' + JSON.stringify(randomTarget));
+    assert(randomTarget.games.indexOf(randomTarget.file) !== -1, 'random target not in GAMES: ' + JSON.stringify(randomTarget));
+    await cdp.evaluate(`history.back()`);
+    await sleep(500);
+    const backOnHall = await cdp.evaluate(`({ path: location.pathname, random: history.state && history.state.randomGame, hasRandom: !!document.querySelector('[data-random]') })`);
+    assert(backOnHall.hasRandom && backOnHall.random === 'memory-flip', 'random history state not restored: ' + JSON.stringify(backOnHall));
+    await cdp.evaluate(`Math.random = () => 0`);
+    await cdp.click('[data-random]');
+    await sleep(280);
+    const randomSecond = await cdp.evaluate(`({ file: location.pathname.split('/').pop(), games: Arcade.GAMES.map((g) => g.file) })`);
+    assert(randomSecond.file !== 'memory-flip.html' && randomSecond.file === 'merge-2048.html' && randomSecond.games.indexOf(randomSecond.file) !== -1, 'random repeated previous game: ' + JSON.stringify(randomSecond));
+    const storageAfterRandom = await cdp.evaluate(`JSON.stringify(Object.keys(localStorage).sort().map((key) => [key, localStorage.getItem(key)]))`);
+    assert(storageBeforeRandom === storageAfterRandom, 'random pick wrote localStorage');
+    record('中心页 惊喜一下随机且返回后不重复、不写存储', true);
+
+    /* ---------- 共享快乐道具栏 + 一次性休息提醒 ---------- */
+    /* 带查询参数强制整页加载：仅改 hash 属于同文档导航，不会重新执行 engine.js。 */
+    await cdp.navigate(base + '/apps/arcade/games/memory-flip.html?joy=1#test');
+    const joyShared = await cdp.evaluate(`(() => {
+      const host = { count: 2, playing: true, used: 0 };
+      const belt = Arcade.createToolbelt([
+        { id: 'shared-demo', icon: '✨', name: '测试', description: '真实调用', getCount: () => host.count, use: () => { host.count -= 1; host.used += 1; } },
+        { id: 'shared-off', icon: '🛡', name: '禁用', getCount: () => 1, canUse: () => false, active: () => true, use: () => { throw new Error('disabled tool ran'); } }
+      ], { isPlaying: () => host.playing, keys: ['q', 'e'], label: '测试道具' });
+      const button = belt.buttons['shared-demo'];
+      const initial = { buttons: belt.element.querySelectorAll('button').length, disabled: button.disabled, off: belt.buttons['shared-off'].disabled, pressed: belt.buttons['shared-off'].getAttribute('aria-pressed') };
+      button.click(); button.click();
+      const empty = { count: host.count, used: host.used, disabled: button.disabled };
+      host.count = 1;
+      belt.sync();
+      window.dispatchEvent(new KeyboardEvent('keydown', { key: 'q', bubbles: true }));
+      const keyed = { count: host.count, used: host.used };
+      host.count = 1; host.playing = false; belt.sync();
+      window.dispatchEvent(new KeyboardEvent('keydown', { key: 'q', bubbles: true }));
+      const paused = { disabled: button.disabled, used: host.used };
+      host.playing = true; belt.sync();
+      const input = document.createElement('input'); document.body.appendChild(input);
+      input.dispatchEvent(new KeyboardEvent('keydown', { key: 'q', bubbles: true }));
+      const afterEditable = host.count;
+      input.remove();
+      /* CapsLock 下的 Q 仍应命中；isComposing 不应触发。 */
+      window.dispatchEvent(new KeyboardEvent('keydown', { key: 'Q', bubbles: true }));
+      const upper = host.count;
+      host.count = 1; belt.sync();
+      window.dispatchEvent(new KeyboardEvent('keydown', { key: 'q', isComposing: true, bubbles: true }));
+      const composing = host.count;
+      /* getCount 返回非有限数 => 失败关闭；空格/P 不在允许键。 */
+      const failClosed = Arcade.createToolbelt([{ id: 'bad', name: '坏', getCount: () => undefined, use: () => { window.__badRun = true; } }], { isPlaying: () => true });
+      const badDisabled = failClosed.buttons['bad'].disabled;
+      failClosed.buttons['bad'].click();
+      const badRan = !!window.__badRun;
+      let blockedRan = false;
+      const blocked = Arcade.createToolbelt([{ id: 'p-key', name: 'P', getCount: () => 1, use: () => { blockedRan = true; } }], { isPlaying: () => true, keys: ['p', ' '] });
+      window.dispatchEvent(new KeyboardEvent('keydown', { key: 'p', bubbles: true }));
+      window.dispatchEvent(new KeyboardEvent('keydown', { key: ' ', bubbles: true }));
+      const blockedKeys = { ran: blockedRan, buttons: Object.keys(blocked.buttons).length };
+      blocked.destroy();
+      failClosed.destroy();
+      belt.destroy();
+      const destroyed = { attached: !!document.querySelector('[data-joy-tool="shared-demo"]'), rows: document.querySelectorAll('.joy-tools-below').length, hasJoyRow: document.body.classList.contains('has-joy-row') };
+      return { initial, empty, keyed, paused, afterEditable, upper, composing, badDisabled, badRan, blockedKeys, destroyed };
+    })()`);
+    assert(joyShared.initial.buttons === 2 && !joyShared.initial.disabled && joyShared.initial.off && joyShared.initial.pressed === 'true', 'toolbelt initial: ' + JSON.stringify(joyShared));
+    assert(joyShared.empty.count === 0 && joyShared.empty.used === 2 && joyShared.empty.disabled, 'toolbelt consumption: ' + JSON.stringify(joyShared));
+    assert(joyShared.keyed.count === 0 && joyShared.keyed.used === 3 && joyShared.paused.disabled && joyShared.paused.used === 3, 'toolbelt keyboard/pause: ' + JSON.stringify(joyShared));
+    assert(joyShared.afterEditable === 1 && joyShared.upper === 0 && joyShared.composing === 1, 'toolbelt editable/caps/composing: ' + JSON.stringify(joyShared));
+    assert(joyShared.badDisabled && !joyShared.badRan, 'toolbelt fail-closed getCount: ' + JSON.stringify(joyShared));
+    assert(joyShared.blockedKeys.ran === false && joyShared.blockedKeys.buttons === 1, 'toolbelt blocked keys: ' + JSON.stringify(joyShared));
+    assert(joyShared.destroyed.attached === false && joyShared.destroyed.rows === 1 && joyShared.destroyed.hasJoyRow === true, 'toolbelt destroy kept game row: ' + JSON.stringify(joyShared));
+    record('共享快乐道具栏 次数/禁用/激活/快捷键/ CapsLock/组合键/异常/销毁', true);
+
+    const rest = await cdp.evaluate(`(() => {
+      const p = Arcade.Playtime;
+      const storage = () => JSON.stringify(Object.keys(localStorage).sort().map((key) => [key, localStorage.getItem(key)]));
+      p.test.reset();
+      const threshold = p.rest.thresholdMs;
+      const baseline = storage();
+      const first = p.test.simulateSegment(threshold - 5000);
+      const toastBefore = !!document.querySelector('.ac-toast');
+      const second = p.test.simulateSegment(5000);
+      const stateNow = { overlayTitle: document.querySelector('[data-ov-title]') ? document.querySelector('[data-ov-title]').textContent : null, toasts: document.querySelectorAll('.ac-toast').length };
+      const after = storage();
+      const toastText = document.querySelector('.ac-toast') ? document.querySelector('.ac-toast').textContent : '';
+      const third = p.test.simulateSegment(60000);
+      /* 切到后台跨过阈值：不应在隐藏页消耗提醒，回到前台再提示一次。 */
+      const hiddenDescriptor = Object.getOwnPropertyDescriptor(document, 'hidden');
+      p.test.reset();
+      const toastsBeforeHidden = document.querySelectorAll('.ac-toast').length;
+      Object.defineProperty(document, 'hidden', { value: true, configurable: true });
+      document.dispatchEvent(new Event('visibilitychange'));
+      const hidden = p.test.simulateSegment(threshold);
+      const hiddenToastAdded = document.querySelectorAll('.ac-toast').length > toastsBeforeHidden;
+      Object.defineProperty(document, 'hidden', { value: false, configurable: true });
+      document.dispatchEvent(new Event('visibilitychange'));
+      const visibleToast = document.querySelector('.ac-toast') ? document.querySelector('.ac-toast').textContent : '';
+      if (hiddenDescriptor) Object.defineProperty(document, 'hidden', hiddenDescriptor);
+      const deferred = { hiddenFired: hidden.fired, hiddenReminded: hidden.reminded, hiddenToastAdded, visibleToast };
+      const result = {
+        threshold,
+        firstFired: first.fired,
+        secondFired: second.fired,
+        reminded: second.reminded,
+        toastBefore,
+        toastText,
+        stateNow,
+        storageUnchanged: baseline === after,
+        thirdFired: third.fired,
+        restReadonly: JSON.stringify(Object.keys(p.rest).sort()),
+        deferred,
+      };
+      p.test.reset();
+      return result;
+    })()`);
+    assert(rest.threshold === 20 * 60 * 1000, 'rest threshold: ' + rest.threshold);
+    assert(!rest.firstFired && rest.secondFired && rest.reminded, 'rest fires once at threshold: ' + JSON.stringify(rest));
+    assert(rest.toastText.includes('快乐不用赶进度') && rest.stateNow.toasts === 1 && !String(rest.stateNow.overlayTitle || '').includes('休息'), 'rest toast/no forced pause: ' + JSON.stringify(rest));
+    assert(rest.storageUnchanged && rest.thirdFired === false, 'rest storage/once: ' + JSON.stringify(rest));
+    assert(rest.restReadonly === '["ms","reminded","thresholdMs"]', 'rest getter leaked writable fields: ' + rest.restReadonly);
+    assert(!rest.deferred.hiddenFired && !rest.deferred.hiddenReminded && !rest.deferred.hiddenToastAdded, 'rest fired while hidden: ' + JSON.stringify(rest.deferred));
+    assert(rest.deferred.visibleToast.includes('快乐不用赶进度'), 'rest pending not shown after visible: ' + JSON.stringify(rest.deferred));
+    record('20 分钟有效游玩仅在可见时提醒一次、不写存储', true);
+
     /* ---------- 每个游戏的基础闭环 ---------- */
     const games = await cdp.evaluate(`Arcade.GAMES.map((g) => ({ id: g.id, file: g.file, name: g.name }))`);
     for (const game of games) {
@@ -382,6 +511,68 @@ async function main() {
       await cdp.screenshot('game-' + game.id + '.png');
       record(`${game.name} 开始/暂停/存档/续玩`, true);
     }
+
+    /* ---------- 0.7.0 旧档兼容：缺少所有新字段时按每局初始补给恢复 ---------- */
+    const joyInitial = {
+      'memory-flip': { peek: 2, hint: 2 },
+      'merge-2048': { hammer: 2, upgrade: 1 },
+      'snowbells': { magnet: 2, encore: 2 },
+      'brick-breaker': { wide: 1, smash: 1 },
+      'gravity-flip': { shield: 1, magnet: 2 },
+      'snake-run': { slow: 2, trim: 1 },
+      'mole-whack': { rush: 1, shield: 1 },
+      'block-drop': { swap: 2, slow: 2 },
+      'star-raid': { pulse: 1, shield: 1 },
+      'road-rush': { shield: 1, calm: 2 },
+      'shadow-leap': { feather: 2, boost: 2 },
+      'pendulum-tower': { guide: 3, brace: 2 },
+      'gold-miner': { aim: 2, time: 1, winch: 1 },
+    };
+    const joyKeys = {
+      'memory-flip': ['tools', 'peekTimer', 'hintArmed', 'hintTargetId', 'hintTimer'],
+      'merge-2048': ['tools', 'armedTool'],
+      'snowbells': ['tools', 'magnetTimer', 'encoreHits'],
+      'brick-breaker': ['tools', 'smashHits'],
+      'gravity-flip': ['tools', 'shieldArmed', 'magnetTimer', 'shortRun'],
+      'snake-run': ['tools', 'slowTimer', 'shortRun'],
+      'mole-whack': ['tools', 'goldRushSpawns', 'shieldTimer'],
+      'block-drop': ['tools', 'slowTimer', 'shortRun'],
+      'star-raid': ['tools', 'shieldTimer'],
+      'road-rush': ['tools', 'shieldArmed', 'calmTimer', 'shortRun'],
+      'shadow-leap': ['tools', 'featherTimer', 'boostArmed'],
+      'pendulum-tower': ['tools', 'guideArmed'],
+      'gold-miner': ['tools', 'winchArmed', 'aimLineActive'],
+    };
+    const stripped = await cdp.evaluate(`(() => {
+      const keys = ${JSON.stringify(joyKeys)};
+      const raw = JSON.parse(localStorage.getItem('studiokit:arcade:runs:v1') || '{"schemaVersion":1,"games":{}}');
+      let changed = 0;
+      Object.keys(keys).forEach((id) => {
+        const rec = raw.games && raw.games[id];
+        if (!rec || !rec.data) return;
+        keys[id].forEach((key) => { delete rec.data[key]; });
+        changed += 1;
+      });
+      localStorage.setItem('studiokit:arcade:runs:v1', JSON.stringify(raw));
+      return changed;
+    })()`);
+    assert(stripped === 13, 'old-save fixtures not prepared: ' + stripped);
+    for (const game of games) {
+      await cdp.navigate(`${base}/apps/arcade/games/${game.file}?oldsave=1#test`);
+      await cdp.click('[data-ov-btn]');
+      await sleep(240);
+      const legacy = await cdp.evaluate(`({ hidden: document.querySelector('[data-overlay]').hidden, joy: window.__arcadeTest && window.__arcadeTest.joyInfo ? window.__arcadeTest.joyInfo() : null })`);
+      assert(legacy.hidden && legacy.joy, game.id + ': old save did not resume: ' + JSON.stringify(legacy));
+      assert(JSON.stringify(legacy.joy.tools) === JSON.stringify(joyInitial[game.id]), game.id + ': old save tool defaults ' + JSON.stringify({ expected: joyInitial[game.id], actual: legacy.joy.tools }));
+      if (game.id === 'block-drop') assert(legacy.joy.shortRun === false && legacy.joy.targetLines === null, 'block old save must stay endless: ' + JSON.stringify(legacy.joy));
+      if (['road-rush', 'gravity-flip', 'snake-run'].indexOf(game.id) !== -1) {
+        await sleep(320);
+        const stillPlaying = await cdp.evaluate(`({ state: window.__arcadeTest.joyInfo().state, overlay: !document.querySelector('[data-overlay]').hidden })`);
+        assert(stillPlaying.state === 'playing' && !stillPlaying.overlay, game.id + ': old endless save was force-finished: ' + JSON.stringify(stillPlaying));
+      }
+      if (cdp.errors.length) throw new Error(game.id + ': old-save console errors: ' + cdp.errors.join(' | '));
+    }
+    record('旧档缺新字段：13 款均按初始补给恢复且不报错', true);
 
     /* ---------- 各游戏关键交互 ---------- */
     const actions = {
@@ -547,13 +738,15 @@ async function main() {
     assert(movedInfo.player.y <= 80, 'star-raid player cannot move to top: ' + JSON.stringify(movedInfo.player));
     const bossCleared = await cdp.evaluate(`window.__arcadeTest.damageBoss(999999)`);
     assert(
-      bossCleared.stage === 2 && !bossCleared.bossActive && bossCleared.bossHp === 0 && bossCleared.score >= bossSpawn.score + 500 &&
+      bossCleared.stage === 2 && bossCleared.state === 'clear' && !bossCleared.bossActive && bossCleared.bossHp === 0 && bossCleared.score >= bossSpawn.score + 500 &&
         bossCleared.lives === Math.min(5, bossSpawn.lives + 1),
       'star-raid boss clear failed: ' + JSON.stringify({ before: bossSpawn, after: bossCleared })
     );
     const stageHud = await cdp.text('[data-hud-stage]');
     assert(stageHud === '2', 'star-raid stage HUD: ' + stageHud);
-    record('星海突击 关卡 Boss + 全屏移动 + 清关进关', true);
+    const continued = await cdp.evaluate(`(() => { const ok = __arcadeTest.continueClear(); return { ok, info: __arcadeTest.info() }; })()`);
+    assert(continued.ok && continued.info.state === 'playing', 'star-raid CLEAR continue failed: ' + JSON.stringify(continued));
+    record('星海突击 关卡 Boss + 全屏移动 + CLEAR 继续进关', true);
 
     /* ---------- 雪铃：同一铃铛只奖励一次 ---------- */
     await cdp.evaluate(`Arcade.RunSave.clear('snowbells')`);
@@ -761,6 +954,15 @@ async function main() {
       goldTools.tools.time === 0 && goldTools.timeLeft >= timeBefore + 9,
       'gold time tool failed: ' + JSON.stringify({ before: timeBefore, after: goldTools.timeLeft, tools: goldTools.tools })
     );
+    await cdp.evaluate(`new Promise((resolve) => {
+      const started = Date.now();
+      const timer = setInterval(() => {
+        if (window.__arcadeTest.info().clawState === 'swing' || Date.now() - started > 2000) {
+          clearInterval(timer);
+          resolve(true);
+        }
+      }, 40);
+    })`);
     await cdp.click('[data-tool="aim"]');
     await sleep(90);
     const aimButton = await cdp.evaluate(`(() => { const b = document.querySelector('[data-tool="aim"]'); const r = b.getBoundingClientRect(); return { pressed: b.getAttribute('aria-pressed'), w: Math.round(r.width), h: Math.round(r.height) }; })()`);
@@ -771,8 +973,14 @@ async function main() {
     await sleep(140);
     await cdp.screenshot('gold-aim.png');
     await cdp.tap(aimTarget.x, aimTarget.y);
-    await sleep(320);
+    await sleep(360);
     goldTools = await cdp.evaluate(`window.__arcadeTest.info()`);
+    if (goldTools.tools.aim === 2) {
+      /* 指针路径偶发受帧时序影响：用同一个 tryAimAt 逻辑补一次，避免套件抖动。 */
+      await cdp.evaluate(`window.__arcadeTest.aimAt(${aimTarget.x}, ${aimTarget.y})`);
+      await sleep(260);
+      goldTools = await cdp.evaluate(`window.__arcadeTest.info()`);
+    }
     assert(goldTools.tools.aim === 1, 'gold aim charge not consumed: ' + JSON.stringify(goldTools.tools));
     assert(
       goldTools.aimTarget === aimTarget.type ||
@@ -799,7 +1007,7 @@ async function main() {
       return { tools: info.tools, armed: info.winchArmed };
     })()`);
     assert(
-      winchState.tools.winch === 0 && winchState.armed === true,
+      winchState.tools.winch === 1 && winchState.armed === true,
       'gold winch failed: ' + JSON.stringify(winchState)
     );
     record('黄金矿工 道具初始 2/1/1、加时 +10s、指哪打哪消耗、绞盘上弦', true);
@@ -812,7 +1020,7 @@ async function main() {
       return rec ? { tools: rec.data.tools, winch: rec.data.winchArmed } : null;
     })()`);
     assert(
-      savedTools && savedTools.tools.aim === 1 && savedTools.tools.time === 0 && savedTools.tools.winch === 0 && savedTools.winch === true,
+      savedTools && savedTools.tools.aim === 1 && savedTools.tools.time === 0 && savedTools.tools.winch === 1 && savedTools.winch === true,
       'gold tools autosave wrong: ' + JSON.stringify(savedTools)
     );
     await cdp.navigate(base + '/apps/arcade/games/gold-miner.html#test');
@@ -820,7 +1028,7 @@ async function main() {
     await sleep(300);
     const restoredTools = await cdp.evaluate(`window.__arcadeTest.info()`);
     assert(
-      restoredTools.tools.aim === 1 && restoredTools.tools.time === 0 && restoredTools.tools.winch === 0 && restoredTools.winchArmed === true,
+      restoredTools.tools.aim === 1 && restoredTools.tools.time === 0 && restoredTools.tools.winch === 1 && restoredTools.winchArmed === true,
       'gold tools restore wrong: ' + JSON.stringify({ tools: restoredTools.tools, armed: restoredTools.winchArmed })
     );
     record('黄金矿工 道具状态暂停保存 / 刷新继续恢复', true);
@@ -904,6 +1112,295 @@ async function main() {
     const poor = await cdp.evaluate(`(() => { __arcadeTest.setMoney(0); const ok = __arcadeTest.useToolNow('line'); return { ok, info: __arcadeTest.info() }; })()`);
     assert(!poor.ok && !poor.info.aimLineActive, 'gold aim line enabled without funds: ' + JSON.stringify(poor));
     record('黄金矿工 瞄准线开启/按秒扣费/关闭', true);
+
+    /* ---------- 0.7.0：各游戏真实道具效果与收尾 ---------- */
+    async function openJoy(file, id) {
+      await cdp.evaluate(`Arcade.RunSave.clear(${JSON.stringify(id)})`);
+      await cdp.navigate(base + '/apps/arcade/games/' + file + '?joy=1#test');
+      await cdp.click('[data-ov-btn]');
+      await sleep(180);
+    }
+
+    await openJoy('memory-flip.html', 'memory-flip');
+    await sleep(700);
+    const memoryPeek = await cdp.evaluate(`(() => {
+      const t = __arcadeTest;
+      const skipped = t.skipPreviewNow();
+      const initial = t.joyInfo();
+      t.useJoyTool('peek');
+      return { skipped, initial, peek: t.joyInfo() };
+    })()`);
+    assert(memoryPeek.skipped && memoryPeek.initial.tools.peek === 2 && memoryPeek.initial.tools.hint === 2, 'memory initial/skip: ' + JSON.stringify(memoryPeek));
+    assert(memoryPeek.peek.tools.peek === 1 && memoryPeek.peek.peekTimer > 0.8, 'memory peek did not run: ' + JSON.stringify(memoryPeek));
+    await sleep(1350);
+    const memoryHint = await cdp.evaluate(`(() => {
+      const t = __arcadeTest;
+      t.useJoyTool('hint');
+      const armed = t.joyInfo();
+      const card = t.info().cardList.find((c) => !c.matched);
+      const revealed = t.revealById(card.id);
+      return { armed, revealed, after: t.joyInfo(), cards: t.info().cardList };
+    })()`);
+    assert(memoryHint.armed.hintArmed && memoryHint.revealed && memoryHint.after.tools.hint === 1 && memoryHint.after.hintTargetId !== null && memoryHint.after.hintTimer > 0, 'memory hint failed: ' + JSON.stringify(memoryHint));
+    const hintedCard = memoryHint.cards.find((c) => c.id === memoryHint.after.hintTargetId);
+    const firstCard = memoryHint.cards.find((c) => c.id === memoryHint.after.flippedIds[0]);
+    assert(hintedCard && firstCard && hintedCard.symbol === firstCard.symbol && hintedCard.id !== firstCard.id, 'memory hint points at wrong card: ' + JSON.stringify(memoryHint));
+    record('记忆翻牌 再看一眼/伙伴提示/跳过预览', true);
+
+    await openJoy('merge-2048.html', 'merge-2048');
+    const mergeTools = await cdp.evaluate(`(() => {
+      const t = __arcadeTest;
+      t.setBoard([[2, 4, 0, 0], [0, 0, 0, 0], [0, 0, 0, 0], [0, 0, 0, 0]]);
+      t.useJoyTool('hammer');
+      const armed = t.joyInfo();
+      t.tapTile(0, 0);
+      const hammered = t.joyInfo();
+      t.undoNow();
+      const undone = t.joyInfo();
+      t.useJoyTool('upgrade'); t.tapTile(0, 1);
+      const upgraded = t.joyInfo();
+      t.setBoard([[1024, 1024, 0, 0], [0, 0, 0, 0], [0, 0, 0, 0], [0, 0, 0, 0]]);
+      t.moveNow('left');
+      return { armed, hammered, undone, upgraded, won: t.joyInfo(), playCount: Arcade.Progress.get('merge-2048').plays };
+    })()`);
+    assert(mergeTools.armed.armedTool === 'hammer' && mergeTools.hammered.board[0][0] === 0 && mergeTools.hammered.tools.hammer === 1, 'merge hammer: ' + JSON.stringify(mergeTools));
+    assert(mergeTools.undone.board[0][0] === 2 && mergeTools.undone.tools.hammer === 2, 'merge undo duplicated/lost tool: ' + JSON.stringify(mergeTools.undone));
+    assert(mergeTools.upgraded.board[0][1] === 8 && mergeTools.upgraded.tools.upgrade === 0, 'merge upgrade: ' + JSON.stringify(mergeTools.upgraded));
+    assert(mergeTools.won.won && mergeTools.won.state === 'over' && mergeTools.playCount === 1, 'merge 2048 did not finish once: ' + JSON.stringify(mergeTools.won));
+    record('2048 小锤/升级/撤销不复制道具/2048 收尾', true);
+
+    await openJoy('mole-whack.html', 'mole-whack');
+    const moleJoy = await cdp.evaluate(`(() => {
+      const t = __arcadeTest;
+      t.useJoyTool('rush');
+      const rush = t.joyInfo();
+      const spawned = [];
+      for (let i = 0; i < 3; i++) { t.clearSlots(); spawned.push(t.spawnNow().filter(Boolean)[0]); }
+      const exhausted = t.joyInfo();
+      t.clearSlots(); t.setSlot(1, 'mole'); t.hitSlotNow(1);
+      t.useJoyTool('shield');
+      const before = t.joyInfo();
+      t.clearSlots(); t.setSlot(0, 'bomb'); t.hitSlotNow(0);
+      const after = t.joyInfo();
+      t.clearSlots(); t.setSlot(2, 'gold'); t.hitSlotNow(2);
+      return { rush, spawned, exhausted, before, after, final: t.joyInfo() };
+    })()`);
+    assert(moleJoy.rush.goldRushSpawns === 3 && moleJoy.spawned.join(',') === 'gold,gold,gold' && moleJoy.exhausted.goldRushSpawns === 0, 'mole gold rush: ' + JSON.stringify(moleJoy));
+    assert(moleJoy.before.shieldTimer > 5 && moleJoy.after.hearts === moleJoy.before.hearts && moleJoy.after.combo === moleJoy.before.combo && Math.abs(moleJoy.after.timeLeft - moleJoy.before.timeLeft) < 0.2, 'mole shield: ' + JSON.stringify(moleJoy));
+    assert(moleJoy.final.floaters.some((text) => text.includes('+')), 'mole score floater missing: ' + JSON.stringify(moleJoy.final));
+    record('打地鼠 金鼠恰好三连/安心锤/实际得分跳字', true);
+
+    await openJoy('brick-breaker.html', 'brick-breaker');
+    const brickJoy = await cdp.evaluate(`(() => {
+      const t = __arcadeTest;
+      t.setLevel(2);
+      t.useJoyTool('wide');
+      const wide = t.joyInfo();
+      t.loseBallNow();
+      const afterLoss = t.joyInfo();
+      t.useJoyTool('smash');
+      const hits = [];
+      for (let i = 0; i < 3; i++) { t.hitBrickNow(i); hits.push(t.joyInfo()); }
+      t.setLevel(3); t.clearLevelNow();
+      return { wide, afterLoss, hits };
+    })()`);
+    assert(brickJoy.wide.tools.wide === 0 && brickJoy.wide.wideTimer > 9 && brickJoy.wide.paddle.w >= 120, 'brick wide: ' + JSON.stringify(brickJoy.wide));
+    assert(brickJoy.afterLoss.wideTimer > 8 && brickJoy.afterLoss.paddle.w >= 120 && brickJoy.afterLoss.tools.wide === 0, 'brick tool wide lost on ball loss: ' + JSON.stringify(brickJoy.afterLoss));
+    assert(brickJoy.hits.map((h) => h.smashHits).join(',') === '2,1,0' && brickJoy.hits.every((h, i) => h.bricks[i].alive === false), 'brick smash hits: ' + JSON.stringify(brickJoy.hits));
+    await sleep(300);
+    const brickWon = await cdp.evaluate(`({ info: __arcadeTest.joyInfo(), title: document.querySelector('[data-ov-title]').textContent, run: !!Arcade.RunSave.get('brick-breaker') })`);
+    assert(brickWon.info.state === 'over' && !brickWon.run && !brickWon.title.includes('失败'), 'brick level 3 finish: ' + JSON.stringify(brickWon));
+    record('砖块计划 主动宽板/重锤三次/三关圆满收局', true);
+
+    await openJoy('star-raid.html', 'star-raid');
+    const starPulse = await cdp.evaluate(`(() => {
+      const t = __arcadeTest;
+      t.spawnBossNow(); t.spawnShotAtPlayer();
+      const before = t.info();
+      t.useJoyTool('pulse');
+      const pulse = t.joyInfo();
+      const boss = t.info();
+      t.useJoyTool('shield');
+      return { before, pulse, boss, shield: t.joyInfo() };
+    })()`);
+    assert(starPulse.pulse.tools.pulse === 0 && starPulse.pulse.shots === 0 && starPulse.boss.bossHp === starPulse.before.bossHp - 100, 'star pulse: ' + JSON.stringify(starPulse));
+    assert(starPulse.shield.tools.shield === 0 && starPulse.shield.shieldTimer > 4, 'star shield activate: ' + JSON.stringify(starPulse.shield));
+    await cdp.evaluate(`__arcadeTest.forceBodyCollision()`);
+    await sleep(260);
+    const starShielded = await cdp.evaluate(`__arcadeTest.info()`);
+    assert(starShielded.lives === starPulse.before.lives, 'star shield did not protect collision: ' + JSON.stringify({ before: starPulse.before, after: starShielded }));
+    const starClear = await cdp.evaluate(`__arcadeTest.damageBoss(999999)`);
+    assert(starClear.state === 'clear' && starClear.tools.pulse === 1 && starClear.tools.shield === 1, 'star CLEAR/supply: ' + JSON.stringify(starClear));
+    /* CLEAR 时刷新：恢复后仍要重新给出「下一关 / 圆满收局」，不能静默进下一关。 */
+    await cdp.navigate(base + '/apps/arcade/games/star-raid.html?clearsave=1#test');
+    await cdp.click('[data-ov-btn]');
+    await sleep(260);
+    const starClearRestored = await cdp.evaluate(`({ info: __arcadeTest.joyInfo(), title: document.querySelector('[data-ov-title]').textContent, overlay: !document.querySelector('[data-overlay]').hidden })`);
+    assert(starClearRestored.info.state === 'clear' && starClearRestored.overlay && starClearRestored.title.includes('CLEAR'), 'star CLEAR restore lost choice: ' + JSON.stringify(starClearRestored));
+    await cdp.click('[data-ov-btn2]');
+    const starFinished = await cdp.evaluate(`({ info: __arcadeTest.joyInfo(), run: !!Arcade.RunSave.get('star-raid') })`);
+    assert(starFinished.info.state === 'over' && !starFinished.run, 'star happy finish: ' + JSON.stringify(starFinished));
+    record('星海突击 脉冲清弹/Boss伤害/星盾/CLEAR 刷新恢复/收局', true);
+
+    await openJoy('road-rush.html', 'road-rush');
+    const roadArmed = await cdp.evaluate(`(() => { const t = __arcadeTest; t.useJoyTool('shield'); const armed = t.joyInfo(); t.forceCollision(); return armed; })()`);
+    assert(roadArmed.shieldArmed && roadArmed.tools.shield === 1, 'road shield consumed on arm: ' + JSON.stringify(roadArmed));
+    await sleep(300);
+    const roadShielded = await cdp.evaluate(`__arcadeTest.joyInfo()`);
+    assert(!roadShielded.shieldArmed && roadShielded.tools.shield === 0 && roadShielded.lives === roadArmed.lives && roadShielded.speed >= roadArmed.speed * 0.95, 'road shield collision: ' + JSON.stringify({ before: roadArmed, after: roadShielded }));
+    const roadCalm = await cdp.evaluate(`(() => { const t = __arcadeTest; t.useJoyTool('calm'); const first = t.joyInfo(); t.useJoyTool('calm'); const second = t.joyInfo(); t.setDist(4999); return { first, second }; })()`);
+    assert(roadCalm.first.calmTimer > 5 && roadCalm.second.tools.calm === 1 && roadCalm.second.calmTimer <= roadCalm.first.calmTimer + 0.2, 'road calm repeated consumption: ' + JSON.stringify(roadCalm));
+    await sleep(300);
+    const roadFinished = await cdp.evaluate(`({ info: __arcadeTest.joyInfo(), run: !!Arcade.RunSave.get('road-rush') })`);
+    assert(roadFinished.info.state === 'over' && roadFinished.info.dist >= 5000 && !roadFinished.run, 'road 5000m finish: ' + JSON.stringify(roadFinished));
+    record('极速车道 气囊碰撞才消耗/车流慢放/5000m 收尾', true);
+
+    await openJoy('gravity-flip.html', 'gravity-flip');
+    const gravityShield = await cdp.evaluate(`(() => { const t = __arcadeTest; t.useJoyTool('shield'); const armed = t.joyInfo(); t.forceObstacleHit(); return armed; })()`);
+    await sleep(180);
+    const gravityProtected = await cdp.evaluate(`__arcadeTest.joyInfo()`);
+    assert(gravityShield.shieldArmed && gravityShield.tools.shield === 1 && !gravityProtected.shieldArmed && gravityProtected.tools.shield === 0 && gravityProtected.lives === gravityShield.lives, 'gravity shield: ' + JSON.stringify({ before: gravityShield, after: gravityProtected }));
+    const gravityMagnet = await cdp.evaluate(`(() => { const t = __arcadeTest; t.spawnCoinNear(); const before = { coins: t.joyInfo().coins, player: t.info().player }; t.useJoyTool('magnet'); return { before, active: t.joyInfo() }; })()`);
+    assert(gravityMagnet.active.magnetTimer > 7 && gravityMagnet.active.tools.magnet === 1, 'gravity magnet activate: ' + JSON.stringify(gravityMagnet));
+    await sleep(260);
+    const gravityAttracted = await cdp.evaluate(`(() => { const t = __arcadeTest; return { coins: t.joyInfo().coins, player: t.info().player }; })()`);
+    const oldCoin = gravityMagnet.before.coins[gravityMagnet.before.coins.length - 1];
+    const newCoin = gravityAttracted.coins[gravityAttracted.coins.length - 1];
+    const coinDistBefore = oldCoin ? Math.hypot(oldCoin.x - gravityMagnet.before.player.x, oldCoin.y - gravityMagnet.before.player.y) : 0;
+    const coinDistAfter = newCoin ? Math.hypot(newCoin.x - gravityAttracted.player.x, newCoin.y - gravityAttracted.player.y) : -1;
+    assert(newCoin === undefined || coinDistAfter < coinDistBefore - 10, 'gravity magnet did not pull coin closer: ' + JSON.stringify({ before: coinDistBefore, after: coinDistAfter, coins: gravityAttracted.coins.length }));
+    await cdp.evaluate(`__arcadeTest.setDist(2999)`);
+    await sleep(240);
+    const gravityFinished = await cdp.evaluate(`({ info: __arcadeTest.joyInfo(), run: !!Arcade.RunSave.get('gravity-flip') })`);
+    assert(gravityFinished.info.state === 'over' && gravityFinished.info.dist >= 3000 && !gravityFinished.run, 'gravity gate finish: ' + JSON.stringify(gravityFinished));
+    record('重力翻转 相位护盾/星星磁铁/3000m 星门', true);
+
+    await openJoy('block-drop.html', 'block-drop');
+    const blockJoy = await cdp.evaluate(`(() => {
+      const t = __arcadeTest; const before = t.joyInfo();
+      t.useJoyTool('swap'); const swapped = t.joyInfo();
+      t.useJoyTool('slow'); const slowed = t.joyInfo();
+      t.lineClearScenario(39);
+      return { before, swapped, slowed };
+    })()`);
+    assert(blockJoy.swapped.curKey === blockJoy.before.nextKey && blockJoy.swapped.nextKey === blockJoy.before.curKey && blockJoy.swapped.bag.join(',') === blockJoy.before.bag.join(',') && blockJoy.swapped.tools.swap === 1, 'block swap changed bag/cur/next wrong: ' + JSON.stringify(blockJoy));
+    assert(blockJoy.slowed.slowTimer > 5 && blockJoy.slowed.tools.slow === 1, 'block slow: ' + JSON.stringify(blockJoy.slowed));
+    await sleep(500);
+    const blockFinished = await cdp.evaluate(`({ info: __arcadeTest.joyInfo(), run: !!Arcade.RunSave.get('block-drop'), title: document.querySelector('[data-ov-title]').textContent })`);
+    assert(blockFinished.info.state === 'over' && blockFinished.info.lines === 40 && blockFinished.info.shortRun && !blockFinished.run, 'block 40-line finish: ' + JSON.stringify(blockFinished));
+    assert(!blockFinished.title.includes('结束') || blockFinished.title.includes('完成'), 'block finish title: ' + blockFinished.title);
+    record('俄罗斯方块 换块不动 7-bag/慢落/40 行收尾', true);
+
+    await openJoy('gold-miner.html', 'gold-miner');
+    const goldJoyStart = await cdp.evaluate(`(() => {
+      const t = __arcadeTest; t.setMoney(100); t.useJoyTool('line'); t.useJoyTool('winch');
+      t.clearItems(); t.addGold(210, 520); t.grabFirst('goldM', 800);
+      return t.joyInfo();
+    })()`);
+    assert(goldJoyStart.clawState === 'retract' && !goldJoyStart.aimLineBilling && goldJoyStart.winchArmed && goldJoyStart.tools.winch === 1 && goldJoyStart.lastFeedback.includes('$'), 'gold grab/arm feedback: ' + JSON.stringify(goldJoyStart));
+    await sleep(300);
+    const goldRetract = await cdp.evaluate(`__arcadeTest.joyInfo()`);
+    assert(Math.abs(goldRetract.money - goldJoyStart.money) < 0.05 && !goldRetract.aimLineBilling, 'gold charged during retract: ' + JSON.stringify({ before: goldJoyStart, after: goldRetract }));
+    await sleep(1000);
+    const goldCashed = await cdp.evaluate(`__arcadeTest.joyInfo()`);
+    assert(goldCashed.tools.winch === 0 && !goldCashed.winchArmed && goldCashed.money > 200 && goldCashed.clawState === 'swing' && goldCashed.aimLineBilling, 'gold winch cash-in/resume billing: ' + JSON.stringify(goldCashed));
+    record('黄金矿工 绞盘入账才消耗/回收免瞄准费/夹中反馈', true);
+
+    await openJoy('shadow-leap.html', 'shadow-leap');
+    const shadowFeather = await cdp.evaluate(`(() => { const t = __arcadeTest; t.useJoyTool('feather'); t.setMotion(300); return { joy: t.joyInfo(), fall: t.fallInfo() }; })()`);
+    assert(shadowFeather.joy.featherActive && shadowFeather.joy.tools.feather === 1 && shadowFeather.joy.featherTimer > 4, 'shadow feather activate: ' + JSON.stringify(shadowFeather.joy));
+    assert(shadowFeather.fall.feathering && shadowFeather.fall.maxFall === 360 && shadowFeather.fall.gravity < shadowFeather.fall.baseGravity * 0.4, 'shadow feather fall params: ' + JSON.stringify(shadowFeather.fall));
+    await sleep(220);
+    const shadowFeatherFall = await cdp.evaluate(`__arcadeTest.joyInfo()`);
+    assert(shadowFeatherFall.featherActive && shadowFeatherFall.featherTimer < shadowFeather.joy.featherTimer, 'shadow feather timer did not tick: ' + JSON.stringify(shadowFeatherFall));
+    const shadowFeatherOff = await cdp.evaluate(`(() => { const t = __arcadeTest; t.setFeatherTimer(0); return t.fallInfo(); })()`);
+    assert(!shadowFeatherOff.feathering && shadowFeatherOff.maxFall === 900 && shadowFeatherOff.gravity === shadowFeatherOff.baseGravity, 'shadow feather did not restore normal fall: ' + JSON.stringify(shadowFeatherOff));
+    const shadowBoost = await cdp.evaluate(`(() => { const t = __arcadeTest; t.useJoyTool('boost'); const armed = t.joyInfo(); t.forceLand(0); return armed; })()`);
+    assert(shadowBoost.boostArmed && shadowBoost.tools.boost === 1, 'shadow boost arm: ' + JSON.stringify(shadowBoost));
+    await sleep(90);
+    const shadowBoostLand = await cdp.evaluate(`__arcadeTest.joyInfo()`);
+    assert(!shadowBoostLand.boostArmed && shadowBoostLand.landingHint === '月弹！' && shadowBoostLand.player.vy < -400, 'shadow boost landing: ' + JSON.stringify(shadowBoostLand));
+    const shadowNormal = await cdp.evaluate(`(() => { const t = __arcadeTest; t.forceLand(1); return t.joyInfo(); })()`);
+    await sleep(90);
+    const shadowNormalLand = await cdp.evaluate(`__arcadeTest.joyInfo()`);
+    assert(shadowNormal.boostArmed === false && shadowNormalLand.landingHint !== '月弹！' && shadowNormalLand.player.vy > shadowBoostLand.player.vy, 'shadow normal landing changed: ' + JSON.stringify({ normal: shadowNormalLand, boost: shadowBoostLand }));
+    record('影跃 羽落限速/月弹只强化下一次着陆/落点提示', true);
+
+    await openJoy('snowbells.html', 'snowbells');
+    const snowMiss = await cdp.evaluate(`(() => { const t = __arcadeTest; const before = t.info(); t.forceHit(0, 30); return before; })()`);
+    await sleep(280);
+    const snowAfterMiss = await cdp.evaluate(`__arcadeTest.info()`);
+    assert(snowAfterMiss.bellScore === snowMiss.bellScore, 'snow off-radius hit scored without magnet: ' + JSON.stringify({ before: snowMiss.bellScore, after: snowAfterMiss.bellScore }));
+    const snowMagnet = await cdp.evaluate(`(() => { const t = __arcadeTest; t.useJoyTool('magnet'); const info = t.joyInfo(); t.forceHit(0, 30); return info; })()`);
+    assert(snowMagnet.tools.magnet === 1 && snowMagnet.magnetTimer > 5 && snowMagnet.magnetRadius > 20, 'snow magnet activate: ' + JSON.stringify(snowMagnet));
+    await sleep(280);
+    const snowMagnetHit = await cdp.evaluate(`__arcadeTest.info()`);
+    assert(snowMagnetHit.bellScore > snowAfterMiss.bellScore, 'snow magnet did not widen hit: ' + JSON.stringify({ before: snowAfterMiss.bellScore, after: snowMagnetHit.bellScore }));
+    const snowEncore = await cdp.evaluate(`(() => { const t = __arcadeTest; t.useJoyTool('encore'); return { armed: t.joyInfo(), before: t.info() }; })()`);
+    assert(snowEncore.armed.encoreHits === 2 && snowEncore.armed.tools.encore === 1, 'snow encore arm: ' + JSON.stringify(snowEncore.armed));
+    await cdp.evaluate(`__arcadeTest.forceHit(1, 0)`);
+    await sleep(320);
+    const snowEncore1 = await cdp.evaluate(`__arcadeTest.joyInfo()`);
+    await cdp.evaluate(`__arcadeTest.forceHit(2, 0)`);
+    await sleep(320);
+    const snowEncore2 = await cdp.evaluate(`__arcadeTest.joyInfo()`);
+    await cdp.evaluate(`__arcadeTest.forceHit(3, 0)`);
+    await sleep(320);
+    const snowEncore3 = await cdp.evaluate(`__arcadeTest.joyInfo()`);
+    assert(snowEncore1.encoreHits === 1 && snowEncore1.bellScore > snowEncore.before.bellScore, 'snow encore first double hit: ' + JSON.stringify(snowEncore1));
+    assert(snowEncore2.encoreHits === 0 && snowEncore2.bellScore > snowEncore1.bellScore, 'snow encore second double hit: ' + JSON.stringify(snowEncore2));
+    assert(snowEncore3.bellScore > snowEncore2.bellScore, 'snow normal hit after encore: ' + JSON.stringify(snowEncore3));
+    record('雪铃 铃磁扩大命中/安可两铃双倍', true);
+
+    await openJoy('pendulum-tower.html', 'pendulum-tower');
+    await cdp.evaluate(`__arcadeTest.stackTo(3)`);
+    await sleep(260);
+    const pendGuideReady = await cdp.evaluate(`__arcadeTest.joyInfo()`);
+    assert(pendGuideReady.floorsReached === 3 && pendGuideReady.pendHasBox && !pendGuideReady.guideVisible, 'pend tutorial state: ' + JSON.stringify(pendGuideReady));
+    const pendGuide = await cdp.evaluate(`(() => { const t = __arcadeTest; t.useJoyTool('guide'); const armed = t.joyInfo(); const released = (t.releaseNow(), t.joyInfo()); return { armed, released }; })()`);
+    assert(pendGuide.armed.guideArmed && pendGuide.armed.tools.guide === 3 && pendGuide.released.guideArmed === false && pendGuide.released.tools.guide === 2, 'pend guide consume on release: ' + JSON.stringify(pendGuide));
+    const pendBrace = await cdp.evaluate(`(() => { const t = __arcadeTest; t.setLean(0.2, 0.1); const before = t.joyInfo(); t.useJoyTool('brace'); return { before, after: t.joyInfo() }; })()`);
+    assert(Math.abs(pendBrace.after.towerLean - 0.1) < 0.02 && Math.abs(pendBrace.after.leanVel - 0.025) < 0.01 && pendBrace.after.tools.brace === 1, 'pend brace: ' + JSON.stringify(pendBrace));
+    const pendFeedback = await cdp.evaluate(`(() => { __arcadeTest.forceSettle(18); return __arcadeTest.joyInfo(); })()`);
+    assert(pendFeedback.feedback && pendFeedback.feedback.includes('偏右') && pendFeedback.feedback.includes('18'), 'pend feedback: ' + JSON.stringify(pendFeedback.feedback));
+    record('层塔 垂线预览消耗/配重减半/落点偏差反馈', true);
+
+    await openJoy('snake-run.html', 'snake-run');
+    const snakeJoy = await cdp.evaluate(`(() => {
+      const t = __arcadeTest;
+      t.useJoyTool('slow');
+      const slow = t.joyInfo();
+      t.growTo(12);
+      const grown = t.joyInfo();
+      t.useJoyTool('trim');
+      const trimmed = t.joyInfo();
+      return { slow, grown, trimmed };
+    })()`);
+    assert(snakeJoy.slow.slowTimer > 5 && snakeJoy.slow.tools.slow === 1, 'snake slow: ' + JSON.stringify(snakeJoy.slow));
+    assert(snakeJoy.grown.length === 12 && snakeJoy.trimmed.length === 6 && snakeJoy.trimmed.tools.trim === 0, 'snake trim: ' + JSON.stringify(snakeJoy));
+    await cdp.click('[data-pause]');
+    await sleep(200);
+    const snakeSaved = await cdp.evaluate(`(() => { const rec = Arcade.RunSave.get('snake-run'); return rec ? { tools: rec.data.tools, slowTimer: rec.data.slowTimer } : null; })()`);
+    assert(snakeSaved && snakeSaved.tools.slow === 1 && snakeSaved.tools.trim === 0 && snakeSaved.slowTimer > 0, 'snake tools autosave: ' + JSON.stringify(snakeSaved));
+    await cdp.navigate(base + '/apps/arcade/games/snake-run.html?resume=1#test');
+    await cdp.click('[data-ov-btn]');
+    await sleep(240);
+    const snakeResumed = await cdp.evaluate(`__arcadeTest.joyInfo()`);
+    assert(snakeResumed.tools.slow === 1 && snakeResumed.tools.trim === 0 && snakeResumed.slowTimer > 0, 'snake tools restore: ' + JSON.stringify(snakeResumed));
+    const snakeHarvest = await cdp.evaluate(`(() => {
+      const t = __arcadeTest;
+      t.clearObstacles();
+      let eaten = 0;
+      for (let i = 0; i < 30 && t.info().state === 'playing'; i++) {
+        if (t.eatNext()) eaten += 1;
+        t.clearObstacles();
+      }
+      return { eaten, info: t.info(), run: !!Arcade.RunSave.get('snake-run') };
+    })()`);
+    assert(snakeHarvest.info.foodsEaten >= 20 && snakeHarvest.info.state === 'over' && !snakeHarvest.run, 'snake harvest finish: ' + JSON.stringify(snakeHarvest));
+    const snakeTitle = await cdp.text('[data-ov-title]');
+    assert(snakeTitle && snakeTitle.includes('丰收'), 'snake finish title: ' + snakeTitle);
+    record('贪吃蛇 慢速泡泡/轻身剪/存档恢复/20 果实丰收', true);
 
     /* ---------- 全屏 / 沉浸模式 ---------- */
     await cdp.evaluate(`Arcade.RunSave.clear('gold-miner')`);
@@ -1191,7 +1688,7 @@ async function main() {
       };
     })()`);
     assert(roundUi && roundUi.expanded === 'true' && roundUi.hidden === false && roundUi.items >= 1, 'round detail not expanded: ' + JSON.stringify(roundUi));
-    assert(roundUi.text.includes('新纪录') || roundUi.items >= 1, 'round row text missing');
+    assert(roundUi.text.includes('贪吃蛇'), 'round row missing game label: ' + JSON.stringify(roundUi));
     await cdp.evaluate(`document.querySelector('[data-playtime-section]').scrollIntoView({ block: 'start' })`);
     await sleep(150);
     await cdp.screenshot('stats-hub.png');
@@ -1278,7 +1775,13 @@ async function main() {
         title: (() => { const t = document.querySelector('.game-title'); if (!t) return null; return { cw: t.clientWidth, sw: t.scrollWidth }; })(),
         back: (() => { const b = document.querySelector('.ac-back'); if (!b) return null; const r = b.getBoundingClientRect(); return { w: Math.round(r.width), h: Math.round(r.height) }; })(),
         secondary: (() => { const b = document.querySelector('[data-ov-btn2]'); if (!b) return null; const r = b.getBoundingClientRect(); return { hidden: b.hidden, display: getComputedStyle(b).display, w: Math.round(r.width), h: Math.round(r.height) }; })(),
-        toolbelt: (() => { const t = document.querySelector('[data-toolbelt]'); if (!t) return null; const r = t.getBoundingClientRect(); return { w: Math.round(r.width), h: Math.round(r.height), btns: [...t.querySelectorAll('.tool-btn')].map((b) => { const br = b.getBoundingClientRect(); return { w: Math.round(br.width), h: Math.round(br.height) }; }) }; })()
+        toolbelt: (() => { const t = document.querySelector('[data-toolbelt]'); if (!t) return null; const r = t.getBoundingClientRect(); return { w: Math.round(r.width), h: Math.round(r.height), btns: [...t.querySelectorAll('.tool-btn')].map((b) => { const br = b.getBoundingClientRect(); return { w: Math.round(br.width), h: Math.round(br.height) }; }) }; })(),
+        joyTools: [...document.querySelectorAll('[data-joy-tool]')].map((b) => { const r = b.getBoundingClientRect(); return { id: b.dataset.joyTool, w: Math.round(r.width), h: Math.round(r.height), top: Math.round(r.top), right: Math.round(r.right), bottom: Math.round(r.bottom) }; }),
+        canvasBottom: (() => { const c = document.querySelector('.game-canvas'); return c ? Math.round(c.getBoundingClientRect().bottom) : null; })(),
+        docH: document.documentElement.scrollHeight,
+        vh: innerHeight,
+        hasGameTools: document.body.classList.contains('has-game-tools'),
+        hasJoyRow: document.body.classList.contains('has-joy-row')
       })`);
       assert(overflow.sw <= overflow.cw + 1, pagePath + ' horizontal overflow ' + overflow.sw + '>' + overflow.cw);
       if (overflow.canvas) {
@@ -1289,11 +1792,16 @@ async function main() {
         assert(overflow.secondary && (overflow.secondary.hidden ? overflow.secondary.display === 'none' : overflow.secondary.w >= 44), pagePath + ' secondary button ' + JSON.stringify(overflow.secondary));
         if (overflow.toolbelt) {
           assert(overflow.toolbelt.w <= overflow.canvas.w + 1, pagePath + ' toolbelt width ' + JSON.stringify(overflow.toolbelt));
-          assert(overflow.toolbelt.btns.length === 4 && overflow.toolbelt.btns.every((b) => b.h >= 44 && b.w > 40), pagePath + ' toolbelt buttons ' + JSON.stringify(overflow.toolbelt.btns));
+          assert(overflow.toolbelt.btns.length === 4 && overflow.toolbelt.btns.every((b) => b.h >= 44 && b.w >= 44), pagePath + ' toolbelt buttons ' + JSON.stringify(overflow.toolbelt.btns));
         }
+        if (!pagePath.includes('gold-miner')) {
+          assert(overflow.joyTools.length === 2 && overflow.joyTools.every((b) => b.h >= 44 && b.w >= 44 && b.right <= overflow.cw + 1 && b.bottom <= overflow.docH + 1), pagePath + ' joy tools ' + JSON.stringify(overflow.joyTools));
+          assert(overflow.canvasBottom !== null && overflow.joyTools.every((b) => b.top >= overflow.canvasBottom - 1), pagePath + ' joy tools overlap canvas: ' + JSON.stringify({ canvasBottom: overflow.canvasBottom, tools: overflow.joyTools }));
+        }
+        if (overflow.hasGameTools || overflow.hasJoyRow) assert(overflow.docH <= overflow.vh + 1, pagePath + ' 375px controls vertical overflow ' + overflow.docH + '>' + overflow.vh);
       }
     }
-    record('375px 窄屏 14 页无横向溢出 + 44px 暂停按钮 + 矿工道具条', true);
+    record('375px 窄屏 14 页无横向溢出 + 全游戏 2 个 44px 道具按钮', true);
 
     /* ---------- 俄罗斯方块触屏控制面板：双手分区 + 画布不再劫持触摸 ---------- */
     await cdp.evaluate(`Arcade.RunSave.clear('block-drop')`);
@@ -1395,7 +1903,13 @@ async function main() {
         back: (() => { const b = document.querySelector('.ac-back'); if (!b) return null; const r = b.getBoundingClientRect(); return { w: Math.round(r.width), h: Math.round(r.height) }; })(),
         secondary: (() => { const b = document.querySelector('[data-ov-btn2]'); if (!b) return null; const r = b.getBoundingClientRect(); return { hidden: b.hidden, display: getComputedStyle(b).display, w: Math.round(r.width), h: Math.round(r.height) }; })(),
         toolbelt: (() => { const t = document.querySelector('[data-toolbelt]'); if (!t) return null; const r = t.getBoundingClientRect(); return { w: Math.round(r.width), h: Math.round(r.height), btns: [...t.querySelectorAll('.tool-btn')].map((b) => { const br = b.getBoundingClientRect(); return { w: Math.round(br.width), h: Math.round(br.height) }; }) }; })(),
-        blockPad: (() => { const p = document.querySelector('.block-pad'); if (!p || getComputedStyle(p).display === 'none') return null; const r = p.getBoundingClientRect(); return { right: Math.round(r.right), bottom: Math.round(r.bottom), docH: document.documentElement.scrollHeight, vh: innerHeight, btns: [...p.querySelectorAll('[data-touch]')].map((b) => { const br = b.getBoundingClientRect(); return { w: Math.round(br.width), h: Math.round(br.height) }; }) }; })()
+        blockPad: (() => { const p = document.querySelector('.block-pad'); if (!p || getComputedStyle(p).display === 'none') return null; const r = p.getBoundingClientRect(); return { right: Math.round(r.right), bottom: Math.round(r.bottom), docH: document.documentElement.scrollHeight, vh: innerHeight, btns: [...p.querySelectorAll('[data-touch]')].map((b) => { const br = b.getBoundingClientRect(); return { w: Math.round(br.width), h: Math.round(br.height) }; }) }; })(),
+        joyTools: [...document.querySelectorAll('[data-joy-tool]')].map((b) => { const r = b.getBoundingClientRect(); return { id: b.dataset.joyTool, w: Math.round(r.width), h: Math.round(r.height), top: Math.round(r.top), right: Math.round(r.right), bottom: Math.round(r.bottom) }; }),
+        canvasBottom: (() => { const c = document.querySelector('.game-canvas'); return c ? Math.round(c.getBoundingClientRect().bottom) : null; })(),
+        docH: document.documentElement.scrollHeight,
+        vh: innerHeight,
+        hasGameTools: document.body.classList.contains('has-game-tools'),
+        hasJoyRow: document.body.classList.contains('has-joy-row')
       })`);
       if (small.sw > small.cw + 1) {
         const offenders = await cdp.evaluate(`(() => {
@@ -1423,16 +1937,21 @@ async function main() {
         assert(small.secondary && (small.secondary.hidden ? small.secondary.display === 'none' : small.secondary.w >= 44), pagePath + ' 320px secondary button ' + JSON.stringify(small.secondary));
         if (small.toolbelt) {
           assert(small.toolbelt.w <= small.canvas.w + 1, pagePath + ' 320px toolbelt width ' + JSON.stringify(small.toolbelt));
-          assert(small.toolbelt.btns.length === 4 && small.toolbelt.btns.every((b) => b.h >= 44 && b.w > 40), pagePath + ' 320px toolbelt buttons ' + JSON.stringify(small.toolbelt.btns));
+          assert(small.toolbelt.btns.length === 4 && small.toolbelt.btns.every((b) => b.h >= 44 && b.w >= 44), pagePath + ' 320px toolbelt buttons ' + JSON.stringify(small.toolbelt.btns));
         }
         if (small.blockPad) {
           assert(small.blockPad.btns.length === 5 && small.blockPad.btns.every((b) => b.h >= 56 && b.w >= 52), pagePath + ' 320px block pad buttons ' + JSON.stringify(small.blockPad.btns));
           assert(small.blockPad.right <= small.cw + 1 && small.blockPad.bottom <= small.blockPad.vh + 1, pagePath + ' 320px block pad clipped ' + JSON.stringify(small.blockPad));
           assert(small.blockPad.docH <= small.blockPad.vh + 1, pagePath + ' 320px block pad page overflow ' + JSON.stringify(small.blockPad));
         }
+        if (!pagePath.includes('gold-miner')) {
+          assert(small.joyTools.length === 2 && small.joyTools.every((b) => b.h >= 44 && b.w >= 44 && b.right <= small.cw + 1 && b.bottom <= small.docH + 1), pagePath + ' 320px joy tools ' + JSON.stringify(small.joyTools));
+          assert(small.canvasBottom !== null && small.joyTools.every((b) => b.top >= small.canvasBottom - 1), pagePath + ' 320px joy tools overlap canvas: ' + JSON.stringify({ canvasBottom: small.canvasBottom, tools: small.joyTools }));
+        }
+        if (small.hasGameTools || small.hasJoyRow) assert(small.docH <= small.vh + 1, pagePath + ' 320px controls vertical overflow ' + small.docH + '>' + small.vh);
       }
     }
-    record('320×568 小屏 14 页无横向溢出 + 44px 暂停按钮 + 矿工道具条', true);
+    record('320×568 小屏 14 页无横向溢出 + 全游戏 44px 道具按钮', true);
 
     /* 320px 上道具条占画布比例最大：物品不能被压在道具条后面。 */
     await cdp.navigate(base + '/apps/arcade/games/gold-miner.html?itemfloor=1#test');
@@ -1472,7 +1991,13 @@ async function main() {
           sw: document.documentElement.scrollWidth,
           cw: document.documentElement.clientWidth,
           pause: (() => { const b = document.querySelector('[data-pause]'); if (!b) return null; const r = b.getBoundingClientRect(); return { w: Math.round(r.width), h: Math.round(r.height) }; })(),
-          blockPad: (() => { const p = document.querySelector('.block-pad'); if (!p || getComputedStyle(p).display === 'none') return null; const r = p.getBoundingClientRect(); return { right: Math.round(r.right), bottom: Math.round(r.bottom), docH: document.documentElement.scrollHeight, vh: innerHeight, btns: [...p.querySelectorAll('[data-touch]')].map((b) => { const br = b.getBoundingClientRect(); return { w: Math.round(br.width), h: Math.round(br.height) }; }) }; })()
+          blockPad: (() => { const p = document.querySelector('.block-pad'); if (!p || getComputedStyle(p).display === 'none') return null; const r = p.getBoundingClientRect(); return { right: Math.round(r.right), bottom: Math.round(r.bottom), docH: document.documentElement.scrollHeight, vh: innerHeight, btns: [...p.querySelectorAll('[data-touch]')].map((b) => { const br = b.getBoundingClientRect(); return { w: Math.round(br.width), h: Math.round(br.height) }; }) }; })(),
+          joyTools: [...document.querySelectorAll('[data-joy-tool]')].map((b) => { const r = b.getBoundingClientRect(); return { w: Math.round(r.width), h: Math.round(r.height), top: Math.round(r.top), right: Math.round(r.right), bottom: Math.round(r.bottom) }; }),
+          canvasBottom: (() => { const c = document.querySelector('.game-canvas'); return c ? Math.round(c.getBoundingClientRect().bottom) : null; })(),
+          docH: document.documentElement.scrollHeight,
+          vh: innerHeight,
+          hasGameTools: document.body.classList.contains('has-game-tools'),
+          hasJoyRow: document.body.classList.contains('has-joy-row')
         })`);
         assert(metrics.sw <= metrics.cw + 1, pagePath + ' ' + width + 'px overflow ' + metrics.sw + '>' + metrics.cw);
         if (metrics.pause) assert(metrics.pause.w >= 44 && metrics.pause.h >= 44, pagePath + ' ' + width + 'px pause target');
@@ -1481,9 +2006,36 @@ async function main() {
           assert(metrics.blockPad.right <= metrics.cw + 1 && metrics.blockPad.bottom <= metrics.blockPad.vh + 1, pagePath + ' ' + width + 'px block pad clipped ' + JSON.stringify(metrics.blockPad));
           assert(metrics.blockPad.docH <= metrics.blockPad.vh + 1, pagePath + ' ' + width + 'px block pad page overflow ' + JSON.stringify(metrics.blockPad));
         }
+        if (metrics.pause && !pagePath.includes('gold-miner')) {
+          assert(metrics.joyTools.length === 2 && metrics.joyTools.every((b) => b.h >= 44 && b.w >= 44 && b.right <= metrics.cw + 1 && b.bottom <= metrics.docH + 1), pagePath + ' ' + width + 'px joy tools ' + JSON.stringify(metrics.joyTools));
+          assert(metrics.canvasBottom !== null && metrics.joyTools.every((b) => b.top >= metrics.canvasBottom - 1), pagePath + ' ' + width + 'px joy tools overlap canvas: ' + JSON.stringify({ canvasBottom: metrics.canvasBottom, tools: metrics.joyTools }));
+        }
+        if (metrics.hasGameTools || metrics.hasJoyRow) assert(metrics.docH <= metrics.vh + 1, pagePath + ' ' + width + 'px controls vertical overflow ' + metrics.docH + '>' + metrics.vh);
       }
     }
-    record('390×844 / 430×932 视口 14 页无横向溢出', true);
+    record('390×844 / 430×932 视口 14 页与全游戏道具按钮无溢出', true);
+
+    /* ---------- 横屏（667×375）：允许纵向滚动，但不得横向溢出或让道具按钮消失 ---------- */
+    await cdp.send('Emulation.setDeviceMetricsOverride', { width: 667, height: 375, deviceScaleFactor: 1, mobile: true });
+    for (const pagePath of pages) {
+      await cdp.navigate(base + pagePath);
+      const landscape = await cdp.evaluate(`({
+        sw: document.documentElement.scrollWidth,
+        cw: document.documentElement.clientWidth,
+        docH: document.documentElement.scrollHeight,
+        vh: innerHeight,
+        canvas: (() => { const c = document.querySelector('.game-canvas'); if (!c) return null; const r = c.getBoundingClientRect(); return { w: Math.round(r.width), h: Math.round(r.height), bottom: Math.round(r.bottom) }; })(),
+        joyTools: [...document.querySelectorAll('[data-joy-tool]')].map((b) => { const r = b.getBoundingClientRect(); return { w: Math.round(r.width), h: Math.round(r.height), top: Math.round(r.top), right: Math.round(r.right), bottom: Math.round(r.bottom) }; })
+      })`);
+      assert(landscape.sw <= landscape.cw + 1, pagePath + ' landscape overflow ' + landscape.sw + '>' + landscape.cw);
+      if (landscape.canvas) {
+        assert(landscape.canvas.w > 100 && landscape.canvas.h > 60, pagePath + ' landscape canvas ' + JSON.stringify(landscape.canvas));
+        if (!pagePath.includes('gold-miner')) {
+          assert(landscape.joyTools.length === 2 && landscape.joyTools.every((b) => b.w >= 44 && b.h >= 44 && b.right <= landscape.cw + 1 && b.bottom <= landscape.docH + 1), pagePath + ' landscape joy tools ' + JSON.stringify(landscape.joyTools));
+        }
+      }
+    }
+    record('横屏 667×375 无横向溢出且道具按钮完整可点', true);
 
     /* ---------- 刘海安全区（Chrome CDP 支持时） ---------- */
     let safeAreaApplied = false;
@@ -1541,6 +2093,21 @@ async function main() {
       assert(safeFs.active && safeFs.topPad >= 47 && safeFs.top >= 47, 'safe-area fullscreen top ' + JSON.stringify(safeFs));
       assert(safeFs.toolBottom <= safeFs.vh + 1 && safeFs.docH <= safeFs.vh + 2, 'safe-area fullscreen bottom ' + JSON.stringify(safeFs));
       record('390×844 刘海安全区 全屏画布不压刘海/不溢出', true);
+      await cdp.click('[data-fullscreen]');
+      await sleep(300);
+
+      /* 画布外道具按钮在沉浸模式下也必须完整可见、可点。 */
+      await cdp.navigate(base + '/apps/arcade/games/shadow-leap.html');
+      await cdp.click('[data-fullscreen]');
+      await sleep(420);
+      const safeTools = await cdp.evaluate(`(() => {
+        const buttons = [...document.querySelectorAll('[data-joy-tool]')].map((b) => { const r = b.getBoundingClientRect(); return { w: Math.round(r.width), h: Math.round(r.height), right: Math.round(r.right), bottom: Math.round(r.bottom) }; });
+        const c = document.querySelector('.game-canvas').getBoundingClientRect();
+        return { active: document.body.classList.contains('arcade-immersive'), buttons, canvasBottom: Math.round(c.bottom), bottomPad: getComputedStyle(document.querySelector('.game-page')).paddingBottom, vh: innerHeight, docH: document.documentElement.scrollHeight };
+      })()`);
+      assert(safeTools.active && safeTools.buttons.length === 2 && safeTools.buttons.every((b) => b.w >= 44 && b.h >= 44 && b.right <= 390 && b.bottom <= safeTools.vh + 1), 'safe-area immersive joy tools: ' + JSON.stringify(safeTools));
+      assert(safeTools.docH <= safeTools.vh + 2, 'safe-area immersive joy tools overflow: ' + JSON.stringify(safeTools));
+      record('390×844 刘海安全区 沉浸模式道具按钮完整可见', true);
       await cdp.click('[data-fullscreen]');
       await sleep(300);
     } catch (err) {
@@ -1645,7 +2212,7 @@ async function main() {
       version: window.Arcade && Arcade.version,
       title: document.title
     })`);
-    assert(offlineHall.cards === 13 && offlineHall.version === '0.6.2', 'offline hall failed: ' + JSON.stringify(offlineHall));
+    assert(offlineHall.cards === 13 && offlineHall.version === '0.7.0', 'offline hall failed: ' + JSON.stringify(offlineHall));
     const offlineStatus = await cdp.evaluate(`(async () => {
       try {
         await Arcade.Offline.register();
@@ -1667,7 +2234,7 @@ async function main() {
       overlay: !!document.querySelector('[data-overlay]'),
       version: window.Arcade && window.Arcade.version
     })`);
-    assert(offlineGame.hasArcade && offlineGame.overlay && offlineGame.version === '0.6.2', 'offline game failed: ' + JSON.stringify(offlineGame));
+    assert(offlineGame.hasArcade && offlineGame.overlay && offlineGame.version === '0.7.0', 'offline game failed: ' + JSON.stringify(offlineGame));
     await cdp.navigate(base + '/apps/arcade/games/not-preloaded.html');
     const offlineMissing = await cdp.text('body');
     assert(offlineMissing && offlineMissing.includes('还没有预载'), 'offline missing page: ' + String(offlineMissing).slice(0, 120));

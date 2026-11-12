@@ -7,7 +7,7 @@
 (() => {
   'use strict';
 
-  const ARCADE_VERSION = '0.6.2';
+  const ARCADE_VERSION = '0.7.0';
   const PROGRESS_KEY = 'studiokit:arcade:progress:v1';
   const PREFS_KEY = 'studiokit:arcade:prefs:v1';
   const RUNS_KEY = 'studiokit:arcade:runs:v1';
@@ -50,7 +50,7 @@
       difficulty: 1,
       session: '2–5 分钟',
       tags: ['记忆', '配对'],
-      how: '点开两张牌找相同图案；配对成功即锁定，关卡越高牌越多。',
+      how: '翻牌配对，6 关递进；1 再看一眼、2 灵犀提示，预览可点按跳过。',
     },
     {
       id: 'merge-2048',
@@ -63,7 +63,7 @@
       difficulty: 1,
       session: '3–8 分钟',
       tags: ['数字', '合成'],
-      how: '上下左右滑动 / 方向键移动方块；同数相撞合并，一步可撤销。',
+      how: '滑动合成 2048；1 小锤、2 升一级，支持撤销，达成后可收尾或继续。',
     },
     {
       id: 'snowbells',
@@ -76,7 +76,7 @@
       difficulty: 2,
       session: '1–3 分钟',
       tags: ['弹跳', '连击'],
-      how: '←→ 或触摸左右半屏移动，踩中铃铛向上弹；连击有倍率加成。',
+      how: '踩铃铛向上连跳；1 铃磁扩大判定、2 安可让接下来两铃双倍分。',
     },
     {
       id: 'brick-breaker',
@@ -89,7 +89,7 @@
       difficulty: 2,
       session: '2–5 分钟',
       tags: ['打砖块', '反弹'],
-      how: '拖动 / ←→ 移动挡板，点击 / 空格发球；接住道具，逐关加速。',
+      how: '反弹打砖；1 宽板、2 重锤球，完成 3 关即可圆满收局。',
     },
     {
       id: 'gravity-flip',
@@ -102,7 +102,7 @@
       difficulty: 2,
       session: '1–2 分钟',
       tags: ['一键', '反应'],
-      how: '点击 / 空格翻转重力，在上下尖刺之间穿行；速度会越来越快。',
+      how: '翻转重力躲尖刺；1 相位护盾、2 星星磁铁，抵达 3000m 星门。',
     },
     {
       id: 'snake-run',
@@ -115,7 +115,7 @@
       difficulty: 2,
       session: '2–5 分钟',
       tags: ['经典', '贪吃'],
-      how: '方向键 / WASD 或滑动转向；吃果实变长，越吃越快。',
+      how: '转向吃果实；1 慢速泡泡、2 轻身剪，收集 20 个果实即丰收。',
     },
     {
       id: 'mole-whack',
@@ -128,7 +128,7 @@
       difficulty: 2,
       session: '1 分钟',
       tags: ['连击', '限时'],
-      how: '点击冒头的地鼠得分，连击有倍率；别敲炸弹，也别放跑金鼠。',
+      how: '45 秒连击敲地鼠；Q 金鼠三连、E 安心锤，炸弹与金鼠混在其中。',
     },
     {
       id: 'block-drop',
@@ -141,7 +141,7 @@
       difficulty: 3,
       session: '3–8 分钟',
       tags: ['消除', '经典'],
-      how: '←→ 移动 · ↑ 旋转 · ↓ 软降 · 空格硬降；触摸分区操作。',
+      how: '经典落块，触摸双手分区；1 换块、2 慢落，新局 40 行轻快收尾。',
     },
     {
       id: 'star-raid',
@@ -154,7 +154,7 @@
       difficulty: 3,
       session: '2–4 分钟',
       tags: ['射击', '弹幕'],
-      how: '拖动 / ←→ 移动，自动开火；吃散射 / 激光 / 追踪 / 速射 Buff 切换弹种。',
+      how: '纵版射击，弹种可叠加；1 电磁脉冲、2 星盾，击破 Boss 可继续或收局。',
     },
     {
       id: 'road-rush',
@@ -167,7 +167,7 @@
       difficulty: 3,
       session: '1–3 分钟',
       tags: ['赛车', '竞速'],
-      how: '←→ 或触摸左右半屏变道；躲开车流，速度会越来越快。',
+      how: '四车道避障；1 防撞气囊、2 车流慢放，抵达 5000m 终点。',
     },
     {
       id: 'shadow-leap',
@@ -180,7 +180,7 @@
       difficulty: 4,
       session: '2–5 分钟',
       tags: ['跳跃', '平台'],
-      how: '←→ 或触摸左右半屏横移，触墙反弹；别掉出屏幕底部。',
+      how: '忍者上跳；1 羽落减缓下降、2 月弹强化下一次着陆起跳。',
     },
     {
       id: 'pendulum-tower',
@@ -193,7 +193,7 @@
       difficulty: 4,
       session: '2–4 分钟',
       tags: ['物理', '叠塔'],
-      how: '看准摆动时机，点击 / 空格松手落箱；偏心会让塔倾斜倒塌。',
+      how: '钟摆叠箱；1 垂线预览、2 配重，落点会报告方向与像素偏差。',
     },
     {
       id: 'gold-miner',
@@ -206,7 +206,7 @@
       difficulty: 4,
       session: '3–6 分钟',
       tags: ['物理', '关卡'],
-      how: '看准角度点击 / 空格放钩；重物拉得慢；1/2/3 使用限量道具；限时达标进入下一关。',
+      how: '摆钩挖金；1/2/3/4 使用限量道具，达标可提前收局；绞盘入账才消耗。',
     },
   ];
 
@@ -407,6 +407,8 @@
   const PLAYTIME_ROUNDS = 30;
   const PLAYTIME_DAYS = 120;
   const PLAYTIME_TICK_MS = 15000;
+  const PLAYTIME_REST_MS = 20 * 60 * 1000;
+  const PLAYTIME_REST_TEXT = '已经玩了一会儿，快乐不用赶进度；可以暂停喝口水，或带着好成绩随时收工。';
 
   function pad2(value) {
     return String(value).padStart(2, '0');
@@ -500,8 +502,33 @@
     let segStart = 0;
     let sessionMs = 0;
     let roundMs = 0;
+    /* 页面生命周期内的有效游玩累计；只用于一次性休息提醒，不写入存储。 */
+    let restMs = 0;
+    let restReminded = false;
+    let restPending = false;
     let installed = false;
     let tickTimer = 0;
+
+    function restState() {
+      return { ms: Math.floor(restMs), thresholdMs: PLAYTIME_REST_MS, reminded: restReminded };
+    }
+
+    function remindRest() {
+      if (restReminded || restMs < PLAYTIME_REST_MS) return false;
+      /* 切到后台/失焦时不消耗这一次机会：等回到页面可见且聚焦再提示。 */
+      if (!visible || !focused || document.hidden) {
+        restPending = true;
+        return false;
+      }
+      restPending = false;
+      restReminded = true;
+      try {
+        showArcadeToast(PLAYTIME_REST_TEXT, 8000);
+      } catch (err) {
+        /* 提示失败不影响游玩与计时。 */
+      }
+      return true;
+    }
 
     function closeSegment() {
       if (!segStart) return;
@@ -509,6 +536,8 @@
       segStart = 0;
       sessionMs += delta;
       roundMs += delta;
+      restMs += delta;
+      if (restMs >= PLAYTIME_REST_MS) remindRest();
     }
 
     function startSegment() {
@@ -581,7 +610,10 @@
       document.addEventListener('visibilitychange', () => {
         visible = !document.hidden;
         if (!visible) flushTime();
-        else if (!overlayOpen) startSegment();
+        else {
+          if (!overlayOpen) startSegment();
+          if (restPending) remindRest();
+        }
       });
       /* createLoop 在窗口失焦时也会自动暂停；计时必须跟随同一语义。 */
       window.addEventListener('blur', () => {
@@ -591,6 +623,7 @@
       window.addEventListener('focus', () => {
         focused = true;
         if (!overlayOpen && visible) startSegment();
+        if (restPending) remindRest();
       });
       window.addEventListener('pagehide', flushTime);
       window.addEventListener('beforeunload', flushTime);
@@ -700,7 +733,7 @@
 
     install();
 
-    return {
+    const api = {
       schema: PLAYTIME_SCHEMA,
       currentGame,
       setOverlayVisible,
@@ -717,7 +750,50 @@
       get timer() {
         return tickTimer;
       },
+      /* 只读：当前页面生命周期内的有效游玩累计与一次性提醒是否已经触发。 */
+      get rest() {
+        return restState();
+      },
     };
+
+    if (location.hash === '#test') {
+      function setRestMs(value) {
+        const n = Number(value);
+        restMs = Number.isFinite(n) ? Math.max(0, n) : 0;
+        return restState();
+      }
+      function addRestMs(value) {
+        const n = Number(value);
+        if (Number.isFinite(n) && n > 0) restMs += n;
+        const fired = remindRest();
+        return Object.assign(restState(), { fired });
+      }
+      function resetRest() {
+        restMs = 0;
+        restReminded = false;
+        return restState();
+      }
+      /* 仅 #test 暴露可改状态的入口；生产页面只有上面的只读 rest getter。 */
+      api.test = {
+        state: restState,
+        setElapsed: setRestMs,
+        setRestMs,
+        advance: addRestMs,
+        addRestMs,
+        check: remindRest,
+        reset: resetRest,
+        /* 走真实的 closeSegment→restMs→remindRest 路径，模拟一段有效游玩。 */
+        simulateSegment(ms) {
+          const span = Math.max(0, Number(ms) || 0);
+          const wasReminded = restReminded;
+          segStart = performance.now() - span;
+          closeSegment();
+          return Object.assign(restState(), { fired: !wasReminded && restReminded });
+        },
+      };
+    }
+
+    return api;
   })();
 
   function formatDuration(ms) {
@@ -1502,6 +1578,251 @@
     return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
   }
 
+  /* ----------------------------------------------------------
+   * 共享“快乐道具栏”（0.7.0）
+   * - 各游戏只提供数量 / 可用 / 使用回调，次数由游戏自己持有与扣除。
+   * - 所有 getter / callback 都隔离异常，失败时按不可用处理，不让整页崩溃。
+   * - 只有显式传入 options.keys 才监听快捷键；默认不抢数字键、空格、P、Esc。
+   * ---------------------------------------------------------- */
+  const JOY_TOOL_DEFAULT_LABEL = '可选道具';
+  const JOY_TOOL_BLOCKED_KEYS = new Set(['', ' ', 'space', 'spacebar', 'p', 'escape', 'esc']);
+
+  function createToolbelt(definitions, options) {
+    const stage = document.querySelector('.game-page .stage-box');
+    const page = document.querySelector('.game-page');
+    if (!stage || !page) return { element: null, buttons: {}, sync() {} };
+
+    const o = options && typeof options === 'object' ? options : {};
+    const list = Array.isArray(definitions) ? definitions : [];
+    const keys = Array.isArray(o.keys) ? o.keys : [];
+    const label = typeof o.label === 'string' && o.label ? o.label : JOY_TOOL_DEFAULT_LABEL;
+    /* placement=below：把道具放到画布外，避免在 320px/横屏短舞台盖住挡板、棋盘等核心内容。 */
+    const below = o.placement === 'below';
+    const elements = document.createElement('div');
+    const buttons = {};
+    const records = [];
+    const keyMap = Object.create(null);
+    const seen = new Set();
+
+    elements.className = below ? 'touch-pad game-tools joy-tools-below' : 'toolbelt joy-toolbelt';
+    elements.setAttribute('role', 'group');
+    elements.setAttribute('aria-label', label);
+    if (below) {
+      elements.setAttribute('data-joy-tools', '');
+      document.body.classList.add('has-joy-row');
+    }
+
+    function isPlaying() {
+      let fn;
+      try {
+        fn = o.isPlaying;
+      } catch (err) {
+        return false;
+      }
+      if (typeof fn !== 'function') return true;
+      try {
+        return fn.call(o) !== false;
+      } catch (err) {
+        return false;
+      }
+    }
+
+    function readCount(def) {
+      let fn;
+      try {
+        fn = def.getCount;
+      } catch (err) {
+        return { value: NaN, finite: false, failed: true };
+      }
+      if (typeof fn !== 'function') return { value: Infinity, finite: false, failed: false };
+      try {
+        const value = Number(fn.call(def));
+        /* getCount 存在但返回非有限数（如拼写错误/undefined）时按不可用处理，避免限量道具无限使用。 */
+        if (!Number.isFinite(value)) return { value: NaN, finite: false, failed: true };
+        return { value, finite: true, failed: false };
+      } catch (err) {
+        return { value: NaN, finite: false, failed: true };
+      }
+    }
+
+    function readCanUse(def) {
+      let fn;
+      try {
+        fn = def.canUse;
+      } catch (err) {
+        return false;
+      }
+      if (typeof fn !== 'function') return true;
+      try {
+        return fn.call(def) !== false;
+      } catch (err) {
+        return false;
+      }
+    }
+
+    function readActive(def) {
+      let fn;
+      try {
+        fn = def.active;
+      } catch (err) {
+        return false;
+      }
+      if (typeof fn !== 'function') return false;
+      try {
+        return !!fn.call(def);
+      } catch (err) {
+        return false;
+      }
+    }
+
+    function displayCount(count) {
+      return count.finite ? String(Math.max(0, Math.floor(count.value))) : '';
+    }
+
+    function toolLabel(record, count) {
+      const parts = [record.name];
+      if (record.description) parts.push(record.description);
+      if (count.failed) parts.push('次数暂不可用');
+      else if (count.finite) parts.push('剩余 ' + Math.max(0, Math.floor(count.value)) + ' 次');
+      else parts.push('次数不限');
+      if (record.key) parts.push('快捷键 ' + record.key);
+      return parts.join('；');
+    }
+
+    function sync() {
+      const playing = isPlaying();
+      records.forEach((record) => {
+        const count = readCount(record.def);
+        const active = readActive(record.def);
+        const canUse = readCanUse(record.def);
+        const disabled = !playing || !canUse || count.failed || count.value <= 0;
+        const text = displayCount(count);
+        const labelText = toolLabel(record, count);
+        record.button.disabled = disabled;
+        record.button.setAttribute('aria-pressed', String(active));
+        record.button.classList.toggle('is-armed', active);
+        record.button.title = labelText;
+        record.button.setAttribute('aria-label', labelText);
+        if (record.countSpan) {
+          record.countSpan.textContent = text;
+          record.countSpan.hidden = !count.finite;
+        }
+      });
+    }
+
+    function isEditableTarget(target) {
+      if (!target) return false;
+      if (target.isContentEditable) return true;
+      const tag = target.tagName ? String(target.tagName).toLowerCase() : '';
+      if (tag === 'input' || tag === 'textarea' || tag === 'select') return true;
+      try {
+        if (typeof target.closest !== 'function') return false;
+        const editable = target.closest('[contenteditable]');
+        return !!editable && editable.getAttribute('contenteditable') !== 'false';
+      } catch (err) {
+        return false;
+      }
+    }
+
+    function activate(record) {
+      /* 先重读一次，确保点击 / 快捷键使用的是当下状态而不是上一帧的按钮属性。 */
+      sync();
+      if (record.button.disabled) return undefined;
+      let result;
+      try {
+        const use = record.def.use;
+        if (typeof use === 'function') result = use.call(record.def);
+      } catch (err) {
+        /* 游戏自己的 use() 失败不应影响工具栏与页面。 */
+      }
+      sync();
+      return result;
+    }
+
+    list.forEach((def, index) => {
+      if (!def || typeof def !== 'object' || typeof def.id !== 'string' || !def.id || seen.has(def.id)) return;
+      seen.add(def.id);
+      const name = typeof def.name === 'string' && def.name ? def.name : def.id;
+      const description = typeof def.description === 'string' ? def.description : '';
+      const rawKey = typeof keys[index] === 'string' ? keys[index] : '';
+      const lowered = rawKey.toLowerCase();
+      const key = JOY_TOOL_BLOCKED_KEYS.has(lowered) ? '' : (rawKey.length === 1 ? lowered : rawKey);
+
+      const button = document.createElement('button');
+      button.type = 'button';
+      button.className = 'tool-btn';
+      button.setAttribute('data-joy-tool', def.id);
+
+      const iconSpan = document.createElement('span');
+      iconSpan.className = 'tool-icon';
+      iconSpan.setAttribute('aria-hidden', 'true');
+      iconSpan.textContent = def.icon == null ? '' : String(def.icon);
+
+      const nameSpan = document.createElement('span');
+      nameSpan.className = 'tool-name';
+      nameSpan.textContent = name;
+
+      const countSpan = document.createElement('span');
+      countSpan.className = 'tool-count';
+      countSpan.setAttribute('aria-hidden', 'true');
+
+      button.appendChild(iconSpan);
+      button.appendChild(nameSpan);
+      button.appendChild(countSpan);
+      elements.appendChild(button);
+      /* 用 defineProperty 而不是普通赋值，避免特殊 id（如 __proto__）改写对象原型。 */
+      Object.defineProperty(buttons, def.id, { value: button, enumerable: true, configurable: true, writable: true });
+
+      const record = { def, button, countSpan, name, description, key };
+      records.push(record);
+      if (key) keyMap[key] = record;
+      button.addEventListener('click', () => {
+        activate(record);
+      });
+    });
+
+    const columns = Math.min(4, Math.max(1, records.length));
+    elements.style.setProperty('--joy-cols', String(columns));
+    elements.style.gridTemplateColumns = `repeat(${columns}, minmax(0, 1fr))`;
+    /* 没有可用定义时不插入空栏，避免给页面留下 68px 空白。 */
+    if (!records.length) {
+      return { element: null, buttons, sync() {}, destroy() {} };
+    }
+    if (below) {
+      /* 画布外：插在舞台之后、提示文字之前，不占用画布逻辑坐标。 */
+      const hint = page.querySelector('.game-hint');
+      if (hint && hint.parentNode === page) page.insertBefore(elements, hint);
+      else page.appendChild(elements);
+    } else {
+      stage.appendChild(elements);
+    }
+
+    let onKeydown = null;
+    if (Object.keys(keyMap).length) {
+      onKeydown = (e) => {
+        if (e.repeat || e.ctrlKey || e.metaKey || e.altKey || e.isComposing) return;
+        if (isEditableTarget(e.target)) return;
+        const record = keyMap[String(e.key || '').toLowerCase()] || keyMap[e.key];
+        if (!record) return;
+        /* 禁用态不吞掉按键，让游戏自己的快捷键继续生效。 */
+        if (record.button.disabled) return;
+        e.preventDefault();
+        activate(record);
+      };
+      window.addEventListener('keydown', onKeydown);
+    }
+
+    function destroy() {
+      if (onKeydown) window.removeEventListener('keydown', onKeydown);
+      onKeydown = null;
+      if (elements.parentNode) elements.parentNode.removeChild(elements);
+      if (below && !document.querySelector('.joy-tools-below')) document.body.classList.remove('has-joy-row');
+    }
+
+    sync();
+    return { element: elements, buttons, sync, destroy };
+  }
+
   function createOverlayUiBase(dom) {
     let previousFocus = null;
     if (dom.overlay) {
@@ -2172,6 +2493,7 @@
     createStarfield,
     createRunAutosave,
     createOverlayUi,
+    createToolbelt,
     bindPause,
     showResumePrompt,
     formatSavedAt,

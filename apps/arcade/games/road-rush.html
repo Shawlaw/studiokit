@@ -11,7 +11,7 @@
   <script src="../engine.js"></script>
   <title>极速车道 · 街机厅 · StudioKit</title>
 </head>
-<body class="arcade-body has-extra-controls" data-studiokit-app="arcade" data-studiokit-app-title="街机厅 Arcade" style="--ac-accent:#ff7847; --card-accent:#ff7847">
+<body class="arcade-body has-extra-controls has-game-tools" data-studiokit-app="arcade" data-studiokit-app-title="街机厅 Arcade" style="--ac-accent:#ff7847; --card-accent:#ff7847">
   <noscript><p class="ac-noscript">此游戏需要启用 JavaScript 才能运行。</p></noscript>
   <main class="game-page">
     <header class="game-topbar">
@@ -40,8 +40,14 @@
     <div class="touch-pad road-pad" data-touch-pad aria-label="赛车变道操作面板">
       <button type="button" class="touch-btn" data-touch="left" aria-label="向左变道">←</button>
       <button type="button" class="touch-btn" data-touch="right" aria-label="向右变道">→</button>
+      <button type="button" class="touch-btn" data-joy-tool="shield" aria-pressed="false" aria-label="防撞气囊，剩余 1 次（快捷键 1）" title="防撞气囊（1）：武装后，下一次撞车不扣命、不减速">
+        <span aria-hidden="true">🛡</span><span data-joy-count aria-hidden="true">1</span>
+      </button>
+      <button type="button" class="touch-btn" data-joy-tool="calm" aria-label="车流慢放 6 秒，剩余 2 次（快捷键 2）" title="车流慢放（2）：6 秒内迎面车流相对速度降至 55%">
+        <span aria-hidden="true">🫧</span><span data-joy-count aria-hidden="true">2</span>
+      </button>
     </div>
-    <p class="game-hint">←→ / A D 或点击左右按钮变道 · 一次操作移动一条车道 · 车速会越来越快 · P / Esc 暂停</p>
+    <p class="game-hint">←→ / A D 变道 · 道具 1/2 · 5000m 抵达终点 · P / Esc 暂停</p>
   </main>
   <script>
     (() => {
@@ -76,6 +82,8 @@
         hudHigh: document.querySelector('[data-hud-high]'),
         pause: document.querySelector('[data-pause]'),
         mute: document.querySelector('[data-mute]'),
+        joyShield: document.querySelector('[data-joy-tool="shield"]'),
+        joyCalm: document.querySelector('[data-joy-tool="calm"]'),
       };
       const ui = A.createOverlayUi(dom);
 
@@ -128,6 +136,14 @@
       let shake = 0;
       let exhaustTimer = 0;
       let keyWasDown = {};
+      const JOY_GOAL_DIST = 5000;
+      const CALM_SECONDS = 6;
+      const tools = { shield: 1, calm: 2 };
+      let shieldArmed = false;
+      /* 只有 0.7.0 新开的局才启用 5000m 终点；旧版无尽档恢复后保持原玩法。 */
+      let shortRun = true;
+      let calmTimer = 0;
+      let joyLastResult = null;
 
       let high = A.Progress.get('road-rush').high;
       dom.hudHigh.textContent = String(high);
@@ -159,6 +175,11 @@
         shake = 0;
         recordSaved = false;
         keyWasDown = {};
+        tools.shield = 1;
+        tools.calm = 2;
+        shieldArmed = false;
+        calmTimer = 0;
+        shortRun = true;
         particles.clear();
         syncHud();
       }
@@ -194,10 +215,11 @@
         syncTouchPad();
       }
 
-      function gameOver() {
+      function gameOver(won) {
         if (state === 'over') return;
+        const wonRun = won === true;
         state = 'over';
-        A.Sfx.play('over');
+        A.Sfx.play(wonRun ? 'perfect' : 'over');
         autosave.clear();
         const finalDist = Math.floor(dist);
         let rec = null;
@@ -208,7 +230,7 @@
         }
         loop.pause();
         showOverlay(
-          '车辆损毁',
+          wonRun ? '抵达终点！' : '车辆损毁',
           `<span class="ac-score">${finalDist}m</span>` +
             (rec && rec.isNewHigh ? '<span class="ac-newhigh">★ 新纪录</span><br/>' : '') +
             `行驶距离 · 最高 ${Math.max(high, finalDist)}m`,
@@ -232,10 +254,75 @@
       function showStart() {
         showOverlay(
           '极速车道',
-          '四车道赛车避障：车流越来越快。<br/>点击左右按钮或 ←→ 一次变一条车道<br/>生命 ×3 · 撞车会大幅减速',
+          '四车道赛车避障：5000m 抵达终点。<br/>点击左右按钮或 ←→ 一次变一条车道<br/>生命 ×3 · 道具 1/2 主动使用',
           '开始游戏',
           startGame
         );
+      }
+
+      function syncJoyTools() {
+        if (!dom.joyShield || !dom.joyCalm) return;
+        dom.joyShield.querySelector('[data-joy-count]').textContent = String(tools.shield);
+        dom.joyCalm.querySelector('[data-joy-count]').textContent = String(tools.calm);
+        dom.joyShield.disabled = state !== 'playing' || shieldArmed || tools.shield <= 0;
+        dom.joyCalm.disabled = state !== 'playing' || calmTimer > 0 || tools.calm <= 0;
+        dom.joyShield.setAttribute('aria-pressed', String(shieldArmed));
+        dom.joyShield.setAttribute('aria-label', shieldArmed
+          ? '防撞气囊已武装，下一次撞车不扣命、不减速'
+          : '防撞气囊，剩余 ' + tools.shield + ' 次（快捷键 1）');
+        dom.joyCalm.setAttribute('aria-label', calmTimer > 0
+          ? '车流慢放生效中，剩余 ' + calmTimer.toFixed(1) + ' 秒'
+          : '车流慢放 6 秒，剩余 ' + tools.calm + ' 次（快捷键 2）');
+      }
+
+      function activateJoyTool(id) {
+        if (state !== 'playing') return false;
+        if (id === 'shield') {
+          if (shieldArmed || tools.shield <= 0) return false;
+          shieldArmed = true;
+          A.Sfx.play('spring');
+          syncJoyTools();
+          autosave.saveNow();
+          return true;
+        }
+        if (id === 'calm') {
+          if (calmTimer > 0 || tools.calm <= 0) return false;
+          tools.calm -= 1;
+          calmTimer = CALM_SECONDS;
+          A.Sfx.play('spring');
+          syncJoyTools();
+          autosave.saveNow();
+          return true;
+        }
+        return false;
+      }
+
+      function clickJoyTool(id) {
+        const button = document.querySelector('[data-joy-tool="' + id + '"]');
+        if (!button) return false;
+        joyLastResult = null;
+        button.click();
+        return joyLastResult === true;
+      }
+
+      function bindJoyTools() {
+        document.querySelectorAll('[data-joy-tool]').forEach((button) => {
+          button.addEventListener('click', () => {
+            joyLastResult = activateJoyTool(button.dataset.joyTool);
+          });
+        });
+        window.addEventListener('keydown', (e) => {
+          if (e.repeat || e.metaKey || e.ctrlKey || e.altKey) return;
+          const target = e.target;
+          if (target && target.tagName) {
+            const tag = target.tagName.toLowerCase();
+            if (tag === 'input' || tag === 'textarea' || tag === 'select' || target.isContentEditable) return;
+          }
+          const id = { '1': 'shield', '2': 'calm' }[e.key];
+          if (!id) return;
+          e.preventDefault();
+          clickJoyTool(id);
+        });
       }
 
       function changeLane(delta) {
@@ -250,6 +337,7 @@
         document.querySelectorAll('[data-touch]').forEach((btn) => {
           btn.disabled = state !== 'playing';
         });
+        syncJoyTools();
       }
 
       function bindTouchPad() {
@@ -278,6 +366,10 @@
           spawnTimer,
           dashOffset,
           player: { x: player.x, lane: player.lane, vx: player.vx, tilt: player.tilt, invul: player.invul },
+          tools: { shield: tools.shield, calm: tools.calm },
+          shieldArmed,
+          calmTimer,
+          shortRun,
         };
       }
 
@@ -313,6 +405,13 @@
           player.vx = Number(data.player.vx) || 0;
           player.tilt = Number(data.player.tilt) || 0;
           player.invul = Number(data.player.invul) || 0;
+          if (data.tools && typeof data.tools === 'object') {
+            tools.shield = Number.isFinite(Number(data.tools.shield)) ? clamp(Math.floor(Number(data.tools.shield)), 0, 1) : 1;
+            tools.calm = Number.isFinite(Number(data.tools.calm)) ? clamp(Math.floor(Number(data.tools.calm)), 0, 2) : 2;
+          }
+          shieldArmed = !!data.shieldArmed && tools.shield > 0;
+          calmTimer = clamp(Number(data.calmTimer) || 0, 0, CALM_SECONDS);
+          shortRun = data.shortRun === true;
           recordSaved = false;
           syncHud();
           syncTouchPad();
@@ -405,6 +504,9 @@
           return;
         }
         autosave.tick(dt);
+        const hadCalm = calmTimer > 0;
+        calmTimer = Math.max(0, calmTimer - dt);
+        if (hadCalm && calmTimer <= 0) syncJoyTools();
 
         /* 加速曲线 */
         speed = Math.min(1, speed + 0.02 * dt + 0.004 * dt);
@@ -412,6 +514,11 @@
         const mps = kmh / 3.6;
         dist += mps * dt;
         syncHud();
+        if (shortRun && dist >= JOY_GOAL_DIST) {
+          gameOver(true);
+          input.endFrame();
+          return;
+        }
 
         /* 玩家变道：一次按键/点击移动一条车道，x 只做短过渡动画。 */
         const leftNow = input.isDown('ArrowLeft', 'a');
@@ -441,7 +548,7 @@
         const playerBox = { x: player.x - 19, y: PLAYER_Y - 26, w: 38, h: 54 };
         for (let i = cars.length - 1; i >= 0; i--) {
           const c = cars[i];
-          c.z -= ((speed - c.own) * dt) / 0.9;
+          c.z -= ((speed - c.own) * dt * (calmTimer > 0 ? 0.55 : 1)) / 0.9;
           if (c.z < -0.14) {
             cars.splice(i, 1);
             continue;
@@ -491,6 +598,21 @@
 
       function hitPlayer(c, idx) {
         cars.splice(idx, 1);
+        if (shieldArmed) {
+          shieldArmed = false;
+          tools.shield = Math.max(0, tools.shield - 1);
+          player.invul = 1.0;
+          shake = A.reducedMotion ? 0 : 5;
+          A.Sfx.play('perfect');
+          particles.emit(player.x, PLAYER_Y, {
+            count: A.reducedMotion ? 6 : 16,
+            speed: [50, 180], life: [0.2, 0.5], size: [2, 5],
+            colors: ['#7ce8e0', '#ffffff'],
+          });
+          syncJoyTools();
+          autosave.saveNow();
+          return;
+        }
         lives -= 1;
         speed = Math.max(0.2, speed * 0.45);
         player.invul = 1.9;
@@ -713,9 +835,11 @@
         }
 
         /* HUD */
-        A.draw.label(ctx, Math.floor(dist) + ' m', 12, 22, { align: 'left', font: 'bold 15px system-ui', color: '#ffd23f' });
+        A.draw.label(ctx, Math.floor(dist) + ' / ' + JOY_GOAL_DIST + ' m', 12, 22, { align: 'left', font: 'bold 15px system-ui', color: '#ffd23f' });
         const kmh = Math.round(speed * 360);
         A.draw.label(ctx, kmh + ' km/h', W - 14, 22, { align: 'right', font: 'bold 15px system-ui', color: '#eef1ff' });
+        const joyText = calmTimer > 0 ? '慢放 ' + calmTimer.toFixed(1) + 's' : shieldArmed ? '气囊已武装' : '';
+        if (joyText) A.draw.label(ctx, joyText, W / 2, 48, { font: 'bold 12px system-ui', color: '#7ce8e0' });
         for (let i = 0; i < lives; i++) {
           ctx.save();
           ctx.translate(W - 24 - i * 18, 44);
@@ -760,10 +884,52 @@
       reset();
       state = 'ready';
       bindTouchPad();
+      bindJoyTools();
+      syncTouchPad();
+      syncJoyTools();
       if (location.hash === '#test') {
         window.__arcadeTest = {
           info() {
-            return { lane: player.lane, x: player.x, speed, cars: cars.length, safe: safeLaneList() };
+            return {
+              lane: player.lane,
+              x: player.x,
+              speed,
+              cars: cars.length,
+              safe: safeLaneList(),
+              state,
+              dist,
+              lives,
+              tools: { shield: tools.shield, calm: tools.calm },
+              shieldArmed,
+              calmTimer,
+            };
+          },
+          joyInfo() {
+            return {
+              state,
+              tools: { shield: tools.shield, calm: tools.calm },
+              shieldArmed,
+              calmTimer,
+              dist,
+              goal: JOY_GOAL_DIST,
+              speed,
+              lives,
+            };
+          },
+          useJoyTool(id) {
+            return clickJoyTool(id);
+          },
+          forceCollision() {
+            cars.push({
+              lane: player.lane, z: 0.06, own: 0.2, w: 40, h: 62,
+              truck: false, color: CAR_COLORS[0], passed: false,
+            });
+            return true;
+          },
+          setDist(value) {
+            dist = Math.max(0, Number(value) || 0);
+            syncHud();
+            return dist;
           },
           stressSpawn(count) {
             let violations = 0;
@@ -785,6 +951,7 @@
           onResume: () => {
             if (restore(saved.data)) {
               state = 'playing';
+              syncTouchPad();
               hideOverlay();
               loop.resume();
               pauseUi.sync();

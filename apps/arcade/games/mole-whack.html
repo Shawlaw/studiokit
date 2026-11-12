@@ -48,6 +48,13 @@
       const W = 420;
       const H = 740;
       const ROUND_TIME = 45;
+      const TOOL_START = { rush: 1, shield: 1 };
+      const TOOL_CAPS = { rush: 1, shield: 1 };
+      const GOLD_RUSH_SPAWNS = 3;
+      const SHIELD_DURATION = 6;
+      const FLOATER_LIFE = 0.55;
+      const FLOATER_RISE = 28;
+      const MAX_FLOATERS = 12;
       const HOLE_R = 40;
       const HOLES = [];
       for (let r = 0; r < 3; r++) {
@@ -89,6 +96,10 @@
       let shake = 0;
       let lastPointer = { x: W / 2, y: H / 2 };
       let hitFlash = 0;
+      const tools = { rush: TOOL_START.rush, shield: TOOL_START.shield };
+      let goldRushSpawns = 0;
+      let shieldTimer = 0;
+      let floaters = [];
 
       let high = A.Progress.get('mole-whack').high;
       dom.hudHigh.textContent = String(high);
@@ -108,6 +119,11 @@
         spawnTimer = 0.5;
         shake = 0;
         hitFlash = 0;
+        tools.rush = TOOL_START.rush;
+        tools.shield = TOOL_START.shield;
+        goldRushSpawns = 0;
+        shieldTimer = 0;
+        floaters = [];
         recordSaved = false;
         particles.clear();
         syncHud();
@@ -124,6 +140,7 @@
         ui.hide();
         loop.resume();
         pauseUi.sync();
+        joyTools.sync();
         autosave.saveNow();
       }
 
@@ -133,11 +150,15 @@
         ui.hide();
         loop.resume();
         pauseUi.sync();
+        joyTools.sync();
       }
 
       function finish() {
         if (state === 'over') return;
         state = 'over';
+        goldRushSpawns = 0;
+        shieldTimer = 0;
+        joyTools.sync();
         autosave.clear();
         A.Sfx.play('over');
         let rec = null;
@@ -163,6 +184,7 @@
         if (state !== 'playing') return;
         loop.pause();
         state = 'paused';
+        joyTools.sync();
         autosave.saveNow();
         ui.show({ title: '已暂停', text: '地鼠也躲起来了。<br/>局内进度已保存。', btn: '继续', onBtn: resumeGame });
         pauseUi.sync();
@@ -187,9 +209,28 @@
         const roll = Math.random();
         const bombChance = 0.05 + difficulty() * 0.2;
         const goldChance = 0.07;
-        const type = roll < bombChance ? 'bomb' : roll < bombChance + goldChance ? 'gold' : 'mole';
+        const forcedGold = goldRushSpawns > 0;
+        const type = forcedGold ? 'gold' : roll < bombChance ? 'bomb' : roll < bombChance + goldChance ? 'gold' : 'mole';
         const life = Math.max(0.58, 1.2 - difficulty() * 0.55) * rand(0.9, 1.15);
         slots[index] = { type, age: 0, life, hit: false, wobble: rand(0, TAU) };
+        if (forcedGold) {
+          goldRushSpawns -= 1;
+          joyTools.sync();
+          autosave.saveNow();
+        }
+      }
+
+      function addFloater(text, x, y, color) {
+        if (floaters.length >= MAX_FLOATERS) floaters.shift();
+        floaters.push({
+          text,
+          x,
+          y,
+          color: color || '#ffffff',
+          life: FLOATER_LIFE,
+          maxLife: FLOATER_LIFE,
+          vy: A.reducedMotion ? 0 : -FLOATER_RISE / FLOATER_LIFE,
+        });
       }
 
       function hitSlot(index) {
@@ -202,26 +243,41 @@
         const hy = HOLES[index].y - 20;
         lastPointer = { x: hx, y: hy };
         hitFlash = 1;
+        let gained = 0;
         if (mole.type === 'bomb') {
-          hearts -= 1;
-          combo = 0;
-          comboTimer = 0;
-          timeLeft = Math.max(0, timeLeft - 3);
-          shake = A.reducedMotion ? 0 : 10;
-          A.Sfx.play('explode');
-          particles.emit(hx, hy, {
-            count: A.reducedMotion ? 10 : 26,
-            speed: [60, 260],
-            life: [0.3, 0.7],
-            size: [2, 5],
-            colors: ['#ff5d5d', '#ff9a3d', '#ffffff'],
-            gravity: 180,
-          });
-          if (hearts <= 0) finish();
+          if (shieldTimer > 0) {
+            A.Sfx.play('spring');
+            addFloater('安心挡下', hx, hy - 18, '#7ce8e0');
+            particles.emit(hx, hy, {
+              count: A.reducedMotion ? 4 : 10,
+              speed: [30, 120],
+              life: [0.2, 0.45],
+              size: [2, 4],
+              colors: ['#7ce8e0', '#ffffff'],
+              gravity: 80,
+            });
+          } else {
+            hearts -= 1;
+            combo = 0;
+            comboTimer = 0;
+            timeLeft = Math.max(0, timeLeft - 3);
+            shake = A.reducedMotion ? 0 : 10;
+            A.Sfx.play('explode');
+            particles.emit(hx, hy, {
+              count: A.reducedMotion ? 10 : 26,
+              speed: [60, 260],
+              life: [0.3, 0.7],
+              size: [2, 5],
+              colors: ['#ff5d5d', '#ff9a3d', '#ffffff'],
+              gravity: 180,
+            });
+            if (hearts <= 0) finish();
+          }
         } else if (mole.type === 'gold') {
           combo += 1;
           comboTimer = 2.4;
-          score += 50 + combo * 5;
+          gained = 50 + combo * 5;
+          score += gained;
           A.Sfx.play('perfect');
           particles.emit(hx, hy, {
             count: A.reducedMotion ? 6 : 18,
@@ -234,7 +290,8 @@
         } else {
           combo += 1;
           comboTimer = 2.2;
-          score += 10 + combo * 5;
+          gained = 10 + combo * 5;
+          score += gained;
           A.Sfx.play('bell', Math.min(combo, 12));
           particles.emit(hx, hy, {
             count: A.reducedMotion ? 4 : 10,
@@ -245,11 +302,18 @@
             gravity: 200,
           });
         }
+        if (gained > 0) addFloater('+' + gained + (combo > 1 ? ' · ' + combo + '连' : ''), hx, hy - 18, mole.type === 'gold' ? '#ffd23f' : '#ffffff');
         syncHud();
       }
 
       function update(dt) {
         particles.update(dt);
+        for (let i = floaters.length - 1; i >= 0; i--) {
+          const floater = floaters[i];
+          floater.life -= dt;
+          floater.y += floater.vy * dt;
+          if (floater.life <= 0) floaters.splice(i, 1);
+        }
         shake = Math.max(0, shake - dt * 28);
         hitFlash = Math.max(0, hitFlash - dt * 6);
         if (state !== 'playing') {
@@ -259,6 +323,10 @@
         autosave.tick(dt);
         elapsed += dt;
         timeLeft = Math.max(0, timeLeft - dt);
+        if (shieldTimer > 0) {
+          shieldTimer = Math.max(0, shieldTimer - dt);
+          if (shieldTimer === 0) joyTools.sync();
+        }
         if (comboTimer > 0) {
           comboTimer -= dt;
           if (comboTimer <= 0) combo = 0;
@@ -311,6 +379,9 @@
           comboTimer,
           hearts,
           spawnTimer,
+          tools: { rush: tools.rush, shield: tools.shield },
+          goldRushSpawns,
+          shieldTimer,
         };
       }
 
@@ -335,8 +406,15 @@
           comboTimer = Math.max(0, Number(data.comboTimer) || 0);
           hearts = clamp(Number(data.hearts) || 3, 1, 3);
           spawnTimer = Number(data.spawnTimer) || 0.5;
+          if (data.tools && typeof data.tools === 'object') {
+            tools.rush = Number.isFinite(Number(data.tools.rush)) ? clamp(Math.floor(Number(data.tools.rush)), 0, TOOL_CAPS.rush) : TOOL_START.rush;
+            tools.shield = Number.isFinite(Number(data.tools.shield)) ? clamp(Math.floor(Number(data.tools.shield)), 0, TOOL_CAPS.shield) : TOOL_START.shield;
+          }
+          goldRushSpawns = clamp(Math.floor(Number(data.goldRushSpawns) || 0), 0, GOLD_RUSH_SPAWNS);
+          shieldTimer = clamp(Number(data.shieldTimer) || 0, 0, SHIELD_DURATION);
           recordSaved = false;
           state = 'playing';
+          joyTools.sync();
           syncHud();
           return true;
         } catch (err) {
@@ -348,6 +426,42 @@
         every: 3,
         meta: () => ({ score, summary: `得分 ${score} · 连击 ${combo} · 剩余 ${Math.ceil(timeLeft)}s` }),
       });
+
+      function useTool(id) {
+        if (state !== 'playing') return false;
+        if (id === 'rush') {
+          if (tools.rush <= 0 || goldRushSpawns > 0) {
+            A.showToast(goldRushSpawns > 0 ? '金鼠三连正在进行' : '金鼠三连已经用过啦');
+            return false;
+          }
+          tools.rush -= 1;
+          goldRushSpawns = GOLD_RUSH_SPAWNS;
+          A.Sfx.play('perfect');
+          A.showToast('接下来 3 次都是金鼠！');
+          autosave.saveNow();
+          joyTools.sync();
+          return true;
+        }
+        if (id === 'shield') {
+          if (tools.shield <= 0 || shieldTimer > 0) {
+            A.showToast(shieldTimer > 0 ? '安心锤仍在保护你' : '安心锤已经用过啦');
+            return false;
+          }
+          tools.shield -= 1;
+          shieldTimer = SHIELD_DURATION;
+          A.Sfx.play('spring');
+          A.showToast('6 秒内炸弹不扣心、不扣时间');
+          autosave.saveNow();
+          joyTools.sync();
+          return true;
+        }
+        return false;
+      }
+
+      const joyTools = A.createToolbelt([
+        { id: 'rush', icon: '🌟', name: '金鼠三连', description: '接下来三次实际生成都是金鼠', getCount: () => tools.rush, use: () => useTool('rush'), active: () => goldRushSpawns > 0 },
+        { id: 'shield', icon: '🛡', name: '安心锤', description: '6 秒内炸弹不扣心、时间和连击', getCount: () => tools.shield, use: () => useTool('shield'), active: () => shieldTimer > 0 },
+      ], { isPlaying: () => state === 'playing', keys: ['q', 'e'], label: '打地鼠道具', placement: 'below' });
 
       window.addEventListener('keydown', (e) => {
         const n = Number(e.key);
@@ -468,6 +582,13 @@
         });
 
         particles.draw(ctx);
+        floaters.forEach((floater) => {
+          A.draw.label(ctx, floater.text, floater.x, floater.y, {
+            font: 'bold 13px system-ui, sans-serif',
+            color: floater.color,
+            alpha: clamp(floater.life / floater.maxLife, 0, 1),
+          });
+        });
 
         /* 锤子 */
         const hx = lastPointer.x + 14;
@@ -496,6 +617,12 @@
           font: '11px system-ui',
           color: '#c9d8c0',
         });
+        const joyStatus = [];
+        if (goldRushSpawns > 0) joyStatus.push('金鼠 ×' + goldRushSpawns);
+        if (shieldTimer > 0) joyStatus.push('安心 ' + Math.ceil(shieldTimer) + 's');
+        if (joyStatus.length) {
+          A.draw.label(ctx, joyStatus.join(' · '), W / 2, 52, { font: 'bold 11px system-ui', color: '#ffd23f' });
+        }
         ctx.restore();
       }
 
@@ -526,6 +653,65 @@
 
       reset();
       state = 'ready';
+      joyTools.sync();
+      if (location.hash === '#test') {
+        window.__arcadeTest = {
+          info() {
+            return {
+              state,
+              score,
+              timeLeft,
+              elapsed,
+              hearts,
+              combo,
+              comboTimer,
+              slots: slots.map((m) => (m ? m.type : null)),
+              tools: { rush: tools.rush, shield: tools.shield },
+              goldRushSpawns,
+              shieldTimer,
+              floaters: floaters.map((f) => f.text),
+            };
+          },
+          joyInfo() {
+            return {
+              tools: { rush: tools.rush, shield: tools.shield },
+              goldRushSpawns,
+              shieldTimer,
+              slots: slots.map((m) => (m ? m.type : null)),
+              floaters: floaters.map((f) => f.text),
+              score,
+              hearts,
+              combo,
+              timeLeft,
+              state,
+            };
+          },
+          useJoyTool(id) {
+            const button = joyTools.buttons[id];
+            if (!button) return false;
+            button.click();
+            return true;
+          },
+          setSlot(index, type) {
+            const i = Number(index);
+            if (!Number.isInteger(i) || i < 0 || i >= HOLES.length || ['mole', 'bomb', 'gold'].indexOf(type) === -1) return false;
+            slots[i] = { type, age: 0.2, life: 5, hit: false, wobble: 0 };
+            return true;
+          },
+          clearSlots() {
+            slots = HOLES.map(() => null);
+            return true;
+          },
+          spawnNow() {
+            spawnMole();
+            return slots.map((m) => (m ? m.type : null));
+          },
+          hitSlotNow(index) {
+            hitSlot(Number(index));
+            return true;
+          },
+        };
+      }
       const saved = autosave.load();
       if (saved) {
         A.showResumePrompt(ui, saved, {
@@ -536,6 +722,7 @@
               ui.hide();
               loop.resume();
               pauseUi.sync();
+              joyTools.sync();
               autosave.saveNow();
             } else {
               autosave.clear();

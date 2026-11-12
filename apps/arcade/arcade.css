@@ -1265,6 +1265,12 @@ body.arcade-immersive .ac-toast {
   bottom: calc(84px + env(safe-area-inset-bottom));
 }
 
+/* 普通模式下，画布外道具行占底部空间：把 Toast 抬到按钮上方，避免 8 秒遮住次数。 */
+body.has-joy-row:not(.arcade-immersive) .ac-toast,
+body.has-game-tools:not(.arcade-immersive) .ac-toast {
+  bottom: calc(116px + env(safe-area-inset-bottom));
+}
+
 @media (orientation: landscape) and (max-height: 560px) {
   body.arcade-immersive .game-page::after {
     content: "↻ 竖屏游玩体验更佳";
@@ -1294,4 +1300,118 @@ body.arcade-immersive .ac-toast {
   .toolbelt { gap: 2px; padding-left: 2px; padding-right: 2px; }
   .tool-btn { gap: 3px; padding: 4px 2px; }
   .tool-btn .tool-rate { min-width: 20px; padding: 1px 2px; }
+}
+
+/* ---------- 共享“快乐道具栏”（0.7.0） ---------- */
+
+/* 只增强新工具栏，不改动黄金矿工现有的 .toolbelt 布局。 */
+.joy-toolbelt {
+  z-index: 3;
+  grid-template-columns: repeat(var(--joy-cols, 1), minmax(0, 1fr));
+  max-width: 100%;
+}
+.joy-toolbelt .tool-btn {
+  min-width: 44px;
+  min-height: 44px;
+  transition: transform 0.12s ease, border-color 0.16s ease, background-color 0.16s ease, box-shadow 0.16s ease;
+}
+.joy-toolbelt .tool-btn:active:not(:disabled) {
+  transform: scale(0.97);
+}
+.joy-toolbelt .tool-btn[aria-pressed="true"] {
+  animation: joy-tool-armed 0.18s ease-out;
+}
+.joy-toolbelt .tool-count[hidden] { display: none; }
+
+@keyframes joy-tool-armed {
+  from { transform: scale(0.96); }
+  to { transform: scale(1); }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .joy-toolbelt .tool-btn { transition: none; }
+  .joy-toolbelt .tool-btn:active:not(:disabled) { transform: none; }
+  .joy-toolbelt .tool-btn[aria-pressed="true"] { animation: none; }
+}
+
+/* 动作游戏把道具放到画布外，避免遮住机体、地板、平台或倾斜计。 */
+.touch-pad.game-tools {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  width: min(520px, 100%);
+}
+.touch-pad.game-tools .touch-btn,
+.touch-pad.game-tools .tool-btn {
+  min-width: 44px;
+  min-height: 48px;
+  padding: 5px 4px;
+  font-size: 14px;
+  line-height: 1.2;
+}
+body.has-game-tools .road-pad {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  width: min(520px, 100%);
+}
+body.has-game-tools .road-pad .touch-btn { font-size: 14px; }
+body.has-game-tools:not(.arcade-immersive) .stage-box {
+  height: min(
+    calc(100dvh - var(--studiokit-shellbar-h, 0px) - 214px - env(safe-area-inset-bottom, 0px)),
+    calc(min(520px, 100vw - 24px) * 740 / 420)
+  );
+}
+
+/* 画布外的共享快乐道具行：为它预留高度，避免短舞台盖住挡板/棋盘。 */
+.touch-pad.joy-tools-below {
+  flex: 0 0 auto;
+  margin: 2px auto 0;
+  width: min(520px, 100%);
+}
+body.has-joy-row:not(.arcade-immersive) .stage-box {
+  height: min(
+    calc(100dvh - var(--studiokit-shellbar-h, 0px) - 226px - env(safe-area-inset-bottom, 0px)),
+    calc(min(520px, 100vw - 24px) * 740 / 420)
+  );
+}
+body.has-joy-row.has-extra-controls:not(.arcade-immersive) .stage-box {
+  height: min(
+    calc(100dvh - var(--studiokit-shellbar-h, 0px) - 246px - env(safe-area-inset-bottom, 0px)),
+    calc(min(520px, 100vw - 24px) * 740 / 420)
+  );
+}
+@media (orientation: landscape) and (max-height: 560px) {
+  /* 横屏短视口：优先保住画布可玩尺寸，允许页面纵向滚动去找道具行。 */
+  body.has-joy-row:not(.arcade-immersive) .stage-box,
+  body.has-joy-row.has-extra-controls:not(.arcade-immersive) .stage-box,
+  body.has-game-tools:not(.arcade-immersive) .stage-box,
+  body.has-game-tools.has-extra-controls:not(.arcade-immersive) .stage-box,
+  body.has-subhud:not(.arcade-immersive) .stage-box {
+    height: min(
+      calc(100dvh - var(--studiokit-shellbar-h, 0px) - 120px),
+      calc(min(520px, 100vw - 24px) * 740 / 420)
+    );
+  }
+}
+@media (max-width: 360px) {
+  body.has-joy-row:not(.arcade-immersive) .stage-box {
+    height: min(
+      calc(100dvh - var(--studiokit-shellbar-h, 0px) - 230px - env(safe-area-inset-bottom, 0px)),
+      calc(min(520px, 100vw - 16px) * 740 / 420)
+    );
+  }
+  body.has-joy-row.has-extra-controls:not(.arcade-immersive) .stage-box {
+    height: min(
+      calc(100dvh - var(--studiokit-shellbar-h, 0px) - 242px - env(safe-area-inset-bottom, 0px)),
+      calc(min(520px, 100vw - 16px) * 740 / 420)
+    );
+  }
+  /* 320px 上两块控制区同时存在：压缩道具行高度与间距，保住井口与按钮尺寸。 */
+  body.has-joy-row.has-extra-controls .joy-tools-below { margin-top: 0; }
+  body.has-joy-row.has-extra-controls .joy-tools-below .tool-btn {
+    min-height: 44px;
+    padding-top: 2px;
+    padding-bottom: 2px;
+  }
+  body.has-game-tools .road-pad { gap: 5px; }
+  body.has-game-tools .road-pad .touch-btn { font-size: 12px; }
 }

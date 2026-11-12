@@ -241,18 +241,22 @@
         dom.toolTime.disabled = tools.time <= 0;
         dom.toolWinch.disabled = tools.winch <= 0 && !winchArmed;
         dom.toolAim.setAttribute('aria-pressed', String(aimArmed));
+        dom.toolWinch.setAttribute('aria-pressed', String(winchArmed));
         dom.toolWinch.classList.toggle('is-armed', winchArmed);
         dom.toolAim.setAttribute('aria-label', '指哪打哪，剩余 ' + tools.aim + ' 次（快捷键 1）');
         dom.toolTime.setAttribute('aria-label', '加时 10 秒，剩余 ' + tools.time + ' 次（快捷键 2）');
-        dom.toolWinch.setAttribute('aria-label', '强力绞盘，剩余 ' + tools.winch + ' 次（快捷键 3）');
+        dom.toolWinch.setAttribute('aria-label', winchArmed
+          ? '强力绞盘已上弦，夹物入账时消耗（快捷键 3）'
+          : '强力绞盘，剩余 ' + tools.winch + ' 次（快捷键 3）');
+        dom.toolWinch.title = winchArmed ? '已上弦：下一次成功入账时消耗' : '强力绞盘（3）：下一次回收无视重量';
         dom.toolAim.title = aimArmed ? '取消瞄准（1）' : '指哪打哪（1）：点选金块或钻石';
         if (dom.toolLine) {
           dom.toolLine.setAttribute('aria-pressed', String(aimLineActive));
           dom.toolLine.classList.toggle('is-armed', aimLineActive);
           dom.toolLine.setAttribute('aria-label', aimLineActive
-            ? '瞄准线已开启，每秒扣 $' + AIM_LINE_COST_PER_SEC + '，点击关闭（快捷键 4）'
-            : '瞄准线，开启后每秒扣 $' + AIM_LINE_COST_PER_SEC + '（快捷键 4）');
-          dom.toolLine.title = aimLineActive ? '关闭瞄准线（4）' : '瞄准线（4）：显示挖取方向与命中物，每秒 $' + AIM_LINE_COST_PER_SEC;
+            ? '瞄准线已开启，摆动时每秒扣 $' + AIM_LINE_COST_PER_SEC + '，伸出与回收暂停计费，点击关闭（快捷键 4）'
+            : '瞄准线，摆动时每秒扣 $' + AIM_LINE_COST_PER_SEC + '，伸出与回收不计费（快捷键 4）');
+          dom.toolLine.title = aimLineActive ? '关闭瞄准线（4）' : '瞄准线（4）：显示挖取方向与命中物，摆动时每秒 $' + AIM_LINE_COST_PER_SEC;
         }
       }
 
@@ -343,9 +347,13 @@
           return true;
         }
         if (name === 'winch') {
-          if (tools.winch <= 0 || winchArmed) return false;
+          if (winchArmed) {
+            toolHint('绞盘已上弦：夹物入账时消耗', '#ffd23f');
+            return false;
+          }
+          if (tools.winch <= 0) return false;
           aimArmed = false;
-          tools.winch -= 1;
+          /* 次数延到实际入账时扣除；抓空或遇到炸药不会让本局补给凭空消失。 */
           winchArmed = true;
           A.Sfx.play('spring');
           toolHint('绞盘上弦：下次回收全速', '#ffd23f');
@@ -711,6 +719,8 @@
           const val = holding.value;
           money += val;
           if (winchArmed) {
+            /* 旧档可能是“已上弦且次数已扣为 0”：保持 0，绝不负数或重复补扣。 */
+            tools.winch = Math.max(0, tools.winch - 1);
             winchArmed = false;
             syncTools();
           }
@@ -730,6 +740,28 @@
         }
         ensureSwing();
         syncHud();
+        /* 在 holding 清理、钩爪恢复后保存，避免续玩时同一物品重复入账。 */
+        autosave.saveNow();
+      }
+
+      function attachHolding(item) {
+        holding = item;
+        clawState = 'retract';
+        clawOpen = 0;
+        const tip = clawTip();
+        const type = TYPES[item.type];
+        floaters.push({
+          text: '夹住 ' + type.label + ' · $' + item.value,
+          x: tip.x,
+          y: Math.max(205, tip.y - item.r - 12),
+          life: 0.8,
+          maxLife: 0.8,
+          color: item.value >= 300 ? '#ffd23f' : '#7ce8e0',
+          big: item.value >= 300,
+        });
+        A.Sfx.play('hit');
+        syncCashout();
+        autosave.saveNow();
       }
 
       /* ---------- 局内存档 ---------- */
@@ -844,13 +876,15 @@
         autosave.tick(dt);
         timeLeft -= dt;
         syncTimerHud();
-        if (aimLineActive) {
+        /* 只有可重新决策的摆动阶段计费；伸出/回收仍显示方向，但暂停扣款。 */
+        if (aimLineActive && clawState === 'swing') {
           money = Math.max(0, money - AIM_LINE_COST_PER_SEC * dt);
           if (Math.floor(money) !== lastMoneyShown) syncHud();
           if (money <= 0) {
             aimLineActive = false;
             syncTools();
             toolHint('余额不足，瞄准线已关闭', '#ff9a9d');
+            autosave.saveNow();
           }
         }
 
@@ -879,12 +913,9 @@
               aimTarget = null;
               clawState = 'retract';
             } else if (pend.length >= dist - aimTarget.r * 0.5) {
-              holding = aimTarget;
+              const caught = aimTarget;
               aimTarget = null;
-              clawState = 'retract';
-              clawOpen = 0;
-              A.Sfx.play('hit');
-              autosave.saveNow();
+              attachHolding(caught);
             }
           } else {
             for (const o of items) {
@@ -892,10 +923,7 @@
                 if (o.type === 'tnt') {
                   explode(o);
                 } else {
-                  holding = o;
-                  clawState = 'retract';
-                  clawOpen = lerp(clawOpen, 0, 1);
-                  A.Sfx.play('hit');
+                  attachHolding(o);
                 }
                 break;
               }
@@ -1230,10 +1258,19 @@
           color: done ? '#7ff0a4' : '#ffe08a',
         });
         if (aimLineActive) {
-          A.draw.label(ctx, `瞄准线 -$${AIM_LINE_COST_PER_SEC}/s`, 12, 42, {
+          A.draw.label(ctx, `瞄准线摆动时 -$${AIM_LINE_COST_PER_SEC}/s`, 12, 42, {
             align: 'left',
             font: 'bold 11px system-ui',
             color: '#7ce8e0',
+          });
+        }
+        if (clawState === 'retract' && holding) {
+          ctx.fillStyle = 'rgba(7, 11, 22, 0.68)';
+          A.draw.roundRect(ctx, W / 2 - 104, 52, 208, 25, 9);
+          ctx.fill();
+          A.draw.label(ctx, TYPES[holding.type].label + ' +$' + holding.value + (winchArmed ? ' · 绞盘' : ''), W / 2, 69, {
+            font: 'bold 12px system-ui',
+            color: '#ffe08a',
           });
         }
         A.draw.label(ctx, '第 ' + level + ' 关 · 摆速 ' + (pend.gravity / SWING_BASE).toFixed(1) + '×', W / 2, 23, {
@@ -1336,6 +1373,29 @@
           useToolNow(name) {
             return useTool(name);
           },
+          joyInfo() {
+            return {
+              tools: { aim: tools.aim, time: tools.time, winch: tools.winch },
+              aimArmed,
+              winchArmed,
+              aimLineActive,
+              aimLineCost: AIM_LINE_COST_PER_SEC,
+              aimLineBilling: aimLineActive && state === 'playing' && clawState === 'swing',
+              clawState,
+              holding: holding ? holding.type : null,
+              money,
+              target,
+              level,
+              timeLeft,
+              lastFeedback: floaters.length ? floaters[floaters.length - 1].text : null,
+            };
+          },
+          useJoyTool(id) {
+            const button = { aim: dom.toolAim, time: dom.toolTime, winch: dom.toolWinch, line: dom.toolLine }[id];
+            if (!button || button.disabled) return false;
+            button.click();
+            return true;
+          },
           aimAt(x, y) {
             return tryAimAt(Number(x), Number(y));
           },
@@ -1384,16 +1444,15 @@
             syncTools();
             return true;
           },
-          grabFirst() {
-            const item = items.find((o) => o.type !== 'tnt');
+          grabFirst(type, length) {
+            const item = items.find((o) => o.type !== 'tnt' && (!type || o.type === type));
             if (!item) return false;
-            holding = item;
-            clawState = 'retract';
             pend.angle = 0.55;
             clawAngle = 0.55;
-            pend.length = 300;
-            clawOpen = 0;
+            pend.length = clamp(Number(length) || 300, MIN_LEN, 800);
+            attachHolding(item);
             syncHud();
+            autosave.saveNow();
             return true;
           },
         };

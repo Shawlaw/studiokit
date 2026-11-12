@@ -11,7 +11,7 @@
   <script src="../engine.js"></script>
   <title>星海突击 · 街机厅 · StudioKit</title>
 </head>
-<body class="arcade-body" data-studiokit-app="arcade" data-studiokit-app-title="街机厅 Arcade" style="--ac-accent:#4f7cff; --card-accent:#4f7cff">
+<body class="arcade-body has-extra-controls has-game-tools" data-studiokit-app="arcade" data-studiokit-app-title="街机厅 Arcade" style="--ac-accent:#4f7cff; --card-accent:#4f7cff">
   <noscript><p class="ac-noscript">此游戏需要启用 JavaScript 才能运行。</p></noscript>
   <main class="game-page">
     <header class="game-topbar">
@@ -39,7 +39,15 @@
         </div>
       </div>
     </div>
-    <p class="game-hint">拖动或 ←→↑↓ / WASD 全屏移动 · 自动开火 · Buff 可叠加 · 30 秒后 Boss 战 · P / Esc 暂停</p>
+    <div class="touch-pad game-tools" data-game-tools aria-label="主动道具（快捷键 1 / 2）">
+      <button type="button" class="touch-btn" data-joy-tool="pulse" aria-label="电磁脉冲，剩余 1 次（快捷键 1）" title="电磁脉冲（1）：清空敌弹并击坠普通敌机，Boss 扣 100 HP">
+        <span aria-hidden="true">💥</span><span>脉冲</span><span data-joy-count aria-hidden="true">1</span>
+      </button>
+      <button type="button" class="touch-btn" data-joy-tool="shield" aria-pressed="false" aria-label="星盾 5 秒，剩余 1 次（快捷键 2）" title="星盾（2）：5 秒内不扣生命">
+        <span aria-hidden="true">🛡</span><span>星盾</span><span data-joy-count aria-hidden="true">1</span>
+      </button>
+    </div>
+    <p class="game-hint">拖动或 ←→↑↓ / WASD 全屏移动 · 自动开火 · 道具 1/2 · Boss 后可收局 · P / Esc 暂停</p>
   </main>
   <script>
     (() => {
@@ -68,6 +76,8 @@
         hudWeapon: document.querySelector('[data-hud-weapon]'),
         pause: document.querySelector('[data-pause]'),
         mute: document.querySelector('[data-mute]'),
+        joyPulse: document.querySelector('[data-joy-tool="pulse"]'),
+        joyShield: document.querySelector('[data-joy-tool="shield"]'),
       };
       const ui = A.createOverlayUi(dom);
 
@@ -100,10 +110,17 @@
       let lastBuff = 'normal';
       let level = 1;
       let stageTime = 0;
+      /* 保存“CLEAR 弹层还在等待选择”的关卡；刷新后重新给出下一关/收局选择。 */
+      let pendingClearStage = 0;
       let boss = null;
       let stageBanner = 0;
       let stageBannerText = '';
       let elapsed = 0;
+      const JOY_TOOL_CAPS = { pulse: 2, shield: 2 };
+      const SHIELD_SECONDS = 5;
+      const tools = { pulse: 1, shield: 1 };
+      let shieldTimer = 0;
+      let joyLastResult = null;
       let high = A.Progress.get('star-raid').high;
       dom.hudHigh.textContent = String(high);
 
@@ -116,6 +133,88 @@
         rapid: { name: '速射', short: '速', color: '#63d68c', duration: 9, interval: 0.065 },
       };
       const PICKUP_TYPES = ['spread', 'laser', 'homing', 'rapid'];
+
+      function syncJoyTools() {
+        if (!dom.joyPulse || !dom.joyShield) return;
+        dom.joyPulse.querySelector('[data-joy-count]').textContent = String(tools.pulse);
+        dom.joyShield.querySelector('[data-joy-count]').textContent = String(tools.shield);
+        dom.joyPulse.disabled = state !== 'playing' || tools.pulse <= 0;
+        dom.joyShield.disabled = state !== 'playing' || tools.shield <= 0 || shieldTimer > 0;
+        dom.joyShield.setAttribute('aria-pressed', String(shieldTimer > 0));
+        dom.joyPulse.setAttribute('aria-label', '电磁脉冲，剩余 ' + tools.pulse + ' 次（快捷键 1）');
+        dom.joyShield.setAttribute('aria-label', shieldTimer > 0
+          ? '星盾生效中，剩余 ' + shieldTimer.toFixed(1) + ' 秒'
+          : '星盾 5 秒，剩余 ' + tools.shield + ' 次（快捷键 2）');
+      }
+
+      function activateJoyTool(id) {
+        if (state !== 'playing') return false;
+        if (id === 'pulse') {
+          if (tools.pulse <= 0 || (!shots.length && !enemies.length)) return false;
+          tools.pulse -= 1;
+          shots = [];
+          enemies.slice().forEach((e) => {
+            const index = enemies.indexOf(e);
+            if (index < 0) return;
+            if (e.kind === 'boss') {
+              e.hp = Math.max(0, e.hp - 100);
+              if (e.hp <= 0) killEnemy(e, index);
+            } else {
+              killEnemy(e, index);
+            }
+          });
+          addFloater(player.x, player.y - 42, '电磁脉冲！', '#7ce8e0');
+          particles.emit(player.x, player.y, {
+            count: A.reducedMotion ? 8 : 24,
+            speed: [80, 280], life: [0.25, 0.65], size: [2, 5],
+            colors: ['#7ce8e0', '#ffffff', '#4f7cff'],
+          });
+          shake = A.reducedMotion ? 0 : 6;
+          A.Sfx.play('explode');
+          syncJoyTools();
+          autosave.saveNow();
+          return true;
+        }
+        if (id === 'shield') {
+          if (tools.shield <= 0 || shieldTimer > 0) return false;
+          tools.shield -= 1;
+          shieldTimer = SHIELD_SECONDS;
+          addFloater(player.x, player.y - 38, '星盾 5 秒', '#7ce8e0');
+          A.Sfx.play('spring');
+          syncJoyTools();
+          autosave.saveNow();
+          return true;
+        }
+        return false;
+      }
+
+      function clickJoyTool(id) {
+        const button = document.querySelector('[data-joy-tool="' + id + '"]');
+        if (!button) return false;
+        joyLastResult = null;
+        button.click();
+        return joyLastResult === true;
+      }
+
+      function bindJoyTools() {
+        document.querySelectorAll('[data-joy-tool]').forEach((button) => {
+          button.addEventListener('click', () => {
+            joyLastResult = activateJoyTool(button.dataset.joyTool);
+          });
+        });
+        window.addEventListener('keydown', (e) => {
+          if (e.repeat || e.metaKey || e.ctrlKey || e.altKey) return;
+          const target = e.target;
+          if (target && target.tagName) {
+            const tag = target.tagName.toLowerCase();
+            if (tag === 'input' || tag === 'textarea' || tag === 'select' || target.isContentEditable) return;
+          }
+          const id = { '1': 'pulse', '2': 'shield' }[e.key];
+          if (!id) return;
+          e.preventDefault();
+          clickJoyTool(id);
+        });
+      }
 
       function activeBuffs() {
         return BUFF_TYPES.filter((type) => buffs[type] > 0);
@@ -309,10 +408,43 @@
         shots = [];
         spawnTimer = 1.3;
         lives = Math.min(5, lives + 1);
+        tools.pulse = Math.min(JOY_TOOL_CAPS.pulse, tools.pulse + 1);
+        tools.shield = Math.min(JOY_TOOL_CAPS.shield, tools.shield + 1);
         stageBannerText = 'STAGE ' + cleared + ' CLEAR';
         stageBanner = 2.4;
+        state = 'clear';
+        pendingClearStage = cleared;
         A.Sfx.play('perfect');
         syncHud();
+        syncJoyTools();
+        autosave.saveNow();
+        loop.pause();
+        showClearPanel(cleared);
+        pauseUi.sync();
+      }
+
+      /* CLEAR 选择弹层抽成函数：刷新恢复后也能重新给出「下一关 / 圆满收局」。 */
+      function showClearPanel(cleared) {
+        ui.show({
+          title: 'STAGE ' + cleared + ' CLEAR',
+          text: '击坠得分 ' + score + ' · 道具各补给 1 次<br/>可以继续下一关，也可以轻松收局。',
+          btn: '下一关',
+          onBtn: resumeClear,
+          btn2: '圆满收局',
+          onBtn2: () => gameOver(true),
+        });
+      }
+
+      function resumeClear() {
+        if (state !== 'clear') return false;
+        state = 'playing';
+        pendingClearStage = 0;
+        ui.hide();
+        loop.resume();
+        pauseUi.sync();
+        syncJoyTools();
+        autosave.saveNow();
+        return true;
       }
 
       /* ---------- 游戏流程 ---------- */
@@ -336,16 +468,21 @@
         lastBuff = 'normal';
         level = 1;
         stageTime = 0;
+        pendingClearStage = 0;
         boss = null;
         stageBanner = 0;
         stageBannerText = '';
         elapsed = 0;
+        tools.pulse = 1;
+        tools.shield = 1;
+        shieldTimer = 0;
         player.x = W / 2;
         player.y = H - 90;
         player.cool = 0;
         player.invul = 0;
         particles.clear();
         syncHud();
+        syncJoyTools();
       }
 
       function syncHud() {
@@ -367,6 +504,7 @@
         ui.hide();
         loop.resume();
         pauseUi.sync();
+        syncJoyTools();
         autosave.saveNow();
       }
 
@@ -376,19 +514,22 @@
         ui.hide();
         loop.resume();
         pauseUi.sync();
+        syncJoyTools();
       }
 
-      function gameOver() {
+      function gameOver(won) {
         if (state === 'over') return;
+        const wonRun = won === true;
         state = 'over';
-        A.Sfx.play('over');
+        pendingClearStage = 0;
+        A.Sfx.play(wonRun ? 'perfect' : 'over');
         autosave.clear();
         const rec = recordSaved ? null : A.Progress.recordPlay('star-raid', score); if (rec) high = rec.high;
         recordSaved = true;
         dom.hudHigh.textContent = String(Math.max(high, score));
         loop.pause();
         ui.show({
-          title: '机体损毁',
+          title: wonRun ? '星海凯旋！' : '机体损毁',
           text:
             `<span class="ac-score">${score}</span>` +
             (rec && rec.isNewHigh ? '<span class="ac-newhigh">★ 新纪录</span><br/>' : '') +
@@ -397,6 +538,7 @@
           onBtn: startGame,
         });
         pauseUi.sync();
+        syncJoyTools();
       }
 
       function pauseByUser() {
@@ -411,12 +553,13 @@
           onBtn: resumeGame,
         });
         pauseUi.sync();
+        syncJoyTools();
       }
 
       function showStart() {
         ui.show({
           title: '星海突击',
-          text: '纵版弹幕射击：击落敌机，躲开弹幕。<br/>吃下 <b>散射 / 激光 / 追踪 / 速射</b>，弹种可叠加<br/>每关 30 秒后 Boss 战 · 整屏移动 · 生命 ×3',
+          text: '纵版弹幕射击：击落敌机，躲开弹幕。<br/>吃下 <b>散射 / 激光 / 追踪 / 速射</b>，弹种可叠加<br/>道具 1/2 主动使用 · 每关 Boss 后可继续或收局 · 生命 ×3',
           btn: '开始游戏',
           onBtn: startGame,
         });
@@ -424,7 +567,7 @@
 
       /* ---------- 局内存档 ---------- */
       function serialize() {
-        if (state !== 'playing' && state !== 'paused') return null;
+        if (state !== 'playing' && state !== 'paused' && state !== 'clear') return null;
         return {
           player: { x: player.x, y: player.y, invul: player.invul },
           bullets: bullets.map((b) => ({
@@ -469,6 +612,9 @@
           stage: level,
           stageTime,
           elapsed,
+          tools: { pulse: tools.pulse, shield: tools.shield },
+          shieldTimer,
+          clearStage: pendingClearStage,
         };
       }
 
@@ -554,8 +700,15 @@
           lastBuff = activeBuffs().slice(-1)[0] || 'normal';
           if (data.lastBuff && buffs[data.lastBuff] > 0) lastBuff = data.lastBuff;
           elapsed = Math.max(0, Number(data.elapsed) || 0);
+          if (data.tools && typeof data.tools === 'object') {
+            tools.pulse = Number.isFinite(Number(data.tools.pulse)) ? clamp(Math.floor(Number(data.tools.pulse)), 0, JOY_TOOL_CAPS.pulse) : 1;
+            tools.shield = Number.isFinite(Number(data.tools.shield)) ? clamp(Math.floor(Number(data.tools.shield)), 0, JOY_TOOL_CAPS.shield) : 1;
+          }
+          shieldTimer = clamp(Number(data.shieldTimer) || 0, 0, SHIELD_SECONDS);
+          pendingClearStage = clamp(Math.floor(Number(data.clearStage) || 0), 0, 999);
           recordSaved = false;
           syncHud();
+          syncJoyTools();
           return true;
         } catch (err) {
           return false;
@@ -664,6 +817,9 @@
         player.x = clamp(player.x, 20, W - 20);
         player.y = clamp(player.y, PLAYER_MIN_Y, PLAYER_MAX_Y);
         player.invul = Math.max(0, player.invul - dt);
+        const hadShield = shieldTimer > 0;
+        shieldTimer = Math.max(0, shieldTimer - dt);
+        if (hadShield && shieldTimer <= 0) syncJoyTools();
 
         let buffChanged = false;
         BUFF_TYPES.forEach((type) => {
@@ -877,7 +1033,7 @@
       }
 
       function hitPlayer() {
-        if (player.invul > 0) return;
+        if (player.invul > 0 || shieldTimer > 0) return;
         lives -= 1;
         player.invul = 1.8;
         shake = A.reducedMotion ? 0 : 8;
@@ -955,6 +1111,15 @@
           ctx.stroke();
         });
         ctx.globalAlpha = 1;
+        if (shieldTimer > 0) {
+          ctx.strokeStyle = '#7ce8e0';
+          ctx.lineWidth = 3;
+          ctx.globalAlpha = 0.72;
+          ctx.beginPath();
+          ctx.arc(0, 0, 31, 0, TAU);
+          ctx.stroke();
+          ctx.globalAlpha = 1;
+        }
         /* 喷焰 */
         const flame = 8 + Math.sin(performance.now() / 40) * 4;
         ctx.fillStyle = '#ffb43d';
@@ -1232,6 +1397,7 @@
         syncMute();
       });
       syncMute();
+      bindJoyTools();
 
       reset();
       state = 'ready';
@@ -1262,6 +1428,9 @@
             const active = activeBuffs();
             return {
               weapon: active.join('+') || 'normal',
+              state,
+              tools: { pulse: tools.pulse, shield: tools.shield },
+              shieldTimer,
               buffs: { ...buffs },
               pickups: pickups.length,
               score,
@@ -1281,6 +1450,28 @@
               shots: shots.length,
               enemies: enemies.length,
             };
+          },
+          joyInfo() {
+            return {
+              state,
+              tools: { pulse: tools.pulse, shield: tools.shield },
+              shieldTimer,
+              shots: shots.length,
+              enemies: enemies.length,
+              stage: level,
+              bossActive: !!boss,
+              clear: state === 'clear',
+            };
+          },
+          useJoyTool(id) {
+            return clickJoyTool(id);
+          },
+          continueClear() {
+            return resumeClear();
+          },
+          spawnShotAtPlayer() {
+            shots.push({ x: player.x, y: player.y - 40, vx: 0, vy: 0, r: 4 });
+            return shots.length;
           },
           fireNow() {
             const before = bullets.length;
@@ -1346,7 +1537,19 @@
           name: '星海突击',
           onResume: () => {
             if (restore(saved.data)) {
+              if (pendingClearStage > 0) {
+                /* 刷新前正停在 CLEAR 弹层：恢复后继续让玩家选择下一关或收局。 */
+                state = 'clear';
+                loop.pause();
+                syncJoyTools();
+                ui.hide();
+                showClearPanel(pendingClearStage);
+                pauseUi.sync();
+                autosave.saveNow();
+                return;
+              }
               state = 'playing';
+              syncJoyTools();
               ui.hide();
               loop.resume();
               pauseUi.sync();

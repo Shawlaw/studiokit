@@ -5,6 +5,7 @@
 - **线上站点：** <https://shawlaw.github.io/studiokit/> · <https://studiokit.pages.dev/>
 - **仓库：** <https://github.com/Shawlaw/studiokit>
 - **已发布工具：** Badge Studio `2.2.1`、街机厅 Arcade `0.6.2`（13 款竖屏小游戏）
+- **本地优化：** Arcade `0.7.0`（全游戏可选道具、短局目标与适度游玩提醒；85/85 无头浏览器检查通过），仅在 `feat/arcade-pure-joy`，未推送/未发布
 - **规划中：** Rounded Image（尚未实现；等待原始需求/规格，不凭空复刻）
 - **最近发布：** 2026-11-12，Arcade 0.6.2（黄金矿工目标取整、俄罗斯方块触屏按钮分区、加速/落底区分）；提交 `0159437`，Actions `43155182519` 成功，GitHub Pages 与 Cloudflare Pages 双端校验通过
 

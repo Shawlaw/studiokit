@@ -81,6 +81,10 @@
       const SOFT_DROP_SEC = 0.06;
       const LOCK_DELAY = 0.5;
       const LOCK_RESETS = 15;
+      const SHORT_LINES = 40;
+      const SLOW_DURATION = 6;
+      const JOY_START = { swap: 2, slow: 2 };
+      const JOY_CAPS = { swap: 2, slow: 2 };
 
       const canvas = document.querySelector('.game-canvas');
       const stageBox = document.querySelector('.stage-box');
@@ -144,6 +148,9 @@
       let touchRight = false;
       let touchSoft = false;
       let slamTimer = 0;
+      const tools = { swap: JOY_START.swap, slow: JOY_START.slow };
+      let slowTimer = 0;
+      let shortRun = true;
 
       let high = A.Progress.get('block-drop').high;
       dom.hudHigh.textContent = String(high);
@@ -182,21 +189,27 @@
         if (!bag.length) pullBag();
         return bag.pop();
       }
-      function spawn() {
-        const key = nextKey || nextPieceKey();
-        nextKey = nextPieceKey();
+      function makeCurrent(key) {
         const def = PIECES[key];
-        cur = {
+        return {
           key,
           m: def.m.map((row) => row.slice()),
           color: def.color,
           x: Math.floor((COLS - def.m.length) / 2),
           y: -1,
         };
+      }
+      function resetPieceMotion() {
         grounded = false;
         lockTimer = 0;
         lockResets = 0;
         dropTimer = 0;
+      }
+      function spawn() {
+        const key = nextKey || nextPieceKey();
+        nextKey = nextPieceKey();
+        cur = makeCurrent(key);
+        resetPieceMotion();
         if (collides(cur.m, cur.x, cur.y + 1)) {
           /* 出生位置已与棋盘重叠：直接顶部失败，不静默丢弃方块。 */
           gameOver();
@@ -220,6 +233,64 @@
           A.Sfx.play('spring');
         }
       }
+
+      /* ---------- 每局主动道具 ---------- */
+      function syncJoyTools() {
+        joyTools.sync();
+      }
+      function useSwapNext() {
+        if (state !== 'playing' || !cur || !nextKey || tools.swap <= 0) return false;
+        const previousKey = cur.key;
+        const candidate = makeCurrent(nextKey);
+        if (collides(candidate.m, candidate.x, candidate.y + 1)) {
+          A.Sfx.play('hit');
+          return false;
+        }
+        cur = candidate;
+        nextKey = previousKey;
+        resetPieceMotion();
+        tools.swap -= 1;
+        A.Sfx.play('spring');
+        syncJoyTools();
+        autosave.saveNow();
+        return true;
+      }
+      function useSlow() {
+        if (state !== 'playing' || tools.slow <= 0 || slowTimer > 0) return false;
+        tools.slow -= 1;
+        slowTimer = SLOW_DURATION;
+        A.Sfx.play('bell', 3);
+        syncJoyTools();
+        autosave.saveNow();
+        return true;
+      }
+      const joyTools = A.createToolbelt(
+        [
+          {
+            id: 'swap',
+            icon: '🔀',
+            name: '换块',
+            description: '与 NEXT 方块交换，不改变 7-bag（快捷键 1）',
+            getCount: () => tools.swap,
+            use: useSwapNext,
+            canUse: () => !!cur && !!nextKey,
+          },
+          {
+            id: 'slow',
+            icon: '🫧',
+            name: '慢落',
+            description: '自然重力减半 6 秒，软降与落底不变（快捷键 2）',
+            getCount: () => tools.slow,
+            use: useSlow,
+            canUse: () => slowTimer <= 0,
+            active: () => slowTimer > 0,
+          },
+        ],
+        { isPlaying: () => state === 'playing', keys: ['1', '2'], label: '可选道具', placement: 'below' }
+      );
+      Object.keys(joyTools.buttons).forEach((id) => {
+        joyTools.buttons[id].setAttribute('data-joy-tool', id);
+      });
 
       /* ---------- 流程 ---------- */
       function reset() {
@@ -249,8 +320,13 @@
         touchLeft = false;
         touchRight = false;
         touchSoft = false;
+        tools.swap = JOY_START.swap;
+        tools.slow = JOY_START.slow;
+        slowTimer = 0;
+        shortRun = true;
         spawn();
         syncHud();
+        syncJoyTools();
       }
 
       function showOverlay(title, text, btn, onBtn, btn2, onBtn2) {
@@ -280,10 +356,10 @@
         syncTouchPad();
       }
 
-      function gameOver() {
+      function gameOver(title, won) {
         if (state === 'over') return;
         state = 'over';
-        A.Sfx.play('over');
+        A.Sfx.play(won ? 'perfect' : 'over');
         autosave.clear();
         let rec = null;
         if (!recordSaved) {
@@ -293,7 +369,7 @@
         }
         loop.pause();
         showOverlay(
-          '游戏结束',
+          title || '游戏结束',
           `<span class="ac-score">${score}</span>` +
             (rec && rec.isNewHigh ? '<span class="ac-newhigh">★ 新纪录</span><br/>' : '') +
             `${lines} 行 · Lv.${level} · 最高 ${Math.max(high, score)}`,
@@ -317,7 +393,7 @@
       function showStart() {
         showOverlay(
           '俄罗斯方块',
-          '经典落块消除：凑满一行即消除。<br/>一次消 4 行（Tetris）得分 ×8<br/>等级越高下落越快 · 随时可暂停',
+          '经典落块消除：新局完成 40 行即快乐收局。<br/>一次消 4 行（Tetris）得分 ×8<br/>道具 1 换块 / 2 慢落 · 随时可暂停',
           '开始游戏',
           startGame
         );
@@ -335,6 +411,7 @@
           btn.disabled = state !== 'playing';
           if (state !== 'playing') btn.classList.remove('is-held');
         });
+        syncJoyTools();
       }
 
       function bindTouchPad() {
@@ -406,6 +483,9 @@
           lockTimer,
           lockResets,
           grounded,
+          tools: { swap: tools.swap, slow: tools.slow },
+          slowTimer,
+          shortRun,
         };
       }
 
@@ -437,6 +517,15 @@
           lockTimer = Number(data.lockTimer) || 0;
           lockResets = Number(data.lockResets) || 0;
           grounded = !!data.grounded;
+          tools.swap = data.tools && Number.isFinite(Number(data.tools.swap))
+            ? clamp(Math.floor(Number(data.tools.swap)), 0, JOY_CAPS.swap)
+            : JOY_START.swap;
+          tools.slow = data.tools && Number.isFinite(Number(data.tools.slow))
+            ? clamp(Math.floor(Number(data.tools.slow)), 0, JOY_CAPS.slow)
+            : JOY_START.slow;
+          slowTimer = clamp(Number(data.slowTimer) || 0, 0, SLOW_DURATION);
+          /* 只有新局明确保存 shortRun=true 才启用 40 行收局；旧档保持无尽。 */
+          shortRun = data.shortRun === true;
           clearing = null;
           recordSaved = false;
           spaceWasDown = false;
@@ -532,6 +621,7 @@
         if (full.length) {
           clearing = { rows: full, timer: 0.22 };
           state = 'clearing';
+          syncJoyTools();
           A.Sfx.play(full.length >= 4 ? 'perfect' : 'land');
         } else {
           A.Sfx.play(hard ? 'slam' : 'land');
@@ -555,7 +645,12 @@
         clearing = null;
         cur = null;
         state = 'playing';
+        if (shortRun && lines >= SHORT_LINES) {
+          gameOver('40 行完成！', true);
+          return;
+        }
         spawn();
+        syncJoyTools();
       }
 
       /* ---------- 更新 ---------- */
@@ -571,6 +666,9 @@
           return;
         }
         autosave.tick(dt);
+        const wasSlow = slowTimer > 0;
+        slowTimer = Math.max(0, slowTimer - dt);
+        if (wasSlow && slowTimer <= 0) syncJoyTools();
 
         const leftHeld = input.isDown('ArrowLeft', 'a') || touchLeft;
         const rightHeld = input.isDown('ArrowRight', 'd') || touchRight;
@@ -616,7 +714,8 @@
 
         /* 重力 + 软降：软降是“加速”，仍逐格下落；落底键才会立即锁定。 */
         const interval = softHeld ? SOFT_DROP_SEC : gravSec();
-        dropTimer += dt;
+        /* 只缩放自然重力的计时增量，避免切换 interval 时补掉多格；主动软降不受影响。 */
+        dropTimer += dt * (!softHeld && slowTimer > 0 ? 0.5 : 1);
         while (dropTimer >= interval) {
           dropTimer -= interval;
           if (!collides(cur.m, cur.x, cur.y + 1)) {
@@ -825,10 +924,33 @@
               bag: bag.slice(),
             };
           },
-          lineClearScenario() {
+          joyInfo() {
+            return {
+              tools: { swap: tools.swap, slow: tools.slow },
+              slowTimer,
+              slowActive: slowTimer > 0,
+              shortRun,
+              targetLines: shortRun ? SHORT_LINES : null,
+              lines,
+              state,
+              curKey: cur ? cur.key : null,
+              nextKey,
+              bag: bag.slice(),
+              dropTimer,
+            };
+          },
+          useJoyTool(id) {
+            const button = joyTools.buttons[id];
+            if (!button || button.disabled) return false;
+            button.click();
+            return true;
+          },
+          lineClearScenario(startLines) {
             board = [];
             for (let r = 0; r < ROWS; r++) board.push(new Array(COLS).fill(null));
             for (let c = 0; c < 6; c++) board[ROWS - 1][c] = '#7c5cff';
+            lines = clamp(Math.floor(Number(startLines) || 0), 0, SHORT_LINES - 1);
+            level = 1 + Math.floor(lines / 10);
             cur = {
               key: 'I',
               m: PIECES.I.m.map((row) => row.slice()),

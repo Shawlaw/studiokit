@@ -11,7 +11,7 @@
   <script src="../engine.js"></script>
   <title>影跃 · 街机厅 · StudioKit</title>
 </head>
-<body class="arcade-body" data-studiokit-app="arcade" data-studiokit-app-title="街机厅 Arcade" style="--ac-accent:#e0567f; --card-accent:#e0567f">
+<body class="arcade-body has-extra-controls has-game-tools" data-studiokit-app="arcade" data-studiokit-app-title="街机厅 Arcade" style="--ac-accent:#e0567f; --card-accent:#e0567f">
   <noscript><p class="ac-noscript">此游戏需要启用 JavaScript 才能运行。</p></noscript>
   <main class="game-page">
     <header class="game-topbar">
@@ -37,7 +37,11 @@
         </div>
       </div>
     </div>
-    <p class="game-hint">←→ / A D 或触摸左右半屏移动 · 触墙反弹 · 平台落点保证可达 · P / Esc 暂停</p>
+    <div class="touch-pad game-tools" aria-label="可选道具（快捷键 1 / 2）">
+      <button type="button" class="touch-btn" data-joy-tool="feather" aria-label="羽落，剩余 2 次（快捷键 1）"><span aria-hidden="true">🪶</span> 羽落 <strong data-joy-count>2</strong></button>
+      <button type="button" class="touch-btn" data-joy-tool="boost" aria-label="月弹，剩余 2 次（快捷键 2）"><span aria-hidden="true">🌙</span> 月弹 <strong data-joy-count>2</strong></button>
+    </div>
+    <p class="game-hint">←→ / A D 或触摸左右半屏移动 · 1 羽落 / 2 月弹 · 平台落点保证可达 · P / Esc 暂停</p>
   </main>
   <script>
     (() => {
@@ -50,6 +54,12 @@
       const GRAVITY = 1500;
       const JUMP_V = -640;
       const MAX_FALL = 900;
+      const FEATHER_DURATION = 5;
+      const FEATHER_GRAVITY = 0.35;
+      const FEATHER_MAX_FALL = 360;
+      const BOOST_JUMP_V = -768;
+      const JOY_START = { feather: 2, boost: 2 };
+      const JOY_CAPS = { feather: 2, boost: 2 };
 
       const canvas = document.querySelector('.game-canvas');
       const stage = A.createStage(canvas, W, H);
@@ -69,6 +79,10 @@
         mute: document.querySelector('[data-mute]'),
       };
       const ui = A.createOverlayUi(dom);
+      const joyButtons = {
+        feather: document.querySelector('[data-joy-tool="feather"]'),
+        boost: document.querySelector('[data-joy-tool="boost"]'),
+      };
 
       const particles = A.createParticles();
 
@@ -81,7 +95,11 @@
       let recordSaved = false;
       let score = 0;
       let hintTimer = 0;
+      let landingHint = '';
       let generatedCount = 0;
+      const tools = { feather: JOY_START.feather, boost: JOY_START.boost };
+      let featherTimer = 0;
+      let boostArmed = false;
 
       let high = A.Progress.get('shadow-leap').high;
       dom.hudHigh.textContent = String(high);
@@ -165,6 +183,55 @@
         while (platforms.length && platforms[0].y > camY + H + 40) platforms.shift();
       }
 
+      /* ---------- 每局主动道具 ---------- */
+      function syncJoyTools() {
+        Object.keys(joyButtons).forEach((id) => {
+          const button = joyButtons[id];
+          const active = id === 'feather' ? featherTimer > 0 : boostArmed;
+          const name = id === 'feather' ? '羽落' : '月弹';
+          const detail = id === 'feather' ? '下落 5 秒更轻缓' : '下一次着陆弹跳增强';
+          button.querySelector('[data-joy-count]').textContent = String(tools[id]);
+          button.disabled = state !== 'playing' || tools[id] <= 0 || active;
+          button.classList.toggle('is-armed', active);
+          button.setAttribute('aria-pressed', String(active));
+          button.setAttribute('aria-label', name + '，' + detail + '，剩余 ' + tools[id] + ' 次（快捷键 ' + (id === 'feather' ? '1' : '2') + '）');
+        });
+      }
+      function useJoy(id) {
+        if (state !== 'playing' || !Object.prototype.hasOwnProperty.call(tools, id) || tools[id] <= 0) return false;
+        if (id === 'feather') {
+          if (featherTimer > 0) return false;
+          tools.feather -= 1;
+          featherTimer = FEATHER_DURATION;
+          A.Sfx.play('bell', 2);
+        } else if (id === 'boost') {
+          if (boostArmed) return false;
+          tools.boost -= 1;
+          boostArmed = true;
+          A.Sfx.play('spring');
+        } else {
+          return false;
+        }
+        syncJoyTools();
+        autosave.saveNow();
+        return true;
+      }
+      Object.keys(joyButtons).forEach((id) => {
+        joyButtons[id].addEventListener('click', () => useJoy(id));
+      });
+      window.addEventListener('keydown', (e) => {
+        if (e.repeat || e.metaKey || e.ctrlKey || e.altKey) return;
+        const target = e.target;
+        if (target && target.tagName) {
+          const tag = target.tagName.toLowerCase();
+          if (tag === 'input' || tag === 'textarea' || tag === 'select' || target.isContentEditable) return;
+        }
+        const id = { '1': 'feather', '2': 'boost' }[e.key];
+        if (!id) return;
+        e.preventDefault();
+        useJoy(id);
+      });
+
       /* ---------- 流程 ---------- */
       function reset() {
         platforms = [];
@@ -180,6 +247,12 @@
         startY = player.y;
         topY = player.y;
         generatedCount = 0;
+        tools.feather = JOY_START.feather;
+        tools.boost = JOY_START.boost;
+        featherTimer = 0;
+        boostArmed = false;
+        hintTimer = 0;
+        landingHint = '';
         particles.clear();
         const ground = { x: 40, y: H - 60, w: W - 80, h: 12, kind: 'normal', speed: 0, broken: false, breakTimer: 0, phase: 0 };
         platforms.push(ground);
@@ -190,6 +263,7 @@
           highest = p;
         }
         syncHud();
+        syncJoyTools();
       }
 
       function syncHud() {
@@ -202,7 +276,7 @@
         state = 'playing';
         ui.hide();
         loop.resume();
-        pauseUi.sync();
+        pauseUi.sync(); syncJoyTools();
         autosave.saveNow();
       }
 
@@ -211,7 +285,7 @@
         state = 'playing';
         ui.hide();
         loop.resume();
-        pauseUi.sync();
+        pauseUi.sync(); syncJoyTools();
       }
 
       function gameOver() {
@@ -235,7 +309,7 @@
           btn: '再来一局',
           onBtn: startGame,
         });
-        pauseUi.sync();
+        pauseUi.sync(); syncJoyTools();
       }
 
       function pauseByUser() {
@@ -249,7 +323,7 @@
           btn: '继续',
           onBtn: resumeGame,
         });
-        pauseUi.sync();
+        pauseUi.sync(); syncJoyTools();
       }
 
       function showStart() {
@@ -289,6 +363,9 @@
           startY,
           score,
           generatedCount,
+          tools: { feather: tools.feather, boost: tools.boost },
+          featherTimer,
+          boostArmed,
         };
       }
 
@@ -323,8 +400,17 @@
           startY = Number(data.startY) || player.y;
           score = Math.max(0, Number(data.score) || 0);
           generatedCount = Math.max(0, Number(data.generatedCount) || platforms.length - 1);
+          tools.feather = data.tools && Number.isFinite(Number(data.tools.feather))
+            ? clamp(Math.floor(Number(data.tools.feather)), 0, JOY_CAPS.feather)
+            : JOY_START.feather;
+          tools.boost = data.tools && Number.isFinite(Number(data.tools.boost))
+            ? clamp(Math.floor(Number(data.tools.boost)), 0, JOY_CAPS.boost)
+            : JOY_START.boost;
+          featherTimer = clamp(Number(data.featherTimer) || 0, 0, FEATHER_DURATION);
+          boostArmed = !!data.boostArmed;
           recordSaved = false;
           syncHud();
+          syncJoyTools();
           return true;
         } catch (err) {
           return false;
@@ -345,6 +431,12 @@
           return;
         }
         autosave.tick(dt);
+        const hadFeather = featherTimer > 0;
+        featherTimer = Math.max(0, featherTimer - dt);
+        if (hadFeather && featherTimer <= 0) {
+          syncJoyTools();
+          autosave.saveNow();
+        }
 
         /* 水平控制 */
         const ACC = 2400;
@@ -373,9 +465,12 @@
           player.vx = -Math.abs(player.vx) * 0.95;
         }
 
-        /* 重力 */
+        /* 重力：羽落只改变下落，不改变上升高度、平台生成或单向碰撞。 */
         player.prevBottom = player.y + player.h;
-        player.vy = Math.min(MAX_FALL, player.vy + GRAVITY * dt);
+        const feathering = featherTimer > 0 && player.vy > 0;
+        const gravity = GRAVITY * (feathering ? FEATHER_GRAVITY : 1);
+        const maxFall = feathering ? FEATHER_MAX_FALL : MAX_FALL;
+        player.vy = Math.min(maxFall, player.vy + gravity * dt);
         player.y += player.vy * dt;
 
         /* 平台行为 */
@@ -393,8 +488,12 @@
           if (p.broken) continue;
           if (A.Physics.oneWayLanding(player, player.prevBottom, p)) {
             player.y = p.y - player.h;
-            player.vy = JUMP_V;
-            A.Sfx.play('jump');
+            const usedBoost = boostArmed;
+            player.vy = usedBoost ? BOOST_JUMP_V : JUMP_V;
+            if (usedBoost) boostArmed = false;
+            landingHint = usedBoost ? '月弹！' : p.kind === 'fragile' ? '快跳！' : p.kind === 'moving' ? '借势！' : '稳！';
+            hintTimer = 0.55;
+            A.Sfx.play(usedBoost ? 'spring' : 'jump');
             particles.emit(player.x + player.w / 2, player.y + player.h, {
               count: A.reducedMotion ? 3 : 7,
               speed: [20, 90],
@@ -408,6 +507,10 @@
               p.broken = true;
               p.breakTimer = 0.22;
               A.Sfx.play('hit');
+            }
+            if (usedBoost) {
+              syncJoyTools();
+              autosave.saveNow();
             }
             break;
           }
@@ -567,6 +670,13 @@
         platforms.forEach(drawPlatform);
         particles.draw(ctx);
         if (state === 'playing' || state === 'paused' || state === 'ready') drawNinja();
+        if (hintTimer > 0 && landingHint && (state === 'playing' || state === 'paused')) {
+          A.draw.label(ctx, landingHint, clamp(player.x + player.w / 2, 46, W - 46), clamp(worldToScreenY(player.y) - 34, 76, H - 40), {
+            font: 'bold 14px system-ui',
+            color: '#ffe08a',
+            alpha: clamp(hintTimer / 0.55, 0, 1),
+          });
+        }
 
         A.draw.label(ctx, score + 'm', W / 2, 46, {
           font: 'bold 30px system-ui, sans-serif',
@@ -609,6 +719,60 @@
               platforms: platforms.map((p) => ({ x: p.x, y: p.y, w: p.w, kind: p.kind, range: p.range, broken: p.broken })),
             };
           },
+          joyInfo() {
+            return {
+              tools: { feather: tools.feather, boost: tools.boost },
+              featherTimer,
+              featherActive: featherTimer > 0,
+              boostArmed,
+              player: { x: player.x, y: player.y, vy: player.vy },
+              landingHint,
+              hintTimer,
+              score,
+              state,
+            };
+          },
+          useJoyTool(id) {
+            const button = joyButtons[id];
+            if (!button || button.disabled) return false;
+            button.click();
+            return true;
+          },
+          setMotion(vy) {
+            player.vy = Number(vy) || 0;
+            return player.vy;
+          },
+          setPosition(x, y) {
+            player.x = clamp(Number(x) || player.x, 0, W - player.w);
+            player.y = clamp(Number(y) || player.y, 0, H);
+            player.prevBottom = player.y + player.h;
+            return { x: player.x, y: player.y };
+          },
+          fallInfo() {
+            const feathering = featherTimer > 0 && player.vy > 0;
+            return {
+              feathering,
+              gravity: GRAVITY * (feathering ? FEATHER_GRAVITY : 1),
+              maxFall: feathering ? FEATHER_MAX_FALL : MAX_FALL,
+              baseGravity: GRAVITY,
+              baseMaxFall: MAX_FALL,
+              vy: player.vy,
+            };
+          },
+          setFeatherTimer(seconds) {
+            featherTimer = clamp(Number(seconds) || 0, 0, FEATHER_DURATION);
+            syncJoyTools();
+            return featherTimer;
+          },
+          forceLand(index) {
+            const p = platforms[index];
+            if (!p) return false;
+            player.x = clamp(p.x + p.w / 2 - player.w / 2, -player.w / 2, W - player.w / 2);
+            player.y = p.y - player.h - 2;
+            player.vy = 120;
+            player.prevBottom = p.y - 2;
+            return true;
+          },
         };
       }
       const saved = autosave.load();
@@ -620,7 +784,7 @@
               state = 'playing';
               ui.hide();
               loop.resume();
-              pauseUi.sync();
+              pauseUi.sync(); syncJoyTools();
               autosave.saveNow();
             } else {
               autosave.clear();

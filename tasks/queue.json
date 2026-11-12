@@ -609,6 +609,27 @@
       "claimedAt": "2026-11-12T04:23:07+00:00",
       "evidence": "提交 0159437 推送 main；Actions 43155182519 的 Validate and build / Deploy GitHub Pages / Deploy Cloudflare Pages / Verify both deployments 全部成功；verify_deploy.py 11/11 关键文件 SHA-256 一致；双端 Arcade 0.6.2 / Badge 2.2.1；Cloudflare 项目 studiokit；Token 仅存 GitHub Secrets。",
       "completedAt": "2026-11-12T04:34:28+00:00"
+    },
+    {
+      "id": "T032",
+      "title": "Arcade 0.7.0：全游戏趣味性、可选道具与适度游玩优化",
+      "kind": "agent",
+      "status": "DONE",
+      "dependsOn": [
+        "T031"
+      ],
+      "ownerAuthorizationRequired": false,
+      "acceptance": [
+        "13 款游戏均有符合各自玩法的趣味性或节奏优化，除已有 4 道具的黄金矿工外均提供至少 2 个主动可选道具",
+        "共享道具栏支持触控、禁用状态与可选快捷键，320/375/390/430px 不溢出；不遮挡核心操作",
+        "新增状态仅写入既有 runs:v1 的 data，旧档缺字段可恢复；不改 localStorage key 或 Schema，不引入远程依赖",
+        "加入每页面最多一次的 20 分钟有效游玩温柔提醒；不新增签到、每日奖励、强制暂停或留存诱导",
+        "validate_site.py / build_site.py / node --check / arcade_smoke.mjs 通过，新增道具与旧档兼容回归有实际证据",
+        "Arcade 版本、registry、SW、README、CHANGELOG、设计文档、TASKS 与 queue 同步；仅本地分支，未经明确授权不发布"
+      ],
+      "claimedAt": "2026-11-12T15:11:00+00:00",
+      "completedAt": "2026-11-12T16:01:57+00:00",
+      "evidence": "0.7.0 local batch: 13 games x 2 active tools (gold-miner keeps 4 + 2 rebalances), 7 natural endings, one-shot 20min break reminder, hub random pick, shared createToolbelt; review fixes: in-canvas toolbars moved below stage (320/landscape no overlap), old endless saves stay endless via shortRun (road/gravity/snake), brick tool-wide survives ball loss, 2048 win bonus once, star CLEAR restored after refresh, pendulum guide consumes on release, gold winch aria; validate_site.py + build_site.py + node --check PASS; arcade_smoke.mjs 85/85 twice; git diff --check clean; not pushed/not released; iOS/Android real-device play and native fullscreen remain UNVERIFIED"
     }
   ]
 }

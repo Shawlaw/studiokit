@@ -76,6 +76,16 @@
         { cols: 6, rows: 4, preview: 1.8 },
       ];
       const BOARD = { x: 26, y: 168, w: W - 52, h: 448 };
+      const TOOL_START = { peek: 2, hint: 2 };
+      const TOOL_CAPS = { peek: 2, hint: 2 };
+      const PEEK_DURATION = 1.2;
+      const HINT_DURATION = 1.5;
+      const PREVIEW_MIN = 0.6;
+      const tools = { peek: TOOL_START.peek, hint: TOOL_START.hint };
+      let peekTimer = 0;
+      let hintArmed = false;
+      let hintTargetId = -1;
+      let hintTimer = 0;
 
       let cards = [];
       let layout = null;
@@ -150,6 +160,10 @@
         mismatchTimer = 0;
         flippedIds = [];
         levelClearTimer = 0;
+        peekTimer = 0;
+        hintArmed = false;
+        hintTargetId = -1;
+        hintTimer = 0;
       }
 
       function reset() {
@@ -157,6 +171,8 @@
         score = 0;
         moves = 0;
         elapsed = 0;
+        tools.peek = TOOL_START.peek;
+        tools.hint = TOOL_START.hint;
         recordSaved = false;
         buildLevel(1);
         syncHud();
@@ -173,6 +189,7 @@
         ui.hide();
         loop.resume();
         pauseUi.sync();
+        joyTools.sync();
         autosave.saveNow();
       }
 
@@ -182,11 +199,17 @@
         ui.hide();
         loop.resume();
         pauseUi.sync();
+        joyTools.sync();
       }
 
       function finish(won) {
         if (state === 'over') return;
         state = 'over';
+        hintArmed = false;
+        peekTimer = 0;
+        hintTargetId = -1;
+        hintTimer = 0;
+        joyTools.sync();
         autosave.clear();
         A.Sfx.play(won ? 'perfect' : 'over');
         let rec = null;
@@ -211,6 +234,7 @@
         if (state !== 'playing') return;
         loop.pause();
         state = 'paused';
+        joyTools.sync();
         autosave.saveNow();
         ui.show({ title: '已暂停', text: '牌面已盖好，等你回来。<br/>局内进度已保存。', btn: '继续', onBtn: resumeGame });
         pauseUi.sync();
@@ -240,6 +264,11 @@
           previewTimer,
           mismatchTimer,
           flippedIds: flippedIds.slice(),
+          tools: { peek: tools.peek, hint: tools.hint },
+          peekTimer,
+          hintArmed,
+          hintTargetId,
+          hintTimer,
           cards: cards.map((c) => ({ symbol: c.symbol, matched: c.matched })),
         };
       }
@@ -267,8 +296,19 @@
           previewTimer = Math.max(0, Number(data.previewTimer) || 0);
           mismatchTimer = Math.max(0, Number(data.mismatchTimer) || 0);
           flippedIds = Array.isArray(data.flippedIds) ? data.flippedIds.filter((id) => Number.isInteger(id) && cards[id]) : [];
+          if (data.tools && typeof data.tools === 'object') {
+            tools.peek = Number.isFinite(Number(data.tools.peek)) ? clamp(Math.floor(Number(data.tools.peek)), 0, TOOL_CAPS.peek) : TOOL_START.peek;
+            tools.hint = Number.isFinite(Number(data.tools.hint)) ? clamp(Math.floor(Number(data.tools.hint)), 0, TOOL_CAPS.hint) : TOOL_START.hint;
+          }
+          peekTimer = clamp(Number(data.peekTimer) || 0, 0, PEEK_DURATION);
+          hintTimer = clamp(Number(data.hintTimer) || 0, 0, HINT_DURATION);
+          const savedHint = Number(data.hintTargetId);
+          hintTargetId = hintTimer > 0 && Number.isInteger(savedHint) && cards[savedHint] && !cards[savedHint].matched ? savedHint : -1;
+          if (hintTargetId < 0) hintTimer = 0;
+          hintArmed = !!data.hintArmed && tools.hint > 0 && previewTimer <= 0 && mismatchTimer <= 0 && peekTimer <= 0 && flippedIds.length === 0;
           levelClearTimer = 0;
           recordSaved = false;
+          joyTools.sync();
           syncHud();
           return true;
         } catch (err) {
@@ -281,13 +321,69 @@
         meta: () => ({ score, summary: `第 ${level} 关 · ${moves} 次翻牌 · ${score} 分` }),
       });
 
+      function useTool(id) {
+        if (state !== 'playing') return false;
+        if (id === 'peek') {
+          if (tools.peek <= 0 || peekTimer > 0 || previewTimer > 0 || mismatchTimer > 0 || flippedIds.length > 0) {
+            A.showToast('请在两张牌都盖好时再看一眼');
+            return false;
+          }
+          tools.peek -= 1;
+          hintArmed = false;
+          peekTimer = PEEK_DURATION;
+          A.Sfx.play('spring');
+          A.showToast('再看一眼：1.2 秒');
+          autosave.saveNow();
+          joyTools.sync();
+          return true;
+        }
+        if (id === 'hint') {
+          if (hintArmed) {
+            hintArmed = false;
+            A.showToast('已取消灵犀提示');
+            autosave.saveNow();
+            joyTools.sync();
+            return true;
+          }
+          if (tools.hint <= 0 || peekTimer > 0 || previewTimer > 0 || mismatchTimer > 0 || flippedIds.length > 0) {
+            A.showToast('请在翻开首张牌前使用灵犀提示');
+            return false;
+          }
+          hintArmed = true;
+          A.Sfx.play('ui');
+          A.showToast('翻开一张牌，会标出它的伙伴');
+          autosave.saveNow();
+          joyTools.sync();
+          return true;
+        }
+        return false;
+      }
+
+      const joyTools = A.createToolbelt([
+        { id: 'peek', icon: '👀', name: '再看一眼', description: '显示未配对牌 1.2 秒', getCount: () => tools.peek, use: () => useTool('peek'), active: () => peekTimer > 0 },
+        { id: 'hint', icon: '💡', name: '灵犀提示', description: '翻开首张牌后标出配对牌', getCount: () => tools.hint, use: () => useTool('hint'), active: () => hintArmed },
+      ], { isPlaying: () => state === 'playing', keys: ['1', '2'], label: '记忆翻牌道具', placement: 'below' });
+
       function reveal(card) {
         if (card.matched) return;
-        if (previewTimer > 0 || mismatchTimer > 0 || flippedIds.length >= 2) return;
+        if (previewTimer > 0 || peekTimer > 0 || mismatchTimer > 0 || flippedIds.length >= 2) return;
         if (flippedIds.indexOf(card.id) !== -1) return;
         flippedIds.push(card.id);
         card.pop = 1;
         A.Sfx.play('ui');
+        if (flippedIds.length === 1 && hintArmed) {
+          const mate = cards.find((c) => c.id !== card.id && !c.matched && c.symbol === card.symbol);
+          if (mate && tools.hint > 0) {
+            tools.hint -= 1;
+            hintArmed = false;
+            hintTargetId = mate.id;
+            hintTimer = HINT_DURATION;
+            A.Sfx.play('bell', 2);
+            A.showToast('灵犀已标出配对牌');
+            autosave.saveNow();
+            joyTools.sync();
+          }
+        }
         if (flippedIds.length === 2) {
           const a = cards[flippedIds[0]];
           const b = cards[flippedIds[1]];
@@ -302,6 +398,8 @@
             if (cards.every((c) => c.matched)) {
               levelClearTimer = 1.35;
               state = 'levelclear';
+              hintArmed = false;
+              joyTools.sync();
               A.Sfx.play('spring');
             }
           } else {
@@ -311,8 +409,22 @@
         }
       }
 
+      function skipPreview() {
+        if (state !== 'playing' || previewTimer <= 0) return false;
+        if (levelConfig(level).preview - previewTimer < PREVIEW_MIN) return false;
+        previewTimer = 0;
+        A.Sfx.play('ui');
+        autosave.saveNow();
+        joyTools.sync();
+        return true;
+      }
+
       function handleTap(x, y) {
         if (state !== 'playing') return;
+        if (previewTimer > 0) {
+          skipPreview();
+          return;
+        }
         for (const card of cards) {
           const rect = cardRect(card);
           if (x >= rect.x && x <= rect.x + rect.w && y >= rect.y && y <= rect.y + rect.h) {
@@ -324,6 +436,17 @@
 
       function update(dt) {
         for (const card of cards) card.pop = Math.max(0, card.pop - dt * 4);
+        if (peekTimer > 0) {
+          peekTimer = Math.max(0, peekTimer - dt);
+          if (peekTimer === 0) joyTools.sync();
+        }
+        if (hintTimer > 0) {
+          hintTimer = Math.max(0, hintTimer - dt);
+          if (hintTimer === 0) {
+            hintTargetId = -1;
+            joyTools.sync();
+          }
+        }
         if (state === 'levelclear') {
           levelClearTimer -= dt;
           if (levelClearTimer <= 0) {
@@ -334,6 +457,7 @@
               score += 100;
               buildLevel(level);
               state = 'playing';
+              joyTools.sync();
               autosave.saveNow();
               syncHud();
             }
@@ -361,7 +485,7 @@
 
       function drawCard(card) {
         const rect = cardRect(card);
-        const revealed = card.matched || previewTimer > 0 || flippedIds.indexOf(card.id) !== -1 || state === 'levelclear';
+        const revealed = card.matched || previewTimer > 0 || peekTimer > 0 || flippedIds.indexOf(card.id) !== -1 || state === 'levelclear';
         const pop = A.reducedMotion ? 1 : 1 + card.pop * 0.06;
         ctx.save();
         ctx.translate(rect.x + rect.w / 2, rect.y + rect.h / 2);
@@ -393,6 +517,12 @@
           ctx.textBaseline = 'middle';
           ctx.fillText('?', rect.w / 2, rect.h / 2 + 1);
         }
+        if (card.id === hintTargetId && hintTimer > 0 && !card.matched) {
+          A.draw.roundRect(ctx, 1, 1, rect.w - 2, rect.h - 2, Math.min(12, rect.w * 0.16));
+          ctx.strokeStyle = '#ffd23f';
+          ctx.lineWidth = 4;
+          ctx.stroke();
+        }
         ctx.restore();
       }
 
@@ -421,7 +551,7 @@
           color: '#93a0c8',
         });
         if (previewTimer > 0) {
-          A.draw.label(ctx, '记住牌面 ' + previewTimer.toFixed(1) + 's', W / 2, 84, {
+          A.draw.label(ctx, '记住牌面 ' + previewTimer.toFixed(1) + 's · 点击可跳过', W / 2, 84, {
             font: 'bold 15px system-ui',
             color: '#ffd23f',
           });
@@ -471,13 +601,49 @@
       if (location.hash === '#test') {
         window.__arcadeTest = {
           info() {
-            return { level, totalLevels: LEVELS.length, cards: cards.length, previewTimer, score, moves };
+            return {
+              level,
+              totalLevels: LEVELS.length,
+              cards: cards.length,
+              previewTimer,
+              score,
+              moves,
+              cardList: cards.map((c) => ({ id: c.id, symbol: c.symbol, matched: c.matched })),
+            };
+          },
+          joyInfo() {
+            return {
+              tools: { peek: tools.peek, hint: tools.hint },
+              peekTimer,
+              hintArmed,
+              hintTargetId,
+              hintTimer,
+              previewTimer,
+              flippedIds: flippedIds.slice(),
+              state,
+            };
+          },
+          useJoyTool(id) {
+            const button = joyTools.buttons[id];
+            if (!button) return false;
+            button.click();
+            return true;
+          },
+          revealById(id) {
+            const card = cards[Number(id)];
+            if (!card) return false;
+            reveal(card);
+            return true;
+          },
+          skipPreviewNow() {
+            return skipPreview();
           },
           setLevel(value) {
             level = clamp(Number(value) || 1, 1, LEVELS.length);
             buildLevel(level);
             state = 'playing';
             ui.hide();
+            joyTools.sync();
             syncHud();
             return true;
           },
@@ -493,6 +659,7 @@
               ui.hide();
               loop.resume();
               pauseUi.sync();
+              joyTools.sync();
               autosave.saveNow();
             } else {
               autosave.clear();

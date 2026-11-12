@@ -11,7 +11,7 @@
   <script src="../engine.js"></script>
   <title>贪吃蛇 · 街机厅 · StudioKit</title>
 </head>
-<body class="arcade-body" data-studiokit-app="arcade" data-studiokit-app-title="街机厅 Arcade" style="--ac-accent:#66d36e; --card-accent:#66d36e">
+<body class="arcade-body has-extra-controls has-game-tools" data-studiokit-app="arcade" data-studiokit-app-title="街机厅 Arcade" style="--ac-accent:#66d36e; --card-accent:#66d36e">
   <noscript><p class="ac-noscript">此游戏需要启用 JavaScript 才能运行。</p></noscript>
   <main class="game-page">
     <header class="game-topbar">
@@ -37,7 +37,15 @@
         </div>
       </div>
     </div>
-    <p class="game-hint">方向键 / WASD 或滑动转向 · 吃果实变长 · 每吃几个果实会加速并出现障碍 · 生命 ×3 · P / Esc 暂停</p>
+    <div class="touch-pad game-tools" data-game-tools aria-label="主动道具（快捷键 1 / 2）">
+      <button type="button" class="touch-btn" data-joy-tool="slow" aria-label="慢速泡泡 6 秒，剩余 2 次（快捷键 1）" title="慢速泡泡（1）：6 秒内每格间隔增加 0.06 秒">
+        <span aria-hidden="true">🫧</span><span>慢速</span><span data-joy-count aria-hidden="true">2</span>
+      </button>
+      <button type="button" class="touch-btn" data-joy-tool="trim" aria-label="轻身剪，剩余 1 次（快捷键 2）" title="轻身剪（2）：去掉尾巴 6 节，最短保留 3 节，不扣分">
+        <span aria-hidden="true">✂</span><span>轻身</span><span data-joy-count aria-hidden="true">1</span>
+      </button>
+    </div>
+    <p class="game-hint">方向键 / WASD 或滑动转向 · 道具 1/2 · 吃满 20 个果实丰收收局 · P / Esc 暂停</p>
   </main>
   <script>
     (() => {
@@ -69,6 +77,8 @@
         hudHigh: document.querySelector('[data-hud-high]'),
         pause: document.querySelector('[data-pause]'),
         mute: document.querySelector('[data-mute]'),
+        joySlow: document.querySelector('[data-joy-tool="slow"]'),
+        joyTrim: document.querySelector('[data-joy-tool="trim"]'),
       };
       const ui = A.createOverlayUi(dom);
       const particles = A.createParticles();
@@ -91,6 +101,14 @@
       let recordSaved = false;
       let swipeStart = null;
       let keyWasDown = {};
+      const JOY_GOAL_FOODS = 20;
+      const SLOW_SECONDS = 6;
+      const SLOW_INTERVAL = 0.06;
+      const tools = { slow: 2, trim: 1 };
+      let slowTimer = 0;
+      /* 旧版无尽档缺少该字段时保持原玩法，不被 20 果实丰收强制收尾。 */
+      let shortRun = true;
+      let joyLastResult = null;
 
       let high = A.Progress.get('snake-run').high;
       dom.hudHigh.textContent = String(high);
@@ -131,6 +149,80 @@
         }
       }
 
+      function effectiveStepInterval() {
+        return stepInterval + (slowTimer > 0 ? SLOW_INTERVAL : 0);
+      }
+
+      function syncJoyTools() {
+        if (!dom.joySlow || !dom.joyTrim) return;
+        dom.joySlow.querySelector('[data-joy-count]').textContent = String(tools.slow);
+        dom.joyTrim.querySelector('[data-joy-count]').textContent = String(tools.trim);
+        dom.joySlow.disabled = state !== 'playing' || slowTimer > 0 || tools.slow <= 0;
+        dom.joyTrim.disabled = state !== 'playing' || snake.length <= 3 || tools.trim <= 0;
+        dom.joySlow.setAttribute('aria-pressed', String(slowTimer > 0));
+        dom.joySlow.setAttribute('aria-label', slowTimer > 0
+          ? '慢速泡泡生效中，剩余 ' + slowTimer.toFixed(1) + ' 秒'
+          : '慢速泡泡 6 秒，剩余 ' + tools.slow + ' 次（快捷键 1）');
+        dom.joyTrim.setAttribute('aria-label', '轻身剪，剩余 ' + tools.trim + ' 次（快捷键 2）；当前长度 ' + snake.length);
+      }
+
+      function activateJoyTool(id) {
+        if (state !== 'playing') return false;
+        if (id === 'slow') {
+          if (slowTimer > 0 || tools.slow <= 0) return false;
+          tools.slow -= 1;
+          slowTimer = SLOW_SECONDS;
+          stepTimer = Math.min(stepTimer, effectiveStepInterval());
+          A.Sfx.play('spring');
+          syncJoyTools();
+          autosave.saveNow();
+          return true;
+        }
+        if (id === 'trim') {
+          if (snake.length <= 3 || tools.trim <= 0) return false;
+          tools.trim -= 1;
+          snake.length = Math.max(3, snake.length - 6);
+          A.Sfx.play('spring');
+          particles.emit(BOARD_X + snake[0].x * CELL + CELL / 2, BOARD_Y + snake[0].y * CELL + CELL / 2, {
+            count: A.reducedMotion ? 4 : 12,
+            speed: [30, 130], life: [0.2, 0.5], size: [2, 4],
+            colors: ['#66d36e', '#ffffff'],
+          });
+          syncJoyTools();
+          autosave.saveNow();
+          return true;
+        }
+        return false;
+      }
+
+      function clickJoyTool(id) {
+        const button = document.querySelector('[data-joy-tool="' + id + '"]');
+        if (!button) return false;
+        joyLastResult = null;
+        button.click();
+        return joyLastResult === true;
+      }
+
+      function bindJoyTools() {
+        document.querySelectorAll('[data-joy-tool]').forEach((button) => {
+          button.addEventListener('click', () => {
+            joyLastResult = activateJoyTool(button.dataset.joyTool);
+          });
+        });
+        window.addEventListener('keydown', (e) => {
+          if (e.repeat || e.metaKey || e.ctrlKey || e.altKey) return;
+          const target = e.target;
+          if (target && target.tagName) {
+            const tag = target.tagName.toLowerCase();
+            if (tag === 'input' || tag === 'textarea' || tag === 'select' || target.isContentEditable) return;
+          }
+          const id = { '1': 'slow', '2': 'trim' }[e.key];
+          if (!id) return;
+          e.preventDefault();
+          clickJoyTool(id);
+        });
+      }
+
       function resetSnake() {
         snake = [
           { x: Math.floor(N / 2), y: Math.floor(N / 2) },
@@ -152,6 +244,10 @@
         invul = 0;
         golden = null;
         goldenTimer = 0;
+        tools.slow = 2;
+        tools.trim = 1;
+        slowTimer = 0;
+        shortRun = true;
         recordSaved = false;
         swipeStart = null;
         resetSnake();
@@ -159,6 +255,7 @@
         spawnFood();
         particles.clear();
         syncHud();
+        syncJoyTools();
       }
 
       function syncHud() {
@@ -172,6 +269,7 @@
         ui.hide();
         loop.resume();
         pauseUi.sync();
+        syncJoyTools();
         autosave.saveNow();
       }
 
@@ -181,13 +279,15 @@
         ui.hide();
         loop.resume();
         pauseUi.sync();
+        syncJoyTools();
       }
 
-      function finish() {
+      function finish(won) {
         if (state === 'over') return;
+        const wonRun = won === true;
         state = 'over';
         autosave.clear();
-        A.Sfx.play('over');
+        A.Sfx.play(wonRun ? 'perfect' : 'over');
         let rec = null;
         if (!recordSaved) {
           rec = A.Progress.recordPlay('snake-run', score); if (rec) high = rec.high;
@@ -196,7 +296,7 @@
         }
         loop.pause();
         ui.show({
-          title: '游戏结束',
+          title: wonRun ? '果园丰收！' : '游戏结束',
           text:
             `<span class="ac-score">${score}</span>` +
             (rec && rec.isNewHigh ? '<span class="ac-newhigh">★ 新纪录</span><br/>' : '') +
@@ -205,6 +305,7 @@
           onBtn: startGame,
         });
         pauseUi.sync();
+        syncJoyTools();
       }
 
       function pauseByUser() {
@@ -214,12 +315,13 @@
         autosave.saveNow();
         ui.show({ title: '已暂停', text: '蛇停住了。<br/>局内进度已保存，可以随时离开。', btn: '继续', onBtn: resumeGame });
         pauseUi.sync();
+        syncJoyTools();
       }
 
       function showStart() {
         ui.show({
           title: '贪吃蛇',
-          text: '吃果实变长，别撞墙、别咬到自己。<br/>每吃几个果实会加速并出现障碍<br/>生命 ×3 · 支持方向键 / 滑动',
+          text: '吃果实变长，别撞墙、别咬到自己。<br/>道具 1/2 主动使用 · 吃满 20 个果实丰收收局<br/>生命 ×3 · 支持方向键 / 滑动',
           btn: '开始游戏',
           onBtn: startGame,
         });
@@ -240,7 +342,7 @@
           gravity: 100,
         });
         if (lives <= 0) {
-          finish();
+          finish(false);
           return;
         }
         resetSnake();
@@ -301,6 +403,8 @@
         }
         if (!ate) snake.pop();
         syncHud();
+        syncJoyTools();
+        if (shortRun && foodsEaten >= JOY_GOAL_FOODS) finish(true);
       }
 
       function handleSwipe(dx, dy) {
@@ -323,6 +427,17 @@
           return;
         }
         autosave.tick(dt);
+        if (shortRun && foodsEaten >= JOY_GOAL_FOODS) {
+          finish(true);
+          input.endFrame();
+          return;
+        }
+        const hadSlow = slowTimer > 0;
+        slowTimer = Math.max(0, slowTimer - dt);
+        if (hadSlow && slowTimer <= 0) {
+          stepTimer = Math.min(stepTimer, stepInterval);
+          syncJoyTools();
+        }
         stun = Math.max(0, stun - dt);
         invul = Math.max(0, invul - dt);
         if (goldenTimer > 0) {
@@ -346,9 +461,10 @@
         }
 
         if (stun <= 0) {
+          const interval = effectiveStepInterval();
           stepTimer += dt;
-          while (stepTimer >= stepInterval) {
-            stepTimer -= stepInterval;
+          while (stepTimer >= interval) {
+            stepTimer -= interval;
             stepSnake();
             if (state !== 'playing') break;
           }
@@ -373,6 +489,9 @@
           stepInterval,
           stun,
           invul,
+          tools: { slow: tools.slow, trim: tools.trim },
+          slowTimer,
+          shortRun,
         };
       }
 
@@ -399,9 +518,16 @@
           stepInterval = clamp(Number(data.stepInterval) || 0.19, 0.08, 0.25);
           stun = Math.max(0, Number(data.stun) || 0);
           invul = Math.max(0, Number(data.invul) || 0);
+          if (data.tools && typeof data.tools === 'object') {
+            tools.slow = Number.isFinite(Number(data.tools.slow)) ? clamp(Math.floor(Number(data.tools.slow)), 0, 2) : 2;
+            tools.trim = Number.isFinite(Number(data.tools.trim)) ? clamp(Math.floor(Number(data.tools.trim)), 0, 1) : 1;
+          }
+          slowTimer = clamp(Number(data.slowTimer) || 0, 0, SLOW_SECONDS);
+          shortRun = data.shortRun === true;
           recordSaved = false;
           state = 'playing';
           syncHud();
+          syncJoyTools();
           return true;
         } catch (err) {
           return false;
@@ -562,6 +688,65 @@
 
       reset();
       state = 'ready';
+      bindJoyTools();
+      if (location.hash === '#test') {
+        window.__arcadeTest = {
+          info() {
+            return {
+              state,
+              score,
+              foodsEaten,
+              goal: JOY_GOAL_FOODS,
+              length: snake.length,
+              lives,
+              stepInterval,
+              slowTimer,
+              tools: { slow: tools.slow, trim: tools.trim },
+              golden: !!golden,
+              food: food ? { x: food.x, y: food.y } : null,
+            };
+          },
+          joyInfo() {
+            return this.info();
+          },
+          useJoyTool(id) {
+            return clickJoyTool(id);
+          },
+          growTo(length) {
+            const target = clamp(Math.floor(Number(length) || 0), 3, 60);
+            const tail = snake[snake.length - 1];
+            while (snake.length < target) snake.push({ x: tail.x, y: tail.y });
+            syncJoyTools();
+            return snake.length;
+          },
+          eatNext() {
+            const head = snake[0];
+            const options = [dir, { x: 1, y: 0 }, { x: 0, y: -1 }, { x: 0, y: 1 }, { x: -1, y: 0 }];
+            for (const d of options) {
+              const nx = head.x + d.x;
+              const ny = head.y + d.y;
+              if (nx < 0 || ny < 0 || nx >= N || ny >= N) continue;
+              if (obstacles.some((o) => o.x === nx && o.y === ny)) continue;
+              if (snake.slice(0, snake.length - 1).some((s) => s.x === nx && s.y === ny)) continue;
+              dir = { ...d };
+              nextDir = { ...d };
+              food = { x: nx, y: ny };
+              const before = foodsEaten;
+              stepSnake();
+              return foodsEaten > before;
+            }
+            return false;
+          },
+          clearObstacles() {
+            obstacles = [];
+            return true;
+          },
+          setFood(x, y) {
+            food = { x: clamp(Math.floor(Number(x)), 0, N - 1), y: clamp(Math.floor(Number(y)), 0, N - 1) };
+            return true;
+          },
+        };
+      }
       const saved = autosave.load();
       if (saved) {
         A.showResumePrompt(ui, saved, {

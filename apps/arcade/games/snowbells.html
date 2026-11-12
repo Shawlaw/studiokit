@@ -11,7 +11,7 @@
   <script src="../engine.js"></script>
   <title>雪铃 · 街机厅 · StudioKit</title>
 </head>
-<body class="arcade-body" data-studiokit-app="arcade" data-studiokit-app-title="街机厅 Arcade" style="--ac-accent:#2fa8a0; --card-accent:#2fa8a0">
+<body class="arcade-body has-extra-controls has-game-tools" data-studiokit-app="arcade" data-studiokit-app-title="街机厅 Arcade" style="--ac-accent:#2fa8a0; --card-accent:#2fa8a0">
   <noscript><p class="ac-noscript">此游戏需要启用 JavaScript 才能运行。</p></noscript>
   <main class="game-page">
     <header class="game-topbar">
@@ -37,7 +37,11 @@
         </div>
       </div>
     </div>
-    <p class="game-hint">←→ / A D 或触摸左右半屏移动 · 踩铃铛连跳 · 铃铛落点保证可跳达 · 连击越高得分越多 · P / Esc 暂停</p>
+    <div class="touch-pad game-tools" aria-label="可选道具（快捷键 1 / 2）">
+      <button type="button" class="touch-btn" data-joy-tool="magnet" aria-label="铃磁，剩余 2 次（快捷键 1）"><span aria-hidden="true">🧲</span> 铃磁 <strong data-joy-count>2</strong></button>
+      <button type="button" class="touch-btn" data-joy-tool="encore" aria-label="安可，剩余 2 次（快捷键 2）"><span aria-hidden="true">🎵</span> 安可 <strong data-joy-count>2</strong></button>
+    </div>
+    <p class="game-hint">←→ / A D 或触摸左右半屏移动 · 踩铃铛连跳 · 1 铃磁 / 2 安可 · 连击越高得分越多 · P / Esc 暂停</p>
   </main>
   <script>
     (() => {
@@ -52,6 +56,11 @@
       const PLAYER_R = 13;
       const BELL_R = 9;
       const MAX_JUMP_RISE = (BOUNCE_V * BOUNCE_V) / (2 * GRAVITY); /* ≈159px */
+      const MAGNET_DURATION = 6;
+      const MAGNET_BONUS = 14;
+      const ENCORE_HITS = 2;
+      const JOY_START = { magnet: 2, encore: 2 };
+      const JOY_CAPS = { magnet: 2, encore: 2 };
 
       const canvas = document.querySelector('.game-canvas');
       const stage = A.createStage(canvas, W, H);
@@ -71,6 +80,10 @@
         mute: document.querySelector('[data-mute]'),
       };
       const ui = A.createOverlayUi(dom);
+      const joyButtons = {
+        magnet: document.querySelector('[data-joy-tool="magnet"]'),
+        encore: document.querySelector('[data-joy-tool="encore"]'),
+      };
 
       const particles = A.createParticles();
 
@@ -89,6 +102,9 @@
       let recordSaved = false;
       let snow = [];
       let prevXs = [];
+      const tools = { magnet: JOY_START.magnet, encore: JOY_START.encore };
+      let magnetTimer = 0;
+      let encoreHits = 0;
 
       let high = A.Progress.get('snowbells').high;
       dom.hudHigh.textContent = String(high);
@@ -139,6 +155,55 @@
         bells = bells.filter((b) => b.y < camY + H + 200);
       }
 
+      /* ---------- 每局主动道具 ---------- */
+      function syncJoyTools() {
+        Object.keys(joyButtons).forEach((id) => {
+          const button = joyButtons[id];
+          const active = id === 'magnet' ? magnetTimer > 0 : encoreHits > 0;
+          const name = id === 'magnet' ? '铃磁' : '安可';
+          const detail = id === 'magnet' ? '6 秒内扩大铃铛碰撞半径' : '接下来两颗铃铛得分翻倍';
+          button.querySelector('[data-joy-count]').textContent = String(tools[id]);
+          button.disabled = state !== 'playing' || tools[id] <= 0 || active;
+          button.classList.toggle('is-armed', active);
+          button.setAttribute('aria-pressed', String(active));
+          button.setAttribute('aria-label', name + '，' + detail + '，剩余 ' + tools[id] + ' 次（快捷键 ' + (id === 'magnet' ? '1' : '2') + '）');
+        });
+      }
+      function useJoy(id) {
+        if (state !== 'playing' || !Object.prototype.hasOwnProperty.call(tools, id) || tools[id] <= 0) return false;
+        if (id === 'magnet') {
+          if (magnetTimer > 0) return false;
+          tools.magnet -= 1;
+          magnetTimer = MAGNET_DURATION;
+          A.Sfx.play('spring');
+        } else if (id === 'encore') {
+          if (encoreHits > 0) return false;
+          tools.encore -= 1;
+          encoreHits = ENCORE_HITS;
+          A.Sfx.play('bell', 4);
+        } else {
+          return false;
+        }
+        syncJoyTools();
+        autosave.saveNow();
+        return true;
+      }
+      Object.keys(joyButtons).forEach((id) => {
+        joyButtons[id].addEventListener('click', () => useJoy(id));
+      });
+      window.addEventListener('keydown', (e) => {
+        if (e.repeat || e.metaKey || e.ctrlKey || e.altKey) return;
+        const target = e.target;
+        if (target && target.tagName) {
+          const tag = target.tagName.toLowerCase();
+          if (tag === 'input' || tag === 'textarea' || tag === 'select' || target.isContentEditable) return;
+        }
+        const id = { '1': 'magnet', '2': 'encore' }[e.key];
+        if (!id) return;
+        e.preventDefault();
+        useJoy(id);
+      });
+
       /* ---------- 流程 ---------- */
       function reset() {
         bells = [];
@@ -149,6 +214,10 @@
         bellScore = 0;
         recordSaved = false;
         prevXs = [];
+        tools.magnet = JOY_START.magnet;
+        tools.encore = JOY_START.encore;
+        magnetTimer = 0;
+        encoreHits = 0;
         player.x = W / 2;
         player.y = H - 150;
         player.vx = 0;
@@ -160,6 +229,7 @@
         particles.clear();
         ensureBells();
         syncHud();
+        syncJoyTools();
       }
 
       function startGame() {
@@ -168,7 +238,7 @@
         state = 'playing';
         ui.hide();
         loop.resume();
-        pauseUi.sync();
+        pauseUi.sync(); syncJoyTools();
         autosave.saveNow();
       }
 
@@ -177,7 +247,7 @@
         state = 'playing';
         ui.hide();
         loop.resume();
-        pauseUi.sync();
+        pauseUi.sync(); syncJoyTools();
       }
 
       function gameOver() {
@@ -202,7 +272,7 @@
           btn: '再来一局',
           onBtn: startGame,
         });
-        pauseUi.sync();
+        pauseUi.sync(); syncJoyTools();
       }
 
       function pauseByUser() {
@@ -216,7 +286,7 @@
           btn: '继续',
           onBtn: resumeGame,
         });
-        pauseUi.sync();
+        pauseUi.sync(); syncJoyTools();
       }
 
       function showStart() {
@@ -242,6 +312,9 @@
           combo,
           bellScore,
           prevXs,
+          tools: { magnet: tools.magnet, encore: tools.encore },
+          magnetTimer,
+          encoreHits,
         };
       }
 
@@ -269,8 +342,17 @@
           combo = Math.max(0, Number(data.combo) || 0);
           bellScore = Math.max(0, Number(data.bellScore) || 0);
           prevXs = Array.isArray(data.prevXs) ? data.prevXs.filter((x) => isFinite(x)) : [];
+          tools.magnet = data.tools && Number.isFinite(Number(data.tools.magnet))
+            ? clamp(Math.floor(Number(data.tools.magnet)), 0, JOY_CAPS.magnet)
+            : JOY_START.magnet;
+          tools.encore = data.tools && Number.isFinite(Number(data.tools.encore))
+            ? clamp(Math.floor(Number(data.tools.encore)), 0, JOY_CAPS.encore)
+            : JOY_START.encore;
+          magnetTimer = clamp(Number(data.magnetTimer) || 0, 0, MAGNET_DURATION);
+          encoreHits = clamp(Math.floor(Number(data.encoreHits) || 0), 0, ENCORE_HITS);
           recordSaved = false;
           syncHud();
+          syncJoyTools();
           return true;
         } catch (err) {
           return false;
@@ -306,6 +388,12 @@
           return;
         }
         autosave.tick(dt);
+        const hadMagnet = magnetTimer > 0;
+        magnetTimer = Math.max(0, magnetTimer - dt);
+        if (hadMagnet && magnetTimer <= 0) {
+          syncJoyTools();
+          autosave.saveNow();
+        }
 
         const ACC = 2100;
         const MAX_VX = 250;
@@ -348,15 +436,17 @@
           for (const b of bells) {
             if (b.consumed) continue;
             if (Math.abs(b.y - player.y) > 40) continue;
-            if (A.Physics.circleCircle(player.x, player.y, PLAYER_R, b.x, b.y, b.r)) {
+            if (A.Physics.circleCircle(player.x, player.y, PLAYER_R, b.x, b.y, b.r + (magnetTimer > 0 ? MAGNET_BONUS : 0))) {
               b.consumed = true;
               combo += 1;
-              const gain = 10 * combo;
+              const usedEncore = encoreHits > 0;
+              const gain = 10 * combo * (usedEncore ? 2 : 1);
+              if (usedEncore) encoreHits -= 1;
               bellScore += gain;
               player.vy = BOUNCE_V;
               player.lastBellY = player.y;
               A.Sfx.play('bell', combo);
-              rings.push({ x: b.x, y: b.y, r: BELL_R + 4, life: 0.5, maxLife: 0.5 });
+              rings.push({ x: b.x, y: b.y, r: BELL_R + 4, life: 0.65, maxLife: 0.65, text: '+' + gain + ' · ×' + combo });
               particles.emit(b.x, b.y, {
                 count: A.reducedMotion ? 4 : 10,
                 speed: [30, 140],
@@ -366,6 +456,10 @@
                 gravity: 200,
               });
               syncHud();
+              if (usedEncore) {
+                syncJoyTools();
+                autosave.saveNow();
+              }
               break;
             }
           }
@@ -526,6 +620,13 @@
           ctx.beginPath();
           ctx.arc(r.x, y, r.r, 0, TAU);
           ctx.stroke();
+          if (r.text) {
+            A.draw.label(ctx, r.text, clamp(r.x, 54, W - 54), y - 20, {
+              font: 'bold 14px system-ui',
+              color: '#fff3c4',
+              alpha: clamp(r.life / r.maxLife, 0, 1),
+            });
+          }
         });
 
         particles.draw(ctx);
@@ -582,11 +683,31 @@
               player: { x: player.x, y: player.y, vy: player.vy },
             };
           },
-          forceHit(index) {
+          joyInfo() {
+            return {
+              tools: { magnet: tools.magnet, encore: tools.encore },
+              magnetTimer,
+              magnetActive: magnetTimer > 0,
+              magnetRadius: BELL_R + (magnetTimer > 0 ? MAGNET_BONUS : 0),
+              encoreHits,
+              combo,
+              bellScore,
+              score,
+              state,
+              lastRingText: rings.length ? rings[rings.length - 1].text || null : null,
+            };
+          },
+          useJoyTool(id) {
+            const button = joyButtons[id];
+            if (!button || button.disabled) return false;
+            button.click();
+            return true;
+          },
+          forceHit(index, dx, dy) {
             const b = bells[index];
             if (!b) return false;
-            player.x = b.x;
-            player.y = b.y;
+            player.x = b.x + (Number(dx) || 0);
+            player.y = b.y + (Number(dy) || 0);
             player.vy = 120;
             return true;
           },
@@ -601,7 +722,7 @@
               state = 'playing';
               ui.hide();
               loop.resume();
-              pauseUi.sync();
+              pauseUi.sync(); syncJoyTools();
               autosave.saveNow();
             } else {
               autosave.clear();
