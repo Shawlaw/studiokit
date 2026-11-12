@@ -4,7 +4,7 @@
 
 - **线上站点：** <https://shawlaw.github.io/studiokit/> · <https://studiokit.pages.dev/>
 - **源码：** <https://github.com/Shawlaw/studiokit>（MIT 许可）
-- **当前工具：** Badge Studio `2.2.1`；街机厅 Arcade `0.6.2`（13 款竖屏小游戏，本次发布）
+- **当前工具：** Badge Studio `2.2.1`；街机厅 Arcade `0.6.2`（13 款竖屏小游戏，已发布）
 - **计划中的工具：** Rounded Image（尚未实现，等待原始需求/规格）
 - **最近发布：** 2026-11-12，Arcade 0.6.2（黄金矿工目标金额取整、俄罗斯方块左右手分区触屏按钮、加速/落底区分）
 - **运行方式：** 纯静态文件；无后端、无账号、无构建依赖、无第三方 CDN
@@ -156,8 +156,8 @@ Cloudflare Pages 部署在域名根路径（当前为 `studiokit.pages.dev`，�
 
 ## 当前状态
 
-- 本次发布：Badge Studio `2.2.1`、街机厅 Arcade `0.6.2`（黄金矿工目标金额取整与 HUD 可读性、俄罗斯方块左右手分区触屏按钮、加速/落底区分；含 0.6.1 Boss 入场碰撞修复）。
-- Arcade 0.6.2 已通过 66 项本地无头浏览器检查，双端一致性验证在发布后执行。
+- 已发布：Badge Studio `2.2.1`、街机厅 Arcade `0.6.2`（黄金矿工目标金额取整与 HUD 可读性、俄罗斯方块左右手分区触屏按钮、加速/落底区分；含 0.6.1 Boss 入场碰撞修复）。
+- Arcade 0.6.2 已通过 66 项本地无头浏览器检查，并完成 GitHub Pages 与 Cloudflare Pages 双端逐文件校验。
 - 规划中：Rounded Image（等待原始需求/规格，不凭空复刻）。
 - 任务、证据和未决项见 [`TASKS.md`](TASKS.md)；后续方向见 [`docs/ROADMAP.md`](docs/ROADMAP.md)。
 - Arcade 的玩法、数据键和已知边界见 [`apps/arcade/README.md`](apps/arcade/README.md)。

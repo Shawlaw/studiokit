@@ -593,7 +593,7 @@
       "id": "T031",
       "title": "双目标发布：GitHub Pages + Cloudflare Pages 与 Arcade 0.6.2",
       "kind": "agent",
-      "status": "IN_PROGRESS",
+      "status": "DONE",
       "dependsOn": [
         "T030"
       ],
@@ -607,7 +607,8 @@
         "推送 main 后四条 Actions job 成功，verify_deploy.py 双端逐文件一致"
       ],
       "claimedAt": "2026-11-12T04:23:07+00:00",
-      "evidence": "IN_PROGRESS: 本地实现双端 workflow、verify 脚本与 Arcade 0.6.2 版本同步；尚未推送。"
+      "evidence": "提交 0159437 推送 main；Actions 43155182519 的 Validate and build / Deploy GitHub Pages / Deploy Cloudflare Pages / Verify both deployments 全部成功；verify_deploy.py 11/11 关键文件 SHA-256 一致；双端 Arcade 0.6.2 / Badge 2.2.1；Cloudflare 项目 studiokit；Token 仅存 GitHub Secrets。",
+      "completedAt": "2026-11-12T04:34:28+00:00"
     }
   ]
 }

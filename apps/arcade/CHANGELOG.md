@@ -11,7 +11,7 @@
 - 俄罗斯方块提示与音效：触屏/键盘提示拆分为按设备显示的单行文案；DAS/ARR 自动连移不再逐格播放 UI 音效，避免按住时每秒约 20 次叠音。
 - 回归：`arcade_smoke.mjs` 扩充按钮顺序/标签/尺寸/分组、加速与落底的样式/行为差异（加速不锁定、落底锁定 + 脉冲类）、左右手多指同按、画布不劫持、320/390/430 与底部安全区断言；检查总数仍为 66。
 - 版本与缓存：`ARCADE_VERSION`、`shared/tool-registry.json`、中心页版本号与 Service Worker 缓存统一升至 `0.6.2`；已安装 PWA 会获取新引擎。
-- 发布：本次提交推送 `main` 后由 `.github/workflows/deploy.yml` 同时部署 GitHub Pages 与 Cloudflare Pages；双端校验记录见 `TASKS.md`。
+- 发布：提交 `0159437` 推送 `main`；Actions `43155182519` 的 `Validate and build`、`Deploy GitHub Pages`、`Deploy Cloudflare Pages`、`Verify both deployments` 全部成功；双端 11/11 文件一致，线上 `0.6.2`。
 
 ## 0.6.1 — 2026-11-12
 

@@ -21,7 +21,8 @@ StudioKit 门户本身没有独立的 semver；以下按仓库里程碑与工具
 - GitHub Pages 与 Cloudflare Pages 双端逐文件 SHA-256 一致；线上运行时验证结果见 T031。
 
 ### Release
-- 本批次通过 `.github/workflows/deploy.yml` 一次构建、双端部署；提交与 Actions run 在发布后补记到 `TASKS.md` 的 T031。
+- 提交 `0159437`；Actions `43155182519` 的 `Validate and build`、`Deploy GitHub Pages`、`Deploy Cloudflare Pages`、`Verify both deployments` 全部成功。
+- GitHub Pages <https://shawlaw.github.io/studiokit/> 与 Cloudflare Pages <https://studiokit.pages.dev/> 双端 11/11 关键文件 SHA-256 一致；Arcade `0.6.2` / Badge `2.2.1`。
 
 ## Site — 2026-11-12
 
@@ -39,7 +40,7 @@ StudioKit 门户本身没有独立的 semver；以下按仓库里程碑与工具
 - `validate_site.py` / `build_site.py` / `node --check shared/site-shell.js` / `node --check shared/home.js` 通过。
 - `arcade_smoke.mjs` 66/66（含 320/375/390/430 无横向溢出与刘海安全区 shellbar 高度）。
 - CDP 实测 320/390/430：shellbar 高度 38px、`scrollWidth` 等于 `innerWidth`，门户/徽章工作台/街机厅/黄金矿工页链接 `href`、`target="_blank"`、`rel="noopener noreferrer"` 正确；截图复核页头与导航条排版。
-- 仅本地提交，未推送、未发布；随 Arcade 0.6.2 一并推送并发布到 GitHub Pages 与 Cloudflare Pages。
+- 随 Arcade 0.6.2 发布（提交 `0159437`，Actions `43155182519`），双端逐文件校验通过。
 
 ## Arcade 0.6.1 — 2026-11-12
 
