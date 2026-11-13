@@ -1,5 +1,18 @@
 # Arcade Changelog
 
+## 0.8.1 — 2026-11-13（已发布）
+
+0.8 系列的功能补充版本：俄罗斯方块新增**禅模式**（无限游玩 + 用户可冻结提速），中心页新增**积分记录表**（跨游戏收集并展示每局积分）。既有 5 个 localStorage key 与 Schema 不变，只新增 `studiokit:arcade:scores:v1`。
+
+- 平台：新增 `window.Arcade.Scores`（`studiokit:arcade:scores:v1`，Schema v1：`{ at, gameId, mode, score, lines, level, durationMs, detail }` 最新在前、最多 300 条；`record/list/stats/modeLabel/exportData/importData/resetGame/resetAll`；损坏数据读取 fail-closed，不删除原值）。`A.Progress.recordPlay(gameId, score, meta)` 扩展为模式感知：所有 13 款游戏的统一结算点自动收集经典积分；`mode:'zen'` 时**不更新经典最高分**；`Playtime.recordRound` 返回本轮时长供积分记录使用。导出备份新增 `scores`，旧备份（无 `scores`）导入时保留当前积分记录；`Progress.resetGame/resetAll` 同步清理积分。共享弹层新增可选第三按钮 `btn3`（不提供时其他游戏行为不变）。
+- 俄罗斯方块禅模式：开始弹层第三入口「🧘 禅模式」→ 无限局（无 40 行收局、无关卡终点）；速度随等级提升，按 `Z` 或画布下方「❄ 冻结提速」后速度停在当前等级、等级与行数继续累计，恢复时立即追平 `level`；HUD（顶栏 `data-hud-zen` + 画布井顶 `ZEN · 速度 Lv.x`）；暂停弹层「结束本局并记录」与井口结束共用同一结算（「禅模式结束」、不显示失败），结算仅一次写入积分记录；禅模式局内状态写入既有 `runs:v1` 的 `data`（`mode:'zen'` / `zenFrozen` / `zenSpeedLevel` / `zenElapsed`），刷新可恢复冻结状态与速度，旧档缺 `mode` 仍按经典恢复。
+- 中心页积分记录表：「游玩统计」之后新增区块（时间 / 游戏 / 模式 / 得分 / 详情），按游戏与模式筛选，最新在前、最多展示最近 50 条，空状态与“仅显示最近 50 条”提示；单独「清除积分记录」只清 `scores:v1`，不影响最高分、游玩时长、局内进度与挑战记录；单游戏清除/清除全部/导入导出提示同步。
+- 版本：`ARCADE_VERSION`、注册表、中心页版本标记与 Service Worker 缓存键统一升至 `0.8.1`（`studiokit-arcade-0.8.1-v1`）。
+- 测试：新增零依赖 `tools/arcade_zen_scores_test.mjs`（14 场景：禅模式无限/冻结恢复/结算积分/表格筛选清除/导入导出/旧档与损坏兼容/320–430 布局，含四档开始弹层三入口完整可见断言）；`arcade_smoke.mjs` 85/85、`arcade_gameplay_test.mjs --suite=base --repeat=2` 22/22 零回归；独立评审 APPROVE-WITH-NOTES，发布前修复 320/375 窄屏禅模式入口被裁剪（M2）及相关 Minor。
+- 文档：新增 `apps/arcade/DESIGN-0.8.1.md`（设计/数值/数据模型/兼容/回滚）与仓库内 `docs/arcade/0.8.1-CONTRACT.md`（并行实施契约）、`docs/arcade/0.8.1-REVIEW.md`（独立评审与 Lead 处理记录）。
+- 发布：提交 `575a766`（功能）+ `41fa79e`（评审修复）推送 `main`；Actions `43423208129` 四个 job 全部成功；CI 与本地 `tools/verify_deploy.py` 均 **37/37** 文件 SHA-256 双端一致（Arcade `0.8.1` / Badge `2.2.1`）；双端线上无头 Chrome **10/10**（门户、中心页积分记录区、方块页 0.8.1、禅模式无限/冻结恢复/结算不污染最高分、中心页表格展示禅记录）；SW 缓存键 `studiokit-arcade-0.8.1-v1`。
+- 未验证：iOS/Android 真机触控（含禅模式按钮与 Z 键替代）、低端机帧率仍为 UNVERIFIED；积分记录无跨设备同步/排行榜（离线优先约束）。
+
 ## 0.8.0 — 2026-11-13（已发布）
 
 本版本以 `0.8.0` 名义发布，同时包含影跃影冲竖切片与外部 0.9 关卡设计包的 13 游戏 × 6 关（78 关）挑战模式；`docs/arcade/0.9/` 中的 `0.9` 是设计包版本，不是应用版本。

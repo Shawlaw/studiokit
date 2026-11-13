@@ -5,7 +5,11 @@
 - 仓库：<https://github.com/Shawlaw/studiokit>
 - GitHub Pages：<https://shawlaw.github.io/studiokit/>
 - Cloudflare Pages：<https://studiokit.pages.dev/>
-- 最近发布：Arcade `0.8.0`（2026-11-13，已发布）
+- 最近发布：Arcade `0.8.1`（2026-11-13，已发布）
+  - 批次内容：T060–T064 俄罗斯方块禅模式（无限游玩 + 冻结/恢复提速）、中心页积分记录表（`studiokit:arcade:scores:v1`）、独立评审（APPROVE-WITH-NOTES，发布前修复 2 Major + 相关 Minor）、小屏开始弹层入口可见性修复
+  - 提交 `575a766`（功能）+ `41fa79e`（评审修复）推送 `main`；Actions `43423208129` 四个 job 均成功
+  - 双端验证：CI 与本地 `tools/verify_deploy.py` 均 **37/37** 文件 SHA-256 一致，Arcade `0.8.1` / Badge `2.2.1`，manifest `application/manifest+json`；双端线上无头 Chrome **10/10**（门户/中心页 0.8.1 + 13 卡 + 积分记录区、方块页 0.8.1 + 禅模式入口、线上禅模式无限/冻结恢复/结算写 zen 记录且经典 high 不变、中心页表格展示禅记录）；SW 缓存键 `studiokit-arcade-0.8.1-v1`
+- 上一个发布：Arcade `0.8.0`（2026-11-13，已发布）
   - 批次内容：T041–T059 影跃影冲/影之试炼、13 游戏 × 6 关挑战模式（基于 0.9 关卡设计包）、`challenge:v1` 记录与数据管线
   - 提交 `95a063f` 推送 `main`；Actions `43369758813` 四个 job 均成功
   - 双端验证：`tools/verify_deploy.py` 37/37 文件 SHA-256 一致（含 13 个挑战数据脚本），Arcade `0.8.0` / Badge `2.2.1`；双端线上无头 Chrome 12/12（hub/中心页/挑战入口/选关/C01）
@@ -17,7 +21,7 @@
   - 批次内容：T028 黄金矿工目标取整/HUD、T029 俄罗斯方块左右手触屏按钮、T030 MIT 与源码入口、T031 双端发布
   - 提交 `0159437`；Actions `43155182519` 四个 job 均成功
   - 双端验证：`tools/verify_deploy.py` 当时覆盖的 11 个文件 SHA-256 一致，Arcade `0.6.2` / Badge `2.2.1`（0.7.0 起校验清单扩为 24 个文件）
-- 发布授权：Owner 2026-11-13 明确指令「以 0.8.0 版本名义提交推送并发布 GitHub Pages」；按双目标规则同时部署 Cloudflare Pages 并逐文件校验。
+- 发布授权：Owner 2026-11-13 当前任务明确指令「给俄罗斯方块添加 zen mode … 添加游戏积分记录表格收集和展示 你自己推进到发版」；据此按双目标规则同时部署 GitHub Pages 与 Cloudflare Pages 并逐文件校验。上一次 0.8.0 的授权为「以 0.8.0 版本名义提交推送并发布 GitHub Pages」。
 - 上一个发布：Arcade `0.6.1`（2026-11-12），提交 `1c9501e`，Actions `43060497094` 成功
 - 部署目标：
   - GitHub Pages：GitHub Actions（`.github/workflows/deploy.yml`）
@@ -60,7 +64,9 @@ node --check shared/home.js
 node --check shared/site-shell.js
 node --check apps/arcade/engine.js
 node --check apps/arcade/sw.js
-node tools/arcade_smoke.mjs   # 需要本机 Chrome；0.7.0 批次当前 85 项，含 PWA/断网与 13 款旧档回归
+node tools/arcade_zen_scores_test.mjs   # 0.8.1 禅模式/积分记录 14 场景（默认端口 8770/9338）
+node tools/arcade_smoke.mjs   # 需要本机 Chrome；当前 85 项，含 PWA/断网与 13 款旧档回归
+node tools/arcade_gameplay_test.mjs --suite=base --repeat=2   # 22/22 确定性玩法回归
 git diff --check
 git status --short
 ```
@@ -71,7 +77,7 @@ git status --short
 py -3 "$env:USERPROFILE\.agents\skills\commit-time-policy\check.py" origin/main..HEAD
 ```
 
-涉及 Arcade 的发布还应查看 `apps/arcade/DESIGN-0.4.0.md`、`DESIGN-0.5.0.md`、`DESIGN-0.6.0.md`、`DESIGN-0.7.0.md` 和 `DESIGN-block-controls.md`。PWA/离线检查必须在 HTTPS 或 `localhost` 下进行；`file://` 与明文局域网 HTTP 不注册 Service Worker。
+涉及 Arcade 的发布还应查看 `apps/arcade/DESIGN-0.4.0.md`、`DESIGN-0.5.0.md`、`DESIGN-0.6.0.md`、`DESIGN-0.7.0.md`、`DESIGN-0.8.0.md`、`DESIGN-0.8.1.md` 和 `DESIGN-block-controls.md`。PWA/离线检查必须在 HTTPS 或 `localhost` 下进行；`file://` 与明文局域网 HTTP 不注册 Service Worker。
 
 本地 Windows 构建会把文本文件写成 CRLF，CI 的 Linux checkout 是 LF。`verify_deploy.py` 在比较前统一换行，但正式发布以 CI artifact 为准；不要用本地 `dist/` 覆盖 CI 产物。
 
@@ -107,7 +113,7 @@ OWNER_AUTHORIZATION: PUBLISH_TO_MAIN
      --retries 15 --delay 8
    ```
 
-   预期：两个 URL 的 24 个关键文件哈希一致（含 13 款游戏页与 `arcade.css`），Arcade 版本为 `0.7.0`，Badge 为 `2.2.1`，manifest 为 `application/manifest+json`。
+   预期：两个 URL 的 24 个关键文件哈希一致（含 13 款游戏页与 `arcade.css`），Arcade 版本为 `0.8.1`，Badge 为 `2.2.1`，manifest 为 `application/manifest+json`。
 4. 打开两个门户，确认工具卡片加载、源码链接、Badge Studio 与街机厅入口可点击。
 5. 打开 Arcade 中心页，确认线上版本 `0.7.0` / 13 款，并检查：
    - 每款游戏都有 2 个主动道具按钮（黄金矿工保留 4 个），按钮在画布外/内均不遮挡核心操作；无签到、每日奖励或付费抽奖入口。

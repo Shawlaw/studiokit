@@ -4,9 +4,9 @@
 
 - **线上站点：** <https://shawlaw.github.io/studiokit/> · <https://studiokit.pages.dev/>
 - **源码：** <https://github.com/Shawlaw/studiokit>（MIT 许可）
-- **当前工具：** Badge Studio `2.2.1`；街机厅 Arcade `0.8.0`（13 款竖屏小游戏 + 78 关挑战模式，已发布）
+- **当前工具：** Badge Studio `2.2.1`；街机厅 Arcade `0.8.1`（13 款竖屏小游戏 + 78 关挑战模式 + 俄罗斯方块禅模式 + 积分记录表，已发布）
 - **计划中的工具：** Rounded Image（尚未实现，等待原始需求/规格）
-- **最近发布：** 2026-11-13，Arcade 0.8.0（影跃影冲与影之试炼、13 款游戏 × 6 关挑战模式、挑战记录与导出导入；GitHub Pages + Cloudflare Pages 双端；提交 `95a063f`，Actions `43369758813`，`verify_deploy.py` 37/37）
+- **最近发布：** 2026-11-13，Arcade 0.8.1（俄罗斯方块禅模式：无限游玩 + 冻结/恢复提速；中心页积分记录表；独立评审后修复小屏模式入口；GitHub Pages + Cloudflare Pages 双端；提交 `41fa79e`，Actions `43423208129`，`verify_deploy.py` 37/37）
 - **运行方式：** 纯静态文件；无后端、无账号、无构建依赖、无第三方 CDN
 
 ## 目录结构
@@ -24,7 +24,7 @@ StudioKit/
 │   │   ├── index.html
 │   │   ├── README.md
 │   │   └── CHANGELOG.md
-│   └── arcade/                      # 街机厅，当前 v0.8.0（已发布）
+│   └── arcade/                      # 街机厅，当前 v0.8.1（已发布）
 │       ├── index.html               # 游戏中心页（统计/分享/安装/预载）
 │       ├── engine.js                # 街机专用共享运行时
 │       ├── arcade.css               # 街机专用样式
@@ -37,6 +37,7 @@ StudioKit/
 │       ├── DESIGN-0.6.0.md          # 星海 Boss/叠加、矿工瞄准线与全屏说明
 │       ├── DESIGN-0.7.0.md          # 全游戏道具、短局目标与适度游玩设计
 │       ├── DESIGN-0.8.0.md          # 影冲/影之试炼与 13 游戏 78 关挑战架构、兼容与回滚
+│       ├── DESIGN-0.8.1.md          # 俄罗斯方块禅模式与积分记录表设计、兼容与回滚
 │       ├── README.md
 │       └── CHANGELOG.md
 ├── templates/single-page-tool/      # 新工具模板
@@ -45,6 +46,7 @@ StudioKit/
 │   ├── validate_site.py             # 静态结构/本地资源/注册表检查
 │   ├── build_site.py                # 生成仅含网站文件的 dist/
 │   ├── arcade_smoke.mjs             # 街机无头浏览器冒烟测试
+│   ├── arcade_zen_scores_test.mjs   # 0.8.1 禅模式/积分记录确定性测试
 │   ├── verify_deploy.py             # 双端发布后的逐文件/版本校验
 │   └── agentctl.py                  # 轻量任务队列命令
 ├── tasks/queue.json                 # 机器可读任务队列
@@ -119,9 +121,10 @@ node --check shared/site-shell.js
 node --check apps/arcade/engine.js
 node --check apps/arcade/sw.js
 node tools/arcade_smoke.mjs
+node tools/arcade_zen_scores_test.mjs
 ```
 
-`arcade_smoke.mjs` 需要本机 Chrome，会启动临时静态服务器与无头浏览器；当前覆盖 85 项检查（显式全屏、共享道具栏与 20 分钟提醒、13 款道具真实效果与旧档恢复、星海 Boss/弹种叠加、存档与游玩计时、分享、PWA 安装清单、离线预载/断网、320–430px 布局、子路径和刘海安全区）。
+`arcade_smoke.mjs` 需要本机 Chrome，会启动临时静态服务器与无头浏览器；当前覆盖 85 项检查（显式全屏、共享道具栏与 20 分钟提醒、13 款道具真实效果与旧档恢复、星海 Boss/弹种叠加、存档与游玩计时、分享、PWA 安装清单、离线预载/断网、320–430px 布局、子路径和刘海安全区）。`arcade_zen_scores_test.mjs` 覆盖 0.8.1 的禅模式无限/冻结恢复、积分记录收集与表格展示、导入导出与旧数据兼容。
 
 构建产物位于 `dist/`。它只包含要发布的网站资源，不包含 Agent Prompt、任务队列、内部文档和开发脚本。
 
@@ -158,8 +161,8 @@ Cloudflare Pages 部署在域名根路径（当前为 `studiokit.pages.dev`，�
 
 ## 当前状态
 
-- 已发布：Badge Studio `2.2.1`、街机厅 Arcade `0.7.0`（13 款游戏各 2 个主动道具、7 类自然收尾、一次性 20 分钟提醒与中心页随机入口；没有签到、每日奖励或付费抽奖）。
-- Arcade 0.7.0 已通过 85 项本地无头浏览器检查、`validate_site.py`、`build_site.py` 与全部 `node --check`；GitHub Pages 与 Cloudflare Pages 双端 24/24 关键文件一致，线上版本 `0.7.0`。
+- 已发布：Badge Studio `2.2.1`、街机厅 Arcade `0.8.1`（13 款游戏各 2 个主动道具、7 类自然收尾、一次性 20 分钟提醒与中心页随机入口；0.8.1 新增俄罗斯方块禅模式与积分记录表；没有签到、每日奖励或付费抽奖）。
+- Arcade 0.8.1 已通过 85 项本地无头浏览器冒烟、`arcade_zen_scores_test.mjs` 14 场景、`arcade_gameplay_test.mjs --suite=base --repeat=2` 22/22、`validate_site.py`、`build_site.py` 与全部 `node --check`；GitHub Pages 与 Cloudflare Pages 双端逐文件一致，线上版本 `0.8.1`。
 - 真机 iOS/Android 试玩、原生全屏与系统分享面板仍为 UNVERIFIED。
 - 规划中：Rounded Image（等待原始需求/规格，不凭空复刻）。
 - 任务、证据和未决项见 [`TASKS.md`](TASKS.md)；后续方向见 [`docs/ROADMAP.md`](docs/ROADMAP.md)。

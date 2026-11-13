@@ -1,6 +1,16 @@
-# Arcade 0.8.0 文档索引
+# Arcade 文档索引
 
-本目录保存 Arcade 0.8.0 游戏性重构与 78 关挑战模式（基于 0.9 关卡设计包）的**计划、事实与验收工具**，不是产品文档，也不进入发布产物（`tools/build_site.py` 的白名单只含 `index.html`、`favicon.svg`、`shared`、`apps`）。
+本目录保存 Arcade 各版本的设计/验收支撑文档，不是产品文档，也不进入发布产物（`tools/build_site.py` 的白名单只含 `index.html`、`favicon.svg`、`shared`、`apps`）。
+
+## 0.8.1（俄罗斯方块禅模式 + 积分记录表；已发布）
+
+| 文档 | 内容 | 状态 |
+| --- | --- | --- |
+| [0.8.1-CONTRACT.md](0.8.1-CONTRACT.md) | 并行实施契约：积分记录数据模型、`A.Scores`/`Progress.recordPlay` API、禅模式状态机与 `#test` 钩子、中心页表格、测试与文件所有权 | 已执行（0.8.1 发布） |
+| [0.8.1-REVIEW.md](0.8.1-REVIEW.md) | 独立 Reviewer 发布前评审：结论、Blocker/Major/Minor、UNVERIFIED 与 DoD 对照；附 Lead 处理记录（M1/M2/Minor 闭环） | 评审完成，发布前修复已闭环 |
+| `apps/arcade/DESIGN-0.8.1.md` | 面向使用者的设计/数值/数据模型/兼容/回滚说明（发布产物内） | 已随 0.8.1 发布 |
+
+发布证据（0.8.1）：提交 `575a766`（功能）+ `41fa79e`（评审修复）推送 `main`；Actions `43423208129` 四个 job 全成功；CI 与本地 `verify_deploy.py` 均 37/37 文件双端一致（Arcade `0.8.1` / Badge `2.2.1`）；双端线上无头 Chrome 10/10。
 
 ## 0.8.0 竖切片（已随 0.8.0 发布）
 

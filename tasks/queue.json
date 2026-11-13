@@ -1045,6 +1045,99 @@
       "ownerAuthorizationNote": "Owner 2026-11-13 当前任务明确指令：开发自测截图验证通过后以 0.8.0 版本名义提交推送并发布 GitHub Pages；按仓库规则同时部署 Cloudflare Pages 并双端验证。",
       "completedAt": "2026-11-13T05:20:00+00:00",
       "evidence": "Owner authorized 0.8.0 release in-task. Pre-push gates on release tree: validate_site PASS; build_site PASS; node --check engine/sw/generator/runner/smoke/lib + 13 inline scripts; arcade_smoke 85/85 (232s); arcade_gameplay_test --suite=all --repeat=2 208/208 (798s); data generator byte-identical; release screenshot/DOM verification 43/43 (hub v0.8.0 13 cards at 320/375/390/430; all 13 games classic starts, challenge entry, 6-stage panel, C01 opens, no overflow/console errors); git diff --check clean; commit-time-policy all 14 unpushed commits compliant (12:10-12:53 window). Commit 95a063f pushed main (5fbe897..95a063f). Actions run 43369758813 success: Validate and build / Deploy GitHub Pages / Deploy Cloudflare Pages / Verify both deployments all completed successfully. verify_deploy.py: 37/37 key files SHA-256 identical across https://shawlaw.github.io/studiokit and https://studiokit.pages.dev, arcade 0.8.0 / badge 2.2.1, manifest content type correct. Live headless Chrome on both origins 12/12: hub cards, hall v0.8.0/13 cards, challenge:v1 key present, challenge entry '挑战 6 关', 6-stage panel visible, C01 starts (shadow-leap / star-raid / gold-miner samples), no console errors. Release evidence docs synced in follow-up commit. iOS/Android real-device touch and Owner two-round playtest remain UNVERIFIED; 5 design deviations await Owner decision in docs/arcade/0.9/REVIEW.md."
+    },
+    {
+      "id": "T060",
+      "title": "Arcade 0.8.1 俄罗斯方块禅模式 + 积分记录平台（并行实现与契约）",
+      "kind": "agent",
+      "status": "DONE",
+      "dependsOn": [
+        "T059"
+      ],
+      "ownerAuthorizationRequired": false,
+      "acceptance": [
+        "按 docs/arcade/0.8.1-CONTRACT.md 实现 A.Scores / Progress.recordPlay(meta) / 俄罗斯方块禅模式 / 中心页积分记录表",
+        "既有 localStorage key 与 Schema 不变，只新增 studiokit:arcade:scores:v1",
+        "版本/注册表/SW 升至 0.8.1；validate/build/node --check 通过"
+      ],
+      "claimedAt": "2026-11-13T11:30:00+00:00",
+      "completedAt": "2026-11-13T12:10:00+00:00",
+      "evidence": "Commit 575a766. Arcade 0.8.1 implemented by 4 parallel workers against docs/arcade/0.8.1-CONTRACT.md: engine.js adds A.Scores (studiokit:arcade:scores:v1, Schema v1, fail-closed reads, 300-record cap) and mode-aware Progress.recordPlay(gameId, score, meta) that collects classic scores from all 13 games and zen records without touching the classic high score, plus export/import/reset integration and optional overlay btn3; block-drop.html adds zen mode (endless, Z/touch freeze-resume speed, zen HUD/canvas label, pause 'end and record', settlement once, runs:v1 zen restore, #test hooks); index.html/arcade.css add the hub score records table (time/game/mode/score/detail, game+mode filters, 50-row display cap, clear-only-scores, a11y, 320-430 no page overflow); ARCADE_VERSION/registry/SW cache/hub marker all 0.8.1; validate_site assertions extended; apps/arcade/DESIGN-0.8.1.md and docs/arcade/0.8.1-CONTRACT.md added. Worker self-checks: engine 65/65 + 5/5 CDP probes, tetris 55/55 probe, hub 41/41 probe; node --check/validate/build PASS."
+    },
+    {
+      "id": "T061",
+      "title": "Arcade 0.8.1 自动化测试与全量门禁（zen/scores 14 场景 + smoke 85/85 + gameplay 22/22）",
+      "kind": "agent",
+      "status": "DONE",
+      "dependsOn": [
+        "T060"
+      ],
+      "ownerAuthorizationRequired": false,
+      "acceptance": [
+        "新增 tools/arcade_zen_scores_test.mjs 覆盖禅模式无限/冻结恢复/积分记录收集展示/兼容/四档布局",
+        "arcade_smoke.mjs 85/85 与 arcade_gameplay_test --suite=base --repeat=2 22/22 零回归",
+        "发现并闭环集成期回归（375/390 hint 换行导致 docH 溢出）"
+      ],
+      "claimedAt": "2026-11-13T11:30:00+00:00",
+      "completedAt": "2026-11-13T12:12:00+00:00",
+      "evidence": "tools/arcade_zen_scores_test.mjs added (1174 lines, zero npm deps, 14 deterministic scenarios ZS-01..ZS-14: hub version/empty state, classic record + high logic, zen endless 40+ lines still playing, zen HUD/zen-bar, freeze/resume incl. real Z key + gravity 0.578->0.418, zen settlement without high pollution, table render/filter/clear, export + old-backup import preserve, invalid import rollback, resetGame/resetAll, corrupt scores fail-closed + legacy keys unchanged, 320/375/390/430 layout + table scroll). Final integrated-tree gates (Lead + QA + Reviewer independent runs): new test 14/14 (22s), arcade_smoke 85/85 (232s, version assertions realigned 0.8.0->0.8.1 and hint/small-screen regressions closed), arcade_gameplay_test --suite=base --repeat=2 22/22 (34s), validate/build/node --check PASS. Regression found and fixed: longer touch hint wrapped at 375/390 making docH 685>667 (smoke) -> touch hint shortened to one line; zen test ZS-04 false alarm traced to pre-existing <=460px CSS hiding the DOM HUD, test now asserts wide-viewport visibility and mobile zen-bar instead."
+    },
+    {
+      "id": "T062",
+      "title": "Arcade 0.8.1 独立发布前评审",
+      "kind": "review",
+      "status": "DONE",
+      "dependsOn": [
+        "T061"
+      ],
+      "ownerAuthorizationRequired": false,
+      "acceptance": [
+        "独立 Reviewer 复跑全部门禁并自建真实输入验证",
+        "产出 Blocker/Major/Minor/UNVERIFIED 清单与逐项 DoD 对照",
+        "评审结论与修复建议可执行"
+      ],
+      "claimedAt": "2026-11-13T11:36:00+00:00",
+      "completedAt": "2026-11-13T12:10:00+00:00",
+      "evidence": "docs/arcade/0.8.1-REVIEW.md: independent Reviewer (no implementation role) verdict APPROVE-WITH-NOTES, 0 Blocker, 2 Major (M1 release-claim docs existed before deployment; M2 zen entry clipped on 320x568/375x667 start overlay with 320 = 0/44px visible), 8 Minor, 9 UNVERIFIED classes. Reviewer independently reran: validate/build/node --check, new test 14/14 (22.1s), smoke 85/85 (231.2s), gameplay base --repeat=2 22/22 (33.9s), and a self-built real-input CDP probe (real mouse clicks x3 zen entry, real Z key, real single-finger touch, real file input import) 61/62 PASS with the only FAIL being M2; 168 requests all same-origin/0 external, 0 console errors, only scores:v1 added and 5 legacy keys unchanged. Review doc records per-item DoD tables, Minor fix suggestions and 9 UNVERIFIED items."
+    },
+    {
+      "id": "T063",
+      "title": "Arcade 0.8.1 集成、版本、评审修复与发布前门禁",
+      "kind": "agent",
+      "status": "DONE",
+      "dependsOn": [
+        "T062"
+      ],
+      "ownerAuthorizationRequired": false,
+      "acceptance": [
+        "评审 M1 采用发布后证据提交时序；M2 窄屏入口修复并加回归断言；Minor 处理",
+        "修复后三项门禁与 validate/build/node --check 全绿",
+        "commit-time-policy 合规；功能提交与修复提交本地落盘"
+      ],
+      "claimedAt": "2026-11-13T12:05:00+00:00",
+      "completedAt": "2026-11-13T12:20:00+00:00",
+      "evidence": "Commit 41fa79e. M1 handled by choosing the post-deployment evidence commit (release-claim docs kept out of feature commits 575a766/41fa79e; evidence updated only after Actions + verify_deploy + live verification). M2 fixed in block-drop.html: <=460px start overlay uses short copy ('经典 40 行 · 禅模式无限 · 6 关挑战') + compact padding/font so all three entries are fully visible at 320x568/375x667/390x844/430x932 (previously 0/44px at 320 and 21/44px at 375); arcade_zen_scores_test ZS-14 gained 4-width three-visible-entry assertions (still 14 scenarios). Minors closed: m-1 #test line-clear hooks call loop.resume() self-guard; m-2 engine returns scoresImported so old backups say 'current score records kept' instead of '0 records'; m-5 filtered table count '筛选 X 条 / 共 N 条'; m-3 contract notes the Lead-only smoke version-assertion exception; m-4 README documents challenge/zen HUD hiding of classic high; m-7 DESIGN wording; m-8 read fail-closed/write self-heal semantics. Re-gates after fix: new test 14/14, smoke 85/85, gameplay 22/22, validate/build/node --check PASS, M2 layout probe 5/5 widths PASS with 44px entries fully visible, inline page script node --check PASS, git diff --check clean, commit-time-policy 2/2 compliant."
+    },
+    {
+      "id": "T064",
+      "title": "Arcade 0.8.1 发布：推送 main 并双端验证（GitHub Pages + Cloudflare Pages）",
+      "kind": "agent",
+      "status": "DONE",
+      "dependsOn": [
+        "T063"
+      ],
+      "ownerAuthorizationRequired": true,
+      "ownerAuthorizationVerifiedByAgentFlag": true,
+      "acceptance": [
+        "Owner 当前任务明确要求推进到发版，双端同时发布",
+        "Actions 四个 job 全部成功",
+        "verify_deploy 双端逐文件一致，线上版本 0.8.1",
+        "TASKS.md 与 queue 记录提交、Actions run 与双端线上验证证据"
+      ],
+      "claimedAt": "2026-11-13T12:12:00+00:00",
+      "ownerAuthorizationNote": "Owner 2026-11-13 当前任务明确指令「给俄罗斯方块添加 zen mode ... 添加游戏积分记录表格收集和展示 你自己推进到发版」；按双目标规则同时部署 GitHub Pages 与 Cloudflare Pages 并双端验证。",
+      "completedAt": "2026-11-13T12:20:00+00:00",
+      "evidence": "Owner current task explicitly instructed the agent to push to release ('你自己推进到发版'); dual-target rule applied: GitHub Pages + Cloudflare Pages published together. Pushed de70117..41fa79e to main (feature 575a766 + review fixes 41fa79e). GitHub Actions run 43423208129: all four jobs succeeded (Validate and build / Deploy GitHub Pages / Deploy Cloudflare Pages / Verify both deployments). CI verify log: PASS cross-origin 37/37 files identical across GitHub Pages + Cloudflare preview + production; arcade 0.8.1 / badge 2.2.1, manifest application/manifest+json. Independent live headless Chrome on both https://shawlaw.github.io/studiokit/ and https://studiokit.pages.dev/ 10/10 PASS: portal/hub show Arcade 0.8.1 + 13 cards + score-records section, block-drop engine 0.8.1 with zen entry/hooks, online zen run endless after 40 lines, Z freeze keeps speed then resume catches up, settlement writes mode:'zen' record while classic high stays 0, hub table renders the zen record. SW cache key studiokit-arcade-0.8.1-v1. iOS/Android real-device touch, long-run performance and human comprehension remain UNVERIFIED; 2 Major + 8 Minor from review were closed before push, 9 UNVERIFIED classes retained in docs/arcade/0.8.1-REVIEW.md."
     }
   ]
 }

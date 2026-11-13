@@ -93,10 +93,22 @@
 - [ ] **Owner 两轮试玩与设计差异裁决（发布后继续收集）**：影跃捷径/实测时长偏短、砖块 K 钥匙可达性最小修正、星海 Boss 弱点时间窗、重力翻转推荐窗口晚半段、挑战模式禁用道具等需 Owner/Reviewer 决定；真机 iOS/Android 触控与手感仍 UNVERIFIED。Owner 未反馈前不升版本、不发布。
 - [x] 0.8.0 已发布：`ARCADE_VERSION`/注册表/SW 缓存升至 `0.8.0`；提交 `95a063f` 推送 `main`，Actions `43369758813` 四 job 成功，`verify_deploy.py` 37/37 双端一致，线上 Arcade `0.8.0` / Badge `2.2.1`；双端无头 Chrome 12/12。后续 0.9 设计包剩余关卡仍需 Owner 授权。
 
+## 0.8.1 发布批次（2026-11-13 已双端发布）
+
+### Arcade 0.8.1 — 俄罗斯方块禅模式 + 积分记录表（已发布）
+
+- [x] 俄罗斯方块禅模式：开始弹层第三入口；无限游玩（无 40 行收局）；速度随等级提升，`Z` / 触屏「❄ 冻结提速 / ▶ 恢复提速」停止或恢复速率增加；禅模式 HUD（顶栏 + 画布）、暂停「结束本局并记录」与井口结算；`runs:v1` 局内恢复；不写经典最高分。
+- [x] 积分记录平台：`A.Scores` + `studiokit:arcade:scores:v1`（Schema v1，最新在前、300 条上限）；13 款游戏统一结算点自动收集经典积分，禅模式追加 `mode:'zen'`；`Progress.recordPlay` 模式感知、导出/导入/清除/单游戏清除接入；共享弹层可选第三按钮。
+- [x] 中心页「积分记录」表：时间/游戏/模式/得分/详情，游戏与模式筛选，最新在前、最多 50 条，空状态与单独清除；四档视口无横向溢出，表格容器内部滚动。
+- [x] 测试与验证：新增 `tools/arcade_zen_scores_test.mjs` 14 场景；`arcade_smoke.mjs` 85/85、`arcade_gameplay_test.mjs --suite=base --repeat=2` 22/22；独立 Reviewer 评审；`validate_site.py` / `build_site.py` / 全部 `node --check` 通过。
+- [x] 独立评审与发布前修复：`docs/arcade/0.8.1-REVIEW.md` APPROVE-WITH-NOTES（0 Blocker / 2 Major / 8 Minor / 9 UNVERIFIED）；M1 改为发布后证据提交时序，M2 修复 320/375 开始弹层禅模式入口被裁剪（窄屏短文案+紧凑样式，ZS-14 加四档三入口可见断言），m-1/m-2/m-5 已修、m-3/m-4/m-7/m-8 已记录。
+- [x] 发布证据：提交 `575a766`（功能）+ `41fa79e`（评审修复）推送 `main`；Actions `43423208129` 四个 job 全成功；CI 与本地 `verify_deploy.py` 均 **37/37** 文件双端一致（Arcade `0.8.1` / Badge `2.2.1`）；双端线上无头 Chrome **10/10**；SW 缓存键 `studiokit-arcade-0.8.1-v1`。
+- 未验证：iOS/Android 真机触控（禅模式按钮与 Z 键替代）与低端机帧率仍 UNVERIFIED；积分记录不提供排行榜/跨设备同步。
+
 ## Now
 
-1. **Arcade 0.8.0 试玩**：按 `docs/arcade/0.8.0-PLAYTEST.md` 与 `docs/arcade/0.9/PLAYTEST.md` 在桌面与 iOS/Android 真机做两轮试玩（影冲理解、挑战选关/路线/难度、失败归因），并裁决 5 项设计差量；真机未验证前不宣称通过。
-2. **Arcade 0.7.0 线上观察**：0.7.0 已双端发布；观察道具次数、自然收尾目标与 20 分钟提醒在真实设备上的接受度。
+1. **Arcade 0.8.1 线上观察**：0.8.1 已双端发布；重点观察禅模式冻结提速的使用率、积分记录表的可读性与移动端表格滚动体验，以及旧存档/旧备份导入后的数据一致性。
+2. **Arcade 0.8.0 试玩**：按 `docs/arcade/0.8.0-PLAYTEST.md` 与 `docs/arcade/0.9/PLAYTEST.md` 在桌面与 iOS/Android 真机做两轮试玩（影冲理解、挑战选关/路线/难度、失败归因），并裁决 5 项设计差量；真机未验证前不宣称通过。
 3. **数值反馈**：收集道具次数、自然收尾目标（5000m/3000m/20 果实/40 行）和休息提醒时长的真实反馈，再决定是否微调；不为了“有更新”而改。
 4. **双端发布维护**：观察 GitHub Pages 与 Cloudflare Pages 的版本一致性；需要时再绑定自定义域名或调整缓存策略。
 5. **文档维护**：工具版本、根目录 README/CHANGELOG、发布记录和任务队列保持一致。

@@ -2,6 +2,25 @@
 
 StudioKit 门户本身没有独立的 semver；以下按仓库里程碑与工具版本记录。各工具的详细变更见 `apps/<tool>/CHANGELOG.md`。
 
+## Arcade 0.8.1 — 2026-11-13（已发布）
+
+### Added
+- 俄罗斯方块禅模式：开始弹层第三入口「🧘 禅模式」，无限游玩（不设 40 行收局与关卡终点）；速度随等级提升，键盘 `Z` / 画布下方「❄ 冻结提速」可停止速率增加，「▶ 恢复提速」立即追平当前等级；顶栏与画布内禅模式 HUD、暂停「结束本局并记录」与井口结束结算；禅模式局内状态写入既有 `runs:v1` data，刷新可恢复；不写经典最高分。
+- 中心页积分记录表：新增 `A.Scores` 与独立存储 `studiokit:arcade:scores:v1`（Schema v1，最新在前、最多 300 条）；13 款游戏统一结算点自动收集经典积分，禅模式结算追加 `mode:'zen'` 记录；中心页「游玩统计」之后新增表格（时间 / 游戏 / 模式 / 得分 / 详情），支持游戏与模式筛选、单独清除、导出/导入。
+- 0.8.1 设计/契约：`apps/arcade/DESIGN-0.8.1.md`、`docs/arcade/0.8.1-CONTRACT.md`、`docs/arcade/0.8.1-REVIEW.md`。
+
+### Changed
+- `ARCADE_VERSION`、注册表、中心页版本标记与 Service Worker 缓存键统一升至 `0.8.1`；共享弹层支持可选第三按钮（其他游戏零改动）。
+- 测试新增 `tools/arcade_zen_scores_test.mjs`（14 场景）；`arcade_smoke.mjs` 85/85 与 `arcade_gameplay_test.mjs --suite=base --repeat=2` 22/22 保持零回归。
+
+### Compatibility
+- `progress:v1` / `runs:v1` / `prefs:v1` / `playtime:v1` / `challenge:v1` 的 key 与 Schema 全部未变；只新增 `scores:v1`。旧备份导入时保留当前积分记录；损坏积分数据读取 fail-closed；禅模式不改变经典最高分与挑战记录。
+
+### Verification
+- 发布前独立评审：**APPROVE-WITH-NOTES / 0 Blocker / 2 Major / 8 Minor / 9 UNVERIFIED**（`docs/arcade/0.8.1-REVIEW.md`）；2 Major（发布声明时序、320/375 窄屏禅模式入口被裁剪）与相关 Minor 已在发布前修复/记录。
+- 门禁：`arcade_zen_scores_test.mjs` **14/14**（含新增四档三入口可见断言）；`arcade_smoke.mjs` **85/85**；`arcade_gameplay_test.mjs --suite=base --repeat=2` **22/22**；`validate_site.py` / `build_site.py` / 全部 `node --check` / `git diff --check` 通过；commit-time-policy 2/2 合规。
+- 双端发布：提交 `575a766`（功能）+ `41fa79e`（评审修复）推送 `main`；Actions `43423208129` 的 Validate and build / Deploy GitHub Pages / Deploy Cloudflare Pages / Verify both deployments 四个 job 全部成功；`tools/verify_deploy.py` **37/37** 文件 SHA-256 双端一致，线上 Arcade `0.8.1` / Badge `2.2.1`；双端线上无头 Chrome **10/10**（门户/中心页/积分记录区/方块页 0.8.1/禅模式无限/冻结恢复/结算不污染最高分/中心页表格显示禅记录）；SW 缓存键 `studiokit-arcade-0.8.1-v1`。iOS/Android 真机触控、30 分钟以上长局与真人理解度仍 UNVERIFIED。
+
 ## Arcade 0.8.0 — 2026-11-13（已发布）
 
 ### Added

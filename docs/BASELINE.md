@@ -29,10 +29,11 @@ Current Arcade baseline facts:
 - 0.6.2 已发布：黄金矿工目标金额统一取整（含旧小数档恢复），HUD 顶部深色渐隐与金色目标胶囊；俄罗斯方块触屏按钮改为左右手分区，`加速`按住逐格下落、`落底`点按立即锁定，画布不再劫持触摸；SW 缓存升至 0.6.2；提交 0159437，Actions 43155182519 双端发布
 - 0.8.0 已发布：影跃新增影冲与影之试炼；导入 0.9 关卡设计包为 13 款游戏各增 6 关（共 78 关）挑战模式，新增 `studiokit:arcade:challenge:v1` 独立记录 key（不写经典最高分/Playtime 轮次），经典/无尽与旧档保持兼容；`arcade_smoke` 85/85、挑战全量 208/208
 - 0.7.0 已发布：13 款游戏各增加 2 个主动可选道具（黄金矿工保留 4 个并重平衡），共享 `A.createToolbelt` 统一道具栏；新增自然收尾（2048/砖块 3 关/重力 3000m/贪吃蛇 20 果实/方块 40 行/星海 CLEAR/赛车 5000m）；新增每页面一次 20 分钟有效游玩提醒；中心页加 🎲 随机入口。没有签到、每日奖励、商店或付费抽奖。`runs:v1` 等 key 与 Schema 不变，新字段只写在各游戏 `data` 内
+- 0.8.1 已发布：俄罗斯方块新增禅模式（无限游玩、速度随等级提升且可按 `Z`/触屏按钮冻结/恢复提速、不写经典最高分、局内状态写入既有 `runs:v1` data）；新增 `A.Scores` 与独立积分记录 key `studiokit:arcade:scores:v1`（Schema v1，最新在前、最多 300 条，13 款游戏统一结算点自动收集，中心页「积分记录」表展示/筛选/清除/导出导入）。既有 5 个 key 与 Schema 不变；`arcade_smoke` 85/85、新增 `arcade_zen_scores_test.mjs` 14 场景、gameplay base 22/22；提交 `575a766` + `41fa79e`，Actions `43423208129` 双端发布成功
 - 全屏/沉浸模式：原生 Fullscreen API 优先，不支持时使用 CSS 沉浸；iPhone Safari 不支持网页元素全屏，**真机与原生全屏仍未验证**
 - PWA/离线：manifest + `apps/arcade/sw.js`，作用域 `apps/arcade/`；显式预载 24 项（11 外壳 + 13 游戏），断网回归已自动化；**iOS/Android 真机安装与系统分享面板仍未验证**
-- Automated coverage: `node tools/arcade_smoke.mjs` 85/85（需要本机 Chrome）；`node tools/arcade_gameplay_test.mjs --suite=all --repeat=2` 208/208；0.8.0 发布时 `verify_deploy.py` 覆盖 37 个关键文件（含 13 个挑战数据）并双端逐文件校验
-- Design/rollback reference: `apps/arcade/DESIGN-0.4.0.md`、`apps/arcade/DESIGN-0.5.0.md`、`apps/arcade/DESIGN-0.6.0.md`、`apps/arcade/DESIGN-0.7.0.md`、`apps/arcade/DESIGN-0.8.0.md`
+- Automated coverage: `node tools/arcade_smoke.mjs` 85/85（需要本机 Chrome）；`node tools/arcade_zen_scores_test.mjs` 14/14（0.8.1）；`node tools/arcade_gameplay_test.mjs --suite=all --repeat=2` 208/208；0.8.1 发布时 `verify_deploy.py` 覆盖关键文件并双端逐文件校验
+- Design/rollback reference: `apps/arcade/DESIGN-0.4.0.md`、`apps/arcade/DESIGN-0.5.0.md`、`apps/arcade/DESIGN-0.6.0.md`、`apps/arcade/DESIGN-0.7.0.md`、`apps/arcade/DESIGN-0.8.0.md`、`apps/arcade/DESIGN-0.8.1.md`
 - Arcade README/CHANGELOG: `apps/arcade/README.md`、`apps/arcade/CHANGELOG.md`
 
 变更 Arcade 版本、GAMES 数量、存储 key、Schema 或玩法基线时，必须同步更新本文件、注册表、Arcade README/CHANGELOG 与相关测试。
