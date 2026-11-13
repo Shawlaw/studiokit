@@ -790,6 +790,239 @@
       "claimedAt": "2026-11-13T02:07:00+00:00",
       "completedAt": "2026-11-13T02:45:00+00:00",
       "evidence": "Lead integration on branch feat/arcade-0.8-gameplay. Gates on final tree: py -3 tools/validate_site.py PASS; py -3 tools/build_site.py PASS (dist allowlist unchanged: index.html/favicon.svg/shared/apps/.nojekyll); node --check engine.js/sw.js/site-shell.js/home.js/arcade_smoke.mjs/arcade_cdp.mjs/arcade_gameplay_test.mjs/arcade_stage_solver.mjs all exit 0; extracted inline page script node --check exit 0; arcade_smoke 85/85 checks passed (exit 0, ports env-overridden); arcade_gameplay_test --repeat=2 22/22 scenario runs passed (exit 0); stage solver JSON and embedded-HTML both 3/3 PASS (exit 0); git diff --check clean. Docs synced: apps/arcade/README.md (0.8.0 dev section + fixed stale 'not released' line + trial limits), apps/arcade/CHANGELOG.md (0.8.0-dev), docs/ROADMAP.md (84->85 fix + 0.8.0 in-progress), docs/RELEASE-RUNBOOK.md (stale pending line replaced), docs/arcade/README.md, docs/arcade/0.8.0-PLAN.md, docs/arcade/0.8.0-STAGES.md (reviewer Minor fixes + Stage Spec appendix), docs/arcade/0.8.0-REVIEW.md (Lead disposition). Version intentionally unchanged (ARCADE_VERSION/registry/SW all 0.7.0); engine.js/sw.js/shared/ untouched. Local commits: b629b6b (docs facts/rubric/plan), 8cc689d (test base/solver/stage data), 4e8f921 (feat shadow-leap vertical slice), e456503 (review+playtest), this task's docs/queue commit. NOT pushed, NOT merged to main, no tag, no deploy; iOS/Android real-device remains UNVERIFIED; release requires Owner playtest + PUBLISH_TO_MAIN authorization."
+    },
+    {
+      "id": "T041",
+      "title": "Arcade 0.9.0：设计包导入、差异报告、集成合同与计划",
+      "kind": "agent",
+      "status": "DONE",
+      "dependsOn": [
+        "T040"
+      ],
+      "ownerAuthorizationRequired": false,
+      "acceptance": [
+        "0.9 关卡设计包原样导入仓库 docs/arcade/0.9/，设计源不被改动",
+        "产出 0.8→0.9 差异报告、唯一集成合同（数据/API/UI/测试/证据等级）与任务映射计划",
+        "设计包自带校验可复跑（1088 断言 PASS），不导入其建议任务队列，不覆盖既有 T 任务"
+      ],
+      "claimedAt": "2026-11-13T02:30:00+00:00",
+      "completedAt": "2026-11-13T02:40:00+00:00",
+      "evidence": "Commit 1b530e4. Imported the Owner 0.9 design pack verbatim (SHA-256 B528BA4E4D734B2CFC128CD7DD748A617F60BF5F520EB8DEB3A6E62846153D79) under docs/arcade/0.9/: 78 stage designs (13 games x 6), 13 human blueprints, common 01-06 docs, LEVEL-INDEX, LEVEL-ATLAS offline HTML, validate_levels.py/build_pack.py/render scripts, PACK-MANIFEST/QA-REPORT/SHA256SUMS, proposed 84-task queue explicitly NOT imported. Added Lead docs: 00-IMPORT-AND-STATUS.md (source hash, verified facts), 0.8-TO-0.9-DIFF.md (0.8 actual assets vs 0.9 requirements, conflict protection, Owner decision points), INTEGRATION-CONTRACT.md (data files, A.Challenge API, challenge record key, per-game UI/flow, hook contract, evidence levels, platform checklist), PLAN.md (T041-T058 mapping, waves, DoD, risks). Design pack self-validation: 1088 assertions PASS (234 design-contract + 454 exact-simulation + 220 geometry + 117 inventory + 51 ray-clearance + 12 timeline). Import only; no runtime change, no version bump, not pushed."
+    },
+    {
+      "id": "T042",
+      "title": "Arcade 0.9.0 平台：数据生成器 + A.Challenge + 挑战记录 + CSS/SW/validate",
+      "kind": "agent",
+      "status": "DONE",
+      "dependsOn": [
+        "T041"
+      ],
+      "ownerAuthorizationRequired": false,
+      "acceptance": [
+        "13 个游戏运行时关卡数据与测试夹具由设计源生成，防剧透、幂等、可校验",
+        "engine.js A.Challenge 支持取关/解锁/记录/结算/选关/导入导出，独立 challenge key，不污染经典",
+        "挑战 UI 共享样式、SW 预缓存、validate 断言就绪；经典 85 项 smoke 零回归"
+      ],
+      "claimedAt": "2026-11-13T02:40:00+00:00",
+      "completedAt": "2026-11-13T03:05:00+00:00",
+      "evidence": "Commit 0e9a156. tools/arcade_09_data.mjs (zero-dependency) validates design contracts (2128 self-checks), re-runs the pack validator (1088 assertions), emits 13 runtime data scripts apps/arcade/challenge/<gameId>.js without referencePlan/acceptance plus 13 full test fixtures tools/testdata/challenge/*.json + index.json and docs/arcade/0.9/DATA-INTEGRATION-REPORT.md; reruns are byte-identical (28 outputs, diffs=0). engine.js adds A.Challenge (stages/stage/progress/isUnlocked/markCleared/resetGame/exportData/importData/resultHtml/stageListHtml/formatTime, SCHEMA_VERSION=1, STORAGE_KEY=studiokit:arcade:challenge:v1, fail-closed storage, XSS-escaped HTML) and Progress.exportText/importText additive integration (old backups keep current challenge data, invalid challenge counted skipped, quota rollback includes key); Progress.resetAll/resetGame also clear challenge records. arcade.css adds .ac-challenge-* classes (44px+ targets, no overflow at 320/375/390/430); sw.js precaches the 13 data files (VERSION intentionally still 0.7.0, release TODO noted); validate_site.py asserts the 13 data files, CHALLENGE_KEY and Challenge export. Platform self-tests: A.Challenge 21/21 in real Chrome, reset/CSS 7/7; smoke 85/85 (231s); validate/build PASS; node --check all."
+    },
+    {
+      "id": "T043",
+      "title": "Arcade 0.9.0 影跃 C01–C06（0.8 试炼迁移到 0.9 数据）",
+      "kind": "agent",
+      "status": "DONE",
+      "dependsOn": [
+        "T042"
+      ],
+      "ownerAuthorizationRequired": false,
+      "acceptance": [
+        "影跃挑战读取生成的 C01-C06 数据（坐标换算/影门/支线/卷轴/影冲）",
+        "旧 0.8 trial 存档安全降级，经典无尽零回归",
+        "6 关有可重复通关证据与证据等级，失败/暂停/刷新恢复一致；320/390 无溢出"
+      ],
+      "claimedAt": "2026-11-13T02:55:00+00:00",
+      "completedAt": "2026-11-13T03:35:00+00:00",
+      "evidence": "Commit c0e2315. shadow-leap.html drops the inlined 0.8 S1-S3 data and reads A.Challenge.stages('shadow-leap'); world mapping worldY=620-height, x=xCenter-width/2, circular gate (radius 38) via circle-box test, wind band C04, switches C06, checkpoints, challenge HUD/select/result, assisted, fail-closed entry when data missing. 0.8 dash/scroll/route/failure-review assets preserved. Old mode:'trial' saves: prompt 'trial data upgraded', map stageIndex 0/1/2 to C01/C02/C03 with continue/restart, challenge:v1 and progress:v1 byte-identical across prompt (recordPreserved=true), never silently deleted; legacy classic saves still classic. tools/challenge/shadow-leap.mjs CH-SL-001..008; `--game=shadow-leap --repeat=2` 16/16 PASS; C01-C06 real-input replays 2.5/2.9/1.9/2.9/2.9/4.5s with C03 dash required (no-dash negative path times out at p0/p1); base suite 11/11; validate PASS; 320/390 no overflow. Design deviations recorded in docs/arcade/0.9/impl/shadow-leap.md (gate radius shortcuts, measured 1.9-4.5s vs design 45-155s, requiredAbility not a hard gate) for Reviewer/Owner."
+    },
+    {
+      "id": "T044",
+      "title": "Arcade 0.9.0 俄罗斯方块 + 2048 挑战模式 C01–C06",
+      "kind": "agent",
+      "status": "DONE",
+      "dependsOn": [
+        "T042"
+      ],
+      "ownerAuthorizationRequired": false,
+      "acceptance": [
+        "方块固定盘面/块序/消行目标，经典 7-bag/40 行/无尽不变",
+        "2048 固定盘面、挑战禁随机新块、maxValidMoves/目标/撤销策略，经典随机不变",
+        "两游戏 6 关挑战入口/选关/记录/重试/暂停刷新/320-390 与确定性场景"
+      ],
+      "claimedAt": "2026-11-13T02:55:00+00:00",
+      "completedAt": "2026-11-13T03:20:00+00:00",
+      "evidence": "Commit 456ed97. block-drop: fixed 20x10 pre-filled board + fixed pieceQueue (no 7-bag in challenge) + clear-line goal; classic 7-bag/40-line/endless and touch controls unchanged. merge-2048: fixed 4x4 initial board, no random spawn in challenge, maxValidMoves/target tile, undo policy (does not refund moves, marks assisted); classic random/undo/tools unchanged. Both: second '挑战 6 关' entry keeps classic [data-ov-btn], stage select with sequential unlock/best, challenge HUD/objective, one-click retry, pause-exit, runs:v1 challenge save, challenge records via A.Challenge, no classic high-score/Playtime pollution, 7 new #test hooks. Real-input reference clears: block-drop C01-C06 clears 1/2/4/2/2/4 equal to design win counts; 2048 C01-C06 final boards equal design resultBoard; 8 scenarios each x2 = 16/16 PASS each; base 11/11; validate PASS; 320/390 no overflow. Design deviations in impl docs (leftCol semantics, undo assisted rule)."
+    },
+    {
+      "id": "T045",
+      "title": "Arcade 0.9.0 记忆翻牌 + 贪吃蛇挑战模式 C01–C06",
+      "kind": "agent",
+      "status": "DONE",
+      "dependsOn": [
+        "T042"
+      ],
+      "ownerAuthorizationRequired": false,
+      "acceptance": [
+        "记忆固定盘面/预览/限错/线索/镜像变换；经典 6 关与道具不变",
+        "贪吃蛇固定地图/脚本果实/方向队列（快速两次 90 度不反向）；经典不变",
+        "两游戏挑战完整流程与确定性场景，C01 真实输入通关"
+      ],
+      "claimedAt": "2026-11-13T02:55:00+00:00",
+      "completedAt": "2026-11-13T03:25:00+00:00",
+      "evidence": "Commit 456ed97. memory-flip: fixed faces/grid, previewSeconds, maxMismatches (C01 limit 4), clues (C03+), layoutTransforms identity/mirror/swap implementations, turnRules, match-all goal; classic 6 levels/preview/tools unchanged. snake-run: fixed 18x18 walls/map, initialSnake/direction, scripted fruitQueue, fixed stepInterval, direction queue (2-entry buffer, per-step dequeue, 180-degree rejected), 1-life challenge; classic 20-fruit/tools unchanged. Both: challenge entry/select/unlock/best, HUD, one-click retry, pause-exit, runs:v1 challenge save, challenge records, no classic pollution, #test hooks, 320/390. Evidence: C01 real-input replays (memory pair clicks timeSec=2.4; snake reference movesRLE 14 steps/3 fruits/3.2s); 6 scenarios each x2 = 12/12 PASS each; base 11/11; validate PASS. Deviations recorded (identity transform default, fixed step interval, no golden fruit in challenge)."
+    },
+    {
+      "id": "T046",
+      "title": "Arcade 0.9.0 打地鼠 + 极速车道挑战模式 C01–C06",
+      "kind": "agent",
+      "status": "DONE",
+      "dependsOn": [
+        "T042"
+      ],
+      "ownerAuthorizationRequired": false,
+      "acceptance": [
+        "打地鼠固定事件时间轴（模拟时间暂停感知/金鼠/炸弹/假目标），经典 45 秒不变",
+        "极速车道固定车流时隙与真实变道过渡，经典 4 车道/5000m 不变",
+        "两游戏挑战完整流程、双指/真实变道证据与确定性场景"
+      ],
+      "claimedAt": "2026-11-13T02:55:00+00:00",
+      "completedAt": "2026-11-13T03:32:00+00:00",
+      "evidence": "Commit 456ed97. mole-whack: fixed events timeline (atSec simulation time pause-aware; normal/gold/bomb/decoy), scripted spawns replace random refresh, scoring/tap priority, two-finger independent second pointer path inside the page (shared engine input untouched), failure attribution and one-click retry; classic 45s/3x3/tools unchanged. road-rush: fixed lane timelines (occupiedLanes per slot), laneChangeTimeSec transition collisions, distance mapping to minDistanceMeters, near-miss scoring, single-collision challenge failure; classic 4-lane/5000m/3-lives unchanged. Evidence: mole-whack CH-MW-002 C01 real-input 8 valid hits/30s, C04 two-finger pair, C01-C06 clock-assisted real clicks (57 hits); road-rush CH-RR-002 C01 real-input 7 changes/12 slots/score=95, C01-C06 real replays totalChanges=38 distances 540-1240m; 8 and 7 scenarios x2 = 16/16 and 14/14; base 11/11; validate PASS; 320/390. Deviations recorded (challenge tools disabled for determinism, unified stage-end failure, collision model)."
+    },
+    {
+      "id": "T047",
+      "title": "Arcade 0.9.0 重力翻转 + 砖块计划挑战模式 C01–C06",
+      "kind": "agent",
+      "status": "DONE",
+      "dependsOn": [
+        "T042"
+      ],
+      "ownerAuthorizationRequired": false,
+      "acceptance": [
+        "重力固定障碍序列/推荐翻转窗口/星星，经典 3000m 不变",
+        "砖块固定 8x5 砖阵 + K 钥匙/G 门（challenge 专属），经典 3 关不变",
+        "逐关可完成证据（engine-replay 如实标注）、失败重试、暂停刷新、320/390"
+      ],
+      "claimedAt": "2026-11-13T02:55:00+00:00",
+      "completedAt": "2026-11-13T03:42:00+00:00",
+      "evidence": "Commit 456ed97. gravity-flip: fixed obstacle sequences keyed by world distance x, recommendedFlipWindows, bonus stars, life tolerance, deterministic replay; classic 3000m/tools unchanged. brick-breaker: fixed 8x5 brick rows from tokens, challenge-only K key brick / G locked gate, fixed ball params, paddle-angle skill, 12s stuck-ball recovery; classic 3 levels/tools unchanged. Design defect found with evidence: under literal 'G is a hard wall' semantics C03/C06 K bricks are unreachable (C03 240s leftover 13 bricks; C06 300s leftover 5 bricks); minimal fix implemented (hitting a locked G damages the K directly above it once; G stays solid/unbreakable, K->G unlock and win conditions unchanged) and recorded for Reviewer/Owner (rejecting it would make C03/C06 unsolvable => Blocker). Evidence: gravity C01 real-input 0 hits/3 flips inside windows/8s + C02-C06 engine replays 0 collisions; brick C01-C06 engine replays clear in 53.3-101s with 0 life lost and no >12s dead loop; 7 scenarios each x2 = 14/14 each; base 11/11; validate PASS; 320/390. Gravity late-half recommended windows found unsafe and recorded."
+    },
+    {
+      "id": "T048",
+      "title": "Arcade 0.9.0 雪铃 + 层塔挑战模式 C01–C06",
+      "kind": "agent",
+      "status": "DONE",
+      "dependsOn": [
+        "T042"
+      ],
+      "ownerAuthorizationRequired": false,
+      "acceptance": [
+        "雪铃固定铃序列/休止铃/错序恢复/彩铃收集，经典连击/道具不变",
+        "层塔固定委托/标记/配重限额，真实钟摆物理无吸附，经典无尽不变",
+        "逐关数据与 C01 参考通关、失败重试、暂停刷新、320/390"
+      ],
+      "claimedAt": "2026-11-13T02:55:00+00:00",
+      "completedAt": "2026-11-13T03:38:00+00:00",
+      "evidence": "Commit 456ed97. snowbells: fixed bells world coords (y=(H-120)-height), startBell, strict requiredSequence, rest bells (sequence but no combo/score), wrong-order recoverable, persistent next-target hint, bonus bells only collectibles, goal after last bell; classic combo/magnet/encore unchanged. pendulum-tower: fixed baseCenterX/boxes, pendulum config plus deterministic initial angular velocity (design only gave static start phase; deviation recorded), limits (tilt/drops/tool caps), real pendulum+drop+tilt physics without snapping, bronze/silver/gold evaluation, attributable failures; classic endless unchanged. Evidence: snowbells C01 real-input sequence 4 bells/2.7s, rest bells x2, retry, pause-refresh, classic; pendulum C01 engine-replay floors=4 marks within tolerance gold, real click release path separately asserted; 6 scenarios each x2 = 12/12 each; base 22/22 x2; CH-DATA-001 PASS; validate PASS; 320/390."
+    },
+    {
+      "id": "T049",
+      "title": "Arcade 0.9.0 星海突击 + 黄金矿工挑战模式 C01–C06",
+      "kind": "agent",
+      "status": "DONE",
+      "dependsOn": [
+        "T042"
+      ],
+      "ownerAuthorizationRequired": false,
+      "acceptance": [
+        "星海固定波次/安全走廊/攻击模式/Boss 阶段，经典 30 秒 Boss/弹种不变",
+        "黄金矿工固定矿图/真实摆钩/参考抓取顺序达标，经典 5 关/道具不变",
+        "两游戏 6 关有可重复通关证据（engine-replay 如实）、失败重试、暂停刷新、320/390"
+      ],
+      "claimedAt": "2026-11-13T02:55:00+00:00",
+      "completedAt": "2026-11-13T03:48:00+00:00",
+      "evidence": "Commit 456ed97. star-raid: fixed events/wave timeline replaces random spawns, safeBandXRatio corridors (danger columns outside corridor +/-16px, residual bullets cleared per event), 7 attack patterns, C05 two-wing weakpoint windows / C06 two-phase boss script (timed weakpoint exposure deviation recorded), startingHealth/powerups/collectibles/assisted, challenge save/hooks; classic 30s boss/stackable weapons/tools unchanged. gold-miner: fixed item layouts, targetMoney/timeLimitSec/referenceCatchOrder, real swing/extend/retract physics and weight-based retraction, TNT no chain explosion in challenge (deviation recorded), manual target clear; classic 5 levels/4 tools unchanged. Evidence: star-raid C01 35s zero damage unsafe=0, C02-C04 cleared 42/46/48s zero damage, C05 56.3s weakpoint exposed 14.1s, C06 69.6s phase2; gold-miner C01 real hook physics 650/6.5s, C02-C06 reference orders 750/950/1200/1100/1550 cleared; 7 scenarios each x2 = 14/14 each; base 11/11; node --check; git diff --check. All reference completions engine-replay, recorded as such."
+    },
+    {
+      "id": "T056",
+      "title": "Arcade 0.9.0 挑战场景聚合器与 78 关数据门禁",
+      "kind": "agent",
+      "status": "DONE",
+      "dependsOn": [
+        "T042"
+      ],
+      "ownerAuthorizationRequired": false,
+      "acceptance": [
+        "聚合器自动发现 13 个挑战模块，支持 base/challenge/all 与 --game/--repeat，原有 11 场景保留",
+        "78 关设计↔运行时数据门禁与 13 游戏经典入口门禁",
+        "最终全量 --repeat=2 与 smoke 85/85 全绿；证据等级汇总与冻结 sha256 落盘"
+      ],
+      "claimedAt": "2026-11-13T02:40:00+00:00",
+      "completedAt": "2026-11-13T04:25:00+00:00",
+      "evidence": "Commits fe79b0f + final test-hardening commit (F). tools/arcade_gameplay_test.mjs: base/challenge/all suites, --game filter, automatic discovery of tools/challenge/*.mjs (missing SKIP, malformed FAIL), CH-DATA-001 (13 games/78 stages, designChecks=2256, runtime=13/13, runtimeChecks=1281), CH-CLASSIC-001 (13/13 classic starts, main button 开始游戏, challenge entries 13), module evidence summary. Migrated the five 0.8 shadow-leap trial base scenarios (SC-SL-004..008) to 0.9 challenge semantics keeping IDs, and hardened SC-SL-009/SC-SL-002 landing assertions from fixed rAF+sleep to in-page 240-frame polling (after Lead observed one rAF-starved flake under 20+ concurrent headless Chromes; isolated repeat=3 then 6/6 PASS). Final gates on final runner sha256 F2942151...: --suite=all --repeat=2 = 208/208 scenario runs passed (104 scenarios x2 = 11 base + 2 global + 91 module), exit 0, 798.3s; smoke 85/85 (232.6s, product hashes unchanged before/after); validate PASS; product files 29/29 sha256 unchanged before/after final run. Evidence mix: 91 module scenarios = 18 real-input-replay / 54 engine-replay / 19 ui-only (ui-only only for data/UI wiring, never as playability proof)."
+    },
+    {
+      "id": "T057",
+      "title": "Arcade 0.9.0 独立评审与 Owner 试玩包",
+      "kind": "review",
+      "status": "DONE",
+      "dependsOn": [
+        "T043",
+        "T044",
+        "T045",
+        "T046",
+        "T047",
+        "T048",
+        "T049",
+        "T056"
+      ],
+      "ownerAuthorizationRequired": false,
+      "acceptance": [
+        "独立 Reviewer 给出 Blocker/Major/Minor/UNVERIFIED 与证据等级裁定",
+        "设计差异逐项分类（可接受实现细节 / 需 Owner 裁决 / 需回改设计）",
+        "Owner 试玩包就绪；Owner 两轮结论未获得时不得宣称发布门槛通过"
+      ],
+      "claimedAt": "2026-11-13T03:55:00+00:00",
+      "completedAt": "2026-11-13T04:28:00+00:00",
+      "evidence": "Reviewed at final tree HEAD fe79b0f (0.9 chain 1b530e4 -> 0e9a156 -> c0e2315 -> 456ed97 -> fe79b0f). docs/arcade/0.9/REVIEW.md: APPROVE-WITH-NOTES, 0 Blocker, 5 Major (all design-intent deviations requiring Owner decision: shadow-leap gate-radius shortcuts and measured 1.9-4.5s vs design 45-155s; global targetDuration mismatches; brick K/G minimal fix - if rejected C03/C06 become Blocker; star-raid boss geometric weakpoints -> timed windows; gravity-flip late-half recommended window unsafe), 6 Minor (real-input-replay means DOM-synthesized events vs native; SW cache version still 0.7.0 must bump before release; inconsistent challenge tool availability; several C02-C06 not replayed per-stage; score-type results not persisted; old trial saves map to stage start only) + m7 resolved, 10 UNVERIFIED classes. Reporter gate: independent design-source vs runtime deep-equal audit PASS (91 assertions), independent native-CDP play 47/47 PASS (shadow C01-C03 real keyboard, 2048 C01-C03 boards equal design, snake C01-C02, mole C01 live clicks, pause-refresh, old trial upgrade, export/import, 320/390 across 13 games), A.Challenge probe 13/13, --suite=all --repeat=2 208/208 (798.4s, final runner), smoke 85/85, node --check 44 places, validate PASS, build dist hash comparison PASS. docs/arcade/0.9/PLAYTEST.md contains two-round Owner script, observation checklist and record template and explicitly states Owner conclusions are not obtained, agents cannot sign for Owner, and the 0.9 release gate is NOT passed. Not pushed/released."
+    },
+    {
+      "id": "T058",
+      "title": "Arcade 0.9.0 集成验证、文档与任务队列同步、本地提交",
+      "kind": "agent",
+      "status": "DONE",
+      "dependsOn": [
+        "T041",
+        "T042",
+        "T043",
+        "T044",
+        "T045",
+        "T046",
+        "T047",
+        "T048",
+        "T049",
+        "T056",
+        "T057"
+      ],
+      "ownerAuthorizationRequired": false,
+      "acceptance": [
+        "Lead 独立复跑 validate/build/node --check/smoke 85/85/base 22/22/data 门禁/幂等/git diff --check",
+        "文档、任务队列、版本策略同步；ARCADE_VERSION 保持 0.7.0",
+        "本地 Conventional Commits，不推送/不合并/不发布"
+      ],
+      "claimedAt": "2026-11-13T04:28:00+00:00",
+      "completedAt": "2026-11-13T04:50:00+00:00",
+      "evidence": "Lead final gates on the final tree: py -3 tools/validate_site.py PASS; py -3 tools/build_site.py PASS (dist contains 13 challenge data files, no tools/docs); node --check engine/sw/generator/runner/smoke/lib all exit 0 (13 runtime data and 13 challenge modules also checked earlier, 0 failures); extracted inline scripts checked (13/13); arcade_smoke.mjs 85/85 checks passed (Lead run, ports 8820/9420); arcade_gameplay_test --suite=base --repeat=2 22/22 PASS on final runner (isolated, after the earlier rAF-starved flake was hardened by test-infra); CH-DATA-001/CH-CLASSIC-001 PASS; node tools/arcade_09_data.mjs rerun byte-identical; git diff --check clean; full-suite 208/208 and independent review evidence contributed by challenge-test-infra and reviewer with frozen product hashes (29 files unchanged, runner final sha F2942151...). Docs synced: apps/arcade/README.md (0.9 challenge section), CHANGELOG.md (0.9.0-dev), docs/arcade/README.md (0.9 index), docs/ROADMAP.md (0.9 in progress), docs/RELEASE-RUNBOOK.md (local dev status), TASKS.md and tasks/queue.json (T041-T058). Version intentionally unchanged: ARCADE_VERSION/registry/SW cache all 0.7.0 (SW bump required before any release). Local commits only: 0.9 implementation chain 1b530e4/0e9a156/c0e2315/456ed97/fe79b0f + test-hardening and docs/queue commits. NOT pushed, NOT merged to main, no tag, no deploy. Owner two-round playtest and design-deviation decisions are still required before 0.9 release; iOS/Android real-device remains UNVERIFIED."
     }
   ]
 }

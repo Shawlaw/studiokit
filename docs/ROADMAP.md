@@ -82,6 +82,17 @@
 - [x] 集成验证：`arcade_smoke.mjs` 85/85、`arcade_gameplay_test.mjs` 11 场景、求解器双路径 3/3、`validate_site.py` / `build_site.py` / `node --check` 全过；未执行 `verify_deploy.py`（未发布）。
 - [ ] GP007：Owner 两轮试玩（第一轮理解影冲/目标，第二轮主动找路线/卷轴）与独立 Reviewer 结论；**Owner 未反馈前不推进其余 12 款、不发布**。真机触控/手感/低端机帧率仍 UNVERIFIED。
 
+### Arcade 0.9.0 — 13 游戏 × 6 关挑战模式（本地 `feat/arcade-0.8-gameplay` 分支继续开发，未推送）
+
+在 0.8 竖切片基础上导入 Owner 提供的 0.9 关卡设计包（13 游戏 × 6 关 = 78 关），为每款游戏实现独立**挑战模式**；经典/无尽保持一级入口，`ARCADE_VERSION` 仍为 `0.7.0`（未发布）。
+
+- [x] 设计包原样导入 `docs/arcade/0.9/`（78 关设计源、13 份蓝图、独立校验脚本、离线图谱、建议队列不导入）；差异报告、集成契约、实施计划落盘。
+- [x] 平台：`A.Challenge` 共享 API、`studiokit:arcade:challenge:v1` 独立记录（导出/导入/清除加法兼容）、13 个运行时数据生成器（校验 1088 设计断言 + 2128 自检、幂等）、挑战 UI 共享样式、SW 预缓存、validate 断言。
+- [x] 13 游戏挑战模式 C01–C06：固定盘面/地图/时间轴/车流/障碍/砖阵/铃序/委托/波次/矿图，选关解锁、记录/最佳/assisted/收集、暂停退出、1 次点击重试、`runs:v1` 挑战局存档；影跃 0.8 试炼迁移到 0.9 数据且旧档安全降级。
+- [x] 测试：`arcade_gameplay_test.mjs` 支持 base/challenge/all 套件与模块自动发现；全量 104 场景 ×2 = **208/208 PASS**（798s）、`arcade_smoke` **85/85**、78 关数据门禁与 13 游戏经典入口门禁 PASS、数据生成幂等。
+- [ ] **Owner 两轮试玩与设计差异裁决**：影跃捷径/实测时长偏短、砖块 K 钥匙可达性最小修正、星海 Boss 弱点时间窗、重力翻转推荐窗口晚半段、挑战模式禁用道具等需 Owner/Reviewer 决定；真机 iOS/Android 触控与手感仍 UNVERIFIED。Owner 未反馈前不升版本、不发布。
+- [ ] 发布（如需）：升 `ARCADE_VERSION`/SW 缓存版本、更新注册表与文档，并按双目标发布流程由 Owner 单独授权。
+
 ## Now
 
 1. **Arcade 0.8.0 竖切片试玩**：按 `docs/arcade/0.8.0-PLAYTEST.md` 在桌面与 iOS/Android 真机做两轮试玩（影冲理解、双路线/卷轴探索、失败是否可归因），再决定是否推广到其余 12 款或回炉；真机未验证前不宣称通过。
