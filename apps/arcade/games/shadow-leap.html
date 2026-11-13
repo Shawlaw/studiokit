@@ -18,8 +18,9 @@
       <a class="ac-back" href="../index.html" aria-label="返回街机厅"><span class="ac-back-icon" aria-hidden="true">‹</span><span class="ac-back-label">街机厅</span></a>
       <h1 class="game-title">🥷 影跃</h1>
       <div class="game-hud">
-        <span>高度 <strong data-hud-score>0</strong>m</span>
-        <span>最高 <strong data-hud-high>0</strong>m</span>
+        <span data-hud-height>高度 <strong data-hud-score>0</strong>m</span>
+        <span data-hud-high-wrap>最高 <strong data-hud-high>0</strong>m</span>
+        <span data-hud-trial hidden></span>
       </div>
       <button type="button" class="ac-icon-btn" data-pause aria-label="暂停游戏" title="暂停游戏（P / Esc）">⏸</button>
       <button type="button" class="ac-icon-btn" data-mute aria-label="切换音效">🔊</button>
@@ -37,17 +38,18 @@
         </div>
       </div>
     </div>
-    <div class="touch-pad game-tools" aria-label="可选道具（快捷键 1 / 2）">
+    <div class="touch-pad game-tools has-air-dash" aria-label="影冲与可选道具（影冲 Shift / J，道具 1 / 2）">
       <button type="button" class="touch-btn" data-joy-tool="feather" aria-label="羽落，剩余 2 次（快捷键 1）"><span aria-hidden="true">🪶</span> 羽落 <strong data-joy-count>2</strong></button>
       <button type="button" class="touch-btn" data-joy-tool="boost" aria-label="月弹，剩余 2 次（快捷键 2）"><span aria-hidden="true">🌙</span> 月弹 <strong data-joy-count>2</strong></button>
+      <button type="button" class="touch-btn touch-btn-air" data-air-dash aria-label="影冲：本跳可用 1 次（Shift / J 或点按）"><span aria-hidden="true">💨</span> 影冲 <strong data-air-dash-count>1</strong></button>
     </div>
-    <p class="game-hint">←→ / A D 或触摸左右半屏移动 · 1 羽落 / 2 月弹 · 平台落点保证可达 · P / Esc 暂停</p>
+    <p class="game-hint">←→ / A D 或触摸左右半屏移动 · Shift / J 或点 💨 影冲（着陆补充） · 1 羽落 / 2 月弹 · P / Esc 暂停</p>
   </main>
   <script>
     (() => {
       'use strict';
       const A = window.Arcade;
-      const { clamp, rand, randInt, TAU } = A.utils;
+      const { clamp, TAU } = A.utils;
 
       const W = 420;
       const H = 740;
@@ -60,6 +62,280 @@
       const BOOST_JUMP_V = -768;
       const JOY_START = { feather: 2, boost: 2 };
       const JOY_CAPS = { feather: 2, boost: 2 };
+      /* GP004 影冲：空中沿朝向的一次短距离水平冲刺；每次成功着陆补充一次。 */
+      const DASH_SPEED = 620;
+      const DASH_TIME = 0.13;
+      const DASH_GRAVITY_SCALE = 0.25;
+      const DASH_LAND_KEEP = 0.6;
+      const DASH_CARRY_TIME = 0.1;
+      const DASH_MAX_CHARGES = 1;
+      /* 影之试炼关卡数据：BEGIN/END 标记之间是纯 JSON（tools/arcade_stage_solver.mjs 按标记提取）；替换关卡数据不需要改运行时。 */
+      const STAGE_DATA_JSON = String.raw`
+/* STAGES-JSON-BEGIN */
+{
+  "version": 1,
+  "designWidth": 420,
+  "player": { "w": 26, "h": 30 },
+  "physics": {
+    "gravity": 1500,
+    "jumpV": -640,
+    "maxFall": 900,
+    "accel": 2400,
+    "maxVx": 265,
+    "dashSpeed": 620,
+    "dashTime": 0.13,
+    "dashGravityScale": 0.25,
+    "wallBounce": 0.95
+  },
+  "stages": [
+    {
+      "id": "S1",
+      "title": "初入影林",
+      "height": 1900,
+      "start": { "x": 192, "y": 1650 },
+      "goal": { "x": 186, "y": 120, "w": 48, "h": 64 },
+      "platforms": [
+        { "x": 140, "y": 1680, "w": 130, "kind": "normal", "baseX": 140, "range": 0, "speed": 0, "phase": 0 },
+        { "x": 50, "y": 1590, "w": 110, "kind": "normal", "baseX": 50, "range": 0, "speed": 0, "phase": 0 },
+        { "x": 120, "y": 1500, "w": 120, "kind": "normal", "baseX": 120, "range": 0, "speed": 0, "phase": 0 },
+        { "x": 20, "y": 1410, "w": 100, "kind": "normal", "baseX": 20, "range": 0, "speed": 0, "phase": 0 },
+        { "x": 110, "y": 1320, "w": 110, "kind": "normal", "baseX": 110, "range": 0, "speed": 0, "phase": 0 },
+        { "x": 30, "y": 1230, "w": 100, "kind": "normal", "baseX": 30, "range": 0, "speed": 0, "phase": 0 },
+        { "x": 120, "y": 1140, "w": 110, "kind": "normal", "baseX": 120, "range": 0, "speed": 0, "phase": 0 },
+        { "x": 20, "y": 1050, "w": 100, "kind": "normal", "baseX": 20, "range": 0, "speed": 0, "phase": 0 },
+        { "x": 290, "y": 1000, "w": 100, "kind": "normal", "baseX": 290, "range": 0, "speed": 0, "phase": 0 },
+        { "x": 120, "y": 960, "w": 100, "kind": "normal", "baseX": 120, "range": 0, "speed": 0, "phase": 0 },
+        { "x": 40, "y": 870, "w": 100, "kind": "normal", "baseX": 40, "range": 0, "speed": 0, "phase": 0 },
+        { "x": 140, "y": 780, "w": 110, "kind": "normal", "baseX": 140, "range": 0, "speed": 0, "phase": 0 },
+        { "x": 40, "y": 690, "w": 100, "kind": "normal", "baseX": 40, "range": 0, "speed": 0, "phase": 0 },
+        { "x": 150, "y": 600, "w": 110, "kind": "normal", "baseX": 150, "range": 0, "speed": 0, "phase": 0 },
+        { "x": 50, "y": 510, "w": 100, "kind": "normal", "baseX": 50, "range": 0, "speed": 0, "phase": 0 },
+        { "x": 160, "y": 420, "w": 110, "kind": "normal", "baseX": 160, "range": 0, "speed": 0, "phase": 0 },
+        { "x": 80, "y": 330, "w": 110, "kind": "normal", "baseX": 80, "range": 0, "speed": 0, "phase": 0 },
+        { "x": 140, "y": 250, "w": 100, "kind": "normal", "baseX": 140, "range": 0, "speed": 0, "phase": 0 }
+      ],
+      "scrolls": [
+        { "id": "S1-C1", "x": 352, "y": 905, "label": "影林残卷" }
+      ],
+      "routes": [
+        {
+          "id": "main",
+          "label": "林间主路",
+          "requiresDash": false,
+          "platforms": [0, 1, 2, 3, 4, 5, 6, 7, 9, 10, 11, 12, 13, 14, 15, 16, 17]
+        }
+      ],
+      "targetSeconds": 45
+    },
+    {
+      "id": "S2",
+      "title": "月下断桥",
+      "height": 2150,
+      "start": { "x": 197, "y": 2000 },
+      "goal": { "x": 186, "y": 120, "w": 48, "h": 64 },
+      "platforms": [
+        { "x": 140, "y": 2030, "w": 140, "kind": "normal", "baseX": 140, "range": 0, "speed": 0, "phase": 0 },
+        { "x": 70, "y": 1935, "w": 110, "kind": "normal", "baseX": 70, "range": 0, "speed": 0, "phase": 0 },
+        { "x": 180, "y": 1845, "w": 110, "kind": "normal", "baseX": 180, "range": 0, "speed": 0, "phase": 0 },
+        { "x": 40, "y": 1755, "w": 100, "kind": "normal", "baseX": 40, "range": 0, "speed": 0, "phase": 0 },
+        { "x": 255, "y": 1716, "w": 90, "kind": "fragile", "baseX": 255, "range": 0, "speed": 0, "phase": 0 },
+        { "x": 30, "y": 1665, "w": 95, "kind": "moving", "baseX": 30, "range": 26, "speed": 0.9, "phase": 0 },
+        { "x": 85, "y": 1587, "w": 90, "kind": "fragile", "baseX": 85, "range": 0, "speed": 0, "phase": 0 },
+        { "x": 100, "y": 1575, "w": 100, "kind": "normal", "baseX": 100, "range": 0, "speed": 0, "phase": 0 },
+        { "x": 300, "y": 1520, "w": 100, "kind": "normal", "baseX": 300, "range": 0, "speed": 0, "phase": 0 },
+        { "x": 40, "y": 1485, "w": 90, "kind": "moving", "baseX": 40, "range": 28, "speed": 1.2, "phase": 0 },
+        { "x": 255, "y": 1458, "w": 90, "kind": "fragile", "baseX": 255, "range": 0, "speed": 0, "phase": 0 },
+        { "x": 130, "y": 1395, "w": 100, "kind": "normal", "baseX": 130, "range": 0, "speed": 0, "phase": 0 },
+        { "x": 85, "y": 1329, "w": 90, "kind": "fragile", "baseX": 85, "range": 0, "speed": 0, "phase": 0 },
+        { "x": 40, "y": 1305, "w": 100, "kind": "normal", "baseX": 40, "range": 0, "speed": 0, "phase": 0 },
+        { "x": 140, "y": 1215, "w": 100, "kind": "fragile", "baseX": 140, "range": 0, "speed": 0, "phase": 0 },
+        { "x": 255, "y": 1200, "w": 90, "kind": "fragile", "baseX": 255, "range": 0, "speed": 0, "phase": 0 },
+        { "x": 50, "y": 1125, "w": 100, "kind": "normal", "baseX": 50, "range": 0, "speed": 0, "phase": 0 },
+        { "x": 85, "y": 1071, "w": 90, "kind": "fragile", "baseX": 85, "range": 0, "speed": 0, "phase": 0 },
+        { "x": 150, "y": 1040, "w": 100, "kind": "normal", "baseX": 150, "range": 0, "speed": 0, "phase": 0 },
+        { "x": 110, "y": 940, "w": 110, "kind": "normal", "baseX": 110, "range": 0, "speed": 0, "phase": 0 },
+        { "x": 200, "y": 830, "w": 100, "kind": "normal", "baseX": 200, "range": 0, "speed": 0, "phase": 0 },
+        { "x": 100, "y": 720, "w": 100, "kind": "normal", "baseX": 100, "range": 0, "speed": 0, "phase": 0 },
+        { "x": 190, "y": 610, "w": 100, "kind": "normal", "baseX": 190, "range": 0, "speed": 0, "phase": 0 },
+        { "x": 90, "y": 500, "w": 100, "kind": "normal", "baseX": 90, "range": 0, "speed": 0, "phase": 0 },
+        { "x": 170, "y": 370, "w": 100, "kind": "normal", "baseX": 170, "range": 0, "speed": 0, "phase": 0 },
+        { "x": 150, "y": 250, "w": 110, "kind": "normal", "baseX": 150, "range": 0, "speed": 0, "phase": 0 }
+      ],
+      "scrolls": [
+        { "id": "S2-C1", "x": 356, "y": 1428, "label": "断桥残卷" }
+      ],
+      "routes": [
+        {
+          "id": "safe",
+          "label": "稳妥长路",
+          "requiresDash": false,
+          "platforms": [0, 1, 2, 3, 5, 7, 9, 11, 13, 14, 16, 18, 19, 20, 21, 22, 23, 24, 25]
+        },
+        {
+          "id": "fast",
+          "label": "近路快线",
+          "requiresDash": false,
+          "platforms": [0, 1, 2, 4, 6, 10, 12, 15, 17, 19, 20, 21, 22, 23, 24, 25]
+        }
+      ],
+      "targetSeconds": 60
+    },
+    {
+      "id": "S3",
+      "title": "影冲试炼",
+      "height": 2250,
+      "start": { "x": 197, "y": 2070 },
+      "goal": { "x": 40, "y": 120, "w": 48, "h": 64 },
+      "platforms": [
+        { "x": 140, "y": 2100, "w": 140, "kind": "normal", "baseX": 140, "range": 0, "speed": 0, "phase": 0 },
+        { "x": 80, "y": 2010, "w": 110, "kind": "normal", "baseX": 80, "range": 0, "speed": 0, "phase": 0 },
+        { "x": 200, "y": 1920, "w": 110, "kind": "normal", "baseX": 200, "range": 0, "speed": 0, "phase": 0 },
+        { "x": 110, "y": 1830, "w": 100, "kind": "normal", "baseX": 110, "range": 0, "speed": 0, "phase": 0 },
+        { "x": 220, "y": 1740, "w": 100, "kind": "normal", "baseX": 220, "range": 0, "speed": 0, "phase": 0 },
+        { "x": 120, "y": 1650, "w": 100, "kind": "normal", "baseX": 120, "range": 0, "speed": 0, "phase": 0 },
+        { "x": 230, "y": 1560, "w": 100, "kind": "normal", "baseX": 230, "range": 0, "speed": 0, "phase": 0 },
+        { "x": 20, "y": 1490, "w": 380, "kind": "normal", "baseX": 20, "range": 0, "speed": 0, "phase": 0 },
+        { "x": 130, "y": 1450, "w": 110, "kind": "normal", "baseX": 130, "range": 0, "speed": 0, "phase": 0 },
+        { "x": 110, "y": 1330, "w": 180, "kind": "normal", "baseX": 110, "range": 0, "speed": 0, "phase": 0 },
+        { "x": 296, "y": 1200, "w": 100, "kind": "normal", "baseX": 296, "range": 0, "speed": 0, "phase": 0 },
+        { "x": 6, "y": 1070, "w": 104, "kind": "normal", "baseX": 6, "range": 0, "speed": 0, "phase": 0 },
+        { "x": 20, "y": 960, "w": 100, "kind": "normal", "baseX": 20, "range": 0, "speed": 0, "phase": 0 },
+        { "x": 80, "y": 850, "w": 95, "kind": "normal", "baseX": 80, "range": 0, "speed": 0, "phase": 0 },
+        { "x": 10, "y": 740, "w": 90, "kind": "normal", "baseX": 10, "range": 0, "speed": 0, "phase": 0 },
+        { "x": 70, "y": 630, "w": 95, "kind": "normal", "baseX": 70, "range": 0, "speed": 0, "phase": 0 },
+        { "x": 10, "y": 520, "w": 90, "kind": "normal", "baseX": 10, "range": 0, "speed": 0, "phase": 0 },
+        { "x": 280, "y": 470, "w": 130, "kind": "normal", "baseX": 280, "range": 0, "speed": 0, "phase": 0 },
+        { "x": 140, "y": 400, "w": 90, "kind": "normal", "baseX": 140, "range": 0, "speed": 0, "phase": 0 },
+        { "x": 40, "y": 310, "w": 120, "kind": "normal", "baseX": 40, "range": 0, "speed": 0, "phase": 0 }
+      ],
+      "scrolls": [
+        { "id": "S3-C1", "x": 410, "y": 210, "label": "影冲残卷" }
+      ],
+      "routes": [
+        {
+          "id": "main",
+          "label": "影冲主线",
+          "requiresDash": true,
+          "platforms": [0, 1, 2, 3, 4, 5, 6, 8, 9, 10, 11, 12, 13, 14, 15, 16, 18, 19]
+        },
+        {
+          "id": "scrollReturn",
+          "label": "侧窗回收回路",
+          "requiresDash": true,
+          "platforms": [0, 1, 2, 3, 4, 5, 6, 8, 9, 10, 11, 12, 13, 14, 15, 16, 17, 18, 19]
+        }
+      ],
+      "targetSeconds": 75
+    }
+  ]
+}
+/* STAGES-JSON-END */
+`.replace(/\/\* STAGES-JSON-(BEGIN|END) \*\//g, '').trim();
+      const STAGES = JSON.parse(STAGE_DATA_JSON).stages;
+                        /* 影之试炼运行时常量：三关 45–120 秒，影门与卷轴数据全部来自 STAGES，替换 JSON 不需要改这里。 */
+      const TRIAL_CLEAR_TITLE = '影门开启';
+      const TRIAL_FAIL_TITLE = '失足';
+      const TRIAL_SCROLL_W = 18;
+      const TRIAL_SCROLL_H = 22;
+      const CLASSIC_HINT = '←→ / A D 或触摸左右半屏移动 · Shift / J 或点 💨 影冲（着陆补充） · 1 羽落 / 2 月弹 · P / Esc 暂停';
+      const TRIAL_HINT = '←→ / A D 或触摸移动 · Shift / J 影冲（着陆补充） · 金色卷轴可选收集 · 抵达影门过关 · P / Esc 暂停';
+      /* GP006：失败复盘按 stageId 给可归因提示（不改关卡数据）。 */
+      const FAIL_HINTS = {
+        S1: '主路不需要影冲，左右轻推别跳过头。',
+        S2: '两条路：稳妥长路不容易踩空；近路快线的易碎窄台要提前预判落点。',
+        S3: '缺口要先起跳、再向缺口方向点一次影冲；落地会补充。',
+      };
+      const FAIL_SCROLL_NOTE = '卷轴是可选的，不影响战力。';
+      const ROUTE_HINT_TIME = 2.4;
+      const SCROLL_OPTIONAL_TAG = '（可选）';
+
+      /* 关卡数据规整：平台/起点/影门/卷轴字段在此收敛，运行时只读规整后的 STAGES；替换 JSON 无需改代码。 */
+      function normalizeStage(raw, index) {
+        if (!raw || typeof raw !== 'object') return;
+        raw.index = index;
+        raw.id = String(raw.id || 'S' + (index + 1));
+        raw.title = String(raw.title || '第 ' + (index + 1) + ' 关');
+        raw.height = clamp(Number(raw.height) || 1800, 1500, 2400);
+        const start = raw.start || {};
+        raw.start = {
+          x: clamp(Number.isFinite(Number(start.x)) ? Number(start.x) : W / 2 - 13, -13, W - 13),
+          y: clamp(Number.isFinite(Number(start.y)) ? Number(start.y) : raw.height - 120, 0, raw.height + 60),
+        };
+        const goal = raw.goal || {};
+        raw.goal = {
+          x: clamp(Number.isFinite(Number(goal.x)) ? Number(goal.x) : W / 2 - 24, 0, W - 20),
+          y: clamp(Number.isFinite(Number(goal.y)) ? Number(goal.y) : 120, 0, raw.height - 40),
+          w: clamp(Number(goal.w) || 48, 20, W),
+          h: clamp(Number(goal.h) || 64, 24, 220),
+        };
+        raw.platforms = (Array.isArray(raw.platforms) ? raw.platforms : []).map((p) => {
+          const kind = p && ['normal', 'moving', 'fragile'].indexOf(p.kind) !== -1 ? p.kind : 'normal';
+          const w = clamp(Number(p && p.w) || 100, 40, W - 8);
+          const x = clamp(Number.isFinite(Number(p && p.x)) ? Number(p.x) : 4, 4, W - w - 4);
+          return {
+            x,
+            y: Number(p && p.y) || 0,
+            w,
+            kind,
+            baseX: p && Number.isFinite(Number(p.baseX)) ? Number(p.baseX) : x,
+            range: p ? clamp(Number(p.range) || 0, 0, 60) : 0,
+            speed: p ? clamp(Number(p.speed) || 0, 0, 3) : 0,
+            phase: p && Number.isFinite(Number(p.phase)) ? Number(p.phase) : 0,
+          };
+        });
+        if (!raw.platforms.length) {
+          raw.platforms.push({ x: 40, y: raw.height - 120, w: W - 80, kind: 'normal', baseX: 40, range: 0, speed: 0, phase: 0 });
+        }
+        raw.scrolls = (Array.isArray(raw.scrolls) ? raw.scrolls : []).map((s, i) => ({
+          id: String((s && s.id) || 'scroll-' + i),
+          x: clamp(Number.isFinite(Number(s && s.x)) ? Number(s.x) : W / 2, 0, W),
+          y: clamp(Number.isFinite(Number(s && s.y)) ? Number(s.y) : 0, 0, raw.height),
+          label: String((s && s.label) || '残卷'),
+        }));
+        raw.targetSeconds = clamp(Number(raw.targetSeconds) || 60, 20, 300);
+        /* GP006 路线：把 routes[].platforms 索引反标到平台，运行时据此判定“这局走了哪条路”。 */
+        raw.routes = (Array.isArray(raw.routes) ? raw.routes : [])
+          .filter((r) => r && typeof r === 'object')
+          .map((r, i) => ({
+            id: String(r.id || 'route-' + i),
+            label: String(r.label || '路线 ' + (i + 1)),
+            requiresDash: !!r.requiresDash,
+            platforms: (Array.isArray(r.platforms) ? r.platforms : [])
+              .map((idx) => Math.floor(Number(idx)))
+              .filter((idx) => idx >= 0 && idx < raw.platforms.length),
+          }))
+          .filter((r) => r.platforms.length >= 2);
+        raw.platforms.forEach((p) => {
+          p.routes = [];
+        });
+        raw.routes.forEach((route) => {
+          route.platforms.forEach((idx) => {
+            const p = raw.platforms[idx];
+            if (p && p.routes.indexOf(route.id) === -1) p.routes.push(route.id);
+          });
+        });
+        raw.routeHint = buildRouteHint(raw);
+      }
+
+      /* 双路线关的分流提示：找出两条路线第一次分开的平台，按左右位置给出“左·X / 右·Y”。 */
+      function buildRouteHint(def) {
+        const routes = def.routes || [];
+        if (routes.length < 2) return '';
+        const a = routes[0].platforms;
+        const b = routes[1].platforms;
+        if (a.length < 2 || b.length < 2) return routes.map((r) => r.label).join(' / ');
+        let k = 0;
+        while (k < a.length && k < b.length && a[k] === b[k]) k += 1;
+        if (k >= a.length || k >= b.length) return routes.map((r) => r.label).join(' / ');
+        const pa = def.platforms[a[k]];
+        const pb = def.platforms[b[k]];
+        if (!pa || !pb) return routes.map((r) => r.label).join(' / ');
+        const leftFirst = pa.x + pa.w / 2 <= pb.x + pb.w / 2;
+        const left = leftFirst ? routes[0].label : routes[1].label;
+        const right = leftFirst ? routes[1].label : routes[0].label;
+        return '左·' + left + ' / 右·' + right;
+      }
+      STAGES.forEach((raw, index) => normalizeStage(raw, index));
 
       const canvas = document.querySelector('.game-canvas');
       const stage = A.createStage(canvas, W, H);
@@ -75,6 +351,10 @@
         ovBtn2: document.querySelector('[data-ov-btn2]'),
         hudScore: document.querySelector('[data-hud-score]'),
         hudHigh: document.querySelector('[data-hud-high]'),
+        hudHeight: document.querySelector('[data-hud-height]'),
+        hudHighWrap: document.querySelector('[data-hud-high-wrap]'),
+        hudTrial: document.querySelector('[data-hud-trial]'),
+        hint: document.querySelector('.game-hint'),
         pause: document.querySelector('[data-pause]'),
         mute: document.querySelector('[data-mute]'),
       };
@@ -83,6 +363,8 @@
         feather: document.querySelector('[data-joy-tool="feather"]'),
         boost: document.querySelector('[data-joy-tool="boost"]'),
       };
+      const dashButton = document.querySelector('[data-air-dash]');
+      const dashCount = document.querySelector('[data-air-dash-count]');
 
       const particles = A.createParticles();
 
@@ -100,6 +382,23 @@
       const tools = { feather: JOY_START.feather, boost: JOY_START.boost };
       let featherTimer = 0;
       let boostArmed = false;
+      let dashCharges = DASH_MAX_CHARGES;
+      let dashTimer = 0;
+      let dashDir = 1;
+      let dashCarryTimer = 0;
+      /* 影之试炼状态：mode 为 'classic' 时下面这些字段不参与逻辑，仅为存档兼容而存在。 */
+      let mode = 'classic';
+      let stageIndex = 0;
+      let stageDef = null;
+      let trialElapsed = 0;
+      let trialScrolls = [];
+      let trialResults = [];
+      let trialDashes = 0;
+      let lastTrialSecond = -1;
+      /* GP006 路线判定：记录落过的独占路线与共享平台；routeHintTimer 只用于开局的路线预示。 */
+      let trialLandingRoutes = [];
+      let trialLandedShared = false;
+      let routeHintTimer = 0;
 
       let high = A.Progress.get('shadow-leap').high;
       dom.hudHigh.textContent = String(high);
@@ -108,9 +407,39 @@
         return y - camY;
       }
 
+      /* ---------- 确定性随机：默认走 Math.random，仅平台生成使用；#test 可 setSeed 固定随机流 ---------- */
+      function mulberry32(seed) {
+        let t = seed >>> 0;
+        return function next() {
+          t = (t + 0x6d2b79f5) >>> 0;
+          let r = Math.imul(t ^ (t >>> 15), 1 | t);
+          r = (r + Math.imul(r ^ (r >>> 7), 61 | r)) ^ r;
+          return ((r ^ (r >>> 14)) >>> 0) / 4294967296;
+        };
+      }
+
+      function normalizeSeed(seed) {
+        const n = Number(seed);
+        if (!Number.isFinite(n)) return 1;
+        const s = Math.floor(Math.abs(n)) % 4294967296;
+        return s === 0 ? 1 : s;
+      }
+
+      let rng = Math.random;
+      let activeSeed = null;
+      function rnd(lo, hi) {
+        return lo + rng() * (hi - lo);
+      }
+      function applySeed(seed) {
+        const s = normalizeSeed(seed);
+        activeSeed = s;
+        rng = mulberry32(s);
+        return s;
+      }
+
       /* ---------- 平台生成：横向距离受控，保证每一跳都够得着 ---------- */
       function makePlatform(x, y, kind) {
-        const w = kind === 'fragile' ? rand(74, 100) : rand(82, 118);
+        const w = kind === 'fragile' ? rnd(74, 100) : rnd(82, 118);
         return {
           x: clamp(x, 6, W - w - 6),
           y,
@@ -118,20 +447,20 @@
           h: 12,
           kind: kind || 'normal',
           baseX: clamp(x, 6, W - w - 6),
-          range: kind === 'moving' ? rand(18, 30) : 0,
-          speed: kind === 'moving' ? rand(0.8, 1.4) : 0,
+          range: kind === 'moving' ? rnd(18, 30) : 0,
+          speed: kind === 'moving' ? rnd(0.8, 1.4) : 0,
           broken: false,
           breakTimer: 0,
-          phase: rand(0, TAU),
+          phase: rnd(0, TAU),
         };
       }
 
       function platformChance(y, index) {
         /* 前 8 块生成平台保持静态宽平台，让玩家先学会起跳；之后才引入机制。 */
         if (index <= 8) return 'normal';
-        if (index <= 12) return Math.random() < 0.16 ? 'moving' : 'normal';
+        if (index <= 12) return rng() < 0.16 ? 'moving' : 'normal';
         const t = clamp(-y / 12000, 0, 1);
-        const r = Math.random();
+        const r = rng();
         if (r < 0.05 + t * 0.10) return 'fragile';
         if (r < 0.14 + t * 0.24) return 'moving';
         return 'normal';
@@ -155,18 +484,18 @@
 
       function addPlatformAbove(highest) {
         const t = clamp(-highest.y / 12000, 0, 1);
-        const gap = rand(62, 92 + t * 26);
+        const gap = rnd(62, 92 + t * 26);
         const y = highest.y - gap;
         const prevCenter = highest.x + highest.w / 2;
         /* 只用保守滞空时间计算可达横向距离，再留 18px 安全余量。 */
         const reach = Math.max(42, maxRunDistance(descentTimeForGap(gap)) - 18);
         const offset = clamp(reach, 42, 120);
         generatedCount += 1;
-        const nextW = generatedCount <= 8 ? rand(100, 118) : rand(74, 118);
+        const nextW = generatedCount <= 8 ? rnd(100, 118) : rnd(74, 118);
         const kind = platformChance(y, generatedCount);
         /* 移动平台会在飞行期间继续横移，进一步收紧落点偏移。 */
         const safeOffset = kind === 'moving' ? Math.min(offset, 90) : offset;
-        const center = clamp(prevCenter + rand(-safeOffset, safeOffset), nextW / 2 + 8, W - nextW / 2 - 8);
+        const center = clamp(prevCenter + rnd(-safeOffset, safeOffset), nextW / 2 + 8, W - nextW / 2 - 8);
         const p = makePlatform(center - nextW / 2, y, kind);
         p.w = nextW;
         return p;
@@ -176,7 +505,7 @@
         let highest = platforms.length ? platforms[platforms.length - 1] : null;
         const genLine = camY - 80;
         while (!highest || highest.y > genLine) {
-          const p = highest ? addPlatformAbove(highest) : makePlatform(rand(6, W - 120), camY - 100, 'normal');
+          const p = highest ? addPlatformAbove(highest) : makePlatform(rnd(6, W - 120), camY - 100, 'normal');
           platforms.push(p);
           highest = p;
         }
@@ -196,6 +525,7 @@
           button.setAttribute('aria-pressed', String(active));
           button.setAttribute('aria-label', name + '，' + detail + '，剩余 ' + tools[id] + ' 次（快捷键 ' + (id === 'feather' ? '1' : '2') + '）');
         });
+        syncDashUi();
       }
       function useJoy(id) {
         if (state !== 'playing' || !Object.prototype.hasOwnProperty.call(tools, id) || tools[id] <= 0) return false;
@@ -219,12 +549,85 @@
       Object.keys(joyButtons).forEach((id) => {
         joyButtons[id].addEventListener('click', () => useJoy(id));
       });
+
+      /* ---------- GP004 影冲：一次空中水平短冲，每次着陆补充 ---------- */
+      function syncDashUi() {
+        if (!dashButton) return;
+        const usable = state === 'playing' && dashCharges > 0 && dashTimer <= 0;
+        dashButton.disabled = !usable;
+        dashButton.classList.toggle('is-ready', usable);
+        if (dashCount) dashCount.textContent = String(dashCharges);
+        dashButton.setAttribute(
+          'aria-label',
+          '影冲：' +
+            (dashCharges > 0 ? '本跳可用 1 次' : '本跳已用，着陆后补充') +
+            '（Shift / J 或点按按钮）'
+        );
+      }
+      /* 冲刺方向优先取当前按住的方向键/触点，否则用角色朝向；保证“按住方向同时冲刺”可复现。 */
+      function heldDirection() {
+        let dir = 0;
+        if (input.isDown('ArrowLeft', 'a')) dir -= 1;
+        if (input.isDown('ArrowRight', 'd')) dir += 1;
+        if (input.pointer.down) dir = input.pointer.x < W / 2 ? -1 : 1;
+        return dir;
+      }
+      /* 仅用于 #test 观察：角色是否正踩在某块平台上（无尽模式落地即自动起跳）。 */
+      function isOnPlatform() {
+        const bottom = player.y + player.h;
+        return platforms.some(
+          (p) =>
+            !p.broken &&
+            bottom >= p.y - 1.5 &&
+            bottom <= p.y + 2.5 &&
+            player.x + player.w > p.x + 2 &&
+            player.x < p.x + p.w - 2
+        );
+      }
+      function emitDashTrail(count) {
+        const cx = player.x + player.w / 2;
+        const cy = worldToScreenY(player.y) + player.h / 2;
+        particles.emit(cx, cy, {
+          count: A.reducedMotion ? 1 : count,
+          speed: [40, 150],
+          angle: dashDir > 0 ? [Math.PI * 0.82, Math.PI * 1.18] : [-Math.PI * 0.18, Math.PI * 0.18],
+          life: [0.12, 0.3],
+          size: [1.5, 3],
+          colors: ['#e0567f', '#ffd23f', '#ffffff'],
+          gravity: 0,
+        });
+      }
+      function tryDash() {
+        if (state !== 'playing') return false;
+        if (dashCharges <= 0 || dashTimer > 0) return false;
+        const dir = heldDirection();
+        dashDir = dir !== 0 ? dir : player.face >= 0 ? 1 : -1;
+        player.face = dashDir;
+        player.vx = dashDir * DASH_SPEED;
+        dashCharges -= 1;
+        dashTimer = DASH_TIME;
+        dashCarryTimer = 0;
+        if (mode === 'trial') trialDashes += 1;
+        A.Sfx.play('jump');
+        emitDashTrail(6);
+        syncJoyTools();
+        autosave.saveNow();
+        return true;
+      }
+      if (dashButton) dashButton.addEventListener('click', () => tryDash());
+
       window.addEventListener('keydown', (e) => {
         if (e.repeat || e.metaKey || e.ctrlKey || e.altKey) return;
         const target = e.target;
         if (target && target.tagName) {
           const tag = target.tagName.toLowerCase();
           if (tag === 'input' || tag === 'textarea' || tag === 'select' || target.isContentEditable) return;
+        }
+        /* Shift / J 影冲：按住方向键再按也可以；不可用时直接忽略，不缓存待发。 */
+        if (e.key === 'Shift' || e.key === 'j' || e.key === 'J') {
+          e.preventDefault();
+          tryDash();
+          return;
         }
         const id = { '1': 'feather', '2': 'boost' }[e.key];
         if (!id) return;
@@ -251,6 +654,11 @@
         tools.boost = JOY_START.boost;
         featherTimer = 0;
         boostArmed = false;
+        /* 开局与重开各有一次影冲，之后只在成功着陆时补充。 */
+        dashCharges = DASH_MAX_CHARGES;
+        dashTimer = 0;
+        dashDir = 1;
+        dashCarryTimer = 0;
         hintTimer = 0;
         landingHint = '';
         particles.clear();
@@ -266,14 +674,44 @@
         syncJoyTools();
       }
 
+      function fmtTime(seconds) {
+        const total = Math.max(0, Math.floor(Number(seconds) || 0));
+        const m = Math.floor(total / 60);
+        const s = total % 60;
+        return (m < 10 ? '0' : '') + m + ':' + (s < 10 ? '0' : '') + s;
+      }
+
+      function syncHint() {
+        if (dom.hint) dom.hint.textContent = mode === 'trial' ? TRIAL_HINT : CLASSIC_HINT;
+      }
+
       function syncHud() {
+        if (mode === 'trial') {
+          dom.hudHeight.hidden = true;
+          dom.hudHighWrap.hidden = true;
+          dom.hudTrial.hidden = false;
+          dom.hudTrial.textContent = stageDef
+            ? stageDef.id + ' ' + stageDef.title + ' · ' + fmtTime(trialElapsed) + ' · 卷轴 ' + trialScrolls.length + '/' + stageDef.scrolls.length + SCROLL_OPTIONAL_TAG
+            : '';
+          return;
+        }
+        dom.hudHeight.hidden = false;
+        dom.hudHighWrap.hidden = false;
+        dom.hudTrial.hidden = true;
         dom.hudScore.textContent = String(score);
       }
 
       function startGame() {
+        mode = 'classic';
+        stageDef = null;
+        trialElapsed = 0;
+        trialScrolls = [];
+        trialResults = [];
+        trialDashes = 0;
         autosave.clear();
         reset();
         state = 'playing';
+        syncHint();
         ui.hide();
         loop.resume();
         pauseUi.sync(); syncJoyTools();
@@ -317,28 +755,346 @@
         loop.pause();
         state = 'paused';
         autosave.saveNow();
-        ui.show({
+        const paused = {
           title: '已暂停',
           text: '影子随时待命。<br/>局内进度已保存，可以随时离开。',
           btn: '继续',
           onBtn: resumeGame,
-        });
-        pauseUi.sync(); syncJoyTools();
+        };
+        if (mode === 'trial') {
+          paused.btn2 = '退出本关';
+          paused.onBtn2 = exitTrial;
+        }
+        ui.show(paused);
+        pauseUi.sync(); syncJoyTools(); syncHud();
       }
 
       function showStart() {
         ui.show({
           title: '影跃',
-          text: '无尽上跳：踩平台起跳，触墙反弹。<br/>紫色平台会移动 · 白色平台踩一次就碎<br/>平台落点保证可达，越往高处越难',
+          text: '无尽上跳：踩平台起跳，触墙反弹。<br/>紫色平台会移动 · 白色平台踩一次就碎<br/>空中按 Shift / J 或点 💨 影冲，每次着陆补充一次<br/>平台落点保证可达，越往高处越难',
           btn: '开始游戏',
           onBtn: startGame,
+          btn2: '影之试炼（S1–S3）',
+          onBtn2: showTrialIntro,
         });
+      }
+
+      function showTrialIntro() {
+        const lines = STAGES.map((s) => s.id + ' ' + s.title).join(' · ');
+        ui.show({
+          title: '影之试炼',
+          text:
+            STAGES.length + ' 关手工影林，每关 45–120 秒。<br/>' + lines +
+            '<br/>穿过顶部发光影门即过关；金色卷轴为可选收集。<br/>影冲每跳一次，落地补充。',
+          btn: '开始 S1',
+          onBtn: () => beginTrial(0),
+          btn2: '返回',
+          onBtn2: showStart,
+        });
+      }
+
+      /* ---------- 影之试炼：世界构建 / 进出关卡 / 胜负 ---------- */
+      function buildStageWorld(index) {
+        const def = STAGES[clamp(index, 0, STAGES.length - 1)];
+        if (!def || !def.platforms.length) return false;
+        stageIndex = def.index;
+        stageDef = def;
+        platforms = def.platforms.map((p) => ({
+          x: p.x,
+          y: p.y,
+          w: p.w,
+          h: 12,
+          kind: p.kind,
+          baseX: p.baseX,
+          range: p.range,
+          speed: p.speed,
+          broken: false,
+          breakTimer: 0,
+          phase: p.phase,
+          routes: Array.isArray(p.routes) ? p.routes.slice() : [],
+        }));
+        camY = clamp(def.height - H, 0, def.height - H);
+        player.x = def.start.x;
+        player.y = def.start.y;
+        player.vx = 0;
+        player.vy = 0;
+        player.face = 1;
+        player.prevBottom = player.y + player.h;
+        startY = player.y;
+        topY = player.y;
+        score = 0;
+        particles.clear();
+        tools.feather = JOY_START.feather;
+        tools.boost = JOY_START.boost;
+        featherTimer = 0;
+        boostArmed = false;
+        dashCharges = DASH_MAX_CHARGES;
+        dashTimer = 0;
+        dashDir = 1;
+        dashCarryTimer = 0;
+        hintTimer = 0;
+        landingHint = '';
+        trialElapsed = 0;
+        trialScrolls = [];
+        trialDashes = 0;
+        lastTrialSecond = -1;
+        trialLandingRoutes = [];
+        trialLandedShared = false;
+        routeHintTimer = 0;
+        return true;
+      }
+
+      function startStage(index) {
+        mode = 'trial';
+        if (!buildStageWorld(index)) return false;
+        /* 双路线关开局给一次“左·X / 右·Y”预示，随后由 HUD 常驻信息接管。 */
+        routeHintTimer = stageDef.routeHint ? ROUTE_HINT_TIME : 0;
+        state = 'playing';
+        syncHint();
+        syncHud();
+        ui.hide();
+        loop.resume();
+        pauseUi.sync(); syncJoyTools();
+        autosave.saveNow();
+        return true;
+      }
+
+      function beginTrial(index) {
+        autosave.clear();
+        trialResults = [];
+        return startStage(index);
+      }
+
+      function exitTrial() {
+        autosave.clear();
+        mode = 'classic';
+        stageDef = null;
+        stageIndex = 0;
+        trialElapsed = 0;
+        trialScrolls = [];
+        trialResults = [];
+        trialDashes = 0;
+        reset();
+        state = 'ready';
+        loop.resume();
+        showStart();
+        pauseUi.sync(); syncJoyTools(); syncHud(); syncHint();
+      }
+
+      function stageClear() {
+        if (state !== 'playing' || mode !== 'trial' || !stageDef) return;
+        state = 'cleared';
+        A.Sfx.play('perfect');
+        const g = stageDef.goal;
+        particles.emit(g.x + g.w / 2, worldToScreenY(g.y + g.h / 2), {
+          count: A.reducedMotion ? 6 : 18,
+          speed: [40, 170],
+          angle: [Math.PI * 0.1, Math.PI * 0.9],
+          life: [0.35, 0.85],
+          size: [2, 4],
+          colors: ['#7cf0d2', '#ffd23f', '#ffffff'],
+          gravity: 120,
+        });
+        const verdict = trialRouteVerdict();
+        const result = {
+          id: stageDef.id,
+          title: stageDef.title,
+          time: Math.round(trialElapsed * 10) / 10,
+          scrolls: trialScrolls.length,
+          dashes: trialDashes,
+          route: verdict || null,
+        };
+        trialResults = trialResults.filter((item) => item.id !== result.id);
+        trialResults.push(result);
+        trialResults.sort((a, b) => STAGES.findIndex((s) => s.id === a.id) - STAGES.findIndex((s) => s.id === b.id));
+        autosave.clear();
+        loop.pause();
+        const isLast = stageIndex >= STAGES.length - 1;
+        ui.show({
+          title: TRIAL_CLEAR_TITLE,
+          text:
+            `<span class="ac-score">${fmtTime(result.time)}</span>` +
+            `${stageDef.id} ${stageDef.title} · 卷轴 ${result.scrolls}/${stageDef.scrolls.length}${SCROLL_OPTIONAL_TAG} · 影冲 ${result.dashes} 次 · 路线 ${routeLabelFor(stageDef, verdict)}`,
+          btn: isLast ? '完成试炼' : '下一关',
+          onBtn: isLast ? showTrialSummary : () => startStage(stageIndex + 1),
+          btn2: '重玩本关',
+          onBtn2: () => startStage(stageIndex),
+        });
+        pauseUi.sync(); syncJoyTools(); syncHud();
+      }
+
+      function stageFail() {
+        if (state !== 'playing' || mode !== 'trial') return;
+        state = 'over';
+        A.Sfx.play('over');
+        loop.pause();
+        ui.show({
+          title: TRIAL_FAIL_TITLE,
+          text:
+            (stageDef ? stageDef.id + ' ' + stageDef.title + ' · ' : '') +
+            '跌落出影林边界。<br/>' +
+            (FAIL_HINTS[stageDef ? stageDef.id : ''] || '从本关起点再来一次，先观察下一块平台的落点。') +
+            '<br/>' + FAIL_SCROLL_NOTE +
+            '<br/>从本关起点立刻重试，进度不受影响。',
+          btn: '从本关起点重试',
+          onBtn: () => startStage(stageIndex),
+          btn2: '退出试炼',
+          onBtn2: exitTrial,
+        });
+        pauseUi.sync(); syncJoyTools(); syncHud();
+      }
+
+      function showTrialSummary() {
+        const lines = STAGES.map((s) => {
+          const r = trialResults.find((item) => item.id === s.id);
+          if (!r) return s.id + ' ' + s.title + ' · 未完成';
+          return (
+            s.id + ' ' + s.title + ' · ' + fmtTime(r.time) +
+            ' · 卷轴 ' + r.scrolls + '/' + s.scrolls.length + SCROLL_OPTIONAL_TAG +
+            ' · 影冲 ' + r.dashes + ' 次' +
+            ' · 路线 ' + routeLabelFor(s, r.route)
+          );
+        }).join('<br/>');
+        ui.show({
+          title: '试炼完成',
+          text: lines + '<br/>本局结果只保留在这里，不写入最高分。',
+          btn: '回到开始',
+          onBtn: exitTrial,
+          btn2: '再试一次',
+          onBtn2: () => beginTrial(0),
+        });
+        pauseUi.sync(); syncJoyTools(); syncHud();
+      }
+
+      function updateTrial(dt) {
+        if (!stageDef) {
+          stageFail();
+          return;
+        }
+        trialElapsed += dt;
+        routeHintTimer = Math.max(0, routeHintTimer - dt);
+        /* 相机只向上跟随，不回滚看下方：跌出画面即失败。 */
+        const line = camY + H * 0.42;
+        if (player.y < line) camY -= line - player.y;
+        camY = clamp(camY, 0, stageDef.height - H);
+        /* 卷轴：18×22 矩形与玩家矩形相交即收集（只影响探索记录）。 */
+        for (const s of stageDef.scrolls) {
+          if (trialScrolls.indexOf(s.id) !== -1) continue;
+          if (
+            player.x + player.w > s.x - TRIAL_SCROLL_W / 2 &&
+            player.x < s.x + TRIAL_SCROLL_W / 2 &&
+            player.y + player.h > s.y - TRIAL_SCROLL_H / 2 &&
+            player.y < s.y + TRIAL_SCROLL_H / 2
+          ) {
+            trialScrolls.push(s.id);
+            A.Sfx.play('bell', 5);
+            particles.emit(s.x, worldToScreenY(s.y), {
+              count: A.reducedMotion ? 4 : 10,
+              speed: [30, 120],
+              angle: [0, TAU],
+              life: [0.25, 0.55],
+              size: [1.5, 3],
+              colors: ['#ffd23f', '#fff3c4'],
+              gravity: 40,
+            });
+            syncHud();
+            autosave.saveNow();
+          }
+        }
+        const g = stageDef.goal;
+        if (player.x + player.w > g.x && player.x < g.x + g.w && player.y + player.h > g.y && player.y < g.y + g.h) {
+          stageClear();
+          return;
+        }
+        if (player.y > camY + H + 30) {
+          stageFail();
+          return;
+        }
+        const sec = Math.floor(trialElapsed);
+        if (sec !== lastTrialSecond) {
+          lastTrialSecond = sec;
+          syncHud();
+        }
+      }
+
+      /* ---------- GP006 路线判定 / 卷轴可选语义 ---------- */
+      /* 路线显示名：mixed=两路都走过；free=只走了共享平台；null=还没判定。 */
+      function routeLabelFor(stage, routeId) {
+        if (!stage) return '未判定';
+        if (routeId === 'mixed') return '混合';
+        if (routeId === 'free') return '自由路线';
+        const found = (stage.routes || []).find((r) => r.id === routeId);
+        return found ? found.label : '未判定';
+      }
+
+      function trialRouteVerdict() {
+        if (!stageDef || !stageDef.routes || !stageDef.routes.length) return null;
+        if (stageDef.routes.length === 1) return stageDef.routes[0].id;
+        if (trialLandingRoutes.length >= 2) return 'mixed';
+        if (trialLandingRoutes.length === 1) return trialLandingRoutes[0];
+        if (trialLandedShared) return 'free';
+        return null;
+      }
+
+      /* 每次成功着陆记录：落在“只属于一条路线”的平台才算走上那条路；共享平台不算分流。 */
+      function trackTrialLanding(p) {
+        if (!stageDef || !p || !Array.isArray(p.routes) || !p.routes.length) return;
+        if (stageDef.routes.length < 2) return;
+        if (p.routes.length === 1) {
+          if (trialLandingRoutes.indexOf(p.routes[0]) === -1) trialLandingRoutes.push(p.routes[0]);
+        } else {
+          trialLandedShared = true;
+        }
+      }
+
+      /* 存档恢复后按平台 y 重新贴回 route 标签（数据里每关平台的 y 唯一）。 */
+      function attachRouteTags(list) {
+        if (!stageDef) return;
+        const byY = {};
+        stageDef.platforms.forEach((p) => {
+          byY[p.y] = p;
+        });
+        list.forEach((p) => {
+          const def = byY[p.y];
+          p.routes = def && Array.isArray(def.routes) ? def.routes.slice() : [];
+        });
+      }
+
+      /* 路线观察数据：trialInfo().routeInfo 与 routeInfo() 共用同一份只读快照。 */
+      function buildTrialRouteInfo() {
+        if (mode !== 'trial' || !stageDef) {
+          return { stageId: null, route: null, routeLabel: '', routeIds: [], routes: [], routeHint: '', exclusiveLanded: [], sharedLanded: false, landedRouted: false };
+        }
+        const verdict = trialRouteVerdict();
+        return {
+          stageId: stageDef.id,
+          route: verdict,
+          routeLabel: routeLabelFor(stageDef, verdict),
+          routeIds: stageDef.routes.map((r) => r.id),
+          routes: stageDef.routes.map((r) => r.label),
+          routeHint: stageDef.routeHint || '',
+          exclusiveLanded: trialLandingRoutes.slice(),
+          sharedLanded: trialLandedShared,
+          landedRouted: trialLandingRoutes.length > 0 || trialLandedShared,
+        };
       }
 
       /* ---------- 局内存档 ---------- */
       function serialize() {
         if (state !== 'playing' && state !== 'paused') return null;
         return {
+          /* 影之试炼字段：classic 下写默认值，旧档缺 mode 时 restore 按 classic 处理。 */
+          mode,
+          stageIndex,
+          trialElapsed,
+          trialScrolls: trialScrolls.slice(),
+          trialResults: trialResults.map((r) => ({ id: r.id, title: r.title, time: r.time, scrolls: r.scrolls, dashes: r.dashes, route: r.route || null })),
+          trialDashes,
+          trialRoute: {
+            exclusive: trialLandingRoutes.slice(),
+            shared: trialLandedShared,
+          },
           player: {
             x: player.x,
             y: player.y,
@@ -366,36 +1122,91 @@
           tools: { feather: tools.feather, boost: tools.boost },
           featherTimer,
           boostArmed,
+          dashCharges,
+          dashTimer,
+          dashDir,
         };
+      }
+
+      function mapSavedPlatforms(list) {
+        return list
+          .filter((p) => p && isFinite(p.x) && isFinite(p.y) && isFinite(p.w))
+          .map((p) => ({
+            x: Number(p.x),
+            y: Number(p.y),
+            w: clamp(Number(p.w), 40, W - 12),
+            h: 12,
+            kind: ['normal', 'moving', 'fragile'].indexOf(p.kind) !== -1 ? p.kind : 'normal',
+            baseX: Number.isFinite(Number(p.baseX)) ? Number(p.baseX) : Number(p.x),
+            range: clamp(Number(p.range) || (p.kind === 'moving' ? 18 : 0), 0, 32),
+            speed: p.kind === 'moving' ? (Number(p.speed) > 5 ? 1 : clamp(Number(p.speed) || 1, 0.6, 1.6)) : 0,
+            broken: !!p.broken,
+            breakTimer: Number(p.breakTimer) || 0,
+            phase: Number(p.phase) || 0,
+          }))
+          .sort((a, b) => b.y - a.y);
       }
 
       function restore(data) {
         if (!data || !data.player || !Array.isArray(data.platforms) || !data.platforms.length) return false;
         try {
+          /* 旧档没有 mode：一律按经典恢复，保证 0.7.0 存档零回归。 */
+          mode = data.mode === 'trial' ? 'trial' : 'classic';
           reset();
-          platforms = data.platforms
-            .filter((p) => p && isFinite(p.x) && isFinite(p.y) && isFinite(p.w))
-            .map((p) => ({
-              x: Number(p.x),
-              y: Number(p.y),
-              w: clamp(Number(p.w), 40, W - 12),
-              h: 12,
-              kind: ['normal', 'moving', 'fragile'].indexOf(p.kind) !== -1 ? p.kind : 'normal',
-              baseX: Number.isFinite(Number(p.baseX)) ? Number(p.baseX) : Number(p.x),
-              range: clamp(Number(p.range) || (p.kind === 'moving' ? 18 : 0), 0, 32),
-              speed: p.kind === 'moving' ? (Number(p.speed) > 5 ? 1 : clamp(Number(p.speed) || 1, 0.6, 1.6)) : 0,
-              broken: !!p.broken,
-              breakTimer: Number(p.breakTimer) || 0,
-              phase: Number(p.phase) || 0,
-            }))
-            .sort((a, b) => b.y - a.y);
-          if (!platforms.length) return false;
-          player.x = clamp(Number(data.player.x) || W / 2, -player.w / 2, W - player.w / 2);
-          player.y = Number(data.player.y) || H - 160;
+          if (mode === 'trial') {
+            const savedIndex = clamp(Math.floor(Number(data.stageIndex) || 0), 0, Math.max(0, STAGES.length - 1));
+            if (!buildStageWorld(savedIndex)) {
+              mode = 'classic';
+              reset();
+              return false;
+            }
+            trialElapsed = clamp(Number(data.trialElapsed) || 0, 0, 36000);
+            trialDashes = clamp(Math.floor(Number(data.trialDashes) || 0), 0, 9999);
+            const scrollIds = stageDef.scrolls.map((s) => s.id);
+            trialScrolls = Array.isArray(data.trialScrolls)
+              ? data.trialScrolls.map((id) => String(id)).filter((id) => scrollIds.indexOf(id) !== -1)
+              : [];
+            const stageIds = STAGES.map((s) => s.id);
+            trialResults = Array.isArray(data.trialResults)
+              ? data.trialResults
+                  .filter((r) => r && typeof r === 'object' && stageIds.indexOf(String(r.id)) !== -1)
+                  .map((r) => ({
+                    id: String(r.id),
+                    title: String(r.title || ''),
+                    time: clamp(Number(r.time) || 0, 0, 36000),
+                    scrolls: clamp(Math.floor(Number(r.scrolls) || 0), 0, 99),
+                    dashes: clamp(Math.floor(Number(r.dashes) || 0), 0, 9999),
+                    route: typeof r.route === 'string' ? r.route : null,
+                  }))
+              : [];
+            lastTrialSecond = Math.floor(trialElapsed);
+            /* GP006 路线进度：旧档缺省按“未判定”处理。 */
+            trialLandingRoutes = [];
+            trialLandedShared = false;
+            if (data.trialRoute && typeof data.trialRoute === 'object') {
+              const validRouteIds = (stageDef.routes || []).map((r) => r.id);
+              trialLandingRoutes = Array.isArray(data.trialRoute.exclusive)
+                ? data.trialRoute.exclusive.map((id) => String(id)).filter((id) => validRouteIds.indexOf(id) !== -1)
+                : [];
+              trialLandedShared = !!data.trialRoute.shared;
+            }
+            routeHintTimer = 0;
+          }
+          const restoredPlatforms = mapSavedPlatforms(data.platforms);
+          if (!restoredPlatforms.length) return false;
+          platforms = restoredPlatforms;
+          if (mode === 'trial' && stageDef) attachRouteTags(platforms);
+          const px = Number(data.player.x);
+          const py = Number(data.player.y);
+          player.x = Number.isFinite(px) ? clamp(px, -player.w / 2, W - player.w / 2) : W / 2 - player.w / 2;
+          player.y = Number.isFinite(py) ? py : mode === 'trial' && stageDef ? stageDef.start.y : H - 160;
           player.vx = Number(data.player.vx) || 0;
           player.vy = Number(data.player.vy) || 0;
           player.face = data.player.face === -1 ? -1 : 1;
-          camY = Number(data.camY) || 0;
+          player.prevBottom = player.y + player.h;
+          const savedCam = Number(data.camY);
+          camY = Number.isFinite(savedCam) ? savedCam : mode === 'trial' && stageDef ? stageDef.height - H : 0;
+          if (mode === 'trial' && stageDef) camY = clamp(camY, 0, stageDef.height - H);
           topY = Number(data.topY) || player.y;
           startY = Number(data.startY) || player.y;
           score = Math.max(0, Number(data.score) || 0);
@@ -408,8 +1219,20 @@
             : JOY_START.boost;
           featherTimer = clamp(Number(data.featherTimer) || 0, 0, FEATHER_DURATION);
           boostArmed = !!data.boostArmed;
+          if (data.dashCharges === undefined || data.dashCharges === null) {
+            /* 旧无尽档没有影冲字段：按开局 1 次可用恢复，不丢局。 */
+            dashCharges = DASH_MAX_CHARGES;
+            dashTimer = 0;
+            dashDir = player.face >= 0 ? 1 : -1;
+          } else {
+            dashCharges = clamp(Math.floor(Number(data.dashCharges) || 0), 0, DASH_MAX_CHARGES);
+            dashTimer = clamp(Number(data.dashTimer) || 0, 0, DASH_TIME);
+            dashDir = data.dashDir === -1 ? -1 : data.dashDir === 1 ? 1 : player.face >= 0 ? 1 : -1;
+          }
+          dashCarryTimer = 0;
           recordSaved = false;
           syncHud();
+          syncHint();
           syncJoyTools();
           return true;
         } catch (err) {
@@ -419,7 +1242,10 @@
 
       const autosave = A.createRunAutosave('shadow-leap', serialize, {
         every: 4,
-        meta: () => ({ score, summary: `高度 ${score}m · 最高 ${Math.max(high, score)}m` }),
+        meta: () =>
+          mode === 'trial' && stageDef
+            ? { score: trialElapsed, summary: `试炼 ${stageDef.id} ${stageDef.title} · ${fmtTime(trialElapsed)} · 卷轴 ${trialScrolls.length}/${stageDef.scrolls.length}` }
+            : { score, summary: `高度 ${score}m · 最高 ${Math.max(high, score)}m` },
       });
 
       /* ---------- 更新 ---------- */
@@ -438,37 +1264,45 @@
           autosave.saveNow();
         }
 
-        /* 水平控制 */
+        /* 水平控制：影冲期间锁定为朝向 × DASH_SPEED，不再响应转向；结束后保留冲刺方向惯性。 */
         const ACC = 2400;
         const MAX_VX = 265;
-        let dir = 0;
-        if (input.isDown('ArrowLeft', 'a')) dir -= 1;
-        if (input.isDown('ArrowRight', 'd')) dir += 1;
-        if (input.pointer.down) {
-          dir = input.pointer.x < W / 2 ? -1 : 1;
-        }
-        if (dir !== 0) {
-          player.vx += dir * ACC * dt;
-          player.face = dir;
+        const dashing = dashTimer > 0;
+        if (dashing) {
+          dashTimer = Math.max(0, dashTimer - dt);
+          player.vx = dashDir * DASH_SPEED;
+          player.face = dashDir;
+          player.x += player.vx * dt;
+          emitDashTrail(2);
         } else {
-          player.vx -= player.vx * Math.min(1, 12 * dt);
+          let dir = heldDirection();
+          const maxVx = dashCarryTimer > 0 ? DASH_SPEED * DASH_LAND_KEEP : MAX_VX;
+          if (dir !== 0) {
+            player.vx += dir * ACC * dt;
+            player.face = dir;
+          } else {
+            player.vx -= player.vx * Math.min(1, 12 * dt);
+          }
+          player.vx = clamp(player.vx, -maxVx, maxVx);
+          player.x += player.vx * dt;
+          dashCarryTimer = Math.max(0, dashCarryTimer - dt);
         }
-        player.vx = clamp(player.vx, -MAX_VX, MAX_VX);
-        player.x += player.vx * dt;
 
-        /* 触墙反弹（保留速度） */
+        /* 触墙反弹（保留速度）；冲刺中反弹后改为朝反方向继续冲，避免长时间贴墙。 */
         if (player.x < -player.w / 2) {
           player.x = -player.w / 2;
           player.vx = Math.abs(player.vx) * 0.95;
+          if (dashing) dashDir = 1;
         } else if (player.x > W - player.w / 2) {
           player.x = W - player.w / 2;
           player.vx = -Math.abs(player.vx) * 0.95;
+          if (dashing) dashDir = -1;
         }
 
-        /* 重力：羽落只改变下落，不改变上升高度、平台生成或单向碰撞。 */
+        /* 重力：羽落只改变下落，不改变上升高度、平台生成或单向碰撞；影冲期间重力降到 25%。 */
         player.prevBottom = player.y + player.h;
         const feathering = featherTimer > 0 && player.vy > 0;
-        const gravity = GRAVITY * (feathering ? FEATHER_GRAVITY : 1);
+        const gravity = GRAVITY * (feathering ? FEATHER_GRAVITY : 1) * (dashing ? DASH_GRAVITY_SCALE : 1);
         const maxFall = feathering ? FEATHER_MAX_FALL : MAX_FALL;
         player.vy = Math.min(maxFall, player.vy + gravity * dt);
         player.y += player.vy * dt;
@@ -488,6 +1322,18 @@
           if (p.broken) continue;
           if (A.Physics.oneWayLanding(player, player.prevBottom, p)) {
             player.y = p.y - player.h;
+            const wasDashing = dashTimer > 0;
+            if (wasDashing) {
+              /* 落地立刻终止影冲，但保留 60% 冲速的横向惯性，避免手感断崖。 */
+              dashTimer = 0;
+              dashCarryTimer = DASH_CARRY_TIME;
+              player.vx = dashDir * DASH_SPEED * DASH_LAND_KEEP;
+            }
+            const hadDashCharge = dashCharges >= DASH_MAX_CHARGES;
+            /* 每次成功着陆补充一次影冲（平台上没有可无限刷的消耗品）。 */
+            dashCharges = DASH_MAX_CHARGES;
+            /* GP006：记录本局实际落过的路线平台（用于结算路线标签）。 */
+            if (mode === 'trial') trackTrialLanding(p);
             const usedBoost = boostArmed;
             player.vy = usedBoost ? BOOST_JUMP_V : JUMP_V;
             if (usedBoost) boostArmed = false;
@@ -508,12 +1354,19 @@
               p.breakTimer = 0.22;
               A.Sfx.play('hit');
             }
-            if (usedBoost) {
+            if (usedBoost || wasDashing || !hadDashCharge) {
               syncJoyTools();
               autosave.saveNow();
             }
             break;
           }
+        }
+
+        /* 影之试炼：相机、计时、卷轴、影门与失败全部走世界坐标，不跑经典的高度/无限生成逻辑。 */
+        if (mode === 'trial') {
+          updateTrial(dt);
+          input.endFrame();
+          return;
         }
 
         /* 相机跟随：玩家越过中线以上时上移 */
@@ -585,6 +1438,23 @@
         ctx.restore();
       }
 
+      /* 影冲残影：只画在冲刺中的短尾迹，reducedMotion 时减量。 */
+      function drawDashTrail() {
+        if (dashTimer <= 0) return;
+        const ghosts = A.reducedMotion ? 1 : 3;
+        const y = worldToScreenY(player.y);
+        const fade = clamp(dashTimer / DASH_TIME, 0, 1);
+        ctx.save();
+        for (let i = 1; i <= ghosts; i++) {
+          const gx = player.x + player.w / 2 - dashDir * i * 11;
+          ctx.globalAlpha = (0.3 - i * 0.07) * (0.45 + fade * 0.55);
+          ctx.fillStyle = '#e0567f';
+          A.draw.roundRect(ctx, gx - 9 - dashDir * i * 2, y + 3, 18 + i * 3, 22 - i * 2, 6);
+          ctx.fill();
+        }
+        ctx.restore();
+      }
+
       function drawNinja() {
         const y = worldToScreenY(player.y);
         ctx.save();
@@ -609,6 +1479,59 @@
         ctx.fillRect(-1, -18 * squash, 7, 3.4);
         ctx.fillStyle = '#e0567f';
         ctx.fillRect(-9, 2 * squash, 18, 3);
+        ctx.restore();
+      }
+
+      /* 影之试炼：发光影门（玩家矩形与 goal 矩形相交即过关）。 */
+      function drawTrialGoal(g) {
+        const y = worldToScreenY(g.y);
+        if (y > H + 20 || y + g.h < -20) return;
+        const pulse = 0.5 + 0.5 * Math.sin(performance.now() / 420);
+        ctx.save();
+        ctx.fillStyle = 'rgba(124,240,210,' + (0.06 + pulse * 0.06).toFixed(3) + ')';
+        A.draw.roundRect(ctx, g.x - 8, y - 10, g.w + 16, g.h + 18, 18);
+        ctx.fill();
+        const grad = ctx.createLinearGradient(0, y, 0, y + g.h);
+        grad.addColorStop(0, 'rgba(124,240,210,' + (0.32 + pulse * 0.16).toFixed(3) + ')');
+        grad.addColorStop(1, 'rgba(124,240,210,0.05)');
+        ctx.fillStyle = grad;
+        A.draw.roundRect(ctx, g.x + 5, y + 4, g.w - 10, g.h - 8, 12);
+        ctx.fill();
+        ctx.strokeStyle = '#7cf0d2';
+        ctx.lineWidth = 3;
+        ctx.beginPath();
+        ctx.moveTo(g.x + 3, y + g.h);
+        ctx.lineTo(g.x + 3, y + 18);
+        ctx.quadraticCurveTo(g.x + g.w / 2, y - 12, g.x + g.w - 3, y + 18);
+        ctx.lineTo(g.x + g.w - 3, y + g.h);
+        ctx.stroke();
+        A.draw.label(ctx, '影门', g.x + g.w / 2, y + g.h + 13, {
+          font: 'bold 11px system-ui, sans-serif',
+          color: 'rgba(124,240,210,0.92)',
+        });
+        ctx.restore();
+      }
+
+      /* 影之试炼：金色卷轴（可选收集，18×22 判定）。 */
+      function drawTrialScroll(s) {
+        if (trialScrolls.indexOf(s.id) !== -1) return;
+        const y = worldToScreenY(s.y);
+        if (y < -24 || y > H + 24) return;
+        const pulse = 0.5 + 0.5 * Math.sin(performance.now() / 300 + s.x * 0.05);
+        ctx.save();
+        ctx.fillStyle = 'rgba(255,210,63,' + (0.1 + pulse * 0.1).toFixed(3) + ')';
+        ctx.beginPath();
+        ctx.arc(s.x, y, 14 + pulse * 3, 0, TAU);
+        ctx.fill();
+        ctx.fillStyle = '#ffd23f';
+        A.draw.roundRect(ctx, s.x - TRIAL_SCROLL_W / 2, y - TRIAL_SCROLL_H / 2, TRIAL_SCROLL_W, TRIAL_SCROLL_H, 4);
+        ctx.fill();
+        ctx.fillStyle = '#3b2a05';
+        ctx.fillRect(s.x - TRIAL_SCROLL_W / 2 + 2, y - 4, TRIAL_SCROLL_W - 4, 2);
+        ctx.fillRect(s.x - TRIAL_SCROLL_W / 2 + 2, y + 1, TRIAL_SCROLL_W - 4, 2);
+        ctx.fillStyle = '#ff9f1c';
+        ctx.fillRect(s.x - TRIAL_SCROLL_W / 2 - 2, y - TRIAL_SCROLL_H / 2, 3, TRIAL_SCROLL_H);
+        ctx.fillRect(s.x + TRIAL_SCROLL_W / 2 - 1, y - TRIAL_SCROLL_H / 2, 3, TRIAL_SCROLL_H);
         ctx.restore();
       }
 
@@ -667,9 +1590,14 @@
           }
         }
 
+        if (mode === 'trial' && stageDef) {
+          drawTrialGoal(stageDef.goal);
+          stageDef.scrolls.forEach(drawTrialScroll);
+        }
         platforms.forEach(drawPlatform);
         particles.draw(ctx);
-        if (state === 'playing' || state === 'paused' || state === 'ready') drawNinja();
+        drawDashTrail();
+        if (state === 'playing' || state === 'paused' || state === 'ready' || state === 'cleared') drawNinja();
         if (hintTimer > 0 && landingHint && (state === 'playing' || state === 'paused')) {
           A.draw.label(ctx, landingHint, clamp(player.x + player.w / 2, 46, W - 46), clamp(worldToScreenY(player.y) - 34, 76, H - 40), {
             font: 'bold 14px system-ui',
@@ -678,10 +1606,41 @@
           });
         }
 
-        A.draw.label(ctx, score + 'm', W / 2, 46, {
-          font: 'bold 30px system-ui, sans-serif',
-          color: 'rgba(255,255,255,0.14)',
-        });
+        if (mode === 'trial' && stageDef) {
+          /* 影之试炼画布内 HUD：手机端顶栏 HUD 隐藏后仍能读到关卡/计时/卷轴。 */
+          A.draw.label(ctx, stageDef.id + ' ' + stageDef.title, W / 2, 26, {
+            font: 'bold 15px system-ui, sans-serif',
+            color: 'rgba(255,255,255,0.62)',
+          });
+          A.draw.label(ctx, fmtTime(trialElapsed) + ' · 卷轴 ' + trialScrolls.length + '/' + stageDef.scrolls.length + SCROLL_OPTIONAL_TAG, W / 2, 48, {
+            font: 'bold 13px system-ui, sans-serif',
+            color: 'rgba(255,210,63,0.75)',
+          });
+          /* GP006：双路线关开局 2.4 秒的「左·X / 右·Y」预示，淡出后不再常驻。 */
+          if (routeHintTimer > 0 && stageDef.routeHint) {
+            A.draw.label(ctx, stageDef.routeHint, W / 2, 74, {
+              font: 'bold 12px system-ui, sans-serif',
+              color: '#7cf0d2',
+              alpha: clamp(routeHintTimer, 0, 1) * 0.85,
+            });
+          }
+        } else {
+          A.draw.label(ctx, score + 'm', W / 2, 46, {
+            font: 'bold 30px system-ui, sans-serif',
+            color: 'rgba(255,255,255,0.14)',
+          });
+        }
+
+        /* 画面内常驻影冲状态：静音也能看出“本跳可用/已用/正在冲”。 */
+        if (state === 'playing' || state === 'paused') {
+          const dashLabel = dashTimer > 0 ? '影冲！' : dashCharges > 0 ? '影冲 可用' : '影冲 已用';
+          A.draw.label(ctx, dashLabel, 10, 72, {
+            align: 'left',
+            font: 'bold 12px system-ui, sans-serif',
+            color: dashTimer > 0 ? '#ffd23f' : dashCharges > 0 ? '#e0567f' : 'rgba(147,160,200,0.55)',
+            alpha: dashTimer > 0 ? 1 : 0.9,
+          });
+        }
       }
 
       const loop = A.createLoop({
@@ -772,6 +1731,162 @@
             player.vy = 120;
             player.prevBottom = p.y - 2;
             return true;
+          },
+          /* ---------- GP004 影冲 / 确定性种子 ---------- */
+          dashInfo() {
+            return {
+              dashCharges,
+              dashTimer,
+              dashing: dashTimer > 0,
+              vx: player.vx,
+              vy: player.vy,
+              face: player.face,
+              landingHint,
+              state,
+            };
+          },
+          triggerDash() {
+            return tryDash();
+          },
+          setSeed(seed) {
+            return applySeed(seed);
+          },
+          seed() {
+            return activeSeed;
+          },
+          /* 设置种子并重生成经典模式平台；返回平台数。会清掉旧局内存档，避免与旧局混用。 */
+          resetWithSeed(seed) {
+            applySeed(seed);
+            autosave.clear();
+            mode = 'classic';
+            stageDef = null;
+            reset();
+            syncHint();
+            return platforms.length;
+          },
+          /* 等于“用种子开一局经典”：设置种子 + 重生成平台 + 进入游玩态；返回平台数。 */
+          startClassicWithSeed(seed) {
+            applySeed(seed);
+            autosave.clear();
+            mode = 'classic';
+            stageDef = null;
+            trialElapsed = 0;
+            trialScrolls = [];
+            trialResults = [];
+            trialDashes = 0;
+            reset();
+            state = 'playing';
+            syncHint();
+            syncHud();
+            ui.hide();
+            loop.resume();
+            pauseUi.sync();
+            syncJoyTools();
+            autosave.saveNow();
+            return platforms.length;
+          },
+          airborne() {
+            return !isOnPlatform();
+          },
+          /* ---------- GP005 影之试炼 ---------- */
+          stageList() {
+            return STAGES.map((s) => ({
+              index: s.index,
+              id: s.id,
+              title: s.title,
+              height: s.height,
+              start: { x: s.start.x, y: s.start.y },
+              goal: { x: s.goal.x, y: s.goal.y, w: s.goal.w, h: s.goal.h },
+              platforms: s.platforms.length,
+              scrolls: s.scrolls.length,
+              routeIds: (s.routes || []).map((r) => r.id),
+              routes: (s.routes || []).map((r) => r.label),
+              routeHint: s.routeHint || '',
+            }));
+          },
+          startTrial(index) {
+            if (!STAGES.length) return false;
+            return beginTrial(clamp(Math.floor(Number(index) || 0), 0, STAGES.length - 1));
+          },
+          loadStage(index) {
+            if (!STAGES.length) return false;
+            return startStage(clamp(Math.floor(Number(index) || 0), 0, STAGES.length - 1));
+          },
+          trialInfo() {
+            const verdict = trialRouteVerdict();
+            const routeInfo = buildTrialRouteInfo();
+            return {
+              mode,
+              stageIndex,
+              stageId: stageDef ? stageDef.id : null,
+              state,
+              elapsed: trialElapsed,
+              player: { x: player.x, y: player.y, vx: player.vx, vy: player.vy },
+              scrolls: trialScrolls.slice(),
+              scrollsCollected: trialScrolls.slice(),
+              scrollsTotal: stageDef ? stageDef.scrolls.length : 0,
+              goal: stageDef ? { x: stageDef.goal.x, y: stageDef.goal.y, w: stageDef.goal.w, h: stageDef.goal.h } : null,
+              route: verdict,
+              routeLabel: routeLabelFor(stageDef, verdict),
+              routes: stageDef ? stageDef.routes.map((r) => r.label) : [],
+              routeInfo,
+              cleared: !!(stageDef && trialResults.some((r) => r.id === stageDef.id)),
+              results: trialResults.map((r) => ({ id: r.id, title: r.title, time: r.time, scrolls: r.scrolls, dashes: r.dashes, route: r.route || null })),
+            };
+          },
+          /* GP006 只读路线观察钩子：供确定性测试判断“这局实际走了哪条路”。 */
+          routeInfo() {
+            return buildTrialRouteInfo();
+          },
+          /* GP006 确定性路线钩子：forceRoute(routeId) 立即把本局判定成该路线，并把玩家摆到该路线独占平台上方。 */
+          forceRoute(routeId) {
+            if (mode !== 'trial' || !stageDef) return false;
+            const route = (stageDef.routes || []).find((r) => r.id === String(routeId));
+            if (!route) return false;
+            if (stageDef.routes.length < 2) return route.id === trialRouteVerdict();
+            const exclusiveIndex = platforms.findIndex(
+              (p) => Array.isArray(p.routes) && p.routes.length === 1 && p.routes[0] === route.id
+            );
+            if (exclusiveIndex === -1) return false;
+            if (trialLandingRoutes.indexOf(route.id) === -1) trialLandingRoutes.push(route.id);
+            const p = platforms[exclusiveIndex];
+            player.x = clamp(p.x + p.w / 2 - player.w / 2, -player.w / 2, W - player.w / 2);
+            player.y = clamp(p.y - player.h - 2, 0, stageDef.height);
+            player.vy = 120;
+            player.prevBottom = p.y - 2;
+            syncHud();
+            return true;
+          },
+          stagePlatforms() {
+            return platforms.map((p) => ({ x: p.x, y: p.y, w: p.w, kind: p.kind, range: p.range, broken: p.broken }));
+          },
+          forceReachGoal() {
+            if (mode !== 'trial' || !stageDef) return false;
+            const g = stageDef.goal;
+            player.x = clamp(g.x + g.w / 2 - player.w / 2, -player.w / 2, W - player.w / 2);
+            player.y = clamp(g.y + g.h / 2 - player.h / 2, 0, stageDef.height);
+            player.vy = 0;
+            player.prevBottom = player.y + player.h;
+            return true;
+          },
+          forceFall() {
+            if (mode !== 'trial' || !stageDef) return false;
+            player.y = stageDef.height + 200;
+            player.vy = 400;
+            player.prevBottom = player.y + player.h;
+            return true;
+          },
+          forceCollectScroll(index) {
+            if (mode !== 'trial' || !stageDef || !stageDef.scrolls.length) return false;
+            const s = stageDef.scrolls[clamp(Math.floor(Number(index) || 0), 0, stageDef.scrolls.length - 1)];
+            if (!s) return false;
+            player.x = clamp(s.x - player.w / 2, -player.w / 2, W - player.w / 2);
+            player.y = clamp(s.y - player.h / 2, 0, stageDef.height);
+            player.prevBottom = player.y + player.h;
+            return true;
+          },
+          trialResults() {
+            return trialResults.map((r) => ({ id: r.id, title: r.title, time: r.time, scrolls: r.scrolls, dashes: r.dashes, route: r.route || null }));
           },
         };
       }

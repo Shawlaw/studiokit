@@ -1353,6 +1353,23 @@ body.has-game-tools .road-pad {
   grid-template-columns: repeat(4, minmax(0, 1fr));
   width: min(520px, 100%);
 }
+/* 影跃：道具行里再放一枚独立影冲按钮，三个按钮仍保持单行 44px 触控目标。 */
+.touch-pad.game-tools.has-air-dash {
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+}
+.touch-btn-air {
+  color: var(--ac-accent);
+  border-color: rgba(224, 86, 127, 0.45);
+}
+.touch-btn-air.is-ready {
+  box-shadow: 0 0 0 1px rgba(224, 86, 127, 0.35), 0 0 12px rgba(224, 86, 127, 0.22);
+}
+.touch-btn-air:disabled {
+  color: var(--ac-muted);
+  border-color: var(--ac-line);
+  box-shadow: none;
+}
+
 body.has-game-tools .road-pad .touch-btn { font-size: 14px; }
 body.has-game-tools:not(.arcade-immersive) .stage-box {
   height: min(
