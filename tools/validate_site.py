@@ -30,6 +30,13 @@ REQUIRED = [
     'templates/single-page-tool/index.html', 'tools/build_site.py', 'tools/new_tool.py'
 ]
 
+# 0.9 挑战模式：每款游戏一个生成数据文件（tools/arcade_09_data.mjs 生成，入库）。
+ARCADE_CHALLENGE_GAMES = [
+    'shadow-leap', 'snowbells', 'star-raid', 'pendulum-tower', 'block-drop',
+    'road-rush', 'gold-miner', 'brick-breaker', 'gravity-flip', 'snake-run',
+    'mole-whack', 'memory-flip', 'merge-2048',
+]
+
 class RefParser(HTMLParser):
     def __init__(self):
         super().__init__(); self.refs = []; self.external_assets = []; self.bad_attrs = []
@@ -174,6 +181,26 @@ def validate(root=ROOT):
         for marker in ('const Playtime =', 'function formatDuration', 'const Share =', 'const Offline =', 'arcade-precache', 'function createToolbelt', 'PLAYTIME_REST_MS'):
             if marker not in source:
                 ok = fail(f'Arcade 0.7.0 marker missing in engine.js: {marker}') and ok
+        # 0.9 平台地基：挑战记录 key + A.Challenge 共享帮助（不改既有版本断言）。
+        if "const CHALLENGE_KEY = 'studiokit:arcade:challenge:v1'" not in source:
+            ok = fail('Arcade challenge storage key missing/changed: expected studiokit:arcade:challenge:v1') and ok
+        if 'const Challenge = {' not in source:
+            ok = fail('Arcade A.Challenge shared helper is missing from engine.js') and ok
+        if '\n    Challenge,' not in source:
+            ok = fail('window.Arcade.Challenge export is missing from engine.js') and ok
+        challenge_dir = root / 'apps/arcade/challenge'
+        for game_id in ARCADE_CHALLENGE_GAMES:
+            data_file = challenge_dir / f'{game_id}.js'
+            if not data_file.exists():
+                ok = fail(f'Arcade challenge data missing: {data_file.relative_to(root)}') and ok
+                continue
+            data_source = data_file.read_text(encoding='utf-8')
+            if 'window.ArcadeChallengeData' not in data_source:
+                ok = fail(f'{data_file.relative_to(root)}: missing window.ArcadeChallengeData registration') and ok
+            if f"window.ArcadeChallengeData['{game_id}']" not in data_source:
+                ok = fail(f'{data_file.relative_to(root)}: gameId registration mismatch (expected {game_id})') and ok
+            if '"referencePlan"' in data_source or '"acceptance"' in data_source:
+                ok = fail(f'{data_file.relative_to(root)}: runtime data must not leak referencePlan/acceptance') and ok
         gold_miner = root / 'apps/arcade/games/gold-miner.html'
         if gold_miner.exists():
             gold_source = gold_miner.read_text(encoding='utf-8')
@@ -192,6 +219,10 @@ def validate(root=ROOT):
             for marker in ("const VERSION = '0.7.0'", 'arcade-precache', 'skipWaiting', 'clients.claim'):
                 if marker not in sw_source:
                     ok = fail(f'Arcade service worker marker missing: {marker}') and ok
+            # 0.9：13 个挑战数据文件必须进入 shell 预缓存（相对路径写法，兼容子路径部署）。
+            for game_id in ARCADE_CHALLENGE_GAMES:
+                if f"'./challenge/{game_id}.js'" not in sw_source:
+                    ok = fail(f'Arcade service worker shell list missing challenge data: ./challenge/{game_id}.js') and ok
         manifest = root / 'apps/arcade/manifest.webmanifest'
         if manifest.exists():
             try:

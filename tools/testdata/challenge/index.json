@@ -1,0 +1,217 @@
+{
+  "packVersion": "0.9.0-design-v1",
+  "runtimeSchemaVersion": "1.0.0",
+  "stageSchemaVersion": "1.0.0",
+  "gameCount": 13,
+  "stageCount": 78,
+  "games": [
+    {
+      "gameId": "shadow-leap",
+      "title": "影跃",
+      "sourceFile": "shadow-leap.html",
+      "ids": [
+        "shadow-leap-C01",
+        "shadow-leap-C02",
+        "shadow-leap-C03",
+        "shadow-leap-C04",
+        "shadow-leap-C05",
+        "shadow-leap-C06"
+      ],
+      "sha256": "a78a82f3f9c4927ec20c9c56cec9b00ef8a169ffd6c3a264dc6b8b0317565f8f",
+      "sourceSha256": "88f943f3bb306e7a168f41067c118a0ae2aed28e15018109e6463525e920fe84",
+      "runtimeSha256": "838fca8dbd98497a7e46499dec6828901ea68ea825838304d95779072f5b44f0"
+    },
+    {
+      "gameId": "snowbells",
+      "title": "雪铃",
+      "sourceFile": "snowbells.html",
+      "ids": [
+        "snowbells-C01",
+        "snowbells-C02",
+        "snowbells-C03",
+        "snowbells-C04",
+        "snowbells-C05",
+        "snowbells-C06"
+      ],
+      "sha256": "54b86a03b38a200fb1f7adc91e0fb67640cfa9a6bfe4106c723ae67afba50f5d",
+      "sourceSha256": "76b468e321248b6f0305f8f04e1a95556574feb71c7a4b382fbf300d64bf2d12",
+      "runtimeSha256": "3baa6529175830eb8e1fe733c0708d2b1cb9fd3420cc7d72cb38b29252dfe946"
+    },
+    {
+      "gameId": "star-raid",
+      "title": "星海突击",
+      "sourceFile": "star-raid.html",
+      "ids": [
+        "star-raid-C01",
+        "star-raid-C02",
+        "star-raid-C03",
+        "star-raid-C04",
+        "star-raid-C05",
+        "star-raid-C06"
+      ],
+      "sha256": "54c6d2233c6a1763540fac061842ae9efdf2a08395f6b166d84909dc7f84a504",
+      "sourceSha256": "5abad25ec4a5c8510dd9e1e4cef9b1ac8efdf2c40b1d02cc12ab5eb987bceead",
+      "runtimeSha256": "cb44d2f7d35d60e3a1f96a3a8a03361b8155f65e8da292fe7983a49a387af384"
+    },
+    {
+      "gameId": "pendulum-tower",
+      "title": "层塔",
+      "sourceFile": "pendulum-tower.html",
+      "ids": [
+        "pendulum-tower-C01",
+        "pendulum-tower-C02",
+        "pendulum-tower-C03",
+        "pendulum-tower-C04",
+        "pendulum-tower-C05",
+        "pendulum-tower-C06"
+      ],
+      "sha256": "6f4cb87336543179ee5f7a9cfc14b395c82e69dbaf2660ca39d4bfe64edaef94",
+      "sourceSha256": "d4fed7f20807be0727b9c961052ea29fbc8ff1cb692ac243704be04345997f35",
+      "runtimeSha256": "1280a30a51fcfd6630e59df3638694e12b2ad83d00d9b549d48c3e648994aa8c"
+    },
+    {
+      "gameId": "block-drop",
+      "title": "俄罗斯方块",
+      "sourceFile": "block-drop.html",
+      "ids": [
+        "block-drop-C01",
+        "block-drop-C02",
+        "block-drop-C03",
+        "block-drop-C04",
+        "block-drop-C05",
+        "block-drop-C06"
+      ],
+      "sha256": "ec155d808bd7a70a3b206dadffdc5e32b1bdfd05a92b03b0e906a75a98a577a3",
+      "sourceSha256": "8cfd98b0d508aef5940aff62dce7f294835e8a70477287e9e4e821029c905f40",
+      "runtimeSha256": "ae9e10169e6a4f45509a0ea28ffb5c14c8b5825fb749168f2713632a7cdf1390"
+    },
+    {
+      "gameId": "road-rush",
+      "title": "极速车道",
+      "sourceFile": "road-rush.html",
+      "ids": [
+        "road-rush-C01",
+        "road-rush-C02",
+        "road-rush-C03",
+        "road-rush-C04",
+        "road-rush-C05",
+        "road-rush-C06"
+      ],
+      "sha256": "d9ddc4d4943c0063a78bbd772750e7d52c2caa3b60aa3a90ed721e512a4d57a5",
+      "sourceSha256": "3c1942e1faf764a177697bb4495a390b9caf0fca5189051ba9d362698551b148",
+      "runtimeSha256": "104594dc30118d3bda56e4714c07d31383e9d9534e56eae3cead13b0bbf2a401"
+    },
+    {
+      "gameId": "gold-miner",
+      "title": "黄金矿工",
+      "sourceFile": "gold-miner.html",
+      "ids": [
+        "gold-miner-C01",
+        "gold-miner-C02",
+        "gold-miner-C03",
+        "gold-miner-C04",
+        "gold-miner-C05",
+        "gold-miner-C06"
+      ],
+      "sha256": "36bd92dea41d7b7ce58a68ddb40a965a7f75f4d82f26c48e94fb5a5268f625c0",
+      "sourceSha256": "ad3e4a4116aa435ede87cb0169a00c917b559ae8f91a5e70a275f8c4b9886db4",
+      "runtimeSha256": "439781a8f0995418f0c95e8e0077fc9a148bf32e8fc5633385e649baf0dc0f46"
+    },
+    {
+      "gameId": "brick-breaker",
+      "title": "砖块计划",
+      "sourceFile": "brick-breaker.html",
+      "ids": [
+        "brick-breaker-C01",
+        "brick-breaker-C02",
+        "brick-breaker-C03",
+        "brick-breaker-C04",
+        "brick-breaker-C05",
+        "brick-breaker-C06"
+      ],
+      "sha256": "9e52f10977db0c94222e671404f2a3ed7fee8c6f2fcd7618620d4a96aad8e536",
+      "sourceSha256": "5e3499cfc7126513472960a907d9260fd8f8ab83bca807c98b9200a2f8ae8b9b",
+      "runtimeSha256": "844cef11cc5e82a3e7f5943e5a13b286b3724aea13027371e1679433f2b5a635"
+    },
+    {
+      "gameId": "gravity-flip",
+      "title": "重力翻转",
+      "sourceFile": "gravity-flip.html",
+      "ids": [
+        "gravity-flip-C01",
+        "gravity-flip-C02",
+        "gravity-flip-C03",
+        "gravity-flip-C04",
+        "gravity-flip-C05",
+        "gravity-flip-C06"
+      ],
+      "sha256": "724eb19ac15a0c68e8955a40cb2a87d3cb5b0272c6e3adddb233b8c06f3beded",
+      "sourceSha256": "d097bba5ba0802968d52da0beb029deb9e48cfd0c91882a2b156668d5049a496",
+      "runtimeSha256": "a45223ca8de1ef67900345e4d633b4d94c27203ce88fbde95029ba0a9a35ea40"
+    },
+    {
+      "gameId": "snake-run",
+      "title": "贪吃蛇",
+      "sourceFile": "snake-run.html",
+      "ids": [
+        "snake-run-C01",
+        "snake-run-C02",
+        "snake-run-C03",
+        "snake-run-C04",
+        "snake-run-C05",
+        "snake-run-C06"
+      ],
+      "sha256": "1eea77b87212d9473d39005f86d470bee6fcf3c9750b2a02d1e96e0e35ca483b",
+      "sourceSha256": "31675ce5f14471cb5576efa7654d733a1dab0fe03e7e802ad5c96f661cda767b",
+      "runtimeSha256": "3450976f88d0d6055ab641e297339d89f85b402cb68ca98bdc2b1e7ead051e83"
+    },
+    {
+      "gameId": "mole-whack",
+      "title": "打地鼠",
+      "sourceFile": "mole-whack.html",
+      "ids": [
+        "mole-whack-C01",
+        "mole-whack-C02",
+        "mole-whack-C03",
+        "mole-whack-C04",
+        "mole-whack-C05",
+        "mole-whack-C06"
+      ],
+      "sha256": "8bc7b031441f60973fba7cb920b0f1697a3e41816e50a2159aaf2a162cea0db3",
+      "sourceSha256": "25559c82f6501fdc0a03382fce42cf2d8d1d7a6e51eecc8077bdea07601e2fae",
+      "runtimeSha256": "4e26e0aa53a35c3416bce909cd1aadd9194738a96f79dd252e38f5972a8e22d9"
+    },
+    {
+      "gameId": "memory-flip",
+      "title": "记忆翻牌",
+      "sourceFile": "memory-flip.html",
+      "ids": [
+        "memory-flip-C01",
+        "memory-flip-C02",
+        "memory-flip-C03",
+        "memory-flip-C04",
+        "memory-flip-C05",
+        "memory-flip-C06"
+      ],
+      "sha256": "a889bea6f4a37c965c167aa14cce7f9cbf7dfdd8da0f87cdc5f8f7086a121e17",
+      "sourceSha256": "cc2c34a2bfd150ac980ff85f8a6883468d48758211ecc2667163f8e91ec397e2",
+      "runtimeSha256": "7ed1c588618063458632f6bee6423ea84b6840a6747850b7783d1335211bba4b"
+    },
+    {
+      "gameId": "merge-2048",
+      "title": "2048 合成",
+      "sourceFile": "merge-2048.html",
+      "ids": [
+        "merge-2048-C01",
+        "merge-2048-C02",
+        "merge-2048-C03",
+        "merge-2048-C04",
+        "merge-2048-C05",
+        "merge-2048-C06"
+      ],
+      "sha256": "c59c2fdeea629900d153c82a999b9eddac6f1248bf429d4e994945acf140c9df",
+      "sourceSha256": "e451af94504b64ece8d603653c9dd7660de1bfb68d6a706c18d5b67c26ae5578",
+      "runtimeSha256": "6f3d2fdaa6196e5873b986dd078a9139e3adce767321f9fd0887d7df1250b6de"
+    }
+  ]
+}

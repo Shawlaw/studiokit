@@ -12,9 +12,11 @@
   const PREFS_KEY = 'studiokit:arcade:prefs:v1';
   const RUNS_KEY = 'studiokit:arcade:runs:v1';
   const PLAYTIME_KEY = 'studiokit:arcade:playtime:v1';
+  const CHALLENGE_KEY = 'studiokit:arcade:challenge:v1';
   const PROGRESS_SCHEMA = 1;
   const RUN_SCHEMA = 1;
   const PLAYTIME_SCHEMA = 1;
+  const CHALLENGE_SCHEMA = 1;
   const EXPORT_FORMAT = 'studiokit-arcade-progress';
 
   /* 引擎脚本自身的目录（apps/arcade/），用于子路径部署、分享链接与 Service Worker。 */
@@ -830,6 +832,303 @@
   }
 
   /* ----------------------------------------------------------
+   * 挑战模式（0.9 设计包）：关卡数据 / 记录 / 选关 / 结算
+   * - 关卡数据来自各游戏页额外加载的 ../challenge/<gameId>.js（window.ArcadeChallengeData）。
+   * - 记录独立存于 CHALLENGE_KEY（Schema v1）；不写 progress:v1 最高分、不写 playtime:v1 轮次。
+   * - 数据缺失 / 不足 6 关 / 存储损坏一律 fail closed（返回空），且不静默删除原值。
+   * ---------------------------------------------------------- */
+  const CHALLENGE_STAGE_COUNT = 6;
+
+  function challengeRawStages(gameId) {
+    if (!gameId || typeof gameId !== 'string') return [];
+    const store = window.ArcadeChallengeData;
+    const rec = store && typeof store === 'object' ? store[gameId] : null;
+    if (!rec || typeof rec !== 'object' || rec.gameId !== gameId || !Array.isArray(rec.stages)) return [];
+    const list = rec.stages.filter((stage) => stage && typeof stage === 'object' && typeof stage.id === 'string' && stage.id);
+    /* 6 关不齐视为数据不可用：挑战入口 fail closed，不影响经典模式。 */
+    return list.length === CHALLENGE_STAGE_COUNT ? list : [];
+  }
+
+  function sanitizeChallengeBest(value) {
+    if (!value || typeof value !== 'object' || Array.isArray(value)) return null;
+    const timeSec = Number(value.timeSec);
+    if (!Number.isFinite(timeSec) || timeSec < 0) return null;
+    return {
+      timeSec: Math.round(timeSec * 10) / 10,
+      assisted: !!value.assisted,
+      collectibles: Array.isArray(value.collectibles)
+        ? value.collectibles.filter((id) => typeof id === 'string' && id).slice(0, 32)
+        : [],
+      at: typeof value.at === 'string' ? value.at : null,
+    };
+  }
+
+  function sanitizeChallengeProgress(value) {
+    const out = { cleared: [], best: {}, updatedAt: null };
+    if (!value || typeof value !== 'object' || Array.isArray(value)) return out;
+    const cleared = Array.isArray(value.cleared) ? value.cleared : [];
+    const seen = Object.create(null);
+    cleared.forEach((id) => {
+      if (typeof id !== 'string' || !id || seen[id]) return;
+      seen[id] = true;
+      out.cleared.push(id);
+    });
+    if (value.best && typeof value.best === 'object' && !Array.isArray(value.best)) {
+      Object.keys(value.best).forEach((id) => {
+        if (!id) return;
+        const best = sanitizeChallengeBest(value.best[id]);
+        if (best) out.best[id] = best;
+      });
+    }
+    out.updatedAt = typeof value.updatedAt === 'string' ? value.updatedAt : null;
+    return out;
+  }
+
+  function readChallengeRecords() {
+    const raw = safeGetJSON(CHALLENGE_KEY);
+    const corrupt = { games: Object.create(null), updatedAt: null, valid: false };
+    if (
+      !raw ||
+      typeof raw !== 'object' ||
+      raw.schemaVersion !== CHALLENGE_SCHEMA ||
+      !raw.games ||
+      typeof raw.games !== 'object' ||
+      Array.isArray(raw.games)
+    ) {
+      /* 损坏数据 fail closed：只返回空记录，不删除也不覆盖原值。 */
+      return corrupt;
+    }
+    const games = Object.create(null);
+    Object.keys(raw.games).forEach((id) => {
+      const rec = raw.games[id];
+      if (!id || !rec || typeof rec !== 'object' || Array.isArray(rec)) return;
+      games[id] = sanitizeChallengeProgress(rec);
+    });
+    return { games, updatedAt: typeof raw.updatedAt === 'string' ? raw.updatedAt : null, valid: true };
+  }
+
+  function challengeStages(gameId) {
+    return challengeRawStages(gameId).slice();
+  }
+
+  function challengeStage(gameId, ref) {
+    const list = challengeRawStages(gameId);
+    if (!list.length) return null;
+    if (typeof ref === 'string' && ref) {
+      const byId = list.filter((stage) => stage.id === ref)[0];
+      if (byId) return byId;
+      if (/^\d+$/.test(ref)) return challengeStage(gameId, Number(ref));
+      return null;
+    }
+    if (typeof ref === 'number' && Number.isInteger(ref)) {
+      /* ref 为数字时先按 1-based stageNumber 解释；找不到再按 0-based index 兜底。 */
+      const byNumber = list.filter((stage) => stage.stageNumber === ref)[0];
+      if (byNumber) return byNumber;
+      if (ref >= 0 && ref < list.length) return list[ref];
+    }
+    return null;
+  }
+
+  function challengeProgress(gameId) {
+    if (!gameId || typeof gameId !== 'string') return sanitizeChallengeProgress(null);
+    const data = readChallengeRecords();
+    return sanitizeChallengeProgress(data.games[gameId]);
+  }
+
+  function challengeIsUnlocked(gameId, ref) {
+    const list = challengeRawStages(gameId);
+    if (!list.length) return false;
+    const target = challengeStage(gameId, ref);
+    if (!target) return false;
+    const index = list.findIndex((stage) => stage.id === target.id);
+    if (index <= 0) return true; /* C01 恒解锁 */
+    return challengeProgress(gameId).cleared.indexOf(list[index - 1].id) !== -1;
+  }
+
+  function challengeMarkCleared(gameId, stageId, result) {
+    if (!gameId || typeof gameId !== 'string') return sanitizeChallengeProgress(null);
+    const list = challengeRawStages(gameId);
+    const target = challengeStage(gameId, stageId);
+    if (!list.length || !target) return challengeProgress(gameId);
+    const data = readChallengeRecords();
+    const rec = sanitizeChallengeProgress(data.games[gameId]);
+    const order = list.map((stage) => stage.id);
+    if (rec.cleared.indexOf(target.id) === -1) rec.cleared.push(target.id);
+    rec.cleared = rec.cleared
+      .filter((id) => order.indexOf(id) !== -1)
+      .sort((a, b) => order.indexOf(a) - order.indexOf(b));
+    const r = result && typeof result === 'object' ? result : {};
+    const timeRaw = Number(r.timeSec);
+    const timeSec = Number.isFinite(timeRaw) && timeRaw >= 0 ? Math.round(timeRaw * 10) / 10 : 0;
+    const assisted = !!r.assisted;
+    const collectibles = Array.isArray(r.collectibles)
+      ? r.collectibles.filter((id) => typeof id === 'string' && id).slice(0, 32)
+      : [];
+    const prev = rec.best[target.id];
+    if (!prev || timeSec < prev.timeSec || (timeSec === prev.timeSec && prev.assisted && !assisted)) {
+      rec.best[target.id] = { timeSec, assisted, collectibles, at: new Date().toISOString() };
+    }
+    const now = new Date().toISOString();
+    rec.updatedAt = now;
+    data.games[gameId] = rec;
+    data.updatedAt = now;
+    /* 写入失败静默返回当前记录：不抛异常，不阻塞本局结算。 */
+    safeSetJSON(CHALLENGE_KEY, { schemaVersion: CHALLENGE_SCHEMA, games: data.games, updatedAt: now });
+    return sanitizeChallengeProgress(rec);
+  }
+
+  function challengeResetGame(gameId) {
+    if (!gameId || typeof gameId !== 'string') return false;
+    const data = readChallengeRecords();
+    if (!data.games[gameId]) return true;
+    delete data.games[gameId];
+    return safeSetJSON(CHALLENGE_KEY, {
+      schemaVersion: CHALLENGE_SCHEMA,
+      games: data.games,
+      updatedAt: new Date().toISOString(),
+    });
+  }
+
+  /* 「清除全部」路径：挑战记录与 progress/runs/playtime 一起清掉，避免残留。 */
+  function challengeResetAll() {
+    try {
+      localStorage.removeItem(CHALLENGE_KEY);
+      return true;
+    } catch (err) {
+      return false;
+    }
+  }
+
+  function challengeExportData() {
+    const data = readChallengeRecords();
+    const games = Object.create(null);
+    Object.keys(data.games).forEach((id) => {
+      games[id] = sanitizeChallengeProgress(data.games[id]);
+    });
+    return { schemaVersion: CHALLENGE_SCHEMA, games, updatedAt: data.updatedAt };
+  }
+
+  function challengeImportData(payload) {
+    const invalid = { ok: false, count: 0 };
+    if (!payload || typeof payload !== 'object' || Array.isArray(payload) || payload.schemaVersion !== CHALLENGE_SCHEMA) {
+      return invalid;
+    }
+    if (!payload.games || typeof payload.games !== 'object' || Array.isArray(payload.games)) return invalid;
+    const validIds = Object.create(null);
+    GAMES.forEach((game) => {
+      validIds[game.id] = true;
+    });
+    const games = Object.create(null);
+    Object.keys(payload.games).forEach((id) => {
+      if (!validIds[id]) return;
+      const rec = payload.games[id];
+      if (!rec || typeof rec !== 'object' || Array.isArray(rec)) return;
+      games[id] = sanitizeChallengeProgress(rec);
+    });
+    const ok = safeSetJSON(CHALLENGE_KEY, {
+      schemaVersion: CHALLENGE_SCHEMA,
+      games,
+      updatedAt: new Date().toISOString(),
+    });
+    return { ok, count: Object.keys(games).length };
+  }
+
+  function challengeFormatTime(sec) {
+    const raw = Number(sec);
+    const total = Number.isFinite(raw) && raw > 0 ? Math.floor(raw) : 0;
+    return pad2(Math.floor(total / 60)) + ':' + pad2(total % 60);
+  }
+
+  function challengeStageGameId(stage) {
+    if (!stage || typeof stage !== 'object') return '';
+    if (typeof stage.gameId === 'string' && stage.gameId) return stage.gameId;
+    const id = typeof stage.id === 'string' ? stage.id : '';
+    const match = /^(.*)-C\d+$/.exec(id);
+    return match ? match[1] : '';
+  }
+
+  function challengeResultHtml(stage, result) {
+    if (!stage || typeof stage !== 'object') return '';
+    const r = result && typeof result === 'object' ? result : {};
+    const timeRaw = Number(r.timeSec);
+    const timeSec = Number.isFinite(timeRaw) && timeRaw >= 0 ? timeRaw : 0;
+    const assisted = !!r.assisted;
+    const collectibles = Array.isArray(r.collectibles)
+      ? r.collectibles.filter((id) => typeof id === 'string' && id).slice(0, 32)
+      : [];
+    const gameId = challengeStageGameId(stage);
+    const rec = gameId ? challengeProgress(gameId) : sanitizeChallengeProgress(null);
+    const best = stage.id && rec.best[stage.id] ? rec.best[stage.id] : null;
+    const label = stage.stageNumber ? 'C' + pad2(stage.stageNumber) : 'C--';
+    const title = escapeHtml(stage.title || '挑战关卡');
+    const bestText = best ? challengeFormatTime(best.timeSec) : '—';
+    const collectBadges = collectibles.length
+      ? collectibles.map((item) => `<span class="ac-collect-badge">${escapeHtml(item)}</span>`).join('')
+      : '<span class="ac-collect-badge is-empty">0</span>';
+    const assistedBadge = assisted ? '<span class="ac-assisted-badge">辅助</span>' : '';
+    return (
+      '<div class="ac-challenge-result">' +
+      `<p class="ac-challenge-result-title">${label} ${title} · 通关</p>` +
+      `<p class="ac-challenge-result-row">用时 <strong>${challengeFormatTime(timeSec)}</strong> · 最佳 <strong>${bestText}</strong>${assistedBadge}</p>` +
+      `<p class="ac-challenge-result-row">收集物 ${collectBadges}</p>` +
+      '</div>'
+    );
+  }
+
+  function challengeStageListHtml(gameId) {
+    const list = challengeRawStages(gameId);
+    if (!list.length) {
+      return '<div class="ac-challenge-panel is-empty"><p class="ac-challenge-tip">挑战数据不可用</p></div>';
+    }
+    const rec = challengeProgress(gameId);
+    const buttons = list
+      .map((stage) => {
+        const cleared = rec.cleared.indexOf(stage.id) !== -1;
+        const unlocked = challengeIsUnlocked(gameId, stage.id);
+        const best = cleared && rec.best[stage.id] ? rec.best[stage.id] : null;
+        const classes = 'ac-stage-btn' + (cleared ? ' is-cleared' : '') + (unlocked ? '' : ' is-locked');
+        const attrs = unlocked ? '' : ' disabled aria-disabled="true"';
+        let meta = '🔒 未解锁';
+        if (cleared) {
+          meta = '✅ 最佳 ' + (best ? challengeFormatTime(best.timeSec) : '—') + (best && best.assisted ? ' · 辅助' : '');
+        } else if (unlocked) {
+          meta = '未通关';
+        }
+        const label = 'C' + pad2(stage.stageNumber || 0);
+        return (
+          `<button type="button" class="${classes}" data-stage-id="${escapeHtml(stage.id)}"${attrs}>` +
+          `<span class="ac-stage-name">${escapeHtml(label + ' ' + (stage.title || ''))}</span>` +
+          `<span class="ac-stage-meta">${escapeHtml(meta)}</span>` +
+          '</button>'
+        );
+      })
+      .join('');
+    const clearedCount = list.filter((stage) => rec.cleared.indexOf(stage.id) !== -1).length;
+    return (
+      '<div class="ac-challenge-panel" role="region" aria-label="挑战 6 关">' +
+      `<div class="ac-challenge-head"><strong>挑战 6 关</strong><span>${clearedCount}/${list.length} 已通关</span></div>` +
+      `<div class="ac-challenge-grid">${buttons}</div>` +
+      '</div>'
+    );
+  }
+
+  const Challenge = {
+    SCHEMA_VERSION: CHALLENGE_SCHEMA,
+    STORAGE_KEY: CHALLENGE_KEY,
+    stages: challengeStages,
+    stage: challengeStage,
+    progress: challengeProgress,
+    isUnlocked: challengeIsUnlocked,
+    markCleared: challengeMarkCleared,
+    resetGame: challengeResetGame,
+    exportData: challengeExportData,
+    importData: challengeImportData,
+    resultHtml: challengeResultHtml,
+    stageListHtml: challengeStageListHtml,
+    formatTime: challengeFormatTime,
+  };
+
+  /* ----------------------------------------------------------
    * 进度（全部游戏共用一个 key，中心页一次读出即可管理）
    * ---------------------------------------------------------- */
   const Progress = {
@@ -880,11 +1179,13 @@
       this.save(data);
       RunSave.clear(gameId);
       Playtime.resetGame(gameId);
+      challengeResetGame(gameId);
     },
     resetAll() {
       this.save({ schemaVersion: PROGRESS_SCHEMA, games: {} });
       RunSave.clearAll();
       Playtime.resetAll();
+      challengeResetAll();
     },
     exportText() {
       const payload = {
@@ -895,6 +1196,7 @@
         state: this.load().games,
         runs: RunSave.all(),
         playtime: Playtime.exportData(),
+        challenge: Challenge.exportData(),
       };
       return JSON.stringify(payload, null, 2);
     },
@@ -922,6 +1224,7 @@
       const prevProgress = safeGetRaw(PROGRESS_KEY);
       const prevRuns = safeGetRaw(RUNS_KEY);
       const prevPlaytime = safeGetRaw(PLAYTIME_KEY);
+      const prevChallenge = safeGetRaw(CHALLENGE_KEY);
       const progressSaved = this.save({ schemaVersion: PROGRESS_SCHEMA, games });
       if (!progressSaved) return { ok: false, reason: '浏览器存储已满或不可用' };
       /* 新备份包含局内存档；旧备份没有 runs 字段时保留当前局内存档。 */
@@ -933,6 +1236,7 @@
           safeRestoreRaw(PROGRESS_KEY, prevProgress);
           safeRestoreRaw(RUNS_KEY, prevRuns);
           safeRestoreRaw(PLAYTIME_KEY, prevPlaytime);
+          safeRestoreRaw(CHALLENGE_KEY, prevChallenge);
           return { ok: false, reason: '浏览器存储已满或不可用' };
         }
         runCount = imported.count;
@@ -946,11 +1250,32 @@
           safeRestoreRaw(PROGRESS_KEY, prevProgress);
           safeRestoreRaw(RUNS_KEY, prevRuns);
           safeRestoreRaw(PLAYTIME_KEY, prevPlaytime);
+          safeRestoreRaw(CHALLENGE_KEY, prevChallenge);
           return { ok: false, reason: '浏览器存储已满或不可用' };
         }
         playtimeCount = imported.count;
       }
-      return { ok: true, count: Object.keys(games).length, runCount, runSkipped, playtimeCount };
+      /* 0.9.0 备份包含挑战记录；旧备份没有 challenge 字段时保留当前挑战记录。
+       * 非法 challenge 不阻塞其余导入，计入 challengeSkipped。 */
+      let challengeCount = 0;
+      let challengeSkipped = 0;
+      if (parsed.challenge && typeof parsed.challenge === 'object') {
+        const imported = Challenge.importData(parsed.challenge);
+        if (imported.ok) {
+          challengeCount = imported.count;
+        } else {
+          challengeSkipped = 1;
+        }
+      }
+      return {
+        ok: true,
+        count: Object.keys(games).length,
+        runCount,
+        runSkipped,
+        playtimeCount,
+        challengeCount,
+        challengeSkipped,
+      };
     },
   };
 
@@ -2481,6 +2806,7 @@
     Progress,
     RunSave,
     Playtime,
+    Challenge,
     Share,
     Offline,
     Prefs,

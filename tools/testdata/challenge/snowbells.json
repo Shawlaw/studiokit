@@ -1,0 +1,674 @@
+{
+  "packVersion": "0.9.0-design-v1",
+  "stageSchemaVersion": "1.0.0",
+  "gameId": "snowbells",
+  "gameName": "雪铃",
+  "sourceFile": "snowbells.html",
+  "stages": [
+    {
+      "schemaVersion": "1.0.0",
+      "id": "snowbells-C01",
+      "gameId": "snowbells",
+      "stageNumber": 1,
+      "chapter": "雪夜演奏",
+      "title": "四铃开场",
+      "difficulty": 1,
+      "targetDurationSec": [
+        45,
+        140
+      ],
+      "goalStatement": "A→B→C→D，四铃顺序击中即可收局",
+      "decision": "分辨下一颗正确铃，不盲目追最近一颗",
+      "practicedSkill": "连续命中 4 次并学会提前转向",
+      "discovery": "最后一颗铃带有不同音色",
+      "mode": "challenge",
+      "content": {
+        "coordinates": "420x740；bell.height相对起点向上；每次命中刷新向上初速 -655，最大理论上升159，实际还需验证横向可达",
+        "bells": [
+          {
+            "id": "A",
+            "xCenter": 210,
+            "height": 0,
+            "kind": "normal",
+            "radius": 9,
+            "consumable": true
+          },
+          {
+            "id": "B",
+            "xCenter": 174,
+            "height": 77,
+            "kind": "normal",
+            "radius": 9,
+            "consumable": true
+          },
+          {
+            "id": "C",
+            "xCenter": 239,
+            "height": 150,
+            "kind": "normal",
+            "radius": 9,
+            "consumable": true
+          },
+          {
+            "id": "D",
+            "xCenter": 201,
+            "height": 224,
+            "kind": "normal",
+            "radius": 9,
+            "consumable": true
+          }
+        ],
+        "requiredSequence": [
+          "A",
+          "B",
+          "C",
+          "D"
+        ],
+        "completion": "按顺序命中指定铃铛，休止铃只反弹不加连击，不强制收集bonus",
+        "wrongBellPolicy": "可反弹但不给计分；0.8s内显示下一个正确目标",
+        "comboBreakPolicy": "落空/错序会失去本关完美奖励，普通通关可恢复继续",
+        "startBell": "A",
+        "goalAfterLast": true
+      },
+      "referencePlan": {
+        "bellOrder": [
+          "A",
+          "B",
+          "C",
+          "D"
+        ],
+        "optional": [],
+        "tactics": "命中后先看下一个目标再进行横移，不依赖局内道具"
+      },
+      "acceptance": {
+        "success": "指定铃铛间距和弹跳时间允许物理命中且不可重复计分",
+        "failure": "无道具可完成必经序列；休止铃能弹但不计分",
+        "mobile": "显示下一个目标，左右多指操作无粘滞",
+        "afk": "任一有效游玩时刻切后台/锁屏/恢复，剩余时间、玩家位置与未完成目标不变化；恢复后手动继续"
+      },
+      "integration": {
+        "separateClassicProgress": true,
+        "noAssistedRequired": true,
+        "requiredFeatures": [
+          "stage_bell_sequence"
+        ],
+        "adaptToHead": true
+      },
+      "designerNotes": "请使用确定性铃点图；连击只统计首次正确命中。"
+    },
+    {
+      "schemaVersion": "1.0.0",
+      "id": "snowbells-C02",
+      "gameId": "snowbells",
+      "stageNumber": 2,
+      "chapter": "雪夜演奏",
+      "title": "左右对唱",
+      "difficulty": 2,
+      "targetDurationSec": [
+        45,
+        140
+      ],
+      "goalStatement": "按左右交替的音序 A→E",
+      "decision": "错误路径仍可救回，但会丢失完美连击",
+      "practicedSkill": "先预判下一跳的横向跨度",
+      "discovery": "正确音序投射在背景星线",
+      "mode": "challenge",
+      "content": {
+        "coordinates": "420x740；bell.height相对起点向上；每次命中刷新向上初速 -655，最大理论上升159，实际还需验证横向可达",
+        "bells": [
+          {
+            "id": "A",
+            "xCenter": 204,
+            "height": 0,
+            "kind": "normal",
+            "radius": 9,
+            "consumable": true
+          },
+          {
+            "id": "B",
+            "xCenter": 125,
+            "height": 71,
+            "kind": "normal",
+            "radius": 9,
+            "consumable": true
+          },
+          {
+            "id": "C",
+            "xCenter": 260,
+            "height": 145,
+            "kind": "normal",
+            "radius": 9,
+            "consumable": true
+          },
+          {
+            "id": "D",
+            "xCenter": 132,
+            "height": 220,
+            "kind": "normal",
+            "radius": 9,
+            "consumable": true
+          },
+          {
+            "id": "E",
+            "xCenter": 231,
+            "height": 295,
+            "kind": "normal",
+            "radius": 9,
+            "consumable": true
+          }
+        ],
+        "requiredSequence": [
+          "A",
+          "B",
+          "C",
+          "D",
+          "E"
+        ],
+        "completion": "按顺序命中指定铃铛，休止铃只反弹不加连击，不强制收集bonus",
+        "wrongBellPolicy": "可反弹但不给计分；0.8s内显示下一个正确目标",
+        "comboBreakPolicy": "落空/错序会失去本关完美奖励，普通通关可恢复继续",
+        "startBell": "A",
+        "goalAfterLast": true
+      },
+      "referencePlan": {
+        "bellOrder": [
+          "A",
+          "B",
+          "C",
+          "D",
+          "E"
+        ],
+        "optional": [],
+        "tactics": "命中后先看下一个目标再进行横移，不依赖局内道具"
+      },
+      "acceptance": {
+        "success": "指定铃铛间距和弹跳时间允许物理命中且不可重复计分",
+        "failure": "无道具可完成必经序列；休止铃能弹但不计分",
+        "mobile": "显示下一个目标，左右多指操作无粘滞",
+        "afk": "任一有效游玩时刻切后台/锁屏/恢复，剩余时间、玩家位置与未完成目标不变化；恢复后手动继续"
+      },
+      "integration": {
+        "separateClassicProgress": true,
+        "noAssistedRequired": true,
+        "requiredFeatures": [
+          "stage_bell_sequence"
+        ],
+        "adaptToHead": true
+      },
+      "designerNotes": "请使用确定性铃点图；连击只统计首次正确命中。"
+    },
+    {
+      "schemaVersion": "1.0.0",
+      "id": "snowbells-C03",
+      "gameId": "snowbells",
+      "stageNumber": 3,
+      "chapter": "雪夜演奏",
+      "title": "休止与连奏",
+      "difficulty": 3,
+      "targetDurationSec": [
+        45,
+        140
+      ],
+      "goalStatement": "经过两个休止铃后完成 3 音连奏",
+      "decision": "休止铃负责反弹但不计入连击；绕开会掉落",
+      "practicedSkill": "理解节奏中的非计分落点",
+      "discovery": "休止铃声音更轻且形状有空心标记",
+      "mode": "challenge",
+      "content": {
+        "coordinates": "420x740；bell.height相对起点向上；每次命中刷新向上初速 -655，最大理论上升159，实际还需验证横向可达",
+        "bells": [
+          {
+            "id": "A",
+            "xCenter": 212,
+            "height": 0,
+            "kind": "normal",
+            "radius": 9,
+            "consumable": true
+          },
+          {
+            "id": "B",
+            "xCenter": 171,
+            "height": 76,
+            "kind": "rest",
+            "radius": 9,
+            "consumable": true
+          },
+          {
+            "id": "C",
+            "xCenter": 258,
+            "height": 150,
+            "kind": "normal",
+            "radius": 9,
+            "consumable": true
+          },
+          {
+            "id": "D",
+            "xCenter": 189,
+            "height": 229,
+            "kind": "rest",
+            "radius": 9,
+            "consumable": true
+          },
+          {
+            "id": "E",
+            "xCenter": 222,
+            "height": 305,
+            "kind": "normal",
+            "radius": 9,
+            "consumable": true
+          }
+        ],
+        "requiredSequence": [
+          "A",
+          "B",
+          "C",
+          "D",
+          "E"
+        ],
+        "completion": "按顺序命中指定铃铛，休止铃只反弹不加连击，不强制收集bonus",
+        "wrongBellPolicy": "可反弹但不给计分；0.8s内显示下一个正确目标",
+        "comboBreakPolicy": "落空/错序会失去本关完美奖励，普通通关可恢复继续",
+        "startBell": "A",
+        "goalAfterLast": true
+      },
+      "referencePlan": {
+        "bellOrder": [
+          "A",
+          "B",
+          "C",
+          "D",
+          "E"
+        ],
+        "optional": [],
+        "tactics": "命中后先看下一个目标再进行横移，不依赖局内道具"
+      },
+      "acceptance": {
+        "success": "指定铃铛间距和弹跳时间允许物理命中且不可重复计分",
+        "failure": "无道具可完成必经序列；休止铃能弹但不计分",
+        "mobile": "显示下一个目标，左右多指操作无粘滞",
+        "afk": "任一有效游玩时刻切后台/锁屏/恢复，剩余时间、玩家位置与未完成目标不变化；恢复后手动继续"
+      },
+      "integration": {
+        "separateClassicProgress": true,
+        "noAssistedRequired": true,
+        "requiredFeatures": [
+          "stage_bell_sequence"
+        ],
+        "adaptToHead": true
+      },
+      "designerNotes": "请使用确定性铃点图；连击只统计首次正确命中。"
+    },
+    {
+      "schemaVersion": "1.0.0",
+      "id": "snowbells-C04",
+      "gameId": "snowbells",
+      "stageNumber": 4,
+      "chapter": "雪夜演奏",
+      "title": "双线谱",
+      "difficulty": 4,
+      "targetDurationSec": [
+        45,
+        140
+      ],
+      "goalStatement": "主音六连击通关，右侧两枚彩铃为可选高分路线",
+      "decision": "选择主线稳连或切入彩铃再汇合",
+      "practicedSkill": "同一次反弹规划连续两个目标",
+      "discovery": "彩铃路线有肉眼可辨的渐亮轨迹",
+      "mode": "challenge",
+      "content": {
+        "coordinates": "420x740；bell.height相对起点向上；每次命中刷新向上初速 -655，最大理论上升159，实际还需验证横向可达",
+        "bells": [
+          {
+            "id": "A",
+            "xCenter": 210,
+            "height": 0,
+            "kind": "normal",
+            "radius": 9,
+            "consumable": true
+          },
+          {
+            "id": "B",
+            "xCenter": 144,
+            "height": 76,
+            "kind": "normal",
+            "radius": 9,
+            "consumable": true
+          },
+          {
+            "id": "C",
+            "xCenter": 248,
+            "height": 151,
+            "kind": "normal",
+            "radius": 9,
+            "consumable": true
+          },
+          {
+            "id": "D",
+            "xCenter": 143,
+            "height": 229,
+            "kind": "normal",
+            "radius": 9,
+            "consumable": true
+          },
+          {
+            "id": "E",
+            "xCenter": 248,
+            "height": 304,
+            "kind": "normal",
+            "radius": 9,
+            "consumable": true
+          },
+          {
+            "id": "F",
+            "xCenter": 214,
+            "height": 378,
+            "kind": "normal",
+            "radius": 9,
+            "consumable": true
+          },
+          {
+            "id": "q1",
+            "xCenter": 318,
+            "height": 214,
+            "kind": "bonus",
+            "radius": 9,
+            "consumable": true
+          },
+          {
+            "id": "q2",
+            "xCenter": 318,
+            "height": 291,
+            "kind": "bonus",
+            "radius": 9,
+            "consumable": true
+          }
+        ],
+        "requiredSequence": [
+          "A",
+          "B",
+          "C",
+          "D",
+          "E",
+          "F"
+        ],
+        "completion": "按顺序命中指定铃铛，休止铃只反弹不加连击，不强制收集bonus",
+        "wrongBellPolicy": "可反弹但不给计分；0.8s内显示下一个正确目标",
+        "comboBreakPolicy": "落空/错序会失去本关完美奖励，普通通关可恢复继续",
+        "startBell": "A",
+        "goalAfterLast": true
+      },
+      "referencePlan": {
+        "bellOrder": [
+          "A",
+          "B",
+          "C",
+          "D",
+          "E",
+          "F"
+        ],
+        "optional": [
+          "q1",
+          "q2"
+        ],
+        "tactics": "命中后先看下一个目标再进行横移，不依赖局内道具"
+      },
+      "acceptance": {
+        "success": "指定铃铛间距和弹跳时间允许物理命中且不可重复计分",
+        "failure": "无道具可完成必经序列；休止铃能弹但不计分",
+        "mobile": "显示下一个目标，左右多指操作无粘滞",
+        "afk": "任一有效游玩时刻切后台/锁屏/恢复，剩余时间、玩家位置与未完成目标不变化；恢复后手动继续"
+      },
+      "integration": {
+        "separateClassicProgress": true,
+        "noAssistedRequired": true,
+        "requiredFeatures": [
+          "stage_bell_sequence"
+        ],
+        "adaptToHead": true
+      },
+      "designerNotes": "请使用确定性铃点图；连击只统计首次正确命中。"
+    },
+    {
+      "schemaVersion": "1.0.0",
+      "id": "snowbells-C05",
+      "gameId": "snowbells",
+      "stageNumber": 5,
+      "chapter": "雪夜演奏",
+      "title": "冷暖和声",
+      "difficulty": 5,
+      "targetDurationSec": [
+        45,
+        140
+      ],
+      "goalStatement": "按蓝红交替序列完成六铃",
+      "decision": "选错颜色不立刻死，但本关完美评价失败",
+      "practicedSkill": "观察颜色同时依赖形状文字标志识别",
+      "discovery": "颜色与图形同时编码，不能只靠颜色",
+      "mode": "challenge",
+      "content": {
+        "coordinates": "420x740；bell.height相对起点向上；每次命中刷新向上初速 -655，最大理论上升159，实际还需验证横向可达",
+        "bells": [
+          {
+            "id": "A",
+            "xCenter": 210,
+            "height": 0,
+            "kind": "normal",
+            "radius": 9,
+            "consumable": true
+          },
+          {
+            "id": "B",
+            "xCenter": 160,
+            "height": 72,
+            "kind": "blue",
+            "radius": 9,
+            "consumable": true
+          },
+          {
+            "id": "C",
+            "xCenter": 246,
+            "height": 148,
+            "kind": "red",
+            "radius": 9,
+            "consumable": true
+          },
+          {
+            "id": "D",
+            "xCenter": 160,
+            "height": 223,
+            "kind": "blue",
+            "radius": 9,
+            "consumable": true
+          },
+          {
+            "id": "E",
+            "xCenter": 246,
+            "height": 300,
+            "kind": "red",
+            "radius": 9,
+            "consumable": true
+          },
+          {
+            "id": "F",
+            "xCenter": 208,
+            "height": 377,
+            "kind": "normal",
+            "radius": 9,
+            "consumable": true
+          }
+        ],
+        "requiredSequence": [
+          "A",
+          "B",
+          "C",
+          "D",
+          "E",
+          "F"
+        ],
+        "completion": "按顺序命中指定铃铛，休止铃只反弹不加连击，不强制收集bonus",
+        "wrongBellPolicy": "可反弹但不给计分；0.8s内显示下一个正确目标",
+        "comboBreakPolicy": "落空/错序会失去本关完美奖励，普通通关可恢复继续",
+        "startBell": "A",
+        "goalAfterLast": true
+      },
+      "referencePlan": {
+        "bellOrder": [
+          "A",
+          "B",
+          "C",
+          "D",
+          "E",
+          "F"
+        ],
+        "optional": [],
+        "tactics": "命中后先看下一个目标再进行横移，不依赖局内道具"
+      },
+      "acceptance": {
+        "success": "指定铃铛间距和弹跳时间允许物理命中且不可重复计分",
+        "failure": "无道具可完成必经序列；休止铃能弹但不计分",
+        "mobile": "显示下一个目标，左右多指操作无粘滞",
+        "afk": "任一有效游玩时刻切后台/锁屏/恢复，剩余时间、玩家位置与未完成目标不变化；恢复后手动继续"
+      },
+      "integration": {
+        "separateClassicProgress": true,
+        "noAssistedRequired": true,
+        "requiredFeatures": [
+          "stage_bell_sequence"
+        ],
+        "adaptToHead": true
+      },
+      "designerNotes": "请使用确定性铃点图；连击只统计首次正确命中。"
+    },
+    {
+      "schemaVersion": "1.0.0",
+      "id": "snowbells-C06",
+      "gameId": "snowbells",
+      "stageNumber": 6,
+      "chapter": "雪夜演奏",
+      "title": "雪夜终曲",
+      "difficulty": 6,
+      "targetDurationSec": [
+        45,
+        140
+      ],
+      "goalStatement": "在一次演奏里完成七节点序列并收尾",
+      "decision": "彩铃捷径与稳妥七连，高手争取无断连",
+      "practicedSkill": "综合颜色辨认、休止衔接、落点控制",
+      "discovery": "终曲完美连击触发仅视觉性的隐藏雪花乐谱",
+      "mode": "challenge",
+      "content": {
+        "coordinates": "420x740；bell.height相对起点向上；每次命中刷新向上初速 -655，最大理论上升159，实际还需验证横向可达",
+        "bells": [
+          {
+            "id": "A",
+            "xCenter": 206,
+            "height": 0,
+            "kind": "normal",
+            "radius": 9,
+            "consumable": true
+          },
+          {
+            "id": "B",
+            "xCenter": 146,
+            "height": 74,
+            "kind": "normal",
+            "radius": 9,
+            "consumable": true
+          },
+          {
+            "id": "C",
+            "xCenter": 259,
+            "height": 150,
+            "kind": "normal",
+            "radius": 9,
+            "consumable": true
+          },
+          {
+            "id": "D",
+            "xCenter": 209,
+            "height": 224,
+            "kind": "rest",
+            "radius": 9,
+            "consumable": true
+          },
+          {
+            "id": "E",
+            "xCenter": 145,
+            "height": 296,
+            "kind": "blue",
+            "radius": 9,
+            "consumable": true
+          },
+          {
+            "id": "F",
+            "xCenter": 267,
+            "height": 370,
+            "kind": "red",
+            "radius": 9,
+            "consumable": true
+          },
+          {
+            "id": "G",
+            "xCenter": 210,
+            "height": 445,
+            "kind": "normal",
+            "radius": 9,
+            "consumable": true
+          },
+          {
+            "id": "q1",
+            "xCenter": 325,
+            "height": 297,
+            "kind": "bonus",
+            "radius": 9,
+            "consumable": true
+          }
+        ],
+        "requiredSequence": [
+          "A",
+          "B",
+          "C",
+          "D",
+          "E",
+          "F",
+          "G"
+        ],
+        "completion": "按顺序命中指定铃铛，休止铃只反弹不加连击，不强制收集bonus",
+        "wrongBellPolicy": "可反弹但不给计分；0.8s内显示下一个正确目标",
+        "comboBreakPolicy": "落空/错序会失去本关完美奖励，普通通关可恢复继续",
+        "startBell": "A",
+        "goalAfterLast": true
+      },
+      "referencePlan": {
+        "bellOrder": [
+          "A",
+          "B",
+          "C",
+          "D",
+          "E",
+          "F",
+          "G"
+        ],
+        "optional": [
+          "q1"
+        ],
+        "tactics": "命中后先看下一个目标再进行横移，不依赖局内道具"
+      },
+      "acceptance": {
+        "success": "指定铃铛间距和弹跳时间允许物理命中且不可重复计分",
+        "failure": "无道具可完成必经序列；休止铃能弹但不计分",
+        "mobile": "显示下一个目标，左右多指操作无粘滞",
+        "afk": "任一有效游玩时刻切后台/锁屏/恢复，剩余时间、玩家位置与未完成目标不变化；恢复后手动继续"
+      },
+      "integration": {
+        "separateClassicProgress": true,
+        "noAssistedRequired": true,
+        "requiredFeatures": [
+          "stage_bell_sequence"
+        ],
+        "adaptToHead": true
+      },
+      "designerNotes": "请使用确定性铃点图；连击只统计首次正确命中。"
+    }
+  ]
+}
