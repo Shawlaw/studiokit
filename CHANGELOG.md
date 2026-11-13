@@ -2,6 +2,16 @@
 
 StudioKit 门户本身没有独立的 semver；以下按仓库里程碑与工具版本记录。各工具的详细变更见 `apps/<tool>/CHANGELOG.md`。
 
+## Arcade 0.8.2 — 2026-11-13（已发布）
+
+### Changed
+- 俄罗斯方块控制区压缩（Owner 试玩反馈：按钮区占太多游戏画面）：删除禅模式独立按钮行，冻结/恢复提速并入道具行（同一行第 3 个按钮）；结束本局保留在暂停弹层；禅模式隐藏重复 hint；道具行按钮固定 44px、页面间距与底部留白压缩；画布高度规则回收空间。
+- 实测禅模式画布面积相对同版本经典模式 **+18%～+47%**、相对 0.8.1 禅模式 **+41.6%～+126.8%**（320/375/390/430/桌面），画布高度比经典多 56–60px，四档与桌面 0 溢出；经典/挑战/存档/积分记录行为与 localStorage key/Schema 全部不变。
+
+### Verification
+- 门禁：`arcade_zen_scores_test.mjs` **14/14**（ZS-04 含控件压缩/画布增量断言）；`arcade_smoke.mjs` **85/85**；`arcade_gameplay_test.mjs --suite=base --repeat=2` **22/22**；`validate_site.py` / `build_site.py` / 全部 `node --check` / `git diff --check` 通过；取舍见 `apps/arcade/DESIGN-0.8.2.md`。
+- 双端发布：提交 `077ccf5` 推送 `main`；Actions `43447829596` 的 Validate and build / Deploy GitHub Pages / Deploy Cloudflare Pages / Verify both deployments 四个 job 全部成功；CI 与本地 `tools/verify_deploy.py` 均 **37/37** 文件 SHA-256 双端一致，线上 Arcade `0.8.2` / Badge `2.2.1`；双端线上无头 Chrome **14/14**（门户/中心页 0.8.2 + 13 卡 + 积分区；方块页经典画布 316×558、禅模式 348×614（+56）；3 个道具行按钮 44px、hint 隐藏、无独立按钮行；真实点击冻结按钮切换文案/aria；结算写 zen 记录且经典 high 不变）；SW 缓存键 `studiokit-arcade-0.8.2-v1`。iOS/Android 真机触控与低端机帧率仍 UNVERIFIED。
+
 ## Arcade 0.8.1 — 2026-11-13（已发布）
 
 ### Added

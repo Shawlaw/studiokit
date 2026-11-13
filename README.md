@@ -4,9 +4,9 @@
 
 - **线上站点：** <https://shawlaw.github.io/studiokit/> · <https://studiokit.pages.dev/>
 - **源码：** <https://github.com/Shawlaw/studiokit>（MIT 许可）
-- **当前工具：** Badge Studio `2.2.1`；街机厅 Arcade `0.8.1`（13 款竖屏小游戏 + 78 关挑战模式 + 俄罗斯方块禅模式 + 积分记录表，已发布）
+- **当前工具：** Badge Studio `2.2.1`；街机厅 Arcade `0.8.2`（13 款竖屏小游戏 + 78 关挑战模式 + 俄罗斯方块禅模式 + 积分记录表 + 俄罗斯方块控件压缩，已发布）
 - **计划中的工具：** Rounded Image（尚未实现，等待原始需求/规格）
-- **最近发布：** 2026-11-13，Arcade 0.8.1（俄罗斯方块禅模式：无限游玩 + 冻结/恢复提速；中心页积分记录表；独立评审后修复小屏模式入口；GitHub Pages + Cloudflare Pages 双端；提交 `41fa79e`，Actions `43423208129`，`verify_deploy.py` 37/37）
+- **最近发布：** 2026-11-13，Arcade 0.8.2（俄罗斯方块控制区压缩：删除禅模式独立按钮行、冻结并入道具行；画布面积相对经典 +18%～+47%、相对 0.8.1 禅模式 +41.6%～+126.8%；GitHub Pages + Cloudflare Pages 双端；提交 `077ccf5`，Actions `43447829596`，`verify_deploy.py` 37/37）
 - **运行方式：** 纯静态文件；无后端、无账号、无构建依赖、无第三方 CDN
 
 ## 目录结构
@@ -24,7 +24,7 @@ StudioKit/
 │   │   ├── index.html
 │   │   ├── README.md
 │   │   └── CHANGELOG.md
-│   └── arcade/                      # 街机厅，当前 v0.8.1（已发布）
+│   └── arcade/                      # 街机厅，当前 v0.8.2（已发布）
 │       ├── index.html               # 游戏中心页（统计/分享/安装/预载）
 │       ├── engine.js                # 街机专用共享运行时
 │       ├── arcade.css               # 街机专用样式
@@ -38,6 +38,7 @@ StudioKit/
 │       ├── DESIGN-0.7.0.md          # 全游戏道具、短局目标与适度游玩设计
 │       ├── DESIGN-0.8.0.md          # 影冲/影之试炼与 13 游戏 78 关挑战架构、兼容与回滚
 │       ├── DESIGN-0.8.1.md          # 俄罗斯方块禅模式与积分记录表设计、兼容与回滚
+│       ├── DESIGN-0.8.2.md          # 俄罗斯方块控制区压缩与画布回收设计、兼容与回滚
 │       ├── README.md
 │       └── CHANGELOG.md
 ├── templates/single-page-tool/      # 新工具模板
@@ -161,8 +162,8 @@ Cloudflare Pages 部署在域名根路径（当前为 `studiokit.pages.dev`，�
 
 ## 当前状态
 
-- 已发布：Badge Studio `2.2.1`、街机厅 Arcade `0.8.1`（13 款游戏各 2 个主动道具、7 类自然收尾、一次性 20 分钟提醒与中心页随机入口；0.8.1 新增俄罗斯方块禅模式与积分记录表；没有签到、每日奖励或付费抽奖）。
-- Arcade 0.8.1 已通过 85 项本地无头浏览器冒烟、`arcade_zen_scores_test.mjs` 14 场景、`arcade_gameplay_test.mjs --suite=base --repeat=2` 22/22、`validate_site.py`、`build_site.py` 与全部 `node --check`；GitHub Pages 与 Cloudflare Pages 双端逐文件一致，线上版本 `0.8.1`。
+- 已发布：Badge Studio `2.2.1`、街机厅 Arcade `0.8.2`（13 款游戏各 2 个主动道具、7 类自然收尾、一次性 20 分钟提醒与中心页随机入口；0.8.1 新增俄罗斯方块禅模式与积分记录表；0.8.2 压缩俄罗斯方块按钮区、给画布让出更多空间；没有签到、每日奖励或付费抽奖）。
+- Arcade 0.8.2 已通过 85 项本地无头浏览器冒烟、`arcade_zen_scores_test.mjs` 14 场景（含控件压缩/画布增量断言）、`arcade_gameplay_test.mjs --suite=base --repeat=2` 22/22、`validate_site.py`、`build_site.py` 与全部 `node --check`；GitHub Pages 与 Cloudflare Pages 双端逐文件一致，线上版本 `0.8.2`。
 - 真机 iOS/Android 试玩、原生全屏与系统分享面板仍为 UNVERIFIED。
 - 规划中：Rounded Image（等待原始需求/规格，不凭空复刻）。
 - 任务、证据和未决项见 [`TASKS.md`](TASKS.md)；后续方向见 [`docs/ROADMAP.md`](docs/ROADMAP.md)。

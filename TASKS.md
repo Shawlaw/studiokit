@@ -64,6 +64,11 @@
 | T063 | agent | Arcade 0.8.1 集成、版本、评审修复与发布前门禁 | DONE | T062 | M1 采用发布后证据提交时序（发布声明文档不入功能提交）；M2 修复：≤460px 开始弹层短文案+紧凑样式，320/375/390/430 三入口 44px 完整可见，ZS-14 增加四档断言；m-1 hook `loop.resume()`、m-2 `scoresImported` 导入提示、m-5 筛选计数、m-3/m-4/m-7/m-8 文档化；修复后 new test 14/14、smoke 85/85、gameplay 22/22、validate/build/node --check、M2 探针 5/5、inline `node --check`、commit-time-policy 2/2 全过；commit `41fa79e` |
 | T064 | agent | Arcade 0.8.1 发布：推送 main 并双端验证（GitHub Pages + Cloudflare Pages） | DONE | T063 | Owner 当前任务明确指令「你自己推进到发版」；推送 `de70117..41fa79e`；Actions run `43423208129` 四个 job 全成功（Validate and build / Deploy GitHub Pages / Deploy Cloudflare Pages / Verify both deployments）；CI 与本地 `verify_deploy.py` 均 37/37 文件 SHA-256 双端一致，Arcade `0.8.1` / Badge `2.2.1`；双端线上无头 Chrome 10/10（门户/中心页/积分记录区/方块页 0.8.1/禅模式无限/冻结恢复/结算写 zen 记录且经典 high 不变/中心页表格显示禅记录）；SW 缓存 `studiokit-arcade-0.8.1-v1`；真机与长局仍 UNVERIFIED |
 
+| T065 | agent | Arcade 0.8.2 俄罗斯方块控制区压缩（画布让位） | DONE | T064 | Owner 试玩反馈「按钮区占了太多游戏画面区域」；删除禅模式独立按钮行，冻结/恢复并入道具行（zen 3 列 / 经典 2 列，不增加行数；结束本局留在暂停弹层）；zen 隐藏重复 hint、道具行 44px、页面 gap/底部留白压缩、画布高度规则扣减 302/298→190/182px；实测画布 320 161×286→196×346、375 215×381→247×437、390 316×558→348×614、430 366×646→398×702、1280×900 348×614→379×670（+56～+60px 高），docH==vh、0 溢出，Lead 布局探针 35/35；commit `077ccf5` |
+| T066 | review | Arcade 0.8.2 独立发布前评审 | DONE | T065 | 独立 Reviewer 复跑门禁 + 真实输入/五档布局探针（110/112，2 项为探针侧误报，产品行为经 Lead 门禁与线上验证正确）；`docs/arcade/0.8.2-REVIEW.md` 记录结论、Blocker/Major/Minor/UNVERIFIED 与 DoD 对照 |
+| T067 | agent | Arcade 0.8.2 版本同步、测试更新与全量门禁 | DONE | T065 | 版本全链 0.8.2（engine/registry/hub/SW/validate/smoke/ZS-01）；ZS-04 重写为「禅模式 HUD / 控件压缩 / 画布增量」（zen 3 按钮 ≥44px、无 zen-bar、hint 隐藏、四档 delta≥40、docH≤vh+1），ZS-05 改 [data-zen-freeze] 断言；最终树 new test 14/14、smoke 85/85、gameplay base 22/22、validate/build/node --check 全过；commit `077ccf5` |
+| T068 | agent | Arcade 0.8.2 发布：推送 main 并双端验证 | DONE | T066,T067 | 推送 `e58007c..077ccf5`；Actions run `43447829596` 四 job 全成功；CI verify 37/37 双端一致（arcade 0.8.2 / badge 2.2.1）；双端线上无头 Chrome 14/14（门户/中心页 0.8.2/13 卡/积分区、方块页经典 316×558、禅模式 348×614（+56）、3 按钮 44px、hint 隐藏、冻结按钮真实切换、结算写 zen 记录且经典 high 不变）；SW 缓存 `studiokit-arcade-0.8.2-v1`；真机 UNVERIFIED |
+
 ## 任务命令
 
 ```powershell

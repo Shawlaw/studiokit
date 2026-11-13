@@ -2,6 +2,16 @@
 
 本目录保存 Arcade 各版本的设计/验收支撑文档，不是产品文档，也不进入发布产物（`tools/build_site.py` 的白名单只含 `index.html`、`favicon.svg`、`shared`、`apps`）。
 
+## 0.8.2（俄罗斯方块控制区压缩；已发布）
+
+| 文档 | 内容 | 状态 |
+| --- | --- | --- |
+| [0.8.2-CONTRACT.md](0.8.2-CONTRACT.md) | 并行实施契约：控件压缩规格、冻结按钮并入道具行、画布高度回收、测试与发布要求 | 已执行（0.8.2 发布） |
+| [0.8.2-REVIEW.md](0.8.2-REVIEW.md) | 独立 Reviewer 发布前评审：结论、Blocker/Major/Minor、UNVERIFIED 与 DoD 对照 | 评审文档 |
+| `apps/arcade/DESIGN-0.8.2.md` | 面向使用者的前后画布对比、兼容与回滚说明（发布产物内） | 已随 0.8.2 发布 |
+
+发布证据（0.8.2）：提交 `077ccf5` 推送 `main`；Actions `43447829596` 四个 job 全成功；CI 与本地 `verify_deploy.py` 均 37/37 文件双端一致（Arcade `0.8.2` / Badge `2.2.1`）；双端线上无头 Chrome 14/14（含五档画布增量、冻结按钮真实切换、结算写 zen 记录）。
+
 ## 0.8.1（俄罗斯方块禅模式 + 积分记录表；已发布）
 
 | 文档 | 内容 | 状态 |

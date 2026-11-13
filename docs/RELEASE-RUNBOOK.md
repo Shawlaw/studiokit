@@ -5,7 +5,11 @@
 - 仓库：<https://github.com/Shawlaw/studiokit>
 - GitHub Pages：<https://shawlaw.github.io/studiokit/>
 - Cloudflare Pages：<https://studiokit.pages.dev/>
-- 最近发布：Arcade `0.8.1`（2026-11-13，已发布）
+- 最近发布：Arcade `0.8.2`（2026-11-13，已发布）
+  - 批次内容：T065–T068 Owner 试玩反馈「按钮区占了太多游戏画面区域」修复：删除禅模式独立按钮行、冻结/恢复并入道具行、zen 隐藏重复 hint、道具行 44px、画布高度回收；实测禅模式画布面积 +18%～+47%、高度比经典多 56–60px；无数据/玩法变更
+  - 提交 `077ccf5` 推送 `main`；Actions `43447829596` 四个 job 均成功
+  - 双端验证：CI 与本地 `tools/verify_deploy.py` 均 **37/37** 文件 SHA-256 一致，Arcade `0.8.2` / Badge `2.2.1`；双端线上无头 Chrome **14/14**（门户/中心页 0.8.2、方块页经典 316×558 → 禅模式 348×614、3 按钮 44px、hint 隐藏、冻结按钮真实切换、结算写 zen 记录且经典 high 不变）；SW 缓存键 `studiokit-arcade-0.8.2-v1`
+- 上一个发布：Arcade `0.8.1`（2026-11-13，已发布）
   - 批次内容：T060–T064 俄罗斯方块禅模式（无限游玩 + 冻结/恢复提速）、中心页积分记录表（`studiokit:arcade:scores:v1`）、独立评审（APPROVE-WITH-NOTES，发布前修复 2 Major + 相关 Minor）、小屏开始弹层入口可见性修复
   - 提交 `575a766`（功能）+ `41fa79e`（评审修复）推送 `main`；Actions `43423208129` 四个 job 均成功
   - 双端验证：CI 与本地 `tools/verify_deploy.py` 均 **37/37** 文件 SHA-256 一致，Arcade `0.8.1` / Badge `2.2.1`，manifest `application/manifest+json`；双端线上无头 Chrome **10/10**（门户/中心页 0.8.1 + 13 卡 + 积分记录区、方块页 0.8.1 + 禅模式入口、线上禅模式无限/冻结恢复/结算写 zen 记录且经典 high 不变、中心页表格展示禅记录）；SW 缓存键 `studiokit-arcade-0.8.1-v1`
