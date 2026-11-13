@@ -118,6 +118,73 @@ async function prepareGame(cdp, file, tag) {
   assert(ready.overlay, file + '：开始弹层缺失');
 }
 
+/** 指定视口 + 空存档的游戏页（0.8.2 布局档位循环用；避免残留 autosave 弹「继续游戏」）。 */
+async function prepareGameAt(cdp, file, tag, width, height) {
+  await setViewport(cdp, width, height);
+  await clearStorageFromHub(cdp);
+  await cdp.navigate(BASE + '/apps/arcade/games/' + file + '?zs=' + encodeURIComponent(tag) + '#test');
+  await cdp.waitFor('document.readyState === "complete" && window.Arcade && window.__arcadeTest', { timeout: 8000 });
+  await cdp.waitFor('document.querySelector("[data-overlay]") && !document.querySelector("[data-overlay]").hidden', { timeout: 8000 });
+  await sleep(120);
+}
+
+/**
+ * 游戏页布局 / 控件快照（0.8.2 §4：删除 zen-bar、冻结按钮并入道具行、禅模式画布增量）。
+ * 只读 DOM / getComputedStyle，不触碰游戏状态。
+ */
+async function gameLayoutSnapshot(cdp) {
+  return cdp.evaluate(`(() => {
+    const round = (value) => Math.round(value);
+    const rect = (el) => {
+      if (!el) return null;
+      const box = el.getBoundingClientRect();
+      return { w: round(box.width), h: round(box.height), top: round(box.top), bottom: round(box.bottom) };
+    };
+    const visible = (el) => {
+      if (!el || el.hidden) return false;
+      const style = getComputedStyle(el);
+      if (style.display === 'none' || style.visibility === 'hidden') return false;
+      return el.getClientRects().length > 0;
+    };
+    const hint = document.querySelector('.block-hint');
+    const row = document.querySelector('[data-joy-tools]') || document.querySelector('.joy-tools-below');
+    const rowButtons = row ? Array.from(row.querySelectorAll('.tool-btn')) : [];
+    const freeze = document.querySelector('[data-zen-freeze]');
+    const freezeName = freeze ? freeze.querySelector('.tool-name') : null;
+    return {
+      hasZenBarClass: document.body.classList.contains('has-zen-bar'),
+      zenBarNodes: document.querySelectorAll('.zen-bar, [data-zen-bar]').length,
+      canvas: rect(document.querySelector('.game-canvas')),
+      stage: rect(document.querySelector('.stage-box')),
+      joyToolCount: document.querySelectorAll('[data-joy-tool]').length,
+      rowButtonCount: rowButtons.length,
+      visibleRowButtons: rowButtons.filter(visible).map((button) => Object.assign({
+        freeze: button.hasAttribute('data-zen-freeze'),
+        text: button.textContent.replace(/\\s+/g, ' ').trim(),
+        name: (button.querySelector('.tool-name') || {}).textContent || '',
+        pressed: button.getAttribute('aria-pressed'),
+        disabled: button.disabled,
+      }, rect(button))),
+      rowColumns: row ? getComputedStyle(row).gridTemplateColumns : null,
+      freezeExists: !!freeze,
+      freezeHidden: freeze ? !!freeze.hidden : null,
+      freezeVisible: visible(freeze),
+      freezeText: freeze ? freeze.textContent.replace(/\\s+/g, ' ').trim() : '',
+      freezeName: freezeName ? freezeName.textContent.trim() : '',
+      freezePressed: freeze ? freeze.getAttribute('aria-pressed') : null,
+      freezeLabel: freeze ? freeze.getAttribute('aria-label') || '' : '',
+      freezeDisabled: freeze ? freeze.disabled : null,
+      hintExists: !!hint,
+      hintDisplay: hint ? getComputedStyle(hint).display : null,
+      hintVisible: visible(hint),
+      docH: document.documentElement.scrollHeight,
+      vh: innerHeight,
+      scrollW: document.documentElement.scrollWidth,
+      clientW: document.documentElement.clientWidth,
+    };
+  })()`);
+}
+
 async function startClassic(cdp) {
   await cdp.click('[data-ov-btn]');
   await cdp.waitFor('window.__arcadeTest && typeof window.__arcadeTest.info === "function" && window.__arcadeTest.info().state === "playing"', { timeout: 8000 });
@@ -290,7 +357,7 @@ async function readScoresPayload(cdp) {
  *   ZS-01 中心页版本 / 区块 / 空状态          —— §7.1
  *   ZS-02 经典一局 → classic 积分 + high 逻辑 —— §7.2
  *   ZS-03 禅模式 40 行不收局（无限）           —— §7.3
- *   ZS-04 禅模式 HUD / 触屏操作条              —— §5.3
+ *   ZS-04 禅模式 HUD / 控件压缩 / 画布增量      —— 0.8.2 §4
  *   ZS-05 冻结 / 恢复提速（含 Z 键）           —— §7.4
  *   ZS-06 禅模式结算 → zen 记录且不污染经典 high —— §7.5
  *   ZS-07 中心页表格渲染（最新在前 / 列 / 格式化） —— §7.6
@@ -305,14 +372,14 @@ async function readScoresPayload(cdp) {
 const SCENARIOS = [
   {
     id: 'ZS-01',
-    title: '中心页版本 0.8.1 + 积分记录区块 + 空状态',
+    title: '中心页版本 0.8.2 + 积分记录区块 + 空状态',
     async run(cdp) {
       await prepareHub(cdp);
       const api = await requireScores(cdp);
-      assert(api.version === '0.8.1', 'A.version=' + JSON.stringify(api.version) + '，期望 0.8.1');
+      assert(api.version === '0.8.2', 'A.version=' + JSON.stringify(api.version) + '，期望 0.8.2');
       const dom = await hubSnapshot(cdp);
       assert(dom.section, '中心页缺少 [data-scores-section] 积分记录区块');
-      assert(dom.versionText.trim() === '0.8.1', '[data-hall-version]=' + JSON.stringify(dom.versionText) + '，期望 0.8.1');
+      assert(dom.versionText.trim() === '0.8.2', '[data-hall-version]=' + JSON.stringify(dom.versionText) + '，期望 0.8.2');
       assert(dom.table, '缺少 .hall-scores-table 积分表格');
       const headers = dom.headers.map((item) => item.text).join('/');
       assert(headers === '时间/游戏/模式/得分/详情', '表头=' + JSON.stringify(headers) + '，期望 时间/游戏/模式/得分/详情');
@@ -407,60 +474,40 @@ const SCENARIOS = [
   },
   {
     id: 'ZS-04',
-    title: '禅模式 HUD 与触屏操作条（§5.3）',
+    title: '禅模式 HUD / 控件压缩 / 画布增量（0.8.2 §4）',
     async run(cdp) {
       await prepareGame(cdp, GAME_FILE, 'zs04');
       await requireZenHooks(cdp);
-      const beforeStart = await cdp.evaluate(`(() => {
-        const visible = (el) => !!el && !el.hidden && el.getClientRects().length > 0;
-        const zen = document.querySelector('[data-hud-zen]');
-        return {
-          zenHidden: zen ? zen.hidden : null,
-          zenText: zen ? zen.textContent.trim() : '',
-          zenVisible: visible(zen),
-          barVisible: visible(document.querySelector('.zen-bar'))
-        };
-      })()`);
-      assert(beforeStart.zenHidden === true && beforeStart.zenText === '', '经典开始界面不应处于禅模式 HUD 状态：' + JSON.stringify(beforeStart));
-      assert(beforeStart.zenVisible === false, '经典开始界面不应显示禅模式 HUD');
-      assert(beforeStart.barVisible === false, '经典开始界面不应显示 .zen-bar 操作条');
 
+      /* 1) 经典开始界面：独立 zen-bar 已删除、仍只有 2 个道具工具、冻结按钮隐藏、hint 可见。 */
+      const classic = await gameLayoutSnapshot(cdp);
+      assert(classic.hasZenBarClass === false, '经典开始界面不应带 body.has-zen-bar：' + JSON.stringify(classic.hasZenBarClass));
+      assert(classic.zenBarNodes === 0, '经典界面仍存在 .zen-bar/[data-zen-bar]：' + classic.zenBarNodes + ' 个（0.8.2 应删除该行）');
+      assert(classic.joyToolCount === 2, '经典 [data-joy-tool] 数量=' + classic.joyToolCount + '，期望 2');
+      assert(classic.freezeExists === true && classic.freezeHidden === true && classic.freezeVisible === false, '经典界面 [data-zen-freeze] 未隐藏：' + JSON.stringify({ exists: classic.freezeExists, hidden: classic.freezeHidden, visible: classic.freezeVisible }));
+      assert(classic.hintExists && classic.hintVisible && classic.hintDisplay !== 'none', '经典界面 hint 不可见：' + JSON.stringify({ display: classic.hintDisplay, visible: classic.hintVisible }));
+
+      /* 2) 进入禅模式：body.has-zen-bar、道具行 3 个可见按钮（2 工具 + 冻结）、全部 ≥44px、hint 隐藏、无 zen-bar。 */
       assert((await cdp.evaluate('window.__arcadeTest.startZen()')) === true, 'startZen() 未返回 true');
       await cdp.waitFor('window.__arcadeTest.zenInfo().state === "playing"', { timeout: 8000 });
+      await sleep(160);
+      const zen = await gameLayoutSnapshot(cdp);
+      assert(zen.hasZenBarClass === true, '禅模式缺少 body.has-zen-bar（CSS 钩子应保留）');
+      assert(zen.zenBarNodes === 0, '禅模式仍存在 .zen-bar/[data-zen-bar]：' + zen.zenBarNodes + ' 个（0.8.2 应删除该行）');
+      assert(zen.rowButtonCount === 3, '禅模式道具行按钮总数=' + zen.rowButtonCount + '，期望 3（2 工具 + 冻结）');
+      assert(zen.visibleRowButtons.length === 3, '禅模式道具行可见按钮=' + JSON.stringify(zen.visibleRowButtons) + '，期望 3');
+      const visibleTools = zen.visibleRowButtons.filter((button) => !button.freeze);
+      const visibleFreezes = zen.visibleRowButtons.filter((button) => button.freeze);
+      assert(visibleTools.length === 2, '禅模式可见 [data-joy-tool] 按钮数=' + visibleTools.length + '，期望 2');
+      assert(visibleFreezes.length === 1, '禅模式可见冻结按钮数=' + visibleFreezes.length + '，期望 1');
+      const tooSmall = zen.visibleRowButtons.filter((button) => button.w < 44 || button.h < 44);
+      assert(tooSmall.length === 0, '禅模式道具行按钮小于 44px：' + JSON.stringify(tooSmall));
+      assert(zen.freezeVisible === true && zen.freezeHidden === false, '禅模式 [data-zen-freeze] 未显示：' + JSON.stringify({ visible: zen.freezeVisible, hidden: zen.freezeHidden }));
+      assert(zen.freezeName.indexOf('冻结提速') !== -1, '冻结按钮 .tool-name=' + JSON.stringify(zen.freezeName) + '，期望「冻结提速」');
+      assert(zen.freezeText.indexOf('冻结提速') !== -1, '冻结按钮文案=' + JSON.stringify(zen.freezeText) + '，期望包含「冻结提速」');
+      assert(zen.hintVisible === false && zen.hintDisplay === 'none', '禅模式 hint 未隐藏：' + JSON.stringify({ display: zen.hintDisplay, visible: zen.hintVisible }));
 
-      /* 420px（手机视口）下 .game-hud 整体由既有 CSS 隐藏、分数画在画布内；
-         这里先断言 DOM 状态正确（hidden 属性 / 文案 / 最高分隐藏），再切宽视口验证真实可见性。 */
-      const state = await cdp.evaluate(`(() => {
-        const zen = document.querySelector('[data-hud-zen]');
-        const highWrap = document.querySelector('[data-hud-highwrap]');
-        const bar = document.querySelector('.zen-bar');
-        return {
-          zenExists: !!zen,
-          zenHidden: zen ? zen.hidden : null,
-          zenText: (zen ? zen.textContent : '').replace(/\\s+/g, ' ').trim(),
-          highWrapExists: !!highWrap,
-          highWrapHidden: highWrap ? highWrap.hidden : null,
-          barExists: !!bar,
-          barHidden: bar ? bar.hidden : null,
-          barText: (bar ? bar.textContent : '').replace(/\\s+/g, ' ').trim(),
-          barButtons: bar ? Array.from(bar.querySelectorAll('button')).map((button) => { const rect = button.getBoundingClientRect(); return { w: Math.round(rect.width), h: Math.round(rect.height), hidden: button.hidden, disabled: button.disabled }; }) : []
-        };
-      })()`);
-      assert(state.zenExists, '缺少 [data-hud-zen] 禅模式 HUD 元素');
-      assert(state.zenHidden === false, '禅模式时 [data-hud-zen].hidden=' + JSON.stringify(state.zenHidden) + '，期望 false');
-      assert(state.zenText.indexOf('禅模式') !== -1, '禅模式 HUD 文案=' + JSON.stringify(state.zenText) + '，应包含「禅模式」');
-      assert(state.zenText.indexOf('速度 Lv.') !== -1, '禅模式 HUD 文案=' + JSON.stringify(state.zenText) + '，应包含「速度 Lv.」');
-      assert(state.zenText.indexOf('行数') !== -1, '禅模式 HUD 文案=' + JSON.stringify(state.zenText) + '，应包含「行数」');
-      assert(state.highWrapExists && state.highWrapHidden === true, '禅模式未隐藏经典「最高」：highWrap.hidden=' + JSON.stringify(state.highWrapHidden) + '（避免误读为禅模式最高分）');
-      assert(state.barExists, '缺少 .zen-bar 禅模式触屏操作条');
-      assert(state.barHidden === false, '禅模式时 .zen-bar.hidden=' + JSON.stringify(state.barHidden) + '，期望 false');
-      assert(state.barButtons.length >= 2, '.zen-bar 按钮数=' + state.barButtons.length + '，期望 ≥2');
-      assert(state.barButtons.every((button) => button.hidden === false), '.zen-bar 有按钮被隐藏：' + JSON.stringify(state.barButtons));
-      assert(state.barButtons.every((button) => button.w >= 44 && button.h >= 44), '.zen-bar 按钮小于 44px：' + JSON.stringify(state.barButtons));
-      assert(state.barText.indexOf('冻结') !== -1, '.zen-bar 文案=' + JSON.stringify(state.barText) + '，应包含「冻结提速」');
-      assert(state.barText.indexOf('结束') !== -1, '.zen-bar 文案=' + JSON.stringify(state.barText) + '，应包含「结束本局」');
-
-      /* 宽视口：.game-hud 不再被窄屏 CSS 隐藏，验证禅模式 HUD 真实可见、经典「最高」不可见。 */
+      /* 3) 宽视口 900px：.game-hud 恢复显示，禅模式 HUD 可见且经典「最高」隐藏。 */
       await setViewport(cdp, 900, 640);
       await sleep(160);
       const wide = await cdp.evaluate(`(() => {
@@ -470,15 +517,83 @@ const SCENARIOS = [
           hudDisplay: hud ? getComputedStyle(hud).display : null,
           zenVisible: visible(document.querySelector('[data-hud-zen]')),
           highVisible: visible(document.querySelector('[data-hud-high]')),
-          zenText: (document.querySelector('[data-hud-zen]') || {}).textContent || ''
+          zenText: ((document.querySelector('[data-hud-zen]') || {}).textContent || '').replace(/\\s+/g, ' ').trim()
         };
       })()`);
       assert(wide.hudDisplay !== 'none', '900px 视口下 .game-hud 仍不可见：display=' + JSON.stringify(wide.hudDisplay));
       assert(wide.zenVisible === true, '900px 视口下禅模式 [data-hud-zen] 不可见');
       assert(wide.highVisible === false, '900px 视口下禅模式仍显示经典「最高」');
-      assert(wide.zenText.indexOf('禅模式') !== -1, '900px 视口禅模式 HUD 文案=' + JSON.stringify(wide.zenText));
+      assert(wide.zenText.indexOf('禅模式') !== -1, '900px 视口禅模式 HUD 文案=' + JSON.stringify(wide.zenText) + '，应包含「禅模式」');
+      assert(wide.zenText.indexOf('速度 Lv.') !== -1, '900px 视口禅模式 HUD 文案=' + JSON.stringify(wide.zenText) + '，应包含「速度 Lv.」');
       await setViewport(cdp);
-      return { zenText: state.zenText.slice(0, 40), barButtons: state.barButtons.length, wideHudVisible: wide.zenVisible };
+      await sleep(120);
+
+      /* 4) 真实点击冻结按钮：zenFrozen 生效、文案/aria 切到「恢复提速」，再点恢复。 */
+      await cdp.click('[data-zen-freeze]');
+      await sleep(120);
+      const frozenInfo = await cdp.evaluate('window.__arcadeTest.zenInfo()');
+      assert(frozenInfo.zenFrozen === true, '真实点击冻结按钮后 zenFrozen=' + JSON.stringify(frozenInfo.zenFrozen) + '，期望 true');
+      const frozen = await gameLayoutSnapshot(cdp);
+      assert(frozen.freezeName.indexOf('恢复') !== -1, '冻结后 [data-zen-freeze] .tool-name=' + JSON.stringify(frozen.freezeName) + '，应切换为「恢复提速」');
+      assert(frozen.freezeText.indexOf('恢复') !== -1, '冻结后 [data-zen-freeze] 文案=' + JSON.stringify(frozen.freezeText) + '，应包含「恢复提速」');
+      assert(frozen.freezePressed === 'true', '冻结后 [data-zen-freeze].aria-pressed=' + JSON.stringify(frozen.freezePressed) + '，期望 true');
+      assert(frozen.freezeLabel.indexOf('恢复') !== -1, '冻结后 [data-zen-freeze].aria-label=' + JSON.stringify(frozen.freezeLabel) + '，应包含「恢复提速」');
+      await cdp.click('[data-zen-freeze]');
+      await sleep(120);
+      const resumedInfo = await cdp.evaluate('window.__arcadeTest.zenInfo()');
+      assert(resumedInfo.zenFrozen === false, '再次点击冻结按钮后 zenFrozen=' + JSON.stringify(resumedInfo.zenFrozen) + '，期望 false');
+      const resumedFreeze = await gameLayoutSnapshot(cdp);
+      assert(resumedFreeze.freezeName.indexOf('冻结提速') !== -1, '恢复后 [data-zen-freeze] .tool-name=' + JSON.stringify(resumedFreeze.freezeName) + '，应恢复「冻结提速」');
+      assert(resumedFreeze.freezePressed === 'false', '恢复后 [data-zen-freeze].aria-pressed=' + JSON.stringify(resumedFreeze.freezePressed) + '，期望 false');
+
+      /* 5) 暂停弹层：禅模式第二按钮为「结束本局并记录」，继续后回到 playing。 */
+      await cdp.click('[data-pause]');
+      await cdp.waitFor('document.querySelector("[data-overlay]") && !document.querySelector("[data-overlay]").hidden', { timeout: 5000 });
+      const paused = await cdp.evaluate(`(() => {
+        const visible = (el) => !!el && !el.hidden && getComputedStyle(el).display !== 'none' && el.getClientRects().length > 0;
+        const btn = document.querySelector('[data-ov-btn]');
+        const btn2 = document.querySelector('[data-ov-btn2]');
+        return {
+          title: ((document.querySelector('[data-ov-title]') || {}).textContent || '').trim(),
+          btn: btn ? btn.textContent.trim() : '',
+          btn2Visible: visible(btn2),
+          btn2: btn2 ? btn2.textContent.replace(/\\s+/g, ' ').trim() : ''
+        };
+      })()`);
+      assert(paused.btn2Visible, '禅模式暂停弹层第二按钮不可见：' + JSON.stringify(paused));
+      assert(paused.btn2.indexOf('结束本局并记录') !== -1, '禅模式暂停弹层第二按钮=' + JSON.stringify(paused.btn2) + '，期望「结束本局并记录」');
+      await cdp.click('[data-ov-btn]');
+      await cdp.waitFor('window.__arcadeTest.zenInfo().state === "playing"', { timeout: 8000 });
+
+      /* 6) 四档 320/375/390/430：禅模式画布比经典高 ≥40px，且 docH<=vh+1、无横向溢出。 */
+      const widthCases = [[320, 568], [375, 667], [390, 844], [430, 932]];
+      const layoutRows = [];
+      for (const [width, height] of widthCases) {
+        await prepareGameAt(cdp, GAME_FILE, 'zs04-' + width, width, height);
+        const classicLayout = await gameLayoutSnapshot(cdp);
+        assert(classicLayout.canvas && classicLayout.canvas.h > 0, width + 'px 经典画布高度读取失败：' + JSON.stringify(classicLayout.canvas));
+        assert(classicLayout.hasZenBarClass === false, width + 'px 经典开始界面不应带 body.has-zen-bar');
+        assert((await cdp.evaluate('window.__arcadeTest.startZen()')) === true, width + 'px startZen() 未返回 true');
+        await cdp.waitFor('window.__arcadeTest.zenInfo().state === "playing"', { timeout: 8000 });
+        await sleep(180);
+        const zenLayout = await gameLayoutSnapshot(cdp);
+        assert(zenLayout.hasZenBarClass === true, width + 'px 禅模式缺少 body.has-zen-bar');
+        assert(zenLayout.canvas && zenLayout.canvas.h > 0, width + 'px 禅模式画布高度读取失败：' + JSON.stringify(zenLayout.canvas));
+        const deltaH = zenLayout.canvas.h - classicLayout.canvas.h;
+        assert(deltaH >= 40, width + 'px 禅模式画布高度增量 ' + deltaH + 'px < 40px：禅 ' + zenLayout.canvas.h + 'px vs 经典 ' + classicLayout.canvas.h + 'px');
+        assert(zenLayout.docH <= zenLayout.vh + 1, width + 'px 禅模式纵向溢出：docH=' + zenLayout.docH + ' > vh=' + zenLayout.vh);
+        assert(zenLayout.scrollW <= zenLayout.clientW + 1, width + 'px 禅模式横向溢出：scrollWidth=' + zenLayout.scrollW + ' > clientWidth=' + zenLayout.clientW);
+        layoutRows.push({ width, classicH: classicLayout.canvas.h, zenH: zenLayout.canvas.h, deltaH, docH: zenLayout.docH, vh: zenLayout.vh });
+      }
+      await setViewport(cdp);
+      return {
+        classic: { joyTools: classic.joyToolCount, hint: classic.hintVisible },
+        zen: { rowButtons: zen.visibleRowButtons.length, minButtonH: Math.min.apply(null, zen.visibleRowButtons.map((button) => button.h)), freezeName: zen.freezeName, hintHidden: zen.hintVisible === false },
+        wideHud: wide.zenText.slice(0, 28),
+        freezeToggle: { frozen: frozenInfo.zenFrozen, resumed: resumedInfo.zenFrozen, ariaPressed: frozen.freezePressed + '→' + resumedFreeze.freezePressed },
+        pauseBtn2: paused.btn2,
+        layout: layoutRows.map((row) => row.width + 'px:经典' + row.classicH + '/禅' + row.zenH + '(+' + row.deltaH + ') docH' + row.docH + '/' + row.vh).join('; '),
+      };
     },
   },
   {
@@ -512,8 +627,22 @@ const SCENARIOS = [
       assert(raised.zenSpeedLevel === base.zenSpeedLevel, '冻结提速后 zenSpeedLevel=' + raised.zenSpeedLevel + '，应保持 ' + base.zenSpeedLevel);
       assert(Math.abs(raised.gravitySec - base.gravitySec) <= 1e-9, '冻结提速后 gravitySec=' + raised.gravitySec + '，应保持 ' + base.gravitySec);
       await sleep(60);
-      const frozenBar = await cdp.evaluate(`(() => { const bar = document.querySelector('.zen-bar'); return bar ? bar.textContent.replace(/\\s+/g, ' ').trim() : ''; })()`);
-      assert(frozenBar.indexOf('恢复') !== -1, '冻结后 .zen-bar 文案=' + JSON.stringify(frozenBar) + '，应切换为「恢复提速」');
+      const frozenButton = await cdp.evaluate(`(() => {
+        const button = document.querySelector('[data-zen-freeze]');
+        if (!button) return null;
+        const name = button.querySelector('.tool-name');
+        return {
+          text: button.textContent.replace(/\\s+/g, ' ').trim(),
+          name: name ? name.textContent.trim() : '',
+          pressed: button.getAttribute('aria-pressed'),
+          label: button.getAttribute('aria-label') || ''
+        };
+      })()`);
+      assert(frozenButton, '冻结后缺少 [data-zen-freeze]（0.8.2 应并入道具行）');
+      assert(frozenButton.name.indexOf('恢复') !== -1, '冻结后 [data-zen-freeze] .tool-name=' + JSON.stringify(frozenButton.name) + '，应切换为「恢复提速」');
+      assert(frozenButton.text.indexOf('恢复') !== -1, '冻结后 [data-zen-freeze] 文案=' + JSON.stringify(frozenButton.text) + '，应包含「恢复提速」');
+      assert(frozenButton.pressed === 'true', '冻结后 [data-zen-freeze].aria-pressed=' + JSON.stringify(frozenButton.pressed) + '，期望 true');
+      assert(frozenButton.label.indexOf('恢复') !== -1, '冻结后 [data-zen-freeze].aria-label=' + JSON.stringify(frozenButton.label) + '，应包含「恢复提速」');
 
       /* 恢复：zenSpeedLevel 立即追平当前 level，重力变小。 */
       const resumedToggle = await cdp.evaluate('window.__arcadeTest.toggleZenFreeze()');
@@ -523,8 +652,20 @@ const SCENARIOS = [
       assert(resumed.zenFrozen === false, '恢复后 zenFrozen=' + JSON.stringify(resumed.zenFrozen));
       assert(resumed.zenSpeedLevel === raised.level, '恢复提速后 zenSpeedLevel=' + resumed.zenSpeedLevel + '，应追平 level=' + raised.level);
       assert(resumed.gravitySec < base.gravitySec, '恢复提速后 gravitySec=' + resumed.gravitySec + '，应小于冻结时 ' + base.gravitySec);
-      const resumedBar = await cdp.evaluate(`(() => { const bar = document.querySelector('.zen-bar'); return bar ? bar.textContent.replace(/\\s+/g, ' ').trim() : ''; })()`);
-      assert(resumedBar.indexOf('冻结') !== -1, '恢复后 .zen-bar 文案=' + JSON.stringify(resumedBar) + '，应恢复「冻结提速」');
+      const resumedButton = await cdp.evaluate(`(() => {
+        const button = document.querySelector('[data-zen-freeze]');
+        if (!button) return null;
+        const name = button.querySelector('.tool-name');
+        return {
+          text: button.textContent.replace(/\\s+/g, ' ').trim(),
+          name: name ? name.textContent.trim() : '',
+          pressed: button.getAttribute('aria-pressed')
+        };
+      })()`);
+      assert(resumedButton, '恢复后缺少 [data-zen-freeze]（0.8.2 应并入道具行）');
+      assert(resumedButton.name.indexOf('冻结提速') !== -1, '恢复后 [data-zen-freeze] .tool-name=' + JSON.stringify(resumedButton.name) + '，应恢复「冻结提速」');
+      assert(resumedButton.text.indexOf('冻结提速') !== -1, '恢复后 [data-zen-freeze] 文案=' + JSON.stringify(resumedButton.text) + '，应包含「冻结提速」');
+      assert(resumedButton.pressed === 'false', '恢复后 [data-zen-freeze].aria-pressed=' + JSON.stringify(resumedButton.pressed) + '，期望 false');
 
       /* Z 键真实键盘输入（按住 ≥1 帧后松开，验证边沿触发）。 */
       await cdp.key('z', 'down');

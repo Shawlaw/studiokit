@@ -7,7 +7,7 @@
 (() => {
   'use strict';
 
-  const ARCADE_VERSION = '0.8.1';
+  const ARCADE_VERSION = '0.8.2';
   const PROGRESS_KEY = 'studiokit:arcade:progress:v1';
   const PREFS_KEY = 'studiokit:arcade:prefs:v1';
   const RUNS_KEY = 'studiokit:arcade:runs:v1';

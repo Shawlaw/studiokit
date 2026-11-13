@@ -1,13 +1,13 @@
 /*
- * 街机厅 Arcade Service Worker（0.8.1）
+ * 街机厅 Arcade Service Worker（0.8.2）
  * - 作用域：apps/arcade/；同时缓存 Arcade 页面引用的 shared/site.css 与 site-shell.js。
  * - 安装时缓存中心页外壳；13 款游戏由中心页「预载全部游戏」按钮按需缓存。
  * - 0.9 挑战数据（./challenge/<gameId>.js，13 个）随外壳预缓存，保证离线可玩挑战模式；
- *   缓存 VERSION 与引擎/注册表保持一致（0.8.1）。
+ *   缓存 VERSION 与引擎/注册表保持一致（0.8.2）。
  * - 导航网络优先（离线回退缓存），静态资源缓存优先；跨域请求一律不拦截。
  * - 不使用任何远程资源、分析或第三方 API（AGENTS.md 约束 4）。
  */
-const VERSION = '0.8.1';
+const VERSION = '0.8.2';
 const CACHE_PREFIX = 'studiokit-arcade-';
 const CACHE_NAME = `${CACHE_PREFIX}${VERSION}-v1`;
 const BASE = new URL('./', self.location.href);

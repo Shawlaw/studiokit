@@ -35,48 +35,28 @@
       pointer-events: none;
     }
     .ch-tip-float[hidden] { display: none; }
-    /* 0.8.1 禅模式：顶栏禅模式 HUD + 画布下方冻结/结束按钮（仅本页生效）。 */
+    /* 0.8.2 禅模式控件压缩：冻结按钮并入道具行，不再占用独立按钮行，把高度还给画布（仅本页生效）。 */
     .game-hud [hidden] { display: none !important; }
     .zen-hud { color: #8ff3f3; white-space: nowrap; }
     .zen-hud strong { color: var(--ac-ink); }
-    .zen-bar {
-      display: flex;
-      flex-wrap: wrap;
-      gap: 8px;
-      width: min(420px, 100%);
-      margin: 2px auto 0;
-    }
-    .zen-bar[hidden] { display: none; }
-    .zen-btn {
-      flex: 1 1 140px;
-      min-width: 0;
-      min-height: 48px;
-      padding: 10px 14px;
-      border: 1px solid var(--ac-line);
-      border-radius: 12px;
-      background: linear-gradient(180deg, var(--ac-panel-2), var(--ac-panel));
-      color: var(--ac-ink);
-      font: inherit;
-      font-size: 13px;
-      font-weight: 700;
-      line-height: 1.2;
-      cursor: pointer;
-      touch-action: manipulation;
-      -webkit-tap-highlight-color: transparent;
-    }
-    .zen-btn:focus-visible { outline: 2px solid var(--ac-accent); outline-offset: 2px; }
-    .zen-btn:disabled { opacity: 0.4; cursor: default; }
-    .zen-btn-freeze.is-frozen {
+    /* 冻结按钮沿用道具行 .tool-btn 样式；冻结时用青色高亮，按钮仍保持 ≥44px。 */
+    .joy-tools-below [data-zen-freeze].is-frozen {
       border-color: #41d9d9;
       color: #b8ffff;
       background: linear-gradient(180deg, rgba(65, 217, 217, 0.32), rgba(65, 217, 217, 0.12));
     }
-    .zen-btn-end { flex: 0 1 120px; color: var(--ac-muted); }
-    /* 禅模式多出按钮行：只为较高视口（含常见竖屏手机）回收 56px 画布高度，避免纵向溢出。 */
+    .joy-tools-below [data-zen-freeze][hidden] { display: none; }
+    /* 禅模式的 HUD 与画布内标签已提示操作，隐藏重复 hint；道具行压缩但按钮仍 ≥44px。 */
+    body.has-zen-bar .block-hint { display: none; }
+    body.has-joy-row .joy-tools-below { gap: 6px; margin-top: 2px; padding: 0; align-items: center; }
+    body.has-joy-row .joy-tools-below .tool-btn { min-height: 44px; height: 44px; padding: 0 4px; }
+    /* 禅模式再压缩页内间隙与底部留白（经典模式不受影响），把空間全部让给画布。 */
+    body.has-zen-bar .game-page { gap: 6px; padding-bottom: max(6px, env(safe-area-inset-bottom)); }
+    /* 禅模式省掉独立按钮行与 hint 后，把空间还给画布：四档手机与桌面实测画布比经典模式高 ≥44px。 */
     @media (min-height: 561px) {
       body.has-zen-bar.has-joy-row.has-extra-controls:not(.arcade-immersive) .stage-box {
         height: min(
-          calc(100dvh - var(--studiokit-shellbar-h, 0px) - 302px - env(safe-area-inset-bottom, 0px)),
+          calc(100dvh - var(--studiokit-shellbar-h, 0px) - 190px - env(safe-area-inset-bottom, 0px)),
           calc(min(520px, 100vw - 24px) * 740 / 420)
         );
       }
@@ -84,7 +64,7 @@
     @media (min-height: 561px) and (max-width: 360px) {
       body.has-zen-bar.has-joy-row.has-extra-controls:not(.arcade-immersive) .stage-box {
         height: min(
-          calc(100dvh - var(--studiokit-shellbar-h, 0px) - 298px - env(safe-area-inset-bottom, 0px)),
+          calc(100dvh - var(--studiokit-shellbar-h, 0px) - 182px - env(safe-area-inset-bottom, 0px)),
           calc(min(520px, 100vw - 16px) * 740 / 420)
         );
       }
@@ -135,10 +115,6 @@
           <div class="ac-challenge-panel" data-ch-panel hidden></div>
         </div>
       </div>
-    </div>
-    <div class="zen-bar" data-zen-bar hidden aria-label="禅模式操作">
-      <button type="button" class="zen-btn zen-btn-freeze" data-zen-freeze aria-label="冻结提速">❄ 冻结提速</button>
-      <button type="button" class="zen-btn zen-btn-end" data-zen-end aria-label="结束本局并记录">结束本局</button>
     </div>
     <div class="touch-pad block-pad" data-touch-pad aria-label="俄罗斯方块触屏操作面板">
       <div class="block-pad-group block-pad-move" role="group" aria-label="左右移动">
@@ -215,9 +191,6 @@
         chLayer: document.querySelector('[data-ch-layer]'),
         chPanel: document.querySelector('[data-ch-panel]'),
         chTip: document.querySelector('[data-ch-tip]'),
-        zenBar: document.querySelector('[data-zen-bar]'),
-        zenFreezeBtn: document.querySelector('[data-zen-freeze]'),
-        zenEndBtn: document.querySelector('[data-zen-end]'),
         pause: document.querySelector('[data-pause]'),
         mute: document.querySelector('[data-mute]'),
       };
@@ -272,6 +245,8 @@
       let zenFrozen = false;
       let zenSpeedLevel = 1;
       let zenElapsed = 0;
+      /* 0.8.2：冻结按钮并入道具行（不新增按钮行），由 syncZenBar 管理显隐/文案/列数。 */
+      let zenFreezeBtn = null;
       /* 0.9 挑战模式状态：mode==='classic' 时这些字段不参与经典逻辑。 */
       let mode = 'classic';
       let chStage = null;
@@ -398,19 +373,49 @@
           (zenFrozen ? ' · 已冻结' : '') +
           ' · 行数 <strong>' + lines + '</strong>';
       }
+      /* 0.8.2：冻结按钮并入道具行（同一行三列），不再有独立按钮行。 */
+      function setupZenFreezeButton() {
+        if (!joyTools || !joyTools.element) return;
+        const button = document.createElement('button');
+        button.type = 'button';
+        button.className = 'tool-btn';
+        button.setAttribute('data-zen-freeze', '');
+        button.setAttribute('aria-pressed', 'false');
+        button.hidden = true;
+        const icon = document.createElement('span');
+        icon.className = 'tool-icon';
+        icon.setAttribute('aria-hidden', 'true');
+        icon.textContent = '❄';
+        const name = document.createElement('span');
+        name.className = 'tool-name';
+        name.textContent = '冻结提速';
+        button.append(icon, name);
+        button.addEventListener('click', () => {
+          if (mode !== 'zen' || state !== 'playing') return;
+          toggleZenFreezeNow();
+        });
+        joyTools.element.appendChild(button);
+        zenFreezeBtn = button;
+      }
       function syncZenBar() {
         const active = zenUiActive();
         if (document.body) document.body.classList.toggle('has-zen-bar', active);
-        if (!dom.zenBar) return;
-        dom.zenBar.hidden = !active;
-        if (!active) return;
-        if (dom.zenFreezeBtn) {
-          dom.zenFreezeBtn.textContent = zenFrozen ? '▶ 恢复提速' : '❄ 冻结提速';
-          dom.zenFreezeBtn.setAttribute('aria-label', zenFrozen ? '恢复提速' : '冻结提速');
-          dom.zenFreezeBtn.classList.toggle('is-frozen', zenFrozen);
-          dom.zenFreezeBtn.disabled = state !== 'playing';
+        if (joyTools && joyTools.element) {
+          /* 经典/挑战：换块 + 慢落两列；禅模式追加冻结按钮，同一行三列，行高不增加。 */
+          joyTools.element.style.gridTemplateColumns = active
+            ? 'repeat(3, minmax(0, 1fr))'
+            : 'repeat(2, minmax(0, 1fr))';
         }
-        if (dom.zenEndBtn) dom.zenEndBtn.disabled = state !== 'playing' && state !== 'paused';
+        if (!zenFreezeBtn) return;
+        zenFreezeBtn.hidden = !active;
+        zenFreezeBtn.disabled = !active || state !== 'playing';
+        zenFreezeBtn.classList.toggle('is-frozen', !!zenFrozen);
+        zenFreezeBtn.setAttribute('aria-pressed', String(!!zenFrozen));
+        const label = zenFrozen ? '恢复提速' : '冻结提速';
+        const name = zenFreezeBtn.querySelector('.tool-name');
+        if (name) name.textContent = label;
+        zenFreezeBtn.title = label + '（快捷键 Z）';
+        zenFreezeBtn.setAttribute('aria-label', label);
       }
       /* #test zenInfo() 的快照：字段与真实状态直接对应，不做假数据。 */
       function zenInfoSnapshot() {
@@ -487,6 +492,8 @@
       Object.keys(joyTools.buttons).forEach((id) => {
         joyTools.buttons[id].setAttribute('data-joy-tool', id);
       });
+      /* 0.8.2：冻结按钮复用道具行容器，经典模式隐藏；不设置 data-joy-tool（数量仍为 2）。 */
+      setupZenFreezeButton();
 
       /* ---------- 流程 ---------- */
       function reset() {
@@ -1086,20 +1093,8 @@
         syncTouchPad();
       }
 
-      /* ---------- 禅模式操作：画布下方按钮 + 键盘 Z 冻结/恢复提速 ---------- */
+      /* ---------- 禅模式操作：冻结按钮已并入道具行；此处只绑定键盘 Z ---------- */
       function bindZenControls() {
-        if (dom.zenFreezeBtn) {
-          dom.zenFreezeBtn.addEventListener('click', () => {
-            if (mode !== 'zen' || state !== 'playing') return;
-            toggleZenFreezeNow();
-          });
-        }
-        if (dom.zenEndBtn) {
-          dom.zenEndBtn.addEventListener('click', () => {
-            if (mode !== 'zen') return;
-            endZenGame();
-          });
-        }
         window.addEventListener('keydown', (e) => {
           if (e.repeat || e.metaKey || e.ctrlKey || e.altKey) return;
           if (e.key !== 'z' && e.key !== 'Z') return;
