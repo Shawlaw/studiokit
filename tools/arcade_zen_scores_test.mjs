@@ -300,7 +300,7 @@ async function readScoresPayload(cdp) {
  *   ZS-11 新备份导入 + 非法 JSON 回滚           —— §7.7
  *   ZS-12 resetGame / resetAll                 —— §7.8
  *   ZS-13 损坏 scores fail-closed + 旧 key 兼容 —— §7.9
- *   ZS-14 320/375/390/430 布局 + 表格横向滚动   —— §7.10
+ *   ZS-14 320/375/390/430 布局 + 表格横向滚动 + 开始弹层三入口可见 —— §7.10
  * ========================================================================== */
 const SCENARIOS = [
   {
@@ -943,7 +943,7 @@ const SCENARIOS = [
   },
   {
     id: 'ZS-14',
-    title: '320/375/390/430 中心页无横向溢出 + 积分表格容器可横向滚动',
+    title: '320/375/390/430 中心页无横向溢出 + 积分表格滚动 + 开始弹层三入口完整可见',
     async run(cdp) {
       await prepareHub(cdp);
       await requireScores(cdp);
@@ -985,9 +985,54 @@ const SCENARIOS = [
         results.push({ width, overflow: metrics.scrollWidth - metrics.clientWidth, wrapScroll: metrics.wrapScrollWidth - metrics.wrapClientWidth, tableWidth: metrics.tableWidth });
         if (width === 320) await safeScreenshot(cdp, 'zen-scores-320.png');
       }
+
+      /* 0.8.1 可发现性回归门禁：窄屏开始弹层必须首屏完整显示三个模式入口（不被弹层裁剪）。 */
+      const overlayResults = [];
+      for (const [width, height] of widths) {
+        await setViewport(cdp, width, height);
+        await cdp.evaluate(`localStorage.removeItem(${JSON.stringify(LEGACY_KEYS.runs)})`).catch(() => {});
+        await cdp.navigate(BASE + '/apps/arcade/games/block-drop.html?zs14=' + width);
+        await cdp.waitFor(`document.querySelector('[data-overlay]') && !document.querySelector('[data-overlay]').hidden && document.querySelector('[data-ov-btn3]') && !document.querySelector('[data-ov-btn3]').hidden`, { timeout: 8000 });
+        await sleep(120);
+        const overlay = await cdp.evaluate(`(() => {
+          const panel = document.querySelector('.overlay-panel');
+          const rect = panel.getBoundingClientRect();
+          const bottom = rect.bottom;
+          const buttons = ['[data-ov-btn]', '[data-ov-btn2]', '[data-ov-btn3]'].map((selector) => {
+            const button = document.querySelector(selector);
+            if (!button || button.hidden) return { selector, hidden: true };
+            const box = button.getBoundingClientRect();
+            return {
+              selector,
+              hidden: false,
+              top: Math.round(box.top),
+              bottom: Math.round(box.bottom),
+              h: Math.round(box.height),
+              fullyVisible: box.top >= rect.top - 1 && box.bottom <= bottom + 1
+            };
+          });
+          return {
+            scrollWidth: document.documentElement.scrollWidth,
+            clientWidth: document.documentElement.clientWidth,
+            panelScrollH: panel.scrollHeight,
+            panelClientH: panel.clientHeight,
+            panelBottom: Math.round(bottom),
+            buttons
+          };
+        })()`);
+        assert(overlay.scrollWidth <= overlay.clientWidth + 1, width + 'px 方块页横向溢出：' + JSON.stringify(overlay));
+        assert(overlay.buttons.length === 3 && overlay.buttons.every((button) => !button.hidden), width + 'px 开始弹层缺少模式入口：' + JSON.stringify(overlay.buttons));
+        const clipped = overlay.buttons.filter((button) => !button.fullyVisible || button.h < 44);
+        assert(clipped.length === 0, width + 'px 开始弹层入口被裁剪或过小：' + JSON.stringify({ panelBottom: overlay.panelBottom, panelClientH: overlay.panelClientH, clipped }));
+        overlayResults.push({ width, buttons: overlay.buttons.map((button) => button.h + 'px@' + button.bottom) });
+        if (width === 320 || width === 375) await safeScreenshot(cdp, 'zen-start-overlay-' + width + '.png');
+      }
       await setViewport(cdp);
       assert(results.length === 4, '布局检查档位数=' + results.length + '，期望 4');
-      return { widths: results.map((item) => item.width + 'px:' + item.wrapScroll + 'px可滚动').join(', ') };
+      return {
+        widths: results.map((item) => item.width + 'px:' + item.wrapScroll + 'px可滚动').join(', '),
+        overlay: overlayResults.map((item) => item.width + 'px:' + item.buttons.join('/')).join(', '),
+      };
     },
   },
 ];

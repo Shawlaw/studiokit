@@ -705,7 +705,9 @@
         });
 
         const total = Number(stats.total) || 0;
-        dom.scoresCount.textContent = `共 ${total} 条`;
+        const filtered = !!state.scoresGame || state.scoresMode !== 'all';
+        /* 有筛选时同时显示筛选结果与总数，避免「共 N 条」与可见行数不一致。 */
+        dom.scoresCount.textContent = filtered ? `筛选 ${records.length} 条 / 共 ${total} 条` : `共 ${total} 条`;
         dom.scoresWrap.hidden = visible.length === 0;
         dom.scoresMore.hidden = records.length <= SCORES_SHOW_LIMIT;
         dom.scoresEmpty.hidden = visible.length > 0;
@@ -835,8 +837,11 @@
           if (result.ok) {
             const runText = result.runCount ? `，含 ${result.runCount} 条局内进度` : '';
             const statText = result.playtimeCount ? `，含 ${result.playtimeCount} 款游戏的时长统计` : '';
-            /* 0.8.1 备份才会带 scores 字段；旧备份没有该字段时保留当前积分记录。引擎始终返回数字 scoreCount，按契约显示条数。 */
-            const scoreText = typeof result.scoreCount === 'number' ? `，含 ${result.scoreCount} 条积分记录` : '';
+            /* 0.8.1 备份才会带 scores 字段：带字段时显示导入条数，旧备份（无字段）提示当前记录已保留。 */
+            let scoreText = '，当前积分记录已保留';
+            if (result.scoresImported) {
+              scoreText = result.scoreCount ? `，含 ${result.scoreCount} 条积分记录` : '，积分记录已清空';
+            }
             const skipText = result.runSkipped ? `，跳过 ${result.runSkipped} 条无效进度` : '';
             note(`导入成功，恢复了 ${result.count} 款游戏的记录${statText}${runText}${scoreText}${skipText}。`);
             render();

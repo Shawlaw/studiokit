@@ -1470,12 +1470,15 @@
        * 非法 scores 视为导入失败并整体回滚，避免留下半套数据。 */
       let scoreCount = 0;
       let scoreSkipped = 0;
+      /* 旧备份没有 scores 字段：保留当前积分记录（scoresImported=false，供中心页提示用）。 */
+      let scoresImported = false;
       if (parsed.scores && typeof parsed.scores === 'object') {
         const imported = Scores.importData(parsed.scores);
         if (!imported.ok) {
           restoreAll();
           return { ok: false, reason: '浏览器存储已满或不可用' };
         }
+        scoresImported = true;
         scoreCount = imported.count;
         scoreSkipped = imported.skipped;
       }
@@ -1489,6 +1492,7 @@
         challengeSkipped,
         scoreCount,
         scoreSkipped,
+        scoresImported,
       };
     },
   };

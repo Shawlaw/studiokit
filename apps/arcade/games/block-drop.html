@@ -89,6 +89,14 @@
         );
       }
     }
+    /* 0.8.1 可发现性修复：窄屏开始弹层压缩文案/间距，保证「开始游戏 / 挑战 6 关 / 🧘 禅模式」三个入口首屏完整可见。 */
+    @media (max-width: 460px) {
+      .overlay-panel { padding: 14px 14px 12px; }
+      .overlay-panel h2 { margin-bottom: 4px; font-size: 17px; }
+      .overlay-panel p { margin-bottom: 10px; font-size: 12px; line-height: 1.5; }
+      .overlay-panel .ac-btn { min-height: 44px; padding: 9px 14px; font-size: 14px; }
+      .overlay-panel .ac-btn-secondary { margin-top: 6px; }
+    }
   </style>
   <script src="../../../shared/site-shell.js" defer></script>
   <script src="../engine.js"></script>
@@ -706,9 +714,13 @@
 
       function showStart() {
         const dataReady = challengeDataReady();
+        /* 窄屏用一段更短说明，避免三入口被弹层裁剪；详细玩法仍由 hint 与各模式内 HUD 承担。 */
+        const narrow = typeof window !== 'undefined' && window.innerWidth <= 460;
         showOverlay(
           '俄罗斯方块',
-          '经典落块消除：新局完成 40 行即快乐收局。<br/>禅模式无限游玩，按 Z 随时冻结提速；一次消 4 行（Tetris）得分 ×8<br/>道具 1 换块 / 2 慢落 · 随时可暂停',
+          narrow
+            ? '经典 40 行 · 禅模式无限 · 6 关挑战<br/>Z 冻结提速 · 道具 1/2'
+            : '经典落块消除：新局完成 40 行即快乐收局。<br/>禅模式无限游玩，按 Z 随时冻结提速；一次消 4 行（Tetris）得分 ×8<br/>道具 1 换块 / 2 慢落 · 随时可暂停',
           '开始游戏',
           startGame,
           dataReady ? '挑战 6 关' : undefined,
@@ -1743,6 +1755,8 @@
             lockTimer = 0;
             lockResets = 0;
             state = 'playing';
+            /* #test 钩子自保护：若调用前处于暂停/结算态，先恢复循环，清行动画才会推进。 */
+            if (loop && typeof loop.resume === 'function') loop.resume();
             hardDrop();
             return true;
           },
@@ -1891,6 +1905,8 @@
             lockResets = 0;
             dropTimer = 0;
             state = 'playing';
+            /* #test 钩子自保护：暂停/结算态直接调用时先恢复循环，避免 state 卡在 clearing。 */
+            if (loop && typeof loop.resume === 'function') loop.resume();
             syncZenHud();
             syncZenBar();
             hardDrop();

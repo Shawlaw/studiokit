@@ -51,7 +51,8 @@
 - 井口堆满 → 「禅模式结束」结算（分数 / 行数 / 等级 / 用时可选），按钮「再来一局」「回到开始」。
 - 暂停弹层在禅模式下提供第二按钮「结束本局并记录」，与井口结束走同一结算路径。
 - 结算调用一次 `A.Progress.recordPlay('block-drop', score, { mode:'zen', lines, level, detail })`：
-  - 行数计入 `progress:v1.plays/lastAt/lastScore`；
+  - 本局计入 `progress:v1` 的 `plays / lastAt / lastScore`（`plays` 是局数，不是行数）；
+  - 行数/等级写入积分记录的 `lines / level / detail`，不写进 `progress`；
   - **不更新经典最高分**（`high` 仅经典更新）；
   - 写入新积分表（见 §4）。
 - `#test` 钩子：`zenInfo/startZen/toggleZenFreeze/zenSetState/zenLineClearScenario/endZen`，供确定性测试复现。
@@ -83,7 +84,7 @@
 
 - 最新在前；上限 300 条（每局一条，超出丢弃最旧，不影响最高分/时长统计）。
 - `mode` 仅 `classic | zen`；挑战有独立的用时/通关记录，不进积分表。
-- 损坏/Schema 不匹配时 fail closed：读为空表，不删除、不覆盖原值。
+- 损坏/Schema 不匹配时 fail closed：读为空表，不删除、不覆盖原值；之后下一次正常结算会用合法 Schema 重建该 key（与既有 `challenge` / `playtime` 的损坏自愈行为一致）。
 
 ### 4.2 收集点
 
