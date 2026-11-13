@@ -1023,6 +1023,28 @@
       "claimedAt": "2026-11-13T04:28:00+00:00",
       "completedAt": "2026-11-13T04:50:00+00:00",
       "evidence": "Lead final gates on the final tree: py -3 tools/validate_site.py PASS; py -3 tools/build_site.py PASS (dist contains 13 challenge data files, no tools/docs); node --check engine/sw/generator/runner/smoke/lib all exit 0 (13 runtime data and 13 challenge modules also checked earlier, 0 failures); extracted inline scripts checked (13/13); arcade_smoke.mjs 85/85 checks passed (Lead run, ports 8820/9420); arcade_gameplay_test --suite=base --repeat=2 22/22 PASS on final runner (isolated, after the earlier rAF-starved flake was hardened by test-infra); CH-DATA-001/CH-CLASSIC-001 PASS; node tools/arcade_09_data.mjs rerun byte-identical; git diff --check clean; full-suite 208/208 and independent review evidence contributed by challenge-test-infra and reviewer with frozen product hashes (29 files unchanged, runner final sha F2942151...). Docs synced: apps/arcade/README.md (0.9 challenge section), CHANGELOG.md (0.9.0-dev), docs/arcade/README.md (0.9 index), docs/ROADMAP.md (0.9 in progress), docs/RELEASE-RUNBOOK.md (local dev status), TASKS.md and tasks/queue.json (T041-T058). Version intentionally unchanged: ARCADE_VERSION/registry/SW cache all 0.7.0 (SW bump required before any release). Local commits only: 0.9 implementation chain 1b530e4/0e9a156/c0e2315/456ed97/fe79b0f + test-hardening and docs/queue commits. NOT pushed, NOT merged to main, no tag, no deploy. Owner two-round playtest and design-deviation decisions are still required before 0.9 release; iOS/Android real-device remains UNVERIFIED."
+    },
+    {
+      "id": "T059",
+      "title": "Arcade 0.8.0 发布：推送 main 并双端验证（GitHub Pages + Cloudflare Pages）",
+      "kind": "agent",
+      "status": "DONE",
+      "dependsOn": [
+        "T058"
+      ],
+      "ownerAuthorizationRequired": true,
+      "ownerAuthorizationVerifiedByAgentFlag": true,
+      "acceptance": [
+        "Owner 明确授权以 0.8.0 名义提交推送并发布",
+        "发布前 validate/build/node --check/smoke 85/85/全量 208/208/截图验证/commit-time-policy 全绿",
+        "main 推送后 Actions 四个 job 全部成功",
+        "verify_deploy.py 对 GitHub Pages 与 Cloudflare Pages 逐文件校验一致，线上版本 0.8.0",
+        "TASKS.md 与 queue 记录提交、Actions run、双端与线上验证证据"
+      ],
+      "claimedAt": "2026-11-13T05:00:00+00:00",
+      "ownerAuthorizationNote": "Owner 2026-11-13 当前任务明确指令：开发自测截图验证通过后以 0.8.0 版本名义提交推送并发布 GitHub Pages；按仓库规则同时部署 Cloudflare Pages 并双端验证。",
+      "completedAt": "2026-11-13T05:20:00+00:00",
+      "evidence": "Owner authorized 0.8.0 release in-task. Pre-push gates on release tree: validate_site PASS; build_site PASS; node --check engine/sw/generator/runner/smoke/lib + 13 inline scripts; arcade_smoke 85/85 (232s); arcade_gameplay_test --suite=all --repeat=2 208/208 (798s); data generator byte-identical; release screenshot/DOM verification 43/43 (hub v0.8.0 13 cards at 320/375/390/430; all 13 games classic starts, challenge entry, 6-stage panel, C01 opens, no overflow/console errors); git diff --check clean; commit-time-policy all 14 unpushed commits compliant (12:10-12:53 window). Commit 95a063f pushed main (5fbe897..95a063f). Actions run 43369758813 success: Validate and build / Deploy GitHub Pages / Deploy Cloudflare Pages / Verify both deployments all completed successfully. verify_deploy.py: 37/37 key files SHA-256 identical across https://shawlaw.github.io/studiokit and https://studiokit.pages.dev, arcade 0.8.0 / badge 2.2.1, manifest content type correct. Live headless Chrome on both origins 12/12: hub cards, hall v0.8.0/13 cards, challenge:v1 key present, challenge entry '挑战 6 关', 6-stage panel visible, C01 starts (shadow-leap / star-raid / gold-miner samples), no console errors. Release evidence docs synced in follow-up commit. iOS/Android real-device touch and Owner two-round playtest remain UNVERIFIED; 5 design deviations await Owner decision in docs/arcade/0.9/REVIEW.md."
     }
   ]
 }

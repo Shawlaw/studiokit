@@ -14,7 +14,7 @@ Current Badge Studio baseline facts:
 
 Current Arcade baseline facts:
 
-- App version: `0.8.0`（`apps/arcade/engine.js` 的 `ARCADE_VERSION` 与注册表保持一致；2026-11-13 已双端发布，提交/`Actions` 见发布后文档同步记录）
+- App version: `0.8.0`（`apps/arcade/engine.js` 的 `ARCADE_VERSION` 与注册表保持一致；2026-11-13 已双端发布，提交 `95a063f`，Actions `43369758813`，`verify_deploy.py` 37/37）
 - Registry entry: `shared/tool-registry.json` → `id: "arcade"`，`href: "./apps/arcade/"`
 - Games: 13（清单唯一来源是 `engine.js` 顶部的 `GAMES` 数组）
 - Run state schema: `v1`（`studiokit:arcade:runs:v1`）

@@ -19,7 +19,7 @@ StudioKit 门户本身没有独立的 semver；以下按仓库里程碑与工具
 ### Verification
 - `validate_site.py` / `build_site.py` / 全部 `node --check`（含 13 页内联脚本）通过；`arcade_smoke.mjs` **85/85**；`arcade_gameplay_test.mjs --suite=all --repeat=2` **208/208**（798s）；78 关设计与运行时数据门禁、13 游戏经典入口门禁 PASS；`tools/arcade_09_data.mjs` 重跑字节一致。
 - 独立 Reviewer：APPROVE-WITH-NOTES / 0 Blocker（5 项设计差量需 Owner 裁决）；原生 CDP 独立实玩 47/47。
-- 双端发布：推送 `main` 后由 GitHub Actions 部署 GitHub Pages + Cloudflare Pages，`verify_deploy.py` 逐文件校验（发布后文档同步提交记录 Actions run 与校验结果）；iOS/Android 真机手感与 Owner 两轮试玩仍 UNVERIFIED。
+- 双端发布：提交 `95a063f` 推送 `main`；Actions `43369758813` 的 Validate and build / Deploy GitHub Pages / Deploy Cloudflare Pages / Verify both deployments 四个 job 全部成功；`verify_deploy.py` 37/37 文件 SHA-256 双端一致（含 13 个挑战数据脚本），线上 Arcade `0.8.0` / Badge `2.2.1`；双端线上无头 Chrome 12/12。iOS/Android 真机手感与 Owner 两轮试玩仍 UNVERIFIED。
 
 ## Arcade 0.7.0 — 2026-11-13（已发布）
 

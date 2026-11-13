@@ -5,9 +5,10 @@
 - 仓库：<https://github.com/Shawlaw/studiokit>
 - GitHub Pages：<https://shawlaw.github.io/studiokit/>
 - Cloudflare Pages：<https://studiokit.pages.dev/>
-- 本次发布（进行中）：Arcade `0.8.0`（2026-11-13）
-  - 批次内容：影跃影冲/影之试炼、13 游戏 × 6 关挑战模式（基于 0.9 设计包）、`challenge:v1` 记录与数据管线
-  - 发布后在此记录提交、Actions run 与 `verify_deploy.py` 双端结果
+- 最近发布：Arcade `0.8.0`（2026-11-13，已发布）
+  - 批次内容：T041–T059 影跃影冲/影之试炼、13 游戏 × 6 关挑战模式（基于 0.9 关卡设计包）、`challenge:v1` 记录与数据管线
+  - 提交 `95a063f` 推送 `main`；Actions `43369758813` 四个 job 均成功
+  - 双端验证：`tools/verify_deploy.py` 37/37 文件 SHA-256 一致（含 13 个挑战数据脚本），Arcade `0.8.0` / Badge `2.2.1`；双端线上无头 Chrome 12/12（hub/中心页/挑战入口/选关/C01）
 - 上一个发布：Arcade `0.7.0`（2026-11-13，已发布）
   - 批次内容：T032 全游戏主动道具/自然收尾/一次性 20 分钟提醒/随机入口、T033 试玩截图复核与发布
   - 提交 `34f03df`；Actions `43274342320` 四个 job 均成功

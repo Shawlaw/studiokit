@@ -91,7 +91,7 @@
 - [x] 13 游戏挑战模式 C01–C06：固定盘面/地图/时间轴/车流/障碍/砖阵/铃序/委托/波次/矿图，选关解锁、记录/最佳/assisted/收集、暂停退出、1 次点击重试、`runs:v1` 挑战局存档；影跃 0.8 试炼迁移到 0.9 数据且旧档安全降级。
 - [x] 测试：`arcade_gameplay_test.mjs` 支持 base/challenge/all 套件与模块自动发现；全量 104 场景 ×2 = **208/208 PASS**（798s）、`arcade_smoke` **85/85**、78 关数据门禁与 13 游戏经典入口门禁 PASS、数据生成幂等。
 - [ ] **Owner 两轮试玩与设计差异裁决（发布后继续收集）**：影跃捷径/实测时长偏短、砖块 K 钥匙可达性最小修正、星海 Boss 弱点时间窗、重力翻转推荐窗口晚半段、挑战模式禁用道具等需 Owner/Reviewer 决定；真机 iOS/Android 触控与手感仍 UNVERIFIED。Owner 未反馈前不升版本、不发布。
-- [x] 0.8.0 已发布：`ARCADE_VERSION`/注册表/SW 缓存升至 `0.8.0`，按双目标流程推送 `main` 并验证 GitHub Pages + Cloudflare Pages；后续 0.9 设计包剩余关卡仍需 Owner 授权。
+- [x] 0.8.0 已发布：`ARCADE_VERSION`/注册表/SW 缓存升至 `0.8.0`；提交 `95a063f` 推送 `main`，Actions `43369758813` 四 job 成功，`verify_deploy.py` 37/37 双端一致，线上 Arcade `0.8.0` / Badge `2.2.1`；双端无头 Chrome 12/12。后续 0.9 设计包剩余关卡仍需 Owner 授权。
 
 ## Now
 

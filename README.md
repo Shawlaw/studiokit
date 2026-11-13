@@ -6,7 +6,7 @@
 - **源码：** <https://github.com/Shawlaw/studiokit>（MIT 许可）
 - **当前工具：** Badge Studio `2.2.1`；街机厅 Arcade `0.8.0`（13 款竖屏小游戏 + 78 关挑战模式，已发布）
 - **计划中的工具：** Rounded Image（尚未实现，等待原始需求/规格）
-- **最近发布：** 2026-11-13，Arcade 0.8.0（影跃影冲与影之试炼、13 款游戏 × 6 关挑战模式、挑战记录与导出导入；GitHub Pages + Cloudflare Pages 双端）
+- **最近发布：** 2026-11-13，Arcade 0.8.0（影跃影冲与影之试炼、13 款游戏 × 6 关挑战模式、挑战记录与导出导入；GitHub Pages + Cloudflare Pages 双端；提交 `95a063f`，Actions `43369758813`，`verify_deploy.py` 37/37）
 - **运行方式：** 纯静态文件；无后端、无账号、无构建依赖、无第三方 CDN
 
 ## 目录结构

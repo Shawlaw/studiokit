@@ -12,7 +12,7 @@
 - 测试：`tools/arcade_gameplay_test.mjs` 支持 `--suite=base|challenge|all`、`--game`、自动发现 `tools/challenge/*.mjs`；新增 78 关设计↔运行时数据门禁（CH-DATA-001）与 13 游戏经典入口门禁（CH-CLASSIC-001）；13 游戏各新增确定性场景模块。`arcade_smoke.mjs` 85/85 保持。
 - 文档：仓库内 `docs/arcade/0.9/` 完整导入设计源与校验脚本、差异报告、集成契约、实施计划、数据报告、13 份实现记录（证据等级/设计差异/UNVERIFIED）、独立评审与 Owner 试玩包。
 - 未验证：iOS/Android 真机触控/手感/低端机帧率；良多物理/弹幕/摆钩关卡为 engine-replay 证据而非真人输入；设计层差异（影跃捷径/时长、砖块 K 可达性最小修正、星海 Boss 时间窗弱点等）需 Owner/Reviewer 决定。78 关数据与参考解由设计包自检证明存在性，不代表真实可玩性。
-- 发布：推送 `main` 后由 GitHub Actions 双端部署（GitHub Pages + Cloudflare Pages）；`ARCADE_VERSION`、注册表、SW 缓存版本统一为 `0.8.0`；发布后文档同步提交记录 Actions run 与 `verify_deploy.py` 双端逐文件校验结果。
+- 发布：提交 `95a063f` 推送 `main`；Actions `43369758813` 四个 job 全部成功；`verify_deploy.py` 37/37 文件双端一致（含 13 个挑战数据脚本），线上 Arcade `0.8.0` / Badge `2.2.1`；双端线上无头 Chrome 12/12；SW 缓存键 `studiokit-arcade-0.8.0-v1`。
 
 ## 0.8.0 影跃竖切片（同一版本发布；以下为开发过程记录）
 

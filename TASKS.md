@@ -56,6 +56,7 @@
 | T056 | agent | Arcade 0.9.0 挑战场景聚合器与 78 关数据门禁 | DONE | T042 | runner 支持 `--suite=base|challenge|all`、`--game`、自动发现 13 个 `tools/challenge/*.mjs`；迁 5 个 0.8 影跃 base 场景到 0.9 语义；CH-DATA-001（designChecks=2256/runtime=13/13）与 CH-CLASSIC-001（13/13）PASS；最终 `--suite=all --repeat=2` **208/208（798.3s）**、smoke **85/85**、产品 29 文件冻结前后 sha 不变；commit `fe79b0f` + 收尾提交 |
 | T057 | review | Arcade 0.9.0 独立评审与 Owner 试玩包 | DONE | T056 | 独立 Reviewer：**APPROVE-WITH-NOTES / 0 Blocker / 5 Major（均为需 Owner 裁决的设计差量）/ 6 Minor / 10 类 UNVERIFIED**；独立数据审计 deep-equal、原生 CDP 实玩 47/47、A.Challenge 探针 13/13、smoke 85/85、全量 208/208；`REVIEW.md` + `PLAYTEST.md`；**Owner 两轮试玩未获得 → 0.9 发布门槛未通过，Agent 不代签**；收尾提交 |
 | T058 | agent | Arcade 0.9.0 集成验证、文档与任务队列同步、本地提交 | DONE | T041,T042,T043,T044,T045,T046,T047,T048,T049,T056,T057 | Lead 收尾：`validate_site`/`build_site`/全部 `node --check`（含 13 页内联脚本抽样）/smoke **85/85**/base 11/11/CH-DATA-001/CH-CLASSIC-001/数据生成幂等/`git diff --check` 全过；文档同步 `apps/arcade/README|CHANGELOG`、`docs/arcade/README`、`ROADMAP`、`RELEASE-RUNBOOK`、`TASKS`、`queue`；本地提交（含 0.9 提交链），**未推送/未合并/未发布**；`ARCADE_VERSION` 保持 0.7.0 |
+| T059 | agent | Arcade 0.8.0 发布：推送 main 并双端验证（GitHub Pages + Cloudflare Pages） | DONE | T058 | Owner 当前任务明确授权「以 0.8.0 名义提交推送并发布 GitHub Pages」；`ARCADE_VERSION`/注册表/SW/中心页版本升至 0.8.0；发布前 smoke 85/85、全量 208/208、截图验证 43/43、commit-time-policy 14/14 合规；提交 `95a063f` 推送 main；Actions `43369758813` 四 job 全成功；`verify_deploy.py` 37/37 文件双端一致，线上 Arcade 0.8.0 / Badge 2.2.1，双端无头 Chrome 12/12；真机与 Owner 试玩仍 UNVERIFIED |
 
 ## 任务命令
 
