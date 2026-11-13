@@ -1,0 +1,72 @@
+{
+  "schemaVersion": "1.0.0",
+  "id": "brick-breaker-C03",
+  "gameId": "brick-breaker",
+  "stageNumber": 3,
+  "chapter": "弹道研究所",
+  "title": "双钥匙门",
+  "difficulty": 3,
+  "targetDurationSec": [
+    75,
+    180
+  ],
+  "goalStatement": "击毁两把钥匙砖 K，才能打破门砖 G",
+  "decision": "先击左钥匙或右钥匙",
+  "practicedSkill": "反弹角度定向瞄准",
+  "discovery": "钥匙变亮预告关联门的开启",
+  "mode": "challenge",
+  "content": {
+    "coordinates": "8列×5行，左上为(0,0)，砖坐标 x=20+col*48, y=128+row*24；.为空",
+    "brickRows": [
+      "..1KK1..",
+      ".11GG11.",
+      "111GG111",
+      "........",
+      "........"
+    ],
+    "tokenLegend": {
+      ".": "empty",
+      "1": "1HP",
+      "2": "2HP",
+      "3": "3HP",
+      "K": "1HP trigger brick",
+      "G": "locked gate brick; initially invulnerable"
+    },
+    "mechanics": {
+      "K": "全部 K 击毁后所有 G 从不可破坏障碍变为普通1HP砖"
+    },
+    "ball": {
+      "speed": 301,
+      "startingPaddleX": 210,
+      "paddleWidth": 88,
+      "lives": 3
+    },
+    "win": {
+      "type": "destroy_all_breakable_including_unlocked_gates"
+    },
+    "stuckBallRecovery": {
+      "ifNoBrickContactSec": 12,
+      "action": "给反弹方向微调且展示提示，不扣命；首次试图只提示"
+    }
+  },
+  "referencePlan": {
+    "route": "先按推荐开口控角引导至上方，随后清理残砖",
+    "hint": "钥匙变亮预告关联门的开启"
+  },
+  "acceptance": {
+    "success": "固定砖阵加载后每颗砖的 HP/机关状态与图一致",
+    "failure": "通关必须全部可破坏砖归零；球不可永久卡死；机关解锁状态可恢复",
+    "mobile": "挡板可单指拖动，手指不遮挡接球判定",
+    "afk": "任一有效游玩时刻切后台/锁屏/恢复，剩余时间、玩家位置与未完成目标不变化；恢复后手动继续"
+  },
+  "integration": {
+    "separateClassicProgress": true,
+    "noAssistedRequired": true,
+    "requiredFeatures": [
+      "fixed_brick_layout",
+      "gate_brick"
+    ],
+    "adaptToHead": true
+  },
+  "designerNotes": "K/G 属 challenge 独立机制；经典关卡原生 spawnBricks 不动"
+}

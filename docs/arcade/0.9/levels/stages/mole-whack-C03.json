@@ -1,0 +1,173 @@
+{
+  "schemaVersion": "1.0.0",
+  "id": "mole-whack-C03",
+  "gameId": "mole-whack",
+  "stageNumber": 3,
+  "chapter": "洞口节奏",
+  "title": "识别炸弹",
+  "difficulty": 3,
+  "targetDurationSec": [
+    32,
+    42
+  ],
+  "goalStatement": "至少七次正确敲击并避开所有炸弹",
+  "decision": "敲有效目标或主动忽略炸弹/假目标",
+  "practicedSkill": "停止点击比击中目标同样重要",
+  "discovery": "爆炸物有不同轮廓和出现前警告",
+  "mode": "challenge",
+  "content": {
+    "grid": {
+      "rows": 3,
+      "cols": 3,
+      "slotOrder": "row-major from 0 to 8"
+    },
+    "stageDurationSec": 32,
+    "events": [
+      {
+        "id": "e1",
+        "atSec": 2,
+        "slot": 0,
+        "kind": "normal",
+        "prewarnSec": 0.42,
+        "visibleSec": 1.4,
+        "score": 1
+      },
+      {
+        "id": "e2",
+        "atSec": 4,
+        "slot": 4,
+        "kind": "bomb",
+        "prewarnSec": 0.42,
+        "visibleSec": 1.4,
+        "score": 0
+      },
+      {
+        "id": "e3",
+        "atSec": 6,
+        "slot": 8,
+        "kind": "normal",
+        "prewarnSec": 0.42,
+        "visibleSec": 1.4,
+        "score": 1
+      },
+      {
+        "id": "e4",
+        "atSec": 8,
+        "slot": 2,
+        "kind": "normal",
+        "prewarnSec": 0.42,
+        "visibleSec": 1.4,
+        "score": 1
+      },
+      {
+        "id": "e5",
+        "atSec": 10,
+        "slot": 6,
+        "kind": "bomb",
+        "prewarnSec": 0.42,
+        "visibleSec": 1.4,
+        "score": 0
+      },
+      {
+        "id": "e6",
+        "atSec": 12,
+        "slot": 1,
+        "kind": "gold",
+        "prewarnSec": 0.42,
+        "visibleSec": 1.4,
+        "score": 2
+      },
+      {
+        "id": "e7",
+        "atSec": 15,
+        "slot": 5,
+        "kind": "normal",
+        "prewarnSec": 0.42,
+        "visibleSec": 1.4,
+        "score": 1
+      },
+      {
+        "id": "e8",
+        "atSec": 17,
+        "slot": 3,
+        "kind": "bomb",
+        "prewarnSec": 0.42,
+        "visibleSec": 1.4,
+        "score": 0
+      },
+      {
+        "id": "e9",
+        "atSec": 19,
+        "slot": 7,
+        "kind": "normal",
+        "prewarnSec": 0.42,
+        "visibleSec": 1.4,
+        "score": 1
+      },
+      {
+        "id": "e10",
+        "atSec": 22,
+        "slot": 4,
+        "kind": "normal",
+        "prewarnSec": 0.42,
+        "visibleSec": 1.4,
+        "score": 1
+      },
+      {
+        "id": "e11",
+        "atSec": 25,
+        "slot": 0,
+        "kind": "gold",
+        "prewarnSec": 0.42,
+        "visibleSec": 1.4,
+        "score": 2
+      }
+    ],
+    "win": {
+      "minValidHits": 7,
+      "minGoldHits": 1,
+      "maxBombHits": 0,
+      "maxDecoyHits": 0
+    },
+    "scoring": {
+      "normal": 1,
+      "gold": 2,
+      "bomb": -3,
+      "decoy": -1,
+      "miss": 0
+    },
+    "tapRule": "仅洞口可点击范围判定，每个事件最多命中一次",
+    "time": "使用暂停感知逻辑时钟；进入后台事件不推进"
+  },
+  "referencePlan": {
+    "hitEventIds": [
+      "e1",
+      "e3",
+      "e4",
+      "e6",
+      "e7",
+      "e9",
+      "e10",
+      "e11"
+    ],
+    "ignoreKinds": [
+      "bomb",
+      "decoy"
+    ]
+  },
+  "acceptance": {
+    "success": "脚本全部有效目标数≥过关需求，spawn不重叠同一洞口时间窗",
+    "failure": "炸弹和假目标扣分正确且误触不会连击多次",
+    "mobile": "两个同时有效目标可用双指点击，不被UI控件遮挡",
+    "afk": "任一有效游玩时刻切后台/锁屏/恢复，剩余时间、玩家位置与未完成目标不变化；恢复后手动继续"
+  },
+  "integration": {
+    "separateClassicProgress": true,
+    "noAssistedRequired": true,
+    "requiredFeatures": [
+      "scripted_spawn_wave"
+    ],
+    "adaptToHead": true
+  },
+  "designerNotes": ""
+}

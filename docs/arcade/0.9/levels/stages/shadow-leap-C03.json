@@ -1,0 +1,138 @@
+{
+  "schemaVersion": "1.0.0",
+  "id": "shadow-leap-C03",
+  "gameId": "shadow-leap",
+  "stageNumber": 3,
+  "chapter": "影之试炼",
+  "title": "影冲试炼",
+  "difficulty": 3,
+  "targetDurationSec": [
+    45,
+    155
+  ],
+  "goalStatement": "用至少一次影冲越过月蚀裂隙",
+  "decision": "保留影冲以越过横向大缺口；卷轴奖励需额外精度",
+  "practicedSkill": "起跳后蓄势，空中定向影冲，落地刷新",
+  "discovery": "左端石碑明确标示冲刺仅落地恢复",
+  "mode": "challenge",
+  "content": {
+    "coordinates": "420×740逻辑像素；平台 xCenter 与 height 均为世界坐标；height=0为出发平台，向上为正；禁止按屏幕坐标硬编码",
+    "playerSpawn": {
+      "platformId": "p0",
+      "offsetX": 0
+    },
+    "platforms": [
+      {
+        "id": "p0",
+        "xCenter": 110,
+        "height": 0,
+        "width": 118,
+        "kind": "static"
+      },
+      {
+        "id": "p1",
+        "xCenter": 66,
+        "height": 78,
+        "width": 76,
+        "kind": "static"
+      },
+      {
+        "id": "p2",
+        "xCenter": 365,
+        "height": 155,
+        "width": 76,
+        "kind": "static"
+      },
+      {
+        "id": "p3",
+        "xCenter": 285,
+        "height": 234,
+        "width": 99,
+        "kind": "static"
+      },
+      {
+        "id": "p4",
+        "xCenter": 191,
+        "height": 310,
+        "width": 103,
+        "kind": "static"
+      },
+      {
+        "id": "p5",
+        "xCenter": 225,
+        "height": 386,
+        "width": 98,
+        "kind": "static"
+      },
+      {
+        "id": "secret",
+        "xCenter": 349,
+        "height": 264,
+        "width": 66,
+        "kind": "static"
+      }
+    ],
+    "mainRoute": [
+      "p0",
+      "p1",
+      "p2",
+      "p3",
+      "p4",
+      "p5"
+    ],
+    "alternativeRoute": [
+      "p2",
+      "secret",
+      "p3"
+    ],
+    "goal": {
+      "type": "gate",
+      "xCenter": 225,
+      "height": 428,
+      "radius": 38
+    },
+    "requiredAbility": "dash",
+    "stageRule": "gap",
+    "collectibles": [
+      {
+        "id": "scroll",
+        "platformId": "secret",
+        "optional": true
+      }
+    ],
+    "deathPolicy": "落出关卡边界后从最近房间检查点重试，关卡任务不回退"
+  },
+  "referencePlan": {
+    "main": [
+      "p0",
+      "p1",
+      "p2",
+      "p3",
+      "p4",
+      "p5"
+    ],
+    "optional": [
+      "p2",
+      "secret",
+      "p3"
+    ],
+    "tactics": "平台 p1→p2 需以真实轨迹证明无影冲不可达、有影冲可达；若达不到，必须调整间距并保留测试"
+  },
+  "acceptance": {
+    "success": "主路径 ['p0', 'p1', 'p2', 'p3', 'p4', 'p5'] 能在允许动作集下连贯落地并触发出口",
+    "failure": "无影冲前两关必须可解；S3 起必需动作与奖励路线独立；死亡返回关内检查点",
+    "mobile": "左右持续按压与影冲按钮支持两指并发，屏幕边缘影冲按钮≥44CSS px",
+    "afk": "任一有效游玩时刻切后台/锁屏/恢复，剩余时间、玩家位置与未完成目标不变化；恢复后手动继续"
+  },
+  "integration": {
+    "separateClassicProgress": true,
+    "noAssistedRequired": true,
+    "requiredFeatures": [
+      "challenge_mode",
+      "stage_gate",
+      "air_dash"
+    ],
+    "adaptToHead": true
+  },
+  "designerNotes": "平台 p1→p2 需以真实轨迹证明无影冲不可达、有影冲可达；若达不到，必须调整间距并保留测试"
+}

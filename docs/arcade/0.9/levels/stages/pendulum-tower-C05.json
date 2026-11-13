@@ -1,0 +1,117 @@
+{
+  "schemaVersion": "1.0.0",
+  "id": "pendulum-tower-C05",
+  "gameId": "pendulum-tower",
+  "stageNumber": 5,
+  "chapter": "建筑委托",
+  "title": "窄层挑战",
+  "difficulty": 5,
+  "targetDurationSec": [
+    60,
+    170
+  ],
+  "goalStatement": "六层且连续三层无大偏差",
+  "decision": "更慢找中心还是拿较小的时间收益",
+  "practicedSkill": "追踪稳定区宽度随楼层变化",
+  "discovery": "发现摆动速度不是唯一难度来源",
+  "mode": "challenge",
+  "content": {
+    "coordinates": "420x740；每箱宽64高40，baseCenterX=210；targetOffsetsPx 是箱心相对基座中心的目标偏置，允许±8px",
+    "baseCenterX": 210,
+    "boxes": [
+      {
+        "order": 1,
+        "width": 64,
+        "height": 40,
+        "targetOffsetPx": 0,
+        "tolerancePx": 7
+      },
+      {
+        "order": 2,
+        "width": 64,
+        "height": 40,
+        "targetOffsetPx": 12,
+        "tolerancePx": 7
+      },
+      {
+        "order": 3,
+        "width": 64,
+        "height": 40,
+        "targetOffsetPx": -10,
+        "tolerancePx": 7
+      },
+      {
+        "order": 4,
+        "width": 64,
+        "height": 40,
+        "targetOffsetPx": 8,
+        "tolerancePx": 7
+      },
+      {
+        "order": 5,
+        "width": 64,
+        "height": 40,
+        "targetOffsetPx": -8,
+        "tolerancePx": 7
+      },
+      {
+        "order": 6,
+        "width": 64,
+        "height": 40,
+        "targetOffsetPx": 0,
+        "tolerancePx": 7
+      }
+    ],
+    "pendulum": {
+      "pivotX": 210,
+      "pivotY": 64,
+      "length": 135,
+      "speedFactor": 1.24,
+      "deterministicStartPhaseRad": 0
+    },
+    "limits": {
+      "maxTowerLeanAbs": 0.095,
+      "maxDroppedBoxes": 7,
+      "braceUsesAllowed": 0,
+      "guideUsesAllowed": 0
+    },
+    "win": {
+      "floorsAtLeast": 6,
+      "noCollapse": true,
+      "allMarkTargetsWithinTolerance": false
+    },
+    "evaluation": {
+      "bronze": "完成并保持稳定",
+      "silver": "全部偏置目标±8px内",
+      "gold": "满足银牌且零道具、零失误"
+    },
+    "physicsNote": "本配置仅规定目标/条件；实际放置是否稳定必须在当前 Lean 模型中按帧仿真"
+  },
+  "referencePlan": {
+    "releaseOffsetsPx": [
+      0,
+      12,
+      -10,
+      8,
+      -8,
+      0
+    ],
+    "strategy": "按目标标记释放，偏置纠正后再看重心指示"
+  },
+  "acceptance": {
+    "success": "物理模拟能以一组真实释放时机稳定完成目标楼层",
+    "failure": "超出倾斜极限判倒塔，配重上限按关卡校验",
+    "mobile": "放箱是清晰的独立点击，底部按钮不遮住钟摆轨迹",
+    "afk": "任一有效游玩时刻切后台/锁屏/恢复，剩余时间、玩家位置与未完成目标不变化；恢复后手动继续"
+  },
+  "integration": {
+    "separateClassicProgress": true,
+    "noAssistedRequired": true,
+    "requiredFeatures": [
+      "commission_mode",
+      "fixed_marks"
+    ],
+    "adaptToHead": true
+  },
+  "designerNotes": "禁止运行时强行吸附到targetOffset；mark 是目标提示，真实释放与物理判定必须保留"
+}

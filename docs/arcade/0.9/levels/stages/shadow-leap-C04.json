@@ -1,0 +1,152 @@
+{
+  "schemaVersion": "1.0.0",
+  "id": "shadow-leap-C04",
+  "gameId": "shadow-leap",
+  "stageNumber": 4,
+  "chapter": "影之试炼",
+  "title": "风之回廊",
+  "difficulty": 4,
+  "targetDurationSec": [
+    45,
+    155
+  ],
+  "goalStatement": "在两段风口中抵达高门",
+  "decision": "逆风短路要精确影冲，背风外圈更稳定",
+  "practicedSkill": "提前看风向旗、对冲时机作选择",
+  "discovery": "壁画揭示风向每次固定，不做随机风",
+  "mode": "challenge",
+  "content": {
+    "coordinates": "420×740逻辑像素；平台 xCenter 与 height 均为世界坐标；height=0为出发平台，向上为正；禁止按屏幕坐标硬编码",
+    "playerSpawn": {
+      "platformId": "p0",
+      "offsetX": 0
+    },
+    "platforms": [
+      {
+        "id": "p0",
+        "xCenter": 202,
+        "height": 0,
+        "width": 119,
+        "kind": "static"
+      },
+      {
+        "id": "p1",
+        "xCenter": 253,
+        "height": 76,
+        "width": 105,
+        "kind": "static"
+      },
+      {
+        "id": "p2",
+        "xCenter": 322,
+        "height": 152,
+        "width": 86,
+        "kind": "moving",
+        "amplitude": 14,
+        "periodSec": 3.2,
+        "phase": 0
+      },
+      {
+        "id": "p3",
+        "xCenter": 244,
+        "height": 230,
+        "width": 92,
+        "kind": "static"
+      },
+      {
+        "id": "p4",
+        "xCenter": 159,
+        "height": 309,
+        "width": 100,
+        "kind": "static"
+      },
+      {
+        "id": "p5",
+        "xCenter": 220,
+        "height": 390,
+        "width": 102,
+        "kind": "static"
+      },
+      {
+        "id": "q2",
+        "xCenter": 170,
+        "height": 151,
+        "width": 92,
+        "kind": "static"
+      },
+      {
+        "id": "q3",
+        "xCenter": 135,
+        "height": 231,
+        "width": 98,
+        "kind": "static"
+      }
+    ],
+    "mainRoute": [
+      "p0",
+      "p1",
+      "p2",
+      "p3",
+      "p4",
+      "p5"
+    ],
+    "alternativeRoute": [
+      "p1",
+      "q2",
+      "q3",
+      "p4"
+    ],
+    "goal": {
+      "type": "gate",
+      "xCenter": 210,
+      "height": 431,
+      "radius": 38
+    },
+    "requiredAbility": "dash",
+    "stageRule": "wind",
+    "collectibles": [],
+    "deathPolicy": "落出关卡边界后从最近房间检查点重试，关卡任务不回退",
+    "winds": [
+      {
+        "heightFrom": 110,
+        "heightTo": 230,
+        "forceX": -65,
+        "telegraph": "旗子+粒子"
+      }
+    ]
+  },
+  "referencePlan": {
+    "main": [
+      "p0",
+      "p1",
+      "p2",
+      "p3",
+      "p4",
+      "p5"
+    ],
+    "optional": [
+      "p1",
+      "q2",
+      "q3",
+      "p4"
+    ],
+    "tactics": "风区域 height=[115,225] 加速度按 x 方向±65px/s²；风矢量始终可视"
+  },
+  "acceptance": {
+    "success": "主路径 ['p0', 'p1', 'p2', 'p3', 'p4', 'p5'] 能在允许动作集下连贯落地并触发出口",
+    "failure": "无影冲前两关必须可解；S3 起必需动作与奖励路线独立；死亡返回关内检查点",
+    "mobile": "左右持续按压与影冲按钮支持两指并发，屏幕边缘影冲按钮≥44CSS px",
+    "afk": "任一有效游玩时刻切后台/锁屏/恢复，剩余时间、玩家位置与未完成目标不变化；恢复后手动继续"
+  },
+  "integration": {
+    "separateClassicProgress": true,
+    "noAssistedRequired": true,
+    "requiredFeatures": [
+      "challenge_mode",
+      "stage_gate",
+      "air_dash"
+    ],
+    "adaptToHead": true
+  },
+  "designerNotes": "风区域 height=[115,225] 加速度按 x 方向±65px/s²；风矢量始终可视"
+}

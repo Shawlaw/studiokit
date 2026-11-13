@@ -1,0 +1,126 @@
+{
+  "schemaVersion": "1.0.0",
+  "id": "gravity-flip-C03",
+  "gameId": "gravity-flip",
+  "stageNumber": 3,
+  "chapter": "重力走廊",
+  "title": "上下合奏",
+  "difficulty": 3,
+  "targetDurationSec": [
+    45,
+    115
+  ],
+  "goalStatement": "从起点通过全部固定尖刺并抵达终点",
+  "decision": "先保持当前安全侧还是提前翻转",
+  "practicedSkill": "逐个观察交错障碍决定切换时间",
+  "discovery": "提前把路线留在另一侧而非临门一脚",
+  "mode": "challenge",
+  "content": {
+    "coordinates": "世界 x 单位 px，player固定屏幕 x=112，障碍的世界x是首次进入场景的路标，不是生成时相机x；场景需换算 cameraOffset",
+    "distanceToFinish": 2400,
+    "scrollSpeedPxSec": 260,
+    "gravity": 2100,
+    "obstacles": [
+      {
+        "id": "o1",
+        "x": 520,
+        "side": "floor",
+        "height": 162,
+        "width": 42,
+        "telegraphLeadPx": 360
+      },
+      {
+        "id": "o2",
+        "x": 1050,
+        "side": "ceiling",
+        "height": 162,
+        "width": 42,
+        "telegraphLeadPx": 360
+      },
+      {
+        "id": "o3",
+        "x": 1590,
+        "side": "floor",
+        "height": 170,
+        "width": 42,
+        "telegraphLeadPx": 360
+      },
+      {
+        "id": "o4",
+        "x": 2130,
+        "side": "ceiling",
+        "height": 170,
+        "width": 42,
+        "telegraphLeadPx": 360
+      }
+    ],
+    "recommendedFlipWindows": [
+      {
+        "xCenter": 230,
+        "toward": "ceiling",
+        "tolerancePx": 70
+      },
+      {
+        "xCenter": 740,
+        "toward": "floor",
+        "tolerancePx": 70
+      },
+      {
+        "xCenter": 1280,
+        "toward": "ceiling",
+        "tolerancePx": 70
+      },
+      {
+        "xCenter": 1830,
+        "toward": "floor",
+        "tolerancePx": 70
+      }
+    ],
+    "bonusStars": [
+      {
+        "x": 1380,
+        "y": 180,
+        "required": false
+      }
+    ],
+    "startGravity": "floor",
+    "win": "pass finish marker alive",
+    "collision": "lives=2; collision respawn at most recent safe segment, no auto-use shield"
+  },
+  "referencePlan": {
+    "flipWindows": [
+      [
+        230,
+        "ceiling"
+      ],
+      [
+        740,
+        "floor"
+      ],
+      [
+        1280,
+        "ceiling"
+      ],
+      [
+        1830,
+        "floor"
+      ]
+    ],
+    "skill": "逐个观察交错障碍决定切换时间"
+  },
+  "acceptance": {
+    "success": "物理仿真至少存在一条可无伤通过的翻转时间序列，角度窗口允许手机响应",
+    "failure": "在无道具前提下可通过；任一尖刺须满足可观察反应窗口",
+    "mobile": "整个画布点击与空格一致，停顿后不会误触翻转",
+    "afk": "任一有效游玩时刻切后台/锁屏/恢复，剩余时间、玩家位置与未完成目标不变化；恢复后手动继续"
+  },
+  "integration": {
+    "separateClassicProgress": true,
+    "noAssistedRequired": true,
+    "requiredFeatures": [
+      "fixed_obstacle_sequence"
+    ],
+    "adaptToHead": true
+  },
+  "designerNotes": "推荐翻转点是待物理验证的设计初值，不可把列表直接当成无碰撞证明"
+}

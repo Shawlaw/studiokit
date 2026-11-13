@@ -1,0 +1,148 @@
+{
+  "schemaVersion": "1.0.0",
+  "id": "gravity-flip-C06",
+  "gameId": "gravity-flip",
+  "stageNumber": 6,
+  "chapter": "重力走廊",
+  "title": "重力终章",
+  "difficulty": 6,
+  "targetDurationSec": [
+    45,
+    115
+  ],
+  "goalStatement": "从起点通过全部固定尖刺并抵达终点",
+  "decision": "先保持当前安全侧还是提前翻转",
+  "practicedSkill": "交错障碍+一次中间奖励路线选择",
+  "discovery": "目标是完成清晰的动作序列，不靠纯随机",
+  "mode": "challenge",
+  "content": {
+    "coordinates": "世界 x 单位 px，player固定屏幕 x=112，障碍的世界x是首次进入场景的路标，不是生成时相机x；场景需换算 cameraOffset",
+    "distanceToFinish": 2530,
+    "scrollSpeedPxSec": 260,
+    "gravity": 2100,
+    "obstacles": [
+      {
+        "id": "o1",
+        "x": 500,
+        "side": "floor",
+        "height": 155,
+        "width": 42,
+        "telegraphLeadPx": 360
+      },
+      {
+        "id": "o2",
+        "x": 940,
+        "side": "ceiling",
+        "height": 165,
+        "width": 42,
+        "telegraphLeadPx": 360
+      },
+      {
+        "id": "o3",
+        "x": 1370,
+        "side": "floor",
+        "height": 165,
+        "width": 42,
+        "telegraphLeadPx": 360
+      },
+      {
+        "id": "o4",
+        "x": 1810,
+        "side": "ceiling",
+        "height": 185,
+        "width": 42,
+        "telegraphLeadPx": 360
+      },
+      {
+        "id": "o5",
+        "x": 2260,
+        "side": "floor",
+        "height": 195,
+        "width": 42,
+        "telegraphLeadPx": 360
+      }
+    ],
+    "recommendedFlipWindows": [
+      {
+        "xCenter": 210,
+        "toward": "ceiling",
+        "tolerancePx": 70
+      },
+      {
+        "xCenter": 650,
+        "toward": "floor",
+        "tolerancePx": 70
+      },
+      {
+        "xCenter": 1090,
+        "toward": "ceiling",
+        "tolerancePx": 70
+      },
+      {
+        "xCenter": 1520,
+        "toward": "floor",
+        "tolerancePx": 70
+      },
+      {
+        "xCenter": 1960,
+        "toward": "ceiling",
+        "tolerancePx": 70
+      }
+    ],
+    "bonusStars": [
+      {
+        "x": 730,
+        "y": 270,
+        "required": false
+      },
+      {
+        "x": 1600,
+        "y": 380,
+        "required": false
+      }
+    ],
+    "startGravity": "floor",
+    "win": "pass finish marker alive",
+    "collision": "lives=2; collision respawn at most recent safe segment, no auto-use shield"
+  },
+  "referencePlan": {
+    "flipWindows": [
+      [
+        210,
+        "ceiling"
+      ],
+      [
+        650,
+        "floor"
+      ],
+      [
+        1090,
+        "ceiling"
+      ],
+      [
+        1520,
+        "floor"
+      ],
+      [
+        1960,
+        "ceiling"
+      ]
+    ],
+    "skill": "交错障碍+一次中间奖励路线选择"
+  },
+  "acceptance": {
+    "success": "物理仿真至少存在一条可无伤通过的翻转时间序列，角度窗口允许手机响应",
+    "failure": "在无道具前提下可通过；任一尖刺须满足可观察反应窗口",
+    "mobile": "整个画布点击与空格一致，停顿后不会误触翻转",
+    "afk": "任一有效游玩时刻切后台/锁屏/恢复，剩余时间、玩家位置与未完成目标不变化；恢复后手动继续"
+  },
+  "integration": {
+    "separateClassicProgress": true,
+    "noAssistedRequired": true,
+    "requiredFeatures": [
+      "fixed_obstacle_sequence"
+    ],
+    "adaptToHead": true
+  },
+  "designerNotes": "推荐翻转点是待物理验证的设计初值，不可把列表直接当成无碰撞证明"
+}

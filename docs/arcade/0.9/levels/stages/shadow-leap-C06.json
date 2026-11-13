@@ -1,0 +1,162 @@
+{
+  "schemaVersion": "1.0.0",
+  "id": "shadow-leap-C06",
+  "gameId": "shadow-leap",
+  "stageNumber": 6,
+  "chapter": "影之试炼",
+  "title": "月门守卫",
+  "difficulty": 6,
+  "targetDurationSec": [
+    45,
+    155
+  ],
+  "goalStatement": "集齐两座房间开关后抵达最终影门",
+  "decision": "先左开关还是右开关自由，回中央安全平台调整",
+  "practicedSkill": "连续预判相位、冲刺与保留检查点",
+  "discovery": "两个半月雕像需要被亲自触碰，不能隔空触发",
+  "mode": "challenge",
+  "content": {
+    "coordinates": "420×740逻辑像素；平台 xCenter 与 height 均为世界坐标；height=0为出发平台，向上为正；禁止按屏幕坐标硬编码",
+    "playerSpawn": {
+      "platformId": "p0",
+      "offsetX": 0
+    },
+    "platforms": [
+      {
+        "id": "p0",
+        "xCenter": 210,
+        "height": 0,
+        "width": 120,
+        "kind": "static"
+      },
+      {
+        "id": "p1",
+        "xCenter": 210,
+        "height": 82,
+        "width": 105,
+        "kind": "static"
+      },
+      {
+        "id": "left-switch",
+        "xCenter": 95,
+        "height": 157,
+        "width": 94,
+        "kind": "moving",
+        "amplitude": 13,
+        "periodSec": 3.4,
+        "phase": 0
+      },
+      {
+        "id": "right-switch",
+        "xCenter": 326,
+        "height": 159,
+        "width": 96,
+        "kind": "moving",
+        "amplitude": 13,
+        "periodSec": 3.4,
+        "phase": 3.14
+      },
+      {
+        "id": "center",
+        "xCenter": 210,
+        "height": 233,
+        "width": 119,
+        "kind": "static"
+      },
+      {
+        "id": "upper",
+        "xCenter": 253,
+        "height": 312,
+        "width": 95,
+        "kind": "fragile",
+        "breakDelaySec": 0.8
+      },
+      {
+        "id": "p6",
+        "xCenter": 210,
+        "height": 390,
+        "width": 115,
+        "kind": "static"
+      }
+    ],
+    "mainRoute": [
+      "p0",
+      "p1",
+      "left-switch",
+      "center",
+      "right-switch",
+      "center",
+      "upper",
+      "p6"
+    ],
+    "alternativeRoute": [
+      "p1",
+      "right-switch",
+      "center",
+      "left-switch",
+      "center",
+      "upper",
+      "p6"
+    ],
+    "goal": {
+      "type": "gate",
+      "xCenter": 210,
+      "height": 435,
+      "radius": 38,
+      "unlock": "all-switches"
+    },
+    "requiredAbility": "dash",
+    "stageRule": "two-switch",
+    "collectibles": [],
+    "deathPolicy": "落出关卡边界后从最近房间检查点重试，关卡任务不回退",
+    "switches": [
+      {
+        "platformId": "left-switch",
+        "persistentWithinAttempt": true
+      },
+      {
+        "platformId": "right-switch",
+        "persistentWithinAttempt": true
+      }
+    ]
+  },
+  "referencePlan": {
+    "main": [
+      "p0",
+      "p1",
+      "left-switch",
+      "center",
+      "right-switch",
+      "center",
+      "upper",
+      "p6"
+    ],
+    "optional": [
+      "p1",
+      "right-switch",
+      "center",
+      "left-switch",
+      "center",
+      "upper",
+      "p6"
+    ],
+    "tactics": "开关触发顺序不限；回中心平台不会重置开关；死亡从房间检查点重试"
+  },
+  "acceptance": {
+    "success": "主路径 ['p0', 'p1', 'left-switch', 'center', 'right-switch', 'center', 'upper', 'p6'] 能在允许动作集下连贯落地并触发出口",
+    "failure": "无影冲前两关必须可解；S3 起必需动作与奖励路线独立；死亡返回关内检查点",
+    "mobile": "左右持续按压与影冲按钮支持两指并发，屏幕边缘影冲按钮≥44CSS px",
+    "afk": "任一有效游玩时刻切后台/锁屏/恢复，剩余时间、玩家位置与未完成目标不变化；恢复后手动继续"
+  },
+  "integration": {
+    "separateClassicProgress": true,
+    "noAssistedRequired": true,
+    "requiredFeatures": [
+      "challenge_mode",
+      "stage_gate",
+      "air_dash"
+    ],
+    "adaptToHead": true
+  },
+  "designerNotes": "开关触发顺序不限；回中心平台不会重置开关；死亡从房间检查点重试"
+}

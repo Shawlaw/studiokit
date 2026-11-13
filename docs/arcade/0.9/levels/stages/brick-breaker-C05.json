@@ -1,0 +1,69 @@
+{
+  "schemaVersion": "1.0.0",
+  "id": "brick-breaker-C05",
+  "gameId": "brick-breaker",
+  "stageNumber": 5,
+  "chapter": "弹道研究所",
+  "title": "薄壁防线",
+  "difficulty": 5,
+  "targetDurationSec": [
+    75,
+    180
+  ],
+  "goalStatement": "穿透低层薄壁，再清顶部重砖",
+  "decision": "先打通正中还是清两边",
+  "practicedSkill": "利用上方连续反弹提高每次控球收益",
+  "discovery": "高层 HP=3 的可见裂纹演变",
+  "mode": "challenge",
+  "content": {
+    "coordinates": "8列×5行，左上为(0,0)，砖坐标 x=20+col*48, y=128+row*24；.为空",
+    "brickRows": [
+      "..3333..",
+      "..1111..",
+      ".11..11.",
+      "11....11",
+      "........"
+    ],
+    "tokenLegend": {
+      ".": "empty",
+      "1": "1HP",
+      "2": "2HP",
+      "3": "3HP",
+      "K": "1HP trigger brick",
+      "G": "locked gate brick; initially invulnerable"
+    },
+    "mechanics": {},
+    "ball": {
+      "speed": 317,
+      "startingPaddleX": 210,
+      "paddleWidth": 82,
+      "lives": 3
+    },
+    "win": {
+      "type": "destroy_all_breakable_including_unlocked_gates"
+    },
+    "stuckBallRecovery": {
+      "ifNoBrickContactSec": 12,
+      "action": "给反弹方向微调且展示提示，不扣命；首次试图只提示"
+    }
+  },
+  "referencePlan": {
+    "route": "先按推荐开口控角引导至上方，随后清理残砖",
+    "hint": "高层 HP=3 的可见裂纹演变"
+  },
+  "acceptance": {
+    "success": "固定砖阵加载后每颗砖的 HP/机关状态与图一致",
+    "failure": "通关必须全部可破坏砖归零；球不可永久卡死；机关解锁状态可恢复",
+    "mobile": "挡板可单指拖动，手指不遮挡接球判定",
+    "afk": "任一有效游玩时刻切后台/锁屏/恢复，剩余时间、玩家位置与未完成目标不变化；恢复后手动继续"
+  },
+  "integration": {
+    "separateClassicProgress": true,
+    "noAssistedRequired": true,
+    "requiredFeatures": [
+      "fixed_brick_layout"
+    ],
+    "adaptToHead": true
+  },
+  "designerNotes": "K/G 属 challenge 独立机制；经典关卡原生 spawnBricks 不动"
+}

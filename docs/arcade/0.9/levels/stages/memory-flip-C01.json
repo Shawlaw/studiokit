@@ -1,0 +1,113 @@
+{
+  "schemaVersion": "1.0.0",
+  "id": "memory-flip-C01",
+  "gameId": "memory-flip",
+  "stageNumber": 1,
+  "chapter": "线索试炼",
+  "title": "分区第一步",
+  "difficulty": 1,
+  "targetDurationSec": [
+    35,
+    140
+  ],
+  "goalStatement": "仅看一次预览配对三组",
+  "decision": "记忆策略或推理顺序决定翻牌效率",
+  "practicedSkill": "按列建立位置记忆",
+  "discovery": "观察相同符号不一定相邻",
+  "mode": "challenge",
+  "content": {
+    "grid": {
+      "rows": 2,
+      "cols": 3
+    },
+    "faces": [
+      [
+        "A",
+        "B",
+        "C"
+      ],
+      [
+        "A",
+        "C",
+        "B"
+      ]
+    ],
+    "previewSeconds": 4.5,
+    "maxMismatches": 4,
+    "turnRules": {
+      "flipTwo": "matching pair stay faceup; mismatch waits 0.7s and flips back",
+      "pauseDuringMismatchedFlip": true,
+      "matchedCardsCannotFlipAgain": true
+    },
+    "goal": {
+      "type": "match-all",
+      "pairs": 3
+    },
+    "clues": {},
+    "layoutTransforms": [
+      "identity"
+    ],
+    "transformsApplyToEntireBoard": true,
+    "progressPersist": "matched ids + mismatches + active two flips + preview timer"
+  },
+  "referencePlan": {
+    "pairs": [
+      {
+        "symbol": "A",
+        "positions": [
+          [
+            0,
+            0
+          ],
+          [
+            1,
+            0
+          ]
+        ]
+      },
+      {
+        "symbol": "B",
+        "positions": [
+          [
+            0,
+            1
+          ],
+          [
+            1,
+            2
+          ]
+        ]
+      },
+      {
+        "symbol": "C",
+        "positions": [
+          [
+            0,
+            2
+          ],
+          [
+            1,
+            1
+          ]
+        ]
+      }
+    ],
+    "approach": "先利用提示再按主题区域扫描，所有匹配都可用该矩阵复核"
+  },
+  "acceptance": {
+    "success": "每个符号恰好两张，参考配对表覆盖全部格子；线索经过事实校验",
+    "failure": "错误次数超过限制失败但允许立即重试；变换必须同步更新正确线索",
+    "mobile": "触摸单张卡的命中区域≥44px，不会翻同一张两次",
+    "afk": "任一有效游玩时刻切后台/锁屏/恢复，剩余时间、玩家位置与未完成目标不变化；恢复后手动继续"
+  },
+  "integration": {
+    "separateClassicProgress": true,
+    "noAssistedRequired": true,
+    "requiredFeatures": [
+      "fixed_memory_board",
+      "cognitive_clue_mode"
+    ],
+    "adaptToHead": true
+  },
+  "designerNotes": "布局对称变换仅用于重玩变化，关卡原理不变；不能对称变换卡片却不更新线索"
+}

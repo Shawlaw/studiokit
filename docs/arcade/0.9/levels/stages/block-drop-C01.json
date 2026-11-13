@@ -1,0 +1,160 @@
+{
+  "schemaVersion": "1.0.0",
+  "id": "block-drop-C01",
+  "gameId": "block-drop",
+  "stageNumber": 1,
+  "chapter": "残局工坊",
+  "title": "第一道横井",
+  "difficulty": 1,
+  "targetDurationSec": [
+    25,
+    110
+  ],
+  "goalStatement": "用横向 I 填平一行",
+  "decision": "选择摆放方向和顺序（挑战模式固定出块）",
+  "practicedSkill": "横向 I 一次清行；不要空场堆叠",
+  "discovery": "横井的宽度等于4格",
+  "mode": "challenge",
+  "content": {
+    "boardWidth": 10,
+    "boardHeight": 20,
+    "boardTopToBottom": [
+      "..........",
+      "..........",
+      "..........",
+      "..........",
+      "..........",
+      "..........",
+      "..........",
+      "..........",
+      "..........",
+      "..........",
+      "..........",
+      "..........",
+      "..........",
+      "..........",
+      "..........",
+      "..........",
+      "..........",
+      "..........",
+      "..........",
+      "###....###"
+    ],
+    "pieceQueue": [
+      "I"
+    ],
+    "holdEnabled": false,
+    "gravityMode": "place-by-place with no time pressure, hard drop + rotate",
+    "spawnPolicy": "only fixed pieceQueue; no bag-7 randomness",
+    "initialActivePiece": "I",
+    "win": {
+      "type": "clear-lines",
+      "count": 1,
+      "maxPlacedPieces": 1
+    },
+    "lose": {
+      "type": "queue-exhausted-or-top-out",
+      "ifGoalUnmet": true
+    },
+    "pieceDefinitions": {
+      "I-H": [
+        [
+          0,
+          0
+        ],
+        [
+          1,
+          0
+        ],
+        [
+          2,
+          0
+        ],
+        [
+          3,
+          0
+        ]
+      ],
+      "I-V": [
+        [
+          0,
+          0
+        ],
+        [
+          0,
+          1
+        ],
+        [
+          0,
+          2
+        ],
+        [
+          0,
+          3
+        ]
+      ],
+      "O-N": [
+        [
+          0,
+          0
+        ],
+        [
+          1,
+          0
+        ],
+        [
+          0,
+          1
+        ],
+        [
+          1,
+          1
+        ]
+      ],
+      "T-STEM-DOWN": [
+        [
+          0,
+          0
+        ],
+        [
+          1,
+          0
+        ],
+        [
+          2,
+          0
+        ],
+        [
+          1,
+          1
+        ]
+      ]
+    },
+    "coordinates": "reference placements give top-left bounding-box column. Rotation system in game must support these orientations without clipping."
+  },
+  "referencePlan": [
+    {
+      "piece": "I",
+      "orientation": "H",
+      "leftCol": 3,
+      "action": "rotate/place/hardDrop"
+    }
+  ],
+  "acceptance": {
+    "success": "按参考队列执行能在最大置块数内清行并达标",
+    "failure": "提前耗尽队列而未达标应失败，且经典7-bag绝不改动",
+    "mobile": "左右/旋转/硬降有独立触摸按钮，连续点击不会粘键",
+    "afk": "任一有效游玩时刻切后台/锁屏/恢复，剩余时间、玩家位置与未完成目标不变化；恢复后手动继续"
+  },
+  "integration": {
+    "separateClassicProgress": true,
+    "noAssistedRequired": true,
+    "requiredFeatures": [
+      "puzzle_board_preset",
+      "puzzle_piece_queue",
+      "clear_line_goal"
+    ],
+    "adaptToHead": true
+  },
+  "designerNotes": ""
+}

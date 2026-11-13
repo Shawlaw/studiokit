@@ -1,0 +1,252 @@
+{
+  "schemaVersion": "1.0.0",
+  "id": "snake-run-C05",
+  "gameId": "snake-run",
+  "stageNumber": 5,
+  "chapter": "果园迷阵",
+  "title": "折叠花田",
+  "difficulty": 5,
+  "targetDurationSec": [
+    40,
+    180
+  ],
+  "goalStatement": "S形通道让简单贪心失效",
+  "decision": "绕路更安全还是尝试短路节省步数",
+  "practicedSkill": "每次取果前规划一个出口",
+  "discovery": "不同缺口可以避免被封死",
+  "mode": "challenge",
+  "content": {
+    "grid": {
+      "cols": 18,
+      "rows": 18,
+      "coords": "左上(0,0)，x向右，y向下"
+    },
+    "initialSnake": [
+      [
+        3,
+        3
+      ],
+      [
+        2,
+        3
+      ],
+      [
+        1,
+        3
+      ]
+    ],
+    "initialDirection": "R",
+    "walls": [
+      [
+        2,
+        6
+      ],
+      [
+        3,
+        6
+      ],
+      [
+        5,
+        6
+      ],
+      [
+        6,
+        6
+      ],
+      [
+        7,
+        6
+      ],
+      [
+        8,
+        6
+      ],
+      [
+        9,
+        6
+      ],
+      [
+        10,
+        6
+      ],
+      [
+        11,
+        6
+      ],
+      [
+        12,
+        6
+      ],
+      [
+        13,
+        6
+      ],
+      [
+        14,
+        6
+      ],
+      [
+        2,
+        10
+      ],
+      [
+        3,
+        10
+      ],
+      [
+        4,
+        10
+      ],
+      [
+        5,
+        10
+      ],
+      [
+        6,
+        10
+      ],
+      [
+        7,
+        10
+      ],
+      [
+        8,
+        10
+      ],
+      [
+        9,
+        10
+      ],
+      [
+        10,
+        10
+      ],
+      [
+        11,
+        10
+      ],
+      [
+        12,
+        10
+      ],
+      [
+        14,
+        10
+      ],
+      [
+        2,
+        14
+      ],
+      [
+        3,
+        14
+      ],
+      [
+        4,
+        14
+      ],
+      [
+        6,
+        14
+      ],
+      [
+        7,
+        14
+      ],
+      [
+        8,
+        14
+      ],
+      [
+        9,
+        14
+      ],
+      [
+        10,
+        14
+      ],
+      [
+        11,
+        14
+      ],
+      [
+        12,
+        14
+      ],
+      [
+        13,
+        14
+      ],
+      [
+        14,
+        14
+      ]
+    ],
+    "fruitQueue": [
+      [
+        2,
+        4
+      ],
+      [
+        6,
+        8
+      ],
+      [
+        14,
+        12
+      ],
+      [
+        8,
+        16
+      ]
+    ],
+    "fruitSpawnMode": "scripted-once, only next fruit visible; never random",
+    "stepIntervalMs": 200,
+    "win": {
+      "type": "collect-in-order",
+      "fruitCount": 4
+    },
+    "lose": {
+      "type": "wall-or-body",
+      "lives": 1
+    },
+    "turnBuffer": "最大队列2方向，按蛇每一逻辑步出队，拒绝反向180度",
+    "bonus": "在不碰任何障碍前提下减少总步数"
+  },
+  "referencePlan": {
+    "movesRLE": [
+      "D1",
+      "L1",
+      "D1",
+      "R2",
+      "D2",
+      "R2",
+      "D1",
+      "R7",
+      "D3",
+      "R1",
+      "D1",
+      "R1",
+      "D4",
+      "L7"
+    ],
+    "totalSteps": 34
+  },
+  "acceptance": {
+    "success": "完整蛇身状态搜索能从开局按给定水果序列安全通关",
+    "failure": "若蛇身增长后堵死果实则必须修改地图/果实或增加提示，不能靠道具脱困",
+    "mobile": "滑动方向按步缓存，连续两个90°输入都生效，反向自杀被拒绝",
+    "afk": "任一有效游玩时刻切后台/锁屏/恢复，剩余时间、玩家位置与未完成目标不变化；恢复后手动继续"
+  },
+  "integration": {
+    "separateClassicProgress": true,
+    "noAssistedRequired": true,
+    "requiredFeatures": [
+      "fixed_snake_map",
+      "scripted_fruit_queue",
+      "direction_queue"
+    ],
+    "adaptToHead": true
+  },
+  "designerNotes": "BFS 参考路线只是可行路线，不保证步数最优；不要在UI中强行提示整条路线"
+}

@@ -1,0 +1,164 @@
+{
+  "schemaVersion": "1.0.0",
+  "id": "shadow-leap-C05",
+  "gameId": "shadow-leap",
+  "stageNumber": 5,
+  "chapter": "影之试炼",
+  "title": "双影岔路",
+  "difficulty": 5,
+  "targetDurationSec": [
+    45,
+    155
+  ],
+  "goalStatement": "任选一条主路线抵达分岔山门",
+  "decision": "右侧影冲捷径节省两跳；左侧宽平台收集线索",
+  "practicedSkill": "读地图构图决定风险与步数",
+  "discovery": "在左下角的发光纹样发现门钥匙线索",
+  "mode": "challenge",
+  "content": {
+    "coordinates": "420×740逻辑像素；平台 xCenter 与 height 均为世界坐标；height=0为出发平台，向上为正；禁止按屏幕坐标硬编码",
+    "playerSpawn": {
+      "platformId": "p0",
+      "offsetX": 0
+    },
+    "platforms": [
+      {
+        "id": "p0",
+        "xCenter": 205,
+        "height": 0,
+        "width": 120,
+        "kind": "static"
+      },
+      {
+        "id": "p1",
+        "xCenter": 182,
+        "height": 77,
+        "width": 100,
+        "kind": "static"
+      },
+      {
+        "id": "l2",
+        "xCenter": 102,
+        "height": 153,
+        "width": 98,
+        "kind": "static"
+      },
+      {
+        "id": "l3",
+        "xCenter": 121,
+        "height": 229,
+        "width": 94,
+        "kind": "static"
+      },
+      {
+        "id": "l4",
+        "xCenter": 179,
+        "height": 305,
+        "width": 99,
+        "kind": "static"
+      },
+      {
+        "id": "r2",
+        "xCenter": 357,
+        "height": 153,
+        "width": 78,
+        "kind": "static"
+      },
+      {
+        "id": "r3",
+        "xCenter": 336,
+        "height": 231,
+        "width": 78,
+        "kind": "fragile",
+        "breakDelaySec": 0.7
+      },
+      {
+        "id": "r4",
+        "xCenter": 293,
+        "height": 307,
+        "width": 86,
+        "kind": "static"
+      },
+      {
+        "id": "p5",
+        "xCenter": 239,
+        "height": 382,
+        "width": 102,
+        "kind": "static"
+      },
+      {
+        "id": "secret",
+        "xCenter": 92,
+        "height": 273,
+        "width": 72,
+        "kind": "static"
+      }
+    ],
+    "mainRoute": [
+      "p0",
+      "p1",
+      "l2",
+      "l3",
+      "l4",
+      "p5"
+    ],
+    "alternativeRoute": [
+      "p1",
+      "r2",
+      "r3",
+      "r4",
+      "p5"
+    ],
+    "goal": {
+      "type": "gate",
+      "xCenter": 210,
+      "height": 425,
+      "radius": 38
+    },
+    "requiredAbility": "dash",
+    "stageRule": "fork",
+    "collectibles": [
+      {
+        "id": "scroll",
+        "platformId": "secret",
+        "optional": true
+      }
+    ],
+    "deathPolicy": "落出关卡边界后从最近房间检查点重试，关卡任务不回退"
+  },
+  "referencePlan": {
+    "main": [
+      "p0",
+      "p1",
+      "l2",
+      "l3",
+      "l4",
+      "p5"
+    ],
+    "optional": [
+      "p1",
+      "r2",
+      "r3",
+      "r4",
+      "p5"
+    ],
+    "tactics": "影冲短路与主线都能通关；卷轴仅影响收藏记录，不影响解锁"
+  },
+  "acceptance": {
+    "success": "主路径 ['p0', 'p1', 'l2', 'l3', 'l4', 'p5'] 能在允许动作集下连贯落地并触发出口",
+    "failure": "无影冲前两关必须可解；S3 起必需动作与奖励路线独立；死亡返回关内检查点",
+    "mobile": "左右持续按压与影冲按钮支持两指并发，屏幕边缘影冲按钮≥44CSS px",
+    "afk": "任一有效游玩时刻切后台/锁屏/恢复，剩余时间、玩家位置与未完成目标不变化；恢复后手动继续"
+  },
+  "integration": {
+    "separateClassicProgress": true,
+    "noAssistedRequired": true,
+    "requiredFeatures": [
+      "challenge_mode",
+      "stage_gate",
+      "air_dash"
+    ],
+    "adaptToHead": true
+  },
+  "designerNotes": "影冲短路与主线都能通关；卷轴仅影响收藏记录，不影响解锁"
+}

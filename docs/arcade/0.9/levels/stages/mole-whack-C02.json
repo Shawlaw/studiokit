@@ -1,0 +1,156 @@
+{
+  "schemaVersion": "1.0.0",
+  "id": "mole-whack-C02",
+  "gameId": "mole-whack",
+  "stageNumber": 2,
+  "chapter": "洞口节奏",
+  "title": "金鼠优先",
+  "difficulty": 2,
+  "targetDurationSec": [
+    31,
+    41
+  ],
+  "goalStatement": "至少点中两只金鼠与五个普通目标",
+  "decision": "敲有效目标或主动忽略炸弹/假目标",
+  "practicedSkill": "选择稀有高分目标优先",
+  "discovery": "金鼠图案有星形边框而不只颜色不同",
+  "mode": "challenge",
+  "content": {
+    "grid": {
+      "rows": 3,
+      "cols": 3,
+      "slotOrder": "row-major from 0 to 8"
+    },
+    "stageDurationSec": 31,
+    "events": [
+      {
+        "id": "e1",
+        "atSec": 2,
+        "slot": 0,
+        "kind": "normal",
+        "prewarnSec": 0.42,
+        "visibleSec": 1.4,
+        "score": 1
+      },
+      {
+        "id": "e2",
+        "atSec": 4.5,
+        "slot": 4,
+        "kind": "gold",
+        "prewarnSec": 0.42,
+        "visibleSec": 1.4,
+        "score": 2
+      },
+      {
+        "id": "e3",
+        "atSec": 7,
+        "slot": 2,
+        "kind": "normal",
+        "prewarnSec": 0.42,
+        "visibleSec": 1.4,
+        "score": 1
+      },
+      {
+        "id": "e4",
+        "atSec": 9.5,
+        "slot": 8,
+        "kind": "gold",
+        "prewarnSec": 0.42,
+        "visibleSec": 1.4,
+        "score": 2
+      },
+      {
+        "id": "e5",
+        "atSec": 12,
+        "slot": 1,
+        "kind": "normal",
+        "prewarnSec": 0.42,
+        "visibleSec": 1.4,
+        "score": 1
+      },
+      {
+        "id": "e6",
+        "atSec": 15,
+        "slot": 3,
+        "kind": "normal",
+        "prewarnSec": 0.42,
+        "visibleSec": 1.4,
+        "score": 1
+      },
+      {
+        "id": "e7",
+        "atSec": 18,
+        "slot": 5,
+        "kind": "gold",
+        "prewarnSec": 0.42,
+        "visibleSec": 1.4,
+        "score": 2
+      },
+      {
+        "id": "e8",
+        "atSec": 21,
+        "slot": 7,
+        "kind": "normal",
+        "prewarnSec": 0.42,
+        "visibleSec": 1.4,
+        "score": 1
+      },
+      {
+        "id": "e9",
+        "atSec": 24,
+        "slot": 6,
+        "kind": "normal",
+        "prewarnSec": 0.42,
+        "visibleSec": 1.4,
+        "score": 1
+      }
+    ],
+    "win": {
+      "minValidHits": 7,
+      "minGoldHits": 2,
+      "maxBombHits": 0,
+      "maxDecoyHits": 0
+    },
+    "scoring": {
+      "normal": 1,
+      "gold": 2,
+      "bomb": -3,
+      "decoy": -1,
+      "miss": 0
+    },
+    "tapRule": "仅洞口可点击范围判定，每个事件最多命中一次",
+    "time": "使用暂停感知逻辑时钟；进入后台事件不推进"
+  },
+  "referencePlan": {
+    "hitEventIds": [
+      "e1",
+      "e2",
+      "e3",
+      "e4",
+      "e5",
+      "e6",
+      "e7",
+      "e8",
+      "e9"
+    ],
+    "ignoreKinds": [
+      "bomb",
+      "decoy"
+    ]
+  },
+  "acceptance": {
+    "success": "脚本全部有效目标数≥过关需求，spawn不重叠同一洞口时间窗",
+    "failure": "炸弹和假目标扣分正确且误触不会连击多次",
+    "mobile": "两个同时有效目标可用双指点击，不被UI控件遮挡",
+    "afk": "任一有效游玩时刻切后台/锁屏/恢复，剩余时间、玩家位置与未完成目标不变化；恢复后手动继续"
+  },
+  "integration": {
+    "separateClassicProgress": true,
+    "noAssistedRequired": true,
+    "requiredFeatures": [
+      "scripted_spawn_wave"
+    ],
+    "adaptToHead": true
+  },
+  "designerNotes": ""
+}

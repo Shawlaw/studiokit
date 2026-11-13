@@ -1,0 +1,1954 @@
+{
+  "schemaVersion": "1.0",
+  "warning": "仅供参考，不自动导入0.8.0任务队列",
+  "tasks": [
+    {
+      "id": "LD90-P00",
+      "type": "owner-gate",
+      "title": "0.8.0收束与0.9.0启动授权",
+      "status": "BLOCKED_OWNER",
+      "dependsOn": [],
+      "scope": "仅阅读当前HEAD/0.8.0实施差异；未经Owner批准不能改业务代码",
+      "acceptance": "0.8.0状态、未完成PR、已实现玩法和待迁移schema核对完毕，Owner明确同意0.9分支"
+    },
+    {
+      "id": "LD90-P01",
+      "type": "foundation",
+      "title": "0.8与蓝图对照/接口契约",
+      "status": "PLANNED",
+      "dependsOn": [
+        "LD90-P00"
+      ],
+      "scope": "只补挑战关适配器（不重写经典模式）",
+      "acceptance": "mode/challenge stageId+stageSchema+暂停/存档版本+可测事件公开，完成基础测试"
+    },
+    {
+      "id": "LD90-P02",
+      "type": "foundation",
+      "title": "关卡验证器与复放测试接入",
+      "status": "PLANNED",
+      "dependsOn": [
+        "LD90-P01"
+      ],
+      "scope": "对levels JSON构建导入和校验；跑本包validator",
+      "acceptance": "至少旧游戏烟雾测试不回归，关卡切换不污染高分存档"
+    },
+    {
+      "id": "LD90-P03",
+      "type": "foundation",
+      "title": "移动端控制与暂停/续玩基线",
+      "status": "PLANNED",
+      "dependsOn": [
+        "LD90-P01"
+      ],
+      "scope": "各游戏新增功能必须在同样输入语义下兼容多指/失焦",
+      "acceptance": "320/375/390/430 CSS px 横竖、切后台/锁屏/刷新、点按连续可验证"
+    },
+    {
+      "id": "LD90-SHADOWLEAP-01",
+      "type": "implement-stage",
+      "gameId": "shadow-leap",
+      "stageId": "shadow-leap-C01",
+      "title": "影跃 C01 初入影林",
+      "dependsOn": [
+        "LD90-P02",
+        "LD90-P03"
+      ],
+      "status": "PLANNED",
+      "targetBranch": "feat/arcade-0.9-gameplay",
+      "designSource": "levels/stages/shadow-leap-C01.json",
+      "gameSource": "apps/arcade/games/shadow-leap.html",
+      "scope": "优先1关/PR；不可修改其他游戏规则或经典模式成绩；仅调整关卡适配器/本游戏/必要测试",
+      "acceptance": [
+        "主路径 ['p0', 'p1', 'p2', 'p3', 'p4', 'p5'] 能在允许动作集下连贯落地并触发出口",
+        "无影冲前两关必须可解；S3 起必需动作与奖励路线独立；死亡返回关内检查点",
+        "左右持续按压与影冲按钮支持两指并发，屏幕边缘影冲按钮≥44CSS px",
+        "任一有效游玩时刻切后台/锁屏/恢复，剩余时间、玩家位置与未完成目标不变化；恢复后手动继续",
+        "给出关卡回放/可复现证据与设计偏差说明；无Owner认可不得改关卡策划约束"
+      ],
+      "ownerGate": false
+    },
+    {
+      "id": "LD90-SHADOWLEAP-02",
+      "type": "implement-stage",
+      "gameId": "shadow-leap",
+      "stageId": "shadow-leap-C02",
+      "title": "影跃 C02 月下断桥",
+      "dependsOn": [
+        "LD90-SHADOWLEAP-01"
+      ],
+      "status": "PLANNED",
+      "targetBranch": "feat/arcade-0.9-gameplay",
+      "designSource": "levels/stages/shadow-leap-C02.json",
+      "gameSource": "apps/arcade/games/shadow-leap.html",
+      "scope": "优先1关/PR；不可修改其他游戏规则或经典模式成绩；仅调整关卡适配器/本游戏/必要测试",
+      "acceptance": [
+        "主路径 ['p0', 'p1', 'p2', 'p3', 'p4', 'p5'] 能在允许动作集下连贯落地并触发出口",
+        "无影冲前两关必须可解；S3 起必需动作与奖励路线独立；死亡返回关内检查点",
+        "左右持续按压与影冲按钮支持两指并发，屏幕边缘影冲按钮≥44CSS px",
+        "任一有效游玩时刻切后台/锁屏/恢复，剩余时间、玩家位置与未完成目标不变化；恢复后手动继续",
+        "给出关卡回放/可复现证据与设计偏差说明；无Owner认可不得改关卡策划约束"
+      ],
+      "ownerGate": false
+    },
+    {
+      "id": "LD90-SHADOWLEAP-03",
+      "type": "implement-stage",
+      "gameId": "shadow-leap",
+      "stageId": "shadow-leap-C03",
+      "title": "影跃 C03 影冲试炼",
+      "dependsOn": [
+        "LD90-SHADOWLEAP-02"
+      ],
+      "status": "PLANNED",
+      "targetBranch": "feat/arcade-0.9-gameplay",
+      "designSource": "levels/stages/shadow-leap-C03.json",
+      "gameSource": "apps/arcade/games/shadow-leap.html",
+      "scope": "优先1关/PR；不可修改其他游戏规则或经典模式成绩；仅调整关卡适配器/本游戏/必要测试",
+      "acceptance": [
+        "主路径 ['p0', 'p1', 'p2', 'p3', 'p4', 'p5'] 能在允许动作集下连贯落地并触发出口",
+        "无影冲前两关必须可解；S3 起必需动作与奖励路线独立；死亡返回关内检查点",
+        "左右持续按压与影冲按钮支持两指并发，屏幕边缘影冲按钮≥44CSS px",
+        "任一有效游玩时刻切后台/锁屏/恢复，剩余时间、玩家位置与未完成目标不变化；恢复后手动继续",
+        "给出关卡回放/可复现证据与设计偏差说明；无Owner认可不得改关卡策划约束"
+      ],
+      "ownerGate": true
+    },
+    {
+      "id": "LD90-SHADOWLEAP-04",
+      "type": "implement-stage",
+      "gameId": "shadow-leap",
+      "stageId": "shadow-leap-C04",
+      "title": "影跃 C04 风之回廊",
+      "dependsOn": [
+        "LD90-SHADOWLEAP-03"
+      ],
+      "status": "PLANNED",
+      "targetBranch": "feat/arcade-0.9-gameplay",
+      "designSource": "levels/stages/shadow-leap-C04.json",
+      "gameSource": "apps/arcade/games/shadow-leap.html",
+      "scope": "优先1关/PR；不可修改其他游戏规则或经典模式成绩；仅调整关卡适配器/本游戏/必要测试",
+      "acceptance": [
+        "主路径 ['p0', 'p1', 'p2', 'p3', 'p4', 'p5'] 能在允许动作集下连贯落地并触发出口",
+        "无影冲前两关必须可解；S3 起必需动作与奖励路线独立；死亡返回关内检查点",
+        "左右持续按压与影冲按钮支持两指并发，屏幕边缘影冲按钮≥44CSS px",
+        "任一有效游玩时刻切后台/锁屏/恢复，剩余时间、玩家位置与未完成目标不变化；恢复后手动继续",
+        "给出关卡回放/可复现证据与设计偏差说明；无Owner认可不得改关卡策划约束"
+      ],
+      "ownerGate": false
+    },
+    {
+      "id": "LD90-SHADOWLEAP-05",
+      "type": "implement-stage",
+      "gameId": "shadow-leap",
+      "stageId": "shadow-leap-C05",
+      "title": "影跃 C05 双影岔路",
+      "dependsOn": [
+        "LD90-SHADOWLEAP-04"
+      ],
+      "status": "PLANNED",
+      "targetBranch": "feat/arcade-0.9-gameplay",
+      "designSource": "levels/stages/shadow-leap-C05.json",
+      "gameSource": "apps/arcade/games/shadow-leap.html",
+      "scope": "优先1关/PR；不可修改其他游戏规则或经典模式成绩；仅调整关卡适配器/本游戏/必要测试",
+      "acceptance": [
+        "主路径 ['p0', 'p1', 'l2', 'l3', 'l4', 'p5'] 能在允许动作集下连贯落地并触发出口",
+        "无影冲前两关必须可解；S3 起必需动作与奖励路线独立；死亡返回关内检查点",
+        "左右持续按压与影冲按钮支持两指并发，屏幕边缘影冲按钮≥44CSS px",
+        "任一有效游玩时刻切后台/锁屏/恢复，剩余时间、玩家位置与未完成目标不变化；恢复后手动继续",
+        "给出关卡回放/可复现证据与设计偏差说明；无Owner认可不得改关卡策划约束"
+      ],
+      "ownerGate": false
+    },
+    {
+      "id": "LD90-SHADOWLEAP-06",
+      "type": "implement-stage",
+      "gameId": "shadow-leap",
+      "stageId": "shadow-leap-C06",
+      "title": "影跃 C06 月门守卫",
+      "dependsOn": [
+        "LD90-SHADOWLEAP-05"
+      ],
+      "status": "PLANNED",
+      "targetBranch": "feat/arcade-0.9-gameplay",
+      "designSource": "levels/stages/shadow-leap-C06.json",
+      "gameSource": "apps/arcade/games/shadow-leap.html",
+      "scope": "优先1关/PR；不可修改其他游戏规则或经典模式成绩；仅调整关卡适配器/本游戏/必要测试",
+      "acceptance": [
+        "主路径 ['p0', 'p1', 'left-switch', 'center', 'right-switch', 'center', 'upper', 'p6'] 能在允许动作集下连贯落地并触发出口",
+        "无影冲前两关必须可解；S3 起必需动作与奖励路线独立；死亡返回关内检查点",
+        "左右持续按压与影冲按钮支持两指并发，屏幕边缘影冲按钮≥44CSS px",
+        "任一有效游玩时刻切后台/锁屏/恢复，剩余时间、玩家位置与未完成目标不变化；恢复后手动继续",
+        "给出关卡回放/可复现证据与设计偏差说明；无Owner认可不得改关卡策划约束"
+      ],
+      "ownerGate": false
+    },
+    {
+      "id": "LD90-SNOWBELLS-01",
+      "type": "implement-stage",
+      "gameId": "snowbells",
+      "stageId": "snowbells-C01",
+      "title": "雪铃 C01 四铃开场",
+      "dependsOn": [
+        "LD90-P02",
+        "LD90-P03"
+      ],
+      "status": "PLANNED",
+      "targetBranch": "feat/arcade-0.9-gameplay",
+      "designSource": "levels/stages/snowbells-C01.json",
+      "gameSource": "apps/arcade/games/snowbells.html",
+      "scope": "优先1关/PR；不可修改其他游戏规则或经典模式成绩；仅调整关卡适配器/本游戏/必要测试",
+      "acceptance": [
+        "指定铃铛间距和弹跳时间允许物理命中且不可重复计分",
+        "无道具可完成必经序列；休止铃能弹但不计分",
+        "显示下一个目标，左右多指操作无粘滞",
+        "任一有效游玩时刻切后台/锁屏/恢复，剩余时间、玩家位置与未完成目标不变化；恢复后手动继续",
+        "给出关卡回放/可复现证据与设计偏差说明；无Owner认可不得改关卡策划约束"
+      ],
+      "ownerGate": false
+    },
+    {
+      "id": "LD90-SNOWBELLS-02",
+      "type": "implement-stage",
+      "gameId": "snowbells",
+      "stageId": "snowbells-C02",
+      "title": "雪铃 C02 左右对唱",
+      "dependsOn": [
+        "LD90-SNOWBELLS-01"
+      ],
+      "status": "PLANNED",
+      "targetBranch": "feat/arcade-0.9-gameplay",
+      "designSource": "levels/stages/snowbells-C02.json",
+      "gameSource": "apps/arcade/games/snowbells.html",
+      "scope": "优先1关/PR；不可修改其他游戏规则或经典模式成绩；仅调整关卡适配器/本游戏/必要测试",
+      "acceptance": [
+        "指定铃铛间距和弹跳时间允许物理命中且不可重复计分",
+        "无道具可完成必经序列；休止铃能弹但不计分",
+        "显示下一个目标，左右多指操作无粘滞",
+        "任一有效游玩时刻切后台/锁屏/恢复，剩余时间、玩家位置与未完成目标不变化；恢复后手动继续",
+        "给出关卡回放/可复现证据与设计偏差说明；无Owner认可不得改关卡策划约束"
+      ],
+      "ownerGate": false
+    },
+    {
+      "id": "LD90-SNOWBELLS-03",
+      "type": "implement-stage",
+      "gameId": "snowbells",
+      "stageId": "snowbells-C03",
+      "title": "雪铃 C03 休止与连奏",
+      "dependsOn": [
+        "LD90-SNOWBELLS-02"
+      ],
+      "status": "PLANNED",
+      "targetBranch": "feat/arcade-0.9-gameplay",
+      "designSource": "levels/stages/snowbells-C03.json",
+      "gameSource": "apps/arcade/games/snowbells.html",
+      "scope": "优先1关/PR；不可修改其他游戏规则或经典模式成绩；仅调整关卡适配器/本游戏/必要测试",
+      "acceptance": [
+        "指定铃铛间距和弹跳时间允许物理命中且不可重复计分",
+        "无道具可完成必经序列；休止铃能弹但不计分",
+        "显示下一个目标，左右多指操作无粘滞",
+        "任一有效游玩时刻切后台/锁屏/恢复，剩余时间、玩家位置与未完成目标不变化；恢复后手动继续",
+        "给出关卡回放/可复现证据与设计偏差说明；无Owner认可不得改关卡策划约束"
+      ],
+      "ownerGate": false
+    },
+    {
+      "id": "LD90-SNOWBELLS-04",
+      "type": "implement-stage",
+      "gameId": "snowbells",
+      "stageId": "snowbells-C04",
+      "title": "雪铃 C04 双线谱",
+      "dependsOn": [
+        "LD90-SNOWBELLS-03"
+      ],
+      "status": "PLANNED",
+      "targetBranch": "feat/arcade-0.9-gameplay",
+      "designSource": "levels/stages/snowbells-C04.json",
+      "gameSource": "apps/arcade/games/snowbells.html",
+      "scope": "优先1关/PR；不可修改其他游戏规则或经典模式成绩；仅调整关卡适配器/本游戏/必要测试",
+      "acceptance": [
+        "指定铃铛间距和弹跳时间允许物理命中且不可重复计分",
+        "无道具可完成必经序列；休止铃能弹但不计分",
+        "显示下一个目标，左右多指操作无粘滞",
+        "任一有效游玩时刻切后台/锁屏/恢复，剩余时间、玩家位置与未完成目标不变化；恢复后手动继续",
+        "给出关卡回放/可复现证据与设计偏差说明；无Owner认可不得改关卡策划约束"
+      ],
+      "ownerGate": false
+    },
+    {
+      "id": "LD90-SNOWBELLS-05",
+      "type": "implement-stage",
+      "gameId": "snowbells",
+      "stageId": "snowbells-C05",
+      "title": "雪铃 C05 冷暖和声",
+      "dependsOn": [
+        "LD90-SNOWBELLS-04"
+      ],
+      "status": "PLANNED",
+      "targetBranch": "feat/arcade-0.9-gameplay",
+      "designSource": "levels/stages/snowbells-C05.json",
+      "gameSource": "apps/arcade/games/snowbells.html",
+      "scope": "优先1关/PR；不可修改其他游戏规则或经典模式成绩；仅调整关卡适配器/本游戏/必要测试",
+      "acceptance": [
+        "指定铃铛间距和弹跳时间允许物理命中且不可重复计分",
+        "无道具可完成必经序列；休止铃能弹但不计分",
+        "显示下一个目标，左右多指操作无粘滞",
+        "任一有效游玩时刻切后台/锁屏/恢复，剩余时间、玩家位置与未完成目标不变化；恢复后手动继续",
+        "给出关卡回放/可复现证据与设计偏差说明；无Owner认可不得改关卡策划约束"
+      ],
+      "ownerGate": false
+    },
+    {
+      "id": "LD90-SNOWBELLS-06",
+      "type": "implement-stage",
+      "gameId": "snowbells",
+      "stageId": "snowbells-C06",
+      "title": "雪铃 C06 雪夜终曲",
+      "dependsOn": [
+        "LD90-SNOWBELLS-05"
+      ],
+      "status": "PLANNED",
+      "targetBranch": "feat/arcade-0.9-gameplay",
+      "designSource": "levels/stages/snowbells-C06.json",
+      "gameSource": "apps/arcade/games/snowbells.html",
+      "scope": "优先1关/PR；不可修改其他游戏规则或经典模式成绩；仅调整关卡适配器/本游戏/必要测试",
+      "acceptance": [
+        "指定铃铛间距和弹跳时间允许物理命中且不可重复计分",
+        "无道具可完成必经序列；休止铃能弹但不计分",
+        "显示下一个目标，左右多指操作无粘滞",
+        "任一有效游玩时刻切后台/锁屏/恢复，剩余时间、玩家位置与未完成目标不变化；恢复后手动继续",
+        "给出关卡回放/可复现证据与设计偏差说明；无Owner认可不得改关卡策划约束"
+      ],
+      "ownerGate": true
+    },
+    {
+      "id": "LD90-STARRAID-01",
+      "type": "implement-stage",
+      "gameId": "star-raid",
+      "stageId": "star-raid-C01",
+      "title": "星海突击 C01 护航第一课",
+      "dependsOn": [
+        "LD90-P02",
+        "LD90-P03"
+      ],
+      "status": "PLANNED",
+      "targetBranch": "feat/arcade-0.9-gameplay",
+      "designSource": "levels/stages/star-raid-C01.json",
+      "gameSource": "apps/arcade/games/star-raid.html",
+      "scope": "优先1关/PR；不可修改其他游戏规则或经典模式成绩；仅调整关卡适配器/本游戏/必要测试",
+      "acceptance": [
+        "定时事件不依赖Math.random且预警与伤害开始时间可复测",
+        "弹幕演算留出可达安全区；阶段目标可在基础武器下完成",
+        "按住拖动+技能点击两指并发，子弹/弱点在小屏可辨",
+        "任一有效游玩时刻切后台/锁屏/恢复，剩余时间、玩家位置与未完成目标不变化；恢复后手动继续",
+        "给出关卡回放/可复现证据与设计偏差说明；无Owner认可不得改关卡策划约束"
+      ],
+      "ownerGate": false
+    },
+    {
+      "id": "LD90-STARRAID-02",
+      "type": "implement-stage",
+      "gameId": "star-raid",
+      "stageId": "star-raid-C02",
+      "title": "星海突击 C02 扫射之门",
+      "dependsOn": [
+        "LD90-STARRAID-01"
+      ],
+      "status": "PLANNED",
+      "targetBranch": "feat/arcade-0.9-gameplay",
+      "designSource": "levels/stages/star-raid-C02.json",
+      "gameSource": "apps/arcade/games/star-raid.html",
+      "scope": "优先1关/PR；不可修改其他游戏规则或经典模式成绩；仅调整关卡适配器/本游戏/必要测试",
+      "acceptance": [
+        "定时事件不依赖Math.random且预警与伤害开始时间可复测",
+        "弹幕演算留出可达安全区；阶段目标可在基础武器下完成",
+        "按住拖动+技能点击两指并发，子弹/弱点在小屏可辨",
+        "任一有效游玩时刻切后台/锁屏/恢复，剩余时间、玩家位置与未完成目标不变化；恢复后手动继续",
+        "给出关卡回放/可复现证据与设计偏差说明；无Owner认可不得改关卡策划约束"
+      ],
+      "ownerGate": false
+    },
+    {
+      "id": "LD90-STARRAID-03",
+      "type": "implement-stage",
+      "gameId": "star-raid",
+      "stageId": "star-raid-C03",
+      "title": "星海突击 C03 冲锋预警",
+      "dependsOn": [
+        "LD90-STARRAID-02"
+      ],
+      "status": "PLANNED",
+      "targetBranch": "feat/arcade-0.9-gameplay",
+      "designSource": "levels/stages/star-raid-C03.json",
+      "gameSource": "apps/arcade/games/star-raid.html",
+      "scope": "优先1关/PR；不可修改其他游戏规则或经典模式成绩；仅调整关卡适配器/本游戏/必要测试",
+      "acceptance": [
+        "定时事件不依赖Math.random且预警与伤害开始时间可复测",
+        "弹幕演算留出可达安全区；阶段目标可在基础武器下完成",
+        "按住拖动+技能点击两指并发，子弹/弱点在小屏可辨",
+        "任一有效游玩时刻切后台/锁屏/恢复，剩余时间、玩家位置与未完成目标不变化；恢复后手动继续",
+        "给出关卡回放/可复现证据与设计偏差说明；无Owner认可不得改关卡策划约束"
+      ],
+      "ownerGate": false
+    },
+    {
+      "id": "LD90-STARRAID-04",
+      "type": "implement-stage",
+      "gameId": "star-raid",
+      "stageId": "star-raid-C04",
+      "title": "星海突击 C04 拾取抉择",
+      "dependsOn": [
+        "LD90-STARRAID-03"
+      ],
+      "status": "PLANNED",
+      "targetBranch": "feat/arcade-0.9-gameplay",
+      "designSource": "levels/stages/star-raid-C04.json",
+      "gameSource": "apps/arcade/games/star-raid.html",
+      "scope": "优先1关/PR；不可修改其他游戏规则或经典模式成绩；仅调整关卡适配器/本游戏/必要测试",
+      "acceptance": [
+        "定时事件不依赖Math.random且预警与伤害开始时间可复测",
+        "弹幕演算留出可达安全区；阶段目标可在基础武器下完成",
+        "按住拖动+技能点击两指并发，子弹/弱点在小屏可辨",
+        "任一有效游玩时刻切后台/锁屏/恢复，剩余时间、玩家位置与未完成目标不变化；恢复后手动继续",
+        "给出关卡回放/可复现证据与设计偏差说明；无Owner认可不得改关卡策划约束"
+      ],
+      "ownerGate": false
+    },
+    {
+      "id": "LD90-STARRAID-05",
+      "type": "implement-stage",
+      "gameId": "star-raid",
+      "stageId": "star-raid-C05",
+      "title": "星海突击 C05 护盾与弱点",
+      "dependsOn": [
+        "LD90-STARRAID-04"
+      ],
+      "status": "PLANNED",
+      "targetBranch": "feat/arcade-0.9-gameplay",
+      "designSource": "levels/stages/star-raid-C05.json",
+      "gameSource": "apps/arcade/games/star-raid.html",
+      "scope": "优先1关/PR；不可修改其他游戏规则或经典模式成绩；仅调整关卡适配器/本游戏/必要测试",
+      "acceptance": [
+        "定时事件不依赖Math.random且预警与伤害开始时间可复测",
+        "弹幕演算留出可达安全区；阶段目标可在基础武器下完成",
+        "按住拖动+技能点击两指并发，子弹/弱点在小屏可辨",
+        "任一有效游玩时刻切后台/锁屏/恢复，剩余时间、玩家位置与未完成目标不变化；恢复后手动继续",
+        "给出关卡回放/可复现证据与设计偏差说明；无Owner认可不得改关卡策划约束"
+      ],
+      "ownerGate": false
+    },
+    {
+      "id": "LD90-STARRAID-06",
+      "type": "implement-stage",
+      "gameId": "star-raid",
+      "stageId": "star-raid-C06",
+      "title": "星海突击 C06 星域毕业战",
+      "dependsOn": [
+        "LD90-STARRAID-05"
+      ],
+      "status": "PLANNED",
+      "targetBranch": "feat/arcade-0.9-gameplay",
+      "designSource": "levels/stages/star-raid-C06.json",
+      "gameSource": "apps/arcade/games/star-raid.html",
+      "scope": "优先1关/PR；不可修改其他游戏规则或经典模式成绩；仅调整关卡适配器/本游戏/必要测试",
+      "acceptance": [
+        "定时事件不依赖Math.random且预警与伤害开始时间可复测",
+        "弹幕演算留出可达安全区；阶段目标可在基础武器下完成",
+        "按住拖动+技能点击两指并发，子弹/弱点在小屏可辨",
+        "任一有效游玩时刻切后台/锁屏/恢复，剩余时间、玩家位置与未完成目标不变化；恢复后手动继续",
+        "给出关卡回放/可复现证据与设计偏差说明；无Owner认可不得改关卡策划约束"
+      ],
+      "ownerGate": true
+    },
+    {
+      "id": "LD90-PENDULUMTOWER-01",
+      "type": "implement-stage",
+      "gameId": "pendulum-tower",
+      "stageId": "pendulum-tower-C01",
+      "title": "层塔 C01 稳稳四层",
+      "dependsOn": [
+        "LD90-P02",
+        "LD90-P03"
+      ],
+      "status": "PLANNED",
+      "targetBranch": "feat/arcade-0.9-gameplay",
+      "designSource": "levels/stages/pendulum-tower-C01.json",
+      "gameSource": "apps/arcade/games/pendulum-tower.html",
+      "scope": "优先1关/PR；不可修改其他游戏规则或经典模式成绩；仅调整关卡适配器/本游戏/必要测试",
+      "acceptance": [
+        "物理模拟能以一组真实释放时机稳定完成目标楼层",
+        "超出倾斜极限判倒塔，配重上限按关卡校验",
+        "放箱是清晰的独立点击，底部按钮不遮住钟摆轨迹",
+        "任一有效游玩时刻切后台/锁屏/恢复，剩余时间、玩家位置与未完成目标不变化；恢复后手动继续",
+        "给出关卡回放/可复现证据与设计偏差说明；无Owner认可不得改关卡策划约束"
+      ],
+      "ownerGate": false
+    },
+    {
+      "id": "LD90-PENDULUMTOWER-02",
+      "type": "implement-stage",
+      "gameId": "pendulum-tower",
+      "stageId": "pendulum-tower-C02",
+      "title": "层塔 C02 交替施工",
+      "dependsOn": [
+        "LD90-PENDULUMTOWER-01"
+      ],
+      "status": "PLANNED",
+      "targetBranch": "feat/arcade-0.9-gameplay",
+      "designSource": "levels/stages/pendulum-tower-C02.json",
+      "gameSource": "apps/arcade/games/pendulum-tower.html",
+      "scope": "优先1关/PR；不可修改其他游戏规则或经典模式成绩；仅调整关卡适配器/本游戏/必要测试",
+      "acceptance": [
+        "物理模拟能以一组真实释放时机稳定完成目标楼层",
+        "超出倾斜极限判倒塔，配重上限按关卡校验",
+        "放箱是清晰的独立点击，底部按钮不遮住钟摆轨迹",
+        "任一有效游玩时刻切后台/锁屏/恢复，剩余时间、玩家位置与未完成目标不变化；恢复后手动继续",
+        "给出关卡回放/可复现证据与设计偏差说明；无Owner认可不得改关卡策划约束"
+      ],
+      "ownerGate": false
+    },
+    {
+      "id": "LD90-PENDULUMTOWER-03",
+      "type": "implement-stage",
+      "gameId": "pendulum-tower",
+      "stageId": "pendulum-tower-C03",
+      "title": "层塔 C03 偏右的委托",
+      "dependsOn": [
+        "LD90-PENDULUMTOWER-02"
+      ],
+      "status": "PLANNED",
+      "targetBranch": "feat/arcade-0.9-gameplay",
+      "designSource": "levels/stages/pendulum-tower-C03.json",
+      "gameSource": "apps/arcade/games/pendulum-tower.html",
+      "scope": "优先1关/PR；不可修改其他游戏规则或经典模式成绩；仅调整关卡适配器/本游戏/必要测试",
+      "acceptance": [
+        "物理模拟能以一组真实释放时机稳定完成目标楼层",
+        "超出倾斜极限判倒塔，配重上限按关卡校验",
+        "放箱是清晰的独立点击，底部按钮不遮住钟摆轨迹",
+        "任一有效游玩时刻切后台/锁屏/恢复，剩余时间、玩家位置与未完成目标不变化；恢复后手动继续",
+        "给出关卡回放/可复现证据与设计偏差说明；无Owner认可不得改关卡策划约束"
+      ],
+      "ownerGate": false
+    },
+    {
+      "id": "LD90-PENDULUMTOWER-04",
+      "type": "implement-stage",
+      "gameId": "pendulum-tower",
+      "stageId": "pendulum-tower-C04",
+      "title": "层塔 C04 有限配重",
+      "dependsOn": [
+        "LD90-PENDULUMTOWER-03"
+      ],
+      "status": "PLANNED",
+      "targetBranch": "feat/arcade-0.9-gameplay",
+      "designSource": "levels/stages/pendulum-tower-C04.json",
+      "gameSource": "apps/arcade/games/pendulum-tower.html",
+      "scope": "优先1关/PR；不可修改其他游戏规则或经典模式成绩；仅调整关卡适配器/本游戏/必要测试",
+      "acceptance": [
+        "物理模拟能以一组真实释放时机稳定完成目标楼层",
+        "超出倾斜极限判倒塔，配重上限按关卡校验",
+        "放箱是清晰的独立点击，底部按钮不遮住钟摆轨迹",
+        "任一有效游玩时刻切后台/锁屏/恢复，剩余时间、玩家位置与未完成目标不变化；恢复后手动继续",
+        "给出关卡回放/可复现证据与设计偏差说明；无Owner认可不得改关卡策划约束"
+      ],
+      "ownerGate": false
+    },
+    {
+      "id": "LD90-PENDULUMTOWER-05",
+      "type": "implement-stage",
+      "gameId": "pendulum-tower",
+      "stageId": "pendulum-tower-C05",
+      "title": "层塔 C05 窄层挑战",
+      "dependsOn": [
+        "LD90-PENDULUMTOWER-04"
+      ],
+      "status": "PLANNED",
+      "targetBranch": "feat/arcade-0.9-gameplay",
+      "designSource": "levels/stages/pendulum-tower-C05.json",
+      "gameSource": "apps/arcade/games/pendulum-tower.html",
+      "scope": "优先1关/PR；不可修改其他游戏规则或经典模式成绩；仅调整关卡适配器/本游戏/必要测试",
+      "acceptance": [
+        "物理模拟能以一组真实释放时机稳定完成目标楼层",
+        "超出倾斜极限判倒塔，配重上限按关卡校验",
+        "放箱是清晰的独立点击，底部按钮不遮住钟摆轨迹",
+        "任一有效游玩时刻切后台/锁屏/恢复，剩余时间、玩家位置与未完成目标不变化；恢复后手动继续",
+        "给出关卡回放/可复现证据与设计偏差说明；无Owner认可不得改关卡策划约束"
+      ],
+      "ownerGate": false
+    },
+    {
+      "id": "LD90-PENDULUMTOWER-06",
+      "type": "implement-stage",
+      "gameId": "pendulum-tower",
+      "stageId": "pendulum-tower-C06",
+      "title": "层塔 C06 城市小塔",
+      "dependsOn": [
+        "LD90-PENDULUMTOWER-05"
+      ],
+      "status": "PLANNED",
+      "targetBranch": "feat/arcade-0.9-gameplay",
+      "designSource": "levels/stages/pendulum-tower-C06.json",
+      "gameSource": "apps/arcade/games/pendulum-tower.html",
+      "scope": "优先1关/PR；不可修改其他游戏规则或经典模式成绩；仅调整关卡适配器/本游戏/必要测试",
+      "acceptance": [
+        "物理模拟能以一组真实释放时机稳定完成目标楼层",
+        "超出倾斜极限判倒塔，配重上限按关卡校验",
+        "放箱是清晰的独立点击，底部按钮不遮住钟摆轨迹",
+        "任一有效游玩时刻切后台/锁屏/恢复，剩余时间、玩家位置与未完成目标不变化；恢复后手动继续",
+        "给出关卡回放/可复现证据与设计偏差说明；无Owner认可不得改关卡策划约束"
+      ],
+      "ownerGate": true
+    },
+    {
+      "id": "LD90-BLOCKDROP-01",
+      "type": "implement-stage",
+      "gameId": "block-drop",
+      "stageId": "block-drop-C01",
+      "title": "俄罗斯方块 C01 第一道横井",
+      "dependsOn": [
+        "LD90-P02",
+        "LD90-P03"
+      ],
+      "status": "PLANNED",
+      "targetBranch": "feat/arcade-0.9-gameplay",
+      "designSource": "levels/stages/block-drop-C01.json",
+      "gameSource": "apps/arcade/games/block-drop.html",
+      "scope": "优先1关/PR；不可修改其他游戏规则或经典模式成绩；仅调整关卡适配器/本游戏/必要测试",
+      "acceptance": [
+        "按参考队列执行能在最大置块数内清行并达标",
+        "提前耗尽队列而未达标应失败，且经典7-bag绝不改动",
+        "左右/旋转/硬降有独立触摸按钮，连续点击不会粘键",
+        "任一有效游玩时刻切后台/锁屏/恢复，剩余时间、玩家位置与未完成目标不变化；恢复后手动继续",
+        "给出关卡回放/可复现证据与设计偏差说明；无Owner认可不得改关卡策划约束"
+      ],
+      "ownerGate": false
+    },
+    {
+      "id": "LD90-BLOCKDROP-02",
+      "type": "implement-stage",
+      "gameId": "block-drop",
+      "stageId": "block-drop-C02",
+      "title": "俄罗斯方块 C02 双行方井",
+      "dependsOn": [
+        "LD90-BLOCKDROP-01"
+      ],
+      "status": "PLANNED",
+      "targetBranch": "feat/arcade-0.9-gameplay",
+      "designSource": "levels/stages/block-drop-C02.json",
+      "gameSource": "apps/arcade/games/block-drop.html",
+      "scope": "优先1关/PR；不可修改其他游戏规则或经典模式成绩；仅调整关卡适配器/本游戏/必要测试",
+      "acceptance": [
+        "按参考队列执行能在最大置块数内清行并达标",
+        "提前耗尽队列而未达标应失败，且经典7-bag绝不改动",
+        "左右/旋转/硬降有独立触摸按钮，连续点击不会粘键",
+        "任一有效游玩时刻切后台/锁屏/恢复，剩余时间、玩家位置与未完成目标不变化；恢复后手动继续",
+        "给出关卡回放/可复现证据与设计偏差说明；无Owner认可不得改关卡策划约束"
+      ],
+      "ownerGate": false
+    },
+    {
+      "id": "LD90-BLOCKDROP-03",
+      "type": "implement-stage",
+      "gameId": "block-drop",
+      "stageId": "block-drop-C03",
+      "title": "俄罗斯方块 C03 纵井四消",
+      "dependsOn": [
+        "LD90-BLOCKDROP-02"
+      ],
+      "status": "PLANNED",
+      "targetBranch": "feat/arcade-0.9-gameplay",
+      "designSource": "levels/stages/block-drop-C03.json",
+      "gameSource": "apps/arcade/games/block-drop.html",
+      "scope": "优先1关/PR；不可修改其他游戏规则或经典模式成绩；仅调整关卡适配器/本游戏/必要测试",
+      "acceptance": [
+        "按参考队列执行能在最大置块数内清行并达标",
+        "提前耗尽队列而未达标应失败，且经典7-bag绝不改动",
+        "左右/旋转/硬降有独立触摸按钮，连续点击不会粘键",
+        "任一有效游玩时刻切后台/锁屏/恢复，剩余时间、玩家位置与未完成目标不变化；恢复后手动继续",
+        "给出关卡回放/可复现证据与设计偏差说明；无Owner认可不得改关卡策划约束"
+      ],
+      "ownerGate": false
+    },
+    {
+      "id": "LD90-BLOCKDROP-04",
+      "type": "implement-stage",
+      "gameId": "block-drop",
+      "stageId": "block-drop-C04",
+      "title": "俄罗斯方块 C04 两次横修",
+      "dependsOn": [
+        "LD90-BLOCKDROP-03"
+      ],
+      "status": "PLANNED",
+      "targetBranch": "feat/arcade-0.9-gameplay",
+      "designSource": "levels/stages/block-drop-C04.json",
+      "gameSource": "apps/arcade/games/block-drop.html",
+      "scope": "优先1关/PR；不可修改其他游戏规则或经典模式成绩；仅调整关卡适配器/本游戏/必要测试",
+      "acceptance": [
+        "按参考队列执行能在最大置块数内清行并达标",
+        "提前耗尽队列而未达标应失败，且经典7-bag绝不改动",
+        "左右/旋转/硬降有独立触摸按钮，连续点击不会粘键",
+        "任一有效游玩时刻切后台/锁屏/恢复，剩余时间、玩家位置与未完成目标不变化；恢复后手动继续",
+        "给出关卡回放/可复现证据与设计偏差说明；无Owner认可不得改关卡策划约束"
+      ],
+      "ownerGate": false
+    },
+    {
+      "id": "LD90-BLOCKDROP-05",
+      "type": "implement-stage",
+      "gameId": "block-drop",
+      "stageId": "block-drop-C05",
+      "title": "俄罗斯方块 C05 T形锁孔",
+      "dependsOn": [
+        "LD90-BLOCKDROP-04"
+      ],
+      "status": "PLANNED",
+      "targetBranch": "feat/arcade-0.9-gameplay",
+      "designSource": "levels/stages/block-drop-C05.json",
+      "gameSource": "apps/arcade/games/block-drop.html",
+      "scope": "优先1关/PR；不可修改其他游戏规则或经典模式成绩；仅调整关卡适配器/本游戏/必要测试",
+      "acceptance": [
+        "按参考队列执行能在最大置块数内清行并达标",
+        "提前耗尽队列而未达标应失败，且经典7-bag绝不改动",
+        "左右/旋转/硬降有独立触摸按钮，连续点击不会粘键",
+        "任一有效游玩时刻切后台/锁屏/恢复，剩余时间、玩家位置与未完成目标不变化；恢复后手动继续",
+        "给出关卡回放/可复现证据与设计偏差说明；无Owner认可不得改关卡策划约束"
+      ],
+      "ownerGate": false
+    },
+    {
+      "id": "LD90-BLOCKDROP-06",
+      "type": "implement-stage",
+      "gameId": "block-drop",
+      "stageId": "block-drop-C06",
+      "title": "俄罗斯方块 C06 复合工坊",
+      "dependsOn": [
+        "LD90-BLOCKDROP-05"
+      ],
+      "status": "PLANNED",
+      "targetBranch": "feat/arcade-0.9-gameplay",
+      "designSource": "levels/stages/block-drop-C06.json",
+      "gameSource": "apps/arcade/games/block-drop.html",
+      "scope": "优先1关/PR；不可修改其他游戏规则或经典模式成绩；仅调整关卡适配器/本游戏/必要测试",
+      "acceptance": [
+        "按参考队列执行能在最大置块数内清行并达标",
+        "提前耗尽队列而未达标应失败，且经典7-bag绝不改动",
+        "左右/旋转/硬降有独立触摸按钮，连续点击不会粘键",
+        "任一有效游玩时刻切后台/锁屏/恢复，剩余时间、玩家位置与未完成目标不变化；恢复后手动继续",
+        "给出关卡回放/可复现证据与设计偏差说明；无Owner认可不得改关卡策划约束"
+      ],
+      "ownerGate": true
+    },
+    {
+      "id": "LD90-ROADRUSH-01",
+      "type": "implement-stage",
+      "gameId": "road-rush",
+      "stageId": "road-rush-C01",
+      "title": "极速车道 C01 入门超车",
+      "dependsOn": [
+        "LD90-P02",
+        "LD90-P03"
+      ],
+      "status": "PLANNED",
+      "targetBranch": "feat/arcade-0.9-gameplay",
+      "designSource": "levels/stages/road-rush-C01.json",
+      "gameSource": "apps/arcade/games/road-rush.html",
+      "scope": "优先1关/PR；不可修改其他游戏规则或经典模式成绩；仅调整关卡适配器/本游戏/必要测试",
+      "acceptance": [
+        "时间展开DP存在连续相邻车道安全路径，并检查换道过渡0.22秒内的碰撞",
+        "把任一车阵改到无可行路径时校验器必须拒绝；碰撞有清晰责任归因",
+        "左右手势和按键一次恰好一车道，按住不重复跳道",
+        "任一有效游玩时刻切后台/锁屏/恢复，剩余时间、玩家位置与未完成目标不变化；恢复后手动继续",
+        "给出关卡回放/可复现证据与设计偏差说明；无Owner认可不得改关卡策划约束"
+      ],
+      "ownerGate": false
+    },
+    {
+      "id": "LD90-ROADRUSH-02",
+      "type": "implement-stage",
+      "gameId": "road-rush",
+      "stageId": "road-rush-C02",
+      "title": "极速车道 C02 左右交替",
+      "dependsOn": [
+        "LD90-ROADRUSH-01"
+      ],
+      "status": "PLANNED",
+      "targetBranch": "feat/arcade-0.9-gameplay",
+      "designSource": "levels/stages/road-rush-C02.json",
+      "gameSource": "apps/arcade/games/road-rush.html",
+      "scope": "优先1关/PR；不可修改其他游戏规则或经典模式成绩；仅调整关卡适配器/本游戏/必要测试",
+      "acceptance": [
+        "时间展开DP存在连续相邻车道安全路径，并检查换道过渡0.22秒内的碰撞",
+        "把任一车阵改到无可行路径时校验器必须拒绝；碰撞有清晰责任归因",
+        "左右手势和按键一次恰好一车道，按住不重复跳道",
+        "任一有效游玩时刻切后台/锁屏/恢复，剩余时间、玩家位置与未完成目标不变化；恢复后手动继续",
+        "给出关卡回放/可复现证据与设计偏差说明；无Owner认可不得改关卡策划约束"
+      ],
+      "ownerGate": false
+    },
+    {
+      "id": "LD90-ROADRUSH-03",
+      "type": "implement-stage",
+      "gameId": "road-rush",
+      "stageId": "road-rush-C03",
+      "title": "极速车道 C03 施工收窄",
+      "dependsOn": [
+        "LD90-ROADRUSH-02"
+      ],
+      "status": "PLANNED",
+      "targetBranch": "feat/arcade-0.9-gameplay",
+      "designSource": "levels/stages/road-rush-C03.json",
+      "gameSource": "apps/arcade/games/road-rush.html",
+      "scope": "优先1关/PR；不可修改其他游戏规则或经典模式成绩；仅调整关卡适配器/本游戏/必要测试",
+      "acceptance": [
+        "时间展开DP存在连续相邻车道安全路径，并检查换道过渡0.22秒内的碰撞",
+        "把任一车阵改到无可行路径时校验器必须拒绝；碰撞有清晰责任归因",
+        "左右手势和按键一次恰好一车道，按住不重复跳道",
+        "任一有效游玩时刻切后台/锁屏/恢复，剩余时间、玩家位置与未完成目标不变化；恢复后手动继续",
+        "给出关卡回放/可复现证据与设计偏差说明；无Owner认可不得改关卡策划约束"
+      ],
+      "ownerGate": false
+    },
+    {
+      "id": "LD90-ROADRUSH-04",
+      "type": "implement-stage",
+      "gameId": "road-rush",
+      "stageId": "road-rush-C04",
+      "title": "极速车道 C04 车队夹缝",
+      "dependsOn": [
+        "LD90-ROADRUSH-03"
+      ],
+      "status": "PLANNED",
+      "targetBranch": "feat/arcade-0.9-gameplay",
+      "designSource": "levels/stages/road-rush-C04.json",
+      "gameSource": "apps/arcade/games/road-rush.html",
+      "scope": "优先1关/PR；不可修改其他游戏规则或经典模式成绩；仅调整关卡适配器/本游戏/必要测试",
+      "acceptance": [
+        "时间展开DP存在连续相邻车道安全路径，并检查换道过渡0.22秒内的碰撞",
+        "把任一车阵改到无可行路径时校验器必须拒绝；碰撞有清晰责任归因",
+        "左右手势和按键一次恰好一车道，按住不重复跳道",
+        "任一有效游玩时刻切后台/锁屏/恢复，剩余时间、玩家位置与未完成目标不变化；恢复后手动继续",
+        "给出关卡回放/可复现证据与设计偏差说明；无Owner认可不得改关卡策划约束"
+      ],
+      "ownerGate": false
+    },
+    {
+      "id": "LD90-ROADRUSH-05",
+      "type": "implement-stage",
+      "gameId": "road-rush",
+      "stageId": "road-rush-C05",
+      "title": "极速车道 C05 近距奖励",
+      "dependsOn": [
+        "LD90-ROADRUSH-04"
+      ],
+      "status": "PLANNED",
+      "targetBranch": "feat/arcade-0.9-gameplay",
+      "designSource": "levels/stages/road-rush-C05.json",
+      "gameSource": "apps/arcade/games/road-rush.html",
+      "scope": "优先1关/PR；不可修改其他游戏规则或经典模式成绩；仅调整关卡适配器/本游戏/必要测试",
+      "acceptance": [
+        "时间展开DP存在连续相邻车道安全路径，并检查换道过渡0.22秒内的碰撞",
+        "把任一车阵改到无可行路径时校验器必须拒绝；碰撞有清晰责任归因",
+        "左右手势和按键一次恰好一车道，按住不重复跳道",
+        "任一有效游玩时刻切后台/锁屏/恢复，剩余时间、玩家位置与未完成目标不变化；恢复后手动继续",
+        "给出关卡回放/可复现证据与设计偏差说明；无Owner认可不得改关卡策划约束"
+      ],
+      "ownerGate": false
+    },
+    {
+      "id": "LD90-ROADRUSH-06",
+      "type": "implement-stage",
+      "gameId": "road-rush",
+      "stageId": "road-rush-C06",
+      "title": "极速车道 C06 最终路书",
+      "dependsOn": [
+        "LD90-ROADRUSH-05"
+      ],
+      "status": "PLANNED",
+      "targetBranch": "feat/arcade-0.9-gameplay",
+      "designSource": "levels/stages/road-rush-C06.json",
+      "gameSource": "apps/arcade/games/road-rush.html",
+      "scope": "优先1关/PR；不可修改其他游戏规则或经典模式成绩；仅调整关卡适配器/本游戏/必要测试",
+      "acceptance": [
+        "时间展开DP存在连续相邻车道安全路径，并检查换道过渡0.22秒内的碰撞",
+        "把任一车阵改到无可行路径时校验器必须拒绝；碰撞有清晰责任归因",
+        "左右手势和按键一次恰好一车道，按住不重复跳道",
+        "任一有效游玩时刻切后台/锁屏/恢复，剩余时间、玩家位置与未完成目标不变化；恢复后手动继续",
+        "给出关卡回放/可复现证据与设计偏差说明；无Owner认可不得改关卡策划约束"
+      ],
+      "ownerGate": true
+    },
+    {
+      "id": "LD90-GOLDMINER-01",
+      "type": "implement-stage",
+      "gameId": "gold-miner",
+      "stageId": "gold-miner-C01",
+      "title": "黄金矿工 C01 轻金快取",
+      "dependsOn": [
+        "LD90-P02",
+        "LD90-P03"
+      ],
+      "status": "PLANNED",
+      "targetBranch": "feat/arcade-0.9-gameplay",
+      "designSource": "levels/stages/gold-miner-C01.json",
+      "gameSource": "apps/arcade/games/gold-miner.html",
+      "scope": "优先1关/PR；不可修改其他游戏规则或经典模式成绩；仅调整关卡适配器/本游戏/必要测试",
+      "acceptance": [
+        "参考物品总价值满足目标；接入原钩爪物理后需实测全部抓取+摆动等待≤时限",
+        "禁用道具仍存在可行路线；炸药碰撞与钩爪先后顺序必须确定",
+        "手机短按放钩、长按瞄准线不能冲突；道具点击不触发放钩",
+        "任一有效游玩时刻切后台/锁屏/恢复，剩余时间、玩家位置与未完成目标不变化；恢复后手动继续",
+        "给出关卡回放/可复现证据与设计偏差说明；无Owner认可不得改关卡策划约束"
+      ],
+      "ownerGate": false
+    },
+    {
+      "id": "LD90-GOLDMINER-02",
+      "type": "implement-stage",
+      "gameId": "gold-miner",
+      "stageId": "gold-miner-C02",
+      "title": "黄金矿工 C02 钻石的代价",
+      "dependsOn": [
+        "LD90-GOLDMINER-01"
+      ],
+      "status": "PLANNED",
+      "targetBranch": "feat/arcade-0.9-gameplay",
+      "designSource": "levels/stages/gold-miner-C02.json",
+      "gameSource": "apps/arcade/games/gold-miner.html",
+      "scope": "优先1关/PR；不可修改其他游戏规则或经典模式成绩；仅调整关卡适配器/本游戏/必要测试",
+      "acceptance": [
+        "参考物品总价值满足目标；接入原钩爪物理后需实测全部抓取+摆动等待≤时限",
+        "禁用道具仍存在可行路线；炸药碰撞与钩爪先后顺序必须确定",
+        "手机短按放钩、长按瞄准线不能冲突；道具点击不触发放钩",
+        "任一有效游玩时刻切后台/锁屏/恢复，剩余时间、玩家位置与未完成目标不变化；恢复后手动继续",
+        "给出关卡回放/可复现证据与设计偏差说明；无Owner认可不得改关卡策划约束"
+      ],
+      "ownerGate": false
+    },
+    {
+      "id": "LD90-GOLDMINER-03",
+      "type": "implement-stage",
+      "gameId": "gold-miner",
+      "stageId": "gold-miner-C03",
+      "title": "黄金矿工 C03 第一颗炸药",
+      "dependsOn": [
+        "LD90-GOLDMINER-02"
+      ],
+      "status": "PLANNED",
+      "targetBranch": "feat/arcade-0.9-gameplay",
+      "designSource": "levels/stages/gold-miner-C03.json",
+      "gameSource": "apps/arcade/games/gold-miner.html",
+      "scope": "优先1关/PR；不可修改其他游戏规则或经典模式成绩；仅调整关卡适配器/本游戏/必要测试",
+      "acceptance": [
+        "参考物品总价值满足目标；接入原钩爪物理后需实测全部抓取+摆动等待≤时限",
+        "禁用道具仍存在可行路线；炸药碰撞与钩爪先后顺序必须确定",
+        "手机短按放钩、长按瞄准线不能冲突；道具点击不触发放钩",
+        "任一有效游玩时刻切后台/锁屏/恢复，剩余时间、玩家位置与未完成目标不变化；恢复后手动继续",
+        "给出关卡回放/可复现证据与设计偏差说明；无Owner认可不得改关卡策划约束"
+      ],
+      "ownerGate": false
+    },
+    {
+      "id": "LD90-GOLDMINER-04",
+      "type": "implement-stage",
+      "gameId": "gold-miner",
+      "stageId": "gold-miner-C04",
+      "title": "黄金矿工 C04 双钻矿脉",
+      "dependsOn": [
+        "LD90-GOLDMINER-03"
+      ],
+      "status": "PLANNED",
+      "targetBranch": "feat/arcade-0.9-gameplay",
+      "designSource": "levels/stages/gold-miner-C04.json",
+      "gameSource": "apps/arcade/games/gold-miner.html",
+      "scope": "优先1关/PR；不可修改其他游戏规则或经典模式成绩；仅调整关卡适配器/本游戏/必要测试",
+      "acceptance": [
+        "参考物品总价值满足目标；接入原钩爪物理后需实测全部抓取+摆动等待≤时限",
+        "禁用道具仍存在可行路线；炸药碰撞与钩爪先后顺序必须确定",
+        "手机短按放钩、长按瞄准线不能冲突；道具点击不触发放钩",
+        "任一有效游玩时刻切后台/锁屏/恢复，剩余时间、玩家位置与未完成目标不变化；恢复后手动继续",
+        "给出关卡回放/可复现证据与设计偏差说明；无Owner认可不得改关卡策划约束"
+      ],
+      "ownerGate": false
+    },
+    {
+      "id": "LD90-GOLDMINER-05",
+      "type": "implement-stage",
+      "gameId": "gold-miner",
+      "stageId": "gold-miner-C05",
+      "title": "黄金矿工 C05 限时三钩",
+      "dependsOn": [
+        "LD90-GOLDMINER-04"
+      ],
+      "status": "PLANNED",
+      "targetBranch": "feat/arcade-0.9-gameplay",
+      "designSource": "levels/stages/gold-miner-C05.json",
+      "gameSource": "apps/arcade/games/gold-miner.html",
+      "scope": "优先1关/PR；不可修改其他游戏规则或经典模式成绩；仅调整关卡适配器/本游戏/必要测试",
+      "acceptance": [
+        "参考物品总价值满足目标；接入原钩爪物理后需实测全部抓取+摆动等待≤时限",
+        "禁用道具仍存在可行路线；炸药碰撞与钩爪先后顺序必须确定",
+        "手机短按放钩、长按瞄准线不能冲突；道具点击不触发放钩",
+        "任一有效游玩时刻切后台/锁屏/恢复，剩余时间、玩家位置与未完成目标不变化；恢复后手动继续",
+        "给出关卡回放/可复现证据与设计偏差说明；无Owner认可不得改关卡策划约束"
+      ],
+      "ownerGate": false
+    },
+    {
+      "id": "LD90-GOLDMINER-06",
+      "type": "implement-stage",
+      "gameId": "gold-miner",
+      "stageId": "gold-miner-C06",
+      "title": "黄金矿工 C06 矿工毕业考",
+      "dependsOn": [
+        "LD90-GOLDMINER-05"
+      ],
+      "status": "PLANNED",
+      "targetBranch": "feat/arcade-0.9-gameplay",
+      "designSource": "levels/stages/gold-miner-C06.json",
+      "gameSource": "apps/arcade/games/gold-miner.html",
+      "scope": "优先1关/PR；不可修改其他游戏规则或经典模式成绩；仅调整关卡适配器/本游戏/必要测试",
+      "acceptance": [
+        "参考物品总价值满足目标；接入原钩爪物理后需实测全部抓取+摆动等待≤时限",
+        "禁用道具仍存在可行路线；炸药碰撞与钩爪先后顺序必须确定",
+        "手机短按放钩、长按瞄准线不能冲突；道具点击不触发放钩",
+        "任一有效游玩时刻切后台/锁屏/恢复，剩余时间、玩家位置与未完成目标不变化；恢复后手动继续",
+        "给出关卡回放/可复现证据与设计偏差说明；无Owner认可不得改关卡策划约束"
+      ],
+      "ownerGate": true
+    },
+    {
+      "id": "LD90-BRICKBREAKER-01",
+      "type": "implement-stage",
+      "gameId": "brick-breaker",
+      "stageId": "brick-breaker-C01",
+      "title": "砖块计划 C01 中路开门",
+      "dependsOn": [
+        "LD90-P02",
+        "LD90-P03"
+      ],
+      "status": "PLANNED",
+      "targetBranch": "feat/arcade-0.9-gameplay",
+      "designSource": "levels/stages/brick-breaker-C01.json",
+      "gameSource": "apps/arcade/games/brick-breaker.html",
+      "scope": "优先1关/PR；不可修改其他游戏规则或经典模式成绩；仅调整关卡适配器/本游戏/必要测试",
+      "acceptance": [
+        "固定砖阵加载后每颗砖的 HP/机关状态与图一致",
+        "通关必须全部可破坏砖归零；球不可永久卡死；机关解锁状态可恢复",
+        "挡板可单指拖动，手指不遮挡接球判定",
+        "任一有效游玩时刻切后台/锁屏/恢复，剩余时间、玩家位置与未完成目标不变化；恢复后手动继续",
+        "给出关卡回放/可复现证据与设计偏差说明；无Owner认可不得改关卡策划约束"
+      ],
+      "ownerGate": false
+    },
+    {
+      "id": "LD90-BRICKBREAKER-02",
+      "type": "implement-stage",
+      "gameId": "brick-breaker",
+      "stageId": "brick-breaker-C02",
+      "title": "砖块计划 C02 左右回廊",
+      "dependsOn": [
+        "LD90-BRICKBREAKER-01"
+      ],
+      "status": "PLANNED",
+      "targetBranch": "feat/arcade-0.9-gameplay",
+      "designSource": "levels/stages/brick-breaker-C02.json",
+      "gameSource": "apps/arcade/games/brick-breaker.html",
+      "scope": "优先1关/PR；不可修改其他游戏规则或经典模式成绩；仅调整关卡适配器/本游戏/必要测试",
+      "acceptance": [
+        "固定砖阵加载后每颗砖的 HP/机关状态与图一致",
+        "通关必须全部可破坏砖归零；球不可永久卡死；机关解锁状态可恢复",
+        "挡板可单指拖动，手指不遮挡接球判定",
+        "任一有效游玩时刻切后台/锁屏/恢复，剩余时间、玩家位置与未完成目标不变化；恢复后手动继续",
+        "给出关卡回放/可复现证据与设计偏差说明；无Owner认可不得改关卡策划约束"
+      ],
+      "ownerGate": false
+    },
+    {
+      "id": "LD90-BRICKBREAKER-03",
+      "type": "implement-stage",
+      "gameId": "brick-breaker",
+      "stageId": "brick-breaker-C03",
+      "title": "砖块计划 C03 双钥匙门",
+      "dependsOn": [
+        "LD90-BRICKBREAKER-02"
+      ],
+      "status": "PLANNED",
+      "targetBranch": "feat/arcade-0.9-gameplay",
+      "designSource": "levels/stages/brick-breaker-C03.json",
+      "gameSource": "apps/arcade/games/brick-breaker.html",
+      "scope": "优先1关/PR；不可修改其他游戏规则或经典模式成绩；仅调整关卡适配器/本游戏/必要测试",
+      "acceptance": [
+        "固定砖阵加载后每颗砖的 HP/机关状态与图一致",
+        "通关必须全部可破坏砖归零；球不可永久卡死；机关解锁状态可恢复",
+        "挡板可单指拖动，手指不遮挡接球判定",
+        "任一有效游玩时刻切后台/锁屏/恢复，剩余时间、玩家位置与未完成目标不变化；恢复后手动继续",
+        "给出关卡回放/可复现证据与设计偏差说明；无Owner认可不得改关卡策划约束"
+      ],
+      "ownerGate": false
+    },
+    {
+      "id": "LD90-BRICKBREAKER-04",
+      "type": "implement-stage",
+      "gameId": "brick-breaker",
+      "stageId": "brick-breaker-C04",
+      "title": "砖块计划 C04 镜像迷阵",
+      "dependsOn": [
+        "LD90-BRICKBREAKER-03"
+      ],
+      "status": "PLANNED",
+      "targetBranch": "feat/arcade-0.9-gameplay",
+      "designSource": "levels/stages/brick-breaker-C04.json",
+      "gameSource": "apps/arcade/games/brick-breaker.html",
+      "scope": "优先1关/PR；不可修改其他游戏规则或经典模式成绩；仅调整关卡适配器/本游戏/必要测试",
+      "acceptance": [
+        "固定砖阵加载后每颗砖的 HP/机关状态与图一致",
+        "通关必须全部可破坏砖归零；球不可永久卡死；机关解锁状态可恢复",
+        "挡板可单指拖动，手指不遮挡接球判定",
+        "任一有效游玩时刻切后台/锁屏/恢复，剩余时间、玩家位置与未完成目标不变化；恢复后手动继续",
+        "给出关卡回放/可复现证据与设计偏差说明；无Owner认可不得改关卡策划约束"
+      ],
+      "ownerGate": false
+    },
+    {
+      "id": "LD90-BRICKBREAKER-05",
+      "type": "implement-stage",
+      "gameId": "brick-breaker",
+      "stageId": "brick-breaker-C05",
+      "title": "砖块计划 C05 薄壁防线",
+      "dependsOn": [
+        "LD90-BRICKBREAKER-04"
+      ],
+      "status": "PLANNED",
+      "targetBranch": "feat/arcade-0.9-gameplay",
+      "designSource": "levels/stages/brick-breaker-C05.json",
+      "gameSource": "apps/arcade/games/brick-breaker.html",
+      "scope": "优先1关/PR；不可修改其他游戏规则或经典模式成绩；仅调整关卡适配器/本游戏/必要测试",
+      "acceptance": [
+        "固定砖阵加载后每颗砖的 HP/机关状态与图一致",
+        "通关必须全部可破坏砖归零；球不可永久卡死；机关解锁状态可恢复",
+        "挡板可单指拖动，手指不遮挡接球判定",
+        "任一有效游玩时刻切后台/锁屏/恢复，剩余时间、玩家位置与未完成目标不变化；恢复后手动继续",
+        "给出关卡回放/可复现证据与设计偏差说明；无Owner认可不得改关卡策划约束"
+      ],
+      "ownerGate": false
+    },
+    {
+      "id": "LD90-BRICKBREAKER-06",
+      "type": "implement-stage",
+      "gameId": "brick-breaker",
+      "stageId": "brick-breaker-C06",
+      "title": "砖块计划 C06 研究所终试",
+      "dependsOn": [
+        "LD90-BRICKBREAKER-05"
+      ],
+      "status": "PLANNED",
+      "targetBranch": "feat/arcade-0.9-gameplay",
+      "designSource": "levels/stages/brick-breaker-C06.json",
+      "gameSource": "apps/arcade/games/brick-breaker.html",
+      "scope": "优先1关/PR；不可修改其他游戏规则或经典模式成绩；仅调整关卡适配器/本游戏/必要测试",
+      "acceptance": [
+        "固定砖阵加载后每颗砖的 HP/机关状态与图一致",
+        "通关必须全部可破坏砖归零；球不可永久卡死；机关解锁状态可恢复",
+        "挡板可单指拖动，手指不遮挡接球判定",
+        "任一有效游玩时刻切后台/锁屏/恢复，剩余时间、玩家位置与未完成目标不变化；恢复后手动继续",
+        "给出关卡回放/可复现证据与设计偏差说明；无Owner认可不得改关卡策划约束"
+      ],
+      "ownerGate": true
+    },
+    {
+      "id": "LD90-GRAVITYFLIP-01",
+      "type": "implement-stage",
+      "gameId": "gravity-flip",
+      "stageId": "gravity-flip-C01",
+      "title": "重力翻转 C01 第一次翻转",
+      "dependsOn": [
+        "LD90-P02",
+        "LD90-P03"
+      ],
+      "status": "PLANNED",
+      "targetBranch": "feat/arcade-0.9-gameplay",
+      "designSource": "levels/stages/gravity-flip-C01.json",
+      "gameSource": "apps/arcade/games/gravity-flip.html",
+      "scope": "优先1关/PR；不可修改其他游戏规则或经典模式成绩；仅调整关卡适配器/本游戏/必要测试",
+      "acceptance": [
+        "物理仿真至少存在一条可无伤通过的翻转时间序列，角度窗口允许手机响应",
+        "在无道具前提下可通过；任一尖刺须满足可观察反应窗口",
+        "整个画布点击与空格一致，停顿后不会误触翻转",
+        "任一有效游玩时刻切后台/锁屏/恢复，剩余时间、玩家位置与未完成目标不变化；恢复后手动继续",
+        "给出关卡回放/可复现证据与设计偏差说明；无Owner认可不得改关卡策划约束"
+      ],
+      "ownerGate": false
+    },
+    {
+      "id": "LD90-GRAVITYFLIP-02",
+      "type": "implement-stage",
+      "gameId": "gravity-flip",
+      "stageId": "gravity-flip-C02",
+      "title": "重力翻转 C02 双连拍",
+      "dependsOn": [
+        "LD90-GRAVITYFLIP-01"
+      ],
+      "status": "PLANNED",
+      "targetBranch": "feat/arcade-0.9-gameplay",
+      "designSource": "levels/stages/gravity-flip-C02.json",
+      "gameSource": "apps/arcade/games/gravity-flip.html",
+      "scope": "优先1关/PR；不可修改其他游戏规则或经典模式成绩；仅调整关卡适配器/本游戏/必要测试",
+      "acceptance": [
+        "物理仿真至少存在一条可无伤通过的翻转时间序列，角度窗口允许手机响应",
+        "在无道具前提下可通过；任一尖刺须满足可观察反应窗口",
+        "整个画布点击与空格一致，停顿后不会误触翻转",
+        "任一有效游玩时刻切后台/锁屏/恢复，剩余时间、玩家位置与未完成目标不变化；恢复后手动继续",
+        "给出关卡回放/可复现证据与设计偏差说明；无Owner认可不得改关卡策划约束"
+      ],
+      "ownerGate": false
+    },
+    {
+      "id": "LD90-GRAVITYFLIP-03",
+      "type": "implement-stage",
+      "gameId": "gravity-flip",
+      "stageId": "gravity-flip-C03",
+      "title": "重力翻转 C03 上下合奏",
+      "dependsOn": [
+        "LD90-GRAVITYFLIP-02"
+      ],
+      "status": "PLANNED",
+      "targetBranch": "feat/arcade-0.9-gameplay",
+      "designSource": "levels/stages/gravity-flip-C03.json",
+      "gameSource": "apps/arcade/games/gravity-flip.html",
+      "scope": "优先1关/PR；不可修改其他游戏规则或经典模式成绩；仅调整关卡适配器/本游戏/必要测试",
+      "acceptance": [
+        "物理仿真至少存在一条可无伤通过的翻转时间序列，角度窗口允许手机响应",
+        "在无道具前提下可通过；任一尖刺须满足可观察反应窗口",
+        "整个画布点击与空格一致，停顿后不会误触翻转",
+        "任一有效游玩时刻切后台/锁屏/恢复，剩余时间、玩家位置与未完成目标不变化；恢复后手动继续",
+        "给出关卡回放/可复现证据与设计偏差说明；无Owner认可不得改关卡策划约束"
+      ],
+      "ownerGate": false
+    },
+    {
+      "id": "LD90-GRAVITYFLIP-04",
+      "type": "implement-stage",
+      "gameId": "gravity-flip",
+      "stageId": "gravity-flip-C04",
+      "title": "重力翻转 C04 星之岔路",
+      "dependsOn": [
+        "LD90-GRAVITYFLIP-03"
+      ],
+      "status": "PLANNED",
+      "targetBranch": "feat/arcade-0.9-gameplay",
+      "designSource": "levels/stages/gravity-flip-C04.json",
+      "gameSource": "apps/arcade/games/gravity-flip.html",
+      "scope": "优先1关/PR；不可修改其他游戏规则或经典模式成绩；仅调整关卡适配器/本游戏/必要测试",
+      "acceptance": [
+        "物理仿真至少存在一条可无伤通过的翻转时间序列，角度窗口允许手机响应",
+        "在无道具前提下可通过；任一尖刺须满足可观察反应窗口",
+        "整个画布点击与空格一致，停顿后不会误触翻转",
+        "任一有效游玩时刻切后台/锁屏/恢复，剩余时间、玩家位置与未完成目标不变化；恢复后手动继续",
+        "给出关卡回放/可复现证据与设计偏差说明；无Owner认可不得改关卡策划约束"
+      ],
+      "ownerGate": false
+    },
+    {
+      "id": "LD90-GRAVITYFLIP-05",
+      "type": "implement-stage",
+      "gameId": "gravity-flip",
+      "stageId": "gravity-flip-C05",
+      "title": "重力翻转 C05 双窄门",
+      "dependsOn": [
+        "LD90-GRAVITYFLIP-04"
+      ],
+      "status": "PLANNED",
+      "targetBranch": "feat/arcade-0.9-gameplay",
+      "designSource": "levels/stages/gravity-flip-C05.json",
+      "gameSource": "apps/arcade/games/gravity-flip.html",
+      "scope": "优先1关/PR；不可修改其他游戏规则或经典模式成绩；仅调整关卡适配器/本游戏/必要测试",
+      "acceptance": [
+        "物理仿真至少存在一条可无伤通过的翻转时间序列，角度窗口允许手机响应",
+        "在无道具前提下可通过；任一尖刺须满足可观察反应窗口",
+        "整个画布点击与空格一致，停顿后不会误触翻转",
+        "任一有效游玩时刻切后台/锁屏/恢复，剩余时间、玩家位置与未完成目标不变化；恢复后手动继续",
+        "给出关卡回放/可复现证据与设计偏差说明；无Owner认可不得改关卡策划约束"
+      ],
+      "ownerGate": false
+    },
+    {
+      "id": "LD90-GRAVITYFLIP-06",
+      "type": "implement-stage",
+      "gameId": "gravity-flip",
+      "stageId": "gravity-flip-C06",
+      "title": "重力翻转 C06 重力终章",
+      "dependsOn": [
+        "LD90-GRAVITYFLIP-05"
+      ],
+      "status": "PLANNED",
+      "targetBranch": "feat/arcade-0.9-gameplay",
+      "designSource": "levels/stages/gravity-flip-C06.json",
+      "gameSource": "apps/arcade/games/gravity-flip.html",
+      "scope": "优先1关/PR；不可修改其他游戏规则或经典模式成绩；仅调整关卡适配器/本游戏/必要测试",
+      "acceptance": [
+        "物理仿真至少存在一条可无伤通过的翻转时间序列，角度窗口允许手机响应",
+        "在无道具前提下可通过；任一尖刺须满足可观察反应窗口",
+        "整个画布点击与空格一致，停顿后不会误触翻转",
+        "任一有效游玩时刻切后台/锁屏/恢复，剩余时间、玩家位置与未完成目标不变化；恢复后手动继续",
+        "给出关卡回放/可复现证据与设计偏差说明；无Owner认可不得改关卡策划约束"
+      ],
+      "ownerGate": true
+    },
+    {
+      "id": "LD90-SNAKERUN-01",
+      "type": "implement-stage",
+      "gameId": "snake-run",
+      "stageId": "snake-run-C01",
+      "title": "贪吃蛇 C01 果园初识",
+      "dependsOn": [
+        "LD90-P02",
+        "LD90-P03"
+      ],
+      "status": "PLANNED",
+      "targetBranch": "feat/arcade-0.9-gameplay",
+      "designSource": "levels/stages/snake-run-C01.json",
+      "gameSource": "apps/arcade/games/snake-run.html",
+      "scope": "优先1关/PR；不可修改其他游戏规则或经典模式成绩；仅调整关卡适配器/本游戏/必要测试",
+      "acceptance": [
+        "完整蛇身状态搜索能从开局按给定水果序列安全通关",
+        "若蛇身增长后堵死果实则必须修改地图/果实或增加提示，不能靠道具脱困",
+        "滑动方向按步缓存，连续两个90°输入都生效，反向自杀被拒绝",
+        "任一有效游玩时刻切后台/锁屏/恢复，剩余时间、玩家位置与未完成目标不变化；恢复后手动继续",
+        "给出关卡回放/可复现证据与设计偏差说明；无Owner认可不得改关卡策划约束"
+      ],
+      "ownerGate": false
+    },
+    {
+      "id": "LD90-SNAKERUN-02",
+      "type": "implement-stage",
+      "gameId": "snake-run",
+      "stageId": "snake-run-C02",
+      "title": "贪吃蛇 C02 中央小门",
+      "dependsOn": [
+        "LD90-SNAKERUN-01"
+      ],
+      "status": "PLANNED",
+      "targetBranch": "feat/arcade-0.9-gameplay",
+      "designSource": "levels/stages/snake-run-C02.json",
+      "gameSource": "apps/arcade/games/snake-run.html",
+      "scope": "优先1关/PR；不可修改其他游戏规则或经典模式成绩；仅调整关卡适配器/本游戏/必要测试",
+      "acceptance": [
+        "完整蛇身状态搜索能从开局按给定水果序列安全通关",
+        "若蛇身增长后堵死果实则必须修改地图/果实或增加提示，不能靠道具脱困",
+        "滑动方向按步缓存，连续两个90°输入都生效，反向自杀被拒绝",
+        "任一有效游玩时刻切后台/锁屏/恢复，剩余时间、玩家位置与未完成目标不变化；恢复后手动继续",
+        "给出关卡回放/可复现证据与设计偏差说明；无Owner认可不得改关卡策划约束"
+      ],
+      "ownerGate": false
+    },
+    {
+      "id": "LD90-SNAKERUN-03",
+      "type": "implement-stage",
+      "gameId": "snake-run",
+      "stageId": "snake-run-C03",
+      "title": "贪吃蛇 C03 双柱回廊",
+      "dependsOn": [
+        "LD90-SNAKERUN-02"
+      ],
+      "status": "PLANNED",
+      "targetBranch": "feat/arcade-0.9-gameplay",
+      "designSource": "levels/stages/snake-run-C03.json",
+      "gameSource": "apps/arcade/games/snake-run.html",
+      "scope": "优先1关/PR；不可修改其他游戏规则或经典模式成绩；仅调整关卡适配器/本游戏/必要测试",
+      "acceptance": [
+        "完整蛇身状态搜索能从开局按给定水果序列安全通关",
+        "若蛇身增长后堵死果实则必须修改地图/果实或增加提示，不能靠道具脱困",
+        "滑动方向按步缓存，连续两个90°输入都生效，反向自杀被拒绝",
+        "任一有效游玩时刻切后台/锁屏/恢复，剩余时间、玩家位置与未完成目标不变化；恢复后手动继续",
+        "给出关卡回放/可复现证据与设计偏差说明；无Owner认可不得改关卡策划约束"
+      ],
+      "ownerGate": false
+    },
+    {
+      "id": "LD90-SNAKERUN-04",
+      "type": "implement-stage",
+      "gameId": "snake-run",
+      "stageId": "snake-run-C04",
+      "title": "贪吃蛇 C04 环形果园",
+      "dependsOn": [
+        "LD90-SNAKERUN-03"
+      ],
+      "status": "PLANNED",
+      "targetBranch": "feat/arcade-0.9-gameplay",
+      "designSource": "levels/stages/snake-run-C04.json",
+      "gameSource": "apps/arcade/games/snake-run.html",
+      "scope": "优先1关/PR；不可修改其他游戏规则或经典模式成绩；仅调整关卡适配器/本游戏/必要测试",
+      "acceptance": [
+        "完整蛇身状态搜索能从开局按给定水果序列安全通关",
+        "若蛇身增长后堵死果实则必须修改地图/果实或增加提示，不能靠道具脱困",
+        "滑动方向按步缓存，连续两个90°输入都生效，反向自杀被拒绝",
+        "任一有效游玩时刻切后台/锁屏/恢复，剩余时间、玩家位置与未完成目标不变化；恢复后手动继续",
+        "给出关卡回放/可复现证据与设计偏差说明；无Owner认可不得改关卡策划约束"
+      ],
+      "ownerGate": false
+    },
+    {
+      "id": "LD90-SNAKERUN-05",
+      "type": "implement-stage",
+      "gameId": "snake-run",
+      "stageId": "snake-run-C05",
+      "title": "贪吃蛇 C05 折叠花田",
+      "dependsOn": [
+        "LD90-SNAKERUN-04"
+      ],
+      "status": "PLANNED",
+      "targetBranch": "feat/arcade-0.9-gameplay",
+      "designSource": "levels/stages/snake-run-C05.json",
+      "gameSource": "apps/arcade/games/snake-run.html",
+      "scope": "优先1关/PR；不可修改其他游戏规则或经典模式成绩；仅调整关卡适配器/本游戏/必要测试",
+      "acceptance": [
+        "完整蛇身状态搜索能从开局按给定水果序列安全通关",
+        "若蛇身增长后堵死果实则必须修改地图/果实或增加提示，不能靠道具脱困",
+        "滑动方向按步缓存，连续两个90°输入都生效，反向自杀被拒绝",
+        "任一有效游玩时刻切后台/锁屏/恢复，剩余时间、玩家位置与未完成目标不变化；恢复后手动继续",
+        "给出关卡回放/可复现证据与设计偏差说明；无Owner认可不得改关卡策划约束"
+      ],
+      "ownerGate": false
+    },
+    {
+      "id": "LD90-SNAKERUN-06",
+      "type": "implement-stage",
+      "gameId": "snake-run",
+      "stageId": "snake-run-C06",
+      "title": "贪吃蛇 C06 迷阵终局",
+      "dependsOn": [
+        "LD90-SNAKERUN-05"
+      ],
+      "status": "PLANNED",
+      "targetBranch": "feat/arcade-0.9-gameplay",
+      "designSource": "levels/stages/snake-run-C06.json",
+      "gameSource": "apps/arcade/games/snake-run.html",
+      "scope": "优先1关/PR；不可修改其他游戏规则或经典模式成绩；仅调整关卡适配器/本游戏/必要测试",
+      "acceptance": [
+        "完整蛇身状态搜索能从开局按给定水果序列安全通关",
+        "若蛇身增长后堵死果实则必须修改地图/果实或增加提示，不能靠道具脱困",
+        "滑动方向按步缓存，连续两个90°输入都生效，反向自杀被拒绝",
+        "任一有效游玩时刻切后台/锁屏/恢复，剩余时间、玩家位置与未完成目标不变化；恢复后手动继续",
+        "给出关卡回放/可复现证据与设计偏差说明；无Owner认可不得改关卡策划约束"
+      ],
+      "ownerGate": true
+    },
+    {
+      "id": "LD90-MOLEWHACK-01",
+      "type": "implement-stage",
+      "gameId": "mole-whack",
+      "stageId": "mole-whack-C01",
+      "title": "打地鼠 C01 看准再敲",
+      "dependsOn": [
+        "LD90-P02",
+        "LD90-P03"
+      ],
+      "status": "PLANNED",
+      "targetBranch": "feat/arcade-0.9-gameplay",
+      "designSource": "levels/stages/mole-whack-C01.json",
+      "gameSource": "apps/arcade/games/mole-whack.html",
+      "scope": "优先1关/PR；不可修改其他游戏规则或经典模式成绩；仅调整关卡适配器/本游戏/必要测试",
+      "acceptance": [
+        "脚本全部有效目标数≥过关需求，spawn不重叠同一洞口时间窗",
+        "炸弹和假目标扣分正确且误触不会连击多次",
+        "两个同时有效目标可用双指点击，不被UI控件遮挡",
+        "任一有效游玩时刻切后台/锁屏/恢复，剩余时间、玩家位置与未完成目标不变化；恢复后手动继续",
+        "给出关卡回放/可复现证据与设计偏差说明；无Owner认可不得改关卡策划约束"
+      ],
+      "ownerGate": false
+    },
+    {
+      "id": "LD90-MOLEWHACK-02",
+      "type": "implement-stage",
+      "gameId": "mole-whack",
+      "stageId": "mole-whack-C02",
+      "title": "打地鼠 C02 金鼠优先",
+      "dependsOn": [
+        "LD90-MOLEWHACK-01"
+      ],
+      "status": "PLANNED",
+      "targetBranch": "feat/arcade-0.9-gameplay",
+      "designSource": "levels/stages/mole-whack-C02.json",
+      "gameSource": "apps/arcade/games/mole-whack.html",
+      "scope": "优先1关/PR；不可修改其他游戏规则或经典模式成绩；仅调整关卡适配器/本游戏/必要测试",
+      "acceptance": [
+        "脚本全部有效目标数≥过关需求，spawn不重叠同一洞口时间窗",
+        "炸弹和假目标扣分正确且误触不会连击多次",
+        "两个同时有效目标可用双指点击，不被UI控件遮挡",
+        "任一有效游玩时刻切后台/锁屏/恢复，剩余时间、玩家位置与未完成目标不变化；恢复后手动继续",
+        "给出关卡回放/可复现证据与设计偏差说明；无Owner认可不得改关卡策划约束"
+      ],
+      "ownerGate": false
+    },
+    {
+      "id": "LD90-MOLEWHACK-03",
+      "type": "implement-stage",
+      "gameId": "mole-whack",
+      "stageId": "mole-whack-C03",
+      "title": "打地鼠 C03 识别炸弹",
+      "dependsOn": [
+        "LD90-MOLEWHACK-02"
+      ],
+      "status": "PLANNED",
+      "targetBranch": "feat/arcade-0.9-gameplay",
+      "designSource": "levels/stages/mole-whack-C03.json",
+      "gameSource": "apps/arcade/games/mole-whack.html",
+      "scope": "优先1关/PR；不可修改其他游戏规则或经典模式成绩；仅调整关卡适配器/本游戏/必要测试",
+      "acceptance": [
+        "脚本全部有效目标数≥过关需求，spawn不重叠同一洞口时间窗",
+        "炸弹和假目标扣分正确且误触不会连击多次",
+        "两个同时有效目标可用双指点击，不被UI控件遮挡",
+        "任一有效游玩时刻切后台/锁屏/恢复，剩余时间、玩家位置与未完成目标不变化；恢复后手动继续",
+        "给出关卡回放/可复现证据与设计偏差说明；无Owner认可不得改关卡策划约束"
+      ],
+      "ownerGate": false
+    },
+    {
+      "id": "LD90-MOLEWHACK-04",
+      "type": "implement-stage",
+      "gameId": "mole-whack",
+      "stageId": "mole-whack-C04",
+      "title": "打地鼠 C04 双目标节奏",
+      "dependsOn": [
+        "LD90-MOLEWHACK-03"
+      ],
+      "status": "PLANNED",
+      "targetBranch": "feat/arcade-0.9-gameplay",
+      "designSource": "levels/stages/mole-whack-C04.json",
+      "gameSource": "apps/arcade/games/mole-whack.html",
+      "scope": "优先1关/PR；不可修改其他游戏规则或经典模式成绩；仅调整关卡适配器/本游戏/必要测试",
+      "acceptance": [
+        "脚本全部有效目标数≥过关需求，spawn不重叠同一洞口时间窗",
+        "炸弹和假目标扣分正确且误触不会连击多次",
+        "两个同时有效目标可用双指点击，不被UI控件遮挡",
+        "任一有效游玩时刻切后台/锁屏/恢复，剩余时间、玩家位置与未完成目标不变化；恢复后手动继续",
+        "给出关卡回放/可复现证据与设计偏差说明；无Owner认可不得改关卡策划约束"
+      ],
+      "ownerGate": false
+    },
+    {
+      "id": "LD90-MOLEWHACK-05",
+      "type": "implement-stage",
+      "gameId": "mole-whack",
+      "stageId": "mole-whack-C05",
+      "title": "打地鼠 C05 假象训练",
+      "dependsOn": [
+        "LD90-MOLEWHACK-04"
+      ],
+      "status": "PLANNED",
+      "targetBranch": "feat/arcade-0.9-gameplay",
+      "designSource": "levels/stages/mole-whack-C05.json",
+      "gameSource": "apps/arcade/games/mole-whack.html",
+      "scope": "优先1关/PR；不可修改其他游戏规则或经典模式成绩；仅调整关卡适配器/本游戏/必要测试",
+      "acceptance": [
+        "脚本全部有效目标数≥过关需求，spawn不重叠同一洞口时间窗",
+        "炸弹和假目标扣分正确且误触不会连击多次",
+        "两个同时有效目标可用双指点击，不被UI控件遮挡",
+        "任一有效游玩时刻切后台/锁屏/恢复，剩余时间、玩家位置与未完成目标不变化；恢复后手动继续",
+        "给出关卡回放/可复现证据与设计偏差说明；无Owner认可不得改关卡策划约束"
+      ],
+      "ownerGate": false
+    },
+    {
+      "id": "LD90-MOLEWHACK-06",
+      "type": "implement-stage",
+      "gameId": "mole-whack",
+      "stageId": "mole-whack-C06",
+      "title": "打地鼠 C06 洞口终考",
+      "dependsOn": [
+        "LD90-MOLEWHACK-05"
+      ],
+      "status": "PLANNED",
+      "targetBranch": "feat/arcade-0.9-gameplay",
+      "designSource": "levels/stages/mole-whack-C06.json",
+      "gameSource": "apps/arcade/games/mole-whack.html",
+      "scope": "优先1关/PR；不可修改其他游戏规则或经典模式成绩；仅调整关卡适配器/本游戏/必要测试",
+      "acceptance": [
+        "脚本全部有效目标数≥过关需求，spawn不重叠同一洞口时间窗",
+        "炸弹和假目标扣分正确且误触不会连击多次",
+        "两个同时有效目标可用双指点击，不被UI控件遮挡",
+        "任一有效游玩时刻切后台/锁屏/恢复，剩余时间、玩家位置与未完成目标不变化；恢复后手动继续",
+        "给出关卡回放/可复现证据与设计偏差说明；无Owner认可不得改关卡策划约束"
+      ],
+      "ownerGate": true
+    },
+    {
+      "id": "LD90-MEMORYFLIP-01",
+      "type": "implement-stage",
+      "gameId": "memory-flip",
+      "stageId": "memory-flip-C01",
+      "title": "记忆翻牌 C01 分区第一步",
+      "dependsOn": [
+        "LD90-P02",
+        "LD90-P03"
+      ],
+      "status": "PLANNED",
+      "targetBranch": "feat/arcade-0.9-gameplay",
+      "designSource": "levels/stages/memory-flip-C01.json",
+      "gameSource": "apps/arcade/games/memory-flip.html",
+      "scope": "优先1关/PR；不可修改其他游戏规则或经典模式成绩；仅调整关卡适配器/本游戏/必要测试",
+      "acceptance": [
+        "每个符号恰好两张，参考配对表覆盖全部格子；线索经过事实校验",
+        "错误次数超过限制失败但允许立即重试；变换必须同步更新正确线索",
+        "触摸单张卡的命中区域≥44px，不会翻同一张两次",
+        "任一有效游玩时刻切后台/锁屏/恢复，剩余时间、玩家位置与未完成目标不变化；恢复后手动继续",
+        "给出关卡回放/可复现证据与设计偏差说明；无Owner认可不得改关卡策划约束"
+      ],
+      "ownerGate": false
+    },
+    {
+      "id": "LD90-MEMORYFLIP-02",
+      "type": "implement-stage",
+      "gameId": "memory-flip",
+      "stageId": "memory-flip-C02",
+      "title": "记忆翻牌 C02 两段扫描",
+      "dependsOn": [
+        "LD90-MEMORYFLIP-01"
+      ],
+      "status": "PLANNED",
+      "targetBranch": "feat/arcade-0.9-gameplay",
+      "designSource": "levels/stages/memory-flip-C02.json",
+      "gameSource": "apps/arcade/games/memory-flip.html",
+      "scope": "优先1关/PR；不可修改其他游戏规则或经典模式成绩；仅调整关卡适配器/本游戏/必要测试",
+      "acceptance": [
+        "每个符号恰好两张，参考配对表覆盖全部格子；线索经过事实校验",
+        "错误次数超过限制失败但允许立即重试；变换必须同步更新正确线索",
+        "触摸单张卡的命中区域≥44px，不会翻同一张两次",
+        "任一有效游玩时刻切后台/锁屏/恢复，剩余时间、玩家位置与未完成目标不变化；恢复后手动继续",
+        "给出关卡回放/可复现证据与设计偏差说明；无Owner认可不得改关卡策划约束"
+      ],
+      "ownerGate": false
+    },
+    {
+      "id": "LD90-MEMORYFLIP-03",
+      "type": "implement-stage",
+      "gameId": "memory-flip",
+      "stageId": "memory-flip-C03",
+      "title": "记忆翻牌 C03 位置线索",
+      "dependsOn": [
+        "LD90-MEMORYFLIP-02"
+      ],
+      "status": "PLANNED",
+      "targetBranch": "feat/arcade-0.9-gameplay",
+      "designSource": "levels/stages/memory-flip-C03.json",
+      "gameSource": "apps/arcade/games/memory-flip.html",
+      "scope": "优先1关/PR；不可修改其他游戏规则或经典模式成绩；仅调整关卡适配器/本游戏/必要测试",
+      "acceptance": [
+        "每个符号恰好两张，参考配对表覆盖全部格子；线索经过事实校验",
+        "错误次数超过限制失败但允许立即重试；变换必须同步更新正确线索",
+        "触摸单张卡的命中区域≥44px，不会翻同一张两次",
+        "任一有效游玩时刻切后台/锁屏/恢复，剩余时间、玩家位置与未完成目标不变化；恢复后手动继续",
+        "给出关卡回放/可复现证据与设计偏差说明；无Owner认可不得改关卡策划约束"
+      ],
+      "ownerGate": false
+    },
+    {
+      "id": "LD90-MEMORYFLIP-04",
+      "type": "implement-stage",
+      "gameId": "memory-flip",
+      "stageId": "memory-flip-C04",
+      "title": "记忆翻牌 C04 镜像试验",
+      "dependsOn": [
+        "LD90-MEMORYFLIP-03"
+      ],
+      "status": "PLANNED",
+      "targetBranch": "feat/arcade-0.9-gameplay",
+      "designSource": "levels/stages/memory-flip-C04.json",
+      "gameSource": "apps/arcade/games/memory-flip.html",
+      "scope": "优先1关/PR；不可修改其他游戏规则或经典模式成绩；仅调整关卡适配器/本游戏/必要测试",
+      "acceptance": [
+        "每个符号恰好两张，参考配对表覆盖全部格子；线索经过事实校验",
+        "错误次数超过限制失败但允许立即重试；变换必须同步更新正确线索",
+        "触摸单张卡的命中区域≥44px，不会翻同一张两次",
+        "任一有效游玩时刻切后台/锁屏/恢复，剩余时间、玩家位置与未完成目标不变化；恢复后手动继续",
+        "给出关卡回放/可复现证据与设计偏差说明；无Owner认可不得改关卡策划约束"
+      ],
+      "ownerGate": false
+    },
+    {
+      "id": "LD90-MEMORYFLIP-05",
+      "type": "implement-stage",
+      "gameId": "memory-flip",
+      "stageId": "memory-flip-C05",
+      "title": "记忆翻牌 C05 左右互换",
+      "dependsOn": [
+        "LD90-MEMORYFLIP-04"
+      ],
+      "status": "PLANNED",
+      "targetBranch": "feat/arcade-0.9-gameplay",
+      "designSource": "levels/stages/memory-flip-C05.json",
+      "gameSource": "apps/arcade/games/memory-flip.html",
+      "scope": "优先1关/PR；不可修改其他游戏规则或经典模式成绩；仅调整关卡适配器/本游戏/必要测试",
+      "acceptance": [
+        "每个符号恰好两张，参考配对表覆盖全部格子；线索经过事实校验",
+        "错误次数超过限制失败但允许立即重试；变换必须同步更新正确线索",
+        "触摸单张卡的命中区域≥44px，不会翻同一张两次",
+        "任一有效游玩时刻切后台/锁屏/恢复，剩余时间、玩家位置与未完成目标不变化；恢复后手动继续",
+        "给出关卡回放/可复现证据与设计偏差说明；无Owner认可不得改关卡策划约束"
+      ],
+      "ownerGate": false
+    },
+    {
+      "id": "LD90-MEMORYFLIP-06",
+      "type": "implement-stage",
+      "gameId": "memory-flip",
+      "stageId": "memory-flip-C06",
+      "title": "记忆翻牌 C06 终局推理",
+      "dependsOn": [
+        "LD90-MEMORYFLIP-05"
+      ],
+      "status": "PLANNED",
+      "targetBranch": "feat/arcade-0.9-gameplay",
+      "designSource": "levels/stages/memory-flip-C06.json",
+      "gameSource": "apps/arcade/games/memory-flip.html",
+      "scope": "优先1关/PR；不可修改其他游戏规则或经典模式成绩；仅调整关卡适配器/本游戏/必要测试",
+      "acceptance": [
+        "每个符号恰好两张，参考配对表覆盖全部格子；线索经过事实校验",
+        "错误次数超过限制失败但允许立即重试；变换必须同步更新正确线索",
+        "触摸单张卡的命中区域≥44px，不会翻同一张两次",
+        "任一有效游玩时刻切后台/锁屏/恢复，剩余时间、玩家位置与未完成目标不变化；恢复后手动继续",
+        "给出关卡回放/可复现证据与设计偏差说明；无Owner认可不得改关卡策划约束"
+      ],
+      "ownerGate": true
+    },
+    {
+      "id": "LD90-MERGE2048-01",
+      "type": "implement-stage",
+      "gameId": "merge-2048",
+      "stageId": "merge-2048-C01",
+      "title": "2048合成 C01 第一次合并",
+      "dependsOn": [
+        "LD90-P02",
+        "LD90-P03"
+      ],
+      "status": "PLANNED",
+      "targetBranch": "feat/arcade-0.9-gameplay",
+      "designSource": "levels/stages/merge-2048-C01.json",
+      "gameSource": "apps/arcade/games/merge-2048.html",
+      "scope": "优先1关/PR；不可修改其他游戏规则或经典模式成绩；仅调整关卡适配器/本游戏/必要测试",
+      "acceptance": [
+        "宽搜可在限定步数找到方案；无解题卡不可入库",
+        "超出有效步数/无可移动后失败，撤销的成绩标签与普通成绩不同",
+        "四向滑动阈值一致，不因页面滚动误触，画布外不禁用普通触摸",
+        "任一有效游玩时刻切后台/锁屏/恢复，剩余时间、玩家位置与未完成目标不变化；恢复后手动继续",
+        "给出关卡回放/可复现证据与设计偏差说明；无Owner认可不得改关卡策划约束"
+      ],
+      "ownerGate": false
+    },
+    {
+      "id": "LD90-MERGE2048-02",
+      "type": "implement-stage",
+      "gameId": "merge-2048",
+      "stageId": "merge-2048-C02",
+      "title": "2048合成 C02 双排规划",
+      "dependsOn": [
+        "LD90-MERGE2048-01"
+      ],
+      "status": "PLANNED",
+      "targetBranch": "feat/arcade-0.9-gameplay",
+      "designSource": "levels/stages/merge-2048-C02.json",
+      "gameSource": "apps/arcade/games/merge-2048.html",
+      "scope": "优先1关/PR；不可修改其他游戏规则或经典模式成绩；仅调整关卡适配器/本游戏/必要测试",
+      "acceptance": [
+        "宽搜可在限定步数找到方案；无解题卡不可入库",
+        "超出有效步数/无可移动后失败，撤销的成绩标签与普通成绩不同",
+        "四向滑动阈值一致，不因页面滚动误触，画布外不禁用普通触摸",
+        "任一有效游玩时刻切后台/锁屏/恢复，剩余时间、玩家位置与未完成目标不变化；恢复后手动继续",
+        "给出关卡回放/可复现证据与设计偏差说明；无Owner认可不得改关卡策划约束"
+      ],
+      "ownerGate": false
+    },
+    {
+      "id": "LD90-MERGE2048-03",
+      "type": "implement-stage",
+      "gameId": "merge-2048",
+      "stageId": "merge-2048-C03",
+      "title": "2048合成 C03 先八后十六",
+      "dependsOn": [
+        "LD90-MERGE2048-02"
+      ],
+      "status": "PLANNED",
+      "targetBranch": "feat/arcade-0.9-gameplay",
+      "designSource": "levels/stages/merge-2048-C03.json",
+      "gameSource": "apps/arcade/games/merge-2048.html",
+      "scope": "优先1关/PR；不可修改其他游戏规则或经典模式成绩；仅调整关卡适配器/本游戏/必要测试",
+      "acceptance": [
+        "宽搜可在限定步数找到方案；无解题卡不可入库",
+        "超出有效步数/无可移动后失败，撤销的成绩标签与普通成绩不同",
+        "四向滑动阈值一致，不因页面滚动误触，画布外不禁用普通触摸",
+        "任一有效游玩时刻切后台/锁屏/恢复，剩余时间、玩家位置与未完成目标不变化；恢复后手动继续",
+        "给出关卡回放/可复现证据与设计偏差说明；无Owner认可不得改关卡策划约束"
+      ],
+      "ownerGate": false
+    },
+    {
+      "id": "LD90-MERGE2048-04",
+      "type": "implement-stage",
+      "gameId": "merge-2048",
+      "stageId": "merge-2048-C04",
+      "title": "2048合成 C04 纵向接力",
+      "dependsOn": [
+        "LD90-MERGE2048-03"
+      ],
+      "status": "PLANNED",
+      "targetBranch": "feat/arcade-0.9-gameplay",
+      "designSource": "levels/stages/merge-2048-C04.json",
+      "gameSource": "apps/arcade/games/merge-2048.html",
+      "scope": "优先1关/PR；不可修改其他游戏规则或经典模式成绩；仅调整关卡适配器/本游戏/必要测试",
+      "acceptance": [
+        "宽搜可在限定步数找到方案；无解题卡不可入库",
+        "超出有效步数/无可移动后失败，撤销的成绩标签与普通成绩不同",
+        "四向滑动阈值一致，不因页面滚动误触，画布外不禁用普通触摸",
+        "任一有效游玩时刻切后台/锁屏/恢复，剩余时间、玩家位置与未完成目标不变化；恢复后手动继续",
+        "给出关卡回放/可复现证据与设计偏差说明；无Owner认可不得改关卡策划约束"
+      ],
+      "ownerGate": false
+    },
+    {
+      "id": "LD90-MERGE2048-05",
+      "type": "implement-stage",
+      "gameId": "merge-2048",
+      "stageId": "merge-2048-C05",
+      "title": "2048合成 C05 双列八进位",
+      "dependsOn": [
+        "LD90-MERGE2048-04"
+      ],
+      "status": "PLANNED",
+      "targetBranch": "feat/arcade-0.9-gameplay",
+      "designSource": "levels/stages/merge-2048-C05.json",
+      "gameSource": "apps/arcade/games/merge-2048.html",
+      "scope": "优先1关/PR；不可修改其他游戏规则或经典模式成绩；仅调整关卡适配器/本游戏/必要测试",
+      "acceptance": [
+        "宽搜可在限定步数找到方案；无解题卡不可入库",
+        "超出有效步数/无可移动后失败，撤销的成绩标签与普通成绩不同",
+        "四向滑动阈值一致，不因页面滚动误触，画布外不禁用普通触摸",
+        "任一有效游玩时刻切后台/锁屏/恢复，剩余时间、玩家位置与未完成目标不变化；恢复后手动继续",
+        "给出关卡回放/可复现证据与设计偏差说明；无Owner认可不得改关卡策划约束"
+      ],
+      "ownerGate": false
+    },
+    {
+      "id": "LD90-MERGE2048-06",
+      "type": "implement-stage",
+      "gameId": "merge-2048",
+      "stageId": "merge-2048-C06",
+      "title": "2048合成 C06 终极转位",
+      "dependsOn": [
+        "LD90-MERGE2048-05"
+      ],
+      "status": "PLANNED",
+      "targetBranch": "feat/arcade-0.9-gameplay",
+      "designSource": "levels/stages/merge-2048-C06.json",
+      "gameSource": "apps/arcade/games/merge-2048.html",
+      "scope": "优先1关/PR；不可修改其他游戏规则或经典模式成绩；仅调整关卡适配器/本游戏/必要测试",
+      "acceptance": [
+        "宽搜可在限定步数找到方案；无解题卡不可入库",
+        "超出有效步数/无可移动后失败，撤销的成绩标签与普通成绩不同",
+        "四向滑动阈值一致，不因页面滚动误触，画布外不禁用普通触摸",
+        "任一有效游玩时刻切后台/锁屏/恢复，剩余时间、玩家位置与未完成目标不变化；恢复后手动继续",
+        "给出关卡回放/可复现证据与设计偏差说明；无Owner认可不得改关卡策划约束"
+      ],
+      "ownerGate": true
+    },
+    {
+      "id": "LD90-Q01",
+      "type": "review",
+      "title": "78关集成质量门禁",
+      "dependsOn": [
+        "LD90-SHADOWLEAP-01",
+        "LD90-SHADOWLEAP-02",
+        "LD90-SHADOWLEAP-03",
+        "LD90-SHADOWLEAP-04",
+        "LD90-SHADOWLEAP-05",
+        "LD90-SHADOWLEAP-06",
+        "LD90-SNOWBELLS-01",
+        "LD90-SNOWBELLS-02",
+        "LD90-SNOWBELLS-03",
+        "LD90-SNOWBELLS-04",
+        "LD90-SNOWBELLS-05",
+        "LD90-SNOWBELLS-06",
+        "LD90-STARRAID-01",
+        "LD90-STARRAID-02",
+        "LD90-STARRAID-03",
+        "LD90-STARRAID-04",
+        "LD90-STARRAID-05",
+        "LD90-STARRAID-06",
+        "LD90-PENDULUMTOWER-01",
+        "LD90-PENDULUMTOWER-02",
+        "LD90-PENDULUMTOWER-03",
+        "LD90-PENDULUMTOWER-04",
+        "LD90-PENDULUMTOWER-05",
+        "LD90-PENDULUMTOWER-06",
+        "LD90-BLOCKDROP-01",
+        "LD90-BLOCKDROP-02",
+        "LD90-BLOCKDROP-03",
+        "LD90-BLOCKDROP-04",
+        "LD90-BLOCKDROP-05",
+        "LD90-BLOCKDROP-06",
+        "LD90-ROADRUSH-01",
+        "LD90-ROADRUSH-02",
+        "LD90-ROADRUSH-03",
+        "LD90-ROADRUSH-04",
+        "LD90-ROADRUSH-05",
+        "LD90-ROADRUSH-06",
+        "LD90-GOLDMINER-01",
+        "LD90-GOLDMINER-02",
+        "LD90-GOLDMINER-03",
+        "LD90-GOLDMINER-04",
+        "LD90-GOLDMINER-05",
+        "LD90-GOLDMINER-06",
+        "LD90-BRICKBREAKER-01",
+        "LD90-BRICKBREAKER-02",
+        "LD90-BRICKBREAKER-03",
+        "LD90-BRICKBREAKER-04",
+        "LD90-BRICKBREAKER-05",
+        "LD90-BRICKBREAKER-06",
+        "LD90-GRAVITYFLIP-01",
+        "LD90-GRAVITYFLIP-02",
+        "LD90-GRAVITYFLIP-03",
+        "LD90-GRAVITYFLIP-04",
+        "LD90-GRAVITYFLIP-05",
+        "LD90-GRAVITYFLIP-06",
+        "LD90-SNAKERUN-01",
+        "LD90-SNAKERUN-02",
+        "LD90-SNAKERUN-03",
+        "LD90-SNAKERUN-04",
+        "LD90-SNAKERUN-05",
+        "LD90-SNAKERUN-06",
+        "LD90-MOLEWHACK-01",
+        "LD90-MOLEWHACK-02",
+        "LD90-MOLEWHACK-03",
+        "LD90-MOLEWHACK-04",
+        "LD90-MOLEWHACK-05",
+        "LD90-MOLEWHACK-06",
+        "LD90-MEMORYFLIP-01",
+        "LD90-MEMORYFLIP-02",
+        "LD90-MEMORYFLIP-03",
+        "LD90-MEMORYFLIP-04",
+        "LD90-MEMORYFLIP-05",
+        "LD90-MEMORYFLIP-06",
+        "LD90-MERGE2048-01",
+        "LD90-MERGE2048-02",
+        "LD90-MERGE2048-03",
+        "LD90-MERGE2048-04",
+        "LD90-MERGE2048-05",
+        "LD90-MERGE2048-06"
+      ],
+      "status": "PLANNED",
+      "scope": "独立reviewer检查经典隔离/存档/移动输入/可解性/关卡差异",
+      "acceptance": "78关数据与实现映射完整，违规关卡不得计为完成"
+    },
+    {
+      "id": "LD90-Q02",
+      "type": "release-gate",
+      "title": "Owner决定是否发布0.9.0",
+      "dependsOn": [
+        "LD90-Q01"
+      ],
+      "status": "BLOCKED_OWNER",
+      "scope": "不得自动push/tag/main/deploy",
+      "acceptance": "Owner检查真机试玩记录及回滚清单后明确授权"
+    }
+  ]
+}

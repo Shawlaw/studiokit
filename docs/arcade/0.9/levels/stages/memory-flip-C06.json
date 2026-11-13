@@ -1,0 +1,196 @@
+{
+  "schemaVersion": "1.0.0",
+  "id": "memory-flip-C06",
+  "gameId": "memory-flip",
+  "stageNumber": 6,
+  "chapter": "线索试炼",
+  "title": "终局推理",
+  "difficulty": 6,
+  "targetDurationSec": [
+    35,
+    140
+  ],
+  "goalStatement": "在更少的翻错次数内完成8对",
+  "decision": "记忆策略或推理顺序决定翻牌效率",
+  "practicedSkill": "建立逻辑笔记与优先检查顺序",
+  "discovery": "有规律但不完全镜像，可选给出一对线索",
+  "mode": "challenge",
+  "content": {
+    "grid": {
+      "rows": 4,
+      "cols": 4
+    },
+    "faces": [
+      [
+        "A",
+        "B",
+        "C",
+        "D"
+      ],
+      [
+        "E",
+        "F",
+        "G",
+        "H"
+      ],
+      [
+        "H",
+        "A",
+        "F",
+        "C"
+      ],
+      [
+        "D",
+        "G",
+        "B",
+        "E"
+      ]
+    ],
+    "previewSeconds": 2.8,
+    "maxMismatches": 4,
+    "turnRules": {
+      "flipTwo": "matching pair stay faceup; mismatch waits 0.7s and flips back",
+      "pauseDuringMismatchedFlip": true,
+      "matchedCardsCannotFlipAgain": true
+    },
+    "goal": {
+      "type": "match-all",
+      "pairs": 8
+    },
+    "clues": {
+      "hintText": "四个角不是同一种图案；右下角能与第二行图案配对"
+    },
+    "layoutTransforms": [
+      "identity",
+      "mirror-horizontal",
+      "mirror-vertical"
+    ],
+    "transformsApplyToEntireBoard": true,
+    "progressPersist": "matched ids + mismatches + active two flips + preview timer"
+  },
+  "referencePlan": {
+    "pairs": [
+      {
+        "symbol": "A",
+        "positions": [
+          [
+            0,
+            0
+          ],
+          [
+            2,
+            1
+          ]
+        ]
+      },
+      {
+        "symbol": "B",
+        "positions": [
+          [
+            0,
+            1
+          ],
+          [
+            3,
+            2
+          ]
+        ]
+      },
+      {
+        "symbol": "C",
+        "positions": [
+          [
+            0,
+            2
+          ],
+          [
+            2,
+            3
+          ]
+        ]
+      },
+      {
+        "symbol": "D",
+        "positions": [
+          [
+            0,
+            3
+          ],
+          [
+            3,
+            0
+          ]
+        ]
+      },
+      {
+        "symbol": "E",
+        "positions": [
+          [
+            1,
+            0
+          ],
+          [
+            3,
+            3
+          ]
+        ]
+      },
+      {
+        "symbol": "F",
+        "positions": [
+          [
+            1,
+            1
+          ],
+          [
+            2,
+            2
+          ]
+        ]
+      },
+      {
+        "symbol": "G",
+        "positions": [
+          [
+            1,
+            2
+          ],
+          [
+            3,
+            1
+          ]
+        ]
+      },
+      {
+        "symbol": "H",
+        "positions": [
+          [
+            1,
+            3
+          ],
+          [
+            2,
+            0
+          ]
+        ]
+      }
+    ],
+    "approach": "先利用提示再按主题区域扫描，所有匹配都可用该矩阵复核"
+  },
+  "acceptance": {
+    "success": "每个符号恰好两张，参考配对表覆盖全部格子；线索经过事实校验",
+    "failure": "错误次数超过限制失败但允许立即重试；变换必须同步更新正确线索",
+    "mobile": "触摸单张卡的命中区域≥44px，不会翻同一张两次",
+    "afk": "任一有效游玩时刻切后台/锁屏/恢复，剩余时间、玩家位置与未完成目标不变化；恢复后手动继续"
+  },
+  "integration": {
+    "separateClassicProgress": true,
+    "noAssistedRequired": true,
+    "requiredFeatures": [
+      "fixed_memory_board",
+      "cognitive_clue_mode"
+    ],
+    "adaptToHead": true
+  },
+  "designerNotes": "布局对称变换仅用于重玩变化，关卡原理不变；不能对称变换卡片却不更新线索"
+}

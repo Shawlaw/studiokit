@@ -1,0 +1,144 @@
+{
+  "schemaVersion": "1.0.0",
+  "id": "star-raid-C02",
+  "gameId": "star-raid",
+  "stageNumber": 2,
+  "chapter": "星域战术",
+  "title": "扫射之门",
+  "difficulty": 2,
+  "targetDurationSec": [
+    42,
+    77
+  ],
+  "goalStatement": "通过五段标记扫射",
+  "decision": "继续待在安全带还是穿越危险区取武器",
+  "practicedSkill": "认清连续扫射方向并先移动到安全侧",
+  "discovery": "拿激光需穿越中央区域，非必需",
+  "mode": "challenge",
+  "content": {
+    "stageDurationSec": 42,
+    "playerSpawn": {
+      "xRatio": 0.5,
+      "yRatio": 0.85
+    },
+    "startingHealth": 3,
+    "events": [
+      {
+        "id": "w1",
+        "atSec": 3,
+        "enemyType": "sweeper",
+        "spawnXRatio": 0.25,
+        "attackPattern": "sweep-lr",
+        "telegraphSec": 0.9,
+        "safeBandXRatio": {
+          "center": 0.8,
+          "halfWidth": 0.12
+        },
+        "attackActiveSec": 3.4,
+        "stopNewThreatsUntilSec": 5.2
+      },
+      {
+        "id": "w2",
+        "atSec": 10,
+        "enemyType": "scout",
+        "spawnXRatio": 0.8,
+        "attackPattern": "aimed",
+        "telegraphSec": 0.9,
+        "safeBandXRatio": {
+          "center": 0.1,
+          "halfWidth": 0.12
+        },
+        "attackActiveSec": 3.4,
+        "stopNewThreatsUntilSec": 12.2
+      },
+      {
+        "id": "w3",
+        "atSec": 18,
+        "enemyType": "sweeper",
+        "spawnXRatio": 0.75,
+        "attackPattern": "sweep-rl",
+        "telegraphSec": 0.9,
+        "safeBandXRatio": {
+          "center": 0.12,
+          "halfWidth": 0.12
+        },
+        "attackActiveSec": 3.4,
+        "stopNewThreatsUntilSec": 20.2
+      },
+      {
+        "id": "w4",
+        "atSec": 27,
+        "enemyType": "pair",
+        "spawnXRatio": 0.48,
+        "attackPattern": "fan3",
+        "telegraphSec": 0.9,
+        "safeBandXRatio": {
+          "center": 0.08,
+          "halfWidth": 0.12
+        },
+        "attackActiveSec": 3.4,
+        "stopNewThreatsUntilSec": 29.2
+      },
+      {
+        "id": "w5",
+        "atSec": 34,
+        "enemyType": "sweeper",
+        "spawnXRatio": 0.3,
+        "attackPattern": "sweep-lr",
+        "telegraphSec": 0.9,
+        "safeBandXRatio": {
+          "center": 0.82,
+          "halfWidth": 0.12
+        },
+        "attackActiveSec": 3.4,
+        "stopNewThreatsUntilSec": 36.2
+      }
+    ],
+    "powerups": [
+      {
+        "atSec": 18,
+        "kind": "laser",
+        "xRatio": 0.5,
+        "required": false
+      }
+    ],
+    "endCondition": "survive-and-clear-events",
+    "patternContract": {
+      "single": "向下单发，瞄准当前位置后锁定",
+      "aimed": "预警瞄准后单发",
+      "fan3": "三个固定发散角-22/0/+22度",
+      "fan5": "五个固定发散角-32/-16/0/+16/+32度",
+      "sweep-lr": "左向右扫描危险带，预先显示扫线",
+      "sweep-rl": "右向左扫描危险带，预先显示扫线",
+      "mark-charge": "标线1.4秒后沿直线冲锋，标线期间锁定落点",
+      "weak-left-right": "先左翼2.5s后右翼2.5s，重复至弱点耗尽",
+      "phase-sweep-and-core": "第1阶段扫线，第2阶段中央核心暴露3s，循环"
+    },
+    "bulletSafeSpace": "所有攻击段至少保留一条玩家可达≥56逻辑px宽的安全走廊，待模拟验证"
+  },
+  "referencePlan": {
+    "events": [
+      "w1",
+      "w2",
+      "w3",
+      "w4",
+      "w5"
+    ],
+    "plan": "读取预警线，移向 safeBandXRatio，Boss 露弱点后再进攻"
+  },
+  "acceptance": {
+    "success": "定时事件不依赖Math.random且预警与伤害开始时间可复测",
+    "failure": "弹幕演算留出可达安全区；阶段目标可在基础武器下完成",
+    "mobile": "按住拖动+技能点击两指并发，子弹/弱点在小屏可辨",
+    "afk": "任一有效游玩时刻切后台/锁屏/恢复，剩余时间、玩家位置与未完成目标不变化；恢复后手动继续"
+  },
+  "integration": {
+    "separateClassicProgress": true,
+    "noAssistedRequired": true,
+    "requiredFeatures": [
+      "fixed_wave_timeline"
+    ],
+    "adaptToHead": true
+  },
+  "designerNotes": ""
+}

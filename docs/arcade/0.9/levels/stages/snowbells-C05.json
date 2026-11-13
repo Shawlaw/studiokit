@@ -1,0 +1,111 @@
+{
+  "schemaVersion": "1.0.0",
+  "id": "snowbells-C05",
+  "gameId": "snowbells",
+  "stageNumber": 5,
+  "chapter": "雪夜演奏",
+  "title": "冷暖和声",
+  "difficulty": 5,
+  "targetDurationSec": [
+    45,
+    140
+  ],
+  "goalStatement": "按蓝红交替序列完成六铃",
+  "decision": "选错颜色不立刻死，但本关完美评价失败",
+  "practicedSkill": "观察颜色同时依赖形状文字标志识别",
+  "discovery": "颜色与图形同时编码，不能只靠颜色",
+  "mode": "challenge",
+  "content": {
+    "coordinates": "420x740；bell.height相对起点向上；每次命中刷新向上初速 -655，最大理论上升159，实际还需验证横向可达",
+    "bells": [
+      {
+        "id": "A",
+        "xCenter": 210,
+        "height": 0,
+        "kind": "normal",
+        "radius": 9,
+        "consumable": true
+      },
+      {
+        "id": "B",
+        "xCenter": 160,
+        "height": 72,
+        "kind": "blue",
+        "radius": 9,
+        "consumable": true
+      },
+      {
+        "id": "C",
+        "xCenter": 246,
+        "height": 148,
+        "kind": "red",
+        "radius": 9,
+        "consumable": true
+      },
+      {
+        "id": "D",
+        "xCenter": 160,
+        "height": 223,
+        "kind": "blue",
+        "radius": 9,
+        "consumable": true
+      },
+      {
+        "id": "E",
+        "xCenter": 246,
+        "height": 300,
+        "kind": "red",
+        "radius": 9,
+        "consumable": true
+      },
+      {
+        "id": "F",
+        "xCenter": 208,
+        "height": 377,
+        "kind": "normal",
+        "radius": 9,
+        "consumable": true
+      }
+    ],
+    "requiredSequence": [
+      "A",
+      "B",
+      "C",
+      "D",
+      "E",
+      "F"
+    ],
+    "completion": "按顺序命中指定铃铛，休止铃只反弹不加连击，不强制收集bonus",
+    "wrongBellPolicy": "可反弹但不给计分；0.8s内显示下一个正确目标",
+    "comboBreakPolicy": "落空/错序会失去本关完美奖励，普通通关可恢复继续",
+    "startBell": "A",
+    "goalAfterLast": true
+  },
+  "referencePlan": {
+    "bellOrder": [
+      "A",
+      "B",
+      "C",
+      "D",
+      "E",
+      "F"
+    ],
+    "optional": [],
+    "tactics": "命中后先看下一个目标再进行横移，不依赖局内道具"
+  },
+  "acceptance": {
+    "success": "指定铃铛间距和弹跳时间允许物理命中且不可重复计分",
+    "failure": "无道具可完成必经序列；休止铃能弹但不计分",
+    "mobile": "显示下一个目标，左右多指操作无粘滞",
+    "afk": "任一有效游玩时刻切后台/锁屏/恢复，剩余时间、玩家位置与未完成目标不变化；恢复后手动继续"
+  },
+  "integration": {
+    "separateClassicProgress": true,
+    "noAssistedRequired": true,
+    "requiredFeatures": [
+      "stage_bell_sequence"
+    ],
+    "adaptToHead": true
+  },
+  "designerNotes": "请使用确定性铃点图；连击只统计首次正确命中。"
+}

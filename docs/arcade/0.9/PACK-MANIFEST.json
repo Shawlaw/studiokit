@@ -1,0 +1,108 @@
+{
+  "packVersion": "0.9.0-design-v1",
+  "observedPublicMainArcadeVersion": "0.7.0",
+  "observedAt": "2026-11-13",
+  "notForImmediateMergeInto0.8": true,
+  "stageCount": 78,
+  "gameCount": 13,
+  "contentSchema": "1.0.0",
+  "gameFiles": [
+    {
+      "gameId": "shadow-leap",
+      "name": "影跃",
+      "filename": "levels/shadow-leap.json",
+      "count": 6
+    },
+    {
+      "gameId": "snowbells",
+      "name": "雪铃",
+      "filename": "levels/snowbells.json",
+      "count": 6
+    },
+    {
+      "gameId": "star-raid",
+      "name": "星海突击",
+      "filename": "levels/star-raid.json",
+      "count": 6
+    },
+    {
+      "gameId": "pendulum-tower",
+      "name": "层塔",
+      "filename": "levels/pendulum-tower.json",
+      "count": 6
+    },
+    {
+      "gameId": "block-drop",
+      "name": "俄罗斯方块",
+      "filename": "levels/block-drop.json",
+      "count": 6
+    },
+    {
+      "gameId": "road-rush",
+      "name": "极速车道",
+      "filename": "levels/road-rush.json",
+      "count": 6
+    },
+    {
+      "gameId": "gold-miner",
+      "name": "黄金矿工",
+      "filename": "levels/gold-miner.json",
+      "count": 6
+    },
+    {
+      "gameId": "brick-breaker",
+      "name": "砖块计划",
+      "filename": "levels/brick-breaker.json",
+      "count": 6
+    },
+    {
+      "gameId": "gravity-flip",
+      "name": "重力翻转",
+      "filename": "levels/gravity-flip.json",
+      "count": 6
+    },
+    {
+      "gameId": "snake-run",
+      "name": "贪吃蛇",
+      "filename": "levels/snake-run.json",
+      "count": 6
+    },
+    {
+      "gameId": "mole-whack",
+      "name": "打地鼠",
+      "filename": "levels/mole-whack.json",
+      "count": 6
+    },
+    {
+      "gameId": "memory-flip",
+      "name": "记忆翻牌",
+      "filename": "levels/memory-flip.json",
+      "count": 6
+    },
+    {
+      "gameId": "merge-2048",
+      "name": "2048合成",
+      "filename": "levels/merge-2048.json",
+      "count": 6
+    }
+  ],
+  "verificationClasses": {
+    "reference_replayed": [
+      "block-drop",
+      "merge-2048",
+      "snake-run",
+      "road-rush",
+      "memory-flip"
+    ],
+    "structural_only": [
+      "shadow-leap",
+      "snowbells",
+      "star-raid",
+      "pendulum-tower",
+      "gold-miner",
+      "brick-breaker",
+      "gravity-flip",
+      "mole-whack"
+    ]
+  }
+}

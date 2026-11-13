@@ -1,0 +1,137 @@
+{
+  "schemaVersion": "1.0.0",
+  "id": "shadow-leap-C01",
+  "gameId": "shadow-leap",
+  "stageNumber": 1,
+  "chapter": "影之试炼",
+  "title": "初入影林",
+  "difficulty": 1,
+  "targetDurationSec": [
+    45,
+    155
+  ],
+  "goalStatement": "抵达高度402的影门",
+  "decision": "走中路稳妥通关或偏右获取卷轴",
+  "practicedSkill": "观察惯性并提前对准落点",
+  "discovery": "右侧银树标记提示有可选卷轴",
+  "mode": "challenge",
+  "content": {
+    "coordinates": "420×740逻辑像素；平台 xCenter 与 height 均为世界坐标；height=0为出发平台，向上为正；禁止按屏幕坐标硬编码",
+    "playerSpawn": {
+      "platformId": "p0",
+      "offsetX": 0
+    },
+    "platforms": [
+      {
+        "id": "p0",
+        "xCenter": 210,
+        "height": 0,
+        "width": 120,
+        "kind": "static"
+      },
+      {
+        "id": "p1",
+        "xCenter": 184,
+        "height": 70,
+        "width": 110,
+        "kind": "static"
+      },
+      {
+        "id": "p2",
+        "xCenter": 228,
+        "height": 142,
+        "width": 96,
+        "kind": "static"
+      },
+      {
+        "id": "p3",
+        "xCenter": 183,
+        "height": 214,
+        "width": 106,
+        "kind": "static"
+      },
+      {
+        "id": "p4",
+        "xCenter": 236,
+        "height": 286,
+        "width": 98,
+        "kind": "static"
+      },
+      {
+        "id": "p5",
+        "xCenter": 205,
+        "height": 358,
+        "width": 110,
+        "kind": "static"
+      },
+      {
+        "id": "secret",
+        "xCenter": 326,
+        "height": 203,
+        "width": 70,
+        "kind": "static"
+      }
+    ],
+    "mainRoute": [
+      "p0",
+      "p1",
+      "p2",
+      "p3",
+      "p4",
+      "p5"
+    ],
+    "alternativeRoute": [
+      "p2",
+      "secret",
+      "p4"
+    ],
+    "goal": {
+      "type": "gate",
+      "xCenter": 210,
+      "height": 402,
+      "radius": 38
+    },
+    "requiredAbility": "none",
+    "stageRule": "side-scroll",
+    "collectibles": [
+      {
+        "id": "scroll",
+        "platformId": "secret",
+        "optional": true
+      }
+    ],
+    "deathPolicy": "落出关卡边界后从最近房间检查点重试，关卡任务不回退"
+  },
+  "referencePlan": {
+    "main": [
+      "p0",
+      "p1",
+      "p2",
+      "p3",
+      "p4",
+      "p5"
+    ],
+    "optional": [
+      "p2",
+      "secret",
+      "p4"
+    ],
+    "tactics": "不使用影冲也可完成；偏右卷轴不参与通关"
+  },
+  "acceptance": {
+    "success": "主路径 ['p0', 'p1', 'p2', 'p3', 'p4', 'p5'] 能在允许动作集下连贯落地并触发出口",
+    "failure": "无影冲前两关必须可解；S3 起必需动作与奖励路线独立；死亡返回关内检查点",
+    "mobile": "左右持续按压与影冲按钮支持两指并发，屏幕边缘影冲按钮≥44CSS px",
+    "afk": "任一有效游玩时刻切后台/锁屏/恢复，剩余时间、玩家位置与未完成目标不变化；恢复后手动继续"
+  },
+  "integration": {
+    "separateClassicProgress": true,
+    "noAssistedRequired": true,
+    "requiredFeatures": [
+      "challenge_mode",
+      "stage_gate"
+    ],
+    "adaptToHead": true
+  },
+  "designerNotes": "不使用影冲也可完成；偏右卷轴不参与通关"
+}

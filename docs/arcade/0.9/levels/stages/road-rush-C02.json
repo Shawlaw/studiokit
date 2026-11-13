@@ -1,0 +1,215 @@
+{
+  "schemaVersion": "1.0.0",
+  "id": "road-rush-C02",
+  "gameId": "road-rush",
+  "stageNumber": 2,
+  "chapter": "路书挑战",
+  "title": "左右交替",
+  "difficulty": 2,
+  "targetDurationSec": [
+    20,
+    75
+  ],
+  "goalStatement": "交错车流中识别下一秒的安全区域",
+  "decision": "避让是硬目标，近距超车只增加评价",
+  "practicedSkill": "贴近拥堵时可以选择暂留安全车道",
+  "discovery": "看预告比最后时刻换道更好",
+  "mode": "challenge",
+  "content": {
+    "laneCount": 4,
+    "slotDurationSec": 1.15,
+    "laneChangeTimeSec": 0.22,
+    "startLane": 1,
+    "timeline": [
+      {
+        "slot": 1,
+        "atSec": 0.0,
+        "occupiedLanes": [
+          1
+        ],
+        "telegraphLeadSec": 1.5,
+        "optionalNearPassBonusLanes": [
+          0,
+          2
+        ]
+      },
+      {
+        "slot": 2,
+        "atSec": 1.15,
+        "occupiedLanes": [
+          1,
+          2
+        ],
+        "telegraphLeadSec": 1.5,
+        "optionalNearPassBonusLanes": [
+          0,
+          3
+        ]
+      },
+      {
+        "slot": 3,
+        "atSec": 2.3,
+        "occupiedLanes": [
+          2
+        ],
+        "telegraphLeadSec": 1.5,
+        "optionalNearPassBonusLanes": [
+          1,
+          3
+        ]
+      },
+      {
+        "slot": 4,
+        "atSec": 3.45,
+        "occupiedLanes": [
+          2,
+          3
+        ],
+        "telegraphLeadSec": 1.5,
+        "optionalNearPassBonusLanes": [
+          1
+        ]
+      },
+      {
+        "slot": 5,
+        "atSec": 4.6,
+        "occupiedLanes": [
+          3
+        ],
+        "telegraphLeadSec": 1.5,
+        "optionalNearPassBonusLanes": [
+          2
+        ]
+      },
+      {
+        "slot": 6,
+        "atSec": 5.75,
+        "occupiedLanes": [
+          0
+        ],
+        "telegraphLeadSec": 1.5,
+        "optionalNearPassBonusLanes": [
+          1
+        ]
+      },
+      {
+        "slot": 7,
+        "atSec": 6.9,
+        "occupiedLanes": [
+          0,
+          1
+        ],
+        "telegraphLeadSec": 1.5,
+        "optionalNearPassBonusLanes": [
+          2
+        ]
+      },
+      {
+        "slot": 8,
+        "atSec": 8.05,
+        "occupiedLanes": [
+          1
+        ],
+        "telegraphLeadSec": 1.5,
+        "optionalNearPassBonusLanes": [
+          0,
+          2
+        ]
+      },
+      {
+        "slot": 9,
+        "atSec": 9.2,
+        "occupiedLanes": [
+          1,
+          2
+        ],
+        "telegraphLeadSec": 1.5,
+        "optionalNearPassBonusLanes": [
+          0,
+          3
+        ]
+      },
+      {
+        "slot": 10,
+        "atSec": 10.35,
+        "occupiedLanes": [
+          2
+        ],
+        "telegraphLeadSec": 1.5,
+        "optionalNearPassBonusLanes": [
+          1,
+          3
+        ]
+      },
+      {
+        "slot": 11,
+        "atSec": 11.5,
+        "occupiedLanes": [
+          1,
+          2
+        ],
+        "telegraphLeadSec": 1.5,
+        "optionalNearPassBonusLanes": [
+          0,
+          3
+        ]
+      },
+      {
+        "slot": 12,
+        "atSec": 12.65,
+        "occupiedLanes": [
+          3
+        ],
+        "telegraphLeadSec": 1.5,
+        "optionalNearPassBonusLanes": [
+          2
+        ]
+      }
+    ],
+    "goal": {
+      "type": "survive-all-slots",
+      "minDistanceMeters": 680
+    },
+    "scoreRules": {
+      "passBonus": 10,
+      "nearPassBonus": 5,
+      "noDamageGold": true
+    },
+    "spawnerPolicy": "challenge only; disable classic random spawn while timeline active",
+    "pathProofModel": "at each slot lane must not be occupied, consecutive lane indices differ ≤1; physics transitions must also be tested"
+  },
+  "referencePlan": {
+    "safeLaneBySlot": [
+      1,
+      0,
+      0,
+      0,
+      1,
+      2,
+      3,
+      2,
+      2,
+      3,
+      3,
+      3,
+      2
+    ],
+    "bonusStrategy": "不求最高分，只给出可活着完成的安全车道序列"
+  },
+  "acceptance": {
+    "success": "时间展开DP存在连续相邻车道安全路径，并检查换道过渡0.22秒内的碰撞",
+    "failure": "把任一车阵改到无可行路径时校验器必须拒绝；碰撞有清晰责任归因",
+    "mobile": "左右手势和按键一次恰好一车道，按住不重复跳道",
+    "afk": "任一有效游玩时刻切后台/锁屏/恢复，剩余时间、玩家位置与未完成目标不变化；恢复后手动继续"
+  },
+  "integration": {
+    "separateClassicProgress": true,
+    "noAssistedRequired": true,
+    "requiredFeatures": [
+      "fixed_traffic_timeline",
+      "time_expanded_lane_validator"
+    ],
+    "adaptToHead": true
+  },
+  "designerNotes": "lane proof只按离散格成立；真正实现必须把相邻车道过渡也纳入碰撞测试"
+}

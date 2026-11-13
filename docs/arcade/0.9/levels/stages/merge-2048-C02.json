@@ -1,0 +1,108 @@
+{
+  "schemaVersion": "1.0.0",
+  "id": "merge-2048-C02",
+  "gameId": "merge-2048",
+  "stageNumber": 2,
+  "chapter": "数字残局",
+  "title": "双排规划",
+  "difficulty": 2,
+  "targetDurationSec": [
+    15,
+    95
+  ],
+  "goalStatement": "形成一枚8",
+  "decision": "每一步选择朝向并预判合并次序",
+  "practicedSkill": "同一滑动可能发生两次不同合并",
+  "discovery": "观察合并是“每一格每回合最多合并一次”",
+  "mode": "challenge",
+  "content": {
+    "grid": {
+      "rows": 4,
+      "cols": 4
+    },
+    "initialBoard": [
+      [
+        2,
+        2,
+        4,
+        4
+      ],
+      [
+        0,
+        0,
+        0,
+        0
+      ],
+      [
+        0,
+        0,
+        0,
+        0
+      ],
+      [
+        0,
+        0,
+        0,
+        0
+      ]
+    ],
+    "challengeSpawnPolicy": "none (no new random or scripted tile after move)",
+    "maxValidMoves": 2,
+    "undoAllowed": true,
+    "undoDoesNotRefundMoveOnRankedAttempt": true,
+    "win": {
+      "anyTileAtLeast": 8
+    },
+    "lose": "valid moves used up without target or no legal move",
+    "scorePolicy": "挑战按有效步数、辅助使用分层统计；经典分数保持不变",
+    "controls": "四方向滑动；仅有效改变盘面的滑动计步"
+  },
+  "referencePlan": {
+    "directions": [
+      "L"
+    ],
+    "resultBoard": [
+      [
+        4,
+        8,
+        0,
+        0
+      ],
+      [
+        0,
+        0,
+        0,
+        0
+      ],
+      [
+        0,
+        0,
+        0,
+        0
+      ],
+      [
+        0,
+        0,
+        0,
+        0
+      ]
+    ]
+  },
+  "acceptance": {
+    "success": "宽搜可在限定步数找到方案；无解题卡不可入库",
+    "failure": "超出有效步数/无可移动后失败，撤销的成绩标签与普通成绩不同",
+    "mobile": "四向滑动阈值一致，不因页面滚动误触，画布外不禁用普通触摸",
+    "afk": "任一有效游玩时刻切后台/锁屏/恢复，剩余时间、玩家位置与未完成目标不变化；恢复后手动继续"
+  },
+  "integration": {
+    "separateClassicProgress": true,
+    "noAssistedRequired": true,
+    "requiredFeatures": [
+      "fixed_2048_board",
+      "challenge_no_spawn",
+      "target_tile"
+    ],
+    "adaptToHead": true
+  },
+  "designerNotes": ""
+}

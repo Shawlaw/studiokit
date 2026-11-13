@@ -1,0 +1,147 @@
+{
+  "schemaVersion": "1.0.0",
+  "id": "shadow-leap-C02",
+  "gameId": "shadow-leap",
+  "stageNumber": 2,
+  "chapter": "影之试炼",
+  "title": "月下断桥",
+  "difficulty": 2,
+  "targetDurationSec": [
+    45,
+    155
+  ],
+  "goalStatement": "通过移动桥与易碎桥后抵达影门",
+  "decision": "移动桥短路 vs 宽静态平台绕行",
+  "practicedSkill": "等待移动相位，易碎平台起跳前预留方向",
+  "discovery": "两条路径不同步且都能到终点",
+  "mode": "challenge",
+  "content": {
+    "coordinates": "420×740逻辑像素；平台 xCenter 与 height 均为世界坐标；height=0为出发平台，向上为正；禁止按屏幕坐标硬编码",
+    "playerSpawn": {
+      "platformId": "p0",
+      "offsetX": 0
+    },
+    "platforms": [
+      {
+        "id": "p0",
+        "xCenter": 205,
+        "height": 0,
+        "width": 120,
+        "kind": "static"
+      },
+      {
+        "id": "p1",
+        "xCenter": 171,
+        "height": 72,
+        "width": 103,
+        "kind": "moving",
+        "amplitude": 18,
+        "periodSec": 3.0,
+        "phase": 0
+      },
+      {
+        "id": "p2",
+        "xCenter": 267,
+        "height": 146,
+        "width": 85,
+        "kind": "fragile",
+        "breakDelaySec": 0.65
+      },
+      {
+        "id": "p3",
+        "xCenter": 239,
+        "height": 219,
+        "width": 94,
+        "kind": "moving",
+        "amplitude": 22,
+        "periodSec": 2.6,
+        "phase": 1.57
+      },
+      {
+        "id": "p4",
+        "xCenter": 165,
+        "height": 291,
+        "width": 100,
+        "kind": "static"
+      },
+      {
+        "id": "p5",
+        "xCenter": 214,
+        "height": 363,
+        "width": 105,
+        "kind": "static"
+      },
+      {
+        "id": "q2",
+        "xCenter": 92,
+        "height": 149,
+        "width": 93,
+        "kind": "static"
+      },
+      {
+        "id": "q3",
+        "xCenter": 106,
+        "height": 221,
+        "width": 95,
+        "kind": "static"
+      }
+    ],
+    "mainRoute": [
+      "p0",
+      "p1",
+      "p2",
+      "p3",
+      "p4",
+      "p5"
+    ],
+    "alternativeRoute": [
+      "p1",
+      "q2",
+      "q3",
+      "p4"
+    ],
+    "goal": {
+      "type": "gate",
+      "xCenter": 210,
+      "height": 405,
+      "radius": 38
+    },
+    "requiredAbility": "none",
+    "stageRule": "fork",
+    "collectibles": [],
+    "deathPolicy": "落出关卡边界后从最近房间检查点重试，关卡任务不回退"
+  },
+  "referencePlan": {
+    "main": [
+      "p0",
+      "p1",
+      "p2",
+      "p3",
+      "p4",
+      "p5"
+    ],
+    "optional": [
+      "p1",
+      "q2",
+      "q3",
+      "p4"
+    ],
+    "tactics": "易碎平台在脚下有0.65秒醒目裂纹提示，不能无预警坍塌"
+  },
+  "acceptance": {
+    "success": "主路径 ['p0', 'p1', 'p2', 'p3', 'p4', 'p5'] 能在允许动作集下连贯落地并触发出口",
+    "failure": "无影冲前两关必须可解；S3 起必需动作与奖励路线独立；死亡返回关内检查点",
+    "mobile": "左右持续按压与影冲按钮支持两指并发，屏幕边缘影冲按钮≥44CSS px",
+    "afk": "任一有效游玩时刻切后台/锁屏/恢复，剩余时间、玩家位置与未完成目标不变化；恢复后手动继续"
+  },
+  "integration": {
+    "separateClassicProgress": true,
+    "noAssistedRequired": true,
+    "requiredFeatures": [
+      "challenge_mode",
+      "stage_gate"
+    ],
+    "adaptToHead": true
+  },
+  "designerNotes": "易碎平台在脚下有0.65秒醒目裂纹提示，不能无预警坍塌"
+}
