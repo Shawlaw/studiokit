@@ -4,9 +4,9 @@
 
 - **线上站点：** <https://shawlaw.github.io/studiokit/> · <https://studiokit.pages.dev/>
 - **源码：** <https://github.com/Shawlaw/studiokit>（MIT 许可）
-- **当前工具：** Badge Studio `2.2.1`；街机厅 Arcade `0.7.0`（13 款竖屏小游戏，已发布）
+- **当前工具：** Badge Studio `2.2.1`；街机厅 Arcade `0.8.0`（13 款竖屏小游戏 + 78 关挑战模式，已发布）
 - **计划中的工具：** Rounded Image（尚未实现，等待原始需求/规格）
-- **最近发布：** 2026-11-13，Arcade 0.7.0（13 款主动道具、自然收尾、一次性 20 分钟提醒与随机入口；GitHub Pages + Cloudflare Pages 双端）
+- **最近发布：** 2026-11-13，Arcade 0.8.0（影跃影冲与影之试炼、13 款游戏 × 6 关挑战模式、挑战记录与导出导入；GitHub Pages + Cloudflare Pages 双端）
 - **运行方式：** 纯静态文件；无后端、无账号、无构建依赖、无第三方 CDN
 
 ## 目录结构
@@ -24,7 +24,7 @@ StudioKit/
 │   │   ├── index.html
 │   │   ├── README.md
 │   │   └── CHANGELOG.md
-│   └── arcade/                      # 街机厅，当前 v0.7.0（已发布）
+│   └── arcade/                      # 街机厅，当前 v0.8.0（已发布）
 │       ├── index.html               # 游戏中心页（统计/分享/安装/预载）
 │       ├── engine.js                # 街机专用共享运行时
 │       ├── arcade.css               # 街机专用样式
@@ -36,6 +36,7 @@ StudioKit/
 │       ├── DESIGN-0.5.0.md          # 统计/分享/PWA/离线设计与回滚说明
 │       ├── DESIGN-0.6.0.md          # 星海 Boss/叠加、矿工瞄准线与全屏说明
 │       ├── DESIGN-0.7.0.md          # 全游戏道具、短局目标与适度游玩设计
+│       ├── DESIGN-0.8.0.md          # 影冲/影之试炼与 13 游戏 78 关挑战架构、兼容与回滚
 │       ├── README.md
 │       └── CHANGELOG.md
 ├── templates/single-page-tool/      # 新工具模板

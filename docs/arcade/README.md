@@ -1,8 +1,8 @@
-# Arcade 0.8 / 0.9 文档索引
+# Arcade 0.8.0 文档索引
 
-本目录保存 Arcade 0.8.0 游戏性重构与 0.9.0 关卡设计落地的**计划、事实与验收工具**，不是产品文档，也不进入发布产物（`tools/build_site.py` 的白名单只含 `index.html`、`favicon.svg`、`shared`、`apps`）。
+本目录保存 Arcade 0.8.0 游戏性重构与 78 关挑战模式（基于 0.9 关卡设计包）的**计划、事实与验收工具**，不是产品文档，也不进入发布产物（`tools/build_site.py` 的白名单只含 `index.html`、`favicon.svg`、`shared`、`apps`）。
 
-## 0.8.0 竖切片（已完成，未发布）
+## 0.8.0 竖切片（已随 0.8.0 发布）
 
 | 文档 | 内容 | 状态 |
 | --- | --- | --- |
@@ -15,7 +15,7 @@
 | [0.8.0-REVIEW.md](0.8.0-REVIEW.md) | GP007：独立 Reviewer 结论（Blocker/Major/Minor/UNVERIFIED）与逐条验收对照 | 已完成：APPROVE-WITH-NOTES（0 Blocker / 2 Major closed / 6 Minor 已由 Lead 收尾） |
 | [0.8.0-PLAYTEST.md](0.8.0-PLAYTEST.md) | GP007：Owner 两轮试玩脚本、观察问题清单与截图 | **待 Owner 试玩（Agent 不可代签，发布门槛未通过）** |
 
-## 0.9.0 关卡设计落地（进行中，未发布）
+## 0.9 关卡设计包落地（随 Arcade 0.8.0 发布；目录版本指设计包）
 
 | 文档 | 内容 | 状态 |
 | --- | --- | --- |
@@ -35,4 +35,4 @@
 - 基线事实以 `5fbe897` 为准；并行 Worker 的未提交改动不写入事实文档，除非另有说明。
 - 任何“已实现/通过”的结论都必须附源码位置或命令结果；未验证项标 `UNVERIFIED`。
 - 不覆盖任何 DONE 任务（T001–T033），不修改 `tasks/queue.json`、`TASKS.md` 或版本号；0.8.0 竖切片的仓库任务登记为 T034–T040（见 `0.8.0-PLAN.md`）。
-- 0.8.0 竖切片未发布：`apps/arcade` 的 `ARCADE_VERSION` 保持 `0.7.0`，发布与否由 Owner 决定（见 `0.8.0-PLAYTEST.md`）。
+- 0.8.0 已双端发布；`apps/arcade` 的 `ARCADE_VERSION` 为 `0.8.0`。Owner 试玩与 5 项设计差量裁决仍待收集（见 `0.8.0-PLAYTEST.md`、`0.9/PLAYTEST.md`）。

@@ -1,27 +1,29 @@
 # Arcade Changelog
 
-## 0.9.0-dev — 2026-11-13（开发中，未发布、未升版本）
+## 0.8.0 — 2026-11-13（已发布）
 
-把外部 0.9 关卡设计包（13 游戏 × 6 关 = 78 关）落地为每款游戏的独立挑战模式；经典/无尽保持一级入口，版本号仍为 0.7.0。
+本版本以 `0.8.0` 名义发布，同时包含影跃影冲竖切片与外部 0.9 关卡设计包的 13 游戏 × 6 关（78 关）挑战模式；`docs/arcade/0.9/` 中的 `0.9` 是设计包版本，不是应用版本。
 
-- 平台：新增 `window.Arcade.Challenge`（`studiokit:arcade:challenge:v1` 记录：cleared/best/assisted/collectibles；取关/解锁/结算 HTML/选关 HTML；导出/导入加法兼容；`Progress.resetAll/resetGame` 同步清理挑战记录）。新增 `tools/arcade_09_data.mjs`：校验设计包并生成 13 个运行时数据 `apps/arcade/challenge/<gameId>.js`（不含参考解）+ 测试夹具 + 数据报告，输出幂等。`arcade.css` 增加挑战选关/结算/标记共享样式；`sw.js` 预缓存 13 个数据文件（缓存版本待发布时升）。
+把外部 0.9 关卡设计包（13 游戏 × 6 关 = 78 关）落地为每款游戏的独立挑战模式；经典/无尽保持一级入口，引擎、注册表与 SW 缓存统一升至 0.8.0。
+
+- 平台：新增 `window.Arcade.Challenge`（`studiokit:arcade:challenge:v1` 记录：cleared/best/assisted/collectibles；取关/解锁/结算 HTML/选关 HTML；导出/导入加法兼容；`Progress.resetAll/resetGame` 同步清理挑战记录）。新增 `tools/arcade_09_data.mjs`：校验设计包并生成 13 个运行时数据 `apps/arcade/challenge/<gameId>.js`（不含参考解）+ 测试夹具 + 数据报告，输出幂等。`arcade.css` 增加挑战选关/结算/标记共享样式；`sw.js` 预缓存 13 个数据文件且缓存版本升至 0.8.0。
 - 影跃：0.8 影之试炼迁移为 0.9 C01–C06 数据驱动（影冲/影门/支线卷轴/侧风/开关/检查点/失败复盘），旧 `mode:'trial'` 存档映射 C01–C03 或提示重开、不静默删档；新增 CH-SL 场景（C01–C06 真实输入回放）。
 - 12 款其余游戏：俄罗斯方块/2048/记忆翻牌/贪吃蛇/打地鼠/极速车道/重力翻转/砖块计划/雪铃/层塔/星海突击/黄金矿工 各增 6 关挑战模式（固定盘面/地图/脚本时间轴/固定车流/固定障碍/固定砖阵/铃序/委托/波次/矿图），逐游戏实现契约 §4 的统一入口/选关/记录/暂停退出/失败重试/存档/assisted，并保留全部 0.7/0.8 经典机制。
 - 测试：`tools/arcade_gameplay_test.mjs` 支持 `--suite=base|challenge|all`、`--game`、自动发现 `tools/challenge/*.mjs`；新增 78 关设计↔运行时数据门禁（CH-DATA-001）与 13 游戏经典入口门禁（CH-CLASSIC-001）；13 游戏各新增确定性场景模块。`arcade_smoke.mjs` 85/85 保持。
 - 文档：仓库内 `docs/arcade/0.9/` 完整导入设计源与校验脚本、差异报告、集成契约、实施计划、数据报告、13 份实现记录（证据等级/设计差异/UNVERIFIED）、独立评审与 Owner 试玩包。
 - 未验证：iOS/Android 真机触控/手感/低端机帧率；良多物理/弹幕/摆钩关卡为 engine-replay 证据而非真人输入；设计层差异（影跃捷径/时长、砖块 K 可达性最小修正、星海 Boss 时间窗弱点等）需 Owner/Reviewer 决定。78 关数据与参考解由设计包自检证明存在性，不代表真实可玩性。
-- 发布：未 push/合并/打 Tag/部署；`ARCADE_VERSION`、注册表、SW 缓存版本保持 0.7.0。
+- 发布：推送 `main` 后由 GitHub Actions 双端部署（GitHub Pages + Cloudflare Pages）；`ARCADE_VERSION`、注册表、SW 缓存版本统一为 `0.8.0`；发布后文档同步提交记录 Actions run 与 `verify_deploy.py` 双端逐文件校验结果。
 
-## 0.8.0-dev — 2026-11-13（开发中，未发布、未升版本）
+## 0.8.0 影跃竖切片（同一版本发布；以下为开发过程记录）
 
-本轮只做《影跃》的玩法深度竖切片，用 Owner 试玩验证“一款游戏先出现真正的目标/决策/技巧/探索”后再决定是否推广到其余 12 款；其余游戏与 0.7.0 一致，`ARCADE_VERSION` 故意保持 `0.7.0`。
+本轮只做《影跃》的玩法深度竖切片，用 Owner 试玩验证“一款游戏先出现真正的目标/决策/技巧/探索”后再决定是否推广到其余 12 款；其余游戏与 0.7.0 一致；本竖切片随后与 0.9 设计包一起以 `0.8.0` 发布。
 
 - 影冲（GP004）：新增空中一次短水平冲刺（620px/s × 0.13s ≈ 80 逻辑像素，重力 ×0.25，落地终止并保留 60% 横向惯性）；每次成功着陆补充一次、开局/重开各一次；不可用时不缓存。键盘 `Shift`/`J` + 独立 ≥44px 触屏按钮（可与画布左右半屏多指并发），按钮/画布状态与残影音效同步；存档只向既有 `runs:v1` 的 `data` 追加 `dashCharges/dashTimer/dashDir`，旧档缺字段按 1/0 恢复；新增 `setSeed/resetWithSeed/startClassicWithSeed` 等确定性测试钩子。
 - 影之试炼（GP005）：新增 S1 初入影林 / S2 月下断桥 / S3 影冲试炼 三关手写关卡、顶部影门结算、失足 1 次点击重试、暂停退出本关；经典主按钮保持「开始游戏」，`btn2` 进入试炼；三关手工数据内嵌，独立求解器 3/3 PASS（S3 关键缺口几何上必须一次影冲，错误冲刺全部回收不判死）；进行中状态写入既有 `runs:v1` 的 `data`（`mode/stageIndex/trialElapsed/trialScrolls/trialResults/...`），旧档缺 `mode` 按经典恢复；试炼不写经典最高分/Playtime 轮次、不新增 localStorage key、不改 Schema、结算不区分 assisted（是否使用羽落/月弹不单独标记）。
 - 双路线与探索（GP006）：S2「稳妥长路 / 近路快线」双路线均可通关（求解器理论最短 11.12s vs 7.88s），结算/三关总结显示路线与卷轴；金色卷轴为可选探索（不影响战力）；失足复盘按关卡给出可归因提示与「卷轴是可选的」说明；新增 `trialInfo.route/routeLabel/routes/routeInfo/scrollsCollected/scrollsTotal` 与只读 `routeInfo()/forceRoute()` 测试钩子。
 - 测试基座（GP003）：从 `tools/arcade_smoke.mjs` 抽出零依赖 CDP 库 `tools/lib/arcade_cdp.mjs`（85 项 smoke 行为与数量不变、端口可 env 覆盖）；新增 `tools/arcade_gameplay_test.mjs` 确定性场景（11 个：seed 复现、影冲单次/落地补充/暂停刷新恢复、旧档恢复、试炼三关状态机、失败重试、暂停刷新恢复、双路线判定、卷轴可选、Boss 生成清关、赛车安全走廊）；新增 `tools/arcade_stage_solver.mjs` 三关独立可达性求解器。
 - 文档：新增 `docs/arcade/`（事实冻结、六维量表、S1–S3 数据与设计、确定性测试协议、独立评审与 Owner 试玩包）；不进发布产物。
-- 测试：`arcade_smoke.mjs` 85/85（经典与 13 款零回归）、`arcade_gameplay_test.mjs --repeat=2` 11 场景×2 全绿、`arcade_stage_solver.mjs` 双路径 3/3 PASS、`validate_site.py` / `build_site.py` / `node --check` 全过；`verify_deploy.py` 未执行（未发布）。
+- 测试：`arcade_smoke.mjs` 85/85（经典与 13 款零回归）、`arcade_gameplay_test.mjs --repeat=2` 11 场景×2 全绿、`arcade_stage_solver.mjs` 双路径 3/3 PASS、`validate_site.py` / `build_site.py` / `node --check` 全过；`verify_deploy.py` 在 0.8.0 发布时对双端逐文件校验通过。
 - 未验证：iOS/Android 真机多指触控与手感、真人通关率/难度、低端机 60fps——均保留 UNVERIFIED，等待 Owner 试玩（GP007 门槛）。
 
 ## 0.7.0 — 2026-11-13（已发布）

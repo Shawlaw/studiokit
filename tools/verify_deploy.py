@@ -39,6 +39,19 @@ PATHS = [
     'apps/arcade/games/shadow-leap.html',
     'apps/arcade/games/pendulum-tower.html',
     'apps/arcade/games/gold-miner.html',
+    'apps/arcade/challenge/block-drop.js',
+    'apps/arcade/challenge/brick-breaker.js',
+    'apps/arcade/challenge/gold-miner.js',
+    'apps/arcade/challenge/gravity-flip.js',
+    'apps/arcade/challenge/memory-flip.js',
+    'apps/arcade/challenge/merge-2048.js',
+    'apps/arcade/challenge/mole-whack.js',
+    'apps/arcade/challenge/pendulum-tower.js',
+    'apps/arcade/challenge/road-rush.js',
+    'apps/arcade/challenge/shadow-leap.js',
+    'apps/arcade/challenge/snake-run.js',
+    'apps/arcade/challenge/snowbells.js',
+    'apps/arcade/challenge/star-raid.js',
 ]
 TEXT_SUFFIXES = {'.html', '.css', '.js', '.json', '.webmanifest', '.svg', '.txt'}
 USER_AGENT = 'StudioKit-deploy-check/1.0 (+https://github.com/Shawlaw/studiokit)'

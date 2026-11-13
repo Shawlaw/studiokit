@@ -2,6 +2,25 @@
 
 StudioKit 门户本身没有独立的 semver；以下按仓库里程碑与工具版本记录。各工具的详细变更见 `apps/<tool>/CHANGELOG.md`。
 
+## Arcade 0.8.0 — 2026-11-13（已发布）
+
+### Added
+- 影跃：空中影冲（每次着陆补充一次，Shift/J + 独立触屏按钮）与「影之试炼」挑战模式（影门出口、失败 1 次点击重试、可选卷轴、双路线、失败复盘）；0.8 试炼随后迁移为 0.9 设计包的 C01–C06。
+- 挑战模式：导入 Owner 0.9 关卡设计包（13 游戏 × 6 关 = 78 关），每款游戏新增第二种入口「挑战 6 关」：固定盘面/地图/时间轴/车流/障碍/砖阵/铃序/委托/波次/矿图，选关解锁、记录/最佳/assisted/收集、暂停退出、1 次点击重试。
+- 平台：`A.Challenge` 共享 API 与独立记录 key `studiokit:arcade:challenge:v1`（导出/导入/清除兼容）；`tools/arcade_09_data.mjs` 校验设计包并幂等生成 13 个运行时数据；挑战 UI 共享样式与 SW 预缓存。
+
+### Changed
+- `ARCADE_VERSION`、注册表、中心页版本号与 Service Worker 缓存统一升至 `0.8.0`。
+- 影跃 0.8 `mode:'trial'` 旧档安全降级（映射 C01–C03 或提示重开，不静默删档）。
+
+### Compatibility
+- `progress:v1` / `runs:v1` / `prefs:v1` / `playtime:v1` 的 key 与 Schema 均未改变；挑战局状态只追加在 `runs:v1` 的 `data`，挑战记录使用独立 `challenge:v1`；挑战不写经典最高分与 Playtime 轮次。
+
+### Verification
+- `validate_site.py` / `build_site.py` / 全部 `node --check`（含 13 页内联脚本）通过；`arcade_smoke.mjs` **85/85**；`arcade_gameplay_test.mjs --suite=all --repeat=2` **208/208**（798s）；78 关设计与运行时数据门禁、13 游戏经典入口门禁 PASS；`tools/arcade_09_data.mjs` 重跑字节一致。
+- 独立 Reviewer：APPROVE-WITH-NOTES / 0 Blocker（5 项设计差量需 Owner 裁决）；原生 CDP 独立实玩 47/47。
+- 双端发布：推送 `main` 后由 GitHub Actions 部署 GitHub Pages + Cloudflare Pages，`verify_deploy.py` 逐文件校验（发布后文档同步提交记录 Actions run 与校验结果）；iOS/Android 真机手感与 Owner 两轮试玩仍 UNVERIFIED。
+
 ## Arcade 0.7.0 — 2026-11-13（已发布）
 
 ### Added

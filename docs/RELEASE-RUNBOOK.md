@@ -5,7 +5,10 @@
 - 仓库：<https://github.com/Shawlaw/studiokit>
 - GitHub Pages：<https://shawlaw.github.io/studiokit/>
 - Cloudflare Pages：<https://studiokit.pages.dev/>
-- 最近发布：Arcade `0.7.0`（2026-11-13，已发布）
+- 本次发布（进行中）：Arcade `0.8.0`（2026-11-13）
+  - 批次内容：影跃影冲/影之试炼、13 游戏 × 6 关挑战模式（基于 0.9 设计包）、`challenge:v1` 记录与数据管线
+  - 发布后在此记录提交、Actions run 与 `verify_deploy.py` 双端结果
+- 上一个发布：Arcade `0.7.0`（2026-11-13，已发布）
   - 批次内容：T032 全游戏主动道具/自然收尾/一次性 20 分钟提醒/随机入口、T033 试玩截图复核与发布
   - 提交 `34f03df`；Actions `43274342320` 四个 job 均成功
   - 双端验证：`tools/verify_deploy.py` 24/24 文件 SHA-256 一致，Arcade `0.7.0` / Badge `2.2.1`
@@ -13,7 +16,7 @@
   - 批次内容：T028 黄金矿工目标取整/HUD、T029 俄罗斯方块左右手触屏按钮、T030 MIT 与源码入口、T031 双端发布
   - 提交 `0159437`；Actions `43155182519` 四个 job 均成功
   - 双端验证：`tools/verify_deploy.py` 当时覆盖的 11 个文件 SHA-256 一致，Arcade `0.6.2` / Badge `2.2.1`（0.7.0 起校验清单扩为 24 个文件）
-- 本地开发中（未发布）：Arcade `0.8.0` 影跃影冲/影之试炼竖切片 + `0.9.0` 13 游戏 × 6 关挑战模式（设计包导入 `docs/arcade/0.9/`），分支 `feat/arcade-0.8-gameplay`，未推送、未合并、未发布；`ARCADE_VERSION` 故意保持 `0.7.0`。发布需 Owner 试玩反馈与明确的 `PUBLISH_TO_MAIN` 授权，发布前必须按本 runbook 全量复跑并决定是否升版本/SW 缓存版本/注册表版本。
+- 发布授权：Owner 2026-11-13 明确指令「以 0.8.0 版本名义提交推送并发布 GitHub Pages」；按双目标规则同时部署 Cloudflare Pages 并逐文件校验。
 - 上一个发布：Arcade `0.6.1`（2026-11-12），提交 `1c9501e`，Actions `43060497094` 成功
 - 部署目标：
   - GitHub Pages：GitHub Actions（`.github/workflows/deploy.yml`）
