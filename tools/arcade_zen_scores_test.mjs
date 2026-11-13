@@ -1,9 +1,10 @@
 #!/usr/bin/env node
 /**
- * Arcade 0.8.1 新特性门禁：俄罗斯方块禅模式 + 积分记录表。
+ * Arcade 0.8.2 门禁：俄罗斯方块禅模式 + 积分记录表 + 控制区压缩（0.8.1 特性 + 0.8.2 布局断言）。
  *
  * 契约来源：docs/arcade/0.8.1-CONTRACT.md §3（scores:v1 数据模型）、§4.2（Progress 集成）、
- * §5.5（#test 禅模式钩子）、§6（中心页积分表）与 §7（自动化测试 10 类场景）。
+ * §5.5（#test 禅模式钩子）、§6（中心页积分表）与 §7（自动化测试场景）；
+ * docs/arcade/0.8.2-CONTRACT.md §4（控件压缩 / 画布增量断言）。
  *
  * 零 npm 依赖：复用 tools/lib/arcade_cdp.mjs（静态服务器 / Chrome / CDP / 断言记录器），
  * 只使用 Node 内置模块与本机 Chrome；不联网、不引入框架。
@@ -580,7 +581,7 @@ const SCENARIOS = [
         assert(zenLayout.hasZenBarClass === true, width + 'px 禅模式缺少 body.has-zen-bar');
         assert(zenLayout.canvas && zenLayout.canvas.h > 0, width + 'px 禅模式画布高度读取失败：' + JSON.stringify(zenLayout.canvas));
         const deltaH = zenLayout.canvas.h - classicLayout.canvas.h;
-        assert(deltaH >= 40, width + 'px 禅模式画布高度增量 ' + deltaH + 'px < 40px：禅 ' + zenLayout.canvas.h + 'px vs 经典 ' + classicLayout.canvas.h + 'px');
+        assert(deltaH >= 44, width + 'px 禅模式画布高度增量 ' + deltaH + 'px < 44px：禅 ' + zenLayout.canvas.h + 'px vs 经典 ' + classicLayout.canvas.h + 'px');
         assert(zenLayout.docH <= zenLayout.vh + 1, width + 'px 禅模式纵向溢出：docH=' + zenLayout.docH + ' > vh=' + zenLayout.vh);
         assert(zenLayout.scrollW <= zenLayout.clientW + 1, width + 'px 禅模式横向溢出：scrollWidth=' + zenLayout.scrollW + ' > clientWidth=' + zenLayout.clientW);
         layoutRows.push({ width, classicH: classicLayout.canvas.h, zenH: zenLayout.canvas.h, deltaH, docH: zenLayout.docH, vh: zenLayout.vh });
@@ -1268,9 +1269,9 @@ function printScenarioList() {
 }
 
 function printHeader(selected) {
-  console.log('# Arcade 0.8.1 禅模式 + 积分记录测试 · ' + selected.length + ' 个场景');
+  console.log('# Arcade 0.8.2 禅模式 + 积分记录 + 控件压缩测试 · ' + selected.length + ' 个场景');
   console.log('# 静态服务器 http://127.0.0.1:' + SERVER_PORT + ' · CDP 端口 ' + CDP_PORT + ' · 截图 ' + path.relative(REPO_ROOT, ARTIFACTS));
-  console.log('# 契约：docs/arcade/0.8.1-CONTRACT.md §3/§4/§5.5/§7');
+  console.log('# 契约：docs/arcade/0.8.1-CONTRACT.md §3/§4/§5.5/§7 + docs/arcade/0.8.2-CONTRACT.md §4');
   console.log('');
 }
 
