@@ -9,6 +9,15 @@
   <link rel="stylesheet" href="../arcade.css" />
   <script src="../../../shared/site-shell.js" defer></script>
   <script src="../engine.js"></script>
+  <script src="../challenge/pendulum-tower.js"></script>
+  <style>
+    .challenge-layer { position: absolute; inset: 0; z-index: 6; display: flex; flex-direction: column; gap: 8px; padding: 10px; overflow-y: auto; background: rgba(8, 13, 28, 0.96); border-radius: inherit; }
+    .challenge-layer[hidden] { display: none; }
+    .challenge-layer .ac-btn[hidden] { display: none; }
+    .challenge-layer .ac-challenge-panel { flex: 0 0 auto; }
+    .challenge-layer .ac-btn { flex: 0 0 auto; width: 100%; min-height: 44px; }
+    .stage-box > .ac-challenge-hud { position: absolute; left: 8px; right: 8px; top: 8px; width: auto; z-index: 4; pointer-events: none; }
+  </style>
   <title>层塔 · 街机厅 · StudioKit</title>
 </head>
 <body class="arcade-body has-extra-controls has-game-tools" data-studiokit-app="arcade" data-studiokit-app-title="街机厅 Arcade" style="--ac-accent:#e5941b; --card-accent:#e5941b">
@@ -35,6 +44,11 @@
             <button type="button" class="ac-btn" data-ov-btn>开始游戏</button>
             <button type="button" class="ac-btn ac-btn-secondary" data-ov-btn2 hidden>重新开始</button>
           </div>
+        </div>
+        <div class="ac-challenge-hud" data-ch-hud hidden></div>
+        <div class="challenge-layer" data-ch-layer hidden>
+          <div data-ch-panel></div>
+          <button type="button" class="ac-btn ac-btn-secondary" data-ch-back>返回开始</button>
         </div>
       </div>
     </div>
@@ -90,6 +104,36 @@
       };
 
       const particles = A.createParticles();
+
+      /* ---------- 0.9 挑战模式：建筑委托（固定钟摆/目标偏置/限次） ---------- */
+      const gameId = 'pendulum-tower';
+      const challengeData = A.Challenge ? A.Challenge.stages(gameId) : [];
+      const challengeAvailable = challengeData.length === 6;
+      const chDom = {
+        hud: document.querySelector('[data-ch-hud]'),
+        layer: document.querySelector('[data-ch-layer]'),
+        panelHost: document.querySelector('[data-ch-panel]'),
+        back: document.querySelector('[data-ch-back]'),
+      };
+      const gameHudEl = document.querySelector('.game-hud');
+      let mode = 'classic';
+      let chStage = null;
+      let chStageIndex = -1;
+      let chBoxesData = [];
+      let chMarks = [];
+      let chPlaced = 0;
+      let chMisses = 0;
+      let chElapsed = 0;
+      let chAssisted = false;
+      let chErrorReason = '';
+      let chLastResult = null;
+      let chMaxLean = LEAN_LIMIT;
+      let chWin = { floorsAtLeast: 4, noCollapse: true };
+      let chLimits = { maxDroppedBoxes: 5, braceUsesAllowed: 0, guideUsesAllowed: 0 };
+      let chToolsUsed = { guide: 0, brace: 0 };
+      let chGoalHintTimer = 0;
+      let chHudSecond = -1;
+      let chEvaluation = null;
 
       let boxes = [];
       let drop = null;
@@ -147,8 +191,10 @@
           const button = joyButtons[id];
           const active = id === 'guide' && guideArmed;
           const usable = id === 'guide'
-            ? floorsReached >= 3 && pendHasBox && !drop && !guideArmed
-            : canBrace();
+            ? (mode === 'challenge'
+              ? tools.guide > 0 && pendHasBox && !drop && !guideArmed
+              : floorsReached >= 3 && pendHasBox && !drop && !guideArmed)
+            : (mode === 'challenge' ? tools.brace > 0 && !drop : canBrace());
           const name = id === 'guide' ? '垂线预览' : '配重';
           const detail = id === 'guide' ? '显示下一箱落点投影' : '当前倾斜减半、角速度降至 25%';
           button.querySelector('[data-joy-count]').textContent = String(tools[id]);
@@ -161,15 +207,21 @@
       function useJoy(id) {
         if (state !== 'playing' || !Object.prototype.hasOwnProperty.call(tools, id) || tools[id] <= 0) return false;
         if (id === 'guide') {
-          if (floorsReached < 3 || !pendHasBox || drop || guideArmed) return false;
+          if (mode !== 'challenge' && floorsReached < 3) return false;
+          if (!pendHasBox || drop || guideArmed) return false;
           /* 次数在真正释放时扣；武装后放弃（暂停/离开）不会白白消耗。 */
           guideArmed = true;
+          if (mode === 'challenge') chAssisted = true;
           A.Sfx.play('spring');
         } else if (id === 'brace') {
           if (!canBrace()) return false;
           tools.brace -= 1;
           towerLean *= 0.5;
           leanVel *= 0.25;
+          if (mode === 'challenge') {
+            chAssisted = true;
+            chToolsUsed.brace += 1;
+          }
           feedback = { text: '配重稳住！', color: '#7ce8e0', life: 1.1 };
           A.Sfx.play('land');
         } else {
@@ -227,13 +279,21 @@
       }
 
       function syncHud() {
-        floorsReached = Math.max(0, boxes.length - 2);
+        floorsReached = mode === 'challenge' ? chPlaced : Math.max(0, boxes.length - 2);
+        if (mode === 'challenge') {
+          syncChallengeHud();
+          return;
+        }
         dom.hudScore.textContent = String(score);
         dom.hudFloor.textContent = String(floorsReached);
         syncJoyTools();
       }
 
       function startGame() {
+        mode = 'classic';
+        hideChallengePanel();
+        if (chDom.hud) chDom.hud.hidden = true;
+        if (gameHudEl) gameHudEl.hidden = false;
         autosave.clear();
         reset();
         state = 'playing';
@@ -285,28 +345,530 @@
         loop.pause();
         state = 'paused';
         autosave.saveNow();
-        ui.show({
+        const opts = {
           title: '已暂停',
           text: '吊臂停住了。<br/>局内进度已保存，可以随时离开。',
           btn: '继续',
           onBtn: resumeGame,
-        });
+        };
+        if (mode === 'challenge') {
+          opts.btn2 = '退出挑战';
+          opts.onBtn2 = exitToChallengeSelect;
+        }
+        ui.show(opts);
         pauseUi.sync(); syncJoyTools();
       }
 
       function showStart() {
+        mode = 'classic';
+        hideChallengePanel();
+        if (chDom.hud) chDom.hud.hidden = true;
+        if (gameHudEl) gameHudEl.hidden = false;
         ui.show({
           title: '层塔',
           text: '钟摆叠箱：看准时机松手。<br/>钟摆会随层数慢慢加速<br/>偏心会让高塔晃动甚至倒塌 · 完美对齐有连击',
           btn: '开始游戏',
           onBtn: startGame,
+          btn2: challengeAvailable ? '挑战 6 关' : '挑战数据不可用',
+          onBtn2: challengeAvailable ? showChallengePanel : null,
+        });
+        if (dom.ovBtn2) dom.ovBtn2.disabled = !challengeAvailable;
+      }
+
+      /* ---------- 0.9 挑战模式实现 ---------- */
+      function chEsc(value) {
+        return String(value == null ? '' : value).replace(/[&<>"']/g, (ch) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[ch]));
+      }
+
+      function chPanelRoot() {
+        return chDom.panelHost ? chDom.panelHost.querySelector('.ac-challenge-panel') : null;
+      }
+
+      function syncChallengePanel() {
+        if (!chDom.panelHost || !A.Challenge) return;
+        chDom.panelHost.innerHTML = A.Challenge.stageListHtml(gameId);
+        const root = chPanelRoot();
+        if (root) root.hidden = true;
+        chDom.panelHost.querySelectorAll('.ac-stage-btn').forEach((button) => {
+          button.addEventListener('click', () => {
+            if (button.disabled) return;
+            startChallenge(button.dataset.stageId);
+          });
         });
       }
 
-      /* ---------- 局内存档 ---------- */
+      function showChallengePanel() {
+        if (!challengeAvailable) {
+          ui.show({ title: '挑战数据不可用', text: '挑战关卡数据加载失败，经典模式不受影响。', btn: '返回', onBtn: showStart });
+          return;
+        }
+        syncChallengePanel();
+        const root = chPanelRoot();
+        if (root) root.hidden = false;
+        if (chDom.layer) chDom.layer.hidden = false;
+        if (chDom.back) chDom.back.hidden = false;
+        loop.pause();
+        state = 'challenge-menu';
+        pauseUi.sync();
+      }
+
+      function hideChallengePanel() {
+        if (chDom.layer) chDom.layer.hidden = true;
+        if (chDom.back) chDom.back.hidden = true;
+        const root = chPanelRoot();
+        if (root) root.hidden = true;
+      }
+
+      function backToStartFromPanel() {
+        hideChallengePanel();
+        mode = 'classic';
+        chStage = null;
+        chStageIndex = -1;
+        if (chDom.hud) chDom.hud.hidden = true;
+        if (gameHudEl) gameHudEl.hidden = false;
+        reset();
+        state = 'ready';
+        showStart();
+        pauseUi.sync();
+        syncJoyTools();
+      }
+
+      function chCurrentSpec() {
+        return chPlaced < chBoxesData.length ? chBoxesData[chPlaced] : null;
+      }
+
+      function chTargetOffset() {
+        const spec = chCurrentSpec();
+        return spec ? Number(spec.targetOffsetPx) || 0 : 0;
+      }
+
+      function chTolerance() {
+        const spec = chCurrentSpec();
+        return spec ? Number(spec.tolerancePx) || 8 : 8;
+      }
+
+      function evaluationLevel() {
+        const allWithin = chMarks.length > 0 && chMarks.every((mark) => mark.withinTolerance);
+        const noTools = chToolsUsed.guide + chToolsUsed.brace === 0;
+        const noMiss = chMisses === 0;
+        if (allWithin && noTools && noMiss) return 'gold';
+        if (allWithin) return 'silver';
+        return 'bronze';
+      }
+
+      function evaluationLabel(level) {
+        return { gold: '金牌：全标记达成且零道具零失误', silver: '银牌：全部标记在容差内', bronze: '铜牌：完成并保持稳定' }[level] || '—';
+      }
+
+      function buildChallengeStage(index) {
+        const stage = challengeData[index];
+        if (!stage) return false;
+        mode = 'challenge';
+        chStage = stage;
+        chStageIndex = index;
+        const content = stage.content || {};
+        chBoxesData = (Array.isArray(content.boxes) ? content.boxes.slice() : []).sort((a, b) => (a.order || 0) - (b.order || 0));
+        chMarks = [];
+        chPlaced = 0;
+        chMisses = 0;
+        chElapsed = 0;
+        chAssisted = false;
+        chErrorReason = '';
+        chLastResult = null;
+        chEvaluation = null;
+        chGoalHintTimer = 3;
+        chHudSecond = -1;
+        chLimits = Object.assign({ maxDroppedBoxes: 5, braceUsesAllowed: 0, guideUsesAllowed: 0 }, content.limits || {});
+        chWin = Object.assign({ floorsAtLeast: chBoxesData.length, noCollapse: true, allMarkTargetsWithinTolerance: false }, content.win || {});
+        chMaxLean = Number(chLimits.maxTowerLeanAbs) || LEAN_LIMIT;
+        const pendulum = content.pendulum || {};
+        pend.length = Number(pendulum.length) || PEND_LEN;
+        pend.gravity = 680 * (Number(pendulum.speedFactor) || 1);
+        pend.angle = Number(pendulum.deterministicStartPhaseRad) || 0;
+        /* 设计只给起始角（0=垂直），需确定性初始角速度才能形成可预测摆幅（约 ±0.95rad，与经典一致）。 */
+        pend.vel = 2.05 * (Number(pendulum.speedFactor) || 1);
+        pend.damping = 0.006;
+        const baseCenterX = Number(content.baseCenterX) || W / 2;
+        boxes = [{ x: baseCenterX - 55, y: -44, w: 110, h: 44, base: true }];
+        drop = null;
+        collapsed = [];
+        towerLean = 0;
+        leanVel = 0;
+        camY = -474;
+        score = 0;
+        perfectCombo = 0;
+        floorsReached = 0;
+        collapseTimer = 0;
+        flash = 0;
+        shakeVal = 0;
+        feedback = null;
+        pendHasBox = true;
+        pendReload = 0;
+        guideArmed = false;
+        chToolsUsed = { guide: 0, brace: 0 };
+        tools.guide = Math.min(JOY_CAPS.guide, Math.max(0, Number(chLimits.guideUsesAllowed) || 0));
+        tools.brace = Math.min(JOY_CAPS.brace, Math.max(0, Number(chLimits.braceUsesAllowed) || 0));
+        particles.clear();
+        syncHud();
+        syncJoyTools();
+        syncChallengeHud();
+        return true;
+      }
+
+      function syncChallengeHud() {
+        if (mode !== 'challenge' || !chStage) return;
+        if (gameHudEl) gameHudEl.hidden = true;
+        if (!chDom.hud) return;
+        chDom.hud.hidden = false;
+        const second = Math.floor(chElapsed);
+        if (second === chHudSecond && state === 'playing') return;
+        chHudSecond = second;
+        const label = 'C' + String(chStage.stageNumber || 0).padStart(2, '0');
+        const spec = chCurrentSpec();
+        const targetText = spec ? '目标 ' + (Number(spec.targetOffsetPx) || 0) + 'px ±' + (Number(spec.tolerancePx) || 8) : '委托完成';
+        chDom.hud.innerHTML =
+          '<strong>' + chEsc(label + ' ' + chStage.title) + '</strong>' +
+          '<span>' + chEsc(chStage.goalStatement || '') + '</span>' +
+          '<span>楼层 ' + chPlaced + '/' + (chWin.floorsAtLeast || chBoxesData.length) + '</span>' +
+          '<span>' + chEsc(targetText) + '</span>' +
+          '<span>倾斜 ' + Math.abs(towerLean).toFixed(3) + '/' + chMaxLean + '</span>' +
+          '<span>落空 ' + chMisses + '/' + (chLimits.maxDroppedBoxes || 0) + '</span>' +
+          '<span>用时 ' + A.Challenge.formatTime(chElapsed) + '</span>';
+      }
+
+      function startChallenge(ref) {
+        if (!challengeAvailable || !A.Challenge) return false;
+        const stage = A.Challenge.stage(gameId, ref);
+        if (!stage) return false;
+        if (!A.Challenge.isUnlocked(gameId, stage.id)) return false;
+        const index = challengeData.findIndex((item) => item.id === stage.id);
+        if (index < 0 || !buildChallengeStage(index)) return false;
+        state = 'playing';
+        hideChallengePanel();
+        ui.hide();
+        loop.resume();
+        pauseUi.sync();
+        syncJoyTools();
+        syncChallengeHud();
+        autosave.clear();
+        autosave.saveNow();
+        return true;
+      }
+
+      /* 挑战落箱：不自动吸附，按真实释放位置落箱；记录与目标偏置的偏差。 */
+      function settleChallengeDrop() {
+        const top = towerTop();
+        const overlap = Math.min(drop.x + drop.w, top.x + top.w) - Math.max(drop.x, top.x);
+        const baseCenterX = Number(chStage.content.baseCenterX) || W / 2;
+        if (overlap < 6) {
+          chMisses += 1;
+          feedback = { text: '落空！', color: '#ff5d5d', life: 1.1 };
+          A.Sfx.play('land');
+          drop = null;
+          syncHud();
+          syncChallengeHud();
+          if (chMisses > (chLimits.maxDroppedBoxes || 0)) {
+            challengeFail('落空 ' + chMisses + ' 次，超过委托允许的 ' + chLimits.maxDroppedBoxes + ' 次');
+          }
+          return;
+        }
+        const center = drop.x + drop.w / 2;
+        const actualOffset = Math.round((center - baseCenterX) * 10) / 10;
+        const targetOffset = chTargetOffset();
+        const tolerance = chTolerance();
+        const within = Math.abs(actualOffset - targetOffset) <= tolerance;
+        chMarks.push({ order: chPlaced + 1, targetOffsetPx: targetOffset, actualOffsetPx: actualOffset, tolerancePx: tolerance, withinTolerance: within });
+        chPlaced += 1;
+        const y = top.y - drop.h;
+        boxes.push({ x: drop.x, y, w: drop.w, h: drop.h });
+        const e = center - (top.x + top.w / 2);
+        leanVel += e * 0.006 * (1 + chPlaced * 0.02);
+        perfectCombo = 0;
+        feedback = { text: (within ? '标记内 ' : '偏离 ') + Math.round(actualOffset) + 'px', color: within ? '#ffd23f' : '#93a0c8', life: 1.1 };
+        A.Sfx.play(within ? 'perfect' : 'land');
+        particles.emit(center, y + drop.h, {
+          count: A.reducedMotion ? 6 : 14,
+          speed: [30, 140],
+          angle: [Math.PI * 1.05, Math.PI * 1.95],
+          life: [0.25, 0.6],
+          size: [2, 4],
+          colors: within ? ['#ffd23f', '#ffffff'] : ['#c9a06b', '#8a6a43'],
+          gravity: 500,
+        });
+        drop = null;
+        syncHud();
+        syncChallengeHud();
+        autosave.saveNow();
+      }
+
+      function updateChallenge(dt) {
+        particles.update(dt);
+        flash = Math.max(0, flash - dt);
+        shakeVal = Math.max(0, shakeVal - dt * 20);
+        if (feedback) {
+          feedback.life -= dt;
+          if (feedback.life <= 0) feedback = null;
+        }
+        leanMeter = chMaxLean > 0 ? clamp(Math.abs(towerLean) / chMaxLean, 0, 1) : 0;
+        if (state !== 'playing') {
+          input.endFrame();
+          return;
+        }
+        autosave.tick(dt);
+        chElapsed += dt;
+        chGoalHintTimer = Math.max(0, chGoalHintTimer - dt);
+        A.Physics.pendulumStep(pend, dt);
+        if (!pendHasBox) {
+          pendReload -= dt;
+          if (pendReload <= 0) {
+            pendHasBox = true;
+            syncJoyTools();
+          }
+        }
+        const stiffness = 6.2;
+        const damp = 0.9;
+        leanVel += (-stiffness * towerLean - damp * leanVel) * dt;
+        towerLean += leanVel * dt;
+        if (Math.abs(towerLean) > chMaxLean) {
+          challengeFail('塔身倾斜 ' + Math.abs(towerLean).toFixed(3) + ' 超过委托上限 ' + chMaxLean + '，结构失稳');
+          input.endFrame();
+          return;
+        }
+        if (drop) {
+          drop.prevBottom = drop.y + drop.h;
+          drop.vy += GRAVITY * dt;
+          drop.y += drop.vy * dt;
+          drop.squash = Math.max(0, drop.squash - dt);
+          const top = towerTop();
+          if (drop.vy > 0 && drop.prevBottom <= top.y + 1 && drop.y + drop.h >= top.y) {
+            settleChallengeDrop();
+          } else if (drop && drop.y > camY + H + 120) {
+            drop = null;
+            chMisses += 1;
+            syncChallengeHud();
+            if (chMisses > (chLimits.maxDroppedBoxes || 0)) {
+              challengeFail('落空 ' + chMisses + ' 次，超过委托允许的 ' + chLimits.maxDroppedBoxes + ' 次');
+              input.endFrame();
+              return;
+            }
+          }
+        }
+        const spaceNow = input.isDown(' ');
+        if (input.pointer.wentDown || (spaceNow && !updateChallenge._space)) releaseBox();
+        updateChallenge._space = spaceNow;
+        camY = lerp(camY, currentTargetCam(), Math.min(1, 4 * dt));
+        if (!drop && chPlaced >= (chWin.floorsAtLeast || chBoxesData.length) && Math.abs(towerLean) <= chMaxLean * 0.98 && Math.abs(leanVel) < 0.4) {
+          challengeClear();
+          input.endFrame();
+          return;
+        }
+        syncChallengeHud();
+        input.endFrame();
+      }
+
+      function challengeClear() {
+        if (mode !== 'challenge' || !chStage) return false;
+        state = 'cleared';
+        chGoalHintTimer = 0;
+        autosave.clear();
+        loop.pause();
+        syncJoyTools();
+        chEvaluation = evaluationLevel();
+        const result = { timeSec: Math.round(chElapsed * 10) / 10, assisted: chAssisted, collectibles: [] };
+        chLastResult = result;
+        if (A.Challenge) A.Challenge.markCleared(gameId, chStage.id, result);
+        const isLast = chStageIndex >= challengeData.length - 1;
+        const marksText = chMarks.map((mark) => mark.order + ':' + mark.actualOffsetPx + 'px' + (mark.withinTolerance ? '✓' : '✗')).join(' ');
+        const resultText =
+          A.Challenge.resultHtml(chStage, result) +
+          '<p class="ac-challenge-tip">' + chEsc(evaluationLabel(chEvaluation)) + '<br/>落点 ' + chEsc(marksText || '—') + ' · 落空 ' + chMisses + ' · 倾斜峰值 ' + Math.abs(towerLean).toFixed(3) + '</p>';
+        ui.show({
+          title: '挑战通关',
+          text: resultText,
+          btn: isLast ? '返回选关' : '下一关',
+          onBtn: () => {
+            if (isLast) exitToChallengeSelect();
+            else startChallenge(challengeData[chStageIndex + 1].id);
+          },
+          btn2: '重玩本关',
+          onBtn2: () => startChallenge(chStage.id),
+        });
+        pauseUi.sync();
+        syncChallengeHud();
+        return true;
+      }
+
+      function challengeFail(reason) {
+        if (mode !== 'challenge' || !chStage) return false;
+        if (state === 'failed' || state === 'cleared') return false;
+        state = 'failed';
+        chErrorReason = reason || '本关失败';
+        chEvaluation = evaluationLevel();
+        autosave.clear();
+        loop.pause();
+        syncJoyTools();
+        ui.show({
+          title: '挑战失败',
+          text:
+            '<p class="ac-challenge-tip">' + chEsc(chErrorReason) + '</p>' +
+            '<p class="ac-challenge-result-row">本关目标：' + chEsc(chStage.goalStatement || '') + ' · 已放 ' + chPlaced + ' 层</p>',
+          btn: '重试本关',
+          onBtn: () => startChallenge(chStage.id),
+          btn2: '返回选关',
+          onBtn2: exitToChallengeSelect,
+        });
+        pauseUi.sync();
+        syncChallengeHud();
+        return true;
+      }
+
+      function exitToChallengeSelect() {
+        mode = 'classic';
+        chStage = null;
+        chStageIndex = -1;
+        chMarks = [];
+        chLastResult = null;
+        chErrorReason = '';
+        autosave.clear();
+        if (chDom.hud) chDom.hud.hidden = true;
+        if (gameHudEl) gameHudEl.hidden = false;
+        reset();
+        state = 'ready';
+        pauseUi.sync();
+        syncJoyTools();
+        showChallengePanel();
+        return true;
+      }
+
+      function exitChallengeToStart() {
+        hideChallengePanel();
+        mode = 'classic';
+        chStage = null;
+        chStageIndex = -1;
+        chMarks = [];
+        autosave.clear();
+        if (chDom.hud) chDom.hud.hidden = true;
+        if (gameHudEl) gameHudEl.hidden = false;
+        reset();
+        state = 'ready';
+        pauseUi.sync();
+        syncJoyTools();
+        showStart();
+        return true;
+      }
+
+      function restoreChallenge(data) {
+        if (!A.Challenge || !data || typeof data.stageId !== 'string') return false;
+        const stage = A.Challenge.stage(gameId, data.stageId);
+        if (!stage) return false;
+        const index = challengeData.findIndex((item) => item.id === stage.id);
+        if (index < 0 || !buildChallengeStage(index)) return false;
+        if (Array.isArray(data.boxes) && data.boxes.length >= 1) {
+          boxes = data.boxes
+            .filter((box) => box && isFinite(box.x) && isFinite(box.y))
+            .map((box) => ({ x: Number(box.x), y: Number(box.y), w: clamp(Number(box.w), 20, 200), h: clamp(Number(box.h), 12, 80), base: !!box.base }));
+          if (!boxes.length || !boxes[0].base) return false;
+        }
+        if (data.pend && isFinite(data.pend.angle)) {
+          pend.angle = Number(data.pend.angle);
+          pend.vel = Number(data.pend.vel) || 0;
+        }
+        chPlaced = Math.max(0, Number(data.chPlaced) || 0);
+        chMisses = Math.max(0, Number(data.chMisses) || 0);
+        chMarks = Array.isArray(data.chMarks) ? data.chMarks.filter((mark) => mark && typeof mark === 'object') : [];
+        chElapsed = Math.max(0, Number(data.chElapsed) || 0);
+        chAssisted = !!data.chAssisted;
+        chToolsUsed = data.chToolsUsed && typeof data.chToolsUsed === 'object' ? { guide: Number(data.chToolsUsed.guide) || 0, brace: Number(data.chToolsUsed.brace) || 0 } : { guide: 0, brace: 0 };
+        towerLean = Number(data.towerLean) || 0;
+        leanVel = Number(data.leanVel) || 0;
+        camY = Number(data.camY) || -474;
+        drop = null;
+        pendHasBox = true;
+        pendReload = 0;
+        guideArmed = false;
+        chEvaluation = null;
+        chErrorReason = '';
+        state = 'playing';
+        syncHud();
+        syncJoyTools();
+        syncChallengeHud();
+        return true;
+      }
+
+      function challengeObservable() {
+        const top = towerTop();
+        const pb = pendulumBoxScreen();
+        return {
+          mode,
+          stageId: chStage ? chStage.id : null,
+          stageNumber: chStage ? chStage.stageNumber : null,
+          state,
+          boxes: boxes.map((box) => ({ x: box.x, y: box.y, w: box.w, h: box.h, base: !!box.base })),
+          floors: chPlaced,
+          floorsRequired: chWin.floorsAtLeast || chBoxesData.length,
+          top: { x: top.x, y: top.y },
+          pendulum: { x: pb.x, y: pb.y, angle: pb.angle, vel: pend.vel, hasBox: pendHasBox },
+          drop: drop ? { x: drop.x, y: drop.y } : null,
+          towerLean,
+          leanVel,
+          maxLean: chMaxLean,
+          marks: chMarks.slice(),
+          currentTargetOffsetPx: chTargetOffset(),
+          currentTolerancePx: chTolerance(),
+          misses: chMisses,
+          maxDroppedBoxes: chLimits.maxDroppedBoxes,
+          tools: { guide: tools.guide, brace: tools.brace },
+          toolsUsed: { guide: chToolsUsed.guide, brace: chToolsUsed.brace },
+          assisted: chAssisted,
+          elapsedSec: Math.round(chElapsed * 10) / 10,
+          goalStatement: chStage ? chStage.goalStatement : null,
+          evaluation: chEvaluation,
+          errorReason: chErrorReason,
+          cleared: !!chLastResult,
+        };
+      }
+
+      /* 测试便捷钩子：在钟摆箱中心到达 baseCenterX+offset 的下一帧立即松手（仍是真实 releaseBox 物理）。 */
+      function releaseWhenAligned(offset, tolerance) {
+        if (mode !== 'challenge' || state !== 'playing') return Promise.resolve(false);
+        const baseCenterX = Number(chStage.content.baseCenterX) || W / 2;
+        const target = baseCenterX + (Number(offset) || 0);
+        const tol = Math.max(1, Number(tolerance) || 6);
+        const started = performance.now();
+        return new Promise((resolve) => {
+          function check() {
+            if (mode !== 'challenge' || state !== 'playing' || !pendHasBox || drop) {
+              resolve(false);
+              return;
+            }
+            const p = pendulumBoxScreen();
+            if (Math.abs(p.x - target) <= tol) {
+              releaseBox();
+              resolve(true);
+              return;
+            }
+            if (performance.now() - started > 9000) {
+              resolve(false);
+              return;
+            }
+            requestAnimationFrame(check);
+          }
+          requestAnimationFrame(check);
+        });
+      }
+
+
       function serialize() {
         if (state !== 'playing' && state !== 'paused') return null;
         return {
+          mode,
+          stageId: mode === 'challenge' && chStage ? chStage.id : null,
+          chPlaced,
+          chMisses,
+          chMarks: chMarks.slice(),
+          chElapsed,
+          chAssisted,
+          chToolsUsed: { guide: chToolsUsed.guide, brace: chToolsUsed.brace },
           boxes: boxes.map((b) => ({ x: b.x, y: b.y, w: b.w, h: b.h, base: !!b.base })),
           drop: drop
             ? { x: drop.x, y: drop.y, w: drop.w, h: drop.h, vy: drop.vy, prevBottom: drop.prevBottom, missed: !!drop.missed, squash: drop.squash }
@@ -325,7 +887,7 @@
         };
       }
 
-      function restore(data) {
+      function restoreClassic(data) {
         if (!data || !Array.isArray(data.boxes) || data.boxes.length < 2) return false;
         try {
           reset();
@@ -384,9 +946,16 @@
         }
       }
 
+      /* 统一恢复入口：0.8 及更早存档缺 mode 一律按经典恢复；mode:'challenge' 走挑战恢复。 */
+      function restore(data) {
+        if (!data || typeof data !== 'object') return false;
+        if (data.mode === 'challenge') return restoreChallenge(data);
+        return restoreClassic(data);
+      }
+
       const autosave = A.createRunAutosave('pendulum-tower', serialize, {
         every: 4,
-        meta: () => ({ score, summary: `得分 ${score} · ${floorsReached} 层` }),
+        meta: () => ({ score, summary: mode === 'challenge' && chStage ? '挑战 ' + chStage.id + ' · ' + chPlaced + ' 层' : `得分 ${score} · ${floorsReached} 层` }),
       });
 
       /* ---------- 松手放箱 ---------- */
@@ -408,7 +977,13 @@
         drop.prevBottom = drop.y + drop.h;
         const usedGuide = guideArmed;
         guideArmed = false;
-        if (usedGuide) tools.guide = Math.max(0, tools.guide - 1);
+        if (usedGuide) {
+          tools.guide = Math.max(0, tools.guide - 1);
+          if (mode === 'challenge') {
+            chAssisted = true;
+            chToolsUsed.guide += 1;
+          }
+        }
         syncJoyTools();
         A.Sfx.play('ui');
         if (usedGuide) autosave.saveNow();
@@ -493,6 +1068,10 @@
 
       /* ---------- 更新 ---------- */
       function update(dt) {
+        if (mode === 'challenge') {
+          updateChallenge(dt);
+          return;
+        }
         particles.update(dt);
         flash = Math.max(0, flash - dt);
         shakeVal = Math.max(0, shakeVal - dt * 20);
@@ -683,6 +1262,29 @@
 
         if (drop) drawCrate(drop.x, drop.y, drop.w, drop.h, { squash: drop.squash });
 
+        /* 挑战委托：在塔顶画出当前箱的目标偏置标记（不吸附，只提示）。 */
+        if (mode === 'challenge' && chStage && chPlaced < chBoxesData.length) {
+          const topBox = towerTop();
+          const targetX = (Number(chStage.content.baseCenterX) || W / 2) + chTargetOffset();
+          const tol = chTolerance();
+          ctx.save();
+          ctx.strokeStyle = 'rgba(99,224,200,0.85)';
+          ctx.lineWidth = 2;
+          ctx.setLineDash([5, 5]);
+          ctx.beginPath();
+          ctx.moveTo(targetX, topBox.y - 46);
+          ctx.lineTo(targetX, topBox.y + 6);
+          ctx.stroke();
+          ctx.setLineDash([]);
+          ctx.fillStyle = 'rgba(99,224,200,0.8)';
+          ctx.fillRect(targetX - BOX_W / 2, topBox.y - 50, BOX_W, 4);
+          A.draw.label(ctx, '目标 ' + chTargetOffset() + 'px ±' + tol, clamp(targetX, 46, W - 46), topBox.y - 62, {
+            font: 'bold 11px system-ui',
+            color: '#63e0c8',
+          });
+          ctx.restore();
+        }
+
         particles.draw(ctx);
         ctx.restore();
 
@@ -770,13 +1372,30 @@
           A.draw.label(ctx, '倒塌', mid + bw / 2 + 22, H - 25, { font: '10px system-ui', color: '#93a0c8' });
         }
 
-        A.draw.label(ctx, 'SCORE ' + score, 12, 20, { align: 'left', font: 'bold 14px system-ui', color: '#ffd23f' });
-        A.draw.label(ctx, '第 ' + floorsReached + ' 层 · 摆速 ' + (pend.gravity / 680).toFixed(1) + '×', W / 2, 44, {
-          font: '11px system-ui',
-          color: 'rgba(238,241,255,0.55)',
-        });
-        if (perfectCombo >= 2) {
-          A.draw.label(ctx, 'PERFECT ×' + perfectCombo, W - 12, 20, { align: 'right', font: 'bold 13px system-ui', color: '#63d68c' });
+        if (mode === 'challenge' && chStage) {
+          const chLabel = 'C' + String(chStage.stageNumber || 0).padStart(2, '0') + ' ' + chStage.title;
+          A.draw.label(ctx, chLabel, 12, 20, { align: 'left', font: 'bold 14px system-ui', color: '#63e0c8' });
+          A.draw.label(ctx, '楼层 ' + chPlaced + '/' + (chWin.floorsAtLeast || chBoxesData.length) + ' · 目标 ' + chTargetOffset() + 'px', W / 2, 44, {
+            font: '11px system-ui',
+            color: 'rgba(238,241,255,0.72)',
+          });
+          A.draw.label(ctx, '倾斜 ' + Math.abs(towerLean).toFixed(3) + '/' + chMaxLean + ' · 落空 ' + chMisses, W - 12, 20, {
+            align: 'right',
+            font: 'bold 12px system-ui',
+            color: Math.abs(towerLean) > chMaxLean * 0.8 ? '#ff9a9a' : '#93a0c8',
+          });
+          if (chGoalHintTimer > 0) {
+            A.draw.label(ctx, chStage.goalStatement || '', W / 2, 64, { font: '12px system-ui', color: '#ffe08a' });
+          }
+        } else {
+          A.draw.label(ctx, 'SCORE ' + score, 12, 20, { align: 'left', font: 'bold 14px system-ui', color: '#ffd23f' });
+          A.draw.label(ctx, '第 ' + floorsReached + ' 层 · 摆速 ' + (pend.gravity / 680).toFixed(1) + '×', W / 2, 44, {
+            font: '11px system-ui',
+            color: 'rgba(238,241,255,0.55)',
+          });
+          if (perfectCombo >= 2) {
+            A.draw.label(ctx, 'PERFECT ×' + perfectCombo, W - 12, 20, { align: 'right', font: 'bold 13px system-ui', color: '#63d68c' });
+          }
         }
         ctx.restore();
       }
@@ -808,6 +1427,7 @@
 
       reset();
       state = 'ready';
+      syncChallengePanel();
       if (location.hash === '#test') {
         window.__arcadeTest = {
           info() {
@@ -874,6 +1494,62 @@
             settleDrop();
             syncJoyTools();
             return feedback ? feedback.text : null;
+          },
+          /* ---------- 0.9 挑战模式钩子（契约见 docs/arcade/0.9/INTEGRATION-CONTRACT.md §5） ---------- */
+          challengeStages() {
+            return challengeData.map((stage) => {
+              const best = A.Challenge.progress(gameId).best[stage.id] || null;
+              return {
+                id: stage.id,
+                stageNumber: stage.stageNumber,
+                title: stage.title,
+                unlocked: A.Challenge.isUnlocked(gameId, stage.id),
+                best: best ? { timeSec: best.timeSec, assisted: !!best.assisted } : null,
+              };
+            });
+          },
+          startChallenge(ref) {
+            return startChallenge(ref);
+          },
+          challengeInfo() {
+            return {
+              mode,
+              stageId: chStage ? chStage.id : null,
+              stageIndex: chStageIndex,
+              state,
+              elapsedSec: Math.round(chElapsed * 10) / 10,
+              objective: chStage ? chStage.goalStatement : null,
+              cleared: !!chLastResult,
+              collectibles: [],
+              assisted: chAssisted,
+              floors: chPlaced,
+              floorsRequired: chWin.floorsAtLeast || chBoxesData.length,
+              marks: chMarks.slice(),
+              misses: chMisses,
+              maxDroppedBoxes: chLimits.maxDroppedBoxes,
+              towerLean,
+              maxLean: chMaxLean,
+              toolsUsed: { guide: chToolsUsed.guide, brace: chToolsUsed.brace },
+              evaluation: chEvaluation,
+              errorReason: chErrorReason,
+            };
+          },
+          stageObservable() {
+            return challengeObservable();
+          },
+          releaseWhenAligned(offset, tolerance) {
+            return releaseWhenAligned(offset, tolerance);
+          },
+          forceStageClear(assisted) {
+            if (mode !== 'challenge' || state !== 'playing' || !chStage) return false;
+            if (assisted === true) chAssisted = true;
+            return challengeClear();
+          },
+          forceStageFail(reason) {
+            return challengeFail(typeof reason === 'string' && reason ? reason : '测试强制失败');
+          },
+          exitChallenge() {
+            return exitChallengeToStart();
           },
         };
       }

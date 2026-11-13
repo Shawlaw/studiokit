@@ -9,7 +9,35 @@
   <link rel="stylesheet" href="../arcade.css" />
   <script src="../../../shared/site-shell.js" defer></script>
   <script src="../engine.js"></script>
+  <script src="../challenge/road-rush.js"></script>
   <title>极速车道 · 街机厅 · StudioKit</title>
+  <style>
+    /* 0.9 挑战模式：选关层盖住画布；挑战 HUD 叠在画布顶部，不拦截点击。 */
+    .challenge-layer {
+      position: absolute;
+      inset: 0;
+      z-index: 6;
+      display: flex;
+      flex-direction: column;
+      gap: 8px;
+      padding: 10px;
+      overflow-y: auto;
+      background: rgba(8, 13, 28, 0.96);
+      border-radius: inherit;
+    }
+    .challenge-layer[hidden] { display: none; }
+    .challenge-layer .ac-challenge-panel { flex: 0 0 auto; }
+    .challenge-layer .ac-btn { flex: 0 0 auto; width: 100%; min-height: 44px; }
+    .stage-box > .ac-challenge-hud {
+      position: absolute;
+      left: 8px;
+      right: 8px;
+      top: 8px;
+      width: auto;
+      z-index: 4;
+      pointer-events: none;
+    }
+  </style>
 </head>
 <body class="arcade-body has-extra-controls has-game-tools" data-studiokit-app="arcade" data-studiokit-app-title="街机厅 Arcade" style="--ac-accent:#ff7847; --card-accent:#ff7847">
   <noscript><p class="ac-noscript">此游戏需要启用 JavaScript 才能运行。</p></noscript>
@@ -35,8 +63,14 @@
             <button type="button" class="ac-btn ac-btn-secondary" data-ov-btn2 hidden>重新开始</button>
           </div>
         </div>
+        <div class="ac-challenge-hud" data-ch-hud hidden></div>
+        <div class="challenge-layer" data-ch-layer hidden>
+          <div data-ch-panel></div>
+          <button type="button" class="ac-btn ac-btn-secondary" data-ch-back>返回开始</button>
+        </div>
       </div>
     </div>
+    <p class="ac-challenge-tip" data-ch-tip hidden></p>
     <div class="touch-pad road-pad" data-touch-pad aria-label="赛车变道操作面板">
       <button type="button" class="touch-btn" data-touch="left" aria-label="向左变道">←</button>
       <button type="button" class="touch-btn" data-touch="right" aria-label="向右变道">→</button>
@@ -145,6 +179,43 @@
       let calmTimer = 0;
       let joyLastResult = null;
 
+      /* ---------- 0.9 挑战模式：固定车流时间轴（数据来自 ../challenge/road-rush.js） ---------- */
+      const GAME_ID = 'road-rush';
+      const challengeData = A.Challenge ? A.Challenge.stages(GAME_ID) : [];
+      const challengeAvailable = challengeData.length === 6;
+      const chDom = {
+        hud: document.querySelector('[data-ch-hud]'),
+        layer: document.querySelector('[data-ch-layer]'),
+        panelHost: document.querySelector('[data-ch-panel]'),
+        back: document.querySelector('[data-ch-back]'),
+        tip: document.querySelector('[data-ch-tip]'),
+      };
+      const gameHudEl = document.querySelector('.game-hud');
+      const CH_GOAL_HINT_SEC = 3;
+      let mode = 'classic';
+      let chStage = null;
+      let chStageIndex = -1;
+      let chSimTime = 0;
+      let chDuration = 12;
+      let chSlots = [];
+      let chSlotCheck = 0;
+      let chLane = 1;
+      let chLanePos = 1;
+      let chLaneFrom = 1;
+      let chLaneChangeTotal = 0.22;
+      let chLaneChangeLeft = 0;
+      let chScore = 0;
+      let chPassed = 0;
+      let chNear = 0;
+      let chDistance = 0;
+      let chGoalHintTimer = 0;
+      let chHudSecond = -1;
+      let chResult = null;
+      let chAssisted = false;
+      let chErrorReason = '';
+      let chFailedSlot = null;
+      let chKeyDown = { left: false, right: false };
+
       let high = A.Progress.get('road-rush').high;
       dom.hudHigh.textContent = String(high);
 
@@ -196,6 +267,13 @@
       }
 
       function startGame() {
+        mode = 'classic';
+        chStage = null;
+        chStageIndex = -1;
+        hideChallengePanel();
+        if (chDom.hud) chDom.hud.hidden = true;
+        if (chDom.tip) chDom.tip.hidden = true;
+        if (gameHudEl) gameHudEl.hidden = false;
         autosave.clear();
         reset();
         state = 'playing';
@@ -241,31 +319,332 @@
         syncTouchPad();
       }
 
+      /* ---------- 0.9 挑战模式实现 ---------- */
+      function chEsc(value) {
+        return String(value == null ? '' : value).replace(/[&<>"']/g, (ch) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[ch]));
+      }
+      function fmtTime(sec) {
+        const s = Math.max(0, Math.floor(Number(sec) || 0));
+        return String(Math.floor(s / 60)).padStart(2, '0') + ':' + String(s % 60).padStart(2, '0');
+      }
+      function chContent() {
+        return (chStage && chStage.content) || {};
+      }
+      function chGoalMinDistance() {
+        const goal = chContent().goal || {};
+        return Math.max(0, Number(goal.minDistanceMeters) || 0);
+      }
+      function chLaneCount() {
+        return Math.max(2, Math.floor(Number(chContent().laneCount) || LANES));
+      }
+      function chBuildSlots(stage) {
+        const content = (stage && stage.content) || {};
+        const laneCount = Math.max(2, Math.floor(Number(content.laneCount) || LANES));
+        const slotDuration = Math.max(0.3, Number(content.slotDurationSec) || 1.15);
+        const timeline = Array.isArray(content.timeline) ? content.timeline : [];
+        return timeline.map((slot, index) => ({
+          slot: index + 1,
+          atSec: Math.max(0, Number(slot && slot.atSec) || 0),
+          occupiedLanes: (Array.isArray(slot && slot.occupiedLanes) ? slot.occupiedLanes : [])
+            .map(Number)
+            .filter((lane) => Number.isInteger(lane) && lane >= 0 && lane < laneCount),
+          telegraphLeadSec: Math.max(0, Number(slot && slot.telegraphLeadSec) || 0),
+          optionalNearPassBonusLanes: (Array.isArray(slot && slot.optionalNearPassBonusLanes) ? slot.optionalNearPassBonusLanes : [])
+            .map(Number)
+            .filter((lane) => Number.isInteger(lane) && lane >= 0 && lane < laneCount),
+          durationSec: slotDuration,
+          passAt: Math.max(0, Number(slot && slot.atSec) || 0) + slotDuration,
+        }));
+      }
+      function chComputeDuration() {
+        return chSlots.length ? chSlots[chSlots.length - 1].passAt : 0;
+      }
+      function chProgressLabel() {
+        return Math.min(chSlots.length, chSlotCheck + 1) + '/' + chSlots.length;
+      }
+      function fmtChallengeLabel(stage) {
+        return 'C' + String((stage && stage.stageNumber) || 0).padStart(2, '0');
+      }
+      function chPanelRoot() {
+        return chDom.panelHost ? chDom.panelHost.querySelector('.ac-challenge-panel') : null;
+      }
+      function syncChallengePanel() {
+        if (!chDom.panelHost || !A.Challenge) return;
+        chDom.panelHost.innerHTML = A.Challenge.stageListHtml(GAME_ID);
+        const root = chPanelRoot();
+        if (root) root.hidden = true;
+        chDom.panelHost.querySelectorAll('.ac-stage-btn').forEach((button) => {
+          button.addEventListener('click', () => {
+            if (button.disabled) return;
+            startChallenge(button.dataset.stageId);
+          });
+        });
+      }
+      function showChallengePanel() {
+        if (!challengeAvailable || !A.Challenge) {
+          ui.show({ title: '挑战数据不可用', text: '挑战关卡数据加载失败，经典模式不受影响。', btn: '返回', onBtn: showStart });
+          return false;
+        }
+        syncChallengePanel();
+        const root = chPanelRoot();
+        if (root) root.hidden = false;
+        if (chDom.layer) chDom.layer.hidden = false;
+        mode = 'classic';
+        chStage = null;
+        chStageIndex = -1;
+        if (chDom.hud) chDom.hud.hidden = true;
+        if (chDom.tip) chDom.tip.hidden = true;
+        if (gameHudEl) gameHudEl.hidden = false;
+        loop.pause();
+        ui.hide();
+        state = 'challenge-menu';
+        pauseUi.sync();
+        syncTouchPad();
+        return true;
+      }
+      function hideChallengePanel() {
+        if (chDom.layer) chDom.layer.hidden = true;
+        const root = chPanelRoot();
+        if (root) root.hidden = true;
+      }
+      function syncChallengeHud() {
+        if (mode !== 'challenge' || !chStage) return;
+        if (gameHudEl) gameHudEl.hidden = true;
+        if (!chDom.hud) return;
+        chDom.hud.hidden = false;
+        const second = Math.floor(chSimTime);
+        if (second === chHudSecond) return;
+        chHudSecond = second;
+        chDom.hud.innerHTML =
+          '<strong>' + chEsc(fmtChallengeLabel(chStage) + ' ' + (chStage.title || '')) + '</strong>' +
+          '<span>目标 ' + Math.round(chGoalMinDistance()) + 'm · 路段 ' + chProgressLabel() + '</span>' +
+          '<span>用时 ' + fmtTime(chSimTime) + '</span>';
+      }
+      function showGoalTip() {
+        if (!chDom.tip || !chStage) return;
+        chDom.tip.hidden = false;
+        chDom.tip.textContent = '目标：' + (chStage.goalStatement || '') + ' · ' + (chStage.decision || '提前变道，避开被占用车道');
+      }
+      function startChallenge(ref) {
+        if (!challengeAvailable || !A.Challenge) return false;
+        const stage = A.Challenge.stage(GAME_ID, ref);
+        if (!stage) return false;
+        if (!A.Challenge.isUnlocked(GAME_ID, stage.id)) return false;
+        autosave.clear();
+        mode = 'challenge';
+        chStage = stage;
+        chStageIndex = challengeData.findIndex((item) => item.id === stage.id);
+        chSlots = chBuildSlots(stage);
+        if (!chSlots.length) return false;
+        chDuration = chComputeDuration();
+        chLaneChangeTotal = Math.max(0.05, Number(chContent().laneChangeTimeSec) || 0.22);
+        chLane = clamp(Math.floor(Number(chContent().startLane) || 0), 0, chLaneCount() - 1);
+        chLanePos = chLane;
+        chLaneFrom = chLane;
+        chLaneChangeLeft = 0;
+        chSimTime = 0;
+        chSlotCheck = 0;
+        chScore = 0;
+        chPassed = 0;
+        chNear = 0;
+        chDistance = 0;
+        chFailedSlot = null;
+        chResult = null;
+        chAssisted = false;
+        chErrorReason = '';
+        chGoalHintTimer = CH_GOAL_HINT_SEC;
+        chHudSecond = -1;
+        chKeyDown = { left: false, right: false };
+        cars = [];
+        particles.clear();
+        player.lane = chLane;
+        player.x = laneCenterX(chLane, uOf(0));
+        player.tilt = 0;
+        recordSaved = false;
+        hideChallengePanel();
+        ui.hide();
+        state = 'playing';
+        loop.resume();
+        pauseUi.sync();
+        syncTouchPad();
+        syncChallengeHud();
+        showGoalTip();
+        autosave.saveNow();
+        return true;
+      }
+      function chChangeLane(delta) {
+        if (mode !== 'challenge' || state !== 'playing') return false;
+        const next = clamp(chLane + delta, 0, chLaneCount() - 1);
+        if (next === chLane) return false;
+        chLaneFrom = chLanePos;
+        chLane = next;
+        chLaneChangeLeft = chLaneChangeTotal;
+        player.lane = next;
+        A.Sfx.play('ui');
+        return true;
+      }
+      function chLanePosition() {
+        if (chLaneChangeLeft <= 0) return chLane;
+        const progress = 1 - chLaneChangeLeft / chLaneChangeTotal;
+        return chLaneFrom + (chLane - chLaneFrom) * clamp(progress, 0, 1);
+      }
+      function chCheckSlot(slot) {
+        /* 车辆在时隙结束时到达玩家段：按“真实车道位置（含变道过渡）”判定碰撞。 */
+        const collided = slot.occupiedLanes.some((lane) => Math.abs(chLanePos - lane) <= 0.5);
+        if (collided) {
+          chFailedSlot = slot;
+          const laneText = slot.occupiedLanes.map((lane) => '第 ' + (lane + 1) + ' 车道').join('、');
+          return chFail('第 ' + slot.slot + ' 段：' + laneText + '有车，变道没有在车辆到达前完成');
+        }
+        const near = slot.optionalNearPassBonusLanes.indexOf(Math.round(chLanePos)) !== -1;
+        const rules = chContent().scoreRules || {};
+        if (near) {
+          chNear += 1;
+          chScore += Math.max(0, Number(rules.nearPassBonus) || 0);
+        } else {
+          chScore += Math.max(0, Number(rules.passBonus) || 0);
+        }
+        chPassed += 1;
+        return true;
+      }
+      function chFinishSuccess() {
+        if (mode !== 'challenge' || !chStage || state !== 'playing') return false;
+        const distance = chGoalMinDistance();
+        if (distance > 0 && chDistance + 0.5 < distance) {
+          return chFail('距离 ' + Math.round(chDistance) + 'm 未达到目标 ' + Math.round(distance) + 'm');
+        }
+        state = 'cleared';
+        chGoalHintTimer = 0;
+        if (chDom.tip) chDom.tip.hidden = true;
+        chResult = { timeSec: Math.round(chSimTime * 10) / 10, assisted: chAssisted, collectibles: [] };
+        if (A.Challenge) A.Challenge.markCleared(GAME_ID, chStage.id, chResult);
+        autosave.clear();
+        loop.pause();
+        syncTouchPad();
+        const isLast = chStageIndex >= challengeData.length - 1;
+        ui.show({
+          title: '挑战通关',
+          text:
+            A.Challenge.resultHtml(chStage, chResult) +
+            '<p class="ac-challenge-tip">得分 ' + chScore + ' · 近距超车 ' + chNear + ' 次 · 目标 ' +
+            chEsc(chStage.goalStatement || '') + '</p>',
+          btn: isLast ? '返回选关' : '下一关',
+          onBtn: () => {
+            if (isLast) exitToChallengeSelect();
+            else startChallenge(challengeData[chStageIndex + 1].id);
+          },
+          btn2: '重玩本关',
+          onBtn2: () => startChallenge(chStage.id),
+        });
+        pauseUi.sync();
+        syncChallengeHud();
+        return true;
+      }
+      function chFail(reason) {
+        if (mode !== 'challenge' || !chStage) return false;
+        if (state === 'failed' || state === 'cleared') return false;
+        state = 'failed';
+        chErrorReason = reason || '本关失败';
+        chGoalHintTimer = 0;
+        if (chDom.tip) chDom.tip.hidden = true;
+        autosave.clear();
+        loop.pause();
+        syncTouchPad();
+        ui.show({
+          title: '挑战失败',
+          text:
+            '<p class="ac-challenge-tip">' + chEsc(chErrorReason) + '</p>' +
+            '<p class="ac-challenge-result-row">本关目标：' + chEsc(chStage.goalStatement || '') + '</p>',
+          btn: '重试本关',
+          onBtn: () => startChallenge(chStage.id),
+          btn2: '返回选关',
+          onBtn2: exitToChallengeSelect,
+        });
+        pauseUi.sync();
+        syncChallengeHud();
+        return true;
+      }
+      function exitToChallengeSelect() {
+        mode = 'classic';
+        chStage = null;
+        chStageIndex = -1;
+        chResult = null;
+        chErrorReason = '';
+        chFailedSlot = null;
+        autosave.clear();
+        if (chDom.hud) chDom.hud.hidden = true;
+        if (chDom.tip) chDom.tip.hidden = true;
+        if (gameHudEl) gameHudEl.hidden = false;
+        reset();
+        state = 'ready';
+        pauseUi.sync();
+        syncTouchPad();
+        showChallengePanel();
+        return true;
+      }
+      function exitChallengeToStart() {
+        hideChallengePanel();
+        mode = 'classic';
+        chStage = null;
+        chStageIndex = -1;
+        autosave.clear();
+        if (chDom.hud) chDom.hud.hidden = true;
+        if (chDom.tip) chDom.tip.hidden = true;
+        if (gameHudEl) gameHudEl.hidden = false;
+        reset();
+        state = 'ready';
+        pauseUi.sync();
+        syncTouchPad();
+        showStart();
+        return true;
+      }
       function pauseByUser() {
         if (state !== 'playing') return;
         loop.pause();
         state = 'paused';
         autosave.saveNow();
-        showOverlay('已暂停', '引擎怠速中。<br/>局内进度已保存，可以随时离开。', '继续', resumeGame);
+        const opts = {
+          title: '已暂停',
+          text: '引擎怠速中。<br/>局内进度已保存，可以随时离开。',
+          btn: '继续',
+          onBtn: resumeGame,
+        };
+        if (mode === 'challenge' && chStage) {
+          opts.text = '挑战暂停：' + fmtChallengeLabel(chStage) + ' ' + chEsc(chStage.title || '') + '。<br/>本关进度已保存。';
+          opts.btn2 = '退出挑战';
+          opts.onBtn2 = exitToChallengeSelect;
+        }
+        ui.show(opts);
         pauseUi.sync();
         syncTouchPad();
       }
 
       function showStart() {
-        showOverlay(
-          '极速车道',
-          '四车道赛车避障：5000m 抵达终点。<br/>点击左右按钮或 ←→ 一次变一条车道<br/>生命 ×3 · 道具 1/2 主动使用',
-          '开始游戏',
-          startGame
-        );
+        mode = 'classic';
+        chStage = null;
+        chStageIndex = -1;
+        hideChallengePanel();
+        if (chDom.hud) chDom.hud.hidden = true;
+        if (chDom.tip) chDom.tip.hidden = true;
+        if (gameHudEl) gameHudEl.hidden = false;
+        ui.show({
+          title: '极速车道',
+          text: '四车道赛车避障：5000m 抵达终点。<br/>点击左右按钮或 ←→ 一次变一条车道<br/>生命 ×3 · 道具 1/2 主动使用',
+          btn: '开始游戏',
+          onBtn: startGame,
+          btn2: challengeAvailable ? '挑战 6 关' : '挑战数据不可用',
+          onBtn2: challengeAvailable ? showChallengePanel : null,
+        });
+        if (dom.ovBtn2) dom.ovBtn2.disabled = !challengeAvailable;
       }
 
       function syncJoyTools() {
         if (!dom.joyShield || !dom.joyCalm) return;
+        const classicPlaying = state === 'playing' && mode === 'classic';
         dom.joyShield.querySelector('[data-joy-count]').textContent = String(tools.shield);
         dom.joyCalm.querySelector('[data-joy-count]').textContent = String(tools.calm);
-        dom.joyShield.disabled = state !== 'playing' || shieldArmed || tools.shield <= 0;
-        dom.joyCalm.disabled = state !== 'playing' || calmTimer > 0 || tools.calm <= 0;
+        dom.joyShield.disabled = !classicPlaying || shieldArmed || tools.shield <= 0;
+        dom.joyCalm.disabled = !classicPlaying || calmTimer > 0 || tools.calm <= 0;
         dom.joyShield.setAttribute('aria-pressed', String(shieldArmed));
         dom.joyShield.setAttribute('aria-label', shieldArmed
           ? '防撞气囊已武装，下一次撞车不扣命、不减速'
@@ -277,6 +656,11 @@
 
       function activateJoyTool(id) {
         if (state !== 'playing') return false;
+        /* 挑战模式使用固定时间轴，禁用 0.7 限量道具以保证路线可复现（见 impl 文档设计差异）。 */
+        if (mode === 'challenge') {
+          A.showToast('挑战模式使用固定车流脚本，道具不可用');
+          return false;
+        }
         if (id === 'shield') {
           if (shieldArmed || tools.shield <= 0) return false;
           shieldArmed = true;
@@ -327,6 +711,10 @@
 
       function changeLane(delta) {
         if (state !== 'playing') return;
+        if (mode === 'challenge') {
+          chChangeLane(delta);
+          return;
+        }
         const next = clamp(player.lane + delta, 0, LANES - 1);
         if (next === player.lane) return;
         player.lane = next;
@@ -357,7 +745,28 @@
       /* ---------- 局内存档 ---------- */
       function serialize() {
         if (state !== 'playing' && state !== 'paused') return null;
+        if (mode === 'challenge') {
+          if (!chStage) return null;
+          return {
+            mode: 'challenge',
+            stageId: chStage.id,
+            challengeState: {
+              chSimTime,
+              chSlotCheck,
+              chLane,
+              chLanePos,
+              chLaneFrom,
+              chLaneChangeLeft,
+              chScore,
+              chPassed,
+              chNear,
+              chDistance,
+              chAssisted,
+            },
+          };
+        }
         return {
+          mode: 'classic',
           cars: cars.map((c) => ({ lane: c.lane, z: c.z, own: c.own, w: c.w, h: c.h, truck: c.truck, color: c.color, passed: c.passed })),
           props: props.map((p) => ({ z: p.z, side: p.side, kind: p.kind })),
           speed,
@@ -373,10 +782,59 @@
         };
       }
 
+      function restoreChallenge(data) {
+        if (!A.Challenge || !data || typeof data.stageId !== 'string') return false;
+        const stage = A.Challenge.stage(GAME_ID, data.stageId);
+        if (!stage) return false;
+        /* 契约要求挑战状态放在 data.challengeState；旧/异常档缺失时回退顶层字段，保持兼容。 */
+        const stateData = data.challengeState && typeof data.challengeState === 'object' ? data.challengeState : data;
+        mode = 'challenge';
+        chStage = stage;
+        chStageIndex = challengeData.findIndex((item) => item.id === stage.id);
+        chSlots = chBuildSlots(stage);
+        if (!chSlots.length) return false;
+        chDuration = chComputeDuration();
+        chLaneChangeTotal = Math.max(0.05, Number(chContent().laneChangeTimeSec) || 0.22);
+        chSimTime = clamp(Number(stateData.chSimTime) || 0, 0, chDuration);
+        chSlotCheck = clamp(Math.floor(Number(stateData.chSlotCheck) || 0), 0, chSlots.length);
+        chLane = clamp(Math.floor(Number(stateData.chLane) || 0), 0, chLaneCount() - 1);
+        chLanePos = clamp(Number(stateData.chLanePos) || chLane, 0, chLaneCount() - 1);
+        chLaneFrom = clamp(Number(stateData.chLaneFrom) || chLane, 0, chLaneCount() - 1);
+        chLaneChangeLeft = clamp(Number(stateData.chLaneChangeLeft) || 0, 0, chLaneChangeTotal);
+        chScore = Math.max(0, Number(stateData.chScore) || 0);
+        chPassed = Math.max(0, Math.floor(Number(stateData.chPassed) || 0));
+        chNear = Math.max(0, Math.floor(Number(stateData.chNear) || 0));
+        chDistance = Math.max(0, Number(stateData.chDistance) || 0);
+        chAssisted = !!stateData.chAssisted;
+        chFailedSlot = null;
+        chResult = null;
+        chErrorReason = '';
+        chGoalHintTimer = 0;
+        chHudSecond = -1;
+        chKeyDown = { left: false, right: false };
+        cars = [];
+        player.lane = chLane;
+        player.x = laneCenterX(chLanePos, uOf(0));
+        player.tilt = 0;
+        if (chDom.tip) chDom.tip.hidden = true;
+        state = 'playing';
+        syncChallengeHud();
+        syncTouchPad();
+        return true;
+      }
+
       function restore(data) {
-        if (!data || !Array.isArray(data.cars) || !data.player) return false;
+        if (!data || typeof data !== 'object') return false;
+        if (data.mode === 'challenge') return restoreChallenge(data);
+        if (!Array.isArray(data.cars) || !data.player) return false;
         try {
           reset();
+          mode = 'classic';
+          chStage = null;
+          chStageIndex = -1;
+          if (chDom.hud) chDom.hud.hidden = true;
+          if (chDom.tip) chDom.tip.hidden = true;
+          if (gameHudEl) gameHudEl.hidden = false;
           cars = data.cars
             .filter((c) => c && isFinite(c.z) && isFinite(c.lane))
             .map((c) => ({
@@ -423,7 +881,11 @@
 
       const autosave = A.createRunAutosave('road-rush', serialize, {
         every: 4,
-        meta: () => ({ score: Math.floor(dist), summary: `${Math.floor(dist)}m · ${Math.round(speed * 360)}km/h` }),
+        meta: () => (
+          mode === 'challenge' && chStage
+            ? { score: chScore, summary: `挑战 ${fmtChallengeLabel(chStage)} · 路段 ${chProgressLabel()} · ${Math.round(chDistance)}m` }
+            : { score: Math.floor(dist), summary: `${Math.floor(dist)}m · ${Math.round(speed * 360)}km/h` }
+        ),
       });
 
       function laneClearTime(lane, extra) {
@@ -496,11 +958,62 @@
       }
 
       /* ---------- 更新 ---------- */
+      /* ---------- 挑战模式更新 ---------- */
+      function updateChallenge(dt) {
+        if (state !== 'playing') {
+          input.endFrame();
+          return;
+        }
+        autosave.tick(dt);
+        chSimTime += dt;
+        if (chGoalHintTimer > 0) {
+          chGoalHintTimer = Math.max(0, chGoalHintTimer - dt);
+          if (chGoalHintTimer <= 0 && chDom.tip) chDom.tip.hidden = true;
+        }
+        const goalMin = chGoalMinDistance();
+        chDistance = chDuration > 0 ? Math.min(goalMin, (goalMin * chSimTime) / chDuration) : 0;
+
+        /* 玩家变道：一次按键/点击恰好一条车道，过渡时长来自 laneChangeTimeSec。 */
+        const leftNow = input.isDown('ArrowLeft', 'a');
+        const rightNow = input.isDown('ArrowRight', 'd');
+        if (leftNow && !chKeyDown.left) chChangeLane(-1);
+        if (rightNow && !chKeyDown.right) chChangeLane(1);
+        chKeyDown.left = leftNow;
+        chKeyDown.right = rightNow;
+        if (input.pointer.wentDown) chChangeLane(input.pointer.x < W / 2 ? -1 : 1);
+
+        if (chLaneChangeLeft > 0) chLaneChangeLeft = Math.max(0, chLaneChangeLeft - dt);
+        chLanePos = chLanePosition();
+        player.lane = chLane;
+        player.x = laneCenterX(chLanePos, uOf(0));
+
+        /* 时隙到达：按真实车道位置（含过渡）做碰撞判定。 */
+        while (chSlotCheck < chSlots.length && chSimTime >= chSlots[chSlotCheck].passAt) {
+          chCheckSlot(chSlots[chSlotCheck]);
+          if (state !== 'playing') {
+            input.endFrame();
+            return;
+          }
+          chSlotCheck += 1;
+        }
+        syncChallengeHud();
+        if (state === 'playing' && chSimTime >= chDuration) {
+          chFinishSuccess();
+          input.endFrame();
+          return;
+        }
+        input.endFrame();
+      }
+
       function update(dt) {
         particles.update(dt);
         shake = Math.max(0, shake - dt * 20);
         if (state !== 'playing') {
           input.endFrame();
+          return;
+        }
+        if (mode === 'challenge') {
+          updateChallenge(dt);
           return;
         }
         autosave.tick(dt);
@@ -804,6 +1317,49 @@
         ctx.restore();
       }
 
+      /* 挑战模式：按固定时间轴绘制被占用车道上的车流与预告。 */
+      function drawChallengeTraffic() {
+        const laneCount = chLaneCount();
+        chSlots.forEach((slot) => {
+          const rel = (chSimTime - slot.atSec) / slot.durationSec;
+          if (rel < 0) {
+            if (chSimTime >= slot.atSec - slot.telegraphLeadSec) {
+              const warn = clamp(1 - (slot.atSec - chSimTime) / Math.max(0.01, slot.telegraphLeadSec), 0, 1);
+              const uTop = uOf(0.55);
+              const uBottom = uOf(0.02);
+              const laneWidthTop = (roadHalfAt(uTop) * 2) / laneCount;
+              const laneWidthBottom = (roadHalfAt(uBottom) * 2) / laneCount;
+              ctx.save();
+              ctx.globalAlpha = 0.16 + warn * 0.3;
+              ctx.fillStyle = '#ff7847';
+              slot.occupiedLanes.forEach((lane) => {
+                const xTop = laneCenterX(lane, uTop);
+                const xBottom = laneCenterX(lane, uBottom);
+                ctx.beginPath();
+                ctx.moveTo(xTop - laneWidthTop * 0.45, yAt(uTop));
+                ctx.lineTo(xTop + laneWidthTop * 0.45, yAt(uTop));
+                ctx.lineTo(xBottom + laneWidthBottom * 0.45, yAt(uBottom));
+                ctx.lineTo(xBottom - laneWidthBottom * 0.45, yAt(uBottom));
+                ctx.closePath();
+                ctx.fill();
+              });
+              ctx.restore();
+            }
+            return;
+          }
+          if (rel > 1) return;
+          const u = uOf(clamp(1 - rel, 0, 1));
+          const sc = scaleAt(u);
+          slot.occupiedLanes.forEach((lane) => {
+            drawCar(laneCenterX(lane, u), yAt(u), 40 * sc, 62 * sc, '#e05656', false, 0, false);
+          });
+        });
+      }
+
+      function drawChallengePlayer() {
+        drawCar(laneCenterX(chLanePos, uOf(0)), PLAYER_Y + 30, 40, 62, '#ff7847', false, clamp((chLane - chLaneFrom) * 0.1, -0.14, 0.14), true);
+      }
+
       function render() {
         stage.beginFrame();
         ctx.save();
@@ -817,40 +1373,62 @@
           .sort((a, b) => b.z - a.z)
           .forEach(drawProp);
 
-        /* 敌车（远→近） */
-        cars
-          .slice()
-          .sort((a, b) => b.z - a.z)
-          .forEach((c) => {
-            const u = uOf(clamp(c.z, 0, 1));
-            const sc = scaleAt(u);
-            drawCar(laneCenterX(c.lane, u), yAt(u), c.w * sc, c.h * sc, c.color, c.truck, 0, false);
-          });
+        if (mode === 'challenge') {
+          drawChallengeTraffic();
+          particles.draw(ctx);
+          drawChallengePlayer();
+        } else {
+          /* 敌车（远→近） */
+          cars
+            .slice()
+            .sort((a, b) => b.z - a.z)
+            .forEach((c) => {
+              const u = uOf(clamp(c.z, 0, 1));
+              const sc = scaleAt(u);
+              drawCar(laneCenterX(c.lane, u), yAt(u), c.w * sc, c.h * sc, c.color, c.truck, 0, false);
+            });
 
-        particles.draw(ctx);
+          particles.draw(ctx);
 
-        /* 玩家车 */
-        if ((state === 'playing' || state === 'paused') && !(player.invul > 0 && Math.floor(player.invul * 12) % 2 === 0)) {
-          drawCar(player.x, PLAYER_Y + 30, 40, 62, '#ff7847', false, player.tilt, true);
+          /* 玩家车 */
+          if ((state === 'playing' || state === 'paused') && !(player.invul > 0 && Math.floor(player.invul * 12) % 2 === 0)) {
+            drawCar(player.x, PLAYER_Y + 30, 40, 62, '#ff7847', false, player.tilt, true);
+          }
         }
 
         /* HUD */
-        A.draw.label(ctx, Math.floor(dist) + ' / ' + JOY_GOAL_DIST + ' m', 12, 22, { align: 'left', font: 'bold 15px system-ui', color: '#ffd23f' });
-        const kmh = Math.round(speed * 360);
-        A.draw.label(ctx, kmh + ' km/h', W - 14, 22, { align: 'right', font: 'bold 15px system-ui', color: '#eef1ff' });
-        const joyText = calmTimer > 0 ? '慢放 ' + calmTimer.toFixed(1) + 's' : shieldArmed ? '气囊已武装' : '';
-        if (joyText) A.draw.label(ctx, joyText, W / 2, 48, { font: 'bold 12px system-ui', color: '#7ce8e0' });
-        for (let i = 0; i < lives; i++) {
-          ctx.save();
-          ctx.translate(W - 24 - i * 18, 44);
-          ctx.fillStyle = '#ff7847';
-          ctx.beginPath();
-          ctx.moveTo(0, -6);
-          ctx.lineTo(6, 6);
-          ctx.lineTo(-6, 6);
-          ctx.closePath();
-          ctx.fill();
-          ctx.restore();
+        if (mode === 'challenge' && chStage) {
+          A.draw.label(ctx, fmtChallengeLabel(chStage) + ' ' + (chStage.title || ''), 12, 22, { align: 'left', font: 'bold 14px system-ui', color: '#5ad1a0' });
+          A.draw.label(ctx, Math.round(chDistance) + ' / ' + Math.round(chGoalMinDistance()) + ' m', W - 14, 22, {
+            align: 'right',
+            font: 'bold 15px system-ui',
+            color: '#ffd23f',
+          });
+          A.draw.label(ctx, '路段 ' + chProgressLabel() + ' · 得分 ' + chScore + (chNear > 0 ? ' · 近距 ' + chNear : ''), W / 2, 48, {
+            font: 'bold 12px system-ui',
+            color: '#7ce8e0',
+          });
+          if (chFailedSlot) {
+            A.draw.label(ctx, '第 ' + chFailedSlot.slot + ' 段撞车', W / 2, 70, { font: 'bold 12px system-ui', color: '#ff8f8f' });
+          }
+        } else {
+          A.draw.label(ctx, Math.floor(dist) + ' / ' + JOY_GOAL_DIST + ' m', 12, 22, { align: 'left', font: 'bold 15px system-ui', color: '#ffd23f' });
+          const kmh = Math.round(speed * 360);
+          A.draw.label(ctx, kmh + ' km/h', W - 14, 22, { align: 'right', font: 'bold 15px system-ui', color: '#eef1ff' });
+          const joyText = calmTimer > 0 ? '慢放 ' + calmTimer.toFixed(1) + 's' : shieldArmed ? '气囊已武装' : '';
+          if (joyText) A.draw.label(ctx, joyText, W / 2, 48, { font: 'bold 12px system-ui', color: '#7ce8e0' });
+          for (let i = 0; i < lives; i++) {
+            ctx.save();
+            ctx.translate(W - 24 - i * 18, 44);
+            ctx.fillStyle = '#ff7847';
+            ctx.beginPath();
+            ctx.moveTo(0, -6);
+            ctx.lineTo(6, 6);
+            ctx.lineTo(-6, 6);
+            ctx.closePath();
+            ctx.fill();
+            ctx.restore();
+          }
         }
         ctx.restore();
       }
@@ -887,6 +1465,12 @@
       bindJoyTools();
       syncTouchPad();
       syncJoyTools();
+      if (chDom.back) {
+        chDom.back.addEventListener('click', () => {
+          hideChallengePanel();
+          showStart();
+        });
+      }
       if (location.hash === '#test') {
         window.__arcadeTest = {
           info() {
@@ -920,6 +1504,9 @@
             return clickJoyTool(id);
           },
           forceCollision() {
+            if (mode === 'challenge') {
+              return chFail('第 ' + (chSlotCheck + 1) + ' 段：测试碰撞');
+            }
             cars.push({
               lane: player.lane, z: 0.06, own: 0.2, w: 40, h: 62,
               truck: false, color: CAR_COLORS[0], passed: false,
@@ -941,6 +1528,85 @@
               if (!futureSafe(null)) violations += 1;
             }
             return { violations, spawned, cars: cars.length, safe: safeLaneList() };
+          },
+          challengeStages() {
+            if (!A.Challenge || !challengeAvailable) return [];
+            const progress = A.Challenge.progress(GAME_ID);
+            return challengeData.map((stage) => ({
+              id: stage.id,
+              stageNumber: stage.stageNumber,
+              title: stage.title,
+              unlocked: A.Challenge.isUnlocked(GAME_ID, stage.id),
+              best: progress.best[stage.id] || null,
+            }));
+          },
+          startChallenge(ref) {
+            return startChallenge(ref);
+          },
+          challengeInfo() {
+            return {
+              mode,
+              stageId: chStage ? chStage.id : null,
+              stageIndex: chStageIndex,
+              state,
+              elapsedSec: chSimTime,
+              durationSec: chDuration,
+              objective: chStage ? chStage.goalStatement : null,
+              decision: chStage ? chStage.decision : null,
+              cleared: !!chResult,
+              collectibles: chResult ? chResult.collectibles.slice() : [],
+              assisted: chAssisted,
+              score: chScore,
+              distance: chDistance,
+              goalDistance: chGoalMinDistance(),
+              lane: chLane,
+              lanePos: chLanePos,
+              passedSlots: chPassed,
+              nearPasses: chNear,
+              error: chErrorReason,
+              failedSlot: chFailedSlot ? chFailedSlot.slot : null,
+            };
+          },
+          stageObservable() {
+            return {
+              mode,
+              stageId: chStage ? chStage.id : null,
+              simTime: chSimTime,
+              durationSec: chDuration,
+              lane: chLane,
+              lanePos: chLanePos,
+              score: chScore,
+              distance: chDistance,
+              goal: chContent().goal || {},
+              laneChangeTimeSec: chLaneChangeTotal,
+              slots: chSlots.map((slot) => ({
+                slot: slot.slot,
+                atSec: slot.atSec,
+                passAt: slot.passAt,
+                occupiedLanes: slot.occupiedLanes.slice(),
+                optionalNearPassBonusLanes: slot.optionalNearPassBonusLanes.slice(),
+              })),
+              checkedSlots: chSlotCheck,
+              passedSlots: chPassed,
+              nearPasses: chNear,
+              failedSlot: chFailedSlot ? chFailedSlot.slot : null,
+            };
+          },
+          forceStageClear(assisted) {
+            if (mode !== 'challenge' || !chStage) return false;
+            chAssisted = !!assisted;
+            chDistance = chGoalMinDistance();
+            chSimTime = chDuration;
+            chSlotCheck = chSlots.length;
+            chPassed = chSlots.length;
+            return chFinishSuccess();
+          },
+          forceStageFail(reason) {
+            if (mode !== 'challenge' || !chStage) return false;
+            return chFail(String(reason || '测试失败'));
+          },
+          exitChallenge() {
+            return exitToChallengeSelect();
           },
         };
       }

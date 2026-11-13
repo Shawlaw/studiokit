@@ -9,6 +9,16 @@
   <link rel="stylesheet" href="../arcade.css" />
   <script src="../../../shared/site-shell.js" defer></script>
   <script src="../engine.js"></script>
+  <script src="../challenge/memory-flip.js"></script>
+  <style>
+    /* 0.9 挑战模式页面局部微调：挑战层覆盖舞台，面板/提示/返回可滚动且不横向溢出 */
+    .challenge-layer { position: absolute; inset: 0; z-index: 6; display: flex; flex-direction: column; gap: 8px; padding: 10px; overflow-y: auto; background: rgba(8, 13, 28, 0.96); border-radius: inherit; }
+    .challenge-layer[hidden] { display: none; }
+    .challenge-layer .ac-btn[hidden] { display: none; }
+    .challenge-layer .ac-challenge-panel { flex: 0 0 auto; }
+    .challenge-layer .ac-btn { flex: 0 0 auto; width: 100%; min-height: 44px; }
+    .stage-box > .ac-challenge-hud { position: absolute; left: 8px; right: 8px; top: 8px; width: auto; z-index: 4; pointer-events: none; }
+  </style>
   <title>记忆翻牌 · 街机厅 · StudioKit</title>
 </head>
 <body class="arcade-body" data-studiokit-app="arcade" data-studiokit-app-title="街机厅 Arcade" style="--ac-accent:#5ad1a0; --card-accent:#5ad1a0">
@@ -34,6 +44,11 @@
             <button type="button" class="ac-btn" data-ov-btn>开始游戏</button>
             <button type="button" class="ac-btn ac-btn-secondary" data-ov-btn2 hidden>重新开始</button>
           </div>
+        </div>
+        <div class="ac-challenge-hud" data-ch-hud hidden></div>
+        <div class="challenge-layer" data-ch-layer hidden>
+          <div data-ch-panel></div>
+          <button type="button" class="ac-btn ac-btn-secondary" data-ch-back>返回开始</button>
         </div>
       </div>
     </div>
@@ -65,6 +80,29 @@
         mute: document.querySelector('[data-mute]'),
       };
       const ui = A.createOverlayUi(dom);
+
+      /* ---------- 0.9 挑战模式：数据/记录/选关 UI（A.Challenge 由 engine.js 提供） ---------- */
+      const gameId = 'memory-flip';
+      const challengeData = A.Challenge ? A.Challenge.stages(gameId) : [];
+      const challengeAvailable = challengeData.length === 6;
+      const chDom = {
+        hud: document.querySelector('[data-ch-hud]'),
+        layer: document.querySelector('[data-ch-layer]'),
+        panelHost: document.querySelector('[data-ch-panel]'),
+        back: document.querySelector('[data-ch-back]'),
+      };
+      const gameHudEl = document.querySelector('.game-hud');
+      const CH_GOAL_HINT_MS = 3000;
+      let mode = 'classic';
+      let chStage = null;
+      let chStageIndex = -1;
+      let chElapsed = 0;
+      let chMismatches = 0;
+      let chAssisted = false;
+      let chErrorReason = '';
+      let chLastResult = null;
+      let chGoalHintTimer = 0;
+      let chHudSecond = -1;
 
       const SYMBOLS = ['🍎', '🍋', '🍇', '🍒', '🥝', '🍑', '🍉', '🍊', '🥥', '🍍', '🫐', '🥕', '🌽', '🍄', '🌻', '🐳', '🐙', '🦊', '🐼', '🦉', '⭐', '🌙', '☀️', '🔥'];
       const LEVELS = [
@@ -179,10 +217,18 @@
       }
 
       function syncHud() {
+        if (mode === 'challenge') {
+          syncChallengeHud();
+          return;
+        }
         dom.hudScore.textContent = String(score);
       }
 
       function startGame() {
+        mode = 'classic';
+        hideChallengePanel();
+        if (chDom.hud) chDom.hud.hidden = true;
+        if (gameHudEl) gameHudEl.hidden = false;
         autosave.clear();
         reset();
         state = 'playing';
@@ -236,17 +282,34 @@
         state = 'paused';
         joyTools.sync();
         autosave.saveNow();
-        ui.show({ title: '已暂停', text: '牌面已盖好，等你回来。<br/>局内进度已保存。', btn: '继续', onBtn: resumeGame });
+        const opts = {
+          title: '已暂停',
+          text: '牌面已盖好，等你回来。<br/>局内进度已保存。',
+          btn: '继续',
+          onBtn: resumeGame,
+        };
+        if (mode === 'challenge') {
+          opts.btn2 = '退出挑战';
+          opts.onBtn2 = exitToChallengeSelect;
+        }
+        ui.show(opts);
         pauseUi.sync();
       }
 
       function showStart() {
+        mode = 'classic';
+        hideChallengePanel();
+        if (chDom.hud) chDom.hud.hidden = true;
+        if (gameHudEl) gameHudEl.hidden = false;
         ui.show({
           title: '记忆翻牌',
           text: '点开两张牌找相同图案。<br/>每关开始会先亮牌预览<br/>6 关由少到多、预览时间逐步缩短',
           btn: '开始游戏',
           onBtn: startGame,
+          btn2: challengeAvailable ? '挑战 6 关' : '挑战数据不可用',
+          onBtn2: challengeAvailable ? showChallengePanel : null,
         });
+        if (dom.ovBtn2) dom.ovBtn2.disabled = !challengeAvailable;
       }
 
       function fmtTime(sec) {
@@ -254,9 +317,341 @@
         return String(Math.floor(s / 60)).padStart(2, '0') + ':' + String(s % 60).padStart(2, '0');
       }
 
+      /* ---------- 0.9 挑战模式实现 ---------- */
+      function chEsc(value) {
+        return String(value == null ? '' : value).replace(/[&<>"']/g, (ch) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[ch]));
+      }
+
+      function chStageIndexFor(stage) {
+        return challengeData.findIndex((item) => item.id === stage.id);
+      }
+
+      function chMaxMismatches() {
+        return chStage && chStage.content && Number.isFinite(Number(chStage.content.maxMismatches)) ? Number(chStage.content.maxMismatches) : 4;
+      }
+
+      function chPanelRoot() {
+        return chDom.panelHost ? chDom.panelHost.querySelector('.ac-challenge-panel') : null;
+      }
+
+      /* 选关面板：由 A.Challenge.stageListHtml 统一生成；初始 root.hidden=true（开始弹层默认不可见）。 */
+      function syncChallengePanel() {
+        if (!chDom.panelHost || !A.Challenge) return;
+        chDom.panelHost.innerHTML = A.Challenge.stageListHtml(gameId);
+        const root = chPanelRoot();
+        if (root) root.hidden = true;
+        chDom.panelHost.querySelectorAll('.ac-stage-btn').forEach((button) => {
+          button.addEventListener('click', () => {
+            if (button.disabled) return;
+            startChallenge(button.dataset.stageId);
+          });
+        });
+      }
+
+      function showChallengePanel() {
+        if (!challengeAvailable) {
+          ui.show({ title: '挑战数据不可用', text: '挑战关卡数据加载失败，经典模式不受影响。', btn: '返回', onBtn: showStart });
+          return;
+        }
+        syncChallengePanel();
+        const root = chPanelRoot();
+        if (root) root.hidden = false;
+        if (chDom.layer) chDom.layer.hidden = false;
+        if (chDom.back) chDom.back.hidden = false;
+        loop.pause();
+        state = 'challenge-menu';
+        pauseUi.sync();
+      }
+
+      function hideChallengePanel() {
+        if (chDom.layer) chDom.layer.hidden = true;
+        if (chDom.back) chDom.back.hidden = true;
+        const root = chPanelRoot();
+        if (root) root.hidden = true;
+      }
+
+      function backToStartFromPanel() {
+        hideChallengePanel();
+        mode = 'classic';
+        chStage = null;
+        chStageIndex = -1;
+        state = 'ready';
+        if (chDom.hud) chDom.hud.hidden = true;
+        if (gameHudEl) gameHudEl.hidden = false;
+        reset();
+        state = 'ready';
+        showStart();
+        pauseUi.sync();
+        joyTools.sync();
+      }
+
+      function chPreviewReveal(card) {
+        if (previewTimer <= 0 || !chStage) return false;
+        const content = chStage.content || {};
+        const clues = content.clues || {};
+        const total = Number(content.previewSeconds) || 0;
+        if (clues.previewMode === 'row-by-row') {
+          const rows = content.grid.rows;
+          const per = Number(clues.previewEachRowSec) || total / Math.max(1, rows);
+          const elapsed = Math.max(0, total - previewTimer);
+          const row = Math.min(rows - 1, Math.floor(elapsed / per));
+          return card.r === row;
+        }
+        if (clues.previewMode === 'quadrants') {
+          const rows = content.grid.rows;
+          const cols = content.grid.cols;
+          const halfR = Math.ceil(rows / 2);
+          const halfC = Math.ceil(cols / 2);
+          const per = Number(clues.previewEachQuadrantSec) || total / 4;
+          const elapsed = Math.max(0, total - previewTimer);
+          const order = [[0, 0], [0, 1], [1, 0], [1, 1]];
+          const [qy, qx] = order[Math.min(3, Math.floor(elapsed / per))];
+          return card.r >= qy * halfR && card.r < (qy + 1) * halfR && card.c >= qx * halfC && card.c < (qx + 1) * halfC;
+        }
+        return true;
+      }
+
+      /* 布局变换：设计包允许 identity/mirror-horizontal/mirror-vertical，用于重玩变化。
+         挑战参考解按 identity 冻结；这里实现三种变换函数但默认使用 identity（见 impl 文档的设计差异）。 */
+      function challengeTransformFaces(rows, cols, faces, transform) {
+        const out = [];
+        for (let r = 0; r < rows; r++) {
+          out.push([]);
+          for (let c = 0; c < cols; c++) {
+            let sr = r;
+            let sc = c;
+            if (transform === 'mirror-horizontal') sr = rows - 1 - r;
+            else if (transform === 'mirror-vertical') sc = cols - 1 - c;
+            out[r].push(faces[sr][sc]);
+          }
+        }
+        return out;
+      }
+
+      function buildChallengeBoard(stage) {
+        const content = stage.content || {};
+        const rows = Number(content.grid && content.grid.rows) || 2;
+        const cols = Number(content.grid && content.grid.cols) || 2;
+        const allowed = Array.isArray(content.layoutTransforms) && content.layoutTransforms.length ? content.layoutTransforms : ['identity'];
+        const transform = allowed.indexOf('identity') !== -1 ? 'identity' : allowed[0];
+        const faces = challengeTransformFaces(rows, cols, content.faces || [], transform);
+        layout = computeLayout({ rows, cols });
+        cards = [];
+        for (let r = 0; r < rows; r++) {
+          for (let c = 0; c < cols; c++) {
+            const symbol = faces[r] && faces[r][c] != null ? String(faces[r][c]) : '❔';
+            cards.push({ id: r * cols + c, symbol, r, c, matched: false, pop: 0 });
+          }
+        }
+        previewTimer = Math.max(0, Number(content.previewSeconds) || 3);
+        mismatchTimer = 0;
+        flippedIds = [];
+        levelClearTimer = 0;
+        peekTimer = 0;
+        hintArmed = false;
+        hintTargetId = -1;
+        hintTimer = 0;
+        return { rows, cols, transform };
+      }
+
+      function syncChallengeHud() {
+        if (mode !== 'challenge' || !chStage) return;
+        if (gameHudEl) gameHudEl.hidden = true;
+        if (!chDom.hud) return;
+        chDom.hud.hidden = false;
+        const second = Math.floor(chElapsed);
+        if (second === chHudSecond) return;
+        chHudSecond = second;
+        const label = 'C' + String(chStage.stageNumber || 0).padStart(2, '0');
+        const clues = (chStage.content && chStage.content.clues) || {};
+        let clueText = clues.hintText || '';
+        if (!clueText && clues.previewMode === 'row-by-row') clueText = '逐行预览：记住每一行的位置';
+        if (!clueText && clues.previewMode === 'quadrants') clueText = '象限预览：用象限编码记住图案';
+        chDom.hud.innerHTML =
+          '<strong>' + chEsc(label + ' ' + chStage.title) + '</strong>' +
+          '<span>' + chEsc(chStage.goalStatement || '') + '</span>' +
+          (clueText ? '<span>线索：' + chEsc(clueText) + '</span>' : '') +
+          '<span>用时 ' + fmtTime(chElapsed) + '</span>' +
+          '<span>翻错 ' + chMismatches + '/' + chMaxMismatches() + '</span>';
+      }
+
+      function startChallenge(ref) {
+        if (!challengeAvailable || !A.Challenge) return false;
+        const stage = A.Challenge.stage(gameId, ref);
+        if (!stage) return false;
+        if (!A.Challenge.isUnlocked(gameId, stage.id)) return false;
+        mode = 'challenge';
+        chStage = stage;
+        chStageIndex = chStageIndexFor(stage);
+        chElapsed = 0;
+        chMismatches = 0;
+        chAssisted = false;
+        chErrorReason = '';
+        chLastResult = null;
+        chGoalHintTimer = 3;
+        chHudSecond = -1;
+        buildChallengeBoard(stage);
+        state = 'playing';
+        hideChallengePanel();
+        ui.hide();
+        loop.resume();
+        pauseUi.sync();
+        joyTools.sync();
+        syncChallengeHud();
+        autosave.clear();
+        autosave.saveNow();
+        return true;
+      }
+
+      function challengeClear() {
+        if (mode !== 'challenge' || !chStage) return false;
+        state = 'cleared';
+        chGoalHintTimer = 0;
+        hintArmed = false;
+        joyTools.sync();
+        autosave.clear();
+        const result = { timeSec: Math.round(chElapsed * 10) / 10, assisted: chAssisted, collectibles: [] };
+        chLastResult = result;
+        if (A.Challenge) A.Challenge.markCleared(gameId, chStage.id, result);
+        loop.pause();
+        const isLast = chStageIndex >= challengeData.length - 1;
+        const tip = '<p class="ac-challenge-tip">本关目标：' + chEsc(chStage.goalStatement || '') + '</p>';
+        ui.show({
+          title: '挑战通关',
+          text: A.Challenge.resultHtml(chStage, result) + tip,
+          btn: isLast ? '返回选关' : '下一关',
+          onBtn: () => {
+            if (isLast) exitToChallengeSelect();
+            else startChallenge(challengeData[chStageIndex + 1].id);
+          },
+          btn2: '重玩本关',
+          onBtn2: () => startChallenge(chStage.id),
+        });
+        pauseUi.sync();
+        syncChallengeHud();
+        return true;
+      }
+
+      function challengeFail(reason) {
+        if (mode !== 'challenge' || !chStage) return false;
+        if (state === 'failed' || state === 'cleared') return false;
+        state = 'failed';
+        chErrorReason = reason || '本关失败';
+        autosave.clear();
+        loop.pause();
+        joyTools.sync();
+        ui.show({
+          title: '挑战失败',
+          text:
+            '<p class="ac-challenge-tip">' + chEsc(chErrorReason) + '</p>' +
+            '<p class="ac-challenge-result-row">本关目标：' + chEsc(chStage.goalStatement || '') + '</p>',
+          btn: '重试本关',
+          onBtn: () => startChallenge(chStage.id),
+          btn2: '返回选关',
+          onBtn2: exitToChallengeSelect,
+        });
+        pauseUi.sync();
+        syncChallengeHud();
+        return true;
+      }
+
+      function exitToChallengeSelect() {
+        mode = 'classic';
+        chStage = null;
+        chStageIndex = -1;
+        chLastResult = null;
+        chErrorReason = '';
+        autosave.clear();
+        if (chDom.hud) chDom.hud.hidden = true;
+        if (gameHudEl) gameHudEl.hidden = false;
+        reset();
+        state = 'ready';
+        pauseUi.sync();
+        joyTools.sync();
+        showChallengePanel();
+        return true;
+      }
+
+      function exitChallengeToStart() {
+        hideChallengePanel();
+        mode = 'classic';
+        chStage = null;
+        chStageIndex = -1;
+        autosave.clear();
+        if (chDom.hud) chDom.hud.hidden = true;
+        if (gameHudEl) gameHudEl.hidden = false;
+        reset();
+        state = 'ready';
+        pauseUi.sync();
+        joyTools.sync();
+        showStart();
+        return true;
+      }
+
+      function restoreChallenge(data) {
+        if (!A.Challenge || !data || typeof data.stageId !== 'string') return false;
+        const stage = A.Challenge.stage(gameId, data.stageId);
+        if (!stage) return false;
+        mode = 'challenge';
+        chStage = stage;
+        chStageIndex = chStageIndexFor(stage);
+        const built = buildChallengeBoard(stage);
+        const rows = built.rows;
+        const cols = built.cols;
+        if (!Array.isArray(data.cards) || data.cards.length !== rows * cols) return false;
+        cards = data.cards.map((card, index) => ({
+          id: index,
+          symbol: card && typeof card.symbol === 'string' ? card.symbol : '❔',
+          r: Math.floor(index / cols),
+          c: index % cols,
+          matched: !!(card && card.matched),
+          pop: 0,
+        }));
+        chElapsed = Math.max(0, Number(data.chElapsed) || 0);
+        chMismatches = Math.max(0, Number(data.chMismatches) || 0);
+        chAssisted = !!data.chAssisted;
+        chLastResult = null;
+        chHudSecond = -1;
+        previewTimer = Math.max(0, Number(data.previewTimer) || 0);
+        mismatchTimer = Math.max(0, Number(data.mismatchTimer) || 0);
+        flippedIds = Array.isArray(data.flippedIds) ? data.flippedIds.filter((id) => Number.isInteger(id) && cards[id] && !cards[id].matched) : [];
+        state = 'playing';
+        syncChallengeHud();
+        return true;
+      }
+
+      function challengeObservable() {
+        return {
+          mode,
+          stageId: chStage ? chStage.id : null,
+          stageNumber: chStage ? chStage.stageNumber : null,
+          state,
+          rows: cards.length ? (chStage ? chStage.content.grid.rows : 0) : 0,
+          cols: cards.length ? (chStage ? chStage.content.grid.cols : 0) : 0,
+          faces: chStage ? chStage.content.faces : [],
+          cards: cards.map((card) => Object.assign({}, cardRect(card), { id: card.id, r: card.r, c: card.c, symbol: card.symbol, matched: card.matched })),
+          matched: cards.map((card) => card.matched),
+          flippedIds: flippedIds.slice(),
+          previewTimer,
+          mismatchTimer,
+          mismatches: chMismatches,
+          maxMismatches: chMaxMismatches(),
+          goalStatement: chStage ? chStage.goalStatement : null,
+          clues: chStage ? chStage.content.clues || {} : {},
+          layoutTransform: 'identity',
+          assisted: chAssisted,
+          cleared: !!chLastResult,
+        };
+      }
+
       function serialize() {
         if (state !== 'playing' && state !== 'paused') return null;
         return {
+          mode,
+          stageId: mode === 'challenge' && chStage ? chStage.id : null,
+          chElapsed,
+          chMismatches,
+          chAssisted,
           level,
           score,
           moves,
@@ -273,7 +668,7 @@
         };
       }
 
-      function restore(data) {
+      function restoreClassic(data) {
         if (!data || !Array.isArray(data.cards) || !data.cards.length) return false;
         try {
           const lv = clamp(Number(data.level) || 1, 1, LEVELS.length);
@@ -316,9 +711,19 @@
         }
       }
 
+      /* 统一恢复入口：0.8 及更早存档缺 mode 一律按经典恢复；mode:'challenge' 走挑战恢复。 */
+      function restore(data) {
+        if (!data || typeof data !== 'object') return false;
+        if (data.mode === 'challenge') return restoreChallenge(data);
+        return restoreClassic(data);
+      }
+
       const autosave = A.createRunAutosave('memory-flip', serialize, {
         every: 3,
-        meta: () => ({ score, summary: `第 ${level} 关 · ${moves} 次翻牌 · ${score} 分` }),
+        meta: () => ({
+          score,
+          summary: mode === 'challenge' && chStage ? '挑战 ' + chStage.id + ' · ' + chMismatches + ' 次翻错' : `第 ${level} 关 · ${moves} 次翻牌 · ${score} 分`,
+        }),
       });
 
       function useTool(id) {
@@ -331,6 +736,7 @@
           tools.peek -= 1;
           hintArmed = false;
           peekTimer = PEEK_DURATION;
+          if (mode === 'challenge') chAssisted = true;
           A.Sfx.play('spring');
           A.showToast('再看一眼：1.2 秒');
           autosave.saveNow();
@@ -350,6 +756,7 @@
             return false;
           }
           hintArmed = true;
+          if (mode === 'challenge') chAssisted = true;
           A.Sfx.play('ui');
           A.showToast('翻开一张牌，会标出它的伙伴');
           autosave.saveNow();
@@ -396,6 +803,10 @@
             syncHud();
             A.Sfx.play('perfect');
             if (cards.every((c) => c.matched)) {
+              if (mode === 'challenge') {
+                challengeClear();
+                return;
+              }
               levelClearTimer = 1.35;
               state = 'levelclear';
               hintArmed = false;
@@ -403,15 +814,23 @@
               A.Sfx.play('spring');
             }
           } else {
-            mismatchTimer = Math.max(0.7, 0.95 - (level - 1) * 0.04);
+            mismatchTimer = mode === 'challenge' ? 0.7 : Math.max(0.7, 0.95 - (level - 1) * 0.04);
             A.Sfx.play('land');
+            if (mode === 'challenge') {
+              chMismatches += 1;
+              if (chMismatches > chMaxMismatches()) {
+                challengeFail('翻错 ' + chMismatches + ' 次，超过本关上限 ' + chMaxMismatches() + ' 次');
+                return;
+              }
+            }
           }
         }
       }
 
       function skipPreview() {
         if (state !== 'playing' || previewTimer <= 0) return false;
-        if (levelConfig(level).preview - previewTimer < PREVIEW_MIN) return false;
+        const totalPreview = mode === 'challenge' && chStage ? Number(chStage.content.previewSeconds) || 0 : levelConfig(level).preview;
+        if (totalPreview - previewTimer < PREVIEW_MIN) return false;
         previewTimer = 0;
         A.Sfx.play('ui');
         autosave.saveNow();
@@ -434,7 +853,33 @@
         }
       }
 
+      function updateChallenge(dt) {
+        for (const card of cards) card.pop = Math.max(0, card.pop - dt * 4);
+        if (state !== 'playing') {
+          input.endFrame();
+          return;
+        }
+        autosave.tick(dt);
+        chElapsed += dt;
+        chGoalHintTimer = Math.max(0, chGoalHintTimer - dt);
+        if (previewTimer > 0) previewTimer = Math.max(0, previewTimer - dt);
+        if (mismatchTimer > 0) {
+          mismatchTimer -= dt;
+          if (mismatchTimer <= 0) {
+            flippedIds = [];
+            mismatchTimer = 0;
+          }
+        }
+        if (input.pointer.wentDown) handleTap(input.pointer.x, input.pointer.y);
+        syncChallengeHud();
+        input.endFrame();
+      }
+
       function update(dt) {
+        if (mode === 'challenge') {
+          updateChallenge(dt);
+          return;
+        }
         for (const card of cards) card.pop = Math.max(0, card.pop - dt * 4);
         if (peekTimer > 0) {
           peekTimer = Math.max(0, peekTimer - dt);
@@ -485,7 +930,8 @@
 
       function drawCard(card) {
         const rect = cardRect(card);
-        const revealed = card.matched || previewTimer > 0 || peekTimer > 0 || flippedIds.indexOf(card.id) !== -1 || state === 'levelclear';
+        const previewVisible = mode === 'challenge' ? chPreviewReveal(card) : previewTimer > 0;
+        const revealed = card.matched || previewVisible || peekTimer > 0 || flippedIds.indexOf(card.id) !== -1 || state === 'levelclear';
         const pop = A.reducedMotion ? 1 : 1 + card.pop * 0.06;
         ctx.save();
         ctx.translate(rect.x + rect.w / 2, rect.y + rect.h / 2);
@@ -540,30 +986,51 @@
           ctx.fillRect(x, y, 2, 2);
         }
 
-        A.draw.label(ctx, 'LEVEL ' + level + ' / ' + LEVELS.length, 12, 24, {
-          align: 'left',
-          font: 'bold 14px system-ui',
-          color: '#5ad1a0',
-        });
-        A.draw.label(ctx, 'SCORE ' + score, W - 12, 24, { align: 'right', font: 'bold 14px system-ui', color: '#ffd23f' });
-        A.draw.label(ctx, '翻牌 ' + moves + ' · ' + fmtTime(elapsed), W / 2, 52, {
-          font: '12px system-ui',
-          color: '#93a0c8',
-        });
-        if (previewTimer > 0) {
-          A.draw.label(ctx, '记住牌面 ' + previewTimer.toFixed(1) + 's · 点击可跳过', W / 2, 84, {
-            font: 'bold 15px system-ui',
-            color: '#ffd23f',
+        if (mode === 'challenge' && chStage) {
+          const chLabel = 'C' + String(chStage.stageNumber || 0).padStart(2, '0') + ' ' + chStage.title;
+          const matchedPairs = cards.filter((card) => card.matched).length / 2;
+          A.draw.label(ctx, chLabel, 12, 24, { align: 'left', font: 'bold 14px system-ui', color: '#5ad1a0' });
+          A.draw.label(ctx, '用时 ' + fmtTime(chElapsed), W - 12, 24, { align: 'right', font: 'bold 14px system-ui', color: '#ffd23f' });
+          A.draw.label(ctx, '翻错 ' + chMismatches + '/' + chMaxMismatches() + ' · 配对 ' + matchedPairs + '/' + cards.length / 2, W / 2, 52, {
+            font: '12px system-ui',
+            color: '#93a0c8',
           });
-        } else if (mismatchTimer > 0) {
-          A.draw.label(ctx, '不匹配，再看一眼…', W / 2, 84, { font: '13px system-ui', color: '#ff9a9a' });
+          if (previewTimer > 0) {
+            A.draw.label(ctx, '记住牌面 ' + previewTimer.toFixed(1) + 's · 点击可跳过', W / 2, 84, {
+              font: 'bold 15px system-ui',
+              color: '#ffd23f',
+            });
+          } else if (mismatchTimer > 0) {
+            A.draw.label(ctx, '不匹配，再看一眼…', W / 2, 84, { font: '13px system-ui', color: '#ff9a9a' });
+          } else {
+            A.draw.label(ctx, chStage.goalStatement || '点开两张相同的牌', W / 2, 84, { font: '13px system-ui', color: '#93a0c8' });
+          }
         } else {
-          A.draw.label(ctx, '点开两张相同的牌', W / 2, 84, { font: '13px system-ui', color: '#93a0c8' });
+          A.draw.label(ctx, 'LEVEL ' + level + ' / ' + LEVELS.length, 12, 24, {
+            align: 'left',
+            font: 'bold 14px system-ui',
+            color: '#5ad1a0',
+          });
+          A.draw.label(ctx, 'SCORE ' + score, W - 12, 24, { align: 'right', font: 'bold 14px system-ui', color: '#ffd23f' });
+          A.draw.label(ctx, '翻牌 ' + moves + ' · ' + fmtTime(elapsed), W / 2, 52, {
+            font: '12px system-ui',
+            color: '#93a0c8',
+          });
+          if (previewTimer > 0) {
+            A.draw.label(ctx, '记住牌面 ' + previewTimer.toFixed(1) + 's · 点击可跳过', W / 2, 84, {
+              font: 'bold 15px system-ui',
+              color: '#ffd23f',
+            });
+          } else if (mismatchTimer > 0) {
+            A.draw.label(ctx, '不匹配，再看一眼…', W / 2, 84, { font: '13px system-ui', color: '#ff9a9a' });
+          } else {
+            A.draw.label(ctx, '点开两张相同的牌', W / 2, 84, { font: '13px system-ui', color: '#93a0c8' });
+          }
         }
 
         cards.forEach(drawCard);
 
-        if (state === 'levelclear') {
+        if (mode !== 'challenge' && state === 'levelclear') {
           A.draw.label(ctx, '第 ' + level + ' 关完成', W / 2, 654, {
             font: 'bold 22px system-ui',
             color: '#5ad1a0',
@@ -598,6 +1065,7 @@
 
       reset();
       state = 'ready';
+      syncChallengePanel();
       if (location.hash === '#test') {
         window.__arcadeTest = {
           info() {
@@ -646,6 +1114,55 @@
             joyTools.sync();
             syncHud();
             return true;
+          },
+          /* ---------- 0.9 挑战模式钩子（契约见 docs/arcade/0.9/INTEGRATION-CONTRACT.md §5） ---------- */
+          challengeStages() {
+            return challengeData.map((stage) => {
+              const best = A.Challenge.progress(gameId).best[stage.id] || null;
+              return {
+                id: stage.id,
+                stageNumber: stage.stageNumber,
+                title: stage.title,
+                unlocked: A.Challenge.isUnlocked(gameId, stage.id),
+                best: best ? { timeSec: best.timeSec, assisted: !!best.assisted } : null,
+              };
+            });
+          },
+          startChallenge(ref) {
+            return startChallenge(ref);
+          },
+          challengeInfo() {
+            return {
+              mode,
+              stageId: chStage ? chStage.id : null,
+              stageIndex: chStageIndex,
+              state,
+              elapsedSec: Math.round(chElapsed * 10) / 10,
+              objective: chStage ? chStage.goalStatement : null,
+              cleared: !!chLastResult,
+              collectibles: [],
+              assisted: chAssisted,
+              mismatches: chMismatches,
+              maxMismatches: chMaxMismatches(),
+              pairsMatched: cards.filter((card) => card.matched).length / 2,
+              pairsTotal: cards.length / 2,
+              previewTimer,
+              errorReason: chErrorReason,
+            };
+          },
+          stageObservable() {
+            return challengeObservable();
+          },
+          forceStageClear(assisted) {
+            if (mode !== 'challenge' || state !== 'playing' || !chStage) return false;
+            if (assisted === true) chAssisted = true;
+            return challengeClear();
+          },
+          forceStageFail(reason) {
+            return challengeFail(typeof reason === 'string' && reason ? reason : '测试强制失败');
+          },
+          exitChallenge() {
+            return exitChallengeToStart();
           },
         };
       }

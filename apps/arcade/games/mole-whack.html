@@ -9,7 +9,35 @@
   <link rel="stylesheet" href="../arcade.css" />
   <script src="../../../shared/site-shell.js" defer></script>
   <script src="../engine.js"></script>
+  <script src="../challenge/mole-whack.js"></script>
   <title>打地鼠 · 街机厅 · StudioKit</title>
+  <style>
+    /* 0.9 挑战模式：选关层盖住画布；挑战 HUD 叠在画布顶部，不拦截点击。 */
+    .challenge-layer {
+      position: absolute;
+      inset: 0;
+      z-index: 6;
+      display: flex;
+      flex-direction: column;
+      gap: 8px;
+      padding: 10px;
+      overflow-y: auto;
+      background: rgba(8, 13, 28, 0.96);
+      border-radius: inherit;
+    }
+    .challenge-layer[hidden] { display: none; }
+    .challenge-layer .ac-challenge-panel { flex: 0 0 auto; }
+    .challenge-layer .ac-btn { flex: 0 0 auto; width: 100%; min-height: 44px; }
+    .stage-box > .ac-challenge-hud {
+      position: absolute;
+      left: 8px;
+      right: 8px;
+      top: 8px;
+      width: auto;
+      z-index: 4;
+      pointer-events: none;
+    }
+  </style>
 </head>
 <body class="arcade-body" data-studiokit-app="arcade" data-studiokit-app-title="街机厅 Arcade" style="--ac-accent:#ff9a3d; --card-accent:#ff9a3d">
   <noscript><p class="ac-noscript">此游戏需要启用 JavaScript 才能运行。</p></noscript>
@@ -35,8 +63,14 @@
             <button type="button" class="ac-btn ac-btn-secondary" data-ov-btn2 hidden>重新开始</button>
           </div>
         </div>
+        <div class="ac-challenge-hud" data-ch-hud hidden></div>
+        <div class="challenge-layer" data-ch-layer hidden>
+          <div data-ch-panel></div>
+          <button type="button" class="ac-btn ac-btn-secondary" data-ch-back>返回开始</button>
+        </div>
       </div>
     </div>
+    <p class="ac-challenge-tip" data-ch-tip hidden></p>
     <p class="game-hint">点击地鼠得分 · 连击有倍率 · 金鼠 +50 · 别敲炸弹 · 数字键 1–9 敲击 · Q 金鼠三连 / E 安心锤 · P / Esc 暂停</p>
   </main>
   <script>
@@ -68,7 +102,6 @@
       const ctx = stage.ctx;
       const input = A.createInput(canvas);
       A.installSfxUnlock();
-
       const dom = {
         overlay: document.querySelector('[data-overlay]'),
         ovTitle: document.querySelector('[data-ov-title]'),
@@ -100,6 +133,36 @@
       let goldRushSpawns = 0;
       let shieldTimer = 0;
       let floaters = [];
+
+      /* ---------- 0.9 挑战模式：脚本时间轴（数据来自 ../challenge/mole-whack.js） ---------- */
+      const GAME_ID = 'mole-whack';
+      const challengeData = A.Challenge ? A.Challenge.stages(GAME_ID) : [];
+      const challengeAvailable = challengeData.length === 6;
+      const chDom = {
+        hud: document.querySelector('[data-ch-hud]'),
+        layer: document.querySelector('[data-ch-layer]'),
+        panelHost: document.querySelector('[data-ch-panel]'),
+        back: document.querySelector('[data-ch-back]'),
+        tip: document.querySelector('[data-ch-tip]'),
+      };
+      const gameHudEl = document.querySelector('.game-hud');
+      const CH_GOAL_HINT_SEC = 3;
+      let mode = 'classic';
+      let chStage = null;
+      let chStageIndex = -1;
+      let chElapsed = 0;
+      let chGoalHintTimer = 0;
+      let chHudSecond = -1;
+      let chResult = null;
+      let chAssisted = false;
+      let chErrorReason = '';
+      let chEvents = [];
+      let chScore = 0;
+      let chValid = 0;
+      let chGold = 0;
+      let chBomb = 0;
+      let chDecoy = 0;
+      let chMiss = 0;
 
       let high = A.Progress.get('mole-whack').high;
       dom.hudHigh.textContent = String(high);
@@ -134,6 +197,13 @@
       }
 
       function startGame() {
+        mode = 'classic';
+        chStage = null;
+        chStageIndex = -1;
+        hideChallengePanel();
+        if (chDom.hud) chDom.hud.hidden = true;
+        if (chDom.tip) chDom.tip.hidden = true;
+        if (gameHudEl) gameHudEl.hidden = false;
         autosave.clear();
         reset();
         state = 'playing';
@@ -180,23 +250,383 @@
         pauseUi.sync();
       }
 
+      /* ---------- 0.9 挑战模式实现 ---------- */
+      function chEsc(value) {
+        return String(value == null ? '' : value).replace(/[&<>"']/g, (ch) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[ch]));
+      }
+      function fmtTime(sec) {
+        const s = Math.max(0, Math.floor(Number(sec) || 0));
+        return String(Math.floor(s / 60)).padStart(2, '0') + ':' + String(s % 60).padStart(2, '0');
+      }
+      function chContent() {
+        return (chStage && chStage.content) || {};
+      }
+      function chDuration() {
+        return Math.max(1, Number(chContent().stageDurationSec) || 30);
+      }
+      function chWin() {
+        return chContent().win || {};
+      }
+      function chScoring() {
+        return chContent().scoring || {};
+      }
+      function chBuildEvents(stage) {
+        const content = (stage && stage.content) || {};
+        const events = Array.isArray(content.events) ? content.events : [];
+        return events.map((event, index) => ({
+          id: String(event && event.id ? event.id : 'e' + (index + 1)),
+          atSec: Math.max(0, Number(event && event.atSec) || 0),
+          slot: clamp(Math.floor(Number(event && event.slot) || 0), 0, HOLES.length - 1),
+          kind: ['normal', 'gold', 'bomb', 'decoy'].indexOf(event && event.kind) !== -1 ? event.kind : 'normal',
+          prewarnSec: Math.max(0, Number(event && event.prewarnSec) || 0.42),
+          visibleSec: Math.max(0.2, Number(event && event.visibleSec) || 1.4),
+          score: Number.isFinite(Number(event && event.score)) ? Number(event.score) : null,
+          hit: false,
+          missed: false,
+        }));
+      }
+      function chEventState(event) {
+        if (event.hit) return 'hit';
+        if (event.missed) return 'missed';
+        if (chElapsed >= event.atSec && chElapsed < event.atSec + event.visibleSec) return 'active';
+        if (chElapsed >= event.atSec - event.prewarnSec && chElapsed < event.atSec) return 'prewarn';
+        return 'pending';
+      }
+      function chPanelRoot() {
+        return chDom.panelHost ? chDom.panelHost.querySelector('.ac-challenge-panel') : null;
+      }
+      function syncChallengePanel() {
+        if (!chDom.panelHost || !A.Challenge) return;
+        chDom.panelHost.innerHTML = A.Challenge.stageListHtml(GAME_ID);
+        const root = chPanelRoot();
+        if (root) root.hidden = true;
+        chDom.panelHost.querySelectorAll('.ac-stage-btn').forEach((button) => {
+          button.addEventListener('click', () => {
+            if (button.disabled) return;
+            startChallenge(button.dataset.stageId);
+          });
+        });
+      }
+      function showChallengePanel() {
+        if (!challengeAvailable || !A.Challenge) {
+          ui.show({ title: '挑战数据不可用', text: '挑战关卡数据加载失败，经典模式不受影响。', btn: '返回', onBtn: showStart });
+          return false;
+        }
+        syncChallengePanel();
+        const root = chPanelRoot();
+        if (root) root.hidden = false;
+        if (chDom.layer) chDom.layer.hidden = false;
+        mode = 'classic';
+        chStage = null;
+        chStageIndex = -1;
+        if (chDom.hud) chDom.hud.hidden = true;
+        if (chDom.tip) chDom.tip.hidden = true;
+        if (gameHudEl) gameHudEl.hidden = false;
+        loop.pause();
+        ui.hide();
+        state = 'challenge-menu';
+        pauseUi.sync();
+        joyTools.sync();
+        return true;
+      }
+      function hideChallengePanel() {
+        if (chDom.layer) chDom.layer.hidden = true;
+        const root = chPanelRoot();
+        if (root) root.hidden = true;
+      }
+      function fmtChallengeLabel(stage) {
+        return 'C' + String((stage && stage.stageNumber) || 0).padStart(2, '0');
+      }
+      function syncChallengeHud() {
+        if (mode !== 'challenge' || !chStage) return;
+        if (gameHudEl) gameHudEl.hidden = true;
+        if (!chDom.hud) return;
+        chDom.hud.hidden = false;
+        const second = Math.floor(chElapsed);
+        if (second === chHudSecond) return;
+        chHudSecond = second;
+        const win = chWin();
+        const minValid = Number(win.minValidHits) || 0;
+        const minGold = Number(win.minGoldHits) || 0;
+        chDom.hud.innerHTML =
+          '<strong>' + chEsc(fmtChallengeLabel(chStage) + ' ' + (chStage.title || '')) + '</strong>' +
+          '<span>有效 ' + chValid + '/' + minValid + ' · 金 ' + chGold + '/' + minGold + '</span>' +
+          '<span>用时 ' + fmtTime(chElapsed) + ' / ' + fmtTime(chDuration()) + '</span>';
+      }
+      function showGoalTip() {
+        if (!chDom.tip || !chStage) return;
+        chDom.tip.hidden = false;
+        chDom.tip.textContent = '目标：' + (chStage.goalStatement || '') + ' · ' + (chStage.decision || '点击有效目标，忽略炸弹与假目标');
+      }
+      function startChallenge(ref) {
+        if (!challengeAvailable || !A.Challenge) return false;
+        const stage = A.Challenge.stage(GAME_ID, ref);
+        if (!stage) return false;
+        if (!A.Challenge.isUnlocked(GAME_ID, stage.id)) return false;
+        autosave.clear();
+        mode = 'challenge';
+        chStage = stage;
+        chStageIndex = challengeData.findIndex((item) => item.id === stage.id);
+        chElapsed = 0;
+        chGoalHintTimer = CH_GOAL_HINT_SEC;
+        chHudSecond = -1;
+        chResult = null;
+        chAssisted = false;
+        chErrorReason = '';
+        chEvents = chBuildEvents(stage);
+        chScore = 0;
+        chValid = 0;
+        chGold = 0;
+        chBomb = 0;
+        chDecoy = 0;
+        chMiss = 0;
+        slots = HOLES.map(() => null);
+        combo = 0;
+        comboTimer = 0;
+        hearts = 3;
+        shieldTimer = 0;
+        goldRushSpawns = 0;
+        floaters = [];
+        particles.clear();
+        recordSaved = false;
+        hideChallengePanel();
+        ui.hide();
+        state = 'playing';
+        loop.resume();
+        pauseUi.sync();
+        joyTools.sync();
+        syncChallengeHud();
+        showGoalTip();
+        autosave.saveNow();
+        return true;
+      }
+      function chNearestHole(x, y) {
+        let best = -1;
+        let bestDist = Infinity;
+        HOLES.forEach((hole, index) => {
+          const d = Math.hypot(x - hole.x, y - hole.y);
+          if (d < HOLE_R + 22 && d < bestDist) {
+            bestDist = d;
+            best = index;
+          }
+        });
+        return best;
+      }
+      function chTap(index) {
+        if (mode !== 'challenge' || state !== 'playing') return false;
+        if (!Number.isInteger(index) || index < 0 || index >= HOLES.length) return false;
+        const active = chEvents.filter((event) => event.slot === index && chEventState(event) === 'active');
+        const hx = HOLES[index].x;
+        const hy = HOLES[index].y - 20;
+        if (!active.length) {
+          chMiss += 1;
+          lastPointer = { x: hx, y: hy };
+          hitFlash = 1;
+          addFloater('落空', hx, hy, '#93a0c8');
+          A.Sfx.play('land');
+          syncChallengeHud();
+          autosave.saveNow();
+          return false;
+        }
+        const event = active[0];
+        event.hit = true;
+        lastPointer = { x: hx, y: hy };
+        hitFlash = 1;
+        const scoring = chScoring();
+        /* 事件自带 score 为 0（炸弹/假目标）时回落到 scoring 表，保证 -3/-1 的负分语义。 */
+        const gained = Number.isFinite(event.score) && event.score !== 0 ? event.score : Number(scoring[event.kind]) || 0;
+        chScore += gained;
+        if (event.kind === 'bomb') {
+          chBomb += 1;
+          combo = 0;
+          comboTimer = 0;
+          shake = A.reducedMotion ? 0 : 10;
+          A.Sfx.play('explode');
+          addFloater((gained >= 0 ? '+' : '') + gained, hx, hy, '#ff5d5d');
+          particles.emit(hx, hy, {
+            count: A.reducedMotion ? 8 : 22,
+            speed: [50, 240],
+            life: [0.3, 0.7],
+            size: [2, 5],
+            colors: ['#ff5d5d', '#ff9a3d', '#ffffff'],
+            gravity: 180,
+          });
+        } else if (event.kind === 'decoy') {
+          chDecoy += 1;
+          A.Sfx.play('land');
+          addFloater((gained >= 0 ? '+' : '') + gained, hx, hy, '#b6a7d8');
+          particles.emit(hx, hy, {
+            count: A.reducedMotion ? 4 : 10,
+            speed: [30, 120],
+            life: [0.2, 0.5],
+            size: [2, 4],
+            colors: ['#9a8fb8', '#ffffff'],
+            gravity: 120,
+          });
+        } else {
+          chValid += 1;
+          if (event.kind === 'gold') {
+            chGold += 1;
+            A.Sfx.play('perfect');
+            addFloater('+' + gained, hx, hy, '#ffd23f');
+          } else {
+            A.Sfx.play('bell', Math.min(chValid, 12));
+            addFloater('+' + gained, hx, hy, '#ffffff');
+          }
+          particles.emit(hx, hy, {
+            count: A.reducedMotion ? 4 : 12,
+            speed: [30, 150],
+            life: [0.2, 0.55],
+            size: [2, 4],
+            colors: event.kind === 'gold' ? ['#ffd23f', '#fff3c4', '#ffffff'] : ['#c9884b', '#ffd23f', '#ffffff'],
+            gravity: 180,
+          });
+        }
+        syncChallengeHud();
+        autosave.saveNow();
+        return true;
+      }
+      function chEvaluate() {
+        const win = chWin();
+        const minValid = Number(win.minValidHits) || 0;
+        const minGold = Number(win.minGoldHits) || 0;
+        const maxBomb = Number.isFinite(Number(win.maxBombHits)) ? Number(win.maxBombHits) : 0;
+        const maxDecoy = Number.isFinite(Number(win.maxDecoyHits)) ? Number(win.maxDecoyHits) : 0;
+        const reasons = [];
+        if (chValid < minValid) reasons.push('有效命中 ' + chValid + '/' + minValid);
+        if (chGold < minGold) reasons.push('金鼠 ' + chGold + '/' + minGold);
+        if (chBomb > maxBomb) reasons.push('炸弹 ' + chBomb + '/上限 ' + maxBomb);
+        if (chDecoy > maxDecoy) reasons.push('假目标 ' + chDecoy + '/上限 ' + maxDecoy);
+        if (reasons.length) return chFail('未达标：' + reasons.join(' · '));
+        return chClear();
+      }
+      function chClear() {
+        if (mode !== 'challenge' || !chStage) return false;
+        state = 'cleared';
+        chGoalHintTimer = 0;
+        if (chDom.tip) chDom.tip.hidden = true;
+        chResult = { timeSec: Math.round(chElapsed * 10) / 10, assisted: chAssisted, collectibles: [] };
+        if (A.Challenge) A.Challenge.markCleared(GAME_ID, chStage.id, chResult);
+        autosave.clear();
+        loop.pause();
+        joyTools.sync();
+        const isLast = chStageIndex >= challengeData.length - 1;
+        ui.show({
+          title: '挑战通关',
+          text:
+            A.Challenge.resultHtml(chStage, chResult) +
+            '<p class="ac-challenge-tip">本关目标：' + chEsc(chStage.goalStatement || '') + '</p>',
+          btn: isLast ? '返回选关' : '下一关',
+          onBtn: () => {
+            if (isLast) exitToChallengeSelect();
+            else startChallenge(challengeData[chStageIndex + 1].id);
+          },
+          btn2: '重玩本关',
+          onBtn2: () => startChallenge(chStage.id),
+        });
+        pauseUi.sync();
+        syncChallengeHud();
+        return true;
+      }
+      function chFail(reason) {
+        if (mode !== 'challenge' || !chStage) return false;
+        if (state === 'failed' || state === 'cleared') return false;
+        state = 'failed';
+        chErrorReason = reason || '本关失败';
+        chGoalHintTimer = 0;
+        if (chDom.tip) chDom.tip.hidden = true;
+        autosave.clear();
+        loop.pause();
+        joyTools.sync();
+        ui.show({
+          title: '挑战失败',
+          text:
+            '<p class="ac-challenge-tip">' + chEsc(chErrorReason) + '</p>' +
+            '<p class="ac-challenge-result-row">本关目标：' + chEsc(chStage.goalStatement || '') + '</p>',
+          btn: '重试本关',
+          onBtn: () => startChallenge(chStage.id),
+          btn2: '返回选关',
+          onBtn2: exitToChallengeSelect,
+        });
+        pauseUi.sync();
+        syncChallengeHud();
+        return true;
+      }
+      function exitToChallengeSelect() {
+        mode = 'classic';
+        chStage = null;
+        chStageIndex = -1;
+        chResult = null;
+        chErrorReason = '';
+        autosave.clear();
+        if (chDom.hud) chDom.hud.hidden = true;
+        if (chDom.tip) chDom.tip.hidden = true;
+        if (gameHudEl) gameHudEl.hidden = false;
+        reset();
+        state = 'ready';
+        pauseUi.sync();
+        joyTools.sync();
+        showChallengePanel();
+        return true;
+      }
+      function exitChallengeToStart() {
+        hideChallengePanel();
+        mode = 'classic';
+        chStage = null;
+        chStageIndex = -1;
+        autosave.clear();
+        if (chDom.hud) chDom.hud.hidden = true;
+        if (chDom.tip) chDom.tip.hidden = true;
+        if (gameHudEl) gameHudEl.hidden = false;
+        reset();
+        state = 'ready';
+        pauseUi.sync();
+        joyTools.sync();
+        showStart();
+        return true;
+      }
+      function tapSlot(index) {
+        if (mode === 'challenge') return chTap(index);
+        return hitSlot(index);
+      }
       function pauseByUser() {
         if (state !== 'playing') return;
         loop.pause();
         state = 'paused';
         joyTools.sync();
         autosave.saveNow();
-        ui.show({ title: '已暂停', text: '地鼠也躲起来了。<br/>局内进度已保存。', btn: '继续', onBtn: resumeGame });
+        const opts = {
+          title: '已暂停',
+          text: '地鼠也躲起来了。<br/>局内进度已保存。',
+          btn: '继续',
+          onBtn: resumeGame,
+        };
+        if (mode === 'challenge' && chStage) {
+          opts.text = '挑战暂停：' + fmtChallengeLabel(chStage) + ' ' + chEsc(chStage.title || '') + '。<br/>本关进度已保存。';
+          opts.btn2 = '退出挑战';
+          opts.onBtn2 = exitToChallengeSelect;
+        }
+        ui.show(opts);
         pauseUi.sync();
       }
 
       function showStart() {
+        mode = 'classic';
+        chStage = null;
+        chStageIndex = -1;
+        hideChallengePanel();
+        if (chDom.hud) chDom.hud.hidden = true;
+        if (chDom.tip) chDom.tip.hidden = true;
+        if (gameHudEl) gameHudEl.hidden = false;
         ui.show({
           title: '打地鼠',
           text: '45 秒内敲中更多地鼠。<br/>连击有倍率 · 金鼠 +50<br/>炸弹会扣心并倒扣 3 秒',
           btn: '开始游戏',
           onBtn: startGame,
+          btn2: challengeAvailable ? '挑战 6 关' : '挑战数据不可用',
+          onBtn2: challengeAvailable ? showChallengePanel : null,
         });
+        if (dom.ovBtn2) dom.ovBtn2.disabled = !challengeAvailable;
       }
 
       function spawnMole() {
@@ -306,6 +736,34 @@
         syncHud();
       }
 
+      function updateChallenge(dt) {
+        if (state !== 'playing') {
+          input.endFrame();
+          return;
+        }
+        autosave.tick(dt);
+        chElapsed += dt;
+        if (chGoalHintTimer > 0) {
+          chGoalHintTimer = Math.max(0, chGoalHintTimer - dt);
+          if (chGoalHintTimer <= 0 && chDom.tip) chDom.tip.hidden = true;
+        }
+        chEvents.forEach((event) => {
+          if (!event.hit && !event.missed && chElapsed >= event.atSec + event.visibleSec) event.missed = true;
+        });
+        if (input.pointer.wentDown) {
+          lastPointer = { x: input.pointer.x, y: input.pointer.y };
+          const index = chNearestHole(input.pointer.x, input.pointer.y);
+          if (index >= 0) chTap(index);
+        }
+        syncChallengeHud();
+        if (state === 'playing' && chElapsed >= chDuration()) {
+          chEvaluate();
+          input.endFrame();
+          return;
+        }
+        input.endFrame();
+      }
+
       function update(dt) {
         particles.update(dt);
         for (let i = floaters.length - 1; i >= 0; i--) {
@@ -318,6 +776,10 @@
         hitFlash = Math.max(0, hitFlash - dt * 6);
         if (state !== 'playing') {
           input.endFrame();
+          return;
+        }
+        if (mode === 'challenge') {
+          updateChallenge(dt);
           return;
         }
         autosave.tick(dt);
@@ -357,7 +819,7 @@
               best = i;
             }
           });
-          if (best >= 0) hitSlot(best);
+          if (best >= 0) tapSlot(best);
         }
 
         if (timeLeft <= 0) {
@@ -370,7 +832,29 @@
 
       function serialize() {
         if (state !== 'playing' && state !== 'paused') return null;
+        if (mode === 'challenge') {
+          if (!chStage) return null;
+          return {
+            mode: 'challenge',
+            stageId: chStage.id,
+            challengeState: {
+              chElapsed,
+              chScore,
+              chValid,
+              chGold,
+              chBomb,
+              chDecoy,
+              chMiss,
+              chAssisted,
+              combo,
+              comboTimer,
+              hearts,
+              chEvents: chEvents.map((event) => ({ id: event.id, hit: !!event.hit, missed: !!event.missed })),
+            },
+          };
+        }
         return {
+          mode: 'classic',
           slots: slots.map((m) => (m ? { type: m.type, age: m.age, life: m.life, hit: m.hit } : null)),
           timeLeft,
           elapsed,
@@ -385,10 +869,59 @@
         };
       }
 
+      function restoreChallenge(data) {
+        if (!A.Challenge || !data || typeof data.stageId !== 'string') return false;
+        const stage = A.Challenge.stage(GAME_ID, data.stageId);
+        if (!stage) return false;
+        /* 契约要求挑战状态放在 data.challengeState；旧/异常档缺失时回退顶层字段，保持兼容。 */
+        const stateData = data.challengeState && typeof data.challengeState === 'object' ? data.challengeState : data;
+        mode = 'challenge';
+        chStage = stage;
+        chStageIndex = challengeData.findIndex((item) => item.id === stage.id);
+        chElapsed = Math.max(0, Number(stateData.chElapsed) || 0);
+        chScore = Number(stateData.chScore) || 0;
+        chValid = Math.max(0, Math.floor(Number(stateData.chValid) || 0));
+        chGold = Math.max(0, Math.floor(Number(stateData.chGold) || 0));
+        chBomb = Math.max(0, Math.floor(Number(stateData.chBomb) || 0));
+        chDecoy = Math.max(0, Math.floor(Number(stateData.chDecoy) || 0));
+        chMiss = Math.max(0, Math.floor(Number(stateData.chMiss) || 0));
+        chAssisted = !!stateData.chAssisted;
+        chResult = null;
+        chErrorReason = '';
+        chGoalHintTimer = 0;
+        chHudSecond = -1;
+        const savedEvents = Array.isArray(stateData.chEvents) ? stateData.chEvents : [];
+        chEvents = chBuildEvents(stage).map((event) => {
+          const saved = savedEvents.filter((item) => item && item.id === event.id)[0];
+          if (saved) {
+            event.hit = !!saved.hit;
+            event.missed = !!saved.missed;
+          }
+          return event;
+        });
+        combo = Math.max(0, Number(stateData.combo) || 0);
+        comboTimer = Math.max(0, Number(stateData.comboTimer) || 0);
+        hearts = clamp(Number(stateData.hearts) || 3, 1, 3);
+        slots = HOLES.map(() => null);
+        if (chDom.tip) chDom.tip.hidden = true;
+        state = 'playing';
+        syncChallengeHud();
+        joyTools.sync();
+        return true;
+      }
+
       function restore(data) {
-        if (!data || !Array.isArray(data.slots) || data.slots.length !== HOLES.length) return false;
+        if (!data || typeof data !== 'object') return false;
+        if (data.mode === 'challenge') return restoreChallenge(data);
+        if (!Array.isArray(data.slots) || data.slots.length !== HOLES.length) return false;
         try {
           reset();
+          mode = 'classic';
+          chStage = null;
+          chStageIndex = -1;
+          if (chDom.hud) chDom.hud.hidden = true;
+          if (chDom.tip) chDom.tip.hidden = true;
+          if (gameHudEl) gameHudEl.hidden = false;
           slots = data.slots.map((m) => {
             if (!m || ['mole', 'bomb', 'gold'].indexOf(m.type) === -1) return null;
             return {
@@ -424,11 +957,20 @@
 
       const autosave = A.createRunAutosave('mole-whack', serialize, {
         every: 3,
-        meta: () => ({ score, summary: `得分 ${score} · 连击 ${combo} · 剩余 ${Math.ceil(timeLeft)}s` }),
+        meta: () => (
+          mode === 'challenge' && chStage
+            ? { score: chScore, summary: `挑战 ${fmtChallengeLabel(chStage)} · 有效 ${chValid}/${Number(chWin().minValidHits) || 0} · ${fmtTime(chElapsed)}` }
+            : { score, summary: `得分 ${score} · 连击 ${combo} · 剩余 ${Math.ceil(timeLeft)}s` }
+        ),
       });
 
       function useTool(id) {
         if (state !== 'playing') return false;
+        /* 挑战模式使用固定事件时间轴，禁用 0.7 限量道具以保证脚本可复现（见 impl 文档设计差异）。 */
+        if (mode === 'challenge') {
+          A.showToast('挑战模式使用固定鼠群脚本，道具不可用');
+          return false;
+        }
         if (id === 'rush') {
           if (tools.rush <= 0 || goldRushSpawns > 0) {
             A.showToast(goldRushSpawns > 0 ? '金鼠三连正在进行' : '金鼠三连已经用过啦');
@@ -461,11 +1003,25 @@
       const joyTools = A.createToolbelt([
         { id: 'rush', icon: '🌟', name: '金鼠三连', description: '接下来三次实际生成都是金鼠', getCount: () => tools.rush, use: () => useTool('rush'), active: () => goldRushSpawns > 0 },
         { id: 'shield', icon: '🛡', name: '安心锤', description: '6 秒内炸弹不扣心、时间和连击', getCount: () => tools.shield, use: () => useTool('shield'), active: () => shieldTimer > 0 },
-      ], { isPlaying: () => state === 'playing', keys: ['q', 'e'], label: '打地鼠道具', placement: 'below' });
+      ], { isPlaying: () => state === 'playing' && mode === 'classic', keys: ['q', 'e'], label: '打地鼠道具', placement: 'below' });
 
       window.addEventListener('keydown', (e) => {
         const n = Number(e.key);
-        if (Number.isInteger(n) && n >= 1 && n <= 9) hitSlot(n - 1);
+        if (Number.isInteger(n) && n >= 1 && n <= 9) tapSlot(n - 1);
+      });
+
+      /* 挑战模式双指并点：共享输入只跟踪一根画布指针，这里为额外手指补一条页面本地判定路径。
+         仅挑战模式生效；主指针仍由共享输入处理，避免同一次点击被记两次。 */
+      canvas.addEventListener('pointerdown', (e) => {
+        if (mode !== 'challenge' || state !== 'playing') return;
+        if (input.pointer.id === e.pointerId) return;
+        const rect = canvas.getBoundingClientRect();
+        if (!rect.width || !rect.height) return;
+        e.preventDefault();
+        const x = ((e.clientX - rect.left) / rect.width) * W;
+        const y = ((e.clientY - rect.top) / rect.height) * H;
+        const index = chNearestHole(x, y);
+        if (index >= 0) chTap(index);
       });
 
       function drawMole(mole, index) {
@@ -500,6 +1056,33 @@
           ctx.arc(-8, -4, 1.6, 0, TAU);
           ctx.arc(8, -4, 1.6, 0, TAU);
           ctx.fill();
+        } else if (mole.type === 'decoy') {
+          /* 假目标：灰色轮廓 + 虚线 + 红色 × 眼，和真地鼠/金鼠明显区分。 */
+          ctx.fillStyle = 'rgba(120, 126, 150, 0.42)';
+          ctx.beginPath();
+          ctx.arc(0, 0, 27, 0, TAU);
+          ctx.fill();
+          ctx.setLineDash([5, 4]);
+          ctx.strokeStyle = 'rgba(190, 198, 230, 0.75)';
+          ctx.lineWidth = 2;
+          ctx.beginPath();
+          ctx.arc(0, 0, 27, 0, TAU);
+          ctx.stroke();
+          ctx.setLineDash([]);
+          ctx.strokeStyle = '#ff8fa3';
+          ctx.lineWidth = 3;
+          ctx.beginPath();
+          ctx.moveTo(-13, -9);
+          ctx.lineTo(-3, 1);
+          ctx.moveTo(-3, -9);
+          ctx.lineTo(-13, 1);
+          ctx.moveTo(3, -9);
+          ctx.lineTo(13, 1);
+          ctx.moveTo(13, -9);
+          ctx.lineTo(3, 1);
+          ctx.stroke();
+          ctx.fillStyle = '#ffd23f';
+          A.draw.label(ctx, '假', 0, 16, { font: 'bold 11px system-ui', color: '#ffd23f' });
         } else {
           const body = mole.type === 'gold' ? '#ffd23f' : '#b8793d';
           const dark = mole.type === 'gold' ? '#c9970f' : '#8a5527';
@@ -539,6 +1122,33 @@
         ctx.restore();
       }
 
+      /* 挑战模式：按事件时间轴绘制预兆环与当前洞口的鼠/炸弹/假目标。 */
+      function chDrawHole(index) {
+        const hole = HOLES[index];
+        let prewarn = false;
+        for (const event of chEvents) {
+          if (event.slot !== index) continue;
+          const eventState = chEventState(event);
+          if (eventState === 'prewarn') prewarn = true;
+          if (eventState === 'active') {
+            drawMole(
+              { type: event.kind, age: Math.max(0, chElapsed - event.atSec), life: event.visibleSec, hit: false, wobble: 0 },
+              index
+            );
+          }
+        }
+        if (prewarn) {
+          const pulse = 0.5 + 0.5 * Math.sin(performance.now() / 90);
+          ctx.save();
+          ctx.strokeStyle = 'rgba(255,210,63,' + (0.35 + pulse * 0.45).toFixed(2) + ')';
+          ctx.lineWidth = 3;
+          ctx.beginPath();
+          ctx.ellipse(hole.x, hole.y + 16, HOLE_R + 2, 16, 0, 0, TAU);
+          ctx.stroke();
+          ctx.restore();
+        }
+      }
+
       function render() {
         stage.beginFrame();
         ctx.save();
@@ -570,7 +1180,8 @@
           ctx.beginPath();
           ctx.ellipse(hole.x, hole.y + 12, HOLE_R - 4, 10, 0, 0, TAU);
           ctx.stroke();
-          if (slots[index]) drawMole(slots[index], index);
+          if (mode === 'challenge') chDrawHole(index);
+          else if (slots[index]) drawMole(slots[index], index);
           ctx.fillStyle = 'rgba(40, 60, 36, 0.9)';
           ctx.beginPath();
           ctx.ellipse(hole.x, hole.y + 24, HOLE_R, 12, 0, 0, Math.PI);
@@ -603,25 +1214,43 @@
         ctx.fill();
         ctx.restore();
 
-        A.draw.label(ctx, 'SCORE ' + score, 12, 24, { align: 'left', font: 'bold 15px system-ui', color: '#ffd23f' });
-        A.draw.label(ctx, Math.ceil(timeLeft) + 's', W - 12, 24, { align: 'right', font: 'bold 16px system-ui', color: timeLeft < 10 ? '#ff5d5d' : '#eef1ff' });
-        A.draw.label(ctx, 'COMBO ×' + Math.max(1, combo), W / 2, 24, { font: 'bold 13px system-ui', color: '#63d68c' });
-        for (let i = 0; i < hearts; i++) {
-          ctx.fillStyle = '#ff5d7a';
-          ctx.beginPath();
-          ctx.arc(20 + i * 17, 52, 5, 0, TAU);
-          ctx.fill();
-        }
-        A.draw.label(ctx, '难度 ' + Math.round(difficulty() * 100) + '%', W - 12, 52, {
-          align: 'right',
-          font: '11px system-ui',
-          color: '#c9d8c0',
-        });
-        const joyStatus = [];
-        if (goldRushSpawns > 0) joyStatus.push('金鼠 ×' + goldRushSpawns);
-        if (shieldTimer > 0) joyStatus.push('安心 ' + Math.ceil(shieldTimer) + 's');
-        if (joyStatus.length) {
-          A.draw.label(ctx, joyStatus.join(' · '), W / 2, 52, { font: 'bold 11px system-ui', color: '#ffd23f' });
+        if (mode === 'challenge' && chStage) {
+          A.draw.label(ctx, fmtChallengeLabel(chStage) + ' ' + (chStage.title || ''), 12, 24, { align: 'left', font: 'bold 14px system-ui', color: '#5ad1a0' });
+          A.draw.label(ctx, '用时 ' + fmtTime(chElapsed) + ' / ' + fmtTime(chDuration()), W - 12, 24, { align: 'right', font: 'bold 14px system-ui', color: '#ffd23f' });
+          A.draw.label(
+            ctx,
+            '有效 ' + chValid + '/' + (Number(chWin().minValidHits) || 0) + ' · 金 ' + chGold + '/' + (Number(chWin().minGoldHits) || 0),
+            W / 2,
+            52,
+            { font: '12px system-ui', color: '#c9d8c0' }
+          );
+          if (chBomb > 0 || chDecoy > 0) {
+            A.draw.label(ctx, '炸弹 ' + chBomb + ' · 假目标 ' + chDecoy + ' / 目标 ' + chStage.goalStatement, W / 2, 72, {
+              font: '11px system-ui',
+              color: '#93a0c8',
+            });
+          }
+        } else {
+          A.draw.label(ctx, 'SCORE ' + score, 12, 24, { align: 'left', font: 'bold 15px system-ui', color: '#ffd23f' });
+          A.draw.label(ctx, Math.ceil(timeLeft) + 's', W - 12, 24, { align: 'right', font: 'bold 16px system-ui', color: timeLeft < 10 ? '#ff5d5d' : '#eef1ff' });
+          A.draw.label(ctx, 'COMBO ×' + Math.max(1, combo), W / 2, 24, { font: 'bold 13px system-ui', color: '#63d68c' });
+          for (let i = 0; i < hearts; i++) {
+            ctx.fillStyle = '#ff5d7a';
+            ctx.beginPath();
+            ctx.arc(20 + i * 17, 52, 5, 0, TAU);
+            ctx.fill();
+          }
+          A.draw.label(ctx, '难度 ' + Math.round(difficulty() * 100) + '%', W - 12, 52, {
+            align: 'right',
+            font: '11px system-ui',
+            color: '#c9d8c0',
+          });
+          const joyStatus = [];
+          if (goldRushSpawns > 0) joyStatus.push('金鼠 ×' + goldRushSpawns);
+          if (shieldTimer > 0) joyStatus.push('安心 ' + Math.ceil(shieldTimer) + 's');
+          if (joyStatus.length) {
+            A.draw.label(ctx, joyStatus.join(' · '), W / 2, 52, { font: 'bold 11px system-ui', color: '#ffd23f' });
+          }
         }
         ctx.restore();
       }
@@ -654,6 +1283,12 @@
       reset();
       state = 'ready';
       joyTools.sync();
+      if (chDom.back) {
+        chDom.back.addEventListener('click', () => {
+          hideChallengePanel();
+          showStart();
+        });
+      }
       if (location.hash === '#test') {
         window.__arcadeTest = {
           info() {
@@ -709,6 +1344,94 @@
           hitSlotNow(index) {
             hitSlot(Number(index));
             return true;
+          },
+          challengeStages() {
+            if (!A.Challenge || !challengeAvailable) return [];
+            const progress = A.Challenge.progress(GAME_ID);
+            return challengeData.map((stage) => ({
+              id: stage.id,
+              stageNumber: stage.stageNumber,
+              title: stage.title,
+              unlocked: A.Challenge.isUnlocked(GAME_ID, stage.id),
+              best: progress.best[stage.id] || null,
+            }));
+          },
+          startChallenge(ref) {
+            return startChallenge(ref);
+          },
+          challengeInfo() {
+            return {
+              mode,
+              stageId: chStage ? chStage.id : null,
+              stageIndex: chStageIndex,
+              state,
+              elapsedSec: chElapsed,
+              durationSec: chDuration(),
+              objective: chStage ? chStage.goalStatement : null,
+              decision: chStage ? chStage.decision : null,
+              cleared: !!chResult,
+              collectibles: chResult ? chResult.collectibles.slice() : [],
+              assisted: chAssisted,
+              score: chScore,
+              validHits: chValid,
+              goldHits: chGold,
+              bombHits: chBomb,
+              decoyHits: chDecoy,
+              misses: chMiss,
+              error: chErrorReason,
+            };
+          },
+          stageObservable() {
+            return {
+              mode,
+              stageId: chStage ? chStage.id : null,
+              simTime: chElapsed,
+              durationSec: chDuration(),
+              goal: chWin(),
+              scoring: chScoring(),
+              holes: HOLES.map((hole) => ({ x: hole.x, y: hole.y, r: HOLE_R })),
+              events: chEvents.map((event) => ({
+                id: event.id,
+                slot: event.slot,
+                kind: event.kind,
+                atSec: event.atSec,
+                prewarnSec: event.prewarnSec,
+                visibleSec: event.visibleSec,
+                score: event.score,
+                state: chEventState(event),
+                hit: !!event.hit,
+                missed: !!event.missed,
+              })),
+              score: chScore,
+              validHits: chValid,
+              goldHits: chGold,
+              bombHits: chBomb,
+              decoyHits: chDecoy,
+              misses: chMiss,
+            };
+          },
+          forceStageClear(assisted) {
+            if (mode !== 'challenge' || !chStage) return false;
+            chAssisted = !!assisted;
+            chElapsed = chDuration();
+            return chClear();
+          },
+          setChallengeClock(sec) {
+            if (mode !== 'challenge' || !chStage) return false;
+            chElapsed = clamp(Number(sec) || 0, 0, chDuration());
+            chHudSecond = -1;
+            syncChallengeHud();
+            return chElapsed;
+          },
+          forceStageFail(reason) {
+            if (mode !== 'challenge' || !chStage) return false;
+            return chFail(String(reason || '测试失败'));
+          },
+          exitChallenge() {
+            return exitToChallengeSelect();
+          },
+          tapHole(index) {
+            return chTap(Number(index));
           },
         };
       }

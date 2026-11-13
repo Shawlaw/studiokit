@@ -7,8 +7,14 @@
   <meta name="theme-color" content="#0b1020" />
   <link rel="stylesheet" href="../../../shared/site.css" />
   <link rel="stylesheet" href="../arcade.css" />
+  <style>
+    .challenge-sheet { position: absolute; inset: 8px; z-index: 6; display: flex; flex-direction: column; justify-content: flex-end; gap: 8px; overflow: auto; }
+    .challenge-sheet[hidden] { display: none; }
+    .challenge-sheet .ac-challenge-panel { width: 100%; max-height: 100%; overflow: auto; }
+  </style>
   <script src="../../../shared/site-shell.js" defer></script>
   <script src="../engine.js"></script>
+  <script src="../challenge/brick-breaker.js"></script>
   <title>砖块计划 · 街机厅 · StudioKit</title>
 </head>
 <body class="arcade-body" data-studiokit-app="arcade" data-studiokit-app-title="街机厅 Arcade" style="--ac-accent:#4fc3f7; --card-accent:#4fc3f7">
@@ -20,6 +26,12 @@
       <div class="game-hud">
         <span>分数 <strong data-hud-score>0</strong></span>
         <span>最高 <strong data-hud-high>0</strong></span>
+      </div>
+      <div class="ac-challenge-hud" data-ch-hud hidden>
+        <span><strong data-ch-stage>C01</strong> <span data-ch-title>挑战</span></span>
+        <span data-ch-goal>目标</span>
+        <span>用时 <strong data-ch-time>00:00</strong></span>
+        <span>剩余 <strong data-ch-remain>0</strong></span>
       </div>
       <button type="button" class="ac-icon-btn" data-pause aria-label="暂停游戏" title="暂停游戏（P / Esc）">⏸</button>
       <button type="button" class="ac-icon-btn" data-mute aria-label="切换音效">🔊</button>
@@ -35,6 +47,7 @@
             <button type="button" class="ac-btn ac-btn-secondary" data-ov-btn2 hidden>重新开始</button>
           </div>
         </div>
+        <div class="challenge-sheet" data-ch-panel hidden></div>
       </div>
     </div>
     <p class="game-hint">拖动 / ←→ 移动挡板 · 点击 / 空格发球 · 接住加宽 / 减速 / 加命道具 · 道具 1 宽板 / 2 重锤 · P / Esc 暂停</p>
@@ -73,7 +86,15 @@
         hudHigh: document.querySelector('[data-hud-high]'),
         pause: document.querySelector('[data-pause]'),
         mute: document.querySelector('[data-mute]'),
+        chPanel: document.querySelector('[data-ch-panel]'),
+        chHud: document.querySelector('[data-ch-hud]'),
+        chStage: document.querySelector('[data-ch-stage]'),
+        chTitle: document.querySelector('[data-ch-title]'),
+        chGoal: document.querySelector('[data-ch-goal]'),
+        chTime: document.querySelector('[data-ch-time]'),
+        chRemain: document.querySelector('[data-ch-remain]'),
       };
+      const classicHudSpans = Array.from(document.querySelectorAll('.game-hud > span'));
       const ui = A.createOverlayUi(dom);
 
       const particles = A.createParticles();
@@ -114,6 +135,36 @@
       let recordSaved = false;
       let spaceWasDown = false;
       let lastLevelConfig = null;
+
+      /* 0.9 挑战模式状态：mode='classic' 时经典逻辑完全不变 */
+      const GAME_ID = 'brick-breaker';
+      let mode = 'classic';
+      let panelOpen = false;
+      const CH_LAUNCH_ANGLES = [0.45, -0.45, 0.3, -0.3, 0.6, -0.6];
+      const CH_TOKEN_HP = { '1': 1, '2': 2, '3': 3, 'K': 1 };
+      const ch = {
+        active: false,
+        stage: null,
+        index: -1,
+        stageState: 'none',
+        elapsed: 0,
+        bricks: [],
+        paddle: { x: W / 2 - 48, y: PADDLE_Y, w: 96, h: 14 },
+        ball: { x: W / 2, y: PADDLE_Y - BALL_R - 1, vx: 0, vy: 0 },
+        lives: 3,
+        speed: 300,
+        launched: false,
+        launches: 0,
+        unlocked: true,
+        keysTotal: 0,
+        noBrickSec: 0,
+        maxNoBrickSec: 0,
+        recoveries: 0,
+        hintShown: false,
+        done: false,
+        assisted: false,
+        replayMode: false,
+      };
 
       let high = A.Progress.get('brick-breaker').high;
       dom.hudHigh.textContent = String(high);
@@ -195,6 +246,11 @@
       }
 
       function startGame() {
+        mode = 'classic';
+        ch.active = false;
+        ch.stage = null;
+        ch.done = true;
+        if (dom.chPanel) dom.chPanel.hidden = true;
         autosave.clear();
         reset();
         state = 'playing';
@@ -212,9 +268,11 @@
         loop.resume();
         pauseUi.sync();
         joyTools.sync();
+        if (mode === 'challenge') updateChallengeHud();
       }
 
       function finish(win) {
+        if (mode !== 'classic') return;
         if (state === 'over') return;
         state = 'over';
         smashHits = 0;
@@ -246,17 +304,32 @@
         state = 'paused';
         joyTools.sync();
         autosave.saveNow();
-        ui.show({ title: '已暂停', text: '球停在半空。<br/>局内进度已保存，可以随时离开。', btn: '继续', onBtn: resumeGame });
+        if (mode === 'challenge') {
+          showOverlay({
+            title: '已暂停',
+            text: '挑战计时与物理已暂停，局内进度已保存。',
+            btn: '继续',
+            onBtn: resumeGame,
+            btn2: '退出挑战',
+            onBtn2: exitChallenge,
+          });
+        } else {
+          showOverlay({ title: '已暂停', text: '球停在半空。<br/>局内进度已保存，可以随时离开。', btn: '继续', onBtn: resumeGame });
+        }
         pauseUi.sync();
       }
 
       function showStart() {
+        const available = challengeAvailable();
         ui.show({
           title: '砖块计划',
           text: '挡板反弹球，打碎所有砖块。<br/>接住 <b>加宽 / 减速 / 加命</b> 道具<br/>关卡越高球越快、挡板越窄',
           btn: '开始游戏',
           onBtn: startGame,
+          btn2: available ? '挑战 6 关' : '挑战数据不可用',
+          onBtn2: available ? () => openChallengePanel() : () => A.showToast('挑战数据不可用'),
         });
+        if (dom.ovBtn2) dom.ovBtn2.disabled = !available;
       }
 
       function launch() {
@@ -411,6 +484,10 @@
       function update(dt) {
         particles.update(dt);
         shake = Math.max(0, shake - dt * 30);
+        if (mode === 'challenge') {
+          updateChallenge(dt);
+          return;
+        }
         if (state === 'levelclear') {
           levelClearTimer -= dt;
           if (levelClearTimer <= 0) {
@@ -496,7 +573,7 @@
 
       function serialize() {
         if (state !== 'playing' && state !== 'paused') return null;
-        return {
+        const classicState = {
           bricks: bricks.map((b) => ({ x: b.x, y: b.y, w: b.w, h: b.h, hp: b.hp, maxHp: b.maxHp, alive: b.alive, color: b.color, dark: b.dark })),
           paddle: { x: paddle.x, y: paddle.y, w: paddle.w, h: paddle.h, baseW: paddle.baseW },
           ball: { x: ball.x, y: ball.y, vx: ball.vx, vy: ball.vy, r: ball.r },
@@ -511,9 +588,25 @@
           tools: { wide: tools.wide, smash: tools.smash },
           smashHits,
         };
+        if (mode === 'challenge') {
+          return {
+            mode: 'challenge',
+            stageId: ch.stage ? ch.stage.id : null,
+            challengeState: serializeChallenge(),
+            classic: classicState,
+          };
+        }
+        return { mode: 'classic', ...classicState };
       }
 
+      /** 存档恢复：mode 缺失 → 经典（0.8 旧档兼容）；mode:'challenge' → 挑战局内恢复。 */
       function restore(data) {
+        if (!data || typeof data !== 'object') return false;
+        if (data.mode === 'challenge') return restoreChallenge(data);
+        return restoreClassic(data);
+      }
+
+      function restoreClassic(data) {
         if (!data || !Array.isArray(data.bricks) || !data.ball || !data.paddle) return false;
         try {
           reset();
@@ -572,11 +665,14 @@
 
       const autosave = A.createRunAutosave('brick-breaker', serialize, {
         every: 4,
-        meta: () => ({ score, summary: `得分 ${score} · 第 ${level} 关 · 生命 ${lives}` }),
+        meta: () =>
+          mode === 'challenge' && ch.stage
+            ? { score: challengeRemaining(), summary: `挑战 ${ch.stage.id} · 剩余 ${challengeRemaining()} 砖 · 生命 ${ch.lives}` }
+            : { score, summary: `得分 ${score} · 第 ${level} 关 · 生命 ${lives}` },
       });
 
       function useTool(id) {
-        if (state !== 'playing') return false;
+        if (state !== 'playing' || mode === 'challenge') return false;
         if (id === 'wide') {
           if (tools.wide <= 0 || wideTimer > 0) {
             A.showToast(wideTimer > 0 ? '宽板效果正在进行' : '主动宽板已经用过啦');
@@ -611,6 +707,688 @@
         { id: 'smash', icon: '🔨', name: '重锤球', description: '接下来三次砖碰直接击碎', getCount: () => tools.smash, use: () => useTool('smash'), active: () => smashHits > 0 },
       ], { isPlaying: () => state === 'playing', keys: ['1', '2'], label: '砖块计划道具', placement: 'below' });
 
+      /* ============================================================
+       * 0.9 挑战模式（C01–C06）：固定 8×5 砖阵 + K 钥匙砖 / G 门 + 固定球参数
+       * - 数据：../challenge/brick-breaker.js（A.Challenge.stages）；缺失/不足 6 关 fail closed
+       * - 砖坐标：x = 20 + col*48, y = 128 + row*24（与经典砖阵同格），w=44, h=20
+       * - 挡板接球位置决定反弹角（offset*0.95，0 度=垂直向上）；球速/挡板宽/生命按 content
+       * - 挑战不写 progress 最高分 / playtime 轮次，只写 challenge:v1
+       * ============================================================ */
+      function showOverlay(opts) {
+        ui.show(opts);
+        if (dom.ovBtn2) dom.ovBtn2.disabled = false;
+      }
+
+      function challengeStagesData() {
+        if (!A.Challenge || typeof A.Challenge.stages !== 'function') return [];
+        return A.Challenge.stages(GAME_ID);
+      }
+      function challengeAvailable() {
+        return challengeStagesData().length === 6;
+      }
+      function inChallenge() {
+        return mode === 'challenge';
+      }
+
+      function syncModeUi() {
+        const chMode = inChallenge();
+        const menuMode = !chMode && panelOpen;
+        classicHudSpans.forEach((el) => {
+          el.hidden = chMode || menuMode;
+        });
+        if (dom.chHud) dom.chHud.hidden = !chMode;
+        document.body.classList.toggle('has-subhud', chMode || menuMode);
+        const toolbelt = joyTools && joyTools.element ? joyTools.element : document.querySelector('[data-game-tools]');
+        if (toolbelt) toolbelt.style.display = chMode || menuMode ? 'none' : '';
+        joyTools.sync();
+        if (chMode) updateChallengeHud();
+      }
+
+      function challengeRemaining() {
+        return ch.bricks.filter((b) => b.alive && (!b.gate || ch.unlocked)).length;
+      }
+
+      function updateChallengeHud() {
+        if (!dom.chHud || !ch.stage) return;
+        const number = ch.stage.stageNumber || ch.index + 1;
+        dom.chStage.textContent = 'C' + String(number).padStart(2, '0');
+        dom.chTitle.textContent = ch.stage.title || '';
+        dom.chGoal.textContent = '目标：' + (ch.stage.goalStatement || '消除所有可破坏砖');
+        dom.chTime.textContent = A.Challenge.formatTime(ch.elapsed);
+        dom.chRemain.textContent = String(challengeRemaining());
+      }
+
+      function renderChallengePanel() {
+        if (!dom.chPanel) return;
+        if (!challengeAvailable()) {
+          dom.chPanel.innerHTML = '<div class="ac-challenge-panel is-empty"><p class="ac-challenge-tip">挑战数据不可用（缺失或不足 6 关）</p></div>';
+          return;
+        }
+        dom.chPanel.innerHTML = A.Challenge.stageListHtml(GAME_ID);
+        const back = document.createElement('button');
+        back.type = 'button';
+        back.className = 'ac-btn ac-btn-secondary';
+        back.textContent = '返回开始界面';
+        back.setAttribute('data-ch-back', '');
+        dom.chPanel.appendChild(back);
+      }
+
+      function openChallengePanel() {
+        if (!challengeAvailable()) {
+          A.showToast('挑战数据不可用');
+          return false;
+        }
+        mode = 'classic';
+        panelOpen = true;
+        ch.active = false;
+        ch.stage = null;
+        ch.done = true;
+        state = 'ready';
+        renderChallengePanel();
+        if (dom.chPanel) dom.chPanel.hidden = false;
+        ui.hide();
+        loop.resume();
+        pauseUi.sync();
+        syncModeUi();
+        return true;
+      }
+
+      function closeChallengePanel() {
+        panelOpen = false;
+        if (dom.chPanel) dom.chPanel.hidden = true;
+        showStart();
+        syncModeUi();
+      }
+
+      if (dom.chPanel) {
+        dom.chPanel.addEventListener('click', (event) => {
+          const target = event.target instanceof Element ? event.target : null;
+          if (!target) return;
+          const stageBtn = target.closest('[data-stage-id]');
+          if (stageBtn && !stageBtn.disabled) {
+            startChallenge(stageBtn.getAttribute('data-stage-id'));
+            return;
+          }
+          if (target.closest('[data-ch-back]')) closeChallengePanel();
+        });
+      }
+
+      function buildChallengeBricks(rows) {
+        const bricks = [];
+        const safeRows = Array.isArray(rows) ? rows : [];
+        for (let r = 0; r < safeRows.length; r += 1) {
+          const line = String(safeRows[r] || '');
+          for (let col = 0; col < line.length; col += 1) {
+            const token = line[col];
+            if (token === '.' || token === ' ') continue;
+            const hp = CH_TOKEN_HP[token] || 1;
+            bricks.push({
+              x: BRICK_X + col * (BRICK_W + BRICK_GAP),
+              y: BRICK_Y + r * (BRICK_H + BRICK_GAP),
+              w: BRICK_W,
+              h: BRICK_H,
+              hp,
+              maxHp: hp,
+              alive: true,
+              tok: token,
+              gate: token === 'G',
+              col,
+              row: r,
+            });
+          }
+        }
+        return bricks;
+      }
+
+      function resetChallengeState(stage) {
+        const content = stage.content || {};
+        ch.elapsed = 0;
+        ch.bricks = buildChallengeBricks(content.brickRows);
+        ch.keysTotal = ch.bricks.filter((b) => b.tok === 'K').length;
+        ch.unlocked = ch.keysTotal === 0;
+        ch.speed = Number(content.ball && content.ball.speed) || 300;
+        ch.lives = clamp(Number(content.ball && content.ball.lives) || 3, 1, 5);
+        const paddleW = clamp(Number(content.ball && content.ball.paddleWidth) || 96, 50, 160);
+        const startX = Number(content.ball && content.ball.startingPaddleX) || W / 2;
+        ch.paddle = { x: clamp(startX - paddleW / 2, FIELD.x + 6, FIELD.x + FIELD.w - paddleW - 6), y: PADDLE_Y, w: paddleW, h: 14 };
+        ch.ball = { x: ch.paddle.x + paddleW / 2, y: PADDLE_Y - BALL_R - 1, vx: 0, vy: 0 };
+        ch.launched = false;
+        ch.launches = 0;
+        ch.noBrickSec = 0;
+        ch.maxNoBrickSec = 0;
+        ch.recoveries = 0;
+        ch.hintShown = false;
+        ch.done = false;
+        ch.assisted = false;
+        ch.replayMode = false;
+        ch.recSec = Number(content.stuckBallRecovery && content.stuckBallRecovery.ifNoBrickContactSec) || 12;
+        pickups.length = 0;
+        particles.clear();
+        updateChallengeHud();
+      }
+
+      function startChallenge(ref) {
+        if (!challengeAvailable()) {
+          A.showToast('挑战数据不可用');
+          return false;
+        }
+        const stage = A.Challenge.stage(GAME_ID, ref);
+        if (!stage) return false;
+        if (!A.Challenge.isUnlocked(GAME_ID, stage.id)) {
+          A.showToast('先通过上一关');
+          return false;
+        }
+        panelOpen = false;
+        if (dom.chPanel) dom.chPanel.hidden = true;
+        mode = 'challenge';
+        ch.active = true;
+        ch.stage = stage;
+        ch.index = challengeStagesData().findIndex((item) => item.id === stage.id);
+        ch.stageState = 'playing';
+        resetChallengeState(stage);
+        state = 'playing';
+        ui.hide();
+        loop.resume();
+        pauseUi.sync();
+        syncModeUi();
+        autosave.saveNow();
+        A.showToast('目标：' + (stage.goalStatement || '消除所有可破坏砖') + '。拖动挡板接球，偏心接球改变反弹角。', 3600);
+        return true;
+      }
+
+      function challengeLaunch() {
+        if (ch.launched || ch.done) return;
+        ch.launched = true;
+        const angle = CH_LAUNCH_ANGLES[ch.launches % CH_LAUNCH_ANGLES.length];
+        ch.launches += 1;
+        const speed = ch.speed;
+        ch.ball.vx = Math.sin(angle) * speed;
+        ch.ball.vy = -Math.cos(angle) * speed;
+        A.Sfx.play('jump');
+      }
+
+      function challengeLoseBall() {
+        ch.lives = Math.max(0, ch.lives - 1);
+        A.Sfx.play('over');
+        ch.launched = false;
+        ch.ball.x = ch.paddle.x + ch.paddle.w / 2;
+        ch.ball.y = PADDLE_Y - BALL_R - 1;
+        ch.ball.vx = 0;
+        ch.ball.vy = 0;
+        ch.noBrickSec = 0;
+        updateChallengeHud();
+        if (ch.lives <= 0) {
+          challengeFail('生命耗尽：球全部掉出场地');
+        } else {
+          A.showToast('丢球 · 剩余生命 ' + ch.lives + ' · 点击 / 空格再次发球', 2200);
+        }
+      }
+
+      function challengeDestroyBrick(brick) {
+        brick.hp -= 1;
+        ch.noBrickSec = 0;
+        if (brick.tok === 'K') {
+          const keysLeft = ch.bricks.filter((b) => b.tok === 'K' && b.alive && b.hp > 0).length;
+          if (keysLeft === 0 && !ch.unlocked) {
+            ch.unlocked = true;
+            ch.bricks.forEach((b) => {
+              if (b.gate) b.hp = 1;
+            });
+            A.showToast('钥匙击毁：门砖解锁！', 2200);
+            A.Sfx.play('perfect');
+          }
+        }
+        if (brick.hp <= 0 && brick.alive) {
+          brick.alive = false;
+          A.Sfx.play('hit');
+          particles.emit(brick.x + brick.w / 2, brick.y + brick.h / 2, {
+            count: A.reducedMotion ? 4 : 10,
+            speed: [30, 160],
+            life: [0.2, 0.5],
+            size: [2, 4],
+            colors: ['#4fc3f7', '#ffd23f', '#ffffff'],
+            gravity: 200,
+          });
+        } else {
+          A.Sfx.play('ui');
+        }
+        updateChallengeHud();
+      }
+
+      function challengeStuckRecovery() {
+        if (ch.noBrickSec < ch.recSec) return;
+        ch.noBrickSec = 0;
+        if (!ch.hintShown) {
+          ch.hintShown = true;
+          A.showToast('球在空转：试试用挡板偏心接球改变角度（不扣命）', 2600);
+          return;
+        }
+        ch.recoveries += 1;
+        const speed = Math.hypot(ch.ball.vx, ch.ball.vy) || ch.speed;
+        let angle = Math.atan2(ch.ball.vx, -ch.ball.vy) + 0.4;
+        if (!Number.isFinite(angle)) angle = 0;
+        ch.ball.vx = Math.sin(angle) * speed;
+        ch.ball.vy = -Math.cos(angle) * speed;
+        A.showToast('球路微调（不扣命）', 1600);
+      }
+
+      /**
+       * 未解锁 G 门被球击中：门保持“硬墙”不可破坏，但正上方的 K 钥匙砖受到 1 点伤害
+       * （设计 C03/C06 中 K 全部位于 G 正上方，按字面“G 是硬墙”时 K 在物理上不可直接触及；
+       *  这是最小实现修正，见 docs/arcade/0.9/impl/brick-breaker.md “设计差异”）。
+       */
+      function challengeHitLockedGate(gateBrick) {
+        ch.noBrickSec = 0;
+        const key = ch.bricks.find((b) => b.tok === 'K' && b.alive && b.hp > 0 && b.col === gateBrick.col && b.row === gateBrick.row - 1);
+        if (!key) {
+          A.Sfx.play('hit');
+          return;
+        }
+        A.showToast('撞门震钥匙：正上方的 K 钥匙砖 -1', 1800);
+        challengeDestroyBrick(key);
+      }
+
+      function challengeTick(dt) {
+        if (ch.done) return;
+        ch.elapsed += dt;
+        const speed = ch.speed;
+        const steps = Math.max(1, Math.ceil((speed * dt) / 7));
+        const sub = dt / steps;
+        for (let s = 0; s < steps; s += 1) {
+          const ball = ch.ball;
+          ball.x += ball.vx * sub;
+          ball.y += ball.vy * sub;
+          if (ball.x - BALL_R < FIELD.x) {
+            ball.x = FIELD.x + BALL_R;
+            ball.vx = Math.abs(ball.vx);
+          } else if (ball.x + BALL_R > FIELD.x + FIELD.w) {
+            ball.x = FIELD.x + FIELD.w - BALL_R;
+            ball.vx = -Math.abs(ball.vx);
+          }
+          if (ball.y - BALL_R < FIELD.y) {
+            ball.y = FIELD.y + BALL_R;
+            ball.vy = Math.abs(ball.vy);
+          }
+          const paddle = ch.paddle;
+          if (
+            ball.vy > 0 &&
+            ball.y + BALL_R >= paddle.y &&
+            ball.y - BALL_R <= paddle.y + paddle.h &&
+            ball.x >= paddle.x - BALL_R &&
+            ball.x <= paddle.x + paddle.w + BALL_R
+          ) {
+            ball.y = paddle.y - BALL_R;
+            const offset = clamp((ball.x - (paddle.x + paddle.w / 2)) / (paddle.w / 2), -1, 1);
+            const angle = offset * 0.95;
+            ball.vx = Math.sin(angle) * speed;
+            ball.vy = -Math.cos(angle) * speed;
+            A.Sfx.play('land');
+          }
+          for (const brick of ch.bricks) {
+            if (!brick.alive) continue;
+            if (!A.Physics.circleBox(ball.x, ball.y, BALL_R, brick)) continue;
+            const dx = ball.x - (brick.x + brick.w / 2);
+            const dy = ball.y - (brick.y + brick.h / 2);
+            if (Math.abs(dx) / (brick.w / 2) > Math.abs(dy) / (brick.h / 2)) ball.vx = dx > 0 ? Math.abs(ball.vx) : -Math.abs(ball.vx);
+            else ball.vy = dy > 0 ? Math.abs(ball.vy) : -Math.abs(ball.vy);
+            if (brick.gate && !ch.unlocked) {
+              challengeHitLockedGate(brick);
+            } else {
+              challengeDestroyBrick(brick);
+            }
+            break;
+          }
+          if (ball.y - BALL_R > H + 20) {
+            challengeLoseBall();
+            return;
+          }
+        }
+        ch.noBrickSec += dt;
+        ch.maxNoBrickSec = Math.max(ch.maxNoBrickSec, ch.noBrickSec);
+        challengeStuckRecovery();
+        updateChallengeHud();
+        if (!ch.bricks.some((b) => b.alive)) challengeWin();
+      }
+
+      /** 线状路径是否被其它存活砖挡住（含未解锁 G 硬墙）。 */
+      function challengeRayBlocked(fromX, fromY, toX, toY, ignoreBrick) {
+        const steps = Math.max(2, Math.ceil(Math.hypot(toX - fromX, toY - fromY) / 5));
+        for (let i = 1; i < steps; i += 1) {
+          const t = i / steps;
+          const x = fromX + (toX - fromX) * t;
+          const y = fromY + (toY - fromY) * t;
+          for (const brick of ch.bricks) {
+            if (!brick.alive || brick === ignoreBrick) continue;
+            if (A.Physics.circleBox(x, y, 2, brick)) return true;
+          }
+        }
+        return false;
+      }
+
+      /**
+       * 回放/自动挡板：确定性控制器（仅 #test 回放使用，不改变玩家真实输入物理）。
+       * 策略：优先撞“K 正下方的 G 门”开锁 → 直瞄路径无遮挡的砖 → 通过空列到顶部落下砸顶部砖 → 兜底瞄准最近砖。
+       */
+      function challengeAutoPaddle() {
+        const paddle = ch.paddle;
+        const ball = ch.ball;
+        if (!ch.launched) {
+          ball.x = paddle.x + paddle.w / 2;
+          ball.y = paddle.y - BALL_R - 1;
+          return;
+        }
+        const alive = ch.bricks.filter((b) => b.alive);
+        const targets = [];
+        for (const gateBrick of alive) {
+          if (!gateBrick.gate || ch.unlocked) continue;
+          const key = alive.find((b) => b.tok === 'K' && b.col === gateBrick.col && b.row === gateBrick.row - 1);
+          if (key) targets.push({ brick: gateBrick, priority: 0 });
+        }
+        for (const brick of alive) {
+          if (brick.gate && !ch.unlocked) continue;
+          targets.push({ brick, priority: 1 });
+        }
+        let best = null;
+        for (const target of targets) {
+          const brick = target.brick;
+          const cx = brick.x + brick.w / 2;
+          const cy = brick.y + brick.h / 2;
+          if (cy >= ball.y - 8) continue;
+          const angle = Math.atan2(cx - ball.x, ball.y - cy);
+          if (Math.abs(angle) > 0.95) continue;
+          if (challengeRayBlocked(ball.x, ball.y, cx, cy, brick)) continue;
+          const score = (target.priority === 0 ? -3 : 0) + Math.abs(angle) * 2 + Math.hypot(cx - ball.x, cy - ball.y) * 0.001;
+          if (!best || score < best.score) best = { angle, score };
+        }
+        if (!best) {
+          /* 顶部攻击：从完全空的列上到砖阵上方，借顶弹与横向速度从上方砸顶部砖 */
+          const openCols = [];
+          for (let col = 0; col < 8; col += 1) {
+            if (alive.some((b) => b.col === col)) continue;
+            const cx = BRICK_X + col * (BRICK_W + BRICK_GAP) + BRICK_W / 2;
+            if (challengeRayBlocked(ball.x, ball.y, cx, FIELD.y + 8, null)) continue;
+            openCols.push(cx);
+          }
+          let cand = null;
+          for (const cx of openCols) {
+            const angle = Math.atan2(cx - ball.x, ball.y - (FIELD.y + 8));
+            if (Math.abs(angle) > 0.95) continue;
+            const xTop = ball.x + Math.tan(angle) * (ball.y - (FIELD.y + 8));
+            const xDesc = xTop + Math.tan(angle) * (BRICK_Y - FIELD.y);
+            let nearest = null;
+            for (const brick of alive) {
+              const d = Math.abs(brick.x + brick.w / 2 - xDesc);
+              if (!nearest || d < nearest) nearest = d;
+            }
+            const score = Math.abs(angle) * 2 + (nearest === null ? 0 : nearest * 0.02);
+            if (!cand || score < cand.score) cand = { angle: clamp(angle, -0.95, 0.95), score };
+          }
+          if (cand) best = cand;
+        }
+        if (!best) {
+          let nearest = null;
+          for (const brick of alive) {
+            const cx = brick.x + brick.w / 2;
+            const cy = brick.y + brick.h / 2;
+            const d = Math.hypot(cx - ball.x, cy - ball.y);
+            if (!nearest || d < nearest.d) nearest = { cx, cy, d };
+          }
+          best = { angle: nearest ? clamp(Math.atan2(nearest.cx - ball.x, Math.max(20, ball.y - nearest.cy)), -0.95, 0.95) : 0 };
+        }
+        const offset = clamp(best.angle / 0.95, -1, 1);
+        paddle.x = clamp(ball.x - paddle.w / 2 - offset * (paddle.w / 2), FIELD.x + 6, FIELD.x + FIELD.w - paddle.w - 6);
+      }
+
+      function updateChallenge(dt) {
+        if (state !== 'playing') {
+          input.endFrame();
+          return;
+        }
+        autosave.tick(dt);
+        if (ch.done) {
+          input.endFrame();
+          return;
+        }
+        const paddle = ch.paddle;
+        let dir = 0;
+        if (input.isDown('ArrowLeft', 'a')) dir -= 1;
+        if (input.isDown('ArrowRight', 'd')) dir += 1;
+        if (dir !== 0) paddle.x += dir * 380 * dt;
+        if (input.pointer.down) paddle.x = input.pointer.x - paddle.w / 2;
+        paddle.x = clamp(paddle.x, FIELD.x + 6, FIELD.x + FIELD.w - paddle.w - 6);
+        if (!ch.launched) {
+          ch.ball.x = paddle.x + paddle.w / 2;
+          ch.ball.y = paddle.y - BALL_R - 1;
+          const spaceNow = input.isDown(' ');
+          if (input.pointer.wentDown || (spaceNow && !spaceWasDown)) challengeLaunch();
+          spaceWasDown = spaceNow;
+        }
+        if (ch.launched) challengeTick(dt);
+        else ch.elapsed += dt;
+        updateChallengeHud();
+        input.endFrame();
+      }
+
+      function challengeWin() {
+        if (!inChallenge() || ch.done) return;
+        ch.done = true;
+        ch.stageState = 'cleared';
+        state = 'cleared';
+        A.Sfx.play('perfect');
+        autosave.clear();
+        const result = { timeSec: Math.round(ch.elapsed * 10) / 10, assisted: ch.assisted === true, collectibles: [] };
+        if (A.Challenge && typeof A.Challenge.markCleared === 'function') {
+          A.Challenge.markCleared(GAME_ID, ch.stage.id, result);
+        }
+        const list = challengeStagesData();
+        const next = list[ch.index + 1] || null;
+        loop.pause();
+        showOverlay({
+          title: '挑战通关！',
+          text: A.Challenge.resultHtml(ch.stage, result),
+          btn: next ? '下一关' : '返回选关',
+          onBtn: next ? () => startChallenge(next.id) : () => openChallengePanel(),
+          btn2: '重玩本关',
+          onBtn2: () => startChallenge(ch.stage.id),
+        });
+        pauseUi.sync();
+        syncModeUi();
+      }
+
+      function challengeFail(reason) {
+        if (!inChallenge() || ch.done) return;
+        ch.done = true;
+        ch.stageState = 'failed';
+        state = 'failed';
+        A.Sfx.play('over');
+        autosave.clear();
+        loop.pause();
+        showOverlay({
+          title: '挑战失败',
+          text:
+            (reason || '未能清空砖阵') +
+            '<br/>提示：接球位置决定反弹角；K 钥匙砖全部击毁后 G 门砖才可破坏；球空转 12 秒会自动微调方向且不扣命。',
+          btn: '重试本关',
+          onBtn: () => startChallenge(ch.stage.id),
+          btn2: '返回选关',
+          onBtn2: () => openChallengePanel(),
+        });
+        pauseUi.sync();
+        syncModeUi();
+      }
+
+      function exitChallenge() {
+        if (!inChallenge()) return false;
+        panelOpen = false;
+        mode = 'classic';
+        ch.active = false;
+        ch.stage = null;
+        ch.done = true;
+        state = 'ready';
+        autosave.clear();
+        if (dom.chPanel) dom.chPanel.hidden = true;
+        loop.resume();
+        pauseUi.sync();
+        syncModeUi();
+        showStart();
+        return true;
+      }
+
+      function serializeChallenge() {
+        return {
+          elapsed: ch.elapsed,
+          lives: ch.lives,
+          launched: ch.launched,
+          launches: ch.launches,
+          unlocked: ch.unlocked,
+          speed: ch.speed,
+          level: 1,
+          paddle: { x: ch.paddle.x, w: ch.paddle.w },
+          ball: { x: ch.ball.x, y: ch.ball.y, vx: ch.ball.vx, vy: ch.ball.vy },
+          bricks: ch.bricks.map((b) => ({ hp: b.hp, alive: !!b.alive })),
+          noBrickSec: ch.noBrickSec,
+          recoveries: ch.recoveries,
+          hintShown: ch.hintShown,
+        };
+      }
+
+      function restoreChallenge(data) {
+        if (!challengeAvailable() || !data || !data.stageId || !data.challengeState) return false;
+        const stage = A.Challenge.stage(GAME_ID, data.stageId);
+        if (!stage || !A.Challenge.isUnlocked(GAME_ID, stage.id)) return false;
+        try {
+          mode = 'challenge';
+          ch.active = true;
+          ch.stage = stage;
+          ch.index = challengeStagesData().findIndex((item) => item.id === stage.id);
+          ch.stageState = 'playing';
+          resetChallengeState(stage);
+          const s = data.challengeState || {};
+          ch.elapsed = Math.max(0, Number(s.elapsed) || 0);
+          ch.lives = clamp(Number(s.lives) || ch.lives, 1, 5);
+          ch.launches = Math.max(0, Number(s.launches) || 0);
+          ch.unlocked = s.unlocked !== false;
+          ch.speed = clamp(Number(s.speed) || ch.speed, 150, 500);
+          ch.launched = !!s.launched;
+          if (s.paddle && Number.isFinite(Number(s.paddle.x))) {
+            ch.paddle.x = clamp(Number(s.paddle.x), FIELD.x + 6, FIELD.x + FIELD.w - ch.paddle.w - 6);
+          }
+          if (s.ball) {
+            ch.ball.x = clamp(Number(s.ball.x) || ch.ball.x, FIELD.x + BALL_R, FIELD.x + FIELD.w - BALL_R);
+            ch.ball.y = clamp(Number(s.ball.y) || ch.ball.y, FIELD.y + BALL_R, H);
+            ch.ball.vx = Number(s.ball.vx) || 0;
+            ch.ball.vy = Number(s.ball.vy) || 0;
+          }
+          if (Array.isArray(s.bricks)) {
+            s.bricks.forEach((item, index) => {
+              const brick = ch.bricks[index];
+              if (!brick || !item) return;
+              brick.alive = item.alive !== false;
+              brick.hp = Math.max(0, Number(item.hp) || 0);
+            });
+          }
+          ch.noBrickSec = Math.max(0, Number(s.noBrickSec) || 0);
+          ch.recoveries = Math.max(0, Number(s.recoveries) || 0);
+          ch.hintShown = !!s.hintShown;
+          ch.done = false;
+          state = 'playing';
+          recordSaved = false;
+          syncModeUi();
+          return true;
+        } catch (err) {
+          mode = 'classic';
+          return false;
+        }
+      }
+
+      /** 仅 #test：用确定性挡板瞄准控制器逐帧回放真实物理，返回清场摘要（engine-replay 证据）。 */
+      function challengeReplayClear(ref) {
+        const started = startChallenge(ref);
+        if (!started) return null;
+        ch.replayMode = true;
+        const maxFrames = 60 * 240;
+        let frames = 0;
+        for (; frames < maxFrames && state === 'playing'; frames += 1) {
+          challengeAutoPaddle();
+          if (!ch.launched) challengeLaunch();
+          challengeTick(1 / 60);
+        }
+        ch.replayMode = false;
+        const summary = {
+          stageId: ch.stage ? ch.stage.id : null,
+          cleared: ch.stageState === 'cleared',
+          frames,
+          seconds: Math.round((frames / 60) * 10) / 10,
+          lives: ch.lives,
+          launches: ch.launches,
+          remaining: ch.bricks.filter((b) => b.alive).length,
+          maxNoBrickSec: Math.round(ch.maxNoBrickSec * 10) / 10,
+          recoveries: ch.recoveries,
+          unlocked: ch.unlocked,
+          winType: (ch.stage && ch.stage.content && ch.stage.content.win && ch.stage.content.win.type) || null,
+        };
+        if (!summary.cleared && state === 'playing') challengeFail('回放超时：未能清空砖阵');
+        return summary;
+      }
+
+      function renderChallenge() {
+        stage.beginFrame();
+        ctx.save();
+        if (shake > 0) ctx.translate(rand(-shake, shake), rand(-shake, shake));
+        const bg = ctx.createLinearGradient(0, 0, 0, H);
+        bg.addColorStop(0, '#071426');
+        bg.addColorStop(1, '#0d2136');
+        ctx.fillStyle = bg;
+        ctx.fillRect(0, 0, W, H);
+
+        ctx.strokeStyle = 'rgba(79,195,247,0.22)';
+        ctx.lineWidth = 2;
+        A.draw.roundRect(ctx, FIELD.x, FIELD.y, FIELD.w, FIELD.h, 12);
+        ctx.stroke();
+
+        for (const brick of ch.bricks) {
+          if (!brick.alive) continue;
+          const locked = brick.gate && !ch.unlocked;
+          ctx.fillStyle = locked ? '#3a4a66' : brick.tok === 'K' ? '#ffd23f' : brick.maxHp >= 3 ? '#ff9a3d' : brick.maxHp === 2 ? '#b06bff' : '#4fc3f7';
+          A.draw.roundRect(ctx, brick.x, brick.y, brick.w, brick.h, 5);
+          ctx.fill();
+          ctx.fillStyle = 'rgba(255,255,255,0.35)';
+          ctx.fillRect(brick.x + 3, brick.y + 3, brick.w - 6, 3);
+          ctx.fillStyle = locked ? '#9fb0cf' : '#071426';
+          const glyph = locked ? '🔒' : brick.tok === 'K' ? 'K' : brick.hp > 1 ? String(brick.hp) : '';
+          if (glyph) A.draw.label(ctx, glyph, brick.x + brick.w / 2, brick.y + brick.h / 2, { font: 'bold 10px system-ui', color: locked ? '#9fb0cf' : '#071426' });
+        }
+
+        particles.draw(ctx);
+
+        ctx.fillStyle = '#e8f4ff';
+        A.draw.roundRect(ctx, ch.paddle.x, ch.paddle.y, ch.paddle.w, ch.paddle.h, 7);
+        ctx.fill();
+        ctx.fillStyle = '#4fc3f7';
+        ctx.fillRect(ch.paddle.x + 4, ch.paddle.y + 3, ch.paddle.w - 8, 3);
+
+        ctx.fillStyle = '#ffffff';
+        ctx.beginPath();
+        ctx.arc(ch.ball.x, ch.ball.y, BALL_R, 0, TAU);
+        ctx.fill();
+        ctx.fillStyle = '#4fc3f7';
+        ctx.beginPath();
+        ctx.arc(ch.ball.x, ch.ball.y, BALL_R * 0.45, 0, TAU);
+        ctx.fill();
+
+        A.draw.label(ctx, '剩余 ' + challengeRemaining(), 12, 24, { align: 'left', font: 'bold 14px system-ui', color: '#ffd23f' });
+        A.draw.label(ctx, ch.unlocked ? '门已解锁' : '击毁 K 开锁', W / 2, 24, { font: 'bold 12px system-ui', color: ch.unlocked ? '#5ad1a0' : '#ffd23f' });
+        for (let i = 0; i < ch.lives; i += 1) {
+          ctx.fillStyle = '#ff6b9d';
+          ctx.beginPath();
+          ctx.arc(W - 20 - i * 17, 24, 5, 0, TAU);
+          ctx.fill();
+        }
+        if (!ch.launched) {
+          A.draw.label(ctx, '点击 / 空格发球', W / 2, PADDLE_Y - 54, { font: '13px system-ui', color: '#93a0c8' });
+        }
+        ctx.restore();
+      }
       function drawBrick(b) {
         if (!b.alive) return;
         ctx.fillStyle = b.color;
@@ -626,7 +1404,30 @@
         }
       }
 
+      function renderLobby() {
+        stage.beginFrame();
+        const bg = ctx.createLinearGradient(0, 0, 0, H);
+        bg.addColorStop(0, '#071426');
+        bg.addColorStop(1, '#0d2136');
+        ctx.fillStyle = bg;
+        ctx.fillRect(0, 0, W, H);
+        ctx.strokeStyle = 'rgba(79,195,247,0.22)';
+        ctx.lineWidth = 2;
+        A.draw.roundRect(ctx, FIELD.x, FIELD.y, FIELD.w, FIELD.h, 12);
+        ctx.stroke();
+        A.draw.label(ctx, '弹道研究所 · 6 关挑战', W / 2, H * 0.28, { font: 'bold 22px system-ui', color: '#e8f4ff' });
+        A.draw.label(ctx, '固定砖阵 · K 钥匙砖 / G 门 · 挡板反弹角', W / 2, H * 0.28 + 30, { font: '13px system-ui', color: '#93a0c8' });
+      }
+
       function render() {
+        if (mode === 'classic' && panelOpen) {
+          renderLobby();
+          return;
+        }
+        if (mode === 'challenge') {
+          renderChallenge();
+          return;
+        }
         stage.beginFrame();
         ctx.save();
         if (shake > 0) ctx.translate(rand(-shake, shake), rand(-shake, shake));
@@ -730,10 +1531,12 @@
       reset();
       state = 'ready';
       joyTools.sync();
+      syncModeUi();
       if (location.hash === '#test') {
         window.__arcadeTest = {
           info() {
             return {
+              mode,
               state,
               level,
               score,
@@ -794,6 +1597,92 @@
             loseBall();
             return true;
           },
+          /* ---- 0.9 挑战模式测试钩子（契约 §5） ---- */
+          challengeStages() {
+            const progress = A.Challenge && A.Challenge.progress ? A.Challenge.progress(GAME_ID) : { cleared: [], best: {} };
+            return challengeStagesData().map((stage) => ({
+              id: stage.id,
+              stageNumber: stage.stageNumber,
+              title: stage.title,
+              unlocked: !!(A.Challenge && A.Challenge.isUnlocked && A.Challenge.isUnlocked(GAME_ID, stage.id)),
+              cleared: progress.cleared.indexOf(stage.id) !== -1,
+              best: progress.best[stage.id] || null,
+            }));
+          },
+          startChallenge(ref) {
+            return startChallenge(ref);
+          },
+          challengeInfo() {
+            return {
+              mode,
+              stageId: ch.stage ? ch.stage.id : null,
+              stageIndex: ch.index,
+              state,
+              elapsedSec: Math.round(ch.elapsed * 10) / 10,
+              objective: ch.stage ? ch.stage.goalStatement : null,
+              cleared: ch.stageState === 'cleared',
+              failed: ch.stageState === 'failed',
+              collectibles: [],
+              assisted: ch.assisted,
+              lives: ch.lives,
+              remaining: challengeRemaining(),
+              unlocked: ch.unlocked,
+              launched: ch.launched,
+              elapsedFrames: Math.round(ch.elapsed * 60),
+              panelOpen: !!(dom.chPanel && !dom.chPanel.hidden),
+              overlay: {
+                visible: ui.visible,
+                title: dom.ovTitle ? dom.ovTitle.textContent : '',
+                btn: dom.ovBtn ? dom.ovBtn.textContent : '',
+                btn2: dom.ovBtn2 && !dom.ovBtn2.hidden ? dom.ovBtn2.textContent : null,
+              },
+            };
+          },
+          stageObservable() {
+            return {
+              stageId: ch.stage ? ch.stage.id : null,
+              elapsed: Math.round(ch.elapsed * 100) / 100,
+              speed: ch.speed,
+              lives: ch.lives,
+              launched: ch.launched,
+              unlocked: ch.unlocked,
+              keysTotal: ch.keysTotal,
+              remaining: challengeRemaining(),
+              noBrickSec: Math.round(ch.noBrickSec * 100) / 100,
+              maxNoBrickSec: Math.round(ch.maxNoBrickSec * 100) / 100,
+              recoveries: ch.recoveries,
+              paddle: { x: Math.round(ch.paddle.x * 100) / 100, w: ch.paddle.w, y: ch.paddle.y },
+              ball: { x: Math.round(ch.ball.x * 100) / 100, y: Math.round(ch.ball.y * 100) / 100, vx: Math.round(ch.ball.vx * 100) / 100, vy: Math.round(ch.ball.vy * 100) / 100 },
+              bricks: ch.bricks.map((b, index) => ({
+                index,
+                x: b.x,
+                y: b.y,
+                tok: b.tok,
+                gate: b.gate,
+                hp: b.hp,
+                maxHp: b.maxHp,
+                alive: b.alive,
+              })),
+              content: ch.stage ? ch.stage.content : null,
+            };
+          },
+          forceStageClear(assisted) {
+            if (mode !== 'challenge' || state !== 'playing') return false;
+            ch.assisted = assisted === true;
+            challengeWin();
+            return true;
+          },
+          forceStageFail(reason) {
+            if (mode !== 'challenge' || state !== 'playing') return false;
+            challengeFail(reason || '测试触发失败');
+            return true;
+          },
+          exitChallenge() {
+            return exitChallenge();
+          },
+          challengeReplayClear(ref) {
+            return challengeReplayClear(ref);
+          },
         };
       }
       const saved = autosave.load();
@@ -803,6 +1692,7 @@
           onResume: () => {
             if (restore(saved.data)) {
               state = 'playing';
+              syncModeUi();
               ui.hide();
               loop.resume();
               pauseUi.sync();

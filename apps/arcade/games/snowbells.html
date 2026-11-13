@@ -9,6 +9,15 @@
   <link rel="stylesheet" href="../arcade.css" />
   <script src="../../../shared/site-shell.js" defer></script>
   <script src="../engine.js"></script>
+  <script src="../challenge/snowbells.js"></script>
+  <style>
+    .challenge-layer { position: absolute; inset: 0; z-index: 6; display: flex; flex-direction: column; gap: 8px; padding: 10px; overflow-y: auto; background: rgba(8, 13, 28, 0.96); border-radius: inherit; }
+    .challenge-layer[hidden] { display: none; }
+    .challenge-layer .ac-btn[hidden] { display: none; }
+    .challenge-layer .ac-challenge-panel { flex: 0 0 auto; }
+    .challenge-layer .ac-btn { flex: 0 0 auto; width: 100%; min-height: 44px; }
+    .stage-box > .ac-challenge-hud { position: absolute; left: 8px; right: 8px; top: 8px; width: auto; z-index: 4; pointer-events: none; }
+  </style>
   <title>雪铃 · 街机厅 · StudioKit</title>
 </head>
 <body class="arcade-body has-extra-controls has-game-tools" data-studiokit-app="arcade" data-studiokit-app-title="街机厅 Arcade" style="--ac-accent:#2fa8a0; --card-accent:#2fa8a0">
@@ -34,6 +43,11 @@
             <button type="button" class="ac-btn" data-ov-btn>开始游戏</button>
             <button type="button" class="ac-btn ac-btn-secondary" data-ov-btn2 hidden>重新开始</button>
           </div>
+        </div>
+        <div class="ac-challenge-hud" data-ch-hud hidden></div>
+        <div class="challenge-layer" data-ch-layer hidden>
+          <div data-ch-panel></div>
+          <button type="button" class="ac-btn ac-btn-secondary" data-ch-back>返回开始</button>
         </div>
       </div>
     </div>
@@ -87,6 +101,35 @@
 
       const particles = A.createParticles();
 
+      /* ---------- 0.9 挑战模式：固定铃序关卡（数据/记录/选关由 A.Challenge 提供） ---------- */
+      const gameId = 'snowbells';
+      const challengeData = A.Challenge ? A.Challenge.stages(gameId) : [];
+      const challengeAvailable = challengeData.length === 6;
+      const chDom = {
+        hud: document.querySelector('[data-ch-hud]'),
+        layer: document.querySelector('[data-ch-layer]'),
+        panelHost: document.querySelector('[data-ch-panel]'),
+        back: document.querySelector('[data-ch-back]'),
+      };
+      const gameHudEl = document.querySelector('.game-hud');
+      const CH_ORIGIN_Y = H - 120;
+      let mode = 'classic';
+      let chStage = null;
+      let chStageIndex = -1;
+      let chBells = [];
+      let chSequence = [];
+      let chSeqIndex = 0;
+      let chOptional = [];
+      let chCollectibles = [];
+      let chWrongHits = 0;
+      let chElapsed = 0;
+      let chAssisted = false;
+      let chErrorReason = '';
+      let chLastResult = null;
+      let chCombo = 0;
+      let chGoalHintTimer = 0;
+      let chHudSecond = -1;
+
       const player = { x: W / 2, y: H - 150, vx: 0, vy: 0, face: 1, prevBottom: 0, onPad: true };
       let bells = [];
       let rings = [];
@@ -117,6 +160,10 @@
         return Math.max(0, Math.floor((startY - topY) / 10));
       }
       function syncHud() {
+        if (mode === 'challenge') {
+          syncChallengeHud();
+          return;
+        }
         score = bellScore + heightScore();
         dom.hudScore.textContent = String(score);
       }
@@ -175,11 +222,13 @@
           if (magnetTimer > 0) return false;
           tools.magnet -= 1;
           magnetTimer = MAGNET_DURATION;
+          if (mode === 'challenge') chAssisted = true;
           A.Sfx.play('spring');
         } else if (id === 'encore') {
           if (encoreHits > 0) return false;
           tools.encore -= 1;
           encoreHits = ENCORE_HITS;
+          if (mode === 'challenge') chAssisted = true;
           A.Sfx.play('bell', 4);
         } else {
           return false;
@@ -233,6 +282,10 @@
       }
 
       function startGame() {
+        mode = 'classic';
+        hideChallengePanel();
+        if (chDom.hud) chDom.hud.hidden = true;
+        if (gameHudEl) gameHudEl.hidden = false;
         autosave.clear();
         reset();
         state = 'playing';
@@ -280,28 +333,457 @@
         loop.pause();
         state = 'paused';
         autosave.saveNow();
-        ui.show({
+        const opts = {
           title: '已暂停',
           text: '铃铛在夜色中等你。<br/>局内进度已保存，可以随时离开。',
           btn: '继续',
           onBtn: resumeGame,
-        });
+        };
+        if (mode === 'challenge') {
+          opts.btn2 = '退出挑战';
+          opts.onBtn2 = exitToChallengeSelect;
+        }
+        ui.show(opts);
         pauseUi.sync(); syncJoyTools();
       }
 
       function showStart() {
+        mode = 'classic';
+        hideChallengePanel();
+        if (chDom.hud) chDom.hud.hidden = true;
+        if (gameHudEl) gameHudEl.hidden = false;
         ui.show({
           title: '雪铃',
           text: '兔子跳铃铛：踩中铃铛向上弹。<br/>每排铃铛都从上一排可达位置生成<br/>连击越高，铃音越高、得分越多',
           btn: '开始游戏',
           onBtn: startGame,
+          btn2: challengeAvailable ? '挑战 6 关' : '挑战数据不可用',
+          onBtn2: challengeAvailable ? showChallengePanel : null,
+        });
+        if (dom.ovBtn2) dom.ovBtn2.disabled = !challengeAvailable;
+      }
+
+      /* ---------- 0.9 挑战模式实现 ---------- */
+      function chEsc(value) {
+        return String(value == null ? '' : value).replace(/[&<>"']/g, (ch) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[ch]));
+      }
+
+      function chPanelRoot() {
+        return chDom.panelHost ? chDom.panelHost.querySelector('.ac-challenge-panel') : null;
+      }
+
+      function syncChallengePanel() {
+        if (!chDom.panelHost || !A.Challenge) return;
+        chDom.panelHost.innerHTML = A.Challenge.stageListHtml(gameId);
+        const root = chPanelRoot();
+        if (root) root.hidden = true;
+        chDom.panelHost.querySelectorAll('.ac-stage-btn').forEach((button) => {
+          button.addEventListener('click', () => {
+            if (button.disabled) return;
+            startChallenge(button.dataset.stageId);
+          });
         });
       }
 
-      /* ---------- 局内存档 ---------- */
+      function showChallengePanel() {
+        if (!challengeAvailable) {
+          ui.show({ title: '挑战数据不可用', text: '挑战关卡数据加载失败，经典模式不受影响。', btn: '返回', onBtn: showStart });
+          return;
+        }
+        syncChallengePanel();
+        const root = chPanelRoot();
+        if (root) root.hidden = false;
+        if (chDom.layer) chDom.layer.hidden = false;
+        if (chDom.back) chDom.back.hidden = false;
+        loop.pause();
+        state = 'challenge-menu';
+        pauseUi.sync();
+      }
+
+      function hideChallengePanel() {
+        if (chDom.layer) chDom.layer.hidden = true;
+        if (chDom.back) chDom.back.hidden = true;
+        const root = chPanelRoot();
+        if (root) root.hidden = true;
+      }
+
+      function backToStartFromPanel() {
+        hideChallengePanel();
+        mode = 'classic';
+        chStage = null;
+        chStageIndex = -1;
+        if (chDom.hud) chDom.hud.hidden = true;
+        if (gameHudEl) gameHudEl.hidden = false;
+        reset();
+        state = 'ready';
+        showStart();
+        pauseUi.sync();
+        syncJoyTools();
+      }
+
+      function buildChallengeStage(index) {
+        const stage = challengeData[index];
+        if (!stage) return false;
+        mode = 'challenge';
+        chStage = stage;
+        chStageIndex = index;
+        const content = stage.content || {};
+        const list = Array.isArray(content.bells) ? content.bells : [];
+        chBells = list.map((bell) => ({
+          id: String(bell.id),
+          x: Number(bell.xCenter),
+          y: CH_ORIGIN_Y - Number(bell.height || 0),
+          r: Number(bell.radius) || BELL_R,
+          kind: bell.kind || 'normal',
+          phase: 0,
+          consumed: false,
+        }));
+        chSequence = (Array.isArray(content.requiredSequence) ? content.requiredSequence : []).map(String);
+        chOptional = chBells.filter((bell) => bell.kind === 'bonus').map((bell) => bell.id);
+        chSeqIndex = 0;
+        chCollectibles = [];
+        chWrongHits = 0;
+        chElapsed = 0;
+        chAssisted = false;
+        chErrorReason = '';
+        chLastResult = null;
+        chCombo = 0;
+        chGoalHintTimer = 3;
+        chHudSecond = -1;
+        bells = [];
+        rings = [];
+        pad = null;
+        camY = 0;
+        magnetTimer = 0;
+        encoreHits = 0;
+        tools.magnet = JOY_START.magnet;
+        tools.encore = JOY_START.encore;
+        const first = chBells.find((bell) => bell.id === (content.startBell || chSequence[0]));
+        player.x = first ? first.x : W / 2;
+        player.y = first ? first.y - 70 : H - 260;
+        player.vx = 0;
+        player.vy = 0;
+        player.face = 1;
+        player.onPad = false;
+        startY = player.y;
+        topY = player.y;
+        particles.clear();
+        syncHud();
+        syncJoyTools();
+        syncChallengeHud();
+        return true;
+      }
+
+      function syncChallengeHud() {
+        if (mode !== 'challenge' || !chStage) return;
+        if (gameHudEl) gameHudEl.hidden = true;
+        if (!chDom.hud) return;
+        chDom.hud.hidden = false;
+        const second = Math.floor(chElapsed);
+        if (second === chHudSecond && state === 'playing') return;
+        chHudSecond = second;
+        const label = 'C' + String(chStage.stageNumber || 0).padStart(2, '0');
+        const done = chSequence.slice(0, chSeqIndex).join('→');
+        const next = chSeqIndex < chSequence.length ? chSequence[chSeqIndex] : '完成';
+        chDom.hud.innerHTML =
+          '<strong>' + chEsc(label + ' ' + chStage.title) + '</strong>' +
+          '<span>' + chEsc(chStage.goalStatement || '') + '</span>' +
+          '<span>下一铃 ' + chEsc(next) + '</span>' +
+          '<span>进度 ' + chEsc((done ? done + '→' : '') + next) + (chSeqIndex >= chSequence.length ? '' : '') + '</span>' +
+          '<span>连击 ×' + chCombo + ' · 错 ' + chWrongHits + '</span>' +
+          '<span>用时 ' + A.Challenge.formatTime(chElapsed) + '</span>';
+      }
+
+      function startChallenge(ref) {
+        if (!challengeAvailable || !A.Challenge) return false;
+        const stage = A.Challenge.stage(gameId, ref);
+        if (!stage) return false;
+        if (!A.Challenge.isUnlocked(gameId, stage.id)) return false;
+        const index = challengeData.findIndex((item) => item.id === stage.id);
+        if (index < 0 || !buildChallengeStage(index)) return false;
+        state = 'playing';
+        hideChallengePanel();
+        ui.hide();
+        loop.resume();
+        pauseUi.sync();
+        syncJoyTools();
+        syncChallengeHud();
+        autosave.clear();
+        autosave.saveNow();
+        return true;
+      }
+
+      function challengeHitBell(bell) {
+        const content = chStage.content || {};
+        const expected = chSeqIndex < chSequence.length ? chSequence[chSeqIndex] : null;
+        if (bell.kind === 'bonus') {
+          if (bell.consumed) return;
+          bell.consumed = true;
+          chCollectibles.push(bell.id);
+          player.vy = BOUNCE_V;
+          A.Sfx.play('bell', 6);
+          rings.push({ x: bell.x, y: bell.y, r: bell.r + 4, life: 0.65, maxLife: 0.65, text: '彩铃 +' + bell.id });
+          syncChallengeHud();
+          autosave.saveNow();
+          return;
+        }
+        if (bell.id === expected) {
+          bell.consumed = true;
+          chSeqIndex += 1;
+          player.vy = BOUNCE_V;
+          player.lastBellY = player.y;
+          if (bell.kind === 'rest') {
+            A.Sfx.play('ui');
+            rings.push({ x: bell.x, y: bell.y, r: bell.r + 4, life: 0.65, maxLife: 0.65, text: '休止' });
+          } else {
+            chCombo += 1;
+            A.Sfx.play('bell', Math.min(chCombo, 12));
+            rings.push({ x: bell.x, y: bell.y, r: bell.r + 4, life: 0.65, maxLife: 0.65, text: '命中 ' + bell.id + ' ×' + chCombo });
+          }
+          particles.emit(bell.x, bell.y, {
+            count: A.reducedMotion ? 4 : 10,
+            speed: [30, 140],
+            life: [0.25, 0.6],
+            size: [1.5, 3.5],
+            colors: ['#ffd23f', '#fff3c4', '#ffffff'],
+            gravity: 200,
+          });
+          syncChallengeHud();
+          if (chSeqIndex >= chSequence.length && content.goalAfterLast !== false) {
+            challengeClear();
+            return;
+          }
+          autosave.saveNow();
+          return;
+        }
+        /* 错序：可反弹但不计分、不消耗该铃（后续仍可命中），连击中断。 */
+        player.vy = BOUNCE_V;
+        player.lastBellY = player.y;
+        chCombo = 0;
+        chWrongHits += 1;
+        A.Sfx.play('land');
+        rings.push({ x: bell.x, y: bell.y, r: bell.r + 4, life: 0.65, maxLife: 0.65, text: '错序，目标是 ' + (expected || '—') });
+        syncChallengeHud();
+      }
+
+      function updateChallenge(dt) {
+        particles.update(dt);
+        for (let i = rings.length - 1; i >= 0; i--) {
+          const r = rings[i];
+          r.life -= dt;
+          r.r += 90 * dt;
+          if (r.life <= 0) rings.splice(i, 1);
+        }
+        if (state !== 'playing') {
+          input.endFrame();
+          return;
+        }
+        autosave.tick(dt);
+        chElapsed += dt;
+        chGoalHintTimer = Math.max(0, chGoalHintTimer - dt);
+        const hadMagnet = magnetTimer > 0;
+        magnetTimer = Math.max(0, magnetTimer - dt);
+        if (hadMagnet && magnetTimer <= 0) {
+          syncJoyTools();
+          autosave.saveNow();
+        }
+        const ACC = 2100;
+        const MAX_VX = 250;
+        let dir = 0;
+        if (input.isDown('ArrowLeft', 'a')) dir -= 1;
+        if (input.isDown('ArrowRight', 'd')) dir += 1;
+        if (input.pointer.down) dir = input.pointer.x < W / 2 ? -1 : 1;
+        if (dir !== 0) {
+          player.vx += dir * ACC * dt;
+          player.face = dir;
+        } else {
+          player.vx -= player.vx * Math.min(1, 10 * dt);
+        }
+        player.vx = clamp(player.vx, -MAX_VX, MAX_VX);
+        player.x += player.vx * dt;
+        if (player.x < PLAYER_R) {
+          player.x = PLAYER_R;
+          player.vx = 0;
+        } else if (player.x > W - PLAYER_R) {
+          player.x = W - PLAYER_R;
+          player.vx = 0;
+        }
+        player.prevBottom = player.y + PLAYER_R;
+        player.vy = Math.min(950, player.vy + GRAVITY * dt);
+        player.y += player.vy * dt;
+        if (player.vy > 40) {
+          for (const bell of chBells) {
+            if (bell.consumed) continue;
+            if (Math.abs(bell.y - player.y) > 60) continue;
+            if (A.Physics.circleCircle(player.x, player.y, PLAYER_R, bell.x, bell.y, bell.r + (magnetTimer > 0 ? MAGNET_BONUS : 0))) {
+              challengeHitBell(bell);
+              if (state !== 'playing') break;
+            }
+          }
+        }
+        if (player.y > H + 40) {
+          challengeFail('落空坠回雪地：先预判下一颗铃的横向位置再起跳');
+          input.endFrame();
+          return;
+        }
+        syncChallengeHud();
+        input.endFrame();
+      }
+
+      function challengeClear() {
+        if (mode !== 'challenge' || !chStage) return false;
+        state = 'cleared';
+        chGoalHintTimer = 0;
+        autosave.clear();
+        loop.pause();
+        syncJoyTools();
+        const result = { timeSec: Math.round(chElapsed * 10) / 10, assisted: chAssisted, collectibles: chCollectibles.slice() };
+        chLastResult = result;
+        if (A.Challenge) A.Challenge.markCleared(gameId, chStage.id, result);
+        const isLast = chStageIndex >= challengeData.length - 1;
+        const marks = chCollectibles.length ? '彩铃 ' + chCollectibles.join('/') : '未收集彩铃';
+        ui.show({
+          title: '挑战通关',
+          text: A.Challenge.resultHtml(chStage, result) + '<p class="ac-challenge-tip">' + chEsc(chStage.goalStatement || '') + ' · ' + chEsc(marks) + '</p>',
+          btn: isLast ? '返回选关' : '下一关',
+          onBtn: () => {
+            if (isLast) exitToChallengeSelect();
+            else startChallenge(challengeData[chStageIndex + 1].id);
+          },
+          btn2: '重玩本关',
+          onBtn2: () => startChallenge(chStage.id),
+        });
+        pauseUi.sync();
+        syncChallengeHud();
+        return true;
+      }
+
+      function challengeFail(reason) {
+        if (mode !== 'challenge' || !chStage) return false;
+        if (state === 'failed' || state === 'cleared') return false;
+        state = 'failed';
+        chErrorReason = reason || '本关失败';
+        autosave.clear();
+        loop.pause();
+        syncJoyTools();
+        ui.show({
+          title: '挑战失败',
+          text:
+            '<p class="ac-challenge-tip">' + chEsc(chErrorReason) + '</p>' +
+            '<p class="ac-challenge-result-row">本关目标：' + chEsc(chStage.goalStatement || '') + '</p>',
+          btn: '重试本关',
+          onBtn: () => startChallenge(chStage.id),
+          btn2: '返回选关',
+          onBtn2: exitToChallengeSelect,
+        });
+        pauseUi.sync();
+        syncChallengeHud();
+        return true;
+      }
+
+      function exitToChallengeSelect() {
+        mode = 'classic';
+        chStage = null;
+        chStageIndex = -1;
+        chBells = [];
+        chLastResult = null;
+        chErrorReason = '';
+        autosave.clear();
+        if (chDom.hud) chDom.hud.hidden = true;
+        if (gameHudEl) gameHudEl.hidden = false;
+        reset();
+        state = 'ready';
+        pauseUi.sync();
+        syncJoyTools();
+        showChallengePanel();
+        return true;
+      }
+
+      function exitChallengeToStart() {
+        hideChallengePanel();
+        mode = 'classic';
+        chStage = null;
+        chStageIndex = -1;
+        chBells = [];
+        autosave.clear();
+        if (chDom.hud) chDom.hud.hidden = true;
+        if (gameHudEl) gameHudEl.hidden = false;
+        reset();
+        state = 'ready';
+        pauseUi.sync();
+        syncJoyTools();
+        showStart();
+        return true;
+      }
+
+      function restoreChallenge(data) {
+        if (!A.Challenge || !data || typeof data.stageId !== 'string') return false;
+        const stage = A.Challenge.stage(gameId, data.stageId);
+        if (!stage) return false;
+        const index = challengeData.findIndex((item) => item.id === stage.id);
+        if (index < 0 || !buildChallengeStage(index)) return false;
+        if (Array.isArray(data.chConsumed)) {
+          for (const id of data.chConsumed) {
+            const bell = chBells.find((item) => item.id === id);
+            if (bell) bell.consumed = true;
+          }
+        }
+        chSeqIndex = clamp(Math.floor(Number(data.chSeqIndex) || 0), 0, chSequence.length);
+        chCombo = Math.max(0, Number(data.chCombo) || 0);
+        chWrongHits = Math.max(0, Number(data.chWrongHits) || 0);
+        chCollectibles = Array.isArray(data.chCollectibles) ? data.chCollectibles.filter((id) => typeof id === 'string') : [];
+        chElapsed = Math.max(0, Number(data.chElapsed) || 0);
+        chAssisted = !!data.chAssisted;
+        if (data.player && isFinite(data.player.x) && isFinite(data.player.y)) {
+          player.x = clamp(Number(data.player.x), PLAYER_R, W - PLAYER_R);
+          player.y = Number(data.player.y);
+          player.vx = Number(data.player.vx) || 0;
+          player.vy = Number(data.player.vy) || 0;
+        }
+        state = 'playing';
+        syncHud();
+        syncJoyTools();
+        syncChallengeHud();
+        return true;
+      }
+
+      function challengeObservable() {
+        const next = chSeqIndex < chSequence.length ? chSequence[chSeqIndex] : null;
+        return {
+          mode,
+          stageId: chStage ? chStage.id : null,
+          stageNumber: chStage ? chStage.stageNumber : null,
+          state,
+          bells: chBells.map((bell) => ({ id: bell.id, x: bell.x, y: bell.y, kind: bell.kind, consumed: bell.consumed, optional: bell.kind === 'bonus' })),
+          sequence: chSequence.slice(),
+          seqIndex: chSeqIndex,
+          nextBellId: next,
+          combo: chCombo,
+          wrongHits: chWrongHits,
+          collectibles: chCollectibles.slice(),
+          player: { x: player.x, y: player.y, vx: player.vx, vy: player.vy },
+          elapsedSec: Math.round(chElapsed * 10) / 10,
+          assisted: chAssisted,
+          goalStatement: chStage ? chStage.goalStatement : null,
+          errorReason: chErrorReason,
+          cleared: !!chLastResult,
+          hudHidden: gameHudEl ? gameHudEl.hidden : null,
+        };
+      }
+
+
       function serialize() {
         if (state !== 'playing' && state !== 'paused') return null;
         return {
+          mode,
+          stageId: mode === 'challenge' && chStage ? chStage.id : null,
+          chSeqIndex,
+          chCombo,
+          chWrongHits,
+          chCollectibles: chCollectibles.slice(),
+          chConsumed: chBells.filter((bell) => bell.consumed).map((bell) => bell.id),
+          chElapsed,
+          chAssisted,
           player: { x: player.x, y: player.y, vx: player.vx, vy: player.vy, face: player.face, onPad: player.onPad, lastBellY: player.lastBellY },
           bells: bells.map((b) => ({ x: b.x, y: b.y, phase: b.phase, consumed: !!b.consumed })),
           pad,
@@ -318,7 +800,7 @@
         };
       }
 
-      function restore(data) {
+      function restoreClassic(data) {
         if (!data || !data.player || !Array.isArray(data.bells)) return false;
         try {
           reset();
@@ -359,13 +841,24 @@
         }
       }
 
+      /* 统一恢复入口：0.8 及更早存档缺 mode 一律按经典恢复；mode:'challenge' 走挑战恢复。 */
+      function restore(data) {
+        if (!data || typeof data !== 'object') return false;
+        if (data.mode === 'challenge') return restoreChallenge(data);
+        return restoreClassic(data);
+      }
+
       const autosave = A.createRunAutosave('snowbells', serialize, {
         every: 4,
-        meta: () => ({ score, summary: `得分 ${score} · 连击 ${combo}` }),
+        meta: () => ({ score, summary: mode === 'challenge' && chStage ? '挑战 ' + chStage.id + ' · 进度 ' + chSeqIndex + '/' + chSequence.length : `得分 ${score} · 连击 ${combo}` }),
       });
 
       /* ---------- 更新 ---------- */
       function update(dt) {
+        if (mode === 'challenge') {
+          updateChallenge(dt);
+          return;
+        }
         particles.update(dt);
         for (let i = rings.length - 1; i >= 0; i--) {
           const r = rings[i];
@@ -599,7 +1092,27 @@
           ctx.fill();
         }
 
-        bells.forEach(drawBell);
+        (mode === 'challenge' ? chBells : bells).forEach(drawBell);
+        if (mode === 'challenge' && chStage) {
+          const nextId = chSeqIndex < chSequence.length ? chSequence[chSeqIndex] : null;
+          const nextBell = nextId ? chBells.find((bell) => bell.id === nextId) : null;
+          if (nextBell && !nextBell.consumed) {
+            const ny = nextBell.y - camY;
+            ctx.save();
+            ctx.strokeStyle = 'rgba(99,224,200,0.9)';
+            ctx.lineWidth = 2;
+            ctx.setLineDash([4, 4]);
+            ctx.beginPath();
+            ctx.arc(nextBell.x, ny, nextBell.r + 10 + Math.sin(performance.now() / 220) * 2, 0, TAU);
+            ctx.stroke();
+            ctx.setLineDash([]);
+            A.draw.label(ctx, '下一铃 ' + nextId, clamp(nextBell.x, 42, W - 42), Math.max(64, ny - 26), {
+              font: 'bold 12px system-ui',
+              color: '#63e0c8',
+            });
+            ctx.restore();
+          }
+        }
 
         if (pad) {
           const py = pad.y - camY;
@@ -639,9 +1152,22 @@
         });
         ctx.globalAlpha = 1;
 
-        A.draw.label(ctx, 'SCORE ' + score, 12, 20, { align: 'left', font: 'bold 14px system-ui', color: '#ffd23f' });
-        if (combo >= 2) {
-          A.draw.label(ctx, 'COMBO ×' + combo, W - 12, 20, { align: 'right', font: 'bold 13px system-ui', color: '#63e0c8' });
+        if (mode === 'challenge' && chStage) {
+          const label = 'C' + String(chStage.stageNumber || 0).padStart(2, '0') + ' ' + chStage.title;
+          A.draw.label(ctx, label, 12, 20, { align: 'left', font: 'bold 14px system-ui', color: '#63e0c8' });
+          A.draw.label(ctx, '进度 ' + chSeqIndex + '/' + chSequence.length + ' · 连击 ×' + chCombo, W - 12, 20, {
+            align: 'right',
+            font: 'bold 13px system-ui',
+            color: '#ffd23f',
+          });
+          if (chGoalHintTimer > 0) {
+            A.draw.label(ctx, chStage.goalStatement || '', W / 2, 46, { font: '12px system-ui', color: '#ffe08a' });
+          }
+        } else {
+          A.draw.label(ctx, 'SCORE ' + score, 12, 20, { align: 'left', font: 'bold 14px system-ui', color: '#ffd23f' });
+          if (combo >= 2) {
+            A.draw.label(ctx, 'COMBO ×' + combo, W - 12, 20, { align: 'right', font: 'bold 13px system-ui', color: '#63e0c8' });
+          }
         }
       }
 
@@ -672,6 +1198,7 @@
 
       reset();
       state = 'ready';
+      syncChallengePanel();
       if (location.hash === '#test') {
         window.__arcadeTest = {
           info() {
@@ -710,6 +1237,55 @@
             player.y = b.y + (Number(dy) || 0);
             player.vy = 120;
             return true;
+          },
+          /* ---------- 0.9 挑战模式钩子（契约见 docs/arcade/0.9/INTEGRATION-CONTRACT.md §5） ---------- */
+          challengeStages() {
+            return challengeData.map((stage) => {
+              const best = A.Challenge.progress(gameId).best[stage.id] || null;
+              return {
+                id: stage.id,
+                stageNumber: stage.stageNumber,
+                title: stage.title,
+                unlocked: A.Challenge.isUnlocked(gameId, stage.id),
+                best: best ? { timeSec: best.timeSec, assisted: !!best.assisted } : null,
+              };
+            });
+          },
+          startChallenge(ref) {
+            return startChallenge(ref);
+          },
+          challengeInfo() {
+            return {
+              mode,
+              stageId: chStage ? chStage.id : null,
+              stageIndex: chStageIndex,
+              state,
+              elapsedSec: Math.round(chElapsed * 10) / 10,
+              objective: chStage ? chStage.goalStatement : null,
+              cleared: !!chLastResult,
+              collectibles: chCollectibles.slice(),
+              assisted: chAssisted,
+              seqIndex: chSeqIndex,
+              seqTotal: chSequence.length,
+              nextBellId: chSeqIndex < chSequence.length ? chSequence[chSeqIndex] : null,
+              combo: chCombo,
+              wrongHits: chWrongHits,
+              errorReason: chErrorReason,
+            };
+          },
+          stageObservable() {
+            return challengeObservable();
+          },
+          forceStageClear(assisted) {
+            if (mode !== 'challenge' || state !== 'playing' || !chStage) return false;
+            if (assisted === true) chAssisted = true;
+            return challengeClear();
+          },
+          forceStageFail(reason) {
+            return challengeFail(typeof reason === 'string' && reason ? reason : '测试强制失败');
+          },
+          exitChallenge() {
+            return exitChallengeToStart();
           },
         };
       }

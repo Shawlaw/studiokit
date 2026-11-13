@@ -9,6 +9,62 @@
   <link rel="stylesheet" href="../arcade.css" />
   <script src="../../../shared/site-shell.js" defer></script>
   <script src="../engine.js"></script>
+  <script src="../challenge/star-raid.js"></script>
+  <style>
+    /* 0.9 挑战模式：选关容器放进 .stage-box 后需要页面本地定位；面板本体来自 A.Challenge.stageListHtml。 */
+    .stage-box > .challenge-select[data-ch-panel] {
+      position: absolute;
+      inset: 6px;
+      z-index: 5;
+      max-height: calc(100% - 12px);
+      overflow-y: auto;
+      -webkit-overflow-scrolling: touch;
+    }
+    .stage-box > .challenge-select[data-ch-panel][hidden] { display: none; }
+    .stage-box > .challenge-select[data-ch-panel] .ac-challenge-grid {
+      grid-template-columns: repeat(2, minmax(0, 1fr));
+    }
+    .stage-box > .challenge-select[data-ch-panel] .ac-challenge-head {
+      flex-wrap: wrap;
+      row-gap: 2px;
+    }
+    @media (max-width: 340px) {
+      .stage-box > .challenge-select[data-ch-panel] .ac-challenge-grid {
+        grid-template-columns: minmax(0, 1fr);
+      }
+    }
+    .stage-box > .challenge-select[data-ch-panel] [data-ch-back] {
+      display: block;
+      width: 100%;
+      min-height: 44px;
+      margin: 8px 0 0;
+    }
+    .ac-challenge-hud[data-ch-hud] {
+      position: absolute;
+      top: 8px;
+      left: 8px;
+      right: 8px;
+      z-index: 3;
+      width: auto;
+      max-width: none;
+      padding: 4px 8px;
+      border-radius: 10px;
+      font-size: 12px;
+      pointer-events: none;
+    }
+    .ac-challenge-tip[data-ch-tip] {
+      position: absolute;
+      left: 8px;
+      right: 8px;
+      bottom: 10px;
+      z-index: 3;
+      margin: 0;
+      font-size: 11px;
+      pointer-events: none;
+    }
+    .ac-challenge-tip[data-ch-tip][hidden] { display: none; }
+    body.has-challenge .game-hud { display: none; }
+  </style>
   <title>星海突击 · 街机厅 · StudioKit</title>
 </head>
 <body class="arcade-body has-extra-controls has-game-tools" data-studiokit-app="arcade" data-studiokit-app-title="街机厅 Arcade" style="--ac-accent:#4f7cff; --card-accent:#4f7cff">
@@ -37,6 +93,9 @@
             <button type="button" class="ac-btn ac-btn-secondary" data-ov-btn2 hidden>重新开始</button>
           </div>
         </div>
+        <span class="ac-challenge-hud" data-ch-hud hidden></span>
+        <p class="ac-challenge-tip" data-ch-tip hidden></p>
+        <div class="challenge-select" data-ch-panel hidden role="region" aria-label="挑战 6 关"></div>
       </div>
     </div>
     <div class="touch-pad game-tools" data-game-tools aria-label="主动道具（快捷键 1 / 2）">
@@ -78,6 +137,9 @@
         mute: document.querySelector('[data-mute]'),
         joyPulse: document.querySelector('[data-joy-tool="pulse"]'),
         joyShield: document.querySelector('[data-joy-tool="shield"]'),
+        chPanel: document.querySelector('[data-ch-panel]'),
+        chHud: document.querySelector('[data-ch-hud]'),
+        chTip: document.querySelector('[data-ch-tip]'),
       };
       const ui = A.createOverlayUi(dom);
 
@@ -124,6 +186,677 @@
       let high = A.Progress.get('star-raid').high;
       dom.hudHigh.textContent = String(high);
 
+      /* ----------------------------------------------------------
+       * 0.9 挑战模式（C01–C06）
+       * - 数据来自 ../challenge/star-raid.js（window.ArcadeChallengeData）经 A.Challenge 读取。
+       * - 挑战用设计源固定波次时间轴替换经典随机刷怪；每个攻击段保证 safeBandXRatio 内为无弹走廊。
+       * - 与经典完全隔离：不写 progress 最高分 / Playtime 轮次；数据缺失时入口 fail closed。
+       * ---------------------------------------------------------- */
+      const CHALLENGE_GAME_ID = 'star-raid';
+      const CHALLENGE_COLUMN_STEP = 36;
+      let mode = 'classic'; /* classic | challenge | panel */
+      let chStage = null;
+      let chContent = null;
+      let chTime = 0;
+      let chHealth = 3;
+      let chAssisted = false;
+      let chCollectibles = [];
+      let chEvents = [];
+      let chDamageLog = [];
+      let chPowerupLog = [];
+      let chBossDefeated = false;
+      let chBossMaxPhase = 0;
+      let chBossExposedWindows = 0;
+      let chBossExposedSeconds = 0;
+      let chFiredVolleys = 0;
+      let chBossHits = 0;
+      let chTipTimer = 0;
+      let chHudTick = 0;
+      let chPowerupSpawned = [];
+
+      function pad2(value) {
+        return String(value).padStart(2, '0');
+      }
+      function challengeStagesList() {
+        if (!A.Challenge || typeof A.Challenge.stages !== 'function') return [];
+        const stages = A.Challenge.stages(CHALLENGE_GAME_ID);
+        return Array.isArray(stages) ? stages : [];
+      }
+      function challengeAvailable() {
+        return challengeStagesList().length === 6;
+      }
+      function challengeStageByRef(ref) {
+        if (!challengeAvailable()) return null;
+        const stage = A.Challenge.stage(CHALLENGE_GAME_ID, ref);
+        return stage && typeof stage === 'object' ? stage : null;
+      }
+      function challengeStagesInfo() {
+        const progress = A.Challenge && A.Challenge.progress ? A.Challenge.progress(CHALLENGE_GAME_ID) : { best: {} };
+        return challengeStagesList().map((stage) => ({
+          id: stage.id,
+          stageNumber: stage.stageNumber,
+          title: stage.title,
+          unlocked: !!(A.Challenge && A.Challenge.isUnlocked && A.Challenge.isUnlocked(CHALLENGE_GAME_ID, stage.id)),
+          best: (progress.best && progress.best[stage.id]) || null,
+        }));
+      }
+      function challengeFmt(sec) {
+        return A.Challenge && A.Challenge.formatTime
+          ? A.Challenge.formatTime(sec)
+          : pad2(Math.floor((Number(sec) || 0) / 60)) + ':' + pad2(Math.floor(Number(sec) || 0) % 60);
+      }
+      function challengeLabel(stage) {
+        return stage ? 'C' + pad2(stage.stageNumber || 0) + ' ' + (stage.title || '') : '挑战';
+      }
+      function challengePatternLabel(ev) {
+        if (!ev) return '';
+        const names = {
+          single: '单发',
+          aimed: '瞄准',
+          fan3: '三发扇弹',
+          fan5: '五发扇弹',
+          'sweep-lr': '左→右扫射',
+          'sweep-rl': '右→左扫射',
+          'mark-charge': '冲锋预警',
+          'weak-left-right': 'Boss 双翼弱点',
+          'phase-sweep-and-core': 'Boss 双阶段',
+        };
+        return names[ev.attackPattern] || ev.attackPattern || '';
+      }
+      function challengeBand(ev) {
+        const ratio = ev && ev.safeBandXRatio ? ev.safeBandXRatio : { center: 0.5, halfWidth: 0.12 };
+        const center = clamp(Number(ratio.center), 0, 1) || 0.5;
+        const halfWidth = clamp(Number(ratio.halfWidth) || 0.12, 0.06, 0.3);
+        return { center, halfWidth, left: Math.max(0, (center - halfWidth) * W), right: Math.min(W, (center + halfWidth) * W) };
+      }
+      /* 危险列只取安全走廊 ±16px 之外：走廊内绝不会出现敌弹（玩家判定半宽 9 + 最大弹半径 5）。 */
+      function challengeDangerColumns(band) {
+        const cols = [];
+        for (let x = 18; x <= W - 18; x += CHALLENGE_COLUMN_STEP) {
+          if (x <= band.left - 16 || x >= band.right + 16) cols.push(x);
+        }
+        return cols;
+      }
+      function challengeActiveEvents() {
+        return chEvents.filter((ev) => ev.started && !ev.done && ev.phase !== 'pending');
+      }
+      function challengeCurrentBand() {
+        const active = challengeActiveEvents();
+        return active.length ? challengeBand(active[0]) : null;
+      }
+      function challengeSpawnEnemy(kind, x, opts) {
+        const def = KINDS[kind] || KINDS.drone;
+        const o = opts || {};
+        const enemy = {
+          uid: nextUid++,
+          kind,
+          x: clamp(Number(x) || W / 2, 4, W - def.w - 4),
+          y: -def.h - 8,
+          w: def.w,
+          h: def.h,
+          hp: Number(o.hp) || 2,
+          maxHp: Number(o.hp) || 2,
+          score: def.score,
+          color: def.color,
+          vy: Number(o.vy) || 120,
+          t: 0,
+          fireTimer: 999,
+          baseX: clamp(Number(x) || W / 2, 4, W - def.w - 4),
+          vx: 0,
+          chSway: Number(o.sway) || 0,
+          chChargeAt: Number(o.chargeAt) || 0,
+        };
+        enemies.push(enemy);
+        return enemy;
+      }
+      function challengeSpawnWaveEnemies(ev) {
+        const spawnX = clamp(ev.spawnXRatio * W, 24, W - 24);
+        if (ev.enemyType === 'pair') {
+          challengeSpawnEnemy('drone', spawnX - 64, { hp: 2, vy: 110 });
+          challengeSpawnEnemy('drone', spawnX + 64, { hp: 2, vy: 110 });
+        } else if (ev.enemyType === 'sweeper') {
+          challengeSpawnEnemy('sine', spawnX, { hp: 3, vy: 36, sway: 140 });
+        } else if (ev.enemyType === 'charger') {
+          challengeSpawnEnemy('diver', spawnX, { hp: 2, vy: 42, chargeAt: chTime + ev.telegraphSec });
+        } else {
+          challengeSpawnEnemy('drone', spawnX, { hp: 2, vy: 130 });
+        }
+      }
+      function challengeStartEvent(ev) {
+        ev.started = true;
+        ev.phase = 'telegraph';
+        ev.phaseTime = 0;
+        ev.salvoIndex = 0;
+        ev.lastSalvo = 0;
+        /* 训练段之间清空上一段残留敌弹，保证新预警的安全走廊真实可达。 */
+        shots = [];
+        if (ev.enemyType === 'boss') {
+          chBossMaxPhase = 1;
+          chBossExposedWindows = 0;
+          chBossExposedSeconds = 0;
+          challengeSpawnBoss(ev);
+          stageBannerText = 'WARNING · ' + (boss ? boss.name : 'BOSS');
+          stageBanner = 1.8;
+        } else {
+          challengeSpawnWaveEnemies(ev);
+          stageBannerText = challengePatternLabel(ev);
+          stageBanner = 0.9;
+        }
+        A.Sfx.play('ui');
+      }
+      function challengeSpawnBoss(ev) {
+        const band = challengeBand(ev);
+        const stageNumber = Math.max(1, Number(chStage && chStage.stageNumber) || 1);
+        /* Boss 血量按设计 targetDurationSec 与基础武器 DPS（约 15.4/s）+ 暴露窗口折算：
+         * C05 双翼弱点暴露率约 80% → 290 HP ≈ 24s 战斗（+37s 波次 ≈ 61s）；
+         * C06 两阶段（阶段 2 核心窗口约 61%）→ 400 HP ≈ 27s 战斗（+44s 波次 ≈ 71s）。 */
+        const maxHp = stageNumber >= 6 ? 400 : 290;
+        const w = 118;
+        const h = 86;
+        const centerX = clamp(band.center * W - w / 2, 4, W - w - 4);
+        boss = {
+          uid: nextUid++,
+          kind: 'boss',
+          name: stageNumber >= 6 ? '星域母舰 · 终阶' : '双翼堡垒',
+          x: centerX,
+          y: -h,
+          w,
+          h,
+          hp: maxHp,
+          maxHp,
+          score: 1200,
+          color: '#ff5d7a',
+          vy: 55,
+          t: 0,
+          fireTimer: 1.2,
+          baseX: centerX,
+          vx: 0,
+          phase: 1,
+          exposed: true,
+          wasExposed: true,
+          weakSide: 'left',
+          salvoIndex: 0,
+        };
+        enemies.push(boss);
+        shots = [];
+      }
+      function challengeSalvoColumns(ev) {
+        const band = challengeBand(ev);
+        const cols = challengeDangerColumns(band);
+        if (!cols.length) return [];
+        const spawnX = clamp(ev.spawnXRatio * W, 18, W - 18);
+        const nearest = (x) => cols.reduce((best, col) => (Math.abs(col - x) < Math.abs(best - x) ? col : best), cols[0]);
+        const pattern = ev.attackPattern;
+        if (pattern === 'fan3' || pattern === 'fan5') {
+          const count = Math.min(cols.length, pattern === 'fan3' ? 3 : 5);
+          const picked = [];
+          for (let i = 0; i < count; i += 1) {
+            const idx = Math.round((i * (cols.length - 1)) / Math.max(1, count - 1));
+            picked.push(cols[(idx + ev.salvoIndex) % cols.length]);
+          }
+          return picked;
+        }
+        if (pattern === 'sweep-lr' || pattern === 'sweep-rl') {
+          const ordered = pattern === 'sweep-lr' ? cols : cols.slice().reverse();
+          const index = ev.salvoIndex % ordered.length;
+          const picked = [ordered[index]];
+          if (ordered.length > 1) picked.push(ordered[(index + 1) % ordered.length]);
+          return picked;
+        }
+        return [nearest(spawnX)];
+      }
+      function challengeSpawnSalvo(ev) {
+        const band = challengeBand(ev);
+        const cols = challengeSalvoColumns(ev);
+        const charge = ev.attackPattern === 'mark-charge';
+        cols.forEach((x, index) => {
+          const outward = x < band.center * W ? -1 : 1;
+          shots.push({
+            x,
+            y: -12,
+            vx: charge ? 0 : outward * (ev.attackPattern.indexOf('fan') === 0 ? 26 : 0),
+            vy: charge ? 440 : 180 + (index % 2) * 24,
+            r: 4,
+            chSource: ev.id,
+          });
+        });
+        if (cols.length) A.Sfx.play('shoot');
+      }
+      function challengeSpawnBossSalvo(ev) {
+        const band = challengeBand(ev);
+        const cols = challengeDangerColumns(band);
+        if (!cols.length) return;
+        const b = boss;
+        let picked;
+        if (ev.attackPattern === 'weak-left-right') {
+          const ordered = b && b.weakSide === 'right' ? cols.slice().reverse() : cols;
+          const index = (b ? b.salvoIndex : 0) % ordered.length;
+          picked = [ordered[index], ordered[(index + 1) % ordered.length]];
+          if (b) b.salvoIndex += 1;
+        } else {
+          const ordered = (b ? b.salvoIndex : 0) % 2 === 0 ? cols : cols.slice().reverse();
+          const index = (b ? b.salvoIndex : 0) % ordered.length;
+          picked = [ordered[index], ordered[(index + 2) % ordered.length]];
+          if (b) b.salvoIndex += 1;
+        }
+        picked.forEach((x) => shots.push({ x, y: -12, vx: 0, vy: 195, r: 5, chSource: ev.id }));
+        A.Sfx.play('shoot');
+      }
+      function challengeUpdateBoss(ev, dt) {
+        const b = boss;
+        if (!b) return;
+        b.t += dt;
+        if (b.y < 104) b.y += b.vy * dt;
+        else b.y = 104 + Math.sin(b.t * 1.2) * 6;
+        const ratio = b.hp / b.maxHp;
+        if (ev.attackPattern === 'weak-left-right') {
+          /* 2s 左翼暴露 → 1s 护盾 → 2s 右翼暴露，循环。 */
+          const cycle = b.t % 5;
+          b.weakSide = cycle < 2.5 ? 'left' : 'right';
+          b.exposed = cycle < 2 || (cycle >= 3 && cycle < 5);
+          b.phase = 1;
+        } else if (ratio > 0.6) {
+          b.phase = 1;
+          b.exposed = true;
+        } else {
+          b.phase = 2;
+          /* 第 2 阶段：1.4s 扫射护盾 → 2.2s 中央核心暴露。 */
+          const cycle = b.t % 3.6;
+          b.exposed = cycle >= 1.4;
+        }
+        if (b.exposed && !b.wasExposed) chBossExposedWindows += 1;
+        if (b.exposed) chBossExposedSeconds += dt;
+        b.wasExposed = b.exposed;
+        if (b.phase > chBossMaxPhase) chBossMaxPhase = b.phase;
+        b.fireTimer -= dt;
+        if (b.fireTimer <= 0 && b.y >= 88) {
+          challengeSpawnBossSalvo(ev);
+          b.fireTimer = 0.55;
+        }
+      }
+      function challengePowerupsSpawned() {
+        const list = chContent && Array.isArray(chContent.powerups) ? chContent.powerups : [];
+        list.forEach((powerup, index) => {
+          const atSec = Number(powerup.atSec) || 0;
+          if (chTime < atSec || chPowerupSpawned[index]) return;
+          chPowerupSpawned[index] = true;
+          const type = WEAPONS[powerup.kind] && powerup.kind !== 'normal' ? powerup.kind : 'spread';
+          pickups.push({
+            x: clamp((Number(powerup.xRatio) || 0.5) * W, 24, W - 24),
+            y: -20,
+            vy: 72,
+            r: 15,
+            type,
+            spin: 0,
+            chPowerup: powerup.kind || type,
+          });
+        });
+      }
+      function updateChallenge(dt) {
+        chTime += dt;
+        stageTime = chTime;
+        chTipTimer = Math.max(0, chTipTimer - dt);
+        stageBanner = Math.max(0, stageBanner - dt);
+        chEvents.forEach((ev) => {
+          if (ev.done) return;
+          if (!ev.started) {
+            if (chTime >= ev.atSec) challengeStartEvent(ev);
+            return;
+          }
+          ev.phaseTime += dt;
+          if (ev.phase === 'telegraph') {
+            if (ev.phaseTime >= ev.telegraphSec) {
+              ev.phase = 'attack';
+              ev.phaseTime = 0;
+              ev.salvoIndex = 0;
+              ev.lastSalvo = 0;
+              if (ev.enemyType !== 'boss') challengeSpawnSalvo(ev);
+            }
+            return;
+          }
+          if (ev.phase !== 'attack') return;
+          if (ev.enemyType === 'boss') {
+            challengeUpdateBoss(ev, dt);
+            return;
+          }
+          ev.lastSalvo -= dt;
+          if (ev.phaseTime <= ev.attackActiveSec && ev.lastSalvo <= 0) {
+            challengeSpawnSalvo(ev);
+            ev.salvoIndex += 1;
+            ev.lastSalvo = 0.45;
+          }
+          if (ev.phaseTime >= ev.attackActiveSec + 0.6) {
+            ev.phase = 'done';
+            ev.done = true;
+          }
+        });
+        challengePowerupsSpawned();
+        chHudTick -= dt;
+        if (chHudTick <= 0) {
+          chHudTick = 0.15;
+          syncChallengeHud(false);
+        }
+        if (chContent && chContent.endCondition === 'defeat-boss') {
+          if (chBossDefeated) challengeClear();
+          return;
+        }
+        if (chTime >= Math.max(1, Number(chContent && chContent.stageDurationSec) || 35)) {
+          challengeClear();
+        }
+      }
+      function updateChallengeEnemies(dt) {
+        for (let i = enemies.length - 1; i >= 0; i -= 1) {
+          const e = enemies[i];
+          if (e.kind === 'boss') continue;
+          e.t += dt;
+          if (e.chChargeAt > 0 && chTime >= e.chChargeAt) {
+            e.vy = 640;
+            e.chChargeAt = 0;
+          }
+          e.y += e.vy * dt;
+          if (e.chSway) e.x = clamp(e.baseX + Math.sin(e.t * 2.2) * e.chSway, 4, W - e.w - 4);
+          if (e.y > H + 60) enemies.splice(i, 1);
+        }
+      }
+      function challengeHit(reason) {
+        if (player.invul > 0 || shieldTimer > 0) return;
+        chHealth -= 1;
+        player.invul = 1.8;
+        shake = A.reducedMotion ? 0 : 8;
+        A.Sfx.play('explode');
+        chDamageLog.push({ atSec: Math.round(chTime * 10) / 10, reason: reason || 'hit' });
+        particles.emit(player.x, player.y, {
+          count: 24,
+          speed: [60, 260],
+          life: [0.3, 0.8],
+          size: [2, 5],
+          colors: ['#4f7cff', '#ffffff', '#ffd23f'],
+          gravity: 100,
+        });
+        if (chHealth <= 0) {
+          chHealth = 0;
+          challengeFail('机体损毁 · 生命归零');
+        }
+      }
+      function syncChallengeHud(force) {
+        if (!dom.chHud || mode !== 'challenge' || !chStage) return;
+        const duration = Math.max(1, Number(chContent && chContent.stageDurationSec) || 35);
+        const active = chEvents.find((ev) => ev.started && !ev.done);
+        let text =
+          challengeLabel(chStage) +
+          ' · 生命 ' +
+          chHealth +
+          ' · ' +
+          challengeFmt(chTime) +
+          '/' +
+          duration +
+          's';
+        if (boss) text += ' · BOSS ' + Math.max(0, Math.ceil(boss.hp)) + '/' + boss.maxHp;
+        else if (active) text += ' · ' + challengePatternLabel(active);
+        if (force || dom.chHud.textContent !== text) dom.chHud.textContent = text;
+        if (dom.chTip) {
+          const show = chTipTimer > 0 && state === 'playing';
+          dom.chTip.hidden = !show;
+          if (show) dom.chTip.textContent = '目标：' + (chStage.goalStatement || '') + ' · ' + (chStage.decision || '');
+        }
+      }
+      function setChallengeChrome(active) {
+        document.body.classList.toggle('has-challenge', !!active);
+        if (dom.chHud) dom.chHud.hidden = !active;
+        if (dom.chTip) dom.chTip.hidden = !active || chTipTimer <= 0;
+        syncJoyTools();
+      }
+      function showChallengePanel() {
+        if (!challengeAvailable()) {
+          A.showToast('挑战数据不可用');
+          return false;
+        }
+        mode = 'panel';
+        state = 'ready';
+        loop.pause();
+        autosave.clear();
+        if (dom.chPanel) {
+          dom.chPanel.innerHTML =
+            A.Challenge.stageListHtml(CHALLENGE_GAME_ID) +
+            '<button type="button" class="ac-btn ac-btn-secondary" data-ch-back>返回开始</button>';
+          dom.chPanel.hidden = false;
+        }
+        setChallengeChrome(false);
+        ui.hide();
+        pauseUi.sync();
+        syncJoyTools();
+        return true;
+      }
+      function hideChallengePanel() {
+        if (dom.chPanel) {
+          dom.chPanel.hidden = true;
+          dom.chPanel.innerHTML = '';
+        }
+      }
+      function closeChallengePanel() {
+        hideChallengePanel();
+        mode = 'classic';
+        chStage = null;
+        chContent = null;
+        chEvents = [];
+        reset();
+        state = 'ready';
+        setChallengeChrome(false);
+        showStart();
+        pauseUi.sync();
+        syncJoyTools();
+        return true;
+      }
+      function resetChallenge(stage) {
+        chStage = stage;
+        chContent = stage && stage.content ? stage.content : {};
+        mode = 'challenge';
+        const spawn = chContent.playerSpawn || { xRatio: 0.5, yRatio: 0.85 };
+        player.x = clamp((Number(spawn.xRatio) || 0.5) * W, 20, W - 20);
+        player.y = clamp((Number(spawn.yRatio) || 0.85) * H, PLAYER_MIN_Y, PLAYER_MAX_Y);
+        player.invul = 0;
+        player.cool = 0;
+        bullets = [];
+        enemies = [];
+        shots = [];
+        pickups = [];
+        floaters = [];
+        score = 0;
+        chTime = 0;
+        chHealth = Math.max(1, Math.floor(Number(chContent.startingHealth) || 3));
+        chAssisted = false;
+        chCollectibles = [];
+        chDamageLog = [];
+        chPowerupLog = [];
+        chBossDefeated = false;
+        chBossMaxPhase = 0;
+        chBossExposedWindows = 0;
+        chBossExposedSeconds = 0;
+        chFiredVolleys = 0;
+        chBossHits = 0;
+        chTipTimer = 3.2;
+        chHudTick = 0;
+        chPowerupSpawned = [];
+        boss = null;
+        stageBanner = 0;
+        stageBannerText = '';
+        stageTime = 0;
+        pendingClearStage = 0;
+        BUFF_TYPES.forEach((type) => {
+          buffs[type] = 0;
+        });
+        lastBuff = 'normal';
+        tools.pulse = 1;
+        tools.shield = 1;
+        shieldTimer = 0;
+        particles.clear();
+        chEvents = (Array.isArray(chContent.events) ? chContent.events : []).map((event, index) => ({
+          id: String(event.id || 'w' + (index + 1)),
+          atSec: Math.max(0, Number(event.atSec) || 0),
+          enemyType: String(event.enemyType || 'scout'),
+          attackPattern: String(event.attackPattern || 'single'),
+          telegraphSec: Math.max(0.2, Number(event.telegraphSec) || 0.9),
+          attackActiveSec: Math.max(0.5, Number(event.attackActiveSec) || 3.4),
+          spawnXRatio: clamp(Number(event.spawnXRatio) || 0.5, 0, 1),
+          safeBandXRatio: event.safeBandXRatio || { center: 0.5, halfWidth: 0.12 },
+          started: false,
+          phase: 'pending',
+          phaseTime: 0,
+          salvoIndex: 0,
+          lastSalvo: 0,
+          done: false,
+        }));
+        syncHud();
+        syncJoyTools();
+        setChallengeChrome(true);
+        syncChallengeHud(true);
+      }
+      function startChallenge(ref) {
+        const stage = challengeStageByRef(ref);
+        if (!stage) {
+          A.showToast('挑战数据不可用');
+          return false;
+        }
+        if (!A.Challenge.isUnlocked(CHALLENGE_GAME_ID, stage.id)) {
+          A.showToast('先通关上一关');
+          return false;
+        }
+        autosave.clear();
+        hideChallengePanel();
+        resetChallenge(stage);
+        state = 'playing';
+        ui.hide();
+        loop.resume();
+        pauseUi.sync();
+        syncJoyTools();
+        autosave.saveNow();
+        return true;
+      }
+      function retryChallenge() {
+        if (!chStage) return false;
+        return startChallenge(chStage.id);
+      }
+      function nextChallengeStage() {
+        if (!chStage) return null;
+        const list = challengeStagesList();
+        const index = list.findIndex((stage) => stage.id === chStage.id);
+        return index >= 0 && index + 1 < list.length ? list[index + 1] : null;
+      }
+      function challengeFail(reason) {
+        if (mode !== 'challenge' || !chStage) return false;
+        if (state === 'failed' || state === 'cleared') return false;
+        state = 'failed';
+        A.Sfx.play('over');
+        autosave.clear();
+        loop.pause();
+        ui.show({
+          title: '挑战失败',
+          text:
+            '<b>' + challengeLabel(chStage) + '</b><br/>' +
+            (reason || '本关失败') +
+            '<br/>已坚持 ' + challengeFmt(chTime) + ' · 生命归零',
+          btn: '重试本关',
+          onBtn: retryChallenge,
+          btn2: '返回选关',
+          onBtn2: showChallengePanel,
+        });
+        pauseUi.sync();
+        syncJoyTools();
+        return true;
+      }
+      function challengeClear() {
+        if (mode !== 'challenge' || !chStage || state === 'cleared') return false;
+        const timeSec = Math.round(Math.max(0, chTime) * 10) / 10;
+        state = 'cleared';
+        const result = { timeSec, assisted: chAssisted, collectibles: chCollectibles.slice() };
+        A.Challenge.markCleared(CHALLENGE_GAME_ID, chStage.id, result);
+        A.Sfx.play('perfect');
+        autosave.clear();
+        loop.pause();
+        const next = nextChallengeStage();
+        ui.show({
+          title: '挑战通关 · C' + pad2(chStage.stageNumber || 0),
+          text: A.Challenge.resultHtml(chStage, result),
+          btn: next ? '下一关' : '返回选关',
+          onBtn: next ? () => startChallenge(next.id) : showChallengePanel,
+          btn2: '重玩本关',
+          onBtn2: retryChallenge,
+        });
+        syncChallengeHud(true);
+        pauseUi.sync();
+        syncJoyTools();
+        return true;
+      }
+      function challengeInfo() {
+        const active = chEvents.find((ev) => ev.started && !ev.done);
+        return {
+          mode,
+          stageId: chStage ? chStage.id : null,
+          stageIndex: chStage ? Math.max(0, (Number(chStage.stageNumber) || 1) - 1) : -1,
+          state,
+          elapsedSec: Math.round(chTime * 10) / 10,
+          objective: chStage ? chStage.goalStatement : '',
+          cleared: state === 'cleared',
+          collectibles: chCollectibles.slice(),
+          assisted: chAssisted,
+          health: chHealth,
+          startingHealth: chStage ? Math.max(1, Math.floor(Number(chContent && chContent.startingHealth) || 3)) : 3,
+          player: { x: player.x, y: player.y, invul: player.invul },
+          activeEvent: active ? { id: active.id, phase: active.phase, pattern: active.attackPattern } : null,
+          eventsDone: chEvents.filter((ev) => ev.done).length,
+          eventsTotal: chEvents.length,
+          boss: boss ? { hp: boss.hp, maxHp: boss.maxHp, phase: boss.phase, exposed: boss.exposed !== false, weakSide: boss.weakSide } : null,
+          bossDefeated: chBossDefeated,
+          bossMaxPhase: chBossMaxPhase,
+          shots: shots.length,
+          challengeAvailable: challengeAvailable(),
+        };
+      }
+      function stageObservable() {
+        return {
+          mode,
+          stageId: chStage ? chStage.id : null,
+          state,
+          time: Math.round(chTime * 10) / 10,
+          stageDurationSec: chStage && chContent ? Math.max(1, Number(chContent.stageDurationSec) || 35) : 0,
+          endCondition: chContent ? chContent.endCondition : null,
+          health: chHealth,
+          startingHealth: chStage ? Math.max(1, Math.floor(Number(chContent && chContent.startingHealth) || 3)) : 3,
+          events: chEvents.map((ev) => ({
+            id: ev.id,
+            atSec: ev.atSec,
+            enemyType: ev.enemyType,
+            attackPattern: ev.attackPattern,
+            phase: ev.phase,
+            started: ev.started,
+            done: ev.done,
+            safeBand: challengeBand(ev),
+          })),
+          activeEventIds: challengeActiveEvents().map((ev) => ev.id),
+          safeBand: challengeCurrentBand(),
+          shots: shots.map((s) => ({ x: Math.round(s.x * 10) / 10, y: Math.round(s.y * 10) / 10, r: s.r, source: s.chSource || null })),
+          player: { x: player.x, y: player.y, invul: player.invul },
+          boss: boss ? { hp: boss.hp, maxHp: boss.maxHp, phase: boss.phase, exposed: boss.exposed !== false, weakSide: boss.weakSide } : null,
+          bossDefeated: chBossDefeated,
+          bossMaxPhase: chBossMaxPhase,
+          bossExposedWindows: chBossExposedWindows,
+          bossExposedSeconds: Math.round(chBossExposedSeconds * 10) / 10,
+          firedVolleys: chFiredVolleys,
+          bossHits: chBossHits,
+          buffs: { ...buffs },
+          bulletsInFlight: bullets.length,
+          enemiesCount: enemies.length,
+          bossCount: enemies.filter((e) => e.kind === 'boss').length,
+          damageLog: chDamageLog.slice(),
+          collectibles: chCollectibles.slice(),
+          powerupLog: chPowerupLog.slice(),
+          assisted: chAssisted,
+          eventsDone: chEvents.filter((ev) => ev.done).length,
+          eventsTotal: chEvents.length,
+          panelVisible: !!(dom.chPanel && !dom.chPanel.hidden),
+        };
+      }
+
       /* ---------- 弹种 Buff ---------- */
       const WEAPONS = {
         normal: { name: '普通', short: '普', color: '#e8f4ff', duration: 0, interval: 0.13 },
@@ -152,6 +885,7 @@
         if (id === 'pulse') {
           if (tools.pulse <= 0 || (!shots.length && !enemies.length)) return false;
           tools.pulse -= 1;
+          if (mode === 'challenge') chAssisted = true;
           shots = [];
           enemies.slice().forEach((e) => {
             const index = enemies.indexOf(e);
@@ -178,6 +912,7 @@
         if (id === 'shield') {
           if (tools.shield <= 0 || shieldTimer > 0) return false;
           tools.shield -= 1;
+          if (mode === 'challenge') chAssisted = true;
           shieldTimer = SHIELD_SECONDS;
           addFloater(player.x, player.y - 38, '星盾 5 秒', '#7ce8e0');
           A.Sfx.play('spring');
@@ -499,6 +1234,12 @@
 
       function startGame() {
         autosave.clear();
+        mode = 'classic';
+        chStage = null;
+        chContent = null;
+        chEvents = [];
+        hideChallengePanel();
+        setChallengeChrome(false);
         reset();
         state = 'playing';
         ui.hide();
@@ -546,22 +1287,42 @@
         loop.pause();
         state = 'paused';
         autosave.saveNow();
-        ui.show({
-          title: '已暂停',
-          text: '休息一下，敌人不会等太久。<br/>局内进度已保存，可以随时离开。',
-          btn: '继续',
-          onBtn: resumeGame,
-        });
+        if (mode === 'challenge') {
+          ui.show({
+            title: '已暂停 · 挑战 ' + (chStage ? 'C' + pad2(chStage.stageNumber || 0) : ''),
+            text: challengeLabel(chStage) + '<br/>进度已保存，可以随时离开。',
+            btn: '继续',
+            onBtn: resumeGame,
+            btn2: '退出挑战',
+            onBtn2: showChallengePanel,
+          });
+        } else {
+          ui.show({
+            title: '已暂停',
+            text: '休息一下，敌人不会等太久。<br/>局内进度已保存，可以随时离开。',
+            btn: '继续',
+            onBtn: resumeGame,
+          });
+        }
         pauseUi.sync();
         syncJoyTools();
       }
 
       function showStart() {
+        mode = 'classic';
+        state = 'ready';
+        chStage = null;
+        chContent = null;
+        chEvents = [];
+        setChallengeChrome(false);
+        const hasChallenge = challengeAvailable();
         ui.show({
           title: '星海突击',
           text: '纵版弹幕射击：击落敌机，躲开弹幕。<br/>吃下 <b>散射 / 激光 / 追踪 / 速射</b>，弹种可叠加<br/>道具 1/2 主动使用 · 每关 Boss 后可继续或收局 · 生命 ×3',
           btn: '开始游戏',
           onBtn: startGame,
+          btn2: hasChallenge ? '挑战 6 关' : '挑战数据不可用',
+          onBtn2: hasChallenge ? showChallengePanel : () => A.showToast('挑战数据不可用'),
         });
       }
 
@@ -569,6 +1330,8 @@
       function serialize() {
         if (state !== 'playing' && state !== 'paused' && state !== 'clear') return null;
         return {
+          mode,
+          stageId: chStage ? chStage.id : null,
           player: { x: player.x, y: player.y, invul: player.invul },
           bullets: bullets.map((b) => ({
             x: b.x,
@@ -599,6 +1362,11 @@
             fireTimer: e.fireTimer,
             baseX: e.baseX,
             vx: e.vx,
+            chSway: e.chSway || 0,
+            chChargeAt: e.chChargeAt || 0,
+            exposed: e.exposed !== false,
+            weakSide: e.weakSide || 'left',
+            salvoIndex: e.salvoIndex || 0,
           })),
           shots,
           pickups,
@@ -615,12 +1383,188 @@
           tools: { pulse: tools.pulse, shield: tools.shield },
           shieldTimer,
           clearStage: pendingClearStage,
+          challenge:
+            mode === 'challenge'
+              ? {
+                  time: chTime,
+                  health: chHealth,
+                  assisted: chAssisted,
+                  collectibles: chCollectibles.slice(),
+                  damageLog: chDamageLog.slice(0, 40),
+                  powerupLog: chPowerupLog.slice(0, 40),
+                  bossDefeated: chBossDefeated,
+                  bossMaxPhase: chBossMaxPhase,
+                  bossExposedWindows: chBossExposedWindows,
+                  events: chEvents.map((ev) => ({
+                    id: ev.id,
+                    started: ev.started,
+                    phase: ev.phase,
+                    phaseTime: ev.phaseTime,
+                    salvoIndex: ev.salvoIndex,
+                    lastSalvo: ev.lastSalvo,
+                    done: ev.done,
+                  })),
+                  boss: boss
+                    ? {
+                        uid: boss.uid,
+                        hp: boss.hp,
+                        maxHp: boss.maxHp,
+                        phase: boss.phase,
+                        exposed: boss.exposed !== false,
+                        weakSide: boss.weakSide || 'left',
+                        salvoIndex: boss.salvoIndex || 0,
+                        t: boss.t,
+                      }
+                    : null,
+                }
+              : null,
         };
       }
 
-      function restore(data) {
-        if (!data || !data.player || !Array.isArray(data.enemies)) return false;
+      function restoreChallenge(data) {
+        const stage = challengeStageByRef(String(data.stageId || ''));
+        if (!stage) return false;
         try {
+          resetChallenge(stage);
+          const savedPlayer = data.player && typeof data.player === 'object' ? data.player : {};
+          player.x = clamp(Number(savedPlayer.x) || player.x, 20, W - 20);
+          player.y = clamp(Number(savedPlayer.y) || player.y, PLAYER_MIN_Y, PLAYER_MAX_Y);
+          player.invul = Number(savedPlayer.invul) || 0;
+          bullets = (data.bullets || [])
+            .filter((b) => b && isFinite(b.x) && isFinite(b.y))
+            .map((b) => ({
+              x: Number(b.x) || 0,
+              y: Number(b.y) || 0,
+              vx: Number(b.vx) || 0,
+              vy: Number(b.vy) || -640,
+              r: Number(b.r) || 3,
+              dmg: Number(b.dmg) || 1,
+              pierce: !!b.pierce,
+              laser: !!b.laser,
+              homing: !!b.homing,
+              hitIds: Array.isArray(b.hitIds) ? b.hitIds.slice() : [],
+            }));
+          shots = (data.shots || [])
+            .filter((s) => s && isFinite(s.x) && isFinite(s.y))
+            .map((s) => ({
+              x: Number(s.x) || 0,
+              y: Number(s.y) || 0,
+              vx: Number(s.vx) || 0,
+              vy: Number(s.vy) || 0,
+              r: Number(s.r) || 4,
+              chSource: s.chSource ? String(s.chSource) : null,
+            }));
+          pickups = (data.pickups || [])
+            .filter((p) => p && WEAPONS[p.type])
+            .map((p) => ({
+              x: Number(p.x) || W / 2,
+              y: Number(p.y) || 0,
+              vy: Number(p.vy) || 70,
+              r: 15,
+              type: p.type,
+              spin: Number(p.spin) || 0,
+              chPowerup: p.chPowerup ? String(p.chPowerup) : null,
+            }));
+          enemies = (data.enemies || [])
+            .filter((e) => e && (e.kind === 'boss' || KINDS[e.kind]) && isFinite(e.x) && isFinite(e.y))
+            .map((e) => {
+              const isBoss = e.kind === 'boss';
+              const hp = Math.max(1, Number(e.hp) || 1);
+              return {
+                uid: Number(e.uid) || nextUid++,
+                kind: e.kind,
+                x: Number(e.x) || 0,
+                y: Number(e.y) || 0,
+                w: Number(e.w) || (isBoss ? 118 : KINDS[e.kind].w),
+                h: Number(e.h) || (isBoss ? 86 : KINDS[e.kind].h),
+                hp,
+                maxHp: Math.max(hp, Number(e.maxHp) || hp),
+                score: Number(e.score) || (isBoss ? 1200 : KINDS[e.kind].score),
+                color: isBoss ? '#ff5d7a' : KINDS[e.kind].color,
+                vy: Number(e.vy) || 120,
+                t: Number(e.t) || 0,
+                fireTimer: 999,
+                baseX: Number(e.baseX) || Number(e.x) || 0,
+                vx: 0,
+                name: isBoss ? String(e.name || 'BOSS') : '',
+                phase: Number(e.phase) || 1,
+                exposed: e.exposed !== false,
+                wasExposed: e.exposed !== false,
+                weakSide: e.weakSide === 'right' ? 'right' : 'left',
+                salvoIndex: Math.max(0, Math.floor(Number(e.salvoIndex) || 0)),
+                chSway: Number(e.chSway) || 0,
+                chChargeAt: Number(e.chChargeAt) || 0,
+              };
+            });
+          boss = enemies.find((e) => e.kind === 'boss') || null;
+          score = Math.max(0, Number(data.score) || 0);
+          nextUid = Math.max(nextUid, Number(data.nextUid) || 1);
+          BUFF_TYPES.forEach((type) => {
+            buffs[type] = 0;
+          });
+          if (data.buffs && typeof data.buffs === 'object') {
+            BUFF_TYPES.forEach((type) => {
+              buffs[type] = Math.max(0, Number(data.buffs[type]) || 0);
+            });
+          }
+          lastBuff = activeBuffs().slice(-1)[0] || 'normal';
+          if (data.lastBuff && buffs[data.lastBuff] > 0) lastBuff = data.lastBuff;
+          if (data.tools && typeof data.tools === 'object') {
+            tools.pulse = Number.isFinite(Number(data.tools.pulse)) ? clamp(Math.floor(Number(data.tools.pulse)), 0, JOY_TOOL_CAPS.pulse) : 1;
+            tools.shield = Number.isFinite(Number(data.tools.shield)) ? clamp(Math.floor(Number(data.tools.shield)), 0, JOY_TOOL_CAPS.shield) : 1;
+          }
+          shieldTimer = clamp(Number(data.shieldTimer) || 0, 0, SHIELD_SECONDS);
+          const ch = data.challenge && typeof data.challenge === 'object' ? data.challenge : {};
+          chTime = clamp(Number(ch.time) || 0, 0, 3600);
+          const maxHealth = Math.max(1, Math.floor(Number(chContent.startingHealth) || 3));
+          chHealth = clamp(Math.floor(Number(ch.health) || maxHealth), 1, maxHealth);
+          chAssisted = !!ch.assisted;
+          chCollectibles = Array.isArray(ch.collectibles) ? ch.collectibles.filter((id) => typeof id === 'string').slice(0, 48) : [];
+          chDamageLog = Array.isArray(ch.damageLog) ? ch.damageLog.slice(0, 40) : [];
+          chPowerupLog = Array.isArray(ch.powerupLog) ? ch.powerupLog.slice(0, 40) : [];
+          chBossDefeated = !!ch.bossDefeated;
+          chBossMaxPhase = clamp(Math.floor(Number(ch.bossMaxPhase) || 0), 0, 9);
+          chBossExposedWindows = clamp(Math.floor(Number(ch.bossExposedWindows) || 0), 0, 999);
+          const savedEvents = Array.isArray(ch.events) ? ch.events : [];
+          chEvents.forEach((ev) => {
+            const saved = savedEvents.find((item) => item && item.id === ev.id);
+            if (!saved) return;
+            ev.started = !!saved.started;
+            ev.phase = ['pending', 'telegraph', 'attack', 'done'].indexOf(saved.phase) !== -1 ? saved.phase : 'pending';
+            ev.phaseTime = clamp(Number(saved.phaseTime) || 0, 0, 120);
+            ev.salvoIndex = Math.max(0, Math.floor(Number(saved.salvoIndex) || 0));
+            ev.lastSalvo = Number(saved.lastSalvo) || 0;
+            ev.done = !!saved.done;
+          });
+          if (boss && ch.boss && typeof ch.boss === 'object') {
+            boss.exposed = ch.boss.exposed !== false;
+            boss.wasExposed = ch.boss.exposed !== false;
+            boss.weakSide = ch.boss.weakSide === 'right' ? 'right' : 'left';
+            boss.salvoIndex = Math.max(0, Math.floor(Number(ch.boss.salvoIndex) || 0));
+            if (Number.isFinite(Number(ch.boss.hp))) boss.hp = clamp(Number(ch.boss.hp), 1, boss.maxHp);
+          }
+          recordSaved = false;
+          state = 'playing';
+          syncHud();
+          syncJoyTools();
+          setChallengeChrome(true);
+          syncChallengeHud(true);
+          return true;
+        } catch (err) {
+          return false;
+        }
+      }
+
+      function restore(data) {
+        if (!data) return false;
+        if (data.mode === 'challenge') return restoreChallenge(data);
+        if (!data.player || !Array.isArray(data.enemies)) return false;
+        try {
+          mode = 'classic';
+          chStage = null;
+          chContent = null;
+          chEvents = [];
+          setChallengeChrome(false);
           reset();
           player.x = clamp(Number(data.player.x) || W / 2, 20, W - 20);
           player.y = clamp(Number(data.player.y) || H - 90, PLAYER_MIN_Y, PLAYER_MAX_Y);
@@ -717,10 +1661,16 @@
 
       const autosave = A.createRunAutosave('star-raid', serialize, {
         every: 4,
-        meta: () => ({
-          score,
-          summary: `得分 ${score} · 第 ${level} 关${boss ? ' · BOSS' : ' · ' + waveInfo().label} · 生命 ${lives}`,
-        }),
+        meta: () =>
+          mode === 'challenge'
+            ? {
+                score: Math.floor(chTime),
+                summary: `挑战 ${chStage ? 'C' + pad2(chStage.stageNumber || 0) : ''} · 生命 ${chHealth} · ${challengeFmt(chTime)}`,
+              }
+            : {
+                score,
+                summary: `得分 ${score} · 第 ${level} 关${boss ? ' · BOSS' : ' · ' + waveInfo().label} · 生命 ${lives}`,
+              },
       });
 
       /* ---------- 更新 ---------- */
@@ -734,6 +1684,20 @@
           return;
         }
         autosave.tick(dt);
+        if (mode === 'challenge') {
+          updateChallenge(dt);
+          if (state !== 'playing') {
+            input.endFrame();
+            return;
+          }
+          updatePlayer(dt);
+          updateChallengeEnemies(dt);
+          updateBullets(dt);
+          updatePickups(dt);
+          collide();
+          input.endFrame();
+          return;
+        }
         elapsed += dt;
         stageBanner = Math.max(0, stageBanner - dt);
         if (!boss) {
@@ -750,6 +1714,7 @@
 
       function fire() {
         player.cool = buffs.rapid > 0 ? 0.075 : 0.13;
+        if (mode === 'challenge') chFiredVolleys += 1;
         /* 普通弹始终存在；每种已激活 Buff 在每一轮里追加自己的弹型，形成叠加。 */
         bullets.push({ x: player.x - 10, y: player.y - 14, vx: 0, vy: -640, r: 3, dmg: 1 });
         bullets.push({ x: player.x + 10, y: player.y - 14, vx: 0, vy: -640, r: 3, dmg: 1 });
@@ -937,6 +1902,12 @@
           if (A.Physics.aabbOverlap(hb, box)) {
             buffs[p.type] = Math.max(buffs[p.type], WEAPONS[p.type].duration);
             lastBuff = p.type;
+            if (mode === 'challenge') {
+              /* 挑战收集物：设计源 powerups 的拾取记录（不影响通关，不标记 assisted）。 */
+              const collectedId = p.chPowerup || p.type;
+              if (chCollectibles.indexOf(collectedId) === -1) chCollectibles.push(collectedId);
+              chPowerupLog.push({ atSec: Math.round(chTime * 10) / 10, kind: collectedId });
+            }
             syncHud();
             A.Sfx.play('perfect');
             addFloater(player.x, player.y - 34, (activeBuffs().length > 1 ? '叠加 ' : '') + WEAPONS[p.type].name + '弹！', WEAPONS[p.type].color);
@@ -999,6 +1970,21 @@
           });
           A.Sfx.play('explode');
           shake = A.reducedMotion ? 0 : 10;
+          if (mode === 'challenge') {
+            /* 挑战 Boss 击破 = 关卡通关（endCondition: defeat-boss）。 */
+            chBossDefeated = true;
+            boss = null;
+            shots = [];
+            chEvents.forEach((ev) => {
+              if (ev.enemyType === 'boss') {
+                ev.done = true;
+                ev.phase = 'done';
+              }
+            });
+            challengeClear();
+            syncHud();
+            return;
+          }
           for (let i = 0; i < 3; i++) {
             dropPickup({
               x: e.x + rand(-40, 40),
@@ -1016,7 +2002,8 @@
           syncHud();
           addFloater(e.x + e.w / 2, e.y, '+' + e.score, '#ffd23f');
           pickupPity += 1;
-          if (Math.random() < (e.kind === 'tank' ? 0.8 : 0.1) || pickupPity >= 12) dropPickup(e);
+          /* 挑战模式不使用随机掉落：掉 Buff 只由设计源 powerups 时间轴决定。 */
+          if (mode !== 'challenge' && (Math.random() < (e.kind === 'tank' ? 0.8 : 0.1) || pickupPity >= 12)) dropPickup(e);
         } else {
           addFloater(e.x + e.w / 2, e.y, '撞毁', '#ff9a9a');
         }
@@ -1033,6 +2020,10 @@
       }
 
       function hitPlayer() {
+        if (mode === 'challenge') {
+          challengeHit('弹幕/碰撞');
+          return;
+        }
         if (player.invul > 0 || shieldTimer > 0) return;
         lives -= 1;
         player.invul = 1.8;
@@ -1057,7 +2048,18 @@
             const b = bullets[j];
             if (b.hitIds && b.hitIds.indexOf(e.uid) !== -1) continue;
             if (A.Physics.circleBox(b.x, b.y, (b.r || 3) + 2, e)) {
+              /* 挑战 Boss 的护盾/未暴露阶段吸收伤害（弱点窗口才掉血）。 */
+              if (mode === 'challenge' && e.kind === 'boss' && e.exposed === false) {
+                particles.emit(b.x, b.y, { count: 2, speed: [20, 70], life: [0.08, 0.22], size: [1.5, 3], colors: ['#7ce8e0'] });
+                if (b.pierce) {
+                  if (b.hitIds.indexOf(e.uid) === -1) b.hitIds.push(e.uid);
+                } else {
+                  bullets.splice(j, 1);
+                }
+                continue;
+              }
               e.hp -= b.dmg || 1;
+              if (mode === 'challenge' && e.kind === 'boss') chBossHits += 1;
               particles.emit(b.x, b.y, { count: 3, speed: [20, 90], life: [0.1, 0.3], size: [1.5, 3], colors: [buffColor()] });
               if (b.pierce) {
                 b.hitIds.push(e.uid);
@@ -1185,6 +2187,13 @@
           ctx.fillStyle = '#4f7cff';
           ctx.fillRect(side * b.w * 0.3 - 4, -b.h * 0.08, 8, b.h * 0.32);
         }
+        if (mode === 'challenge' && b.exposed === false) {
+          ctx.strokeStyle = 'rgba(124, 232, 224, 0.85)';
+          ctx.lineWidth = 3;
+          ctx.beginPath();
+          ctx.arc(0, 0, Math.max(b.w, b.h) * 0.55 + pulse * 3, 0, TAU);
+          ctx.stroke();
+        }
         ctx.restore();
       }
 
@@ -1298,6 +2307,7 @@
         ctx.fillRect(-10, -10, W + 20, H + 20);
         stars.draw(ctx);
         particles.draw(ctx);
+        if (mode === 'challenge') drawChallengeOverlay();
 
         enemies.forEach(drawEnemy);
         pickups.forEach(drawPickup);
@@ -1325,6 +2335,11 @@
         });
 
         /* 画布内 HUD */
+        if (mode === 'challenge') {
+          drawChallengeHud();
+          ctx.restore();
+          return;
+        }
         A.draw.label(ctx, 'SCORE ' + score, 12, 20, { align: 'left', font: 'bold 14px system-ui, sans-serif', color: '#ffd23f' });
         const wave = waveInfo();
         A.draw.label(ctx, boss ? 'STG ' + level + ' · BOSS' : 'STG ' + level + ' · ' + wave.label, W / 2, 20, {
@@ -1372,6 +2387,92 @@
         ctx.restore();
       }
 
+      /* ---------- 挑战模式渲染：安全走廊 / 预警 / 挑战 HUD ---------- */
+      function drawChallengeOverlay() {
+        challengeActiveEvents().forEach((ev) => {
+          const band = challengeBand(ev);
+          const pulse = 0.5 + 0.5 * Math.sin(performance.now() / 150);
+          ctx.save();
+          ctx.fillStyle = ev.phase === 'attack' ? 'rgba(90, 209, 160, 0.16)' : 'rgba(90, 209, 160, 0.10)';
+          ctx.fillRect(band.left, 0, band.right - band.left, H);
+          ctx.strokeStyle = 'rgba(90, 209, 160, 0.6)';
+          ctx.lineWidth = 2;
+          ctx.beginPath();
+          ctx.moveTo(band.left, 0);
+          ctx.lineTo(band.left, H);
+          ctx.moveTo(band.right, 0);
+          ctx.lineTo(band.right, H);
+          ctx.stroke();
+          if (ev.phase === 'telegraph') {
+            ctx.setLineDash([8, 8]);
+            ctx.strokeStyle = 'rgba(255, 210, 63, ' + (0.28 + pulse * 0.3) + ')';
+            ctx.lineWidth = 1.5;
+            challengeDangerColumns(band).forEach((x) => {
+              ctx.beginPath();
+              ctx.moveTo(x, 96);
+              ctx.lineTo(x, H);
+              ctx.stroke();
+            });
+            ctx.setLineDash([]);
+            A.draw.label(ctx, '预警 · ' + challengePatternLabel(ev) + ' · 移向绿色安全走廊', W / 2, 88, {
+              font: 'bold 12px system-ui, sans-serif',
+              color: '#ffd23f',
+            });
+          } else if (ev.attackPattern === 'mark-charge') {
+            ctx.fillStyle = 'rgba(255, 93, 107, 0.14)';
+            challengeDangerColumns(band).forEach((x) => ctx.fillRect(x - 11, 90, 22, H - 90));
+          }
+          ctx.restore();
+        });
+      }
+      function drawChallengeHud() {
+        const duration = Math.max(1, Number(chContent && chContent.stageDurationSec) || 35);
+        const maxHealth = Math.max(1, Math.floor(Number(chContent && chContent.startingHealth) || 3));
+        const shade = ctx.createLinearGradient(0, 0, 0, 54);
+        shade.addColorStop(0, 'rgba(7, 11, 24, 0.82)');
+        shade.addColorStop(1, 'rgba(7, 11, 24, 0)');
+        ctx.fillStyle = shade;
+        ctx.fillRect(0, 0, W, 54);
+        A.draw.label(ctx, '生命 ' + chHealth + '/' + maxHealth, 12, 20, {
+          align: 'left',
+          font: 'bold 14px system-ui, sans-serif',
+          color: chHealth <= 1 ? '#ff8f86' : '#7ce8e0',
+        });
+        A.draw.label(ctx, challengeLabel(chStage), W / 2, 20, {
+          font: 'bold 13px system-ui, sans-serif',
+          color: '#ffd23f',
+        });
+        A.draw.label(ctx, challengeFmt(chTime) + ' / ' + duration + 's', W - 12, 20, {
+          align: 'right',
+          font: 'bold 13px system-ui, sans-serif',
+          color: '#e8f4ff',
+        });
+        const active = chEvents.find((ev) => ev.started && !ev.done);
+        const sub = boss
+          ? 'BOSS ' + Math.ceil(boss.hp) + ' / ' + boss.maxHp + (boss.exposed === false ? ' · 护盾' : ' · 弱点暴露')
+          : active
+            ? challengePatternLabel(active) + (active.phase === 'telegraph' ? ' · 预警' : '')
+            : '准备';
+        A.draw.label(ctx, sub, W / 2, 38, {
+          font: 'bold 12px system-ui, sans-serif',
+          color: boss ? (boss.exposed === false ? '#7ce8e0' : '#ff9a9d') : '#93a0c8',
+        });
+        if (boss) {
+          const ratio = clamp(boss.hp / boss.maxHp, 0, 1);
+          ctx.fillStyle = 'rgba(7,11,24,0.72)';
+          ctx.fillRect(60, 50, 300, 6);
+          ctx.fillStyle = boss.exposed === false ? '#4f7cff' : '#ff5d7a';
+          ctx.fillRect(60, 50, 300 * ratio, 6);
+        }
+        if (stageBanner > 0) {
+          A.draw.label(ctx, stageBannerText, W / 2, H * 0.34, {
+            font: 'bold 20px system-ui, sans-serif',
+            color: boss ? '#ff9a9d' : '#ffd23f',
+            alpha: clamp(stageBanner / 0.6, 0, 1),
+          });
+        }
+      }
+
       /* ---------- 输入与循环 ---------- */
       const loop = A.createLoop({
         update,
@@ -1398,6 +2499,19 @@
       });
       syncMute();
       bindJoyTools();
+      if (dom.chPanel) {
+        dom.chPanel.addEventListener('click', (event) => {
+          const target = event.target instanceof Element ? event.target : null;
+          if (!target) return;
+          if (target.closest('[data-ch-back]')) {
+            closeChallengePanel();
+            return;
+          }
+          const stageBtn = target.closest('.ac-stage-btn[data-stage-id]');
+          if (!stageBtn || stageBtn.disabled) return;
+          startChallenge(stageBtn.dataset.stageId);
+        });
+      }
 
       reset();
       state = 'ready';
@@ -1528,6 +2642,50 @@
               vx: 0,
             });
             return true;
+          },
+          /* ---------- 0.9 挑战模式钩子（契约 INTEGRATION-CONTRACT §5） ---------- */
+          challengeStages() {
+            return challengeStagesInfo();
+          },
+          startChallenge(ref) {
+            return startChallenge(ref);
+          },
+          challengeInfo() {
+            return challengeInfo();
+          },
+          stageObservable() {
+            return stageObservable();
+          },
+          forceStageClear(assisted) {
+            if (mode !== 'challenge' || state !== 'playing') return false;
+            if (assisted) chAssisted = true;
+            return challengeClear();
+          },
+          forceStageFail(reason) {
+            return challengeFail(String(reason || 'force'));
+          },
+          exitChallenge() {
+            if (mode !== 'challenge' && mode !== 'failed' && mode !== 'cleared') return false;
+            return showChallengePanel();
+          },
+          openChallengePanel() {
+            return showChallengePanel();
+          },
+          /* #test 专用：同步推进挑战时间轴（固定 1/60 步长，确定性驱动/回放用）。 */
+          advanceChallenge(seconds) {
+            const total = Math.max(0, Number(seconds) || 0);
+            const step = 1 / 60;
+            let guard = Math.ceil(total / step) + 2;
+            while (guard-- > 0 && state === 'playing') update(step);
+            return { state, info: challengeInfo() };
+          },
+          setPlayerPos(x, y) {
+            player.x = clamp(Number(x) || player.x, 20, W - 20);
+            player.y = clamp(Number(y) || player.y, PLAYER_MIN_Y, PLAYER_MAX_Y);
+            return { x: player.x, y: player.y };
+          },
+          challengePanelVisible() {
+            return !!(dom.chPanel && !dom.chPanel.hidden);
           },
         };
       }

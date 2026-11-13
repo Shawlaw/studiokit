@@ -7,8 +7,15 @@
   <meta name="theme-color" content="#0b1020" />
   <link rel="stylesheet" href="../../../shared/site.css" />
   <link rel="stylesheet" href="../arcade.css" />
+  <style>
+    /* 0.9 挑战模式：选关面板浮在画布上（页面本地微调，不影响其它游戏） */
+    .challenge-sheet { position: absolute; inset: 8px; z-index: 6; display: flex; flex-direction: column; justify-content: flex-end; gap: 8px; overflow: auto; }
+    .challenge-sheet[hidden] { display: none; }
+    .challenge-sheet .ac-challenge-panel { width: 100%; max-height: 100%; overflow: auto; }
+  </style>
   <script src="../../../shared/site-shell.js" defer></script>
   <script src="../engine.js"></script>
+  <script src="../challenge/gravity-flip.js"></script>
   <title>重力翻转 · 街机厅 · StudioKit</title>
 </head>
 <body class="arcade-body has-extra-controls has-game-tools" data-studiokit-app="arcade" data-studiokit-app-title="街机厅 Arcade" style="--ac-accent:#9b7cff; --card-accent:#9b7cff">
@@ -20,6 +27,12 @@
       <div class="game-hud">
         <span>距离 <strong data-hud-score>0</strong>m</span>
         <span>最高 <strong data-hud-high>0</strong>m</span>
+      </div>
+      <div class="ac-challenge-hud" data-ch-hud hidden>
+        <span><strong data-ch-stage>C01</strong> <span data-ch-title>挑战</span></span>
+        <span data-ch-goal>目标</span>
+        <span>用时 <strong data-ch-time>00:00</strong></span>
+        <span>残卷 <strong data-ch-collect>0</strong></span>
       </div>
       <button type="button" class="ac-icon-btn" data-pause aria-label="暂停游戏" title="暂停游戏（P / Esc）">⏸</button>
       <button type="button" class="ac-icon-btn" data-mute aria-label="切换音效">🔊</button>
@@ -35,6 +48,7 @@
             <button type="button" class="ac-btn ac-btn-secondary" data-ov-btn2 hidden>重新开始</button>
           </div>
         </div>
+        <div class="challenge-sheet" data-ch-panel hidden></div>
       </div>
     </div>
     <div class="touch-pad game-tools" data-game-tools aria-label="主动道具（快捷键 1 / 2）">
@@ -81,7 +95,15 @@
         mute: document.querySelector('[data-mute]'),
         joyShield: document.querySelector('[data-joy-tool="shield"]'),
         joyMagnet: document.querySelector('[data-joy-tool="magnet"]'),
+        chPanel: document.querySelector('[data-ch-panel]'),
+        chHud: document.querySelector('[data-ch-hud]'),
+        chStage: document.querySelector('[data-ch-stage]'),
+        chTitle: document.querySelector('[data-ch-title]'),
+        chGoal: document.querySelector('[data-ch-goal]'),
+        chTime: document.querySelector('[data-ch-time]'),
+        chCollect: document.querySelector('[data-ch-collect]'),
       };
+      const classicHudSpans = Array.from(document.querySelectorAll('.game-hud > span'));
       const ui = A.createOverlayUi(dom);
       const particles = A.createParticles();
 
@@ -108,6 +130,37 @@
       let shortRun = true;
       let joyLastResult = null;
 
+      /* 0.9 挑战模式状态：mode='classic' 时经典逻辑完全不变 */
+      const GAME_ID = 'gravity-flip';
+      let mode = 'classic';
+      let panelOpen = false;
+      const ch = {
+        active: false,
+        stage: null,
+        index: -1,
+        stageState: 'none',
+        elapsed: 0,
+        offset: 0,
+        distance: 0,
+        speed: 260,
+        gravity: 2100,
+        dir: 1,
+        y: 0,
+        vy: 0,
+        lives: 2,
+        invul: 0,
+        obstacles: [],
+        stars: [],
+        taken: [],
+        windows: [],
+        flipLog: [],
+        flipCount: 0,
+        hits: 0,
+        done: false,
+        assisted: false,
+        spaceWasDown: false,
+      };
+
       let high = A.Progress.get('gravity-flip').high;
       dom.hudHigh.textContent = String(high);
 
@@ -119,8 +172,10 @@
         if (!dom.joyShield || !dom.joyMagnet) return;
         dom.joyShield.querySelector('[data-joy-count]').textContent = String(tools.shield);
         dom.joyMagnet.querySelector('[data-joy-count]').textContent = String(tools.magnet);
-        dom.joyShield.disabled = state !== 'playing' || shieldArmed || tools.shield <= 0;
-        dom.joyMagnet.disabled = state !== 'playing' || magnetTimer > 0 || tools.magnet <= 0;
+        /* 挑战模式使用设计数据，不提供经典主动道具（公平性与确定性），经典模式行为不变。 */
+        const toolsAllowed = state === 'playing' && mode === 'classic';
+        dom.joyShield.disabled = !toolsAllowed || shieldArmed || tools.shield <= 0;
+        dom.joyMagnet.disabled = !toolsAllowed || magnetTimer > 0 || tools.magnet <= 0;
         dom.joyShield.setAttribute('aria-pressed', String(shieldArmed));
         dom.joyMagnet.setAttribute('aria-pressed', String(magnetTimer > 0));
         dom.joyShield.setAttribute('aria-label', shieldArmed
@@ -132,7 +187,7 @@
       }
 
       function activateJoyTool(id) {
-        if (state !== 'playing') return false;
+        if (state !== 'playing' || mode === 'challenge') return false;
         if (id === 'shield') {
           if (shieldArmed || tools.shield <= 0) return false;
           shieldArmed = true;
@@ -213,6 +268,11 @@
       }
 
       function startGame() {
+        mode = 'classic';
+        ch.active = false;
+        ch.stage = null;
+        ch.done = true;
+        if (dom.chPanel) dom.chPanel.hidden = true;
         autosave.clear();
         reset();
         state = 'playing';
@@ -230,9 +290,11 @@
         loop.resume();
         pauseUi.sync();
         syncJoyTools();
+        if (mode === 'challenge') updateChallengeHud();
       }
 
       function finish(won) {
+        if (mode !== 'classic') return;
         if (state === 'over') return;
         const wonRun = won === true;
         state = 'over';
@@ -264,20 +326,597 @@
         loop.pause();
         state = 'paused';
         autosave.saveNow();
-        ui.show({ title: '已暂停', text: '重力也停住了。<br/>局内进度已保存，可以随时离开。', btn: '继续', onBtn: resumeGame });
+        if (mode === 'challenge') {
+          showOverlay({
+            title: '已暂停',
+            text: '挑战计时与物理已暂停，局内进度已保存。',
+            btn: '继续',
+            onBtn: resumeGame,
+            btn2: '退出挑战',
+            onBtn2: exitChallenge,
+          });
+        } else {
+          showOverlay({ title: '已暂停', text: '重力也停住了。<br/>局内进度已保存，可以随时离开。', btn: '继续', onBtn: resumeGame });
+        }
         pauseUi.sync();
         syncJoyTools();
       }
 
       function showStart() {
+        const available = challengeAvailable();
         ui.show({
           title: '重力翻转',
           text: '点击 / 空格翻转重力。<br/>吃星星加分 · 道具 1/2 主动使用<br/>3000m 抵达星门 · 生命 ×3',
           btn: '开始游戏',
           onBtn: startGame,
+          btn2: available ? '挑战 6 关' : '挑战数据不可用',
+          onBtn2: available ? () => openChallengePanel() : () => A.showToast('挑战数据不可用'),
+        });
+        if (dom.ovBtn2) dom.ovBtn2.disabled = !available;
+      }
+
+      /* ============================================================
+       * 0.9 挑战模式（C01–C06）：固定障碍序列 + 真实重力翻转
+       * - 数据：../challenge/gravity-flip.js（A.Challenge.stages）；缺失/不足 6 关时 fail closed
+       * - 世界坐标：offset = 已前进 px；障碍屏幕 x = obstacle.x - offset
+       * - 玩家固定屏幕 x=112；终点 marker 世界 x=distanceToFinish，offset+PLAYER_X 到达即通关
+       * - 挑战不写 progress 最高分 / playtime 轮次，只写 challenge:v1
+       * ============================================================ */
+      function showOverlay(opts) {
+        ui.show(opts);
+        if (dom.ovBtn2) dom.ovBtn2.disabled = false;
+      }
+
+      function challengeStagesData() {
+        if (!A.Challenge || typeof A.Challenge.stages !== 'function') return [];
+        return A.Challenge.stages(GAME_ID);
+      }
+      function challengeAvailable() {
+        return challengeStagesData().length === 6;
+      }
+      function inChallenge() {
+        return mode === 'challenge';
+      }
+
+      function syncModeUi() {
+        const chMode = inChallenge();
+        const menuMode = !chMode && panelOpen;
+        classicHudSpans.forEach((el) => {
+          el.hidden = chMode || menuMode;
+        });
+        if (dom.chHud) dom.chHud.hidden = !chMode;
+        document.body.classList.toggle('has-subhud', chMode || menuMode);
+        const pad = document.querySelector('[data-game-tools]');
+        if (pad) pad.style.display = chMode || menuMode ? 'none' : '';
+        syncJoyTools();
+        if (chMode) updateChallengeHud();
+      }
+
+      function updateChallengeHud() {
+        if (!dom.chHud || !ch.stage) return;
+        const number = ch.stage.stageNumber || ch.index + 1;
+        dom.chStage.textContent = 'C' + String(number).padStart(2, '0');
+        dom.chTitle.textContent = ch.stage.title || '';
+        dom.chGoal.textContent = '目标：' + (ch.stage.goalStatement || '通过全部固定尖刺并抵达终点');
+        dom.chTime.textContent = A.Challenge.formatTime(ch.elapsed);
+        dom.chCollect.textContent = String(ch.taken.length);
+      }
+
+      function renderChallengePanel() {
+        if (!dom.chPanel) return;
+        if (!challengeAvailable()) {
+          dom.chPanel.innerHTML = '<div class="ac-challenge-panel is-empty"><p class="ac-challenge-tip">挑战数据不可用（缺失或不足 6 关）</p></div>';
+          return;
+        }
+        dom.chPanel.innerHTML = A.Challenge.stageListHtml(GAME_ID);
+        const back = document.createElement('button');
+        back.type = 'button';
+        back.className = 'ac-btn ac-btn-secondary';
+        back.textContent = '返回开始界面';
+        back.setAttribute('data-ch-back', '');
+        dom.chPanel.appendChild(back);
+      }
+
+      function openChallengePanel() {
+        if (!challengeAvailable()) {
+          A.showToast('挑战数据不可用');
+          return false;
+        }
+        mode = 'classic';
+        panelOpen = true;
+        ch.active = false;
+        ch.stage = null;
+        ch.done = true;
+        state = 'ready';
+        renderChallengePanel();
+        if (dom.chPanel) dom.chPanel.hidden = false;
+        ui.hide();
+        loop.resume();
+        pauseUi.sync();
+        syncModeUi();
+        return true;
+      }
+
+      function closeChallengePanel() {
+        panelOpen = false;
+        if (dom.chPanel) dom.chPanel.hidden = true;
+        showStart();
+        syncModeUi();
+      }
+
+      if (dom.chPanel) {
+        dom.chPanel.addEventListener('click', (event) => {
+          const target = event.target instanceof Element ? event.target : null;
+          if (!target) return;
+          const stageBtn = target.closest('[data-stage-id]');
+          if (stageBtn && !stageBtn.disabled) {
+            startChallenge(stageBtn.getAttribute('data-stage-id'));
+            return;
+          }
+          if (target.closest('[data-ch-back]')) closeChallengePanel();
         });
       }
 
+      function resetChallengeState(stage) {
+        const content = stage.content || {};
+        ch.elapsed = 0;
+        ch.offset = 0;
+        ch.distance = Number(content.distanceToFinish) || 2200;
+        ch.speed = Number(content.scrollSpeedPxSec) || 260;
+        ch.gravity = Number(content.gravity) || 2100;
+        ch.dir = content.startGravity === 'ceiling' ? -1 : 1;
+        ch.y = ch.dir === 1 ? FLOOR - PLAYER_H / 2 : CEILING + PLAYER_H / 2;
+        ch.vy = 0;
+        ch.invul = 0;
+        ch.lives = 2;
+        const lifeMatch = /lives=(\d+)/.exec(content.collision || '');
+        if (lifeMatch) ch.lives = clamp(Number(lifeMatch[1]) || 2, 1, 3);
+        ch.obstacles = (content.obstacles || []).map((o) => ({ ...o, screenX: o.x, dead: false, passed: false }));
+        ch.stars = (content.bonusStars || []).map((s, i) => ({ ...s, id: 'star' + (i + 1), taken: false, screenX: s.x }));
+        ch.taken = [];
+        ch.windows = (content.recommendedFlipWindows || []).map((w) => ({ ...w }));
+        ch.flipLog = [];
+        ch.flipCount = 0;
+        ch.hits = 0;
+        ch.done = false;
+        ch.assisted = false;
+        ch.spaceWasDown = false;
+        particles.clear();
+        updateChallengeHud();
+      }
+
+      function startChallenge(ref) {
+        if (!challengeAvailable()) {
+          A.showToast('挑战数据不可用');
+          return false;
+        }
+        const stage = A.Challenge.stage(GAME_ID, ref);
+        if (!stage) return false;
+        if (!A.Challenge.isUnlocked(GAME_ID, stage.id)) {
+          A.showToast('先通过上一关');
+          return false;
+        }
+        panelOpen = false;
+        if (dom.chPanel) dom.chPanel.hidden = true;
+        mode = 'challenge';
+        ch.active = true;
+        ch.stage = stage;
+        ch.index = challengeStagesData().findIndex((item) => item.id === stage.id);
+        ch.stageState = 'playing';
+        resetChallengeState(stage);
+        state = 'playing';
+        ui.hide();
+        loop.resume();
+        pauseUi.sync();
+        syncModeUi();
+        autosave.saveNow();
+        A.showToast('目标：' + (stage.goalStatement || '通过全部固定尖刺并抵达终点') + '。点击 / 空格翻转重力。', 3600);
+        return true;
+      }
+
+      function challengeFlip() {
+        if (!inChallenge() || state !== 'playing' || ch.done) return;
+        ch.dir *= -1;
+        ch.vy *= 0.25;
+        ch.flipCount += 1;
+        ch.flipLog.push([Math.round(ch.offset), ch.dir === 1 ? 'floor' : 'ceiling']);
+        A.Sfx.play('jump');
+        particles.emit(PLAYER_X, ch.y, {
+          count: A.reducedMotion ? 3 : 8,
+          speed: [20, 100],
+          life: [0.15, 0.35],
+          size: [1.5, 3],
+          colors: ['#9b7cff', '#ffffff'],
+        });
+      }
+
+      function challengeHit(obstacle) {
+        if (ch.invul > 0 || ch.done) return;
+        ch.hits += 1;
+        ch.lives = Math.max(0, ch.lives - 1);
+        obstacle.dead = true;
+        obstacle.passed = true;
+        ch.dir = 1;
+        ch.y = FLOOR - PLAYER_H / 2;
+        ch.vy = 0;
+        ch.invul = 1.6;
+        shake = A.reducedMotion ? 0 : 7;
+        A.Sfx.play('explode');
+        particles.emit(PLAYER_X, ch.y, {
+          count: A.reducedMotion ? 8 : 20,
+          speed: [40, 200],
+          life: [0.25, 0.6],
+          size: [2, 4],
+          colors: ['#9b7cff', '#ff5d7a', '#ffffff'],
+          gravity: 200,
+        });
+        updateChallengeHud();
+        if (ch.lives <= 0) challengeFail('生命耗尽：撞上了固定尖刺');
+        else A.showToast('被尖刺击中 · 剩余生命 ' + ch.lives + ' · 从当前位置继续', 2200);
+      }
+
+      function updateChallenge(dt) {
+        if (state !== 'playing') {
+          input.endFrame();
+          return;
+        }
+        autosave.tick(dt);
+        if (ch.done) {
+          input.endFrame();
+          return;
+        }
+        ch.elapsed += dt;
+        const spaceNow = input.isDown(' ');
+        if (input.pointer.wentDown || (spaceNow && !ch.spaceWasDown)) challengeFlip();
+        ch.spaceWasDown = spaceNow;
+        ch.invul = Math.max(0, ch.invul - dt);
+
+        ch.offset += ch.speed * dt;
+        ch.vy = clamp(ch.vy + ch.dir * ch.gravity * dt, -MAX_VY, MAX_VY);
+        ch.y += ch.vy * dt;
+        if (ch.y + PLAYER_H / 2 > FLOOR) {
+          ch.y = FLOOR - PLAYER_H / 2;
+          ch.vy = 0;
+        } else if (ch.y - PLAYER_H / 2 < CEILING) {
+          ch.y = CEILING + PLAYER_H / 2;
+          ch.vy = 0;
+        }
+
+        const hb = { x: PLAYER_X - PLAYER_W / 2 + 3, y: ch.y - PLAYER_H / 2 + 3, w: PLAYER_W - 6, h: PLAYER_H - 6 };
+        for (const o of ch.obstacles) {
+          o.screenX = o.x - ch.offset;
+          if (o.dead) continue;
+          if (!o.passed && o.x + (o.width || 42) < ch.offset + PLAYER_X) o.passed = true;
+          const box =
+            o.side === 'floor'
+              ? { x: o.screenX, y: FLOOR - o.height, w: o.width, h: o.height }
+              : { x: o.screenX, y: CEILING, w: o.width, h: o.height };
+          if (ch.invul <= 0 && A.Physics.aabbOverlap(hb, box)) {
+            challengeHit(o);
+            break;
+          }
+        }
+
+        for (const s of ch.stars) {
+          s.screenX = s.x - ch.offset;
+          if (s.taken || s.screenX < -40 || s.screenX > W + 40) continue;
+          if (Math.hypot(s.screenX - PLAYER_X, s.y - ch.y) < 26) {
+            s.taken = true;
+            ch.taken.push(s.id);
+            A.Sfx.play('bell', 3);
+          }
+        }
+        updateChallengeHud();
+
+        if (ch.offset + PLAYER_X >= ch.distance) {
+          challengeWin();
+        }
+        input.endFrame();
+      }
+
+      function challengeWin() {
+        if (!inChallenge() || ch.done) return;
+        ch.done = true;
+        ch.stageState = 'cleared';
+        state = 'cleared';
+        A.Sfx.play('perfect');
+        autosave.clear();
+        const result = { timeSec: Math.round(ch.elapsed * 10) / 10, assisted: ch.assisted === true, collectibles: ch.taken.slice() };
+        if (A.Challenge && typeof A.Challenge.markCleared === 'function') {
+          A.Challenge.markCleared(GAME_ID, ch.stage.id, result);
+        }
+        const list = challengeStagesData();
+        const next = list[ch.index + 1] || null;
+        loop.pause();
+        showOverlay({
+          title: '挑战通关！',
+          text: A.Challenge.resultHtml(ch.stage, result),
+          btn: next ? '下一关' : '返回选关',
+          onBtn: next ? () => startChallenge(next.id) : () => openChallengePanel(),
+          btn2: '重玩本关',
+          onBtn2: () => startChallenge(ch.stage.id),
+        });
+        pauseUi.sync();
+        syncModeUi();
+      }
+
+      function challengeFail(reason) {
+        if (!inChallenge() || ch.done) return;
+        ch.done = true;
+        ch.stageState = 'failed';
+        state = 'failed';
+        A.Sfx.play('over');
+        autosave.clear();
+        loop.pause();
+        showOverlay({
+          title: '挑战失败',
+          text:
+            (reason || '撞上了固定尖刺') +
+            '<br/>提示：障碍进入画面后提前一次翻转；被撞后生命 -1，仍可从当前位置继续。',
+          btn: '重试本关',
+          onBtn: () => startChallenge(ch.stage.id),
+          btn2: '返回选关',
+          onBtn2: () => openChallengePanel(),
+        });
+        pauseUi.sync();
+        syncModeUi();
+      }
+
+      function exitChallenge() {
+        if (!inChallenge()) return false;
+        panelOpen = false;
+        mode = 'classic';
+        ch.active = false;
+        ch.stage = null;
+        ch.done = true;
+        state = 'ready';
+        autosave.clear();
+        if (dom.chPanel) dom.chPanel.hidden = true;
+        loop.resume();
+        pauseUi.sync();
+        syncModeUi();
+        showStart();
+        return true;
+      }
+
+      function serializeChallenge() {
+        return {
+          elapsed: ch.elapsed,
+          offset: ch.offset,
+          dir: ch.dir,
+          y: ch.y,
+          vy: ch.vy,
+          invul: ch.invul,
+          lives: ch.lives,
+          hits: ch.hits,
+          flipCount: ch.flipCount,
+          flipLog: ch.flipLog.slice(0, 64),
+          obstacles: ch.obstacles.map((o) => ({ id: o.id, dead: !!o.dead, passed: !!o.passed })),
+          stars: ch.stars.map((s) => ({ id: s.id, taken: !!s.taken })),
+          taken: ch.taken.slice(),
+        };
+      }
+
+      function restoreChallenge(data) {
+        if (!challengeAvailable() || !data || !data.stageId || !data.challengeState) return false;
+        const stage = A.Challenge.stage(GAME_ID, data.stageId);
+        if (!stage || !A.Challenge.isUnlocked(GAME_ID, stage.id)) return false;
+        try {
+          mode = 'challenge';
+          ch.active = true;
+          ch.stage = stage;
+          ch.index = challengeStagesData().findIndex((item) => item.id === stage.id);
+          ch.stageState = 'playing';
+          resetChallengeState(stage);
+          const s = data.challengeState || {};
+          ch.elapsed = Math.max(0, Number(s.elapsed) || 0);
+          ch.offset = clamp(Number(s.offset) || 0, 0, ch.distance);
+          ch.dir = s.dir === -1 ? -1 : 1;
+          ch.y = clamp(Number(s.y) || FLOOR - PLAYER_H / 2, CEILING + PLAYER_H / 2, FLOOR - PLAYER_H / 2);
+          ch.vy = Number(s.vy) || 0;
+          ch.invul = Math.max(0, Number(s.invul) || 0);
+          ch.lives = clamp(Number(s.lives) || 2, 1, 3);
+          ch.hits = Math.max(0, Number(s.hits) || 0);
+          ch.flipCount = Math.max(0, Number(s.flipCount) || 0);
+          if (Array.isArray(s.flipLog)) {
+            ch.flipLog = s.flipLog.filter((entry) => Array.isArray(entry) && entry.length >= 2).slice(0, 64);
+          }
+          if (Array.isArray(s.obstacles)) {
+            const byId = Object.create(null);
+            s.obstacles.forEach((item) => {
+              if (item && typeof item.id === 'string') byId[item.id] = item;
+            });
+            ch.obstacles.forEach((o) => {
+              const item = byId[o.id];
+              if (item) {
+                o.dead = !!item.dead;
+                o.passed = !!item.passed;
+              }
+            });
+          }
+          if (Array.isArray(s.stars)) {
+            const taken = new Set(s.stars.filter((item) => item && item.taken).map((item) => item.id));
+            ch.stars.forEach((star) => {
+              star.taken = taken.has(star.id);
+            });
+          }
+          ch.taken = Array.isArray(s.taken) ? s.taken.filter((id) => typeof id === 'string') : [];
+          state = 'playing';
+          recordSaved = false;
+          syncModeUi();
+          return true;
+        } catch (err) {
+          mode = 'classic';
+          return false;
+        }
+      }
+
+      /** 仅 #test：固定 1/60 步长驱动同一份 updateChallenge 物理，按推荐窗口早沿自动翻转，逐关验证可达性。 */
+      function challengeReplayFlip(ref) {
+        const started = startChallenge(ref);
+        if (!started) return null;
+        const windows = ch.windows.map((w) => ({ x: Math.max(0, w.xCenter - w.tolerancePx + 8), toward: w.toward }));
+        let wi = 0;
+        let frames = 0;
+        const maxFrames = 60 * 30;
+        for (; frames < maxFrames && state === 'playing'; frames += 1) {
+          while (wi < windows.length && ch.offset >= windows[wi].x) {
+            const targetDir = windows[wi].toward === 'ceiling' ? -1 : 1;
+            if (ch.dir !== targetDir) challengeFlip();
+            wi += 1;
+          }
+          updateChallenge(1 / 60);
+        }
+        return {
+          stageId: ch.stage ? ch.stage.id : null,
+          cleared: ch.stageState === 'cleared',
+          frames,
+          seconds: Math.round((frames / 60) * 10) / 10,
+          lives: ch.lives,
+          hits: ch.hits,
+          flips: ch.flipCount,
+          windows: windows.length,
+          atWindowEdgeFirst: windows.length > 0,
+        };
+      }
+      function drawChallengePlayer() {
+        if (ch.invul > 0 && Math.floor(ch.invul * 12) % 2 === 0) return;
+        ctx.save();
+        ctx.translate(PLAYER_X, ch.y);
+        const sq = 1 + Math.max(0, 0) * 0.18;
+        ctx.scale(1 / sq, sq);
+        ctx.fillStyle = '#e8e2ff';
+        A.draw.roundRect(ctx, -PLAYER_W / 2, -PLAYER_H / 2, PLAYER_W, PLAYER_H, 7);
+        ctx.fill();
+        ctx.strokeStyle = '#9b7cff';
+        ctx.lineWidth = 2;
+        ctx.stroke();
+        ctx.fillStyle = '#2a1f52';
+        const eyeY = ch.dir > 0 ? 2 : -2;
+        ctx.beginPath();
+        ctx.arc(-5, eyeY, 2.2, 0, TAU);
+        ctx.fill();
+        ctx.beginPath();
+        ctx.arc(5, eyeY, 2.2, 0, TAU);
+        ctx.fill();
+        ctx.restore();
+      }
+
+      function renderChallenge() {
+        stage.beginFrame();
+        ctx.save();
+        if (shake > 0) ctx.translate(rand(-shake, shake), rand(-shake, shake));
+        const bg = ctx.createLinearGradient(0, 0, 0, H);
+        bg.addColorStop(0, '#0d0a24');
+        bg.addColorStop(0.5, '#1a1440');
+        bg.addColorStop(1, '#0d0a24');
+        ctx.fillStyle = bg;
+        ctx.fillRect(0, 0, W, H);
+
+        const scroll = ch.offset * 0.25;
+        for (let i = 0; i < 36; i++) {
+          const x = ((i * 89 + scroll * (i % 3 + 1)) % (W + 20)) - 10;
+          const y = 60 + ((i * 137) % (H - 120));
+          ctx.fillStyle = i % 4 === 0 ? 'rgba(155,124,255,0.5)' : 'rgba(147,160,200,0.28)';
+          ctx.fillRect(x, y, 2, 2);
+        }
+
+        ctx.fillStyle = '#241a4d';
+        ctx.fillRect(0, 0, W, CEILING);
+        ctx.fillStyle = '#6a4fd0';
+        ctx.fillRect(0, CEILING - 4, W, 4);
+        ctx.fillStyle = '#241a4d';
+        ctx.fillRect(0, FLOOR, W, H - FLOOR);
+        ctx.fillStyle = '#6a4fd0';
+        ctx.fillRect(0, FLOOR, W, 4);
+
+        ctx.fillStyle = 'rgba(155,124,255,0.45)';
+        for (let x = ((ch.offset * 0.5) % 28) - 28; x < W; x += 28) {
+          ctx.beginPath();
+          ctx.moveTo(x, FLOOR);
+          ctx.lineTo(x + 9, FLOOR - 12);
+          ctx.lineTo(x + 18, FLOOR);
+          ctx.closePath();
+          ctx.fill();
+          ctx.beginPath();
+          ctx.moveTo(x, CEILING);
+          ctx.lineTo(x + 9, CEILING + 12);
+          ctx.lineTo(x + 18, CEILING);
+          ctx.closePath();
+          ctx.fill();
+        }
+
+        /* 障碍 + 预告（telegraphLeadPx 内高亮，至少提前 350 逻辑距离可见） */
+        for (const o of ch.obstacles) {
+          if (o.dead) continue;
+          const sx = o.x - ch.offset;
+          if (sx > W + 80 || sx + o.width < -20) continue;
+          const lead = typeof o.telegraphLeadPx === 'number' ? o.telegraphLeadPx : 360;
+          const warning = sx <= W + lead;
+          const y = o.side === 'floor' ? FLOOR - o.height : CEILING;
+          if (warning) {
+            ctx.fillStyle = 'rgba(255,93,122,0.16)';
+            ctx.fillRect(sx, y, o.width, o.height);
+          }
+          const g = ctx.createLinearGradient(sx, 0, sx + o.width, 0);
+          g.addColorStop(0, warning ? '#ff5d7a' : '#7a3d5c');
+          g.addColorStop(1, warning ? '#9b7cff' : '#5a4a86');
+          ctx.fillStyle = g;
+          A.draw.roundRect(ctx, sx, y, o.width, o.height, 5);
+          ctx.fill();
+          ctx.fillStyle = 'rgba(255,255,255,0.28)';
+          for (let k = 0; k < o.height; k += 14) ctx.fillRect(sx + 4, y + k + 4, o.width - 8, 4);
+        }
+
+        for (const s of ch.stars) {
+          if (s.taken) continue;
+          const sx = s.x - ch.offset;
+          if (sx < -20 || sx > W + 20) continue;
+          ctx.save();
+          ctx.translate(sx, s.y);
+          ctx.rotate(ch.offset * 0.04);
+          ctx.fillStyle = '#ffd23f';
+          ctx.beginPath();
+          for (let k = 0; k < 5; k += 1) {
+            const ang = -Math.PI / 2 + (k * TAU) / 5;
+            const px = Math.cos(ang) * 9;
+            const py = Math.sin(ang) * 9;
+            if (k === 0) ctx.moveTo(px, py);
+            else ctx.lineTo(px, py);
+            const ang2 = ang + TAU / 10;
+            ctx.lineTo(Math.cos(ang2) * 4, Math.sin(ang2) * 4);
+          }
+          ctx.closePath();
+          ctx.fill();
+          ctx.restore();
+        }
+
+        /* 终点 marker */
+        const finishX = ch.distance - ch.offset;
+        if (finishX < W + 40) {
+          ctx.strokeStyle = '#5ad1a0';
+          ctx.lineWidth = 4;
+          ctx.beginPath();
+          ctx.moveTo(finishX, CEILING);
+          ctx.lineTo(finishX, FLOOR);
+          ctx.stroke();
+          A.draw.label(ctx, '终点', finishX, CEILING - 12, { font: 'bold 12px system-ui', color: '#5ad1a0' });
+        }
+
+        particles.draw(ctx);
+        drawChallengePlayer();
+
+        A.draw.label(ctx, Math.floor(ch.offset) + ' / ' + ch.distance, 12, 24, { align: 'left', font: 'bold 14px system-ui', color: '#ffd23f' });
+        A.draw.label(ctx, ch.dir > 0 ? '重力 ↓' : '重力 ↑', W - 12, 24, { align: 'right', font: 'bold 12px system-ui', color: '#9b7cff' });
+        for (let i = 0; i < ch.lives; i += 1) {
+          ctx.fillStyle = '#ff5d7a';
+          ctx.beginPath();
+          ctx.arc(20 + i * 17, 48, 5, 0, TAU);
+          ctx.fill();
+        }
+        A.draw.label(ctx, ch.flipCount + ' 次翻转', W / 2, 48, { font: '12px system-ui', color: '#93a0c8' });
+        ctx.restore();
+      }
       function flip() {
         if (state !== 'playing') return;
         player.gravityDir *= -1;
@@ -352,6 +991,10 @@
       function update(dt) {
         particles.update(dt);
         shake = Math.max(0, shake - dt * 26);
+        if (mode === 'challenge') {
+          updateChallenge(dt);
+          return;
+        }
         if (state !== 'playing') {
           input.endFrame();
           return;
@@ -447,7 +1090,7 @@
 
       function serialize() {
         if (state !== 'playing' && state !== 'paused') return null;
-        return {
+        const classicState = {
           player: { y: player.y, vy: player.vy, gravityDir: player.gravityDir, invul: player.invul },
           obstacles: obstacles.map((o) => ({ x: o.x, w: o.w, h: o.h, side: o.side, passed: o.passed })),
           coins: coins.map((c) => ({ x: c.x, y: c.y, spin: c.spin })),
@@ -461,9 +1104,25 @@
           magnetTimer,
           shortRun,
         };
+        if (mode === 'challenge') {
+          return {
+            mode: 'challenge',
+            stageId: ch.stage ? ch.stage.id : null,
+            challengeState: serializeChallenge(),
+            classic: classicState,
+          };
+        }
+        return { mode: 'classic', ...classicState };
       }
 
+      /** 存档恢复：mode 缺失 → 经典（0.8 旧档兼容）；mode:'challenge' → 挑战局内恢复。 */
       function restore(data) {
+        if (!data || typeof data !== 'object') return false;
+        if (data.mode === 'challenge') return restoreChallenge(data);
+        return restoreClassic(data);
+      }
+
+      function restoreClassic(data) {
         if (!data || !data.player || !Array.isArray(data.obstacles)) return false;
         try {
           reset();
@@ -506,7 +1165,10 @@
 
       const autosave = A.createRunAutosave('gravity-flip', serialize, {
         every: 4,
-        meta: () => ({ score: Math.floor(dist), summary: `${Math.floor(dist)}m · 生命 ${lives}` }),
+        meta: () =>
+          mode === 'challenge' && ch.stage
+            ? { score: Math.floor(ch.offset), summary: `挑战 ${ch.stage.id} · ${Math.floor(ch.offset)}px · 生命 ${ch.lives}` }
+            : { score: Math.floor(dist), summary: `${Math.floor(dist)}m · 生命 ${lives}` },
       });
 
       function drawPlayer() {
@@ -539,7 +1201,32 @@
         ctx.restore();
       }
 
+      function renderLobby() {
+        stage.beginFrame();
+        const bg = ctx.createLinearGradient(0, 0, 0, H);
+        bg.addColorStop(0, '#0d0a24');
+        bg.addColorStop(1, '#1a1440');
+        ctx.fillStyle = bg;
+        ctx.fillRect(0, 0, W, H);
+        ctx.fillStyle = '#241a4d';
+        ctx.fillRect(0, 0, W, CEILING);
+        ctx.fillRect(0, FLOOR, W, H - FLOOR);
+        ctx.fillStyle = '#6a4fd0';
+        ctx.fillRect(0, CEILING - 4, W, 4);
+        ctx.fillRect(0, FLOOR, W, 4);
+        A.draw.label(ctx, '影之试炼 · 6 关挑战', W / 2, H * 0.28, { font: 'bold 22px system-ui', color: '#e8e2ff' });
+        A.draw.label(ctx, '选择关卡 · 固定障碍序列 · 真实重力翻转', W / 2, H * 0.28 + 30, { font: '13px system-ui', color: '#93a0c8' });
+      }
+
       function render() {
+        if (mode === 'classic' && panelOpen) {
+          renderLobby();
+          return;
+        }
+        if (mode === 'challenge') {
+          renderChallenge();
+          return;
+        }
         stage.beginFrame();
         ctx.save();
         if (shake > 0) ctx.translate(rand(-shake, shake), rand(-shake, shake));
@@ -664,10 +1351,12 @@
 
       reset();
       state = 'ready';
+      syncModeUi();
       if (location.hash === '#test') {
         window.__arcadeTest = {
           info() {
             return {
+              mode,
               state,
               dist,
               lives,
@@ -712,6 +1401,90 @@
             syncHud();
             return dist;
           },
+          /* ---- 0.9 挑战模式测试钩子（契约 §5） ---- */
+          challengeStages() {
+            const progress = A.Challenge && A.Challenge.progress ? A.Challenge.progress(GAME_ID) : { cleared: [], best: {} };
+            return challengeStagesData().map((stage) => ({
+              id: stage.id,
+              stageNumber: stage.stageNumber,
+              title: stage.title,
+              unlocked: !!(A.Challenge && A.Challenge.isUnlocked && A.Challenge.isUnlocked(GAME_ID, stage.id)),
+              cleared: progress.cleared.indexOf(stage.id) !== -1,
+              best: progress.best[stage.id] || null,
+            }));
+          },
+          startChallenge(ref) {
+            return startChallenge(ref);
+          },
+          challengeInfo() {
+            return {
+              mode,
+              stageId: ch.stage ? ch.stage.id : null,
+              stageIndex: ch.index,
+              state,
+              elapsedSec: Math.round(ch.elapsed * 10) / 10,
+              objective: ch.stage ? ch.stage.goalStatement : null,
+              cleared: ch.stageState === 'cleared',
+              failed: ch.stageState === 'failed',
+              collectibles: ch.taken.slice(),
+              assisted: ch.assisted,
+              lives: ch.lives,
+              distance: Math.round(ch.offset),
+              totalDistance: ch.distance,
+              gravityDir: ch.dir,
+              flipCount: ch.flipCount,
+              hits: ch.hits,
+              panelOpen: !!(dom.chPanel && !dom.chPanel.hidden),
+              overlay: {
+                visible: ui.visible,
+                title: dom.ovTitle ? dom.ovTitle.textContent : '',
+                btn: dom.ovBtn ? dom.ovBtn.textContent : '',
+                btn2: dom.ovBtn2 && !dom.ovBtn2.hidden ? dom.ovBtn2.textContent : null,
+              },
+            };
+          },
+          stageObservable() {
+            return {
+              stageId: ch.stage ? ch.stage.id : null,
+              offset: Math.round(ch.offset * 100) / 100,
+              distance: ch.distance,
+              speed: ch.speed,
+              player: { y: Math.round(ch.y * 100) / 100, vy: Math.round(ch.vy * 100) / 100, gravityDir: ch.dir },
+              lives: ch.lives,
+              invul: Math.round(ch.invul * 100) / 100,
+              obstacles: ch.obstacles.map((o) => ({
+                id: o.id,
+                worldX: o.x,
+                screenX: Math.round((o.x - ch.offset) * 100) / 100,
+                side: o.side,
+                height: o.height,
+                width: o.width,
+                dead: !!o.dead,
+                passed: !!o.passed,
+                telegraph: o.x - ch.offset <= (o.telegraphLeadPx || 360) + W,
+              })),
+              stars: ch.stars.map((s) => ({ id: s.id, worldX: s.x, y: s.y, taken: !!s.taken, screenX: Math.round((s.x - ch.offset) * 100) / 100 })),
+              windows: ch.windows,
+              flipLog: ch.flipLog.slice(),
+            };
+          },
+          forceStageClear(assisted) {
+            if (mode !== 'challenge' || state !== 'playing') return false;
+            ch.assisted = assisted === true;
+            challengeWin();
+            return true;
+          },
+          forceStageFail(reason) {
+            if (mode !== 'challenge' || state !== 'playing') return false;
+            challengeFail(reason || '测试触发失败');
+            return true;
+          },
+          exitChallenge() {
+            return exitChallenge();
+          },
+          challengeReplayFlip(ref) {
+            return challengeReplayFlip(ref);
+          },
         };
       }
       const saved = autosave.load();
@@ -721,6 +1494,7 @@
           onResume: () => {
             if (restore(saved.data)) {
               state = 'playing';
+              syncModeUi();
               syncJoyTools();
               ui.hide();
               loop.resume();

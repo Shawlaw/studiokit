@@ -7,8 +7,38 @@
   <meta name="theme-color" content="#0b1020" />
   <link rel="stylesheet" href="../../../shared/site.css" />
   <link rel="stylesheet" href="../arcade.css" />
+  <style>
+    /* 0.9 挑战模式：选关层 / 浮动提示只作用于本页，不改共享样式。 */
+    .challenge-layer {
+      position: absolute;
+      inset: 0;
+      z-index: 5;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      padding: 12px;
+      background: rgba(7, 11, 24, 0.82);
+      overflow-y: auto;
+    }
+    .challenge-layer[hidden] { display: none; }
+    .challenge-layer .ac-challenge-panel { width: min(360px, 100%); max-height: calc(100% - 4px); overflow-y: auto; }
+    .challenge-layer .ac-challenge-tip { margin: 0 0 8px; }
+    .challenge-back { display: block; width: 100%; min-height: 44px; margin-top: 8px; }
+    .ch-tip-float {
+      position: absolute;
+      left: 8px;
+      right: 8px;
+      top: 8px;
+      z-index: 3;
+      margin: 0;
+      max-width: none;
+      pointer-events: none;
+    }
+    .ch-tip-float[hidden] { display: none; }
+  </style>
   <script src="../../../shared/site-shell.js" defer></script>
   <script src="../engine.js"></script>
+  <script src="../challenge/merge-2048.js"></script>
   <title>2048 合成 · 街机厅 · StudioKit</title>
 </head>
 <body class="arcade-body has-undo" data-studiokit-app="arcade" data-studiokit-app-title="街机厅 Arcade" style="--ac-accent:#f2b33d; --card-accent:#f2b33d">
@@ -18,8 +48,9 @@
       <a class="ac-back" href="../index.html" aria-label="返回街机厅"><span class="ac-back-icon" aria-hidden="true">‹</span><span class="ac-back-label">街机厅</span></a>
       <h1 class="game-title">🔢 2048 合成</h1>
       <div class="game-hud">
-        <span>分数 <strong data-hud-score>0</strong></span>
-        <span class="hud-high-wrap">最高 <strong data-hud-high>0</strong></span>
+        <span data-hud-classic>分数 <strong data-hud-score>0</strong></span>
+        <span class="hud-high-wrap" data-hud-classic>最高 <strong data-hud-high>0</strong></span>
+        <span class="ac-challenge-hud" data-ch-hud hidden></span>
       </div>
       <button type="button" class="ac-icon-btn" data-undo aria-label="撤销一步" title="撤销一步（Z）">↶</button>
       <button type="button" class="ac-icon-btn" data-pause aria-label="暂停游戏" title="暂停游戏（P / Esc）">⏸</button>
@@ -35,6 +66,10 @@
             <button type="button" class="ac-btn" data-ov-btn>开始游戏</button>
             <button type="button" class="ac-btn ac-btn-secondary" data-ov-btn2 hidden>重新开始</button>
           </div>
+        </div>
+        <div class="ac-challenge-tip ch-tip-float" data-ch-tip hidden></div>
+        <div class="challenge-layer" data-ch-layer hidden>
+          <div class="ac-challenge-panel" data-ch-panel hidden></div>
         </div>
       </div>
     </div>
@@ -69,6 +104,11 @@
         ovBtn2: document.querySelector('[data-ov-btn2]'),
         hudScore: document.querySelector('[data-hud-score]'),
         hudHigh: document.querySelector('[data-hud-high]'),
+        hudClassic: document.querySelectorAll('[data-hud-classic]'),
+        chHud: document.querySelector('[data-ch-hud]'),
+        chLayer: document.querySelector('[data-ch-layer]'),
+        chPanel: document.querySelector('[data-ch-panel]'),
+        chTip: document.querySelector('[data-ch-tip]'),
         pause: document.querySelector('[data-pause]'),
         undo: document.querySelector('[data-undo]'),
         mute: document.querySelector('[data-mute]'),
@@ -94,6 +134,9 @@
       const TOOL_CAPS = { hammer: 2, upgrade: 1 };
       const HAMMER_MAX_VALUE = 64;
       const UPGRADE_MAX_VALUE = 256;
+      /* 0.9 挑战模式：固定盘面 + 禁止随机新块 + 有效步数上限（数据来自 ../challenge/merge-2048.js）。 */
+      const CHALLENGE_GAME_ID = 'merge-2048';
+      const CH_TIP_SEC = 3;
       const tools = { hammer: TOOL_START.hammer, upgrade: TOOL_START.upgrade };
       let armedTool = null;
 
@@ -111,6 +154,19 @@
       let swipeStart = null;
       let keyWasDown = {};
       let lastBest = 0;
+      /* 0.9 挑战模式状态：mode==='classic' 时这些字段不参与经典逻辑。 */
+      let mode = 'classic';
+      let chStage = null;
+      let chStageId = null;
+      let chElapsed = 0;
+      let chAssisted = false;
+      let chMoves = 0;
+      let chTarget = 4;
+      let chMaxMoves = 1;
+      let chUndoAllowed = true;
+      let chUndoUsed = 0;
+      let chTipTimer = 0;
+      let chLastHudSecond = -1;
 
       let high = A.Progress.get('merge-2048').high;
       dom.hudHigh.textContent = String(high);
@@ -175,6 +231,11 @@
       }
 
       function startGame() {
+        mode = 'classic';
+        chStage = null;
+        chTipTimer = 0;
+        if (dom.chLayer) dom.chLayer.hidden = true;
+        if (dom.chPanel) dom.chPanel.hidden = true;
         autosave.clear();
         reset();
         state = 'playing';
@@ -182,6 +243,8 @@
         loop.resume();
         pauseUi.sync();
         joyTools.sync();
+        syncChallengeHud();
+        updateChallengeTip();
         autosave.saveNow();
       }
 
@@ -234,17 +297,263 @@
         state = 'paused';
         joyTools.sync();
         autosave.saveNow();
-        ui.show({ title: '已暂停', text: '数字先停一停。<br/>局内进度已保存。', btn: '继续', onBtn: resumeGame });
+        const paused = { title: '已暂停', text: '数字先停一停。<br/>局内进度已保存。', btn: '继续', onBtn: resumeGame };
+        if (mode === 'challenge') {
+          paused.btn2 = '退出挑战';
+          paused.onBtn2 = exitChallenge;
+        }
+        ui.show(paused);
         pauseUi.sync();
       }
 
       function showStart() {
+        const dataReady = challengeDataReady();
         ui.show({
           title: '2048 合成',
           text: '滑动 / 方向键移动所有方块。<br/>同数相撞合并，目标 2048<br/>一步可撤销 · 达成后仍可继续挑战',
           btn: '开始游戏',
           onBtn: startGame,
+          btn2: dataReady ? '挑战 6 关' : undefined,
+          onBtn2: dataReady ? openChallengePanel : undefined,
         });
+        syncChallengeHud();
+      }
+
+      /* ---------- 0.9 挑战模式（C01–C06：固定盘面 + 禁随机新块 + 目标块） ---------- */
+      function challengeStagesData() {
+        return A.Challenge && typeof A.Challenge.stages === 'function' ? A.Challenge.stages(CHALLENGE_GAME_ID) : [];
+      }
+      function challengeDataReady() {
+        return challengeStagesData().length === 6;
+      }
+      function stageLabel(stage) {
+        return stage ? 'C' + String(stage.stageNumber || 0).padStart(2, '0') : 'C--';
+      }
+      function syncChallengeHud() {
+        const inChallenge = mode === 'challenge';
+        dom.hudClassic.forEach((el) => {
+          el.hidden = inChallenge;
+        });
+        dom.chHud.hidden = !inChallenge;
+        if (!inChallenge) return;
+        if (!chStage) {
+          dom.chHud.textContent = '';
+          return;
+        }
+        dom.chHud.innerHTML =
+          '<strong>' + stageLabel(chStage) + ' ' + chStage.title + '</strong>' +
+          '<span>目标 ' + chTarget + ' · 步数 ' + chMoves + '/' + chMaxMoves + '</span>' +
+          '<span>用时 ' + A.Challenge.formatTime(chElapsed) + '</span>' +
+          '<span>撤销 ' + (chUndoAllowed ? chUndoUsed + ' 次' : '不可用') + '</span>';
+      }
+      function updateChallengeTip() {
+        if (!dom.chTip) return;
+        if (mode !== 'challenge' || !chStage || chTipTimer <= 0) {
+          dom.chTip.hidden = true;
+          return;
+        }
+        dom.chTip.hidden = false;
+        dom.chTip.innerHTML =
+          '<strong>' + stageLabel(chStage) + ' ' + chStage.title + '</strong> · ' + chStage.goalStatement +
+          '<br/>操作：方向键 / 滑动移动。目标方块 ' + chTarget + '，最多 ' + chMaxMoves + ' 步有效移动（无随机新块）。';
+      }
+      function renderChallengePanel() {
+        if (!dom.chPanel) return;
+        dom.chPanel.innerHTML = '';
+        const stages = challengeStagesData();
+        if (!stages.length) {
+          dom.chPanel.classList.add('is-empty');
+          const tip = document.createElement('p');
+          tip.className = 'ac-challenge-tip';
+          tip.textContent = '挑战数据不可用';
+          dom.chPanel.appendChild(tip);
+          return;
+        }
+        dom.chPanel.classList.remove('is-empty');
+        const holder = document.createElement('div');
+        holder.innerHTML = A.Challenge.stageListHtml(CHALLENGE_GAME_ID);
+        const inner = holder.firstElementChild;
+        if (inner) {
+          inner.classList.remove('ac-challenge-panel');
+          while (inner.firstChild) dom.chPanel.appendChild(inner.firstChild);
+        }
+        const back = document.createElement('button');
+        back.type = 'button';
+        back.className = 'ac-btn ac-btn-secondary challenge-back';
+        back.textContent = '返回';
+        back.addEventListener('click', closeChallengePanel);
+        dom.chPanel.appendChild(back);
+        dom.chPanel.querySelectorAll('.ac-stage-btn[data-stage-id]').forEach((btn) => {
+          btn.addEventListener('click', () => startChallenge(btn.dataset.stageId));
+        });
+      }
+      function openChallengePanel() {
+        if (!dom.chLayer || !dom.chPanel) return false;
+        ui.hide();
+        mode = 'classic';
+        chStage = null;
+        state = 'ready';
+        loop.resume();
+        renderChallengePanel();
+        dom.chLayer.hidden = false;
+        dom.chPanel.hidden = false;
+        syncChallengeHud();
+        pauseUi.sync();
+        joyTools.sync();
+        return true;
+      }
+      function closeChallengePanel() {
+        if (dom.chLayer) dom.chLayer.hidden = true;
+        if (dom.chPanel) dom.chPanel.hidden = true;
+        state = 'ready';
+        showStart();
+        syncChallengeHud();
+        pauseUi.sync();
+        joyTools.sync();
+      }
+      function exitChallenge() {
+        autosave.clear();
+        mode = 'classic';
+        chStage = null;
+        state = 'ready';
+        reset();
+        openChallengePanel();
+        syncChallengeHud();
+      }
+      function startChallenge(ref) {
+        if (!A.Challenge || typeof A.Challenge.stage !== 'function') return false;
+        const stage = A.Challenge.stage(CHALLENGE_GAME_ID, ref);
+        if (!stage || !stage.content) return false;
+        if (!A.Challenge.isUnlocked(CHALLENGE_GAME_ID, stage.id)) {
+          A.showToast('前一关通关后解锁');
+          return false;
+        }
+        const content = stage.content;
+        const initial = content.initialBoard;
+        if (!Array.isArray(initial) || initial.length !== N || initial.some((row) => !Array.isArray(row) || row.length !== N)) return false;
+        const win = content.win && typeof content.win === 'object' ? content.win : {};
+        mode = 'challenge';
+        chStage = stage;
+        chStageId = stage.id;
+        chElapsed = 0;
+        chAssisted = false;
+        chMoves = 0;
+        chTarget = Math.max(4, Math.floor(Number(win.anyTileAtLeast) || 4));
+        chMaxMoves = Math.max(1, Math.floor(Number(content.maxValidMoves) || 1));
+        chUndoAllowed = content.undoAllowed !== false;
+        chUndoUsed = 0;
+        chTipTimer = CH_TIP_SEC;
+        chLastHudSecond = -1;
+        autosave.clear();
+        board = emptyBoard();
+        nextId = 1;
+        for (let r = 0; r < N; r += 1) {
+          for (let c = 0; c < N; c += 1) {
+            const value = Number(initial[r][c]) || 0;
+            if (value >= 2 && (value & (value - 1)) === 0) board[r][c] = { id: nextId++, value, r, c, pr: r, pc: c, anim: 1, pop: 0 };
+          }
+        }
+        score = 0;
+        moves = 0;
+        won = false;
+        winBonusClaimed = false;
+        undoStack = [];
+        moveLock = 0;
+        swipeStart = null;
+        keyWasDown = {};
+        tools.hammer = TOOL_START.hammer;
+        tools.upgrade = TOOL_START.upgrade;
+        armedTool = null;
+        recordSaved = true; /* 挑战不写 progress 最高分 / Playtime 轮次 */
+        state = 'playing';
+        if (dom.chLayer) dom.chLayer.hidden = true;
+        if (dom.chPanel) dom.chPanel.hidden = true;
+        ui.hide();
+        loop.resume();
+        updateChallengeTip();
+        syncChallengeHud();
+        syncHud();
+        joyTools.sync();
+        pauseUi.sync();
+        autosave.saveNow();
+        return true;
+      }
+      function challengeWinReached() {
+        return bestTile() >= chTarget;
+      }
+      function challengeHasLegalMove() {
+        return !isGameOver();
+      }
+      function challengeClear() {
+        if (state === 'cleared') return;
+        state = 'cleared';
+        armedTool = null;
+        autosave.clear();
+        const result = { timeSec: Math.round(chElapsed * 10) / 10, assisted: chAssisted, collectibles: [] };
+        A.Challenge.markCleared(CHALLENGE_GAME_ID, chStageId, result);
+        A.Sfx.play('perfect');
+        loop.pause();
+        const stages = challengeStagesData();
+        const index = stages.findIndex((s) => s.id === chStageId);
+        const isLast = index < 0 || index >= stages.length - 1;
+        ui.show({
+          title: '关卡完成',
+          text: A.Challenge.resultHtml(chStage, result),
+          btn: isLast ? '返回选关' : '下一关',
+          onBtn: isLast ? openChallengePanel : () => startChallenge(stages[index + 1].id),
+          btn2: '重玩本关',
+          onBtn2: () => startChallenge(chStageId),
+        });
+        chTipTimer = 0;
+        updateChallengeTip();
+        syncChallengeHud();
+        pauseUi.sync();
+        joyTools.sync();
+      }
+      function challengeFail(reason) {
+        if (state === 'over' || state === 'cleared') return;
+        state = 'over';
+        armedTool = null;
+        A.Sfx.play('over');
+        autosave.clear();
+        loop.pause();
+        const goal = chStage ? chStage.goalStatement : '';
+        ui.show({
+          title: '挑战失败',
+          text:
+            `<span class="ac-score">${chMoves}/${chMaxMoves} 步</span>` +
+            (chStage ? stageLabel(chStage) + ' ' + chStage.title + '<br/>' : '') +
+            (reason || '目标没有达成') +
+            '<br/>目标：' + goal +
+            '<br/>可以重试本关，也可以先回选关。',
+          btn: '重试本关',
+          onBtn: () => startChallenge(chStageId),
+          btn2: '返回选关',
+          onBtn2: openChallengePanel,
+        });
+        chTipTimer = 0;
+        updateChallengeTip();
+        syncChallengeHud();
+        pauseUi.sync();
+        joyTools.sync();
+      }
+      /* 挑战每步之后的统一判定：达标 → 通关；步数用完/无合法移动 → 失败。 */
+      function afterChallengeMove() {
+        syncHud();
+        syncChallengeHud();
+        if (challengeWinReached()) {
+          challengeClear();
+          return true;
+        }
+        if (chMoves >= chMaxMoves) {
+          challengeFail('有效步数用完了');
+          return true;
+        }
+        if (!challengeHasLegalMove()) {
+          challengeFail('棋盘已经没有可移动的方向');
+          return true;
+        }
+        return false;
       }
 
       function restoreToolCounts(value) {
@@ -280,12 +589,30 @@
           armedTool,
           winBonusClaimed,
           undo: undoStack.slice(-3),
+          /* 0.9 挑战：mode 缺失时 restore 按经典恢复（旧档安全）。 */
+          mode,
+          stageId: mode === 'challenge' ? chStageId : null,
+          challenge:
+            mode === 'challenge'
+              ? {
+                  moves: chMoves,
+                  target: chTarget,
+                  maxMoves: chMaxMoves,
+                  elapsed: chElapsed,
+                  assisted: chAssisted,
+                  undoAllowed: chUndoAllowed,
+                  undoUsed: chUndoUsed,
+                }
+              : null,
         };
       }
 
       function restore(data) {
         if (!data || !Array.isArray(data.board) || data.board.length !== N) return false;
         try {
+          /* 旧档没有 mode：一律按经典恢复；先切经典，避免 reset() 触发挑战逻辑。 */
+          mode = 'classic';
+          chStage = null;
           reset();
           const values = data.board;
           if (values.some((row) => !Array.isArray(row) || row.length !== N)) return false;
@@ -308,8 +635,31 @@
           armedTool = (data.armedTool === 'hammer' || data.armedTool === 'upgrade') && tools[data.armedTool] > 0 ? data.armedTool : null;
           recordSaved = false;
           state = 'playing';
+          /* 0.9 挑战存档恢复：同关同盘面同步数继续。 */
+          if (data.mode === 'challenge' && data.stageId && A.Challenge && typeof A.Challenge.stage === 'function') {
+            const stage = A.Challenge.stage(CHALLENGE_GAME_ID, data.stageId);
+            if (stage && stage.content) {
+              const c = data.challenge && typeof data.challenge === 'object' ? data.challenge : {};
+              const win = stage.content.win && typeof stage.content.win === 'object' ? stage.content.win : {};
+              mode = 'challenge';
+              chStage = stage;
+              chStageId = stage.id;
+              chMoves = clamp(Math.floor(Number(c.moves) || 0), 0, 99);
+              chTarget = Math.max(4, Math.floor(Number(c.target) || Number(win.anyTileAtLeast) || 4));
+              chMaxMoves = Math.max(1, Math.floor(Number(c.maxMoves) || Number(stage.content.maxValidMoves) || 1));
+              chElapsed = clamp(Number(c.elapsed) || 0, 0, 36000);
+              chAssisted = !!c.assisted;
+              chUndoAllowed = c.undoAllowed !== false;
+              chUndoUsed = clamp(Math.floor(Number(c.undoUsed) || 0), 0, 99);
+              chTipTimer = 0;
+              chLastHudSecond = Math.floor(chElapsed);
+              recordSaved = true; /* 挑战不写最高分/轮次 */
+            }
+          }
           joyTools.sync();
           syncHud();
+          syncChallengeHud();
+          updateChallengeTip();
           return true;
         } catch (err) {
           return false;
@@ -318,7 +668,10 @@
 
       const autosave = A.createRunAutosave('merge-2048', serialize, {
         every: 3,
-        meta: () => ({ score, summary: `得分 ${score} · ${moves} 步 · 最大 ${bestTile()}` }),
+        meta: () =>
+          mode === 'challenge' && chStage
+            ? { score: chElapsed, summary: `挑战 ${stageLabel(chStage)} ${chStage.title} · ${chMoves}/${chMaxMoves} 步` }
+            : { score, summary: `得分 ${score} · ${moves} 步 · 最大 ${bestTile()}` },
       });
 
       function useTool(id) {
@@ -374,7 +727,15 @@
         syncHud();
         joyTools.sync();
         autosave.saveNow();
-        if (isGameOver()) finish(false);
+        if (mode === 'challenge') {
+          /* 挑战里使用限量道具 = 辅助成绩（仍可通关，结算显示「辅助」）。 */
+          chAssisted = true;
+          syncChallengeHud();
+          if (challengeWinReached()) challengeClear();
+          else if (!challengeHasLegalMove()) challengeFail('棋盘已经没有可移动的方向');
+        } else if (isGameOver()) {
+          finish(false);
+        }
         return true;
       }
 
@@ -455,11 +816,19 @@
 
         if (!moved) {
           board = newBoard;
-          if (isGameOver()) finish(false);
+          if (mode !== 'challenge' && isGameOver()) finish(false);
           return false;
         }
         pushUndo(before);
         board = newBoard;
+        if (mode === 'challenge') {
+          /* 挑战：只统计有效移动，不生成随机新块，按目标/步数判定。 */
+          chMoves += 1;
+          moveLock = 0.09;
+          A.Sfx.play('land');
+          afterChallengeMove();
+          return true;
+        }
         moves += 1;
         moveLock = 0.09;
         spawnTile();
@@ -485,6 +854,7 @@
 
       function undo() {
         if (state !== 'playing' || !undoStack.length) return;
+        if (mode === 'challenge' && !chUndoAllowed) return;
         const snap = undoStack.pop();
         board = emptyBoard();
         nextId = 1;
@@ -495,12 +865,19 @@
           }
         }
         score = Math.max(0, Number(snap.score) || 0);
-        moves = Math.max(0, Number(snap.moves) || moves - 1);
+        if (mode === 'challenge') {
+          /* 挑战：撤销不退还已用步数（undoDoesNotRefundMoveOnRankedAttempt），并标记为辅助成绩。 */
+          chUndoUsed += 1;
+          chAssisted = true;
+        } else {
+          moves = Math.max(0, Number(snap.moves) || moves - 1);
+        }
         won = !!snap.won;
         winBonusClaimed = !!snap.winBonusClaimed;
         restoreToolCounts(snap.tools);
         armedTool = null;
         syncHud();
+        syncChallengeHud();
         joyTools.sync();
         autosave.saveNow();
         A.Sfx.play('ui');
@@ -523,6 +900,17 @@
           return;
         }
         autosave.tick(dt);
+        if (mode === 'challenge') {
+          chElapsed += dt;
+          const tipBefore = chTipTimer;
+          chTipTimer = Math.max(0, chTipTimer - dt);
+          if ((tipBefore > 0) !== (chTipTimer > 0)) updateChallengeTip();
+          const sec = Math.floor(chElapsed);
+          if (sec !== chLastHudSecond) {
+            chLastHudSecond = sec;
+            syncChallengeHud();
+          }
+        }
         const keys = { left: ['ArrowLeft', 'a'], right: ['ArrowRight', 'd'], up: ['ArrowUp', 'w'], down: ['ArrowDown', 's'] };
         Object.keys(keys).forEach((dir) => {
           const down = input.isDown(...keys[dir]);
@@ -564,16 +952,31 @@
         ctx.fillStyle = bg;
         ctx.fillRect(0, 0, W, H);
 
-        A.draw.label(ctx, 'SCORE ' + score, 12, 24, { align: 'left', font: 'bold 15px system-ui', color: '#ffd23f' });
-        A.draw.label(ctx, '最大 ' + bestTile(), W - 12, 24, { align: 'right', font: 'bold 15px system-ui', color: '#eef1ff' });
-        A.draw.label(ctx, '步数 ' + moves + ' · 撤销 ' + undoStack.length + '/3', W / 2, 52, {
-          font: '12px system-ui',
-          color: '#c9b99f',
-        });
-        A.draw.label(ctx, won ? '已达成 2048，继续挑战！' : '目标 2048', W / 2, 82, {
-          font: 'bold 14px system-ui',
-          color: won ? '#63d68c' : '#f2b33d',
-        });
+        if (mode === 'challenge' && chStage) {
+          A.draw.label(ctx, stageLabel(chStage) + ' ' + chStage.title, W / 2, 24, {
+            font: 'bold 17px system-ui',
+            color: 'rgba(238,241,255,0.85)',
+          });
+          A.draw.label(ctx, '目标 ' + chTarget + ' · 步数 ' + chMoves + '/' + chMaxMoves + ' · 用时 ' + A.Challenge.formatTime(chElapsed), W / 2, 52, {
+            font: 'bold 13px system-ui',
+            color: '#ffd23f',
+          });
+          A.draw.label(ctx, '挑战模式：无随机新块 · 撤销不退还步数', W / 2, 82, {
+            font: '12px system-ui',
+            color: '#c9b99f',
+          });
+        } else {
+          A.draw.label(ctx, 'SCORE ' + score, 12, 24, { align: 'left', font: 'bold 15px system-ui', color: '#ffd23f' });
+          A.draw.label(ctx, '最大 ' + bestTile(), W - 12, 24, { align: 'right', font: 'bold 15px system-ui', color: '#eef1ff' });
+          A.draw.label(ctx, '步数 ' + moves + ' · 撤销 ' + undoStack.length + '/3', W / 2, 52, {
+            font: '12px system-ui',
+            color: '#c9b99f',
+          });
+          A.draw.label(ctx, won ? '已达成 2048，继续挑战！' : '目标 2048', W / 2, 82, {
+            font: 'bold 14px system-ui',
+            color: won ? '#63d68c' : '#f2b33d',
+          });
+        }
 
         ctx.fillStyle = 'rgba(20, 14, 8, 0.55)';
         A.draw.roundRect(ctx, BOARD_X - 8, BOARD_Y - 8, BOARD_W + 16, BOARD_W + 16, 14);
@@ -642,6 +1045,8 @@
               score,
               moves,
               won,
+              mode,
+              stageId: mode === 'challenge' ? chStageId : null,
               best: bestTile(),
               board: board.map((row) => row.map((t) => (t ? t.value : 0))),
               undo: undoStack.length,
@@ -655,6 +1060,7 @@
               armedTool,
               won,
               state,
+              mode,
               undo: undoStack.length,
               board: board.map((row) => row.map((t) => (t ? t.value : 0))),
             };
@@ -669,6 +1075,8 @@
             if (!Array.isArray(values) || values.length !== N || values.some((row) => !Array.isArray(row) || row.length !== N)) return false;
             const valid = values.every((row) => row.every((value) => value === 0 || (Number.isInteger(value) && value >= 2 && (value & (value - 1)) === 0)));
             if (!valid) return false;
+            mode = 'classic';
+            chStage = null;
             board = emptyBoard();
             nextId = 1;
             for (let r = 0; r < N; r++) {
@@ -701,6 +1109,75 @@
           },
           undoNow() {
             undo();
+            return true;
+          },
+          /* ---------- 0.9 挑战模式钩子 ---------- */
+          challengeStages() {
+            const progress = A.Challenge.progress(CHALLENGE_GAME_ID);
+            return challengeStagesData().map((stage) => ({
+              id: stage.id,
+              stageNumber: stage.stageNumber,
+              title: stage.title,
+              unlocked: A.Challenge.isUnlocked(CHALLENGE_GAME_ID, stage.id),
+              cleared: progress.cleared.indexOf(stage.id) !== -1,
+              best: progress.best[stage.id] ? { timeSec: progress.best[stage.id].timeSec, assisted: progress.best[stage.id].assisted } : null,
+            }));
+          },
+          startChallenge(ref) {
+            return startChallenge(ref);
+          },
+          challengeInfo() {
+            const progress = A.Challenge.progress(CHALLENGE_GAME_ID);
+            const stages = challengeStagesData();
+            const index = stages.findIndex((s) => s.id === chStageId);
+            return {
+              mode,
+              stageId: chStageId,
+              stageIndex: index,
+              state,
+              elapsedSec: Math.round(chElapsed * 10) / 10,
+              objective: chStage ? chStage.goalStatement : '',
+              cleared: !!(chStageId && progress.cleared.indexOf(chStageId) !== -1),
+              collectibles: [],
+              assisted: chAssisted,
+              movesUsed: chMoves,
+              maxValidMoves: chMaxMoves,
+              target: chTarget,
+              bestTile: bestTile(),
+              undoAllowed: chUndoAllowed,
+              undoUsed: chUndoUsed,
+            };
+          },
+          stageObservable() {
+            return {
+              mode,
+              stageId: chStageId,
+              state,
+              board: board.map((row) => row.map((t) => (t ? t.value : 0))),
+              bestTile: bestTile(),
+              movesUsed: chMoves,
+              maxValidMoves: chMaxMoves,
+              target: chTarget,
+              undoUsed: chUndoUsed,
+              undoAvailable: undoStack.length,
+              elapsedSec: Math.round(chElapsed * 10) / 10,
+              assisted: chAssisted,
+            };
+          },
+          forceStageClear(assisted) {
+            if (mode !== 'challenge' || state !== 'playing') return false;
+            chAssisted = !!assisted;
+            challengeClear();
+            return true;
+          },
+          forceStageFail(reason) {
+            if (mode !== 'challenge' || state !== 'playing') return false;
+            challengeFail(typeof reason === 'string' && reason ? reason : '测试强制失败');
+            return true;
+          },
+          exitChallenge() {
+            if (mode !== 'challenge') return false;
+            exitChallenge();
             return true;
           },
         };
