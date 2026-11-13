@@ -1,6 +1,6 @@
 # Arcade 0.9 挑战模式测试基座（T056）
 
-> 状态：**阶段 1 完成**（分支 `feat/arcade-0.8-gameplay`；只改 `tools/` 与本文档，不改 `apps/`）。
+> 状态：**T056 收口完成（阶段 1 + 阶段 2）**（分支 `feat/arcade-0.8-gameplay`；2026-11-13 本地全量回归通过，未发布）。
 > 上游依据：`docs/arcade/0.9/INTEGRATION-CONTRACT.md`（尤其 §5/§6）、`docs/arcade/0.9/PLAN.md`、`docs/arcade/0.8.0-TESTING.md`。
 > 一句话：**`arcade_smoke.mjs` 保证 0.7/0.8 经典全链路不回退；`arcade_gameplay_test.mjs` 用固定初始状态 + 稳定场景 ID 断言玩法不变量；0.9 起它同时是 13 款游戏挑战场景模块的聚合器与 78 关数据门禁。**
 
@@ -136,6 +136,8 @@ export default {
 
 `ctx`（`run(cdp, ctx)` 第二个参数）提供：`base`（静态服务器根 URL）、`repoRoot`、`artifacts`、`assert`、`record`、`sleep`、`round1`、`gameId`、`gameFile`、`scenarioId`、`suite`、`source`、`moduleFile`、`evidenceLevel`、`attempt`、`repeat`。游戏 Agent 可以只依赖 `cdp`，需要通用 helper 时从 `ctx` 取，**不要**在模块里重新实现服务器/Chrome。
 
+**时序断言纪律（高并发必读）**：等待游戏循环推进（落地、暂停、刷新恢复、状态机变化）必须用 `cdp.waitFor` 或页内轮询（`requestAnimationFrame` 循环直到目标状态），**不要**用固定 `sleep` 或单次 `rAF` 后直接断言——CPU 竞争时 rAF 可能被饿死，导致“动作已发生但状态未更新”的假失败。`SC-SL-002`（月弹落地）与 `SC-SL-009`（影冲落地补充/暂停）已按此加固：页内最多 240 帧轮询直到 `boostArmed=false` / `dashCharges===1 && !dashing`，再读取证据。
+
 ### 5.3 自动发现与错误策略
 
 - runner 启动时扫描 `tools/challenge/*.mjs`（按文件名排序）并动态 `import` 默认导出。
@@ -194,7 +196,7 @@ export default {
 - `tools/arcade_gameplay_test.mjs`：保留 0.8 的 11 个场景与 `--list/--scenario/--repeat/--help` 语义；新增 `--suite=base|challenge|all`、`--game=<gameId>`、`tools/challenge/*.mjs` 自动发现、`CH-DATA-001`、`CH-CLASSIC-001`、模块证据汇总；退出码 0/1/2 语义保留。
 - 影跃 0.9 迁移：`SC-SL-004..008` 保留 ID 但已从 0.8 trial(S1–S3) 改写为 0.9 挑战(C01–C06) 语义；g-shadow 交付 challenge 钩子后已删除 `pending` 并实测 **11/11（`--repeat=2` 22/22）** 全绿。迁移细节见 §8.3。
 - 平台 Agent 的 13 个运行时数据文件已生成，`CH-DATA-001` 的运行时一致性检查已启用并通过。
-- 游戏场景模块（`tools/challenge/*.mjs`）分批交付中：首批 9/13 模块（shadow-leap、memory-flip、mole-whack、road-rush、snake-run、block-drop、merge-2048、brick-breaker、gravity-flip）已可自动发现；首轮 `--suite=challenge` 见 §8.4，其余 4 个（snowbells、pendulum-tower、star-raid、gold-miner）交付后跑最终全量。
+- 游戏场景模块（`tools/challenge/*.mjs`）**13/13 已全部交付（91 个场景）**：自动发现、`--game` 筛选、模块证据汇总均已在真实交付上验证；最终全量回归与逐游戏证据见 §10。
 
 阶段 1 实测（Windows / Node v25.8.1 / 本机 Chrome 无头；端口均 env 覆盖避免并行冲突）：
 
@@ -242,6 +244,7 @@ g-shadow 把影跃从 0.8 的 S1–S3 trial 迁移到 0.9 的 C01–C06 挑战�
 - `--game=shadow-leap --repeat=2`：**16/16 passed**，exit 0（8 场景 ×2，含 C01–C06 六关真实输入连续参考通关）。
 - 结论：聚合器与模块协议在真实交付上可用；模块错误会带 `[tools/challenge/<gameId>.mjs]` 后缀、加载/结构错误会 `FAIL CH-MODULE`，与设计一致。
 - 待最终收口：剩余 4 个模块（snowbells / pendulum-tower / star-raid / gold-miner）交付后，跑 `--suite=all --repeat=2` + smoke 85/85，并填写第 10 节表。
+- **最终收口（2026-11-13，13/13 模块）**：`--suite=all --repeat=2` → 104 场景 ×2 = **208/208 passed**，exit 0；加固后复跑 208/208、798.3s（加固前首轮 208/208、800.0s）；`--scenario=CH-DATA-001` / `--scenario=CH-CLASSIC-001` PASS；smoke **85/85**；`validate_site.py` PASS；逐游戏证据等级与冻结 sha256 见 §10。期间发生过 2 次模块/页面并行写入导致的瞬态失败（已隔离复跑全绿），以及 SC-SL-009 在 20+ 并发无头 Chrome 下 1 次 rAF 饿死假失败（已改为页内轮询加固，见 §5.2）。
 
 ## 9. 阶段 1 基线记录（实测）
 
@@ -250,25 +253,100 @@ g-shadow 把影跃从 0.8 的 S1–S3 trial 迁移到 0.9 的 C01–C06 挑战�
 - 设计源 78 关：`docs/arcade/0.9/levels/*.json`；运行时 13 个数据文件：`apps/arcade/challenge/*.js`（平台 Agent 生成，`node --check` 通过）。
 - 0.8 base 证据摘要与 `docs/arcade/0.8.0-TESTING.md` 第 11 节一致（11 场景 ×2 全绿）。
 
-## 10. 阶段 2 证据等级汇总表（待填）
+## 10. 最终证据汇总（T056 收口，2026-11-13）
 
-> 数据来源：`node tools/arcade_gameplay_test.mjs --suite=challenge --repeat=2` 的 PASS/SKIP/FAIL 行与模块汇总；证据等级取模块/场景 `evidence` 字段，并与 `docs/arcade/0.9/impl/<gameId>.md` 核对。
+> 运行环境：Windows / Node v25.8.1 / Python 3.14.3 / 无头 Chrome。gameplay 端口 `8786/9384`，smoke 端口 `8796/9396`。
+> 并发条件：运行前 8700–9500 端口无其它测试监听（无其它 runner 并行）；系统另有 44 个其它会话遗留 Chrome 进程（空闲态 CPU 增量约 1.6s/3s、系统 load 15%）。以下为“独占端口 + 无并行测试”条件下的实测。
 
-| gameId | 游戏 | 场景数 | 证据等级 | PASS | SKIP | FAIL | impl 文档 | 备注 |
-| --- | --- | --- | --- | --- | --- | --- | --- | --- |
-| shadow-leap | 影跃 | 8（挑战模块；另 base 侧 5 个已迁移） | real-input-replay / engine-replay / ui-only | 16/16（`--repeat=2`） | 0 | 0 | 见 §8.3 | C01–C06 六关真实输入连续参考通关通过；`--suite=base` 11/11、22/22 |
-| block-drop | 俄罗斯方块 | 待模块交付 | 待填 | — | — | — | — | — |
-| merge-2048 | 2048 合成 | 待模块交付 | 待填 | — | — | — | — | — |
-| memory-flip | 记忆翻牌 | 待模块交付 | 待填 | — | — | — | — | — |
-| snake-run | 贪吃蛇 | 待模块交付 | 待填 | — | — | — | — | — |
-| mole-whack | 打地鼠 | 待模块交付 | 待填 | — | — | — | — | — |
-| road-rush | 极速车道 | 待模块交付 | 待填 | — | — | — | — | — |
-| gravity-flip | 重力翻转 | 待模块交付 | 待填 | — | — | — | — | — |
-| brick-breaker | 砖块计划 | 待模块交付 | 待填 | — | — | — | — | — |
-| snowbells | 雪铃 | 待模块交付 | 待填 | — | — | — | — | — |
-| pendulum-tower | 层塔 | 待模块交付 | 待填 | — | — | — | — | — |
-| star-raid | 星海突击 | 待模块交付 | 待填 | — | — | — | — | — |
-| gold-miner | 黄金矿工 | 待模块交付 | 待填 | — | — | — | — | — |
+### 10.1 命令与实测结果
+
+| 命令 | 结果 |
+| --- | --- |
+| `node --check tools/arcade_gameplay_test.mjs` / `tools/lib/arcade_cdp.mjs` | 通过（exit 0） |
+| `node tools/arcade_gameplay_test.mjs --suite=all --repeat=2` | **208/208 scenario runs passed**（104 场景 ×2：base 11 + 全局 2 + 13 模块 91），exit 0，**798.3s** |
+| `node tools/arcade_gameplay_test.mjs --scenario=CH-DATA-001` | PASS：`games=13, stages=78, designChecks=2256, runtime=13/13, runtimeChecks=1281`，0.8s |
+| `node tools/arcade_gameplay_test.mjs --scenario=CH-CLASSIC-001` | PASS：`games=13, classicStarted=13, mainButton=开始游戏, challengeEntryVisible=13`，10.1s |
+| `ARCADE_SMOKE_PORT=8796 ARCADE_CDP_PORT=9396 node tools/arcade_smoke.mjs` | **85/85 checks passed**，exit 0，232.6s；跑前/跑后关键文件 sha256 不变 |
+| `py -3 tools/validate_site.py` | `PASS: StudioKit validation succeeded`，exit 0，0.4s |
+| 全仓冻结校验 | 13 游戏页 + 13 模块 + engine.js/arcade.css/sw.js 的 sha256 与回归前快照完全一致；收口过程只改了本 `TESTING.md` |
+
+补充说明：
+- SC-SL-009/SC-SL-002 时序加固前首轮全量为 208/208、800.0s；加固后复跑仍 **208/208、798.3s**。两次运行期间产品文件 sha256 均未变化。
+- 高并发瞬态（均隔离复跑全绿，非产品缺陷）：模块/游戏页并行写入期间出现 2 次瞬态失败（`CH-MW-003`、snowbells/pendulum 各 1 次）；`SC-SL-009` 在 20+ 并发无头 Chrome 下曾 1 次 rAF 饿死假失败，已改为页内轮询加固（§5.2）。
+- 本表证据等级取自各模块 `evidence` 字段；`ui-only` 仅用于数据/选关/布局/记录接线断言，未作为“关卡可玩”证据。star-raid、pendulum-tower、gold-miner 的参考通关为 `engine-replay`（弹幕/物理/摆钩类难以真实输入，契约允许），需 Reviewer 对照 `impl/<gameId>.md` 的差距说明。
+
+### 10.2 13 游戏挑战模块证据汇总
+
+| gameId | 游戏 | 模块场景数 | real-input-replay | engine-replay | ui-only | 参考通关证据 | PASS（×2） | FAIL | impl 文档 |
+| --- | --- | --- | --- | --- | --- | --- | --- | --- | --- |
+| memory-flip | 记忆翻牌 | 6 | 1 | 5 | 0 | real-input-replay | 12/12 | 0 | `impl/memory-flip.md` |
+| merge-2048 | 2048 合成 | 8 | 2 | 4 | 2 | real-input-replay | 16/16 | 0 | `impl/merge-2048.md` |
+| snowbells | 雪铃 | 6 | 1 | 5 | 0 | real-input-replay | 12/12 | 0 | `impl/snowbells.md` |
+| brick-breaker | 砖块计划 | 7 | 2 | 3 | 2 | engine-replay（真实输入发球+清场回放） | 14/14 | 0 | `impl/brick-breaker.md` |
+| gravity-flip | 重力翻转 | 7 | 3 | 1 | 3 | real-input-replay（C01）；C02–C06 engine-replay | 14/14 | 0 | `impl/gravity-flip.md` |
+| snake-run | 贪吃蛇 | 6 | 1 | 5 | 0 | real-input-replay | 12/12 | 0 | `impl/snake-run.md` |
+| mole-whack | 打地鼠 | 8 | 1 | 7 | 0 | real-input-replay（C01）；C01–C06 时钟辅助真实指针回放 | 16/16 | 0 | `impl/mole-whack.md` |
+| block-drop | 俄罗斯方块 | 8 | 2 | 4 | 2 | real-input-replay（C01–C06） | 16/16 | 0 | `impl/block-drop.md` |
+| star-raid | 星海突击 | 7 | 0 | 4 | 3 | engine-replay（C01–C06 安全走廊回放） | 14/14 | 0 | `impl/star-raid.md` |
+| road-rush | 极速车道 | 7 | 2 | 5 | 0 | real-input-replay（C01–C06） | 14/14 | 0 | `impl/road-rush.md` |
+| shadow-leap | 影跃 | 8 | 3 | 2 | 3 | real-input-replay（C01–C06 连续通关） | 16/16 | 0 | `impl/shadow-leap.md` |
+| pendulum-tower | 层塔 | 6 | 0 | 6 | 0 | engine-replay（C01 参考释放） | 12/12 | 0 | `impl/pendulum-tower.md` |
+| gold-miner | 黄金矿工 | 7 | 0 | 3 | 4 | engine-replay（C01–C06 参考顺序回放） | 14/14 | 0 | `impl/gold-miner.md` |
+| **合计** | **13 游戏** | **91** | **18** | **54** | **19** | — | **182/182** | **0** | **13/13** |
+
+### 10.3 全局门禁与 base
+
+| 套件 | 场景数 | 结果 |
+| --- | --- | --- |
+| base（0.8 原 6 个 + 影跃 0.9 迁移 5 个） | 11 | **22/22 PASS**（`--repeat=2`） |
+| `CH-DATA-001` 数据门禁（纯 Node） | 1 | PASS：设计源 2256 项 + 运行时数据 1281 项检查，13 游戏 × 6 关 |
+| `CH-CLASSIC-001` 经典回归（13 游戏） | 1 | PASS：13/13 经典可启动、主按钮文案不变、挑战入口 13/13 可见 |
+| 挑战模块 | 91 | **182/182 PASS**（13 模块 ×2） |
+
+### 10.4 冻结 sha256 清单（回归/冒烟前后一致）
+
+产品文件（引擎/样式/SW + 13 游戏页）：
+
+| 文件 | sha256 |
+| --- | --- |
+| `apps/arcade/engine.js` | `2E9B82024C9855E221B79F6D3922A95C5CCA9028B5406AB5219ED06C32D2A413` |
+| `apps/arcade/arcade.css` | `EF3D677F4DE28233A89A92B08AC44CB7D0BD2C5C223A083888CFAB1CF3006BF6` |
+| `apps/arcade/sw.js` | `5386CC2779070527CF3B7262B82156165F4CC2014A7650259E0842469EA586D1` |
+| `apps/arcade/games/memory-flip.html` | `92B36A0973960CD5290A6BB585E68EC6D982BD7D9245B97798024E405F0C6B92` |
+| `apps/arcade/games/merge-2048.html` | `D23EA5EFBABC669BD9DEC5D1B92AC31A6B30678AF08BF4E05C592614CFF7A297` |
+| `apps/arcade/games/snowbells.html` | `1F93F3C584103BEED62D31B439EFD78FC66FAC190B1FC41C7B02DCF211630537` |
+| `apps/arcade/games/brick-breaker.html` | `6BD9C45E4E824821FEE90C80D0508136619E9A81BADD133A51287080FD82227A` |
+| `apps/arcade/games/gravity-flip.html` | `D09F27C3EA23C858A830B427A747ABC1D3B787E152DA7E924144D8CEECD48B45` |
+| `apps/arcade/games/snake-run.html` | `2B46F258BE761BC65419704CE4D70DBAEFCF82AD62494A54DB2E1FA6BB2C50B2` |
+| `apps/arcade/games/mole-whack.html` | `BDD378AA13DC858EB8B28D5EC43572ED0589C9B05D6A65B56DB31C2F996ACBF8` |
+| `apps/arcade/games/block-drop.html` | `1D1E251A052EA14588C1930DF4CEC310E2C6515BEB60AF8B2DD9E6A4395BA9AC` |
+| `apps/arcade/games/star-raid.html` | `699C8FF733984A9E7EDD78CA302EC67588E5ECF9604E1581866E59D296C4F5AD` |
+| `apps/arcade/games/road-rush.html` | `19D220E06558C4E9EDCB56711CE85E9E66791FDF699188914003AB45CC24623C` |
+| `apps/arcade/games/shadow-leap.html` | `391FA8F8225B043B54FBE287D0CC8B7D18D379D152AAAFB1D8E593E4BB13EC05` |
+| `apps/arcade/games/pendulum-tower.html` | `C3ACD9E618BA756DFF65CC08D8455CA1B79FA3115F334E6F36F2CEA5DAEA6CC3` |
+| `apps/arcade/games/gold-miner.html` | `5858E6FDA3F2EAD121534140152328C8C696AFC37B39EBD9CC53B42A6969AADD` |
+
+测试基础设施（runner 最终版 + 13 模块 + 通用库）：
+
+| 文件 | sha256 |
+| --- | --- |
+| `tools/arcade_gameplay_test.mjs` | `F294215158EF869258907A198884533CBB553DCCB96E14C21725E1FD664AF95B` |
+| `tools/lib/arcade_cdp.mjs` | `1C3BB40A4AA8BE5645104670D5316595797336140F49A1F523EFDB632478D0E9` |
+| `tools/challenge/memory-flip.mjs` | `9DF43129F08EED37F64D326FEB249DC5810C9AA49CA57CDD034361BDAF7EEAAF` |
+| `tools/challenge/merge-2048.mjs` | `AFA6F529926C775DE22ED2E0E3E706C7C3B96FD92B27B419B194BBFD2BF3C90B` |
+| `tools/challenge/snowbells.mjs` | `1C22D4FD0B68FE224BC4899ED2EBD2C1904DD3D1E6DFE28AE68325A272440F65` |
+| `tools/challenge/brick-breaker.mjs` | `BAFC0A6854106AAD5805D974A419006FF2FD3D368069AE0A9A866782C52B91CD` |
+| `tools/challenge/gravity-flip.mjs` | `26FBEAF47DA26248E2F61530654EF5F49113485A59159963B261CC6D528E922F` |
+| `tools/challenge/snake-run.mjs` | `787C2393BC11CBEF71EC3D860BCFC3B1E777CD7A9828AAFD93B96429C536CAD1` |
+| `tools/challenge/mole-whack.mjs` | `D8192129F460BD1A157266173DE4630FBC53A7778629F27ECF23E55611F88073` |
+| `tools/challenge/block-drop.mjs` | `2DAEA1C398F78D897B4DABD3F5C29B22B947F033EFDE4719231DF215A1C480C4` |
+| `tools/challenge/star-raid.mjs` | `98FD7D689BF9BB767D210C192BE7196979971F0AEE1D3C5B1FB3E01C2149FE04` |
+| `tools/challenge/road-rush.mjs` | `3BC9A13D15F3E8E21B179CCDA1F5D7B6374D84D1DC84A596C48170BEE6302005` |
+| `tools/challenge/shadow-leap.mjs` | `96D9F42522F9E5A440B0677FE74DC4946BA44EB638A45BC7580CF18BE0BA89A9` |
+| `tools/challenge/pendulum-tower.mjs` | `7A4B719FA8892102DAC50CD3E37BD5B0A47454D6967ACBFA6695C5F98B2DC64B` |
+| `tools/challenge/gold-miner.mjs` | `DF3DA98D2EBB4DE5E1E4F4A4644B025FA264AECF270263879C281F763210DD4D` |
+
+> 冒烟前后核对：`engine.js`、`arcade.css`、`shadow-leap.html`、`star-raid.html`、`gold-miner.html` 的 sha256 在 smoke 运行前后完全一致；全量回归前后 13 游戏页 + 13 模块 + 引擎/样式/SW 亦一致。
 
 ## 11. 失败排查
 

@@ -274,13 +274,20 @@ const SCENARIOS = [
       assert(boost.repeat === false && boost.afterRepeat.tools.boost === 1 && boost.afterRepeat.boostArmed === true, '月弹上弦期间重复使用未被拒绝');
       assert(boost.button.disabled === true && boost.button.pressed === 'true', '月弹上弦时按钮未进入禁用/激活态：' + JSON.stringify(boost.button));
       assert(boost.forced === true, 'forceLand(1) 失败（教学平台不足）');
+      /* 轮询等待真实着陆帧：高并发时 rAF 回调可能早于游戏 update，固定 rAF/sleep 会误报。 */
       const landed = await cdp.evaluate(`(async () => {
-        await new Promise((resolve) => requestAnimationFrame(() => resolve()));
-        return window.__arcadeTest.joyInfo();
+        const t = window.__arcadeTest;
+        for (let frame = 0; frame < 240; frame += 1) {
+          const joy = t.joyInfo();
+          if (joy.boostArmed === false) return { landedFrame: frame, joy };
+          await new Promise((resolve) => requestAnimationFrame(() => resolve()));
+        }
+        return { landedFrame: -1, joy: t.joyInfo() };
       })()`);
-      assert(landed.boostArmed === false, '月弹着陆后未消耗上弦状态');
-      assert(landed.landingHint === '月弹！', '月弹着陆提示错误：' + landed.landingHint);
-      assert(landed.player.vy < -400, '月弹强化跳速度不足：' + landed.player.vy);
+      assert(landed.landedFrame >= 0, '月弹着陆事件未在 240 帧内发生：' + JSON.stringify(landed.joy));
+      assert(landed.joy.boostArmed === false, '月弹着陆后未消耗上弦状态');
+      assert(landed.joy.landingHint === '月弹！', '月弹着陆提示错误：' + landed.joy.landingHint);
+      assert(landed.joy.player.vy < -400, '月弹强化跳速度不足：' + landed.joy.player.vy);
 
       return {
         feather: '2→1→0',
@@ -288,8 +295,8 @@ const SCENARIOS = [
         featherMaxFall: feather.fall.maxFall,
         featherTimerExpired: true,
         boost: '2→1→0',
-        boostLandingHint: landed.landingHint,
-        boostJumped: landed.player.vy < -400,
+        boostLandingHint: landed.joy.landingHint,
+        boostJumped: landed.joy.player.vy < -400,
       };
     },
   },
@@ -733,14 +740,20 @@ const SCENARIOS = [
       assert(air.first === true && air.during.dashCharges === 0 && air.during.dashing === true, '空中影冲未消耗/未生效：' + JSON.stringify(air.during));
       assert(air.second === false && air.afterSecond.dashCharges === 0, '空中第二次影冲未被拒绝：' + JSON.stringify(air.afterSecond));
 
-      /* 2) 落地补充：forceLand 立即终止冲刺并补满 1 次，可再次触发一次。 */
+      /* 2) 落地补充：forceLand 立即终止冲刺并补满 1 次，可再次触发一次。
+         （轮询等待真实落地帧，不用固定 rAF：高并发下 rAF 可能早于游戏 update。） */
       const landed = await cdp.evaluate(`(async () => {
         const t = __arcadeTest;
         const forced = t.forceLand(1);
-        await new Promise((resolve) => requestAnimationFrame(() => resolve()));
-        return { forced, info: t.dashInfo() };
+        for (let frame = 0; frame < 240; frame += 1) {
+          const info = t.dashInfo();
+          if (info.dashCharges === 1 && info.dashing === false) return { forced, landedFrame: frame, info };
+          await new Promise((resolve) => requestAnimationFrame(() => resolve()));
+        }
+        return { forced, landedFrame: -1, info: t.dashInfo() };
       })()`);
       assert(landed.forced === true, 'forceLand(1) 失败');
+      assert(landed.landedFrame >= 0, '落地补充未在 240 帧内发生：' + JSON.stringify(landed.info));
       assert(landed.info.dashCharges === 1 && landed.info.dashing === false, '落地未补满影冲/未终止冲刺：' + JSON.stringify(landed.info));
       const reuse = await cdp.evaluate(`(() => {
         const t = __arcadeTest;
@@ -756,8 +769,11 @@ const SCENARIOS = [
       const paused = await cdp.evaluate(`(async () => {
         const t = __arcadeTest;
         t.forceLand(1);
-        await new Promise((resolve) => requestAnimationFrame(() => resolve()));
-        const landedAgain = t.dashInfo();
+        let landedAgain = t.dashInfo();
+        for (let frame = 0; frame < 240 && !(landedAgain.dashCharges === 1 && landedAgain.dashing === false); frame += 1) {
+          await new Promise((resolve) => requestAnimationFrame(() => resolve()));
+          landedAgain = t.dashInfo();
+        }
         const used = t.triggerDash();
         document.querySelector('[data-pause]').click();
         return { landedAgain, used, info: t.dashInfo() };
