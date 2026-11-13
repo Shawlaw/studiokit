@@ -13,7 +13,7 @@
   - 批次内容：T028 黄金矿工目标取整/HUD、T029 俄罗斯方块左右手触屏按钮、T030 MIT 与源码入口、T031 双端发布
   - 提交 `0159437`；Actions `43155182519` 四个 job 均成功
   - 双端验证：`tools/verify_deploy.py` 当时覆盖的 11 个文件 SHA-256 一致，Arcade `0.6.2` / Badge `2.2.1`（0.7.0 起校验清单扩为 24 个文件）
-- 本地待发布：Arcade `0.7.0`（全游戏主动道具、自然收尾与一次性 20 分钟提醒），仅在 `feat/arcade-pure-joy`，未推送；本次发布前必须按本 runbook 全量复跑并补齐 13 款游戏页与 `arcade.css` 的双端校验
+- 本地开发中（未发布）：Arcade `0.8.0` 影跃「影冲 / 影之试炼 S1–S3」竖切片，分支 `feat/arcade-0.8-gameplay`，未推送、未合并、未发布；`ARCADE_VERSION` 故意保持 `0.7.0`。发布需 Owner 试玩反馈与明确的 `PUBLISH_TO_MAIN` 授权，发布前必须按本 runbook 全量复跑并决定是否升版本/SW 缓存版本。
 - 上一个发布：Arcade `0.6.1`（2026-11-12），提交 `1c9501e`，Actions `43060497094` 成功
 - 部署目标：
   - GitHub Pages：GitHub Actions（`.github/workflows/deploy.yml`）

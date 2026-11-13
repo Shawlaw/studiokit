@@ -652,6 +652,144 @@
       "ownerAuthorizationVerifiedByAgentFlag": true,
       "completedAt": "2026-11-12T18:01:06+00:00",
       "evidence": "Owner explicit in-task instruction to self-play/screenshot then commit+push+release to GitHub Pages and Cloudflare Pages. Playtest: all 13 games started and played in headless Chrome at 420x900 plus 320/375/390/430 and 667x375 landscape; screenshots reviewed, no overflow/console errors; fixed external joy-tool labels and hint shortcuts in commit 34f03df. Local checks: validate_site.py / build_site.py / node --check PASS; arcade_smoke.mjs 85/85. Pushed main 34f03df via HTTPS; Actions run 43274342320 all four jobs success (Validate and build / Deploy GitHub Pages / Deploy Cloudflare Pages / Verify both deployments). verify_deploy.py: 24/24 files identical across GH Pages and Cloudflare, arcade 0.7.0 / badge 2.2.1. Live headless Chrome on both origins: hub 0.7.0/13 cards/random entry/SW cache studiokit-arcade-0.7.0-v1, sample games show joy tools (gold-miner 4), hints mention 道具, zero console errors. iOS/Android real-device play, native fullscreen and system share remain UNVERIFIED."
+    },
+    {
+      "id": "T034",
+      "title": "Arcade 0.8.0 GP001+GP002：事实冻结与游戏性量表/关卡模板",
+      "kind": "agent",
+      "status": "DONE",
+      "dependsOn": [
+        "T033"
+      ],
+      "ownerAuthorizationRequired": false,
+      "acceptance": [
+        "公开仓库版本与本地 HEAD 一致性、13 款现状矩阵、#test 钩子/测试入口、GP↔T 冲突映射形成文档",
+        "PRD 现状声明逐条标注 CONFIRMED/WRONG/UNVERIFIED 并附源码证据",
+        "六维 0-4 量表含证据字段、单关规格模板、AFK/无 FOMO 契约、评审 Gate 与 GP004-007 DoD",
+        "py -3 tools/validate_site.py 通过；不改代码/版本/TASKS/queue；仅本地未推送"
+      ],
+      "claimedAt": "2026-11-13T00:43:00+00:00",
+      "completedAt": "2026-11-13T01:07:00+00:00",
+      "evidence": "Commit b629b6b (docs only). docs/arcade/0.8.0-FACTS.md: HEAD 5fbe897/branch/origin sync, Arcade 0.7.0 + Badge 2.2.1 + 13 games + T001-T033 all DONE, 13-game matrix re-verified with file:line evidence (PRD claims CONFIRMED; found 3 stale repo docs - arcade README 'not released', RELEASE-RUNBOOK 'pending', ROADMAP '84 checks' vs actual 85; PRD lostpointercapture claim WRONG; road-rush futureSafe / snake randomFreeCell code-structure risks CONFIRMED, runtime consequences UNVERIFIED), #test hook inventory, GP-to-T mapping. GAMEPLAY-DESIGN-RUBRIC.md: six-dimension 0-4 rubric with evidence fields, stage-spec template, AFK/no-FOMO contract, Gate A/B/C, GP004-GP007 DoD. 0.8.0-PLAN.md: GP-to-T mapping and execution order. validate_site.py PASS. Docs only; no runtime/version change; not pushed."
+    },
+    {
+      "id": "T035",
+      "title": "Arcade 0.8.0 GP003：确定性玩法测试基座与关卡求解器",
+      "kind": "agent",
+      "status": "DONE",
+      "dependsOn": [
+        "T034"
+      ],
+      "ownerAuthorizationRequired": false,
+      "acceptance": [
+        "现有 #test 钩子可复用，至少 3 个可重复场景，不破坏发布资源白名单",
+        "抽取零依赖 CDP 测试库后 arcade_smoke 仍 85/85 且输出/默认端口不变",
+        "新增确定性场景 runner（稳定场景 ID、--scenario/--repeat、退出码）与关卡可达性求解器",
+        "node --check 通过；不改游戏文件、不跑 build_site.py；仅本地未推送"
+      ],
+      "claimedAt": "2026-11-13T00:44:00+00:00",
+      "completedAt": "2026-11-13T02:13:00+00:00",
+      "evidence": "Commit 8cc689d. tools/lib/arcade_cdp.mjs extracted from arcade_smoke.mjs (static server, CDP client, launchChrome, recorder; ports env-overridable; defaults 8765/9333 unchanged); arcade_smoke.mjs keeps 85 record labels/count/output format and passes 85/85 on final tree. New tools/arcade_gameplay_test.mjs with 11 deterministic scenarios (SC-SL-001/002/003/009 shadow seed+dash, SC-SL-004/005/006 trial lifecycle, SC-SL-007/008 routes+scroll, SC-STAR-001 boss, SC-ROAD-001 corridor), --list/--scenario/--repeat/help, exit codes 0/1/2; --repeat=2 = 22/22 identical evidence. New tools/arcade_stage_solver.mjs proves S1-S3 reachability from docs/arcade/stages-0.8.json AND from the page STAGES-JSON block (3/3 PASS each, exit 0; S3 mandatory air-dash gap 0/972 without dash vs 5724/22356 with one; recovery 972/972; scroll needs dash). Frozen stage data sha256 432C8AB2...; docs/arcade/0.8.0-TESTING.md documents scenario/seed contracts. Tools/docs only, not in release allowlist. Real-device remains UNVERIFIED."
+    },
+    {
+      "id": "T036",
+      "title": "Arcade 0.8.0 GP004：影跃空中影冲动作与移动端并发输入",
+      "kind": "agent",
+      "status": "DONE",
+      "dependsOn": [
+        "T035"
+      ],
+      "ownerAuthorizationRequired": false,
+      "acceptance": [
+        "一跳最多一次影冲、落地补充、不可用不缓存",
+        "Shift/J + 独立 >=44px 触屏按钮，按住左右同时可冲刺",
+        "暂停/刷新后影冲与道具状态可恢复，旧无尽档不退化",
+        "确定性用例：空中一次、落地补充、暂停/重载恢复；经典 85 项 smoke 零回归"
+      ],
+      "claimedAt": "2026-11-13T00:44:00+00:00",
+      "completedAt": "2026-11-13T01:09:00+00:00",
+      "evidence": "Commit 4e8f921 (shared feat commit for GP004-GP006; same file, not splittable). DASH_SPEED=620/DASH_TIME=0.13 (approx 80.6px)/DASH_GRAVITY_SCALE=0.25/DASH_LAND_KEEP=0.6+0.1s carry; one charge replenished on every successful landing; Shift or J + independent 117x48px [data-air-dash] button independent from canvas half-screen pointer; unavailable presses ignored (no buffering); serialize adds dashCharges/dashTimer/dashDir with old-run default 1/0; seeded mulberry32 generation only for platform spawning (default Math.random unchanged); UI label + button count + aria + trail/particles/sfx. Verified: inline node --check exit 0; dashInfo/triggerDash/seed hooks; 41-item self CDP suite PASS; SC-SL-003/SC-SL-009 deterministic scenarios PASS (air single use, landing recharge, pause freeze, refresh restore, legacy restore); classic teaching-platform invariants and full 85/85 smoke unchanged."
+    },
+    {
+      "id": "T037",
+      "title": "Arcade 0.8.0 GP005：影跃影之试炼 S1-S3 与进出关卡",
+      "kind": "agent",
+      "status": "DONE",
+      "dependsOn": [
+        "T036"
+      ],
+      "ownerAuthorizationRequired": false,
+      "acceptance": [
+        "S1 教学移动、S2 移动/易碎、S3 教影冲，每关有影门出口、胜利与 1 次点击重试",
+        "单关可在 1-2 分钟完成，三关确定性可达（独立求解器 3/3 PASS）",
+        "进行中状态写入既有 runs:v1 data，旧档缺 mode 按 classic 恢复；不写经典最高分/Playtime 轮次",
+        "经典模式与 85 项 smoke 零回归；仅本地未推送"
+      ],
+      "claimedAt": "2026-11-13T01:10:00+00:00",
+      "completedAt": "2026-11-13T01:51:00+00:00",
+      "evidence": "Commit 4e8f921. Handcrafted S1 (18 platforms)/S2 (26)/S3 (20) embedded inside the page between STAGES-JSON markers (deep-equal with frozen docs/arcade/stages-0.8.json sha 432C8AB2...); start semantics player top-left; 420x740 viewport with up-only camera; 影门 AABB clear, one-click retry from stage start, pause exit, three-stage summary; trial state persisted only inside existing runs:v1 data (mode/stageIndex/trialElapsed/trialScrolls/trialResults/trialDashes/trialRoute extras, no new key/schema); old save without mode restores as classic; trial does not call Progress.recordPlay (no classic high score/Playtime round pollution). Stage solver 3/3 PASS both JSON and embedded HTML paths; S3 mandatory air-dash gap proven (0/972 without dash, 5724/22356 with one, recovery 972/972 zero deaths); deterministic SC-SL-004/005/006 pass; 320/375/390/430 trial screenshots no overflow; classic entry remains the primary start button so the 85-check smoke is unchanged (85/85)."
+    },
+    {
+      "id": "T038",
+      "title": "Arcade 0.8.0 GP006：影跃双路线、卷轴探索与可读失败复盘",
+      "kind": "agent",
+      "status": "DONE",
+      "dependsOn": [
+        "T037"
+      ],
+      "ownerAuthorizationRequired": false,
+      "acceptance": [
+        "至少一关两条可行路线，结算说明动作与路线表现",
+        "卷轴为可选探索、不影响战力，不成为必需资源",
+        "失败提示可归因、重试 <=2 次点击；经典/85 项 smoke 零回归"
+      ],
+      "claimedAt": "2026-11-13T01:51:00+00:00",
+      "completedAt": "2026-11-13T02:07:00+00:00",
+      "evidence": "Commit 4e8f921. S2 platforms tagged from routes[].platforms (shared platforms multi-tag); landings record exclusive/shared routes; result classification fast/safe/mixed/free with labels (稳妥长路 / 近路快线) shown on stage-clear overlay and final summary, persisted as results[].route/trialRoute in existing data. Failure overlay now has stage-specific actionable hints (S1 no-dash, S2 route trade-off, S3 jump-then-dash) plus 'scroll is optional' note; HUD and results label scrolls as optional; 2.4s route hint at S2 start, not persistent. trialInfo adds route/routeLabel/routes/routeInfo/scrollsCollected/scrollsTotal; read-only routeInfo()/forceRoute() hooks. SC-SL-007/008 enabled; final gameplay --repeat=2 = 22/22, smoke 85/85, solver 3/3. Real-device and human route preference remain UNVERIFIED (Owner playtest)."
+    },
+    {
+      "id": "T039",
+      "title": "Arcade 0.8.0 GP007：独立评审与 Owner 试玩包",
+      "kind": "review",
+      "status": "BLOCKED",
+      "dependsOn": [
+        "T035",
+        "T036",
+        "T037",
+        "T038"
+      ],
+      "ownerAuthorizationRequired": false,
+      "acceptance": [
+        "独立 Reviewer 提供游戏性/安全/兼容结论，Blocker 与 Major 有处理记录",
+        "明确未做真机测试的部分，不把 Agent 结论当作 Owner 试玩",
+        "Owner 至少两轮体验结论（第一轮理解动作，第二轮主动找更短/更难路线），未满足前不推进其余 12 款"
+      ],
+      "claimedAt": "2026-11-13T01:40:00+00:00",
+      "blockedAt": "2026-11-13T02:25:00+00:00",
+      "blockReason": "Owner 两轮试玩结论尚未获得：Agent 不可代签 GP007，0.8.0 发布门槛未通过。技术侧已就绪（APPROVE-WITH-NOTES / 0 Blocker），Owner 按 docs/arcade/0.8.0-PLAYTEST.md 完成两轮试玩后即可解阻。",
+      "evidence": "Commit e456503. Independent reviewer (no implementation role) produced docs/arcade/0.8.0-REVIEW.md: APPROVE-WITH-NOTES, 0 Blocker, 2 Major closed during review (death-line doc mismatch fixed in STAGES.md by Lead; GP004 D407 deterministic cases added as SC-SL-009), 6 Minor dispositioned by Lead, 8 UNVERIFIED classes (real-device dual-touch/feel/fps, human first-run pacing, S2 fast human pass, 5-minute AFK, true simultaneous dual-touch, Owner conclusions). Reviewer independent gates on frozen tree: validate PASS, node --check 6/6 + inline page script, solver double path 3/3, smoke 85/85 (232.3s, sha unchanged), gameplay --repeat=2 22/22, own real-input CDP suite 78/78 (S1 10.4s clear, S2 safe 11.5s with route label, S3 real Shift dash across mandatory gap, wrong/no-dash both recovered on R without premature death). docs/arcade/0.8.0-PLAYTEST.md contains the two-round Owner script, observation checklist and explicit statements that Owner conclusions are missing and cannot be signed by an agent. Not pushed/released."
+    },
+    {
+      "id": "T040",
+      "title": "Arcade 0.8.0 竖切片集成验证与本地提交",
+      "kind": "agent",
+      "status": "DONE",
+      "dependsOn": [
+        "T034",
+        "T035",
+        "T036",
+        "T037",
+        "T038"
+      ],
+      "ownerAuthorizationRequired": false,
+      "acceptance": [
+        "validate_site.py / build_site.py / node --check（含页内联脚本）/ arcade_smoke 85/85 / gameplay 22/22 / solver 双路径全部通过",
+        "git diff --check 干净；文档/版本/任务队列同步；提交为本地 Conventional Commits，未推送/未发布",
+        "ARCADE_VERSION 保持 0.7.0，注册表/SW/共享运行时未改"
+      ],
+      "claimedAt": "2026-11-13T02:07:00+00:00",
+      "completedAt": "2026-11-13T02:45:00+00:00",
+      "evidence": "Lead integration on branch feat/arcade-0.8-gameplay. Gates on final tree: py -3 tools/validate_site.py PASS; py -3 tools/build_site.py PASS (dist allowlist unchanged: index.html/favicon.svg/shared/apps/.nojekyll); node --check engine.js/sw.js/site-shell.js/home.js/arcade_smoke.mjs/arcade_cdp.mjs/arcade_gameplay_test.mjs/arcade_stage_solver.mjs all exit 0; extracted inline page script node --check exit 0; arcade_smoke 85/85 checks passed (exit 0, ports env-overridden); arcade_gameplay_test --repeat=2 22/22 scenario runs passed (exit 0); stage solver JSON and embedded-HTML both 3/3 PASS (exit 0); git diff --check clean. Docs synced: apps/arcade/README.md (0.8.0 dev section + fixed stale 'not released' line + trial limits), apps/arcade/CHANGELOG.md (0.8.0-dev), docs/ROADMAP.md (84->85 fix + 0.8.0 in-progress), docs/RELEASE-RUNBOOK.md (stale pending line replaced), docs/arcade/README.md, docs/arcade/0.8.0-PLAN.md, docs/arcade/0.8.0-STAGES.md (reviewer Minor fixes + Stage Spec appendix), docs/arcade/0.8.0-REVIEW.md (Lead disposition). Version intentionally unchanged (ARCADE_VERSION/registry/SW all 0.7.0); engine.js/sw.js/shared/ untouched. Local commits: b629b6b (docs facts/rubric/plan), 8cc689d (test base/solver/stage data), 4e8f921 (feat shadow-leap vertical slice), e456503 (review+playtest), this task's docs/queue commit. NOT pushed, NOT merged to main, no tag, no deploy; iOS/Android real-device remains UNVERIFIED; release requires Owner playtest + PUBLISH_TO_MAIN authorization."
     }
   ]
 }

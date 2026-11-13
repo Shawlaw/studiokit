@@ -1,5 +1,17 @@
 # Arcade Changelog
 
+## 0.8.0-dev — 2026-11-13（开发中，未发布、未升版本）
+
+本轮只做《影跃》的玩法深度竖切片，用 Owner 试玩验证“一款游戏先出现真正的目标/决策/技巧/探索”后再决定是否推广到其余 12 款；其余游戏与 0.7.0 一致，`ARCADE_VERSION` 故意保持 `0.7.0`。
+
+- 影冲（GP004）：新增空中一次短水平冲刺（620px/s × 0.13s ≈ 80 逻辑像素，重力 ×0.25，落地终止并保留 60% 横向惯性）；每次成功着陆补充一次、开局/重开各一次；不可用时不缓存。键盘 `Shift`/`J` + 独立 ≥44px 触屏按钮（可与画布左右半屏多指并发），按钮/画布状态与残影音效同步；存档只向既有 `runs:v1` 的 `data` 追加 `dashCharges/dashTimer/dashDir`，旧档缺字段按 1/0 恢复；新增 `setSeed/resetWithSeed/startClassicWithSeed` 等确定性测试钩子。
+- 影之试炼（GP005）：新增 S1 初入影林 / S2 月下断桥 / S3 影冲试炼 三关手写关卡、顶部影门结算、失足 1 次点击重试、暂停退出本关；经典主按钮保持「开始游戏」，`btn2` 进入试炼；三关手工数据内嵌，独立求解器 3/3 PASS（S3 关键缺口几何上必须一次影冲，错误冲刺全部回收不判死）；进行中状态写入既有 `runs:v1` 的 `data`（`mode/stageIndex/trialElapsed/trialScrolls/trialResults/...`），旧档缺 `mode` 按经典恢复；试炼不写经典最高分/Playtime 轮次、不新增 localStorage key、不改 Schema、结算不区分 assisted（是否使用羽落/月弹不单独标记）。
+- 双路线与探索（GP006）：S2「稳妥长路 / 近路快线」双路线均可通关（求解器理论最短 11.12s vs 7.88s），结算/三关总结显示路线与卷轴；金色卷轴为可选探索（不影响战力）；失足复盘按关卡给出可归因提示与「卷轴是可选的」说明；新增 `trialInfo.route/routeLabel/routes/routeInfo/scrollsCollected/scrollsTotal` 与只读 `routeInfo()/forceRoute()` 测试钩子。
+- 测试基座（GP003）：从 `tools/arcade_smoke.mjs` 抽出零依赖 CDP 库 `tools/lib/arcade_cdp.mjs`（85 项 smoke 行为与数量不变、端口可 env 覆盖）；新增 `tools/arcade_gameplay_test.mjs` 确定性场景（11 个：seed 复现、影冲单次/落地补充/暂停刷新恢复、旧档恢复、试炼三关状态机、失败重试、暂停刷新恢复、双路线判定、卷轴可选、Boss 生成清关、赛车安全走廊）；新增 `tools/arcade_stage_solver.mjs` 三关独立可达性求解器。
+- 文档：新增 `docs/arcade/`（事实冻结、六维量表、S1–S3 数据与设计、确定性测试协议、独立评审与 Owner 试玩包）；不进发布产物。
+- 测试：`arcade_smoke.mjs` 85/85（经典与 13 款零回归）、`arcade_gameplay_test.mjs --repeat=2` 11 场景×2 全绿、`arcade_stage_solver.mjs` 双路径 3/3 PASS、`validate_site.py` / `build_site.py` / `node --check` 全过；`verify_deploy.py` 未执行（未发布）。
+- 未验证：iOS/Android 真机多指触控与手感、真人通关率/难度、低端机 60fps——均保留 UNVERIFIED，等待 Owner 试玩（GP007 门槛）。
+
 ## 0.7.0 — 2026-11-13（已发布）
 
 本轮主题是“更快乐、但不要求沉迷”：13 款游戏都增加了由玩家主动决定何时使用的道具、更直接的即时反馈，或更自然的收尾目标；没有签到、每日奖励、商店、付费抽奖、跨局成长或限时回归任务。
