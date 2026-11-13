@@ -212,7 +212,7 @@ def validate(root=ROOT):
             index_source = arcade_index.read_text(encoding='utf-8')
             for marker in ('rel="manifest"', 'data-playtime-section', 'data-offline', 'data-install', 'data-share', 'data-random', '无签到', 'data-hall-version>0.8.0'):
                 if marker not in index_source:
-                    ok = fail(f'Arcade hub 0.7.0 marker missing: {marker}') and ok
+                    ok = fail(f'Arcade hub 0.8.0 marker missing: {marker}') and ok
         arcade_sw = root / 'apps/arcade/sw.js'
         if arcade_sw.exists():
             sw_source = arcade_sw.read_text(encoding='utf-8')

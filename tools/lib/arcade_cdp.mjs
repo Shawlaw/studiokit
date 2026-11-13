@@ -3,7 +3,7 @@
  * StudioKit Arcade 零依赖 CDP 测试库。
  *
  * 从 tools/arcade_smoke.mjs 抽出的通用基础设施，供：
- * - tools/arcade_smoke.mjs：0.7.0 全链路回归冒烟（85 项）
+ * - tools/arcade_smoke.mjs：0.8.0 全链路回归冒烟（85 项）
  * - tools/arcade_gameplay_test.mjs：0.8.0 确定性玩法场景
  *
  * 只使用 Node 内置模块（http / fs / os / path / child_process / url）与

@@ -529,8 +529,8 @@ function renderReport(games, outputs, designResult, designParsed) {
   lines.push('');
   lines.push('## 6. 已知事项 / 发布前处理');
   lines.push('');
-  lines.push('- `apps/arcade/sw.js` 的 shell 预缓存已加入这 13 个数据文件，但缓存 `VERSION` 仍是 `0.7.0`；**发布前必须升缓存版本**，否则老用户离线态可能拿不到新数据。');
-  lines.push('- `ARCADE_VERSION` 保持 `0.7.0`（0.8/0.9 均未发布），不存在构建步骤；生成物入库供静态站点直接加载。');
+  lines.push('- `apps/arcade/sw.js` 的 shell 预缓存包含这 13 个数据文件；0.8.0 发布时缓存 `VERSION` 已升至 `0.8.0`，老用户会更新缓存。');
+  lines.push('- `ARCADE_VERSION` 为 `0.8.0`；不存在构建步骤，生成物入库供静态站点直接加载。');
   lines.push('- 设计包校验只证明设计数据存在参考解，不代表真实引擎物理/移动端可玩；后者由各游戏 `impl/<gameId>.md` 与测试证据补齐。');
   lines.push('');
   return lines.join('\n');
