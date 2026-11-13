@@ -35,6 +35,60 @@
       pointer-events: none;
     }
     .ch-tip-float[hidden] { display: none; }
+    /* 0.8.1 禅模式：顶栏禅模式 HUD + 画布下方冻结/结束按钮（仅本页生效）。 */
+    .game-hud [hidden] { display: none !important; }
+    .zen-hud { color: #8ff3f3; white-space: nowrap; }
+    .zen-hud strong { color: var(--ac-ink); }
+    .zen-bar {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 8px;
+      width: min(420px, 100%);
+      margin: 2px auto 0;
+    }
+    .zen-bar[hidden] { display: none; }
+    .zen-btn {
+      flex: 1 1 140px;
+      min-width: 0;
+      min-height: 48px;
+      padding: 10px 14px;
+      border: 1px solid var(--ac-line);
+      border-radius: 12px;
+      background: linear-gradient(180deg, var(--ac-panel-2), var(--ac-panel));
+      color: var(--ac-ink);
+      font: inherit;
+      font-size: 13px;
+      font-weight: 700;
+      line-height: 1.2;
+      cursor: pointer;
+      touch-action: manipulation;
+      -webkit-tap-highlight-color: transparent;
+    }
+    .zen-btn:focus-visible { outline: 2px solid var(--ac-accent); outline-offset: 2px; }
+    .zen-btn:disabled { opacity: 0.4; cursor: default; }
+    .zen-btn-freeze.is-frozen {
+      border-color: #41d9d9;
+      color: #b8ffff;
+      background: linear-gradient(180deg, rgba(65, 217, 217, 0.32), rgba(65, 217, 217, 0.12));
+    }
+    .zen-btn-end { flex: 0 1 120px; color: var(--ac-muted); }
+    /* 禅模式多出按钮行：只为较高视口（含常见竖屏手机）回收 56px 画布高度，避免纵向溢出。 */
+    @media (min-height: 561px) {
+      body.has-zen-bar.has-joy-row.has-extra-controls:not(.arcade-immersive) .stage-box {
+        height: min(
+          calc(100dvh - var(--studiokit-shellbar-h, 0px) - 302px - env(safe-area-inset-bottom, 0px)),
+          calc(min(520px, 100vw - 24px) * 740 / 420)
+        );
+      }
+    }
+    @media (min-height: 561px) and (max-width: 360px) {
+      body.has-zen-bar.has-joy-row.has-extra-controls:not(.arcade-immersive) .stage-box {
+        height: min(
+          calc(100dvh - var(--studiokit-shellbar-h, 0px) - 298px - env(safe-area-inset-bottom, 0px)),
+          calc(min(520px, 100vw - 16px) * 740 / 420)
+        );
+      }
+    }
   </style>
   <script src="../../../shared/site-shell.js" defer></script>
   <script src="../engine.js"></script>
@@ -49,7 +103,8 @@
       <h1 class="game-title">🧱 俄罗斯方块</h1>
       <div class="game-hud">
         <span data-hud-classic>分数 <strong data-hud-score>0</strong></span>
-        <span data-hud-classic>最高 <strong data-hud-high>0</strong></span>
+        <span data-hud-classic data-hud-highwrap>最高 <strong data-hud-high>0</strong></span>
+        <span class="zen-hud" data-hud-zen hidden></span>
         <span class="ac-challenge-hud" data-ch-hud hidden></span>
       </div>
       <button type="button" class="ac-icon-btn" data-pause aria-label="暂停游戏" title="暂停游戏（P / Esc）">⏸</button>
@@ -64,6 +119,7 @@
             <p data-ov-text>经典落块消除</p>
             <button type="button" class="ac-btn" data-ov-btn>开始游戏</button>
             <button type="button" class="ac-btn ac-btn-secondary" data-ov-btn2 hidden>重新开始</button>
+            <button type="button" class="ac-btn ac-btn-secondary" data-ov-btn3 hidden>🧘 禅模式</button>
           </div>
         </div>
         <div class="ac-challenge-tip ch-tip-float" data-ch-tip hidden></div>
@@ -71,6 +127,10 @@
           <div class="ac-challenge-panel" data-ch-panel hidden></div>
         </div>
       </div>
+    </div>
+    <div class="zen-bar" data-zen-bar hidden aria-label="禅模式操作">
+      <button type="button" class="zen-btn zen-btn-freeze" data-zen-freeze aria-label="冻结提速">❄ 冻结提速</button>
+      <button type="button" class="zen-btn zen-btn-end" data-zen-end aria-label="结束本局并记录">结束本局</button>
     </div>
     <div class="touch-pad block-pad" data-touch-pad aria-label="俄罗斯方块触屏操作面板">
       <div class="block-pad-group block-pad-move" role="group" aria-label="左右移动">
@@ -94,8 +154,8 @@
       </div>
     </div>
     <p class="game-hint block-hint">
-      <span class="hint-touch">← → 移动 · ↓ 加速 · ⇓ 落底 · 道具 1 换块 / 2 慢落</span>
-      <span class="hint-keyboard">←→ 移动 · ↑ 旋转 · ↓ 加速 · 空格落底 · 道具 1/2 · P 暂停</span>
+      <span class="hint-touch">← → 移动 · ↓ 加速 · ⇓ 落底 · 道具 1/2 · 禅模式</span>
+      <span class="hint-keyboard">←→ 移动 · ↑ 旋转 · ↓ 加速 · 空格落底 · 道具 1/2 · Z 冻结提速 · P 暂停</span>
     </p>
   </main>
   <script>
@@ -137,13 +197,19 @@
         ovText: document.querySelector('[data-ov-text]'),
         ovBtn: document.querySelector('[data-ov-btn]'),
         ovBtn2: document.querySelector('[data-ov-btn2]'),
+        ovBtn3: document.querySelector('[data-ov-btn3]'),
         hudScore: document.querySelector('[data-hud-score]'),
         hudHigh: document.querySelector('[data-hud-high]'),
+        hudHighWrap: document.querySelector('[data-hud-highwrap]'),
+        hudZen: document.querySelector('[data-hud-zen]'),
         hudClassic: document.querySelectorAll('[data-hud-classic]'),
         chHud: document.querySelector('[data-ch-hud]'),
         chLayer: document.querySelector('[data-ch-layer]'),
         chPanel: document.querySelector('[data-ch-panel]'),
         chTip: document.querySelector('[data-ch-tip]'),
+        zenBar: document.querySelector('[data-zen-bar]'),
+        zenFreezeBtn: document.querySelector('[data-zen-freeze]'),
+        zenEndBtn: document.querySelector('[data-zen-end]'),
         pause: document.querySelector('[data-pause]'),
         mute: document.querySelector('[data-mute]'),
       };
@@ -194,6 +260,10 @@
       const tools = { swap: JOY_START.swap, slow: JOY_START.slow };
       let slowTimer = 0;
       let shortRun = true;
+      /* 0.8.1 禅模式：无限游玩；zenFrozen 时速度停在 zenSpeedLevel，恢复后立即追平 level。 */
+      let zenFrozen = false;
+      let zenSpeedLevel = 1;
+      let zenElapsed = 0;
       /* 0.9 挑战模式状态：mode==='classic' 时这些字段不参与经典逻辑。 */
       let mode = 'classic';
       let chStage = null;
@@ -282,17 +352,72 @@
         return y;
       }
       function gravSec() {
-        return Math.max(0.06, 0.8 * Math.pow(0.85, level - 1));
+        /* 禅模式按 zenSpeedLevel（可冻结）计速；经典/挑战继续按 level，行为零回归。 */
+        const speedLevel = mode === 'zen' ? zenSpeedLevel : level;
+        return Math.max(0.06, 0.8 * Math.pow(0.85, speedLevel - 1));
       }
       function syncHud() {
         dom.hudScore.textContent = String(score);
+      }
+      /* 冻结时 zenSpeedLevel 不跟随 level；恢复提速时立即追平当前 level。 */
+      function syncZenSpeed() {
+        if (mode !== 'zen' || zenFrozen) return;
+        zenSpeedLevel = level;
       }
       function levelUp() {
         const lv = 1 + Math.floor(lines / 10);
         if (lv > level) {
           level = lv;
+          syncZenSpeed();
           A.Sfx.play('spring');
         }
+      }
+      function zenUiActive() {
+        return mode === 'zen' && (state === 'playing' || state === 'paused' || state === 'clearing');
+      }
+      function syncZenHud() {
+        const inZen = mode === 'zen';
+        /* 禅模式隐藏经典「最高」，避免被误读成禅模式最高分；挑战模式同样隐藏。 */
+        if (dom.hudHighWrap) dom.hudHighWrap.hidden = inZen || mode === 'challenge';
+        if (!dom.hudZen) return;
+        dom.hudZen.hidden = !inZen;
+        if (!inZen) {
+          dom.hudZen.textContent = '';
+          return;
+        }
+        dom.hudZen.innerHTML =
+          '🧘 禅模式 · 速度 Lv.' + zenSpeedLevel +
+          (zenFrozen ? ' · 已冻结' : '') +
+          ' · 行数 <strong>' + lines + '</strong>';
+      }
+      function syncZenBar() {
+        const active = zenUiActive();
+        if (document.body) document.body.classList.toggle('has-zen-bar', active);
+        if (!dom.zenBar) return;
+        dom.zenBar.hidden = !active;
+        if (!active) return;
+        if (dom.zenFreezeBtn) {
+          dom.zenFreezeBtn.textContent = zenFrozen ? '▶ 恢复提速' : '❄ 冻结提速';
+          dom.zenFreezeBtn.setAttribute('aria-label', zenFrozen ? '恢复提速' : '冻结提速');
+          dom.zenFreezeBtn.classList.toggle('is-frozen', zenFrozen);
+          dom.zenFreezeBtn.disabled = state !== 'playing';
+        }
+        if (dom.zenEndBtn) dom.zenEndBtn.disabled = state !== 'playing' && state !== 'paused';
+      }
+      /* #test zenInfo() 的快照：字段与真实状态直接对应，不做假数据。 */
+      function zenInfoSnapshot() {
+        return {
+          mode,
+          state,
+          score,
+          lines,
+          level,
+          zenFrozen,
+          zenSpeedLevel,
+          gravitySec: gravSec(),
+          shortRun: mode === 'zen' ? false : shortRun,
+          high: A.Progress.get('block-drop').high,
+        };
       }
 
       /* ---------- 每局主动道具 ---------- */
@@ -387,13 +512,22 @@
         tools.slow = JOY_START.slow;
         slowTimer = 0;
         shortRun = true;
+        zenFrozen = false;
+        zenSpeedLevel = 1;
+        zenElapsed = 0;
         spawn();
         syncHud();
         syncJoyTools();
       }
 
-      function showOverlay(title, text, btn, onBtn, btn2, onBtn2) {
-        ui.show({ title, text, btn, onBtn, btn2, onBtn2 });
+      function showOverlay(title, text, btn, onBtn, btn2, onBtn2, btn3, onBtn3) {
+        const opts = { title, text, btn, onBtn, btn2, onBtn2 };
+        /* 可选第三按钮：页面不传 btn3 时引擎会把它隐藏，其他弹层行为不变。 */
+        if (btn3) {
+          opts.btn3 = btn3;
+          opts.onBtn3 = onBtn3;
+        }
+        ui.show(opts);
       }
       function hideOverlay() {
         ui.hide();
@@ -418,6 +552,70 @@
         autosave.saveNow();
       }
 
+      /* 0.8.1 禅模式：无限局（不设 40 行收局），速度可冻结/恢复。 */
+      function startZenRound() {
+        mode = 'zen';
+        chStage = null;
+        chQueue = [];
+        chTipTimer = 0;
+        if (dom.chLayer) dom.chLayer.hidden = true;
+        if (dom.chPanel) dom.chPanel.hidden = true;
+        autosave.clear();
+        reset();
+        shortRun = false;
+        zenFrozen = false;
+        zenSpeedLevel = 1;
+        zenElapsed = 0;
+        state = 'playing';
+        hideOverlay();
+        loop.resume();
+        pauseUi.sync();
+        syncTouchPad();
+        syncChallengeHud();
+        updateChallengeTip();
+        autosave.saveNow();
+        return true;
+      }
+      /* 真实切换冻结/恢复提速逻辑（键盘 Z、触屏按钮、#test 钩子共用）。 */
+      function toggleZenFreezeNow() {
+        if (mode !== 'zen' || (state !== 'playing' && state !== 'paused')) {
+          return { zenFrozen, zenSpeedLevel };
+        }
+        zenFrozen = !zenFrozen;
+        if (!zenFrozen) zenSpeedLevel = level;
+        A.Sfx.play(zenFrozen ? 'hit' : 'spring');
+        syncZenHud();
+        syncZenBar();
+        autosave.saveNow();
+        return { zenFrozen, zenSpeedLevel };
+      }
+      function endZenGame() {
+        if (mode !== 'zen') return false;
+        if (state !== 'playing' && state !== 'paused') return false;
+        gameOver('禅模式结束', false);
+        return state === 'over';
+      }
+      /* 禅模式收局/主动结束后的「回到开始」：把模式复位为经典入口态。 */
+      function returnToStart() {
+        mode = 'classic';
+        chStage = null;
+        chStageId = null;
+        chQueue = [];
+        chTipTimer = 0;
+        zenFrozen = false;
+        zenSpeedLevel = 1;
+        zenElapsed = 0;
+        state = 'ready';
+        autosave.clear();
+        if (dom.chLayer) dom.chLayer.hidden = true;
+        if (dom.chPanel) dom.chPanel.hidden = true;
+        reset();
+        showStart();
+        syncChallengeHud();
+        pauseUi.sync();
+        syncTouchPad();
+      }
+
       function resumeGame() {
         if (state !== 'paused') return;
         state = 'playing';
@@ -425,6 +623,7 @@
         loop.resume();
         pauseUi.sync();
         syncTouchPad();
+        syncZenBar();
       }
 
       function gameOver(title, won) {
@@ -432,6 +631,35 @@
         state = 'over';
         A.Sfx.play(won ? 'perfect' : 'over');
         autosave.clear();
+        if (mode === 'zen') {
+          /* 禅模式：井口堆满/主动结束都走同一结算；积分只记录一次，且不写经典最高分（引擎保证）。 */
+          if (!recordSaved) {
+            A.Progress.recordPlay('block-drop', score, {
+              mode: 'zen',
+              lines,
+              level,
+              detail: '禅模式 · ' + lines + ' 行 · Lv.' + level,
+            });
+            recordSaved = true;
+          }
+          loop.pause();
+          showOverlay(
+            title || '禅模式结束',
+            `<span class="ac-score">${score}</span>` +
+              `${lines} 行 · Lv.${level} · 速度 Lv.${zenSpeedLevel}` +
+              (zenElapsed > 0 ? ` · 用时 ${A.formatDuration(zenElapsed * 1000)}` : '') +
+              '<br/>本局已记录到积分表（禅模式不计经典最高分）',
+            '再来一局',
+            startZenRound,
+            '回到开始',
+            returnToStart
+          );
+          syncZenHud();
+          syncZenBar();
+          pauseUi.sync();
+          syncTouchPad();
+          return;
+        }
         let rec = null;
         if (!recordSaved) {
           rec = A.Progress.recordPlay('block-drop', score); if (rec) high = rec.high;
@@ -465,21 +693,28 @@
         if (mode === 'challenge') {
           paused.btn2 = '退出挑战';
           paused.onBtn2 = exitChallenge;
+        } else if (mode === 'zen') {
+          /* 禅模式暂停：可直接结束本局并记录，与井口结束走同一结算路径。 */
+          paused.btn2 = '结束本局并记录';
+          paused.onBtn2 = endZenGame;
         }
         ui.show(paused);
         pauseUi.sync();
         syncTouchPad();
+        syncZenBar();
       }
 
       function showStart() {
         const dataReady = challengeDataReady();
         showOverlay(
           '俄罗斯方块',
-          '经典落块消除：新局完成 40 行即快乐收局。<br/>一次消 4 行（Tetris）得分 ×8<br/>道具 1 换块 / 2 慢落 · 随时可暂停',
+          '经典落块消除：新局完成 40 行即快乐收局。<br/>禅模式无限游玩，按 Z 随时冻结提速；一次消 4 行（Tetris）得分 ×8<br/>道具 1 换块 / 2 慢落 · 随时可暂停',
           '开始游戏',
           startGame,
           dataReady ? '挑战 6 关' : undefined,
-          dataReady ? openChallengePanel : undefined
+          dataReady ? openChallengePanel : undefined,
+          '🧘 禅模式',
+          startZenRound
         );
         syncChallengeHud();
       }
@@ -510,6 +745,9 @@
           el.hidden = inChallenge;
         });
         dom.chHud.hidden = !inChallenge;
+        /* 禅模式 HUD / 画布下方操作条随模式与状态同步（经典/挑战时自动隐藏）。 */
+        syncZenHud();
+        syncZenBar();
         if (!inChallenge) return;
         if (!chStage) {
           dom.chHud.textContent = '';
@@ -836,6 +1074,34 @@
         syncTouchPad();
       }
 
+      /* ---------- 禅模式操作：画布下方按钮 + 键盘 Z 冻结/恢复提速 ---------- */
+      function bindZenControls() {
+        if (dom.zenFreezeBtn) {
+          dom.zenFreezeBtn.addEventListener('click', () => {
+            if (mode !== 'zen' || state !== 'playing') return;
+            toggleZenFreezeNow();
+          });
+        }
+        if (dom.zenEndBtn) {
+          dom.zenEndBtn.addEventListener('click', () => {
+            if (mode !== 'zen') return;
+            endZenGame();
+          });
+        }
+        window.addEventListener('keydown', (e) => {
+          if (e.repeat || e.metaKey || e.ctrlKey || e.altKey) return;
+          if (e.key !== 'z' && e.key !== 'Z') return;
+          const target = e.target;
+          if (target && target.tagName) {
+            const tag = target.tagName.toLowerCase();
+            if (tag === 'input' || tag === 'textarea' || tag === 'select' || target.isContentEditable) return;
+          }
+          if (mode !== 'zen' || state !== 'playing') return;
+          e.preventDefault();
+          toggleZenFreezeNow();
+        });
+      }
+
       /* ---------- 局内存档 ---------- */
       function serialize() {
         if (state !== 'playing' && state !== 'paused') return null;
@@ -862,6 +1128,10 @@
           tools: { swap: tools.swap, slow: tools.slow },
           slowTimer,
           shortRun,
+          /* 0.8.1 禅模式：mode 缺失的旧档仍按经典恢复。 */
+          zenFrozen,
+          zenSpeedLevel,
+          zenElapsed,
           /* 0.9 挑战：mode 缺失时 restore 按经典恢复（旧档安全）。 */
           mode,
           stageId: mode === 'challenge' ? chStageId : null,
@@ -952,6 +1222,28 @@
               if (!cur) spawnChallenge();
             }
           }
+          /* 0.8.1 禅模式存档恢复：无限局 + 冻结速度；旧档缺 mode 已按经典恢复，挑战逻辑不受影响。 */
+          if (data.mode === 'zen') {
+            mode = 'zen';
+            chStage = null;
+            chStageId = null;
+            chQueue = [];
+            shortRun = false;
+            recordSaved = false;
+            zenElapsed = clamp(Number(data.zenElapsed) || 0, 0, 36000);
+            zenFrozen = data.zenFrozen === true;
+            const savedSpeedLevel = Math.floor(Number(data.zenSpeedLevel) || 0);
+            /* 冻结：沿用保存的速度（并夹在 [1, level] 内）；未冻结：立即追平 level。 */
+            zenSpeedLevel = zenFrozen
+              ? clamp(savedSpeedLevel >= 1 ? savedSpeedLevel : level, 1, Math.max(1, level))
+              : level;
+            if (!cur && state === 'playing') {
+              const prevRecordSaved = recordSaved;
+              recordSaved = true; /* 补出块失败时不把恢复过程误记成一局 */
+              spawn();
+              recordSaved = prevRecordSaved;
+            }
+          }
           syncHud();
           syncChallengeHud();
           updateChallengeTip();
@@ -967,7 +1259,9 @@
         meta: () =>
           mode === 'challenge' && chStage
             ? { score: chElapsed, summary: `挑战 ${stageLabel(chStage)} ${chStage.title} · ${chLines}/${chTarget} 行` }
-            : { score, summary: `得分 ${score} · ${lines} 行 · Lv.${level}` },
+            : mode === 'zen'
+              ? { score, summary: `禅模式 · 得分 ${score} · ${lines} 行 · 速度 Lv.${zenSpeedLevel}${zenFrozen ? '（已冻结）' : ''}` }
+              : { score, summary: `得分 ${score} · ${lines} 行 · Lv.${level}` },
       });
 
       /* ---------- 操作 ---------- */
@@ -1072,6 +1366,7 @@
         lines += n;
         levelUp();
         syncHud();
+        if (mode === 'zen') syncZenHud();
         clearing = null;
         cur = null;
         state = 'playing';
@@ -1117,6 +1412,8 @@
             chLastHudSecond = sec;
             syncChallengeHud();
           }
+        } else if (mode === 'zen') {
+          zenElapsed += dt;
         }
         const wasSlow = slowTimer > 0;
         slowTimer = Math.max(0, slowTimer - dt);
@@ -1334,6 +1631,15 @@
             font: 'bold 13px system-ui',
             color: '#ffd23f',
           });
+        } else if (mode === 'zen' && (state === 'playing' || state === 'paused' || state === 'clearing')) {
+          A.draw.label(ctx, 'ZEN · 速度 Lv.' + zenSpeedLevel, W / 2, 66, {
+            font: 'bold 22px system-ui',
+            color: zenFrozen ? '#8ff3f3' : 'rgba(238,241,255,0.78)',
+          });
+          A.draw.label(ctx, (zenFrozen ? '❄ 已冻结 · ' : '') + '行数 ' + lines + ' · 无限游玩 · Z 冻结提速', W / 2, 92, {
+            font: 'bold 12px system-ui',
+            color: '#ffd23f',
+          });
         } else {
           A.draw.label(ctx, 'BLOCK DROP', W / 2, 70, {
             font: 'bold 22px system-ui',
@@ -1371,6 +1677,7 @@
       reset();
       state = 'ready';
       bindTouchPad();
+      bindZenControls();
       if (location.hash === '#test') {
         window.__arcadeTest = {
           info() {
@@ -1387,6 +1694,8 @@
               filled: board.reduce((n, row) => n + row.filter(Boolean).length, 0),
               nextKey,
               bag: bag.slice(),
+              zenFrozen,
+              zenSpeedLevel,
             };
           },
           joyInfo() {
@@ -1414,6 +1723,10 @@
           lineClearScenario(startLines) {
             mode = 'classic';
             chStage = null;
+            /* 勾子显式恢复经典 40 行收局状态，避免先跑过禅模式后 shortRun 残留导致回归场景不确定。 */
+            shortRun = true;
+            syncZenHud();
+            syncZenBar();
             board = [];
             for (let r = 0; r < ROWS; r++) board.push(new Array(COLS).fill(null));
             for (let c = 0; c < 6; c++) board[ROWS - 1][c] = '#7c5cff';
@@ -1436,6 +1749,9 @@
           topOutScenario() {
             mode = 'classic';
             chStage = null;
+            shortRun = true;
+            syncZenHud();
+            syncZenBar();
             board = [];
             for (let r = 0; r < ROWS; r++) board.push(new Array(COLS).fill('#7c5cff'));
             cur = null;
@@ -1523,6 +1839,65 @@
             if (mode !== 'challenge') return false;
             exitChallenge();
             return true;
+          },
+          /* ---------- 0.8.1 禅模式钩子（复用真实状态与结算逻辑） ---------- */
+          zenInfo() {
+            return zenInfoSnapshot();
+          },
+          startZen() {
+            return startZenRound();
+          },
+          toggleZenFreeze() {
+            return toggleZenFreezeNow();
+          },
+          zenSetState(opts) {
+            const o = opts && typeof opts === 'object' ? opts : {};
+            const nextLines = Math.floor(Number(o.lines));
+            if (Number.isFinite(nextLines)) lines = clamp(nextLines, 0, 9999);
+            /* 真实 recompute：level 仍按 lines 提升；未冻结时速度立即追平 level。 */
+            level = 1 + Math.floor(lines / 10);
+            if (typeof o.frozen === 'boolean') zenFrozen = o.frozen;
+            if (!zenFrozen) zenSpeedLevel = level;
+            syncHud();
+            syncZenHud();
+            syncZenBar();
+            autosave.saveNow();
+            return zenInfoSnapshot();
+          },
+          zenLineClearScenario(startLines) {
+            mode = 'zen';
+            chStage = null;
+            chStageId = null;
+            chQueue = [];
+            shortRun = false;
+            recordSaved = false;
+            zenFrozen = false;
+            zenElapsed = 0;
+            board = [];
+            for (let r = 0; r < ROWS; r++) board.push(new Array(COLS).fill(null));
+            for (let c = 0; c < 6; c++) board[ROWS - 1][c] = '#7c5cff';
+            lines = clamp(Math.floor(Number(startLines) || 0), 0, SHORT_LINES - 1);
+            level = 1 + Math.floor(lines / 10);
+            zenSpeedLevel = level;
+            cur = {
+              key: 'I',
+              m: PIECES.I.m.map((row) => row.slice()),
+              color: PIECES.I.color,
+              x: 6,
+              y: ROWS - 2,
+            };
+            grounded = false;
+            lockTimer = 0;
+            lockResets = 0;
+            dropTimer = 0;
+            state = 'playing';
+            syncZenHud();
+            syncZenBar();
+            hardDrop();
+            return true;
+          },
+          endZen() {
+            return endZenGame();
           },
         };
       }

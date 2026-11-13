@@ -7,7 +7,7 @@
 (() => {
   'use strict';
 
-  const ARCADE_VERSION = '0.8.0';
+  const ARCADE_VERSION = '0.8.1';
   const PROGRESS_KEY = 'studiokit:arcade:progress:v1';
   const PREFS_KEY = 'studiokit:arcade:prefs:v1';
   const RUNS_KEY = 'studiokit:arcade:runs:v1';
@@ -17,6 +17,9 @@
   const RUN_SCHEMA = 1;
   const PLAYTIME_SCHEMA = 1;
   const CHALLENGE_SCHEMA = 1;
+  const SCORES_KEY = 'studiokit:arcade:scores:v1';
+  const SCORES_SCHEMA = 1;
+  const SCORES_LIMIT = 300;
   const EXPORT_FORMAT = 'studiokit-arcade-progress';
 
   /* 引擎脚本自身的目录（apps/arcade/），用于子路径部署、分享链接与 Service Worker。 */
@@ -143,7 +146,7 @@
       difficulty: 3,
       session: '3–8 分钟',
       tags: ['消除', '经典'],
-      how: '经典落块，触摸双手分区；1 换块、2 慢落，新局 40 行轻快收尾。',
+      how: '经典 40 行、无尽禅模式（可冻结提速）、6 关挑战；1 换块、2 慢落。',
     },
     {
       id: 'star-raid',
@@ -589,7 +592,7 @@
     }
 
     function recordRound(gameId, score, isNewHigh) {
-      if (!currentGame || gameId !== currentGame.id) return;
+      if (!currentGame || gameId !== currentGame.id) return { duration: 0 };
       closeSegment();
       flushTime();
       const duration = Math.max(0, Math.round(roundMs));
@@ -604,6 +607,8 @@
       data.games[currentGame.id] = rec;
       data.updatedAt = now.toISOString();
       safeSetJSON(PLAYTIME_KEY, data);
+      /* 0.8.1：把本轮有效游玩时长返回给 Progress.recordPlay，供积分记录使用。 */
+      return { duration };
     }
 
     function install() {
@@ -1129,6 +1134,180 @@
   };
 
   /* ----------------------------------------------------------
+   * 积分记录（0.8.1）：每局结束一条，最新在前，上限 SCORES_LIMIT 条。
+   * - 独立于 progress/runs/playtime/challenge；挑战有独立用时/通关记录，不进积分表。
+   * - 读取 fail closed：损坏 / Schema 不匹配时返回空记录，不删除、不覆盖原值。
+   * - 写入失败静默：不抛异常、不阻塞本局结算。
+   * ---------------------------------------------------------- */
+  const GAME_ID_SET = new Set(GAMES.map((game) => game.id));
+
+  /* null / 非法值按 null 处理；只接受非负有限数并向下取整。 */
+  function sanitizeScoreCount(value) {
+    if (value == null) return null;
+    const count = Number(value);
+    return Number.isFinite(count) && count >= 0 ? Math.floor(count) : null;
+  }
+
+  /* 校验并规整一条积分记录；fallbackAt 只在写入路径提供，读取 / 导入必须自带合法 at。 */
+  function sanitizeScoreEntry(entry, fallbackAt) {
+    if (!entry || typeof entry !== 'object' || Array.isArray(entry)) return null;
+    const gameId = typeof entry.gameId === 'string' ? entry.gameId : '';
+    if (!GAME_ID_SET.has(gameId)) return null;
+    const scoreValue = Number(entry.score);
+    if (!Number.isFinite(scoreValue) || scoreValue < 0) return null;
+    let at = null;
+    if (typeof entry.at === 'string' && entry.at && entry.at.length <= 64) {
+      const time = new Date(entry.at).getTime();
+      if (!Number.isNaN(time)) at = entry.at;
+    }
+    if (!at && typeof fallbackAt === 'string' && fallbackAt) at = fallbackAt;
+    if (!at) return null;
+    return {
+      at,
+      gameId,
+      mode: entry.mode === 'zen' ? 'zen' : 'classic',
+      score: Math.floor(scoreValue),
+      lines: sanitizeScoreCount(entry.lines),
+      level: sanitizeScoreCount(entry.level),
+      durationMs: sanitizeScoreCount(entry.durationMs),
+      detail: typeof entry.detail === 'string' ? entry.detail.slice(0, 120) : '',
+    };
+  }
+
+  function readScoresData() {
+    const blank = { valid: false, records: [], updatedAt: null };
+    const raw = safeGetJSON(SCORES_KEY);
+    if (
+      !raw ||
+      typeof raw !== 'object' ||
+      Array.isArray(raw) ||
+      raw.schemaVersion !== SCORES_SCHEMA ||
+      !Array.isArray(raw.records)
+    ) {
+      /* 损坏 / Schema 不匹配：fail closed 返回空记录，不删除也不覆盖原值。 */
+      return blank;
+    }
+    const records = [];
+    for (let i = 0; i < raw.records.length && records.length < SCORES_LIMIT; i += 1) {
+      const rec = sanitizeScoreEntry(raw.records[i]);
+      if (rec) records.push(rec);
+    }
+    /* 存储约定最新在前；这里再按时间兜底排序，避免外部写入的乱序数据影响展示。 */
+    records.sort((a, b) => new Date(b.at).getTime() - new Date(a.at).getTime());
+    return { valid: true, records, updatedAt: typeof raw.updatedAt === 'string' ? raw.updatedAt : null };
+  }
+
+  function writeScoresData(records) {
+    return safeSetJSON(SCORES_KEY, {
+      schemaVersion: SCORES_SCHEMA,
+      records: records.slice(0, SCORES_LIMIT),
+      updatedAt: new Date().toISOString(),
+    });
+  }
+
+  const Scores = {
+    SCHEMA_VERSION: SCORES_SCHEMA,
+    STORAGE_KEY: SCORES_KEY,
+    /* 追加一条记录；非法返回 null。成功返回写入的规整记录（含 at）。 */
+    record(entry) {
+      let rec;
+      try {
+        rec = sanitizeScoreEntry(entry, new Date().toISOString());
+      } catch (err) {
+        return null;
+      }
+      if (!rec) return null;
+      const data = readScoresData();
+      const records = [rec].concat(data.records).slice(0, SCORES_LIMIT);
+      /* 写入失败只影响本条记录，不抛异常、不阻塞游戏结算。 */
+      return writeScoresData(records) ? rec : null;
+    },
+    /* 过滤 + 最新优先 + limit；不传 opts 返回全部（最多 SCORES_LIMIT 条）。 */
+    list(opts) {
+      const options = opts && typeof opts === 'object' && !Array.isArray(opts) ? opts : {};
+      let records = readScoresData().records;
+      if (typeof options.gameId === 'string' && options.gameId) {
+        records = records.filter((rec) => rec.gameId === options.gameId);
+      }
+      if (typeof options.mode === 'string' && options.mode) {
+        records = records.filter((rec) => rec.mode === options.mode);
+      }
+      const limit = Number(options.limit);
+      if (Number.isFinite(limit) && limit >= 0) records = records.slice(0, Math.floor(limit));
+      /* 浅拷贝数组：避免调用方改到内部数组（记录对象为每次读取的新对象）。 */
+      return records.slice();
+    },
+    stats() {
+      const records = readScoresData().records;
+      const byGame = {};
+      records.forEach((rec) => {
+        byGame[rec.gameId] = (byGame[rec.gameId] || 0) + 1;
+      });
+      return { total: records.length, byGame };
+    },
+    /* 'zen' -> '禅模式'，'classic' -> '经典'，其他原样返回。 */
+    modeLabel(mode) {
+      if (mode === 'zen') return '禅模式';
+      if (mode === 'classic') return '经典';
+      return typeof mode === 'string' ? mode : '';
+    },
+    exportData() {
+      const data = readScoresData();
+      return {
+        schemaVersion: SCORES_SCHEMA,
+        records: data.records.map((rec) => Object.assign({}, rec)),
+        updatedAt: data.updatedAt,
+      };
+    },
+    /* 整体替换；非法 payload 返回 ok=false 且不写存储。 */
+    importData(payload) {
+      if (
+        !payload ||
+        typeof payload !== 'object' ||
+        Array.isArray(payload) ||
+        payload.schemaVersion !== SCORES_SCHEMA ||
+        !Array.isArray(payload.records)
+      ) {
+        return { ok: false, count: 0, skipped: 0 };
+      }
+      const records = [];
+      let skipped = 0;
+      payload.records.forEach((entry) => {
+        const rec = sanitizeScoreEntry(entry);
+        if (!rec) {
+          skipped += 1;
+          return;
+        }
+        records.push(rec);
+      });
+      records.sort((a, b) => new Date(b.at).getTime() - new Date(a.at).getTime());
+      if (records.length > SCORES_LIMIT) {
+        skipped += records.length - SCORES_LIMIT;
+        records.length = SCORES_LIMIT;
+      }
+      const ok = writeScoresData(records);
+      return { ok, count: records.length, skipped };
+    },
+    /* 只清指定游戏的积分；损坏数据保持原样。 */
+    resetGame(gameId) {
+      if (!gameId || typeof gameId !== 'string') return;
+      const data = readScoresData();
+      if (!data.valid) return;
+      const records = data.records.filter((rec) => rec.gameId !== gameId);
+      if (records.length === data.records.length) return;
+      writeScoresData(records);
+    },
+    /* 只清积分记录：不动最高分 / 时长 / 局内进度 / 挑战记录。 */
+    resetAll() {
+      try {
+        localStorage.removeItem(SCORES_KEY);
+      } catch (err) {
+        /* 忽略存储不可用 */
+      }
+    },
+  };
+
+  /* ----------------------------------------------------------
    * 进度（全部游戏共用一个 key，中心页一次读出即可管理）
    * ---------------------------------------------------------- */
   const Progress = {
@@ -1159,18 +1338,32 @@
       }
       return { high: 0, plays: 0, lastAt: null, lastScore: 0 };
     },
-    recordPlay(gameId, score) {
+    recordPlay(gameId, score, meta) {
       const data = this.load();
       const rec = data.games[gameId] || { high: 0, plays: 0, lastAt: null, lastScore: 0 };
+      const m = meta && typeof meta === 'object' && !Array.isArray(meta) ? meta : {};
+      const zen = m.mode === 'zen';
       rec.plays = (Number(rec.plays) || 0) + 1;
       rec.high = Number(rec.high) || 0;
       rec.lastAt = new Date().toISOString();
       rec.lastScore = Number(score) || 0;
-      const isNewHigh = Number(score) > rec.high;
+      /* 0.8.1：只有经典 / 缺省模式参与最高分更新，禅模式不污染经典最高分。 */
+      const isNewHigh = !zen && Number(score) > rec.high;
       if (isNewHigh) rec.high = Number(score) || 0;
       data.games[gameId] = rec;
       this.save(data);
-      Playtime.recordRound(gameId, score, isNewHigh);
+      /* 先结算本轮有效时长（Playtime），再写入积分记录；meta.durationMs 优先。 */
+      const round = Playtime.recordRound(gameId, score, isNewHigh);
+      const roundDuration = round && typeof round.duration === 'number' ? round.duration : null;
+      Scores.record({
+        gameId,
+        mode: zen ? 'zen' : 'classic',
+        score,
+        lines: m.lines,
+        level: m.level,
+        durationMs: m.durationMs != null ? m.durationMs : roundDuration,
+        detail: m.detail,
+      });
       return { isNewHigh, high: rec.high, plays: rec.plays };
     },
     resetGame(gameId) {
@@ -1180,12 +1373,14 @@
       RunSave.clear(gameId);
       Playtime.resetGame(gameId);
       challengeResetGame(gameId);
+      Scores.resetGame(gameId);
     },
     resetAll() {
       this.save({ schemaVersion: PROGRESS_SCHEMA, games: {} });
       RunSave.clearAll();
       Playtime.resetAll();
       challengeResetAll();
+      Scores.resetAll();
     },
     exportText() {
       const payload = {
@@ -1197,6 +1392,7 @@
         runs: RunSave.all(),
         playtime: Playtime.exportData(),
         challenge: Challenge.exportData(),
+        scores: Scores.exportData(),
       };
       return JSON.stringify(payload, null, 2);
     },
@@ -1225,6 +1421,15 @@
       const prevRuns = safeGetRaw(RUNS_KEY);
       const prevPlaytime = safeGetRaw(PLAYTIME_KEY);
       const prevChallenge = safeGetRaw(CHALLENGE_KEY);
+      const prevScores = safeGetRaw(SCORES_KEY);
+      /* 任一子步骤写入失败时整体回滚，包括 0.8.1 新增的积分记录 key。 */
+      const restoreAll = () => {
+        safeRestoreRaw(PROGRESS_KEY, prevProgress);
+        safeRestoreRaw(RUNS_KEY, prevRuns);
+        safeRestoreRaw(PLAYTIME_KEY, prevPlaytime);
+        safeRestoreRaw(CHALLENGE_KEY, prevChallenge);
+        safeRestoreRaw(SCORES_KEY, prevScores);
+      };
       const progressSaved = this.save({ schemaVersion: PROGRESS_SCHEMA, games });
       if (!progressSaved) return { ok: false, reason: '浏览器存储已满或不可用' };
       /* 新备份包含局内存档；旧备份没有 runs 字段时保留当前局内存档。 */
@@ -1233,10 +1438,7 @@
       if (parsed.runs && typeof parsed.runs === 'object') {
         const imported = RunSave.importMap(parsed.runs);
         if (!imported.ok) {
-          safeRestoreRaw(PROGRESS_KEY, prevProgress);
-          safeRestoreRaw(RUNS_KEY, prevRuns);
-          safeRestoreRaw(PLAYTIME_KEY, prevPlaytime);
-          safeRestoreRaw(CHALLENGE_KEY, prevChallenge);
+          restoreAll();
           return { ok: false, reason: '浏览器存储已满或不可用' };
         }
         runCount = imported.count;
@@ -1247,10 +1449,7 @@
       if (parsed.playtime && typeof parsed.playtime === 'object') {
         const imported = Playtime.importData(parsed.playtime);
         if (!imported.ok) {
-          safeRestoreRaw(PROGRESS_KEY, prevProgress);
-          safeRestoreRaw(RUNS_KEY, prevRuns);
-          safeRestoreRaw(PLAYTIME_KEY, prevPlaytime);
-          safeRestoreRaw(CHALLENGE_KEY, prevChallenge);
+          restoreAll();
           return { ok: false, reason: '浏览器存储已满或不可用' };
         }
         playtimeCount = imported.count;
@@ -1267,6 +1466,19 @@
           challengeSkipped = 1;
         }
       }
+      /* 0.8.1 备份包含积分记录；旧备份没有 scores 字段时保留当前积分记录。
+       * 非法 scores 视为导入失败并整体回滚，避免留下半套数据。 */
+      let scoreCount = 0;
+      let scoreSkipped = 0;
+      if (parsed.scores && typeof parsed.scores === 'object') {
+        const imported = Scores.importData(parsed.scores);
+        if (!imported.ok) {
+          restoreAll();
+          return { ok: false, reason: '浏览器存储已满或不可用' };
+        }
+        scoreCount = imported.count;
+        scoreSkipped = imported.skipped;
+      }
       return {
         ok: true,
         count: Object.keys(games).length,
@@ -1275,6 +1487,8 @@
         playtimeCount,
         challengeCount,
         challengeSkipped,
+        scoreCount,
+        scoreSkipped,
       };
     },
   };
@@ -2158,6 +2372,8 @@
         dom.overlay.setAttribute('aria-labelledby', dom.ovTitle.id);
       }
     }
+    /* 0.8.1 可选第三按钮：页面不提供 dom.ovBtn3 时行为与旧版完全一致。 */
+    if (dom.ovBtn3) dom.ovBtn3.hidden = true;
     function hide() {
       dom.overlay.hidden = true;
       if (previousFocus && typeof previousFocus.focus === 'function') {
@@ -2187,6 +2403,17 @@
           ? () => {
               Sfx.play('ui');
               if (o.onBtn2) o.onBtn2();
+            }
+          : null;
+      }
+      if (dom.ovBtn3) {
+        const hasThird = !!o.btn3;
+        dom.ovBtn3.hidden = !hasThird;
+        dom.ovBtn3.textContent = o.btn3 || '';
+        dom.ovBtn3.onclick = hasThird
+          ? () => {
+              Sfx.play('ui');
+              if (o.onBtn3) o.onBtn3();
             }
           : null;
       }
@@ -2807,6 +3034,7 @@
     RunSave,
     Playtime,
     Challenge,
+    Scores,
     Share,
     Offline,
     Prefs,

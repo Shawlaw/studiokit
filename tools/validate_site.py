@@ -15,7 +15,7 @@ REQUIRED = [
     'apps/badge-studio/index.html', 'apps/badge-studio/README.md', 'apps/badge-studio/CHANGELOG.md',
     'apps/arcade/index.html', 'apps/arcade/README.md', 'apps/arcade/CHANGELOG.md',
     'apps/arcade/DESIGN-0.4.0.md', 'apps/arcade/DESIGN-0.5.0.md',
-    'apps/arcade/DESIGN-0.6.0.md',
+    'apps/arcade/DESIGN-0.6.0.md', 'apps/arcade/DESIGN-0.8.1.md',
     'apps/arcade/engine.js', 'apps/arcade/arcade.css', 'apps/arcade/sw.js',
     'apps/arcade/manifest.webmanifest',
     'apps/arcade/icons/icon-192.png', 'apps/arcade/icons/icon-512.png',
@@ -27,7 +27,8 @@ REQUIRED = [
     'apps/arcade/games/memory-flip.html', 'apps/arcade/games/merge-2048.html',
     'apps/arcade/games/brick-breaker.html', 'apps/arcade/games/gravity-flip.html',
     'apps/arcade/games/snake-run.html', 'apps/arcade/games/mole-whack.html',
-    'templates/single-page-tool/index.html', 'tools/build_site.py', 'tools/new_tool.py'
+    'templates/single-page-tool/index.html', 'tools/build_site.py', 'tools/new_tool.py',
+    'tools/arcade_zen_scores_test.mjs'
 ]
 
 # 0.9 挑战模式：每款游戏一个生成数据文件（tools/arcade_09_data.mjs 生成，入库）。
@@ -168,7 +169,7 @@ def validate(root=ROOT):
     arcade_engine = root / 'apps/arcade/engine.js'
     if arcade_engine.exists():
         source = arcade_engine.read_text(encoding='utf-8')
-        if "const ARCADE_VERSION = '0.8.0'" not in source:
+        if "const ARCADE_VERSION = '0.8.1'" not in source:
             ok = fail('Arcade ARCADE_VERSION drifted; update registry/README/CHANGELOG together') and ok
         if source.count("file: '") < 13:
             ok = fail('Arcade GAMES list should contain at least 13 games') and ok
@@ -188,6 +189,15 @@ def validate(root=ROOT):
             ok = fail('Arcade A.Challenge shared helper is missing from engine.js') and ok
         if '\n    Challenge,' not in source:
             ok = fail('window.Arcade.Challenge export is missing from engine.js') and ok
+        # 0.8.1：积分记录存储 key + A.Scores 共享帮助（新 key，不改既有 Schema）。
+        if "const SCORES_KEY = 'studiokit:arcade:scores:v1'" not in source:
+            ok = fail('Arcade scores storage key missing/changed: expected studiokit:arcade:scores:v1') and ok
+        if 'const Scores = {' not in source:
+            ok = fail('Arcade A.Scores shared helper is missing from engine.js') and ok
+        if '\n    Scores,' not in source:
+            ok = fail('window.Arcade.Scores export is missing from engine.js') and ok
+        if 'recordPlay(gameId, score, meta) {' not in source:
+            ok = fail('Arcade Progress.recordPlay mode-aware signature missing (0.8.1 zen scores)') and ok
         challenge_dir = root / 'apps/arcade/challenge'
         for game_id in ARCADE_CHALLENGE_GAMES:
             data_file = challenge_dir / f'{game_id}.js'
@@ -210,13 +220,19 @@ def validate(root=ROOT):
         arcade_index = root / 'apps/arcade/index.html'
         if arcade_index.exists():
             index_source = arcade_index.read_text(encoding='utf-8')
-            for marker in ('rel="manifest"', 'data-playtime-section', 'data-offline', 'data-install', 'data-share', 'data-random', '无签到', 'data-hall-version>0.8.0'):
+            for marker in ('rel="manifest"', 'data-playtime-section', 'data-scores-section', 'data-scores-body', 'data-scores-empty', 'data-offline', 'data-install', 'data-share', 'data-random', '无签到', 'data-hall-version>0.8.1'):
                 if marker not in index_source:
-                    ok = fail(f'Arcade hub 0.8.0 marker missing: {marker}') and ok
+                    ok = fail(f'Arcade hub 0.8.1 marker missing: {marker}') and ok
+        arcade_block = root / 'apps/arcade/games/block-drop.html'
+        if arcade_block.exists():
+            block_source = arcade_block.read_text(encoding='utf-8')
+            for marker in ('data-ov-btn3', 'data-hud-zen', 'zenSpeedLevel', 'startZen', 'zenInfo', 'zenLineClearScenario'):
+                if marker not in block_source:
+                    ok = fail(f'Arcade block-drop zen mode marker missing: {marker}') and ok
         arcade_sw = root / 'apps/arcade/sw.js'
         if arcade_sw.exists():
             sw_source = arcade_sw.read_text(encoding='utf-8')
-            for marker in ("const VERSION = '0.8.0'", 'arcade-precache', 'skipWaiting', 'clients.claim'):
+            for marker in ("const VERSION = '0.8.1'", 'arcade-precache', 'skipWaiting', 'clients.claim'):
                 if marker not in sw_source:
                     ok = fail(f'Arcade service worker marker missing: {marker}') and ok
             # 0.9：13 个挑战数据文件必须进入 shell 预缓存（相对路径写法，兼容子路径部署）。
@@ -241,8 +257,8 @@ def validate(root=ROOT):
             try:
                 registry = json.loads(registry_path.read_text(encoding='utf-8'))
                 arcade = next((t for t in registry.get('tools', []) if t.get('id') == 'arcade'), None)
-                if arcade and arcade.get('version') != '0.8.0':
-                    ok = fail('Arcade registry version must match engine 0.8.0') and ok
+                if arcade and arcade.get('version') != '0.8.1':
+                    ok = fail('Arcade registry version must match engine 0.8.1') and ok
             except Exception:
                 pass
 

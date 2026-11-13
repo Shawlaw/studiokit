@@ -23,7 +23,7 @@
     <header class="hall-head">
       <div>
         <h1>🕹 街机厅 Arcade</h1>
-        <p class="hall-sub">13 款竖屏小游戏 · 每款可选道具 + 6 关挑战 · 无签到与每日奖励 · 随时圆满收工 · v<span data-hall-version>0.8.0</span></p>
+        <p class="hall-sub">13 款竖屏小游戏 · 每款可选道具 + 6 关挑战 · 自动收集积分记录 · 无签到与每日奖励 · 随时圆满收工 · v<span data-hall-version>0.8.1</span></p>
       </div>
       <div class="hall-stats">
         <span>累计时长 <strong data-stat-time>0 分钟</strong></span>
@@ -90,11 +90,55 @@
       <p class="hall-pt-empty" data-pt-empty hidden>还没有游玩记录。任意开一局，回来这里就能看到累计时长、每款游戏和每一轮的明细。</p>
     </section>
 
+    <section class="hall-scores" data-scores-section aria-labelledby="hall-scores-title">
+      <div class="hall-section-head">
+        <div>
+          <h2 id="hall-scores-title">积分记录</h2>
+          <p>每局经典或禅模式结束后自动收集分数，只保存在本机，不会上传。</p>
+        </div>
+        <span class="hall-section-note" data-scores-count>共 0 条</span>
+      </div>
+      <div class="hall-scores-toolbar">
+        <label class="hall-scores-filter">
+          <span>游戏</span>
+          <select data-scores-game>
+            <option value="">全部游戏</option>
+          </select>
+        </label>
+        <label class="hall-scores-filter">
+          <span>模式</span>
+          <select data-scores-mode>
+            <option value="all">全部</option>
+            <option value="classic">经典</option>
+            <option value="zen">禅模式</option>
+          </select>
+        </label>
+        <button type="button" class="ac-btn-ghost ac-danger hall-scores-clear" data-scores-clear>清除积分记录</button>
+      </div>
+      <div class="hall-scores-wrap" data-scores-wrap>
+        <table class="hall-scores-table">
+          <caption>最新在前，最多展示最近 50 条；挑战模式有独立的通关记录，不计入积分表。</caption>
+          <thead>
+            <tr>
+              <th scope="col">时间</th>
+              <th scope="col">游戏</th>
+              <th scope="col">模式</th>
+              <th scope="col">得分</th>
+              <th scope="col">详情</th>
+            </tr>
+          </thead>
+          <tbody data-scores-body></tbody>
+        </table>
+      </div>
+      <p class="hall-scores-empty" data-scores-empty hidden>还没有积分记录。任意经典或禅模式结束一局，这里会自动收集分数、模式与详情。</p>
+      <p class="hall-scores-more" data-scores-more hidden>仅显示最近 50 条；导出备份可保留全部积分记录。</p>
+    </section>
+
     <section class="hall-grid" data-hall-grid aria-label="游戏列表"></section>
 
     <section class="hall-manage" aria-label="进度管理">
       <h2>进度管理</h2>
-      <p class="hall-manage-note" data-manage-note>最高分、游玩时长、轮次明细与局内进度只保存在此浏览器的 localStorage 中，不会上传任何服务器。</p>
+      <p class="hall-manage-note" data-manage-note>最高分、游玩时长、轮次明细、积分记录与局内进度只保存在此浏览器的 localStorage 中，不会上传任何服务器。</p>
       <button type="button" class="ac-btn-ghost" data-export>导出备份（JSON）</button>
       <button type="button" class="ac-btn-ghost" data-import-btn>导入备份</button>
       <input type="file" accept=".json,application/json" data-import-file hidden />
@@ -160,16 +204,24 @@
         resumeSection: document.querySelector('[data-resume-section]'),
         resumeList: document.querySelector('[data-resume-list]'),
         resumeMore: document.querySelector('[data-resume-more]'),
+        scoresGame: document.querySelector('[data-scores-game]'),
+        scoresMode: document.querySelector('[data-scores-mode]'),
+        scoresClear: document.querySelector('[data-scores-clear]'),
+        scoresBody: document.querySelector('[data-scores-body]'),
+        scoresWrap: document.querySelector('[data-scores-wrap]'),
+        scoresEmpty: document.querySelector('[data-scores-empty]'),
+        scoresMore: document.querySelector('[data-scores-more]'),
+        scoresCount: document.querySelector('[data-scores-count]'),
       };
 
-      const DEFAULT_NOTE = '最高分、游玩时长、轮次明细与局内进度只保存在此浏览器的 localStorage 中，不会上传任何服务器。';
+      const DEFAULT_NOTE = '最高分、游玩时长、轮次明细、积分记录与局内进度只保存在此浏览器的 localStorage 中，不会上传任何服务器。';
       const GAME_BY_ID = {};
       A.GAMES.forEach((g, index) => {
         GAME_BY_ID[g.id] = g;
         g.__order = index;
       });
       const CATEGORIES = ['全部'].concat(Array.from(new Set(A.GAMES.map((g) => g.category))));
-      const state = { query: '', category: '全部', onlyProgress: false, sort: 'recommend', resumeExpanded: false };
+      const state = { query: '', category: '全部', onlyProgress: false, sort: 'recommend', resumeExpanded: false, scoresGame: '', scoresMode: 'all' };
       let noteTimer = 0;
 
       function relTime(iso) {
@@ -399,10 +451,10 @@
         clear.setAttribute('aria-label', '清除此游戏记录：' + game.name);
         clear.addEventListener('click', () => {
           const extra = run ? '以及未完成的局内进度' : '';
-          if (window.confirm(`清除「${game.name}」的最高分、游玩时长、轮次明细${extra}？此操作不可恢复。`)) {
+          if (window.confirm(`清除「${game.name}」的最高分、游玩时长、轮次明细、积分记录${extra}？此操作不可恢复。`)) {
             A.Progress.resetGame(game.id);
             A.Sfx.play('ui');
-            note(`已清除「${game.name}」的记录${run ? '与局内进度' : ''}。`);
+            note(`已清除「${game.name}」的记录（含积分记录）${run ? '与局内进度' : ''}。`);
             render();
           }
         });
@@ -532,6 +584,142 @@
         });
       }
 
+      /* ---------- 积分记录（0.8.1） ---------- */
+      const SCORES_SHOW_LIMIT = 50;
+      const SCORES_MODES = ['all', 'classic', 'zen'];
+
+      function scoresApi() {
+        const api = A.Scores;
+        return api && typeof api.list === 'function' ? api : null;
+      }
+
+      function scoreModeLabel(mode) {
+        const api = scoresApi();
+        if (api && typeof api.modeLabel === 'function') {
+          try {
+            const label = api.modeLabel(mode);
+            if (typeof label === 'string' && label) return label;
+          } catch (err) {
+            /* 引擎标签异常时退回本地文案，不影响表格渲染 */
+          }
+        }
+        return mode === 'zen' ? '禅模式' : '经典';
+      }
+
+      function scoreDetail(rec) {
+        const detail = typeof rec.detail === 'string' ? rec.detail.trim() : '';
+        if (detail) return detail;
+        const bits = [];
+        if (rec.lines !== null && rec.lines !== undefined && Number.isFinite(Number(rec.lines))) bits.push(`${Number(rec.lines)} 行`);
+        if (rec.level !== null && rec.level !== undefined && Number.isFinite(Number(rec.level))) bits.push(`Lv.${Number(rec.level)}`);
+        if (rec.durationMs !== null && rec.durationMs !== undefined && Number.isFinite(Number(rec.durationMs))) bits.push(A.formatClock(Number(rec.durationMs)));
+        return bits.join(' · ') || '—';
+      }
+
+      function appendScoresOption(select, label, value) {
+        const option = document.createElement('option');
+        option.value = value;
+        option.textContent = label;
+        select.appendChild(option);
+      }
+
+      function syncScoresGameOptions(byGame) {
+        const counts = byGame && typeof byGame === 'object' ? byGame : {};
+        const selected = state.scoresGame;
+        dom.scoresGame.replaceChildren();
+        appendScoresOption(dom.scoresGame, '全部游戏', '');
+        A.GAMES.forEach((game) => {
+          const count = Number(counts[game.id]) || 0;
+          if (count <= 0) return;
+          appendScoresOption(dom.scoresGame, `${game.icon} ${game.name}（${count}）`, game.id);
+        });
+        if (selected && Number(counts[selected]) > 0) {
+          dom.scoresGame.value = selected;
+        } else if (selected) {
+          /* 记录被清除/导入后该游戏已无积分：筛选回落到全部，避免空表困惑。 */
+          state.scoresGame = '';
+        }
+      }
+
+      function renderScores() {
+        const api = scoresApi();
+        let stats = { total: 0, byGame: {} };
+        if (api && typeof api.stats === 'function') {
+          try {
+            stats = api.stats() || stats;
+          } catch (err) {
+            stats = { total: 0, byGame: {} };
+          }
+        }
+        syncScoresGameOptions(stats.byGame);
+        dom.scoresMode.value = state.scoresMode;
+
+        const opts = {};
+        if (state.scoresGame) opts.gameId = state.scoresGame;
+        if (state.scoresMode !== 'all') opts.mode = state.scoresMode;
+        let records = [];
+        if (api) {
+          try {
+            records = api.list(opts) || [];
+          } catch (err) {
+            records = [];
+          }
+        }
+        const visible = records.slice(0, SCORES_SHOW_LIMIT);
+
+        dom.scoresBody.replaceChildren();
+        visible.forEach((rec) => {
+          const game = GAME_BY_ID[rec.gameId] || null;
+          const row = document.createElement('tr');
+
+          const when = document.createElement('td');
+          when.className = 'hall-scores-time';
+          when.textContent = A.formatRoundAt(rec.at) || '—';
+
+          const gameCell = document.createElement('td');
+          gameCell.className = 'hall-scores-game';
+          const icon = document.createElement('span');
+          icon.className = 'hall-scores-game-icon';
+          icon.setAttribute('aria-hidden', 'true');
+          icon.textContent = game ? game.icon : '🎮';
+          const name = document.createElement('span');
+          name.textContent = game ? game.name : String(rec.gameId || '未知游戏');
+          gameCell.append(icon, name);
+
+          const modeCell = document.createElement('td');
+          const modeTag = document.createElement('span');
+          modeTag.className = 'hall-scores-mode' + (rec.mode === 'zen' ? ' is-zen' : '');
+          modeTag.textContent = scoreModeLabel(rec.mode);
+          modeCell.appendChild(modeTag);
+
+          const scoreCell = document.createElement('td');
+          scoreCell.className = 'hall-scores-score';
+          scoreCell.textContent = (Number(rec.score) || 0).toLocaleString('zh-CN');
+
+          const detailCell = document.createElement('td');
+          detailCell.className = 'hall-scores-detail';
+          detailCell.textContent = scoreDetail(rec);
+
+          row.append(when, gameCell, modeCell, scoreCell, detailCell);
+          dom.scoresBody.appendChild(row);
+        });
+
+        const total = Number(stats.total) || 0;
+        dom.scoresCount.textContent = `共 ${total} 条`;
+        dom.scoresWrap.hidden = visible.length === 0;
+        dom.scoresMore.hidden = records.length <= SCORES_SHOW_LIMIT;
+        dom.scoresEmpty.hidden = visible.length > 0;
+        if (!dom.scoresEmpty.hidden) {
+          if (!api) {
+            dom.scoresEmpty.textContent = '积分记录暂不可用，请刷新页面或更新离线缓存后重试。';
+          } else if (total === 0) {
+            dom.scoresEmpty.textContent = '还没有积分记录。任意经典或禅模式结束一局，这里会自动收集分数、模式与详情。';
+          } else {
+            dom.scoresEmpty.textContent = '当前筛选下没有积分记录，换个游戏或模式看看。';
+          }
+        }
+      }
+
       function render() {
         const progress = A.Progress.load();
         let totalPlays = 0;
@@ -541,6 +729,7 @@
         renderFilters();
         renderResume();
         renderPlaytime();
+        renderScores();
 
         const games = sortedGames();
         dom.grid.replaceChildren();
@@ -596,7 +785,30 @@
         render();
       });
 
-      /* 导出备份（含最高分、游玩记录与局内进度） */
+      /* 积分记录筛选：只重渲染表格，不重建游戏卡片，避免筛选时整页跳动。 */
+      dom.scoresGame.addEventListener('change', () => {
+        state.scoresGame = dom.scoresGame.value;
+        renderScores();
+      });
+      dom.scoresMode.addEventListener('change', () => {
+        state.scoresMode = SCORES_MODES.indexOf(dom.scoresMode.value) !== -1 ? dom.scoresMode.value : 'all';
+        renderScores();
+      });
+      dom.scoresClear.addEventListener('click', () => {
+        if (!A.Scores || typeof A.Scores.resetAll !== 'function') {
+          note('当前页面的引擎版本还不支持积分记录，请刷新页面后再试。', true);
+          return;
+        }
+        if (!window.confirm('清除全部积分记录？最高分、游玩时长、轮次明细与局内进度都会保留，此操作不可恢复。')) return;
+        A.Scores.resetAll();
+        A.Sfx.play('ui');
+        note('已清除全部积分记录；最高分、游玩时长与局内进度都保留着。');
+        state.scoresGame = '';
+        state.scoresMode = 'all';
+        renderScores();
+      });
+
+      /* 导出备份（含最高分、游玩记录、积分记录与局内进度） */
       dom.exportBtn.addEventListener('click', () => {
         const text = A.Progress.exportText();
         const blob = new Blob([text], { type: 'application/json' });
@@ -608,7 +820,7 @@
         a.click();
         a.remove();
         setTimeout(() => URL.revokeObjectURL(url), 2000);
-        note('已导出备份文件（studiokit-arcade-progress.json），包含最高分、游玩时长、轮次与局内进度。');
+        note('已导出备份文件（studiokit-arcade-progress.json），包含最高分、游玩时长、轮次、积分记录与局内进度。');
       });
 
       /* 导入备份 */
@@ -623,8 +835,10 @@
           if (result.ok) {
             const runText = result.runCount ? `，含 ${result.runCount} 条局内进度` : '';
             const statText = result.playtimeCount ? `，含 ${result.playtimeCount} 款游戏的时长统计` : '';
+            /* 0.8.1 备份才会带 scores 字段；旧备份没有该字段时保留当前积分记录。引擎始终返回数字 scoreCount，按契约显示条数。 */
+            const scoreText = typeof result.scoreCount === 'number' ? `，含 ${result.scoreCount} 条积分记录` : '';
             const skipText = result.runSkipped ? `，跳过 ${result.runSkipped} 条无效进度` : '';
-            note(`导入成功，恢复了 ${result.count} 款游戏的记录${statText}${runText}${skipText}。`);
+            note(`导入成功，恢复了 ${result.count} 款游戏的记录${statText}${runText}${scoreText}${skipText}。`);
             render();
           } else {
             note(`导入失败：${result.reason}`, true);
@@ -636,9 +850,9 @@
 
       /* 清除全部 */
       dom.resetAll.addEventListener('click', () => {
-        if (window.confirm('清除全部游戏的最高分、游玩时长、轮次明细与未完成的局内进度？此操作不可恢复。')) {
+        if (window.confirm('清除全部游戏的最高分、游玩时长、轮次明细、积分记录与未完成的局内进度？此操作不可恢复。')) {
           A.Progress.resetAll();
-          note('已清除全部记录、时长统计与局内进度。');
+          note('已清除全部记录、积分记录、时长统计与局内进度。');
           render();
         }
       });
