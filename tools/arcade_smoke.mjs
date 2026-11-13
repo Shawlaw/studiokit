@@ -1,266 +1,38 @@
 #!/usr/bin/env node
 /**
- * 街机厅无头浏览器冒烟测试。
- * 零 npm 依赖：Node 内置 http + WebSocket + 本机 Chrome DevTools Protocol。
+ * 街机厅无头浏览器冒烟测试（85 项全链路回归）。
+ * 零 npm 依赖：通用基础设施见 tools/lib/arcade_cdp.mjs（静态服务器 / Chrome 启动 / CDP / 断言记录器）。
  * 运行：node tools/arcade_smoke.mjs
+ * 端口可用环境变量覆盖：ARCADE_SMOKE_PORT（默认 8765）/ ARCADE_CDP_PORT（默认 9333）。
+ * 需要本机 Chrome（可用 CHROME_PATH 覆盖路径）。
  */
-import http from 'node:http';
 import fs from 'node:fs';
-import os from 'node:os';
 import path from 'node:path';
-import { spawn } from 'node:child_process';
 import { fileURLToPath } from 'node:url';
+import { createRecorder, envPort, launchChrome, openPage, sleep, startServer, stopChrome } from './lib/arcade_cdp.mjs';
 
 const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
 const ARTIFACTS = path.join(ROOT, 'test-artifacts');
-const SERVER_PORT = 8765;
-const CDP_PORT = 9333;
-const CHROME = process.env.CHROME_PATH || 'C:\\Program Files\\Google\\Chrome\\Application\\chrome.exe';
-const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
-
-const MIME = {
-  '.html': 'text/html; charset=utf-8',
-  '.js': 'text/javascript; charset=utf-8',
-  '.css': 'text/css; charset=utf-8',
-  '.json': 'application/json; charset=utf-8',
-  '.webmanifest': 'application/manifest+json; charset=utf-8',
-  '.svg': 'image/svg+xml',
-  '.png': 'image/png',
-  '.jpg': 'image/jpeg',
-  '.ico': 'image/x-icon',
-};
-
-function startServer() {
-  const server = http.createServer((req, res) => {
-    try {
-      const urlPath = decodeURIComponent((req.url || '/').split('?')[0]);
-      let filePath = path.join(ROOT, urlPath.startsWith('/studiokit/') ? urlPath.slice('/studiokit'.length) : urlPath);
-      if (!filePath.startsWith(ROOT)) {
-        res.writeHead(403);
-        res.end('forbidden');
-        return;
-      }
-      if (fs.existsSync(filePath) && fs.statSync(filePath).isDirectory()) filePath = path.join(filePath, 'index.html');
-      if (!fs.existsSync(filePath)) {
-        res.writeHead(404);
-        res.end('not found');
-        return;
-      }
-      res.writeHead(200, { 'Content-Type': MIME[path.extname(filePath)] || 'application/octet-stream' });
-      fs.createReadStream(filePath).pipe(res);
-    } catch (err) {
-      res.writeHead(500);
-      res.end(String(err));
-    }
-  });
-  return new Promise((resolve) => server.listen(SERVER_PORT, '127.0.0.1', () => resolve(server)));
-}
-
-async function waitForJson(url, timeout = 15000) {
-  const end = Date.now() + timeout;
-  while (Date.now() < end) {
-    try {
-      const res = await fetch(url);
-      if (res.ok) return await res.json();
-    } catch (err) {
-      /* retry */
-    }
-    await sleep(120);
-  }
-  throw new Error('timeout waiting for ' + url);
-}
-
-class CDP {
-  constructor(wsUrl) {
-    this.ws = new WebSocket(wsUrl);
-    this.id = 0;
-    this.pending = new Map();
-    this.events = new Map();
-    this.errors = [];
-    this.ws.addEventListener('message', (event) => {
-      const msg = JSON.parse(event.data);
-      if (msg.id) {
-        const p = this.pending.get(msg.id);
-        if (!p) return;
-        this.pending.delete(msg.id);
-        if (msg.error) p.reject(new Error(msg.error.message));
-        else p.resolve(msg.result);
-        return;
-      }
-      if (msg.method === 'Runtime.exceptionThrown') {
-        const d = msg.params.exceptionDetails;
-        this.errors.push('exception: ' + (d.exception?.description || d.text || 'unknown'));
-      } else if (msg.method === 'Log.entryAdded' && msg.params.entry.level === 'error') {
-        const entry = msg.params.entry;
-        const url = entry.url || '';
-        if (url.includes('favicon.ico')) return;
-        this.errors.push('log: ' + entry.text + (url ? ' [' + url + ']' : ''));
-      } else if (msg.method === 'Runtime.consoleAPICalled' && msg.params.type === 'error') {
-        this.errors.push('console: ' + msg.params.args.map((a) => a.value ?? a.description ?? '').join(' '));
-      }
-      const handlers = this.events.get(msg.method);
-      if (handlers) handlers.forEach((fn) => fn(msg.params));
-    });
-  }
-
-  async ready() {
-    if (this.ws.readyState === WebSocket.OPEN) return;
-    await new Promise((resolve, reject) => {
-      this.ws.addEventListener('open', resolve, { once: true });
-      this.ws.addEventListener('error', reject, { once: true });
-    });
-  }
-
-  send(method, params = {}) {
-    const id = ++this.id;
-    return new Promise((resolve, reject) => {
-      this.pending.set(id, { resolve, reject });
-      this.ws.send(JSON.stringify({ id, method, params }));
-    });
-  }
-
-  on(method, fn) {
-    if (!this.events.has(method)) this.events.set(method, new Set());
-    this.events.get(method).add(fn);
-  }
-
-  async evaluate(expression) {
-    const result = await this.send('Runtime.evaluate', {
-      expression,
-      awaitPromise: true,
-      returnByValue: true,
-      userGesture: true,
-    });
-    if (result.exceptionDetails) {
-      throw new Error('evaluate failed: ' + (result.exceptionDetails.exception?.description || result.exceptionDetails.text));
-    }
-    return result.result?.value;
-  }
-
-  async navigate(url) {
-    this.errors = [];
-    await this.send('Page.navigate', { url });
-    await sleep(220);
-    for (let i = 0; i < 60; i++) {
-      try {
-        const state = await this.evaluate('document.readyState');
-        if (state === 'complete') break;
-      } catch (err) {
-        /* page may still be navigating */
-      }
-      await sleep(80);
-    }
-    await sleep(180);
-  }
-
-  async screenshot(name) {
-    const shot = await this.send('Page.captureScreenshot', { format: 'png' });
-    fs.writeFileSync(path.join(ARTIFACTS, name), Buffer.from(shot.data, 'base64'));
-  }
-
-  async click(selector) {
-    const ok = await this.evaluate(`(() => { const el = document.querySelector(${JSON.stringify(selector)}); if (!el) return false; el.click(); return true; })()`);
-    if (!ok) throw new Error('selector not found: ' + selector);
-  }
-
-  async text(selector) {
-    return this.evaluate(`(() => { const el = document.querySelector(${JSON.stringify(selector)}); return el ? el.textContent : null; })()`);
-  }
-
-  async key(key, type = 'both') {
-    const code = { ArrowLeft: 37, ArrowUp: 38, ArrowRight: 39, ArrowDown: 40, ' ': 32 }[key] || key.toUpperCase().charCodeAt(0);
-    const opts = { key, code: key === ' ' ? 'Space' : key, windowsVirtualKeyCode: code, nativeVirtualKeyCode: code, bubbles: true };
-    if (type !== 'up') await this.evaluate(`window.dispatchEvent(new KeyboardEvent('keydown', ${JSON.stringify(opts)}))`);
-    if (type !== 'down') await this.evaluate(`window.dispatchEvent(new KeyboardEvent('keyup', ${JSON.stringify(opts)}))`);
-  }
-
-  async pointer(x, y, type) {
-    await this.evaluate(`(() => {
-      const c = document.querySelector('.game-canvas');
-      if (!c) return false;
-      const r = c.getBoundingClientRect();
-      const cx = r.left + (${x} / 420) * r.width;
-      const cy = r.top + (${y} / 740) * r.height;
-      c.dispatchEvent(new PointerEvent(${JSON.stringify(type)}, { clientX: cx, clientY: cy, pointerId: 1, pointerType: 'touch', isPrimary: true, bubbles: true, cancelable: true }));
-      return true;
-    })()`);
-  }
-
-  async tap(x, y) {
-    await this.pointer(x, y, 'pointerdown');
-    await sleep(30);
-    await this.pointer(x, y, 'pointerup');
-  }
-
-  async buttonPointer(selector, type = 'pointerdown', pointerId = 1) {
-    const ok = await this.evaluate(`(() => {
-      const el = document.querySelector(${JSON.stringify(selector)});
-      if (!el) return false;
-      el.dispatchEvent(new PointerEvent(${JSON.stringify(type)}, { pointerId: ${pointerId}, pointerType: 'touch', isPrimary: ${pointerId} === 1, bubbles: true, cancelable: true }));
-      return true;
-    })()`);
-    if (!ok) throw new Error('button not found: ' + selector);
-  }
-
-  async drag(x1, y1, x2, y2) {
-    await this.pointer(x1, y1, 'pointerdown');
-    await sleep(30);
-    await this.pointer(x2, y2, 'pointermove');
-    await sleep(30);
-    await this.pointer(x2, y2, 'pointerup');
-  }
-
-  close() {
-    try {
-      this.ws.close();
-    } catch (err) {
-      /* ignore */
-    }
-  }
-}
-
-const results = [];
-function record(name, ok, detail = '') {
-  results.push({ name, ok, detail });
-  console.log(`${ok ? 'PASS' : 'FAIL'}  ${name}${detail ? ' — ' + detail : ''}`);
-}
-function assert(condition, message) {
-  if (!condition) throw new Error(message);
-}
+const SERVER_PORT = envPort('ARCADE_SMOKE_PORT', 8765);
+const CDP_PORT = envPort('ARCADE_CDP_PORT', 9333);
+const { results, record, assert, summary } = createRecorder();
 
 async function main() {
   fs.mkdirSync(ARTIFACTS, { recursive: true });
-  let server = await startServer();
-  const profile = fs.mkdtempSync(path.join(os.tmpdir(), 'studiokit-arcade-'));
-  const chrome = spawn(
-    CHROME,
-    [
-      '--headless=new',
-      '--disable-gpu',
-      '--no-sandbox',
-      '--disable-dev-shm-usage',
-      '--remote-allow-origins=*',
-      `--remote-debugging-port=${CDP_PORT}`,
-      `--user-data-dir=${profile}`,
-      '--window-size=420,900',
-      '--hide-scrollbars',
-      '--mute-audio',
-      'about:blank',
-    ],
-    { stdio: 'ignore' }
-  );
-
+  let server = null;
   let cdp = null;
+  let launched = null;
   try {
-    const version = await waitForJson(`http://127.0.0.1:${CDP_PORT}/json/version`);
-    const target = await fetch(`http://127.0.0.1:${CDP_PORT}/json/new?${encodeURIComponent('about:blank')}`, { method: 'PUT' }).then((r) => r.json());
-    cdp = new CDP(target.webSocketDebuggerUrl);
-    await cdp.ready();
-    await cdp.send('Page.enable');
-    await cdp.send('Runtime.enable');
-    await cdp.send('Log.enable');
-    await cdp.send('Emulation.setDeviceMetricsOverride', { width: 420, height: 900, deviceScaleFactor: 1, mobile: true });
-    await cdp.send('Emulation.setTouchEmulationEnabled', { enabled: true, maxTouchPoints: 1 });
+    server = await startServer({ root: ROOT, port: SERVER_PORT });
+    launched = await launchChrome({ port: CDP_PORT, profilePrefix: 'studiokit-arcade-' });
+    cdp = await openPage({
+      port: CDP_PORT,
+      width: 420,
+      height: 900,
+      deviceScaleFactor: 1,
+      mobile: true,
+      artifactsDir: ARTIFACTS,
+    });
 
     const base = `http://127.0.0.1:${SERVER_PORT}`;
 
@@ -2238,7 +2010,7 @@ async function main() {
     await cdp.navigate(base + '/apps/arcade/games/not-preloaded.html');
     const offlineMissing = await cdp.text('body');
     assert(offlineMissing && offlineMissing.includes('还没有预载'), 'offline missing page: ' + String(offlineMissing).slice(0, 120));
-    server = await startServer();
+    server = await startServer({ root: ROOT, port: SERVER_PORT });
     record('断网后中心页/已预载游戏可开，未预载页显示提示', true);
     await cdp.navigate(base + '/apps/arcade/');
 
@@ -2246,23 +2018,12 @@ async function main() {
     await cdp.evaluate(`localStorage.clear()`);
   } finally {
     if (cdp) cdp.close();
-    try {
-      chrome.kill();
-    } catch (err) {
-      /* ignore */
-    }
     if (server) server.close();
-    await sleep(300);
-    try {
-      fs.rmSync(profile, { recursive: true, force: true });
-    } catch (err) {
-      /* ignore */
-    }
+    await stopChrome(launched || {});
   }
 
-  const failed = results.filter((r) => !r.ok);
-  console.log(`\n${results.length - failed.length}/${results.length} checks passed`);
-  if (failed.length) process.exitCode = 1;
+  const outcome = summary();
+  if (outcome.failed) process.exitCode = 1;
 }
 
 main().catch((err) => {

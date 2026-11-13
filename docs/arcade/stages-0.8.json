@@ -1,0 +1,157 @@
+{
+  "version": 1,
+  "designWidth": 420,
+  "player": { "w": 26, "h": 30 },
+  "physics": {
+    "gravity": 1500,
+    "jumpV": -640,
+    "maxFall": 900,
+    "accel": 2400,
+    "maxVx": 265,
+    "dashSpeed": 620,
+    "dashTime": 0.13,
+    "dashGravityScale": 0.25,
+    "wallBounce": 0.95
+  },
+  "stages": [
+    {
+      "id": "S1",
+      "title": "初入影林",
+      "height": 1900,
+      "start": { "x": 192, "y": 1650 },
+      "goal": { "x": 186, "y": 120, "w": 48, "h": 64 },
+      "platforms": [
+        { "x": 140, "y": 1680, "w": 130, "kind": "normal", "baseX": 140, "range": 0, "speed": 0, "phase": 0 },
+        { "x": 50, "y": 1590, "w": 110, "kind": "normal", "baseX": 50, "range": 0, "speed": 0, "phase": 0 },
+        { "x": 120, "y": 1500, "w": 120, "kind": "normal", "baseX": 120, "range": 0, "speed": 0, "phase": 0 },
+        { "x": 20, "y": 1410, "w": 100, "kind": "normal", "baseX": 20, "range": 0, "speed": 0, "phase": 0 },
+        { "x": 110, "y": 1320, "w": 110, "kind": "normal", "baseX": 110, "range": 0, "speed": 0, "phase": 0 },
+        { "x": 30, "y": 1230, "w": 100, "kind": "normal", "baseX": 30, "range": 0, "speed": 0, "phase": 0 },
+        { "x": 120, "y": 1140, "w": 110, "kind": "normal", "baseX": 120, "range": 0, "speed": 0, "phase": 0 },
+        { "x": 20, "y": 1050, "w": 100, "kind": "normal", "baseX": 20, "range": 0, "speed": 0, "phase": 0 },
+        { "x": 290, "y": 1000, "w": 100, "kind": "normal", "baseX": 290, "range": 0, "speed": 0, "phase": 0 },
+        { "x": 120, "y": 960, "w": 100, "kind": "normal", "baseX": 120, "range": 0, "speed": 0, "phase": 0 },
+        { "x": 40, "y": 870, "w": 100, "kind": "normal", "baseX": 40, "range": 0, "speed": 0, "phase": 0 },
+        { "x": 140, "y": 780, "w": 110, "kind": "normal", "baseX": 140, "range": 0, "speed": 0, "phase": 0 },
+        { "x": 40, "y": 690, "w": 100, "kind": "normal", "baseX": 40, "range": 0, "speed": 0, "phase": 0 },
+        { "x": 150, "y": 600, "w": 110, "kind": "normal", "baseX": 150, "range": 0, "speed": 0, "phase": 0 },
+        { "x": 50, "y": 510, "w": 100, "kind": "normal", "baseX": 50, "range": 0, "speed": 0, "phase": 0 },
+        { "x": 160, "y": 420, "w": 110, "kind": "normal", "baseX": 160, "range": 0, "speed": 0, "phase": 0 },
+        { "x": 80, "y": 330, "w": 110, "kind": "normal", "baseX": 80, "range": 0, "speed": 0, "phase": 0 },
+        { "x": 140, "y": 250, "w": 100, "kind": "normal", "baseX": 140, "range": 0, "speed": 0, "phase": 0 }
+      ],
+      "scrolls": [
+        { "id": "S1-C1", "x": 352, "y": 905, "label": "影林残卷" }
+      ],
+      "routes": [
+        {
+          "id": "main",
+          "label": "林间主路",
+          "requiresDash": false,
+          "platforms": [0, 1, 2, 3, 4, 5, 6, 7, 9, 10, 11, 12, 13, 14, 15, 16, 17]
+        }
+      ],
+      "targetSeconds": 45
+    },
+    {
+      "id": "S2",
+      "title": "月下断桥",
+      "height": 2150,
+      "start": { "x": 197, "y": 2000 },
+      "goal": { "x": 186, "y": 120, "w": 48, "h": 64 },
+      "platforms": [
+        { "x": 140, "y": 2030, "w": 140, "kind": "normal", "baseX": 140, "range": 0, "speed": 0, "phase": 0 },
+        { "x": 70, "y": 1935, "w": 110, "kind": "normal", "baseX": 70, "range": 0, "speed": 0, "phase": 0 },
+        { "x": 180, "y": 1845, "w": 110, "kind": "normal", "baseX": 180, "range": 0, "speed": 0, "phase": 0 },
+        { "x": 40, "y": 1755, "w": 100, "kind": "normal", "baseX": 40, "range": 0, "speed": 0, "phase": 0 },
+        { "x": 255, "y": 1716, "w": 90, "kind": "fragile", "baseX": 255, "range": 0, "speed": 0, "phase": 0 },
+        { "x": 30, "y": 1665, "w": 95, "kind": "moving", "baseX": 30, "range": 26, "speed": 0.9, "phase": 0 },
+        { "x": 85, "y": 1587, "w": 90, "kind": "fragile", "baseX": 85, "range": 0, "speed": 0, "phase": 0 },
+        { "x": 100, "y": 1575, "w": 100, "kind": "normal", "baseX": 100, "range": 0, "speed": 0, "phase": 0 },
+        { "x": 300, "y": 1520, "w": 100, "kind": "normal", "baseX": 300, "range": 0, "speed": 0, "phase": 0 },
+        { "x": 40, "y": 1485, "w": 90, "kind": "moving", "baseX": 40, "range": 28, "speed": 1.2, "phase": 0 },
+        { "x": 255, "y": 1458, "w": 90, "kind": "fragile", "baseX": 255, "range": 0, "speed": 0, "phase": 0 },
+        { "x": 130, "y": 1395, "w": 100, "kind": "normal", "baseX": 130, "range": 0, "speed": 0, "phase": 0 },
+        { "x": 85, "y": 1329, "w": 90, "kind": "fragile", "baseX": 85, "range": 0, "speed": 0, "phase": 0 },
+        { "x": 40, "y": 1305, "w": 100, "kind": "normal", "baseX": 40, "range": 0, "speed": 0, "phase": 0 },
+        { "x": 140, "y": 1215, "w": 100, "kind": "fragile", "baseX": 140, "range": 0, "speed": 0, "phase": 0 },
+        { "x": 255, "y": 1200, "w": 90, "kind": "fragile", "baseX": 255, "range": 0, "speed": 0, "phase": 0 },
+        { "x": 50, "y": 1125, "w": 100, "kind": "normal", "baseX": 50, "range": 0, "speed": 0, "phase": 0 },
+        { "x": 85, "y": 1071, "w": 90, "kind": "fragile", "baseX": 85, "range": 0, "speed": 0, "phase": 0 },
+        { "x": 150, "y": 1040, "w": 100, "kind": "normal", "baseX": 150, "range": 0, "speed": 0, "phase": 0 },
+        { "x": 110, "y": 940, "w": 110, "kind": "normal", "baseX": 110, "range": 0, "speed": 0, "phase": 0 },
+        { "x": 200, "y": 830, "w": 100, "kind": "normal", "baseX": 200, "range": 0, "speed": 0, "phase": 0 },
+        { "x": 100, "y": 720, "w": 100, "kind": "normal", "baseX": 100, "range": 0, "speed": 0, "phase": 0 },
+        { "x": 190, "y": 610, "w": 100, "kind": "normal", "baseX": 190, "range": 0, "speed": 0, "phase": 0 },
+        { "x": 90, "y": 500, "w": 100, "kind": "normal", "baseX": 90, "range": 0, "speed": 0, "phase": 0 },
+        { "x": 170, "y": 370, "w": 100, "kind": "normal", "baseX": 170, "range": 0, "speed": 0, "phase": 0 },
+        { "x": 150, "y": 250, "w": 110, "kind": "normal", "baseX": 150, "range": 0, "speed": 0, "phase": 0 }
+      ],
+      "scrolls": [
+        { "id": "S2-C1", "x": 356, "y": 1428, "label": "断桥残卷" }
+      ],
+      "routes": [
+        {
+          "id": "safe",
+          "label": "稳妥长路",
+          "requiresDash": false,
+          "platforms": [0, 1, 2, 3, 5, 7, 9, 11, 13, 14, 16, 18, 19, 20, 21, 22, 23, 24, 25]
+        },
+        {
+          "id": "fast",
+          "label": "近路快线",
+          "requiresDash": false,
+          "platforms": [0, 1, 2, 4, 6, 10, 12, 15, 17, 19, 20, 21, 22, 23, 24, 25]
+        }
+      ],
+      "targetSeconds": 60
+    },
+    {
+      "id": "S3",
+      "title": "影冲试炼",
+      "height": 2250,
+      "start": { "x": 197, "y": 2070 },
+      "goal": { "x": 40, "y": 120, "w": 48, "h": 64 },
+      "platforms": [
+        { "x": 140, "y": 2100, "w": 140, "kind": "normal", "baseX": 140, "range": 0, "speed": 0, "phase": 0 },
+        { "x": 80, "y": 2010, "w": 110, "kind": "normal", "baseX": 80, "range": 0, "speed": 0, "phase": 0 },
+        { "x": 200, "y": 1920, "w": 110, "kind": "normal", "baseX": 200, "range": 0, "speed": 0, "phase": 0 },
+        { "x": 110, "y": 1830, "w": 100, "kind": "normal", "baseX": 110, "range": 0, "speed": 0, "phase": 0 },
+        { "x": 220, "y": 1740, "w": 100, "kind": "normal", "baseX": 220, "range": 0, "speed": 0, "phase": 0 },
+        { "x": 120, "y": 1650, "w": 100, "kind": "normal", "baseX": 120, "range": 0, "speed": 0, "phase": 0 },
+        { "x": 230, "y": 1560, "w": 100, "kind": "normal", "baseX": 230, "range": 0, "speed": 0, "phase": 0 },
+        { "x": 20, "y": 1490, "w": 380, "kind": "normal", "baseX": 20, "range": 0, "speed": 0, "phase": 0 },
+        { "x": 130, "y": 1450, "w": 110, "kind": "normal", "baseX": 130, "range": 0, "speed": 0, "phase": 0 },
+        { "x": 110, "y": 1330, "w": 180, "kind": "normal", "baseX": 110, "range": 0, "speed": 0, "phase": 0 },
+        { "x": 296, "y": 1200, "w": 100, "kind": "normal", "baseX": 296, "range": 0, "speed": 0, "phase": 0 },
+        { "x": 6, "y": 1070, "w": 104, "kind": "normal", "baseX": 6, "range": 0, "speed": 0, "phase": 0 },
+        { "x": 20, "y": 960, "w": 100, "kind": "normal", "baseX": 20, "range": 0, "speed": 0, "phase": 0 },
+        { "x": 80, "y": 850, "w": 95, "kind": "normal", "baseX": 80, "range": 0, "speed": 0, "phase": 0 },
+        { "x": 10, "y": 740, "w": 90, "kind": "normal", "baseX": 10, "range": 0, "speed": 0, "phase": 0 },
+        { "x": 70, "y": 630, "w": 95, "kind": "normal", "baseX": 70, "range": 0, "speed": 0, "phase": 0 },
+        { "x": 10, "y": 520, "w": 90, "kind": "normal", "baseX": 10, "range": 0, "speed": 0, "phase": 0 },
+        { "x": 280, "y": 470, "w": 130, "kind": "normal", "baseX": 280, "range": 0, "speed": 0, "phase": 0 },
+        { "x": 140, "y": 400, "w": 90, "kind": "normal", "baseX": 140, "range": 0, "speed": 0, "phase": 0 },
+        { "x": 40, "y": 310, "w": 120, "kind": "normal", "baseX": 40, "range": 0, "speed": 0, "phase": 0 }
+      ],
+      "scrolls": [
+        { "id": "S3-C1", "x": 410, "y": 210, "label": "影冲残卷" }
+      ],
+      "routes": [
+        {
+          "id": "main",
+          "label": "影冲主线",
+          "requiresDash": true,
+          "platforms": [0, 1, 2, 3, 4, 5, 6, 8, 9, 10, 11, 12, 13, 14, 15, 16, 18, 19]
+        },
+        {
+          "id": "scrollReturn",
+          "label": "侧窗回收回路",
+          "requiresDash": true,
+          "platforms": [0, 1, 2, 3, 4, 5, 6, 8, 9, 10, 11, 12, 13, 14, 15, 16, 17, 18, 19]
+        }
+      ],
+      "targetSeconds": 75
+    }
+  ]
+}
