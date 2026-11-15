@@ -1,5 +1,14 @@
 # Arcade Changelog
 
+## 0.8.3 — 2026-11-15（待发布）
+
+Owner 实机反馈：Android 手机浏览器里中心页顶部导航条上方多出一条空白。
+
+- 根因：部分 Android 浏览器在普通标签页也返回约 40px 的 `env(safe-area-inset-top)`；共享 `.studiokit-shellbar` 把该值当作内边距，而 `* { box-sizing: border-box }` 让 38px 的 `min-height` 被安全区吃掉，导航文字被压到条底，上方留下整块空白。
+- 修复：`shared/site.css` 的 shellbar 显式 `box-sizing: border-box`；顶部安全区只在 `html.studiokit-shell-standalone` 下应用，并用 `min-height: calc(38px + env(safe-area-inset-top))` 把安全区加在 38px 导航行之外；窄屏媒体查询同步移除顶部内边距。`shared/site-shell.js` 通过 `display-mode: standalone` / `navigator.standalone` 加类，并在 `resize` 时同步 `--studiokit-shellbar-h`。
+- 版本：`ARCADE_VERSION`、注册表、中心页版本标记与 Service Worker `VERSION` 统一升至 `0.8.3`，缓存键为 `studiokit-arcade-0.8.3-v1`；已装 SW 用户会随版本刷新共享资源。
+- 测试：`arcade_smoke.mjs` 新增「浏览器模式安全区：shellbar 保持 38px 且文字居中（Android 空白回归防护）」，独立窗口安全区用例改为真实模拟 standalone（38px + 安全区、文字居中）；**86/86** 通过；`arcade_zen_scores_test.mjs` 14/14、`arcade_gameplay_test.mjs --suite=base --repeat=2` 22/22；`validate_site.py` / `build_site.py` / `node --check` 通过。发布证据待双端验证后补入。
+
 ## 0.8.2 — 2026-11-13（已发布）
 
 Owner 对 0.8.1 的试玩反馈：「模式没问题，但是按钮区占了太多游戏画面区域了」。0.8.2 只优化俄罗斯方块画布外的控件布局，不减少功能、不改变玩法与数据。

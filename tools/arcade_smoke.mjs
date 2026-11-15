@@ -46,8 +46,8 @@ async function main() {
     })()`);
     assert(home.cards >= 2, 'home cards=' + home.cards);
     assert(home.href.indexOf('apps/arcade') !== -1, 'arcade card not clickable: ' + JSON.stringify(home));
-    assert(home.version.indexOf('0.8.2') !== -1, 'arcade version missing on home card');
-    record('门户街机厅卡片可点击且版本 0.8.2', true);
+    assert(home.version.indexOf('0.8.3') !== -1, 'arcade version missing on home card');
+    record('门户街机厅卡片可点击且版本 0.8.3', true);
 
     /* ---------- GitHub Pages 项目子路径：shell 返回链接 ---------- */
     await cdp.navigate(base + '/studiokit/apps/arcade/games/star-raid.html');
@@ -65,10 +65,10 @@ async function main() {
       cards: document.querySelectorAll('.hall-card').length,
       runs: window.Arcade && Arcade.RunSave.count()
     })`);
-    assert(hallInfo.version === '0.8.2', 'version is ' + hallInfo.version);
+    assert(hallInfo.version === '0.8.3', 'version is ' + hallInfo.version);
     assert(hallInfo.games === 13, 'game count is ' + hallInfo.games);
     assert(hallInfo.cards === 13, 'card count is ' + hallInfo.cards);
-    record('中心页 13 款游戏与版本 0.8.2', true);
+    record('中心页 13 款游戏与版本 0.8.3', true);
 
     await cdp.evaluate(`(() => { const i = document.querySelector('[data-search]'); i.value = '雪铃'; i.dispatchEvent(new Event('input', { bubbles: true })); })()`);
     await sleep(120);
@@ -1811,18 +1811,63 @@ async function main() {
 
     /* ---------- 刘海安全区（Chrome CDP 支持时） ---------- */
     let safeAreaApplied = false;
+    let standaloneStub = null;
     try {
       await cdp.send('Emulation.setSafeAreaInsetsOverride', { insets: { top: 47, left: 0, bottom: 34, right: 0 } });
       safeAreaApplied = true;
       await cdp.send('Emulation.setDeviceMetricsOverride', { width: 390, height: 844, deviceScaleFactor: 1, mobile: true });
+
+      /* 普通浏览器标签页：部分 Android 浏览器会报告非零 safe-area-inset-top，但顶部
+         已被浏览器 UI 占住；shellbar 必须保持 38px，不能因此多出一条空白。 */
       await cdp.navigate(base + '/apps/arcade/games/star-raid.html');
-      const safe = await cdp.evaluate(`({
-        paddingTop: getComputedStyle(document.querySelector('.studiokit-shellbar')).paddingTop,
-        shellH: Math.round(document.querySelector('.studiokit-shellbar').getBoundingClientRect().height),
-        docH: document.documentElement.scrollHeight,
-        viewH: window.innerHeight
-      })`);
-      assert(parseFloat(safe.paddingTop) >= 47, 'shell safe-area padding ' + JSON.stringify(safe));
+      const safeBrowser = await cdp.evaluate(`(() => {
+        const bar = document.querySelector('.studiokit-shellbar');
+        const r = bar.getBoundingClientRect();
+        const text = bar.querySelector('.studiokit-shell-current').getBoundingClientRect();
+        return {
+          standalone: matchMedia('(display-mode: standalone)').matches,
+          paddingTop: parseFloat(getComputedStyle(bar).paddingTop),
+          shellH: Math.round(r.height),
+          textAbove: Math.round(text.top - r.top),
+          textBelow: Math.round(r.bottom - text.bottom),
+          docH: document.documentElement.scrollHeight,
+          viewH: window.innerHeight
+        };
+      })()`);
+      assert(!safeBrowser.standalone, 'browser display-mode leak: ' + JSON.stringify(safeBrowser));
+      assert(safeBrowser.paddingTop === 0 && Math.abs(safeBrowser.shellH - 38) <= 1, 'browser-mode shellbar grew with top safe-area: ' + JSON.stringify(safeBrowser));
+      assert(Math.abs(safeBrowser.textAbove - safeBrowser.textBelow) <= 2, 'browser-mode shellbar text not centered: ' + JSON.stringify(safeBrowser));
+      assert(safeBrowser.docH <= safeBrowser.viewH + 2, 'safe-area page overflow ' + JSON.stringify(safeBrowser));
+      record('390×844 浏览器模式安全区：shellbar 保持 38px 且文字居中（Android 空白回归防护）', true);
+
+      /* 独立窗口/安装到桌面：页面铺到状态栏下面，顶部安全区要加在 38px 导航行之外。 */
+      standaloneStub = await cdp.send('Page.addScriptToEvaluateOnNewDocument', {
+        source: `(() => {
+          const real = window.matchMedia.bind(window);
+          window.matchMedia = (query) => query === '(display-mode: standalone)'
+            ? { matches: true, media: query, onchange: null, addListener() {}, removeListener() {}, addEventListener() {}, removeEventListener() {}, dispatchEvent() { return false; } }
+            : real(query);
+        })();`,
+      });
+      await cdp.navigate(base + '/apps/arcade/games/star-raid.html');
+      const safe = await cdp.evaluate(`(() => {
+        const bar = document.querySelector('.studiokit-shellbar');
+        const r = bar.getBoundingClientRect();
+        const text = bar.querySelector('.studiokit-shell-current').getBoundingClientRect();
+        return {
+          standaloneClass: document.documentElement.classList.contains('studiokit-shell-standalone'),
+          paddingTop: parseFloat(getComputedStyle(bar).paddingTop),
+          shellH: Math.round(r.height),
+          textAbove: Math.round(text.top - r.top),
+          textBelow: Math.round(r.bottom - text.bottom),
+          barVar: getComputedStyle(document.documentElement).getPropertyValue('--studiokit-shellbar-h').trim(),
+          docH: document.documentElement.scrollHeight,
+          viewH: window.innerHeight
+        };
+      })()`);
+      assert(safe.standaloneClass && parseFloat(safe.paddingTop) >= 47, 'standalone shell safe-area padding ' + JSON.stringify(safe));
+      assert(safe.shellH >= 47 + 37 && safe.barVar === safe.shellH + 'px', 'standalone shell must add safe-area above the 38px row ' + JSON.stringify(safe));
+      assert(Math.abs(safe.textAbove - 47 - safe.textBelow) <= 2, 'standalone shell text not centered in nav row ' + JSON.stringify(safe));
       assert(safe.docH <= safe.viewH + 2, 'safe-area page overflow ' + JSON.stringify(safe));
 
       /* 俄罗斯方块在底部 Home Indicator 安全区下：按钮面板与提示不能被推出视口。 */
@@ -1843,7 +1888,7 @@ async function main() {
       assert(safeBlock.docH <= safeBlock.viewH + 2, 'block-drop safe-area overflow: ' + JSON.stringify(safeBlock));
       assert(safeBlock.padH >= 56, 'block-drop safe-area pad height: ' + JSON.stringify(safeBlock));
       assert(safeBlock.hintBottom <= safeBlock.viewH - parseFloat(safeBlock.pagePadBottom) + 1, 'block-drop hint inside safe area: ' + JSON.stringify(safeBlock));
-      record('390×844 刘海安全区 shellbar/页面高度 + 方块按钮面板', true);
+      record('390×844 独立窗口安全区 shellbar/页面高度 + 方块按钮面板', true);
 
       /* 全屏时顶栏与画布同样要避开刘海/底部安全区。 */
       await cdp.navigate(base + '/apps/arcade/games/gold-miner.html');
@@ -1864,7 +1909,7 @@ async function main() {
       })()`);
       assert(safeFs.active && safeFs.topPad >= 47 && safeFs.top >= 47, 'safe-area fullscreen top ' + JSON.stringify(safeFs));
       assert(safeFs.toolBottom <= safeFs.vh + 1 && safeFs.docH <= safeFs.vh + 2, 'safe-area fullscreen bottom ' + JSON.stringify(safeFs));
-      record('390×844 刘海安全区 全屏画布不压刘海/不溢出', true);
+      record('390×844 独立窗口安全区 全屏画布不压刘海/不溢出', true);
       await cdp.click('[data-fullscreen]');
       await sleep(300);
 
@@ -1879,12 +1924,15 @@ async function main() {
       })()`);
       assert(safeTools.active && safeTools.buttons.length === 2 && safeTools.buttons.every((b) => b.w >= 44 && b.h >= 44 && b.right <= 390 && b.bottom <= safeTools.vh + 1), 'safe-area immersive joy tools: ' + JSON.stringify(safeTools));
       assert(safeTools.docH <= safeTools.vh + 2, 'safe-area immersive joy tools overflow: ' + JSON.stringify(safeTools));
-      record('390×844 刘海安全区 沉浸模式道具按钮完整可见', true);
+      record('390×844 独立窗口安全区 沉浸模式道具按钮完整可见', true);
       await cdp.click('[data-fullscreen]');
       await sleep(300);
     } catch (err) {
       console.log('SKIP 刘海安全区（当前 Chrome/CDP 不支持 setSafeAreaInsetsOverride 或断言失败）: ' + err.message);
     } finally {
+      if (standaloneStub) {
+        await cdp.send('Page.removeScriptToEvaluateOnNewDocument', { identifier: standaloneStub.identifier }).catch(() => {});
+      }
       if (safeAreaApplied) {
         await cdp.send('Emulation.setSafeAreaInsetsOverride', { insets: { top: 0, left: 0, bottom: 0, right: 0 } }).catch(() => {});
       }
@@ -1984,7 +2032,7 @@ async function main() {
       version: window.Arcade && Arcade.version,
       title: document.title
     })`);
-    assert(offlineHall.cards === 13 && offlineHall.version === '0.8.2', 'offline hall failed: ' + JSON.stringify(offlineHall));
+    assert(offlineHall.cards === 13 && offlineHall.version === '0.8.3', 'offline hall failed: ' + JSON.stringify(offlineHall));
     const offlineStatus = await cdp.evaluate(`(async () => {
       try {
         await Arcade.Offline.register();
@@ -2006,7 +2054,7 @@ async function main() {
       overlay: !!document.querySelector('[data-overlay]'),
       version: window.Arcade && window.Arcade.version
     })`);
-    assert(offlineGame.hasArcade && offlineGame.overlay && offlineGame.version === '0.8.2', 'offline game failed: ' + JSON.stringify(offlineGame));
+    assert(offlineGame.hasArcade && offlineGame.overlay && offlineGame.version === '0.8.3', 'offline game failed: ' + JSON.stringify(offlineGame));
     await cdp.navigate(base + '/apps/arcade/games/not-preloaded.html');
     const offlineMissing = await cdp.text('body');
     assert(offlineMissing && offlineMissing.includes('还没有预载'), 'offline missing page: ' + String(offlineMissing).slice(0, 120));

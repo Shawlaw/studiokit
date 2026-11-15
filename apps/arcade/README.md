@@ -1,10 +1,19 @@
 # 街机厅 Arcade
 
-**应用版本：0.8.2（2026-11-13 已双端发布）｜进度 Schema：v1｜局内存档 Schema：v1｜游玩统计 Schema：v1｜积分记录 Schema：v1**
+**应用版本：0.8.3（2026-11-15 发布中）｜进度 Schema：v1｜局内存档 Schema：v1｜游玩统计 Schema：v1｜积分记录 Schema：v1**
 
 竖屏街机小游戏合集：网页加载后纯本地游玩，自带自研轻量物理引擎（重力、AABB/圆碰撞、单向平台、单摆积分、塔体倾斜力矩）。所有游戏由简到难、随时可暂停，并会把未完成的局内进度自动保存在本机。0.4.0 起支持全屏/沉浸游玩，黄金矿工加入限量主动道具与更平缓的起始摆速；0.5.0 新增游玩时长/轮次统计、分享、可安装 PWA 与手动离线预载；0.6.0 加入星海突击 30 秒关卡 Boss、弹种叠加与全屏纵向移动，黄金矿工瞄准线按秒计费，并修复瞄准后摆幅衰减与点开始误触全屏；0.6.1 修复 Boss 入场阶段穿过贴顶玩家的碰撞问题；0.6.2 修复黄金矿工目标金额小数，重排俄罗斯方块触屏按钮并区分「加速 / 落底」。
 
 0.7.0 为全部 13 款游戏补充符合各自玩法的主动道具、即时反馈或自然终点，并坚持“快乐不用赶进度”：没有签到、每日奖励、付费抽奖、商店或跨局成长；道具每局固定补给，中心页可随机选游戏，连续有效游玩 20 分钟只提醒一次且绝不强制暂停。0.7.0 已双端发布（GitHub Pages + Cloudflare Pages，提交 `34f03df`，Actions `43274342320` 四个 job 成功，`tools/verify_deploy.py` 24/24 文件一致）。
+
+## 0.8.3 修复：Android 普通浏览器顶部导航条空白（2026-11-15 发布中）
+
+Owner 实机反馈 Android 手机浏览器里中心页顶部导航条上方多出一条空白。0.8.3 只修共享 shell，不改游戏、玩法、存档或 localStorage key/Schema。
+
+- **根因**：部分 Android 浏览器在普通标签页也会返回约 40px 的 `env(safe-area-inset-top)`；共享 shellbar 把安全区无条件当作 `padding-top`，而工具页的 `* { box-sizing: border-box }` 让 38px `min-height` 被安全区吃掉，导航文字被压到条底、上方整块留白。
+- **修复**：顶部安全区只在安装到桌面/独立窗口（`display-mode: standalone` / `navigator.standalone`）时应用，并且加在 38px 导航行之外；普通标签页保持 38px、文字垂直居中。`--studiokit-shellbar-h` 在 resize 时同步；共享样式/脚本由 0.8.3 的 SW 缓存键刷新。
+- **兼容**：不改 `progress:v1` / `runs:v1` / `prefs:v1` / `playtime:v1` / `challenge:v1` / `scores:v1` 的 key 与 Schema；Badge Studio 共用同一 shell，也一并修复。
+- **测试**：`arcade_smoke.mjs` 新增浏览器模式安全区回归断言并真实模拟独立窗口，**86/86**；`arcade_zen_scores_test.mjs` 14/14、`arcade_gameplay_test.mjs --suite=base --repeat=2` 22/22；`validate_site.py` / `build_site.py` / `node --check` 通过。
 
 ## 0.8.2 新增：俄罗斯方块控制区压缩，把画面还给游戏（2026-11-13 已发布）
 

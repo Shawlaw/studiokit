@@ -4,6 +4,14 @@
   if (!body || !body.dataset.studiokitApp) return;
   if (body.dataset.studiokitShell === 'off') return;
 
+  // 独立窗口（安装到桌面/主屏幕）里页面会铺到状态栏下面，导航条需要让出顶部安全区；
+  // 普通标签页不这么做：浏览器 UI 已占住顶部，部分 Android 浏览器仍会返回非零
+  // safe-area-inset-top，照单全收会让导航条上方多出一条空白。
+  const standalone =
+    (window.matchMedia && window.matchMedia('(display-mode: standalone)').matches) ||
+    window.navigator.standalone === true;
+  if (standalone) document.documentElement.classList.add('studiokit-shell-standalone');
+
   const bar = document.createElement('nav');
   bar.className = 'studiokit-shellbar';
   bar.setAttribute('aria-label', 'StudioKit 工具导航');
@@ -50,8 +58,13 @@
   actions.append(note, source);
   bar.append(home, separator, current, actions);
   body.insertBefore(bar, body.firstChild);
-  document.documentElement.style.setProperty(
-    '--studiokit-shellbar-h',
-    `${Math.round(bar.getBoundingClientRect().height)}px`
-  );
+  function syncBarHeight() {
+    document.documentElement.style.setProperty(
+      '--studiokit-shellbar-h',
+      `${Math.round(bar.getBoundingClientRect().height)}px`
+    );
+  }
+  syncBarHeight();
+  // 旋转或进出独立窗口时顶部安全区会变，游戏页按该变量扣减高度，需要同步刷新。
+  window.addEventListener('resize', syncBarHeight, { passive: true });
 })();

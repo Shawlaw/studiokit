@@ -41,3 +41,10 @@
 - **Decision:** 一次构建的 `dist/` 同时部署到 GitHub Pages 项目站点与 Cloudflare Pages 项目 `studiokit`。`push main` 触发同一个 workflow：构建一次，两个部署 job 并行，最后由 `tools/verify_deploy.py` 校验两个 origin 的逐文件哈希与版本一致。Cloudflare 使用 Direct Upload（`wrangler pages deploy`），不接 Git 集成；自定义域名以后单独绑定到 Cloudflare。
 - **Reason:** 站点全部使用相对路径，同一份静态产物天然适配 GitHub Pages 子路径与 Cloudflare 根路径，应用代码不需要分叉。Direct Upload 复用 GitHub Actions 已通过的构建结果，避免第二套构建环境和两套校验结论；Cloudflare 作为独立的第二入口，降低单一托管故障的影响。
 - **Consequence:** 两个部署不是事务性的：任一 job 失败都可能出现一端新、一端旧，必须用 `Re-run failed jobs` 修复，不能推空提交重试。两个域名是独立 origin，localStorage/SW/PWA 不互通。CI 需要 Pages Edit 的 API Token（只放 GitHub Secrets）。本地 Windows 构建为 CRLF，CI Linux 为 LF，校验脚本按文本换行归一化比较；发布以 CI 产物为准。
+
+## ADR-0007: Top safe-area only in standalone shell
+
+- **Status:** Accepted
+- **Decision:** 共享 shellbar 只在独立窗口（安装到桌面/主屏幕，`display-mode: standalone` 或 `navigator.standalone`）应用顶部 `safe-area-inset-top`，并把安全区加到 38px 导航行之外（`min-height: calc(38px + env(...))`）；普通浏览器标签页保持 38px，不因浏览器报告的顶部安全区产生内边距。
+- **Reason:** 普通浏览器标签页的顶部已被浏览器自身的地址栏/工具栏占据，页面并未铺到状态栏下面；但部分 Android 浏览器（Owner 实机反馈）仍返回约 40px 的非零 `safe-area-inset-top`，无条件内缩会在导航条上方留出一条空白，并把文字压到导航条底部。独立窗口下页面才真正铺到状态栏下面，需要安全区。
+- **Consequence:** 以后修 shellbar 间距时不能把顶部安全区重新放回无条件内边距；新增的 `arcade_smoke` 浏览器模式/独立窗口两组断言会拦截回归。`--studiokit-shellbar-h` 需要在 resize 时同步，游戏页用该变量扣减高度。SW 对 `shared/site.css` 是缓存优先，修改共享 shell 后必须递增 Arcade 缓存修订号（当前 `studiokit-arcade-0.8.3-v1`），否则已装 SW 的用户拿不到新样式。

@@ -4,7 +4,7 @@
 
 - **线上站点：** <https://shawlaw.github.io/studiokit/> · <https://studiokit.pages.dev/>
 - **源码：** <https://github.com/Shawlaw/studiokit>（MIT 许可）
-- **当前工具：** Badge Studio `2.2.1`；街机厅 Arcade `0.8.2`（13 款竖屏小游戏 + 78 关挑战模式 + 俄罗斯方块禅模式 + 积分记录表 + 俄罗斯方块控件压缩，已发布）
+- **当前工具：** Badge Studio `2.2.1`；街机厅 Arcade `0.8.3`（13 款竖屏小游戏 + 78 关挑战模式 + 俄罗斯方块禅模式 + 积分记录表 + 俄罗斯方块控件压缩，0.8.3 发布中）
 - **计划中的工具：** Rounded Image（尚未实现，等待原始需求/规格）
 - **最近发布：** 2026-11-13，Arcade 0.8.2（俄罗斯方块控制区压缩：删除禅模式独立按钮行、冻结并入道具行；画布面积相对经典 +18%～+47%、相对 0.8.1 禅模式 +41.6%～+126.8%；GitHub Pages + Cloudflare Pages 双端；提交 `077ccf5`，Actions `43447829596`，`verify_deploy.py` 37/37）
 - **运行方式：** 纯静态文件；无后端、无账号、无构建依赖、无第三方 CDN
@@ -24,7 +24,7 @@ StudioKit/
 │   │   ├── index.html
 │   │   ├── README.md
 │   │   └── CHANGELOG.md
-│   └── arcade/                      # 街机厅，当前 v0.8.2（已发布）
+│   └── arcade/                      # 街机厅，当前 v0.8.3（发布中）
 │       ├── index.html               # 游戏中心页（统计/分享/安装/预载）
 │       ├── engine.js                # 街机专用共享运行时
 │       ├── arcade.css               # 街机专用样式
