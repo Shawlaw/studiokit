@@ -115,9 +115,19 @@
 - [x] 发布证据：提交 `077ccf5` 推送 `main`；Actions `43447829596` 四 job 全成功；CI 与本地 `verify_deploy.py` 均 37/37 双端一致（Arcade `0.8.2` / Badge `2.2.1`）；双端线上无头 Chrome 14/14；SW 缓存键 `studiokit-arcade-0.8.2-v1`。
 - 未验证：iOS/Android 真机触控手感与低端机帧率仍为 UNVERIFIED。
 
+## 0.8.3 发布批次（2026-11-15 已双端发布）
+
+### Arcade 0.8.3 — 共享 shell Android 顶部导航条空白修复（已发布）
+
+- [x] Owner Android 实机反馈顶部导航条上方整块空白；定位为部分 Android 浏览器普通标签页也返回约 40px `safe-area-inset-top`，与 `*{box-sizing:border-box}` 叠加后把 38px 导航行压扁、文字贴底。
+- [x] 共享 shell：顶部安全区只在 standalone/独立窗口应用，并计入 `min-height: calc(38px + env(...))`；普通标签页保持 38px、文字居中；`--studiokit-shellbar-h` 在 resize 同步；Badge Studio 一并修复。
+- [x] 测试：`arcade_smoke.mjs` 新增浏览器模式安全区回归断言 + standalone 真实模拟，**86/86**；`arcade_zen_scores_test.mjs` 14/14、gameplay base 22/22；`validate_site.py` / `build_site.py` / `node --check` 通过。
+- [x] 发布证据：提交 `c1727e7` 推送 `main`；Actions `43670060561` 四 job 全成功；CI 与本地 `verify_deploy.py` 均 **37/37** 文件双端一致（Arcade `0.8.3` / Badge `2.2.1`）；双端线上无头 Chrome 浏览器模式（40px 安全区下 shellbar 38px、文字居中）+ 独立窗口（78px）+ SW 缓存键 `studiokit-arcade-0.8.3-v1`，0 console error。
+- 未验证：Owner 的那台 Android 浏览器发布后复测；iPhone/Android 真机触控与低端机帧率仍 UNVERIFIED。
+
 ## Now
 
-1. **Arcade 0.8.1 线上观察**：0.8.1 已双端发布；重点观察禅模式冻结提速的使用率、积分记录表的可读性与移动端表格滚动体验，以及旧存档/旧备份导入后的数据一致性。
+1. **Arcade 0.8.3 线上观察**：0.8.3 已双端发布；重点观察 Android 普通浏览器顶部导航条、共享 shell 的 SW 缓存刷新，以及禅模式/积分记录表的移动端体验。
 2. **Arcade 0.8.0 试玩**：按 `docs/arcade/0.8.0-PLAYTEST.md` 与 `docs/arcade/0.9/PLAYTEST.md` 在桌面与 iOS/Android 真机做两轮试玩（影冲理解、挑战选关/路线/难度、失败归因），并裁决 5 项设计差量；真机未验证前不宣称通过。
 3. **数值反馈**：收集道具次数、自然收尾目标（5000m/3000m/20 果实/40 行）和休息提醒时长的真实反馈，再决定是否微调；不为了“有更新”而改。
 4. **双端发布维护**：观察 GitHub Pages 与 Cloudflare Pages 的版本一致性；需要时再绑定自定义域名或调整缓存策略。

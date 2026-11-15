@@ -5,7 +5,11 @@
 - 仓库：<https://github.com/Shawlaw/studiokit>
 - GitHub Pages：<https://shawlaw.github.io/studiokit/>
 - Cloudflare Pages：<https://studiokit.pages.dev/>
-- 最近发布：Arcade `0.8.2`（2026-11-13，已发布）
+- 最近发布：Arcade `0.8.3`（2026-11-15，已发布）
+  - 批次内容：共享 shell 修复 Android 普通浏览器顶部导航条空白：顶部安全区只在安装/独立窗口应用并计入导航行总高度；普通标签页保持 38px、文字居中；SW 缓存键随 0.8.3 刷新；无数据/玩法变更
+  - 提交 `c1727e7` 推送 `main`；Actions `43670060561` 四个 job 均成功
+  - 双端验证：CI 与本地 `tools/verify_deploy.py` 均 **37/37** 文件 SHA-256 一致，Arcade `0.8.3` / Badge `2.2.1`；双端线上无头 Chrome 浏览器模式（40px 安全区下 shellbar 38px、文字居中）、独立窗口 78px（40+38）、SW 缓存键 `studiokit-arcade-0.8.3-v1`，0 console error
+- 上一个发布：Arcade `0.8.2`（2026-11-13，已发布）
   - 批次内容：T065–T068 Owner 试玩反馈「按钮区占了太多游戏画面区域」修复：删除禅模式独立按钮行、冻结/恢复并入道具行、zen 隐藏重复 hint、道具行 44px、画布高度回收；实测禅模式画布面积 +18%～+47%、高度比经典多 56–60px；无数据/玩法变更
   - 提交 `077ccf5` 推送 `main`；Actions `43447829596` 四个 job 均成功
   - 双端验证：CI 与本地 `tools/verify_deploy.py` 均 **37/37** 文件 SHA-256 一致，Arcade `0.8.2` / Badge `2.2.1`；双端线上无头 Chrome **14/14**（门户/中心页 0.8.2、方块页经典 316×558 → 禅模式 348×614、3 按钮 44px、hint 隐藏、冻结按钮真实切换、结算写 zen 记录且经典 high 不变）；SW 缓存键 `studiokit-arcade-0.8.2-v1`

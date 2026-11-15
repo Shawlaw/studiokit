@@ -1210,6 +1210,22 @@
       "ownerAuthorizationNote": "延续 Owner 2026-11-13 明确要求「你自己推进到发版」；本轮为 Owner 试玩 0.8.1 后反馈「按钮区占了太多游戏画面区域」的直接修复，按双目标规则同时发布 GitHub Pages + Cloudflare Pages。",
       "completedAt": "2026-11-13T15:10:00+00:00",
       "evidence": "Now-defunct owner instruction chain: the 0.8.2 release continues the same release objective the Owner authorized when asking the agent to '自己推进到发版' and is a direct response to Owner playtest feedback on the live 0.8.1 build; dual-target rule applied. Pushed e58007c..077ccf5 to main. GitHub Actions run 43447829596: all four jobs succeeded (Validate and build / Deploy GitHub Pages / Deploy Cloudflare Pages / Verify both deployments). CI verify log: PASS cross-origin 37/37 files identical across GitHub Pages + Cloudflare preview + production; arcade 0.8.2 / badge 2.2.1, manifest application/manifest+json. Independent live headless Chrome on both origins 14/14 PASS: portal/hub 0.8.2 + 13 cards + score-records section; block-drop classic canvas 316x558 with 2 tool buttons, freeze hidden, hint visible; zen canvas 348x614 (+56), docH==vh, no zen-bar node, 3 tool buttons 44px incl freeze, hint hidden; real freeze click toggles label/aria/frozen; zen settlement writes mode:'zen' record (45 lines) while classic high stays 0. SW cache key studiokit-arcade-0.8.2-v1. iOS/Android real-device touch and low-end performance remain UNVERIFIED."
+    },
+    {
+      "id": "T069",
+      "title": "共享 shell：修复 Android 普通浏览器顶部安全区撑高导航条",
+      "kind": "agent",
+      "status": "DONE",
+      "dependsOn": [],
+      "ownerAuthorizationRequired": false,
+      "acceptance": [
+        "普通浏览器标签页即使报告非零 safe-area-inset-top，shellbar 仍为 38px 且文字居中",
+        "独立窗口（安装到桌面）仍保留顶部安全区：38px 导航行 + env(safe-area-inset-top)",
+        "旋转/resize 后 --studiokit-shellbar-h 与真实高度同步",
+        "版本全链 0.8.3，双端发布并通过 verify_deploy 与线上无头复测"
+      ],
+      "completedAt": "2026-11-15T02:35:00+00:00",
+      "evidence": "Owner Android 实机截图：浏览器顶部工具栏下方、shellbar 文字上方出现整块空白。像素复核（864×1920 截图，CSS 360×800 @dpr3）显示空白为 shellbar 自身 padding-top≈40px：部分 Android 浏览器在普通标签页返回非零 safe-area-inset-top，而 arcade/badge 的 `*{box-sizing:border-box}` 让 38px min-height 被安全区吃掉，文字被压到条底（bar≈56.6px，上 40 下 1）。修复：shared/site.css shellbar 显式 border-box，顶部安全区只在 html.studiokit-shell-standalone 下应用并计入 min-height calc(38px+env(...))；shared/site-shell.js 用 display-mode:standalone/navigator.standalone 加类并在 resize 同步 --studiokit-shellbar-h；版本全链升至 0.8.3（engine/registry/hub/SW），SW 缓存键 studiokit-arcade-0.8.3-v1，已装 SW 用户会刷新 shared 资源。门禁：arcade_smoke 86/86（新增浏览器模式安全区回归断言；独立窗口改为真实 standalone 模拟，校验 38px 行+安全区+文字居中），zen_scores 14/14，gameplay base --repeat=2 22/22，validate_site/build_site/node --check/git diff --check 全过。发布：提交 c1727e7 推送 main；Actions 43670060561 四 job 全部成功；CI 与本地 verify_deploy.py 均 37/37 文件 SHA-256 双端一致（Arcade 0.8.3 / Badge 2.2.1）；双端线上无头 Chrome 复测浏览器模式（模拟 40px 安全区时 shellbar 38px、文字居中）、独立窗口 78px（40+38）、SW 缓存键 studiokit-arcade-0.8.3-v1，0 console error。Owner 的那台 Android 浏览器仍建议发布后复测；真机 iOS/Android 触控手感仍 UNVERIFIED。"
     }
   ]
 }

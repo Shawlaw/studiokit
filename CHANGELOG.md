@@ -2,7 +2,7 @@
 
 StudioKit 门户本身没有独立的 semver；以下按仓库里程碑与工具版本记录。各工具的详细变更见 `apps/<tool>/CHANGELOG.md`。
 
-## Arcade 0.8.3 — 2026-11-15（待发布）
+## Arcade 0.8.3 — 2026-11-15（已发布）
 
 ### Fixed
 - Android 手机浏览器里 StudioKit 顶部导航条上方多出一条空白（Owner 实机反馈：浏览器报告约 40px 顶部安全区，但顶部实际已被浏览器 UI 占据）。共享 `.studiokit-shellbar` 现在只在独立窗口（安装到桌面/主屏幕）应用 `safe-area-inset-top`，并把安全区加在 38px 导航行之外；普通标签页保持 38px、文字垂直居中。
@@ -10,7 +10,8 @@ StudioKit 门户本身没有独立的 semver；以下按仓库里程碑与工具
 - Arcade 版本全链升至 `0.8.3`（`ARCADE_VERSION`、注册表、中心页版本标记、SW `VERSION` 与缓存键 `studiokit-arcade-0.8.3-v1`），已装 SW 的用户会随版本刷新 `shared/site.css` 与 `site-shell.js`。
 
 ### Verification
-- `arcade_smoke.mjs` **86/86**（新增浏览器模式安全区回归断言；独立窗口安全区断言改为真实 standalone 模拟，校验 38px 导航行 + 安全区与文字居中）；`arcade_zen_scores_test.mjs` 14/14、`arcade_gameplay_test.mjs --suite=base --repeat=2` 22/22；`validate_site.py` / `build_site.py` / `node --check` 通过；双端发布证据待补。
+- `arcade_smoke.mjs` **86/86**（新增浏览器模式安全区回归断言；独立窗口安全区断言改为真实 standalone 模拟，校验 38px 导航行 + 安全区与文字居中）；`arcade_zen_scores_test.mjs` 14/14、`arcade_gameplay_test.mjs --suite=base --repeat=2` 22/22；`validate_site.py` / `build_site.py` / `node --check` 通过。
+- 双端发布：提交 `c1727e7` 推送 `main`；Actions `43670060561` 的 Validate and build / Deploy GitHub Pages / Deploy Cloudflare Pages / Verify both deployments 四个 job 全部成功；CI 与本地 `tools/verify_deploy.py` 均 **37/37** 文件 SHA-256 双端一致，线上 Arcade `0.8.3` / Badge `2.2.1`；双端线上无头 Chrome 复测普通浏览器模式（模拟 40px 顶部安全区时 shellbar 仍为 38px、文字居中）与独立窗口（40+38=78px），SW 缓存键 `studiokit-arcade-0.8.3-v1`，0 console error。Owner 的那台 Android 浏览器仍建议发布后复测。
 
 ## Arcade 0.8.2 — 2026-11-13（已发布）
 

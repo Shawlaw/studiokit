@@ -2,6 +2,15 @@
 
 本目录保存 Arcade 各版本的设计/验收支撑文档，不是产品文档，也不进入发布产物（`tools/build_site.py` 的白名单只含 `index.html`、`favicon.svg`、`shared`、`apps`）。
 
+## 0.8.3（共享 shell Android 顶部导航条空白修复；已发布）
+
+| 文档 | 内容 | 状态 |
+| --- | --- | --- |
+| `apps/arcade/CHANGELOG.md` / `apps/arcade/README.md` | 根因、修复、兼容与门禁 | 已随 0.8.3 发布 |
+| [../DECISIONS.md](../DECISIONS.md) ADR-0007 | 顶部安全区只在独立窗口应用 | 已接受 |
+
+发布证据（0.8.3）：提交 `c1727e7` 推送 `main`；Actions `43670060561` 四个 job 全成功；CI 与本地 `verify_deploy.py` 均 37/37 文件双端一致（Arcade `0.8.3` / Badge `2.2.1`）；双端线上无头 Chrome 复测浏览器模式（40px 安全区下 shellbar 38px、文字居中）与独立窗口（78px），SW 缓存键 `studiokit-arcade-0.8.3-v1`，0 console error。
+
 ## 0.8.2（俄罗斯方块控制区压缩；已发布）
 
 | 文档 | 内容 | 状态 |
