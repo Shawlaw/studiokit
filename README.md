@@ -4,7 +4,7 @@
 
 - **线上站点：** <https://shawlaw.github.io/studiokit/> · <https://studiokit.pages.dev/>
 - **源码：** <https://github.com/Shawlaw/studiokit>（MIT 许可）
-- **当前工具：** Badge Studio `2.2.1`；街机厅 Arcade `0.8.3`（13 款竖屏小游戏 + 78 关挑战模式 + 俄罗斯方块禅模式 + 积分记录表 + 俄罗斯方块控件压缩，已发布）；Venue Compare `0.1.0`（餐厅考察对比与地图标注，draft 待验收）
+- **当前工具：** Badge Studio `2.2.1`；街机厅 Arcade `0.8.3`（13 款竖屏小游戏 + 78 关挑战模式 + 俄罗斯方块禅模式 + 积分记录表 + 俄罗斯方块控件压缩，已发布）；Venue Compare `0.2.0`（餐厅考察对比、地图标注与外部链接，draft 待验收）
 - **计划中的工具：** Rounded Image（尚未实现，等待原始需求/规格）
 - **最近发布：** 2026-11-15，Arcade 0.8.3（共享 shell 修复 Android 普通浏览器顶部导航条空白：顶部安全区只在安装/独立窗口应用并计入导航条总高度，普通标签页保持 38px、文字居中；GitHub Pages + Cloudflare Pages 双端；提交 `c1727e7`，Actions `43670060561`，`verify_deploy.py` 37/37）
 - **运行方式：** 纯静态文件；无后端、无账号、无构建依赖、无第三方 CDN

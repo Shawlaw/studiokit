@@ -1242,6 +1242,22 @@
       ],
       "completedAt": "2026-11-16T01:55:00+00:00",
       "evidence": "新增 apps/restaurant-compare/ v0.1.0 draft：单页 HTML + 共享 shell；IndexedDB 命名空间 studiokit:restaurant-compare（兼容只读旧库 restaurant-compare-editor）；地图上传/缩放/平移/标注拖动、表格与卡片双向定位、6 项费用对比、环境/菜单多附件（图片灯箱、视频内嵌、PDF 下载）、JSON 导入导出、删除/换图确认、Ctrl+Z/Shift+Ctrl+Z、550ms 防抖自动保存、独立只读 HTML 导出（克隆文档 + JSON 注入 + 外壳/外链校验）。修复原版恢复存档后 scheduleSave 覆盖真实数据、EMBEDDED_DATA 字面量替换失败静默导出示例、data: PDF iframe、16px 触控目标等问题。门禁：validate_site/build_site/node --check 全过；restaurant_compare_smoke 17/17（含桌面与 320/375/390/430、标记放置/拖动、撤销重做、附件上传、删除确认、导入过滤 javascript: 附件、导出端无外壳/无编辑器/无外链、打印样式、0 console error）。仅本地分支 feat/restaurant-compare，未推送未发布；真机触控与超大项目仍 UNVERIFIED。"
+    },
+    {
+      "id": "T071",
+      "title": "Venue Compare 0.2.0：餐厅外部链接与分享文案提取",
+      "kind": "agent",
+      "status": "DONE",
+      "dependsOn": ["T070"],
+      "ownerAuthorizationRequired": false,
+      "acceptance": [
+        "每家餐厅可添加最多 12 个 http/https 链接，支持预设、分享文案提取与自动命名",
+        "详情、表格、卡片和导出页都能打开链接，javascript: 等协议被拒绝",
+        "Schema v3 兼容 v2 项目，链接字段缺省为空数组",
+        "restaurant_compare_smoke 覆盖链接流程且全量通过"
+      ],
+      "completedAt": "2026-11-16T02:25:00+00:00",
+      "evidence": "Venue Compare 0.2.0：编辑弹窗新增外部链接区（大众点评 / 官方网站 / 小红书 / 地图 / 自定义预设）；链接行支持名称 + 地址，粘贴整段分享文案时从 clipboard 提取第一个 http(s) 链接，失焦时同样规范化，并按 dianping/dpurl.cn、xiaohongshu/xhslink、meituan、weibo、amap、baidu、google 域名推断名称；仅接受 http/https，拒绝 javascript: 与带凭据 URL，重复 URL 去重，最多 12 个。详情弹窗新增链接卡片（target=_blank、rel=noopener noreferrer、referrerpolicy=no-referrer），桌面表格新增「链接」列，移动端卡片显示前 3 个与 +N，导出只读页保留链接。Schema 升至 v3（links: [{label,url}]），v2 项目读取后 links 默认 [] 并在保存时升级；修复附件移除按钮未绑定事件，并修复添加/删除链接行会丢失未同步输入的问题。版本全链 0.2.0；restaurant_compare_smoke 19/19（新增详情链接属性、分享文案提取、自动命名、删除行、javascript: 拦截、表格/卡片计数、导入恶意链接过滤、导出页链接与附件移除回归）；validate_site/build_site/node --check 全过；仅本地分支 feat/restaurant-compare，未推送未发布。"
     }
   ]
 }

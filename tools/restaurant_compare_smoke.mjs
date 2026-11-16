@@ -109,7 +109,104 @@ async function main() {
     await cdp.evaluate(`document.querySelector('#detailDialog [data-close="detail"]').click()`);
     await sleep(200);
 
-    /* ---------- 4. 地图标记点击与缩放 ---------- */
+    /* ---------- 4. 外部链接：展示、编辑、分享文案提取与校验 ---------- */
+    await cdp.evaluate(`document.querySelector('#rows tr[data-id="A"]').click()`);
+    await sleep(250);
+    const linkDetail = await cdp.evaluate(`({
+      links: document.querySelectorAll('#detailContent .link-card').length,
+      href: (document.querySelector('#detailContent .link-card') || {}).href || '',
+      target: (document.querySelector('#detailContent .link-card') || {}).target || '',
+      rel: (document.querySelector('#detailContent .link-card') || {}).rel || '',
+      label: (document.querySelector('#detailContent .link-card strong') || {}).textContent || ''
+    })`);
+    assert(linkDetail.links === 2 && linkDetail.href.startsWith('https://') && linkDetail.target === '_blank' && /noopener/.test(linkDetail.rel) && linkDetail.label === '大众点评', 'detail links wrong: ' + JSON.stringify(linkDetail));
+    await cdp.evaluate(`document.querySelector('#detailDialog [data-close="detail"]').click()`);
+    await sleep(150);
+    const linkCells = await cdp.evaluate(`({
+      cells: document.querySelectorAll('#rows tr[data-id="A"] td').length,
+      tableCount: (document.querySelector('#rows tr[data-id="A"] .link-count') || {}).textContent || '',
+      cardLinks: document.querySelectorAll('.rc-card[data-id="A"] .rc-link').length
+    })`);
+    assert(linkCells.cells === 11 && linkCells.tableCount.includes('2') && linkCells.cardLinks === 2, 'link cells wrong: ' + JSON.stringify(linkCells));
+
+    await cdp.evaluate(`document.querySelector('#rows tr[data-id="A"] [data-action="edit"]').click()`);
+    await sleep(200);
+    let linkEdit = await cdp.evaluate(`({ rows: document.querySelectorAll('#linkList .link-row').length, presets: document.querySelectorAll('#linkPresets [data-preset]').length })`);
+    assert(linkEdit.rows === 2 && linkEdit.presets === 5, 'edit links initial wrong: ' + JSON.stringify(linkEdit));
+    await cdp.evaluate(`document.querySelector('#linkPresets [data-preset="小红书"]').click()`);
+    await sleep(100);
+    await cdp.evaluate(`(() => {
+      const row = document.querySelectorAll('#linkList .link-row')[2];
+      const url = row.querySelector('[data-link-field="url"]');
+      url.value = '【分享】这家店环境不错 https://www.xiaohongshu.com/discovery/item/abc?x=1 复制打开';
+      url.dispatchEvent(new Event('input', { bubbles: true }));
+      url.dispatchEvent(new FocusEvent('focusout', { bubbles: true }));
+    })()`);
+    const extracted = await cdp.evaluate(`document.querySelectorAll('#linkList .link-row')[2].querySelector('[data-link-field="url"]').value`);
+    assert(extracted === 'https://www.xiaohongshu.com/discovery/item/abc?x=1', 'share text extraction failed: ' + extracted);
+    await cdp.evaluate(`document.querySelector('#linkPresets [data-preset="其他"]').click()`);
+    await sleep(100);
+    await cdp.evaluate(`(() => {
+      const row = document.querySelectorAll('#linkList .link-row')[3];
+      const url = row.querySelector('[data-link-field="url"]');
+      url.value = '看看这家 https://m.dianping.com/shop/123456?utm=abc 复制';
+      url.dispatchEvent(new Event('input', { bubbles: true }));
+      url.dispatchEvent(new FocusEvent('focusout', { bubbles: true }));
+    })()`);
+    const inferred = await cdp.evaluate(`({
+      rows: document.querySelectorAll('#linkList .link-row').length,
+      label: document.querySelectorAll('#linkList .link-row')[3].querySelector('[data-link-field="label"]').value,
+      url: document.querySelectorAll('#linkList .link-row')[3].querySelector('[data-link-field="url"]').value
+    })`);
+    assert(inferred.rows === 4 && inferred.label === '大众点评' && inferred.url === 'https://m.dianping.com/shop/123456?utm=abc', 'link inference failed: ' + JSON.stringify(inferred));
+    await cdp.screenshot('06-links-edit.png');
+    await cdp.evaluate(`document.querySelectorAll('#linkList .link-row')[2].querySelector('[data-action="remove-link"]').click()`);
+    await sleep(100);
+    linkEdit = await cdp.evaluate(`({ rows: document.querySelectorAll('#linkList .link-row').length })`);
+    assert(linkEdit.rows === 3, 'remove link failed: ' + JSON.stringify(linkEdit));
+
+    await cdp.evaluate(`(() => {
+      const url = document.querySelectorAll('#linkList .link-row')[0].querySelector('[data-link-field="url"]');
+      url.value = 'javascript:alert(1)';
+      url.dispatchEvent(new Event('input', { bubbles: true }));
+      document.getElementById('editForm').requestSubmit();
+    })()`);
+    await sleep(250);
+    const invalidLink = await cdp.evaluate(`({
+      open: document.getElementById('editDialog').open,
+      invalid: document.querySelectorAll('#linkList .link-row')[0].querySelector('[data-link-field="url"]').getAttribute('aria-invalid'),
+      toast: document.getElementById('toastText').textContent
+    })`);
+    assert(invalidLink.open && invalidLink.invalid === 'true', 'invalid link not blocked: ' + JSON.stringify(invalidLink));
+    await cdp.evaluate(`(() => {
+      const url = document.querySelectorAll('#linkList .link-row')[0].querySelector('[data-link-field="url"]');
+      url.value = 'https://www.dianping.com/';
+      url.dispatchEvent(new Event('input', { bubbles: true }));
+      document.getElementById('editForm').requestSubmit();
+    })()`);
+    await sleep(600);
+    assert(!(await cdp.evaluate(`document.getElementById('editDialog').open`)), 'edit dialog stayed open after valid links');
+
+    await cdp.evaluate(`document.querySelector('#rows tr[data-id="A"]').click()`);
+    await sleep(250);
+    const savedLinks = await cdp.evaluate(`({
+      links: document.querySelectorAll('#detailContent .link-card').length,
+      tableCount: (document.querySelector('#rows tr[data-id="A"] .link-count') || {}).textContent || '',
+      cardLinks: document.querySelectorAll('.rc-card[data-id="A"] .rc-link').length,
+      hosts: [...document.querySelectorAll('#detailContent .link-card small')].map(node => node.textContent)
+    })`);
+    assert(savedLinks.links === 3 && savedLinks.tableCount.includes('3') && savedLinks.cardLinks === 3 && savedLinks.hosts.includes('dianping.com') && savedLinks.hosts.includes('example.com'), 'saved links wrong: ' + JSON.stringify(savedLinks));
+    record('外部链接：详情/表格/卡片展示，分享文案提取与 javascript: 拦截', true, JSON.stringify({ linkDetail, extracted, inferred, savedLinks }));
+    await cdp.screenshot('07-links-detail.png');
+    await cdp.evaluate(`document.querySelector('#detailDialog [data-close="detail"]').click()`);
+    await sleep(150);
+    await cdp.evaluate(`document.getElementById('listPanel').scrollIntoView({ block: 'start' })`);
+    await sleep(200);
+    await cdp.screenshot('08-table-links.png');
+    await cdp.evaluate(`document.getElementById('mapPanel').scrollIntoView({ block: 'start' })`);
+    await sleep(250);
+
+    /* ---------- 5. 地图标记点击与缩放 ---------- */
     const markerRect = await cdp.evaluate(`(() => { const r=document.querySelector('.map-marker').getBoundingClientRect(); return {x:r.x+r.width/2,y:r.y+r.height/2}; })()`);
     await mouseClick(cdp, markerRect.x, markerRect.y);
     await sleep(250);
@@ -209,6 +306,24 @@ async function main() {
     await sleep(500);
     const fileCount = await cdp.evaluate(`document.querySelectorAll('#environmentFileList .file-row').length`);
     assert(fileCount === 1, 'file upload list expected 1, got ' + fileCount);
+    await cdp.evaluate(`document.querySelector('#environmentFileList [data-action="remove-asset"]').click()`);
+    await sleep(120);
+    const removedCount = await cdp.evaluate(`document.querySelectorAll('#environmentFileList .file-row').length`);
+    assert(removedCount === 0, 'remove asset failed, got ' + removedCount);
+    await cdp.evaluate(`(() => {
+      const binary = atob(${JSON.stringify(TINY_PNG)});
+      const bytes = new Uint8Array(binary.length);
+      for (let i = 0; i < binary.length; i += 1) bytes[i] = binary.charCodeAt(i);
+      const file = new File([bytes], '测试图片.png', { type: 'image/png' });
+      const transfer = new DataTransfer();
+      transfer.items.add(file);
+      const input = document.getElementById('environmentFiles');
+      input.files = transfer.files;
+      input.dispatchEvent(new Event('change', { bubbles: true }));
+    })()`);
+    await sleep(500);
+    const reAddedCount = await cdp.evaluate(`document.querySelectorAll('#environmentFileList .file-row').length`);
+    assert(reAddedCount === 1, 're-add asset failed, got ' + reAddedCount);
     await cdp.evaluate(`document.getElementById('editForm').requestSubmit()`);
     await sleep(550);
     await cdp.evaluate(`document.querySelector('#rows tr[data-id=${JSON.stringify(defaultId)}]').click()`);
@@ -241,13 +356,20 @@ async function main() {
         table: getComputedStyle(document.querySelector('.table-wrap')).display,
         cards: getComputedStyle(document.querySelector('.rc-cards')).display,
         cardCount: document.querySelectorAll('.rc-card').length,
+        links: document.querySelectorAll('.rc-card[data-id="A"] .rc-link').length,
         actionRight: Math.max(...[...document.querySelectorAll('.hero-actions > *')].map((node) => node.getBoundingClientRect().right)),
         control: Math.round(document.querySelector('.map-control-btn').getBoundingClientRect().width)
       })`);
       assert(layout.docW <= width && layout.table === 'none' && layout.cards === 'flex' && layout.cardCount === 6, width + 'px layout failed: ' + JSON.stringify(layout));
       assert(layout.actionRight <= width - 8, width + 'px hero actions overflow: ' + layout.actionRight);
       assert(layout.control >= 40, width + 'px map control too small');
+      assert(layout.links === 3, width + 'px card links missing');
       if (width === 390) await cdp.screenshot('03-mobile-390.png');
+      if (width === 390) {
+        await cdp.evaluate(`document.querySelector('.rc-card[data-id="A"]').scrollIntoView({ block: 'center' })`);
+        await sleep(200);
+        await cdp.screenshot('09-mobile-links.png');
+      }
     }
     record('320 / 375 / 390 / 430px 无横向溢出，表格切换为卡片', true);
     await cdp.send('Emulation.setDeviceMetricsOverride', { width: 1440, height: 1000, deviceScaleFactor: 1, mobile: false });
@@ -277,7 +399,7 @@ async function main() {
     /* ---------- 11. 导入（替换）与恶意附件过滤 ---------- */
     await cdp.evaluate(`(() => {
       const payload = { restaurants: [
-        { id: 'X', name: '导入一号', minimum: '¥100', environment: [{ name: 'bad', type: 'image/png', dataUrl: 'javascript:alert(1)', size: 10 }] },
+        { id: 'X', name: '导入一号', minimum: '¥100', environment: [{ name: 'bad', type: 'image/png', dataUrl: 'javascript:alert(1)', size: 10 }], links: [{ label: '官网', url: 'https://example.com/x' }, { label: '坏链接', url: 'javascript:alert(1)' }] },
         { id: 'Y', name: '导入二号', parking: '免费' }
       ], map: null };
       const file = new File([JSON.stringify(payload)], 'import.json', { type: 'application/json' });
@@ -300,8 +422,8 @@ async function main() {
     assert(imported.rows === 2 && imported.names.includes('导入一号') && imported.markers === 0 && imported.placeholder, 'import failed: ' + JSON.stringify(imported));
     await cdp.evaluate(`document.querySelector('#rows tr[data-id="X"]').click()`);
     await sleep(250);
-    const malicious = await cdp.evaluate(`({ media: document.querySelectorAll('#detailContent .media-card').length, empty: !!document.querySelector('#detailContent .detail-empty') })`);
-    assert(malicious.media === 0, 'malicious dataUrl was not dropped');
+    const malicious = await cdp.evaluate(`({ media: document.querySelectorAll('#detailContent .media-card').length, links: document.querySelectorAll('#detailContent .link-card').length, empty: !!document.querySelector('#detailContent .detail-empty') })`);
+    assert(malicious.media === 0 && malicious.links === 1, 'malicious dataUrl/link was not filtered');
     record('导入替换项目并丢弃 javascript: 附件', true, JSON.stringify({ imported, malicious }));
     await cdp.evaluate(`document.querySelector('#detailDialog [data-close="detail"]').click()`);
     await sleep(150);
@@ -327,12 +449,14 @@ async function main() {
         allActive: text.includes('data-filter="all" class="is-active"'),
         embedded: text.includes('id="embeddedData"'),
         viewOnly: text.includes('data-view-only="true"'),
-        external: (text.match(/<script[^>]+src=/g) || []).length
+        external: (text.match(/<script[^>]+src=/g) || []).length,
+        goodLink: text.includes('example.com/x'),
+        badLink: text.includes('javascript:alert')
       };
     })()`);
     assert(exportResult.ok, 'export produced no blob');
     assert(!exportResult.shellNode && !exportResult.editorDialog && !exportResult.help && !exportResult.footerLink, 'export leaked editor/shell content: ' + JSON.stringify(exportResult));
-    assert(exportResult.allActive && exportResult.embedded && exportResult.viewOnly && exportResult.external === 0, 'export validation failed: ' + JSON.stringify(exportResult));
+    assert(exportResult.allActive && exportResult.embedded && exportResult.viewOnly && exportResult.external === 0 && exportResult.goodLink && !exportResult.badLink, 'export validation failed: ' + JSON.stringify(exportResult));
     record('导出独立 HTML：无站点外壳 / 编辑器 / 外链，筛选状态重置', true, exportResult.size + ' bytes');
 
     const blobUrl = await cdp.evaluate(`URL.createObjectURL(window.__rcBlobs[0])`);
@@ -350,9 +474,11 @@ async function main() {
       lede: document.querySelector('.lede').textContent.trim(),
       help: !!document.querySelector('.help'),
       footerLink: !!document.querySelector('.foot a'),
-      mapDesc: document.querySelector('#mapPanel .panel-head p').textContent.trim()
+      mapDesc: document.querySelector('#mapPanel .panel-head p').textContent.trim(),
+      links: document.querySelectorAll('.rc-link').length
     })`);
     assert(viewer.viewOnly === 'true' && viewer.rows === 2 && viewer.cards === 2 && viewer.markers === 0 && viewer.placeholder, 'viewer render failed: ' + JSON.stringify(viewer));
+    assert(viewer.links === 1, 'viewer external link missing: ' + JSON.stringify(viewer));
     assert(!viewer.shell && !viewer.editDialog && viewer.print && !viewer.help && !viewer.footerLink, 'viewer still exposes editor: ' + JSON.stringify(viewer));
     assert(/只读展示页/.test(viewer.lede) && /标记与下方表格双向联动/.test(viewer.mapDesc), 'viewer copy not switched');
     record('导出页只读渲染、无编辑入口且文案切换', true);
@@ -362,6 +488,19 @@ async function main() {
     await sleep(250);
     const viewerDetail = await cdp.evaluate(`({ open: document.getElementById('detailDialog').open, edit: !!document.getElementById('detailEditBtn'), delete: !!document.getElementById('detailDeleteBtn'), locate: !!document.getElementById('detailLocateBtn') })`);
     assert(viewerDetail.open && !viewerDetail.edit && !viewerDetail.delete && viewerDetail.locate, 'viewer detail actions wrong: ' + JSON.stringify(viewerDetail));
+    await cdp.evaluate(`document.querySelector('#detailDialog [data-close="detail"]').click()`);
+    await sleep(120);
+
+    await cdp.evaluate(`document.querySelector('#rows tr[data-id="X"]').click()`);
+    await sleep(250);
+    const viewerLink = await cdp.evaluate(`({
+      open: document.getElementById('detailDialog').open,
+      links: document.querySelectorAll('#detailContent .link-card').length,
+      href: (document.querySelector('#detailContent .link-card') || {}).href || '',
+      target: (document.querySelector('#detailContent .link-card') || {}).target || ''
+    })`);
+    assert(viewerLink.open && viewerLink.links === 1 && viewerLink.href === 'https://example.com/x' && viewerLink.target === '_blank', 'viewer link wrong: ' + JSON.stringify(viewerLink));
+    record('导出页保留外部链接且以新标签打开', true);
     await cdp.evaluate(`document.querySelector('#detailDialog [data-close="detail"]').click()`);
     await sleep(120);
 
