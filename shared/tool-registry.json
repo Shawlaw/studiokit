@@ -50,7 +50,7 @@
       "subtitle": "餐厅考察对比 · 地图标注",
       "description": "把候选餐厅的费用、容量、环境与菜单资料收进一张地图和一张对比表，支持大众点评 / 官网等外部链接与分享备注；离线编辑，一键导出可转发的独立 HTML。",
       "version": "0.2.0",
-      "status": "draft",
+      "status": "available",
       "href": "./apps/restaurant-compare/",
       "icon": "🍽",
       "tags": [

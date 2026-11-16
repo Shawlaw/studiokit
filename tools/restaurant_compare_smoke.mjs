@@ -52,7 +52,8 @@ async function main() {
       return { cards: cards.length, found: !!card, status: card ? card.querySelector('.tool-status').textContent : '', href: card ? (card.getAttribute('href') || '') : '' };
     })()`);
     assert(homepage.found, 'home card missing for Venue Compare');
-    record('门户显示 Venue Compare 草稿卡片', homepage.status === '开发中', JSON.stringify(homepage));
+    assert(homepage.status === '可用' && homepage.href.indexOf('apps/restaurant-compare') !== -1, 'home card should be available: ' + JSON.stringify(homepage));
+    record('门户显示 Venue Compare 可用卡片', true, JSON.stringify(homepage));
 
     await cdp.navigate(base + '/apps/restaurant-compare/');
     await sleep(450);

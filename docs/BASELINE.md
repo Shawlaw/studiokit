@@ -10,6 +10,17 @@ Current Badge Studio baseline facts:
 - Default scheme content is project-neutral (`STUDIOKIT` / `BADGE STUDIO` / `◎`); personal default samples must not appear in the repository or its history.
 - The editor's drawing, configuration, autosave and export logic is intended to remain unchanged. Any future version upgrade must update this record and the app changelog deliberately.
 
+## Venue Compare
+
+Current Venue Compare baseline facts:
+
+- App version: `0.2.0`（`apps/restaurant-compare/index.html` 的 `APP_VERSION` 与注册表一致）
+- Registry entry: `shared/tool-registry.json` → `id: "restaurant-compare"`，`href: "./apps/restaurant-compare/"`，`status: "available"`
+- Storage: IndexedDB `studiokit:restaurant-compare`（version 1，store `projects`，记录 key `current`）；项目 Schema `v3`；旧库 `restaurant-compare-editor` 只读兼容
+- Links: 每餐厅最多 12 个 http/https 链接，`{ label, url, note? }`；label ≤ 30、url ≤ 1000、note ≤ 300 字符
+- Export: 展示 HTML 自包含，不依赖 `shared/`；查看端只读，外部链接仅点击时联网
+- Automated coverage: `node tools/restaurant_compare_smoke.mjs` 19/19（需要本机 Chrome）；`validate_site.py` / `build_site.py` / `node --check` 通过
+
 ## Arcade
 
 Current Arcade baseline facts:

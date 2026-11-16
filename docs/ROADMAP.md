@@ -125,6 +125,14 @@
 - [x] 发布证据：提交 `c1727e7` 推送 `main`；Actions `43670060561` 四 job 全成功；CI 与本地 `verify_deploy.py` 均 **37/37** 文件双端一致（Arcade `0.8.3` / Badge `2.2.1`）；双端线上无头 Chrome 浏览器模式（40px 安全区下 shellbar 38px、文字居中）+ 独立窗口（78px）+ SW 缓存键 `studiokit-arcade-0.8.3-v1`，0 console error。
 - 未验证：Owner 的那台 Android 浏览器发布后复测；iPhone/Android 真机触控与低端机帧率仍 UNVERIFIED。
 
+## Venue Compare 0.2.0 发布批次（2026-11-16 已双端发布）
+
+### Venue Compare — 餐厅考察对比与地图标注（已发布）
+
+- [x] 从 Owner 提供的单文件 HTML 接入为 StudioKit 工具：共享 shell、IndexedDB 命名空间、空状态/示例、响应式卡片、撤销重做与自动保存。
+- [x] 0.2.0 增加每餐厅外部链接（大众点评/官网/小红书/地图预设、分享文案提取与备注、http(s) 白名单）。
+- [x] 验证：`restaurant_compare_smoke.mjs` 19/19；`validate_site.py` / `build_site.py` / `node --check` 通过；320/375/390/430px 无横向溢出。
+
 ## Now
 
 1. **Arcade 0.8.3 线上观察**：0.8.3 已双端发布；重点观察 Android 普通浏览器顶部导航条、共享 shell 的 SW 缓存刷新，以及禅模式/积分记录表的移动端体验。

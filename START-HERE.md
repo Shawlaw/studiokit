@@ -4,7 +4,7 @@
 
 - **线上站点：** <https://shawlaw.github.io/studiokit/> · <https://studiokit.pages.dev/>
 - **仓库：** <https://github.com/Shawlaw/studiokit>
-- **已发布工具：** Badge Studio `2.2.1`、街机厅 Arcade `0.7.0`（13 款竖屏小游戏，全游戏可选道具、短局目标与适度游玩提醒）
+- **已发布工具：** Badge Studio `2.2.1`、街机厅 Arcade `0.8.3`（13 款竖屏小游戏 + 78 关挑战 + 禅模式 + 积分记录）、Venue Compare `0.2.0`（餐厅考察对比、地图标注与外部链接 / 备注）
 - **规划中：** Rounded Image（尚未实现；等待原始需求/规格，不凭空复刻）
 - **最近发布：** 2026-11-13，Arcade 0.7.0（13 款主动道具、自然收尾、一次性 20 分钟提醒、随机入口）；提交 `34f03df`，Actions `43274342320` 四 job 成功，GitHub Pages 与 Cloudflare Pages 双端 24/24 文件一致
 
@@ -20,7 +20,7 @@
    OWNER_AUTHORIZATION: PUBLISH_TO_MAIN
    ```
 
-4. 发布后要求 Agent 返回 commit SHA、Actions run URL、Pages URL，并实际验证门户、Badge Studio 和街机厅。
+4. 发布后要求 Agent 返回 commit SHA、Actions run URL、Pages URL，并实际验证门户、Badge Studio、街机厅和 Venue Compare。
 5. 不要把 Token、Cookie 或个人数据放进仓库或 Prompt 文件。
 6. Arcade 的 iOS/Android 真机试玩和原生全屏仍未验证；涉及移动端体验的改动请要求 Agent 说明降级路径。
 7. PWA 安装与离线预载只在 HTTPS 或 `localhost` 生效；`file://` 或明文 HTTP 局域网地址只能在线游玩。iOS 安装靠「分享 → 添加到主屏幕」，没有自动安装提示。
@@ -45,7 +45,8 @@ node --check shared/home.js
 node --check shared/site-shell.js
 node --check apps/arcade/engine.js
 node tools/arcade_smoke.mjs   # 需要本机 Chrome
+node tools/restaurant_compare_smoke.mjs   # 需要本机 Chrome
 py -3 -m http.server 8000
 ```
 
-访问 `http://localhost:8000/`；街机厅在 `http://localhost:8000/apps/arcade/`。
+访问 `http://localhost:8000/`；街机厅在 `http://localhost:8000/apps/arcade/`，Venue Compare 在 `http://localhost:8000/apps/restaurant-compare/`。

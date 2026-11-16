@@ -21,6 +21,7 @@ PATHS = [
     'shared/site-shell.js',
     'shared/tool-registry.json',
     'apps/badge-studio/index.html',
+    'apps/restaurant-compare/index.html',
     'apps/arcade/index.html',
     'apps/arcade/engine.js',
     'apps/arcade/arcade.css',
@@ -172,8 +173,11 @@ def main(argv: list[str] | None = None) -> int:
     tools = {tool.get('id'): tool for tool in registry.get('tools', []) if isinstance(tool, dict)}
     arcade = tools.get('arcade', {})
     badge = tools.get('badge-studio', {})
+    venue = tools.get('restaurant-compare', {})
     registry_arcade = arcade.get('version')
     registry_badge = badge.get('version')
+    registry_venue = venue.get('version')
+    venue_status = venue.get('status')
 
     try:
         engine_arcade = get_version(
@@ -191,6 +195,11 @@ def main(argv: list[str] | None = None) -> int:
             first['apps/badge-studio/index.html']['body'].decode('utf-8'),
             'Badge Studio',
         )
+        venue_app = get_version(
+            r"const APP_VERSION = '([^']+)'",
+            first['apps/restaurant-compare/index.html']['body'].decode('utf-8'),
+            'Venue Compare',
+        )
     except (UnicodeDecodeError, RuntimeError) as exc:
         print(f'FAIL cannot read remote version markers: {exc}', file=sys.stderr)
         return 1
@@ -202,8 +211,12 @@ def main(argv: list[str] | None = None) -> int:
         )
     if badge_app != registry_badge:
         failures.append(f'Badge Studio versions differ: app={badge_app}, registry={registry_badge}')
-    if not registry_arcade or not registry_badge:
-        failures.append('registry is missing arcade/badge-studio versions')
+    if venue_app != registry_venue:
+        failures.append(f'Venue Compare versions differ: app={venue_app}, registry={registry_venue}')
+    if venue_status != 'available':
+        failures.append(f'restaurant-compare registry status is {venue_status!r}, expected available')
+    if not registry_arcade or not registry_badge or not registry_venue:
+        failures.append('registry is missing arcade/badge-studio/restaurant-compare versions')
     if failures:
         for failure in failures:
             print(f'FAIL {failure}', file=sys.stderr)
@@ -216,9 +229,9 @@ def main(argv: list[str] | None = None) -> int:
     for base, result in results.items():
         print(
             f'PASS {base} ({len(PATHS)} files, arcade {registry_arcade}, badge {registry_badge}, '
-            f'manifest {result["apps/arcade/manifest.webmanifest"]["content_type"]})'
+            f'venue {registry_venue}, manifest {result["apps/arcade/manifest.webmanifest"]["content_type"]})'
         )
-    print(f'PASS versions: arcade {registry_arcade} (engine/sw/registry), badge {registry_badge}')
+    print(f'PASS versions: arcade {registry_arcade} (engine/sw/registry), badge {registry_badge}, venue {registry_venue} (available)')
     return 0
 
 

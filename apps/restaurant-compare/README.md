@@ -5,7 +5,7 @@
 - Tool ID：`restaurant-compare`
 - 入口：`apps/restaurant-compare/index.html`
 - 当前版本：`0.2.0`
-- 注册表状态：`draft`（等待 Owner 验收后再改为 `available`）
+- 注册表状态：`available`（Owner 已验收；2026-11-16 双端发布）
 
 ## 适合谁
 
