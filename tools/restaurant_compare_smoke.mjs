@@ -131,8 +131,8 @@ async function main() {
 
     await cdp.evaluate(`document.querySelector('#rows tr[data-id="A"] [data-action="edit"]').click()`);
     await sleep(200);
-    let linkEdit = await cdp.evaluate(`({ rows: document.querySelectorAll('#linkList .link-row').length, presets: document.querySelectorAll('#linkPresets [data-preset]').length })`);
-    assert(linkEdit.rows === 2 && linkEdit.presets === 5, 'edit links initial wrong: ' + JSON.stringify(linkEdit));
+    let linkEdit = await cdp.evaluate(`({ rows: document.querySelectorAll('#linkList .link-row').length, notes: document.querySelectorAll('#linkList [data-link-field="note"]').length, presets: document.querySelectorAll('#linkPresets [data-preset]').length })`);
+    assert(linkEdit.rows === 2 && linkEdit.notes === 2 && linkEdit.presets === 5, 'edit links initial wrong: ' + JSON.stringify(linkEdit));
     await cdp.evaluate(`document.querySelector('#linkPresets [data-preset="小红书"]').click()`);
     await sleep(100);
     await cdp.evaluate(`(() => {
@@ -146,19 +146,16 @@ async function main() {
     assert(extracted === 'https://www.xiaohongshu.com/discovery/item/abc?x=1', 'share text extraction failed: ' + extracted);
     await cdp.evaluate(`document.querySelector('#linkPresets [data-preset="其他"]').click()`);
     await sleep(100);
-    await cdp.evaluate(`(() => {
+    const pasted = await cdp.evaluate(`(() => {
       const row = document.querySelectorAll('#linkList .link-row')[3];
       const url = row.querySelector('[data-link-field="url"]');
-      url.value = '看看这家 https://m.dianping.com/shop/123456?utm=abc 复制';
-      url.dispatchEvent(new Event('input', { bubbles: true }));
-      url.dispatchEvent(new FocusEvent('focusout', { bubbles: true }));
+      const note = row.querySelector('[data-link-field="note"]');
+      const transfer = new DataTransfer();
+      transfer.setData('text/plain', '看看这家 https://m.dianping.com/shop/123456?utm=abc 环境不错，包间可坐 12 人');
+      url.dispatchEvent(new ClipboardEvent('paste', { clipboardData: transfer, bubbles: true, cancelable: true }));
+      return { value: url.value, label: row.querySelector('[data-link-field="label"]').value, note: note.value };
     })()`);
-    const inferred = await cdp.evaluate(`({
-      rows: document.querySelectorAll('#linkList .link-row').length,
-      label: document.querySelectorAll('#linkList .link-row')[3].querySelector('[data-link-field="label"]').value,
-      url: document.querySelectorAll('#linkList .link-row')[3].querySelector('[data-link-field="url"]').value
-    })`);
-    assert(inferred.rows === 4 && inferred.label === '大众点评' && inferred.url === 'https://m.dianping.com/shop/123456?utm=abc', 'link inference failed: ' + JSON.stringify(inferred));
+    assert(pasted.value === 'https://m.dianping.com/shop/123456?utm=abc' && pasted.label === '大众点评' && pasted.note.includes('环境不错'), 'paste extraction/note failed: ' + JSON.stringify(pasted));
     await cdp.screenshot('06-links-edit.png');
     await cdp.evaluate(`document.querySelectorAll('#linkList .link-row')[2].querySelector('[data-action="remove-link"]').click()`);
     await sleep(100);
@@ -193,10 +190,12 @@ async function main() {
       links: document.querySelectorAll('#detailContent .link-card').length,
       tableCount: (document.querySelector('#rows tr[data-id="A"] .link-count') || {}).textContent || '',
       cardLinks: document.querySelectorAll('.rc-card[data-id="A"] .rc-link').length,
-      hosts: [...document.querySelectorAll('#detailContent .link-card small')].map(node => node.textContent)
+      hosts: [...document.querySelectorAll('#detailContent .link-card small')].map(node => node.textContent),
+      notes: [...document.querySelectorAll('#detailContent .link-card-note')].map(node => node.textContent)
     })`);
     assert(savedLinks.links === 3 && savedLinks.tableCount.includes('3') && savedLinks.cardLinks === 3 && savedLinks.hosts.includes('dianping.com') && savedLinks.hosts.includes('example.com'), 'saved links wrong: ' + JSON.stringify(savedLinks));
-    record('外部链接：详情/表格/卡片展示，分享文案提取与 javascript: 拦截', true, JSON.stringify({ linkDetail, extracted, inferred, savedLinks }));
+    assert(savedLinks.notes.length === 1 && savedLinks.notes[0].includes('环境不错'), 'saved link note wrong: ' + JSON.stringify(savedLinks));
+    record('外部链接：详情/表格/卡片展示，分享文案提取与 javascript: 拦截', true, JSON.stringify({ linkDetail, extracted, pasted, savedLinks }));
     await cdp.screenshot('07-links-detail.png');
     await cdp.evaluate(`document.querySelector('#detailDialog [data-close="detail"]').click()`);
     await sleep(150);
@@ -399,7 +398,7 @@ async function main() {
     /* ---------- 11. 导入（替换）与恶意附件过滤 ---------- */
     await cdp.evaluate(`(() => {
       const payload = { restaurants: [
-        { id: 'X', name: '导入一号', minimum: '¥100', environment: [{ name: 'bad', type: 'image/png', dataUrl: 'javascript:alert(1)', size: 10 }], links: [{ label: '官网', url: 'https://example.com/x' }, { label: '坏链接', url: 'javascript:alert(1)' }] },
+        { id: 'X', name: '导入一号', minimum: '¥100', environment: [{ name: 'bad', type: 'image/png', dataUrl: 'javascript:alert(1)', size: 10 }], links: [{ label: '官网', url: 'https://example.com/x', note: '导入备注：官网首页' }, { label: '坏链接', url: 'javascript:alert(1)' }] },
         { id: 'Y', name: '导入二号', parking: '免费' }
       ], map: null };
       const file = new File([JSON.stringify(payload)], 'import.json', { type: 'application/json' });
@@ -451,12 +450,13 @@ async function main() {
         viewOnly: text.includes('data-view-only="true"'),
         external: (text.match(/<script[^>]+src=/g) || []).length,
         goodLink: text.includes('example.com/x'),
+        note: text.includes('导入备注：官网首页'),
         badLink: text.includes('javascript:alert')
       };
     })()`);
     assert(exportResult.ok, 'export produced no blob');
     assert(!exportResult.shellNode && !exportResult.editorDialog && !exportResult.help && !exportResult.footerLink, 'export leaked editor/shell content: ' + JSON.stringify(exportResult));
-    assert(exportResult.allActive && exportResult.embedded && exportResult.viewOnly && exportResult.external === 0 && exportResult.goodLink && !exportResult.badLink, 'export validation failed: ' + JSON.stringify(exportResult));
+    assert(exportResult.allActive && exportResult.embedded && exportResult.viewOnly && exportResult.external === 0 && exportResult.goodLink && exportResult.note && !exportResult.badLink, 'export validation failed: ' + JSON.stringify(exportResult));
     record('导出独立 HTML：无站点外壳 / 编辑器 / 外链，筛选状态重置', true, exportResult.size + ' bytes');
 
     const blobUrl = await cdp.evaluate(`URL.createObjectURL(window.__rcBlobs[0])`);
@@ -497,9 +497,10 @@ async function main() {
       open: document.getElementById('detailDialog').open,
       links: document.querySelectorAll('#detailContent .link-card').length,
       href: (document.querySelector('#detailContent .link-card') || {}).href || '',
-      target: (document.querySelector('#detailContent .link-card') || {}).target || ''
+      target: (document.querySelector('#detailContent .link-card') || {}).target || '',
+      note: (document.querySelector('#detailContent .link-card-note') || {}).textContent || ''
     })`);
-    assert(viewerLink.open && viewerLink.links === 1 && viewerLink.href === 'https://example.com/x' && viewerLink.target === '_blank', 'viewer link wrong: ' + JSON.stringify(viewerLink));
+    assert(viewerLink.open && viewerLink.links === 1 && viewerLink.href === 'https://example.com/x' && viewerLink.target === '_blank' && viewerLink.note.includes('导入备注'), 'viewer link wrong: ' + JSON.stringify(viewerLink));
     record('导出页保留外部链接且以新标签打开', true);
     await cdp.evaluate(`document.querySelector('#detailDialog [data-close="detail"]').click()`);
     await sleep(120);

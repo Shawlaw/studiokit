@@ -268,6 +268,7 @@
     .link-row input[aria-invalid="true"]{border-color:#d9a5a2;background:#fffafa}
     .link-row .file-remove{width:30px;height:30px;border-radius:8px;color:#9a8f8c;font-size:15px}
     .link-row .file-remove:hover{background:var(--danger-soft);color:var(--danger)}
+    .link-row .link-note-input{grid-column:1/-1;min-height:34px;color:var(--muted);font-size:11px}
 
     /* ---------- detail ---------- */
     .detail-kv{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:8px;margin-bottom:19px}
@@ -302,6 +303,7 @@
     .link-card-text strong{display:block;font-size:12px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
     .link-card-text small{display:block;margin-top:1px;color:var(--faint);font-size:10px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
     .link-card-open{color:var(--brand);font-size:10.5px;font-weight:750;white-space:nowrap}
+    .link-card-note{display:-webkit-box;margin-top:2px;color:var(--muted);font-size:10px;font-style:normal;line-height:1.45;overflow:hidden;-webkit-line-clamp:2;-webkit-box-orient:vertical}
     .link-note{margin:7px 0 0;color:var(--faint);font-size:10px}
     .detail-note{margin-top:14px;color:var(--faint);font-size:10.5px}
     .lightbox-dialog{width:min(1180px,calc(100vw - 20px));background:#0d1411}
@@ -845,13 +847,14 @@
     if (!raw) return null;
     if (typeof raw === 'string') {
       const url = normalizeExternalUrl(raw);
-      return url ? { label: inferLinkLabel(url).slice(0, 30), url } : null;
+      return url ? { label: inferLinkLabel(url).slice(0, 30), url, note: '' } : null;
     }
     if (typeof raw !== 'object') return null;
     const url = normalizeExternalUrl(raw.url || raw.href || raw.link || '');
     if (!url) return null;
     const label = String(raw.label || raw.name || '').trim().slice(0, 30) || inferLinkLabel(url).slice(0, 30);
-    return { label, url };
+    const note = String(raw.note || raw.description || raw.desc || '').trim().slice(0, 300);
+    return { label, url, note };
   }
   function normalizeProject(raw) {
     const source = raw && typeof raw === 'object' ? (raw.project && typeof raw.project === 'object' ? raw.project : raw) : {};
@@ -1868,8 +1871,9 @@
   }
   function linksSection(restaurant) {
     const links = restaurant.links || [];
+    if (!links.length && VIEW_ONLY) return '';
     const body = links.length
-      ? '<div class="links-grid">' + links.map(link => '<a class="link-card" href="' + esc(link.url) + '" target="_blank" rel="noopener noreferrer" referrerpolicy="no-referrer" title="' + esc(link.url) + '"><span class="link-card-icon">↗</span><span class="link-card-text"><strong>' + esc(link.label) + '</strong><small>' + esc(displayHost(link.url)) + '</small></span><span class="link-card-open">打开</span></a>').join('') + '</div>'
+      ? '<div class="links-grid">' + links.map(link => '<a class="link-card" href="' + esc(link.url) + '" target="_blank" rel="noopener noreferrer" referrerpolicy="no-referrer" title="' + esc(link.url) + '"><span class="link-card-icon">↗</span><span class="link-card-text"><strong>' + esc(link.label) + '</strong><small>' + esc(displayHost(link.url)) + '</small>' + (link.note ? '<em class="link-card-note">' + esc(link.note) + '</em>' : '') + '</span><span class="link-card-open">打开</span></a>').join('') + '</div>'
       : '<div class="detail-empty">还没有外部链接。' + (VIEW_ONLY ? '' : '点右上角「编辑」可以添加大众点评分享链接或餐厅官网。') + '</div>';
     return '<section class="media-section"><h3>外部链接 <small>' + links.length + ' 个</small></h3>' + body + '<p class="link-note">外部链接会在新标签页打开，需要联网。</p></section>';
   }
@@ -1889,9 +1893,9 @@
     ];
     if (content) {
       content.innerHTML = '<div class="detail-kv">' + kv.map(([label, value]) => '<div><span>' + esc(label) + '</span><strong class="' + (value ? '' : 'is-empty') + '">' + esc(value || '未确认') + '</strong></div>').join('') + '</div>' +
+        linksSection(restaurant) +
         mediaSection(restaurant, 'environment', '环境资料') +
         mediaSection(restaurant, 'menu', '菜单资料') +
-        linksSection(restaurant) +
         '<p class="detail-note">' + (VIEW_ONLY ? '这是离线展示页，资料直接内嵌在文件中。' : '资料随项目保存在本机；导出展示页时会一起打包。') + '</p>';
     }
     const markerBtn = byId('detailMarkerBtn');
@@ -2019,6 +2023,7 @@
       '<input data-link-field="label" maxlength="30" placeholder="名称，如大众点评" aria-label="链接名称" value="' + esc(link.label || '') + '" />' +
       '<input data-link-field="url" maxlength="1000" inputmode="url" placeholder="粘贴链接或整段分享文案" aria-label="链接地址" value="' + esc(link.url || '') + '" />' +
       '<button class="file-remove" type="button" data-action="remove-link" data-index="' + index + '" aria-label="移除链接">×</button>' +
+      '<input data-link-field="note" class="link-note-input" maxlength="300" placeholder="备注 / 分享文案（可选）" aria-label="链接备注" value="' + esc(link.note || '') + '" />' +
       '</div>'
     ).join('');
   }
@@ -2028,8 +2033,10 @@
       if (!draft.links[index]) return;
       const label = row.querySelector('[data-link-field="label"]');
       const url = row.querySelector('[data-link-field="url"]');
+      const note = row.querySelector('[data-link-field="note"]');
       if (label) draft.links[index].label = label.value;
       if (url) draft.links[index].url = url.value;
+      if (note) draft.links[index].note = note.value;
     });
   }
   function addDraftLink(preset) {
@@ -2038,7 +2045,7 @@
     if (!Array.isArray(draft.links)) draft.links = [];
     if (draft.links.length >= 12) { toast('最多添加 12 个外部链接'); return; }
     const label = preset && preset !== '其他' ? String(preset).slice(0, 30) : '';
-    draft.links.push({ label, url: '' });
+    draft.links.push({ label, url: '', note: '' });
     renderLinkRows();
     const rows = document.querySelectorAll('#linkList .link-row');
     const row = rows[rows.length - 1];
@@ -2060,6 +2067,7 @@
     for (const row of rows) {
       const labelInput = row.querySelector('[data-link-field="label"]');
       const urlInput = row.querySelector('[data-link-field="url"]');
+      const noteInput = row.querySelector('[data-link-field="note"]');
       if (!labelInput || !urlInput) continue;
       urlInput.removeAttribute('aria-invalid');
       const rawUrl = urlInput.value.trim();
@@ -2073,7 +2081,7 @@
       }
       if (seen.has(url)) continue;
       seen.add(url);
-      links.push({ label: (labelInput.value.trim() || inferLinkLabel(url)).slice(0, 30), url });
+      links.push({ label: (labelInput.value.trim() || inferLinkLabel(url)).slice(0, 30), url, note: noteInput ? noteInput.value.trim().slice(0, 300) : '' });
       if (links.length >= 12) break;
     }
     return links;
@@ -2671,16 +2679,19 @@
         const input = event.target.closest('[data-link-field="url"]');
         if (!input) return;
         const clipboard = event.clipboardData || window.clipboardData;
-        const extracted = clipboard ? extractFirstUrl(clipboard.getData('text')) : '';
+        const text = clipboard ? clipboard.getData('text') : '';
+        const extracted = text ? extractFirstUrl(text) : '';
         const url = extracted ? normalizeExternalUrl(extracted) : '';
         if (!url) return;
         event.preventDefault();
         input.value = url;
         const row = input.closest('.link-row');
         const labelInput = row && row.querySelector('[data-link-field="label"]');
+        const noteInput = row && row.querySelector('[data-link-field="note"]');
         if (labelInput && !labelInput.value.trim()) labelInput.value = inferLinkLabel(url);
+        if (noteInput && text.trim().length > url.length + 8) noteInput.value = text.trim().slice(0, 300);
         dirtyDraft = true;
-        toast('已从分享文案中提取链接');
+        toast('已提取链接，并把分享文案留在备注里');
       });
       linkList.addEventListener('focusout', event => {
         const input = event.target.closest('[data-link-field="url"]');
