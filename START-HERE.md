@@ -6,7 +6,7 @@
 - **仓库：** <https://github.com/Shawlaw/studiokit>
 - **已发布工具：** Badge Studio `2.2.1`、街机厅 Arcade `0.8.3`（13 款竖屏小游戏 + 78 关挑战 + 禅模式 + 积分记录）、Venue Compare `0.2.0`（餐厅考察对比、地图标注与外部链接 / 备注）
 - **规划中：** Rounded Image（尚未实现；等待原始需求/规格，不凭空复刻）
-- **最近发布：** 2026-11-13，Arcade 0.7.0（13 款主动道具、自然收尾、一次性 20 分钟提醒、随机入口）；提交 `34f03df`，Actions `43274342320` 四 job 成功，GitHub Pages 与 Cloudflare Pages 双端 24/24 文件一致
+- **最近发布：** 2026-11-16，Venue Compare 0.2.0（餐厅考察对比、地图标注、外部链接 / 分享备注）；提交 `2276194`，Actions `43809215680` 四 job 成功，GitHub Pages 与 Cloudflare Pages 双端 38/38 文件一致
 
 首次建仓与首次发布的完整步骤保留在 [`docs/RELEASE-RUNBOOK.md`](docs/RELEASE-RUNBOOK.md)；`prompts/` 下的启动/发布 Prompt 是历史脚本，不再代表当前流程。
 

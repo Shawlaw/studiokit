@@ -1258,6 +1258,24 @@
       ],
       "completedAt": "2026-11-16T02:25:00+00:00",
       "evidence": "Venue Compare 0.2.0：编辑弹窗新增外部链接区（大众点评 / 官方网站 / 小红书 / 地图 / 自定义预设）；链接行支持名称 + 地址，粘贴整段分享文案时从 clipboard 提取第一个 http(s) 链接，失焦时同样规范化，并按 dianping/dpurl.cn、xiaohongshu/xhslink、meituan、weibo、amap、baidu、google 域名推断名称；每个链接可带 300 字以内备注，粘贴长文案时自动把原文留在备注；仅接受 http/https，拒绝 javascript: 与带凭据 URL，重复 URL 去重，最多 12 个。详情弹窗新增链接卡片（target=_blank、rel=noopener noreferrer、referrerpolicy=no-referrer），桌面表格新增「链接」列，移动端卡片显示前 3 个与 +N，导出只读页保留链接。Schema 升至 v3（links: [{label,url,note?}]），v2 项目读取后 links 默认 [] 并在保存时升级；修复附件移除按钮未绑定事件，并修复添加/删除链接行会丢失未同步输入的问题。版本全链 0.2.0；restaurant_compare_smoke 19/19（新增详情链接属性、分享文案提取、自动命名、删除行、javascript: 拦截、表格/卡片计数、导入恶意链接过滤、导出页链接与附件移除回归）；validate_site/build_site/node --check 全过；仅本地分支 feat/restaurant-compare，未推送未发布。"
+    },
+    {
+      "id": "T072",
+      "title": "Venue Compare 0.2.0 发布：available + 双端部署与线上验证",
+      "kind": "agent",
+      "status": "DONE",
+      "dependsOn": ["T070", "T071"],
+      "ownerAuthorizationRequired": true,
+      "ownerAuthorizationVerifiedByAgentFlag": false,
+      "ownerAuthorizationNote": "Owner 本轮明确指令「更新好所有相关文档之后提交并发布吧，注意提交时间」；按 StudioKit 双目标规则同时发布 GitHub Pages + Cloudflare Pages。因该指令为当前任务的直接发布授权，执行时未再要求独立授权行。",
+      "acceptance": [
+        "注册表 restaurant-compare 状态为 available，版本与 app/README/CHANGELOG 一致",
+        "main 推送后 Actions 四个 job 全成功",
+        "verify_deploy 对 GitHub Pages 与 Cloudflare Pages 逐文件一致，Venue 版本/状态正确",
+        "双端线上无头 Chrome 核心路径通过，文档与任务状态同步"
+      ],
+      "completedAt": "2026-11-16T05:25:00+00:00",
+      "evidence": "Owner 本轮明确要求提交并发布。注册表 draft→available；提交链 81684b9（新工具）/ f7146f8（外部链接）/ ec0359d（分享备注）/ 2276194（发布文档与 verify_deploy），四笔 commit-time 均在 2026-11-16 12:10–13:27 窗口且秒数非 00，check.py 4/4 compliant；main 从 17d59c7 fast-forward 到 227619421b692efb6a21d120b5be70282d970069 并推送。GitHub Actions run 43809215680：Validate and build / Deploy GitHub Pages / Deploy Cloudflare Pages / Verify both deployments 四个 job 全成功。本地 tools/verify_deploy.py 对 https://shawlaw.github.io/studiokit/ 与 https://studiokit.pages.dev/ 校验 38/38 文件 SHA-256 一致（Arcade 0.8.3 / Badge 2.2.1 / Venue 0.2.0 available，manifest 正确）。双端线上无头 Chrome 2/2：首页 Venue Compare 卡片可用、工具页 shell/空状态/4 统计卡、示例 5 家/5 标记/地图、A 详情 6 项费用 + 2 外部链接（https + target=_blank）+ 2 媒体、0 console error。真机 iOS/Android 触控与超大项目仍 UNVERIFIED。"
     }
   ]
 }

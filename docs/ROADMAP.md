@@ -132,6 +132,7 @@
 - [x] 从 Owner 提供的单文件 HTML 接入为 StudioKit 工具：共享 shell、IndexedDB 命名空间、空状态/示例、响应式卡片、撤销重做与自动保存。
 - [x] 0.2.0 增加每餐厅外部链接（大众点评/官网/小红书/地图预设、分享文案提取与备注、http(s) 白名单）。
 - [x] 验证：`restaurant_compare_smoke.mjs` 19/19；`validate_site.py` / `build_site.py` / `node --check` 通过；320/375/390/430px 无横向溢出。
+- [x] 0.2.0 已双端发布：注册表 `draft` → `available`；提交 `2276194`（含 `81684b9` / `f7146f8` / `ec0359d`）；Actions `43809215680` 四 job 成功；`verify_deploy.py` **38/38** 双端一致；双端线上无头 Chrome 2/2。
 
 ## Now
 

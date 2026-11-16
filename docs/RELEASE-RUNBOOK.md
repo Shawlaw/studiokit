@@ -5,7 +5,11 @@
 - 仓库：<https://github.com/Shawlaw/studiokit>
 - GitHub Pages：<https://shawlaw.github.io/studiokit/>
 - Cloudflare Pages：<https://studiokit.pages.dev/>
-- 最近发布：Arcade `0.8.3`（2026-11-15，已发布）
+- 最近发布：Venue Compare `0.2.0`（2026-11-16，已发布）
+  - 批次内容：新工具从 draft 转 available：餐厅考察对比、地图标注、外部链接 / 分享备注；单页 HTML + 共享 shell；自包含只读 HTML 导出；无第三方运行时
+  - 提交 `2276194`（含 `81684b9` / `f7146f8` / `ec0359d`）推送 `main`；Actions `43809215680` 四个 job 均成功
+  - 双端验证：CI 与本地 `tools/verify_deploy.py` 均 **38/38** 文件 SHA-256 一致（Venue `0.2.0` / `available`，Arcade `0.8.3`，Badge `2.2.1`）；双端线上无头 Chrome **2/2**（首页卡片可用、空状态、示例 5 家 / 5 标记 / 2 链接、详情 6 项费用 + 2 链接 + 2 媒体）；0 console error；真机触控仍 UNVERIFIED
+- 上一个发布：Arcade `0.8.3`（2026-11-15，已发布）
   - 批次内容：共享 shell 修复 Android 普通浏览器顶部导航条空白：顶部安全区只在安装/独立窗口应用并计入导航行总高度；普通标签页保持 38px、文字居中；SW 缓存键随 0.8.3 刷新；无数据/玩法变更
   - 提交 `c1727e7` 推送 `main`；Actions `43670060561` 四个 job 均成功
   - 双端验证：CI 与本地 `tools/verify_deploy.py` 均 **37/37** 文件 SHA-256 一致，Arcade `0.8.3` / Badge `2.2.1`；双端线上无头 Chrome 浏览器模式（40px 安全区下 shellbar 38px、文字居中）、独立窗口 78px（40+38）、SW 缓存键 `studiokit-arcade-0.8.3-v1`，0 console error

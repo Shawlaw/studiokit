@@ -4,6 +4,7 @@
 
 - Tool ID：`restaurant-compare`
 - 入口：`apps/restaurant-compare/index.html`
+- 线上：<https://shawlaw.github.io/studiokit/apps/restaurant-compare/> · <https://studiokit.pages.dev/apps/restaurant-compare/>
 - 当前版本：`0.2.0`
 - 注册表状态：`available`（Owner 已验收；2026-11-16 双端发布）
 

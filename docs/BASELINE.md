@@ -20,6 +20,7 @@ Current Venue Compare baseline facts:
 - Links: 每餐厅最多 12 个 http/https 链接，`{ label, url, note? }`；label ≤ 30、url ≤ 1000、note ≤ 300 字符
 - Export: 展示 HTML 自包含，不依赖 `shared/`；查看端只读，外部链接仅点击时联网
 - Automated coverage: `node tools/restaurant_compare_smoke.mjs` 19/19（需要本机 Chrome）；`validate_site.py` / `build_site.py` / `node --check` 通过
+- 0.2.0 已双端发布（2026-11-16）：提交 `2276194`（含 `81684b9` / `f7146f8` / `ec0359d`）；Actions `43809215680` 四个 job 全成功；`verify_deploy.py` **38/38** 双端一致；双端线上无头 Chrome 2/2；注册表状态 `available`
 
 ## Arcade
 
@@ -49,4 +50,4 @@ Current Arcade baseline facts:
 - Design/rollback reference: `apps/arcade/DESIGN-0.4.0.md`、`apps/arcade/DESIGN-0.5.0.md`、`apps/arcade/DESIGN-0.6.0.md`、`apps/arcade/DESIGN-0.7.0.md`、`apps/arcade/DESIGN-0.8.0.md`、`apps/arcade/DESIGN-0.8.1.md`、`apps/arcade/DESIGN-0.8.2.md`
 - Arcade README/CHANGELOG: `apps/arcade/README.md`、`apps/arcade/CHANGELOG.md`
 
-变更 Arcade 版本、GAMES 数量、存储 key、Schema 或玩法基线时，必须同步更新本文件、注册表、Arcade README/CHANGELOG 与相关测试。
+变更 Arcade 版本、GAMES 数量、存储 key、Schema 或玩法基线时，必须同步更新本文件、注册表、Arcade README/CHANGELOG 与相关测试。变更 Venue Compare 版本、存储 Schema 或链接限制时，必须同步更新本文件、注册表、README/CHANGELOG 与 `restaurant_compare_smoke.mjs`。
