@@ -43,6 +43,21 @@
         "物理",
         "离线"
       ]
+    },
+    {
+      "id": "restaurant-compare",
+      "name": "Venue Compare",
+      "subtitle": "餐厅考察对比 · 地图标注",
+      "description": "把候选餐厅的费用、容量、环境与菜单资料收进一张地图和一张对比表；离线编辑，一键导出可转发的独立 HTML。",
+      "version": "0.1.0",
+      "status": "draft",
+      "href": "./apps/restaurant-compare/",
+      "icon": "🍽",
+      "tags": [
+        "对比",
+        "地图",
+        "离线"
+      ]
     }
   ]
 }

@@ -4,7 +4,7 @@
 
 - **线上站点：** <https://shawlaw.github.io/studiokit/> · <https://studiokit.pages.dev/>
 - **源码：** <https://github.com/Shawlaw/studiokit>（MIT 许可）
-- **当前工具：** Badge Studio `2.2.1`；街机厅 Arcade `0.8.3`（13 款竖屏小游戏 + 78 关挑战模式 + 俄罗斯方块禅模式 + 积分记录表 + 俄罗斯方块控件压缩，已发布）
+- **当前工具：** Badge Studio `2.2.1`；街机厅 Arcade `0.8.3`（13 款竖屏小游戏 + 78 关挑战模式 + 俄罗斯方块禅模式 + 积分记录表 + 俄罗斯方块控件压缩，已发布）；Venue Compare `0.1.0`（餐厅考察对比与地图标注，draft 待验收）
 - **计划中的工具：** Rounded Image（尚未实现，等待原始需求/规格）
 - **最近发布：** 2026-11-15，Arcade 0.8.3（共享 shell 修复 Android 普通浏览器顶部导航条空白：顶部安全区只在安装/独立窗口应用并计入导航条总高度，普通标签页保持 38px、文字居中；GitHub Pages + Cloudflare Pages 双端；提交 `c1727e7`，Actions `43670060561`，`verify_deploy.py` 37/37）
 - **运行方式：** 纯静态文件；无后端、无账号、无构建依赖、无第三方 CDN
@@ -21,6 +21,10 @@ StudioKit/
 │   └── tool-registry.json           # 首页工具注册表（新增工具只需登记一次）
 ├── apps/
 │   ├── badge-studio/                # 徽章工作台，当前 v2.2.1
+│   │   ├── index.html
+│   │   ├── README.md
+│   │   └── CHANGELOG.md
+│   ├── restaurant-compare/          # 餐厅考察对比，当前 v0.1.0（draft 待验收）
 │   │   ├── index.html
 │   │   ├── README.md
 │   │   └── CHANGELOG.md
@@ -48,6 +52,7 @@ StudioKit/
 │   ├── build_site.py                # 生成仅含网站文件的 dist/
 │   ├── arcade_smoke.mjs             # 街机无头浏览器冒烟测试
 │   ├── arcade_zen_scores_test.mjs   # 0.8.1 禅模式/积分记录确定性测试
+│   ├── restaurant_compare_smoke.mjs # Venue Compare 无头浏览器冒烟测试
 │   ├── verify_deploy.py             # 双端发布后的逐文件/版本校验
 │   └── agentctl.py                  # 轻量任务队列命令
 ├── tasks/queue.json                 # 机器可读任务队列
@@ -71,6 +76,7 @@ Linux / macOS 使用 `python3 -m http.server 8000`。浏览器访问：
 - 门户：`http://localhost:8000/`
 - Badge Studio：`http://localhost:8000/apps/badge-studio/`
 - 街机厅：`http://localhost:8000/apps/arcade/`
+- Venue Compare：`http://localhost:8000/apps/restaurant-compare/`
 
 Arcade 的游戏清单内联在 `apps/arcade/engine.js` 中，子游戏页也支持 `file://` 直接打开；但共享门户的注册表读取仍建议走 HTTP。
 

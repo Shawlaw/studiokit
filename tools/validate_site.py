@@ -27,6 +27,7 @@ REQUIRED = [
     'apps/arcade/games/memory-flip.html', 'apps/arcade/games/merge-2048.html',
     'apps/arcade/games/brick-breaker.html', 'apps/arcade/games/gravity-flip.html',
     'apps/arcade/games/snake-run.html', 'apps/arcade/games/mole-whack.html',
+    'apps/restaurant-compare/index.html', 'apps/restaurant-compare/README.md', 'apps/restaurant-compare/CHANGELOG.md',
     'templates/single-page-tool/index.html', 'tools/build_site.py', 'tools/new_tool.py',
     'tools/arcade_zen_scores_test.mjs'
 ]

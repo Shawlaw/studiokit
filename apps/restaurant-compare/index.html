@@ -1,0 +1,2549 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
+  <meta name="description" content="餐厅考察对比：把候选餐厅的费用、容量、环境与菜单资料收进一张地图和一张对比表，离线编辑，一键导出可转发的独立展示页。" />
+  <meta name="color-scheme" content="light" />
+  <meta name="theme-color" content="#f5f4ef" />
+  <title>Venue Compare · 餐厅考察对比 · StudioKit</title>
+  <link rel="stylesheet" href="../../shared/site.css" data-shared />
+  <script src="../../shared/site-shell.js" defer data-shared></script>
+  <style>
+    :root{
+      --bg:#f4f3ee;--surface:#fffefb;--surface-2:#f8f7f2;--ink:#1d2823;--muted:#6b7772;--faint:#98a39d;
+      --line:#e4e5de;--line-strong:#d3d8cf;--brand:#1f5a4e;--brand-deep:#16443b;--brand-soft:#e8f1ed;
+      --accent:#c4763c;--accent-soft:#fbecdd;--danger:#a9443f;--danger-soft:#fbebea;--ok:#2c6b4f;
+      --radius:18px;--radius-sm:12px;--shadow:0 22px 50px -34px rgba(24,45,37,.45);
+      --sans:-apple-system,BlinkMacSystemFont,"Segoe UI","PingFang SC","Hiragino Sans GB","Microsoft YaHei",sans-serif;
+      --mono:ui-monospace,SFMono-Regular,Menlo,Consolas,monospace;
+      --sk-page-pad:clamp(16px,3vw,30px);
+    }
+    *{box-sizing:border-box}
+    html{scroll-behavior:smooth}
+    body{margin:0;background:var(--bg);color:var(--ink);font:15px/1.6 var(--sans);-webkit-font-smoothing:antialiased}
+    button,input,select,textarea{font:inherit;color:inherit}
+    button{cursor:pointer;background:none;border:0}
+    a{color:var(--brand)}
+    :focus-visible{outline:3px solid rgba(196,118,60,.45);outline-offset:2px}
+    [hidden]{display:none!important}
+    .sr-only{position:absolute;width:1px;height:1px;padding:0;margin:-1px;overflow:hidden;clip:rect(0 0 0 0);white-space:nowrap;border:0}
+    .page{max-width:1300px;margin:0 auto;padding:clamp(22px,3.4vw,40px) var(--sk-page-pad) 60px}
+
+    /* ---------- hero ---------- */
+    .hero{display:flex;justify-content:space-between;align-items:flex-end;gap:30px;flex-wrap:wrap;margin-bottom:22px}
+    .hero-main{max-width:700px}
+    .eyebrow{margin:0 0 9px;color:var(--brand);font-size:11px;font-weight:800;letter-spacing:.18em}
+    .hero h1{margin:0;font-size:clamp(29px,4.4vw,42px);line-height:1.12;letter-spacing:-.035em;font-weight:800}
+    .lede{margin:11px 0 0;color:var(--muted);font-size:14px;line-height:1.7;max-width:60ch}
+    .hero-meta{display:flex;align-items:center;gap:9px;flex-wrap:wrap;margin-top:15px;color:var(--faint);font-size:11.5px}
+    .meta-dot{width:3px;height:3px;border-radius:50%;background:var(--line-strong)}
+    .save-chip{display:inline-flex;align-items:center;gap:6px;padding:4px 9px;border:1px solid var(--line);border-radius:999px;background:var(--surface);color:var(--muted);font-size:11px;font-weight:700}
+    .save-chip i{width:6px;height:6px;border-radius:50%;background:var(--ok);flex:none}
+    .save-chip[data-state="saving"] i{background:var(--accent);animation:pulse 1s ease-in-out infinite}
+    .save-chip[data-state="pending"] i{background:var(--accent)}
+    .save-chip[data-state="error"]{color:var(--danger);border-color:#eccfcd}
+    .save-chip[data-state="error"] i{background:var(--danger)}
+    @keyframes pulse{50%{opacity:.35}}
+    .hero-actions{display:flex;align-items:center;gap:8px;flex-wrap:wrap}
+    .btn{display:inline-flex;align-items:center;justify-content:center;gap:6px;min-height:40px;padding:8px 14px;border:1px solid var(--line-strong);border-radius:11px;background:var(--surface);font-size:13px;font-weight:700;text-decoration:none;transition:border-color .15s,box-shadow .15s,transform .15s,background .15s;white-space:nowrap}
+    .btn:hover{border-color:#b9c2b7;box-shadow:0 4px 12px -6px rgba(20,40,30,.28);transform:translateY(-1px)}
+    .btn:active{transform:none}
+    .btn.primary{background:var(--brand);border-color:var(--brand);color:#fff}
+    .btn.primary:hover{background:var(--brand-deep);border-color:var(--brand-deep)}
+    .btn.soft{background:var(--brand-soft);border-color:#d5e4dc;color:var(--brand-deep)}
+    .btn.danger{background:#fff;border-color:#eccfcd;color:var(--danger)}
+    .btn.small{min-height:34px;padding:5px 10px;font-size:12px;border-radius:9px}
+    .btn:disabled,.icon-btn:disabled{opacity:.42;cursor:not-allowed;transform:none;box-shadow:none}
+    .icon-btn{display:inline-flex;align-items:center;justify-content:center;width:40px;height:40px;border:1px solid var(--line-strong);border-radius:11px;background:var(--surface);color:var(--muted);font-size:17px;line-height:1;transition:border-color .15s,color .15s}
+    .icon-btn:hover:not(:disabled){border-color:#b9c2b7;color:var(--brand)}
+    .undo-group{display:flex;gap:5px}
+    .menu{position:relative}
+    .menu summary{list-style:none;cursor:pointer}
+    .menu summary::-webkit-details-marker{display:none}
+    .menu summary .chev{font-size:9px;color:var(--faint);margin-left:1px}
+    .menu[open] summary{border-color:#b9c2b7;color:var(--brand)}
+    .menu-list{position:absolute;right:0;top:calc(100% + 7px);z-index:60;width:250px;padding:6px;border:1px solid var(--line);border-radius:14px;background:var(--surface);box-shadow:0 18px 45px -20px rgba(20,40,30,.32)}
+    .menu-list button{display:flex;flex-direction:column;gap:1px;width:100%;padding:9px 11px;border-radius:9px;text-align:left;font-size:12.5px;font-weight:700}
+    .menu-list button:hover{background:var(--surface-2)}
+    .menu-list button small{font-size:10.5px;font-weight:500;color:var(--faint)}
+    .menu-list button.danger{color:var(--danger)}
+    .menu-divider{height:1px;margin:5px 6px;background:var(--line)}
+    .viewer-banner{display:none;margin-bottom:18px;padding:11px 14px;border:1px solid #d5e4dc;border-radius:12px;background:var(--brand-soft);color:var(--brand-deep);font-size:12px}
+    .viewer-only{display:none!important}
+    body[data-view-only="true"] .viewer-only{display:inline!important}
+    body[data-view-only="true"] button.viewer-only{display:inline-flex!important}
+
+    /* ---------- steps ---------- */
+    .steps{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:9px;margin:0 0 16px;padding:0;list-style:none}
+    .step{display:flex;align-items:center;gap:10px;padding:10px 12px;border:1px solid var(--line);border-radius:13px;background:var(--surface);text-align:left;transition:border-color .15s,background .15s}
+    .step:hover{border-color:var(--line-strong)}
+    .step-num{display:grid;place-items:center;width:24px;height:24px;border-radius:50%;background:var(--surface-2);border:1px solid var(--line);color:var(--muted);font-size:11px;font-weight:800;flex:none}
+    .step-text{min-width:0}
+    .step-text strong{display:block;font-size:12px;line-height:1.3}
+    .step-text span{display:block;font-size:10.5px;color:var(--faint);white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+    .step.is-done{border-color:#d5e4dc;background:#f4faf7}
+    .step.is-done .step-num{background:var(--brand);border-color:var(--brand);color:#fff}
+    .step.is-current{border-color:#e6c6a9;background:#fffaf4}
+    .step.is-current .step-num{background:var(--accent);border-color:var(--accent);color:#fff}
+
+    /* ---------- stats ---------- */
+    .stats{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:11px;margin-bottom:16px}
+    .stat{padding:15px 17px;border:1px solid var(--line);border-radius:16px;background:var(--surface);box-shadow:var(--shadow)}
+    .stat-label{color:var(--faint);font-size:11px;font-weight:700;letter-spacing:.02em}
+    .stat-value{margin-top:3px;font-size:23px;font-weight:800;letter-spacing:-.03em;font-variant-numeric:tabular-nums}
+    .stat-note{margin-top:1px;color:var(--muted);font-size:10.5px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+
+    /* ---------- panels ---------- */
+    .panel{margin-top:16px;border:1px solid var(--line);border-radius:var(--radius);background:var(--surface);box-shadow:var(--shadow);overflow:hidden}
+    .panel-head{display:flex;justify-content:space-between;align-items:flex-start;gap:18px;flex-wrap:wrap;padding:20px 22px 15px}
+    .panel-head h2{margin:0;font-size:17px;letter-spacing:-.02em}
+    .panel-head p{margin:4px 0 0;color:var(--muted);font-size:12px;line-height:1.55;max-width:70ch}
+    .panel-head-actions{display:flex;align-items:center;gap:8px;flex-wrap:wrap}
+    .panel-foot{display:flex;justify-content:space-between;gap:14px;flex-wrap:wrap;padding:10px 22px;border-top:1px solid var(--line);background:#fbfaf6;color:var(--faint);font-size:10.5px}
+
+    /* ---------- map ---------- */
+    .map-wrap{padding:0 22px 18px}
+    .map-stage{position:relative;height:clamp(360px,56vh,590px);border:1px solid #dde0d7;border-radius:14px;background:
+      radial-gradient(circle at 1px 1px,rgba(90,110,100,.13) 1px,transparent 0) 0 0/22px 22px,var(--surface-2);
+      overflow:hidden;display:flex;align-items:center;justify-content:center;touch-action:pan-y;overscroll-behavior:contain;user-select:none}
+    .map-stage.has-map{display:block;cursor:default}
+    .map-stage.is-empty{height:clamp(240px,32vh,320px)}
+    .map-stage.can-pan{touch-action:none;cursor:grab}
+    .map-stage.is-panning{cursor:grabbing}
+    .map-stage.is-placing{cursor:crosshair}
+    .map-stage.is-expanded{position:fixed;inset:0;z-index:120;height:100vh;height:100dvh;border:0;border-radius:0;background:#111c18}
+    body.map-locked{overflow:hidden}
+    .map-placeholder{padding:40px 22px;text-align:center;color:var(--muted);max-width:460px}
+    .map-placeholder .ph-icon{display:grid;place-items:center;width:58px;height:58px;margin:0 auto 13px;border:1px dashed #b9c6bb;border-radius:18px;background:var(--surface);font-size:25px}
+    .map-placeholder strong{display:block;color:#40504a;font-size:14px;margin-bottom:4px}
+    .map-placeholder p{margin:0 0 13px;font-size:12px}
+    .map-canvas{position:absolute;left:50%;top:50%;line-height:0;transform-origin:center center;will-change:transform}
+    .map-image{display:block;width:100%;height:100%;object-fit:fill;pointer-events:none;background:#f2f0e9}
+    .map-markers{position:absolute;inset:0}
+    .map-marker{position:absolute;z-index:2;width:32px;height:32px;padding:0;transform:translate(-50%,-50%) scale(var(--counter-scale,1));transform-origin:center;touch-action:none;border-radius:50%}
+    .map-marker::after{content:"";position:absolute;inset:-7px;border-radius:50%}
+    .map-marker-pin{display:grid;place-items:center;width:32px;height:32px;border:2px solid #fff;border-radius:50%;background:var(--brand);color:#fff;font-size:11px;font-weight:850;box-shadow:0 3px 9px rgba(12,32,25,.36);transition:transform .12s,background .12s}
+    .map-marker:hover .map-marker-pin,.map-marker:focus-visible .map-marker-pin{transform:scale(1.09);background:var(--brand-deep)}
+    .map-marker.is-active{z-index:6}
+    .map-marker.is-active .map-marker-pin{background:var(--accent);box-shadow:0 0 0 4px rgba(196,118,60,.24),0 3px 10px rgba(12,32,25,.3)}
+    .map-marker.is-pulse .map-marker-pin{animation:markerPulse 1.15s ease-in-out 2}
+    @keyframes markerPulse{50%{box-shadow:0 0 0 11px rgba(196,118,60,.22),0 3px 10px rgba(12,32,25,.3)}}
+    .map-marker-label{position:absolute;left:50%;top:calc(100% + 8px);z-index:7;transform:translateX(-50%);padding:4px 8px;border-radius:6px;background:#1d2823;color:#fff;font-size:10.5px;line-height:1.3;white-space:nowrap;pointer-events:none;opacity:0;transition:opacity .12s}
+    .map-marker:hover .map-marker-label,.map-marker:focus-visible .map-marker-label,.map-marker.is-active .map-marker-label{opacity:1}
+    .map-controls{position:absolute;z-index:8;right:12px;top:12px;display:flex;flex-direction:column;gap:4px;padding:5px;border:1px solid rgba(218,222,211,.9);border-radius:13px;background:rgba(255,254,251,.94);box-shadow:0 6px 18px -8px rgba(15,35,25,.3);backdrop-filter:blur(8px)}
+    .map-control-btn{display:grid;place-items:center;width:42px;height:42px;border-radius:9px;background:var(--surface-2);color:#2b4a40;font-size:21px;font-weight:650;line-height:1}
+    .map-control-btn:hover{background:#e6efe9}
+    .map-control-btn:disabled{opacity:.35}
+    .map-zoom-level{min-width:42px;padding:1px 0;text-align:center;color:var(--faint);font-size:9.5px;font-weight:750}
+    .map-hint{position:absolute;z-index:7;left:12px;bottom:12px;padding:5px 9px;border:1px solid rgba(218,222,211,.9);border-radius:8px;background:rgba(255,254,251,.9);color:#6d7a73;font-size:10px;pointer-events:none;backdrop-filter:blur(6px)}
+    .map-stage.is-expanded .map-hint{color:#c8d2cc;background:rgba(20,32,27,.7);border-color:rgba(255,255,255,.14)}
+    .map-stage.is-expanded .map-controls{background:rgba(255,254,251,.96)}
+    .map-banner{position:absolute;z-index:9;left:50%;top:12px;transform:translateX(-50%);display:flex;align-items:center;gap:9px;max-width:calc(100% - 140px);padding:7px 12px;border:1px solid #e6c6a9;border-radius:999px;background:#fff7ee;color:#8a5527;font-size:11.5px;font-weight:700;box-shadow:0 6px 18px -10px rgba(90,60,20,.4)}
+    .map-banner button{color:#8a5527;text-decoration:underline;font-size:11px}
+    .map-toolbar{display:flex;align-items:center;gap:10px;flex-wrap:wrap;margin-top:11px;padding:10px 12px;border:1px solid #dce6df;border-radius:12px;background:#f6faf7}
+    .map-toolbar label{font-size:11px;font-weight:750;color:#5c6f66}
+    .map-toolbar select{min-width:190px;max-width:100%;padding:7px 9px;border:1px solid var(--line);border-radius:8px;background:var(--surface);font-size:12px}
+    .map-toolbar-help{flex:1;min-width:180px;color:var(--faint);font-size:10.5px;line-height:1.5}
+    .map-caption{margin:8px 2px 0;color:var(--faint);font-size:10.5px;min-height:15px}
+
+    /* ---------- list ---------- */
+    .list-tools{display:flex;align-items:center;gap:8px;flex-wrap:wrap;justify-content:flex-end}
+    .search{width:230px;max-width:100%;min-height:38px;padding:7px 11px;border:1px solid var(--line);border-radius:10px;background:var(--surface-2);font-size:12.5px;outline:none}
+    .search:focus{border-color:#9db8aa;background:#fff;box-shadow:0 0 0 3px rgba(31,90,78,.08)}
+    .chips{display:inline-flex;padding:3px;border:1px solid var(--line);border-radius:10px;background:var(--surface-2)}
+    .chips button{padding:5px 9px;border-radius:7px;color:var(--muted);font-size:11px;font-weight:700;white-space:nowrap}
+    .chips button.is-active{background:var(--surface);color:var(--brand-deep);box-shadow:0 1px 3px rgba(20,40,30,.12)}
+    .table-wrap{overflow:auto;border-top:1px solid var(--line);border-bottom:1px solid var(--line)}
+    table{width:100%;min-width:1040px;border-collapse:separate;border-spacing:0}
+    thead th{position:sticky;top:0;z-index:2;padding:10px 11px;border-bottom:1px solid var(--line);background:#f7f6f1;color:#778078;font-size:10.5px;font-weight:750;letter-spacing:.03em;text-align:left;white-space:nowrap}
+    thead th:first-child{left:0;z-index:3;width:56px;min-width:56px}
+    thead th:nth-child(2){left:56px;z-index:3;box-shadow:1px 0 0 var(--line)}
+    tbody td{padding:11px;border-bottom:1px solid #efeee8;font-size:12.5px;vertical-align:middle;white-space:nowrap}
+    tbody tr{cursor:pointer}
+    tbody tr:hover{background:#fbfaf5}
+    tbody tr.is-active{background:#fff8ef}
+    tbody tr.is-active td:first-child{box-shadow:inset 3px 0 var(--accent)}
+    tbody tr:last-child td{border-bottom:0}
+    tbody td:first-child{position:sticky;left:0;z-index:1;width:56px;min-width:56px;background:inherit}
+    tbody td:nth-child(2){position:sticky;left:56px;z-index:1;background:inherit;box-shadow:1px 0 0 var(--line)}
+    tbody tr:hover td:first-child,tbody tr:hover td:nth-child(2){background:#fbfaf5}
+    tbody tr.is-active td:first-child,tbody tr.is-active td:nth-child(2){background:#fff8ef}
+    .id-chip{display:inline-flex;align-items:center;justify-content:center;min-width:28px;height:26px;padding:0 6px;border:1px solid #dce6df;border-radius:8px;background:#f2f8f5;color:var(--brand-deep);font-size:11.5px;font-weight:800}
+    button.id-chip:hover{background:#e3efe9;border-color:#c9dcd2}
+    .rest-name{padding:1px 0;border:0;background:none;color:#202c26;font-size:12.5px;font-weight:750;text-align:left}
+    .rest-name:hover{color:var(--brand);text-decoration:underline}
+    .fee{font-variant-numeric:tabular-nums}
+    .fee.is-empty{color:#b3bab4}
+    .media-count{display:inline-flex;align-items:center;gap:4px;padding:3px 7px;border-radius:7px;background:#f1f6f3;color:#436357;font-size:10.5px;font-weight:700}
+    .media-count.is-empty{background:transparent;color:#b3bab4;font-weight:500}
+    .row-actions{display:flex;align-items:center;gap:2px}
+    .row-btn{display:inline-flex;align-items:center;justify-content:center;min-width:34px;min-height:34px;padding:0 7px;border-radius:8px;color:var(--muted);font-size:11px;font-weight:700}
+    .row-btn:hover{background:var(--brand-soft);color:var(--brand-deep)}
+    .row-btn.delete:hover{background:var(--danger-soft);color:var(--danger)}
+    .row-btn svg{width:15px;height:15px;fill:none;stroke:currentColor;stroke-width:1.8;stroke-linecap:round;stroke-linejoin:round}
+    .table-empty{padding:36px 20px;text-align:center;color:var(--faint);font-size:12px}
+    .rc-cards{display:none;padding:12px;gap:10px;flex-direction:column}
+    .cards-empty{display:none;padding:26px 16px;text-align:center;color:var(--faint);font-size:12px}
+    .rc-card{padding:14px;border:1px solid var(--line);border-radius:14px;background:var(--surface);cursor:pointer;transition:border-color .15s,box-shadow .15s}
+    .rc-card:hover{border-color:var(--line-strong);box-shadow:0 5px 16px -12px rgba(20,40,30,.4)}
+    .rc-card.is-active{border-color:#e6c6a9;background:#fffaf4}
+    .rc-card-top{display:flex;align-items:flex-start;gap:9px}
+    .rc-card-title{flex:1;min-width:0}
+    .rc-card-title strong{display:block;font-size:14px;line-height:1.35}
+    .rc-card-title span{display:block;margin-top:1px;color:var(--faint);font-size:10.5px}
+    .rc-fees{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:7px 10px;margin:12px 0 10px;padding:10px;border-radius:10px;background:var(--surface-2)}
+    .rc-fee{display:flex;justify-content:space-between;gap:8px;min-width:0;font-size:11px}
+    .rc-fee span{color:var(--faint);white-space:nowrap}
+    .rc-fee strong{font-weight:700;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;font-variant-numeric:tabular-nums}
+    .rc-card-foot{display:flex;align-items:center;justify-content:space-between;gap:8px;flex-wrap:wrap}
+    .rc-media{display:flex;gap:5px;flex-wrap:wrap}
+    .rc-media-none{color:var(--faint);font-size:10.5px}
+    .rc-actions{display:flex;gap:4px}
+
+    /* ---------- empty ---------- */
+    .empty-state{padding:44px 22px;text-align:center}
+    .empty-state .empty-icon{display:grid;place-items:center;width:54px;height:54px;margin:0 auto 12px;border-radius:17px;background:var(--brand-soft);font-size:24px}
+    .empty-state h3{margin:0 0 5px;font-size:16px}
+    .empty-state p{margin:0 auto 16px;max-width:44ch;color:var(--muted);font-size:12.5px}
+    .empty-actions{display:flex;justify-content:center;gap:8px;flex-wrap:wrap}
+
+    /* ---------- dialogs ---------- */
+    dialog{padding:0;border:0;border-radius:20px;width:min(820px,calc(100vw - 26px));max-height:90vh;background:transparent;color:var(--ink);box-shadow:0 30px 90px -25px rgba(8,24,18,.45)}
+    dialog::backdrop{background:rgba(12,24,19,.5);backdrop-filter:blur(3px)}
+    dialog[open]{animation:dialogIn .16s ease-out}
+    @keyframes dialogIn{from{opacity:.4;transform:translateY(6px) scale(.99)}}
+    .dialog-shell{display:flex;flex-direction:column;max-height:90vh;border-radius:20px;background:var(--surface);overflow:hidden}
+    .dialog-head{display:flex;align-items:flex-start;justify-content:space-between;gap:14px;padding:20px 23px 14px;border-bottom:1px solid var(--line)}
+    .dialog-head h2{margin:0;font-size:19px;line-height:1.25;letter-spacing:-.02em}
+    .dialog-head p{margin:4px 0 0;color:var(--muted);font-size:11.5px}
+    .icon-close{display:grid;place-items:center;width:36px;height:36px;border-radius:10px;background:var(--surface-2);color:#65726b;font-size:20px;line-height:1;flex:none}
+    .icon-close:hover{background:#ecebe4;color:var(--ink)}
+    .dialog-body{padding:19px 23px;overflow:auto;overscroll-behavior:contain}
+    .dialog-actions{display:flex;justify-content:space-between;align-items:center;gap:10px;padding:13px 23px;border-top:1px solid var(--line);background:#fbfaf6;flex-wrap:wrap}
+    .dialog-actions .right{display:flex;gap:8px;margin-left:auto}
+    .dialog-section + .dialog-section{margin-top:19px;padding-top:17px;border-top:1px solid var(--line)}
+    .dialog-section h3{margin:0 0 10px;font-size:13px;letter-spacing:.01em}
+    .form-grid{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:12px 14px}
+    .field{display:flex;flex-direction:column;gap:4px;min-width:0}
+    .field.full{grid-column:1/-1}
+    .field label{color:#58645e;font-size:11px;font-weight:750}
+    .field label em{color:var(--danger);font-style:normal}
+    .field input,.field textarea{width:100%;min-height:38px;padding:8px 10px;border:1px solid var(--line);border-radius:9px;background:#fff;font-size:12.5px;outline:none}
+    .field input:focus,.field textarea:focus{border-color:#9db8aa;box-shadow:0 0 0 3px rgba(31,90,78,.08)}
+    .field input[aria-invalid="true"]{border-color:#d9a5a2;background:#fffafa}
+    .field-hint{color:var(--faint);font-size:10px}
+    .field-error{color:var(--danger);font-size:10.5px;font-weight:700}
+    .media-editor{margin-top:2px}
+    .media-editor-head{display:flex;align-items:center;justify-content:space-between;gap:10px;margin-bottom:8px}
+    .media-editor-head strong{font-size:12px}
+    .media-editor-head span{color:var(--faint);font-size:10.5px}
+    .upload-label{display:inline-flex;align-items:center;gap:5px;min-height:34px;padding:5px 9px;border:1px dashed #9db8aa;border-radius:9px;background:#f5faf7;color:var(--brand-deep);font-size:11.5px;font-weight:700;cursor:pointer}
+    .upload-label:hover{background:#edf6f1}
+    .upload-label input{display:none}
+    .upload-label.is-busy{opacity:.6;pointer-events:none}
+    .file-list{display:flex;flex-direction:column;gap:6px}
+    .file-row{display:flex;align-items:center;gap:9px;padding:7px 9px;border:1px solid var(--line);border-radius:9px;background:#fcfbf7;font-size:11.5px}
+    .file-row .file-icon{display:grid;place-items:center;width:26px;height:26px;border-radius:7px;background:var(--brand-soft);color:var(--brand-deep);font-size:11px;font-weight:800;flex:none}
+    .file-row .file-meta{min-width:0;flex:1}
+    .file-row .file-name{display:block;font-weight:650;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+    .file-row .file-size{display:block;color:var(--faint);font-size:10px}
+    .file-row .file-remove{width:30px;height:30px;border-radius:8px;color:#9a8f8c;font-size:15px;flex:none}
+    .file-row .file-remove:hover{background:var(--danger-soft);color:var(--danger)}
+    .file-empty{padding:9px 0;color:var(--faint);font-size:10.5px}
+
+    /* ---------- detail ---------- */
+    .detail-kv{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:8px;margin-bottom:19px}
+    .detail-kv div{min-width:0;padding:10px 11px;border:1px solid #efeee8;border-radius:10px;background:var(--surface-2)}
+    .detail-kv span{display:block;margin-bottom:3px;color:var(--faint);font-size:10px}
+    .detail-kv strong{display:block;font-size:12px;font-weight:750;overflow-wrap:anywhere}
+    .detail-kv strong.is-empty{color:#b3bab4;font-weight:500}
+    .media-section + .media-section{margin-top:18px}
+    .media-section h3{display:flex;align-items:baseline;gap:6px;margin:0 0 9px;font-size:13.5px}
+    .media-section h3 small{color:var(--faint);font-size:10.5px;font-weight:500}
+    .media-grid{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:10px}
+    .media-card{border:1px solid var(--line);border-radius:12px;background:#fff;overflow:hidden;min-width:0}
+    .media-preview{position:relative;display:flex;align-items:center;justify-content:center;height:190px;background:#f1f4f1;overflow:hidden}
+    button.media-preview{width:100%;height:190px;padding:0;border:0;border-radius:0;background:var(--surface-2);cursor:zoom-in}
+    .media-preview img{width:100%;height:100%;object-fit:contain;cursor:zoom-in}
+    .media-preview video{width:100%;height:100%;object-fit:contain;background:#0d1411}
+    .media-preview iframe{width:100%;height:100%;border:0;background:#fff}
+    .media-file-placeholder{padding:18px;text-align:center;color:var(--muted)}
+    .media-file-placeholder .file-icon{font-size:26px}
+    .media-file-placeholder span{display:block;margin-top:5px;font-size:10.5px}
+    .media-card-foot{display:flex;align-items:center;justify-content:space-between;gap:8px;padding:8px 10px}
+    .media-card-foot strong{display:block;min-width:0;font-size:11px;font-weight:700;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+    .media-card-foot small{display:block;margin-top:1px;color:var(--faint);font-size:9.5px}
+    .media-card-foot button{padding:4px 7px;border-radius:6px;color:var(--brand);font-size:10.5px;font-weight:750;white-space:nowrap}
+    .media-card-foot button:hover{background:var(--brand-soft)}
+    .detail-empty{padding:14px;border:1px dashed var(--line-strong);border-radius:10px;color:var(--faint);font-size:11.5px}
+    .detail-note{margin-top:14px;color:var(--faint);font-size:10.5px}
+    .lightbox-dialog{width:min(1180px,calc(100vw - 20px));background:#0d1411}
+    .lightbox-dialog .dialog-shell{background:#0d1411}
+    .lightbox-dialog .dialog-head{border-color:#25332d;color:#fff}
+    .lightbox-dialog .dialog-head p{color:#9fb0a8}
+    .lightbox-dialog .icon-close{background:#1c2a24;color:#c5d4cd}
+    .lightbox-body{position:relative;display:flex;align-items:center;justify-content:center;min-height:180px;max-height:76vh;padding:0 16px 14px}
+    .lightbox-body img,.lightbox-body video{max-width:100%;max-height:72vh;object-fit:contain;border-radius:8px}
+    .lightbox-nav{position:absolute;top:50%;transform:translateY(-50%);display:grid;place-items:center;width:42px;height:42px;border-radius:50%;background:rgba(255,255,255,.14);color:#fff;font-size:21px;backdrop-filter:blur(4px)}
+    .lightbox-nav:hover{background:rgba(255,255,255,.24)}
+    .lightbox-nav.prev{left:22px}.lightbox-nav.next{right:22px}
+    .lightbox-count{position:absolute;right:16px;bottom:2px;color:#9fb0a8;font-size:10.5px}
+    .confirm-dialog{width:min(440px,calc(100vw - 28px))}
+    .confirm-body{padding:22px 23px 6px;color:var(--muted);font-size:13px;line-height:1.65}
+    .confirm-body strong{display:block;margin-bottom:5px;color:var(--ink);font-size:15px}
+
+    /* ---------- toast ---------- */
+    .toast{position:fixed;left:50%;bottom:24px;z-index:200;display:flex;align-items:center;gap:12px;max-width:min(560px,calc(100vw - 28px));padding:10px 13px 10px 15px;border-radius:12px;background:#1b2a24;color:#f3f7f5;font-size:12px;box-shadow:0 18px 40px -18px rgba(0,0,0,.55);opacity:0;transform:translate(-50%,14px);pointer-events:none;transition:opacity .2s,transform .2s}
+    .toast.show{opacity:1;transform:translate(-50%,0);pointer-events:auto}
+    .toast button{padding:3px 7px;border-radius:6px;background:rgba(255,255,255,.14);color:#fff;font-size:11px;font-weight:750;white-space:nowrap}
+    .toast button:hover{background:rgba(255,255,255,.24)}
+    .toast .toast-text{min-width:0}
+
+    /* ---------- misc ---------- */
+    .foot{display:flex;justify-content:space-between;gap:14px;flex-wrap:wrap;margin-top:24px;padding-top:14px;border-top:1px solid var(--line);color:var(--faint);font-size:10.5px}
+    .foot a{color:var(--muted);text-decoration:none}
+    .foot a:hover{text-decoration:underline}
+    .help{margin-top:16px;border:1px solid var(--line);border-radius:13px;background:var(--surface);overflow:hidden}
+    .help summary{padding:12px 16px;cursor:pointer;color:var(--muted);font-size:11.5px;font-weight:700}
+    .help-grid{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:10px;padding:0 16px 16px}
+    .help-grid div{padding:11px 12px;border:1px solid var(--line);border-radius:10px;background:var(--surface-2)}
+    .help-grid strong{display:block;margin-bottom:3px;font-size:11.5px}
+    .help-grid p{margin:0;color:var(--faint);font-size:10.5px;line-height:1.55}
+
+    /* ---------- responsive ---------- */
+    @media (max-width:1040px){
+      .steps{grid-template-columns:repeat(2,minmax(0,1fr))}
+      .detail-kv{grid-template-columns:repeat(2,minmax(0,1fr))}
+    }
+    @media (max-width:900px){
+      .stats{grid-template-columns:repeat(2,minmax(0,1fr))}
+      .panel-head{padding:17px 16px 12px}
+      .map-wrap{padding:0 16px 15px}
+      .panel-foot{padding:10px 16px}
+      .hero-actions{width:100%}
+      .search{width:100%}
+      .list-tools{width:100%;justify-content:flex-start}
+    }
+    @media (max-width:760px){
+      .page{padding-bottom:40px}
+      .hero{gap:18px;margin-bottom:16px}
+      .lede{font-size:13px}
+      .steps{gap:6px}
+      .step{padding:8px 9px;border-radius:10px}
+      .step-text span{display:none}
+      .map-stage{height:clamp(300px,42vh,380px)}
+      .map-wrap{padding:0 10px 12px}
+      .table-wrap{display:none}
+      .rc-cards{display:flex}
+      .cards-empty{display:block}
+      .media-grid{grid-template-columns:1fr}
+      .media-preview{height:210px}
+      .help-grid{grid-template-columns:1fr}
+      .map-controls{right:8px;top:8px}
+      .map-control-btn{width:40px;height:40px}
+      .map-hint{left:8px;bottom:8px;font-size:9px;max-width:calc(100% - 90px)}
+      .map-banner{top:8px;max-width:calc(100% - 120px);font-size:10.5px}
+      .map-caption{font-size:10px}
+      .form-grid{grid-template-columns:1fr}
+      .field.full{grid-column:auto}
+      .dialog-head,.dialog-body,.dialog-actions{padding-left:16px;padding-right:16px}
+      .confirm-body{padding-left:16px;padding-right:16px}
+      .detail-kv{grid-template-columns:repeat(2,minmax(0,1fr))}
+      .toast{bottom:14px}
+      .foot{flex-direction:column;gap:5px}
+    }
+    @media (max-width:480px){
+      .hero h1{font-size:27px}
+      .hero-actions .btn{flex:1 1 auto}
+      .stats{gap:7px}
+      .stat{padding:11px 12px;border-radius:12px}
+      .stat-value{font-size:19px}
+      .stat-note{display:none}
+      .icon-btn,.undo-group{display:none}
+      .steps .step-text strong{font-size:11px}
+      .map-toolbar{gap:7px}
+      .map-toolbar select{min-width:0;flex:1 1 130px}
+      .map-toolbar-help{display:none}
+      .list-tools .search{flex:1 1 100%}
+      .chips button{padding:5px 7px}
+      .media-preview{height:180px}
+      .dialog-actions .btn{flex:1 1 auto}
+    }
+    @media (prefers-reduced-motion:reduce){
+      *,*::before,*::after{animation-duration:.01ms!important;animation-iteration-count:1!important;transition-duration:.01ms!important;scroll-behavior:auto!important}
+    }
+
+    /* ---------- viewer ---------- */
+    body[data-view-only="true"] .editor-only{display:none!important}
+    body[data-view-only="true"] .viewer-banner{display:block}
+    body[data-view-only="true"] .page{padding-top:clamp(18px,2.6vw,28px)}
+
+    /* ---------- print ---------- */
+    @media print{
+      body{background:#fff}
+      .page{max-width:none;padding:0}
+      .hero-actions,.steps,.save-chip,.hero-meta,.map-controls,.map-hint,.map-toolbar,.list-tools,.row-actions,.panel-foot .editor-only,.foot,.help,.toast,.dialog-actions{display:none!important}
+      .panel,.stat{box-shadow:none;break-inside:avoid}
+      .panel{border:1px solid #ddd}
+      .map-stage{height:auto;min-height:0;border:0;background:#fff}
+      .map-canvas{position:static;width:auto!important;height:auto!important;transform:none!important;margin:0 auto}
+      .map-image{max-height:360px;width:auto!important;height:auto!important}
+      .map-markers{position:static}
+      .map-marker{display:none}
+      .table-wrap{display:block;overflow:visible;border:1px solid #eee}
+      table{min-width:0;font-size:9.5px}
+      thead th,tbody td{padding:5px 6px}
+      thead th,thead th:first-child,thead th:nth-child(2){position:static;left:auto;box-shadow:none}
+      tbody td:first-child,tbody td:nth-child(2){position:static;left:auto;box-shadow:none}
+      .rc-cards,.cards-empty{display:none}
+      .toast{display:none}
+      .stat{border:1px solid #eee}
+      .viewer-banner{display:none}
+    }
+  </style>
+</head>
+<body data-studiokit-app="restaurant-compare" data-studiokit-app-title="Venue Compare">
+  <div class="page">
+    <div class="viewer-banner" role="note">离线展示页 · 地图、餐厅资料与附件都已内置，无需联网。</div>
+
+    <header class="hero">
+      <div class="hero-main">
+        <p class="eyebrow">VENUE DOSSIER · LOCAL-FIRST</p>
+        <h1>餐厅考察对比</h1>
+        <p class="lede"><span class="editor-only">把候选餐厅的费用、容量、环境与菜单资料收进一张地图和一张对比表；编辑只发生在你的浏览器里，导出后是一条链接就能转发的独立页面。</span><span class="viewer-only">这是可离线打开的只读展示页：地图、费用、容量与环境 / 菜单资料都已内嵌，转发文件即可分享。</span></p>
+        <div class="hero-meta">
+          <span class="save-chip editor-only" id="saveChip" data-state="idle" role="status" aria-live="polite"><i></i><span id="saveText">尚未修改</span></span>
+          <span class="meta-dot editor-only"></span>
+          <span>v0.1.0</span>
+          <span class="meta-dot"></span>
+          <span class="editor-only">数据只保存在本机浏览器</span>
+          <span class="viewer-only">只读展示 · 可离线打开</span>
+        </div>
+      </div>
+      <div class="hero-actions">
+        <button class="btn primary editor-only" id="addBtn" type="button">＋ 新增餐厅</button>
+        <button class="btn editor-only" id="importBtn" type="button">导入项目</button>
+        <details class="menu editor-only" id="exportMenu">
+          <summary class="btn" role="button" aria-label="导出与更多操作">导出 <span class="chev">▾</span></summary>
+          <div class="menu-list" role="menu">
+            <button type="button" role="menuitem" data-menu="html">导出展示 HTML<small>含地图与附件，可单独转发</small></button>
+            <button type="button" role="menuitem" data-menu="json">备份项目 JSON<small>换设备或长期留存</small></button>
+            <button type="button" role="menuitem" data-menu="print">打印 / 另存 PDF<small>适合直接发群</small></button>
+            <div class="menu-divider" role="separator"></div>
+            <button type="button" role="menuitem" data-menu="sample">载入示例项目<small>用虚构数据快速体验</small></button>
+            <button type="button" role="menuitem" class="danger" data-menu="clear">清空当前项目<small>会先要求确认</small></button>
+          </div>
+        </details>
+        <div class="undo-group editor-only">
+          <button class="icon-btn" id="undoBtn" type="button" title="撤销 (Ctrl+Z)" aria-label="撤销" disabled>↶</button>
+          <button class="icon-btn" id="redoBtn" type="button" title="重做 (Ctrl+Shift+Z)" aria-label="重做" disabled>↷</button>
+        </div>
+        <button class="btn viewer-only" id="printBtnViewer" type="button">打印 / 另存 PDF</button>
+      </div>
+    </header>
+
+    <ol class="steps editor-only" id="steps" aria-label="完成进度">
+      <li><button class="step" type="button" data-step="map"><span class="step-num">1</span><span class="step-text"><strong>上传位置地图</strong><span>截图、平面图都可以</span></span></button></li>
+      <li><button class="step" type="button" data-step="list"><span class="step-num">2</span><span class="step-text"><strong>录入候选餐厅</strong><span>费用、容量、资料</span></span></button></li>
+      <li><button class="step" type="button" data-step="map"><span class="step-num">3</span><span class="step-text"><strong>在图上标注</strong><span>编号与表格联动</span></span></button></li>
+      <li><button class="step" type="button" data-step="export"><span class="step-num">4</span><span class="step-text"><strong>导出并转发</strong><span>单个 HTML 文件</span></span></button></li>
+    </ol>
+
+    <section class="stats" id="stats" aria-label="项目概览"></section>
+
+    <section class="panel" id="mapPanel" aria-labelledby="mapTitle">
+      <div class="panel-head">
+        <div>
+          <h2 id="mapTitle">位置总览</h2>
+          <p><span class="editor-only">上传原始地图后，选择餐厅编号并在图上点选位置；标记可直接拖动校准，与下方表格双向联动。</span><span class="viewer-only">地图标记与下方表格双向联动；拖动、滚轮或双指可查看细节。</span></p>
+        </div>
+        <div class="panel-head-actions editor-only">
+          <button class="btn small soft" id="uploadMapBtn" type="button">↑ 上传 / 更换地图</button>
+          <input id="mapInput" type="file" accept="image/*" hidden />
+        </div>
+      </div>
+      <div class="map-wrap">
+        <div class="map-stage" id="mapStage" role="region" aria-label="位置地图"></div>
+        <div class="map-toolbar editor-only" id="mapToolbar">
+          <label for="markerSelect">标注餐厅</label>
+          <select id="markerSelect" aria-label="选择要标注的餐厅"></select>
+          <button class="btn small soft" id="placeBtn" type="button" disabled>＋ 放置标记</button>
+          <span class="map-toolbar-help" id="placeHelp">先上传地图，再选择餐厅并点击地图放置标记。</span>
+        </div>
+        <p class="map-caption" id="mapCaption"></p>
+      </div>
+    </section>
+
+    <section class="panel" id="listPanel" aria-labelledby="listTitle">
+      <div class="panel-head">
+        <div>
+          <h2 id="listTitle">餐厅横向对比</h2>
+          <p>点击任意一行查看完整资料；点编号或名称可把地图定位到对应标记。</p>
+        </div>
+        <div class="list-tools">
+          <input class="search" id="searchInput" type="search" placeholder="搜索编号或餐厅名称…" aria-label="搜索餐厅" autocomplete="off" />
+          <div class="chips" id="markFilter" role="group" aria-label="按标注状态筛选">
+            <button type="button" data-filter="all" class="is-active">全部</button>
+            <button type="button" data-filter="marked">已标注</button>
+            <button type="button" data-filter="unmarked">未标注</button>
+          </div>
+          <button class="btn small primary editor-only" id="addBtn2" type="button">＋ 新增</button>
+        </div>
+      </div>
+      <div class="table-wrap">
+        <table>
+          <caption class="sr-only">餐厅费用与资料横向对比表</caption>
+          <thead>
+            <tr>
+              <th scope="col">编号</th><th scope="col">餐厅名称</th><th scope="col">低消</th><th scope="col">定金</th>
+              <th scope="col">茶位费</th><th scope="col">服务费</th><th scope="col">停车</th><th scope="col">可坐人数</th>
+              <th scope="col">资料</th><th scope="col">操作</th>
+            </tr>
+          </thead>
+          <tbody id="rows"></tbody>
+        </table>
+        <div class="table-empty" id="tableEmpty" hidden></div>
+      </div>
+      <div class="rc-cards" id="cards"></div>
+      <div class="cards-empty" id="cardsEmpty" hidden></div>
+      <div class="empty-state" id="listEmpty" hidden>
+        <div class="empty-icon">🍽</div>
+        <h3>还没有候选餐厅</h3>
+        <p>先添加第一家，或在空白项目里载入一组虚构示例，快速看看地图标注和对比表长什么样。</p>
+        <div class="empty-actions">
+          <button class="btn primary editor-only" type="button" data-empty="add">＋ 新增第一家</button>
+          <button class="btn editor-only" type="button" data-empty="sample">载入示例项目</button>
+          <button class="btn editor-only" type="button" data-empty="import">导入备份</button>
+        </div>
+      </div>
+      <div class="panel-foot">
+        <span id="tableFoot">共 0 家餐厅</span>
+        <span class="editor-only">费用以餐厅实际确认为准；空白表示尚未收集或确认。环境 / 菜单资料支持图片、视频与 PDF。</span>
+      </div>
+    </section>
+
+    <details class="help editor-only">
+      <summary>怎么用 · 三步就够</summary>
+      <div class="help-grid">
+        <div><strong>1 · 地图与标注</strong><p>上传平面图或地图截图，选择餐厅编号后点「放置标记」，再点图上位置。标记可拖动，滚轮需按住 Ctrl / ⌘ 才缩放，避免误触页面滚动。</p></div>
+        <div><strong>2 · 资料与对比</strong><p>费用字段都是自由文本，保留「¥2,680/桌」这类原始表述即可；环境与菜单可分别上传多份图片、视频和 PDF。</p></div>
+        <div><strong>3 · 导出与转发</strong><p>「导出展示 HTML」会生成一个自包含文件：地图、附件和页面都在里面，对方无需安装、无需联网、也不会改到你的原始项目。</p></div>
+      </div>
+    </details>
+
+    <footer class="foot">
+      <span>LOCAL-FIRST · 数据不会上传到服务器</span>
+      <span class="editor-only"><a href="../../index.html">← 返回 StudioKit</a></span>
+    </footer>
+  </div>
+
+  <dialog id="editDialog" class="editor-only" aria-labelledby="editTitle">
+    <form class="dialog-shell" id="editForm" novalidate>
+      <div class="dialog-head">
+        <div><h2 id="editTitle">编辑餐厅</h2><p>基础信息用于对比表；环境与菜单可分别放多份资料。</p></div>
+        <button class="icon-close" type="button" data-close="edit" aria-label="关闭编辑窗口">×</button>
+      </div>
+      <div class="dialog-body">
+        <section class="dialog-section">
+          <h3>基础信息</h3>
+          <div class="form-grid">
+            <div class="field">
+              <label for="f-id">餐厅编号 <em>*</em></label>
+              <input id="f-id" name="id" maxlength="12" autocomplete="off" placeholder="例如 A" />
+              <span class="field-hint">用于地图标记和表格排序，建议 A、B、C…</span>
+              <span class="field-error" id="f-id-error" hidden></span>
+            </div>
+            <div class="field">
+              <label for="f-name">餐厅名称 <em>*</em></label>
+              <input id="f-name" name="name" autocomplete="off" placeholder="例如 云顶中餐厅" />
+              <span class="field-error" id="f-name-error" hidden></span>
+            </div>
+          </div>
+        </section>
+        <section class="dialog-section">
+          <h3>费用与容量</h3>
+          <div class="form-grid">
+            <div class="field"><label for="f-minimum">低消</label><input id="f-minimum" name="minimum" placeholder="例如 每桌 ¥2,680 起" /></div>
+            <div class="field"><label for="f-deposit">定金</label><input id="f-deposit" name="deposit" placeholder="例如 ¥500/桌 或 20%" /></div>
+            <div class="field"><label for="f-tea">茶位费</label><input id="f-tea" name="teaFee" placeholder="例如 ¥18/位 / 免" /></div>
+            <div class="field"><label for="f-service">服务费</label><input id="f-service" name="serviceFee" placeholder="例如 10% / 无" /></div>
+            <div class="field"><label for="f-parking">停车</label><input id="f-parking" name="parking" placeholder="例如 免费 2 小时" /></div>
+            <div class="field"><label for="f-capacity">可坐人数</label><input id="f-capacity" name="capacity" placeholder="例如 36 人 / 4 桌" /></div>
+          </div>
+        </section>
+        <section class="dialog-section media-editor">
+          <div class="media-editor-head"><strong>环境资料</strong><span>包间、大厅、桌型、采光、动线</span></div>
+          <div class="media-editor-head" style="margin-top:-2px">
+            <span style="color:var(--faint);font-size:10.5px">图片 / 视频 / PDF，可多选</span>
+            <label class="upload-label">＋ 添加<input id="environmentFiles" type="file" accept="image/*,video/*,application/pdf,.pdf" multiple /></label>
+          </div>
+          <div class="file-list" id="environmentFileList"></div>
+        </section>
+        <section class="dialog-section media-editor">
+          <div class="media-editor-head"><strong>菜单资料</strong><span>套餐、单点、酒水；PDF 与图片均可</span></div>
+          <div class="media-editor-head" style="margin-top:-2px">
+            <span style="color:var(--faint);font-size:10.5px">图片 / 视频 / PDF，可多选</span>
+            <label class="upload-label">＋ 添加<input id="menuFiles" type="file" accept="image/*,video/*,application/pdf,.pdf" multiple /></label>
+          </div>
+          <div class="file-list" id="menuFileList"></div>
+        </section>
+      </div>
+      <div class="dialog-actions">
+        <span class="field-hint" id="editStorageHint">附件会随项目保存在本机浏览器</span>
+        <div class="right">
+          <button class="btn" type="button" data-close="edit">取消</button>
+          <button class="btn primary" type="submit" id="saveEditBtn">保存餐厅</button>
+        </div>
+      </div>
+    </form>
+  </dialog>
+
+  <dialog id="detailDialog" aria-labelledby="detailTitle">
+    <div class="dialog-shell">
+      <div class="dialog-head">
+        <div><h2 id="detailTitle">餐厅资料</h2><p id="detailSubtitle"></p></div>
+        <div style="display:flex;align-items:center;gap:7px">
+          <button class="btn small soft editor-only" id="detailEditBtn" type="button">编辑</button>
+          <button class="icon-close" type="button" data-close="detail" aria-label="关闭详情窗口">×</button>
+        </div>
+      </div>
+      <div class="dialog-body" id="detailContent"></div>
+      <div class="dialog-actions">
+        <div class="editor-only" style="display:flex;gap:6px">
+          <button class="btn small" id="detailMarkerBtn" type="button">移除地图标记</button>
+          <button class="btn small danger" id="detailDeleteBtn" type="button">删除餐厅</button>
+        </div>
+        <div class="right">
+          <button class="btn small" id="detailLocateBtn" type="button">在地图上定位</button>
+          <button class="btn small" type="button" data-close="detail">关闭</button>
+        </div>
+      </div>
+    </div>
+  </dialog>
+
+  <dialog id="confirmDialog" class="confirm-dialog editor-only" aria-labelledby="confirmTitle">
+    <div class="dialog-shell">
+      <div class="dialog-head">
+        <div><h2 id="confirmTitle">确认操作</h2><p>此操作会修改当前项目</p></div>
+        <button class="icon-close" type="button" data-close="confirm" aria-label="关闭">×</button>
+      </div>
+      <div class="confirm-body" id="confirmBody"></div>
+      <div class="dialog-actions">
+        <div class="right">
+          <button class="btn" type="button" data-close="confirm" data-autofocus>取消</button>
+          <button class="btn primary" type="button" id="confirmOk">确定</button>
+        </div>
+      </div>
+    </div>
+  </dialog>
+
+  <dialog id="lightboxDialog" class="lightbox-dialog" aria-labelledby="lightboxTitle">
+    <div class="dialog-shell">
+      <div class="dialog-head">
+        <div><h2 id="lightboxTitle">预览</h2><p id="lightboxSubtitle">点击关闭按钮返回</p></div>
+        <button class="icon-close" type="button" data-close="lightbox" aria-label="关闭预览">×</button>
+      </div>
+      <div class="lightbox-body" id="lightboxBody">
+        <button class="lightbox-nav prev" type="button" id="lightboxPrev" aria-label="上一张">‹</button>
+        <div id="lightboxStage" style="display:contents"></div>
+        <button class="lightbox-nav next" type="button" id="lightboxNext" aria-label="下一张">›</button>
+        <span class="lightbox-count" id="lightboxCount"></span>
+      </div>
+    </div>
+  </dialog>
+
+  <input id="projectInput" type="file" accept=".json,application/json" hidden />
+  <div class="toast" id="toast" role="status" aria-live="polite">
+    <span class="toast-text" id="toastText"></span>
+    <button type="button" id="toastAction" hidden>撤销</button>
+  </div>
+
+  <script type="application/json" id="embeddedData">null</script>
+  <script>
+(() => {
+  'use strict';
+  const APP_VERSION = '0.1.0';
+  const TOOL_ID = 'restaurant-compare';
+  const DB_NAME = 'studiokit:' + TOOL_ID;
+  const LEGACY_DB = 'restaurant-compare-editor';
+  const STORE = 'projects';
+  const RECORD_KEY = 'current';
+  const VIEW_ONLY = document.body.dataset.viewOnly === 'true';
+  const byId = id => document.getElementById(id);
+  const esc = value => String(value ?? '').replace(/[&<>"']/g, ch => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[ch]));
+  const clamp = (n, min, max) => Math.max(min, Math.min(max, n));
+  const fmtBytes = n => {
+    const v = Math.max(0, Number(n) || 0);
+    if (v < 1024) return v + ' B';
+    if (v < 1024 * 1024) return (v / 1024).toFixed(1) + ' KB';
+    return (v / 1024 / 1024).toFixed(1) + ' MB';
+  };
+  const hhmm = date => {
+    const d = date instanceof Date ? date : new Date(date);
+    return String(d.getHours()).padStart(2, '0') + ':' + String(d.getMinutes()).padStart(2, '0');
+  };
+  const stamp = date => {
+    const d = date instanceof Date ? date : new Date(date);
+    return d.getFullYear() + String(d.getMonth() + 1).padStart(2, '0') + String(d.getDate()).padStart(2, '0') + '-' + String(d.getHours()).padStart(2, '0') + String(d.getMinutes()).padStart(2, '0');
+  };
+  const DATA_URL_RE = /^data:(?:image\/[a-z0-9.+-]+|video\/[a-z0-9.+-]+|application\/pdf)(?:;[a-z0-9=.+-]+)*,/i;
+  const safeDataUrl = url => (typeof url === 'string' && DATA_URL_RE.test(url) ? url : '');
+  const bytesFromDataUrl = url => Math.floor(String(url || '').length * 0.75);
+
+  const emptyProject = () => ({ schemaVersion: 2, title: '餐厅考察对比', updatedAt: null, restaurants: [], map: null });
+  let project = emptyProject();
+  let lastSavedAt = null;
+  let activeId = null;
+  let editingId = null;
+  let dirtyDraft = false;
+  let draft = null;
+  let placeMode = false;
+  let markFilter = 'all';
+  let hasExported = false;
+  let lightboxState = null;
+  let confirmResolve = null;
+  let lastFocus = null;
+
+  /* ---------- size & file helpers ---------- */
+  function estimateBytes(p) {
+    if (!p) return 0;
+    let n = 600 + (p.map && p.map.dataUrl ? p.map.dataUrl.length : 0);
+    for (const r of p.restaurants || []) {
+      n += 260;
+      for (const group of ['environment', 'menu']) {
+        for (const a of r[group] || []) n += (a && a.dataUrl ? a.dataUrl.length : 0) + 120;
+      }
+    }
+    return n;
+  }
+  const projectBytes = () => estimateBytes(project);
+  function readFileAsDataUrl(file) {
+    return new Promise((resolve, reject) => {
+      const reader = new FileReader();
+      reader.onload = () => resolve(String(reader.result || ''));
+      reader.onerror = () => reject(reader.error || new Error('读取失败'));
+      reader.readAsDataURL(file);
+    });
+  }
+  function downloadBlob(blob, filename) {
+    const url = URL.createObjectURL(blob);
+    const link = document.createElement('a');
+    link.href = url;
+    link.download = filename;
+    document.body.appendChild(link);
+    link.click();
+    link.remove();
+    setTimeout(() => URL.revokeObjectURL(url), 4000);
+  }
+  const downloadJson = () => {
+    const payload = { app: TOOL_ID, version: APP_VERSION, exportedAt: new Date().toISOString(), project };
+    downloadBlob(new Blob([JSON.stringify(payload, null, 2)], { type: 'application/json;charset=utf-8' }), '餐厅对比-备份-' + stamp(new Date()) + '.json');
+    toast('项目备份已下载');
+  };
+
+  /* ---------- normalize / sanitize ---------- */
+  function normalizeAsset(raw) {
+    if (!raw || typeof raw !== 'object') return null;
+    const dataUrl = safeDataUrl(raw.dataUrl);
+    if (!dataUrl) return null;
+    const declared = String(raw.type || '').slice(0, 80);
+    const type = declared || (dataUrl.slice(5, Math.max(5, dataUrl.indexOf(';'))) || 'application/octet-stream');
+    const size = Number(raw.size);
+    return {
+      name: String(raw.name || '附件').slice(0, 180),
+      type,
+      size: Number.isFinite(size) && size > 0 ? size : bytesFromDataUrl(dataUrl),
+      dataUrl
+    };
+  }
+  function normalizeProject(raw) {
+    const source = raw && typeof raw === 'object' ? (raw.project && typeof raw.project === 'object' ? raw.project : raw) : {};
+    const list = Array.isArray(source.restaurants) ? source.restaurants : [];
+    const seen = new Set();
+    const restaurants = [];
+    for (const item of list) {
+      if (!item || typeof item !== 'object') continue;
+      const id = String(item.id || '').trim().slice(0, 12);
+      if (!id || seen.has(id.toUpperCase())) continue;
+      seen.add(id.toUpperCase());
+      const cleanAssets = group => (Array.isArray(item[group]) ? item[group] : []).map(normalizeAsset).filter(Boolean).slice(0, 80);
+      restaurants.push({
+        id,
+        name: String(item.name || '未命名餐厅').trim().slice(0, 80) || '未命名餐厅',
+        minimum: String(item.minimum || '').slice(0, 120),
+        deposit: String(item.deposit || '').slice(0, 120),
+        teaFee: String(item.teaFee || '').slice(0, 120),
+        serviceFee: String(item.serviceFee || '').slice(0, 120),
+        parking: String(item.parking || '').slice(0, 120),
+        capacity: String(item.capacity || '').slice(0, 60),
+        environment: cleanAssets('environment'),
+        menu: cleanAssets('menu')
+      });
+    }
+    const ids = new Set(restaurants.map(r => r.id));
+    let map = null;
+    if (source.map && typeof source.map === 'object') {
+      const dataUrl = safeDataUrl(source.map.dataUrl);
+      if (dataUrl) {
+        const seenMarkers = new Set();
+        const markers = [];
+        for (const marker of Array.isArray(source.map.markers) ? source.map.markers : []) {
+          if (!marker || typeof marker !== 'object') continue;
+          const restaurantId = String(marker.restaurantId || '');
+          if (!ids.has(restaurantId) || seenMarkers.has(restaurantId)) continue;
+          const x = Number(marker.x), y = Number(marker.y);
+          if (!Number.isFinite(x) || !Number.isFinite(y)) continue;
+          seenMarkers.add(restaurantId);
+          markers.push({ restaurantId, x: clamp(x, 0.005, 0.995), y: clamp(y, 0.005, 0.995) });
+        }
+        map = {
+          name: String(source.map.name || '位置地图').slice(0, 160),
+          type: String(source.map.type || 'image/*').slice(0, 60),
+          size: Number(source.map.size) > 0 ? Number(source.map.size) : bytesFromDataUrl(dataUrl),
+          dataUrl,
+          markers,
+          view: source.map.view && typeof source.map.view === 'object' ? {
+            scale: clamp(Number(source.map.view.scale) || 1, 1, 8),
+            x: Number(source.map.view.x) || 0,
+            y: Number(source.map.view.y) || 0
+          } : null
+        };
+      }
+    }
+    return {
+      schemaVersion: 2,
+      title: String(source.title || '餐厅考察对比').slice(0, 80) || '餐厅考察对比',
+      updatedAt: typeof source.updatedAt === 'string' ? source.updatedAt : null,
+      restaurants,
+      map
+    };
+  }
+
+  /* ---------- sample project ---------- */
+  function sampleProject() {
+    const svg = [
+      '<svg xmlns="http://www.w3.org/2000/svg" width="960" height="620" viewBox="0 0 960 620">',
+      '<rect width="960" height="620" fill="#f2efe6"/>',
+      '<rect x="0" y="270" width="960" height="64" fill="#e6e1d3"/>',
+      '<rect x="398" y="0" width="64" height="620" fill="#e6e1d3"/>',
+      '<rect x="58" y="58" width="292" height="172" rx="14" fill="#dfe8df"/>',
+      '<rect x="510" y="58" width="392" height="172" rx="14" fill="#e9e2d5"/>',
+      '<rect x="58" y="374" width="292" height="188" rx="14" fill="#e9e2d5"/>',
+      '<rect x="510" y="374" width="176" height="188" rx="14" fill="#dfe8df"/>',
+      '<rect x="734" y="374" width="168" height="188" rx="14" fill="#f0e5d2"/>',
+      '<path d="M330 140 h80 M740 140 h80 M730 466 h100" stroke="#b9c4b6" stroke-width="3" stroke-dasharray="8 8"/>',
+      '<text x="80" y="96" font-family="sans-serif" font-size="17" font-weight="700" fill="#5f7266">A · 云顶中餐厅</text>',
+      '<text x="532" y="96" font-family="sans-serif" font-size="17" font-weight="700" fill="#5f7266">B · 江畔小馆</text>',
+      '<text x="80" y="412" font-family="sans-serif" font-size="17" font-weight="700" fill="#5f7266">C · 松间宴</text>',
+      '<text x="532" y="412" font-family="sans-serif" font-size="17" font-weight="700" fill="#5f7266">D · 里巷食堂</text>',
+      '<text x="756" y="412" font-family="sans-serif" font-size="17" font-weight="700" fill="#5f7266">E · 湖畔西餐厅</text>',
+      '<text x="398" y="606" font-family="sans-serif" font-size="12" fill="#9aa79b" text-anchor="middle">示意图 · 非真实位置</text>',
+      '</svg>'
+    ].join('');
+    const envSvg = [
+      '<svg xmlns="http://www.w3.org/2000/svg" width="640" height="400" viewBox="0 0 640 400">',
+      '<rect width="640" height="400" fill="#efe9df"/>',
+      '<rect x="46" y="42" width="548" height="316" rx="20" fill="#fbf7ee" stroke="#d8cdbb" stroke-width="2"/>',
+      '<circle cx="210" cy="196" r="74" fill="#dfe9e0"/>',
+      '<rect x="320" y="132" width="210" height="34" rx="9" fill="#e7dccb"/>',
+      '<rect x="320" y="186" width="210" height="34" rx="9" fill="#e7dccb"/>',
+      '<rect x="320" y="240" width="210" height="34" rx="9" fill="#e7dccb"/>',
+      '<text x="320" y="92" font-family="sans-serif" font-size="17" font-weight="700" fill="#5f7266">包间环境示意 · 12 人桌</text>',
+      '<text x="182" y="202" font-family="sans-serif" font-size="15" fill="#5f7266">圆桌</text>',
+      '</svg>'
+    ].join('');
+    const menuSvg = [
+      '<svg xmlns="http://www.w3.org/2000/svg" width="480" height="640" viewBox="0 0 480 640">',
+      '<rect width="480" height="640" fill="#fffdf8"/>',
+      '<rect x="34" y="34" width="412" height="572" rx="14" fill="#fbf7ee" stroke="#ded5c4" stroke-width="2"/>',
+      '<text x="240" y="112" font-family="sans-serif" font-size="26" font-weight="700" fill="#3f5348" text-anchor="middle">精选套餐</text>',
+      '<line x1="92" y1="140" x2="388" y2="140" stroke="#d8cdbb" stroke-width="2"/>',
+      '<text x="92" y="196" font-family="sans-serif" font-size="16" fill="#5f7266">迎宾四小碟</text>',
+      '<text x="388" y="196" font-family="sans-serif" font-size="16" fill="#5f7266" text-anchor="end">—</text>',
+      '<text x="92" y="250" font-family="sans-serif" font-size="16" fill="#5f7266">清蒸海斑</text>',
+      '<text x="388" y="250" font-family="sans-serif" font-size="16" fill="#5f7266" text-anchor="end">—</text>',
+      '<text x="92" y="304" font-family="sans-serif" font-size="16" fill="#5f7266">脆皮乳鸽</text>',
+      '<text x="388" y="304" font-family="sans-serif" font-size="16" fill="#5f7266" text-anchor="end">—</text>',
+      '<text x="92" y="358" font-family="sans-serif" font-size="16" fill="#5f7266">时令蔬菜</text>',
+      '<text x="388" y="358" font-family="sans-serif" font-size="16" fill="#5f7266" text-anchor="end">—</text>',
+      '<text x="92" y="412" font-family="sans-serif" font-size="16" fill="#5f7266">甜品拼盘</text>',
+      '<text x="388" y="412" font-family="sans-serif" font-size="16" fill="#5f7266" text-anchor="end">—</text>',
+      '<text x="240" y="520" font-family="sans-serif" font-size="12" fill="#9aa79b" text-anchor="middle">菜单示意 · 非真实报价</text>',
+      '</svg>'
+    ].join('');
+    const demoAsset = (name, source) => {
+      const dataUrl = 'data:image/svg+xml;charset=utf-8,' + encodeURIComponent(source);
+      return { name, type: 'image/svg+xml', size: Math.round(dataUrl.length * 0.75), dataUrl };
+    };
+    return normalizeProject({
+      title: '餐厅考察对比（示例）',
+      restaurants: [
+        { id: 'A', name: '云顶中餐厅', minimum: '每桌 ¥2,680 起', deposit: '¥500/桌', teaFee: '¥18/位', serviceFee: '10%', parking: '免费 2 小时', capacity: '36 人', environment: [demoAsset('包间环境示意.svg', envSvg)], menu: [demoAsset('套餐菜单示意.svg', menuSvg)] },
+        { id: 'B', name: '江畔小馆', minimum: '每桌 ¥1,880 起', deposit: '¥300/桌', teaFee: '¥12/位', serviceFee: '8%', parking: '免费 1 小时', capacity: '24 人' },
+        { id: 'C', name: '松间宴', minimum: '每桌 ¥3,280 起', deposit: '¥800/桌', teaFee: '¥20/位', serviceFee: '15%', parking: '泊车券', capacity: '48 人' },
+        { id: 'D', name: '里巷食堂', minimum: '每桌 ¥1,280 起', deposit: '¥200/桌', teaFee: '¥8/位', serviceFee: '5%', parking: '无', capacity: '18 人' },
+        { id: 'E', name: '湖畔西餐厅', minimum: '每桌 ¥2,380 起', deposit: '¥500/桌', teaFee: '免', serviceFee: '10%', parking: '免费 3 小时', capacity: '40 人' }
+      ],
+      map: {
+        name: '示例位置图.svg',
+        type: 'image/svg+xml',
+        dataUrl: 'data:image/svg+xml;charset=utf-8,' + encodeURIComponent(svg),
+        markers: [
+          { restaurantId: 'A', x: 0.2, y: 0.23 },
+          { restaurantId: 'B', x: 0.72, y: 0.22 },
+          { restaurantId: 'C', x: 0.2, y: 0.72 },
+          { restaurantId: 'D', x: 0.58, y: 0.68 },
+          { restaurantId: 'E', x: 0.84, y: 0.72 }
+        ]
+      }
+    });
+  }
+
+  /* ---------- storage ---------- */
+  function openDatabase(name, upgrade) {
+    return new Promise((resolve, reject) => {
+      const request = indexedDB.open(name, 1);
+      request.onupgradeneeded = () => {
+        if (upgrade && !request.result.objectStoreNames.contains(STORE)) request.result.createObjectStore(STORE);
+      };
+      request.onsuccess = () => resolve(request.result);
+      request.onerror = () => reject(request.error || new Error('无法打开本地数据库'));
+      request.onblocked = () => reject(new Error('本地数据库被其他页面占用'));
+    });
+  }
+  function readRecord(db, key) {
+    return new Promise((resolve, reject) => {
+      const tx = db.transaction(STORE, 'readonly');
+      const req = tx.objectStore(STORE).get(key);
+      req.onsuccess = () => resolve(req.result || null);
+      req.onerror = () => reject(req.error || new Error('读取失败'));
+    });
+  }
+  function writeRecord(db, key, value) {
+    return new Promise((resolve, reject) => {
+      const tx = db.transaction(STORE, 'readwrite');
+      tx.objectStore(STORE).put(value, key);
+      tx.oncomplete = () => resolve(true);
+      tx.onerror = () => reject(tx.error || new Error('写入失败'));
+      tx.onabort = () => reject(tx.error || new Error('写入被中断'));
+    });
+  }
+  async function loadSaved() {
+    try {
+      const db = await openDatabase(DB_NAME, true);
+      try {
+        const record = await readRecord(db, RECORD_KEY);
+        if (!record) return null;
+        if (record.project) return record;
+        if (Array.isArray(record.restaurants)) return { project: record, savedAt: null };
+        return null;
+      } finally {
+        db.close();
+      }
+    } catch (error) {
+      console.warn('[venue-compare] load skipped', error);
+      return null;
+    }
+  }
+  async function loadLegacy() {
+    try {
+      if (!indexedDB.databases) return null;
+      const databases = await indexedDB.databases();
+      if (!databases.some(entry => entry.name === LEGACY_DB)) return null;
+      const db = await openDatabase(LEGACY_DB, false);
+      try {
+        if (!db.objectStoreNames.contains(STORE)) return null;
+        const record = await readRecord(db, RECORD_KEY);
+        if (record && Array.isArray(record.restaurants)) return record;
+        return null;
+      } finally {
+        db.close();
+      }
+    } catch (error) {
+      console.warn('[venue-compare] legacy load skipped', error);
+      return null;
+    }
+  }
+  let saveTimer = null;
+  let saving = false;
+  let saveQueued = false;
+  async function persistNow() {
+    if (VIEW_ONLY) return;
+    if (saving) { saveQueued = true; return; }
+    saving = true;
+    setSaveState('saving');
+    try {
+      const db = await openDatabase(DB_NAME, true);
+      try {
+        await writeRecord(db, RECORD_KEY, { schemaVersion: 2, savedAt: new Date().toISOString(), project });
+      } finally {
+        db.close();
+      }
+      lastSavedAt = new Date();
+      setSaveState('saved');
+    } catch (error) {
+      console.warn('[venue-compare] save failed', error);
+      const quota = error && (error.name === 'QuotaExceededError' || /quota|space/i.test(String(error.message || '')));
+      setSaveState('error', quota ? '存储空间不足' : '浏览器拒绝了写入');
+      toast(quota ? '保存失败：浏览器存储空间不足，请先导出备份并删除部分附件' : '保存失败：' + (error && error.message ? error.message : '未知错误'), { duration: 6000 });
+    } finally {
+      saving = false;
+      if (saveQueued) { saveQueued = false; void persistNow(); }
+    }
+  }
+  function scheduleSave() {
+    if (VIEW_ONLY) return;
+    project.updatedAt = new Date().toISOString();
+    setSaveState('pending');
+    clearTimeout(saveTimer);
+    saveTimer = setTimeout(() => { saveTimer = null; void persistNow(); }, 550);
+  }
+  function setSaveState(state, detail) {
+    const chip = byId('saveChip');
+    const text = byId('saveText');
+    if (!chip || !text) return;
+    chip.dataset.state = state;
+    if (state === 'saving') text.textContent = '保存中…';
+    else if (state === 'pending') text.textContent = '有未保存的修改';
+    else if (state === 'error') text.textContent = '保存失败 · ' + (detail || '未知原因');
+    else if (state === 'saved') text.textContent = '已保存 ' + (lastSavedAt ? hhmm(lastSavedAt) : '');
+    else text.textContent = '尚未修改';
+  }
+
+  /* ---------- undo / redo ---------- */
+  const undoStack = [];
+  const redoStack = [];
+  const MAX_UNDO = 20;
+  function snapshotJson() { return JSON.stringify(project); }
+  function pushUndo(label) {
+    try {
+      undoStack.push({ label, json: snapshotJson() });
+      const limit = projectBytes() > 24 * 1024 * 1024 ? 3 : MAX_UNDO;
+      while (undoStack.length > limit) undoStack.shift();
+      redoStack.length = 0;
+      updateUndoButtons();
+    } catch (error) {
+      undoStack.length = 0;
+    }
+  }
+  function commit(label, mutate) {
+    pushUndo(label);
+    mutate();
+    project.schemaVersion = 2;
+    project.updatedAt = new Date().toISOString();
+    renderAll();
+    scheduleSave();
+  }
+  function restoreSnapshot(json) {
+    project = normalizeProject(JSON.parse(json));
+    if (activeId && !project.restaurants.some(r => r.id === activeId)) activeId = null;
+    renderAll();
+    scheduleSave();
+    updateUndoButtons();
+  }
+  function undo() {
+    if (!undoStack.length) return;
+    const entry = undoStack.pop();
+    redoStack.push({ label: entry.label, json: snapshotJson() });
+    restoreSnapshot(entry.json);
+    toast('已撤销：' + entry.label);
+  }
+  function redo() {
+    if (!redoStack.length) return;
+    const entry = redoStack.pop();
+    undoStack.push({ label: entry.label, json: snapshotJson() });
+    restoreSnapshot(entry.json);
+    toast('已重做：' + entry.label);
+  }
+  function updateUndoButtons() {
+    const undoBtn = byId('undoBtn');
+    const redoBtn = byId('redoBtn');
+    if (!undoBtn || !redoBtn) return;
+    undoBtn.disabled = !undoStack.length;
+    redoBtn.disabled = !redoStack.length;
+  }
+
+  /* ---------- toast / confirm / focus ---------- */
+  let toastTimer = null;
+  function hideToast() {
+    const el = byId('toast');
+    if (el) el.classList.remove('show');
+  }
+  function toast(message, options = {}) {
+    const el = byId('toast');
+    const text = byId('toastText');
+    const action = byId('toastAction');
+    if (!el || !text || !action) return;
+    text.textContent = message;
+    if (options.actionLabel && typeof options.onAction === 'function') {
+      action.hidden = false;
+      action.textContent = options.actionLabel;
+      action.onclick = () => { hideToast(); options.onAction(); };
+    } else {
+      action.hidden = true;
+      action.onclick = null;
+    }
+    el.classList.add('show');
+    clearTimeout(toastTimer);
+    toastTimer = setTimeout(hideToast, options.duration || 3600);
+  }
+  function openDialog(dialog, opener) {
+    if (!dialog || dialog.open) return;
+    lastFocus = opener || document.activeElement;
+    if (typeof dialog.showModal === 'function') dialog.showModal();
+    else dialog.setAttribute('open', '');
+    const focusTarget = dialog.querySelector('[data-autofocus]') || dialog.querySelector('input:not([type=hidden]), textarea, select, button');
+    if (focusTarget) setTimeout(() => { try { focusTarget.focus({ preventScroll: true }); } catch (error) { /* noop */ } }, 30);
+  }
+  function closeDialog(dialog, { restoreFocus = true } = {}) {
+    if (!dialog) return;
+    if (typeof dialog.close === 'function') { if (dialog.open) dialog.close(); }
+    else dialog.removeAttribute('open');
+    if (restoreFocus && lastFocus && typeof lastFocus.focus === 'function') {
+      try { lastFocus.focus({ preventScroll: true }); } catch (error) { /* noop */ }
+    }
+    lastFocus = null;
+  }
+  function askConfirm({ title, message, confirmText = '确定', danger = false }) {
+    const dialog = byId('confirmDialog');
+    const titleEl = byId('confirmTitle');
+    const bodyEl = byId('confirmBody');
+    const ok = byId('confirmOk');
+    if (!dialog || !titleEl || !bodyEl || !ok) return Promise.resolve(false);
+    titleEl.textContent = title || '确认操作';
+    bodyEl.innerHTML = message || '';
+    ok.textContent = confirmText;
+    ok.className = danger ? 'btn danger' : 'btn primary';
+    if (confirmResolve) { confirmResolve(false); confirmResolve = null; }
+    return new Promise(resolve => {
+      confirmResolve = resolve;
+      openDialog(dialog);
+    });
+  }
+  function settleConfirm(value) {
+    const dialog = byId('confirmDialog');
+    if (confirmResolve) { const resolve = confirmResolve; confirmResolve = null; resolve(value); }
+    closeDialog(dialog);
+  }
+
+  /* ---------- small view helpers ---------- */
+  function nextRestaurantId() {
+    const used = new Set(project.restaurants.map(r => r.id.toUpperCase()));
+    for (const letter of 'ABCDEFGHIJKLMNOPQRSTUVWXYZ') if (!used.has(letter)) return letter;
+    let index = project.restaurants.length + 1;
+    while (used.has('R' + index)) index += 1;
+    return 'R' + index;
+  }
+  const findRestaurant = id => project.restaurants.find(r => r.id === id) || null;
+  const findMarker = id => (project.map && Array.isArray(project.map.markers) ? project.map.markers.find(m => m.restaurantId === id) : null) || null;
+  const assetCount = r => (r.environment ? r.environment.length : 0) + (r.menu ? r.menu.length : 0);
+  const markedCount = () => (project.map ? project.map.markers.length : 0);
+  const feeValue = value => (value ? esc(value) : '<span class="muted">—</span>');
+
+  /* ---------- render: stats / steps ---------- */
+  function renderStats() {
+    const host = byId('stats');
+    if (!host) return;
+    const total = project.restaurants.length;
+    const env = project.restaurants.reduce((n, r) => n + (r.environment ? r.environment.length : 0), 0);
+    const menu = project.restaurants.reduce((n, r) => n + (r.menu ? r.menu.length : 0), 0);
+    const marked = markedCount();
+    const cards = [
+      { label: '候选餐厅', value: String(total), note: total ? marked + ' 家已标注位置' : '还没有录入餐厅' },
+      { label: '地图标记', value: total ? marked + ' / ' + total : '0', note: project.map ? '已上传 ' + project.map.name : '尚未上传位置图' },
+      { label: '资料附件', value: String(env + menu), note: '环境 ' + env + ' · 菜单 ' + menu },
+      { label: '项目体积', value: fmtBytes(estimateBytes(project)), note: VIEW_ONLY ? '只读展示页' : '自动保存在本机浏览器' }
+    ];
+    host.innerHTML = cards.map(card => '<div class="stat"><div class="stat-label">' + esc(card.label) + '</div><div class="stat-value">' + esc(card.value) + '</div><div class="stat-note">' + esc(card.note) + '</div></div>').join('');
+  }
+  function renderSteps() {
+    const host = byId('steps');
+    if (!host) return;
+    const total = project.restaurants.length;
+    const done = [Boolean(project.map), total > 0, total > 0 && markedCount() === total, hasExported];
+    let current = done.findIndex(value => !value);
+    if (current < 0) current = 3;
+    host.querySelectorAll('.step').forEach((step, index) => {
+      step.classList.toggle('is-done', done[index]);
+      step.classList.toggle('is-current', index === current && !done[index]);
+      step.setAttribute('aria-label', done[index] ? '第 ' + (index + 1) + ' 步已完成' : (index === current ? '当前步骤：' : '第 ' + (index + 1) + ' 步：') + step.querySelector('strong').textContent);
+    });
+  }
+
+  /* ---------- map view state ---------- */
+  const freshView = () => ({ scale: 1, x: 0, y: 0, baseW: 0, baseH: 0, src: null });
+  let mapView = freshView();
+  const mapPointers = new Map();
+  let mapGesture = null;
+  let markerDrag = null;
+  let suppressClickUntil = 0;
+
+  function placeholderHtml() {
+    if (VIEW_ONLY) {
+      return '<div class="map-placeholder"><div class="ph-icon">🗺</div><strong>这个项目没有附位置图</strong><p>餐厅资料与对比表仍可正常查看。</p></div>';
+    }
+    return '<div class="map-placeholder"><div class="ph-icon">🗺</div><strong>还没有位置地图</strong><p>上传一张平面图、园区图或地图截图，就能把每家餐厅标在图上，并与下方表格互相定位。</p><button class="btn soft" type="button" data-map="upload">↑ 上传地图</button></div>';
+  }
+  function renderMap() {
+    const stage = byId('mapStage');
+    if (!stage) return;
+    const map = project.map;
+    if (!map) {
+      mapView = freshView();
+      stage.className = 'map-stage is-empty';
+      document.body.classList.remove('map-locked');
+      stage.innerHTML = placeholderHtml();
+      const caption = byId('mapCaption');
+      if (caption) caption.textContent = '';
+      syncPlaceUI();
+      return;
+    }
+    stage.classList.add('has-map');
+    stage.classList.remove('is-empty', 'is-placing');
+    if (mapView.src !== map.dataUrl) {
+      mapView = freshView();
+      mapView.src = map.dataUrl;
+      stage.innerHTML = [
+        '<div class="map-canvas" id="mapCanvas">',
+        '<img class="map-image" id="mapImage" alt="位置地图" draggable="false" />',
+        '<div class="map-markers" id="mapMarkers"></div>',
+        '</div>',
+        '<div class="map-controls" role="group" aria-label="地图缩放与查看">',
+        '<button class="map-control-btn" type="button" data-map="in" aria-label="放大地图">＋</button>',
+        '<span class="map-zoom-level" id="mapZoomLevel">100%</span>',
+        '<button class="map-control-btn" type="button" data-map="out" aria-label="缩小地图">−</button>',
+        '<button class="map-control-btn" type="button" data-map="reset" aria-label="复位地图">⌂</button>',
+        '<button class="map-control-btn" type="button" data-map="expand" aria-label="全屏查看地图">⤢</button>',
+        '</div>',
+        '<div class="map-hint" id="mapHint">拖动平移 · 双击放大 · Ctrl/⌘ + 滚轮缩放</div>',
+        '<div class="map-banner" id="mapBanner" hidden><span id="mapBannerText"></span><button type="button" data-map="cancel-place">退出</button></div>'
+      ].join('');
+      const img = byId('mapImage');
+      const onReady = () => {
+        fitMap(true);
+        renderMarkers();
+        syncPlaceUI();
+      };
+      img.addEventListener('load', onReady, { once: true });
+      img.addEventListener('error', () => toast('地图图片无法显示，请重新上传'), { once: true });
+      img.src = map.dataUrl;
+      if (img.complete && img.naturalWidth) onReady();
+    } else {
+      renderMarkers();
+      if (mapView.baseW) { clampMapView(); applyMapTransform(); }
+    }
+    const caption = byId('mapCaption');
+    if (caption) caption.textContent = map.name + ' · ' + markedCount() + ' / ' + project.restaurants.length + ' 家已标注 · 拖动标记可微调位置';
+    syncPlaceUI();
+  }
+  function renderMarkers() {
+    const host = byId('mapMarkers');
+    if (!host || !project.map) return;
+    host.innerHTML = project.map.markers.map(marker => {
+      const restaurant = findRestaurant(marker.restaurantId);
+      if (!restaurant) return '';
+      const active = activeId === restaurant.id;
+      return '<button class="map-marker' + (active ? ' is-active' : '') + '" type="button" data-marker="' + esc(restaurant.id) + '" style="left:' + (marker.x * 100).toFixed(3) + '%;top:' + (marker.y * 100).toFixed(3) + '%;" aria-label="' + esc(restaurant.id + ' ' + restaurant.name + ' 的地图标记') + '"><span class="map-marker-pin">' + esc(restaurant.id) + '</span><span class="map-marker-label">' + esc(restaurant.name) + '</span></button>';
+    }).join('');
+  }
+  function syncMarkerActive() {
+    document.querySelectorAll('.map-marker').forEach(el => el.classList.toggle('is-active', el.dataset.marker === activeId));
+  }
+  function fitMap(force) {
+    const img = byId('mapImage');
+    const stage = byId('mapStage');
+    if (!img || !stage || !img.naturalWidth) return;
+    const pad = stage.classList.contains('is-expanded') ? 24 : 36;
+    const fit = Math.min((stage.clientWidth - pad) / img.naturalWidth, (stage.clientHeight - pad) / img.naturalHeight);
+    mapView.baseW = Math.max(60, Math.round(img.naturalWidth * fit));
+    mapView.baseH = Math.max(60, Math.round(img.naturalHeight * fit));
+    const canvas = byId('mapCanvas');
+    if (canvas) { canvas.style.width = mapView.baseW + 'px'; canvas.style.height = mapView.baseH + 'px'; }
+    if (force) {
+      const saved = project.map && project.map.view;
+      mapView.scale = saved && saved.scale ? clamp(Number(saved.scale) || 1, 1, 8) : 1;
+      mapView.x = saved && mapView.scale > 1 ? Number(saved.x) || 0 : 0;
+      mapView.y = saved && mapView.scale > 1 ? Number(saved.y) || 0 : 0;
+    }
+    clampMapView();
+    applyMapTransform();
+  }
+  function clampMapView() {
+    const stage = byId('mapStage');
+    if (!stage || !mapView.baseW) return;
+    const vw = stage.clientWidth;
+    const vh = stage.clientHeight;
+    const scaledW = mapView.baseW * mapView.scale;
+    const scaledH = mapView.baseH * mapView.scale;
+    const maxX = Math.max(0, (scaledW - vw) / 2 + 16);
+    const maxY = Math.max(0, (scaledH - vh) / 2 + 16);
+    mapView.x = clamp(mapView.x, -maxX, maxX);
+    mapView.y = clamp(mapView.y, -maxY, maxY);
+  }
+  function applyMapTransform() {
+    const canvas = byId('mapCanvas');
+    const stage = byId('mapStage');
+    if (!canvas || !stage || !mapView.baseW) return;
+    canvas.style.transform = 'translate(-50%,-50%) translate(' + mapView.x.toFixed(1) + 'px,' + mapView.y.toFixed(1) + 'px) scale(' + mapView.scale.toFixed(4) + ')';
+    canvas.style.setProperty('--counter-scale', String(1 / mapView.scale));
+    const level = byId('mapZoomLevel');
+    if (level) level.textContent = Math.round(mapView.scale * 100) + '%';
+    const zoomOut = stage.querySelector('[data-map="out"]');
+    const zoomIn = stage.querySelector('[data-map="in"]');
+    if (zoomOut) zoomOut.disabled = mapView.scale <= 1.001;
+    if (zoomIn) zoomIn.disabled = mapView.scale >= 7.999;
+    stage.classList.toggle('can-pan', mapView.scale > 1.001 || stage.classList.contains('is-expanded'));
+  }
+  function persistMapView() {
+    if (VIEW_ONLY || !project.map) return;
+    project.map.view = { scale: Number(mapView.scale.toFixed(3)), x: Math.round(mapView.x), y: Math.round(mapView.y) };
+    scheduleSave();
+  }
+  function zoomAt(clientX, clientY, nextScale) {
+    const stage = byId('mapStage');
+    if (!stage || !mapView.baseW) return;
+    const rect = stage.getBoundingClientRect();
+    const px = clientX - rect.left - rect.width / 2;
+    const py = clientY - rect.top - rect.height / 2;
+    const scale = clamp(nextScale, 1, 8);
+    if (Math.abs(scale - mapView.scale) < 0.001) return;
+    const worldX = (px - mapView.x) / mapView.scale;
+    const worldY = (py - mapView.y) / mapView.scale;
+    mapView.x = px - worldX * scale;
+    mapView.y = py - worldY * scale;
+    mapView.scale = scale;
+    clampMapView();
+    applyMapTransform();
+    persistMapView();
+  }
+  function zoomBy(factor) {
+    const stage = byId('mapStage');
+    if (!stage) return;
+    const rect = stage.getBoundingClientRect();
+    zoomAt(rect.left + rect.width / 2, rect.top + rect.height / 2, mapView.scale * factor);
+  }
+  function resetMapView() {
+    mapView.scale = 1;
+    mapView.x = 0;
+    mapView.y = 0;
+    clampMapView();
+    applyMapTransform();
+    persistMapView();
+  }
+  function centerOnMarker(marker) {
+    if (!mapView.baseW) return;
+    const scale = Math.max(mapView.scale, 1.85);
+    mapView.scale = scale;
+    mapView.x = -(marker.x - 0.5) * mapView.baseW * scale;
+    mapView.y = -(marker.y - 0.5) * mapView.baseH * scale;
+    clampMapView();
+    applyMapTransform();
+    persistMapView();
+  }
+  function toggleExpandedMap(force) {
+    const stage = byId('mapStage');
+    if (!stage || !project.map) return;
+    const next = typeof force === 'boolean' ? force : !stage.classList.contains('is-expanded');
+    stage.classList.toggle('is-expanded', next);
+    document.body.classList.toggle('map-locked', next);
+    const button = stage.querySelector('[data-map="expand"]');
+    if (button) {
+      button.textContent = next ? '×' : '⤢';
+      button.setAttribute('aria-label', next ? '退出全屏地图' : '全屏查看地图');
+    }
+    setTimeout(() => { fitMap(false); }, 60);
+  }
+
+  /* ---------- placement mode ---------- */
+  function selectedRestaurantId() {
+    const select = byId('markerSelect');
+    return select ? select.value : '';
+  }
+  function setPlaceMode(enabled) {
+    if (VIEW_ONLY) return;
+    if (enabled) {
+      if (!project.map) { toast('请先上传位置地图'); return; }
+      if (!selectedRestaurantId()) { toast('请先选择要标注的餐厅'); return; }
+      activeId = selectedRestaurantId();
+      syncMarkerActive();
+      renderList();
+    }
+    placeMode = Boolean(enabled);
+    const stage = byId('mapStage');
+    if (stage) stage.classList.toggle('is-placing', placeMode);
+    if (placeMode) {
+      toast('点击地图放置标记，按 Esc 退出标注模式', { duration: 3000 });
+    }
+    syncPlaceUI();
+  }
+  function syncPlaceUI() {
+    const stage = byId('mapStage');
+    const placeBtn = byId('placeBtn');
+    const help = byId('placeHelp');
+    const banner = byId('mapBanner');
+    const bannerText = byId('mapBannerText');
+    const select = byId('markerSelect');
+    if (stage) stage.classList.toggle('is-placing', placeMode && Boolean(project.map));
+    if (!placeBtn) return;
+    const id = select ? select.value : '';
+    const restaurant = id ? findRestaurant(id) : null;
+    const marked = id ? findMarker(id) : null;
+    placeBtn.disabled = !project.map || !restaurant;
+    placeBtn.textContent = placeMode ? '取消放置' : (marked ? '移动标记' : '＋ 放置标记');
+    placeBtn.classList.toggle('primary', placeMode);
+    placeBtn.classList.toggle('soft', !placeMode);
+    if (help) {
+      if (!project.map) help.textContent = '先上传地图，再选择餐厅并点击地图放置标记。';
+      else if (!restaurant) help.textContent = '先添加餐厅，或在上方选择一个编号。';
+      else if (placeMode) help.textContent = '在地图上点选位置；Esc 退出。标记随后可拖动微调。';
+      else if (marked) help.textContent = '这家餐厅已标注，可拖动标记微调，或点「移动标记」重新放置。';
+      else help.textContent = '选好餐厅后点「放置标记」，再点击地图上对应的位置。';
+    }
+    if (banner && bannerText) {
+      const show = placeMode && restaurant && project.map;
+      banner.hidden = !show;
+      if (show) bannerText.textContent = '点击地图放置 ' + id + ' · ' + restaurant.name;
+    }
+  }
+  function placeMarkerAt(clientX, clientY) {
+    if (VIEW_ONLY || !project.map) return;
+    const canvas = byId('mapCanvas');
+    const id = selectedRestaurantId();
+    if (!canvas || !id) return;
+    const rect = canvas.getBoundingClientRect();
+    if (!rect.width || !rect.height) return;
+    const x = clamp((clientX - rect.left) / rect.width, 0.005, 0.995);
+    const y = clamp((clientY - rect.top) / rect.height, 0.005, 0.995);
+    const existing = findMarker(id);
+    activeId = id;
+    commit(existing ? '移动地图标记' : '放置地图标记', () => {
+      if (!Array.isArray(project.map.markers)) project.map.markers = [];
+      if (existing) { existing.x = x; existing.y = y; }
+      else project.map.markers.push({ restaurantId: id, x, y });
+    });
+    setPlaceMode(false);
+    const restaurant = findRestaurant(id);
+    toast('已标注 ' + id + (restaurant ? ' · ' + restaurant.name : '') + ' 的位置');
+  }
+
+  /* ---------- map gestures ---------- */
+  function pointerDistance(a, b) { return Math.hypot(a.x - b.x, a.y - b.y); }
+  function pointerMidpoint(a, b) { return { x: (a.x + b.x) / 2, y: (a.y + b.y) / 2 }; }
+  function beginPinch() {
+    const points = Array.from(mapPointers.values());
+    if (points.length < 2) return;
+    const stage = byId('mapStage');
+    if (!stage) return;
+    const rect = stage.getBoundingClientRect();
+    const mid = pointerMidpoint(points[0], points[1]);
+    const distance = Math.max(1, pointerDistance(points[0], points[1]));
+    mapGesture = {
+      type: 'pinch',
+      startDistance: distance,
+      startScale: mapView.scale,
+      anchorX: (mid.x - rect.left - rect.width / 2 - mapView.x) / mapView.scale,
+      anchorY: (mid.y - rect.top - rect.height / 2 - mapView.y) / mapView.scale,
+      moved: false
+    };
+  }
+  function onMapPointerDown(event) {
+    if (VIEW_ONLY && !project.map) return;
+    if (!project.map) return;
+    const stage = byId('mapStage');
+    if (!stage) return;
+    const markerEl = event.target.closest('.map-marker');
+    if (markerEl && event.button === 0) {
+      markerDrag = { id: markerEl.dataset.marker, pointerId: event.pointerId, startX: event.clientX, startY: event.clientY, moved: false, pushed: false, el: markerEl };
+      try { stage.setPointerCapture(event.pointerId); } catch (error) { /* noop */ }
+      event.preventDefault();
+      return;
+    }
+    if (event.target.closest('.map-controls, .map-banner, .map-placeholder, button, select, label')) return;
+    mapPointers.set(event.pointerId, { x: event.clientX, y: event.clientY });
+    if (mapPointers.size === 2) {
+      beginPinch();
+      event.preventDefault();
+      return;
+    }
+    if (mapPointers.size === 1 && mapView.scale > 1.001 && !placeMode) {
+      mapGesture = {
+        type: 'pan',
+        pointerId: event.pointerId,
+        startX: event.clientX,
+        startY: event.clientY,
+        startViewX: mapView.x,
+        startViewY: mapView.y,
+        moved: false
+      };
+      stage.classList.add('is-panning');
+      try { stage.setPointerCapture(event.pointerId); } catch (error) { /* noop */ }
+      event.preventDefault();
+    }
+  }
+  function onMapPointerMove(event) {
+    if (markerDrag && markerDrag.pointerId === event.pointerId) {
+      const distance = Math.hypot(event.clientX - markerDrag.startX, event.clientY - markerDrag.startY);
+      if (distance > 3) {
+        if (!markerDrag.pushed) { pushUndo('移动地图标记'); markerDrag.pushed = true; }
+        markerDrag.moved = true;
+        const canvas = byId('mapCanvas');
+        const marker = findMarker(markerDrag.id);
+        if (canvas && marker) {
+          const rect = canvas.getBoundingClientRect();
+          if (rect.width && rect.height) {
+            marker.x = clamp((event.clientX - rect.left) / rect.width, 0.005, 0.995);
+            marker.y = clamp((event.clientY - rect.top) / rect.height, 0.005, 0.995);
+            markerDrag.el.style.left = (marker.x * 100).toFixed(3) + '%';
+            markerDrag.el.style.top = (marker.y * 100).toFixed(3) + '%';
+          }
+        }
+      }
+      event.preventDefault();
+      return;
+    }
+    if (!mapGesture) return;
+    if (mapGesture.type === 'pan' && mapGesture.pointerId === event.pointerId) {
+      const dx = event.clientX - mapGesture.startX;
+      const dy = event.clientY - mapGesture.startY;
+      if (Math.abs(dx) + Math.abs(dy) > 4) mapGesture.moved = true;
+      mapView.x = mapGesture.startViewX + dx;
+      mapView.y = mapGesture.startViewY + dy;
+      clampMapView();
+      applyMapTransform();
+      event.preventDefault();
+    } else if (mapGesture.type === 'pinch') {
+      const points = Array.from(mapPointers.values());
+      if (points.length < 2) return;
+      const stage = byId('mapStage');
+      if (!stage) return;
+      const rect = stage.getBoundingClientRect();
+      const mid = pointerMidpoint(points[0], points[1]);
+      const distance = Math.max(1, pointerDistance(points[0], points[1]));
+      const scale = clamp(mapGesture.startScale * (distance / mapGesture.startDistance), 1, 8);
+      mapGesture.moved = true;
+      mapView.scale = scale;
+      mapView.x = (mid.x - rect.left - rect.width / 2) - mapGesture.anchorX * scale;
+      mapView.y = (mid.y - rect.top - rect.height / 2) - mapGesture.anchorY * scale;
+      clampMapView();
+      applyMapTransform();
+      event.preventDefault();
+    }
+  }
+  function finishMapPointer(event, cancelled) {
+    if (markerDrag && markerDrag.pointerId === event.pointerId) {
+      const drag = markerDrag;
+      markerDrag = null;
+      try { byId('mapStage').releasePointerCapture(event.pointerId); } catch (error) { /* noop */ }
+      if (!cancelled && drag.moved) {
+        activeId = drag.id;
+        project.updatedAt = new Date().toISOString();
+        renderList();
+        scheduleSave();
+        const restaurant = findRestaurant(drag.id);
+        toast('已调整 ' + drag.id + (restaurant ? ' · ' + restaurant.name : '') + ' 的位置');
+      } else if (!cancelled && !drag.moved) {
+        locateRestaurant(drag.id);
+        openDetail(drag.id);
+      }
+      if (cancelled && drag.pushed) { /* keep partial move but saved by scheduleSave below */ scheduleSave(); }
+      return;
+    }
+    const wasPan = mapGesture && mapGesture.type === 'pan' && mapGesture.moved;
+    if (mapGesture && mapGesture.moved && (mapGesture.type === 'pan' || mapGesture.type === 'pinch')) {
+      suppressClickUntil = Date.now() + 220;
+      persistMapView();
+    }
+    mapPointers.delete(event.pointerId);
+    if (mapPointers.size === 0) {
+      mapGesture = null;
+      const stage = byId('mapStage');
+      if (stage) stage.classList.remove('is-panning');
+    } else if (mapGesture && mapGesture.type === 'pinch' && mapPointers.size === 1) {
+      const point = Array.from(mapPointers.entries())[0];
+      mapGesture = { type: 'pan', pointerId: point[0], startX: point[1].x, startY: point[1].y, startViewX: mapView.x, startViewY: mapView.y, moved: true };
+      const stage = byId('mapStage');
+      if (stage) stage.classList.add('is-panning');
+    }
+    if (wasPan) suppressClickUntil = Date.now() + 220;
+  }
+
+  /* ---------- render: list ---------- */
+  function filteredRestaurants() {
+    const query = (byId('searchInput') ? byId('searchInput').value : '').trim().toLowerCase();
+    return project.restaurants
+      .filter(restaurant => {
+        if (query && !(restaurant.id + ' ' + restaurant.name).toLowerCase().includes(query)) return false;
+        const marked = Boolean(findMarker(restaurant.id));
+        if (markFilter === 'marked' && !marked) return false;
+        if (markFilter === 'unmarked' && marked) return false;
+        return true;
+      })
+      .sort((a, b) => a.id.localeCompare(b.id, 'zh-Hans-CN', { numeric: true, sensitivity: 'base' }));
+  }
+  const feeCell = value => '<td class="fee' + (value ? '' : ' is-empty') + '">' + (value ? esc(value) : '—') + '</td>';
+  function assetBadge(restaurant) {
+    const env = restaurant.environment.length;
+    const menu = restaurant.menu.length;
+    const total = env + menu;
+    if (!total) return '<span class="media-count is-empty">—</span>';
+    const title = '环境 ' + env + ' 份 · 菜单 ' + menu + ' 份';
+    return '<span class="media-count" title="' + esc(title) + '">' + total + ' 份' + (env && menu ? ' · 环 ' + env + ' / 菜 ' + menu : env ? ' · 环境' : ' · 菜单') + '</span>';
+  }
+  function rowActions(restaurant) {
+    if (VIEW_ONLY) return '<div class="row-actions"><button class="row-btn" type="button" data-action="detail" data-id="' + esc(restaurant.id) + '">详情</button></div>';
+    return '<div class="row-actions">' +
+      '<button class="row-btn" type="button" data-action="locate" data-id="' + esc(restaurant.id) + '" aria-label="在地图上定位 ' + esc(restaurant.name) + '" title="在地图上定位">定位</button>' +
+      '<button class="row-btn" type="button" data-action="edit" data-id="' + esc(restaurant.id) + '" aria-label="编辑 ' + esc(restaurant.name) + '" title="编辑">编辑</button>' +
+      '<button class="row-btn delete" type="button" data-action="delete" data-id="' + esc(restaurant.id) + '" aria-label="删除 ' + esc(restaurant.name) + '" title="删除">删除</button>' +
+      '</div>';
+  }
+  function renderList() {
+    const rows = byId('rows');
+    const cards = byId('cards');
+    const empty = byId('listEmpty');
+    const tableEmpty = byId('tableEmpty');
+    const tableWrap = document.querySelector('.table-wrap');
+    const foot = byId('tableFoot');
+    if (!rows || !cards || !empty) return;
+    const hasAny = project.restaurants.length > 0;
+    empty.hidden = hasAny;
+    if (tableWrap) tableWrap.style.display = hasAny ? '' : 'none';
+    if (!hasAny) {
+      rows.innerHTML = '';
+      cards.innerHTML = '';
+      if (tableEmpty) { tableEmpty.hidden = true; tableEmpty.textContent = ''; }
+      const cardsEmptyReset = byId('cardsEmpty');
+      if (cardsEmptyReset) { cardsEmptyReset.hidden = true; cardsEmptyReset.textContent = ''; }
+      if (foot) foot.textContent = '共 0 家餐厅';
+      return;
+    }
+    const list = filteredRestaurants();
+    const isFiltered = list.length !== project.restaurants.length;
+    rows.innerHTML = list.map(restaurant => {
+      const active = activeId === restaurant.id;
+      return '<tr data-id="' + esc(restaurant.id) + '"' + (active ? ' class="is-active"' : '') + '>' +
+        '<td><button class="id-chip" type="button" data-action="locate" data-id="' + esc(restaurant.id) + '">' + esc(restaurant.id) + '</button></td>' +
+        '<td><button class="rest-name" type="button" data-action="locate" data-id="' + esc(restaurant.id) + '">' + esc(restaurant.name) + '</button></td>' +
+        feeCell(restaurant.minimum) + feeCell(restaurant.deposit) + feeCell(restaurant.teaFee) + feeCell(restaurant.serviceFee) + feeCell(restaurant.parking) + feeCell(restaurant.capacity) +
+        '<td>' + assetBadge(restaurant) + '</td>' +
+        '<td>' + rowActions(restaurant) + '</td>' +
+        '</tr>';
+    }).join('');
+    cards.innerHTML = list.map(restaurant => {
+      const active = activeId === restaurant.id;
+      const marker = findMarker(restaurant.id);
+      return '<article class="rc-card' + (active ? ' is-active' : '') + '" data-id="' + esc(restaurant.id) + '">' +
+        '<div class="rc-card-top">' +
+        '<button class="id-chip" type="button" data-action="locate" data-id="' + esc(restaurant.id) + '">' + esc(restaurant.id) + '</button>' +
+        '<div class="rc-card-title"><strong>' + esc(restaurant.name) + '</strong><span>' + (marker ? '已在地图上标注' : '尚未标注位置') + ' · ' + assetCount(restaurant) + ' 份资料</span></div>' +
+        '<button class="row-btn" type="button" data-action="detail" data-id="' + esc(restaurant.id) + '" aria-label="查看资料">详情</button>' +
+        '</div>' +
+        '<div class="rc-fees">' +
+        '<div class="rc-fee"><span>低消</span><strong>' + (restaurant.minimum ? esc(restaurant.minimum) : '—') + '</strong></div>' +
+        '<div class="rc-fee"><span>定金</span><strong>' + (restaurant.deposit ? esc(restaurant.deposit) : '—') + '</strong></div>' +
+        '<div class="rc-fee"><span>茶位费</span><strong>' + (restaurant.teaFee ? esc(restaurant.teaFee) : '—') + '</strong></div>' +
+        '<div class="rc-fee"><span>服务费</span><strong>' + (restaurant.serviceFee ? esc(restaurant.serviceFee) : '—') + '</strong></div>' +
+        '<div class="rc-fee"><span>停车</span><strong>' + (restaurant.parking ? esc(restaurant.parking) : '—') + '</strong></div>' +
+        '<div class="rc-fee"><span>可坐</span><strong>' + (restaurant.capacity ? esc(restaurant.capacity) : '—') + '</strong></div>' +
+        '</div>' +
+        '<div class="rc-card-foot"><div class="rc-media">' + (assetCount(restaurant) ? assetBadge(restaurant) : '<span class="rc-media-none">还没有资料</span>') + '</div><div class="rc-actions"><button class="row-btn" type="button" data-action="locate" data-id="' + esc(restaurant.id) + '">定位</button>' + (VIEW_ONLY ? '' : '<button class="row-btn" type="button" data-action="edit" data-id="' + esc(restaurant.id) + '">编辑</button>') + '</div></div>' +
+        '</article>';
+    }).join('');
+    const filterNote = isFiltered ? '（筛选出 ' + list.length + ' 家）' : '';
+    const cardsEmpty = byId('cardsEmpty');
+    const noMatches = list.length === 0;
+    const noMatchesText = '没有匹配的餐厅，试试清空搜索或切换筛选。';
+    if (tableEmpty) { tableEmpty.hidden = !noMatches; tableEmpty.textContent = noMatches ? noMatchesText : ''; }
+    if (cardsEmpty) { cardsEmpty.hidden = !noMatches; cardsEmpty.textContent = noMatches ? noMatchesText : ''; }
+    if (foot) foot.textContent = '共 ' + project.restaurants.length + ' 家餐厅 · ' + markedCount() + ' 家已标注 ' + filterNote;
+  }
+  function setActive(id, { scroll = false } = {}) {
+    activeId = id;
+    syncMarkerActive();
+    renderList();
+    if (scroll) {
+      const card = document.querySelector('.rc-card[data-id="' + CSS.escape(id) + '"]');
+      if (card) card.scrollIntoView({ block: 'nearest', behavior: 'smooth' });
+    }
+  }
+  function locateRestaurant(id) {
+    const marker = findMarker(id);
+    const restaurant = findRestaurant(id);
+    if (!restaurant) return;
+    activeId = id;
+    renderList();
+    syncMarkerActive();
+    if (!project.map || !marker) {
+      toast('「' + restaurant.name + '」还没有地图标记');
+      return;
+    }
+    const panel = byId('mapPanel');
+    if (panel) panel.scrollIntoView({ behavior: 'smooth', block: 'start' });
+    centerOnMarker(marker);
+    renderMarkerSelect();
+    const element = Array.from(document.querySelectorAll('.map-marker')).find(el => el.dataset.marker === id);
+    if (element) {
+      element.classList.add('is-pulse');
+      setTimeout(() => element.classList.remove('is-pulse'), 2500);
+    }
+  }
+  function renderAll() {
+    renderStats();
+    renderSteps();
+    renderMarkerSelect();
+    renderMap();
+    renderList();
+    updateUndoButtons();
+  }
+  function renderMarkerSelect() {
+    const select = byId('markerSelect');
+    if (!select) return;
+    const options = project.restaurants
+      .slice()
+      .sort((a, b) => a.id.localeCompare(b.id, 'zh-Hans-CN', { numeric: true, sensitivity: 'base' }))
+      .map(restaurant => '<option value="' + esc(restaurant.id) + '">' + esc(restaurant.id + ' · ' + restaurant.name) + (findMarker(restaurant.id) ? ' · 已标注' : '') + '</option>')
+      .join('');
+    select.innerHTML = options || '<option value="">暂无餐厅</option>';
+    select.disabled = !project.restaurants.length;
+    if (activeId && findRestaurant(activeId)) select.value = activeId;
+    else if (project.restaurants.length) select.selectedIndex = 0;
+    else select.value = '';
+    syncPlaceUI();
+  }
+
+  /* ---------- detail ---------- */
+  let detailId = null;
+  function mediaKind(asset) {
+    const type = String(asset.type || '').toLowerCase();
+    if (type.startsWith('image/')) return 'image';
+    if (type.startsWith('video/')) return 'video';
+    if (type === 'application/pdf') return 'pdf';
+    return 'file';
+  }
+  const kindLabel = kind => (kind === 'image' ? '图' : kind === 'video' ? '视频' : kind === 'pdf' ? 'PDF' : '文件');
+  function mediaCard(asset, group, index) {
+    const kind = mediaKind(asset);
+    let preview = '';
+    if (kind === 'image') {
+      preview = '<button class="media-preview" type="button" data-action="zoom" data-group="' + group + '" data-index="' + index + '" aria-label="放大查看 ' + esc(asset.name) + '"><img src="' + esc(asset.dataUrl) + '" alt="' + esc(asset.name) + '" loading="lazy" /></button>';
+    } else if (kind === 'video') {
+      preview = '<div class="media-preview"><video src="' + esc(asset.dataUrl) + '" controls preload="metadata" playsinline></video></div>';
+    } else {
+      const icon = kind === 'pdf' ? 'PDF' : 'FILE';
+      preview = '<div class="media-preview"><div class="media-file-placeholder"><div class="file-icon">' + icon + '</div><span>' + (kind === 'pdf' ? 'PDF 请下载后查看' : '该文件类型无法预览') + '</span></div></div>';
+    }
+    return '<div class="media-card">' + preview +
+      '<div class="media-card-foot"><div style="min-width:0"><strong title="' + esc(asset.name) + '">' + esc(asset.name) + '</strong><small>' + kindLabel(kind) + ' · ' + fmtBytes(asset.size) + '</small></div>' +
+      '<button type="button" data-action="download-asset" data-group="' + group + '" data-index="' + index + '">下载</button></div></div>';
+  }
+  function mediaSection(restaurant, group, title) {
+    const assets = restaurant[group] || [];
+    const body = assets.length
+      ? '<div class="media-grid">' + assets.map((asset, index) => mediaCard(asset, group, index)).join('') + '</div>'
+      : '<div class="detail-empty">还没有上传' + esc(title) + '。' + (VIEW_ONLY ? '' : '点右上角「编辑」补充图片、视频或 PDF。') + '</div>';
+    return '<section class="media-section"><h3>' + esc(title) + ' <small>' + assets.length + ' 份</small></h3>' + body + '</section>';
+  }
+  function openDetail(id) {
+    const restaurant = findRestaurant(id);
+    if (!restaurant) return;
+    detailId = id;
+    activeId = id;
+    const title = byId('detailTitle');
+    const subtitle = byId('detailSubtitle');
+    const content = byId('detailContent');
+    if (title) title.textContent = restaurant.id + ' · ' + restaurant.name;
+    if (subtitle) subtitle.textContent = '费用、容量与环境 / 菜单资料';
+    const kv = [
+      ['低消', restaurant.minimum], ['定金', restaurant.deposit], ['茶位费', restaurant.teaFee],
+      ['服务费', restaurant.serviceFee], ['停车', restaurant.parking], ['可坐人数', restaurant.capacity]
+    ];
+    if (content) {
+      content.innerHTML = '<div class="detail-kv">' + kv.map(([label, value]) => '<div><span>' + esc(label) + '</span><strong class="' + (value ? '' : 'is-empty') + '">' + esc(value || '未确认') + '</strong></div>').join('') + '</div>' +
+        mediaSection(restaurant, 'environment', '环境资料') +
+        mediaSection(restaurant, 'menu', '菜单资料') +
+        '<p class="detail-note">' + (VIEW_ONLY ? '这是离线展示页，资料直接内嵌在文件中。' : '资料随项目保存在本机；导出展示页时会一起打包。') + '</p>';
+    }
+    const markerBtn = byId('detailMarkerBtn');
+    if (markerBtn) markerBtn.hidden = !findMarker(id);
+    const editBtn = byId('detailEditBtn');
+    if (editBtn) editBtn.hidden = VIEW_ONLY;
+    renderList();
+    syncMarkerActive();
+    renderMarkerSelect();
+    openDialog(byId('detailDialog'));
+  }
+
+  /* ---------- lightbox ---------- */
+  function imageEntries(restaurant, group) {
+    return (restaurant[group] || []).map((asset, index) => ({ asset, index })).filter(entry => mediaKind(entry.asset) === 'image');
+  }
+  function openLightbox(group, index) {
+    const restaurant = findRestaurant(detailId);
+    if (!restaurant) return;
+    const entries = imageEntries(restaurant, group);
+    const position = entries.findIndex(entry => entry.index === index);
+    if (position < 0) return;
+    lightboxState = { restaurantId: restaurant.id, group, entries, position };
+    renderLightbox();
+    openDialog(byId('lightboxDialog'));
+  }
+  function renderLightbox() {
+    if (!lightboxState) return;
+    const restaurant = findRestaurant(lightboxState.restaurantId);
+    if (!restaurant) return;
+    const entry = lightboxState.entries[lightboxState.position];
+    if (!entry) return;
+    const stage = byId('lightboxStage');
+    const title = byId('lightboxTitle');
+    const subtitle = byId('lightboxSubtitle');
+    const count = byId('lightboxCount');
+    const prev = byId('lightboxPrev');
+    const next = byId('lightboxNext');
+    if (stage) stage.innerHTML = '<img src="' + esc(entry.asset.dataUrl) + '" alt="' + esc(entry.asset.name) + '" />';
+    if (title) title.textContent = entry.asset.name;
+    if (subtitle) subtitle.textContent = restaurant.id + ' · ' + (lightboxState.group === 'environment' ? '环境资料' : '菜单资料') + ' · ' + fmtBytes(entry.asset.size);
+    if (count) count.textContent = (lightboxState.position + 1) + ' / ' + lightboxState.entries.length;
+    const many = lightboxState.entries.length > 1;
+    if (prev) prev.hidden = !many;
+    if (next) next.hidden = !many;
+  }
+  function stepLightbox(delta) {
+    if (!lightboxState) return;
+    const total = lightboxState.entries.length;
+    if (total < 2) return;
+    lightboxState.position = (lightboxState.position + delta + total) % total;
+    renderLightbox();
+  }
+
+  /* ---------- edit dialog ---------- */
+  const fieldMap = { id: 'f-id', name: 'f-name', minimum: 'f-minimum', deposit: 'f-deposit', teaFee: 'f-tea', serviceFee: 'f-service', parking: 'f-parking', capacity: 'f-capacity' };
+  let filesReading = false;
+  function blankRestaurant() {
+    return { id: nextRestaurantId(), name: '', minimum: '', deposit: '', teaFee: '', serviceFee: '', parking: '', capacity: '', environment: [], menu: [] };
+  }
+  function openEdit(id, opener) {
+    if (VIEW_ONLY) return;
+    editingId = id || null;
+    const source = id ? findRestaurant(id) : null;
+    draft = source ? JSON.parse(JSON.stringify(source)) : blankRestaurant();
+    dirtyDraft = false;
+    for (const [key, fieldId] of Object.entries(fieldMap)) {
+      const input = byId(fieldId);
+      if (input) input.value = draft[key] || '';
+    }
+    for (const input of document.querySelectorAll('#editForm input[aria-invalid="true"]')) input.removeAttribute('aria-invalid');
+    for (const error of document.querySelectorAll('#editForm .field-error')) { error.hidden = true; error.textContent = ''; }
+    renderEditFiles('environment');
+    renderEditFiles('menu');
+    const title = byId('editTitle');
+    if (title) title.textContent = source ? '编辑 ' + source.id + ' · ' + source.name : '新增餐厅';
+    const hint = byId('editStorageHint');
+    if (hint) hint.textContent = '当前项目约 ' + fmtBytes(projectBytes()) + ' · 保存后写入本机浏览器';
+    const saveBtn = byId('saveEditBtn');
+    if (saveBtn) saveBtn.disabled = false;
+    openDialog(byId('editDialog'), opener);
+    setTimeout(() => { const target = source ? byId('f-name') : byId('f-id'); if (target) { target.focus({ preventScroll: true }); target.select(); } }, 60);
+  }
+  function requestCloseEdit() {
+    if (!draft) { closeDialog(byId('editDialog')); return; }
+    if (filesReading) { toast('资料还在读取，请稍候再关闭'); return; }
+    if (!dirtyDraft) { closeEditDialog(); return; }
+    askConfirm({
+      title: '放弃未保存的修改？',
+      message: '<strong>这家餐厅的修改还没有保存</strong>关闭后本次填写的内容会丢失。',
+      confirmText: '放弃修改',
+      danger: true
+    }).then(ok => { if (ok) closeEditDialog(); });
+  }
+  function closeEditDialog() {
+    closeDialog(byId('editDialog'));
+    editingId = null;
+    draft = null;
+    dirtyDraft = false;
+  }
+  function renderEditFiles(group) {
+    const host = byId(group === 'environment' ? 'environmentFileList' : 'menuFileList');
+    if (!host || !draft) return;
+    const assets = draft[group] || [];
+    if (!assets.length) {
+      host.innerHTML = '<div class="file-empty">还没有添加' + (group === 'environment' ? '环境' : '菜单') + '资料。</div>';
+      return;
+    }
+    host.innerHTML = assets.map((asset, index) => {
+      const kind = mediaKind(asset);
+      return '<div class="file-row"><span class="file-icon">' + kindLabel(kind) + '</span><div class="file-meta"><span class="file-name" title="' + esc(asset.name) + '">' + esc(asset.name) + '</span><span class="file-size">' + fmtBytes(asset.size) + '</span></div><button class="file-remove" type="button" data-action="remove-asset" data-group="' + group + '" data-index="' + index + '" aria-label="移除 ' + esc(asset.name) + '">×</button></div>';
+    }).join('');
+  }
+  function addFiles(group, fileList) {
+    if (!draft || !fileList || !fileList.length) return;
+    const files = Array.from(fileList);
+    const accepted = [];
+    let skipped = 0;
+    for (const file of files) {
+      const type = String(file.type || '').toLowerCase();
+      const isPdf = type === 'application/pdf' || /\.pdf$/i.test(file.name || '');
+      const allowed = type.startsWith('image/') || type.startsWith('video/') || isPdf;
+      if (!allowed || file.size > 40 * 1024 * 1024) { skipped += 1; continue; }
+      accepted.push(file);
+    }
+    if (!accepted.length) { toast(skipped ? '这些文件类型不支持或超过 40MB' : '没有可添加的文件'); return; }
+    filesReading = true;
+    const labels = document.querySelectorAll('.upload-label');
+    labels.forEach(label => label.classList.add('is-busy'));
+    const saveBtn = byId('saveEditBtn');
+    if (saveBtn) saveBtn.disabled = true;
+    (async () => {
+      let added = 0;
+      for (const file of accepted) {
+        try {
+          let dataUrl = await readFileAsDataUrl(file);
+          if (/\.pdf$/i.test(file.name || '') && dataUrl.startsWith('data:application/octet-stream')) {
+            dataUrl = dataUrl.replace('data:application/octet-stream', 'data:application/pdf');
+          }
+          const type = dataUrl.slice(5, Math.max(5, dataUrl.indexOf(';'))) || file.type || 'application/octet-stream';
+          draft[group].push({ name: file.name || '未命名附件', type, size: file.size, dataUrl });
+          added += 1;
+        } catch (error) {
+          skipped += 1;
+        }
+      }
+      filesReading = false;
+      labels.forEach(label => label.classList.remove('is-busy'));
+      const saveBtnNow = byId('saveEditBtn');
+      if (saveBtnNow) saveBtnNow.disabled = false;
+      renderEditFiles(group);
+      dirtyDraft = true;
+      const hint = byId('editStorageHint');
+      if (hint) hint.textContent = '当前项目约 ' + fmtBytes(projectBytes() + draft.environment.concat(draft.menu).reduce((n, asset) => n + asset.dataUrl.length, 0)) + ' · 保存后写入本机浏览器';
+      toast('已添加 ' + added + ' 份资料' + (skipped ? '，另有 ' + skipped + ' 份被跳过' : ''));
+    })();
+  }
+  function fillDraftFromForm() {
+    if (!draft) return;
+    for (const [key, fieldId] of Object.entries(fieldMap)) {
+      const input = byId(fieldId);
+      if (input) draft[key] = input.value;
+    }
+  }
+  function validateDraft() {
+    let firstInvalid = null;
+    const id = String(draft.id || '').trim();
+    const name = String(draft.name || '').trim();
+    const setError = (fieldId, errorId, message) => {
+      const input = byId(fieldId);
+      const error = byId(errorId);
+      if (input) input.setAttribute('aria-invalid', 'true');
+      if (error) { error.hidden = false; error.textContent = message; }
+      if (!firstInvalid) firstInvalid = input;
+    };
+    for (const input of document.querySelectorAll('#editForm input[aria-invalid="true"]')) input.removeAttribute('aria-invalid');
+    for (const error of document.querySelectorAll('#editForm .field-error')) { error.hidden = true; error.textContent = ''; }
+    if (!id) setError('f-id', 'f-id-error', '请填写餐厅编号');
+    else if (!/^\S{1,12}$/.test(id)) setError('f-id', 'f-id-error', '编号不能包含空格，最多 12 个字符');
+    else if (project.restaurants.some(restaurant => restaurant.id.toUpperCase() === id.toUpperCase() && restaurant.id.toUpperCase() !== String(editingId || '').toUpperCase())) setError('f-id', 'f-id-error', '这个编号已经被使用');
+    if (!name) setError('f-name', 'f-name-error', '请填写餐厅名称');
+    if (firstInvalid) firstInvalid.focus();
+    return { ok: !firstInvalid, id, name };
+  }
+  function saveEdit(event) {
+    event.preventDefault();
+    if (!draft) return;
+    if (filesReading) { toast('资料还在读取，请稍候再保存'); return; }
+    fillDraftFromForm();
+    const result = validateDraft();
+    if (!result.ok) return;
+    const originalId = editingId;
+    const nextId = result.id;
+    const payload = {
+      id: nextId,
+      name: result.name,
+      minimum: String(draft.minimum || '').trim(),
+      deposit: String(draft.deposit || '').trim(),
+      teaFee: String(draft.teaFee || '').trim(),
+      serviceFee: String(draft.serviceFee || '').trim(),
+      parking: String(draft.parking || '').trim(),
+      capacity: String(draft.capacity || '').trim(),
+      environment: draft.environment.map(asset => ({ ...asset })),
+      menu: draft.menu.map(asset => ({ ...asset }))
+    };
+    commit(originalId ? '保存 ' + originalId + ' 的修改' : '新增餐厅 ' + nextId, () => {
+      if (originalId) {
+        const index = project.restaurants.findIndex(restaurant => restaurant.id === originalId);
+        if (index >= 0) project.restaurants[index] = payload;
+        if (project.map) {
+          const marker = project.map.markers.find(item => item.restaurantId === originalId);
+          if (marker) marker.restaurantId = nextId;
+        }
+      } else {
+        project.restaurants.push(payload);
+      }
+    });
+    activeId = nextId;
+    closeEditDialog();
+    renderAll();
+    toast(originalId ? '已保存 ' + nextId + ' · ' + payload.name : '已添加 ' + nextId + ' · ' + payload.name);
+  }
+  function deleteRestaurant(id) {
+    const restaurant = findRestaurant(id);
+    if (!restaurant) return;
+    askConfirm({
+      title: '删除 ' + restaurant.id + ' · ' + restaurant.name + '？',
+      message: '<strong>餐厅资料与地图标记会一起移除</strong>删除后仍可用 Ctrl+Z 或提示条上的「撤销」恢复。',
+      confirmText: '删除',
+      danger: true
+    }).then(ok => {
+      if (!ok) return;
+      closeDialog(byId('detailDialog'));
+      commit('删除餐厅 ' + restaurant.id, () => {
+        project.restaurants = project.restaurants.filter(item => item.id !== id);
+        if (project.map) project.map.markers = project.map.markers.filter(marker => marker.restaurantId !== id);
+      });
+      if (activeId === id) activeId = null;
+      renderAll();
+      toast('已删除 ' + restaurant.id + ' · ' + restaurant.name, { actionLabel: '撤销', onAction: undo });
+    });
+  }
+  function removeMarker(id) {
+    const restaurant = findRestaurant(id);
+    if (!restaurant || !findMarker(id)) return;
+    commit('移除 ' + restaurant.id + ' 的地图标记', () => {
+      project.map.markers = project.map.markers.filter(marker => marker.restaurantId !== id);
+    });
+    const markerBtn = byId('detailMarkerBtn');
+    if (markerBtn) markerBtn.hidden = true;
+    renderAll();
+    toast('已移除 ' + restaurant.id + ' 的地图标记', { actionLabel: '撤销', onAction: undo });
+  }
+
+  /* ---------- map upload / project import ---------- */
+  async function handleMapFile(file) {
+    if (!file) return;
+    if (!String(file.type || '').startsWith('image/')) { toast('地图请上传图片文件'); return; }
+    if (file.size > 30 * 1024 * 1024) { toast('地图图片超过 30MB，请先压缩'); return; }
+    const hasMarkers = project.map && project.map.markers.length;
+    if (hasMarkers) {
+      const ok = await askConfirm({
+        title: '更换位置地图？',
+        message: '<strong>已有 ' + project.map.markers.length + ' 个标记</strong>更换地图会保留标记的相对位置；如果新地图范围不同，标记可能需要重新拖动校准。',
+        confirmText: '更换地图'
+      });
+      if (!ok) return;
+    }
+    toast('正在读取地图…', { duration: 2000 });
+    try {
+      const dataUrl = await readFileAsDataUrl(file);
+      const markers = project.map ? project.map.markers.map(marker => ({ ...marker })) : [];
+      pushUndo('更新位置地图');
+      project.map = { name: file.name || '位置地图', type: file.type || 'image/*', size: file.size, dataUrl, markers, view: null };
+      mapView = freshView();
+      placeMode = false;
+      renderAll();
+      scheduleSave();
+      toast('位置地图已更新');
+    } catch (error) {
+      toast('地图读取失败，请换一张图片试试');
+    }
+  }
+  function countAssetsDeep(source) {
+    const list = source && Array.isArray(source.restaurants) ? source.restaurants : [];
+    return list.reduce((n, item) => n + (Array.isArray(item.environment) ? item.environment.length : 0) + (Array.isArray(item.menu) ? item.menu.length : 0), 0);
+  }
+  async function importProjectFile(file) {
+    if (!file) return;
+    try {
+      const text = await file.text();
+      const parsed = JSON.parse(text);
+      const candidate = normalizeProject(parsed);
+      if (!candidate.restaurants.length && !candidate.map) throw new Error('文件中没有餐厅或地图');
+      const ok = await askConfirm({
+        title: '导入这个项目？',
+        message: '<strong>将替换当前编辑器中的全部内容</strong>当前有 ' + project.restaurants.length + ' 家餐厅、' + markedCount() + ' 个地图标记；建议先备份。导入后仍可用 Ctrl+Z 撤销。',
+        confirmText: '导入并替换'
+      });
+      if (!ok) return;
+      pushUndo('导入项目');
+      project = candidate;
+      activeId = null;
+      placeMode = false;
+      mapView = freshView();
+      renderAll();
+      scheduleSave();
+      const dropped = countAssetsDeep(parsed) - countAssetsDeep(candidate);
+      toast('已导入 ' + candidate.restaurants.length + ' 家餐厅' + (dropped > 0 ? '，' + dropped + ' 份无效附件已跳过' : ''), { duration: 4200 });
+    } catch (error) {
+      toast('导入失败：' + (error && error.message ? error.message : '文件无法读取'));
+    }
+  }
+  function loadSampleProject() {
+    const apply = () => {
+      pushUndo('载入示例项目');
+      project = sampleProject();
+      activeId = null;
+      placeMode = false;
+      mapView = freshView();
+      renderAll();
+      scheduleSave();
+      toast('已载入示例项目（虚构数据）');
+    };
+    if (!project.restaurants.length && !project.map) { apply(); return; }
+    askConfirm({
+      title: '载入示例项目？',
+      message: '<strong>示例会替换当前项目</strong>当前内容仍可用 Ctrl+Z 撤销。',
+      confirmText: '载入示例'
+    }).then(ok => { if (ok) apply(); });
+  }
+  function clearProject() {
+    askConfirm({
+      title: '清空当前项目？',
+      message: '<strong>餐厅、地图与全部附件都会移除</strong>清空后可用 Ctrl+Z 撤销。建议先导出一次 JSON 备份。',
+      confirmText: '清空项目',
+      danger: true
+    }).then(ok => {
+      if (!ok) return;
+      pushUndo('清空项目');
+      project = emptyProject();
+      activeId = null;
+      placeMode = false;
+      mapView = freshView();
+      renderAll();
+      scheduleSave();
+      toast('项目已清空', { actionLabel: '撤销', onAction: undo });
+    });
+  }
+
+  /* ---------- export ---------- */
+  function buildStandaloneHtml() {
+    const clone = document.documentElement.cloneNode(true);
+    clone.setAttribute('lang', 'zh-CN');
+    clone.removeAttribute('class');
+    clone.removeAttribute('style');
+    clone.querySelectorAll('[data-shared], .studiokit-shellbar').forEach(node => node.remove());
+    clone.querySelectorAll('.editor-only').forEach(node => node.remove());
+    const body = clone.querySelector('body');
+    if (!body) throw new Error('页面结构异常');
+    body.setAttribute('data-view-only', 'true');
+    body.removeAttribute('data-studiokit-app');
+    body.removeAttribute('data-studiokit-app-title');
+    body.classList.remove('map-locked');
+    body.classList.add('is-viewer');
+    const title = clone.querySelector('title');
+    if (title) title.textContent = (project.title || '餐厅考察对比') + ' · 展示页';
+    clone.querySelectorAll('#markFilter [data-filter]').forEach(button => button.classList.toggle('is-active', button.dataset.filter === 'all'));
+    const dynamicIds = ['stats', 'rows', 'cards', 'detailContent', 'lightboxStage'];
+    for (const id of dynamicIds) {
+      const node = clone.querySelector('#' + id);
+      if (node) node.innerHTML = '';
+    }
+    const mapStage = clone.querySelector('#mapStage');
+    if (mapStage) { mapStage.className = 'map-stage'; mapStage.innerHTML = ''; }
+    for (const id of ['tableEmpty', 'mapCaption', 'detailSubtitle', 'lightboxTitle', 'lightboxCount']) {
+      const node = clone.querySelector('#' + id);
+      if (node) { if (node.tagName === 'INPUT') node.value = ''; else node.textContent = ''; }
+    }
+    const detailTitle = clone.querySelector('#detailTitle');
+    if (detailTitle) detailTitle.textContent = '餐厅资料';
+    const tableFoot = clone.querySelector('#tableFoot');
+    if (tableFoot) tableFoot.textContent = '共 0 家餐厅';
+    const listEmpty = clone.querySelector('#listEmpty');
+    if (listEmpty) listEmpty.hidden = true;
+    for (const dialog of clone.querySelectorAll('dialog')) dialog.removeAttribute('open');
+    const toastNode = clone.querySelector('#toast');
+    if (toastNode) toastNode.className = 'toast';
+    const projectInput = clone.querySelector('#projectInput');
+    if (projectInput) projectInput.remove();
+    const embedded = clone.querySelector('#embeddedData');
+    if (!embedded) throw new Error('导出模板缺少数据占位符');
+    const viewerProject = normalizeProject(project);
+    const json = JSON.stringify(viewerProject).replace(/</g, '\\u003c').replace(/\u2028/g, '\\u2028').replace(/\u2029/g, '\\u2029');
+    if (json.length < 20) throw new Error('项目数据为空');
+    embedded.textContent = json;
+    if (clone.querySelector('[data-shared], .studiokit-shellbar')) throw new Error('导出校验失败：仍包含站点外壳');
+    const leftover = clone.querySelector('script[src], link[rel="stylesheet"][href]');
+    if (leftover) throw new Error('导出校验失败：仍包含外部资源');
+    const html = '<!doctype html>\n' + clone.outerHTML;
+    if (!html.includes('id="embeddedData"')) throw new Error('导出校验失败：缺少数据');
+    return html;
+  }
+  async function exportStandaloneHtml() {
+    const restaurantCount = project.restaurants.length;
+    if (!restaurantCount && !project.map) { toast('项目还是空的，先添加餐厅或上传地图'); return; }
+    const approx = estimateBytes(project) * 1.06 + 90000;
+    if (approx > 18 * 1024 * 1024) {
+      const ok = await askConfirm({
+        title: '导出文件约 ' + fmtBytes(approx) + '？',
+        message: '<strong>生成过程可能需要几秒</strong>文件较大时，部分聊天工具可能限制发送；可以先压缩附件再导出。',
+        confirmText: '继续导出'
+      });
+      if (!ok) return;
+    }
+    toast('正在生成展示页…', { duration: 2400 });
+    await new Promise(resolve => setTimeout(resolve, 80));
+    try {
+      const html = buildStandaloneHtml();
+      const blob = new Blob([html], { type: 'text/html;charset=utf-8' });
+      const filename = '餐厅对比-展示-' + stamp(new Date()) + '.html';
+      downloadBlob(blob, filename);
+      hasExported = true;
+      renderSteps();
+      toast('展示页已导出 · ' + fmtBytes(blob.size) + '，可直接转发', { duration: 5200 });
+    } catch (error) {
+      console.error('[venue-compare] export failed', error);
+      toast('导出失败：' + (error && error.message ? error.message : '页面构建异常'), { duration: 6000 });
+    }
+  }
+
+  /* ---------- dialogs / generic handlers ---------- */
+  function requestCloseDetail() { closeDialog(byId('detailDialog')); }
+  function requestCloseLightbox() { closeDialog(byId('lightboxDialog')); lightboxState = null; }
+  function removeAsset(group, index) {
+    if (!draft || !draft[group] || !draft[group][index]) return;
+    draft[group].splice(index, 1);
+    dirtyDraft = true;
+    renderEditFiles(group);
+  }
+  function downloadAsset(group, index) {
+    const restaurant = findRestaurant(detailId);
+    const asset = restaurant && restaurant[group] ? restaurant[group][index] : null;
+    if (!asset) return;
+    const link = document.createElement('a');
+    link.href = asset.dataUrl;
+    link.download = asset.name || '附件';
+    document.body.appendChild(link);
+    link.click();
+    link.remove();
+  }
+  function handleMapControl(action) {
+    if (action === 'in') zoomBy(1.25);
+    else if (action === 'out') zoomBy(1 / 1.25);
+    else if (action === 'reset') { resetMapView(); toast('地图已复位'); }
+    else if (action === 'expand') toggleExpandedMap();
+    else if (action === 'upload') { const input = byId('mapInput'); if (input) input.click(); }
+    else if (action === 'cancel-place') setPlaceMode(false);
+  }
+  function scrollToPanel(panel) {
+    const mapPanel = byId('mapPanel');
+    const listPanel = byId('listPanel');
+    const target = panel === 'map' ? mapPanel : listPanel;
+    if (target) target.scrollIntoView({ behavior: 'smooth', block: 'start' });
+  }
+
+  function bindCommon() {
+    const stage = byId('mapStage');
+    const rows = byId('rows');
+    const cards = byId('cards');
+    const search = byId('searchInput');
+    if (stage) {
+      stage.addEventListener('pointerdown', onMapPointerDown);
+      stage.addEventListener('pointermove', onMapPointerMove);
+      stage.addEventListener('pointerup', event => finishMapPointer(event, false));
+      stage.addEventListener('pointercancel', event => finishMapPointer(event, true));
+      stage.addEventListener('lostpointercapture', event => { if (markerDrag && markerDrag.pointerId === event.pointerId) finishMapPointer(event, true); });
+      stage.addEventListener('click', event => {
+        const control = event.target.closest('[data-map]');
+        if (control) { handleMapControl(control.dataset.map); return; }
+        const marker = event.target.closest('.map-marker');
+        if (marker) {
+          if (event.detail === 0) { locateRestaurant(marker.dataset.marker); openDetail(marker.dataset.marker); }
+          return;
+        }
+        if (event.target.closest('.map-controls, .map-banner, .map-placeholder')) return;
+        if (placeMode && Date.now() > suppressClickUntil) placeMarkerAt(event.clientX, event.clientY);
+      });
+      stage.addEventListener('dblclick', event => {
+        if (!project.map || event.target.closest('.map-controls, .map-banner, button')) return;
+        zoomAt(event.clientX, event.clientY, Math.min(8, mapView.scale * 1.6));
+      });
+      stage.addEventListener('wheel', event => {
+        if (!project.map || !(event.ctrlKey || event.metaKey)) return;
+        event.preventDefault();
+        zoomAt(event.clientX, event.clientY, mapView.scale * (event.deltaY < 0 ? 1.18 : 1 / 1.18));
+      }, { passive: false });
+      stage.addEventListener('keydown', event => {
+        const marker = event.target.closest('.map-marker');
+        if (marker && (event.key === 'Enter' || event.key === ' ')) {
+          event.preventDefault();
+          locateRestaurant(marker.dataset.marker);
+          openDetail(marker.dataset.marker);
+        }
+      });
+    }
+    if (rows) {
+      rows.addEventListener('click', event => {
+        const action = event.target.closest('[data-action]');
+        if (action) {
+          event.stopPropagation();
+          if (action.dataset.action === 'locate') locateRestaurant(action.dataset.id);
+          else if (action.dataset.action === 'detail') openDetail(action.dataset.id);
+          else if (action.dataset.action === 'edit') openEdit(action.dataset.id, action);
+          else if (action.dataset.action === 'delete') deleteRestaurant(action.dataset.id);
+          return;
+        }
+        const row = event.target.closest('tr[data-id]');
+        if (row) openDetail(row.dataset.id);
+      });
+    }
+    if (cards) {
+      const activate = card => { if (card && card.dataset.id) openDetail(card.dataset.id); };
+      cards.addEventListener('click', event => {
+        const action = event.target.closest('[data-action]');
+        if (action) {
+          event.stopPropagation();
+          if (action.dataset.action === 'locate') locateRestaurant(action.dataset.id);
+          else if (action.dataset.action === 'detail') openDetail(action.dataset.id);
+          else if (action.dataset.action === 'edit') openEdit(action.dataset.id, action);
+          return;
+        }
+        activate(event.target.closest('.rc-card'));
+      });
+      cards.addEventListener('keydown', event => {
+        if (event.key !== 'Enter' && event.key !== ' ') return;
+        if (event.target.closest('[data-action], button')) return;
+        const card = event.target.closest('.rc-card');
+        if (card) { event.preventDefault(); activate(card); }
+      });
+    }
+    if (search) search.addEventListener('input', renderList);
+    if (VIEW_ONLY) {
+      const printBtn = byId('printBtnViewer');
+      if (printBtn) printBtn.addEventListener('click', () => window.print());
+      const locateBtn = byId('detailLocateBtn');
+      if (locateBtn) locateBtn.addEventListener('click', () => {
+        const id = detailId;
+        closeDialog(byId('detailDialog'));
+        if (id) locateRestaurant(id);
+      });
+    }
+    const filter = byId('markFilter');
+    if (filter) {
+      filter.addEventListener('click', event => {
+        const button = event.target.closest('[data-filter]');
+        if (!button) return;
+        markFilter = button.dataset.filter;
+        filter.querySelectorAll('[data-filter]').forEach(item => item.classList.toggle('is-active', item === button));
+        renderList();
+      });
+    }
+    const empty = byId('listEmpty');
+    if (empty) {
+      empty.addEventListener('click', event => {
+        const button = event.target.closest('[data-empty]');
+        if (!button) return;
+        if (button.dataset.empty === 'add') openEdit(null, button);
+        else if (button.dataset.empty === 'sample') loadSampleProject();
+        else if (button.dataset.empty === 'import') { const input = byId('projectInput'); if (input) input.click(); }
+      });
+    }
+    const steps = byId('steps');
+    if (steps) {
+      steps.addEventListener('click', event => {
+        const step = event.target.closest('[data-step]');
+        if (!step) return;
+        const target = step.dataset.step;
+        if (target === 'export') exportStandaloneHtml();
+        else scrollToPanel(target);
+      });
+    }
+    document.addEventListener('keydown', event => {
+      const modifier = event.ctrlKey || event.metaKey;
+      if (modifier && event.key.toLowerCase() === 'z' && !VIEW_ONLY) {
+        const tag = (event.target.tagName || '').toLowerCase();
+        if (tag === 'input' || tag === 'textarea' || event.target.isContentEditable) return;
+        event.preventDefault();
+        if (event.shiftKey) redo(); else undo();
+      } else if (modifier && event.key.toLowerCase() === 'y' && !VIEW_ONLY) {
+        event.preventDefault();
+        redo();
+      } else if (event.key === 'Escape') {
+        if (placeMode) { setPlaceMode(false); event.preventDefault(); return; }
+        const stageNow = byId('mapStage');
+        if (stageNow && stageNow.classList.contains('is-expanded')) { toggleExpandedMap(false); event.preventDefault(); return; }
+        const openLightbox = byId('lightboxDialog');
+        if (openLightbox && openLightbox.open) { requestCloseLightbox(); return; }
+      } else if (byId('lightboxDialog') && byId('lightboxDialog').open) {
+        if (event.key === 'ArrowLeft') stepLightbox(-1);
+        if (event.key === 'ArrowRight') stepLightbox(1);
+      }
+    });
+    document.addEventListener('click', event => {
+      const closer = event.target.closest('[data-close]');
+      if (!closer) return;
+      const kind = closer.dataset.close;
+      if (kind === 'edit') requestCloseEdit();
+      else if (kind === 'detail') requestCloseDetail();
+      else if (kind === 'lightbox') requestCloseLightbox();
+      else if (kind === 'confirm') settleConfirm(false);
+    });
+    const detail = byId('detailDialog');
+    if (detail) {
+      detail.addEventListener('cancel', event => { event.preventDefault(); requestCloseDetail(); });
+      detail.addEventListener('click', event => { if (event.target === detail) requestCloseDetail(); });
+    }
+    const lightbox = byId('lightboxDialog');
+    if (lightbox) {
+      lightbox.addEventListener('cancel', event => { event.preventDefault(); requestCloseLightbox(); });
+      lightbox.addEventListener('click', event => { if (event.target === lightbox) requestCloseLightbox(); });
+    }
+    const prev = byId('lightboxPrev');
+    const next = byId('lightboxNext');
+    if (prev) prev.addEventListener('click', () => stepLightbox(-1));
+    if (next) next.addEventListener('click', () => stepLightbox(1));
+    const detailContent = byId('detailContent');
+    if (detailContent) {
+      detailContent.addEventListener('click', event => {
+        const action = event.target.closest('[data-action]');
+        if (!action) return;
+        if (action.dataset.action === 'zoom') openLightbox(action.dataset.group, Number(action.dataset.index));
+        else if (action.dataset.action === 'download-asset') downloadAsset(action.dataset.group, Number(action.dataset.index));
+      });
+    }
+  }
+
+  function bindEditor() {
+    const add = (id, handler) => { const node = byId(id); if (node) node.addEventListener('click', handler); };
+    add('addBtn', event => openEdit(null, event.currentTarget));
+    add('addBtn2', event => openEdit(null, event.currentTarget));
+    add('importBtn', () => { const input = byId('projectInput'); if (input) input.click(); });
+    add('undoBtn', undo);
+    add('redoBtn', redo);
+    add('printBtnViewer', () => window.print());
+    add('uploadMapBtn', () => { const input = byId('mapInput'); if (input) input.click(); });
+    add('placeBtn', () => setPlaceMode(!placeMode));
+    add('detailEditBtn', () => { const id = detailId; closeDialog(byId('detailDialog')); if (id) openEdit(id); });
+    add('detailLocateBtn', () => {
+      const id = detailId;
+      closeDialog(byId('detailDialog'));
+      if (id) locateRestaurant(id);
+    });
+    add('detailDeleteBtn', () => { if (detailId) deleteRestaurant(detailId); });
+    add('detailMarkerBtn', () => { if (detailId) removeMarker(detailId); });
+    const select = byId('markerSelect');
+    if (select) {
+      select.addEventListener('change', () => {
+        activeId = select.value || null;
+        syncMarkerActive();
+        renderList();
+        syncPlaceUI();
+        if (placeMode) toast('现在点击地图放置 ' + select.value + ' 的标记');
+      });
+    }
+    const mapInput = byId('mapInput');
+    if (mapInput) mapInput.addEventListener('change', async event => {
+      const file = event.target.files && event.target.files[0];
+      event.target.value = '';
+      if (file) await handleMapFile(file);
+    });
+    const projectInput = byId('projectInput');
+    if (projectInput) projectInput.addEventListener('change', async event => {
+      const file = event.target.files && event.target.files[0];
+      event.target.value = '';
+      if (file) await importProjectFile(file);
+    });
+    const form = byId('editForm');
+    if (form) {
+      form.addEventListener('submit', saveEdit);
+      form.addEventListener('input', () => { dirtyDraft = true; });
+    }
+    for (const group of ['environment', 'menu']) {
+      const input = byId(group === 'environment' ? 'environmentFiles' : 'menuFiles');
+      if (input) input.addEventListener('change', event => {
+        const files = Array.from(event.target.files || []);
+        event.target.value = '';
+        addFiles(group, files);
+      });
+    }
+    const editDialog = byId('editDialog');
+    if (editDialog) {
+      editDialog.addEventListener('cancel', event => { event.preventDefault(); requestCloseEdit(); });
+      editDialog.addEventListener('click', event => { if (event.target === editDialog) requestCloseEdit(); });
+    }
+    const confirmDialog = byId('confirmDialog');
+    if (confirmDialog) {
+      confirmDialog.addEventListener('cancel', event => { event.preventDefault(); settleConfirm(false); });
+      confirmDialog.addEventListener('click', event => { if (event.target === confirmDialog) settleConfirm(false); });
+    }
+    add('confirmOk', () => settleConfirm(true));
+    const exportMenu = byId('exportMenu');
+    if (exportMenu) {
+      exportMenu.addEventListener('click', event => {
+        const item = event.target.closest('[data-menu]');
+        if (!item) return;
+        exportMenu.open = false;
+        const action = item.dataset.menu;
+        if (action === 'html') exportStandaloneHtml();
+        else if (action === 'json') downloadJson();
+        else if (action === 'print') window.print();
+        else if (action === 'sample') loadSampleProject();
+        else if (action === 'clear') clearProject();
+      });
+      document.addEventListener('click', event => {
+        if (exportMenu.open && !exportMenu.contains(event.target)) exportMenu.open = false;
+      });
+      exportMenu.addEventListener('keydown', event => { if (event.key === 'Escape') exportMenu.open = false; });
+    }
+    window.addEventListener('resize', () => { if (project.map) fitMap(false); });
+    window.addEventListener('beforeunload', event => {
+      if (saveTimer || saving) { event.preventDefault(); event.returnValue = ''; }
+    });
+    document.addEventListener('visibilitychange', () => {
+      if (document.hidden && saveTimer) {
+        clearTimeout(saveTimer);
+        saveTimer = null;
+        void persistNow();
+      }
+    });
+  }
+
+  /* ---------- init ---------- */
+  function parseEmbedded() {
+    try {
+      const node = byId('embeddedData');
+      const raw = node && node.textContent ? node.textContent.trim() : '';
+      if (!raw || raw === 'null') return null;
+      return JSON.parse(raw);
+    } catch (error) {
+      console.warn('[venue-compare] embedded data parse failed', error);
+      return null;
+    }
+  }
+  async function init() {
+    bindCommon();
+    if (VIEW_ONLY) {
+      project = normalizeProject(parseEmbedded() || emptyProject());
+      if (document.body.dataset.viewOnly !== 'true') document.body.dataset.viewOnly = 'true';
+      renderAll();
+      const titleNode = byId('detailTitle');
+      if (titleNode) titleNode.textContent = '餐厅资料';
+      document.title = (project.title || '餐厅考察对比') + ' · 展示页';
+      return;
+    }
+    bindEditor();
+    renderAll();
+    setSaveState('idle');
+    try {
+      const saved = await loadSaved();
+      if (saved) {
+        project = normalizeProject(saved.project || saved);
+        lastSavedAt = saved.savedAt ? new Date(saved.savedAt) : null;
+        renderAll();
+        setSaveState(lastSavedAt ? 'saved' : 'idle');
+        if (project.restaurants.length || project.map) toast('已恢复上次编辑内容 · ' + (project.restaurants.length) + ' 家餐厅');
+      } else {
+        const legacy = await loadLegacy();
+        if (legacy) {
+          project = normalizeProject(legacy);
+          renderAll();
+          toast('已载入旧版存档，下次修改会写入新的 StudioKit 存储空间', { duration: 4800 });
+        }
+      }
+    } catch (error) {
+      console.warn('[venue-compare] init storage error', error);
+      toast('本地存档读取失败，可以从 JSON 备份恢复');
+    }
+  }
+  init();
+
+})();
+  </script>
+</body>
+</html>
