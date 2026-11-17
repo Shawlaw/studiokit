@@ -9,7 +9,7 @@
 | `apps/arcade/DESIGN-0.8.4.md` | 问题、道具坞方案、五档前后画布实测、`.tool-icon` 冲突修复、矮视口回退、兼容与回滚 | 本地实现，未发布 |
 | `apps/arcade/CHANGELOG.md` / `apps/arcade/README.md` | 变更摘要、门禁与“未推送/未发布”说明 | 本地实现，未发布 |
 
-门禁（本地）：`arcade_smoke.mjs` 86/86、`arcade_zen_scores_test.mjs` 14/14、`arcade_gameplay_test.mjs --suite=base --repeat=2` 22/22、`validate_site.py` / `build_site.py` / `node --check` 通过；**尚无发布证据**（未推送、未部署）。
+门禁（本地）：`arcade_smoke.mjs` 87/87、`arcade_zen_scores_test.mjs` 14/14、`arcade_gameplay_test.mjs --suite=base --repeat=2` 22/22、`validate_site.py` / `build_site.py` / `node --check` 通过；**尚无发布证据**（未推送、未部署）。
 
 ## 0.8.3（共享 shell Android 顶部导航条空白修复；已发布）
 

@@ -1665,6 +1665,45 @@ async function main() {
     record('俄罗斯方块 375px 双手按钮面板 + 画布触摸区不再误触', true);
     await cdp.screenshot('touch-block-drop.png');
 
+    /* ---------- 俄罗斯方块拇指区暂停键 + 双击画面暂停（0.8.4 地铁单手） ---------- */
+    for (const [width, height] of [[320, 568], [375, 667], [390, 844], [430, 932]]) {
+      await cdp.send('Emulation.setDeviceMetricsOverride', { width, height, deviceScaleFactor: 1, mobile: true });
+      await cdp.evaluate(`Arcade.RunSave.clear('block-drop')`);
+      await cdp.navigate(base + '/apps/arcade/games/block-drop.html#test');
+      await cdp.waitFor('document.readyState === "complete" && window.__arcadeTest', { timeout: 8000 });
+      await cdp.click('[data-ov-btn]');
+      await cdp.waitFor('window.__arcadeTest.info().state === "playing"', { timeout: 8000 });
+      const fab = await cdp.evaluate(`(() => {
+        const b = document.querySelector('[data-block-pause]');
+        if (!b) return null;
+        const r = b.getBoundingClientRect();
+        const c = document.querySelector('.game-canvas').getBoundingClientRect();
+        const well = { left: c.left + c.width * 30 / 420, right: c.left + c.width * 270 / 420, top: c.top + c.height * 120 / 740, bottom: c.top + c.height * 600 / 740 };
+        const overlap = !(r.bottom <= well.top + 1 || r.top >= well.bottom || r.right <= well.left || r.left >= well.right);
+        return { display: getComputedStyle(b).display, w: Math.round(r.width), h: Math.round(r.height), left: Math.round(r.left), right: Math.round(r.right), top: Math.round(r.top), bottom: Math.round(r.bottom), inStage: !!b.closest('.stage-box'), coversWell: overlap, cw: document.documentElement.clientWidth };
+      })()`);
+      assert(fab && fab.display === 'flex' && fab.w >= 44 && fab.h >= 44 && fab.inStage, width + 'px 拇指区暂停键 ' + JSON.stringify(fab));
+      assert(fab.coversWell === false && fab.right <= fab.cw + 1, width + 'px 拇指区暂停键位置 ' + JSON.stringify(fab));
+      await cdp.click('[data-block-pause]');
+      await sleep(200);
+      const fabPaused = await cdp.evaluate(`({ state: window.__arcadeTest.info().state, hidden: document.querySelector('[data-overlay]').hidden, title: document.querySelector('[data-ov-title]').textContent })`);
+      assert(fabPaused.state === 'paused' && fabPaused.hidden === false && fabPaused.title.indexOf('已暂停') !== -1, width + 'px 点击拇指区暂停键未暂停：' + JSON.stringify(fabPaused));
+      await cdp.click('[data-ov-btn]');
+      await cdp.waitFor('window.__arcadeTest.info().state === "playing"', { timeout: 8000 });
+      await cdp.pointer(210, 300, 'pointerdown');
+      await cdp.pointer(210, 300, 'pointerup');
+      await sleep(40);
+      await cdp.pointer(210, 300, 'pointerdown');
+      await cdp.pointer(210, 300, 'pointerup');
+      await sleep(200);
+      const dblPaused = await cdp.evaluate(`({ state: window.__arcadeTest.info().state, hidden: document.querySelector('[data-overlay]').hidden })`);
+      assert(dblPaused.state === 'paused' && dblPaused.hidden === false, width + 'px 双击画面未暂停：' + JSON.stringify(dblPaused));
+      await cdp.click('[data-ov-btn]');
+      await cdp.waitFor('window.__arcadeTest.info().state === "playing"', { timeout: 8000 });
+      await cdp.screenshot('thumb-pause-' + width + '.png');
+    }
+    record('俄罗斯方块拇指区暂停键 + 双击画面暂停（320/375/390/430）', true);
+
     /* ---------- 320px 小屏：安全区/暂停/画布不裁切 ---------- */
     await cdp.send('Emulation.setDeviceMetricsOverride', { width: 320, height: 568, deviceScaleFactor: 1, mobile: true });
     for (const pagePath of pages) {

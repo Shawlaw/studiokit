@@ -8,9 +8,10 @@ Owner 试玩反馈：「感觉俄罗斯方块的道具区极大挤占了游戏�
 - 画布增高：经典高度扣减 `246 → 192px`（≤360px 宽 `242 → 188`）、禅 `190 → 144`（≤360px `182 → 138`）。实测经典 320 161×286→192×340、375 215×381→246×435、390 316×558→346×612、430 366×646→396×700、1280×900 348×614→378×668；禅 196×346→220×390、247×437→273×483、348×614→364×643、398×702→404×713、379×670→406×716；五档 0 溢出，坞顶在井口下方 14–85px。
 - 共享样式冲突修复：`shared/site.css` 的门户 `.tool-icon`（46×46 图标卡）命中了街机厅道具按钮的同名 class，把 emoji 撑成大方块；道具图标改为 `.tool-glyph`（engine.js / gold-miner.html / arcade.css），13 款游戏道具按钮恢复 16px emoji，门户图标卡不受影响。
 - 矮视口回退：viewport ≤560px 高时 `placeJoyDock()` 把道具行放回画布外，保留 0.8.3 布局。
+- 地铁单手暂停（Owner 反馈顶部按钮不方便）：画布右侧空档新增 56×56 拇指区暂停键；触屏双击画面任意位置也可暂停（320ms/30px 阈值，鼠标不触发）；顶部按钮、`P`/`Esc`、切后台自动暂停全部保留，共用同一暂停路径。
 - 兼容：localStorage key/Schema、玩法、存档、积分记录、挑战记录与 `#test` 钩子均不变。
 - 版本：`ARCADE_VERSION`、注册表、中心页版本标记与 SW `VERSION` 统一升至 `0.8.4`，缓存键 `studiokit-arcade-0.8.4-v1`。
-- 测试：`arcade_smoke.mjs` **86/86**（道具行断言改为「方块页不得越过井口」）、`arcade_zen_scores_test.mjs` **14/14**（ZS-04 改为「经典比 0.8.3 基线高 ≥44px + 禅不低于经典」）、`arcade_gameplay_test.mjs --suite=base --repeat=2` **22/22**、`validate_site.py` / `build_site.py` / `node --check` 通过。
+- 测试：`arcade_smoke.mjs` **87/87**（道具行断言改为「方块页不得越过井口」）、`arcade_zen_scores_test.mjs` **14/14**（ZS-04 改为「经典比 0.8.3 基线高 ≥44px + 禅不低于经典」）、`arcade_gameplay_test.mjs --suite=base --repeat=2` **22/22**、`validate_site.py` / `build_site.py` / `node --check` 通过。
 - 发布：**未推送、未发布**；设计与回滚见 `DESIGN-0.8.4.md`。
 
 ## 0.8.3 — 2026-11-15（已发布）

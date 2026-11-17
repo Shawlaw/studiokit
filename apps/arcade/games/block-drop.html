@@ -154,6 +154,41 @@
         );
       }
     }
+    /* 0.8.4 拇指区暂停：地铁单手可达。位于画布右侧信息栏下方的空档（不压井口），
+       56×56 触控目标；仅触屏/窄屏显示，矮视口回退画布外时隐藏。 */
+    .block-pause-fab {
+      position: absolute;
+      right: 8px;
+      bottom: 20%;
+      z-index: 2;
+      width: 56px;
+      height: 56px;
+      display: none;
+      flex-direction: column;
+      align-items: center;
+      justify-content: center;
+      gap: 1px;
+      padding: 0;
+      border-radius: 18px;
+      border: 1px solid rgba(124, 92, 255, 0.5);
+      background: rgba(13, 20, 46, 0.88);
+      color: var(--ac-ink);
+      box-shadow: 0 6px 18px rgba(0, 0, 0, 0.45);
+      -webkit-backdrop-filter: blur(6px);
+      backdrop-filter: blur(6px);
+      font: inherit;
+      cursor: pointer;
+      touch-action: manipulation;
+      -webkit-tap-highlight-color: transparent;
+    }
+    .block-pause-fab:active { transform: translateY(1px); border-color: var(--ac-accent); }
+    .block-pause-glyph { font-size: 18px; line-height: 1; }
+    .block-pause-label { font-size: 9px; line-height: 1.1; color: var(--ac-muted); }
+    @media (hover: none), (max-width: 620px) {
+      .block-pause-fab { display: flex; }
+    }
+    /* ≤560px 高视口道具坞回到画布外时，画布内没有安全空档，暂停键同样回到顶部按钮。 */
+    body:not(.has-block-dock) .block-pause-fab { display: none; }
     /* 0.8.1 可发现性修复：窄屏开始弹层压缩文案/间距，保证「开始游戏 / 挑战 6 关 / 🧘 禅模式」三个入口首屏完整可见。 */
     @media (max-width: 460px) {
       .overlay-panel { padding: 14px 14px 12px; }
@@ -186,6 +221,9 @@
     <div class="stage-wrap">
       <div class="stage-box">
         <canvas class="game-canvas" aria-label="俄罗斯方块游戏画面"></canvas>
+        <button type="button" class="block-pause-fab" data-block-pause aria-label="暂停游戏" title="暂停游戏（P）">
+          <span class="block-pause-glyph" aria-hidden="true">⏸</span><span class="block-pause-label">暂停</span>
+        </button>
         <div class="overlay" data-overlay hidden>
           <div class="overlay-panel">
             <h2 data-ov-title>俄罗斯方块</h2>
@@ -223,7 +261,7 @@
       </div>
     </div>
     <p class="game-hint block-hint">
-      <span class="hint-touch">← → 移动 · ↓ 加速 · ⇓ 落底 · 道具 1/2 · 禅模式</span>
+      <span class="hint-touch">← → 移动 · ↓ 加速 · ⇓ 落底 · 双击画面暂停</span>
       <span class="hint-keyboard">←→ 移动 · ↑ 旋转 · ↓ 加速 · 空格落底 · 道具 1/2 · Z 冻结提速 · P 暂停</span>
     </p>
   </main>
@@ -260,6 +298,25 @@
       const input = A.createInput(canvas);
       A.installSfxUnlock();
 
+      /* 0.8.4 地铁单手暂停：双击画布任意位置即可暂停，不必瞄准按钮（鼠标双击不触发，桌面用 P）。 */
+      let lastTapAt = 0;
+      let lastTapX = 0;
+      let lastTapY = 0;
+      canvas.addEventListener('pointerup', (e) => {
+        if (state !== 'playing' || e.pointerType === 'mouse') return;
+        const now = typeof performance !== 'undefined' && performance.now ? performance.now() : Date.now();
+        const dx = e.clientX - lastTapX;
+        const dy = e.clientY - lastTapY;
+        if (now - lastTapAt <= 320 && dx * dx + dy * dy <= 900) {
+          lastTapAt = 0;
+          pauseByUser();
+          return;
+        }
+        lastTapAt = now;
+        lastTapX = e.clientX;
+        lastTapY = e.clientY;
+      });
+
       const dom = {
         overlay: document.querySelector('[data-overlay]'),
         ovTitle: document.querySelector('[data-ov-title]'),
@@ -278,6 +335,7 @@
         chTip: document.querySelector('[data-ch-tip]'),
         pause: document.querySelector('[data-pause]'),
         mute: document.querySelector('[data-mute]'),
+        blockPause: document.querySelector('[data-block-pause]'),
       };
       const ui = A.createOverlayUi(dom);
 
@@ -1779,6 +1837,13 @@
         isPlaying: () => state === 'playing',
         isPaused: () => state === 'paused',
       });
+
+      /* 0.8.4 拇指区暂停键：与顶部按钮、P/Esc、双击画面共用同一暂停路径（含存档与「继续」弹层）。 */
+      if (dom.blockPause) {
+        dom.blockPause.addEventListener('click', () => {
+          if (state === 'playing') pauseByUser();
+        });
+      }
 
       function syncMute() {
         dom.mute.textContent = A.Sfx.muted ? '🔇' : '🔊';
