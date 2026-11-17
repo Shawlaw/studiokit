@@ -161,6 +161,8 @@ async function gameLayoutSnapshot(cdp) {
       rowButtonCount: rowButtons.length,
       visibleRowButtons: rowButtons.filter(visible).map((button) => Object.assign({
         freeze: button.hasAttribute('data-zen-freeze'),
+        tool: button.hasAttribute('data-joy-tool'),
+        pause: button.hasAttribute('data-block-pause'),
         text: button.textContent.replace(/\\s+/g, ' ').trim(),
         name: (button.querySelector('.tool-name') || {}).textContent || '',
         pressed: button.getAttribute('aria-pressed'),
@@ -486,7 +488,7 @@ const SCENARIOS = [
       assert(classic.zenBarNodes === 0, '经典界面仍存在 .zen-bar/[data-zen-bar]：' + classic.zenBarNodes + ' 个（0.8.2 应删除该行）');
       assert(classic.joyToolCount === 2, '经典 [data-joy-tool] 数量=' + classic.joyToolCount + '，期望 2');
       assert(classic.freezeExists === true && classic.freezeHidden === true && classic.freezeVisible === false, '经典界面 [data-zen-freeze] 未隐藏：' + JSON.stringify({ exists: classic.freezeExists, hidden: classic.freezeHidden, visible: classic.freezeVisible }));
-      assert(classic.hintExists && classic.hintVisible && classic.hintDisplay !== 'none', '经典界面 hint 不可见：' + JSON.stringify({ display: classic.hintDisplay, visible: classic.hintVisible }));
+      assert(classic.hintExists && classic.hintVisible === false && classic.hintDisplay === 'none', '触屏经典界面应隐藏重复 hint（0.8.4 把 27px 还给画布）：' + JSON.stringify({ display: classic.hintDisplay, visible: classic.hintVisible }));
 
       /* 2) 进入禅模式：body.has-zen-bar、道具行 3 个可见按钮（2 工具 + 冻结）、全部 ≥44px、hint 隐藏、无 zen-bar。 */
       assert((await cdp.evaluate('window.__arcadeTest.startZen()')) === true, 'startZen() 未返回 true');
@@ -495,12 +497,14 @@ const SCENARIOS = [
       const zen = await gameLayoutSnapshot(cdp);
       assert(zen.hasZenBarClass === true, '禅模式缺少 body.has-zen-bar（CSS 钩子应保留）');
       assert(zen.zenBarNodes === 0, '禅模式仍存在 .zen-bar/[data-zen-bar]：' + zen.zenBarNodes + ' 个（0.8.2 应删除该行）');
-      assert(zen.rowButtonCount === 3, '禅模式道具行按钮总数=' + zen.rowButtonCount + '，期望 3（2 工具 + 冻结）');
-      assert(zen.visibleRowButtons.length === 3, '禅模式道具行可见按钮=' + JSON.stringify(zen.visibleRowButtons) + '，期望 3');
-      const visibleTools = zen.visibleRowButtons.filter((button) => !button.freeze);
+      assert(zen.rowButtonCount === 4, '禅模式道具坞按钮总数=' + zen.rowButtonCount + '，期望 4（2 工具 + 冻结 + 暂停）');
+      assert(zen.visibleRowButtons.length === 4, '禅模式道具坞可见按钮=' + JSON.stringify(zen.visibleRowButtons) + '，期望 4');
+      const visibleTools = zen.visibleRowButtons.filter((button) => button.tool);
       const visibleFreezes = zen.visibleRowButtons.filter((button) => button.freeze);
+      const visiblePauses = zen.visibleRowButtons.filter((button) => button.pause);
       assert(visibleTools.length === 2, '禅模式可见 [data-joy-tool] 按钮数=' + visibleTools.length + '，期望 2');
       assert(visibleFreezes.length === 1, '禅模式可见冻结按钮数=' + visibleFreezes.length + '，期望 1');
+      assert(visiblePauses.length === 1, '禅模式可见拇指区暂停按钮数=' + visiblePauses.length + '，期望 1');
       const tooSmall = zen.visibleRowButtons.filter((button) => button.w < 44 || button.h < 44);
       assert(tooSmall.length === 0, '禅模式道具行按钮小于 44px：' + JSON.stringify(tooSmall));
       assert(zen.freezeVisible === true && zen.freezeHidden === false, '禅模式 [data-zen-freeze] 未显示：' + JSON.stringify({ visible: zen.freezeVisible, hidden: zen.freezeHidden }));
@@ -594,7 +598,7 @@ const SCENARIOS = [
       await setViewport(cdp);
       return {
         classic: { joyTools: classic.joyToolCount, hint: classic.hintVisible },
-        zen: { rowButtons: zen.visibleRowButtons.length, minButtonH: Math.min.apply(null, zen.visibleRowButtons.map((button) => button.h)), freezeName: zen.freezeName, hintHidden: zen.hintVisible === false },
+        zen: { rowButtons: zen.visibleRowButtons.length, pause: zen.visibleRowButtons.filter((b) => b.pause).length, minButtonH: Math.min.apply(null, zen.visibleRowButtons.map((button) => button.h)), freezeName: zen.freezeName, hintHidden: zen.hintVisible === false },
         wideHud: wide.zenText.slice(0, 28),
         freezeToggle: { frozen: frozenInfo.zenFrozen, resumed: resumedInfo.zenFrozen, ariaPressed: frozen.freezePressed + '→' + resumedFreeze.freezePressed },
         pauseBtn2: paused.btn2,

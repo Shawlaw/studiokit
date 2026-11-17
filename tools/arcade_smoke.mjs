@@ -1550,7 +1550,7 @@ async function main() {
         toolbelt: (() => { const t = document.querySelector('[data-toolbelt]'); if (!t) return null; const r = t.getBoundingClientRect(); return { w: Math.round(r.width), h: Math.round(r.height), btns: [...t.querySelectorAll('.tool-btn')].map((b) => { const br = b.getBoundingClientRect(); return { w: Math.round(br.width), h: Math.round(br.height) }; }) }; })(),
         joyTools: [...document.querySelectorAll('[data-joy-tool]')].map((b) => { const r = b.getBoundingClientRect(); return { id: b.dataset.joyTool, w: Math.round(r.width), h: Math.round(r.height), top: Math.round(r.top), right: Math.round(r.right), bottom: Math.round(r.bottom) }; }),
         canvasBottom: (() => { const c = document.querySelector('.game-canvas'); return c ? Math.round(c.getBoundingClientRect().bottom) : null; })(),
-        wellBottom: (() => { const c = document.querySelector('.game-canvas'); if (!c) return null; const b = c.getBoundingClientRect(); return Math.round(b.top + b.height * 600 / 740); })(),
+        wellBottom: (() => { const c = document.querySelector('.game-canvas'); if (!c) return null; const b = c.getBoundingClientRect(); return Math.round(b.top + b.height * 526 / 610); })(),
         docH: document.documentElement.scrollHeight,
         vh: innerHeight,
         hasGameTools: document.body.classList.contains('has-game-tools'),
@@ -1592,7 +1592,7 @@ async function main() {
         labels: btns.map((b) => (b.querySelector('.block-btn-label') || {}).textContent || ''),
         sizes: btns.map(rect),
         groups,
-        hintLines: (() => { const h = document.querySelector('.block-hint'); return Math.round(h.getBoundingClientRect().height / parseFloat(getComputedStyle(h).lineHeight)); })(),
+        hintDisplay: getComputedStyle(document.querySelector('.block-hint')).display,
         touchHint: getComputedStyle(document.querySelector('.hint-touch')).display,
         keyboardHint: getComputedStyle(document.querySelector('.hint-keyboard')).display,
         softBg: getComputedStyle(document.querySelector('[data-touch="soft"]')).backgroundImage,
@@ -1611,7 +1611,7 @@ async function main() {
     assert(padLayout.softBg !== padLayout.hardBg && padLayout.softColor !== padLayout.hardColor, 'soft/hard styles not distinct: ' + JSON.stringify({ softBg: padLayout.softBg, hardBg: padLayout.hardBg, softColor: padLayout.softColor, hardColor: padLayout.hardColor }));
     assert(padLayout.groups.length === 2 && padLayout.groups[0].right + 8 <= padLayout.groups[1].x, 'touch groups not separated: ' + JSON.stringify(padLayout.groups));
     assert(padLayout.sizes[4].right <= padLayout.vw && padLayout.sizes[4].bottom <= padLayout.vh, 'pad clipped: ' + JSON.stringify(padLayout));
-    assert(padLayout.hintLines === 1 && padLayout.touchHint !== 'none' && padLayout.keyboardHint === 'none', 'touch hint wrong: ' + JSON.stringify(padLayout));
+    assert(padLayout.hintDisplay === 'none', 'touch hint should be hidden on touch (0.8.4): ' + JSON.stringify(padLayout));
     assert(padLayout.docH <= padLayout.vh + 1, 'block-drop vertical overflow: ' + padLayout.docH + '>' + padLayout.vh);
 
     await cdp.click('[data-ov-btn]');
@@ -1678,7 +1678,7 @@ async function main() {
         if (!b) return null;
         const r = b.getBoundingClientRect();
         const c = document.querySelector('.game-canvas').getBoundingClientRect();
-        const well = { left: c.left + c.width * 30 / 420, right: c.left + c.width * 270 / 420, top: c.top + c.height * 120 / 740, bottom: c.top + c.height * 600 / 740 };
+        const well = { left: c.left + c.width * 8 / 340, right: c.left + c.width * 248 / 340, top: c.top + c.height * 46 / 610, bottom: c.top + c.height * 526 / 610 };
         const overlap = !(r.bottom <= well.top + 1 || r.top >= well.bottom || r.right <= well.left || r.left >= well.right);
         return { display: getComputedStyle(b).display, w: Math.round(r.width), h: Math.round(r.height), left: Math.round(r.left), right: Math.round(r.right), top: Math.round(r.top), bottom: Math.round(r.bottom), inStage: !!b.closest('.stage-box'), coversWell: overlap, cw: document.documentElement.clientWidth };
       })()`);
@@ -1720,7 +1720,7 @@ async function main() {
         blockPad: (() => { const p = document.querySelector('.block-pad'); if (!p || getComputedStyle(p).display === 'none') return null; const r = p.getBoundingClientRect(); return { right: Math.round(r.right), bottom: Math.round(r.bottom), docH: document.documentElement.scrollHeight, vh: innerHeight, btns: [...p.querySelectorAll('[data-touch]')].map((b) => { const br = b.getBoundingClientRect(); return { w: Math.round(br.width), h: Math.round(br.height) }; }) }; })(),
         joyTools: [...document.querySelectorAll('[data-joy-tool]')].map((b) => { const r = b.getBoundingClientRect(); return { id: b.dataset.joyTool, w: Math.round(r.width), h: Math.round(r.height), top: Math.round(r.top), right: Math.round(r.right), bottom: Math.round(r.bottom) }; }),
         canvasBottom: (() => { const c = document.querySelector('.game-canvas'); return c ? Math.round(c.getBoundingClientRect().bottom) : null; })(),
-        wellBottom: (() => { const c = document.querySelector('.game-canvas'); if (!c) return null; const b = c.getBoundingClientRect(); return Math.round(b.top + b.height * 600 / 740); })(),
+        wellBottom: (() => { const c = document.querySelector('.game-canvas'); if (!c) return null; const b = c.getBoundingClientRect(); return Math.round(b.top + b.height * 526 / 610); })(),
         docH: document.documentElement.scrollHeight,
         vh: innerHeight,
         hasGameTools: document.body.classList.contains('has-game-tools'),
@@ -1810,7 +1810,7 @@ async function main() {
           blockPad: (() => { const p = document.querySelector('.block-pad'); if (!p || getComputedStyle(p).display === 'none') return null; const r = p.getBoundingClientRect(); return { right: Math.round(r.right), bottom: Math.round(r.bottom), docH: document.documentElement.scrollHeight, vh: innerHeight, btns: [...p.querySelectorAll('[data-touch]')].map((b) => { const br = b.getBoundingClientRect(); return { w: Math.round(br.width), h: Math.round(br.height) }; }) }; })(),
           joyTools: [...document.querySelectorAll('[data-joy-tool]')].map((b) => { const r = b.getBoundingClientRect(); return { w: Math.round(r.width), h: Math.round(r.height), top: Math.round(r.top), right: Math.round(r.right), bottom: Math.round(r.bottom) }; }),
           canvasBottom: (() => { const c = document.querySelector('.game-canvas'); return c ? Math.round(c.getBoundingClientRect().bottom) : null; })(),
-        wellBottom: (() => { const c = document.querySelector('.game-canvas'); if (!c) return null; const b = c.getBoundingClientRect(); return Math.round(b.top + b.height * 600 / 740); })(),
+        wellBottom: (() => { const c = document.querySelector('.game-canvas'); if (!c) return null; const b = c.getBoundingClientRect(); return Math.round(b.top + b.height * 526 / 610); })(),
           docH: document.documentElement.scrollHeight,
           vh: innerHeight,
           hasGameTools: document.body.classList.contains('has-game-tools'),

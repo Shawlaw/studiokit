@@ -4,7 +4,7 @@
 
 - **线上站点：** <https://shawlaw.github.io/studiokit/> · <https://studiokit.pages.dev/>
 - **源码：** <https://github.com/Shawlaw/studiokit>（MIT 许可）
-- **当前工具：** Badge Studio `2.2.1`；街机厅 Arcade `0.8.4`（本地实现，线上仍为 `0.8.3`；13 款竖屏小游戏 + 78 关挑战模式 + 俄罗斯方块禅模式 + 积分记录表 + 道具坞收进画布）；Venue Compare `0.2.0`（餐厅考察对比、地图标注与外部链接 / 备注，已发布）
+- **当前工具：** Badge Studio `2.2.1`；街机厅 Arcade `0.8.4`（本地实现，线上仍为 `0.8.3`；13 款竖屏小游戏 + 78 关挑战模式 + 俄罗斯方块禅模式 + 积分记录表 + 棋盘优先画布与拇指区暂停）；Venue Compare `0.2.0`（餐厅考察对比、地图标注与外部链接 / 备注，已发布）
 - **计划中的工具：** Rounded Image（尚未实现，等待原始需求/规格）
 - **最近发布：** 2026-11-16，Venue Compare 0.2.0（餐厅考察对比、地图标注、外部链接 / 分享备注；GitHub Pages + Cloudflare Pages 双端；提交 `2276194`，Actions `43809215680`，`verify_deploy.py` 38/38）
 - **运行方式：** 纯静态文件；无后端、无账号、无构建依赖、无第三方 CDN

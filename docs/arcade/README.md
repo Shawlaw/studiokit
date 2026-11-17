@@ -6,7 +6,7 @@
 
 | 文档 | 内容 | 状态 |
 | --- | --- | --- |
-| `apps/arcade/DESIGN-0.8.4.md` | 问题、道具坞方案、五档前后画布实测、`.tool-icon` 冲突修复、矮视口回退、兼容与回滚 | 本地实现，未发布 |
+| `apps/arcade/DESIGN-0.8.4.md` | 棋盘优先画布 340×610、道具坞、拇指区暂停/双击暂停、五档占屏比实测、`.tool-icon` 冲突修复、矮视口回退、兼容与回滚 | 本地实现，未发布 |
 | `apps/arcade/CHANGELOG.md` / `apps/arcade/README.md` | 变更摘要、门禁与“未推送/未发布”说明 | 本地实现，未发布 |
 
 门禁（本地）：`arcade_smoke.mjs` 87/87、`arcade_zen_scores_test.mjs` 14/14、`arcade_gameplay_test.mjs --suite=base --repeat=2` 22/22、`validate_site.py` / `build_site.py` / `node --check` 通过；**尚无发布证据**（未推送、未部署）。
