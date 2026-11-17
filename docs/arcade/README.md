@@ -2,14 +2,16 @@
 
 本目录保存 Arcade 各版本的设计/验收支撑文档，不是产品文档，也不进入发布产物（`tools/build_site.py` 的白名单只含 `index.html`、`favicon.svg`、`shared`、`apps`）。
 
-## 0.8.4（俄罗斯方块道具坞收进画布空区；本地实现，未发布）
+## 0.8.4（棋盘优先画布 + 道具坞 + 地铁单手暂停；2026-11-18 已双端发布）
 
 | 文档 | 内容 | 状态 |
 | --- | --- | --- |
-| `apps/arcade/DESIGN-0.8.4.md` | 棋盘优先画布 340×610、道具坞、拇指区暂停/双击暂停、五档占屏比实测、`.tool-icon` 冲突修复、矮视口回退、兼容与回滚 | 本地实现，未发布 |
-| `apps/arcade/CHANGELOG.md` / `apps/arcade/README.md` | 变更摘要、门禁与“未推送/未发布”说明 | 本地实现，未发布 |
+| `apps/arcade/DESIGN-0.8.4.md` | 棋盘优先画布 340×610、道具坞、拇指区暂停/双击暂停、五档占屏比实测、`.tool-icon` 冲突修复、矮视口回退、兼容与回滚 | 已随 0.8.4 发布 |
+| `apps/arcade/CHANGELOG.md` / `apps/arcade/README.md` | 变更摘要、门禁与“未推送/未发布”说明 | 已随 0.8.4 发布 |
 
-门禁（本地）：`arcade_smoke.mjs` 87/87、`arcade_zen_scores_test.mjs` 14/14、`arcade_gameplay_test.mjs --suite=base --repeat=2` 22/22、`validate_site.py` / `build_site.py` / `node --check` 通过；**尚无发布证据**（未推送、未部署）。
+门禁：`arcade_smoke.mjs` **87/87**、`arcade_zen_scores_test.mjs` **14/14**、`arcade_gameplay_test.mjs --suite=base --repeat=2` **22/22**、`validate_site.py` / `build_site.py` / `node --check` 通过。
+
+发布证据（0.8.4）：提交 `77cb02a..ecfdda4`（3 个提交：`853739c` 道具坞 / `0756490` 地铁单手暂停 / `ecfdda4` 棋盘优先画布）推送 `main`；Actions `44122372096` 的 Validate and build / Deploy GitHub Pages / Deploy Cloudflare Pages / Verify both deployments 四个 job 全部成功；CI 与本地 `tools/verify_deploy.py` 均 **38/38** 文件 SHA-256 双端一致（Arcade `0.8.4` / Badge `2.2.1` / Venue `0.2.0`，manifest `application/manifest+json`）；双端线上无头 Chrome **18/18**（中心页 0.8.4 + 13 卡、SW VERSION 0.8.4、方块页运行时 0.8.4、390×844 棋盘 257×513、道具坞 3 格含暂停 / 禅模式 4 格含冻结、触屏 hint 隐藏、0 console error）；SW 缓存键 `studiokit-arcade-0.8.4-v1`。
 
 ## 0.8.3（共享 shell Android 顶部导航条空白修复；已发布）
 

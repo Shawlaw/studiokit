@@ -1,6 +1,6 @@
 # Arcade Changelog
 
-## 0.8.4 — 2026-11-17（本地实现，未发布）
+## 0.8.4 — 2026-11-18（已发布）
 
 Owner 三轮反馈：「道具区极大挤占了游戏画面」「暂停按钮不方便，主要在地铁上玩」「游戏画面占屏比还是太小」。0.8.4 把画布重排为棋盘优先，并把暂停放进拇指区；不改玩法与数据。
 
@@ -13,7 +13,7 @@ Owner 三轮反馈：「道具区极大挤占了游戏画面」「暂停按钮�
 - 兼容：localStorage key/Schema、玩法、存档、积分记录、挑战记录与 `#test` 钩子不变。
 - 版本：`ARCADE_VERSION`、注册表、中心页版本标记与 SW `VERSION` 统一升至 `0.8.4`，缓存键 `studiokit-arcade-0.8.4-v1`。
 - 测试：`arcade_smoke.mjs` **87/87**（新增拇指区暂停/双击暂停 1 项）、`arcade_zen_scores_test.mjs` **14/14**、`arcade_gameplay_test.mjs --suite=base --repeat=2` **22/22**、`validate_site.py` / `build_site.py` / `node --check` 通过。
-- 发布：**未推送、未发布**；设计与回滚见 `DESIGN-0.8.4.md`。
+- 发布：提交 `77cb02a..ecfdda4`（3 个提交：`853739c` 道具坞 / `0756490` 地铁单手暂停 / `ecfdda4` 棋盘优先画布）推送 `main`；Actions `44122372096` 的 Validate and build / Deploy GitHub Pages / Deploy Cloudflare Pages / Verify both deployments 四个 job 全部成功；CI 与本地 `tools/verify_deploy.py` 均 **38/38** 文件 SHA-256 双端一致（Arcade `0.8.4` / Badge `2.2.1` / Venue `0.2.0`，manifest `application/manifest+json`）；双端线上无头 Chrome **18/18**（中心页 0.8.4 + 13 卡、SW VERSION 0.8.4、方块页运行时 0.8.4、390×844 棋盘 257×513、道具坞 3 格含暂停 / 禅模式 4 格含冻结、触屏 hint 隐藏、0 console error）；SW 缓存键 `studiokit-arcade-0.8.4-v1`。 设计与回滚见 `DESIGN-0.8.4.md`。
 
 ## 0.8.3 — 2026-11-15（已发布）
 

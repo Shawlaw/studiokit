@@ -2,6 +2,21 @@
 
 StudioKit 门户本身没有独立的 semver；以下按仓库里程碑与工具版本记录。各工具的详细变更见 `apps/<tool>/CHANGELOG.md`。
 
+## Arcade 0.8.4 — 2026-11-18（已发布）
+
+### Changed
+- 俄罗斯方块画布改为**棋盘优先 340×610**（井口 240×480 占画布 79% 高 / 71% 宽，0.8.3 为 65% / 57%）：右侧信息栏 100→76px、顶部信息带 46px、底部 84px 道具坞带；画布外道具行与触屏重复 hint 移除。经典棋盘占屏比 320 13.3%→25.2%、375 15.9%→28.3%、390 23.9%→40.0%、430 25.7%→40.7%，**棋盘面积 +58%～+89%，棋盘格边长 +26%～+36%**。
+- 道具坞：经典/挑战 3 格（换块 / 慢落 / 暂停）、禅模式 4 格（+ ❄ 冻结提速），44px 高、≥44×44、单行不换行；快捷键 `1/2/Z` 与禁用态不变。
+- 地铁单手暂停：暂停键为道具坞最后一格（屏幕约 78–85% 高度），并支持触屏双击画面任意位置暂停（320ms/30px，鼠标不触发）；顶部按钮、`P`/`Esc`、切后台自动暂停保留，共用 `pauseByUser()`。
+
+### Fixed
+- `shared/site.css` 门户 `.tool-icon`（46×46 图标卡）命中街机厅道具按钮同名 class，把 emoji 撑成方块；街机厅改用 `.tool-glyph`，13 款游戏道具按钮恢复 16px emoji。
+
+### Verification
+- `arcade_smoke.mjs` **87/87**（新增拇指区暂停/双击暂停 1 项）、`arcade_zen_scores_test.mjs` **14/14**、`arcade_gameplay_test.mjs --suite=base --repeat=2` **22/22**；`validate_site.py` / `build_site.py` / `node --check` 通过。
+- 双端发布：提交 `77cb02a..ecfdda4`（3 个提交：`853739c` 道具坞 / `0756490` 地铁单手暂停 / `ecfdda4` 棋盘优先画布）推送 `main`；Actions `44122372096` 的 Validate and build / Deploy GitHub Pages / Deploy Cloudflare Pages / Verify both deployments 四个 job 全部成功；CI 与本地 `tools/verify_deploy.py` 均 **38/38** 文件 SHA-256 双端一致（Arcade `0.8.4` / Badge `2.2.1` / Venue `0.2.0`，manifest `application/manifest+json`）；双端线上无头 Chrome **18/18**（中心页 0.8.4 + 13 卡、SW VERSION 0.8.4、方块页运行时 0.8.4、390×844 棋盘 257×513、道具坞 3 格含暂停 / 禅模式 4 格含冻结、触屏 hint 隐藏、0 console error）；SW 缓存键 `studiokit-arcade-0.8.4-v1`。
+- 兼容：localStorage key/Schema（`progress/runs/prefs/playtime/challenge/scores`）、玩法、存档、积分记录与挑战记录全部不变；`#test` 钩子字段不变。
+
 ## Arcade 0.8.3 — 2026-11-15（已发布）
 
 ### Fixed

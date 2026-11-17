@@ -5,7 +5,11 @@
 - 仓库：<https://github.com/Shawlaw/studiokit>
 - GitHub Pages：<https://shawlaw.github.io/studiokit/>
 - Cloudflare Pages：<https://studiokit.pages.dev/>
-- 最近发布：Venue Compare `0.2.0`（2026-11-16，已发布）
+- 最近发布：Arcade `0.8.4`（2026-11-18，已发布）
+  - 批次内容：棋盘优先画布 340×610（经典棋盘占屏 +58%～+89%）、道具坞（经典 3 格 / 禅 4 格，含暂停）、地铁单手暂停（拇指区暂停键 + 触屏双击画面暂停）、`.tool-icon` 同名 class 冲突修复；无数据/玩法变更
+  - 提交 `77cb02a..ecfdda4`（`853739c` / `0756490` / `ecfdda4`）推送 `main`；Actions `44122372096` 四个 job 均成功
+  - 双端验证：CI 与本地 `tools/verify_deploy.py` 均 **38/38** 文件 SHA-256 一致（Arcade `0.8.4` / Badge `2.2.1` / Venue `0.2.0`）；双端线上无头 Chrome **18/18**（中心页 0.8.4 + 13 卡、SW 0.8.4、方块页棋盘 257×513 @390×844、道具坞 3/4 格、hint 隐藏、0 console error）；SW 缓存键 `studiokit-arcade-0.8.4-v1`；真机触控仍 UNVERIFIED
+- 上一个发布：Venue Compare `0.2.0`（2026-11-16，已发布）
   - 批次内容：新工具从 draft 转 available：餐厅考察对比、地图标注、外部链接 / 分享备注；单页 HTML + 共享 shell；自包含只读 HTML 导出；无第三方运行时
   - 提交 `2276194`（含 `81684b9` / `f7146f8` / `ec0359d`）推送 `main`；Actions `43809215680` 四个 job 均成功
   - 双端验证：CI 与本地 `tools/verify_deploy.py` 均 **38/38** 文件 SHA-256 一致（Venue `0.2.0` / `available`，Arcade `0.8.3`，Badge `2.2.1`）；双端线上无头 Chrome **2/2**（首页卡片可用、空状态、示例 5 家 / 5 标记 / 2 链接、详情 6 项费用 + 2 链接 + 2 媒体）；0 console error；真机触控仍 UNVERIFIED
@@ -77,7 +81,7 @@ node --check shared/site-shell.js
 node --check apps/arcade/engine.js
 node --check apps/arcade/sw.js
 node tools/arcade_zen_scores_test.mjs   # 0.8.1 禅模式/积分记录 14 场景（默认端口 8770/9338）
-node tools/arcade_smoke.mjs   # 需要本机 Chrome；当前 85 项，含 PWA/断网与 13 款旧档回归
+node tools/arcade_smoke.mjs   # 需要本机 Chrome；当前 87 项，含 PWA/断网与 13 款旧档回归
 node tools/arcade_gameplay_test.mjs --suite=base --repeat=2   # 22/22 确定性玩法回归
 git diff --check
 git status --short
@@ -125,7 +129,7 @@ OWNER_AUTHORIZATION: PUBLISH_TO_MAIN
      --retries 15 --delay 8
    ```
 
-   预期：两个 URL 的 24 个关键文件哈希一致（含 13 款游戏页与 `arcade.css`），Arcade 版本为 `0.8.1`，Badge 为 `2.2.1`，manifest 为 `application/manifest+json`。
+   预期：两个 URL 的 38 个关键文件哈希一致（含 13 款游戏页与 `arcade.css`），Arcade 版本为 `0.8.4`，Badge 为 `2.2.1`，Venue 为 `0.2.0`，manifest 为 `application/manifest+json`。
 4. 打开两个门户，确认工具卡片加载、源码链接、Badge Studio 与街机厅入口可点击。
 5. 打开 Arcade 中心页，确认线上版本 `0.7.0` / 13 款，并检查：
    - 每款游戏都有 2 个主动道具按钮（黄金矿工保留 4 个），按钮在画布外/内均不遮挡核心操作；无签到、每日奖励或付费抽奖入口。
