@@ -377,10 +377,10 @@ const SCENARIOS = [
     async run(cdp) {
       await prepareHub(cdp);
       const api = await requireScores(cdp);
-      assert(api.version === '0.8.3', 'A.version=' + JSON.stringify(api.version) + '，期望 0.8.3');
+      assert(api.version === '0.8.4', 'A.version=' + JSON.stringify(api.version) + '，期望 0.8.4');
       const dom = await hubSnapshot(cdp);
       assert(dom.section, '中心页缺少 [data-scores-section] 积分记录区块');
-      assert(dom.versionText.trim() === '0.8.3', '[data-hall-version]=' + JSON.stringify(dom.versionText) + '，期望 0.8.3');
+      assert(dom.versionText.trim() === '0.8.4', '[data-hall-version]=' + JSON.stringify(dom.versionText) + '，期望 0.8.4');
       assert(dom.table, '缺少 .hall-scores-table 积分表格');
       const headers = dom.headers.map((item) => item.text).join('/');
       assert(headers === '时间/游戏/模式/得分/详情', '表头=' + JSON.stringify(headers) + '，期望 时间/游戏/模式/得分/详情');
@@ -581,7 +581,12 @@ const SCENARIOS = [
         assert(zenLayout.hasZenBarClass === true, width + 'px 禅模式缺少 body.has-zen-bar');
         assert(zenLayout.canvas && zenLayout.canvas.h > 0, width + 'px 禅模式画布高度读取失败：' + JSON.stringify(zenLayout.canvas));
         const deltaH = zenLayout.canvas.h - classicLayout.canvas.h;
-        assert(deltaH >= 44, width + 'px 禅模式画布高度增量 ' + deltaH + 'px < 44px：禅 ' + zenLayout.canvas.h + 'px vs 经典 ' + classicLayout.canvas.h + 'px');
+        /* 0.8.4：道具坞移入画布底部空区后，经典与禅模式都回收了 44px 行高；宽视口下画布会被
+           420:740 宽度上限截住，禅模式的额外余量无法再转成固定高度差，故改为两条不变量：
+           经典画布须比 0.8.3 基线高 ≥44px（行高确实还给了画布），禅模式不得低于经典。 */
+        const BASELINE_083 = { 320: 286, 375: 381, 390: 558, 430: 646 };
+        assert(classicLayout.canvas.h >= BASELINE_083[width] + 44, width + 'px 经典画布 ' + classicLayout.canvas.h + 'px 未比 0.8.3 基线 ' + BASELINE_083[width] + 'px 高出 44px');
+        assert(deltaH >= 0, width + 'px 禅模式画布 ' + zenLayout.canvas.h + 'px 反而低于经典 ' + classicLayout.canvas.h + 'px');
         assert(zenLayout.docH <= zenLayout.vh + 1, width + 'px 禅模式纵向溢出：docH=' + zenLayout.docH + ' > vh=' + zenLayout.vh);
         assert(zenLayout.scrollW <= zenLayout.clientW + 1, width + 'px 禅模式横向溢出：scrollWidth=' + zenLayout.scrollW + ' > clientWidth=' + zenLayout.clientW);
         layoutRows.push({ width, classicH: classicLayout.canvas.h, zenH: zenLayout.canvas.h, deltaH, docH: zenLayout.docH, vh: zenLayout.vh });

@@ -7,7 +7,7 @@
 (() => {
   'use strict';
 
-  const ARCADE_VERSION = '0.8.3';
+  const ARCADE_VERSION = '0.8.4';
   const PROGRESS_KEY = 'studiokit:arcade:progress:v1';
   const PREFS_KEY = 'studiokit:arcade:prefs:v1';
   const RUNS_KEY = 'studiokit:arcade:runs:v1';
@@ -2297,7 +2297,7 @@
       button.setAttribute('data-joy-tool', def.id);
 
       const iconSpan = document.createElement('span');
-      iconSpan.className = 'tool-icon';
+      iconSpan.className = 'tool-glyph';
       iconSpan.setAttribute('aria-hidden', 'true');
       iconSpan.textContent = def.icon == null ? '' : String(def.icon);
 

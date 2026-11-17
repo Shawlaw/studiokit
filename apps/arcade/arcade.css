@@ -1320,7 +1320,9 @@ body.arcade-immersive .toolbelt {
   user-select: none;
   -webkit-tap-highlight-color: transparent;
 }
-.tool-btn .tool-icon { font-size: 16px; line-height: 1; }
+/* 道具按钮图标：类名不能再用 .tool-icon——共享 site.css 的门户 46×46 图标卡也叫这个名字，
+   会把道具按钮里的 emoji 撑成大方块（0.8.4 修正）。 */
+.tool-btn .tool-glyph { font-size: 16px; line-height: 1; }
 .tool-btn .tool-name { white-space: nowrap; }
 .tool-btn .tool-count {
   min-width: 18px;

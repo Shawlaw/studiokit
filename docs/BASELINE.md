@@ -26,7 +26,7 @@ Current Venue Compare baseline facts:
 
 Current Arcade baseline facts:
 
-- App version: `0.8.3`（`apps/arcade/engine.js` 的 `ARCADE_VERSION` 与注册表保持一致；2026-11-15 已双端发布，提交 `c1727e7`，Actions `43670060561`，`verify_deploy.py` 37/37）
+- App version: `0.8.4`（本地实现，未发布；`apps/arcade/engine.js` 的 `ARCADE_VERSION` 与注册表保持一致。线上仍为 `0.8.3`：2026-11-15 已双端发布，提交 `c1727e7`，Actions `43670060561`，`verify_deploy.py` 37/37）
 - Registry entry: `shared/tool-registry.json` → `id: "arcade"`，`href: "./apps/arcade/"`
 - Games: 13（清单唯一来源是 `engine.js` 顶部的 `GAMES` 数组）
 - Run state schema: `v1`（`studiokit:arcade:runs:v1`）
@@ -44,6 +44,7 @@ Current Arcade baseline facts:
 - 0.8.1 已发布：俄罗斯方块新增禅模式（无限游玩、速度随等级提升且可按 `Z`/触屏按钮冻结/恢复提速、不写经典最高分、局内状态写入既有 `runs:v1` data）；新增 `A.Scores` 与独立积分记录 key `studiokit:arcade:scores:v1`（Schema v1，最新在前、最多 300 条，13 款游戏统一结算点自动收集，中心页「积分记录」表展示/筛选/清除/导出导入）。既有 5 个 key 与 Schema 不变；`arcade_smoke` 85/85、新增 `arcade_zen_scores_test.mjs` 14 场景、gameplay base 22/22；提交 `575a766` + `41fa79e`，Actions `43423208129` 双端发布成功
 - 0.8.2 已发布：俄罗斯方块控制区压缩（Owner 试玩反馈）：删除禅模式独立按钮行，冻结/恢复按钮并入道具行（同一行 3 按钮、经典仍 2 按钮）；禅模式隐藏重复 hint；道具行 44px、页面间距压缩；画布高度规则回收空间后禅模式画布面积 +18%～+47%、高度比经典多 56–60px。localStorage key/Schema、玩法与存档全部不变；`arcade_smoke` 85/85、`arcade_zen_scores_test.mjs` 14 场景（含控件压缩/画布增量断言）、gameplay base 22/22
 - 0.8.3 已发布：修复 Android 普通浏览器顶部导航条空白（Owner 实机反馈）：共享 shellbar 只在 standalone/独立窗口应用顶部 `safe-area-inset-top` 并计入 38px 导航行之外，普通标签页保持 38px、文字居中；Badge Studio 共用同一 shell 一并修复。localStorage key/Schema、玩法与存档不变；`arcade_smoke` 86/86、`arcade_zen_scores_test.mjs` 14/14、gameplay base 22/22
+- 0.8.4 本地实现（未发布）：俄罗斯方块道具坞从画布外整行收进画布底部空区（井口 y=600/740 以下无绘制内容），经典高度扣减 246→192px、禅 190→144px；实测经典画布 320 161×286→192×340、375 215×381→246×435、390 316×558→346×612、430 366×646→396×700、1280×900 348×614→378×668，禅模式 196×346→220×390、247×437→273×483、348×614→364×643、398×702→404×713、379×670→406×716；≤560px 高视口自动回退画布外。顺带修复 `shared/site.css` 门户 `.tool-icon`（46×46）与街机厅道具按钮同名 class 冲突（改为 `.tool-glyph`）。localStorage key/Schema、玩法、存档、积分与挑战不变；`arcade_smoke` 86/86、`arcade_zen_scores_test.mjs` 14/14、gameplay base 22/22
 - 全屏/沉浸模式：原生 Fullscreen API 优先，不支持时使用 CSS 沉浸；iPhone Safari 不支持网页元素全屏，**真机与原生全屏仍未验证**
 - PWA/离线：manifest + `apps/arcade/sw.js`，作用域 `apps/arcade/`；显式预载 24 项（11 外壳 + 13 游戏），断网回归已自动化；**iOS/Android 真机安装与系统分享面板仍未验证**
 - Automated coverage: `node tools/arcade_smoke.mjs` 86/86（需要本机 Chrome）；`node tools/arcade_zen_scores_test.mjs` 14/14（0.8.1）；`node tools/arcade_gameplay_test.mjs --suite=all --repeat=2` 208/208；0.8.1 发布时 `verify_deploy.py` 覆盖关键文件并双端逐文件校验

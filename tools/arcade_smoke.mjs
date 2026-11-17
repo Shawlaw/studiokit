@@ -46,8 +46,8 @@ async function main() {
     })()`);
     assert(home.cards >= 2, 'home cards=' + home.cards);
     assert(home.href.indexOf('apps/arcade') !== -1, 'arcade card not clickable: ' + JSON.stringify(home));
-    assert(home.version.indexOf('0.8.3') !== -1, 'arcade version missing on home card');
-    record('门户街机厅卡片可点击且版本 0.8.3', true);
+    assert(home.version.indexOf('0.8.4') !== -1, 'arcade version missing on home card');
+    record('门户街机厅卡片可点击且版本 0.8.4', true);
 
     /* ---------- GitHub Pages 项目子路径：shell 返回链接 ---------- */
     await cdp.navigate(base + '/studiokit/apps/arcade/games/star-raid.html');
@@ -65,10 +65,10 @@ async function main() {
       cards: document.querySelectorAll('.hall-card').length,
       runs: window.Arcade && Arcade.RunSave.count()
     })`);
-    assert(hallInfo.version === '0.8.3', 'version is ' + hallInfo.version);
+    assert(hallInfo.version === '0.8.4', 'version is ' + hallInfo.version);
     assert(hallInfo.games === 13, 'game count is ' + hallInfo.games);
     assert(hallInfo.cards === 13, 'card count is ' + hallInfo.cards);
-    record('中心页 13 款游戏与版本 0.8.3', true);
+    record('中心页 13 款游戏与版本 0.8.4', true);
 
     await cdp.evaluate(`(() => { const i = document.querySelector('[data-search]'); i.value = '雪铃'; i.dispatchEvent(new Event('input', { bubbles: true })); })()`);
     await sleep(120);
@@ -1550,6 +1550,7 @@ async function main() {
         toolbelt: (() => { const t = document.querySelector('[data-toolbelt]'); if (!t) return null; const r = t.getBoundingClientRect(); return { w: Math.round(r.width), h: Math.round(r.height), btns: [...t.querySelectorAll('.tool-btn')].map((b) => { const br = b.getBoundingClientRect(); return { w: Math.round(br.width), h: Math.round(br.height) }; }) }; })(),
         joyTools: [...document.querySelectorAll('[data-joy-tool]')].map((b) => { const r = b.getBoundingClientRect(); return { id: b.dataset.joyTool, w: Math.round(r.width), h: Math.round(r.height), top: Math.round(r.top), right: Math.round(r.right), bottom: Math.round(r.bottom) }; }),
         canvasBottom: (() => { const c = document.querySelector('.game-canvas'); return c ? Math.round(c.getBoundingClientRect().bottom) : null; })(),
+        wellBottom: (() => { const c = document.querySelector('.game-canvas'); if (!c) return null; const b = c.getBoundingClientRect(); return Math.round(b.top + b.height * 600 / 740); })(),
         docH: document.documentElement.scrollHeight,
         vh: innerHeight,
         hasGameTools: document.body.classList.contains('has-game-tools'),
@@ -1568,7 +1569,9 @@ async function main() {
         }
         if (!pagePath.includes('gold-miner')) {
           assert(overflow.joyTools.length === 2 && overflow.joyTools.every((b) => b.h >= 44 && b.w >= 44 && b.right <= overflow.cw + 1 && b.bottom <= overflow.docH + 1), pagePath + ' joy tools ' + JSON.stringify(overflow.joyTools));
-          assert(overflow.canvasBottom !== null && overflow.joyTools.every((b) => b.top >= overflow.canvasBottom - 1), pagePath + ' joy tools overlap canvas: ' + JSON.stringify({ canvasBottom: overflow.canvasBottom, tools: overflow.joyTools }));
+          /* 0.8.4：方块道具坞嵌在画布底部空区（井口 y=600/740 以下），只要求不遮井口；其余游戏仍须在画布外。 */
+          const joyAnchor = pagePath.includes('block-drop') ? overflow.wellBottom : overflow.canvasBottom;
+          assert(joyAnchor !== null && overflow.joyTools.every((b) => b.top >= joyAnchor - 1), pagePath + ' joy tools overlap canvas: ' + JSON.stringify({ anchor: joyAnchor, canvasBottom: overflow.canvasBottom, wellBottom: overflow.wellBottom, tools: overflow.joyTools }));
         }
         if (overflow.hasGameTools || overflow.hasJoyRow) assert(overflow.docH <= overflow.vh + 1, pagePath + ' 375px controls vertical overflow ' + overflow.docH + '>' + overflow.vh);
       }
@@ -1678,6 +1681,7 @@ async function main() {
         blockPad: (() => { const p = document.querySelector('.block-pad'); if (!p || getComputedStyle(p).display === 'none') return null; const r = p.getBoundingClientRect(); return { right: Math.round(r.right), bottom: Math.round(r.bottom), docH: document.documentElement.scrollHeight, vh: innerHeight, btns: [...p.querySelectorAll('[data-touch]')].map((b) => { const br = b.getBoundingClientRect(); return { w: Math.round(br.width), h: Math.round(br.height) }; }) }; })(),
         joyTools: [...document.querySelectorAll('[data-joy-tool]')].map((b) => { const r = b.getBoundingClientRect(); return { id: b.dataset.joyTool, w: Math.round(r.width), h: Math.round(r.height), top: Math.round(r.top), right: Math.round(r.right), bottom: Math.round(r.bottom) }; }),
         canvasBottom: (() => { const c = document.querySelector('.game-canvas'); return c ? Math.round(c.getBoundingClientRect().bottom) : null; })(),
+        wellBottom: (() => { const c = document.querySelector('.game-canvas'); if (!c) return null; const b = c.getBoundingClientRect(); return Math.round(b.top + b.height * 600 / 740); })(),
         docH: document.documentElement.scrollHeight,
         vh: innerHeight,
         hasGameTools: document.body.classList.contains('has-game-tools'),
@@ -1718,7 +1722,8 @@ async function main() {
         }
         if (!pagePath.includes('gold-miner')) {
           assert(small.joyTools.length === 2 && small.joyTools.every((b) => b.h >= 44 && b.w >= 44 && b.right <= small.cw + 1 && b.bottom <= small.docH + 1), pagePath + ' 320px joy tools ' + JSON.stringify(small.joyTools));
-          assert(small.canvasBottom !== null && small.joyTools.every((b) => b.top >= small.canvasBottom - 1), pagePath + ' 320px joy tools overlap canvas: ' + JSON.stringify({ canvasBottom: small.canvasBottom, tools: small.joyTools }));
+          const smallAnchor = pagePath.includes('block-drop') ? small.wellBottom : small.canvasBottom;
+          assert(smallAnchor !== null && small.joyTools.every((b) => b.top >= smallAnchor - 1), pagePath + ' 320px joy tools overlap canvas: ' + JSON.stringify({ anchor: smallAnchor, canvasBottom: small.canvasBottom, wellBottom: small.wellBottom, tools: small.joyTools }));
         }
         if (small.hasGameTools || small.hasJoyRow) assert(small.docH <= small.vh + 1, pagePath + ' 320px controls vertical overflow ' + small.docH + '>' + small.vh);
       }
@@ -1766,6 +1771,7 @@ async function main() {
           blockPad: (() => { const p = document.querySelector('.block-pad'); if (!p || getComputedStyle(p).display === 'none') return null; const r = p.getBoundingClientRect(); return { right: Math.round(r.right), bottom: Math.round(r.bottom), docH: document.documentElement.scrollHeight, vh: innerHeight, btns: [...p.querySelectorAll('[data-touch]')].map((b) => { const br = b.getBoundingClientRect(); return { w: Math.round(br.width), h: Math.round(br.height) }; }) }; })(),
           joyTools: [...document.querySelectorAll('[data-joy-tool]')].map((b) => { const r = b.getBoundingClientRect(); return { w: Math.round(r.width), h: Math.round(r.height), top: Math.round(r.top), right: Math.round(r.right), bottom: Math.round(r.bottom) }; }),
           canvasBottom: (() => { const c = document.querySelector('.game-canvas'); return c ? Math.round(c.getBoundingClientRect().bottom) : null; })(),
+        wellBottom: (() => { const c = document.querySelector('.game-canvas'); if (!c) return null; const b = c.getBoundingClientRect(); return Math.round(b.top + b.height * 600 / 740); })(),
           docH: document.documentElement.scrollHeight,
           vh: innerHeight,
           hasGameTools: document.body.classList.contains('has-game-tools'),
@@ -1780,7 +1786,8 @@ async function main() {
         }
         if (metrics.pause && !pagePath.includes('gold-miner')) {
           assert(metrics.joyTools.length === 2 && metrics.joyTools.every((b) => b.h >= 44 && b.w >= 44 && b.right <= metrics.cw + 1 && b.bottom <= metrics.docH + 1), pagePath + ' ' + width + 'px joy tools ' + JSON.stringify(metrics.joyTools));
-          assert(metrics.canvasBottom !== null && metrics.joyTools.every((b) => b.top >= metrics.canvasBottom - 1), pagePath + ' ' + width + 'px joy tools overlap canvas: ' + JSON.stringify({ canvasBottom: metrics.canvasBottom, tools: metrics.joyTools }));
+          const metricsAnchor = pagePath.includes('block-drop') ? metrics.wellBottom : metrics.canvasBottom;
+          assert(metricsAnchor !== null && metrics.joyTools.every((b) => b.top >= metricsAnchor - 1), pagePath + ' ' + width + 'px joy tools overlap canvas: ' + JSON.stringify({ anchor: metricsAnchor, canvasBottom: metrics.canvasBottom, wellBottom: metrics.wellBottom, tools: metrics.joyTools }));
         }
         if (metrics.hasGameTools || metrics.hasJoyRow) assert(metrics.docH <= metrics.vh + 1, pagePath + ' ' + width + 'px controls vertical overflow ' + metrics.docH + '>' + metrics.vh);
       }
@@ -2032,7 +2039,7 @@ async function main() {
       version: window.Arcade && Arcade.version,
       title: document.title
     })`);
-    assert(offlineHall.cards === 13 && offlineHall.version === '0.8.3', 'offline hall failed: ' + JSON.stringify(offlineHall));
+    assert(offlineHall.cards === 13 && offlineHall.version === '0.8.4', 'offline hall failed: ' + JSON.stringify(offlineHall));
     const offlineStatus = await cdp.evaluate(`(async () => {
       try {
         await Arcade.Offline.register();
@@ -2054,7 +2061,7 @@ async function main() {
       overlay: !!document.querySelector('[data-overlay]'),
       version: window.Arcade && window.Arcade.version
     })`);
-    assert(offlineGame.hasArcade && offlineGame.overlay && offlineGame.version === '0.8.3', 'offline game failed: ' + JSON.stringify(offlineGame));
+    assert(offlineGame.hasArcade && offlineGame.overlay && offlineGame.version === '0.8.4', 'offline game failed: ' + JSON.stringify(offlineGame));
     await cdp.navigate(base + '/apps/arcade/games/not-preloaded.html');
     const offlineMissing = await cdp.text('body');
     assert(offlineMissing && offlineMissing.includes('还没有预载'), 'offline missing page: ' + String(offlineMissing).slice(0, 120));
