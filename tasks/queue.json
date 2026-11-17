@@ -1310,8 +1310,8 @@
         "双端线上无头 Chrome 核心路径通过（中心页 0.8.4/方块页棋盘与道具坞/暂停）",
         "文档、注册表、版本、任务状态同步，无未授权发布动作"
       ],
-      "completedAt": "2026-11-18T00:40:00+08:00",
-      "evidence": "推送 77cb02a..ecfdda4（853739c 道具坞 / 0756490 地铁单手暂停 / ecfdda4 棋盘优先画布）；Actions run 44122372096 四 job 全成功；CI 与本地 tools/verify_deploy.py 均 38/38 文件 SHA-256 双端一致（Arcade 0.8.4 / Badge 2.2.1 / Venue 0.2.0 available，manifest application/manifest+json）；双端线上无头 Chrome 18/18：中心页 0.8.4 + 13 卡、SW VERSION 0.8.4、方块页运行时 0.8.4、390x844 棋盘 257x513、道具坞经典 3 格含暂停 / 禅 4 格含冻结、触屏 hint 隐藏、0 console error；SW 缓存键 studiokit-arcade-0.8.4-v1。真机 iOS/Android 触控与双击暂停手感仍 UNVERIFIED。"
+      "completedAt": "2026-11-18T00:21:38+08:00",
+      "evidence": "推送 77cb02a..ecfdda4（853739c 道具坞 / 0756490 地铁单手暂停 / ecfdda4 棋盘优先画布）；Actions run 44122372096 四 job 全成功；CI 与本地 tools/verify_deploy.py 均 38/38 文件 SHA-256 双端一致（Arcade 0.8.4 / Badge 2.2.1 / Venue 0.2.0 available，manifest application/manifest+json）；双端线上无头 Chrome 18/18：中心页 0.8.4 + 13 卡、SW VERSION 0.8.4、方块页运行时 0.8.4、390x844 棋盘 257x513、道具坞经典 3 格含暂停 / 禅 4 格含冻结、触屏 hint 隐藏、0 console error；SW 缓存键 studiokit-arcade-0.8.4-v1；发布后证据文档提交 9a87b5f 触发 Actions run 44125175097 同样 success，最终 verify_deploy 仍 38/38 双端一致。真机 iOS/Android 触控与双击暂停手感仍 UNVERIFIED。"
     }
   ]
 }
