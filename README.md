@@ -4,7 +4,7 @@
 
 - **线上站点：** <https://shawlaw.github.io/studiokit/> · <https://studiokit.pages.dev/>
 - **源码：** <https://github.com/Shawlaw/studiokit>（MIT 许可）
-- **当前工具：** Badge Studio `2.2.1`；街机厅 Arcade `0.8.5`（13 款竖屏小游戏 + 78 关挑战模式 + 俄罗斯方块禅模式 + 积分记录表 + 极速车道转向灯换道/连超/拾取 + 贪吃蛇四向按钮与棋盘优先画布）；Venue Compare `0.2.0`（餐厅考察对比、地图标注与外部链接 / 备注，已发布）
+- **当前工具：** Badge Studio `2.2.1`；街机厅 Arcade `0.8.6`（13 款竖屏小游戏 + 78 关挑战模式 + 俄罗斯方块禅模式 + 积分记录表 + 极速车道转向灯换道/连超/拾取 + 结算重选模式 + 贪吃蛇左右相对转向双按钮与棋盘优先画布）；Venue Compare `0.2.0`（餐厅考察对比、地图标注与外部链接 / 备注，已发布）
 - **计划中的工具：** Rounded Image（尚未实现，等待原始需求/规格）
 - **最近发布：** 2026-11-19，Arcade 0.8.5（极速车道卡死修复 + 转向灯换道/连超/加速带/维修箱/评价、贪吃蛇棋盘优先与四向按钮、方块积分消去层数；GitHub Pages + Cloudflare Pages 双端；提交 `ee9b45b`，Actions `44472286080`，`verify_deploy.py` 38/38，线上无头 Chrome 20/20）
 - **运行方式：** 纯静态文件；无后端、无账号、无构建依赖、无第三方 CDN
@@ -28,7 +28,7 @@ StudioKit/
 │   │   ├── index.html
 │   │   ├── README.md
 │   │   └── CHANGELOG.md
-│   └── arcade/                      # 街机厅，当前 v0.8.5（GitHub Pages + Cloudflare Pages 双端发布）
+│   └── arcade/                      # 街机厅，当前 v0.8.6（待发布；0.8.5 已双端发布）
 │       ├── index.html               # 游戏中心页（统计/分享/安装/预载）
 │       ├── engine.js                # 街机专用共享运行时
 │       ├── arcade.css               # 街机专用样式
@@ -43,6 +43,7 @@ StudioKit/
 │       ├── DESIGN-0.8.0.md          # 影冲/影之试炼与 13 游戏 78 关挑战架构、兼容与回滚
 │       ├── DESIGN-0.8.1.md          # 俄罗斯方块禅模式与积分记录表设计、兼容与回滚
 │       ├── DESIGN-0.8.2.md          # 俄罗斯方块控制区压缩与画布回收设计、兼容与回滚
+│       ├── DESIGN-0.8.6.md          # 结算重选模式与贪吃蛇双拇指相对转向设计、兼容与回滚
 │       ├── README.md
 │       └── CHANGELOG.md
 ├── templates/single-page-tool/      # 新工具模板

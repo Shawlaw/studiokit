@@ -315,7 +315,7 @@
             (rec && rec.isNewHigh ? '<span class="ac-newhigh">★ 新纪录</span><br/>' : '') +
             `飞行距离 · 最高 ${Math.max(high, finalDist)}m`,
           btn: '再来一局',
-          onBtn: startGame,
+          onBtn: showStart,
         });
         pauseUi.sync();
         syncJoyTools();

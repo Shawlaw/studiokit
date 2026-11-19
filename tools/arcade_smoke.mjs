@@ -1,6 +1,6 @@
 #!/usr/bin/env node
 /**
- * 街机厅无头浏览器冒烟测试（85 项全链路回归）。
+ * 街机厅无头浏览器冒烟测试（91 项全链路回归）。
  * 零 npm 依赖：通用基础设施见 tools/lib/arcade_cdp.mjs（静态服务器 / Chrome 启动 / CDP / 断言记录器）。
  * 运行：node tools/arcade_smoke.mjs
  * 端口可用环境变量覆盖：ARCADE_SMOKE_PORT（默认 8765）/ ARCADE_CDP_PORT（默认 9333）。
@@ -46,8 +46,8 @@ async function main() {
     })()`);
     assert(home.cards >= 2, 'home cards=' + home.cards);
     assert(home.href.indexOf('apps/arcade') !== -1, 'arcade card not clickable: ' + JSON.stringify(home));
-    assert(home.version.indexOf('0.8.5') !== -1, 'arcade version missing on home card');
-    record('门户街机厅卡片可点击且版本 0.8.5', true);
+    assert(home.version.indexOf('0.8.6') !== -1, 'arcade version missing on home card');
+    record('门户街机厅卡片可点击且版本 0.8.6', true);
 
     /* ---------- GitHub Pages 项目子路径：shell 返回链接 ---------- */
     await cdp.navigate(base + '/studiokit/apps/arcade/games/star-raid.html');
@@ -65,10 +65,10 @@ async function main() {
       cards: document.querySelectorAll('.hall-card').length,
       runs: window.Arcade && Arcade.RunSave.count()
     })`);
-    assert(hallInfo.version === '0.8.5', 'version is ' + hallInfo.version);
+    assert(hallInfo.version === '0.8.6', 'version is ' + hallInfo.version);
     assert(hallInfo.games === 13, 'game count is ' + hallInfo.games);
     assert(hallInfo.cards === 13, 'card count is ' + hallInfo.cards);
-    record('中心页 13 款游戏与版本 0.8.5', true);
+    record('中心页 13 款游戏与版本 0.8.6', true);
 
     await cdp.evaluate(`(() => { const i = document.querySelector('[data-search]'); i.value = '雪铃'; i.dispatchEvent(new Event('input', { bubbles: true })); })()`);
     await sleep(120);
@@ -1136,6 +1136,18 @@ async function main() {
     assert(blockFinished.info.state === 'over' && blockFinished.info.lines === 40 && blockFinished.info.shortRun && !blockFinished.run, 'block 40-line finish: ' + JSON.stringify(blockFinished));
     assert(!blockFinished.title.includes('结束') || blockFinished.title.includes('完成'), 'block finish title: ' + blockFinished.title);
     record('俄罗斯方块 换块不动 7-bag/慢落/40 行收尾', true);
+    await cdp.click('[data-ov-btn]');
+    const blockReplayModes = await cdp.evaluate(`({
+      overlay: !document.querySelector('[data-overlay]').hidden,
+      title: document.querySelector('[data-ov-title]').textContent,
+      primary: document.querySelector('[data-ov-btn]').textContent,
+      challenge: document.querySelector('[data-ov-btn2]').textContent,
+      zen: document.querySelector('[data-ov-btn3]').textContent,
+      challengeVisible: !document.querySelector('[data-ov-btn2]').hidden,
+      zenVisible: !document.querySelector('[data-ov-btn3]').hidden
+    })`);
+    assert(blockReplayModes.overlay && blockReplayModes.primary === '开始游戏' && blockReplayModes.challengeVisible && blockReplayModes.challenge.includes('挑战') && blockReplayModes.zenVisible && blockReplayModes.zen.includes('禅模式'), '方块结算没有重新提供经典/挑战/禅模式: ' + JSON.stringify(blockReplayModes));
+    record('俄罗斯方块 结算「再来一局」返回经典/挑战/禅模式选择', true);
 
     await openJoy('gold-miner.html', 'gold-miner');
     const goldJoyStart = await cdp.evaluate(`(() => {
@@ -1442,6 +1454,17 @@ async function main() {
     assert(overState.run === false, 'snake run not cleared after game over');
     record('贪吃蛇 自然结束/记录写入/局内档清理', true);
     await cdp.screenshot('gameover-snake.png');
+    await cdp.click('[data-ov-btn]');
+    const replayModeSelect = await cdp.evaluate(`({
+      overlay: !document.querySelector('[data-overlay]').hidden,
+      title: document.querySelector('[data-ov-title]').textContent,
+      primary: document.querySelector('[data-ov-btn]').textContent,
+      secondary: document.querySelector('[data-ov-btn2]').textContent,
+      secondaryVisible: !document.querySelector('[data-ov-btn2]').hidden,
+      run: !!Arcade.RunSave.get('snake-run')
+    })`);
+    assert(replayModeSelect.overlay && replayModeSelect.title === '贪吃蛇' && replayModeSelect.primary === '开始游戏' && replayModeSelect.secondaryVisible && replayModeSelect.secondary.includes('挑战') && !replayModeSelect.run, '再来一局没有回到模式选择: ' + JSON.stringify(replayModeSelect));
+    record('贪吃蛇 结算「再来一局」返回开始与模式选择', true);
 
     /* ---------- 游玩时长：游玩计时、暂停不计时、轮次明细 ---------- */
     await cdp.evaluate(`Arcade.Playtime.resetAll()`);
@@ -1747,8 +1770,8 @@ async function main() {
     record('俄罗斯方块 375px 双手按钮面板 + 画布触摸区不再误触', true);
     await cdp.screenshot('touch-block-drop.png');
 
-    /* ---------- 0.8.5 贪吃蛇：四向按钮 + 棋盘优先画布 + 放缓提速 ---------- */
-    for (const [width, height, minCanvas] of [[320, 568, 250], [375, 667, 300]]) {
+    /* ---------- 0.8.6 贪吃蛇：双拇指相对转向 + 棋盘优先画布 + 放缓提速 ---------- */
+    for (const [width, height, minCanvas, minBoard] of [[320, 568, 240, 185], [375, 667, 290, 245], [390, 844, 290, 285], [430, 932, 290, 315]]) {
       await cdp.send('Emulation.setDeviceMetricsOverride', { width, height, deviceScaleFactor: 1, mobile: true });
       await cdp.evaluate(`Arcade.RunSave.clear('snake-run')`);
       await cdp.navigate(base + '/apps/arcade/games/snake-run.html#test');
@@ -1756,11 +1779,12 @@ async function main() {
       const snakeLayout = await cdp.evaluate(`(() => {
         const c = document.querySelector('.game-canvas').getBoundingClientRect();
         const pad = document.querySelector('[data-dpad]');
-        const btns = [...pad.querySelectorAll('[data-dir]')].map((b) => { const r = b.getBoundingClientRect(); return { dir: b.dataset.dir, w: Math.round(r.width), h: Math.round(r.height) }; });
+        const btns = [...pad.querySelectorAll('[data-turn]')].map((b) => { const r = b.getBoundingClientRect(); return { turn: b.dataset.turn, label: b.textContent.trim(), left: Math.round(r.left), right: Math.round(r.right), w: Math.round(r.width), h: Math.round(r.height) }; });
         return {
           canvas: { w: Math.round(c.width), h: Math.round(c.height) },
           boardPx: Math.round(c.width * 306 / 360),
           btns,
+          oldAbsoluteButtons: pad.querySelectorAll('[data-dir]').length,
           padDisplay: getComputedStyle(pad).display,
           sw: document.documentElement.scrollWidth,
           cw: document.documentElement.clientWidth,
@@ -1771,9 +1795,11 @@ async function main() {
       })()`);
       assert(snakeLayout.sw <= snakeLayout.cw + 1, '贪吃蛇 ' + width + 'px 横向溢出: ' + JSON.stringify(snakeLayout));
       assert(snakeLayout.canvas.h > minCanvas, '贪吃蛇 ' + width + 'px 画布过小: ' + JSON.stringify(snakeLayout));
-      assert(snakeLayout.boardPx >= (width === 375 ? 250 : 190), '贪吃蛇 ' + width + 'px 棋盘没有放大: ' + JSON.stringify(snakeLayout));
-      assert(snakeLayout.padDisplay === 'grid', '贪吃蛇四向面板未显示: ' + JSON.stringify(snakeLayout));
-      assert(snakeLayout.btns.length === 4 && snakeLayout.btns.every((b) => b.w >= 44 && b.h >= 44), '贪吃蛇方向键小于 44px: ' + JSON.stringify(snakeLayout.btns));
+      assert(snakeLayout.boardPx >= minBoard, '贪吃蛇 ' + width + 'px 棋盘没有放大: ' + JSON.stringify(snakeLayout));
+      assert(snakeLayout.padDisplay === 'grid', '贪吃蛇双按钮面板未显示: ' + JSON.stringify(snakeLayout));
+      assert(snakeLayout.oldAbsoluteButtons === 0, '贪吃蛇仍保留绝对方向按钮: ' + JSON.stringify(snakeLayout));
+      assert(snakeLayout.btns.length === 2 && snakeLayout.btns[0].turn === 'left' && snakeLayout.btns[1].turn === 'right', '贪吃蛇不是左右两枚转向键: ' + JSON.stringify(snakeLayout.btns));
+      assert(snakeLayout.btns.every((b) => b.w >= 120 && b.h >= 58) && snakeLayout.btns[0].right < snakeLayout.btns[1].left, '贪吃蛇双拇指按钮尺寸/分区不合格: ' + JSON.stringify(snakeLayout.btns));
       assert(snakeLayout.hudInTopbar, '贪吃蛇挑战 HUD 没有移出画布');
       assert(snakeLayout.docH <= snakeLayout.vh + 1, '贪吃蛇 ' + width + 'px 纵向溢出: ' + JSON.stringify(snakeLayout));
     }
@@ -1784,29 +1810,46 @@ async function main() {
     await cdp.navigate(base + '/apps/arcade/games/snake-run.html#test');
     await cdp.waitFor('document.readyState === "complete" && window.__arcadeTest', { timeout: 8000 });
     await cdp.click('[data-ov-btn]');
-    await sleep(220);
     const snakeDpadReady = await cdp.evaluate(`__arcadeTest.info()`);
-    assert(snakeDpadReady.dpadDisabled.every((d) => d === false), '贪吃蛇开局后方向键仍禁用: ' + JSON.stringify(snakeDpadReady));
-    await cdp.buttonPointer('[data-dir="down"]', 'pointerdown');
-    await sleep(420);
-    const snakeTurnDown = await cdp.evaluate(`__arcadeTest.info()`);
-    assert(snakeTurnDown.dir.y === 1 && snakeTurnDown.dir.x === 0, '贪吃蛇「下」按钮未转向: ' + JSON.stringify(snakeTurnDown));
-    await cdp.buttonPointer('[data-dir="up"]', 'pointerdown');
-    await sleep(200);
-    const snakeReverse = await cdp.evaluate(`__arcadeTest.info()`);
-    assert(snakeReverse.dir.y !== -1 && snakeReverse.nextDir.y !== -1, '贪吃蛇按钮允许原地掉头: ' + JSON.stringify(snakeReverse));
-    await cdp.buttonPointer('[data-dir="right"]', 'pointerdown');
-    await sleep(300);
-    const snakeTurnRight = await cdp.evaluate(`__arcadeTest.info()`);
-    assert(snakeTurnRight.dir.x === 1 || snakeTurnRight.nextDir.x === 1, '贪吃蛇「右」按钮未转向: ' + JSON.stringify(snakeTurnRight));
+    assert(snakeDpadReady.dpadDisabled.length === 2 && snakeDpadReady.dpadDisabled.every((d) => d === false), '贪吃蛇开局后转向键仍禁用: ' + JSON.stringify(snakeDpadReady));
+    await cdp.buttonPointer('[data-turn="right"]', 'pointerdown', 11);
+    await cdp.buttonPointer('[data-turn="right"]', 'pointerdown', 11);
+    const snakeQueuedTurns = await cdp.evaluate(`__arcadeTest.info()`);
+    assert(snakeQueuedTurns.dir.x === 1 && snakeQueuedTurns.nextDir.y === 1 && snakeQueuedTurns.queuedTurn && snakeQueuedTurns.queuedTurn.x === -1, '贪吃蛇连点没有按待执行方向排队: ' + JSON.stringify(snakeQueuedTurns));
+    await cdp.waitFor('__arcadeTest.info().dir.y === 1', { timeout: 1200 });
+    const snakeFirstTurn = await cdp.evaluate(`__arcadeTest.info()`);
+    assert(snakeFirstTurn.nextDir.x === -1 && !snakeFirstTurn.queuedTurn, '贪吃蛇第一格没有只消费一次转向: ' + JSON.stringify(snakeFirstTurn));
+    await cdp.waitFor('__arcadeTest.info().dir.x === -1', { timeout: 1200 });
+    const snakeSecondTurn = await cdp.evaluate(`__arcadeTest.info()`);
+    assert(snakeSecondTurn.dir.x === -1 && snakeSecondTurn.dir.y === 0, '贪吃蛇第二次右转没有相对蛇头生效: ' + JSON.stringify(snakeSecondTurn));
+    await cdp.buttonPointer('[data-turn="left"]', 'pointerdown', 12);
+    await cdp.waitFor('__arcadeTest.info().dir.y === 1', { timeout: 1200 });
+    const snakeLeftTurn = await cdp.evaluate(`__arcadeTest.info()`);
+    assert(snakeLeftTurn.dir.x === 0 && snakeLeftTurn.dir.y === 1, '贪吃蛇左转没有相对蛇头生效: ' + JSON.stringify(snakeLeftTurn));
     const snakeSpeed = await cdp.evaluate(`(() => {
       const t = __arcadeTest;
       for (let i = 0; i < 20; i++) t.eatNext();
       return t.info();
     })()`);
-    assert(snakeSpeed.foodsEaten >= 20 && snakeSpeed.stepInterval >= 0.12 && snakeSpeed.stepInterval < 0.16, '贪吃蛇 20 果实后仍然提速过快: ' + JSON.stringify(snakeSpeed));
-    if (cdp.errors.length) throw new Error('snake dpad console errors: ' + cdp.errors.join(' | '));
-    record('贪吃蛇 棋盘优先画布 + 四向按钮 + 提速放缓', true);
+    assert(snakeSpeed.foodsEaten >= 20 && snakeSpeed.stepInterval >= 0.12 && snakeSpeed.stepInterval < 0.16 && snakeSpeed.state === 'over', '贪吃蛇 20 果实后仍然提速过快或未收局: ' + JSON.stringify(snakeSpeed));
+    /* 从结算重新选择挑战模式：触屏相对转向必须进入既有挑战队列，同样按格消费。 */
+    await cdp.click('[data-ov-btn]');
+    await cdp.click('[data-ov-btn2]');
+    await cdp.waitFor('document.querySelector("[data-ch-layer]") && !document.querySelector("[data-ch-layer]").hidden', { timeout: 5000 });
+    await cdp.click('.ac-stage-btn:not([disabled])');
+    await cdp.waitFor('__arcadeTest.info().state === "playing"', { timeout: 5000 });
+    const challengeTurnBase = await cdp.evaluate(`__arcadeTest.info()`);
+    assert(challengeTurnBase.challengeQueue.length === 0, '挑战开局方向队列非空: ' + JSON.stringify(challengeTurnBase));
+    await cdp.buttonPointer('[data-turn="right"]', 'pointerdown', 13);
+    await cdp.buttonPointer('[data-turn="right"]', 'pointerdown', 13);
+    const challengeTurns = await cdp.evaluate(`__arcadeTest.info()`);
+    const expectedChallengeTurns = challengeTurns.challengeQueue;
+    const firstExpected = { x: -challengeTurnBase.dir.y, y: challengeTurnBase.dir.x };
+    const secondExpected = { x: -firstExpected.y, y: firstExpected.x };
+    assert(expectedChallengeTurns.length === 2 && expectedChallengeTurns[0].x === firstExpected.x && expectedChallengeTurns[0].y === firstExpected.y && expectedChallengeTurns[1].x === secondExpected.x && expectedChallengeTurns[1].y === secondExpected.y, '挑战触屏相对转向队列错误: ' + JSON.stringify({ before: challengeTurnBase, after: challengeTurns, firstExpected, secondExpected }));
+    await cdp.waitFor('__arcadeTest.info().challengeQueue.length === 1', { timeout: 1200 });
+    if (cdp.errors.length) throw new Error('snake turn-pad console errors: ' + cdp.errors.join(' | '));
+    record('贪吃蛇 棋盘优先画布 + 双拇指左右转向 + 两级连点缓冲 + 提速放缓', true);
 
     /* ---------- 俄罗斯方块拇指区暂停键 + 双击画面暂停（0.8.4 地铁单手） ---------- */
     for (const [width, height] of [[320, 568], [375, 667], [390, 844], [430, 932]]) {
@@ -2221,7 +2264,7 @@ async function main() {
       version: window.Arcade && Arcade.version,
       title: document.title
     })`);
-    assert(offlineHall.cards === 13 && offlineHall.version === '0.8.5', 'offline hall failed: ' + JSON.stringify(offlineHall));
+    assert(offlineHall.cards === 13 && offlineHall.version === '0.8.6', 'offline hall failed: ' + JSON.stringify(offlineHall));
     const offlineStatus = await cdp.evaluate(`(async () => {
       try {
         await Arcade.Offline.register();
@@ -2243,7 +2286,7 @@ async function main() {
       overlay: !!document.querySelector('[data-overlay]'),
       version: window.Arcade && window.Arcade.version
     })`);
-    assert(offlineGame.hasArcade && offlineGame.overlay && offlineGame.version === '0.8.5', 'offline game failed: ' + JSON.stringify(offlineGame));
+    assert(offlineGame.hasArcade && offlineGame.overlay && offlineGame.version === '0.8.6', 'offline game failed: ' + JSON.stringify(offlineGame));
     await cdp.navigate(base + '/apps/arcade/games/not-preloaded.html');
     const offlineMissing = await cdp.text('body');
     assert(offlineMissing && offlineMissing.includes('还没有预载'), 'offline missing page: ' + String(offlineMissing).slice(0, 120));

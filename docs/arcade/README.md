@@ -2,6 +2,15 @@
 
 本目录保存 Arcade 各版本的设计/验收支撑文档，不是产品文档，也不进入发布产物（`tools/build_site.py` 的白名单只含 `index.html`、`favicon.svg`、`shared`、`apps`）。
 
+## 0.8.6（结算重选模式 + 贪吃蛇双拇指相对转向；2026-11-19 待发布）
+
+| 文档 | 内容 | 状态 |
+| --- | --- | --- |
+| `apps/arcade/DESIGN-0.8.6.md` | 13 款游戏结算回到模式选择、俄罗斯方块经典/禅模式完整复位、贪吃蛇左右相对转向与两级连点、四档竖屏布局、兼容与回滚 | 已实现，待发布 |
+| `apps/arcade/CHANGELOG.md` / `apps/arcade/README.md` | 变更摘要、门禁与发布证据 | 随 0.8.6 更新 |
+
+门禁：`arcade_smoke.mjs` **91/91**、`arcade_zen_scores_test.mjs` **14/14**、`arcade_gameplay_test.mjs --suite=base --repeat=2` **22/22**、`validate_site.py` / `build_site.py` / `node --check` 通过；320/375/390/430 双按钮布局通过，真机手感 UNVERIFIED。发布证据待双端核验后回填。
+
 ## 0.8.5（极速车道车流规则 + 贪吃蛇棋盘优先 + 积分记录消去层数；2026-11-19 已双端发布）
 
 | 文档 | 内容 | 状态 |

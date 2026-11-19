@@ -822,8 +822,6 @@
               (zenElapsed > 0 ? ` · 用时 ${A.formatDuration(zenElapsed * 1000)}` : '') +
               '<br/>本局已记录到积分表（禅模式不计经典最高分）',
             '再来一局',
-            startZenRound,
-            '回到开始',
             returnToStart
           );
           syncZenHud();
@@ -851,7 +849,7 @@
             (rec && rec.isNewHigh ? '<span class="ac-newhigh">★ 新纪录</span><br/>' : '') +
             `${lines} 行 · Lv.${level} · 最高 ${Math.max(high, score)}`,
           '再来一局',
-          startGame
+          returnToStart
         );
         pauseUi.sync();
         syncTouchPad();

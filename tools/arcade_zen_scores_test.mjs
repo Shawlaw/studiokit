@@ -379,10 +379,10 @@ const SCENARIOS = [
     async run(cdp) {
       await prepareHub(cdp);
       const api = await requireScores(cdp);
-      assert(api.version === '0.8.5', 'A.version=' + JSON.stringify(api.version) + '，期望 0.8.5');
+      assert(api.version === '0.8.6', 'A.version=' + JSON.stringify(api.version) + '，期望 0.8.6');
       const dom = await hubSnapshot(cdp);
       assert(dom.section, '中心页缺少 [data-scores-section] 积分记录区块');
-      assert(dom.versionText.trim() === '0.8.5', '[data-hall-version]=' + JSON.stringify(dom.versionText) + '，期望 0.8.5');
+      assert(dom.versionText.trim() === '0.8.6', '[data-hall-version]=' + JSON.stringify(dom.versionText) + '，期望 0.8.6');
       assert(dom.table, '缺少 .hall-scores-table 积分表格');
       const headers = dom.headers.map((item) => item.text).join('/');
       assert(headers === '时间/游戏/模式/得分/详情', '表头=' + JSON.stringify(headers) + '，期望 时间/游戏/模式/得分/详情');
@@ -428,7 +428,16 @@ const SCENARIOS = [
       assert(payload.records.length === 1, 'scores:v1 原始记录数=' + payload.records.length + '，期望 1');
       assert(payload.records[0].gameId === 'block-drop' && payload.records[0].mode === 'classic', 'scores:v1 首条记录字段错误：' + JSON.stringify(payload.records[0]));
 
-      /* 第二局等效得分：最高分不得被覆盖/降低，plays 递增。 */
+      /* 第二局等效得分：0.8.6 的「再来一局」先回模式选择，再点「开始游戏」进入经典局。 */
+      await cdp.click('[data-ov-btn]');
+      await cdp.waitFor('document.querySelector("[data-overlay]") && !document.querySelector("[data-overlay]").hidden && document.querySelector("[data-ov-btn]").textContent === "开始游戏"', { timeout: 8000 });
+      const replayEntry = await cdp.evaluate(`({
+        title: document.querySelector('[data-ov-title]').textContent,
+        challengeVisible: !document.querySelector('[data-ov-btn2]').hidden,
+        zenVisible: !document.querySelector('[data-ov-btn3]').hidden,
+        state: window.__arcadeTest.info().state
+      })`);
+      assert(replayEntry.title.indexOf('俄罗斯方块') !== -1 && replayEntry.challengeVisible && replayEntry.zenVisible && replayEntry.state === 'ready', '经典再来一局未复位到三模式开始层：' + JSON.stringify(replayEntry));
       await cdp.click('[data-ov-btn]');
       await cdp.waitFor('window.__arcadeTest.info().state === "playing"', { timeout: 8000 });
       await cdp.evaluate('window.__arcadeTest.lineClearScenario(39)');
@@ -756,7 +765,21 @@ const SCENARIOS = [
       const afterAgain = await readScores(cdp);
       assert(afterAgain.length === countBeforeAgain, '重复 endZen() 产生了额外积分记录：' + (afterAgain.length - countBeforeAgain) + ' 条');
       await safeScreenshot(cdp, 'zen-settlement.png');
-      return { zenScore: zenRecord.score, classicHigh, plays: settled.progress.plays, title: settled.title.slice(0, 20) };
+      await cdp.click('[data-ov-btn]');
+      const replayModes = await cdp.evaluate(`(() => ({
+        overlayVisible: !document.querySelector('[data-overlay]').hidden,
+        title: document.querySelector('[data-ov-title]').textContent,
+        primary: document.querySelector('[data-ov-btn]').textContent,
+        challenge: document.querySelector('[data-ov-btn2]').textContent,
+        challengeVisible: !document.querySelector('[data-ov-btn2]').hidden,
+        zen: document.querySelector('[data-ov-btn3]').textContent,
+        zenVisible: !document.querySelector('[data-ov-btn3]').hidden,
+        state: window.__arcadeTest.zenInfo().state
+      }))()`);
+      assert(replayModes.overlayVisible && replayModes.title.indexOf('俄罗斯方块') !== -1, '禅模式再来一局未回到开始弹层：' + JSON.stringify(replayModes));
+      assert(replayModes.primary === '开始游戏' && replayModes.challengeVisible && replayModes.challenge.indexOf('挑战') !== -1 && replayModes.zenVisible && replayModes.zen.indexOf('禅模式') !== -1, '禅模式再来一局未提供经典/挑战/禅模式：' + JSON.stringify(replayModes));
+      assert(replayModes.state === 'ready', '禅模式再来一局后内部状态未复位 ready：' + JSON.stringify(replayModes));
+      return { zenScore: zenRecord.score, classicHigh, plays: settled.progress.plays, title: settled.title.slice(0, 20), replayModes: ['classic', 'challenge', 'zen'] };
     },
   },
   {

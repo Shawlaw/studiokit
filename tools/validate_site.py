@@ -170,7 +170,7 @@ def validate(root=ROOT):
     arcade_engine = root / 'apps/arcade/engine.js'
     if arcade_engine.exists():
         source = arcade_engine.read_text(encoding='utf-8')
-        if "const ARCADE_VERSION = '0.8.5'" not in source:
+        if "const ARCADE_VERSION = '0.8.6'" not in source:
             ok = fail('Arcade ARCADE_VERSION drifted; update registry/README/CHANGELOG together') and ok
         if source.count("file: '") < 13:
             ok = fail('Arcade GAMES list should contain at least 13 games') and ok
@@ -221,19 +221,38 @@ def validate(root=ROOT):
         arcade_index = root / 'apps/arcade/index.html'
         if arcade_index.exists():
             index_source = arcade_index.read_text(encoding='utf-8')
-            for marker in ('rel="manifest"', 'data-playtime-section', 'data-scores-section', 'data-scores-body', 'data-scores-empty', 'data-offline', 'data-install', 'data-share', 'data-random', '无签到', 'data-hall-version>0.8.5'):
+            for marker in ('rel="manifest"', 'data-playtime-section', 'data-scores-section', 'data-scores-body', 'data-scores-empty', 'data-offline', 'data-install', 'data-share', 'data-random', '无签到', 'data-hall-version>0.8.6'):
                 if marker not in index_source:
-                    ok = fail(f'Arcade hub 0.8.5 marker missing: {marker}') and ok
+                    ok = fail(f'Arcade hub 0.8.6 marker missing: {marker}') and ok
         arcade_block = root / 'apps/arcade/games/block-drop.html'
         if arcade_block.exists():
             block_source = arcade_block.read_text(encoding='utf-8')
             for marker in ('data-ov-btn3', 'data-hud-zen', 'data-zen-freeze', 'zenSpeedLevel', 'startZen', 'zenInfo', 'zenLineClearScenario'):
                 if marker not in block_source:
                     ok = fail(f'Arcade block-drop marker missing: {marker}') and ok
+        # 0.8.6：所有经典/禅模式「再来一局」必须回到模式选择，不得直接 startGame/startZenRound。
+        for game_id in ARCADE_CHALLENGE_GAMES:
+            game_page = root / f'apps/arcade/games/{game_id}.html'
+            if not game_page.exists():
+                continue
+            game_source = game_page.read_text(encoding='utf-8')
+            for replay in re.finditer(r"['\"]再来一局['\"]", game_source):
+                callback_window = game_source[replay.end():replay.end() + 100]
+                if re.search(r'\b(?:startGame|startZenRound)\b', callback_window):
+                    ok = fail(f'{game_page.relative_to(root)}: 再来一局仍直接重开，未返回模式选择') and ok
+        snake_page = root / 'apps/arcade/games/snake-run.html'
+        if snake_page.exists():
+            snake_source = snake_page.read_text(encoding='utf-8')
+            for marker in ('data-turn="left"', 'data-turn="right"', 'function handleTurnInput', 'function rotateTurn'):
+                if marker not in snake_source:
+                    ok = fail(f'Arcade snake relative-turn marker missing: {marker}') and ok
+            for obsolete in ('data-dir="up"', 'data-dir="down"', 'data-dir="left"', 'data-dir="right"'):
+                if obsolete in snake_source:
+                    ok = fail(f'Arcade snake absolute direction button must be removed: {obsolete}') and ok
         arcade_sw = root / 'apps/arcade/sw.js'
         if arcade_sw.exists():
             sw_source = arcade_sw.read_text(encoding='utf-8')
-            for marker in ("const VERSION = '0.8.5'", 'arcade-precache', 'skipWaiting', 'clients.claim'):
+            for marker in ("const VERSION = '0.8.6'", 'arcade-precache', 'skipWaiting', 'clients.claim'):
                 if marker not in sw_source:
                     ok = fail(f'Arcade service worker marker missing: {marker}') and ok
             # 0.9：13 个挑战数据文件必须进入 shell 预缓存（相对路径写法，兼容子路径部署）。
@@ -258,8 +277,8 @@ def validate(root=ROOT):
             try:
                 registry = json.loads(registry_path.read_text(encoding='utf-8'))
                 arcade = next((t for t in registry.get('tools', []) if t.get('id') == 'arcade'), None)
-                if arcade and arcade.get('version') != '0.8.5':
-                    ok = fail('Arcade registry version must match engine 0.8.5') and ok
+                if arcade and arcade.get('version') != '0.8.6':
+                    ok = fail('Arcade registry version must match engine 0.8.6') and ok
             except Exception:
                 pass
 

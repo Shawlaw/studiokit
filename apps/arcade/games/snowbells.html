@@ -323,7 +323,7 @@
             (rec && rec.isNewHigh ? '<span class="ac-newhigh">★ 新纪录</span><br/>' : '') +
             `铃铛分 ${bellScore} + 高度 ${heightScore()} · 最高 ${Math.max(high, score)}`,
           btn: '再来一局',
-          onBtn: startGame,
+          onBtn: showStart,
         });
         pauseUi.sync(); syncJoyTools();
       }

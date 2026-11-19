@@ -989,7 +989,7 @@
             (rec && rec.isNewHigh ? '<span class="ac-newhigh">★ 新纪录</span><br/>' : '') +
             `第 ${level} 关 · 目标 $${target} 未达成 · 最高 $${Math.max(high, total)}`,
           btn: '再来一局',
-          onBtn: startGame,
+          onBtn: showStart,
         });
         pauseUi.sync();
         syncCashout();

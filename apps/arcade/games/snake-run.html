@@ -17,11 +17,11 @@
     .challenge-layer .ac-btn[hidden] { display: none; }
     .challenge-layer .ac-challenge-panel { flex: 0 0 auto; }
     .challenge-layer .ac-btn { flex: 0 0 auto; width: 100%; min-height: 44px; }
-    /* 0.8.4 棋盘优先画布：四向按钮自带文字，触屏隐藏重复 hint；舞台高度按 360×430 逻辑比例计算。 */
-    .touch-pad.snake-pad { grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 8px; }
-    .snake-pad .snake-dir { display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 2px; min-height: 58px; font-size: 22px; padding: 4px 0; }
-    .snake-dir-glyph { font-size: 23px; line-height: 1; }
-    .snake-dir-label { font-size: 10px; line-height: 1; font-weight: 600; letter-spacing: .5px; color: var(--ac-muted); }
+    /* 0.8.6 双拇指相对转向：左右两个宽按钮，不再提供绝对方向的上/下/掉头按钮。 */
+    .touch-pad.snake-pad { grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 12px; }
+    .snake-pad .snake-dir { display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 3px; min-height: 64px; font-size: 22px; padding: 4px 8px; touch-action: manipulation; user-select: none; -webkit-user-select: none; }
+    .snake-dir-glyph { font-size: 26px; line-height: 1; }
+    .snake-dir-label { font-size: 12px; line-height: 1; font-weight: 700; letter-spacing: .5px; color: var(--ac-muted); }
     .snake-pad .snake-dir:active .snake-dir-label { color: var(--ac-ink); }
     @media (hover: none), (max-width: 620px) { .snake-hint { display: none; } }
     /* 共享 .stage-box 的 aspect-ratio:420/740 会让新逻辑画布被纵向拉长、格子变长方形；
@@ -37,7 +37,7 @@
     /* 页面样式在 arcade.css 之后加载，高优先级选择器覆盖共享的 740/420 高度规则。 */
     body.has-game-tools.has-snake-pad:not(.arcade-immersive) .stage-box {
       height: min(
-        calc(100dvh - var(--studiokit-shellbar-h, 0px) - 243px - env(safe-area-inset-bottom, 0px)),
+        calc(100dvh - var(--studiokit-shellbar-h, 0px) - 249px - env(safe-area-inset-bottom, 0px)),
         calc(min(520px, 100vw - 24px) * 430 / 360)
       );
     }
@@ -84,11 +84,9 @@
         </div>
       </div>
     </div>
-    <div class="touch-pad snake-pad" data-dpad aria-label="贪吃蛇方向操作面板">
-      <button type="button" class="touch-btn snake-dir" data-dir="left" aria-label="向左转"><span class="snake-dir-glyph" aria-hidden="true">←</span><span class="snake-dir-label" aria-hidden="true">左</span></button>
-      <button type="button" class="touch-btn snake-dir" data-dir="up" aria-label="向上转"><span class="snake-dir-glyph" aria-hidden="true">↑</span><span class="snake-dir-label" aria-hidden="true">上</span></button>
-      <button type="button" class="touch-btn snake-dir" data-dir="down" aria-label="向下转"><span class="snake-dir-glyph" aria-hidden="true">↓</span><span class="snake-dir-label" aria-hidden="true">下</span></button>
-      <button type="button" class="touch-btn snake-dir" data-dir="right" aria-label="向右转"><span class="snake-dir-glyph" aria-hidden="true">→</span><span class="snake-dir-label" aria-hidden="true">右</span></button>
+    <div class="touch-pad snake-pad" data-dpad aria-label="贪吃蛇双拇指转向面板：按蛇头当前方向左转或右转">
+      <button type="button" class="touch-btn snake-dir" data-turn="left" aria-label="按蛇头当前方向向左转 90 度"><span class="snake-dir-glyph" aria-hidden="true">↺</span><span class="snake-dir-label" aria-hidden="true">左转</span></button>
+      <button type="button" class="touch-btn snake-dir" data-turn="right" aria-label="按蛇头当前方向向右转 90 度"><span class="snake-dir-glyph" aria-hidden="true">↻</span><span class="snake-dir-label" aria-hidden="true">右转</span></button>
     </div>
     <div class="touch-pad game-tools" data-game-tools aria-label="主动道具（快捷键 1 / 2）">
       <button type="button" class="touch-btn" data-joy-tool="slow" aria-label="慢速泡泡 6 秒，剩余 2 次（快捷键 1）" title="慢速泡泡（1）：6 秒内每格间隔增加 0.06 秒">
@@ -98,7 +96,7 @@
         <span aria-hidden="true">✂</span><span>轻身</span><span data-joy-count aria-hidden="true">1</span>
       </button>
     </div>
-    <p class="game-hint snake-hint">方向键 / WASD / 滑动转向 · 触屏四向按钮 · 道具 1/2 · 吃满 20 个果实丰收收局 · P / Esc 暂停</p>
+    <p class="game-hint snake-hint">方向键 / WASD / 滑动转向 · 触屏按蛇头方向左右转 · 道具 1/2 · 吃满 20 个果实丰收收局 · P / Esc 暂停</p>
   </main>
   <script>
     (() => {
@@ -131,7 +129,7 @@
         hudScore: document.querySelector('[data-hud-score]'),
         hudHigh: document.querySelector('[data-hud-high]'),
         hudClassic: document.querySelectorAll('[data-hud-classic]'),
-        dpadButtons: document.querySelectorAll('[data-dir]'),
+        dpadButtons: document.querySelectorAll('[data-turn]'),
         pause: document.querySelector('[data-pause]'),
         mute: document.querySelector('[data-mute]'),
         joySlow: document.querySelector('[data-joy-tool="slow"]'),
@@ -171,6 +169,8 @@
       let snake = [];
       let dir = { x: 1, y: 0 };
       let nextDir = { x: 1, y: 0 };
+      /* 触屏相对转向的第二个待执行方向；每格最多消费一步，快速连点也不会直接掉头。 */
+      let queuedTurn = null;
       let food = null;
       let golden = null;
       let goldenTimer = 0;
@@ -238,8 +238,11 @@
         return stepInterval + (slowTimer > 0 ? SLOW_INTERVAL : 0);
       }
 
-      /* 0.8.4 四向按钮：只在局内可用，方向与键盘/滑动共用同一套规则（掉头无效）。 */
-      const DIR_WANT = { left: { x: -1, y: 0 }, up: { x: 0, y: -1 }, down: { x: 0, y: 1 }, right: { x: 1, y: 0 } };
+      /* 0.8.6 相对转向：左键永远逆时针 90°，右键永远顺时针 90°。
+         键盘/滑动仍是绝对方向；触屏连点基于待执行方向计算，但每格只转一次。 */
+      function rotateTurn(base, turn) {
+        return turn === 'left' ? { x: base.y, y: -base.x } : { x: -base.y, y: base.x };
+      }
 
       function syncDpad() {
         dom.dpadButtons.forEach((button) => {
@@ -247,20 +250,18 @@
         });
       }
 
-      function handleDirInput(name) {
-        if (state !== 'playing') return;
-        const want = DIR_WANT[name];
-        if (!want) return;
+      function handleTurnInput(turn) {
+        if (state !== 'playing' || (turn !== 'left' && turn !== 'right')) return false;
         if (mode === 'challenge') {
-          /* 先剔除与待执行方向重复的点击，再由 queueChallengeDir 校验掉头与队列长度。 */
           const last = chDirQueue.length ? chDirQueue[chDirQueue.length - 1] : dir;
-          if (last.x === want.x && last.y === want.y) return;
-          queueChallengeDir(want);
-          return;
+          return queueChallengeDir(rotateTurn(last, turn));
         }
-        if (nextDir.x === want.x && nextDir.y === want.y) return;
-        if (want.x === -dir.x && want.y === -dir.y) return;
-        nextDir = want;
+        if (queuedTurn) return false;
+        const base = nextDir || dir;
+        const want = rotateTurn(base, turn);
+        if (nextDir.x === dir.x && nextDir.y === dir.y) nextDir = want;
+        else queuedTurn = want;
+        return true;
       }
 
       function bindDpad() {
@@ -269,7 +270,7 @@
         dom.dpadButtons.forEach((button) => {
           button.addEventListener('pointerdown', (e) => {
             e.preventDefault();
-            handleDirInput(button.dataset.dir);
+            handleTurnInput(button.dataset.turn);
           });
           button.addEventListener('contextmenu', (e) => e.preventDefault());
         });
@@ -357,6 +358,7 @@
         ];
         dir = { x: 1, y: 0 };
         nextDir = { x: 1, y: 0 };
+        queuedTurn = null;
         stepTimer = 0;
       }
 
@@ -431,7 +433,7 @@
             (rec && rec.isNewHigh ? '<span class="ac-newhigh">★ 新纪录</span><br/>' : '') +
             `吃到 ${foodsEaten} 个果实 · 最高 ${Math.max(high, score)}`,
           btn: '再来一局',
-          onBtn: startGame,
+          onBtn: showStart,
         });
         pauseUi.sync();
         syncJoyTools();
@@ -458,7 +460,7 @@
         syncChallengeHud();
         ui.show({
           title: '贪吃蛇',
-          text: '吃果实变长，别撞墙、别咬到自己。<br/>触屏方向键 / ←↑↓→ / 滑动转向 · 道具 1/2<br/>吃满 20 个果实丰收收局 · 生命 ×3',
+          text: '吃果实变长，别撞墙、别咬到自己。<br/>触屏按蛇头方向左右转 / 方向键 / 滑动 · 道具 1/2<br/>吃满 20 个果实丰收收局 · 生命 ×3',
           btn: '开始游戏',
           onBtn: startGame,
           btn2: challengeAvailable ? '挑战 6 关' : '挑战数据不可用',
@@ -494,6 +496,10 @@
 
       function stepSnake() {
         dir = nextDir;
+        if (queuedTurn) {
+          nextDir = queuedTurn;
+          queuedTurn = null;
+        }
         const head = snake[0];
         const nx = head.x + dir.x;
         const ny = head.y + dir.y;
@@ -551,6 +557,7 @@
         if (Math.abs(dx) < 20 && Math.abs(dy) < 20) return;
         const want = Math.abs(dx) > Math.abs(dy) ? { x: dx > 0 ? 1 : -1, y: 0 } : { x: 0, y: dy > 0 ? 1 : -1 };
         if (want.x === -dir.x && want.y === -dir.y) return;
+        queuedTurn = null;
         nextDir = want;
       }
 
@@ -594,7 +601,10 @@
           const down = input.isDown(...keys[key]);
           if (down && !keyWasDown[key]) {
             const want = { left: { x: -1, y: 0 }, right: { x: 1, y: 0 }, up: { x: 0, y: -1 }, down: { x: 0, y: 1 } }[key];
-            if (!(want.x === -dir.x && want.y === -dir.y)) nextDir = want;
+            if (!(want.x === -dir.x && want.y === -dir.y)) {
+              queuedTurn = null;
+              nextDir = want;
+            }
           }
           keyWasDown[key] = down;
         });
@@ -1264,9 +1274,11 @@
               tools: { slow: tools.slow, trim: tools.trim },
               golden: !!golden,
               food: food ? { x: food.x, y: food.y } : null,
-              /* 0.8.4 四向按钮验收：暴露当前/待执行方向，便于验证按钮转向与掉头拦截。 */
+              /* 0.8.6 相对转向验收：暴露当前与两级待执行方向，验证连点按格消费且不直接掉头。 */
               dir: { x: dir.x, y: dir.y },
               nextDir: { x: nextDir.x, y: nextDir.y },
+              queuedTurn: queuedTurn ? { x: queuedTurn.x, y: queuedTurn.y } : null,
+              challengeQueue: chDirQueue.map((item) => ({ x: item.x, y: item.y })),
               dpadDisabled: Array.from(dom.dpadButtons).map((b) => b.disabled),
             };
           },

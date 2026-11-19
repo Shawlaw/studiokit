@@ -1350,6 +1350,40 @@
       ],
       "completedAt": "2026-11-19T14:28:30+08:00",
       "evidence": "推送 bdb1176..ee9b45b（cf8979e 极速车道 / 211d8ca 贪吃蛇 / 16a2a8b 方块积分 / 35394a2 测试 / ee9b45b 文档）；Actions run 44472286080 四 job 全成功；CI 与本地 tools/verify_deploy.py 均 38/38 文件 SHA-256 双端一致（Arcade 0.8.5 / Badge 2.2.1 / Venue 0.2.0 available，manifest application/manifest+json）；双端线上无头 Chrome 20/20：中心页 0.8.5 + 13 卡、SW VERSION 0.8.5、极速车道地平线车身 6.43x9.96px + 打灯车 0→1 完成、贪吃蛇棋盘 309px + 4x58px 按钮 + 向下转向、方块运行时 0.8.5、0 console error；SW 缓存键 studiokit-arcade-0.8.5-v1；发布后证据文档提交 a14e6fb 触发 Actions run 44472920425 同样四 job success。真机 iOS/Android 按钮手感与转向灯可读性仍 UNVERIFIED。"
+    },
+    {
+      "id": "T077",
+      "title": "Arcade 0.8.6：结算重新选模式与贪吃蛇双拇指相对转向",
+      "kind": "agent",
+      "status": "DONE",
+      "dependsOn": ["T076"],
+      "ownerAuthorizationRequired": false,
+      "acceptance": [
+        "13 款游戏经典/禅模式结算的再来一局回到开始弹层并支持重新选模式",
+        "2048 继续挑战与挑战关重试/下一关/返回选关保持原行为",
+        "贪吃蛇触屏仅有左右相对转向双按钮，适合竖屏双拇指，连点按格执行且不单格掉头",
+        "arcade_smoke 91/91、zen 14/14、gameplay base 22/22、validate/build/node --check 通过",
+        "localStorage key/Schema、挑战数据、玩法数值与积分规则不变；版本/文档/任务同步"
+      ],
+      "completedAt": "2026-11-19T23:11:19+08:00",
+      "evidence": "修改前真实浏览器复现：贪吃蛇结算点再来一局直接 over→playing 且弹层关闭，按钮为 left/up/down/right。13 款游戏经典/禅结算改为回到开始弹层；俄罗斯方块复用 returnToStart 完整复位 mode=classic/state=ready 并显示经典/挑战/禅三入口，2048 继续挑战与挑战重试/选关不变。贪吃蛇改为左右两枚 64px 高相对转向按钮，375px 实测每枚 170×64；经典 nextDir+queuedTurn 两级缓冲与挑战 chDirQueue 每格消费一次，连点两次右转依次向下/向左，无单格掉头；键盘/WASD/滑动保持绝对方向。门禁：arcade_smoke 91/91、zen 14/14、gameplay base 22/22、validate/build/node --check（含 13 页内联脚本）全过；320/375/390/430 布局通过；validate 新增全 13 游戏结算回调和蛇按钮静态防回归。版本链 0.8.6，SW 缓存 studiokit-arcade-0.8.6-v1；设计见 apps/arcade/DESIGN-0.8.6.md。真机手感 UNVERIFIED。"
+    },
+    {
+      "id": "T078",
+      "title": "Arcade 0.8.6 发布：推送 main 并双端验证（GitHub Pages + Cloudflare Pages）",
+      "kind": "agent",
+      "status": "IN_PROGRESS",
+      "dependsOn": ["T077"],
+      "ownerAuthorizationRequired": true,
+      "ownerAuthorizationVerifiedByAgentFlag": true,
+      "ownerAuthorizationNote": "Owner 当前任务明确指令「你弄完优化完就直接发个版吧」，即 OWNER_AUTHORIZATION: PUBLISH_TO_MAIN；按 StudioKit 双目标规则发布 GitHub Pages + Cloudflare Pages 并回填证据。",
+      "acceptance": [
+        "通过门禁的提交 fast-forward 推送 origin/main",
+        "Actions 四个 job 全部成功（Validate/Deploy GH Pages/Deploy CF Pages/Verify）",
+        "verify_deploy 对两个最终 URL 38/38 文件一致，Arcade 0.8.6 与注册表/SW 一致",
+        "双端线上无头 Chrome 验证版本、结算模式重选、贪吃蛇左右相对转向与布局",
+        "文档、注册表、版本、任务状态同步，无未授权发布动作"
+      ]
     }
   ]
 }
