@@ -26,9 +26,9 @@ Current Venue Compare baseline facts:
 
 Current Arcade baseline facts:
 
-- App version: `0.8.6`（`apps/arcade/engine.js` 的 `ARCADE_VERSION` 与注册表保持一致；2026-11-19 已双端发布，发布证据见下方 0.8.6 条目）
+- App version: `0.9.0`（`apps/arcade/engine.js` 的 `ARCADE_VERSION` 与注册表保持一致；2026-11-20 发布）
 - Registry entry: `shared/tool-registry.json` → `id: "arcade"`，`href: "./apps/arcade/"`
-- Games: 13（清单唯一来源是 `engine.js` 顶部的 `GAMES` 数组）
+- Games: 16（13 款带 6 关挑战 + 3 款平和棋牌：二十一点、五子棋、纸牌接龙；清单唯一来源是 `engine.js` 顶部的 `GAMES` 数组）
 - Run state schema: `v1`（`studiokit:arcade:runs:v1`）
 - Progress schema: `v1`（`studiokit:arcade:progress:v1`）
 - Playtime schema: `v1`（`studiokit:arcade:playtime:v1`；0.5.0 新增，独立 key）
@@ -47,10 +47,11 @@ Current Arcade baseline facts:
 - 0.8.4 已发布（2026-11-18）：俄罗斯方块画布改为棋盘优先 340×610（井口 240×480 占画布 79% 高/71% 宽），画布外道具行与触屏 hint 移除；经典棋盘占屏 320 13.3%→25.2%、375 15.9%→28.3%、390 23.9%→40.0%、430 25.7%→40.7%，棋盘面积 +58%～+89%；道具坞 3/4 格（含暂停）≥44×44，拇指区暂停键 + 触屏双击画面暂停；≤560px 高视口回退画布外。另修 `shared/site.css` 门户 `.tool-icon` 同名 class 冲突（改 `.tool-glyph`）。localStorage key/Schema、玩法、存档、积分与挑战不变；`arcade_smoke` 87/87、`arcade_zen_scores_test.mjs` 14/14、gameplay base 22/22；双端发布提交 `77cb02a..ecfdda4`、Actions `44122372096` 四 job 成功、`verify_deploy.py` 38/38 双端一致、线上无头 Chrome 18/18，SW 缓存键 `studiokit-arcade-0.8.4-v1`
 - 0.8.5 已发布（2026-11-19）：极速车道修复卡车在地平线缩放下 `roundRect` 负圆角导致的 `RangeError` → rAF 断链卡死/车辆全消失（引擎 `roundRect` 夹取 + `createLoop` 逐帧兜底）；`scaleAt` 与路面同一透视、地平线保留 16.1% 车身，车辆在 `z=1.02~1.52` 预生成；新增转向灯换道（signal 0.55s → moving 0.5s、车灯/箭头/虚线导引、公平性 `futureSafe` 检查）、连超尾流、加速带、维修箱、每 1000m 车流加密与 S+/S/A/B/C 评价；贪吃蛇逻辑画布 420×740→360×430（375×667 棋盘 180→273px）、新增四向 58px 按钮、提速 11.8→7.7 格/秒；方块经典积分记录写入 `lines/level/detail`。localStorage key/Schema、挑战数据与其余 10 款游戏不变；`arcade_smoke` **89/89**、`arcade_zen_scores_test.mjs` 14/14、gameplay base 22/22；双端发布 提交 `bdb1176..ee9b45b`（5 个提交：`cf8979e` 极速车道 / `211d8ca` 贪吃蛇 / `16a2a8b` 方块积分 / `35394a2` 测试 / `ee9b45b` 文档）推送 `main`；Actions `44472286080` 的 Validate and build / Deploy GitHub Pages / Deploy Cloudflare Pages / Verify both deployments 四个 job 全部成功；CI 与本地 `tools/verify_deploy.py` 均 **38/38** 文件 SHA-256 双端一致（Arcade `0.8.5` / Badge `2.2.1` / Venue `0.2.0`，manifest `application/manifest+json`）；双端线上无头 Chrome **20/20**（中心页 0.8.5 + 13 卡、SW `VERSION 0.8.5`、极速车道地平线车身 6.43×9.96px + 打灯车 0→1 完成、贪吃蛇棋盘 309px + 4×58px 按钮 + 向下转向、方块运行时 0.8.5、0 console error）；SW 缓存键 `studiokit-arcade-0.8.5-v1`。
 - 0.8.6 已双端发布（2026-11-19）：13 款游戏经典局与俄罗斯方块禅模式的「再来一局」回到开始弹层重新选模式；俄罗斯方块完整复位 `mode='classic'` / `state='ready'`，2048 继续挑战与挑战关重试/选关不变。贪吃蛇触屏改为左右相对转向双按钮（64px 高、左右等宽分区），经典两级缓冲与挑战方向队列按格消费连点，键盘/WASD/滑动保持绝对方向。localStorage key/Schema、挑战数据、玩法数值与积分规则不变；`arcade_smoke` **91/91**、zen **14/14**、gameplay base **22/22**，validate/build/node 全过；真机手感 UNVERIFIED。发布提交 `14a9160`，Actions `44553437432` 四 job 全成功；CI 与本地 `verify_deploy.py` 均 **38/38** 文件一致；双端线上无头 Chrome **20/20**；SW 缓存键 `studiokit-arcade-0.8.6-v1`。
+- 0.9.0 发布批次（2026-11-20）：新增二十一点、五子棋、纸牌接龙三款无倒计时单机棋牌（复用 `progress:v1` / `runs:v1`，不新增 key）；修复 10 款既有游戏的挑战公平性与续档/计分问题（记忆翻牌 peek 锁死与续档丢道具、2048 继续挑战丢最终分、砖块拖动误发球、层塔续档重开一箱、矿工最后一钩不结算、极速车道近距奖励算反、影跃重试刷最佳时间、星海刷新重置 Boss 计时、俄罗斯方块挑战换块不同步队列、雪铃铃铛类型不可辨）。挑战关卡数据、参考解与既有 Schema 不变；新增 `tools/arcade_calm_games_test.mjs`、`tools/arcade_calm_probe.mjs`、`tools/check_inline_scripts.mjs`。
 - 全屏/沉浸模式：原生 Fullscreen API 优先，不支持时使用 CSS 沉浸；iPhone Safari 不支持网页元素全屏，**真机与原生全屏仍未验证**
-- PWA/离线：manifest + `apps/arcade/sw.js`，作用域 `apps/arcade/`；显式预载 24 项（11 外壳 + 13 游戏），断网回归已自动化；**iOS/Android 真机安装与系统分享面板仍未验证**
-- Automated coverage: `node tools/arcade_smoke.mjs` 91/91（需要本机 Chrome）；`node tools/arcade_zen_scores_test.mjs` 14/14（0.8.1）；`node tools/arcade_gameplay_test.mjs --suite=all --repeat=2` 208/208；0.8.1 发布时 `verify_deploy.py` 覆盖关键文件并双端逐文件校验
-- Design/rollback reference: `apps/arcade/DESIGN-0.4.0.md`、`apps/arcade/DESIGN-0.5.0.md`、`apps/arcade/DESIGN-0.6.0.md`、`apps/arcade/DESIGN-0.7.0.md`、`apps/arcade/DESIGN-0.8.0.md`、`apps/arcade/DESIGN-0.8.1.md`、`apps/arcade/DESIGN-0.8.2.md`、`apps/arcade/DESIGN-0.8.4.md`、`apps/arcade/DESIGN-0.8.5.md`、`apps/arcade/DESIGN-0.8.6.md`
+- PWA/离线：manifest + `apps/arcade/sw.js`，作用域 `apps/arcade/`；显式预载 27 项（11 外壳 + 16 游戏），断网回归已自动化；**iOS/Android 真机安装与系统分享面板仍未验证**
+- Automated coverage: `node tools/arcade_smoke.mjs` **94/94**（需要本机 Chrome）；`node tools/arcade_zen_scores_test.mjs` **14/14**；`node tools/arcade_gameplay_test.mjs --suite=all --repeat=1` **104/104** 与 `--suite=base --repeat=2` **22/22**；`node tools/arcade_calm_games_test.mjs` **6 场景**（三款棋牌规则自检/结算/四档布局 + 10 款修复 regression）；`check_inline_scripts.mjs` 覆盖 19 个 HTML 的 20 段内联脚本
+- Design/rollback reference: `apps/arcade/DESIGN-0.4.0.md`、`DESIGN-0.5.0.md`、`DESIGN-0.6.0.md`、`DESIGN-0.7.0.md`、`DESIGN-0.8.0.md`、`DESIGN-0.8.1.md`、`DESIGN-0.8.2.md`、`DESIGN-0.8.4.md`、`DESIGN-0.8.5.md`、`DESIGN-0.8.6.md`、`DESIGN-0.9.0.md`
 - Arcade README/CHANGELOG: `apps/arcade/README.md`、`apps/arcade/CHANGELOG.md`
 
 变更 Arcade 版本、GAMES 数量、存储 key、Schema 或玩法基线时，必须同步更新本文件、注册表、Arcade README/CHANGELOG 与相关测试。变更 Venue Compare 版本、存储 Schema 或链接限制时，必须同步更新本文件、注册表、README/CHANGELOG 与 `restaurant_compare_smoke.mjs`。

@@ -123,3 +123,9 @@ py -3 tools/validate_site.py
 
 - Verdict：待 T057 独立评审。
 - 建议复核点：CH-RR-002/007 的真实变道回放日志与截图、C01 参考解与失败路径归因、`lanePos` 过渡判定的公平性（0.22s 是否足够）、挑战 HUD 与安全车道预告可读性、320/390 截图、classic 主按钮与 HUD 隐藏切换。
+
+## 0.9.0 修订（2026-11-20）
+
+- 近距奖励修正为「基础 10 + 近距 5 = 15」；C01 参考通关分数由 95 变为 145（7×10 + 5×15）。challengeInfo/stageObservable 新增 lastSlotScore / lastSlotNear / startLaneMoved / scoreRules。
+- C02 首时隙占用出生车道时，进入挑战自动移到该时隙安全车道并提示；时间轴与参考解相对车道跳变不变。
+- 新增 __arcadeTest.regression() 8 条确定性断言，由 `tools/arcade_calm_games_test.mjs` CG-06 调用。

@@ -110,3 +110,10 @@ CH-SR-007：C02/C03/C04 cleared，health=3，damage=0，unsafe=0
 $env:ARCADE_GAMEPLAY_PORT='8807'; $env:ARCADE_GAMEPLAY_CDP_PORT='9407'
 node tools/arcade_gameplay_test.mjs --game=star-raid --repeat=2
 ```
+
+## 0.9.0 修订（2026-11-20）
+
+- 挑战存档恢复 Boss ireTimer/阶段计时与固定拾取游标，刷新不再消弹或重复掉 Buff；旧档缺字段使用安全默认值（0.55s / 已生成游标按时间推断）。
+- 挑战模式隐藏与画布重叠的重复 DOM HUD，只保留画布内 HUD；.game-hud 的 data-* 契约保留。
+- C03 数据没有零伤字段，因此不新增隐藏判定，改为 HUD 目标文案与「碰撞只扣生命、通关判定只看存活」一致。
+- 新增 __arcadeTest.regression() 13 条确定性断言（CG-06 调用）。

@@ -81,6 +81,10 @@
 
 | T077 | agent | Arcade 0.8.6：结算重新选模式与贪吃蛇双拇指相对转向 | DONE | T076 | 修改前真实浏览器复现再来一局直接 over→playing 与四向按钮。13 款经典/禅结算回到开始弹层重选模式；方块完整复位经典/挑战/禅三入口；2048 继续挑战与挑战重试/选关不变。贪吃蛇改左右相对转向双按钮（375px 每枚 170×64），经典两级缓冲与挑战队列按格执行连点、无单格掉头，键盘/WASD/滑动不变。门禁 smoke **91/91**、zen **14/14**、gameplay base **22/22**、validate/build/node 全过；320/375/390/430 布局通过；版本链 0.8.6，设计见 `apps/arcade/DESIGN-0.8.6.md`；真机手感 UNVERIFIED |
 | T078 | agent | Arcade 0.8.6 发布：推送 main 并双端验证（GitHub Pages + Cloudflare Pages） | DONE | T077 | Owner 当前任务明确指令「你弄完优化完就直接发个版吧」，即 `OWNER_AUTHORIZATION: PUBLISH_TO_MAIN`；提交 `14a9160` 推送 `main`；Actions `44553437432` 四 job 全成功；CI 与本地 `verify_deploy.py` 均 **38/38** 双端一致（Arcade `0.8.6` / Badge `2.2.1` / Venue `0.2.0`，manifest 正确）；双端线上无头 Chrome **20/20**（SW 0.8.6、中心页 13 卡、双按钮、经典/挑战相对转向、贪吃蛇结算重选、方块三入口 ready、0 console error）；SW 缓存键 `studiokit-arcade-0.8.6-v1`；真机双手手感仍 UNVERIFIED |
+| T079 | agent | Arcade：13 游戏与 78 关趣味性审查及针对性优化 | DONE | T078 | 只读审查 13 款 × 6 关，区分代码事实/自动回放/真人未验证；修复 10 款阻断与公平性问题（记忆翻牌 peek 锁死与续档、2048 继续挑战丢分、砖块拖动误发球、层塔续档重开一箱、矿工最后一钩、车道近距奖励算反、影跃刷最佳、星海 Boss 计时、方块换块队列、雪铃铃铛可读性）；每款补 `regression()`，CG-06 107 条断言全过 |
+| T080 | agent | Arcade：新增竖屏平和单机棋牌类小游戏 | DONE | T078 | 新增二十一点/五子棋/纸牌接龙三款（无倒计时、无下注、无签到、离线）；复用 progress/runs 不新增 key；`arcade_calm_games_test` 17/17（规则自检 42 条、结算与积分记录、四档布局、2 个 44px 道具）；320/375 画布内点按粒度小于 44px 已披露为 UNVERIFIED |
+| T081 | review | Arcade 新版本集成、独立游戏性复审与发布前门禁 | DONE | T079,T080 | 独立 Reviewer：APPROVE-WITH-NOTES（0 Blocker / 3 Major / 12 Minor），Major 已闭环或披露，见 `docs/arcade/0.9.0-REVIEW.md`；smoke 94/94、zen 14/14、gameplay all 104/104、base 22/22、calm 17/17、validate/build/node/inline 全过；版本链与 41 项部署清单同步 |
+| T082 | agent | Arcade 新版本发布：main 双端部署与线上验证 | IN_PROGRESS | T081 | Owner 当前指令「都弄完之后就再发一个版本吧」即 `OWNER_AUTHORIZATION: PUBLISH_TO_MAIN`；推送后须看到四 job 成功并双端逐文件与线上实测通过 |
 
 ## 任务命令
 

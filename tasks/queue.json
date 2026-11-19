@@ -1248,7 +1248,9 @@
       "title": "Venue Compare 0.2.0：餐厅外部链接与分享文案提取",
       "kind": "agent",
       "status": "DONE",
-      "dependsOn": ["T070"],
+      "dependsOn": [
+        "T070"
+      ],
       "ownerAuthorizationRequired": false,
       "acceptance": [
         "每家餐厅可添加最多 12 个 http/https 链接，支持预设、分享文案提取与自动命名",
@@ -1264,7 +1266,10 @@
       "title": "Venue Compare 0.2.0 发布：available + 双端部署与线上验证",
       "kind": "agent",
       "status": "DONE",
-      "dependsOn": ["T070", "T071"],
+      "dependsOn": [
+        "T070",
+        "T071"
+      ],
       "ownerAuthorizationRequired": true,
       "ownerAuthorizationVerifiedByAgentFlag": false,
       "ownerAuthorizationNote": "Owner 本轮明确指令「更新好所有相关文档之后提交并发布吧，注意提交时间」；按 StudioKit 双目标规则同时发布 GitHub Pages + Cloudflare Pages。因该指令为当前任务的直接发布授权，执行时未再要求独立授权行。",
@@ -1299,7 +1304,9 @@
       "title": "Arcade 0.8.4 发布：推送 main 并双端验证（GitHub Pages + Cloudflare Pages）",
       "kind": "agent",
       "status": "DONE",
-      "dependsOn": ["T073"],
+      "dependsOn": [
+        "T073"
+      ],
       "ownerAuthorizationRequired": true,
       "ownerAuthorizationVerifiedByAgentFlag": true,
       "ownerAuthorizationNote": "Owner 本轮明确指令「优化项都开发完测完之后就提交到 main 分支然后版本 bump 到 0.8.4，更新所有相关文档，然后发布」；据此按 StudioKit 双目标规则同时发布 GitHub Pages + Cloudflare Pages，并在发布后回填证据。",
@@ -1318,7 +1325,9 @@
       "title": "Arcade 0.8.5：极速车道车流规则与卡死修复、贪吃蛇棋盘优先与四向按钮、方块积分消去层数",
       "kind": "agent",
       "status": "DONE",
-      "dependsOn": ["T074"],
+      "dependsOn": [
+        "T074"
+      ],
       "ownerAuthorizationRequired": false,
       "acceptance": [
         "极速车道不再卡死/车辆消失；远车从地平线可见，不再临近才放大",
@@ -1337,7 +1346,9 @@
       "title": "Arcade 0.8.5 发布：推送 main 并双端验证（GitHub Pages + Cloudflare Pages）",
       "kind": "agent",
       "status": "DONE",
-      "dependsOn": ["T075"],
+      "dependsOn": [
+        "T075"
+      ],
       "ownerAuthorizationRequired": true,
       "ownerAuthorizationVerifiedByAgentFlag": true,
       "ownerAuthorizationNote": "Owner 本轮明确指令「大概是这些，你多开subagent全力推进优化开发测试以及提交发布吧」；据此按 StudioKit 双目标规则同时发布 GitHub Pages + Cloudflare Pages，并在发布后回填证据。",
@@ -1356,7 +1367,9 @@
       "title": "Arcade 0.8.6：结算重新选模式与贪吃蛇双拇指相对转向",
       "kind": "agent",
       "status": "DONE",
-      "dependsOn": ["T076"],
+      "dependsOn": [
+        "T076"
+      ],
       "ownerAuthorizationRequired": false,
       "acceptance": [
         "13 款游戏经典/禅模式结算的再来一局回到开始弹层并支持重新选模式",
@@ -1373,7 +1386,9 @@
       "title": "Arcade 0.8.6 发布：推送 main 并双端验证（GitHub Pages + Cloudflare Pages）",
       "kind": "agent",
       "status": "DONE",
-      "dependsOn": ["T077"],
+      "dependsOn": [
+        "T077"
+      ],
       "ownerAuthorizationRequired": true,
       "ownerAuthorizationVerifiedByAgentFlag": true,
       "ownerAuthorizationNote": "Owner 当前任务明确指令「你弄完优化完就直接发个版吧」，即 OWNER_AUTHORIZATION: PUBLISH_TO_MAIN；按 StudioKit 双目标规则发布 GitHub Pages + Cloudflare Pages 并回填证据。",
@@ -1386,6 +1401,81 @@
       ],
       "completedAt": "2026-11-19T23:25:13+08:00",
       "evidence": "提交 14a9160 fast-forward 推送 origin/main；Actions run 44553437432 的 Validate and build / Deploy GitHub Pages / Deploy Cloudflare Pages / Verify both deployments 四 job 全成功；CI 与本地 tools/verify_deploy.py 均 38/38 文件 SHA-256 双端一致（Arcade 0.8.6 / Badge 2.2.1 / Venue 0.2.0 available，manifest application/manifest+json）；双端线上无头 Chrome 各 10/10、合计 20/20（SW 0.8.6、中心页 13 卡、双按钮布局、经典相对转向两级连点、挑战触屏队列、贪吃蛇结算重选、方块三入口 ready、窄屏无溢出、0 console error）；SW 缓存键 studiokit-arcade-0.8.6-v1。真机 iOS/Android 双手手感仍 UNVERIFIED。"
+    },
+    {
+      "id": "T079",
+      "title": "Arcade：13 游戏与 78 关趣味性审查及针对性优化",
+      "kind": "agent",
+      "status": "DONE",
+      "dependsOn": [
+        "T078"
+      ],
+      "ownerAuthorizationRequired": false,
+      "claimedAt": "2026-11-19T23:45:36+08:00",
+      "acceptance": [
+        "按六维量表逐款审查 classic 与 C01-C06，区分代码事实、自动回放和真人未验证项",
+        "修复审查确认的过短、误导、不公平或机械重复问题，保留经典记录与旧档兼容",
+        "相关挑战数据、设计差异和确定性测试同步更新",
+        "validate/build/node --check、Arcade smoke、gameplay 与四档窄屏回归通过"
+      ],
+      "completedAt": "2026-11-20T01:30:00+08:00",
+      "evidence": "只读审查 13 款 classic 与 78 关挑战（区分代码事实/自动回放/真人未验证）。修复 10 款：memory-flip 挑战 peek 计时与续档、2048 继续挑战最终记录、block-drop 挑战换块同步固定队列、snowbells 铃铛 kind 可读性并禁用无效安可、brick-breaker 拖动不发球与 K/G 常驻提示、pendulum-tower 挑战对齐目标偏置与续档 drop/tools、gold-miner resolving 最后一钩与价值/重量、road-rush 近距 10+5 与出生车道、shadow-leap 跨重试累计计时与易碎平台裂纹、star-raid Boss 计时/拾取游标恢复与 HUD 去重。每款 #test 新增 regression()，CG-06 共 107 条断言全过；挑战关卡数据与参考解未改。"
+    },
+    {
+      "id": "T080",
+      "title": "Arcade：新增竖屏平和单机棋牌类小游戏",
+      "kind": "agent",
+      "status": "DONE",
+      "dependsOn": [
+        "T078"
+      ],
+      "ownerAuthorizationRequired": false,
+      "acceptance": [
+        "新增至少两款规则完整、无倒计时、可离线游玩的棋牌/棋类游戏",
+        "点按优先、竖屏单手交互，320/375/390/430 无溢出且主要触控目标不小于 44px",
+        "复用 Arcade 现有进度/局内档/暂停/音效，不新增远程依赖或 FOMO",
+        "胜负、撤销/提示、AI 或发牌、存档恢复与经典积分记录有真实浏览器测试"
+      ],
+      "completedAt": "2026-11-20T01:31:00+08:00",
+      "evidence": "新增三款无倒计时单机棋牌：blackjack（6 手无下注、A 自动 11/1、换牌/看底牌）、gomoku（11 路本地 AI、先预览再确认、悔棋/提示、种子可复现）、solitaire（Klondike 抽 1、点选移动、无限翻回、撤销/提示）。均复用 progress:v1/runs:v1，不新增 key；新增 arcade_calm_games_test 17/17（规则 selftest 14/15/13、playToEnd 真实结算与积分记录、四档布局、2 个 ≥44px 道具），arcade_calm_probe 单页接入通过；320/375 画布内点按粒度小于 44px 已在 DESIGN/README 披露为 UNVERIFIED。"
+    },
+    {
+      "id": "T081",
+      "title": "Arcade 新版本集成、独立游戏性复审与发布前门禁",
+      "kind": "review",
+      "status": "DONE",
+      "dependsOn": [
+        "T079",
+        "T080"
+      ],
+      "ownerAuthorizationRequired": false,
+      "acceptance": [
+        "独立 Reviewer 复核所有 Blocker/Major 闭环，不将自动回放等同真人好玩",
+        "静态校验、构建、全部 JS 语法、smoke、zen/scores、全量 challenge 与新游戏测试通过",
+        "320/375/390/430 和桌面检查、离线预载、旧档与导出导入兼容通过",
+        "版本、README/CHANGELOG/DESIGN、注册表、发布校验清单和任务文档同步，diff 干净"
+      ],
+      "completedAt": "2026-11-20T01:50:00+08:00",
+      "evidence": "独立 Reviewer：APPROVE-WITH-NOTES（0 Blocker / 3 Major / 12 Minor），见 docs/arcade/0.9.0-REVIEW.md；Major-1 根 README/CHANGELOG、Major-2 ROADMAP 措辞已发布前修复，Major-3 320/375 点按粒度已披露为 UNVERIFIED；m1–m7/m9–m12 已处理，m8 记录为已知弱点。门禁：smoke 94/94、zen 14/14、gameplay all 104/104、base 22/22、calm 17/17、validate/build/node/check_inline_scripts 全过；verify_deploy 清单 41 项；localStorage key/Schema 未变。"
+    },
+    {
+      "id": "T082",
+      "title": "Arcade 新版本发布：main 双端部署与线上验证",
+      "kind": "agent",
+      "status": "IN_PROGRESS",
+      "dependsOn": [
+        "T081"
+      ],
+      "ownerAuthorizationRequired": true,
+      "ownerAuthorizationNote": "Owner 当前任务明确指令「都弄完之后就再发一个版本吧」，即 OWNER_AUTHORIZATION: PUBLISH_TO_MAIN；目标是既有 Shawlaw/studiokit 的 GitHub Pages + Cloudflare Pages 双端。",
+      "acceptance": [
+        "未推送提交通过 commit-time-policy，验证后 fast-forward 推送 main",
+        "Actions 四个 job 全部成功，不能仅看到推送就声称发布",
+        "verify_deploy 对 GitHub Pages 与 Cloudflare Pages 逐文件一致，新版本与游戏数量正确",
+        "双端线上真实浏览器验证新棋牌游戏、代表性挑战优化、SW 与零 console error",
+        "发布后证据和任务状态同步；真机未实测项如实记录"
+      ],
+      "claimedAt": "2026-11-20T01:55:00+08:00"
     }
   ]
 }

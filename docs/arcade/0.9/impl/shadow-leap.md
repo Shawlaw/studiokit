@@ -337,3 +337,10 @@ test-artifacts/shadow-leap-320.png / shadow-leap-390.png / shadow-leap-390-ingam
 | 320/390 布局 | 待复核 | CH-SL-005 + 截图 |
 | 设计差异接受度 | 待 Owner/Reviewer | §8.3/8.4/8.6 |
 | 真机 | UNVERIFIED | §11.1 |
+
+## 0.9.0 修订（2026-11-20）
+
+- 最佳成绩改为「跨重试累计时间」（chTotalElapsed），修复故意死亡清空计时刷最佳；HUD/结算显示本次与累计，旧档缺字段按 0。
+- 易碎平台按 crackTimer 绘制裂纹/透明度/倒计时环；失败复盘显示最后一次落点与目标平台方向。
+- challengeInfo/stageObservable 新增累计时间、失败复盘与裂纹绘制状态字段；失败判定与关卡几何不变。
+- 新增 __arcadeTest.regression() 15 条确定性断言（CG-06 调用）。

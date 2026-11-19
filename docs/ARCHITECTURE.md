@@ -17,7 +17,7 @@ StudioKit 将多个轻量单页 HTML 工具集中到一个 GitHub Pages 站点�
   - `engine.js`：街机专用共享运行时（循环、物理、输入、音效、局内档、全屏/沉浸、游玩计时、分享与离线封装），只被 Arcade 页面引用。
   - `arcade.css`：街机专用样式（舞台、道具条、沉浸布局、统计与离线面板）。
   - `sw.js` + `manifest.webmanifest` + `icons/`：Arcade 作用域的离线缓存与 PWA 清单。
-  - `games/*.html`：13 款互相独立的游戏页；一个游戏出错不影响其他游戏。
+  - `games/*.html`：16 款互相独立的游戏页（13 款带挑战模式 + 3 款平和棋牌）；一个游戏出错不影响其他游戏。
 - `apps/restaurant-compare/`：餐厅考察对比单页工具（费用/容量、环境与菜单附件、地图标注、外部链接/备注、JSON 与自包含 HTML 导出）；业务状态留在本工具内。
 - `templates/single-page-tool/`：新增工具的标准起点。
 - `tools/build_site.py`：把公开站点白名单复制到 `dist/`；Agent 文档、任务队列、Prompt 和开发脚本不发布。

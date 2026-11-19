@@ -89,7 +89,9 @@ node --check shared/site-shell.js
 node --check apps/arcade/engine.js
 node --check apps/arcade/sw.js
 node tools/arcade_zen_scores_test.mjs   # 0.8.1 禅模式/积分记录 14 场景（默认端口 8770/9338）
-node tools/arcade_smoke.mjs   # 需要本机 Chrome；当前 87 项，含 PWA/断网与 13 款旧档回归
+node tools/check_inline_scripts.mjs   # 全站 HTML 内联脚本语法
+node tools/arcade_smoke.mjs   # 需要本机 Chrome；当前 94 项，含 PWA/断网与 16 款旧档回归
+node tools/arcade_calm_games_test.mjs   # 三款棋牌规则/结算/四档布局 + 10 款修复 regression
 node tools/arcade_gameplay_test.mjs --suite=base --repeat=2   # 22/22 确定性玩法回归
 git diff --check
 git status --short
@@ -137,12 +139,13 @@ OWNER_AUTHORIZATION: PUBLISH_TO_MAIN
      --retries 15 --delay 8
    ```
 
-   预期：两个 URL 的 38 个关键文件哈希一致（含 13 款游戏页与 `arcade.css`），Arcade 版本为 `0.8.6`，Badge 为 `2.2.1`，Venue 为 `0.2.0`，manifest 为 `application/manifest+json`。
+   预期：两个 URL 的 41 个关键文件哈希一致（含 16 款游戏页与 `arcade.css`），Arcade 版本为 `0.9.0`，Badge 为 `2.2.1`，Venue 为 `0.2.0`，manifest 为 `application/manifest+json`。
 4. 打开两个门户，确认工具卡片加载、源码链接、Badge Studio 与街机厅入口可点击。
-5. 打开 Arcade 中心页，确认线上版本 `0.8.6` / 13 款，并检查：
-   - 每款游戏都有 2 个主动道具按钮（黄金矿工保留 4 个），按钮在画布外/内均不遮挡核心操作；无签到、每日奖励或付费抽奖入口。
+5. 打开 Arcade 中心页，确认线上版本 `0.9.0` / 16 款（13 挑战 + 3 棋牌），并检查：
+   - 每款游戏都有 2 个主动道具按钮（黄金矿工保留 4 个），按钮在画布外/内均不遮挡核心操作；三款新棋牌无倒计时、无下注、无签到/每日奖励。
+   - 三款新棋牌可开始/暂停/续玩，五子棋先预览再确认、纸牌接龙无限翻回牌库；320/375 宽度下无横向溢出。
    - 中心页「惊喜一下」可随机打开一款，返回后再点不会立刻重复；页脚显示「快乐约定」。
-   - `游玩统计`、`分享`、`安装到桌面`、`预载全部游戏` 的既有行为无回归；SW 缓存键为 `studiokit-arcade-0.8.6-v1`。
+   - `游玩统计`、`分享`、`安装到桌面`、`预载全部游戏` 的既有行为无回归；预载总数 27 项（11 外壳 + 16 游戏）；SW 缓存键为 `studiokit-arcade-0.9.0-v1`。
    - 经典/禅模式结算点「再来一局」回到开始弹层并可重新选模式；挑战关仍可直接重试或返回选关。
    - 贪吃蛇触屏仅有左右两枚相对转向按钮，左右分区且 ≥44px；连点按格执行，不出现单格掉头。
    - 自然收尾：2048 达成、砖块第 3 关、重力 3000m、贪吃蛇 20 果实、方块 40 行、星海 Boss CLEAR、赛车 5000m 至少抽测 3 项。

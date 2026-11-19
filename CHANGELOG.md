@@ -2,6 +2,30 @@
 
 StudioKit 门户本身没有独立的 semver；以下按仓库里程碑与工具版本记录。各工具的详细变更见 `apps/<tool>/CHANGELOG.md`。
 
+## Arcade 0.9.0 — 2026-11-20（待发布）
+
+### Added
+- 新增三款无倒计时、无下注、无联网的单机棋牌小游戏：二十一点（6 手、A 自动 11/1、换牌/看底牌）、五子棋（11 路、本地启发式 AI、悔棋/提示、先预览再确认防误触）、纸牌接龙（Klondike 抽 1、点选后点目标移动、无限翻回牌库、撤销/提示）。三款复用既有 `studiokit:arcade:progress:v1` 与 `studiokit:arcade:runs:v1`，不新增 localStorage key。
+- 新增 `tools/arcade_calm_games_test.mjs`（三款棋牌规则自检/结算/四档布局 + 10 款修复 regression）、`tools/arcade_calm_probe.mjs`（单页接入探针）、`tools/check_inline_scripts.mjs`（全站 HTML 内联脚本语法）。
+
+### Fixed
+- **记忆翻牌**：挑战「再看一眼」计时器不递减导致牌面常亮且无法继续翻牌（阻断）；挑战续档丢失道具与计时；C03/C05 分区预览最后区域 0 秒曝光；暂停时未真正盖牌。
+- **2048**：达成 2048 后「继续挑战」，最终更高分不再写入；挑战 HUD 与关卡实际步数上限不一致；320px 滑动阈值过小。
+- **俄罗斯方块**：挑战「换块」未同步固定队列导致 NEXT 与实际出块不一致；失败复盘追加本关技巧提示。
+- **雪铃**：休止铃/彩铃/蓝红铃绘制完全相同；挑战中无效的「安可」扣次数。
+- **砖块计划**：触屏按住拖动挡板会同时发球；C03/C06 锁定门/钥匙无提示。
+- **层塔**：挑战对齐提示用经典重叠率而非本关目标偏置；下落中刷新会重开一箱/补回道具；结算倾斜峰值取当前值。
+- **黄金矿工**：时间归零时已夹中的最后一钩不结算；矿物缺少价值/重量信息。
+- **极速车道**：近距超车奖励算反（近距 5 < 普通 10）；C02 出生车道被首时隙占用。
+- **影跃**：重试清零计时可刷最佳成绩；易碎平台无裂纹预警；失败复盘无落点信息。
+- **星海突击**：挑战刷新后 Boss 射击计时被重置、固定拾取物游标未保存；挑战顶部 DOM HUD 与画布 HUD 重叠。
+
+### Verification
+- `arcade_smoke.mjs` **94/94**、`arcade_zen_scores_test.mjs` **14/14**、`arcade_gameplay_test.mjs --suite=all --repeat=1` **104/104** 与 base **22/22**、`arcade_calm_games_test.mjs` **17/17**（含 107 条修复 regression 断言）；`validate_site.py` / `build_site.py` / `check_inline_scripts.mjs` / `node --check` 全部通过。
+- localStorage key / Schema 不变；挑战关卡数据与参考解不变；旧备份导入与旧档恢复通过自动化验证。
+- 独立评审：0 Blocker / 3 Major / 12 Minor，Major 已在发布前闭环或写入已知限制；真机触控与五子棋 AI 手感仍 UNVERIFIED。
+- 发布计划：本次提交推送 `main` 触发 GitHub Pages + Cloudflare Pages 双端部署；`tools/verify_deploy.py` 覆盖 41 个文件逐文件比对。Actions run、双端校验与线上结果在发布成功后回填 `docs/RELEASE-RUNBOOK.md` 与 `TASKS.md`。
+
 ## Arcade 0.8.6 — 2026-11-19（已双端发布）
 
 ### Changed
