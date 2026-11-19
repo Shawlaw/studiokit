@@ -137,6 +137,18 @@
       /* 0.9 挑战模式：固定盘面 + 禁止随机新块 + 有效步数上限（数据来自 ../challenge/merge-2048.js）。 */
       const CHALLENGE_GAME_ID = 'merge-2048';
       const CH_TIP_SEC = 3;
+      /* 0.9：滑动判定的物理阈值固定 26 CSS px（24–32 区间中值），再按画布实际 CSS 尺寸折算成逻辑像素。
+         旧实现写死 22 逻辑像素，320px 窄屏上实际只有约 15 CSS px，容易把点按误判成滑动。 */
+      const SWIPE_MIN_CSS = 26;
+      function swipeCSSScale() {
+        const rect = canvas.getBoundingClientRect();
+        if (!(rect.width > 0) || !(rect.height > 0)) return 1;
+        return Math.min(rect.width / W, rect.height / H);
+      }
+      function swipeThresholdLogical() {
+        const scale = swipeCSSScale();
+        return clamp(SWIPE_MIN_CSS / Math.max(0.2, scale), 8, 120);
+      }
       const tools = { hammer: TOOL_START.hammer, upgrade: TOOL_START.upgrade };
       let armedTool = null;
 
@@ -257,37 +269,65 @@
         joyTools.sync();
       }
 
-      function finish(win) {
+      /* 最终结束才写一次记录：胜利弹层不记录，继续挑战后棋盘满 / 用户主动收工才落库。 */
+      function recordFinalPlay() {
+        if (recordSaved) return null;
+        const rec = A.Progress.recordPlay('merge-2048', score);
+        if (rec) high = rec.high;
+        recordSaved = true;
+        dom.hudHigh.textContent = String(Math.max(A.Progress.get('merge-2048').high, score));
+        return rec;
+      }
+
+      function continueAfterWin() {
+        state = 'playing';
+        armedTool = null;
+        ui.hide();
+        loop.resume();
+        pauseUi.sync();
+        joyTools.sync();
+        autosave.saveNow();
+      }
+
+      /* win=true 只用于「首次合成 2048」的胜利弹层：不写记录、保留局内档继续同一局；
+         win=false 或 opts.stop=true 才是本局真正结束，此时只 recordPlay 一次。 */
+      function finish(win, opts) {
         if (state === 'over') return;
+        const stop = !!(opts && opts.stop);
+        const winPopup = !!win && !stop && !recordSaved;
+        /* 写存档必须在 state 变成 over 之前（serialize 只在游玩态返回数据）。 */
+        if (winPopup) autosave.saveNow();
         state = 'over';
         armedTool = null;
         joyTools.sync();
-        autosave.clear();
+        if (!winPopup) autosave.clear();
         A.Sfx.play(win ? 'perfect' : 'over');
         let rec = null;
-        if (!recordSaved) {
-          rec = A.Progress.recordPlay('merge-2048', score); if (rec) high = rec.high;
-          recordSaved = true;
-          dom.hudHigh.textContent = String(Math.max(A.Progress.get('merge-2048').high, score));
-        }
+        if (!winPopup) rec = recordFinalPlay();
         loop.pause();
-        ui.show({
-          title: win ? '2048 达成！' : '棋盘满了',
-          text:
-            `<span class="ac-score">${score}</span>` +
+        const title = winPopup ? '2048 达成！' : stop ? '本局结束' : '棋盘满了';
+        const text = winPopup
+          ? `<span class="ac-score">${score}</span>` +
+            `${moves} 步 · 最大方块 ${bestTile()} · 可以继续挑战更高数字`
+          : `<span class="ac-score">${score}</span>` +
             (rec && rec.isNewHigh ? '<span class="ac-newhigh">★ 新纪录</span><br/>' : '') +
-            `${moves} 步 · 最大方块 ${bestTile()}${win ? ' · 可以继续挑战更高数字' : ''}`,
-          btn: win ? '继续挑战' : '再来一局',
-          onBtn: win ? () => {
-            state = 'playing';
-            armedTool = null;
-            ui.hide();
-            loop.resume();
-            pauseUi.sync();
-            joyTools.sync();
-            autosave.saveNow();
-          } : showStart,
-        });
+            `${moves} 步 · 最大方块 ${bestTile()} · 本局成绩已记录一次`;
+        const options = {
+          title: title,
+          text: text,
+          btn: winPopup ? '继续挑战' : '再来一局',
+          onBtn: winPopup ? continueAfterWin : showStart,
+        };
+        if (winPopup) {
+          /* 直接点「再来一局」= 主动收下本局成绩：只记录一次后回模式选择。 */
+          options.btn2 = '再来一局';
+          options.onBtn2 = () => {
+            recordFinalPlay();
+            autosave.clear();
+            showStart();
+          };
+        }
+        ui.show(options);
         pauseUi.sync();
       }
 
@@ -301,6 +341,10 @@
         if (mode === 'challenge') {
           paused.btn2 = '退出挑战';
           paused.onBtn2 = exitChallenge;
+        } else if (won && !recordSaved) {
+          /* 首次 2048 胜利后继续挑战：允许用户主动收工，本局成绩此时才记录一次。 */
+          paused.btn2 = '结束本局并记录';
+          paused.onBtn2 = () => finish(false, { stop: true });
         }
         ui.show(paused);
         pauseUi.sync();
@@ -329,6 +373,12 @@
       function stageLabel(stage) {
         return stage ? 'C' + String(stage.stageNumber || 0).padStart(2, '0') : 'C--';
       }
+      /* 关卡文案里的「N 步内」可能与 content.maxValidMoves 不一致（C06 文案六步、实际上限五步），
+         展示层统一用真实上限覆盖，不修改生成的挑战数据。 */
+      function challengeGoalDisplay(stage, maxMoves) {
+        const raw = String((stage && stage.goalStatement) || '');
+        return raw.replace(/([0-9]+|[一二两三四五六七八九十]+)\s*步内/g, String(maxMoves) + ' 步内');
+      }
       function syncChallengeHud() {
         const inChallenge = mode === 'challenge';
         dom.hudClassic.forEach((el) => {
@@ -354,7 +404,7 @@
         }
         dom.chTip.hidden = false;
         dom.chTip.innerHTML =
-          '<strong>' + stageLabel(chStage) + ' ' + chStage.title + '</strong> · ' + chStage.goalStatement +
+          '<strong>' + stageLabel(chStage) + ' ' + chStage.title + '</strong> · ' + challengeGoalDisplay(chStage, chMaxMoves) +
           '<br/>操作：方向键 / 滑动移动。目标方块 ' + chTarget + '，最多 ' + chMaxMoves + ' 步有效移动（无随机新块）。';
       }
       function renderChallengePanel() {
@@ -498,7 +548,9 @@
         const isLast = index < 0 || index >= stages.length - 1;
         ui.show({
           title: '关卡完成',
-          text: A.Challenge.resultHtml(chStage, result),
+          text:
+            A.Challenge.resultHtml(chStage, result) +
+            '<p class="ac-challenge-result-row">本关有效步数 <strong>' + chMoves + '/' + chMaxMoves + '</strong></p>',
           btn: isLast ? '返回选关' : '下一关',
           onBtn: isLast ? openChallengePanel : () => startChallenge(stages[index + 1].id),
           btn2: '重玩本关',
@@ -517,7 +569,7 @@
         A.Sfx.play('over');
         autosave.clear();
         loop.pause();
-        const goal = chStage ? chStage.goalStatement : '';
+        const goal = chStage ? challengeGoalDisplay(chStage, chMaxMoves) : '';
         ui.show({
           title: '挑战失败',
           text:
@@ -884,7 +936,8 @@
       }
 
       function handleSwipe(dx, dy) {
-        if (Math.abs(dx) < 22 && Math.abs(dy) < 22) return;
+        const threshold = swipeThresholdLogical();
+        if (Math.abs(dx) < threshold && Math.abs(dy) < threshold) return;
         if (Math.abs(dx) > Math.abs(dy)) move(dx > 0 ? 'right' : 'left');
         else move(dy > 0 ? 'down' : 'up');
       }
@@ -921,7 +974,8 @@
         if (input.pointer.wentUp && swipeStart) {
           const dx = input.pointer.x - swipeStart.x;
           const dy = input.pointer.y - swipeStart.y;
-          if (armedTool && Math.abs(dx) < 22 && Math.abs(dy) < 22) handleBoardPoint(input.pointer.x, input.pointer.y);
+          const tapSlop = swipeThresholdLogical();
+          if (armedTool && Math.abs(dx) < tapSlop && Math.abs(dy) < tapSlop) handleBoardPoint(input.pointer.x, input.pointer.y);
           else handleSwipe(dx, dy);
           swipeStart = null;
         }
@@ -1052,7 +1106,16 @@
               undo: undoStack.length,
               tools: { hammer: tools.hammer, upgrade: tools.upgrade },
               armedTool,
+              /* 0.9 结算语义：#test 直接暴露「是否已落库」与 plays/积分条数，便于验证只记录一次。 */
+              recordSaved,
+              plays: A.Progress.get(CHALLENGE_GAME_ID).plays,
+              scoresCount: A.Scores.list({ gameId: CHALLENGE_GAME_ID }).length,
             };
+          },
+          /* 当前视口下滑动阈值：逻辑像素 + 折算后的 CSS 像素（应在 24–32 CSS px 区间）。 */
+          swipeThreshold() {
+            const logical = swipeThresholdLogical();
+            return { logical: logical, cssPx: logical * swipeCSSScale() };
           },
           joyInfo() {
             return {
@@ -1071,10 +1134,12 @@
             button.click();
             return true;
           },
-          setBoard(values) {
+          setBoard(values, opts) {
             if (!Array.isArray(values) || values.length !== N || values.some((row) => !Array.isArray(row) || row.length !== N)) return false;
             const valid = values.every((row) => row.every((value) => value === 0 || (Number.isInteger(value) && value >= 2 && (value & (value - 1)) === 0)));
             if (!valid) return false;
+            /* 测试用 opts.preserveRun=true：只换盘面，保留当前分数 / 已达成 2048 等局内状态。 */
+            const preserveRun = !!(opts && typeof opts === 'object' && opts.preserveRun);
             mode = 'classic';
             chStage = null;
             board = emptyBoard();
@@ -1085,11 +1150,14 @@
                 if (value) board[r][c] = { id: nextId++, value, r, c, pr: r, pc: c, anim: 1, pop: 0 };
               }
             }
-            score = 0;
-            moves = 0;
-            won = false;
-            undoStack = [];
-            recordSaved = false;
+            if (!preserveRun) {
+              score = 0;
+              moves = 0;
+              won = false;
+              winBonusClaimed = false;
+              undoStack = [];
+              recordSaved = false;
+            }
             moveLock = 0;
             armedTool = null;
             state = 'playing';
@@ -1098,6 +1166,7 @@
             pauseUi.sync();
             joyTools.sync();
             syncHud();
+            syncChallengeHud();
             return true;
           },
           tapTile(r, c) {
@@ -1179,6 +1248,173 @@
             if (mode !== 'challenge') return false;
             exitChallenge();
             return true;
+          },
+          /* ---------- 确定性回归：覆盖 0.9 修复（同步执行、不依赖真实计时/异步等待） ---------- */
+          regression() {
+            const details = [];
+            let pass = 0;
+            let fail = 0;
+            const check = (ok, name, extra) => {
+              if (ok) {
+                pass += 1;
+                details.push('PASS ' + name);
+              } else {
+                fail += 1;
+                details.push('FAIL ' + name + (extra ? ' — ' + extra : ''));
+              }
+            };
+            const api = window.__arcadeTest;
+            const keys = [
+              'studiokit:arcade:progress:v1',
+              'studiokit:arcade:runs:v1',
+              'studiokit:arcade:playtime:v1',
+              'studiokit:arcade:scores:v1',
+              'studiokit:arcade:challenge:v1',
+            ];
+            const snap = {};
+            keys.forEach((key) => {
+              try {
+                snap[key] = localStorage.getItem(key);
+              } catch (err) {
+                snap[key] = null;
+              }
+            });
+            const progressPlays = () => A.Progress.get('merge-2048').plays;
+            const scoreRecords = () => A.Scores.list({ gameId: 'merge-2048' });
+            const nearWinBoard = [
+              [1024, 1024, 8, 16],
+              [32, 64, 128, 256],
+              [512, 4, 2, 8],
+              [16, 32, 64, 2],
+            ];
+            const fullNoMergeBoard = [
+              [2, 4, 2, 4],
+              [4, 2, 4, 2],
+              [2, 4, 2, 4],
+              [4, 2, 4, 2],
+            ];
+            try {
+              autosave.clear();
+              startGame();
+              const basePlays = progressPlays();
+              const baseScores = scoreRecords().length;
+              /* A. 首次达成 2048：胜利弹层不写记录。 */
+              check(api.setBoard(nearWinBoard), '测试盘面可设置');
+              move('left');
+              const winPopup = {
+                state: state,
+                title: dom.ovTitle.textContent,
+                recordSaved: recordSaved,
+                plays: progressPlays(),
+                scores: scoreRecords().length,
+                score: score,
+                best: bestTile(),
+              };
+              check(winPopup.state === 'over' && /2048 达成/.test(winPopup.title), '首次合成 2048 弹出胜利层', JSON.stringify({ state: winPopup.state, title: winPopup.title }));
+              check(winPopup.recordSaved === false && winPopup.plays === basePlays && winPopup.scores === baseScores, '胜利弹层不写 plays/积分记录', JSON.stringify({ recordSaved: winPopup.recordSaved, plays: winPopup.plays, scores: winPopup.scores }));
+              check(winPopup.score === 4096 && winPopup.best === 2048, '胜利时分数与最大方块正确', JSON.stringify({ score: winPopup.score, best: winPopup.best }));
+              /* B. 点「继续挑战」继续同一局，棋盘满时只记录一次且为终局分数。 */
+              dom.ovBtn.click();
+              check(state === 'playing' && ui.visible === false && recordSaved === false, '继续挑战后回到同一局且尚未记录', JSON.stringify({ state: state, recordSaved: recordSaved }));
+              check(api.setBoard(fullNoMergeBoard, { preserveRun: true }), '终局盘面可设置（保留本局分数）');
+              const finalScore = score;
+              check(finalScore === 4096, '继续挑战后分数保留', 'score=' + finalScore);
+              move('left');
+              const ended = { state: state, title: dom.ovTitle.textContent, recordSaved: recordSaved, plays: progressPlays(), scores: scoreRecords(), score: score };
+              check(ended.state === 'over' && /棋盘满了/.test(ended.title), '满盘后正常结算', JSON.stringify({ state: ended.state, title: ended.title }));
+              check(ended.recordSaved === true && ended.plays === basePlays + 1, '最终结算 plays 只加一次', JSON.stringify({ plays: ended.plays, base: basePlays }));
+              const finalRecord = ended.scores.filter((record) => record.score === finalScore)[0];
+              check(ended.scores.length === baseScores + 1 && !!finalRecord, '最终结算积分记录只加一次且为终局分数', JSON.stringify({ scores: ended.scores.length, base: baseScores, finalScore: finalScore }));
+              finish(false);
+              check(progressPlays() === basePlays + 1 && scoreRecords().length === baseScores + 1, '重复触发结算不重复计数', JSON.stringify({ plays: progressPlays(), scores: scoreRecords().length }));
+              /* C. 胜利弹层直接点「再来一局」：本次收局也只记录一次。 */
+              api.setBoard(nearWinBoard);
+              move('left');
+              const restartBase = { plays: progressPlays(), scores: scoreRecords().length };
+              dom.ovBtn2.click();
+              const restarted = { plays: progressPlays(), scores: scoreRecords(), title: dom.ovTitle.textContent };
+              check(
+                restarted.plays === restartBase.plays + 1 && restarted.scores.length === restartBase.scores + 1 && restarted.scores.some((record) => record.score === 4096),
+                '胜利弹层直接再来一局只记录一次且为最终分',
+                JSON.stringify({ plays: restarted.plays, scores: restarted.scores.length })
+              );
+              /* D. C06 文案「六步」必须显示实际 maxValidMoves（缺陷 6）。 */
+              const stages = challengeStagesData();
+              const c06 = stages.filter((stage) => stage.stageNumber === 6)[0];
+              if (!c06) {
+                check(false, 'C06 挑战数据存在');
+              } else {
+                const cMax = Math.max(1, Math.floor(Number(c06.content.maxValidMoves) || 1));
+                const goalText = challengeGoalDisplay(c06, cMax);
+                mode = 'challenge';
+                chStage = c06;
+                chStageId = c06.id;
+                chMoves = 2;
+                chTarget = Math.max(4, Math.floor(Number(c06.content.win && c06.content.win.anyTileAtLeast) || 4));
+                chMaxMoves = cMax;
+                chElapsed = 0;
+                chTipTimer = 3;
+                syncChallengeHud();
+                updateChallengeTip();
+                const hudText = dom.chHud.textContent || '';
+                const tipText = dom.chTip.textContent || '';
+                check(hudText.indexOf('2/' + cMax) !== -1, 'C06 HUD 显示实际步数上限', JSON.stringify({ hud: hudText, max: cMax }));
+                check(tipText.indexOf(cMax + ' 步有效移动') !== -1 && tipText.indexOf('六步') === -1, 'C06 提示用实际步数上限覆盖文案', JSON.stringify({ tip: tipText }));
+                check(goalText.indexOf(cMax + ' 步内') !== -1 && goalText.indexOf('六步') === -1, 'C06 目标文案按实际上限展示', goalText);
+                mode = 'classic';
+                chStage = null;
+                chStageId = null;
+                chTipTimer = 0;
+                syncChallengeHud();
+                updateChallengeTip();
+              }
+              /* E. 滑动阈值按画布 CSS 尺寸折算（缺陷 7）。 */
+              const th = api.swipeThreshold();
+              check(th.cssPx >= 24 && th.cssPx <= 32 && th.logical >= 16, '滑动阈值折算为 24–32 CSS px', JSON.stringify(th));
+              api.setBoard([
+                [0, 0, 0, 2],
+                [0, 0, 0, 0],
+                [0, 0, 0, 0],
+                [0, 0, 0, 0],
+              ]);
+              const movesBefore = moves;
+              handleSwipe(th.logical * 0.5, 0);
+              const smallIgnored = moves === movesBefore;
+              handleSwipe(-th.logical * 1.2, 0);
+              check(smallIgnored && moves === movesBefore + 1, '阈值以下滑动不触发、达到阈值触发移动', JSON.stringify({ before: movesBefore, after: moves }));
+            } catch (err) {
+              check(false, 'regression 执行未抛异常', String(err && err.message ? err.message : err));
+            } finally {
+              try {
+                autosave.clear();
+                mode = 'classic';
+                chStage = null;
+                chStageId = null;
+                chTipTimer = 0;
+                reset();
+                state = 'ready';
+                loop.resume();
+                if (dom.chTip) dom.chTip.hidden = true;
+                syncChallengeHud();
+                updateChallengeTip();
+                showStart();
+                pauseUi.sync();
+                joyTools.sync();
+              } catch (err) {
+                /* 清理失败不掩盖断言结果 */
+              }
+              keys.forEach((key) => {
+                try {
+                  if (snap[key] === null) localStorage.removeItem(key);
+                  else localStorage.setItem(key, snap[key]);
+                } catch (err) {
+                  /* 忽略存储不可用 */
+                }
+              });
+              high = A.Progress.get('merge-2048').high;
+              dom.hudHigh.textContent = String(high);
+            }
+            return { pass: pass, fail: fail, details: details };
           },
         };
       }

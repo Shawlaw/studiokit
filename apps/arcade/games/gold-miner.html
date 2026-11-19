@@ -147,6 +147,7 @@
       const AIM_LINE_COST_PER_SEC = 2;
       const WINCH_SPEED = 980;
       const TIME_BONUS = 10;
+      const TIME_UP_HINT = '时间到 · 等待本次回收';
       const TOOL_CAPS = { aim: 3, time: 2, winch: 2 };
       const TOOL_START = { aim: 2, time: 1, winch: 1 };
 
@@ -211,6 +212,21 @@
         tnt: { r: 11, value: 0, weight: 0, label: '炸药' },
       };
 
+      /* 矿物价值/重量标签：纯视觉（不改判定、不改数值），字号上限 11px。
+       * 重量分档用于提示回收时间：轻(≤3) / 中(4–8) / 重(≥9)。 */
+      function weightBand(weight) {
+        const value = Number(weight) || 0;
+        if (value >= 9) return '重';
+        if (value >= 4) return '中';
+        return '轻';
+      }
+      function itemLabelModel(item) {
+        if (!item || item.type === 'tnt') return null;
+        const value = Math.max(0, Math.floor(Number(item.value) || 0));
+        const band = weightBand(item.weight);
+        return { value, weightBand: band, text: '$' + value + ' ' + band, fontPx: 11 };
+      }
+
       const pend = { angle: 0.9, vel: 0, length: MIN_LEN, gravity: 520, damping: 0 };
       /* 摆角（pend）与钩爪朝向（clawAngle）分离：瞄准时只改朝向，不打断摆动能量。 */
       let clawAngle = pend.angle;
@@ -228,6 +244,8 @@
       let recordSaved = false;
       let spaceWasDown = false;
       let clawOpen = 0;
+      /* 结算宽限：倒计时归零后进入 resolving，禁止新放钩/道具，等当前伸出/回收完成并 cashIn 再判胜负。 */
+      let timeUp = false;
 
       /* 限量道具：初始补给 + 每关补给；aimTarget 为“指哪打哪”正在飞向的目标。 */
       const tools = { aim: TOOL_START.aim, time: TOOL_START.time, winch: TOOL_START.winch };
@@ -342,6 +360,7 @@
         clawState = 'swing';
         clawOpen = 0;
         spaceWasDown = false;
+        timeUp = false;
         const initTools = chContent.initialTools && typeof chContent.initialTools === 'object' ? chContent.initialTools : {};
         tools.aim = clamp(Math.floor(Number(initTools.aim) || 0), 0, TOOL_CAPS.aim);
         tools.time = clamp(Math.floor(Number(initTools.time) || 0), 0, TOOL_CAPS.time);
@@ -517,6 +536,7 @@
           money,
           target,
           timeLeft: Math.round(Math.max(0, timeLeft) * 10) / 10,
+          timeUp,
           clawState,
           angleDeg: Math.round(((pend.angle * 180) / Math.PI) * 10) / 10,
           holding: holding ? String(holding.id || holding.type) : null,
@@ -532,6 +552,7 @@
           money,
           target,
           timeLeft,
+          timeUp,
           elapsedSec: Math.round(chElapsed * 10) / 10,
           items: items.map((o) => ({
             id: o.id || null,
@@ -541,6 +562,8 @@
             r: o.r,
             value: o.value,
             weight: o.weight,
+            labelText: itemLabelModel(o) ? itemLabelModel(o).text : null,
+            weightBand: weightBand(o.weight),
           })),
           caught: chCaught.slice(),
           collectibles: chCollectibles.slice(),
@@ -684,6 +707,7 @@
 
       function useTool(name) {
         if (state !== 'playing') return false;
+        if (timeUp) return false;
         /* 0.9 挑战关按设计不提供经典限量道具（initialTools 全 0），也不提供按秒计费的瞄准线。 */
         if (mode === 'challenge') {
           toolHint(name === 'line' ? '挑战关不提供瞄准线' : '挑战关不提供道具', '#ffd23f');
@@ -770,7 +794,7 @@
       }
 
       function tryAimAt(x, y) {
-        if (!aimArmed || state !== 'playing') return false;
+        if (!aimArmed || state !== 'playing' || timeUp) return false;
         const target = aimableAt(x, y);
         if (!target) {
           const tnt = items.find(
@@ -900,6 +924,7 @@
         clawState = 'swing';
         clawOpen = 0;
         spaceWasDown = false;
+        timeUp = false;
         tools.aim = TOOL_START.aim;
         tools.time = TOOL_START.time;
         tools.winch = TOOL_START.winch;
@@ -931,7 +956,7 @@
       }
 
       function syncCashout() {
-        const canCashout = state === 'playing' && clawState === 'swing' && money >= target;
+        const canCashout = state === 'playing' && !timeUp && clawState === 'swing' && money >= target;
         dom.cashout.hidden = !canCashout;
         dom.cashout.textContent = mode === 'challenge' ? '达标 · 结算通关' : '达标 · 立即进入下一关';
       }
@@ -1003,6 +1028,7 @@
         level += 1;
         target = levelStartMoney + wholeTarget(levelSpec(level).target);
         timeLeft = levelTime(level);
+        timeUp = false;
         pend.gravity = swingGravity(level);
         pend.angle = rand(0.92, 1.0) * (Math.random() > 0.5 ? 1 : -1);
         pend.vel = 0;
@@ -1021,8 +1047,26 @@
         syncHud();
       }
 
+      /* 时间到结算：倒计时归零后不立即判负，禁止新放钩/道具，等当前伸出/回收完成并 cashIn，
+       * 再按最终金额判胜负（classic 与挑战共用）。 */
+      function timeUpVerdict(finalMoney, targetMoney) {
+        return Number(finalMoney) >= Number(targetMoney) ? 'win' : 'lose';
+      }
+      function resolveTimeUp() {
+        if (state !== 'playing') return false;
+        const verdict = timeUpVerdict(money, target);
+        if (mode === 'challenge') {
+          if (verdict === 'win') challengeClear();
+          else challengeFail('倒计时归零，最终 $' + Math.floor(money) + ' / 目标 $' + target + ' 未达标');
+          return true;
+        }
+        if (verdict === 'win') nextLevel();
+        else gameOver();
+        return true;
+      }
+
       function cashOut() {
-        if (state !== 'playing' || clawState !== 'swing' || money < target) return;
+        if (state !== 'playing' || timeUp || clawState !== 'swing' || money < target) return;
         if (mode === 'challenge') {
           challengeClear();
           return;
@@ -1092,7 +1136,7 @@
       }
 
       function releaseClaw() {
-        if (clawState !== 'swing') return;
+        if (clawState !== 'swing' || timeUp) return;
         clawAngle = pend.angle;
         clawState = 'extend';
         syncCashout();
@@ -1278,8 +1322,12 @@
             : Number.isFinite(Number(data.levelStartMoney))
               ? wholeAmount(Number(data.levelStartMoney))
               : Math.max(0, target - levelSpec(level).target);
+          const savedTime = Number(data.timeLeft);
+          const restoringTimeUp = Number.isFinite(savedTime) && savedTime <= 0.0001;
           const timeCap = isChallenge ? levelTime(level) : levelTime(level) + TIME_BONUS;
-          timeLeft = clamp(Number(data.timeLeft) || levelTime(level), 0.1, timeCap);
+          /* 存档时 timeLeft=0 说明倒计时已归零（结算宽限中暂停/离开），恢复后继续 resolving 等回收完。 */
+          timeLeft = restoringTimeUp ? 0 : clamp(Number.isFinite(savedTime) ? savedTime : levelTime(level), 0.1, timeCap);
+          timeUp = restoringTimeUp;
           if (data.pend && isFinite(data.pend.angle)) {
             pend.angle = Number(data.pend.angle);
             pend.vel = Number(data.pend.vel) || 0;
@@ -1372,7 +1420,7 @@
             syncChallengeHud(false);
           }
         }
-        if (autoRelease && clawState === 'swing' && state === 'playing') {
+        if (autoRelease && clawState === 'swing' && state === 'playing' && !timeUp) {
           const deg = (pend.angle * 180) / Math.PI;
           if (Math.abs(deg - autoRelease.targetDeg) <= autoRelease.tolDeg) {
             /* #test 专用：把摆角精确对准设计 aimAngleDeg 后走真实 releaseClaw 物理（文档标注 engine-replay 差距）。
@@ -1384,9 +1432,17 @@
           }
         }
         timeLeft -= dt;
+        if (timeLeft <= 0) {
+          timeLeft = 0;
+          if (!timeUp) {
+            /* 进入结算宽限：禁止新放钩/道具，允许当前伸出/回收完成并 cashIn 后再判胜负。 */
+            timeUp = true;
+            syncCashout();
+          }
+        }
         syncTimerHud();
         /* 只有可重新决策的摆动阶段计费；伸出/回收仍显示方向，但暂停扣款。 */
-        if (aimLineActive && clawState === 'swing') {
+        if (aimLineActive && clawState === 'swing' && !timeUp) {
           money = Math.max(0, money - AIM_LINE_COST_PER_SEC * dt);
           if (Math.floor(money) !== lastMoneyShown) syncHud();
           if (money <= 0) {
@@ -1405,10 +1461,10 @@
           if (aimArmed) {
             /* 瞄准期间不按摆角放钩；点击画布直接锁定物品。 */
             spaceWasDown = input.isDown(' ');
-            if (input.pointer.wentDown) tryAimAt(input.pointer.x, input.pointer.y);
+            if (!timeUp && input.pointer.wentDown) tryAimAt(input.pointer.x, input.pointer.y);
           } else {
             const spaceNow = input.isDown(' ');
-            if (input.pointer.wentDown || (spaceNow && !spaceWasDown)) releaseClaw();
+            if (!timeUp && (input.pointer.wentDown || (spaceNow && !spaceWasDown))) releaseClaw();
             spaceWasDown = spaceNow;
           }
         } else if (clawState === 'extend') {
@@ -1451,24 +1507,9 @@
           }
         }
 
-        if (timeLeft <= 0) {
-          timeLeft = 0;
-          if (mode === 'challenge') {
-            if (money >= target) {
-              challengeClear();
-            } else {
-              challengeFail('倒计时归零，未达标');
-            }
-            input.endFrame();
-            return;
-          }
-          if (money >= target) {
-            nextLevel();
-          } else {
-            gameOver();
-            input.endFrame();
-            return;
-          }
+        if (timeUp && clawState === 'swing') {
+          /* 当前伸出/回收已完成（cashIn → ensureSwing），按最终金额判胜负。 */
+          resolveTimeUp();
         }
         input.endFrame();
       }
@@ -1626,6 +1667,17 @@
           ctx.beginPath();
           ctx.arc(o.r * 0.75, -o.r * 1.35, 2.2 + Math.sin(performance.now() / 90) * 0.8, 0, TAU);
           ctx.fill();
+        }
+        /* 常显 $价值 + 轻/中/重 重量标签（≤11px，深色底保证 320px 下可读；不参与抓取判定）。 */
+        const label = itemLabelModel(o);
+        if (label) {
+          const ly = o.r + 10;
+          ctx.font = 'bold ' + label.fontPx + 'px system-ui';
+          const pillW = Math.ceil(ctx.measureText(label.text).width) + 8;
+          ctx.fillStyle = 'rgba(7, 11, 22, 0.74)';
+          A.draw.roundRect(ctx, -pillW / 2, ly - 7.5, pillW, 15, 5);
+          ctx.fill();
+          A.draw.label(ctx, label.text, 0, ly, { font: 'bold ' + label.fontPx + 'px system-ui', color: '#fff3c4' });
         }
         ctx.restore();
       }
@@ -1801,6 +1853,17 @@
           font: 'bold 15px system-ui',
           color: urgent ? (Math.floor(timeLeft * 4) % 2 === 0 ? '#ff8f86' : '#ffd0c8') : '#f6ead0',
         });
+        /* 时间到结算宽限：常显提示，直到本次回收完成并判定胜负。 */
+        if (timeUp) {
+          ctx.fillStyle = 'rgba(7, 11, 22, 0.86)';
+          A.draw.roundRect(ctx, W / 2 - 98, 132, 196, 28, 9);
+          ctx.fill();
+          ctx.strokeStyle = 'rgba(255, 210, 63, 0.75)';
+          ctx.lineWidth = 1.5;
+          A.draw.roundRect(ctx, W / 2 - 98, 132, 196, 28, 9);
+          ctx.stroke();
+          A.draw.label(ctx, TIME_UP_HINT, W / 2, 146, { font: 'bold 12px system-ui', color: '#ffd23f' });
+        }
       }
 
       const loop = A.createLoop({
@@ -1886,6 +1949,7 @@
               spec: levelSpec(level),
               holding: holding ? holding.type : null,
               cashoutHidden: dom.cashout.hidden,
+              timeUp,
               clawState,
               angle: pend.angle,
               clawAngle,
@@ -1918,6 +1982,7 @@
               target,
               level,
               timeLeft,
+              timeUp,
               lastFeedback: floaters.length ? floaters[floaters.length - 1].text : null,
             };
           },
@@ -1985,6 +2050,165 @@
             syncHud();
             autosave.saveNow();
             return true;
+          },
+          /* ---------- 修复回归（#test 专用、同步确定性；结束后恢复临时状态） ---------- */
+          regression() {
+            const details = [];
+            let pass = 0;
+            let fail = 0;
+            const check = (ok, text) => {
+              if (ok) {
+                pass += 1;
+                details.push('PASS ' + text);
+              } else {
+                fail += 1;
+                details.push('FAIL ' + text);
+              }
+            };
+            const snapshot = {
+              mode,
+              state,
+              money,
+              target,
+              level,
+              levelStartMoney,
+              timeLeft,
+              timeUp,
+              items: items.slice(),
+              holding,
+              clawState,
+              clawAngle,
+              clawOpen,
+              pend: { angle: pend.angle, vel: pend.vel, length: pend.length, gravity: pend.gravity, damping: pend.damping },
+              tools: { aim: tools.aim, time: tools.time, winch: tools.winch },
+              winchArmed,
+              aimArmed,
+              aimTarget,
+              aimLineActive,
+              floaters: floaters.slice(),
+              lastMoneyShown,
+              chStage,
+              chContent,
+              chElapsed,
+              chAssisted,
+              chCollectibles,
+              chCaught,
+              chTipTimer,
+              chHudTimer,
+              autoRelease,
+            };
+            const restoreSnapshot = () => {
+              mode = snapshot.mode;
+              state = snapshot.state;
+              money = snapshot.money;
+              target = snapshot.target;
+              level = snapshot.level;
+              levelStartMoney = snapshot.levelStartMoney;
+              timeLeft = snapshot.timeLeft;
+              timeUp = snapshot.timeUp;
+              items = snapshot.items;
+              holding = snapshot.holding;
+              clawState = snapshot.clawState;
+              clawAngle = snapshot.clawAngle;
+              clawOpen = snapshot.clawOpen;
+              pend.angle = snapshot.pend.angle;
+              pend.vel = snapshot.pend.vel;
+              pend.length = snapshot.pend.length;
+              pend.gravity = snapshot.pend.gravity;
+              pend.damping = snapshot.pend.damping;
+              tools.aim = snapshot.tools.aim;
+              tools.time = snapshot.tools.time;
+              tools.winch = snapshot.tools.winch;
+              winchArmed = snapshot.winchArmed;
+              aimArmed = snapshot.aimArmed;
+              aimTarget = snapshot.aimTarget;
+              aimLineActive = snapshot.aimLineActive;
+              floaters = snapshot.floaters;
+              lastMoneyShown = snapshot.lastMoneyShown;
+              chStage = snapshot.chStage;
+              chContent = snapshot.chContent;
+              chElapsed = snapshot.chElapsed;
+              chAssisted = snapshot.chAssisted;
+              chCollectibles = snapshot.chCollectibles;
+              chCaught = snapshot.chCaught;
+              chTipTimer = snapshot.chTipTimer;
+              chHudTimer = snapshot.chHudTimer;
+              autoRelease = snapshot.autoRelease;
+              lastHudTime = -1;
+              setChallengeChrome(mode === 'challenge');
+              syncTools();
+              syncHud();
+              syncCashout();
+              syncChallengeHud(true);
+              if (snapshot.state === 'playing' || snapshot.state === 'paused') autosave.saveNow();
+              else autosave.clear();
+            };
+            try {
+              /* 1) 价值/重量标签数据：$价值 + 轻/中/重，字号 ≤11px，数值不变。 */
+              const goldMLabel = itemLabelModel({ type: 'goldM', value: TYPES.goldM.value, weight: TYPES.goldM.weight });
+              const diamondLabel = itemLabelModel({ type: 'diamond', value: TYPES.diamond.value, weight: TYPES.diamond.weight });
+              const rockLLabel = itemLabelModel({ type: 'rockL', value: TYPES.rockL.value, weight: TYPES.rockL.weight });
+              check(goldMLabel && goldMLabel.text === '$150 中' && goldMLabel.fontPx <= 11, '中金常显「$150 中」且字号 ≤11px');
+              check(diamondLabel.text === '$600 轻' && rockLLabel.text === '$20 重', '钻石=轻、巨石=重（重量分档可用于回收时间决策）');
+              check(itemLabelModel({ type: 'tnt', value: 0, weight: 0 }) === null && TYPES.goldM.value === 150, '炸药不叠加无关标签，矿物数值未被修改');
+              /* 2) 时间到判定只按最终金额；HUD 宽限文案存在。 */
+              check(timeUpVerdict(150, 300) === 'lose' && timeUpVerdict(250, 200) === 'win' && timeUpVerdict(200, 200) === 'win', '时间到判定按最终金额：$150/300 负、$250/200 胜、恰好达标胜');
+              check(TIME_UP_HINT === '时间到 · 等待本次回收', '时间到 HUD 文案为「时间到 · 等待本次回收」');
+              /* 3) 伸出中时间到：进入 resolving，禁止新放钩但允许当前伸出完成。 */
+              mode = 'classic';
+              chStage = null;
+              chContent = null;
+              state = 'playing';
+              money = 100;
+              target = 500;
+              level = 1;
+              levelStartMoney = 0;
+              items = [{ type: 'goldM', x: 210, y: 430, r: 14, value: 150, weight: 4, wob: 0 }];
+              holding = null;
+              aimTarget = null;
+              aimArmed = false;
+              winchArmed = false;
+              clawState = 'extend';
+              pend.angle = 0.4;
+              clawAngle = 0.4;
+              pend.length = MIN_LEN;
+              pend.vel = 0;
+              timeLeft = 0.01;
+              timeUp = false;
+              update(1 / 60);
+              check(timeUp === true && state === 'playing' && clawState === 'extend', '时间到进入 resolving：state 仍 playing、当前伸出继续（未提前判负）');
+              /* 4) 回收中时间到：本次回收完成并 cashIn，再按最终金额（100+150=250）结算晋级。 */
+              money = 100;
+              target = 200;
+              level = 1;
+              levelStartMoney = 0;
+              items = [{ type: 'goldM', x: 210, y: 430, r: 14, value: 150, weight: 4, wob: 0 }];
+              holding = items[0];
+              clawState = 'retract';
+              pend.angle = 0.4;
+              clawAngle = 0.4;
+              pend.length = MIN_LEN + 2;
+              pend.vel = 0;
+              timeLeft = 0.01;
+              timeUp = false;
+              update(1 / 60);
+              check(money === 250 && level === 2 && state === 'playing' && timeUp === false, '最后一钩宽限：回收完成 cashIn 后 money 100→250，按最终金额达标晋级（旧逻辑会按 100 直接判负）');
+            } catch (err) {
+              fail += 1;
+              details.push('FAIL regression 异常：' + (err && err.message ? err.message : String(err)));
+            } finally {
+              restoreSnapshot();
+            }
+            return { pass, fail, details };
+          },
+          /* #test 专用：设置剩余时间，用于验证「时间到结算宽限」。 */
+          setTimeLeft(seconds) {
+            const cap = levelTime(level) + TIME_BONUS;
+            timeLeft = clamp(Number(seconds) || 0, 0, cap);
+            if (timeLeft > 0) timeUp = false;
+            syncTimerHud();
+            syncCashout();
+            return timeLeft;
           },
           /* ---------- 0.9 挑战模式钩子（契约 INTEGRATION-CONTRACT §5） ---------- */
           challengeStages() {

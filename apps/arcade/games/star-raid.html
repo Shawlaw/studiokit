@@ -248,6 +248,26 @@
       function challengeLabel(stage) {
         return stage ? 'C' + pad2(stage.stageNumber || 0) + ' ' + (stage.title || '') : '挑战';
       }
+      /* 0.9.0 修复（缺陷 3）：数据源 content 未声明「无伤 / 零碰撞」判定字段时不能凭空加判定，
+       * C03 的实际通关判定只看存活到结束；HUD 目标文案按实际判定展示，避免「无碰撞」误导。
+       * 若未来 content.win 明确声明 noDamage / hitless / noCollision 等字段，这里保留原目标文案，
+       * 判定逻辑仍需数据源与测试同步扩展（不改数据文件）。 */
+      function challengeNoDamageRule(stage) {
+        const content = stage && stage.content && typeof stage.content === 'object' ? stage.content : chContent;
+        const win = content && content.win && typeof content.win === 'object' ? content.win : null;
+        if (!win) return false;
+        const keys = ['noDamage', 'hitless', 'noCollision', 'zeroCollision', 'requireNoDamage'];
+        return keys.some((key) => win[key] === true);
+      }
+      function challengeGoalText(stage) {
+        const goal = String((stage && stage.goalStatement) || '');
+        if (challengeNoDamageRule(stage)) return goal;
+        const stageNumber = Number(stage && stage.stageNumber) || 0;
+        if (stageNumber === 3 && /无碰撞|无伤|零碰撞|无伤害/.test(goal)) {
+          return '完成冲锋训练并存活到结束（碰撞只扣生命，通关判定只看存活）';
+        }
+        return goal;
+      }
       function challengePatternLabel(ev) {
         if (!ev) return '';
         const names = {
@@ -597,12 +617,14 @@
         if (dom.chTip) {
           const show = chTipTimer > 0 && state === 'playing';
           dom.chTip.hidden = !show;
-          if (show) dom.chTip.textContent = '目标：' + (chStage.goalStatement || '') + ' · ' + (chStage.decision || '');
+          if (show) dom.chTip.textContent = '目标：' + challengeGoalText(chStage) + ' · ' + (chStage.decision || '');
         }
       }
       function setChallengeChrome(active) {
         document.body.classList.toggle('has-challenge', !!active);
-        if (dom.chHud) dom.chHud.hidden = !active;
+        /* 0.9.0 修复（缺陷 2）：挑战模式只保留画布内 HUD；DOM 挑战 HUD 与画布内文字重复，
+         * 390px 下会叠压。DOM 节点保留（data-ch-hud 契约），但始终隐藏。 */
+        if (dom.chHud) dom.chHud.hidden = true;
         if (dom.chTip) dom.chTip.hidden = !active || chTipTimer <= 0;
         syncJoyTools();
       }
@@ -795,7 +817,7 @@
           stageIndex: chStage ? Math.max(0, (Number(chStage.stageNumber) || 1) - 1) : -1,
           state,
           elapsedSec: Math.round(chTime * 10) / 10,
-          objective: chStage ? chStage.goalStatement : '',
+          objective: chStage ? challengeGoalText(chStage) : '',
           cleared: state === 'cleared',
           collectibles: chCollectibles.slice(),
           assisted: chAssisted,
@@ -805,10 +827,12 @@
           activeEvent: active ? { id: active.id, phase: active.phase, pattern: active.attackPattern } : null,
           eventsDone: chEvents.filter((ev) => ev.done).length,
           eventsTotal: chEvents.length,
-          boss: boss ? { hp: boss.hp, maxHp: boss.maxHp, phase: boss.phase, exposed: boss.exposed !== false, weakSide: boss.weakSide } : null,
+          boss: boss ? { hp: boss.hp, maxHp: boss.maxHp, phase: boss.phase, exposed: boss.exposed !== false, weakSide: boss.weakSide, fireTimer: boss.fireTimer, t: boss.t } : null,
           bossDefeated: chBossDefeated,
           bossMaxPhase: chBossMaxPhase,
           shots: shots.length,
+          pickups: pickups.length,
+          powerupSpawned: chPowerupSpawned.map((spawned) => !!spawned),
           challengeAvailable: challengeAvailable(),
         };
       }
@@ -836,13 +860,15 @@
           safeBand: challengeCurrentBand(),
           shots: shots.map((s) => ({ x: Math.round(s.x * 10) / 10, y: Math.round(s.y * 10) / 10, r: s.r, source: s.chSource || null })),
           player: { x: player.x, y: player.y, invul: player.invul },
-          boss: boss ? { hp: boss.hp, maxHp: boss.maxHp, phase: boss.phase, exposed: boss.exposed !== false, weakSide: boss.weakSide } : null,
+          boss: boss ? { hp: boss.hp, maxHp: boss.maxHp, phase: boss.phase, exposed: boss.exposed !== false, weakSide: boss.weakSide, fireTimer: boss.fireTimer, t: boss.t } : null,
           bossDefeated: chBossDefeated,
           bossMaxPhase: chBossMaxPhase,
           bossExposedWindows: chBossExposedWindows,
           bossExposedSeconds: Math.round(chBossExposedSeconds * 10) / 10,
           firedVolleys: chFiredVolleys,
           bossHits: chBossHits,
+          pickupsInFlight: pickups.length,
+          powerupSpawned: chPowerupSpawned.map((spawned) => !!spawned),
           buffs: { ...buffs },
           bulletsInFlight: bullets.length,
           enemiesCount: enemies.length,
@@ -1395,6 +1421,10 @@
                   bossDefeated: chBossDefeated,
                   bossMaxPhase: chBossMaxPhase,
                   bossExposedWindows: chBossExposedWindows,
+                  bossExposedSeconds: chBossExposedSeconds,
+                  /* 0.9.0 修复（缺陷 1）：固定拾取物生成游标必须随档保存，否则刷新后按
+                   * 已通过的 atSec 重新生成一遍（重复掉 Buff）。 */
+                  powerupSpawned: chPowerupSpawned.map((spawned) => !!spawned),
                   events: chEvents.map((ev) => ({
                     id: ev.id,
                     started: ev.started,
@@ -1414,6 +1444,9 @@
                         weakSide: boss.weakSide || 'left',
                         salvoIndex: boss.salvoIndex || 0,
                         t: boss.t,
+                        /* 0.9.0 修复（缺陷 1）：Boss 射击/阶段计时随档保存，刷新后不回到 999。 */
+                        fireTimer: boss.fireTimer,
+                        wasExposed: boss.wasExposed !== false,
                       }
                     : null,
                 }
@@ -1426,6 +1459,8 @@
         if (!stage) return false;
         try {
           resetChallenge(stage);
+          const ch = data.challenge && typeof data.challenge === 'object' ? data.challenge : {};
+          const savedBoss = ch.boss && typeof ch.boss === 'object' ? ch.boss : null;
           const savedPlayer = data.player && typeof data.player === 'object' ? data.player : {};
           player.x = clamp(Number(savedPlayer.x) || player.x, 20, W - 20);
           player.y = clamp(Number(savedPlayer.y) || player.y, PLAYER_MIN_Y, PLAYER_MAX_Y);
@@ -1470,6 +1505,11 @@
             .map((e) => {
               const isBoss = e.kind === 'boss';
               const hp = Math.max(1, Number(e.hp) || 1);
+              /* 0.9.0 修复（缺陷 1）：新增保存的 Boss 射击计时优先；旧档未写入时回退到
+               * enemies[].fireTimer（旧档本来就有），仍缺失则用 0.55s 安全默认值，
+               * 不能像以前那样一律重置为 999（会消掉刷新前应有的弹幕节奏）。 */
+              const legacyTimer = Number.isFinite(Number(e.fireTimer)) ? Number(e.fireTimer) : 0.55;
+              const bossTimer = Number.isFinite(Number(savedBoss && savedBoss.fireTimer)) ? Number(savedBoss.fireTimer) : legacyTimer;
               return {
                 uid: Number(e.uid) || nextUid++,
                 kind: e.kind,
@@ -1483,7 +1523,7 @@
                 color: isBoss ? '#ff5d7a' : KINDS[e.kind].color,
                 vy: Number(e.vy) || 120,
                 t: Number(e.t) || 0,
-                fireTimer: 999,
+                fireTimer: isBoss ? clamp(bossTimer, -10, 30) : 999,
                 baseX: Number(e.baseX) || Number(e.x) || 0,
                 vx: 0,
                 name: isBoss ? String(e.name || 'BOSS') : '',
@@ -1514,7 +1554,6 @@
             tools.shield = Number.isFinite(Number(data.tools.shield)) ? clamp(Math.floor(Number(data.tools.shield)), 0, JOY_TOOL_CAPS.shield) : 1;
           }
           shieldTimer = clamp(Number(data.shieldTimer) || 0, 0, SHIELD_SECONDS);
-          const ch = data.challenge && typeof data.challenge === 'object' ? data.challenge : {};
           chTime = clamp(Number(ch.time) || 0, 0, 3600);
           const maxHealth = Math.max(1, Math.floor(Number(chContent.startingHealth) || 3));
           chHealth = clamp(Math.floor(Number(ch.health) || maxHealth), 1, maxHealth);
@@ -1525,6 +1564,15 @@
           chBossDefeated = !!ch.bossDefeated;
           chBossMaxPhase = clamp(Math.floor(Number(ch.bossMaxPhase) || 0), 0, 9);
           chBossExposedWindows = clamp(Math.floor(Number(ch.bossExposedWindows) || 0), 0, 999);
+          chBossExposedSeconds = clamp(Number(ch.bossExposedSeconds) || 0, 0, 3600);
+          /* 0.9.0 修复（缺陷 1）：恢复固定拾取物生成游标。旧档缺字段时用安全默认值：
+           * 已过 atSec 的拾取物视为已生成，避免刷新把它们再生成一遍。 */
+          const savedSpawned = Array.isArray(ch.powerupSpawned) ? ch.powerupSpawned : null;
+          const powerupList = Array.isArray(chContent.powerups) ? chContent.powerups : [];
+          chPowerupSpawned = powerupList.map((powerup, index) => {
+            if (savedSpawned) return !!savedSpawned[index];
+            return (Number(powerup && powerup.atSec) || 0) <= chTime;
+          });
           const savedEvents = Array.isArray(ch.events) ? ch.events : [];
           chEvents.forEach((ev) => {
             const saved = savedEvents.find((item) => item && item.id === ev.id);
@@ -1538,10 +1586,15 @@
           });
           if (boss && ch.boss && typeof ch.boss === 'object') {
             boss.exposed = ch.boss.exposed !== false;
-            boss.wasExposed = ch.boss.exposed !== false;
+            boss.wasExposed = ch.boss.wasExposed === undefined ? boss.exposed : !!ch.boss.wasExposed;
             boss.weakSide = ch.boss.weakSide === 'right' ? 'right' : 'left';
             boss.salvoIndex = Math.max(0, Math.floor(Number(ch.boss.salvoIndex) || 0));
             if (Number.isFinite(Number(ch.boss.hp))) boss.hp = clamp(Number(ch.boss.hp), 1, boss.maxHp);
+            /* 0.9.0 修复（缺陷 1）：Boss 阶段计时（b.t 驱动弱点/护盾循环）与射击计时连续。
+             * 入场等待期间 fireTimer 允许为负数（<=0 表示“下次进入射程立即开火”），必须原样恢复；
+             * 仅对异常大值/无意义值做范围保护。 */
+            if (Number.isFinite(Number(ch.boss.t))) boss.t = clamp(Number(ch.boss.t), 0, 3600);
+            if (Number.isFinite(Number(ch.boss.fireTimer))) boss.fireTimer = clamp(Number(ch.boss.fireTimer), -10, 30);
           }
           recordSaved = false;
           state = 'playing';
@@ -2686,6 +2739,118 @@
           },
           challengePanelVisible() {
             return !!(dom.chPanel && !dom.chPanel.hidden);
+          },
+          /* ---------- 0.9.0 修复回归自检（页面内同步断言，不写测试文件） ---------- */
+          regression() {
+            const details = [];
+            let pass = 0;
+            let fail = 0;
+            const check = (ok, message) => {
+              if (ok) {
+                pass += 1;
+                details.push('PASS ' + message);
+              } else {
+                fail += 1;
+                details.push('FAIL ' + message);
+              }
+            };
+            const snapshotState = state;
+            const snapshot = (state === 'playing' || state === 'paused' || state === 'clear') ? serialize() : null;
+            try {
+              const stage = challengeStageByRef('star-raid-C05');
+              check(!!stage, 'C05 挑战关卡数据可用（Boss 修复依赖）');
+              if (stage) {
+                resetChallenge(stage);
+                state = 'playing';
+                chTime = 40.5;
+                const bossEv = chEvents.filter((ev) => ev.enemyType === 'boss')[0];
+                check(!!bossEv, 'C05 含 Boss 事件');
+                if (bossEv) {
+                  bossEv.started = true;
+                  bossEv.phase = 'attack';
+                  bossEv.phaseTime = 2.5;
+                  bossEv.salvoIndex = 3;
+                  bossEv.lastSalvo = 0.2;
+                  challengeSpawnBoss(bossEv);
+                }
+                if (boss) {
+                  boss.t = 3.2;
+                  boss.fireTimer = 0.42;
+                  boss.hp = 220;
+                }
+                const powerups = Array.isArray(chContent.powerups) ? chContent.powerups : [];
+                chPowerupSpawned = powerups.map((powerup) => (Number(powerup && powerup.atSec) || 0) <= chTime);
+                pickups = [];
+                const savedRun = serialize();
+                check(!!savedRun && !!(savedRun.challenge && savedRun.challenge.boss), '挑战局内档包含 Boss 状态');
+                const expectTimer = boss ? boss.fireTimer : -1;
+                const expectT = boss ? boss.t : -1;
+                const restoredOk = restore(savedRun);
+                check(restoredOk === true, '挑战刷新恢复返回成功');
+                check(!!boss && Math.abs(boss.fireTimer - expectTimer) < 0.001, '刷新后 Boss fireTimer 连续（' + (boss ? boss.fireTimer : 'null') + '，不是 999）');
+                check(!!boss && Math.abs(boss.t - expectT) < 0.001, '刷新后 Boss 阶段计时 b.t 连续');
+                const pickupsBefore = pickups.length;
+                challengePowerupsSpawned();
+                check(pickups.length === pickupsBefore, '刷新后固定拾取物不重复生成（游标已恢复）');
+                const timerBeforeStep = boss ? boss.fireTimer : -1;
+                update(1 / 60);
+                check(!!boss && Math.abs(timerBeforeStep - boss.fireTimer - 1 / 60) < 0.001, '恢复后首帧 Boss 射击计时继续推进');
+                /* 旧档安全默认：缺 fireTimer / t / powerupSpawned 字段时也不能回到 999 或重复生成。 */
+                const legacy = JSON.parse(JSON.stringify(savedRun));
+                if (legacy.challenge && legacy.challenge.boss) {
+                  delete legacy.challenge.boss.fireTimer;
+                  delete legacy.challenge.boss.t;
+                }
+                if (legacy.challenge) delete legacy.challenge.powerupSpawned;
+                if (Array.isArray(legacy.enemies)) {
+                  legacy.enemies.forEach((enemy) => {
+                    if (enemy && enemy.kind === 'boss') delete enemy.fireTimer;
+                  });
+                }
+                const legacyOk = restore(legacy);
+                check(legacyOk === true && !!boss && boss.fireTimer >= 0 && boss.fireTimer <= 2, '旧档缺 Boss 计时字段时使用安全默认值（' + (boss ? boss.fireTimer : 'null') + '）');
+                const legacyPickups = pickups.length;
+                challengePowerupsSpawned();
+                check(pickups.length === legacyPickups, '旧档缺拾取游标时仍不重复生成');
+              }
+              /* 缺陷 2：挑战模式 DOM HUD 必须隐藏，只保留画布内 HUD。 */
+              setChallengeChrome(true);
+              check(dom.chHud && dom.chHud.hidden === true, '挑战模式 DOM 挑战 HUD 已隐藏（只保留画布内 HUD）');
+              const gameHud = document.querySelector('.game-hud');
+              check(!gameHud || getComputedStyle(gameHud).display === 'none', '挑战模式顶部 DOM 游戏 HUD 已隐藏');
+              /* 缺陷 3：C03 目标文案与实际「只看存活」判定一致。 */
+              const c03 = challengeStageByRef('star-raid-C03');
+              const c03Text = challengeGoalText(c03);
+              check(!!c03 && /存活/.test(c03Text) && !/无碰撞/.test(c03Text), 'C03 目标文案与实际判定一致：' + c03Text);
+            } catch (err) {
+              fail += 1;
+              details.push('FAIL regression 异常：' + (err && err.message ? err.message : err));
+            } finally {
+              if (snapshot && restore(snapshot)) {
+                state = 'playing';
+                if (snapshotState === 'playing') {
+                  loop.resume();
+                  autosave.saveNow();
+                } else if (snapshotState === 'paused') {
+                  pauseByUser();
+                } else if (snapshotState === 'clear') {
+                  state = 'clear';
+                  loop.pause();
+                  showClearPanel(pendingClearStage);
+                }
+              } else {
+                autosave.clear();
+                mode = 'classic';
+                chStage = null;
+                chContent = null;
+                chEvents = [];
+                setChallengeChrome(false);
+                reset();
+                state = 'ready';
+                showStart();
+              }
+            }
+            return { pass, fail, details };
           },
         };
       }

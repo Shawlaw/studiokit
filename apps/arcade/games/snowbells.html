@@ -203,14 +203,28 @@
       }
 
       /* ---------- 每局主动道具 ---------- */
+      /* 可点击条件集中判断：挑战关的「安可」不生效，直接返回 false 且不消耗次数（经典模式效果保留）。 */
+      function joyUsable(id) {
+        if (state !== 'playing' || !Object.prototype.hasOwnProperty.call(tools, id) || tools[id] <= 0) return false;
+        if (id === 'magnet') return magnetTimer <= 0;
+        if (id === 'encore') {
+          if (mode === 'challenge') return false;
+          return encoreHits <= 0;
+        }
+        return false;
+      }
       function syncJoyTools() {
         Object.keys(joyButtons).forEach((id) => {
           const button = joyButtons[id];
           const active = id === 'magnet' ? magnetTimer > 0 : encoreHits > 0;
           const name = id === 'magnet' ? '铃磁' : '安可';
-          const detail = id === 'magnet' ? '6 秒内扩大铃铛碰撞半径' : '接下来两颗铃铛得分翻倍';
+          const detail = id === 'magnet'
+            ? '6 秒内扩大铃铛碰撞半径'
+            : mode === 'challenge'
+              ? '挑战关不可用（经典模式：接下来两颗铃铛得分翻倍）'
+              : '接下来两颗铃铛得分翻倍';
           button.querySelector('[data-joy-count]').textContent = String(tools[id]);
-          button.disabled = state !== 'playing' || tools[id] <= 0 || active;
+          button.disabled = !joyUsable(id);
           button.classList.toggle('is-armed', active);
           button.setAttribute('aria-pressed', String(active));
           button.setAttribute('aria-label', name + '，' + detail + '，剩余 ' + tools[id] + ' 次（快捷键 ' + (id === 'magnet' ? '1' : '2') + '）');
@@ -218,6 +232,11 @@
       }
       function useJoy(id) {
         if (state !== 'playing' || !Object.prototype.hasOwnProperty.call(tools, id) || tools[id] <= 0) return false;
+        /* 挑战关没有读取 encoreHits 的命中逻辑：诚实地拒绝使用，避免白扣次数并标记 assisted。 */
+        if (id === 'encore' && mode === 'challenge') {
+          A.showToast('挑战关不使用安可');
+          return false;
+        }
         if (id === 'magnet') {
           if (magnetTimer > 0) return false;
           tools.magnet -= 1;
@@ -980,9 +999,29 @@
       }
 
       /* ---------- 渲染 ---------- */
+      /* 挑战铃铛按 kind 区分：classic（缺省金铃）/ rest 空心虚线环 / bonus 星形高亮 / blue·red 填色+字样。
+       * 静音与色弱可读：休止靠"空心虚线环+双竖线"，彩铃靠星形，蓝/红铃额外写"蓝/红"字样，不只靠颜色。 */
+      const BELL_STYLE = {
+        normal: { shape: 'classic', dashed: false, fillColor: null, stroke: '#9c7420', label: '' },
+        rest: { shape: 'hollow-dashed-ring', dashed: true, fillColor: null, stroke: '#9fb4e8', label: '休' },
+        bonus: { shape: 'sparkle-star', dashed: false, fillColor: '#ff9de2', stroke: '#ffd23f', label: '彩' },
+        blue: { shape: 'fisheye-disc', dashed: false, fillColor: '#3d7dff', stroke: '#bcd5ff', label: '蓝' },
+        red: { shape: 'fisheye-disc', dashed: false, fillColor: '#e8504f', stroke: '#ffc2b8', label: '红' },
+      };
+      const bellDrawStats = { classic: 0, rest: 0, bonus: 0, blue: 0, red: 0 };
+      function bellStyle(kind) {
+        return BELL_STYLE[kind] || BELL_STYLE.normal;
+      }
+      function bellDrawBucket(kind) {
+        return kind === 'rest' || kind === 'bonus' || kind === 'blue' || kind === 'red' ? kind : 'classic';
+      }
+
       function drawBell(b) {
         const y = b.y - camY;
         if (y < -20 || y > H + 20) return;
+        const kind = b && typeof b.kind === 'string' ? b.kind : 'normal';
+        const style = bellStyle(kind);
+        bellDrawStats[bellDrawBucket(kind)] += 1;
         const bob = Math.sin(b.phase + performance.now() / 700) * 2;
         ctx.save();
         ctx.globalAlpha = b.consumed ? 0.28 : 1;
@@ -993,20 +1032,72 @@
         ctx.moveTo(0, -b.r - bob);
         ctx.lineTo(0, -34);
         ctx.stroke();
-        const g = ctx.createRadialGradient(-3, -3, 1, 0, 0, b.r + 2);
-        g.addColorStop(0, '#ffe9a3');
-        g.addColorStop(1, '#e8b83a');
-        ctx.fillStyle = g;
-        ctx.beginPath();
-        ctx.arc(0, 0, b.r, 0, TAU);
-        ctx.fill();
-        ctx.strokeStyle = '#9c7420';
-        ctx.lineWidth = 1.4;
-        ctx.stroke();
-        ctx.fillStyle = '#9c7420';
-        ctx.beginPath();
-        ctx.arc(0, b.r - 2, 2.4, 0, TAU);
-        ctx.fill();
+        if (style.shape === 'classic') {
+          /* 经典模式缺省金铃：与修复前完全一致，不改经典视觉。 */
+          const g = ctx.createRadialGradient(-3, -3, 1, 0, 0, b.r + 2);
+          g.addColorStop(0, '#ffe9a3');
+          g.addColorStop(1, '#e8b83a');
+          ctx.fillStyle = g;
+          ctx.beginPath();
+          ctx.arc(0, 0, b.r, 0, TAU);
+          ctx.fill();
+          ctx.strokeStyle = '#9c7420';
+          ctx.lineWidth = 1.4;
+          ctx.stroke();
+          ctx.fillStyle = '#9c7420';
+          ctx.beginPath();
+          ctx.arc(0, b.r - 2, 2.4, 0, TAU);
+          ctx.fill();
+        } else if (style.shape === 'hollow-dashed-ring') {
+          /* 休止铃：空心虚线环 + 双竖线（静音下也能凭形状识别）。 */
+          ctx.setLineDash([3, 3]);
+          ctx.strokeStyle = style.stroke;
+          ctx.lineWidth = 2;
+          ctx.beginPath();
+          ctx.arc(0, 0, b.r, 0, TAU);
+          ctx.stroke();
+          ctx.setLineDash([]);
+          ctx.fillStyle = style.stroke;
+          ctx.fillRect(-3.2, -3.6, 2, 7.2);
+          ctx.fillRect(1.2, -3.6, 2, 7.2);
+          A.draw.label(ctx, style.label, 0, b.r + 11, { font: 'bold 10px system-ui', color: style.stroke });
+        } else if (style.shape === 'sparkle-star') {
+          /* 彩铃：六角星高亮，形状与金铃/休止铃不同。 */
+          const g = ctx.createRadialGradient(0, 0, 1, 0, 0, b.r + 6);
+          g.addColorStop(0, '#fff6c4');
+          g.addColorStop(0.55, style.fillColor);
+          g.addColorStop(1, style.stroke);
+          ctx.fillStyle = g;
+          ctx.beginPath();
+          const outer = b.r + 6;
+          for (let i = 0; i < 10; i += 1) {
+            const rad = i % 2 === 0 ? outer : outer * 0.42;
+            const ang = -Math.PI / 2 + (i * Math.PI) / 5;
+            const px = Math.cos(ang) * rad;
+            const py = Math.sin(ang) * rad;
+            if (i === 0) ctx.moveTo(px, py);
+            else ctx.lineTo(px, py);
+          }
+          ctx.closePath();
+          ctx.fill();
+          ctx.strokeStyle = 'rgba(255,255,255,0.85)';
+          ctx.lineWidth = 1.2;
+          ctx.stroke();
+          A.draw.label(ctx, style.label, 0, b.r + 11, { font: 'bold 10px system-ui', color: '#ffd7f2' });
+        } else {
+          /* 蓝/红铃：实心填色 + 白字"蓝/红"，色弱/灰度下凭字样仍可区分。 */
+          const g = ctx.createRadialGradient(-3, -3, 1, 0, 0, b.r + 2);
+          g.addColorStop(0, style.stroke);
+          g.addColorStop(1, style.fillColor);
+          ctx.fillStyle = g;
+          ctx.beginPath();
+          ctx.arc(0, 0, b.r, 0, TAU);
+          ctx.fill();
+          ctx.strokeStyle = style.stroke;
+          ctx.lineWidth = 1.4;
+          ctx.stroke();
+          A.draw.label(ctx, style.label, 0, 0.5, { font: 'bold 9px system-ui', color: '#ffffff' });
+        }
         ctx.restore();
       }
 
@@ -1239,6 +1330,90 @@
             return true;
           },
           /* ---------- 0.9 挑战模式钩子（契约见 docs/arcade/0.9/INTEGRATION-CONTRACT.md §5） ---------- */
+          /* 修复回归：同步、确定性断言（#test 专用；调用后会清理临时状态）。 */
+          regression() {
+            const details = [];
+            let pass = 0;
+            let fail = 0;
+            const check = (ok, text) => {
+              if (ok) {
+                pass += 1;
+                details.push('PASS ' + text);
+              } else {
+                fail += 1;
+                details.push('FAIL ' + text);
+              }
+            };
+            try {
+              /* 1) kind → 绘制样式映射：normal/rest/bonus/blue/red 必须落到不同分支。 */
+              const styles = { normal: bellStyle('normal'), rest: bellStyle('rest'), bonus: bellStyle('bonus'), blue: bellStyle('blue'), red: bellStyle('red') };
+              check(styles.normal.shape === 'classic' && styles.normal.dashed === false, 'normal 走经典金铃分支（classic 缺省外观不变）');
+              check(styles.rest.shape === 'hollow-dashed-ring' && styles.rest.dashed === true && !styles.rest.fillColor, 'rest 走空心虚线环分支（无填充）');
+              check(styles.bonus.shape === 'sparkle-star' && styles.bonus.shape !== styles.normal.shape && styles.bonus.shape !== styles.rest.shape, 'bonus 走星形高亮分支');
+              check(
+                styles.blue.shape === 'fisheye-disc' && styles.red.shape === 'fisheye-disc' &&
+                styles.blue.label === '蓝' && styles.red.label === '红' &&
+                styles.blue.fillColor !== styles.red.fillColor,
+                'blue/red 走填色圆盘且带「蓝/红」字样编码，可区分'
+              );
+              /* 2) 真实绘制分支命中：直接调用内部 drawBell 并读分支计数。 */
+              const before = Object.assign({}, bellDrawStats);
+              [['normal', 40], ['rest', 100], ['bonus', 160], ['blue', 220], ['red', 280]].forEach((pair) => {
+                drawBell({ x: pair[1], y: camY + 120, r: BELL_R, kind: pair[0], phase: 0, consumed: false });
+              });
+              check(
+                bellDrawStats.classic === before.classic + 1 &&
+                bellDrawStats.rest === before.rest + 1 &&
+                bellDrawStats.bonus === before.bonus + 1 &&
+                bellDrawStats.blue === before.blue + 1 &&
+                bellDrawStats.red === before.red + 1,
+                'drawBell 实际命中 classic/rest/bonus/blue/red 五条绘制分支'
+              );
+              /* 3) 挑战下「安可」被诚实拒绝且不消耗；经典模式效果保留。 */
+              const snapshot = { mode, state, magnetTimer, encoreHits, chAssisted, magnet: tools.magnet, encore: tools.encore };
+              mode = 'challenge';
+              state = 'playing';
+              tools.encore = 2;
+              encoreHits = 0;
+              chAssisted = false;
+              const rejected = useJoy('encore');
+              check(rejected === false && tools.encore === 2 && encoreHits === 0 && chAssisted === false, '挑战模式 useJoy(encore)=false 且剩余次数/assisted 均不变');
+              mode = 'classic';
+              state = 'playing';
+              tools.encore = 2;
+              encoreHits = 0;
+              chAssisted = false;
+              const classicUsed = useJoy('encore');
+              check(classicUsed === true && tools.encore === 1 && encoreHits === ENCORE_HITS && chAssisted === false, '经典模式 encore 仍生效（次数 -1、双倍命中 2 颗）');
+              mode = snapshot.mode;
+              state = snapshot.state;
+              magnetTimer = snapshot.magnetTimer;
+              encoreHits = snapshot.encoreHits;
+              chAssisted = snapshot.chAssisted;
+              tools.magnet = snapshot.magnet;
+              tools.encore = snapshot.encore;
+              syncJoyTools();
+              autosave.clear();
+            } catch (err) {
+              fail += 1;
+              details.push('FAIL regression 异常：' + (err && err.message ? err.message : String(err)));
+            }
+            return { pass, fail, details };
+          },
+          /* 绘制分支证据：kind → 样式映射 + 各分支实际命中计数。 */
+          bellRenderInfo() {
+            return {
+              kinds: ['normal', 'rest', 'bonus', 'blue', 'red'],
+              styles: {
+                normal: bellStyle('normal'),
+                rest: bellStyle('rest'),
+                bonus: bellStyle('bonus'),
+                blue: bellStyle('blue'),
+                red: bellStyle('red'),
+              },
+              drawStats: Object.assign({}, bellDrawStats),
+            };
+          },
           challengeStages() {
             return challengeData.map((stage) => {
               const best = A.Challenge.progress(gameId).best[stage.id] || null;

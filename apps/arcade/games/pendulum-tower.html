@@ -128,6 +128,7 @@
       let chErrorReason = '';
       let chLastResult = null;
       let chMaxLean = LEAN_LIMIT;
+      let chPeakLean = 0;
       let chWin = { floorsAtLeast: 4, noCollapse: true };
       let chLimits = { maxDroppedBoxes: 5, braceUsesAllowed: 0, guideUsesAllowed: 0 };
       let chToolsUsed = { guide: 0, brace: 0 };
@@ -447,6 +448,34 @@
         return spec ? Number(spec.tolerancePx) || 8 : 8;
       }
 
+      /* 挑战对齐判定：投影箱心 vs 关卡目标偏置（targetOffsetPx ± tolerancePx）。
+       * 与经典的「85% 重叠」判定分开，避免把玩家引向错误位置。 */
+      function challengeAlignState(centerX, targetOffsetPx, tolerancePx, baseCenterX) {
+        const base = Number.isFinite(Number(baseCenterX)) ? Number(baseCenterX) : W / 2;
+        const offset = Number(centerX) - (base + (Number(targetOffsetPx) || 0));
+        const tol = Math.max(0, Number(tolerancePx) || 0);
+        return { offsetPx: offset, tolerancePx: tol, aligned: Math.abs(offset) <= tol };
+      }
+
+      function challengeAlignNow(centerX) {
+        const content = chStage && chStage.content ? chStage.content : {};
+        return challengeAlignState(centerX, chTargetOffset(), chTolerance(), Number(content.baseCenterX) || W / 2);
+      }
+
+      function classicAlignState(centerX, topBox) {
+        const overlap = Math.min(centerX + BOX_W / 2, topBox.x + topBox.w) - Math.max(centerX - BOX_W / 2, topBox.x);
+        return { overlapPx: overlap, ratio: overlap / BOX_W, aligned: overlap >= BOX_W * 0.85 };
+      }
+
+      /* 挑战倾斜峰值：记录整局真实最大 |towerLean|，结算/复盘用它而不是当前瞬时值。 */
+      function recordPeakLean() {
+        chPeakLean = Math.max(chPeakLean, Math.abs(towerLean));
+        return chPeakLean;
+      }
+      function peakLeanText() {
+        return chPeakLean.toFixed(3);
+      }
+
       function evaluationLevel() {
         const allWithin = chMarks.length > 0 && chMarks.every((mark) => mark.withinTolerance);
         const noTools = chToolsUsed.guide + chToolsUsed.brace === 0;
@@ -481,6 +510,7 @@
         chLimits = Object.assign({ maxDroppedBoxes: 5, braceUsesAllowed: 0, guideUsesAllowed: 0 }, content.limits || {});
         chWin = Object.assign({ floorsAtLeast: chBoxesData.length, noCollapse: true, allMarkTargetsWithinTolerance: false }, content.win || {});
         chMaxLean = Number(chLimits.maxTowerLeanAbs) || LEAN_LIMIT;
+        chPeakLean = 0;
         const pendulum = content.pendulum || {};
         pend.length = Number(pendulum.length) || PEND_LEN;
         pend.gravity = 680 * (Number(pendulum.speedFactor) || 1);
@@ -629,8 +659,9 @@
         const damp = 0.9;
         leanVel += (-stiffness * towerLean - damp * leanVel) * dt;
         towerLean += leanVel * dt;
+        recordPeakLean();
         if (Math.abs(towerLean) > chMaxLean) {
-          challengeFail('塔身倾斜 ' + Math.abs(towerLean).toFixed(3) + ' 超过委托上限 ' + chMaxLean + '，结构失稳');
+          challengeFail('塔身倾斜 ' + peakLeanText() + ' 超过委托上限 ' + chMaxLean + '，结构失稳');
           input.endFrame();
           return;
         }
@@ -681,7 +712,7 @@
         const marksText = chMarks.map((mark) => mark.order + ':' + mark.actualOffsetPx + 'px' + (mark.withinTolerance ? '✓' : '✗')).join(' ');
         const resultText =
           A.Challenge.resultHtml(chStage, result) +
-          '<p class="ac-challenge-tip">' + chEsc(evaluationLabel(chEvaluation)) + '<br/>落点 ' + chEsc(marksText || '—') + ' · 落空 ' + chMisses + ' · 倾斜峰值 ' + Math.abs(towerLean).toFixed(3) + '</p>';
+          '<p class="ac-challenge-tip">' + chEsc(evaluationLabel(chEvaluation)) + '<br/>落点 ' + chEsc(marksText || '—') + ' · 落空 ' + chMisses + ' · 倾斜峰值 ' + peakLeanText() + '</p>';
         ui.show({
           title: '挑战通关',
           text: resultText,
@@ -757,12 +788,48 @@
         return true;
       }
 
+      /* 挑战恢复归一化：按 classic 的字段校验方式恢复 drop/tools 次数/guideArmed 等（全部 clamp）。
+       * 关键点：下落中的 drop 要原样恢复（pendHasBox 必为 false），不能靠"重给一箱"续玩；
+       * 工具剩余次数按关卡允许上限 clamp，避免刷新补回额度。 */
+      function normalizeChallengeRestore(data, caps) {
+        const guideCap = clamp(Math.floor(Number(caps && caps.guide)), 0, JOY_CAPS.guide);
+        const braceCap = clamp(Math.floor(Number(caps && caps.brace)), 0, JOY_CAPS.brace);
+        const d = data && typeof data === 'object' ? data : {};
+        let drop = null;
+        if (d.drop && isFinite(d.drop.x) && isFinite(d.drop.y)) {
+          drop = {
+            x: Number(d.drop.x),
+            y: Number(d.drop.y),
+            w: clamp(Number(d.drop.w) || BOX_W, 20, 200),
+            h: clamp(Number(d.drop.h) || BOX_H, 12, 80),
+            vy: Number(d.drop.vy) || 0,
+            prevBottom: Number(d.drop.prevBottom) || 0,
+            missed: !!d.drop.missed,
+            squash: Number(d.drop.squash) || 0,
+          };
+        }
+        /* drop 在飞：必须恢复 drop 且 pendHasBox=false，避免刷新重给一箱；
+         * 无 drop（上一箱已落定、正处于补箱读秒）：沿用 0.8.6 挑战续玩语义，恢复后钟摆持有 1 只箱，
+         * 不产生额外箱子（否则会与既有挑战续玩测试 CH-PT-004 的「钟摆有箱」契约冲突）。 */
+        const hasBox = drop ? false : true;
+        let reload = hasBox ? 0 : clamp(Number(d.pendReload) || 0, 0, 2);
+        if (!hasBox && !drop && reload <= 0) reload = 0.55;
+        const toolsNext = {
+          guide: d.tools && Number.isFinite(Number(d.tools.guide)) ? clamp(Math.floor(Number(d.tools.guide)), 0, guideCap) : guideCap,
+          brace: d.tools && Number.isFinite(Number(d.tools.brace)) ? clamp(Math.floor(Number(d.tools.brace)), 0, braceCap) : braceCap,
+        };
+        const guideArmedNext = !!d.guideArmed && hasBox && !drop && toolsNext.guide > 0;
+        return { drop, pendHasBox: hasBox, pendReload: reload, tools: toolsNext, guideArmed: guideArmedNext };
+      }
+
       function restoreChallenge(data) {
         if (!A.Challenge || !data || typeof data.stageId !== 'string') return false;
         const stage = A.Challenge.stage(gameId, data.stageId);
         if (!stage) return false;
         const index = challengeData.findIndex((item) => item.id === stage.id);
         if (index < 0 || !buildChallengeStage(index)) return false;
+        /* buildChallengeStage 已按关卡 limits 写好初始额度，以此作为恢复时 clamp 的上限。 */
+        const caps = { guide: tools.guide, brace: tools.brace };
         if (Array.isArray(data.boxes) && data.boxes.length >= 1) {
           boxes = data.boxes
             .filter((box) => box && isFinite(box.x) && isFinite(box.y))
@@ -772,6 +839,8 @@
         if (data.pend && isFinite(data.pend.angle)) {
           pend.angle = Number(data.pend.angle);
           pend.vel = Number(data.pend.vel) || 0;
+          pend.length = clamp(Number(data.pend.length) || pend.length, 40, 320);
+          pend.gravity = Number(data.pend.gravity) || pend.gravity;
         }
         chPlaced = Math.max(0, Number(data.chPlaced) || 0);
         chMisses = Math.max(0, Number(data.chMisses) || 0);
@@ -782,10 +851,15 @@
         towerLean = Number(data.towerLean) || 0;
         leanVel = Number(data.leanVel) || 0;
         camY = Number(data.camY) || -474;
-        drop = null;
-        pendHasBox = true;
-        pendReload = 0;
-        guideArmed = false;
+        /* 恢复 drop / pendHasBox / pendReload / tools / guideArmed（不再强制 drop=null 重给一箱）。 */
+        const restored = normalizeChallengeRestore(data, caps);
+        drop = restored.drop;
+        pendHasBox = restored.pendHasBox;
+        pendReload = restored.pendReload;
+        tools.guide = restored.tools.guide;
+        tools.brace = restored.tools.brace;
+        guideArmed = restored.guideArmed;
+        chPeakLean = Math.abs(towerLean);
         chEvaluation = null;
         chErrorReason = '';
         state = 'playing';
@@ -812,6 +886,7 @@
           towerLean,
           leanVel,
           maxLean: chMaxLean,
+          peakLean: chPeakLean,
           marks: chMarks.slice(),
           currentTargetOffsetPx: chTargetOffset(),
           currentTolerancePx: chTolerance(),
@@ -1321,12 +1396,28 @@
           ctx.restore();
         }
 
-        /* 前 3 层免费教学；之后仅玩家主动消耗“垂线预览”时显示。 */
+        /* 前 3 层免费教学；之后仅玩家主动消耗“垂线预览”时显示。
+         * 挑战关用「投影箱心 vs 关卡 targetOffsetPx ± tolerancePx」判定（容差内才变绿），
+         * 并常显「预计偏差 N px」；经典模式保持原 85% 重叠判定。 */
         if (state === 'playing' && pendHasBox && (floorsReached < 3 || guideArmed)) {
           const top = towerTop();
           const topScreenY = top.y - camY;
-          const overlap = Math.min(pb.x + BOX_W / 2, top.x + top.w) - Math.max(pb.x - BOX_W / 2, top.x);
-          const aligned = overlap >= BOX_W * 0.85;
+          let aligned;
+          let labelText;
+          let labelX;
+          if (mode === 'challenge' && chStage) {
+            const model = challengeAlignNow(pb.x);
+            aligned = model.aligned;
+            const rounded = Math.round(model.offsetPx);
+            labelText = '预计偏差 ' + (rounded > 0 ? '+' : '') + rounded + 'px' + (aligned ? ' · 对齐' : ' / ±' + Math.round(model.tolerancePx) + 'px');
+            /* 挑战文案较长：靠近画布边缘时内收，避免被裁切。 */
+            labelX = clamp(pb.x, 96, W - 96);
+          } else {
+            const model = classicAlignState(pb.x, top);
+            aligned = model.aligned;
+            labelText = aligned ? '对齐' : '左右微调';
+            labelX = pb.x;
+          }
           ctx.save();
           ctx.strokeStyle = aligned ? 'rgba(99,214,140,0.8)' : 'rgba(255,210,63,0.65)';
           ctx.lineWidth = 1.5;
@@ -1338,7 +1429,7 @@
           ctx.setLineDash([]);
           ctx.fillStyle = aligned ? 'rgba(99,214,140,0.55)' : 'rgba(255,210,63,0.45)';
           ctx.fillRect(top.x, topScreenY - 5, top.w, 5);
-          A.draw.label(ctx, aligned ? '对齐' : '左右微调', pb.x, Math.max(88, topScreenY - 18), {
+          A.draw.label(ctx, labelText, labelX, Math.max(88, topScreenY - 18), {
             font: 'bold 12px system-ui',
             color: aligned ? '#63d68c' : '#ffd23f',
           });
@@ -1496,6 +1587,79 @@
             return feedback ? feedback.text : null;
           },
           /* ---------- 0.9 挑战模式钩子（契约见 docs/arcade/0.9/INTEGRATION-CONTRACT.md §5） ---------- */
+          /* 修复回归：同步、确定性断言（#test 专用；调用结束后恢复被临时改动的标量）。 */
+          regression() {
+            const details = [];
+            let pass = 0;
+            let fail = 0;
+            const check = (ok, text) => {
+              if (ok) {
+                pass += 1;
+                details.push('PASS ' + text);
+              } else {
+                fail += 1;
+                details.push('FAIL ' + text);
+              }
+            };
+            const oldLean = towerLean;
+            const oldLeanVel = leanVel;
+            const oldPeak = chPeakLean;
+            try {
+              /* 1) 挑战对齐用 targetOffsetPx ± tolerancePx（容差内真、容差外假）。 */
+              const inside = challengeAlignState(210 + 8 + 7, 8, 8, 210);
+              const edge = challengeAlignState(210 + 8 + 8, 8, 8, 210);
+              const outside = challengeAlignState(210 + 8 + 9, 8, 8, 210);
+              check(inside.aligned === true && Math.abs(inside.offsetPx - 7) < 1e-9, '挑战对齐：目标+8px、容差 8px，偏差 7px 判定对齐');
+              check(edge.aligned === true && outside.aligned === false, '挑战对齐：偏差=容差 判定对齐，超出 1px 判定未对齐');
+              const classic = classicAlignState(226, { x: 170, w: 64 });
+              check(classic.aligned === false && challengeAlignState(226, 8, 8, 210).aligned === true, '挑战对齐与经典 85% 重叠判定不同：同一位置挑战判定对齐、经典判定未对齐');
+              /* 2) 恢复归一化：下落中恢复同一箱、工具次数不补回、guideArmed 按条件恢复。 */
+              const caps = { guide: 3, brace: 2 };
+              const midDrop = normalizeChallengeRestore(
+                { drop: { x: 180, y: -300, w: 64, h: 40, vy: 120, prevBottom: -260 }, pendHasBox: false, pendReload: 0.3, tools: { guide: 2, brace: 0 }, guideArmed: true },
+                caps
+              );
+              check(midDrop.drop && midDrop.drop.x === 180 && midDrop.drop.y === -300 && midDrop.pendHasBox === false, '下落中刷新：恢复同一箱（drop 位置不变、pendHasBox=false），不重给一箱');
+              check(midDrop.tools.guide === 2 && midDrop.tools.brace === 0 && midDrop.guideArmed === false, '恢复：剩余工具次数保持、drop 期间不恢复 armed（配重后刷新不补回额度）');
+              const armed = normalizeChallengeRestore({ pendHasBox: true, tools: { guide: 1, brace: 2 }, guideArmed: true }, caps);
+              check(armed.guideArmed === true && armed.tools.guide === 1 && armed.tools.brace === 2, '恢复：无 drop 时 guideArmed 与剩余工具次数一致恢复');
+              const reloading = normalizeChallengeRestore({ pendHasBox: false, pendReload: 0.4, tools: { guide: 1, brace: 1 }, guideArmed: true }, caps);
+              check(reloading.pendHasBox === true && reloading.pendReload === 0, '恢复：无 drop 的补箱读秒状态恢复为持 1 只箱（与 0.8.6 续玩一致，不额外生成箱子）');
+              const clamped = normalizeChallengeRestore({ pendHasBox: true, tools: { guide: 99, brace: 99 }, guideArmed: true }, caps);
+              const wiped = normalizeChallengeRestore({ drop: { x: 10, y: 10 }, pendHasBox: true, tools: { guide: 0, brace: 0 }, guideArmed: true }, caps);
+              check(clamped.tools.guide === 3 && clamped.tools.brace === 2, '恢复：工具次数按关卡允许上限 clamp');
+              check(wiped.guideArmed === false && wiped.tools.guide === 0 && wiped.pendHasBox === false, '恢复：工具次数 0 时不恢复 armed，且 drop 期间强制 pendHasBox=false');
+              /* 3) 倾斜峰值记录整局真实最大值，而不是当前 abs(towerLean)。 */
+              chPeakLean = 0;
+              towerLean = -0.03;
+              recordPeakLean();
+              towerLean = 0.06;
+              recordPeakLean();
+              towerLean = 0.01;
+              recordPeakLean();
+              const peak = chPeakLean;
+              check(Math.abs(peak - 0.06) < 1e-9 && peakLeanText() === '0.060', '倾斜峰值记录整局最大 |lean|（0.060），结算文案使用峰值');
+            } catch (err) {
+              fail += 1;
+              details.push('FAIL regression 异常：' + (err && err.message ? err.message : String(err)));
+            } finally {
+              towerLean = oldLean;
+              leanVel = oldLeanVel;
+              chPeakLean = oldPeak;
+            }
+            return { pass, fail, details };
+          },
+          /* 对齐判定证据：同一投影箱心下的挑战判定（targetOffset±tolerance）与经典判定（85% 重叠）。 */
+          alignInfo(centerX) {
+            const x = Number(centerX);
+            return {
+              centerX: x,
+              targetOffsetPx: chTargetOffset(),
+              tolerancePx: chTolerance(),
+              challenge: challengeAlignNow(x),
+              classic: classicAlignState(x, towerTop()),
+            };
+          },
           challengeStages() {
             return challengeData.map((stage) => {
               const best = A.Challenge.progress(gameId).best[stage.id] || null;
@@ -1529,6 +1693,7 @@
               maxDroppedBoxes: chLimits.maxDroppedBoxes,
               towerLean,
               maxLean: chMaxLean,
+              peakLean: chPeakLean,
               toolsUsed: { guide: chToolsUsed.guide, brace: chToolsUsed.brace },
               evaluation: chEvaluation,
               errorReason: chErrorReason,

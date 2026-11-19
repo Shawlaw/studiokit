@@ -103,6 +103,9 @@
       let chLastResult = null;
       let chGoalHintTimer = 0;
       let chHudSecond = -1;
+      /* 挑战预览计划：按区域数均分实际 previewSeconds，最后区域不会被切没；HUD 预览剩余时间元素缓存。 */
+      let chPreviewPlan = null;
+      let chPreviewEl = null;
 
       const SYMBOLS = ['🍎', '🍋', '🍇', '🍒', '🥝', '🍑', '🍉', '🍊', '🥥', '🍍', '🫐', '🥕', '🌽', '🍄', '🌻', '🐳', '🐙', '🦊', '🐼', '🦉', '⭐', '🌙', '☀️', '🔥'];
       const LEVELS = [
@@ -385,30 +388,66 @@
         joyTools.sync();
       }
 
-      function chPreviewReveal(card) {
-        if (previewTimer <= 0 || !chStage) return false;
-        const content = chStage.content || {};
+      /* 分区预览按「区域数」均分实际 previewSeconds（而不是用 clue 里的每区秒数硬切），
+         保证最后区域至少曝光 PREVIEW_MIN 秒；均分不足时把总预览延长到 regionCount*PREVIEW_MIN。 */
+      function chPreviewRegions(content) {
         const clues = content.clues || {};
-        const total = Number(content.previewSeconds) || 0;
+        const rows = Math.max(1, Number(content.grid && content.grid.rows) || 1);
+        const cols = Math.max(1, Number(content.grid && content.grid.cols) || 1);
         if (clues.previewMode === 'row-by-row') {
-          const rows = content.grid.rows;
-          const per = Number(clues.previewEachRowSec) || total / Math.max(1, rows);
-          const elapsed = Math.max(0, total - previewTimer);
-          const row = Math.min(rows - 1, Math.floor(elapsed / per));
-          return card.r === row;
+          const regions = [];
+          for (let r = 0; r < rows; r++) regions.push({ type: 'row', r: r });
+          return regions;
         }
         if (clues.previewMode === 'quadrants') {
-          const rows = content.grid.rows;
-          const cols = content.grid.cols;
           const halfR = Math.ceil(rows / 2);
           const halfC = Math.ceil(cols / 2);
-          const per = Number(clues.previewEachQuadrantSec) || total / 4;
-          const elapsed = Math.max(0, total - previewTimer);
           const order = [[0, 0], [0, 1], [1, 0], [1, 1]];
-          const [qy, qx] = order[Math.min(3, Math.floor(elapsed / per))];
-          return card.r >= qy * halfR && card.r < (qy + 1) * halfR && card.c >= qx * halfC && card.c < (qx + 1) * halfC;
+          return order
+            .filter((item) => item[0] * halfR < rows && item[1] * halfC < cols)
+            .map((item) => ({ type: 'quadrant', qy: item[0], qx: item[1], halfR: halfR, halfC: halfC }));
         }
-        return true;
+        return [{ type: 'all' }];
+      }
+
+      function chBuildPreviewPlan(content) {
+        const raw = Math.max(0, Number(content && content.previewSeconds) || 0);
+        const regions = chPreviewRegions(content || {});
+        const regionCount = Math.max(1, regions.length);
+        let total = raw;
+        let per = total / regionCount;
+        if (per < PREVIEW_MIN) {
+          per = PREVIEW_MIN;
+          total = regionCount * PREVIEW_MIN;
+        }
+        return { mode: regions[0].type, regions: regions, regionCount: regionCount, total: total, per: per };
+      }
+
+      function chPreviewTotal() {
+        if (mode === 'challenge') return chPreviewPlan ? chPreviewPlan.total : Math.max(0, Number(chStage && chStage.content.previewSeconds) || 0);
+        return levelConfig(level).preview;
+      }
+
+      function chPreviewRegionIndex() {
+        const plan = chPreviewPlan;
+        if (!plan || plan.mode === 'all') return 0;
+        const elapsed = Math.max(0, plan.total - previewTimer);
+        return Math.min(plan.regionCount - 1, Math.max(0, Math.floor(elapsed / plan.per)));
+      }
+
+      function chPreviewReveal(card) {
+        if (previewTimer <= 0 || !chStage) return false;
+        const plan = chPreviewPlan;
+        if (!plan || plan.mode === 'all') return true;
+        const region = plan.regions[chPreviewRegionIndex()];
+        if (!region) return true;
+        if (region.type === 'row') return card.r === region.r;
+        return (
+          card.r >= region.qy * region.halfR &&
+          card.r < (region.qy + 1) * region.halfR &&
+          card.c >= region.qx * region.halfC &&
+          card.c < (region.qx + 1) * region.halfC
+        );
       }
 
       /* 布局变换：设计包允许 identity/mirror-horizontal/mirror-vertical，用于重玩变化。
@@ -443,7 +482,8 @@
             cards.push({ id: r * cols + c, symbol, r, c, matched: false, pop: 0 });
           }
         }
-        previewTimer = Math.max(0, Number(content.previewSeconds) || 3);
+        chPreviewPlan = chBuildPreviewPlan(content);
+        previewTimer = chPreviewPlan.total;
         mismatchTimer = 0;
         flippedIds = [];
         levelClearTimer = 0;
@@ -455,7 +495,10 @@
       }
 
       function syncChallengeHud() {
-        if (mode !== 'challenge' || !chStage) return;
+        if (mode !== 'challenge' || !chStage) {
+          chPreviewEl = null;
+          return;
+        }
         if (gameHudEl) gameHudEl.hidden = true;
         if (!chDom.hud) return;
         chDom.hud.hidden = false;
@@ -471,8 +514,25 @@
           '<strong>' + chEsc(label + ' ' + chStage.title) + '</strong>' +
           '<span>' + chEsc(chStage.goalStatement || '') + '</span>' +
           (clueText ? '<span>线索：' + chEsc(clueText) + '</span>' : '') +
+          '<span data-ch-preview hidden></span>' +
           '<span>用时 ' + fmtTime(chElapsed) + '</span>' +
           '<span>翻错 ' + chMismatches + '/' + chMaxMismatches() + '</span>';
+        chPreviewEl = chDom.hud.querySelector('[data-ch-preview]');
+        syncChallengePreviewLabel();
+      }
+
+      /* 预览剩余时间：HUD 每帧更新真实倒计时（与画布上的 toFixed(1) 标签同源），
+         让「延长总预览」后的剩余时间也如实可见。 */
+      function syncChallengePreviewLabel() {
+        if (!chPreviewEl) return;
+        if (mode === 'challenge' && previewTimer > 0) {
+          const total = chPreviewPlan ? chPreviewPlan.total : previewTimer;
+          chPreviewEl.hidden = false;
+          chPreviewEl.textContent = '预览剩余 ' + previewTimer.toFixed(1) + 's / ' + total.toFixed(1) + 's';
+        } else {
+          chPreviewEl.hidden = true;
+          chPreviewEl.textContent = '';
+        }
       }
 
       function startChallenge(ref) {
@@ -615,6 +675,23 @@
         previewTimer = Math.max(0, Number(data.previewTimer) || 0);
         mismatchTimer = Math.max(0, Number(data.mismatchTimer) || 0);
         flippedIds = Array.isArray(data.flippedIds) ? data.flippedIds.filter((id) => Number.isInteger(id) && cards[id] && !cards[id].matched) : [];
+        /* 刷新续玩：道具次数与 peek / 灵犀效果一并恢复（与 restoreClassic 同样的字段校验与 clamp）。 */
+        if (data.tools && typeof data.tools === 'object') {
+          tools.peek = Number.isFinite(Number(data.tools.peek)) ? clamp(Math.floor(Number(data.tools.peek)), 0, TOOL_CAPS.peek) : TOOL_START.peek;
+          tools.hint = Number.isFinite(Number(data.tools.hint)) ? clamp(Math.floor(Number(data.tools.hint)), 0, TOOL_CAPS.hint) : TOOL_START.hint;
+        }
+        peekTimer = clamp(Number(data.peekTimer) || 0, 0, PEEK_DURATION);
+        hintTimer = clamp(Number(data.hintTimer) || 0, 0, HINT_DURATION);
+        const savedHint = Number(data.hintTargetId);
+        hintTargetId = hintTimer > 0 && Number.isInteger(savedHint) && cards[savedHint] && !cards[savedHint].matched ? savedHint : -1;
+        if (hintTargetId < 0) hintTimer = 0;
+        hintArmed =
+          !!data.hintArmed &&
+          tools.hint > 0 &&
+          previewTimer <= 0 &&
+          mismatchTimer <= 0 &&
+          peekTimer <= 0 &&
+          flippedIds.length === 0;
         state = 'playing';
         syncChallengeHud();
         return true;
@@ -829,7 +906,8 @@
 
       function skipPreview() {
         if (state !== 'playing' || previewTimer <= 0) return false;
-        const totalPreview = mode === 'challenge' && chStage ? Number(chStage.content.previewSeconds) || 0 : levelConfig(level).preview;
+        /* 挑战可能因「每区至少 0.6 秒」延长了总预览，这里必须用实际总时长判断已看够 0.6 秒。 */
+        const totalPreview = chPreviewTotal();
         if (totalPreview - previewTimer < PREVIEW_MIN) return false;
         previewTimer = 0;
         A.Sfx.play('ui');
@@ -862,12 +940,28 @@
         autosave.tick(dt);
         chElapsed += dt;
         chGoalHintTimer = Math.max(0, chGoalHintTimer - dt);
-        if (previewTimer > 0) previewTimer = Math.max(0, previewTimer - dt);
+        if (previewTimer > 0) {
+          previewTimer = Math.max(0, previewTimer - dt);
+          syncChallengePreviewLabel();
+        }
         if (mismatchTimer > 0) {
           mismatchTimer -= dt;
           if (mismatchTimer <= 0) {
             flippedIds = [];
             mismatchTimer = 0;
+          }
+        }
+        /* 挑战模式必须按 dt 推进「再看一眼 / 灵犀」计时：到期后牌面恢复盖好、可以继续翻牌，
+           暂停（loop 暂停、state 非 playing）时与经典一致不推进。 */
+        if (peekTimer > 0) {
+          peekTimer = Math.max(0, peekTimer - dt);
+          if (peekTimer === 0) joyTools.sync();
+        }
+        if (hintTimer > 0) {
+          hintTimer = Math.max(0, hintTimer - dt);
+          if (hintTimer === 0) {
+            hintTargetId = -1;
+            joyTools.sync();
           }
         }
         if (input.pointer.wentDown) handleTap(input.pointer.x, input.pointer.y);
@@ -928,10 +1022,17 @@
         input.endFrame();
       }
 
+      /* 牌面是否朝上：暂停 / 弹层可见时未配对牌一律按背面绘制，和暂停文案「牌面已盖好」一致。 */
+      function cardFaceVisible(card) {
+        if (card.matched) return true;
+        if (state === 'paused' || ui.visible) return false;
+        const previewVisible = mode === 'challenge' ? chPreviewReveal(card) : previewTimer > 0;
+        return previewVisible || peekTimer > 0 || flippedIds.indexOf(card.id) !== -1 || state === 'levelclear';
+      }
+
       function drawCard(card) {
         const rect = cardRect(card);
-        const previewVisible = mode === 'challenge' ? chPreviewReveal(card) : previewTimer > 0;
-        const revealed = card.matched || previewVisible || peekTimer > 0 || flippedIds.indexOf(card.id) !== -1 || state === 'levelclear';
+        const revealed = cardFaceVisible(card);
         const pop = A.reducedMotion ? 1 : 1 + card.pop * 0.06;
         ctx.save();
         ctx.translate(rect.x + rect.w / 2, rect.y + rect.h / 2);
@@ -1147,6 +1248,14 @@
               pairsMatched: cards.filter((card) => card.matched).length / 2,
               pairsTotal: cards.length / 2,
               previewTimer,
+              previewPlan: chPreviewPlan
+                ? { mode: chPreviewPlan.mode, regionCount: chPreviewPlan.regionCount, total: chPreviewPlan.total, per: chPreviewPlan.per }
+                : null,
+              tools: { peek: tools.peek, hint: tools.hint },
+              peekTimer,
+              hintArmed,
+              hintTargetId,
+              hintTimer,
               errorReason: chErrorReason,
             };
           },
@@ -1163,6 +1272,213 @@
           },
           exitChallenge() {
             return exitChallengeToStart();
+          },
+          /* ---------- 确定性回归：覆盖 0.9 修复（同步执行、不依赖真实计时/异步等待） ---------- */
+          regression() {
+            const details = [];
+            let pass = 0;
+            let fail = 0;
+            const check = (ok, name, extra) => {
+              if (ok) {
+                pass += 1;
+                details.push('PASS ' + name);
+              } else {
+                fail += 1;
+                details.push('FAIL ' + name + (extra ? ' — ' + extra : ''));
+              }
+            };
+            const keys = [
+              'studiokit:arcade:progress:v1',
+              'studiokit:arcade:runs:v1',
+              'studiokit:arcade:playtime:v1',
+              'studiokit:arcade:scores:v1',
+              'studiokit:arcade:challenge:v1',
+            ];
+            const snap = {};
+            keys.forEach((key) => {
+              try {
+                snap[key] = localStorage.getItem(key);
+              } catch (err) {
+                snap[key] = null;
+              }
+            });
+            const advanceChallenge = (seconds) => {
+              const frames = Math.max(1, Math.ceil(seconds / (1 / 60)));
+              for (let i = 0; i < frames; i++) updateChallenge(1 / 60);
+            };
+            try {
+              if (!challengeAvailable || !challengeData.length) {
+                check(false, '挑战数据可用（6 关）');
+              } else {
+                /* A. 挑战 peek 按 dt 递减，到期后恢复可翻牌（缺陷 1）。 */
+                startChallenge(challengeData[0].id);
+                advanceChallenge(0.7);
+                check(skipPreview(), '挑战预览可跳过');
+                const peekUsed = useTool('peek');
+                check(
+                  peekUsed && peekTimer > 0 && tools.peek === TOOL_START.peek - 1,
+                  '挑战使用再看一眼扣次数并开始计时',
+                  JSON.stringify({ used: peekUsed, peekTimer: peekTimer, peek: tools.peek })
+                );
+                state = 'paused';
+                const pausedPeek = peekTimer;
+                advanceChallenge(0.5);
+                check(peekTimer === pausedPeek, '挑战暂停时不推进 peek 计时', 'peekTimer=' + peekTimer);
+                state = 'playing';
+                advanceChallenge(PEEK_DURATION + 0.3);
+                check(peekTimer === 0, '挑战 peek 计时按 dt 递减到 0', 'peekTimer=' + peekTimer);
+                const firstId = cards.findIndex((card) => !card.matched && flippedIds.indexOf(card.id) === -1);
+                if (firstId < 0) {
+                  check(false, '挑战存在可翻的未配对牌');
+                } else {
+                  reveal(cards[firstId]);
+                  check(flippedIds.length === 1, 'peek 结束后可以继续翻牌', JSON.stringify({ flippedIds: flippedIds.slice() }));
+                  const mate = cards.filter((card) => card.id !== firstId && !card.matched && card.symbol === cards[firstId].symbol)[0];
+                  if (mate) reveal(mate);
+                  check(!!mate && cards[firstId].matched && mate.matched, 'peek 结束后可以继续配对');
+                }
+                /* B. 刷新恢复工具次数 / hintArmed / 灵犀标记 / peekTimer（缺陷 2）。 */
+                startChallenge(challengeData[0].id);
+                advanceChallenge(0.7);
+                skipPreview();
+                useTool('hint');
+                const hintToolsBefore = tools.hint;
+                const snapHint = JSON.parse(JSON.stringify(serialize()));
+                restore(JSON.parse(JSON.stringify(snapHint)));
+                check(
+                  hintArmed === true && tools.hint === hintToolsBefore && hintToolsBefore === TOOL_START.hint,
+                  '刷新恢复灵犀待命与次数',
+                  JSON.stringify({ hintArmed: hintArmed, hint: tools.hint })
+                );
+                const hintTargetCard = cards.filter((card) => !card.matched)[0];
+                if (hintTargetCard) {
+                  reveal(hintTargetCard);
+                  const snapTarget = JSON.parse(JSON.stringify(serialize()));
+                  restore(JSON.parse(JSON.stringify(snapTarget)));
+                  check(
+                    hintTimer > 0 && hintTargetId >= 0 && !!cards[hintTargetId] && !cards[hintTargetId].matched,
+                    '刷新恢复灵犀标记与倒计时',
+                    JSON.stringify({ hintTimer: hintTimer, hintTargetId: hintTargetId })
+                  );
+                } else {
+                  check(false, '存在未配对牌用于灵犀恢复');
+                }
+                restore(JSON.parse(JSON.stringify(snapHint)));
+                useTool('peek');
+                const peekToolsBefore = tools.peek;
+                const snapPeek = JSON.parse(JSON.stringify(serialize()));
+                restore(JSON.parse(JSON.stringify(snapPeek)));
+                check(
+                  peekTimer > 0 && tools.peek === peekToolsBefore && peekToolsBefore === TOOL_START.peek - 2,
+                  '刷新恢复再看一眼计时与次数',
+                  JSON.stringify({ peekTimer: peekTimer, peek: tools.peek })
+                );
+                /* C. 分区预览按区域均分实际时长，末区至少 0.6 秒（缺陷 3）。 */
+                const stageC05 = challengeData.filter((stage) => stage.stageNumber === 5)[0];
+                const stageC03 = challengeData.filter((stage) => stage.stageNumber === 3)[0];
+                if (stageC05) {
+                  mode = 'challenge';
+                  chStage = stageC05;
+                  chStageIndex = chStageIndexFor(stageC05);
+                  chElapsed = 0;
+                  state = 'playing';
+                  buildChallengeBoard(stageC05);
+                  const plan = chPreviewPlan;
+                  const halfR = Math.ceil(stageC05.content.grid.rows / 2);
+                  const halfC = Math.ceil(stageC05.content.grid.cols / 2);
+                  const lastQuadrantCard = cards.filter((card) => card.r >= halfR && card.c >= halfC)[0];
+                  previewTimer = plan.per * 0.2;
+                  check(
+                    plan.regionCount === 4 && plan.per >= PREVIEW_MIN - 1e-9 && chPreviewReveal(lastQuadrantCard) === true,
+                    'C05 象限均分且末象限有曝光',
+                    JSON.stringify({ regionCount: plan.regionCount, total: plan.total, per: plan.per })
+                  );
+                } else {
+                  check(false, 'C05 关卡数据存在');
+                }
+                if (stageC03) {
+                  mode = 'challenge';
+                  chStage = stageC03;
+                  chStageIndex = chStageIndexFor(stageC03);
+                  chElapsed = 0;
+                  state = 'playing';
+                  buildChallengeBoard(stageC03);
+                  const plan = chPreviewPlan;
+                  const lastRowCard = cards.filter((card) => card.r === stageC03.content.grid.rows - 1)[0];
+                  previewTimer = plan.per * 0.2;
+                  check(
+                    plan.regionCount === 3 && plan.per >= PREVIEW_MIN - 1e-9 && chPreviewReveal(lastRowCard) === true,
+                    'C03 逐行均分且末行有曝光',
+                    JSON.stringify({ regionCount: plan.regionCount, total: plan.total, per: plan.per })
+                  );
+                } else {
+                  check(false, 'C03 关卡数据存在');
+                }
+                const syntheticStage = {
+                  content: {
+                    grid: { rows: 2, cols: 2 },
+                    faces: [['A', 'A'], ['B', 'B']],
+                    previewSeconds: 0.5,
+                    clues: { previewMode: 'row-by-row' },
+                  },
+                };
+                buildChallengeBoard(syntheticStage);
+                check(
+                  chPreviewPlan.total >= 1.2 - 1e-9 && previewTimer >= 1.2 - 1e-9,
+                  '均分不足 0.6s 时延长总预览',
+                  JSON.stringify({ total: chPreviewPlan.total, per: chPreviewPlan.per })
+                );
+                /* D. 暂停时未配对牌按背面绘制（缺陷 4）。 */
+                mode = 'classic';
+                chStage = null;
+                reset();
+                state = 'playing';
+                ui.hide();
+                previewTimer = 0;
+                peekTimer = 0;
+                flippedIds = [cards[0].id];
+                const facePlaying = cardFaceVisible(cards[0]);
+                state = 'paused';
+                const facePaused = cardFaceVisible(cards[0]);
+                state = 'playing';
+                ui.show({ title: '回归弹层', text: '' });
+                const faceOverlay = cardFaceVisible(cards[0]);
+                ui.hide();
+                check(
+                  facePlaying === true && facePaused === false && faceOverlay === false,
+                  '暂停/弹层可见时未配对牌按背面绘制',
+                  JSON.stringify({ playing: facePlaying, paused: facePaused, overlay: faceOverlay })
+                );
+              }
+            } catch (err) {
+              check(false, 'regression 执行未抛异常', String(err && err.message ? err.message : err));
+            } finally {
+              try {
+                autosave.clear();
+                mode = 'classic';
+                chStage = null;
+                chStageIndex = -1;
+                chPreviewPlan = null;
+                reset();
+                state = 'ready';
+                if (chDom.hud) chDom.hud.hidden = true;
+                if (gameHudEl) gameHudEl.hidden = false;
+                showStart();
+                pauseUi.sync();
+                joyTools.sync();
+              } catch (err) {
+                /* 清理失败不掩盖断言结果 */
+              }
+              keys.forEach((key) => {
+                try {
+                  if (snap[key] === null) localStorage.removeItem(key);
+                  else localStorage.setItem(key, snap[key]);
+                } catch (err) {
+                  /* 忽略存储不可用 */
+                }
+              });
+            }
+            return { pass: pass, fail: fail, details: details };
           },
         };
       }

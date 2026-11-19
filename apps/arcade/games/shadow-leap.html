@@ -359,6 +359,9 @@
       let stageIndex = 0;
       let stageDef = null;
       let chElapsed = 0;
+      /* 0.9.0 修复（缺陷 6）：跨重试累计的挑战总时间；最佳成绩只认这个累计值，
+       * 防止故意死亡重试刷出更短的「本次尝试」用时。 */
+      let chTotalElapsed = 0;
       let chCollectibles = [];
       let chSwitches = [];
       let challengeAssisted = false;
@@ -375,6 +378,8 @@
       let chTipTimer = 0;
       let chGoalLockedTimer = 0;
       let chFailReason = '';
+      /* 0.9.0 修复（缺陷 8）：失败复盘的落点/目标平台方向描述。 */
+      let chFailDetail = '';
       let chPanelOpen = false;
 
       let high = A.Progress.get('shadow-leap').high;
@@ -681,7 +686,7 @@
           dom.hudHighWrap.hidden = true;
           dom.chHud.hidden = false;
           dom.chHud.textContent = stageDef
-            ? 'C' + chPad2(stageDef.stageNumber) + ' ' + stageDef.title + ' · 影门 ' + (CH_START_WORLD_Y - stageDef.goal.cy) + 'm · ' + fmtTime(chElapsed)
+            ? 'C' + chPad2(stageDef.stageNumber) + ' ' + stageDef.title + ' · 影门 ' + (CH_START_WORLD_Y - stageDef.goal.cy) + 'm · 本次 ' + fmtTime(chElapsed) + ' · 累计 ' + fmtTime(chTotalElapsed)
             : '';
           return;
         }
@@ -695,6 +700,7 @@
         mode = 'classic';
         stageDef = null;
         chElapsed = 0;
+        chTotalElapsed = 0;
         chCollectibles = [];
         chSwitches = [];
         challengeAssisted = false;
@@ -709,6 +715,7 @@
         chTipTimer = 0;
         chGoalLockedTimer = 0;
         chFailReason = '';
+        chFailDetail = '';
         chPanelOpen = false;
         dom.chPanel.hidden = true;
         autosave.clear();
@@ -934,6 +941,7 @@
         chTipTimer = CH_TIP_SECONDS;
         chGoalLockedTimer = 0;
         chFailReason = '';
+        chFailDetail = '';
         return true;
       }
 
@@ -941,6 +949,8 @@
         if (!STAGES.length) return false;
         mode = 'challenge';
         if (!buildChallengeWorld(index)) return false;
+        /* 0.9.0 修复（缺陷 6）：新进关/新一关重置累计时间；失败重试（keep）跨重试累加。 */
+        if (!keep) chTotalElapsed = 0;
         if (keep) {
           chCollectibles = Array.isArray(keep.collectibles) ? keep.collectibles.slice() : [];
           chSwitches = Array.isArray(keep.switches) ? keep.switches.slice() : [];
@@ -1006,6 +1016,7 @@
         stageDef = null;
         stageIndex = 0;
         chElapsed = 0;
+        chTotalElapsed = 0;
         chCollectibles = [];
         chSwitches = [];
         chResults = [];
@@ -1020,6 +1031,7 @@
         chTipTimer = 0;
         chGoalLockedTimer = 0;
         chFailReason = '';
+        chFailDetail = '';
         reset();
         state = 'ready';
         loop.resume();
@@ -1155,7 +1167,9 @@
           colors: ['#7cf0d2', '#ffd23f', '#ffffff'],
           gravity: 120,
         });
-        const timeSec = Math.round(chElapsed * 10) / 10;
+        /* 0.9.0 修复（缺陷 6）：最佳成绩记录整个挑战（含此前失败重试）的累计时间，
+         * 并且只在通关时写一次记录；「本次尝试」时间只用于 HUD 展示。 */
+        const timeSec = Math.round(Math.max(0, chTotalElapsed) * 10) / 10;
         const result = { timeSec, assisted: challengeAssisted, collectibles: chCollectibles.slice() };
         try {
           A.Challenge.markCleared(CHALLENGE_GAME_ID, stageDef.id, result);
@@ -1178,6 +1192,7 @@
         }
         const extra =
           '<p class="ac-challenge-result-row">路线 <strong>' + A.escapeHtml(chRouteLabel(verdict)) + '</strong> · 影冲 ' + chDashes + ' 次</p>' +
+          '<p class="ac-challenge-result-row">本次尝试 ' + fmtTime(chElapsed) + ' · 累计用时 ' + fmtTime(chTotalElapsed) + '</p>' +
           '<p class="ac-challenge-tip">' +
           (isLast
             ? '6 关影林全部完成；挑战记录与最佳用时已保存到本机。'
@@ -1194,10 +1209,49 @@
         pauseUi.sync(); syncJoyTools(); syncHud();
       }
 
+      /* 0.9.0 修复（缺陷 8）：失败复盘记录「最后一次落脚平台 + 目标平台方向」，
+       * 只使用玩家实际落脚点与画面上可见的平台位置，不读取/泄露参考解路线。 */
+      function chFailSide(originX) {
+        const playerCenter = player.x + player.w / 2;
+        if (playerCenter < originX - 12) return '左侧';
+        if (playerCenter > originX + 12) return '右侧';
+        return '正下方';
+      }
+      function chBuildFailDetail() {
+        if (!stageDef) return '';
+        const last = chLastLandedId ? platforms.filter((p) => p && p.id === chLastLandedId)[0] : null;
+        const basePlat = last || stageDef.spawnPlatform || null;
+        if (!basePlat) return '';
+        const baseIndex = Number.isFinite(Number(basePlat.index)) ? Number(basePlat.index) : 0;
+        const baseCenter = basePlat.x + basePlat.w / 2;
+        const baseLabel = last ? '第 ' + (baseIndex + 1) + ' 块平台' : '起始平台';
+        const side = chFailSide(baseCenter);
+        let target = null;
+        for (const p of platforms) {
+          if (!p || p.broken || !Number.isFinite(Number(p.index))) continue;
+          if (p.index === baseIndex) continue;
+          if (p.y >= basePlat.y - 1) continue; /* 目标平台必须在更高处 */
+          if (!target || p.y > target.y) target = p;
+        }
+        if (!target) {
+          return '落点：你在' + baseLabel + side + '落空；目标平台在上方。下次先确认落点再起跳。';
+        }
+        const targetIndex = Number.isFinite(Number(target.index)) ? Number(target.index) : baseIndex + 1;
+        const targetCenter = target.x + target.w / 2;
+        const dx = targetCenter - baseCenter;
+        const direction = Math.abs(dx) <= 12 ? '正上方' : dx > 0 ? '右侧' : '左侧';
+        const leadSec = clamp(Math.abs(dx) / 265, 0.1, 0.9);
+        return (
+          '落点：你在' + baseLabel + side + '落空；目标平台第 ' + (targetIndex + 1) +
+          ' 块在' + direction + '（水平约 ' + Math.round(Math.abs(dx)) + 'px）。' +
+          '下次提前约 ' + leadSec.toFixed(1) + 's 向' + direction + '起跳修正。'
+        );
+      }
       function stageFail(reason) {
         if (state !== 'playing' || mode !== 'challenge') return;
         state = 'over';
         chFailReason = String(reason || 'fall');
+        chFailDetail = chBuildFailDetail();
         A.Sfx.play('over');
         autosave.clear();
         loop.pause();
@@ -1208,6 +1262,7 @@
           text:
             (stageDef ? 'C' + chPad2(stageDef.stageNumber) + ' ' + stageDef.title + ' · ' : '') +
             '跌落出影林边界。<br/>' +
+            (chFailDetail ? chFailDetail + '<br/>' : '') +
             hint +
             (stageDef && stageDef.collectibles.length ? '<br/>' + CH_FAIL_SCROLL_NOTE : '') +
             '<br/>1 次点击即可重试：' +
@@ -1227,6 +1282,8 @@
           return;
         }
         chElapsed += dt;
+        /* 0.9.0 修复（缺陷 6）：累计时间跨重试只增不减，最佳成绩用累计值。 */
+        chTotalElapsed += dt;
         chTipTimer = Math.max(0, chTipTimer - dt);
         chGoalLockedTimer = Math.max(0, chGoalLockedTimer - dt);
         /* 卷轴：18×22 圆形近似触发半径 14，只影响探索记录，不影响战力/通关。 */
@@ -1316,6 +1373,7 @@
         if (mode === 'challenge' && stageDef) {
           out.challengeState = {
             elapsed: chElapsed,
+            totalElapsed: chTotalElapsed,
             collectibles: chCollectibles.slice(),
             switches: chSwitches.slice(),
             assisted: challengeAssisted,
@@ -1374,6 +1432,8 @@
             }
             const cs = data.challengeState && typeof data.challengeState === 'object' ? data.challengeState : {};
             chElapsed = clamp(Number(cs.elapsed) || 0, 0, 36000);
+            /* 0.9.0 修复（缺陷 6）：旧档缺 totalElapsed 时按 0 处理（不伪造累计时间）。 */
+            chTotalElapsed = clamp(Number(cs.totalElapsed) || 0, 0, 360000);
             lastChSecond = Math.floor(chElapsed);
             const scrollIds = stageDef.collectibles.map((c) => c.id);
             chCollectibles = Array.isArray(cs.collectibles)
@@ -1469,9 +1529,10 @@
         meta: () =>
           mode === 'challenge' && stageDef
             ? {
-                score: chElapsed,
+                score: Math.round(chTotalElapsed * 10) / 10,
                 summary:
-                  '挑战 C' + chPad2(stageDef.stageNumber) + ' ' + stageDef.title + ' · ' + fmtTime(chElapsed) +
+                  '挑战 C' + chPad2(stageDef.stageNumber) + ' ' + stageDef.title +
+                  ' · 本次 ' + fmtTime(chElapsed) + ' · 累计 ' + fmtTime(chTotalElapsed) +
                   (stageDef.collectibles.length ? ' · 卷轴 ' + chCollectibles.length + '/' + stageDef.collectibles.length : ''),
               }
             : { score, summary: `高度 ${score}m · 最高 ${Math.max(high, score)}m` },
@@ -1640,6 +1701,24 @@
       }
 
       /* ---------- 渲染 ---------- */
+      /* 0.9.0 修复（缺陷 7）：易碎平台按 crackTimer 计算绘制状态（透明度 / 裂纹数 / 倒计时环），
+       * 越接近破碎越明显；classic 平台没有 crackTimer，保持原样。供绘制与 #test 断言共用。 */
+      function chCrackVisual(p) {
+        const active = !!(p && p.kind === 'fragile' && p.crackTimer > 0);
+        const total = Math.max(0.2, Number(p && p.breakDelay) || 0.65);
+        const remain = active ? clamp(p.crackTimer / total, 0, 1) : 0;
+        const urgency = active ? 1 - remain : 0;
+        return {
+          active,
+          remain,
+          urgency,
+          alpha: active ? clamp(1 - urgency * 0.55, 0.35, 1) : 1,
+          crackCount: active ? Math.min(4, 1 + Math.floor(urgency * 3.5)) : 0,
+          ringRatio: remain,
+          warning: active && urgency > 0.5,
+        };
+      }
+
       function drawPlatform(p) {
         const y = worldToScreenY(p.y);
         if (y < -20 || y > H + 20) return;
@@ -1666,19 +1745,48 @@
           ctx.closePath();
           ctx.fill();
         } else {
-          ctx.strokeStyle = '#cfd8f2';
-          ctx.lineWidth = 2;
+          /* 0.9.0 修复（缺陷 7）：裂纹/倒计时环/透明度都跟随 crackTimer，不再只画静态虚框。 */
+          const crack = chCrackVisual(p);
+          ctx.globalAlpha = crack.alpha;
+          ctx.strokeStyle = crack.active ? 'rgba(255,143,134,0.95)' : '#cfd8f2';
+          ctx.lineWidth = crack.active ? 2 + crack.urgency * 1.4 : 2;
           ctx.setLineDash(p.broken ? [3, 5] : []);
           A.draw.roundRect(ctx, p.x, y, p.w, p.h, 5);
           ctx.stroke();
           ctx.setLineDash([]);
           if (!p.broken) {
-            ctx.strokeStyle = 'rgba(207,216,242,0.6)';
+            ctx.strokeStyle = crack.active ? 'rgba(255,176,120,' + (0.55 + crack.urgency * 0.45).toFixed(3) + ')' : 'rgba(207,216,242,0.6)';
             ctx.beginPath();
             ctx.moveTo(p.x + p.w * 0.3, y + 2);
             ctx.lineTo(p.x + p.w * 0.42, y + p.h - 2);
             ctx.lineTo(p.x + p.w * 0.55, y + 2);
             ctx.stroke();
+            if (crack.active) {
+              /* 裂纹数量随倒计时增加，位置沿平台宽度展开。 */
+              ctx.strokeStyle = 'rgba(255,232,214,' + (0.45 + crack.urgency * 0.5).toFixed(3) + ')';
+              ctx.lineWidth = 1 + crack.urgency;
+              for (let k = 0; k < crack.crackCount; k += 1) {
+                const cx = p.x + p.w * (0.16 + k * 0.21);
+                ctx.beginPath();
+                ctx.moveTo(cx, y + 2);
+                ctx.lineTo(cx + p.w * 0.035, y + p.h * 0.5);
+                ctx.lineTo(cx - p.w * 0.02, y + p.h - 2);
+                ctx.stroke();
+              }
+              /* 倒计时环：剩余比例越小、环越短、越接近红/橙色高亮。 */
+              const ringX = p.x + p.w - 10;
+              const ringY = y + p.h / 2;
+              ctx.strokeStyle = 'rgba(255,210,63,0.35)';
+              ctx.lineWidth = 2;
+              ctx.beginPath();
+              ctx.arc(ringX, ringY, 6, 0, TAU);
+              ctx.stroke();
+              ctx.strokeStyle = crack.urgency > 0.6 ? '#ff8f86' : '#ffd23f';
+              ctx.lineWidth = 2.4;
+              ctx.beginPath();
+              ctx.arc(ringX, ringY, 6, -Math.PI / 2, -Math.PI / 2 + TAU * crack.ringRatio);
+              ctx.stroke();
+            }
           }
         }
         ctx.restore();
@@ -1940,7 +2048,8 @@
           const infoLine =
             chTipTimer > 0
               ? '目标：' + stageDef.goalStatement
-              : fmtTime(chElapsed) +
+              : '本次 ' + fmtTime(chElapsed) +
+                ' · 累计 ' + fmtTime(chTotalElapsed) +
                 (chGoalProgressText() ? ' · ' + chGoalProgressText() : '') +
                 (stageDef.switches.length ? ' · 半月雕像 ' + chSwitches.length + '/' + stageDef.switches.length : '');
           A.draw.label(ctx, infoLine, W / 2, 48, {
@@ -2019,6 +2128,7 @@
 
       function resetChallengeRuntime() {
         chElapsed = 0;
+        chTotalElapsed = 0;
         chCollectibles = [];
         chSwitches = [];
         challengeAssisted = false;
@@ -2214,6 +2324,8 @@
               stageNumber: stageDef ? stageDef.stageNumber : null,
               state,
               elapsedSec: chElapsed,
+              attemptElapsedSec: chElapsed,
+              totalElapsedSec: chTotalElapsed,
               objective: stageDef ? stageDef.goalStatement : '',
               cleared: state === 'cleared',
               failed: state === 'over',
@@ -2227,6 +2339,7 @@
               routeInfo: buildChallengeRouteInfo(),
               checkpoint: chCheckpoint ? { platformIndex: chCheckpoint.platformIndex } : null,
               dashes: chDashes,
+              failure: chFailDetail,
               failReason: chFailReason,
               goal: stageDef ? { cx: stageDef.goal.cx, cy: stageDef.goal.cy, r: stageDef.goal.r, unlocked: chGoalUnlocked() } : null,
               player: testPlayer(),
@@ -2241,6 +2354,7 @@
               stageId: stageDef ? stageDef.id : null,
               state,
               elapsed: chElapsed,
+              totalElapsed: chTotalElapsed,
               platforms: platforms.map((p) => ({
                 id: p.id || null,
                 index: p.index === undefined || p.index === null ? null : p.index,
@@ -2251,6 +2365,7 @@
                 phase: p.phase,
                 broken: !!p.broken,
                 cracking: p.crackTimer > 0,
+                crackVisual: chCrackVisual(p),
               })),
               player: testPlayer(),
               goal: stageDef ? { cx: stageDef.goal.cx, cy: stageDef.goal.cy, r: stageDef.goal.r, unlocked: chGoalUnlocked() } : null,
@@ -2387,6 +2502,111 @@
           },
           trialResults() {
             return chResults.map((r) => ({ id: r.id, title: r.title, time: r.time, scrolls: r.scrolls, dashes: r.dashes, route: r.route || null }));
+          },
+          /* ---------- 0.9.0 修复回归自检（页面内同步断言，不写测试文件） ---------- */
+          regression() {
+            const details = [];
+            let pass = 0;
+            let fail = 0;
+            const check = (ok, message) => {
+              if (ok) {
+                pass += 1;
+                details.push('PASS ' + message);
+              } else {
+                fail += 1;
+                details.push('FAIL ' + message);
+              }
+            };
+            const snapshotState = state;
+            const snapshot = state === 'playing' || state === 'paused' ? serialize() : null;
+            const challengeKey = 'studiokit:arcade:challenge:v1';
+            const recordsBefore = localStorage.getItem(challengeKey);
+            try {
+              /* 缺陷 6：连续失败重试后累计时间只增不减，最佳时间 = 累计时间且不为 0。 */
+              enterStage(0, null);
+              state = 'playing';
+              for (let i = 0; i < 30; i += 1) update(1 / 60);
+              const totalFirst = chTotalElapsed;
+              check(totalFirst > 0.4, '第一次尝试累计时间正增长（' + totalFirst.toFixed(2) + 's）');
+              stageFail('fall');
+              const retryOk = retryStage();
+              check(retryOk === true && state === 'playing' && chElapsed === 0, '失败重试后回到游玩态且本次尝试计时清零');
+              const totalAfterRetry = chTotalElapsed;
+              check(Math.abs(totalAfterRetry - totalFirst) < 1e-6 && totalAfterRetry > 0, '重试后累计时间保留（' + totalAfterRetry.toFixed(2) + 's，跨重试累加）');
+              syncHud();
+              check(/本次/.test(dom.chHud.textContent) && /累计/.test(dom.chHud.textContent), 'HUD 同时显示本次尝试与累计时间：' + dom.chHud.textContent);
+              for (let i = 0; i < 30; i += 1) update(1 / 60);
+              check(chTotalElapsed > totalAfterRetry + 0.4, '继续尝试后累计时间单调不减（' + totalAfterRetry.toFixed(2) + ' → ' + chTotalElapsed.toFixed(2) + 's）');
+              const totalAtClear = chTotalElapsed;
+              localStorage.removeItem(challengeKey);
+              stageClear();
+              const bestRecord = A.Challenge.progress(CHALLENGE_GAME_ID).best[stageDef.id];
+              const expectBest = Math.round(totalAtClear * 10) / 10;
+              check(!!bestRecord && Math.abs(bestRecord.timeSec - expectBest) < 0.05 && bestRecord.timeSec > 0, '最佳时间 = 累计时间且不为 0（' + (bestRecord ? bestRecord.timeSec : 'null') + 's）');
+              /* 缺陷 7：易碎平台裂纹渲染读取 crackTimer；越接近破碎越明显。 */
+              const crackFull = chCrackVisual({ kind: 'fragile', crackTimer: 0.65, breakDelay: 0.65 });
+              const crackMid = chCrackVisual({ kind: 'fragile', crackTimer: 0.3, breakDelay: 0.65 });
+              const crackNear = chCrackVisual({ kind: 'fragile', crackTimer: 0.05, breakDelay: 0.65 });
+              check(crackFull.active && crackMid.active && crackNear.active, '易碎平台绘制状态读取 crackTimer（active=true）');
+              check(crackFull.alpha > crackMid.alpha && crackMid.alpha > crackNear.alpha, '越接近破碎透明度越低（' + crackFull.alpha.toFixed(2) + ' > ' + crackMid.alpha.toFixed(2) + ' > ' + crackNear.alpha.toFixed(2) + '）');
+              check(crackNear.crackCount > crackFull.crackCount, '越接近破碎裂纹越多（' + crackFull.crackCount + ' → ' + crackNear.crackCount + '）');
+              check(crackFull.ringRatio > crackMid.ringRatio && crackMid.ringRatio > crackNear.ringRatio, '倒计时环随 crackTimer 缩短（' + crackFull.ringRatio.toFixed(2) + ' → ' + crackNear.ringRatio.toFixed(2) + '）');
+              enterStage(1, null);
+              state = 'playing';
+              const fragilePlat = platforms.filter((p) => p.kind === 'fragile')[0];
+              check(!!fragilePlat, 'C02 含易碎平台（渲染观察样本）');
+              if (fragilePlat) {
+                fragilePlat.crackTimer = 0.35;
+                fragilePlat.breakDelay = fragilePlat.breakDelay || 0.65;
+                const observedPlat = this.stageObservable().platforms.filter((p) => p.index === fragilePlat.index)[0];
+                check(!!observedPlat && observedPlat.crackVisual && observedPlat.crackVisual.active === true && observedPlat.crackVisual.alpha < 1, 'stageObservable 暴露的裂纹绘制状态跟随 crackTimer');
+              }
+              /* 缺陷 8：失败复盘显示最后一次落点与目标平台方向。 */
+              enterStage(0, null);
+              state = 'playing';
+              const landingPlat = platforms.filter((p) => p && Number.isFinite(Number(p.index)))[1] || platforms[0];
+              onChallengeLanded(landingPlat);
+              player.x = landingPlat.x + landingPlat.w + 40;
+              player.y = H + 200;
+              player.vy = 400;
+              player.prevBottom = player.y + player.h;
+              update(1 / 60);
+              const failInfo = this.challengeInfo();
+              check(/第 \d+ 块平台/.test(failInfo.failure || '') && /目标平台/.test(failInfo.failure || ''), '失败复盘显示最后一次落点与目标平台方向：' + (failInfo.failure || ''));
+              check(/目标平台/.test(failInfo.failure || '') && /(左侧|右侧|正上方)/.test(failInfo.failure || ''), '失败复盘包含落空侧与目标平台方向');
+              check((dom.ovText.textContent || '').indexOf(failInfo.failure) !== -1, '失败弹层实际展示复盘文案');
+            } catch (err) {
+              fail += 1;
+              details.push('FAIL regression 异常：' + (err && err.message ? err.message : err));
+            } finally {
+              if (recordsBefore === null) localStorage.removeItem(challengeKey);
+              else localStorage.setItem(challengeKey, recordsBefore);
+              if (snapshot && restore(snapshot)) {
+                state = 'playing';
+                if (snapshotState === 'paused') {
+                  pauseByUser();
+                } else {
+                  loop.resume();
+                  autosave.saveNow();
+                }
+                syncHud();
+                syncJoyTools();
+                syncHint();
+              } else {
+                autosave.clear();
+                mode = 'classic';
+                stageDef = null;
+                resetChallengeRuntime();
+                reset();
+                state = 'ready';
+                loop.resume();
+                showStart();
+                syncHud();
+                syncJoyTools();
+                syncHint();
+              }
+            }
+            return { pass, fail, details };
           },
         };
       }

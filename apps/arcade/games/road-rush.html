@@ -247,6 +247,10 @@
       let chErrorReason = '';
       let chFailedSlot = null;
       let chKeyDown = { left: false, right: false };
+      /* 0.9.0：单次通过得分语义（基础分 + 近距奖励）与首时隙安全出生记录，供 #test 观察。 */
+      let chLastSlotScore = 0;
+      let chLastSlotNear = false;
+      let chStartMoved = false;
 
       let high = A.Progress.get('road-rush').high;
       dom.hudHigh.textContent = String(high);
@@ -396,8 +400,41 @@
         const goal = chContent().goal || {};
         return Math.max(0, Number(goal.minDistanceMeters) || 0);
       }
+      function chLaneCountFor(content) {
+        return Math.max(2, Math.floor(Number(content && content.laneCount) || LANES));
+      }
       function chLaneCount() {
-        return Math.max(2, Math.floor(Number(chContent().laneCount) || LANES));
+        return chLaneCountFor(chContent());
+      }
+      /* 0.9.0 修复（缺陷 4）：普通通过 = passBonus，近距通过 = passBonus + nearPassBonus。
+       * 之前把近距当作替代分（只 +5），导致贴车流反而比普通通过低分。 */
+      function chScoreForSlot(slot, lanePos, content) {
+        const rules = (content || chContent()).scoreRules || {};
+        const base = Math.max(0, Number(rules.passBonus) || 0);
+        const near =
+          !!(slot && Array.isArray(slot.optionalNearPassBonusLanes)) &&
+          slot.optionalNearPassBonusLanes.indexOf(Math.round(Number(lanePos) || 0)) !== -1;
+        const bonus = near ? Math.max(0, Number(rules.nearPassBonus) || 0) : 0;
+        return { score: base + bonus, near, base, bonus };
+      }
+      /* 0.9.0 修复（缺陷 5）：首时隙若占用出生车道，进入挑战时自动落到该时隙安全车道；
+       * 优先保证下一时隙也安全，再选离出生车道最近的一条，时间轴/参考解相对跳变不变。 */
+      function chPickStartLane(slots, laneCount, startLane) {
+        const start = clamp(Math.floor(Number(startLane) || 0), 0, laneCount - 1);
+        const first = slots && slots[0];
+        if (!first || first.occupiedLanes.indexOf(start) === -1) return { lane: start, moved: false };
+        const next = slots[1] || null;
+        const safe = [];
+        for (let lane = 0; lane < laneCount; lane += 1) {
+          if (first.occupiedLanes.indexOf(lane) === -1) safe.push(lane);
+        }
+        if (!safe.length) return { lane: start, moved: false };
+        const rank = (lane) => {
+          const nextDanger = next && next.occupiedLanes.indexOf(lane) !== -1 ? 1 : 0;
+          return nextDanger * 1000 + Math.abs(lane - start) * 10 + lane;
+        };
+        safe.sort((a, b) => rank(a) - rank(b));
+        return { lane: safe[0], moved: true };
       }
       function chBuildSlots(stage) {
         const content = (stage && stage.content) || {};
@@ -485,7 +522,10 @@
       function showGoalTip() {
         if (!chDom.tip || !chStage) return;
         chDom.tip.hidden = false;
-        chDom.tip.textContent = '目标：' + (chStage.goalStatement || '') + ' · ' + (chStage.decision || '提前变道，避开被占用车道');
+        chDom.tip.textContent =
+          '目标：' + (chStage.goalStatement || '') +
+          ' · ' + (chStage.decision || '提前变道，避开被占用车道') +
+          (chStartMoved ? ' · 已移到安全车道' : '');
       }
       function startChallenge(ref) {
         if (!challengeAvailable || !A.Challenge) return false;
@@ -500,7 +540,9 @@
         if (!chSlots.length) return false;
         chDuration = chComputeDuration();
         chLaneChangeTotal = Math.max(0.05, Number(chContent().laneChangeTimeSec) || 0.22);
-        chLane = clamp(Math.floor(Number(chContent().startLane) || 0), 0, chLaneCount() - 1);
+        const startPick = chPickStartLane(chSlots, chLaneCount(), clamp(Math.floor(Number(chContent().startLane) || 0), 0, chLaneCount() - 1));
+        chLane = startPick.lane;
+        chStartMoved = startPick.moved;
         chLanePos = chLane;
         chLaneFrom = chLane;
         chLaneChangeLeft = 0;
@@ -509,6 +551,8 @@
         chScore = 0;
         chPassed = 0;
         chNear = 0;
+        chLastSlotScore = 0;
+        chLastSlotNear = false;
         chDistance = 0;
         chFailedSlot = null;
         chResult = null;
@@ -531,6 +575,7 @@
         syncTouchPad();
         syncChallengeHud();
         showGoalTip();
+        if (chStartMoved) A.showToast('已移到安全车道');
         autosave.saveNow();
         return true;
       }
@@ -558,14 +603,11 @@
           const laneText = slot.occupiedLanes.map((lane) => '第 ' + (lane + 1) + ' 车道').join('、');
           return chFail('第 ' + slot.slot + ' 段：' + laneText + '有车，变道没有在车辆到达前完成');
         }
-        const near = slot.optionalNearPassBonusLanes.indexOf(Math.round(chLanePos)) !== -1;
-        const rules = chContent().scoreRules || {};
-        if (near) {
-          chNear += 1;
-          chScore += Math.max(0, Number(rules.nearPassBonus) || 0);
-        } else {
-          chScore += Math.max(0, Number(rules.passBonus) || 0);
-        }
+        const scored = chScoreForSlot(slot, chLanePos);
+        if (scored.near) chNear += 1;
+        chScore += scored.score;
+        chLastSlotScore = scored.score;
+        chLastSlotNear = scored.near;
         chPassed += 1;
         return true;
       }
@@ -824,6 +866,9 @@
               chNear,
               chDistance,
               chAssisted,
+              lastSlotScore: chLastSlotScore,
+              lastSlotNear: chLastSlotNear,
+              startLaneMoved: chStartMoved,
             },
           };
         }
@@ -901,8 +946,24 @@
         chScore = Math.max(0, Number(stateData.chScore) || 0);
         chPassed = Math.max(0, Math.floor(Number(stateData.chPassed) || 0));
         chNear = Math.max(0, Math.floor(Number(stateData.chNear) || 0));
+        chLastSlotScore = Math.max(0, Number(stateData.lastSlotScore) || 0);
+        chLastSlotNear = !!stateData.lastSlotNear;
+        chStartMoved = !!stateData.startLaneMoved;
         chDistance = Math.max(0, Number(stateData.chDistance) || 0);
         chAssisted = !!stateData.chAssisted;
+        /* 0.9.0 修复（缺陷 5）：旧档若在第 1 个时隙判定前仍停在被占用出生车道，
+         * 恢复时同样自动移到该时隙安全车道，避免开局立刻失败。 */
+        if (chSlotCheck === 0 && chSlots[0] && chSimTime < chSlots[0].passAt) {
+          const startPick = chPickStartLane(chSlots, chLaneCount(), chLane);
+          if (startPick.moved) {
+            chLane = startPick.lane;
+            chLanePos = startPick.lane;
+            chLaneFrom = startPick.lane;
+            chLaneChangeLeft = 0;
+            chStartMoved = true;
+            A.showToast('已移到安全车道');
+          }
+        }
         chFailedSlot = null;
         chResult = null;
         chErrorReason = '';
@@ -2133,6 +2194,11 @@
               lanePos: chLanePos,
               passedSlots: chPassed,
               nearPasses: chNear,
+              /* 0.9.0：score = 通过时隙累计（基础 10 + 近距奖励 5），这里补单次语义。 */
+              lastSlotScore: chLastSlotScore,
+              lastSlotNear: chLastSlotNear,
+              startLaneMoved: chStartMoved,
+              scoreRules: (chContent().scoreRules || {}),
               error: chErrorReason,
               failedSlot: chFailedSlot ? chFailedSlot.slot : null,
             };
@@ -2159,6 +2225,9 @@
               checkedSlots: chSlotCheck,
               passedSlots: chPassed,
               nearPasses: chNear,
+              lastSlotScore: chLastSlotScore,
+              lastSlotNear: chLastSlotNear,
+              startLaneMoved: chStartMoved,
               failedSlot: chFailedSlot ? chFailedSlot.slot : null,
             };
           },
@@ -2177,6 +2246,81 @@
           },
           exitChallenge() {
             return exitToChallengeSelect();
+          },
+          /* ---------- 0.9.0 修复回归自检（页面内同步断言，不写测试文件） ---------- */
+          regression() {
+            const details = [];
+            let pass = 0;
+            let fail = 0;
+            const check = (ok, message) => {
+              if (ok) {
+                pass += 1;
+                details.push('PASS ' + message);
+              } else {
+                fail += 1;
+                details.push('FAIL ' + message);
+              }
+            };
+            const snapshotState = state;
+            const snapshot = state === 'playing' || state === 'paused' ? serialize() : null;
+            try {
+              const c01 = A.Challenge && A.Challenge.stage ? A.Challenge.stage(GAME_ID, 'road-rush-C01') : null;
+              check(!!c01, 'C01 关卡数据可用（near-pass 得分样本依赖）');
+              if (c01) {
+                const rules = c01.content.scoreRules || {};
+                const base = Math.max(0, Number(rules.passBonus) || 0);
+                const bonus = Math.max(0, Number(rules.nearPassBonus) || 0);
+                const startedNormal = startChallenge('road-rush-C01');
+                check(startedNormal === true && mode === 'challenge' && state === 'playing', '可进入 C01 挑战（普通通过样本）');
+                chLane = 0;
+                chLanePos = 0;
+                chCheckSlot(chSlots[0]);
+                const normalScore = chScore;
+                const normalNear = chNear;
+                startChallenge('road-rush-C01');
+                chLane = 1;
+                chLanePos = 1;
+                chCheckSlot(chSlots[0]);
+                const nearScore = chScore;
+                const nearNear = chNear;
+                check(normalScore === base, '同一关同一时隙：普通通过 = 基础 ' + base + ' 分（实际 ' + normalScore + '）');
+                check(nearScore === base + bonus, '同一关同一时隙：近距通过 = 基础 ' + base + ' + 奖励 ' + bonus + ' = ' + (base + bonus) + ' 分（实际 ' + nearScore + '）');
+                check(nearScore > normalScore && nearNear === normalNear + 1, '近距通过得分严格高于普通通过（' + nearScore + ' > ' + normalScore + '）且近距计数 +1');
+                check(chLastSlotNear === true && chLastSlotScore === nearScore, '#test 暴露的单次 score/近距标记语义正确');
+              }
+              const c02 = A.Challenge && A.Challenge.stage ? A.Challenge.stage(GAME_ID, 'road-rush-C02') : null;
+              if (c02) {
+                const slots = chBuildSlots(c02);
+                const laneCount = chLaneCountFor(c02.content);
+                const pick = chPickStartLane(slots, laneCount, c02.content.startLane);
+                check(pick.moved === true && slots[0].occupiedLanes.indexOf(pick.lane) === -1, 'C02 出生车道被首时隙占用时自动移到安全车道（lane ' + pick.lane + '）');
+                check(pick.lane === 0, 'C02 安全车道选择稳定为 lane 0（时间轴与参考解相对跳变不变）');
+              }
+            } catch (err) {
+              fail += 1;
+              details.push('FAIL regression 异常：' + (err && err.message ? err.message : err));
+            } finally {
+              if (snapshot && restore(snapshot)) {
+                state = 'playing';
+                if (snapshotState === 'paused') {
+                  pauseByUser();
+                } else {
+                  loop.resume();
+                  autosave.saveNow();
+                }
+                syncTouchPad();
+              } else {
+                autosave.clear();
+                mode = 'classic';
+                chStage = null;
+                chStageIndex = -1;
+                hideChallengePanel();
+                reset();
+                state = 'ready';
+                showStart();
+              }
+            }
+            return { pass, fail, details };
           },
         };
       }

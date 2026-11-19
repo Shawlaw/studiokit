@@ -142,6 +142,10 @@
       let panelOpen = false;
       const CH_LAUNCH_ANGLES = [0.45, -0.45, 0.3, -0.3, 0.6, -0.6];
       const CH_TOKEN_HP = { '1': 1, '2': 2, '3': 3, 'K': 1 };
+      /* 挑战 K/G 常驻提示：被锁 G 画锁定图标，K 画钥匙图标，并画一条 K→G 短连线；HUD 常驻一句规则。 */
+      const GATE_HINT_TEXT = '撞未解锁的门会震碎上方钥匙';
+      const GATE_KEY_GLYPH = 'key';
+      const GATE_LOCK_GLYPH = 'lock';
       const ch = {
         active: false,
         stage: null,
@@ -342,6 +346,58 @@
         A.Sfx.play('jump');
       }
 
+      /* ---------- 发球手势（触屏/鼠标统一） ----------
+       * pointerdown 只记录起点；pointermove 超过 8 CSS px 视为拖动挡板；
+       * pointerup 时若未拖动且球未发出才发球。经典与 C01–C06 共用；键盘空格发球逻辑不变。 */
+      const LAUNCH_DRAG_PX = 8;
+      const launchGesture = { tracking: false, dragged: false, startX: 0, startY: 0, pointerId: null };
+      function launchGestureDown(event) {
+        if (event && event.button != null && event.button !== 0) return;
+        if (launchGesture.tracking) return;
+        launchGesture.tracking = true;
+        launchGesture.dragged = false;
+        launchGesture.startX = Number(event.clientX) || 0;
+        launchGesture.startY = Number(event.clientY) || 0;
+        launchGesture.pointerId = event.pointerId == null ? null : event.pointerId;
+      }
+      function launchGestureMove(event) {
+        if (!launchGesture.tracking) return;
+        if (launchGesture.pointerId != null && event.pointerId != null && event.pointerId !== launchGesture.pointerId) return;
+        const dx = (Number(event.clientX) || 0) - launchGesture.startX;
+        const dy = (Number(event.clientY) || 0) - launchGesture.startY;
+        if (Math.hypot(dx, dy) > LAUNCH_DRAG_PX) launchGesture.dragged = true;
+      }
+      function tryLaunchByTap() {
+        if (state !== 'playing') return false;
+        if (mode === 'challenge') {
+          if (ch.launched || ch.done) return false;
+          challengeLaunch();
+          return ch.launched === true;
+        }
+        if (launched) return false;
+        launch();
+        return true;
+      }
+      function launchGestureUp(event, cancelled) {
+        if (!launchGesture.tracking) return false;
+        if (!cancelled && launchGesture.pointerId != null && event && event.pointerId != null && event.pointerId !== launchGesture.pointerId) return false;
+        const dragged = launchGesture.dragged || !!cancelled;
+        launchGesture.tracking = false;
+        launchGesture.dragged = false;
+        launchGesture.pointerId = null;
+        if (dragged) return false;
+        return tryLaunchByTap();
+      }
+      function resetLaunchGesture() {
+        launchGesture.tracking = false;
+        launchGesture.dragged = false;
+        launchGesture.pointerId = null;
+      }
+      canvas.addEventListener('pointerdown', launchGestureDown);
+      window.addEventListener('pointermove', launchGestureMove);
+      window.addEventListener('pointerup', (event) => launchGestureUp(event, false));
+      window.addEventListener('pointercancel', (event) => launchGestureUp(event, true));
+
       function spawnPickup(brick) {
         if (Math.random() > 0.14) return;
         pickups.push({
@@ -541,7 +597,8 @@
           ball.x = paddle.x + paddle.w / 2;
           ball.y = paddle.y - BALL_R - 1;
           const spaceNow = input.isDown(' ');
-          if (input.pointer.wentDown || (spaceNow && !spaceWasDown)) launch();
+          /* 发球只由「未拖动的轻点放开」或空格边沿触发（见 launchGestureUp）。 */
+          if (spaceNow && !spaceWasDown) launch();
           spaceWasDown = spaceNow;
         } else {
           moveBall(dt);
@@ -744,6 +801,42 @@
         if (chMode) updateChallengeHud();
       }
 
+      /* 常驻提示模型：门未解锁时，找出「K 正上方的 G」配对并给出短连线端点；纯数据，渲染与回归共用。 */
+      function chGateHintModel(bricks, unlocked) {
+        const list = Array.isArray(bricks) ? bricks : [];
+        const keys = list.filter((brick) => brick && brick.alive && brick.tok === 'K');
+        const gates = list.filter((brick) => brick && brick.alive && brick.gate);
+        const links = [];
+        const locked = !unlocked && gates.length > 0;
+        if (locked) {
+          keys.forEach((key) => {
+            const gate = gates.find((item) => item.col === key.col && item.row === key.row + 1);
+            if (!gate) return;
+            links.push({
+              col: key.col,
+              fromX: key.x + key.w / 2,
+              fromY: key.y + key.h,
+              toX: gate.x + gate.w / 2,
+              toY: gate.y,
+            });
+          });
+        }
+        return {
+          locked,
+          keys: keys.length,
+          gates: gates.length,
+          links,
+          keyGlyph: GATE_KEY_GLYPH,
+          lockGlyph: GATE_LOCK_GLYPH,
+          text: GATE_HINT_TEXT,
+        };
+      }
+
+      function challengeGoalHudText() {
+        const goal = ch.stage && ch.stage.goalStatement ? ch.stage.goalStatement : '消除所有可破坏砖';
+        return '目标：' + goal + ' · ' + GATE_HINT_TEXT;
+      }
+
       function challengeRemaining() {
         return ch.bricks.filter((b) => b.alive && (!b.gate || ch.unlocked)).length;
       }
@@ -753,7 +846,7 @@
         const number = ch.stage.stageNumber || ch.index + 1;
         dom.chStage.textContent = 'C' + String(number).padStart(2, '0');
         dom.chTitle.textContent = ch.stage.title || '';
-        dom.chGoal.textContent = '目标：' + (ch.stage.goalStatement || '消除所有可破坏砖');
+        dom.chGoal.textContent = challengeGoalHudText();
         dom.chTime.textContent = A.Challenge.formatTime(ch.elapsed);
         dom.chRemain.textContent = String(challengeRemaining());
       }
@@ -1160,7 +1253,8 @@
           ch.ball.x = paddle.x + paddle.w / 2;
           ch.ball.y = paddle.y - BALL_R - 1;
           const spaceNow = input.isDown(' ');
-          if (input.pointer.wentDown || (spaceNow && !spaceWasDown)) challengeLaunch();
+          /* 与经典共用「拖动不发球、轻点放开才发球」的手势（launchGestureUp → tryLaunchByTap）。 */
+          if (spaceNow && !spaceWasDown) challengeLaunch();
           spaceWasDown = spaceNow;
         }
         if (ch.launched) challengeTick(dt);
@@ -1331,6 +1425,47 @@
         return summary;
       }
 
+      /* 矢量钥匙图标：圆形匙柄 + 匙杆 + 两枚齿，避免依赖 emoji 字体。 */
+      function drawKeyIcon(cx, cy) {
+        ctx.save();
+        ctx.translate(cx, cy);
+        ctx.strokeStyle = '#3a2400';
+        ctx.lineWidth = 1.6;
+        ctx.beginPath();
+        ctx.arc(-3.2, 0, 2.3, 0, TAU);
+        ctx.stroke();
+        ctx.beginPath();
+        ctx.moveTo(-1, 0);
+        ctx.lineTo(5.4, 0);
+        ctx.stroke();
+        ctx.beginPath();
+        ctx.moveTo(3.1, 0);
+        ctx.lineTo(3.1, 2.7);
+        ctx.moveTo(5.2, 0);
+        ctx.lineTo(5.2, 2.3);
+        ctx.stroke();
+        ctx.restore();
+      }
+
+      /* 矢量锁定图标：锁梁 + 锁体，替代对 emoji 的依赖。 */
+      function drawLockIcon(cx, cy) {
+        ctx.save();
+        ctx.translate(cx, cy);
+        ctx.strokeStyle = '#cdd8ee';
+        ctx.lineWidth = 1.6;
+        ctx.beginPath();
+        ctx.arc(0, -1.6, 2.7, Math.PI, 0);
+        ctx.stroke();
+        ctx.fillStyle = '#cdd8ee';
+        A.draw.roundRect(ctx, -3.8, -1.6, 7.6, 6, 1.4);
+        ctx.fill();
+        ctx.fillStyle = '#3a4a66';
+        ctx.beginPath();
+        ctx.arc(0, 1.2, 0.9, 0, TAU);
+        ctx.fill();
+        ctx.restore();
+      }
+
       function renderChallenge() {
         stage.beginFrame();
         ctx.save();
@@ -1354,9 +1489,38 @@
           ctx.fill();
           ctx.fillStyle = 'rgba(255,255,255,0.35)';
           ctx.fillRect(brick.x + 3, brick.y + 3, brick.w - 6, 3);
-          ctx.fillStyle = locked ? '#9fb0cf' : '#071426';
-          const glyph = locked ? '🔒' : brick.tok === 'K' ? 'K' : brick.hp > 1 ? String(brick.hp) : '';
-          if (glyph) A.draw.label(ctx, glyph, brick.x + brick.w / 2, brick.y + brick.h / 2, { font: 'bold 10px system-ui', color: locked ? '#9fb0cf' : '#071426' });
+          const cx = brick.x + brick.w / 2;
+          const cy = brick.y + brick.h / 2;
+          if (locked) {
+            drawLockIcon(cx, cy + 1);
+          } else if (brick.tok === 'K') {
+            drawKeyIcon(cx, cy);
+          } else if (brick.hp > 1) {
+            A.draw.label(ctx, String(brick.hp), cx, cy, { font: 'bold 10px system-ui', color: '#071426' });
+          }
+        }
+
+        /* 常驻 K→G 短连线：被锁门与正上方钥匙之间的视觉关联（纯视觉，不改判定）。 */
+        const gateHint = chGateHintModel(ch.bricks, ch.unlocked);
+        if (gateHint.locked) {
+          ctx.save();
+          ctx.strokeStyle = 'rgba(255,210,63,0.95)';
+          ctx.lineWidth = 2.4;
+          gateHint.links.forEach((link) => {
+            ctx.beginPath();
+            ctx.moveTo(link.fromX, link.fromY - 1.5);
+            ctx.lineTo(link.toX, link.toY + 1.5);
+            ctx.stroke();
+            /* 门侧小箭头，强化「K 影响 G」的方向。 */
+            ctx.fillStyle = 'rgba(255,210,63,0.95)';
+            ctx.beginPath();
+            ctx.moveTo(link.toX, link.toY + 4.6);
+            ctx.lineTo(link.toX - 3.2, link.toY + 1.2);
+            ctx.lineTo(link.toX + 3.2, link.toY + 1.2);
+            ctx.closePath();
+            ctx.fill();
+          });
+          ctx.restore();
         }
 
         particles.draw(ctx);
@@ -1377,7 +1541,7 @@
         ctx.fill();
 
         A.draw.label(ctx, '剩余 ' + challengeRemaining(), 12, 24, { align: 'left', font: 'bold 14px system-ui', color: '#ffd23f' });
-        A.draw.label(ctx, ch.unlocked ? '门已解锁' : '击毁 K 开锁', W / 2, 24, { font: 'bold 12px system-ui', color: ch.unlocked ? '#5ad1a0' : '#ffd23f' });
+        A.draw.label(ctx, ch.unlocked ? '门已解锁' : '击毁 K 开锁 · 撞门震碎上方钥匙', W / 2, 24, { font: 'bold 11px system-ui', color: ch.unlocked ? '#5ad1a0' : '#ffd23f' });
         for (let i = 0; i < ch.lives; i += 1) {
           ctx.fillStyle = '#ff6b9d';
           ctx.beginPath();
@@ -1598,6 +1762,107 @@
             return true;
           },
           /* ---- 0.9 挑战模式测试钩子（契约 §5） ---- */
+          /* 修复回归：同步、确定性断言（#test 专用；调用结束后恢复原状态）。 */
+          regression() {
+            const details = [];
+            let pass = 0;
+            let fail = 0;
+            const check = (ok, text) => {
+              if (ok) {
+                pass += 1;
+                details.push('PASS ' + text);
+              } else {
+                fail += 1;
+                details.push('FAIL ' + text);
+              }
+            };
+            const snapshot = {
+              mode,
+              state,
+              launched,
+              ball: { x: ball.x, y: ball.y, vx: ball.vx, vy: ball.vy },
+              chLaunched: ch.launched,
+              chLaunches: ch.launches,
+              chDone: ch.done,
+              chBall: { x: ch.ball.x, y: ch.ball.y, vx: ch.ball.vx, vy: ch.ball.vy },
+            };
+            try {
+              /* 1) 拖动挡板不自动发球：pointerdown → 移动 40px → pointerup。 */
+              mode = 'classic';
+              state = 'playing';
+              launched = false;
+              ball.vx = 0;
+              ball.vy = 0;
+              resetLaunchGesture();
+              launchGestureDown({ button: 0, clientX: 100, clientY: 100, pointerId: 41 });
+              launchGestureMove({ clientX: 140, clientY: 100, pointerId: 41 });
+              const dragLaunched = launchGestureUp({ pointerId: 41 }, false);
+              check(dragLaunched === false && launched === false, '经典模式：按住拖动 40CSS px 后松手不触发发球');
+              /* 2) 原地轻点（pointerup）才发球。 */
+              ball.vx = 0;
+              ball.vy = 0;
+              resetLaunchGesture();
+              launchGestureDown({ button: 0, clientX: 200, clientY: 200, pointerId: 42 });
+              const tapLaunched = launchGestureUp({ pointerId: 42 }, false);
+              check(tapLaunched === true && launched === true && ball.vy < 0, '经典模式：原地轻点（pointerup、无拖动）才发球');
+              /* 3) 8px 阈值内的小抖动仍按轻点处理。 */
+              launched = false;
+              ball.vx = 0;
+              ball.vy = 0;
+              resetLaunchGesture();
+              launchGestureDown({ button: 0, clientX: 220, clientY: 220, pointerId: 43 });
+              launchGestureMove({ clientX: 225, clientY: 223, pointerId: 43 });
+              const jitterLaunched = launchGestureUp({ pointerId: 43 }, false);
+              check(jitterLaunched === true && launched === true, '移动 ≤8CSS px 仍视为轻点并发球');
+              /* 4) 挑战模式共用同一手势：拖动不放球、轻点才放球。 */
+              mode = 'challenge';
+              state = 'playing';
+              ch.launched = false;
+              ch.done = false;
+              resetLaunchGesture();
+              launchGestureDown({ button: 0, clientX: 100, clientY: 300, pointerId: 44 });
+              launchGestureMove({ clientX: 150, clientY: 300, pointerId: 44 });
+              launchGestureUp({ pointerId: 44 }, false);
+              const chDragLaunched = ch.launched;
+              resetLaunchGesture();
+              launchGestureDown({ button: 0, clientX: 200, clientY: 300, pointerId: 45 });
+              launchGestureUp({ pointerId: 45 }, false);
+              const chTapLaunched = ch.launched;
+              check(chDragLaunched === false && chTapLaunched === true, '挑战模式共用同一手势：拖动不发球、轻点才发球');
+              /* 5) K/G 常驻提示：锁门时 K→G 连线模型与 HUD 文案存在。 */
+              const synth = buildChallengeBricks(['..KK....', '..GG....', '........', '........', '........']);
+              const hint = chGateHintModel(synth, false);
+              check(hint.locked === true && hint.links.length === 2 && hint.keys === 2 && hint.gates === 2, 'K/G 提示模型：未解锁时生成 2 条 K→G 短连线');
+              check(hint.keyGlyph === GATE_KEY_GLYPH && hint.lockGlyph === GATE_LOCK_GLYPH, 'K 使用钥匙图标、被锁 G 使用锁定图标');
+              const unlockedHint = chGateHintModel(synth, true);
+              check(unlockedHint.locked === false && unlockedHint.links.length === 0, '门解锁后不再显示锁定连线');
+              check(challengeGoalHudText().indexOf(GATE_HINT_TEXT) !== -1, 'HUD 常驻提示含「撞未解锁的门会震碎上方钥匙」');
+            } catch (err) {
+              fail += 1;
+              details.push('FAIL regression 异常：' + (err && err.message ? err.message : String(err)));
+            } finally {
+              mode = snapshot.mode;
+              state = snapshot.state;
+              launched = snapshot.launched;
+              ball.x = snapshot.ball.x;
+              ball.y = snapshot.ball.y;
+              ball.vx = snapshot.ball.vx;
+              ball.vy = snapshot.ball.vy;
+              ch.launched = snapshot.chLaunched;
+              ch.launches = snapshot.chLaunches;
+              ch.done = snapshot.chDone;
+              ch.ball.x = snapshot.chBall.x;
+              ch.ball.y = snapshot.chBall.y;
+              ch.ball.vx = snapshot.chBall.vx;
+              ch.ball.vy = snapshot.chBall.vy;
+              resetLaunchGesture();
+            }
+            return { pass, fail, details };
+          },
+          /* 常驻 K/G 提示证据（当前挑战砖阵；未开局时为空模型）。 */
+          gateHintInfo() {
+            return chGateHintModel(ch.bricks, ch.unlocked);
+          },
           challengeStages() {
             const progress = A.Challenge && A.Challenge.progress ? A.Challenge.progress(GAME_ID) : { cleared: [], best: {} };
             return challengeStagesData().map((stage) => ({
@@ -1628,6 +1893,8 @@
               remaining: challengeRemaining(),
               unlocked: ch.unlocked,
               launched: ch.launched,
+              gateHint: chGateHintModel(ch.bricks, ch.unlocked),
+              gateHintText: GATE_HINT_TEXT,
               elapsedFrames: Math.round(ch.elapsed * 60),
               panelOpen: !!(dom.chPanel && !dom.chPanel.hidden),
               overlay: {
@@ -1651,6 +1918,7 @@
               noBrickSec: Math.round(ch.noBrickSec * 100) / 100,
               maxNoBrickSec: Math.round(ch.maxNoBrickSec * 100) / 100,
               recoveries: ch.recoveries,
+              gateHint: chGateHintModel(ch.bricks, ch.unlocked),
               paddle: { x: Math.round(ch.paddle.x * 100) / 100, w: ch.paddle.w, y: ch.paddle.y },
               ball: { x: Math.round(ch.ball.x * 100) / 100, y: Math.round(ch.ball.y * 100) / 100, vx: Math.round(ch.ball.vx * 100) / 100, vy: Math.round(ch.ball.vy * 100) / 100 },
               bricks: ch.bricks.map((b, index) => ({

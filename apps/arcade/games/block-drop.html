@@ -583,7 +583,16 @@
         nextKey = previousKey;
         resetPieceMotion();
         tools.swap -= 1;
-        if (mode === 'challenge') chAssisted = true;
+        if (mode === 'challenge') {
+          /* 挑战固定块序：cur 与 NEXT 交换后同步固定队列，保证 NEXT 显示 == 实际下一块。
+             队列长度与多块集合不变，只交换「当前块槽位（chQueueIndex-1）」与「NEXT 槽位」。 */
+          if (chQueueIndex > 0 && chQueueIndex < chQueue.length) {
+            chQueue[chQueueIndex - 1] = cur.key;
+            chQueue[chQueueIndex] = nextKey;
+          }
+          chAssisted = true;
+          syncChallengeHud();
+        }
         A.Sfx.play('spring');
         syncJoyTools();
         autosave.saveNow();
@@ -1022,6 +1031,11 @@
           A.showToast('前一关通关后解锁');
           return false;
         }
+        return applyChallengeStage(stage);
+      }
+      /* 真正进入挑战关：校验通过后由 startChallenge 调用；#test regression 也可直接用它
+         构造确定性挑战状态（不依赖解锁进度）。 */
+      function applyChallengeStage(stage) {
         const content = stage.content;
         const rows = Array.isArray(content.boardTopToBottom) ? content.boardTopToBottom : [];
         if (rows.length !== ROWS) return false;
@@ -1137,6 +1151,17 @@
         pauseUi.sync();
         syncTouchPad();
       }
+      /* 失败建议：读取该关 practicedSkill / goalStatement，追加一句可执行的具体建议（不改变胜负判定）。 */
+      function challengeSuggestionText() {
+        if (!chStage) return '';
+        const goal = String(chStage.goalStatement || '').trim();
+        const skill = String(chStage.practicedSkill || '').trim();
+        if (!goal && !skill) return '';
+        const parts = [];
+        if (goal) parts.push('对照目标「' + goal + '」');
+        if (skill) parts.push(skill);
+        return parts.join('；') + '。';
+      }
       function challengeFail(reason) {
         if (state === 'over' || state === 'cleared') return;
         state = 'over';
@@ -1144,6 +1169,7 @@
         autosave.clear();
         loop.pause();
         const goal = chStage ? chStage.goalStatement : '';
+        const suggestion = challengeSuggestionText();
         ui.show({
           title: '挑战失败',
           text:
@@ -1151,6 +1177,7 @@
             (chStage ? stageLabel(chStage) + ' ' + chStage.title + '<br/>' : '') +
             (reason || '目标没有达成') +
             '<br/>目标：' + goal +
+            (suggestion ? '<br/>建议：' + suggestion : '') +
             '<br/>可以重试本关，也可以先回选关。',
           btn: '重试本关',
           onBtn: () => startChallenge(chStageId),
@@ -1890,6 +1917,9 @@
               filled: board.reduce((n, row) => n + row.filter(Boolean).length, 0),
               nextKey,
               bag: bag.slice(),
+              /* 0.9 挑战固定块序：暴露队列以便验证「换块后 NEXT 与实际出块一致」。 */
+              chQueue: chQueue.slice(),
+              chQueueIndex,
               zenFrozen,
               zenSpeedLevel,
             };
@@ -2098,6 +2128,125 @@
           },
           endZen() {
             return endZenGame();
+          },
+          /* ---------- 确定性回归：覆盖 0.9 修复（同步执行、不依赖真实计时/异步等待） ---------- */
+          regression() {
+            const details = [];
+            let pass = 0;
+            let fail = 0;
+            const api = window.__arcadeTest;
+            const check = (ok, name, extra) => {
+              if (ok) {
+                pass += 1;
+                details.push('PASS ' + name);
+              } else {
+                fail += 1;
+                details.push('FAIL ' + name + (extra ? ' — ' + extra : ''));
+              }
+            };
+            const keys = [
+              'studiokit:arcade:progress:v1',
+              'studiokit:arcade:runs:v1',
+              'studiokit:arcade:playtime:v1',
+              'studiokit:arcade:scores:v1',
+              'studiokit:arcade:challenge:v1',
+            ];
+            const snap = {};
+            keys.forEach((key) => {
+              try {
+                snap[key] = localStorage.getItem(key);
+              } catch (err) {
+                snap[key] = null;
+              }
+            });
+            try {
+              if (!challengeDataReady()) {
+                check(false, '挑战数据可用（6 关）');
+              } else {
+                const stages = challengeStagesData();
+                const c06 = stages.filter((stage) => stage.stageNumber === 6)[0];
+                if (!c06 || !c06.content) {
+                  check(false, 'C06 挑战数据存在');
+                } else {
+                  /* A. 挑战换块：cur/next 交换 + 固定队列同步 + 实际出块与 NEXT 一致（缺陷 8）。 */
+                  applyChallengeStage(c06);
+                  const before = api.stageObservable();
+                  const beforeCur = before.piece ? before.piece.key : null;
+                  const beforeNext = before.nextKey;
+                  const beforeQueue = before.queue.slice();
+                  check(beforeCur !== beforeNext, 'C06 起手 cur/next 不同', JSON.stringify({ cur: beforeCur, next: beforeNext }));
+                  const swapped = useSwapNext();
+                  const afterSwap = api.stageObservable();
+                  check(
+                    swapped && afterSwap.piece && afterSwap.piece.key === beforeNext && nextKey === beforeCur,
+                    '挑战换块后 cur/next 交换',
+                    JSON.stringify({ cur: afterSwap.piece && afterSwap.piece.key, next: nextKey, expectCur: beforeNext, expectNext: beforeCur })
+                  );
+                  check(
+                    chQueue.length === beforeQueue.length && chQueue.slice().sort().join(',') === beforeQueue.slice().sort().join(','),
+                    '换块保持固定队列长度与多块集合',
+                    JSON.stringify({ before: beforeQueue, after: chQueue.slice() })
+                  );
+                  check(chQueue[chQueueIndex] === nextKey && nextKey === beforeCur, 'NEXT 显示与固定队列对应项一致', JSON.stringify({ index: chQueueIndex, queue: chQueue.slice(), next: nextKey }));
+                  const savedNext = nextKey;
+                  spawnChallenge(); /* 真实推进到下一块：实际出块必须等于刚才 NEXT 显示。 */
+                  const spawned = { mode: mode, state: state, curKey: cur ? cur.key : null, nextKey: nextKey, index: chQueueIndex };
+                  check(spawned.curKey === savedNext, '挑战换块后实际出块与 NEXT 一致', JSON.stringify({ expected: savedNext, spawned: spawned }));
+                  check(spawned.nextKey === (chQueue[chQueueIndex] || null), '后续 NEXT 仍取自固定队列', JSON.stringify({ next: spawned.nextKey, expected: chQueue[chQueueIndex] || null }));
+                  /* B. 挑战失败弹层追加 practicedSkill / goalStatement 建议（缺陷 9，判定不变）。 */
+                  applyChallengeStage(c06);
+                  challengeFail('出块次数用完了');
+                  const failText = dom.ovText.textContent || '';
+                  const failTitle = dom.ovTitle.textContent || '';
+                  check(state === 'over' && /挑战失败/.test(failTitle), '挑战失败判定与标题不变', JSON.stringify({ state: state, title: failTitle }));
+                  check(
+                    failText.indexOf('建议') !== -1 && failText.indexOf(c06.practicedSkill) !== -1 && failText.indexOf(c06.goalStatement) !== -1,
+                    '失败弹层追加具体可执行建议',
+                    JSON.stringify({ text: failText })
+                  );
+                  /* C. 经典换块仍不改变 7-bag（缺陷 8 的回归保护）。 */
+                  startGame();
+                  const bagBefore = bag.slice();
+                  const curBefore = cur ? cur.key : null;
+                  const nextBefore = nextKey;
+                  useSwapNext();
+                  check(
+                    cur && cur.key === nextBefore && nextKey === curBefore && bag.slice().join(',') === bagBefore.join(','),
+                    '经典换块不动 7-bag',
+                    JSON.stringify({ cur: cur && cur.key, next: nextKey, bag: bag.slice() })
+                  );
+                }
+              }
+            } catch (err) {
+              check(false, 'regression 执行未抛异常', String(err && err.message ? err.message : err));
+            } finally {
+              try {
+                autosave.clear();
+                mode = 'classic';
+                chStage = null;
+                chStageId = null;
+                chQueue = [];
+                state = 'ready';
+                reset();
+                loop.resume();
+                showStart();
+                syncChallengeHud();
+                updateChallengeTip();
+                pauseUi.sync();
+                syncTouchPad();
+              } catch (err) {
+                /* 清理失败不掩盖断言结果 */
+              }
+              keys.forEach((key) => {
+                try {
+                  if (snap[key] === null) localStorage.removeItem(key);
+                  else localStorage.setItem(key, snap[key]);
+                } catch (err) {
+                  /* 忽略存储不可用 */
+                }
+              });
+            }
+            return { pass: pass, fail: fail, details: details };
           },
         };
       }
