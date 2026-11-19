@@ -56,11 +56,19 @@ export default {
         ctx.assert(obs.dir.x === 1 && obs.dir.y === 0 && obs.walls.length === 11, 'C01 初始方向/墙错误：' + JSON.stringify({ dir: obs.dir, walls: obs.walls.length }));
         ctx.assert(obs.food && obs.food.x === 7 && obs.food.y === 3 && obs.fruitIndex === 0 && obs.fruitTotal === 3, 'C01 脚本果实错误：' + JSON.stringify({ food: obs.food, index: obs.fruitIndex, total: obs.fruitTotal }));
         ctx.assert(obs.stepIntervalMs === 230, 'C01 步间隔 ' + obs.stepIntervalMs + ' ≠ 230');
+        /* 0.8.5 起挑战 HUD 位于顶栏 .game-hud 内：只隐藏经典分数/最高两个 span，
+           整个 .game-hud 保持可见（隐藏整块会连同挑战徽标一起消失）。 */
         const hud = await cdp.evaluate(`(() => {
           const hud = document.querySelector('[data-ch-hud]');
-          return { hidden: hud.hidden, text: hud.textContent, gameHudHidden: document.querySelector('.game-hud').hidden };
+          const classicSpans = [...document.querySelectorAll('[data-hud-classic]')];
+          return {
+            hidden: hud.hidden,
+            text: hud.textContent,
+            gameHudVisible: !document.querySelector('.game-hud').hidden,
+            classicHidden: classicSpans.length > 0 && classicSpans.every((el) => el.hidden)
+          };
         })()`);
-        ctx.assert(hud.hidden === false && /C01/.test(hud.text) && hud.gameHudHidden === true, '挑战 HUD 未按合同切换：' + JSON.stringify(hud));
+        ctx.assert(hud.hidden === false && /C01/.test(hud.text) && hud.gameHudVisible === true && hud.classicHidden === true, '挑战 HUD 未按合同切换：' + JSON.stringify(hud));
         return { stages: stages.length, panelButtons: panel.count, locked: panel.locked, entered: info.stageId };
       },
       'engine-replay'

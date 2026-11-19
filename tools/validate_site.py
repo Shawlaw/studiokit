@@ -16,6 +16,7 @@ REQUIRED = [
     'apps/arcade/index.html', 'apps/arcade/README.md', 'apps/arcade/CHANGELOG.md',
     'apps/arcade/DESIGN-0.4.0.md', 'apps/arcade/DESIGN-0.5.0.md',
     'apps/arcade/DESIGN-0.6.0.md', 'apps/arcade/DESIGN-0.8.1.md', 'apps/arcade/DESIGN-0.8.2.md',
+    'apps/arcade/DESIGN-0.9.0.md',
     'apps/arcade/engine.js', 'apps/arcade/arcade.css', 'apps/arcade/sw.js',
     'apps/arcade/manifest.webmanifest',
     'apps/arcade/icons/icon-192.png', 'apps/arcade/icons/icon-512.png',
@@ -27,9 +28,11 @@ REQUIRED = [
     'apps/arcade/games/memory-flip.html', 'apps/arcade/games/merge-2048.html',
     'apps/arcade/games/brick-breaker.html', 'apps/arcade/games/gravity-flip.html',
     'apps/arcade/games/snake-run.html', 'apps/arcade/games/mole-whack.html',
+    'apps/arcade/games/blackjack.html', 'apps/arcade/games/gomoku.html',
+    'apps/arcade/games/solitaire.html',
     'apps/restaurant-compare/index.html', 'apps/restaurant-compare/README.md', 'apps/restaurant-compare/CHANGELOG.md',
     'templates/single-page-tool/index.html', 'tools/build_site.py', 'tools/new_tool.py',
-    'tools/arcade_zen_scores_test.mjs'
+    'tools/arcade_zen_scores_test.mjs', 'tools/arcade_calm_games_test.mjs',
 ]
 
 # 0.9 挑战模式：每款游戏一个生成数据文件（tools/arcade_09_data.mjs 生成，入库）。
@@ -38,6 +41,9 @@ ARCADE_CHALLENGE_GAMES = [
     'road-rush', 'gold-miner', 'brick-breaker', 'gravity-flip', 'snake-run',
     'mole-whack', 'memory-flip', 'merge-2048',
 ]
+# 0.9.0 新增的平和棋牌小游戏：没有 6 关挑战，但必须同样具备开始/暂停/续玩/道具/测试钩子。
+ARCADE_CALM_GAMES = ['blackjack', 'gomoku', 'solitaire']
+ARCADE_ALL_GAMES = ARCADE_CHALLENGE_GAMES + ARCADE_CALM_GAMES
 
 class RefParser(HTMLParser):
     def __init__(self):
@@ -170,10 +176,10 @@ def validate(root=ROOT):
     arcade_engine = root / 'apps/arcade/engine.js'
     if arcade_engine.exists():
         source = arcade_engine.read_text(encoding='utf-8')
-        if "const ARCADE_VERSION = '0.8.6'" not in source:
+        if "const ARCADE_VERSION = '0.9.0'" not in source:
             ok = fail('Arcade ARCADE_VERSION drifted; update registry/README/CHANGELOG together') and ok
-        if source.count("file: '") < 13:
-            ok = fail('Arcade GAMES list should contain at least 13 games') and ok
+        if source.count("file: '") < 16:
+            ok = fail('Arcade GAMES list should contain at least 16 games') and ok
         if "const RUNS_KEY = 'studiokit:arcade:runs:v1'" not in source:
             ok = fail('Arcade run-save key changed; requires migration review') and ok
         if "const PLAYTIME_KEY = 'studiokit:arcade:playtime:v1'" not in source:
@@ -221,9 +227,9 @@ def validate(root=ROOT):
         arcade_index = root / 'apps/arcade/index.html'
         if arcade_index.exists():
             index_source = arcade_index.read_text(encoding='utf-8')
-            for marker in ('rel="manifest"', 'data-playtime-section', 'data-scores-section', 'data-scores-body', 'data-scores-empty', 'data-offline', 'data-install', 'data-share', 'data-random', '无签到', 'data-hall-version>0.8.6'):
+            for marker in ('rel="manifest"', 'data-playtime-section', 'data-scores-section', 'data-scores-body', 'data-scores-empty', 'data-offline', 'data-install', 'data-share', 'data-random', '无签到', 'data-hall-version>0.9.0'):
                 if marker not in index_source:
-                    ok = fail(f'Arcade hub 0.8.6 marker missing: {marker}') and ok
+                    ok = fail(f'Arcade hub 0.9.0 marker missing: {marker}') and ok
         arcade_block = root / 'apps/arcade/games/block-drop.html'
         if arcade_block.exists():
             block_source = arcade_block.read_text(encoding='utf-8')
@@ -231,15 +237,28 @@ def validate(root=ROOT):
                 if marker not in block_source:
                     ok = fail(f'Arcade block-drop marker missing: {marker}') and ok
         # 0.8.6：所有经典/禅模式「再来一局」必须回到模式选择，不得直接 startGame/startZenRound。
-        for game_id in ARCADE_CHALLENGE_GAMES:
+        # 只在同一个 showOverlay/show 调用的参数范围内判断（遇到 } 即停），避免把后面紧邻的
+        # function startGame() 定义误判成结算回调。
+        replay_direct = re.compile(
+            r"btn\s*:\s*['\"]再来一局['\"][^}]{0,160}?(?:onBtn|onBtn2)\s*:\s*(?:\(\s*\)\s*=>\s*)?(?:startGame|startZenRound)\b"
+        )
+        for game_id in ARCADE_ALL_GAMES:
+            game_page = root / f'apps/arcade/games/{game_id}.html'
+            if not game_page.exists():
+                ok = fail(f'Arcade game page missing: {game_page.relative_to(root)}') and ok
+                continue
+            game_source = game_page.read_text(encoding='utf-8')
+            if replay_direct.search(game_source):
+                ok = fail(f'{game_page.relative_to(root)}: 再来一局仍直接重开，未返回模式选择') and ok
+        # 0.9.0：三款平和棋牌必须共用 Arcade 接入契约（暂停/续玩/2 个可选道具/测试钩子）。
+        for game_id in ARCADE_CALM_GAMES:
             game_page = root / f'apps/arcade/games/{game_id}.html'
             if not game_page.exists():
                 continue
-            game_source = game_page.read_text(encoding='utf-8')
-            for replay in re.finditer(r"['\"]再来一局['\"]", game_source):
-                callback_window = game_source[replay.end():replay.end() + 100]
-                if re.search(r'\b(?:startGame|startZenRound)\b', callback_window):
-                    ok = fail(f'{game_page.relative_to(root)}: 再来一局仍直接重开，未返回模式选择') and ok
+            calm_source = game_page.read_text(encoding='utf-8')
+            for marker in ('A.createRunAutosave(', 'A.createToolbelt(', 'A.bindPause(', 'window.__arcadeTest', 'data-pause', 'data-ov-btn'):
+                if marker not in calm_source:
+                    ok = fail(f'{game_page.relative_to(root)}: calm-game marker missing: {marker}') and ok
         snake_page = root / 'apps/arcade/games/snake-run.html'
         if snake_page.exists():
             snake_source = snake_page.read_text(encoding='utf-8')
@@ -252,7 +271,7 @@ def validate(root=ROOT):
         arcade_sw = root / 'apps/arcade/sw.js'
         if arcade_sw.exists():
             sw_source = arcade_sw.read_text(encoding='utf-8')
-            for marker in ("const VERSION = '0.8.6'", 'arcade-precache', 'skipWaiting', 'clients.claim'):
+            for marker in ("const VERSION = '0.9.0'", 'arcade-precache', 'skipWaiting', 'clients.claim'):
                 if marker not in sw_source:
                     ok = fail(f'Arcade service worker marker missing: {marker}') and ok
             # 0.9：13 个挑战数据文件必须进入 shell 预缓存（相对路径写法，兼容子路径部署）。
@@ -277,8 +296,8 @@ def validate(root=ROOT):
             try:
                 registry = json.loads(registry_path.read_text(encoding='utf-8'))
                 arcade = next((t for t in registry.get('tools', []) if t.get('id') == 'arcade'), None)
-                if arcade and arcade.get('version') != '0.8.6':
-                    ok = fail('Arcade registry version must match engine 0.8.6') and ok
+                if arcade and arcade.get('version') != '0.9.0':
+                    ok = fail('Arcade registry version must match engine 0.9.0') and ok
             except Exception:
                 pass
 

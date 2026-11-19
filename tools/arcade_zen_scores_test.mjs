@@ -375,14 +375,14 @@ async function readScoresPayload(cdp) {
 const SCENARIOS = [
   {
     id: 'ZS-01',
-    title: '中心页版本 0.8.2 + 积分记录区块 + 空状态',
+    title: '中心页版本 0.9.0 + 积分记录区块 + 空状态',
     async run(cdp) {
       await prepareHub(cdp);
       const api = await requireScores(cdp);
-      assert(api.version === '0.8.6', 'A.version=' + JSON.stringify(api.version) + '，期望 0.8.6');
+      assert(api.version === '0.9.0', 'A.version=' + JSON.stringify(api.version) + '，期望 0.9.0');
       const dom = await hubSnapshot(cdp);
       assert(dom.section, '中心页缺少 [data-scores-section] 积分记录区块');
-      assert(dom.versionText.trim() === '0.8.6', '[data-hall-version]=' + JSON.stringify(dom.versionText) + '，期望 0.8.6');
+      assert(dom.versionText.trim() === '0.9.0', '[data-hall-version]=' + JSON.stringify(dom.versionText) + '，期望 0.9.0');
       assert(dom.table, '缺少 .hall-scores-table 积分表格');
       const headers = dom.headers.map((item) => item.text).join('/');
       assert(headers === '时间/游戏/模式/得分/详情', '表头=' + JSON.stringify(headers) + '，期望 时间/游戏/模式/得分/详情');
@@ -1106,7 +1106,7 @@ const SCENARIOS = [
       assert(state.runCount === 1, 'runs:v1 读取失败：count=' + state.runCount + '，期望 1');
       assert(state.playtimeTotalMs === 120000, 'playtime:v1 读取失败：totalMs=' + state.playtimeTotalMs + '，期望 120000');
       assert(Array.isArray(state.challengeCleared) && state.challengeCleared.length === 1, 'challenge:v1 读取失败：' + JSON.stringify(state.challengeCleared));
-      assert(state.cards === 13, '损坏 scores 导致中心页游戏卡片数=' + state.cards + '，期望 13');
+      assert(state.cards === 16, '损坏 scores 导致中心页游戏卡片数=' + state.cards + '，期望 16');
       const missingKeys = ALL_KEYS.filter((key) => state.keyNames.indexOf(key) === -1);
       assert(missingKeys.length === 0, '旧 localStorage key 被改名/删除：缺少 ' + missingKeys.join(', ') + '（实际 ' + state.keyNames.join(', ') + '）');
       const dom = await hubSnapshot(cdp);

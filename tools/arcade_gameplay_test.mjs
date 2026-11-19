@@ -873,6 +873,10 @@ const EXPECTED_GAME_IDS = [
   'gold-miner',
 ];
 
+/** 0.9.0 新增的平和棋牌小游戏：无 6 关挑战，但需通过经典入口与开始/暂停契约。 */
+const EXPECTED_CALM_GAME_IDS = ['blackjack', 'gomoku', 'solitaire'];
+const EXPECTED_ALL_GAME_IDS = EXPECTED_GAME_IDS.concat(EXPECTED_CALM_GAME_IDS);
+
 /** 证据等级（INTEGRATION-CONTRACT.md §6）：ui-only 不得作为关卡 DONE 证据。 */
 const CHALLENGE_EVIDENCE_LEVELS = ['real-input-replay', 'engine-replay', 'ui-only'];
 
@@ -1476,9 +1480,9 @@ const CH_CLASSIC_SCENARIO = {
       return { hasArcade: !!window.Arcade, version: window.Arcade && Arcade.version, games };
     })()`);
     check(hall.hasArcade, '中心页 Arcade 运行时缺失');
-    check(hall.games.length === EXPECTED_GAME_IDS.length, '中心页游戏数 ' + hall.games.length + ' ≠ ' + EXPECTED_GAME_IDS.length);
+    check(hall.games.length === EXPECTED_ALL_GAME_IDS.length, '中心页游戏数 ' + hall.games.length + ' ≠ ' + EXPECTED_ALL_GAME_IDS.length);
     const hallIds = hall.games.map((game) => game.id).sort();
-    check(canonicalize(hallIds) === canonicalize(EXPECTED_GAME_IDS.slice().sort()), '中心页游戏清单与 0.9 设计源不一致：' + hallIds.join(','));
+    check(canonicalize(hallIds) === canonicalize(EXPECTED_ALL_GAME_IDS.slice().sort()), '中心页游戏清单与 0.9.0 运行时不一致：' + hallIds.join(','));
     let classicStarted = 0;
     let entryButtons = 0;
     let challengeEntryVisible = 0;
@@ -1518,10 +1522,17 @@ const CH_CLASSIC_SCENARIO = {
         };
       })()`);
       const prefix = game.id + '：';
+      const isCalm = EXPECTED_CALM_GAME_IDS.indexOf(game.id) !== -1;
       check(ready.hasArcade, prefix + 'Arcade 运行时未加载');
       check(ready.hasHooks, prefix + '#test 钩子缺失');
-      check(ready.challengeStages === 6, prefix + 'A.Challenge.stages(gameId) 应有 6 关，实际 ' + ready.challengeStages + '（挑战数据脚本未加载或数据损坏）');
-      check(ready.entryTextPresent, prefix + '开始弹层缺少「挑战 6 关」入口文案（挑战入口未接入）');
+      if (isCalm) {
+        /* 0.9.0 棋牌小游戏没有挑战模式：不得出现挑战入口，也不得注册挑战数据。 */
+        check(ready.challengeStages === 0, prefix + '棋牌小游戏不应注册 6 关挑战，实际 ' + ready.challengeStages);
+        check(!ready.entryTextPresent, prefix + '棋牌小游戏不应出现「挑战 6 关」入口');
+      } else {
+        check(ready.challengeStages === 6, prefix + 'A.Challenge.stages(gameId) 应有 6 关，实际 ' + ready.challengeStages + '（挑战数据脚本未加载或数据损坏）');
+        check(ready.entryTextPresent, prefix + '开始弹层缺少「挑战 6 关」入口文案（挑战入口未接入）');
+      }
       check(ready.overlayVisible, prefix + '开始弹层不可见');
       check(ready.btnExists && ready.btnVisible && !ready.btnDisabled, prefix + '[data-ov-btn] 不存在/不可见/禁用');
       check(ready.btnText === '开始游戏', prefix + '经典主按钮文案应保持「开始游戏」，实际 ' + JSON.stringify(ready.btnText));

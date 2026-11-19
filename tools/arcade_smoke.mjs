@@ -46,8 +46,8 @@ async function main() {
     })()`);
     assert(home.cards >= 2, 'home cards=' + home.cards);
     assert(home.href.indexOf('apps/arcade') !== -1, 'arcade card not clickable: ' + JSON.stringify(home));
-    assert(home.version.indexOf('0.8.6') !== -1, 'arcade version missing on home card');
-    record('门户街机厅卡片可点击且版本 0.8.6', true);
+    assert(home.version.indexOf('0.9.0') !== -1, 'arcade version missing on home card');
+    record('门户街机厅卡片可点击且版本 0.9.0', true);
 
     /* ---------- GitHub Pages 项目子路径：shell 返回链接 ---------- */
     await cdp.navigate(base + '/studiokit/apps/arcade/games/star-raid.html');
@@ -65,10 +65,10 @@ async function main() {
       cards: document.querySelectorAll('.hall-card').length,
       runs: window.Arcade && Arcade.RunSave.count()
     })`);
-    assert(hallInfo.version === '0.8.6', 'version is ' + hallInfo.version);
-    assert(hallInfo.games === 13, 'game count is ' + hallInfo.games);
-    assert(hallInfo.cards === 13, 'card count is ' + hallInfo.cards);
-    record('中心页 13 款游戏与版本 0.8.6', true);
+    assert(hallInfo.version === '0.9.0', 'version is ' + hallInfo.version);
+    assert(hallInfo.games === 16, 'game count is ' + hallInfo.games);
+    assert(hallInfo.cards === 16, 'card count is ' + hallInfo.cards);
+    record('中心页 16 款游戏与版本 0.9.0', true);
 
     await cdp.evaluate(`(() => { const i = document.querySelector('[data-search]'); i.value = '雪铃'; i.dispatchEvent(new Event('input', { bubbles: true })); })()`);
     await sleep(120);
@@ -299,6 +299,9 @@ async function main() {
       'shadow-leap': { feather: 2, boost: 2 },
       'pendulum-tower': { guide: 3, brace: 2 },
       'gold-miner': { aim: 2, time: 1, winch: 1 },
+      'blackjack': { swap: 1, peek: 2 },
+      'gomoku': { undo: 3, hint: 2 },
+      'solitaire': { undo: 10, hint: 3 },
     };
     const joyKeys = {
       'memory-flip': ['tools', 'peekTimer', 'hintArmed', 'hintTargetId', 'hintTimer'],
@@ -314,6 +317,9 @@ async function main() {
       'shadow-leap': ['tools', 'featherTimer', 'boostArmed'],
       'pendulum-tower': ['tools', 'guideArmed'],
       'gold-miner': ['tools', 'winchArmed', 'aimLineActive'],
+      'blackjack': ['tools'],
+      'gomoku': ['tools'],
+      'solitaire': ['tools'],
     };
     const stripped = await cdp.evaluate(`(() => {
       const keys = ${JSON.stringify(joyKeys)};
@@ -328,7 +334,7 @@ async function main() {
       localStorage.setItem('studiokit:arcade:runs:v1', JSON.stringify(raw));
       return changed;
     })()`);
-    assert(stripped === 13, 'old-save fixtures not prepared: ' + stripped);
+    assert(stripped === 16, 'old-save fixtures not prepared: ' + stripped);
     for (const game of games) {
       await cdp.navigate(`${base}/apps/arcade/games/${game.file}?oldsave=1#test`);
       await cdp.click('[data-ov-btn]');
@@ -344,7 +350,7 @@ async function main() {
       }
       if (cdp.errors.length) throw new Error(game.id + ': old-save console errors: ' + cdp.errors.join(' | '));
     }
-    record('旧档缺新字段：13 款均按初始补给恢复且不报错', true);
+    record('旧档缺新字段：16 款均按初始补给恢复且不报错', true);
 
     /* ---------- 各游戏关键交互 ---------- */
     const actions = {
@@ -1007,12 +1013,24 @@ async function main() {
       const upgraded = t.joyInfo();
       t.setBoard([[1024, 1024, 0, 0], [0, 0, 0, 0], [0, 0, 0, 0], [0, 0, 0, 0]]);
       t.moveNow('left');
-      return { armed, hammered, undone, upgraded, won: t.joyInfo(), playCount: Arcade.Progress.get('merge-2048').plays };
+      return { armed, hammered, undone, upgraded, won: t.joyInfo(), playCount: Arcade.Progress.get('merge-2048').plays, scores: Arcade.Scores.list({ gameId: 'merge-2048' }).length };
     })()`);
     assert(mergeTools.armed.armedTool === 'hammer' && mergeTools.hammered.board[0][0] === 0 && mergeTools.hammered.tools.hammer === 1, 'merge hammer: ' + JSON.stringify(mergeTools));
     assert(mergeTools.undone.board[0][0] === 2 && mergeTools.undone.tools.hammer === 2, 'merge undo duplicated/lost tool: ' + JSON.stringify(mergeTools.undone));
     assert(mergeTools.upgraded.board[0][1] === 8 && mergeTools.upgraded.tools.upgrade === 0, 'merge upgrade: ' + JSON.stringify(mergeTools.upgraded));
-    assert(mergeTools.won.won && mergeTools.won.state === 'over' && mergeTools.playCount === 1, 'merge 2048 did not finish once: ' + JSON.stringify(mergeTools.won));
+    /* 0.9.0：首次 2048 胜利弹层不再落记录，继续挑战后最终结束才记录一次。 */
+    assert(mergeTools.won.won && mergeTools.playCount === 0 && mergeTools.scores === 0, '2048 win overlay must not record yet: ' + JSON.stringify(mergeTools.won));
+    await cdp.click('[data-ov-btn]');
+    await sleep(220);
+    const mergeContinue = await cdp.evaluate(`(() => {
+      const t = __arcadeTest;
+      const during = { state: t.joyInfo().state, overlay: !document.querySelector('[data-overlay]').hidden, plays: Arcade.Progress.get('merge-2048').plays };
+      t.setBoard([[2, 4, 8, 16], [32, 64, 128, 256], [512, 1024, 2, 4], [8, 16, 32, 64]], { preserveRun: true });
+      t.moveNow('left');
+      return { during, final: { plays: Arcade.Progress.get('merge-2048').plays, scores: Arcade.Scores.list({ gameId: 'merge-2048' }).length, state: t.joyInfo().state } };
+    })()`);
+    assert(mergeContinue.during.state === 'playing' && mergeContinue.during.overlay === false && mergeContinue.during.plays === 0, '2048 continue-after-win did not resume same run: ' + JSON.stringify(mergeContinue.during));
+    assert(mergeContinue.final.plays === 1 && mergeContinue.final.scores === 1, '2048 final record should be exactly once: ' + JSON.stringify(mergeContinue.final));
     record('2048 小锤/升级/撤销不复制道具/2048 收尾', true);
 
     await openJoy('mole-whack.html', 'mole-whack');
@@ -1372,7 +1390,7 @@ async function main() {
     record('俄罗斯方块 7-bag + 1 行消除计分 + 顶部失败 + 积分记录消去层数', true);
 
     /* ---------- 中心页续玩区与导出导入 ---------- */
-    /* 先为每款游戏各留一条未完成进度，确保续玩区覆盖全部 13 款。 */
+    /* 先为每款游戏各留一条未完成进度，确保续玩区覆盖全部 16 款。 */
     for (const game of games) {
       await cdp.evaluate(`window.Arcade && Arcade.RunSave.clear(${JSON.stringify(game.id)})`);
       await cdp.navigate(`${base}/apps/arcade/games/${game.file}`);
@@ -1387,22 +1405,22 @@ async function main() {
       more: document.querySelector('[data-resume-more]') ? document.querySelector('[data-resume-more]').textContent : '',
       runs: Arcade.RunSave.count()
     }))()`);
-    assert(resumeInfo.runs === 13, 'run count is ' + resumeInfo.runs);
+    assert(resumeInfo.runs === 16, 'run count is ' + resumeInfo.runs);
     assert(resumeInfo.visible === 6, 'resume visible cards is ' + resumeInfo.visible);
-    assert(resumeInfo.more.indexOf('13') !== -1, 'resume expand button missing: ' + resumeInfo.more);
+    assert(resumeInfo.more.indexOf('16') !== -1, 'resume expand button missing: ' + resumeInfo.more);
     await cdp.screenshot('hall-resume.png');
     await cdp.evaluate(`(() => { const b = document.querySelector('[data-resume-more] button'); if (b) b.click(); })()`);
     await sleep(120);
     const expanded = await cdp.evaluate(`document.querySelectorAll('.hall-resume-card').length`);
-    assert(expanded === 13, 'resume expanded cards is ' + expanded);
+    assert(expanded === 16, 'resume expanded cards is ' + expanded);
     const exportCheck = await cdp.evaluate(`(() => {
       const text = Arcade.Progress.exportText();
       const data = JSON.parse(text);
       const imported = Arcade.Progress.importText(text);
       return { runs: Object.keys(data.runs || {}).length, ok: imported.ok, runCount: imported.runCount, games: Object.keys(data.state || {}).length };
     })()`);
-    assert(exportCheck.ok && exportCheck.runs >= 13 && exportCheck.runCount >= 13, 'export/import runs failed: ' + JSON.stringify(exportCheck));
-    record('中心页续玩区 13 条折叠/展开 + 导出/导入含局内进度', true);
+    assert(exportCheck.ok && exportCheck.runs >= 16 && exportCheck.runCount >= 16, 'export/import runs failed: ' + JSON.stringify(exportCheck));
+    record('中心页续玩区 16 条折叠/展开 + 导出/导入含局内进度', true);
     await cdp.screenshot('hall-resume.png');
 
     /* ---------- 存储写失败不得谎报导入成功 ---------- */
@@ -1681,7 +1699,7 @@ async function main() {
         if (overflow.hasGameTools || overflow.hasJoyRow) assert(overflow.docH <= overflow.vh + 1, pagePath + ' 375px controls vertical overflow ' + overflow.docH + '>' + overflow.vh);
       }
     }
-    record('375px 窄屏 14 页无横向溢出 + 全游戏 2 个 44px 道具按钮', true);
+    record('375px 窄屏 17 页无横向溢出 + 全游戏 2 个 44px 道具按钮', true);
 
     /* ---------- 俄罗斯方块触屏控制面板：双手分区 + 画布不再劫持触摸 ---------- */
     await cdp.evaluate(`Arcade.RunSave.clear('block-drop')`);
@@ -1953,7 +1971,7 @@ async function main() {
         if (small.hasGameTools || small.hasJoyRow) assert(small.docH <= small.vh + 1, pagePath + ' 320px controls vertical overflow ' + small.docH + '>' + small.vh);
       }
     }
-    record('320×568 小屏 14 页无横向溢出 + 全游戏 44px 道具按钮', true);
+    record('320×568 小屏 17 页无横向溢出 + 全游戏 44px 道具按钮', true);
 
     /* 320px 上道具条占画布比例最大：物品不能被压在道具条后面。 */
     await cdp.navigate(base + '/apps/arcade/games/gold-miner.html?itemfloor=1#test');
@@ -2017,7 +2035,7 @@ async function main() {
         if (metrics.hasGameTools || metrics.hasJoyRow) assert(metrics.docH <= metrics.vh + 1, pagePath + ' ' + width + 'px controls vertical overflow ' + metrics.docH + '>' + metrics.vh);
       }
     }
-    record('390×844 / 430×932 视口 14 页与全游戏道具按钮无溢出', true);
+    record('390×844 / 430×932 视口 17 页与全游戏道具按钮无溢出', true);
 
     /* ---------- 横屏（667×375）：允许纵向滚动，但不得横向溢出或让道具按钮消失 ---------- */
     await cdp.send('Emulation.setDeviceMetricsOverride', { width: 667, height: 375, deviceScaleFactor: 1, mobile: true });
@@ -2240,7 +2258,7 @@ async function main() {
     const precacheResult = await cdp.evaluate(`Arcade.Offline.precache(Arcade.Offline.preloadUrls())`);
     assert(precacheResult && precacheResult.total === preloadUrls.length && precacheResult.failed === 0, 'precache failed: ' + JSON.stringify(precacheResult));
     const allCached = await cdp.evaluate(`Arcade.Offline.cacheStatus()`);
-    assert(allCached.gamesCached === 13 && allCached.cached === allCached.total, 'precache incomplete: ' + JSON.stringify(allCached));
+    assert(allCached.gamesCached === 16 && allCached.cached === allCached.total, 'precache incomplete: ' + JSON.stringify(allCached));
     await cdp.navigate(base + '/apps/arcade/');
     await sleep(450);
     const offlineUi = await cdp.evaluate(`({
@@ -2250,7 +2268,7 @@ async function main() {
     assert(offlineUi.text.includes('已预载'), 'offline button did not update: ' + JSON.stringify(offlineUi));
     assert(offlineUi.status.includes('断网'), 'offline status missing: ' + JSON.stringify(offlineUi));
     if (cdp.errors.length) throw new Error('PWA hub console errors: ' + cdp.errors.join(' | '));
-    record('PWA manifest + 核心缓存 + 13 款游戏预载', true);
+    record('PWA manifest + 核心缓存 + 16 款游戏预载', true);
 
     /* 真正停掉静态服务器，确保命中的只能是 Service Worker 缓存。 */
     server.close();
@@ -2264,7 +2282,7 @@ async function main() {
       version: window.Arcade && Arcade.version,
       title: document.title
     })`);
-    assert(offlineHall.cards === 13 && offlineHall.version === '0.8.6', 'offline hall failed: ' + JSON.stringify(offlineHall));
+    assert(offlineHall.cards === 16 && offlineHall.version === '0.9.0', 'offline hall failed: ' + JSON.stringify(offlineHall));
     const offlineStatus = await cdp.evaluate(`(async () => {
       try {
         await Arcade.Offline.register();
@@ -2274,7 +2292,7 @@ async function main() {
         return { ok: false, error: String(err) };
       }
     })()`);
-    assert(offlineStatus.ok && offlineStatus.status.gamesCached === 13, 'offline cache status failed: ' + JSON.stringify(offlineStatus));
+    assert(offlineStatus.ok && offlineStatus.status.gamesCached === 16, 'offline cache status failed: ' + JSON.stringify(offlineStatus));
     const offlineUiText = await cdp.evaluate(`({
       button: document.querySelector('[data-offline]').textContent,
       status: document.querySelector('[data-offline-status]').textContent
@@ -2286,7 +2304,7 @@ async function main() {
       overlay: !!document.querySelector('[data-overlay]'),
       version: window.Arcade && window.Arcade.version
     })`);
-    assert(offlineGame.hasArcade && offlineGame.overlay && offlineGame.version === '0.8.6', 'offline game failed: ' + JSON.stringify(offlineGame));
+    assert(offlineGame.hasArcade && offlineGame.overlay && offlineGame.version === '0.9.0', 'offline game failed: ' + JSON.stringify(offlineGame));
     await cdp.navigate(base + '/apps/arcade/games/not-preloaded.html');
     const offlineMissing = await cdp.text('body');
     assert(offlineMissing && offlineMissing.includes('还没有预载'), 'offline missing page: ' + String(offlineMissing).slice(0, 120));
