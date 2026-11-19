@@ -834,7 +834,13 @@
         }
         let rec = null;
         if (!recordSaved) {
-          rec = A.Progress.recordPlay('block-drop', score); if (rec) high = rec.high;
+          /* 0.8.5：经典局也把当次消去层数与等级写进积分记录，积分表详情列不再只剩分数。 */
+          rec = A.Progress.recordPlay('block-drop', score, {
+            lines,
+            level,
+            detail: lines + ' 行 · Lv.' + level,
+          });
+          if (rec) high = rec.high;
           recordSaved = true;
           dom.hudHigh.textContent = String(Math.max(high, score));
         }
