@@ -1,0 +1,1747 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
+  <meta name="description" content="纸牌接龙 · 静局：标准 Klondike 抽 1 张，点选再点目标即可移动，不依赖拖拽，支持撤销与提示，无倒计时。" />
+  <meta name="theme-color" content="#0b1020" />
+  <link rel="stylesheet" href="../../../shared/site.css" />
+  <link rel="stylesheet" href="../arcade.css" />
+  <script src="../../../shared/site-shell.js" defer></script>
+  <script src="../engine.js"></script>
+  <title>纸牌接龙 · 静局 · 街机厅 · StudioKit</title>
+</head>
+<body class="arcade-body" data-studiokit-app="arcade" data-studiokit-app-title="街机厅 Arcade" style="--ac-accent:#7fd0c8; --card-accent:#7fd0c8">
+  <noscript><p class="ac-noscript">此游戏需要启用 JavaScript 才能运行。</p></noscript>
+  <main class="game-page">
+    <header class="game-topbar">
+      <a class="ac-back" href="../index.html" aria-label="返回街机厅"><span class="ac-back-icon" aria-hidden="true">‹</span><span class="ac-back-label">街机厅</span></a>
+      <h1 class="game-title">♠ 纸牌接龙 · 静局</h1>
+      <div class="game-hud">
+        <span>分数 <strong data-hud-score>0</strong></span>
+        <span>最高 <strong data-hud-high>0</strong></span>
+      </div>
+      <button type="button" class="ac-icon-btn" data-pause aria-label="暂停游戏" title="暂停游戏（P / Esc）">⏸</button>
+      <button type="button" class="ac-icon-btn" data-mute aria-label="切换音效">🔊</button>
+    </header>
+    <div class="stage-wrap">
+      <div class="stage-box">
+        <canvas class="game-canvas" aria-label="纸牌接龙游戏画面"></canvas>
+        <div class="overlay" data-overlay hidden>
+          <div class="overlay-panel">
+            <h2 data-ov-title>纸牌接龙 · 静局</h2>
+            <p data-ov-text>一个人慢慢理牌</p>
+            <button type="button" class="ac-btn" data-ov-btn>开始游戏</button>
+            <button type="button" class="ac-btn ac-btn-secondary" data-ov-btn2 hidden>重新开始</button>
+          </div>
+        </div>
+      </div>
+    </div>
+    <p class="game-hint">点牌选中，再点目标列或基座移动（无需拖动）· 点牌库翻 1 张，翻完可倒回重翻 · 道具 1 撤销 / 2 提示 · P / Esc 暂停</p>
+  </main>
+  <script>
+    (() => {
+      'use strict';
+      const A = window.Arcade;
+      const { clamp } = A.utils;
+
+      /* ---------- 画布与布局常量（逻辑 420×740） ---------- */
+      const W = 420;
+      const H = 740;
+      const GAME_ID = 'solitaire';
+      const LEFT = 14;
+      const COL_W = 56;
+      const CARD_W = 50;
+      const CARD_H = 70;
+      const UP_OFFSET = 20;
+      const DOWN_OFFSET = 12;
+      const TOP_W = 46;
+      const TOP_H = 64;
+      const TOP_Y = 22;
+      const TABLEAU_Y = 118;
+      const TOP_BAND_END = TABLEAU_Y - 8;
+      const HINT_SECONDS = 3;
+      const TOOL_START = { undo: 10, hint: 3 };
+      const TOOL_CAPS = { undo: 10, hint: 3 };
+      const SUITS = ['♠', '♥', '♦', '♣'];
+      const RANKS = ['', 'A', '2', '3', '4', '5', '6', '7', '8', '9', '10', 'J', 'Q', 'K'];
+      const TOP_SLOTS = [
+        { type: 'stock', col: 0 },
+        { type: 'waste', col: 1 },
+        { type: 'foundation', index: 0, col: 3 },
+        { type: 'foundation', index: 1, col: 4 },
+        { type: 'foundation', index: 2, col: 5 },
+        { type: 'foundation', index: 3, col: 6 },
+      ];
+      const TOP_SLOT_CENTERS = TOP_SLOTS.map((slot) => LEFT + slot.col * COL_W + COL_W / 2);
+
+      const canvas = document.querySelector('.game-canvas');
+      const stage = A.createStage(canvas, W, H);
+      const ctx = stage.ctx;
+      const input = A.createInput(canvas);
+      A.installSfxUnlock();
+
+      const dom = {
+        overlay: document.querySelector('[data-overlay]'),
+        ovTitle: document.querySelector('[data-ov-title]'),
+        ovText: document.querySelector('[data-ov-text]'),
+        ovBtn: document.querySelector('[data-ov-btn]'),
+        ovBtn2: document.querySelector('[data-ov-btn2]'),
+        hudScore: document.querySelector('[data-hud-score]'),
+        hudHigh: document.querySelector('[data-hud-high]'),
+        pause: document.querySelector('[data-pause]'),
+        mute: document.querySelector('[data-mute]'),
+      };
+      const ui = A.createOverlayUi(dom);
+
+      /* ---------- 牌面编码：0..51 = 花色*13 + (点数-1) ---------- */
+      function suitOf(card) {
+        return Math.floor(card / 13);
+      }
+      function rankOf(card) {
+        return (card % 13) + 1;
+      }
+      function isRed(card) {
+        const suit = suitOf(card);
+        return suit === 1 || suit === 2;
+      }
+      function rankText(card) {
+        return RANKS[rankOf(card)];
+      }
+      function suitText(card) {
+        return SUITS[suitOf(card)];
+      }
+      function topOf(pile) {
+        return pile.length ? pile[pile.length - 1] : null;
+      }
+      function canStackOn(card, target) {
+        return isRed(card) !== isRed(target) && rankOf(card) === rankOf(target) - 1;
+      }
+      function isRunValid(cards) {
+        if (!Array.isArray(cards) || !cards.length) return false;
+        for (let i = 0; i < cards.length; i += 1) {
+          if (!Number.isInteger(cards[i]) || cards[i] < 0 || cards[i] > 51) return false;
+        }
+        for (let i = 0; i < cards.length - 1; i += 1) {
+          if (!canStackOn(cards[i + 1], cards[i])) return false;
+        }
+        return true;
+      }
+
+      /* ---------- 运行状态 ---------- */
+      let seed = 1;
+      let stock = [];
+      let waste = [];
+      let tableau = [[], [], [], [], [], [], []];
+      let foundations = [[], [], [], []];
+      let moves = 0;
+      let undoStack = [];
+      let selected = null;
+      let tools = { undo: TOOL_START.undo, hint: TOOL_START.hint };
+      let hintMoves = [];
+      let hintTimer = 0;
+      let state = 'ready';
+      let recordSaved = false;
+      let lastRecord = null;
+      let high = A.Progress.get(GAME_ID).high;
+      let rng = makeRng(1);
+      const feltDots = [];
+      for (let i = 0; i < 90; i += 1) {
+        feltDots.push({ x: (i * 67 + 13) % W, y: (i * 131 + 29) % H, r: i % 3 === 0 ? 2 : 1 });
+      }
+
+      function makeRng(value) {
+        let a = Number(value) >>> 0;
+        if (!a) a = 0x9e3779b9;
+        return function next() {
+          a = (a + 0x6d2b79f5) >>> 0;
+          let t = a;
+          t = Math.imul(t ^ (t >>> 15), t | 1);
+          t ^= t + Math.imul(t ^ (t >>> 7), t | 61);
+          return ((t ^ (t >>> 14)) >>> 0) / 4294967296;
+        };
+      }
+      function randomSeed() {
+        return Math.floor(Math.random() * 4294967296) >>> 0;
+      }
+
+      /* ---------- 布局几何 ---------- */
+      function topSlotX(col) {
+        return LEFT + col * COL_W + 5;
+      }
+      function cardColX(index) {
+        return LEFT + index * COL_W + 3;
+      }
+      function tableauCardY(index, cardIndex) {
+        let y = TABLEAU_Y;
+        const col = tableau[index];
+        for (let i = 0; i < cardIndex; i += 1) y += col[i].up ? UP_OFFSET : DOWN_OFFSET;
+        return y;
+      }
+
+      /* ---------- 计分与校验 ---------- */
+      function foundationCount() {
+        let count = 0;
+        for (let f = 0; f < 4; f += 1) count += foundations[f].length;
+        return count;
+      }
+      function faceUpCount() {
+        let count = 0;
+        for (let t = 0; t < 7; t += 1) {
+          for (let i = 0; i < tableau[t].length; i += 1) if (tableau[t][i].up) count += 1;
+        }
+        return count;
+      }
+      function computeScore() {
+        return Math.max(0, foundationCount() * 10 + faceUpCount() * 5 - moves);
+      }
+      function canPlaceOnFoundation(card, foundationIndex) {
+        if (!Number.isInteger(card) || card < 0 || card > 51) return false;
+        if (!Number.isInteger(foundationIndex) || foundationIndex < 0 || foundationIndex > 3) return false;
+        const pile = foundations[foundationIndex];
+        if (!pile.length) return rankOf(card) === 1;
+        const top = pile[pile.length - 1];
+        return suitOf(card) === suitOf(top) && rankOf(card) === rankOf(top) + 1;
+      }
+      function canPlaceOnTableau(card, pileIndex) {
+        if (!Number.isInteger(card) || card < 0 || card > 51) return false;
+        if (!Number.isInteger(pileIndex) || pileIndex < 0 || pileIndex > 6) return false;
+        const pile = tableau[pileIndex];
+        if (!pile.length) return rankOf(card) === 13;
+        const top = pile[pile.length - 1];
+        return top.up && canStackOn(card, top.c);
+      }
+
+      /* ---------- 布局注入 / 存档解析（严格逐字段校验） ---------- */
+      function parseCardValue(value) {
+        if (Number.isInteger(value) && value >= 0 && value <= 51) return value;
+        if (typeof value === 'string') {
+          const text = value.trim().toUpperCase();
+          const match = /^(10|[2-9AJQKT])([SHDC])$/.exec(text);
+          if (!match) return null;
+          const rankChar = match[1];
+          let rank = Number(rankChar);
+          if (rankChar === 'A') rank = 1;
+          else if (rankChar === 'T' || rankChar === '10') rank = 10;
+          else if (rankChar === 'J') rank = 11;
+          else if (rankChar === 'Q') rank = 12;
+          else if (rankChar === 'K') rank = 13;
+          const suitMap = { S: 0, H: 1, D: 2, C: 3 };
+          const suit = suitMap[match[2]];
+          if (!Number.isInteger(rank) || rank < 1 || rank > 13 || suit === undefined) return null;
+          return suit * 13 + (rank - 1);
+        }
+        if (value && typeof value === 'object' && !Array.isArray(value)) {
+          if (Number.isInteger(value.c)) return parseCardValue(value.c);
+          if (Number.isInteger(value.id)) return parseCardValue(value.id);
+          if (Number.isInteger(value.card)) return parseCardValue(value.card);
+          const suit = Number(value.suit);
+          const rank = Number(value.rank);
+          if (Number.isInteger(suit) && suit >= 0 && suit <= 3 && Number.isInteger(rank) && rank >= 1 && rank <= 13) {
+            return suit * 13 + (rank - 1);
+          }
+        }
+        return null;
+      }
+      function parseTableauEntry(value) {
+        let raw = value;
+        let up = true;
+        if (value && typeof value === 'object' && !Array.isArray(value)) {
+          if (Object.prototype.hasOwnProperty.call(value, 'up')) up = value.up !== false;
+          else if (Object.prototype.hasOwnProperty.call(value, 'faceUp')) up = value.faceUp !== false;
+          else if (Object.prototype.hasOwnProperty.call(value, 'hidden')) up = value.hidden !== true;
+          if (Object.prototype.hasOwnProperty.call(value, 'c')) raw = value.c;
+          else if (Object.prototype.hasOwnProperty.call(value, 'card')) raw = value.card;
+          else raw = value;
+        }
+        const card = parseCardValue(raw);
+        if (card === null) return null;
+        return { c: card, up: up !== false };
+      }
+      function parseLayout(raw, strictFull) {
+        if (!raw || typeof raw !== 'object' || Array.isArray(raw)) return null;
+        if (!Array.isArray(raw.stock) || !Array.isArray(raw.waste) || !Array.isArray(raw.tableau) || !Array.isArray(raw.foundations)) return null;
+        if (raw.tableau.length !== 7 || raw.foundations.length !== 4) return null;
+        const all = [];
+        const nextStock = [];
+        for (let i = 0; i < raw.stock.length; i += 1) {
+          const card = parseCardValue(raw.stock[i]);
+          if (card === null) return null;
+          nextStock.push(card);
+          all.push(card);
+        }
+        const nextWaste = [];
+        for (let i = 0; i < raw.waste.length; i += 1) {
+          const card = parseCardValue(raw.waste[i]);
+          if (card === null) return null;
+          nextWaste.push(card);
+          all.push(card);
+        }
+        const nextTableau = [];
+        for (let t = 0; t < 7; t += 1) {
+          const column = raw.tableau[t];
+          if (!Array.isArray(column)) return null;
+          const pile = [];
+          let seenFaceUp = false;
+          for (let i = 0; i < column.length; i += 1) {
+            const entry = parseTableauEntry(column[i]);
+            if (!entry) return null;
+            if (entry.up) seenFaceUp = true;
+            else if (seenFaceUp) return null;
+            pile.push(entry);
+            all.push(entry.c);
+          }
+          nextTableau.push(pile);
+        }
+        const nextFoundations = [];
+        for (let f = 0; f < 4; f += 1) {
+          const sequence = raw.foundations[f];
+          if (!Array.isArray(sequence)) return null;
+          const pile = [];
+          for (let i = 0; i < sequence.length; i += 1) {
+            const card = parseCardValue(sequence[i]);
+            if (card === null) return null;
+            if (rankOf(card) !== i + 1) return null;
+            if (i > 0 && suitOf(card) !== suitOf(pile[i - 1])) return null;
+            pile.push(card);
+            all.push(card);
+          }
+          nextFoundations.push(pile);
+        }
+        if (all.length > 52) return null;
+        if (strictFull && all.length !== 52) return null;
+        const seen = Object.create(null);
+        for (let i = 0; i < all.length; i += 1) {
+          if (seen[all[i]]) return null;
+          seen[all[i]] = true;
+        }
+        /* 测试注入允许少于 52 张（缺牌自动补进牌库）；恢复存档必须恰好 52 张。 */
+        if (!strictFull) {
+          for (let card = 0; card < 52; card += 1) {
+            if (!seen[card]) nextStock.push(card);
+          }
+        }
+        return { stock: nextStock, waste: nextWaste, tableau: nextTableau, foundations: nextFoundations };
+      }
+      function normalizeSelection(raw, layout) {
+        if (!raw || typeof raw !== 'object') return null;
+        if (raw.from === 'tableau') {
+          const pile = Number(raw.pile);
+          const index = Number(raw.index);
+          if (!Number.isInteger(pile) || pile < 0 || pile > 6) return null;
+          const column = layout.tableau[pile];
+          if (!Number.isInteger(index) || index < 0 || index >= column.length) return null;
+          const cards = [];
+          for (let i = index; i < column.length; i += 1) {
+            if (!column[i].up) return null;
+            cards.push(column[i].c);
+          }
+          if (!isRunValid(cards)) return null;
+          return { from: 'tableau', pile: pile, index: index };
+        }
+        if (raw.from === 'waste') {
+          if (!layout.waste.length) return null;
+          const index = Number(raw.index);
+          if (!Number.isInteger(index) || index !== layout.waste.length - 1) return null;
+          return { from: 'waste', pile: 0, index: index };
+        }
+        if (raw.from === 'foundation') {
+          const pile = Number(raw.pile);
+          if (!Number.isInteger(pile) || pile < 0 || pile > 3) return null;
+          const sequence = layout.foundations[pile];
+          if (!sequence.length) return null;
+          const index = Number(raw.index);
+          if (!Number.isInteger(index) || index !== sequence.length - 1) return null;
+          return { from: 'foundation', pile: pile, index: index };
+        }
+        return null;
+      }
+      function collectCardsFromState() {
+        const ids = [];
+        for (let i = 0; i < stock.length; i += 1) ids.push(stock[i]);
+        for (let i = 0; i < waste.length; i += 1) ids.push(waste[i]);
+        for (let t = 0; t < 7; t += 1) {
+          for (let i = 0; i < tableau[t].length; i += 1) ids.push(tableau[t][i].c);
+        }
+        for (let f = 0; f < 4; f += 1) {
+          for (let i = 0; i < foundations[f].length; i += 1) ids.push(foundations[f][i]);
+        }
+        return ids;
+      }
+      function stateFingerprint() {
+        return JSON.stringify({ stock: stock, waste: waste, tableau: tableau, foundations: foundations, moves: moves });
+      }
+
+      function serialize() {
+        if (state !== 'playing' && state !== 'paused') return null;
+        return {
+          v: 1,
+          seed: seed,
+          stock: stock.slice(),
+          waste: waste.slice(),
+          tableau: tableau.map((col) => col.map((entry) => ({ c: entry.c, up: entry.up }))),
+          foundations: foundations.map((pile) => pile.slice()),
+          moves: moves,
+          score: computeScore(),
+          tools: { undo: tools.undo, hint: tools.hint },
+          selected: selected ? { from: selected.from, pile: selected.pile, index: selected.index } : null,
+        };
+      }
+      function restore(data) {
+        if (!data || typeof data !== 'object') return false;
+        const layout = parseLayout(data, true);
+        if (!layout) return false;
+        const seedValue = Number(data.seed);
+        if (!Number.isInteger(seedValue) || seedValue < 0 || seedValue > 4294967295) return false;
+        const movesValue = Number(data.moves);
+        if (!Number.isInteger(movesValue) || movesValue < 0 || movesValue > 10000000) return false;
+        const scoreValue = Number(data.score);
+        if (!Number.isFinite(scoreValue) || scoreValue < 0) return false;
+        let undoCount = TOOL_START.undo;
+        let hintCount = TOOL_START.hint;
+        if (data.tools !== undefined && data.tools !== null) {
+          if (typeof data.tools !== 'object') return false;
+          const undoValue = Number(data.tools.undo);
+          const hintValue = Number(data.tools.hint);
+          if (!Number.isInteger(undoValue) || undoValue < 0 || undoValue > TOOL_CAPS.undo) return false;
+          if (!Number.isInteger(hintValue) || hintValue < 0 || hintValue > TOOL_CAPS.hint) return false;
+          undoCount = undoValue;
+          hintCount = hintValue;
+        }
+        let selection = null;
+        if (data.selected !== undefined && data.selected !== null) {
+          selection = normalizeSelection(data.selected, layout);
+          if (!selection) return false;
+        }
+        seed = seedValue >>> 0;
+        rng = makeRng(seed);
+        stock = layout.stock;
+        waste = layout.waste;
+        tableau = layout.tableau;
+        foundations = layout.foundations;
+        moves = movesValue;
+        tools = { undo: undoCount, hint: hintCount };
+        selected = selection;
+        undoStack = [];
+        recordSaved = false;
+        lastRecord = null;
+        clearHint();
+        state = 'playing';
+        syncHud();
+        syncTools();
+        return true;
+      }
+
+      const autosave = A.createRunAutosave(GAME_ID, serialize, {
+        every: 3,
+        meta: () => {
+          const score = computeScore();
+          return { score: score, summary: '得分 ' + score + ' · ' + moves + ' 步 · 归位 ' + foundationCount() + '/52' };
+        },
+      });
+
+      /* ---------- 发牌与局面注入 ---------- */
+      function beginDeal(newSeed) {
+        seed = Number(newSeed) >>> 0;
+        rng = makeRng(seed || 1);
+        const deck = [];
+        for (let i = 0; i < 52; i += 1) deck.push(i);
+        for (let i = deck.length - 1; i > 0; i -= 1) {
+          const j = Math.floor(rng() * (i + 1));
+          const tmp = deck[i];
+          deck[i] = deck[j];
+          deck[j] = tmp;
+        }
+        stock = [];
+        waste = [];
+        tableau = [[], [], [], [], [], [], []];
+        foundations = [[], [], [], []];
+        moves = 0;
+        undoStack = [];
+        selected = null;
+        tools = { undo: TOOL_START.undo, hint: TOOL_START.hint };
+        recordSaved = false;
+        lastRecord = null;
+        clearHint();
+        let cursor = 0;
+        for (let col = 0; col < 7; col += 1) {
+          const pile = [];
+          for (let row = 0; row <= col; row += 1) {
+            pile.push({ c: deck[cursor], up: row === col });
+            cursor += 1;
+          }
+          tableau[col] = pile;
+        }
+        stock = deck.slice(cursor);
+      }
+      function applySetDeal(raw) {
+        const layout = parseLayout(raw, false);
+        if (!layout) return false;
+        stock = layout.stock;
+        waste = layout.waste;
+        tableau = layout.tableau;
+        foundations = layout.foundations;
+        moves = 0;
+        undoStack = [];
+        selected = null;
+        tools = { undo: TOOL_START.undo, hint: TOOL_START.hint };
+        recordSaved = false;
+        lastRecord = null;
+        clearHint();
+        state = 'playing';
+        ui.hide();
+        loop.resume();
+        pauseUi.sync();
+        syncHud();
+        syncTools();
+        autosave.saveNow();
+        return true;
+      }
+      function layoutWithTableau(columns) {
+        const used = Object.create(null);
+        const nextTableau = [];
+        for (let t = 0; t < 7; t += 1) {
+          const source = columns && columns[t] ? columns[t] : [];
+          const pile = [];
+          for (let i = 0; i < source.length; i += 1) {
+            const entry = source[i];
+            let card;
+            let up = true;
+            if (entry && typeof entry === 'object' && !Array.isArray(entry)) {
+              card = Object.prototype.hasOwnProperty.call(entry, 'c') ? entry.c : entry.id;
+              up = entry.up !== false;
+            } else {
+              card = entry;
+            }
+            used[card] = true;
+            pile.push({ c: card, up: up });
+          }
+          nextTableau.push(pile);
+        }
+        const nextStock = [];
+        for (let card = 0; card < 52; card += 1) if (!used[card]) nextStock.push(card);
+        return { stock: nextStock, waste: [], tableau: nextTableau, foundations: [[], [], [], []] };
+      }
+      function makeNearWinLayout() {
+        const nextFoundations = [];
+        const nextTableau = [[], [], [], [], [], [], []];
+        for (let suit = 0; suit < 4; suit += 1) {
+          const sequence = [];
+          for (let rankIndex = 0; rankIndex < 12; rankIndex += 1) sequence.push(suit * 13 + rankIndex);
+          nextFoundations.push(sequence);
+          nextTableau[suit].push({ c: suit * 13 + 12, up: true });
+        }
+        return { stock: [], waste: [], tableau: nextTableau, foundations: nextFoundations };
+      }
+
+      /* ---------- 快照与撤销 ---------- */
+      function snapshot() {
+        return {
+          stock: stock.slice(),
+          waste: waste.slice(),
+          tableau: tableau.map((col) => col.map((entry) => ({ c: entry.c, up: entry.up }))),
+          foundations: foundations.map((pile) => pile.slice()),
+          moves: moves,
+        };
+      }
+      function applySnapshot(snap) {
+        stock = snap.stock.slice();
+        waste = snap.waste.slice();
+        tableau = snap.tableau.map((col) => col.map((entry) => ({ c: entry.c, up: entry.up })));
+        foundations = snap.foundations.map((pile) => pile.slice());
+        moves = snap.moves;
+        selected = null;
+        clearHint();
+      }
+      function pushUndo() {
+        undoStack.push(snapshot());
+        if (undoStack.length > 60) undoStack.shift();
+      }
+      function clearHint() {
+        hintMoves = [];
+        hintTimer = 0;
+      }
+
+      /* ---------- 选择与合法移动 ---------- */
+      function selectedCards() {
+        if (!selected) return null;
+        if (selected.from === 'tableau') {
+          const col = tableau[selected.pile];
+          if (!col || selected.index < 0 || selected.index >= col.length) return null;
+          const cards = [];
+          for (let i = selected.index; i < col.length; i += 1) {
+            if (!col[i].up) return null;
+            cards.push(col[i].c);
+          }
+          return isRunValid(cards) ? cards : null;
+        }
+        if (selected.from === 'waste') {
+          if (!waste.length) return null;
+          return [waste[waste.length - 1]];
+        }
+        if (selected.from === 'foundation') {
+          const pile = foundations[selected.pile];
+          if (!pile || !pile.length) return null;
+          return [pile[pile.length - 1]];
+        }
+        return null;
+      }
+      function selectedRef() {
+        if (!selected) return null;
+        if (selected.from === 'tableau') return { pile: 'tableau', index: selected.pile, cardIndex: selected.index };
+        if (selected.from === 'waste') return { pile: 'waste' };
+        return { pile: 'foundation', index: selected.pile };
+      }
+      function canMoveSelectionTo(target, index) {
+        const cards = selectedCards();
+        if (!cards || !cards.length) return false;
+        if (target === 'foundation') {
+          if (selected.from === 'foundation') return false;
+          return cards.length === 1 && canPlaceOnFoundation(cards[0], index);
+        }
+        if (target === 'tableau') {
+          if (selected.from === 'tableau' && selected.pile === index) return false;
+          return canPlaceOnTableau(cards[0], index);
+        }
+        return false;
+      }
+      function applyMove(target, index) {
+        if (state !== 'playing') return false;
+        if (!canMoveSelectionTo(target, index)) return false;
+        const cards = selectedCards();
+        if (!cards || !cards.length) return false;
+        const source = selected;
+        pushUndo();
+        let revealed = false;
+        if (source.from === 'tableau') {
+          const col = tableau[source.pile];
+          col.splice(source.index, cards.length);
+          if (col.length && !col[col.length - 1].up) {
+            col[col.length - 1].up = true;
+            revealed = true;
+          }
+        } else if (source.from === 'waste') {
+          waste.pop();
+        } else if (source.from === 'foundation') {
+          foundations[source.pile].pop();
+        }
+        if (target === 'tableau') {
+          const col = tableau[index];
+          for (let i = 0; i < cards.length; i += 1) col.push({ c: cards[i], up: true });
+        } else {
+          foundations[index].push(cards[0]);
+        }
+        moves += 1;
+        selected = null;
+        clearHint();
+        if (revealed) A.Sfx.play('bell', 2);
+        else A.Sfx.play('land');
+        syncHud();
+        syncTools();
+        if (foundationCount() === 52) {
+          settleWin();
+        } else {
+          autosave.saveNow();
+        }
+        return true;
+      }
+      function collectLegalMoves() {
+        const list = [];
+        if (waste.length) {
+          const card = waste[waste.length - 1];
+          for (let f = 0; f < 4; f += 1) {
+            if (canPlaceOnFoundation(card, f)) list.push({ type: 'move', from: { pile: 'waste' }, to: { pile: 'foundation', index: f }, cards: 1 });
+          }
+          for (let t = 0; t < 7; t += 1) {
+            if (canPlaceOnTableau(card, t)) list.push({ type: 'move', from: { pile: 'waste' }, to: { pile: 'tableau', index: t }, cards: 1 });
+          }
+        }
+        for (let f = 0; f < 4; f += 1) {
+          const pile = foundations[f];
+          if (!pile.length) continue;
+          const card = pile[pile.length - 1];
+          for (let t = 0; t < 7; t += 1) {
+            if (canPlaceOnTableau(card, t)) list.push({ type: 'move', from: { pile: 'foundation', index: f }, to: { pile: 'tableau', index: t }, cards: 1 });
+          }
+        }
+        for (let t = 0; t < 7; t += 1) {
+          const col = tableau[t];
+          for (let i = 0; i < col.length; i += 1) {
+            if (!col[i].up) continue;
+            const cards = [];
+            let valid = true;
+            for (let k = i; k < col.length; k += 1) {
+              if (!col[k].up) {
+                valid = false;
+                break;
+              }
+              cards.push(col[k].c);
+            }
+            if (!valid || !isRunValid(cards)) continue;
+            if (i === col.length - 1) {
+              for (let f = 0; f < 4; f += 1) {
+                if (canPlaceOnFoundation(col[i].c, f)) {
+                  list.push({ type: 'move', from: { pile: 'tableau', index: t, cardIndex: i }, to: { pile: 'foundation', index: f }, cards: 1 });
+                }
+              }
+            }
+            for (let d = 0; d < 7; d += 1) {
+              if (d === t) continue;
+              if (canPlaceOnTableau(col[i].c, d)) {
+                list.push({ type: 'move', from: { pile: 'tableau', index: t, cardIndex: i }, to: { pile: 'tableau', index: d }, cards: cards.length });
+              }
+            }
+          }
+        }
+        if (stock.length) list.push({ type: 'draw' });
+        else if (waste.length) list.push({ type: 'recycle' });
+        return list;
+      }
+      function collectHintMoves() {
+        const list = [];
+        let order = 0;
+        function add(priority, from, to) {
+          list.push({ priority: priority, order: order++, from: from, to: to });
+        }
+        if (selected) {
+          const cards = selectedCards();
+          const from = selectedRef();
+          if (cards && from) {
+            if (cards.length === 1 && selected.from !== 'foundation') {
+              for (let f = 0; f < 4; f += 1) {
+                if (canPlaceOnFoundation(cards[0], f)) add(0, from, { pile: 'foundation', index: f });
+              }
+            }
+            for (let t = 0; t < 7; t += 1) {
+              if (selected.from === 'tableau' && selected.pile === t) continue;
+              if (canPlaceOnTableau(cards[0], t)) add(1, from, { pile: 'tableau', index: t });
+            }
+          }
+          list.sort((a, b) => a.priority - b.priority || a.order - b.order);
+          return list;
+        }
+        if (waste.length) {
+          const card = waste[waste.length - 1];
+          const from = { pile: 'waste' };
+          for (let f = 0; f < 4; f += 1) if (canPlaceOnFoundation(card, f)) add(0, from, { pile: 'foundation', index: f });
+          for (let t = 0; t < 7; t += 1) if (canPlaceOnTableau(card, t)) add(2, from, { pile: 'tableau', index: t });
+        }
+        for (let t = 0; t < 7; t += 1) {
+          const col = tableau[t];
+          for (let i = 0; i < col.length; i += 1) {
+            if (!col[i].up) continue;
+            const cards = [];
+            let valid = true;
+            for (let k = i; k < col.length; k += 1) {
+              if (!col[k].up) {
+                valid = false;
+                break;
+              }
+              cards.push(col[k].c);
+            }
+            if (!valid || !isRunValid(cards)) continue;
+            const from = { pile: 'tableau', index: t, cardIndex: i };
+            const reveals = i > 0 && !col[i - 1].up;
+            if (i === col.length - 1) {
+              for (let f = 0; f < 4; f += 1) {
+                if (canPlaceOnFoundation(col[i].c, f)) add(0, from, { pile: 'foundation', index: f });
+              }
+            }
+            for (let d = 0; d < 7; d += 1) {
+              if (d === t) continue;
+              if (canPlaceOnTableau(col[i].c, d)) add(reveals ? 1 : 3, from, { pile: 'tableau', index: d });
+            }
+          }
+        }
+        for (let f = 0; f < 4; f += 1) {
+          const pile = foundations[f];
+          if (!pile.length) continue;
+          for (let t = 0; t < 7; t += 1) {
+            if (canPlaceOnTableau(pile[pile.length - 1], t)) add(6, { pile: 'foundation', index: f }, { pile: 'tableau', index: t });
+          }
+        }
+        if (stock.length) add(4, { pile: 'stock' }, { pile: 'stock' });
+        else if (waste.length) add(7, { pile: 'waste' }, { pile: 'stock' });
+        list.sort((a, b) => a.priority - b.priority || a.order - b.order);
+        return list;
+      }
+
+      /* ---------- 交互动作 ---------- */
+      function drawStock() {
+        if (state !== 'playing') return false;
+        if (!stock.length && !waste.length) {
+          A.showToast('牌库和废牌堆都空了');
+          return false;
+        }
+        pushUndo();
+        if (stock.length) {
+          waste.push(stock.pop());
+          A.Sfx.play('ui');
+        } else {
+          stock = waste.slice().reverse();
+          waste = [];
+          A.Sfx.play('land');
+        }
+        selected = null;
+        clearHint();
+        syncHud();
+        syncTools();
+        autosave.saveNow();
+        return true;
+      }
+      function flipTableauTop(pileIndex) {
+        if (state !== 'playing') return false;
+        const col = tableau[pileIndex];
+        if (!col.length) return false;
+        const top = col[col.length - 1];
+        if (top.up) return false;
+        pushUndo();
+        top.up = true;
+        selected = null;
+        clearHint();
+        A.Sfx.play('bell', 2);
+        syncHud();
+        syncTools();
+        autosave.saveNow();
+        return true;
+      }
+      function tapWaste() {
+        if (state !== 'playing') return false;
+        if (!waste.length) {
+          if (selected) {
+            selected = null;
+            clearHint();
+            syncTools();
+            return true;
+          }
+          return false;
+        }
+        if (selected && selected.from === 'waste') {
+          selected = null;
+          clearHint();
+          syncTools();
+          return true;
+        }
+        selected = { from: 'waste', pile: 0, index: waste.length - 1 };
+        clearHint();
+        A.Sfx.play('ui');
+        syncTools();
+        return true;
+      }
+      function tapFoundation(foundationIndex) {
+        if (state !== 'playing') return false;
+        const index = Number(foundationIndex);
+        if (!Number.isInteger(index) || index < 0 || index > 3) return false;
+        const pile = foundations[index];
+        if (selected) {
+          if (selected.from === 'foundation' && selected.pile === index) {
+            selected = null;
+            clearHint();
+            syncTools();
+            return true;
+          }
+          if (canMoveSelectionTo('foundation', index)) return applyMove('foundation', index);
+          if (pile.length) {
+            selected = { from: 'foundation', pile: index, index: pile.length - 1 };
+            clearHint();
+            A.Sfx.play('ui');
+            syncTools();
+            return true;
+          }
+          A.showToast('空基座只能从 A 开始叠放');
+          return false;
+        }
+        if (!pile.length) return false;
+        selected = { from: 'foundation', pile: index, index: pile.length - 1 };
+        clearHint();
+        A.Sfx.play('ui');
+        syncTools();
+        return true;
+      }
+      function tapTableau(pileIndex, cardIndex) {
+        if (state !== 'playing') return false;
+        const index = Number(pileIndex);
+        if (!Number.isInteger(index) || index < 0 || index > 6) return false;
+        const col = tableau[index];
+        const hasExplicit = Number.isInteger(cardIndex) && cardIndex >= 0;
+        if (selected) {
+          if (selected.from === 'tableau' && selected.pile === index && (!hasExplicit || cardIndex === selected.index)) {
+            selected = null;
+            clearHint();
+            syncTools();
+            return true;
+          }
+          if (canMoveSelectionTo('tableau', index)) return applyMove('tableau', index);
+          let fallback = hasExplicit && cardIndex < col.length ? cardIndex : col.length - 1;
+          if (col.length && fallback >= 0 && col[fallback] && col[fallback].up) {
+            if (selected.from === 'tableau' && selected.pile === index && selected.index === fallback) {
+              selected = null;
+              clearHint();
+              syncTools();
+              return true;
+            }
+            selected = { from: 'tableau', pile: index, index: fallback };
+            clearHint();
+            A.Sfx.play('ui');
+            syncTools();
+            return true;
+          }
+          if (!col.length) A.showToast('空列只接 K 开头的牌');
+          return false;
+        }
+        if (!col.length) return false;
+        const target = hasExplicit && cardIndex < col.length ? cardIndex : col.length - 1;
+        if (target < 0 || !col[target]) return false;
+        if (!col[target].up) {
+          if (target === col.length - 1) return flipTableauTop(index);
+          return false;
+        }
+        selected = { from: 'tableau', pile: index, index: target };
+        clearHint();
+        A.Sfx.play('ui');
+        syncTools();
+        return true;
+      }
+      function handlePileTap(type, index, cardIndex) {
+        if (state !== 'playing') return false;
+        if (type === 'stock') return drawStock();
+        if (type === 'waste') return tapWaste();
+        if (type === 'foundation') return tapFoundation(index);
+        if (type === 'tableau') return tapTableau(index, cardIndex);
+        return false;
+      }
+      function useUndo() {
+        if (state !== 'playing') return false;
+        if (tools.undo <= 0) return false;
+        if (!undoStack.length) {
+          A.showToast('还没有可撤销的步骤');
+          return false;
+        }
+        const snap = undoStack.pop();
+        applySnapshot(snap);
+        tools.undo -= 1;
+        A.Sfx.play('ui');
+        A.showToast('已撤销上一步');
+        syncHud();
+        syncTools();
+        autosave.saveNow();
+        return true;
+      }
+      function useHint() {
+        if (state !== 'playing') return false;
+        if (hintTimer > 0) {
+          A.showToast('提示还在显示中');
+          return false;
+        }
+        if (tools.hint <= 0) return false;
+        const list = collectHintMoves();
+        if (!list.length) {
+          A.showToast('当前没有可执行的一步，可以撤销或结束本局');
+          return false;
+        }
+        tools.hint -= 1;
+        hintMoves = list.slice(0, 3);
+        hintTimer = HINT_SECONDS;
+        A.Sfx.play('bell', 3);
+        A.showToast('已标出可行的一步（3 秒）');
+        syncTools();
+        autosave.saveNow();
+        return true;
+      }
+
+      /* ---------- 生命周期与结算 ---------- */
+      function syncHud() {
+        dom.hudScore.textContent = String(computeScore());
+        dom.hudHigh.textContent = String(high);
+      }
+      function syncTools() {
+        joyTools.sync();
+      }
+      function recordResult() {
+        if (recordSaved && lastRecord) return lastRecord;
+        recordSaved = true;
+        const score = computeScore();
+        const rec = A.Progress.recordPlay(GAME_ID, score);
+        if (rec) high = rec.high;
+        else high = Math.max(high, score);
+        lastRecord = {
+          score: score,
+          high: high,
+          isNewHigh: !!(rec && rec.isNewHigh),
+          plays: A.Progress.get(GAME_ID).plays,
+        };
+        dom.hudHigh.textContent = String(high);
+        return lastRecord;
+      }
+      function settleWin() {
+        if (state === 'over') return false;
+        state = 'over';
+        selected = null;
+        clearHint();
+        autosave.clear();
+        const record = recordResult();
+        A.Sfx.play('perfect');
+        loop.pause();
+        syncTools();
+        pauseUi.sync();
+        ui.show({
+          title: '接龙完成！',
+          text:
+            '<span class="ac-score">' + record.score + '</span>' +
+            (record.isNewHigh ? '<span class="ac-newhigh">★ 新纪录</span><br/>' : '') +
+            '52 张牌全部归位 · ' + moves + ' 步<br/>慢慢来，随时可以再来一局。',
+          btn: '再来一局',
+          onBtn: showStart,
+        });
+        return true;
+      }
+      function finishManually() {
+        if (state === 'over' || state === 'ready') return false;
+        state = 'over';
+        selected = null;
+        clearHint();
+        autosave.clear();
+        const record = recordResult();
+        A.Sfx.play('over');
+        loop.pause();
+        syncTools();
+        pauseUi.sync();
+        ui.show({
+          title: '本局结束',
+          text:
+            '<span class="ac-score">' + record.score + '</span>' +
+            (record.isNewHigh ? '<span class="ac-newhigh">★ 新纪录</span><br/>' : '') +
+            '归位 ' + foundationCount() + ' / 52 · ' + moves + ' 步<br/>谢谢你陪这些牌坐一会儿。',
+          btn: '再来一局',
+          onBtn: showStart,
+        });
+        return true;
+      }
+      function startGame() {
+        if (state === 'over') return;
+        state = 'playing';
+        ui.hide();
+        loop.resume();
+        pauseUi.sync();
+        syncHud();
+        syncTools();
+        autosave.saveNow();
+      }
+      function resumeGame() {
+        if (state !== 'paused') return;
+        state = 'playing';
+        ui.hide();
+        loop.resume();
+        pauseUi.sync();
+        syncHud();
+        syncTools();
+      }
+      function pauseByUser() {
+        if (state !== 'playing') return;
+        loop.pause();
+        state = 'paused';
+        syncTools();
+        pauseUi.sync();
+        autosave.saveNow();
+        ui.show({
+          title: '已暂停',
+          text: '牌面已经收好，不着急。<br/>局内进度已自动保存在本机。',
+          btn: '继续',
+          onBtn: resumeGame,
+          btn2: '结束本局并记录',
+          onBtn2: finishManually,
+        });
+        pauseUi.sync();
+      }
+      function showStart() {
+        state = 'ready';
+        beginDeal(randomSeed());
+        autosave.clear();
+        ui.show({
+          title: '纸牌接龙 · 静局',
+          text: '点一张明牌选中，再点目标列或基座完成移动<br/>不必拖动。点牌库翻一张，翻完可整体倒回重翻<br/>无倒计时、无惩罚，随时可以暂停',
+          btn: '开始游戏',
+          onBtn: startGame,
+        });
+        pauseUi.sync();
+        syncHud();
+        syncTools();
+      }
+
+      /* ---------- 渲染 ---------- */
+      function drawCardFace(x, y, w, h, card, opts) {
+        const options = opts || {};
+        const lift = options.lift || 0;
+        const top = y - lift;
+        const radius = Math.max(4, Math.min(w, h) * 0.09);
+        ctx.save();
+        ctx.shadowColor = 'rgba(0, 0, 0, 0.34)';
+        ctx.shadowBlur = 3.5;
+        ctx.shadowOffsetY = 2;
+        A.draw.roundRect(ctx, x, top, w, h, radius);
+        ctx.fillStyle = '#fbf9f2';
+        ctx.fill();
+        ctx.shadowColor = 'rgba(0, 0, 0, 0)';
+        ctx.shadowBlur = 0;
+        ctx.shadowOffsetY = 0;
+        A.draw.roundRect(ctx, x, top, w, h, radius);
+        if (options.outline) {
+          ctx.strokeStyle = options.outline;
+          ctx.lineWidth = options.outlineWidth || 2.5;
+        } else {
+          ctx.strokeStyle = 'rgba(96, 88, 72, 0.5)';
+          ctx.lineWidth = Math.max(1, w * 0.02);
+        }
+        ctx.stroke();
+        const ink = isRed(card) ? '#c0392b' : '#23262e';
+        const rankFont = Math.max(12, Math.round(h * 0.25));
+        const suitFont = Math.max(10, Math.round(h * 0.17));
+        const pad = Math.max(3, Math.round(w * 0.08));
+        const textTop = Math.max(2, Math.round(h * 0.035));
+        ctx.fillStyle = ink;
+        ctx.textAlign = 'left';
+        ctx.textBaseline = 'top';
+        ctx.font = '700 ' + rankFont + 'px system-ui, "Segoe UI", sans-serif';
+        ctx.fillText(rankText(card), x + pad, top + textTop);
+        ctx.font = suitFont + 'px system-ui, "Segoe UI", sans-serif';
+        ctx.fillText(suitText(card), x + pad, top + textTop + Math.round(rankFont * 0.95));
+        ctx.globalAlpha = 0.9;
+        ctx.textAlign = 'center';
+        ctx.textBaseline = 'middle';
+        ctx.font = Math.round(h * 0.3) + 'px system-ui, "Segoe UI", sans-serif';
+        ctx.fillText(suitText(card), x + w * 0.64, top + h * 0.61);
+        ctx.globalAlpha = 1;
+        ctx.textAlign = 'right';
+        ctx.textBaseline = 'bottom';
+        ctx.font = '700 ' + Math.round(rankFont * 0.9) + 'px system-ui, "Segoe UI", sans-serif';
+        ctx.fillText(rankText(card), x + w - pad, top + h - Math.max(2, Math.round(h * 0.03)));
+        ctx.restore();
+      }
+      function drawCardBack(x, y, w, h) {
+        const radius = Math.max(4, Math.min(w, h) * 0.09);
+        ctx.save();
+        ctx.shadowColor = 'rgba(0, 0, 0, 0.34)';
+        ctx.shadowBlur = 3.5;
+        ctx.shadowOffsetY = 2;
+        const grad = ctx.createLinearGradient(x, y, x + w, y + h);
+        grad.addColorStop(0, '#2e5c4e');
+        grad.addColorStop(1, '#173a30');
+        A.draw.roundRect(ctx, x, y, w, h, radius);
+        ctx.fillStyle = grad;
+        ctx.fill();
+        ctx.shadowColor = 'rgba(0, 0, 0, 0)';
+        ctx.shadowBlur = 0;
+        ctx.shadowOffsetY = 0;
+        ctx.strokeStyle = 'rgba(205, 236, 220, 0.4)';
+        ctx.lineWidth = 1.2;
+        ctx.stroke();
+        A.draw.roundRect(ctx, x + 3, y + 3, w - 6, h - 6, Math.max(2, radius - 2));
+        ctx.strokeStyle = 'rgba(226, 245, 234, 0.14)';
+        ctx.lineWidth = 1;
+        ctx.stroke();
+        ctx.beginPath();
+        ctx.moveTo(x + w / 2, y + h * 0.3);
+        ctx.lineTo(x + w * 0.7, y + h / 2);
+        ctx.lineTo(x + w / 2, y + h * 0.7);
+        ctx.lineTo(x + w * 0.3, y + h / 2);
+        ctx.closePath();
+        ctx.strokeStyle = 'rgba(224, 244, 232, 0.2)';
+        ctx.lineWidth = 1.2;
+        ctx.stroke();
+        ctx.restore();
+      }
+      function drawSlot(x, y, w, h, label) {
+        const radius = Math.max(4, Math.min(w, h) * 0.09);
+        ctx.save();
+        A.draw.roundRect(ctx, x, y, w, h, radius);
+        ctx.fillStyle = 'rgba(4, 14, 11, 0.28)';
+        ctx.fill();
+        ctx.strokeStyle = 'rgba(212, 236, 223, 0.18)';
+        ctx.lineWidth = 1.2;
+        ctx.setLineDash([5, 4]);
+        ctx.stroke();
+        ctx.setLineDash([]);
+        if (label) {
+          ctx.fillStyle = 'rgba(218, 240, 227, 0.24)';
+          ctx.font = '700 ' + Math.round(h * 0.32) + 'px system-ui, "Segoe UI", sans-serif';
+          ctx.textAlign = 'center';
+          ctx.textBaseline = 'middle';
+          ctx.fillText(label, x + w / 2, y + h / 2);
+        }
+        ctx.restore();
+      }
+      function strokeAround(x, y, w, h, color, width, lift) {
+        const radius = Math.max(4, Math.min(w, h) * 0.09);
+        ctx.save();
+        ctx.shadowColor = color;
+        ctx.shadowBlur = 7;
+        A.draw.roundRect(ctx, x, y - (lift || 0), w, h, radius);
+        ctx.strokeStyle = color;
+        ctx.lineWidth = width || 2.5;
+        ctx.stroke();
+        ctx.restore();
+      }
+      function drawBackground() {
+        const bg = ctx.createLinearGradient(0, 0, 0, H);
+        bg.addColorStop(0, '#12352b');
+        bg.addColorStop(0.55, '#0d2a22');
+        bg.addColorStop(1, '#071b15');
+        ctx.fillStyle = bg;
+        ctx.fillRect(0, 0, W, H);
+        const glow = ctx.createRadialGradient(W * 0.5, H * 0.18, 24, W * 0.5, H * 0.18, W * 0.9);
+        glow.addColorStop(0, 'rgba(150, 220, 185, 0.08)');
+        glow.addColorStop(1, 'rgba(0, 0, 0, 0)');
+        ctx.fillStyle = glow;
+        ctx.fillRect(0, 0, W, H);
+        ctx.fillStyle = 'rgba(214, 240, 226, 0.04)';
+        for (let i = 0; i < feltDots.length; i += 1) {
+          const dot = feltDots[i];
+          ctx.fillRect(dot.x, dot.y, dot.r, dot.r);
+        }
+        ctx.strokeStyle = 'rgba(180, 220, 200, 0.09)';
+        ctx.lineWidth = 1;
+        A.draw.roundRect(ctx, 6, 6, W - 12, H - 12, 16);
+        ctx.stroke();
+      }
+      function drawTopRow() {
+        const stockX = topSlotX(0);
+        if (stock.length) drawCardBack(stockX, TOP_Y, TOP_W, TOP_H);
+        else drawSlot(stockX, TOP_Y, TOP_W, TOP_H, '↻');
+        const wasteX = topSlotX(1);
+        if (waste.length) {
+          const wasteSelected = selected && selected.from === 'waste';
+          drawCardFace(wasteX, TOP_Y, TOP_W, TOP_H, waste[waste.length - 1], {
+            lift: wasteSelected ? 6 : 0,
+            outline: wasteSelected ? '#ffd27a' : null,
+            outlineWidth: 2.5,
+          });
+        } else {
+          drawSlot(wasteX, TOP_Y, TOP_W, TOP_H, '');
+        }
+        for (let f = 0; f < 4; f += 1) {
+          const x = topSlotX(3 + f);
+          const pile = foundations[f];
+          if (pile.length) {
+            const foundationSelected = selected && selected.from === 'foundation' && selected.pile === f;
+            drawCardFace(x, TOP_Y, TOP_W, TOP_H, pile[pile.length - 1], {
+              lift: foundationSelected ? 6 : 0,
+              outline: foundationSelected ? '#ffd27a' : null,
+              outlineWidth: 2.5,
+            });
+          } else {
+            drawSlot(x, TOP_Y, TOP_W, TOP_H, 'A');
+          }
+        }
+      }
+      function drawTableau() {
+        for (let t = 0; t < 7; t += 1) {
+          const x = cardColX(t);
+          const col = tableau[t];
+          if (!col.length) {
+            drawSlot(x, TABLEAU_Y, CARD_W, CARD_H, 'K');
+            continue;
+          }
+          let y = TABLEAU_Y;
+          for (let i = 0; i < col.length; i += 1) {
+            const isSel = !!(selected && selected.from === 'tableau' && selected.pile === t && i >= selected.index);
+            if (col[i].up) {
+              drawCardFace(x, y, CARD_W, CARD_H, col[i].c, {
+                lift: isSel ? 6 : 0,
+                outline: isSel ? '#ffd27a' : null,
+                outlineWidth: 2.5,
+              });
+            } else {
+              drawCardBack(x, y, CARD_W, CARD_H);
+            }
+            y += col[i].up ? UP_OFFSET : DOWN_OFFSET;
+          }
+        }
+      }
+      function drawSelectionTargets() {
+        if (!selected) return;
+        const color = 'rgba(143, 227, 207, 0.85)';
+        for (let f = 0; f < 4; f += 1) {
+          if (canMoveSelectionTo('foundation', f)) strokeAround(topSlotX(3 + f), TOP_Y, TOP_W, TOP_H, color, 2, 0);
+        }
+        for (let t = 0; t < 7; t += 1) {
+          if (!canMoveSelectionTo('tableau', t)) continue;
+          const col = tableau[t];
+          if (!col.length) strokeAround(cardColX(t), TABLEAU_Y, CARD_W, CARD_H, color, 2, 0);
+          else strokeAround(cardColX(t), tableauCardY(t, col.length - 1), CARD_W, CARD_H, color, 2, 0);
+        }
+      }
+      function drawHints() {
+        const sourceColor = 'rgba(143, 227, 207, 0.95)';
+        const targetColor = 'rgba(255, 210, 122, 0.95)';
+        for (let h = 0; h < hintMoves.length; h += 1) {
+          const move = hintMoves[h];
+          const from = move.from;
+          if (from.pile === 'stock') {
+            strokeAround(topSlotX(0), TOP_Y, TOP_W, TOP_H, sourceColor, 2.5, 0);
+          } else if (from.pile === 'waste' && waste.length) {
+            strokeAround(topSlotX(1), TOP_Y, TOP_W, TOP_H, sourceColor, 2.5, selected && selected.from === 'waste' ? 6 : 0);
+          } else if (from.pile === 'foundation' && foundations[from.index].length) {
+            strokeAround(topSlotX(3 + from.index), TOP_Y, TOP_W, TOP_H, sourceColor, 2.5, selected && selected.from === 'foundation' && selected.pile === from.index ? 6 : 0);
+          } else if (from.pile === 'tableau') {
+            const col = tableau[from.index];
+            const start = from.cardIndex == null ? Math.max(0, col.length - 1) : from.cardIndex;
+            const selectedHere = selected && selected.from === 'tableau' && selected.pile === from.index;
+            for (let i = start; i < col.length; i += 1) {
+              const lift = selectedHere && i >= selected.index ? 6 : 0;
+              strokeAround(cardColX(from.index), tableauCardY(from.index, i), CARD_W, CARD_H, sourceColor, 2.2, lift);
+            }
+          }
+          const to = move.to;
+          if (!to) continue;
+          if (to.pile === 'stock') strokeAround(topSlotX(0), TOP_Y, TOP_W, TOP_H, targetColor, 2.5, 0);
+          else if (to.pile === 'foundation') strokeAround(topSlotX(3 + to.index), TOP_Y, TOP_W, TOP_H, targetColor, 2.5, 0);
+          else if (to.pile === 'tableau') {
+            const col = tableau[to.index];
+            if (col.length) strokeAround(cardColX(to.index), tableauCardY(to.index, col.length - 1), CARD_W, CARD_H, targetColor, 2.5, 0);
+            else strokeAround(cardColX(to.index), TABLEAU_Y, CARD_W, CARD_H, targetColor, 2.5, 0);
+          }
+        }
+      }
+      function drawStatus() {
+        A.draw.label(ctx, '分数 ' + computeScore() + '   ·   步数 ' + moves + '   ·   归位 ' + foundationCount() + ' / 52', W / 2, H - 16, {
+          font: '700 15px system-ui, "Segoe UI", sans-serif',
+          color: 'rgba(216, 236, 225, 0.82)',
+        });
+        if (hintTimer > 0) {
+          A.draw.label(ctx, '提示中 ' + hintTimer.toFixed(1) + 's', W / 2, H - 42, {
+            font: '600 13px system-ui, "Segoe UI", sans-serif',
+            color: 'rgba(255, 210, 122, 0.9)',
+          });
+        } else if (selected) {
+          A.draw.label(ctx, '已选中 · 点目标列或基座', W / 2, H - 42, {
+            font: '600 13px system-ui, "Segoe UI", sans-serif',
+            color: 'rgba(143, 227, 207, 0.9)',
+          });
+        }
+      }
+      function render() {
+        stage.beginFrame();
+        drawBackground();
+        drawTopRow();
+        drawTableau();
+        drawSelectionTargets();
+        if (hintTimer > 0 && hintMoves.length) drawHints();
+        drawStatus();
+      }
+
+      /* ---------- 指针输入 ---------- */
+      function handlePointerTap(x, y) {
+        if (state !== 'playing') return;
+        if (y < TOP_BAND_END) {
+          let best = 0;
+          let bestDist = Infinity;
+          for (let i = 0; i < TOP_SLOT_CENTERS.length; i += 1) {
+            const dist = Math.abs(x - TOP_SLOT_CENTERS[i]);
+            if (dist < bestDist) {
+              bestDist = dist;
+              best = i;
+            }
+          }
+          const slot = TOP_SLOTS[best];
+          handlePileTap(slot.type, slot.index, undefined);
+          return;
+        }
+        const pileIndex = clamp(Math.floor((x - LEFT) / COL_W), 0, 6);
+        const col = tableau[pileIndex];
+        let cardTop = TABLEAU_Y;
+        let cardIndex = -1;
+        for (let i = 0; i < col.length; i += 1) {
+          if (y >= cardTop - 2 && y <= cardTop + CARD_H) cardIndex = i;
+          cardTop += col[i].up ? UP_OFFSET : DOWN_OFFSET;
+        }
+        handlePileTap('tableau', pileIndex, cardIndex >= 0 ? cardIndex : undefined);
+      }
+
+      function update(dt) {
+        if (state === 'playing') {
+          if (hintTimer > 0) {
+            hintTimer = Math.max(0, hintTimer - dt);
+            if (hintTimer === 0) {
+              hintMoves = [];
+              syncTools();
+            }
+          }
+          autosave.tick(dt);
+          if (input.pointer.wentDown) handlePointerTap(input.pointer.x, input.pointer.y);
+        }
+        input.endFrame();
+      }
+
+      const loop = A.createLoop({
+        update,
+        render,
+        onAutoPause() {
+          if (state === 'playing') pauseByUser();
+        },
+      });
+
+      const pauseUi = A.bindPause({
+        button: dom.pause,
+        pause: pauseByUser,
+        resume: resumeGame,
+        isPlaying: () => state === 'playing',
+        isPaused: () => state === 'paused',
+      });
+
+      const joyTools = A.createToolbelt(
+        [
+          {
+            id: 'undo',
+            icon: '↩',
+            name: '撤销',
+            description: '回退上一步（含翻牌与移动）',
+            getCount: () => tools.undo,
+            canUse: () => undoStack.length > 0,
+            use: () => useUndo(),
+          },
+          {
+            id: 'hint',
+            icon: '💡',
+            name: '提示',
+            description: '高亮合法移动 3 秒',
+            getCount: () => tools.hint,
+            canUse: () => hintTimer <= 0,
+            use: () => useHint(),
+            active: () => hintTimer > 0,
+          },
+        ],
+        { isPlaying: () => state === 'playing', keys: ['1', '2'], label: '纸牌接龙道具', placement: 'below' }
+      );
+
+      function syncMute() {
+        dom.mute.textContent = A.Sfx.muted ? '🔇' : '🔊';
+      }
+      dom.mute.addEventListener('click', () => {
+        A.Sfx.setMuted(!A.Sfx.muted);
+        syncMute();
+      });
+      syncMute();
+
+      /* ---------- 测试钩子（仅 #test） ---------- */
+      function runNearWinSettlement() {
+        if (!applySetDeal(makeNearWinLayout())) return false;
+        for (let suit = 0; suit < 4; suit += 1) {
+          handlePileTap('tableau', suit, 0);
+          handlePileTap('foundation', suit, undefined);
+        }
+        return state === 'over' && foundationCount() === 52;
+      }
+      function selftest() {
+        const details = [];
+        let pass = 0;
+        let fail = 0;
+        function check(name, ok, detail) {
+          const item = { name: name, ok: !!ok };
+          if (!ok && detail !== undefined) item.detail = detail;
+          details.push(item);
+          if (ok) pass += 1;
+          else fail += 1;
+        }
+        let snapshotBefore = null;
+        if (state === 'playing' || state === 'paused') {
+          try {
+            snapshotBefore = serialize();
+          } catch (err) {
+            snapshotBefore = null;
+          }
+        }
+        try {
+          beginDeal(20261120);
+          const dealCards = collectCardsFromState();
+          const uniqueSeen = Object.create(null);
+          let uniqueCount = 0;
+          for (let i = 0; i < dealCards.length; i += 1) {
+            if (!uniqueSeen[dealCards[i]]) {
+              uniqueSeen[dealCards[i]] = true;
+              uniqueCount += 1;
+            }
+          }
+          check('发牌 52 张不重复', dealCards.length === 52 && uniqueCount === 52, { total: dealCards.length, unique: uniqueCount });
+          const lengths = tableau.map((col) => col.length);
+          check('7 列张数依次为 1..7', lengths.join(',') === '1,2,3,4,5,6,7' && stock.length === 24 && waste.length === 0, { lengths: lengths, stock: stock.length });
+          let onlyLastUp = true;
+          for (let t = 0; t < 7; t += 1) {
+            for (let i = 0; i < tableau[t].length; i += 1) {
+              if (tableau[t][i].up !== (i === tableau[t].length - 1)) onlyLastUp = false;
+            }
+          }
+          check('发牌时每列只有末张明牌', onlyLastUp, tableau.map((col) => col.map((entry) => (entry.up ? 1 : 0))));
+          check(
+            '基座为空且只接 A',
+            foundations.every((pile) => pile.length === 0) &&
+              canPlaceOnFoundation(0, 0) &&
+              canPlaceOnFoundation(13, 1) &&
+              !canPlaceOnFoundation(1, 0) &&
+              !canPlaceOnFoundation(12, 0),
+            { foundations: foundations.map((pile) => pile.length) }
+          );
+          check(
+            '列内红黑交替且点数递减校验',
+            isRunValid([12, 24, 10, 22]) && !isRunValid([12, 24, 23, 22]) && !isRunValid([12, 25]) && !isRunValid([24, 12]),
+            {}
+          );
+          const illegalLayout = layoutWithTableau([[{ c: 0, up: true }], [{ c: 1, up: true }], [], [], [], [], []]);
+          const illegalInjected = applySetDeal(illegalLayout);
+          const selectOk = tapTableau(1, 0);
+          const rejectedFoundation = tapFoundation(0);
+          check(
+            '非法移动被拒绝（基座必须从 A 起）',
+            illegalInjected && selectOk && rejectedFoundation === false && foundations[0].length === 0 && tableau[1].length === 1,
+            { injected: illegalInjected, selected: selectOk, rejected: rejectedFoundation }
+          );
+          const boardBefore = stateFingerprint();
+          tapTableau(0);
+          check('非法落列不改变牌面', stateFingerprint() === boardBefore, {});
+          const emptyLayout = layoutWithTableau([[], [], [], [], [], [], []]);
+          applySetDeal(emptyLayout);
+          const undoLeft = tools.undo;
+          const drew = drawStock();
+          const afterDraw = { stock: stock.length, waste: waste.length };
+          const undone = useUndo();
+          check('撤销恢复翻牌前状态并消耗次数', drew && undone && stock.length === 52 && waste.length === 0 && tools.undo === undoLeft - 1 && moves === 0, {
+            afterDraw: afterDraw,
+            afterUndo: { stock: stock.length, waste: waste.length, undo: tools.undo },
+          });
+          applySetDeal(emptyLayout);
+          for (let i = 0; i < 52; i += 1) drawStock();
+          const exhausted = { stock: stock.length, waste: waste.length };
+          const recycled = drawStock();
+          const recycleState = { stock: stock.length, waste: waste.length, moves: moves, score: computeScore() };
+          check(
+            '牌库可无限翻回且不计步',
+            exhausted.stock === 0 && exhausted.waste === 52 && recycled && recycleState.stock === 52 && recycleState.waste === 0 && recycleState.moves === 0 && recycleState.score === 0,
+            { exhausted: exhausted, after: recycleState }
+          );
+          beginDeal(424242);
+          const dealA = stateFingerprint() + '|' + stock.join(',');
+          beginDeal(424242);
+          const dealB = stateFingerprint() + '|' + stock.join(',');
+          beginDeal(424243);
+          const dealC = stateFingerprint() + '|' + stock.join(',');
+          check('种子复现同一发牌', dealA === dealB && dealA !== dealC, { same: dealA === dealB, different: dealA !== dealC });
+          beginDeal(20261121);
+          const serialized = serialize();
+          const restoredOk = !!(serialized && restore(serialized));
+          const restoredFingerprint = stateFingerprint();
+          beginDeal(20261121);
+          const freshFingerprint = stateFingerprint();
+          const badData = JSON.parse(JSON.stringify(serialized));
+          badData.stock.pop();
+          const badRejected = restore(badData) === false;
+          check('存档逐字段校验且坏档安全失败', restoredOk && restoredFingerprint === freshFingerprint && badRejected, {
+            restored: restoredOk,
+            badRejected: badRejected,
+          });
+          let recorded = [];
+          const originalRecordPlay = A.Progress.recordPlay;
+          A.Progress.recordPlay = function recordSpy(gameId, score) {
+            recorded.push({ gameId: gameId, score: score });
+            return { isNewHigh: false, high: Math.max(high, score), plays: 1 };
+          };
+          let settlement = null;
+          try {
+            const injected = applySetDeal(makeNearWinLayout());
+            if (injected) {
+              for (let suit = 0; suit < 4; suit += 1) {
+                tapTableau(suit, 0);
+                tapFoundation(suit);
+              }
+            }
+            settlement = {
+              injected: injected,
+              state: state,
+              foundationCount: foundationCount(),
+              recorded: recorded.slice(),
+              overlayVisible: !dom.overlay.hidden,
+              overlayBtn: dom.ovBtn.textContent,
+            };
+          } finally {
+            A.Progress.recordPlay = originalRecordPlay;
+          }
+          check(
+            '注入近胜局可判胜并只结算一次',
+            settlement.injected &&
+              settlement.state === 'over' &&
+              settlement.foundationCount === 52 &&
+              settlement.recorded.length === 1 &&
+              settlement.recorded[0].gameId === GAME_ID &&
+              settlement.overlayVisible &&
+              /再来一局/.test(settlement.overlayBtn),
+            settlement
+          );
+          check('胜利按公式计分（520 - 4 步 = 516）', settlement.recorded.length === 1 && settlement.recorded[0].score === 516, settlement.recorded);
+        } catch (err) {
+          check('自检执行无异常', false, String(err && err.stack ? err.stack : err));
+        } finally {
+          try {
+            if (snapshotBefore && restore(snapshotBefore)) {
+              state = 'playing';
+              ui.hide();
+              loop.resume();
+              pauseUi.sync();
+              syncHud();
+              syncTools();
+              autosave.saveNow();
+            } else {
+              autosave.clear();
+              showStart();
+            }
+          } catch (cleanupError) {
+            try {
+              autosave.clear();
+              showStart();
+            } catch (cleanupError2) {
+              /* 清理失败时保留当前画面，不影响测试结果 */
+            }
+          }
+        }
+        return { pass: pass, fail: fail, details: details };
+      }
+      if (location.hash === '#test') {
+        window.__arcadeTest = {
+          info() {
+            return {
+              state: state,
+              seed: seed,
+              moves: moves,
+              score: computeScore(),
+              high: high,
+              won: foundationCount() === 52,
+              settled: state === 'over',
+              recordSaved: recordSaved,
+              lastRecord: lastRecord,
+              stock: stock.slice(),
+              stockCount: stock.length,
+              waste: waste.slice(),
+              wasteCount: waste.length,
+              wasteTop: topOf(waste),
+              tableau: tableau.map((col) => col.map((entry) => ({ c: entry.c, up: entry.up }))),
+              tableauLengths: tableau.map((col) => col.length),
+              foundations: foundations.map((pile) => pile.slice()),
+              foundationLengths: foundations.map((pile) => pile.length),
+              foundationCount: foundationCount(),
+              faceUpCount: faceUpCount(),
+              selected: selected ? { from: selected.from, pile: selected.pile, index: selected.index } : null,
+              tools: { undo: tools.undo, hint: tools.hint },
+              undoAvailable: undoStack.length,
+              hintActive: hintTimer > 0,
+              hintRemaining: hintTimer,
+            };
+          },
+          joyInfo() {
+            return {
+              tools: { undo: tools.undo, hint: tools.hint },
+              state: state,
+              selected: selected ? { from: selected.from, pile: selected.pile, index: selected.index } : null,
+              undoAvailable: undoStack.length,
+              hintActive: hintTimer > 0,
+            };
+          },
+          setSeed(value) {
+            const next = Number(value);
+            if (!Number.isFinite(next)) return false;
+            beginDeal(Math.floor(Math.abs(next)) >>> 0);
+            state = 'playing';
+            ui.hide();
+            loop.resume();
+            pauseUi.sync();
+            syncHud();
+            syncTools();
+            autosave.saveNow();
+            return true;
+          },
+          setDeal(json) {
+            return applySetDeal(json);
+          },
+          tap(type, index, cardIndex) {
+            let cardArg;
+            if (cardIndex !== undefined && cardIndex !== null) {
+              const parsed = Number(cardIndex);
+              cardArg = Number.isInteger(parsed) ? parsed : undefined;
+            }
+            const pile = index === undefined || index === null ? 0 : Number(index);
+            return handlePileTap(String(type), pile, cardArg);
+          },
+          legalMoves() {
+            return collectLegalMoves();
+          },
+          undo() {
+            return useUndo();
+          },
+          winState() {
+            return {
+              won: foundationCount() === 52,
+              foundationCount: foundationCount(),
+              foundations: foundations.map((pile) => pile.length),
+              state: state,
+              score: computeScore(),
+              recorded: recordSaved,
+              lastRecord: lastRecord,
+            };
+          },
+          playToEnd() {
+            const before = A.Progress.get(GAME_ID);
+            const ok = runNearWinSettlement();
+            const progress = A.Progress.get(GAME_ID);
+            return {
+              ok: ok,
+              score: lastRecord ? lastRecord.score : computeScore(),
+              plays: progress.plays,
+              high: progress.high,
+              foundationCount: foundationCount(),
+              won: state === 'over' && foundationCount() === 52,
+              recorded: recordSaved,
+              overlayVisible: !dom.overlay.hidden,
+              overlayBtn: dom.ovBtn.textContent,
+              beforePlays: before.plays,
+            };
+          },
+          selftest() {
+            return selftest();
+          },
+        };
+      }
+
+      /* ---------- 启动 ---------- */
+      const saved = autosave.load();
+      beginDeal(randomSeed());
+      state = 'ready';
+      if (saved) {
+        A.showResumePrompt(ui, saved, {
+          name: '纸牌接龙',
+          onResume() {
+            if (restore(saved.data)) {
+              state = 'playing';
+              ui.hide();
+              loop.resume();
+              pauseUi.sync();
+              syncHud();
+              syncTools();
+              autosave.saveNow();
+            } else {
+              autosave.clear();
+              A.showToast('上次的牌局存档已损坏，已重新发牌');
+              showStart();
+            }
+          },
+          onRestart() {
+            autosave.clear();
+            showStart();
+          },
+        });
+      } else {
+        showStart();
+      }
+      syncHud();
+      syncTools();
+      pauseUi.sync();
+      loop.start();
+    })();
+  </script>
+</body>
+</html>

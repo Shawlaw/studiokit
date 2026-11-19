@@ -7,7 +7,7 @@
 (() => {
   'use strict';
 
-  const ARCADE_VERSION = '0.8.6';
+  const ARCADE_VERSION = '0.9.0';
   const PROGRESS_KEY = 'studiokit:arcade:progress:v1';
   const PREFS_KEY = 'studiokit:arcade:prefs:v1';
   const RUNS_KEY = 'studiokit:arcade:runs:v1';
@@ -69,6 +69,45 @@
       session: '3–8 分钟',
       tags: ['数字', '合成'],
       how: '滑动合成 2048；1 小锤、2 升一级，支持撤销，达成后可收尾或继续。',
+    },
+    {
+      id: 'blackjack',
+      file: 'blackjack.html',
+      name: '二十一点',
+      tagline: '六手牌，稳稳做决定',
+      icon: '🂡',
+      accent: '#e0688a',
+      category: '棋牌',
+      difficulty: 1,
+      session: '2–4 分钟',
+      tags: ['棋牌', '概率'],
+      how: '不下注的 21 点：要牌或停牌，固定 6 手；1 换一张、2 看底牌，无倒计时。',
+    },
+    {
+      id: 'gomoku',
+      file: 'gomoku.html',
+      name: '五子棋',
+      tagline: '落子前先看清一路',
+      icon: '⚫',
+      accent: '#5ad1a0',
+      category: '棋牌',
+      difficulty: 2,
+      session: '3–8 分钟',
+      tags: ['棋类', '对弈'],
+      how: '11 路棋盘对本地 AI：先点预览、再点确认；1 悔棋、2 提示，无计时。',
+    },
+    {
+      id: 'solitaire',
+      file: 'solitaire.html',
+      name: '纸牌接龙',
+      tagline: '一个人慢慢理牌',
+      icon: '♠',
+      accent: '#7fd0c8',
+      category: '棋牌',
+      difficulty: 2,
+      session: '5–12 分钟',
+      tags: ['纸牌', '整理'],
+      how: 'Klondike 抽 1 张，点选再点目标即可移动；1 撤销、2 提示，无倒计时与惩罚。',
     },
     {
       id: 'snowbells',
@@ -2614,7 +2653,7 @@
       const url = this.hubUrl();
       return this.open({
         title: '街机厅 Arcade · StudioKit',
-        text: '推荐你玩 StudioKit 街机厅：13 款竖屏小游戏，打开即玩，无需登录，还能预载到本地离线玩。',
+        text: '推荐你玩 StudioKit 街机厅：16 款竖屏小游戏，打开即玩，无需登录，还能预载到本地离线玩。',
         url,
       });
     },
@@ -2622,7 +2661,7 @@
       const url = this.gameUrl(game);
       return this.open({
         title: `${game.name} · 街机厅 Arcade`,
-        text: `推荐你玩「${game.name}」：${game.tagline}。13 款竖屏小游戏，打开即玩，可离线预载。`,
+        text: `推荐你玩「${game.name}」：${game.tagline}。16 款竖屏小游戏，打开即玩，可离线预载。`,
         url,
       });
     },
@@ -2652,7 +2691,7 @@
   /* ----------------------------------------------------------
    * 离线缓存（0.5.0）
    * - 任意 Arcade 页面都会注册 apps/arcade/sw.js；中心页负责“预载全部游戏”UI。
-   * - 核心外壳在 SW 安装时缓存；13 款游戏由用户点按钮后逐项缓存并反馈进度。
+   * - 核心外壳在 SW 安装时缓存；16 款游戏由用户点按钮后逐项缓存并反馈进度。
    * - file:// 或非安全上下文自动降级为 unsupported，不抛错、不影响游戏。
    * ---------------------------------------------------------- */
   const Offline = (() => {

@@ -1,0 +1,1662 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
+  <meta name="description" content="五子棋 · 静局：11 路单机五子棋，玩家执黑先行，对本地 AI。点空格先预览、再点同一点确认落子，没有倒计时，适合通勤时慢慢下的一局。" />
+  <meta name="theme-color" content="#0d1016" />
+  <link rel="stylesheet" href="../../../shared/site.css" />
+  <link rel="stylesheet" href="../arcade.css" />
+  <script src="../../../shared/site-shell.js" defer></script>
+  <script src="../engine.js"></script>
+  <title>五子棋 · 静局 · 街机厅 · StudioKit</title>
+</head>
+<body class="arcade-body" data-studiokit-app="arcade" data-studiokit-app-title="街机厅 Arcade" style="--ac-accent:#d9b06a; --card-accent:#d9b06a">
+  <noscript><p class="ac-noscript">此游戏需要启用 JavaScript 才能运行。</p></noscript>
+  <main class="game-page">
+    <header class="game-topbar">
+      <a class="ac-back" href="../index.html" aria-label="返回街机厅"><span class="ac-back-icon" aria-hidden="true">‹</span><span class="ac-back-label">街机厅</span></a>
+      <h1 class="game-title">五子棋 · 静局</h1>
+      <div class="game-hud">
+        <span>分数 <strong data-hud-score>0</strong></span>
+        <span>最高 <strong data-hud-high>0</strong></span>
+      </div>
+      <button type="button" class="ac-icon-btn" data-pause aria-label="暂停游戏" title="暂停游戏（P / Esc）">⏸</button>
+      <button type="button" class="ac-icon-btn" data-mute aria-label="切换音效">🔊</button>
+    </header>
+    <div class="stage-wrap">
+      <div class="stage-box">
+        <canvas class="game-canvas" aria-label="五子棋棋盘：先点空格预览，再点同一点确认落子"></canvas>
+        <div class="overlay" data-overlay hidden>
+          <div class="overlay-panel">
+            <h2 data-ov-title>五子棋 · 静局</h2>
+            <p data-ov-text>执黑先行，与本地 AI 对弈</p>
+            <button type="button" class="ac-btn" data-ov-btn>开始游戏</button>
+            <button type="button" class="ac-btn ac-btn-secondary" data-ov-btn2 hidden>重新开始</button>
+          </div>
+        </div>
+      </div>
+    </div>
+    <p class="game-hint">点空格先预览，再点同一点落子（防误触）· 道具 1 悔棋 / 2 提示 · P / Esc 暂停</p>
+  </main>
+  <script>
+    (() => {
+      'use strict';
+      const A = window.Arcade;
+      const { clamp } = A.utils;
+
+      /* ----------------------------------------------------------
+       * 布局常量（逻辑画布 420×740，11 路棋盘 ≈380×380 居中）
+       * ---------------------------------------------------------- */
+      const W = 420;
+      const H = 740;
+      const N = 11;
+      const EMPTY = 0;
+      const BLACK = 1; // 玩家执黑
+      const WHITE = 2; // 本地 AI 执白
+      const GRID = 34; // 格点间距 ≈34px
+      const GRID_X = 40;
+      const GRID_Y = 200;
+      const BOARD = { x: 18, y: 178, w: 384, h: 384 };
+      const PLACE_BTN = { x: 110, y: 590, w: 200, h: 56 };
+      const STONE_R = 14;
+      const TOOL_START = { undo: 3, hint: 2 };
+      const TOOL_CAPS = { undo: 3, hint: 2 };
+      const AI_DELAY = 0.22; // 玩家落子后 AI 回应间隔（≤300ms）
+      const HINT_SECONDS = 3;
+      const DEFENSE_WEIGHT = 0.9;
+      const SAVE_VERSION = 1;
+      const TEST_SEED = 6; // 测试用固定种子：playToEnd() 默认在此种子下稳定走出 31 手胜局
+      const LETTERS = 'ABCDEFGHIJK'; // A–K 共 11 列
+      const DIRS = [[0, 1], [1, 0], [1, 1], [1, -1]];
+      const TAU = Math.PI * 2;
+      const DRAW_PATTERN = [
+        [1, 0, 0, 1, 1, 0, 0, 1, 1, 1, 1],
+        [1, 1, 1, 0, 1, 1, 1, 1, 0, 0, 0],
+        [0, 1, 0, 1, 0, 0, 0, 1, 1, 1, 1],
+        [0, 0, 1, 0, 1, 0, 1, 1, 0, 1, 0],
+        [1, 0, 1, 0, 1, 1, 1, 0, 0, 0, 0],
+        [1, 1, 1, 1, 0, 0, 0, 1, 1, 1, 1],
+        [1, 0, 0, 1, 1, 0, 0, 0, 1, 1, 0],
+        [0, 1, 0, 1, 1, 1, 1, 0, 1, 0, 1],
+        [1, 0, 0, 0, 1, 0, 0, 1, 1, 0, 1],
+        [0, 0, 1, 0, 1, 0, 0, 1, 0, 1, 1],
+        [1, 0, 1, 0, 0, 0, 1, 0, 1, 1, 0],
+      ];
+
+      const canvas = document.querySelector('.game-canvas');
+      const stage = A.createStage(canvas, W, H);
+      const ctx = stage.ctx;
+      const input = A.createInput(canvas);
+      A.installSfxUnlock();
+
+      const dom = {
+        overlay: document.querySelector('[data-overlay]'),
+        ovTitle: document.querySelector('[data-ov-title]'),
+        ovText: document.querySelector('[data-ov-text]'),
+        ovBtn: document.querySelector('[data-ov-btn]'),
+        ovBtn2: document.querySelector('[data-ov-btn2]'),
+        hudScore: document.querySelector('[data-hud-score]'),
+        hudHigh: document.querySelector('[data-hud-high]'),
+        pause: document.querySelector('[data-pause]'),
+        mute: document.querySelector('[data-mute]'),
+      };
+      const ui = A.createOverlayUi(dom);
+
+      /* ----------------------------------------------------------
+       * 局内状态
+       * ---------------------------------------------------------- */
+      let board = emptyBoard();
+      let turn = BLACK;
+      let moves = 0;
+      let score = 0;
+      let result = null; // null | 'win' | 'lose' | 'draw' | 'resign'
+      let winInfo = null; // { winner, line }
+      let preview = null; // { r, c }
+      let lastMove = null; // { r, c }
+      let state = 'ready'; // ready | playing | paused | over
+      let recordSaved = false;
+      let lastRecord = null;
+      let tools = { undo: TOOL_START.undo, hint: TOOL_START.hint };
+      let undoStack = []; // 每次玩家落子前快照，保留最近 3 个
+      let hint = null; // { r, c }
+      let hintTimer = 0;
+      let aiSeed = (Date.now() ^ ((Math.random() * 0xffffffff) >>> 0)) >>> 0;
+      let aiCalls = 0;
+      let rng = makeRng(aiSeed);
+      let aiDelay = 0;
+      let animTime = 0;
+      let high = A.Progress.get('gomoku').high;
+      dom.hudHigh.textContent = String(high);
+
+      /* ----------------------------------------------------------
+       * 棋盘纯函数（不碰 DOM / 存档，便于确定性自测）
+       * ---------------------------------------------------------- */
+      function emptyBoard() {
+        const out = [];
+        for (let r = 0; r < N; r += 1) out.push(new Array(N).fill(EMPTY));
+        return out;
+      }
+
+      function cloneBoard(bd) {
+        return bd.map((row) => row.slice());
+      }
+
+      function inBoard(r, c) {
+        return r >= 0 && r < N && c >= 0 && c < N;
+      }
+
+      function px(c) {
+        return GRID_X + c * GRID;
+      }
+
+      function py(r) {
+        return GRID_Y + r * GRID;
+      }
+
+      function coordName(p) {
+        return p ? LETTERS.charAt(p.c) + String(p.r + 1) : '—';
+      }
+
+      function countStones(bd) {
+        const counts = { black: 0, white: 0, total: 0 };
+        for (let r = 0; r < N; r += 1) {
+          for (let c = 0; c < N; c += 1) {
+            const v = bd[r][c];
+            if (v === BLACK) counts.black += 1;
+            else if (v === WHITE) counts.white += 1;
+            if (v !== EMPTY) counts.total += 1;
+          }
+        }
+        return counts;
+      }
+
+      function isBoardFull(bd) {
+        for (let r = 0; r < N; r += 1) {
+          for (let c = 0; c < N; c += 1) {
+            if (bd[r][c] === EMPTY) return false;
+          }
+        }
+        return true;
+      }
+
+      function countDirection(bd, r, c, dr, dc, color) {
+        let count = 0;
+        let rr = r + dr;
+        let cc = c + dc;
+        while (inBoard(rr, cc) && bd[rr][cc] === color) {
+          count += 1;
+          rr += dr;
+          cc += dc;
+        }
+        const open = inBoard(rr, cc) && bd[rr][cc] === EMPTY ? 1 : 0;
+        return { count, open };
+      }
+
+      /* 经过 (r,c) 的连续同色线；≥5 子即返回整条（含长连）。 */
+      function winLineAt(bd, r, c, color) {
+        if (!inBoard(r, c) || bd[r][c] !== color) return null;
+        for (let d = 0; d < DIRS.length; d += 1) {
+          const dr = DIRS[d][0];
+          const dc = DIRS[d][1];
+          const line = [{ r, c }];
+          let rr = r - dr;
+          let cc = c - dc;
+          while (inBoard(rr, cc) && bd[rr][cc] === color) {
+            line.unshift({ r: rr, c: cc });
+            rr -= dr;
+            cc -= dc;
+          }
+          rr = r + dr;
+          cc = c + dc;
+          while (inBoard(rr, cc) && bd[rr][cc] === color) {
+            line.push({ r: rr, c: cc });
+            rr += dr;
+            cc += dc;
+          }
+          if (line.length >= 5) return line;
+        }
+        return null;
+      }
+
+      function findWinner(bd) {
+        for (let r = 0; r < N; r += 1) {
+          for (let c = 0; c < N; c += 1) {
+            const color = bd[r][c];
+            if (color === EMPTY) continue;
+            const line = winLineAt(bd, r, c, color);
+            if (line) return { winner: color, line };
+          }
+        }
+        return null;
+      }
+
+      function hasNeighborWithin2(bd, r, c) {
+        for (let dr = -2; dr <= 2; dr += 1) {
+          for (let dc = -2; dc <= 2; dc += 1) {
+            if (dr === 0 && dc === 0) continue;
+            const rr = r + dr;
+            const cc = c + dc;
+            if (inBoard(rr, cc) && bd[rr][cc] !== EMPTY) return true;
+          }
+        }
+        return false;
+      }
+
+      /* 候选点：只考虑已有棋子周围 2 格内的空位（按行列稳定排序）。 */
+      function candidateMoves(bd) {
+        const out = [];
+        for (let r = 0; r < N; r += 1) {
+          for (let c = 0; c < N; c += 1) {
+            if (bd[r][c] !== EMPTY) continue;
+            if (!hasNeighborWithin2(bd, r, c)) continue;
+            out.push({ r, c });
+          }
+        }
+        return out;
+      }
+
+      function wouldWin(bd, r, c, color) {
+        if (!inBoard(r, c) || bd[r][c] !== EMPTY) return false;
+        bd[r][c] = color;
+        const line = winLineAt(bd, r, c, color);
+        bd[r][c] = EMPTY;
+        return !!line;
+      }
+
+      /* 棋形分：连续子数 + 开放端数量。 */
+      function patternValue(count, open) {
+        if (count >= 5) return 1000000;
+        if (count === 4) return open === 2 ? 120000 : open === 1 ? 12000 : 0;
+        if (count === 3) return open === 2 ? 6000 : open === 1 ? 800 : 0;
+        if (count === 2) return open === 2 ? 400 : open === 1 ? 60 : 0;
+        if (count === 1) return open === 2 ? 20 : open === 1 ? 4 : 0;
+        return 0;
+      }
+
+      function scoreAt(bd, r, c, color) {
+        if (!inBoard(r, c) || bd[r][c] !== EMPTY) return -1;
+        bd[r][c] = color;
+        let total = 0;
+        for (let d = 0; d < DIRS.length; d += 1) {
+          const dr = DIRS[d][0];
+          const dc = DIRS[d][1];
+          const forward = countDirection(bd, r, c, dr, dc, color);
+          const backward = countDirection(bd, r, c, -dr, -dc, color);
+          const count = 1 + forward.count + backward.count;
+          const open = forward.open + backward.open;
+          total += patternValue(count, open);
+        }
+        bd[r][c] = EMPTY;
+        return total;
+      }
+
+      function pickOne(list, rand) {
+        if (!list.length) return null;
+        if (typeof rand !== 'function') return { r: list[0].r, c: list[0].c };
+        let value = Number(rand());
+        if (!Number.isFinite(value)) value = 0;
+        const index = clamp(Math.floor(value * list.length), 0, list.length - 1);
+        return { r: list[index].r, c: list[index].c };
+      }
+
+      /*
+       * AI 决策（纯函数，rand 传入 mulberry32 以保证可复现）：
+       * 1) 自己有立即五连 → 直接赢；
+       * 2) 对手有立即五连 → 封堵；
+       * 3) 否则对“已有棋子周围 2 格内”的空位打分：
+       *    自身进攻分 + DEFENSE_WEIGHT × 对手在该点的进攻分；
+       *    同分用 rand 决定，无 rand 时取行列序第一个。
+       */
+      function chooseAIMove(bd, color, rand) {
+        const human = color === BLACK ? WHITE : BLACK;
+        const cands = candidateMoves(bd);
+        if (!cands.length) {
+          if (bd[5][5] === EMPTY) return { r: 5, c: 5 };
+          for (let r = 0; r < N; r += 1) {
+            for (let c = 0; c < N; c += 1) {
+              if (bd[r][c] === EMPTY) return { r, c };
+            }
+          }
+          return null;
+        }
+        const wins = [];
+        for (let i = 0; i < cands.length; i += 1) {
+          const m = cands[i];
+          if (wouldWin(bd, m.r, m.c, color)) wins.push(m);
+        }
+        if (wins.length) return pickOne(wins, rand);
+        const blocks = [];
+        for (let i = 0; i < cands.length; i += 1) {
+          const m = cands[i];
+          if (wouldWin(bd, m.r, m.c, human)) blocks.push(m);
+        }
+        if (blocks.length) return pickOne(blocks, rand);
+        let bestScore = -Infinity;
+        let best = [];
+        for (let i = 0; i < cands.length; i += 1) {
+          const m = cands[i];
+          const value = scoreAt(bd, m.r, m.c, color) + DEFENSE_WEIGHT * scoreAt(bd, m.r, m.c, human);
+          if (value > bestScore + 1e-9) {
+            bestScore = value;
+            best = [m];
+          } else if (Math.abs(value - bestScore) <= 1e-9) {
+            best.push(m);
+          }
+        }
+        if (!best.length) return { r: cands[0].r, c: cands[0].c };
+        return pickOne(best, rand);
+      }
+
+      function recommendMove(bd, color) {
+        return chooseAIMove(bd, color, null);
+      }
+
+      function winScore(totalMoves) {
+        return Math.max(300, 1000 - 10 * totalMoves);
+      }
+
+      /* 统一结算判定：五连优先，其次棋盘下满平局。 */
+      function evaluateEnd(bd, totalMoves) {
+        const win = findWinner(bd);
+        if (win) {
+          return {
+            over: true,
+            result: win.winner === BLACK ? 'win' : 'lose',
+            score: win.winner === BLACK ? winScore(totalMoves) : 0,
+            winInfo: win,
+          };
+        }
+        if (isBoardFull(bd)) {
+          return { over: true, result: 'draw', score: 300, winInfo: null };
+        }
+        return { over: false, result: null, score: 0, winInfo: null };
+      }
+
+      function makeRng(seed) {
+        /* mulberry32：同一 seed 必定产生同一序列，供 AI 同分决策复现。 */
+        let a = Number(seed) >>> 0;
+        return function rngNext() {
+          a = (a + 0x6d2b79f5) >>> 0;
+          let t = a;
+          t = Math.imul(t ^ (t >>> 15), t | 1);
+          t ^= t + Math.imul(t ^ (t >>> 7), t | 61);
+          return ((t ^ (t >>> 14)) >>> 0) / 4294967296;
+        };
+      }
+
+      function nextRand() {
+        aiCalls += 1;
+        return rng();
+      }
+
+      function rebuildRng(seed, calls) {
+        rng = makeRng(seed);
+        for (let i = 0; i < calls; i += 1) rng();
+      }
+
+      /* ----------------------------------------------------------
+       * 局内流程
+       * ---------------------------------------------------------- */
+      function syncHud() {
+        dom.hudScore.textContent = String(score);
+      }
+
+      function syncAll() {
+        syncHud();
+        pauseUi.sync();
+        joyTools.sync();
+      }
+
+      function resetGame() {
+        board = emptyBoard();
+        turn = BLACK;
+        moves = 0;
+        score = 0;
+        result = null;
+        winInfo = null;
+        preview = null;
+        lastMove = null;
+        recordSaved = false;
+        lastRecord = null;
+        tools = { undo: TOOL_START.undo, hint: TOOL_START.hint };
+        undoStack = [];
+        hint = null;
+        hintTimer = 0;
+        aiDelay = 0;
+        aiSeed = (Date.now() ^ ((Math.random() * 0xffffffff) >>> 0)) >>> 0;
+        aiCalls = 0;
+        rng = makeRng(aiSeed);
+        syncHud();
+      }
+
+      function startGame() {
+        autosave.clear();
+        resetGame();
+        state = 'playing';
+        ui.hide();
+        loop.resume();
+        input.endFrame();
+        syncAll();
+        autosave.saveNow();
+      }
+
+      function resumeGame() {
+        if (state !== 'paused') return;
+        state = 'playing';
+        ui.hide();
+        loop.resume();
+        input.endFrame();
+        syncAll();
+      }
+
+      function showStart() {
+        resetGame();
+        state = 'ready';
+        syncAll();
+        ui.show({
+          title: '五子棋 · 静局',
+          text: '你执黑先行，与本地 AI 对弈。<br/>点空格先预览，再点同一点确认落子。<br/>五子连珠即胜 · 没有倒计时，慢慢想。',
+          btn: '开始游戏',
+          onBtn: startGame,
+        });
+        pauseUi.sync();
+        joyTools.sync();
+      }
+
+      function recordOnce() {
+        if (recordSaved) return;
+        recordSaved = true;
+        const rec = A.Progress.recordPlay('gomoku', score);
+        if (rec) {
+          high = rec.high;
+          lastRecord = { plays: rec.plays, high: rec.high, isNewHigh: !!rec.isNewHigh };
+        } else {
+          const current = A.Progress.get('gomoku');
+          lastRecord = { plays: current.plays, high: current.high, isNewHigh: false };
+        }
+        dom.hudHigh.textContent = String(Math.max(high, score));
+      }
+
+      function finishGame(kind, endInfo) {
+        if (state === 'over') return false;
+        state = 'over';
+        result = kind;
+        winInfo = endInfo || null;
+        if (kind === 'win') {
+          score = winScore(moves);
+          if (!winInfo) winInfo = findWinner(board);
+          A.Sfx.play('perfect');
+        } else if (kind === 'draw') {
+          score = 300;
+          winInfo = null;
+          A.Sfx.play('bell', 2);
+        } else {
+          score = 0;
+          winInfo = kind === 'lose' ? winInfo || findWinner(board) : null;
+          A.Sfx.play('over');
+        }
+        preview = null;
+        hint = null;
+        hintTimer = 0;
+        aiDelay = 0;
+        autosave.clear();
+        recordOnce();
+        loop.pause();
+        syncAll();
+        const newHigh = lastRecord && lastRecord.isNewHigh ? '<span class="ac-newhigh">★ 新纪录</span><br/>' : '';
+        const head = `<span class="ac-score">${score}</span>${newHigh}`;
+        let detail = '';
+        if (kind === 'win') detail = `黑棋连成五子 · 共 ${moves} 手 · 再来一局，或先歇一会儿。`;
+        else if (kind === 'lose') detail = `白棋连成五子 · 共 ${moves} 手 · 下一局慢慢来。`;
+        else if (kind === 'draw') detail = `棋盘下满，和棋同样记 300 分 · 共 ${moves} 手。`;
+        else detail = `已认输并记录 0 分 · 共 ${moves} 手。`;
+        let title = '和棋';
+        if (kind === 'win') title = '你连成五子';
+        else if (kind === 'lose') title = 'AI 连成五子';
+        else if (kind === 'resign') title = '已认输';
+        ui.show({
+          title,
+          text: head + detail + '<br/>点「再来一局」回到开始弹层。',
+          btn: '再来一局',
+          onBtn: showStart,
+        });
+        pauseUi.sync();
+        joyTools.sync();
+        return true;
+      }
+
+      function pauseByUser() {
+        if (state !== 'playing') return;
+        loop.pause();
+        state = 'paused';
+        joyTools.sync();
+        autosave.saveNow();
+        ui.show({
+          title: '已暂停',
+          text: '棋盘先放在这里，等你回来。<br/>局内进度已保存在本机。',
+          btn: '继续',
+          onBtn: resumeGame,
+          btn2: '认输并记录',
+          onBtn2: resignAndRecord,
+        });
+        pauseUi.sync();
+      }
+
+      function resignAndRecord() {
+        if (state !== 'paused' && state !== 'playing') return false;
+        if (state === 'playing') loop.pause();
+        return finishGame('resign', null);
+      }
+
+      function pushHistory() {
+        undoStack.push({
+          board: cloneBoard(board),
+          turn,
+          moves,
+          score,
+          aiSeed,
+          aiCalls,
+          lastMove: lastMove ? { r: lastMove.r, c: lastMove.c } : null,
+        });
+        if (undoStack.length > TOOL_CAPS.undo) undoStack.shift();
+      }
+
+      function applyPlayerMove(r, c) {
+        if (state !== 'playing' || turn !== BLACK) return false;
+        if (!inBoard(r, c) || board[r][c] !== EMPTY) return false;
+        pushHistory();
+        board[r][c] = BLACK;
+        moves += 1;
+        lastMove = { r, c };
+        preview = null;
+        hint = null;
+        hintTimer = 0;
+        aiDelay = 0;
+        score = 0;
+        A.Sfx.play('land');
+        const end = evaluateEnd(board, moves);
+        if (end.over) {
+          finishGame(end.result, end.winInfo);
+          return true;
+        }
+        turn = WHITE;
+        aiDelay = AI_DELAY;
+        autosave.saveNow();
+        syncAll();
+        return true;
+      }
+
+      function performAIMove() {
+        if (state !== 'playing') return null;
+        if (winInfo) return null;
+        turn = WHITE;
+        aiDelay = 0;
+        const mv = chooseAIMove(board, WHITE, nextRand);
+        if (!mv) {
+          turn = BLACK;
+          return null;
+        }
+        board[mv.r][mv.c] = WHITE;
+        moves += 1;
+        lastMove = { r: mv.r, c: mv.c };
+        preview = null;
+        hint = null;
+        hintTimer = 0;
+        const end = evaluateEnd(board, moves);
+        A.Sfx.play('ui');
+        if (end.over) {
+          finishGame(end.result, end.winInfo);
+          return { r: mv.r, c: mv.c };
+        }
+        turn = BLACK;
+        autosave.saveNow();
+        syncAll();
+        return { r: mv.r, c: mv.c };
+      }
+
+      function applyUndo() {
+        if (state !== 'playing') return false;
+        if (turn !== BLACK) {
+          A.showToast('等 AI 落子后再悔棋');
+          return false;
+        }
+        if (tools.undo <= 0) {
+          A.showToast('悔棋次数已经用完了');
+          return false;
+        }
+        if (!undoStack.length) {
+          A.showToast('还没有可以撤销的落子');
+          return false;
+        }
+        const snap = undoStack.pop();
+        board = cloneBoard(snap.board);
+        turn = snap.turn;
+        moves = snap.moves;
+        score = snap.score;
+        lastMove = snap.lastMove ? { r: snap.lastMove.r, c: snap.lastMove.c } : null;
+        aiSeed = snap.aiSeed;
+        aiCalls = snap.aiCalls;
+        rebuildRng(aiSeed, aiCalls);
+        preview = null;
+        winInfo = null;
+        result = null;
+        aiDelay = 0;
+        hint = null;
+        hintTimer = 0;
+        tools.undo -= 1;
+        A.Sfx.play('ui');
+        A.showToast('已撤回自己一步和 AI 一步');
+        autosave.saveNow();
+        syncAll();
+        return true;
+      }
+
+      function useTool(id) {
+        if (state !== 'playing') return false;
+        if (id === 'undo') return applyUndo();
+        if (id === 'hint') {
+          if (turn !== BLACK) {
+            A.showToast('等 AI 落子后再看提示');
+            return false;
+          }
+          if (hintTimer > 0) {
+            hintTimer = 0;
+            hint = null;
+            A.showToast('已收起提示');
+            autosave.saveNow();
+            joyTools.sync();
+            return true;
+          }
+          if (tools.hint <= 0) {
+            A.showToast('提示次数已经用完了');
+            return false;
+          }
+          const mv = recommendMove(board, BLACK);
+          if (!mv) {
+            A.showToast('棋盘暂时没有可提示的位置');
+            return false;
+          }
+          tools.hint -= 1;
+          hint = { r: mv.r, c: mv.c };
+          hintTimer = HINT_SECONDS;
+          A.Sfx.play('bell', 2);
+          A.showToast('推荐落点已高亮 ' + HINT_SECONDS + ' 秒');
+          autosave.saveNow();
+          joyTools.sync();
+          return true;
+        }
+        return false;
+      }
+
+      /* ----------------------------------------------------------
+       * 点按交互：先预览、再确认（防 320px 屏误触）
+       * ---------------------------------------------------------- */
+      function pointInRect(x, y, rect) {
+        return x >= rect.x && x <= rect.x + rect.w && y >= rect.y && y <= rect.y + rect.h;
+      }
+
+      function cellAt(x, y) {
+        const c = Math.round((x - GRID_X) / GRID);
+        const r = Math.round((y - GRID_Y) / GRID);
+        if (r < 0 || r >= N || c < 0 || c >= N) return null;
+        const dx = Math.abs(x - px(c));
+        const dy = Math.abs(y - py(r));
+        if (dx > GRID * 0.52 || dy > GRID * 0.52) return null;
+        return { r, c };
+      }
+
+      function confirmPreview() {
+        if (state !== 'playing' || turn !== BLACK) return false;
+        if (!preview) {
+          A.showToast('先点棋盘上的空格预览，再点落子');
+          return false;
+        }
+        return applyPlayerMove(preview.r, preview.c);
+      }
+
+      function tapAt(x, y) {
+        if (state !== 'playing') return false;
+        if (pointInRect(x, y, PLACE_BTN)) return confirmPreview();
+        if (turn !== BLACK) return false;
+        const cell = cellAt(x, y);
+        if (!cell) return false;
+        if (board[cell.r][cell.c] !== EMPTY) return false;
+        if (preview && preview.r === cell.r && preview.c === cell.c) return applyPlayerMove(cell.r, cell.c);
+        preview = { r: cell.r, c: cell.c };
+        A.Sfx.play('ui');
+        autosave.saveNow();
+        joyTools.sync();
+        return true;
+      }
+
+      /* ----------------------------------------------------------
+       * 局内存档（棋盘 / 回合 / 步数 / 分数 / 工具次数 / AI 种子状态 / 最后落点 / 预览 / 悔棋栈）
+       * ---------------------------------------------------------- */
+      function serialize() {
+        if (state !== 'playing' && state !== 'paused') return null;
+        return {
+          v: SAVE_VERSION,
+          board: cloneBoard(board),
+          turn,
+          moves,
+          score,
+          tools: { undo: tools.undo, hint: tools.hint },
+          aiSeed,
+          aiCalls,
+          lastMove: lastMove ? { r: lastMove.r, c: lastMove.c } : null,
+          preview: preview ? { r: preview.r, c: preview.c } : null,
+          hint: hint && hintTimer > 0 ? { r: hint.r, c: hint.c, t: Math.round(hintTimer * 10) / 10 } : null,
+          history: undoStack.map((snap) => ({
+            board: cloneBoard(snap.board),
+            turn: snap.turn,
+            moves: snap.moves,
+            score: snap.score,
+            aiSeed: snap.aiSeed,
+            aiCalls: snap.aiCalls,
+            lastMove: snap.lastMove ? { r: snap.lastMove.r, c: snap.lastMove.c } : null,
+          })),
+        };
+      }
+
+      function validBoardShape(bd) {
+        if (!Array.isArray(bd) || bd.length !== N) return false;
+        for (let r = 0; r < N; r += 1) {
+          const row = bd[r];
+          if (!Array.isArray(row) || row.length !== N) return false;
+          for (let c = 0; c < N; c += 1) {
+            const v = row[c];
+            if (v !== EMPTY && v !== BLACK && v !== WHITE) return false;
+          }
+        }
+        return true;
+      }
+
+      function validStoneCoord(bd, p) {
+        if (!p || typeof p !== 'object') return false;
+        if (!Number.isInteger(p.r) || !Number.isInteger(p.c)) return false;
+        if (!inBoard(p.r, p.c)) return false;
+        return bd[p.r][p.c] !== EMPTY;
+      }
+
+      function validEmptyCoord(bd, p) {
+        if (!p || typeof p !== 'object') return false;
+        if (!Number.isInteger(p.r) || !Number.isInteger(p.c)) return false;
+        if (!inBoard(p.r, p.c)) return false;
+        return bd[p.r][p.c] === EMPTY;
+      }
+
+      function restore(data) {
+        try {
+          if (!data || typeof data !== 'object' || data.v !== SAVE_VERSION) return false;
+          if (!validBoardShape(data.board)) return false;
+          const counts = countStones(data.board);
+          if (!Number.isInteger(data.moves) || data.moves !== counts.total) return false;
+          if (data.moves < 0 || data.moves > N * N - 1) return false;
+          if (findWinner(data.board)) return false;
+          if (data.turn !== BLACK && data.turn !== WHITE) return false;
+          const expectedTurn = counts.black === counts.white ? BLACK : counts.black === counts.white + 1 ? WHITE : 0;
+          if (!expectedTurn || data.turn !== expectedTurn) return false;
+          if (data.score !== 0) return false;
+          /* 旧档兼容：0.9.0 之前的局内档没有 tools 字段，按每局初始补给恢复，而不是拒绝续玩。 */
+          const toolData = data.tools && typeof data.tools === 'object' ? data.tools : TOOL_START;
+          const savedUndo = Number.isFinite(Number(toolData.undo)) ? Math.floor(Number(toolData.undo)) : TOOL_START.undo;
+          const savedHintCount = Number.isFinite(Number(toolData.hint)) ? Math.floor(Number(toolData.hint)) : TOOL_START.hint;
+          if (savedUndo < 0 || savedUndo > TOOL_CAPS.undo) return false;
+          if (savedHintCount < 0 || savedHintCount > TOOL_CAPS.hint) return false;
+          if (!Number.isInteger(data.aiSeed) || data.aiSeed < 0 || data.aiSeed > 0xffffffff) return false;
+          if (!Number.isInteger(data.aiCalls) || data.aiCalls < 0 || data.aiCalls > 200000) return false;
+          if (data.lastMove != null && !validStoneCoord(data.board, data.lastMove)) return false;
+          if (data.preview != null) {
+            if (!validEmptyCoord(data.board, data.preview)) return false;
+            if (data.turn !== BLACK) return false;
+          }
+          let savedHint = null;
+          if (data.hint != null) {
+            if (!validEmptyCoord(data.board, data.hint)) return false;
+            const ht = Number(data.hint.t);
+            if (!Number.isFinite(ht) || ht <= 0 || ht > HINT_SECONDS) return false;
+            savedHint = { r: data.hint.r, c: data.hint.c, t: ht };
+          }
+          if (!Array.isArray(data.history) || data.history.length > TOOL_CAPS.undo) return false;
+          const history = [];
+          for (let i = 0; i < data.history.length; i += 1) {
+            const snap = data.history[i];
+            if (!snap || typeof snap !== 'object') return false;
+            if (!validBoardShape(snap.board)) return false;
+            const sc = countStones(snap.board);
+            if (!Number.isInteger(snap.moves) || snap.moves !== sc.total) return false;
+            if (snap.moves < 0 || snap.moves > N * N - 1) return false;
+            if (findWinner(snap.board)) return false;
+            const expectedSnapTurn = sc.black === sc.white ? BLACK : sc.black === sc.white + 1 ? WHITE : 0;
+            if (!expectedSnapTurn || snap.turn !== BLACK) return false;
+            if (snap.score !== 0) return false;
+            if (!Number.isInteger(snap.aiSeed) || snap.aiSeed < 0 || snap.aiSeed > 0xffffffff) return false;
+            if (!Number.isInteger(snap.aiCalls) || snap.aiCalls < 0 || snap.aiCalls > 200000) return false;
+            if (snap.lastMove != null && !validStoneCoord(snap.board, snap.lastMove)) return false;
+            history.push({
+              board: cloneBoard(snap.board),
+              turn: snap.turn,
+              moves: snap.moves,
+              score: snap.score,
+              aiSeed: snap.aiSeed,
+              aiCalls: snap.aiCalls,
+              lastMove: snap.lastMove ? { r: snap.lastMove.r, c: snap.lastMove.c } : null,
+            });
+          }
+          board = cloneBoard(data.board);
+          turn = data.turn;
+          moves = data.moves;
+          score = 0;
+          result = null;
+          winInfo = null;
+          preview = data.preview ? { r: data.preview.r, c: data.preview.c } : null;
+          lastMove = data.lastMove ? { r: data.lastMove.r, c: data.lastMove.c } : null;
+          tools = { undo: savedUndo, hint: savedHintCount };
+          undoStack = history;
+          hint = savedHint ? { r: savedHint.r, c: savedHint.c } : null;
+          hintTimer = savedHint ? savedHint.t : 0;
+          aiSeed = data.aiSeed;
+          aiCalls = data.aiCalls;
+          rebuildRng(aiSeed, aiCalls);
+          aiDelay = turn === WHITE ? AI_DELAY : 0;
+          recordSaved = false;
+          lastRecord = null;
+          state = 'playing';
+          syncAll();
+          return true;
+        } catch (err) {
+          return false;
+        }
+      }
+
+      const autosave = A.createRunAutosave('gomoku', serialize, {
+        every: 3,
+        meta: () => ({
+          score,
+          summary: '黑棋 ' + Math.max(0, Math.ceil(moves / 2)) + ' 手 · ' + (turn === BLACK ? '轮到你落子' : 'AI 思考中'),
+        }),
+      });
+
+      /* ----------------------------------------------------------
+       * 画布外可选道具（≥44px）：悔棋 / 提示
+       * ---------------------------------------------------------- */
+      const joyTools = A.createToolbelt(
+        [
+          {
+            id: 'undo',
+            icon: '↩',
+            name: '悔棋',
+            description: '撤销自己一步 + AI 一步',
+            getCount: () => tools.undo,
+            canUse: () => state === 'playing' && turn === BLACK && undoStack.length > 0 && tools.undo > 0,
+            use: () => useTool('undo'),
+          },
+          {
+            id: 'hint',
+            icon: '💡',
+            name: '提示',
+            description: '高亮 AI 推荐的落点 3 秒',
+            getCount: () => tools.hint,
+            canUse: () => state === 'playing' && turn === BLACK && tools.hint > 0,
+            use: () => useTool('hint'),
+            active: () => hintTimer > 0,
+          },
+        ],
+        { isPlaying: () => state === 'playing', keys: ['1', '2'], label: '五子棋道具', placement: 'below' }
+      );
+
+      /* ----------------------------------------------------------
+       * 绘制（木色棋盘 / 黑白子 / 柔和阴影，无倒计时）
+       * ---------------------------------------------------------- */
+      function drawStone(x, y, color, opts) {
+        const o = opts || {};
+        const alpha = o.alpha == null ? 1 : o.alpha;
+        const radius = o.r || STONE_R;
+        ctx.save();
+        ctx.globalAlpha = alpha;
+        ctx.shadowColor = 'rgba(0,0,0,0.32)';
+        ctx.shadowBlur = 7;
+        ctx.shadowOffsetY = 2;
+        const g = ctx.createRadialGradient(x - radius * 0.36, y - radius * 0.4, radius * 0.16, x, y, radius * 1.06);
+        if (color === BLACK) {
+          g.addColorStop(0, '#726d63');
+          g.addColorStop(0.42, '#26231f');
+          g.addColorStop(1, '#070707');
+        } else {
+          g.addColorStop(0, '#ffffff');
+          g.addColorStop(0.55, '#f2eee5');
+          g.addColorStop(1, '#cfc8ba');
+        }
+        ctx.fillStyle = g;
+        ctx.beginPath();
+        ctx.arc(x, y, radius, 0, TAU);
+        ctx.fill();
+        ctx.shadowColor = 'transparent';
+        ctx.strokeStyle = color === BLACK ? 'rgba(0,0,0,0.5)' : 'rgba(120,110,92,0.42)';
+        ctx.lineWidth = 1;
+        ctx.stroke();
+        ctx.globalAlpha = alpha * (color === BLACK ? 0.24 : 0.5);
+        ctx.fillStyle = '#ffffff';
+        ctx.beginPath();
+        ctx.ellipse(x - radius * 0.32, y - radius * 0.36, radius * 0.3, radius * 0.16, -0.62, 0, TAU);
+        ctx.fill();
+        ctx.restore();
+      }
+
+      function drawBoard() {
+        ctx.save();
+        ctx.shadowColor = 'rgba(0,0,0,0.5)';
+        ctx.shadowBlur = 26;
+        ctx.shadowOffsetY = 10;
+        A.draw.roundRect(ctx, BOARD.x, BOARD.y, BOARD.w, BOARD.h, 18);
+        const wood = ctx.createLinearGradient(BOARD.x, BOARD.y, BOARD.x + BOARD.w, BOARD.y + BOARD.h);
+        wood.addColorStop(0, '#e7cda3');
+        wood.addColorStop(0.52, '#dab886');
+        wood.addColorStop(1, '#c7a26b');
+        ctx.fillStyle = wood;
+        ctx.fill();
+        ctx.restore();
+
+        /* 木纹：静态正弦线，不随时间抖动 */
+        ctx.save();
+        for (let i = 0; i < 13; i += 1) {
+          const baseY = BOARD.y + 22 + (i * (BOARD.h - 44)) / 12;
+          ctx.beginPath();
+          for (let step = 0; step <= 44; step += 1) {
+            const x = BOARD.x + 14 + (step * (BOARD.w - 28)) / 44;
+            const y = baseY + Math.sin((x + i * 37) / 46) * 1.6 + Math.sin((x + i * 11) / 17) * 0.7;
+            if (step === 0) ctx.moveTo(x, y);
+            else ctx.lineTo(x, y);
+          }
+          ctx.strokeStyle = 'rgba(122,86,46,' + (0.035 + (i % 3) * 0.012).toFixed(3) + ')';
+          ctx.lineWidth = 1;
+          ctx.stroke();
+        }
+        ctx.restore();
+
+        /* 棋盘内框 */
+        A.draw.roundRect(ctx, BOARD.x + 6, BOARD.y + 6, BOARD.w - 12, BOARD.h - 12, 14);
+        ctx.strokeStyle = 'rgba(120,84,44,0.3)';
+        ctx.lineWidth = 1.2;
+        ctx.stroke();
+
+        /* 11×11 格线 */
+        for (let i = 0; i < N; i += 1) {
+          const strong = i === 0 || i === N - 1;
+          ctx.strokeStyle = strong ? 'rgba(72,46,22,0.72)' : 'rgba(86,58,28,0.52)';
+          ctx.lineWidth = strong ? 1.7 : 1;
+          ctx.beginPath();
+          ctx.moveTo(px(i), py(0));
+          ctx.lineTo(px(i), py(N - 1));
+          ctx.stroke();
+          ctx.beginPath();
+          ctx.moveTo(px(0), py(i));
+          ctx.lineTo(px(N - 1), py(i));
+          ctx.stroke();
+        }
+
+        /* 星位（小目） */
+        const stars = [[3, 3], [3, 7], [7, 3], [7, 7], [5, 5]];
+        ctx.fillStyle = 'rgba(70,46,22,0.72)';
+        for (let i = 0; i < stars.length; i += 1) {
+          ctx.beginPath();
+          ctx.arc(px(stars[i][1]), py(stars[i][0]), 2.6, 0, TAU);
+          ctx.fill();
+        }
+
+        /* 坐标标签：A–K / 1–11，11px */
+        for (let c = 0; c < N; c += 1) {
+          A.draw.label(ctx, LETTERS.charAt(c), px(c), py(N - 1) + 16, {
+            font: '11px system-ui, sans-serif',
+            color: 'rgba(84,58,30,0.74)',
+          });
+        }
+        for (let r = 0; r < N; r += 1) {
+          A.draw.label(ctx, String(r + 1), px(0) - 14, py(r), {
+            font: '11px system-ui, sans-serif',
+            color: 'rgba(84,58,30,0.74)',
+          });
+        }
+      }
+
+      function drawThinkingDots(cx, cy) {
+        const pulse = A.reducedMotion ? 0.6 : 0.35 + 0.65 * ((Math.sin(animTime * 4.2) + 1) / 2);
+        for (let i = 0; i < 3; i += 1) {
+          const alpha = 0.2 + 0.6 * ((pulse + i * 0.22) % 1);
+          ctx.fillStyle = 'rgba(231,201,131,' + alpha.toFixed(3) + ')';
+          ctx.beginPath();
+          ctx.arc(cx - 12 + i * 12, cy, 2.4, 0, TAU);
+          ctx.fill();
+        }
+      }
+
+      function drawStatus() {
+        const cx = W / 2;
+        let main = '静局';
+        let sub = '11 路棋盘 · 你执黑先行';
+        let guide = '点「开始游戏」，慢慢下一局';
+        let guideColor = 'rgba(214,196,166,0.75)';
+        if (state === 'playing') {
+          if (turn === BLACK) {
+            main = '轮到你落子';
+            sub = '你执黑 · 已落 ' + moves + ' 手 · 没有倒计时';
+            if (hintTimer > 0 && hint) {
+              guide = '提示：' + coordName(hint) + ' 附近（' + Math.ceil(hintTimer) + ' 秒）';
+              guideColor = '#e7c983';
+            } else if (preview) {
+              guide = '已选 ' + coordName(preview) + ' · 再点同一点确认';
+              guideColor = '#e7c983';
+            } else {
+              guide = '先点空格预览，再点同一点落子';
+            }
+          } else {
+            main = 'AI 正在回应';
+            sub = '你执黑 · 已落 ' + moves + ' 手 · 没有倒计时';
+            guide = '本地计算，不用等太久';
+          }
+        } else if (state === 'paused') {
+          main = '已暂停';
+          sub = '棋盘和进度都已保存';
+          guide = '继续，或认输并记录';
+        } else if (state === 'over') {
+          main = result === 'win' ? '这局你赢了' : result === 'lose' ? '这局 AI 赢了' : result === 'draw' ? '和棋' : '本局结束';
+          sub = '共 ' + moves + ' 手 · 得分 ' + score;
+          guide = '点「再来一局」回到开始';
+        }
+        A.draw.label(ctx, main, cx, 54, { font: 'bold 18px system-ui, sans-serif', color: '#f1e7d6' });
+        A.draw.label(ctx, sub, cx, 82, { font: '12px system-ui, sans-serif', color: 'rgba(180,186,200,0.72)' });
+        A.draw.label(ctx, guide, cx, 116, { font: '13px system-ui, sans-serif', color: guideColor });
+        if (state === 'playing' && turn === WHITE) drawThinkingDots(cx, 146);
+      }
+
+      function drawStones() {
+        for (let r = 0; r < N; r += 1) {
+          for (let c = 0; c < N; c += 1) {
+            const v = board[r][c];
+            if (v === EMPTY) continue;
+            drawStone(px(c), py(r), v);
+          }
+        }
+        /* 最后一手：金圈标记 */
+        if (lastMove && board[lastMove.r] && board[lastMove.r][lastMove.c] !== EMPTY) {
+          ctx.save();
+          ctx.strokeStyle = '#e0b45c';
+          ctx.lineWidth = 2;
+          ctx.beginPath();
+          ctx.arc(px(lastMove.c), py(lastMove.r), STONE_R + 3.5, 0, TAU);
+          ctx.stroke();
+          ctx.restore();
+        }
+      }
+
+      function drawWinLine() {
+        if (!winInfo || !winInfo.line || winInfo.line.length < 5) return;
+        const line = winInfo.line;
+        const first = line[0];
+        const last = line[line.length - 1];
+        const pulse = A.reducedMotion ? 0.6 : 0.55 + 0.35 * ((Math.sin(animTime * 3.1) + 1) / 2);
+        ctx.save();
+        ctx.strokeStyle = 'rgba(231,201,131,' + pulse.toFixed(3) + ')';
+        ctx.lineWidth = 5;
+        ctx.lineCap = 'round';
+        ctx.beginPath();
+        ctx.moveTo(px(first.c), py(first.r));
+        ctx.lineTo(px(last.c), py(last.r));
+        ctx.stroke();
+        ctx.strokeStyle = 'rgba(255,232,176,0.95)';
+        ctx.lineWidth = 2.4;
+        for (let i = 0; i < line.length; i += 1) {
+          ctx.beginPath();
+          ctx.arc(px(line[i].c), py(line[i].r), STONE_R + 4.5, 0, TAU);
+          ctx.stroke();
+        }
+        ctx.restore();
+      }
+
+      function drawPreviewMarks() {
+        if (!preview || state !== 'playing' || turn !== BLACK) return;
+        const x = px(preview.c);
+        const y = py(preview.r);
+        ctx.save();
+        ctx.strokeStyle = 'rgba(231,201,131,0.18)';
+        ctx.lineWidth = 1;
+        ctx.setLineDash([4, 7]);
+        ctx.beginPath();
+        ctx.moveTo(x, py(0));
+        ctx.lineTo(x, py(N - 1));
+        ctx.moveTo(px(0), y);
+        ctx.lineTo(px(N - 1), y);
+        ctx.stroke();
+        ctx.restore();
+        drawStone(x, y, BLACK, { alpha: 0.42 });
+        ctx.save();
+        ctx.strokeStyle = '#e7c983';
+        ctx.lineWidth = 2;
+        ctx.setLineDash([5, 5]);
+        ctx.beginPath();
+        ctx.arc(x, y, STONE_R + 4, 0, TAU);
+        ctx.stroke();
+        ctx.restore();
+      }
+
+      function drawHintMark() {
+        if (!hint || hintTimer <= 0) return;
+        const x = px(hint.c);
+        const y = py(hint.r);
+        const pulse = A.reducedMotion ? 0.6 : 0.45 + 0.4 * ((Math.sin(animTime * 3.6) + 1) / 2);
+        ctx.save();
+        ctx.strokeStyle = 'rgba(231,201,131,' + pulse.toFixed(3) + ')';
+        ctx.lineWidth = 2.4;
+        ctx.setLineDash([6, 6]);
+        ctx.lineDashOffset = A.reducedMotion ? 0 : -animTime * 14;
+        ctx.beginPath();
+        ctx.arc(x, y, STONE_R + 6, 0, TAU);
+        ctx.stroke();
+        ctx.setLineDash([]);
+        ctx.fillStyle = 'rgba(231,201,131,' + (pulse * 0.9).toFixed(3) + ')';
+        ctx.beginPath();
+        ctx.arc(x, y, 2.6, 0, TAU);
+        ctx.fill();
+        ctx.restore();
+      }
+
+      function drawPlaceButton() {
+        const enabled = state === 'playing' && turn === BLACK && !!preview;
+        A.draw.roundRect(ctx, PLACE_BTN.x, PLACE_BTN.y, PLACE_BTN.w, PLACE_BTN.h, 16);
+        ctx.fillStyle = enabled ? 'rgba(217,176,106,0.2)' : 'rgba(255,255,255,0.04)';
+        ctx.fill();
+        ctx.strokeStyle = enabled ? 'rgba(231,201,131,0.88)' : 'rgba(147,160,200,0.24)';
+        ctx.lineWidth = 1.5;
+        ctx.stroke();
+        A.draw.label(ctx, enabled ? '落子' : '先预览再落子', W / 2, PLACE_BTN.y + PLACE_BTN.h / 2 + 1, {
+          font: enabled ? 'bold 18px system-ui, sans-serif' : '13px system-ui, sans-serif',
+          color: enabled ? '#f3e3c3' : 'rgba(200,206,222,0.55)',
+        });
+      }
+
+      function drawFooter() {
+        let line = '静局 · 没有倒计时 · 慢慢想';
+        if (state === 'playing' && turn === BLACK) {
+          line = preview ? '再点同一点，或按「落子」确认' : '「落子」按钮在有预览时可确认';
+        } else if (state === 'playing' && turn === WHITE) {
+          line = 'AI 落子后轮到你';
+        }
+        A.draw.label(ctx, line, W / 2, 674, { font: '12px system-ui, sans-serif', color: 'rgba(160,168,184,0.66)' });
+        /* 静字小印：视觉收束 */
+        ctx.save();
+        A.draw.roundRect(ctx, W / 2 - 16, 692, 32, 32, 8);
+        ctx.strokeStyle = 'rgba(217,176,106,0.32)';
+        ctx.lineWidth = 1.2;
+        ctx.stroke();
+        A.draw.label(ctx, '静', W / 2, 709, { font: '15px system-ui, sans-serif', color: 'rgba(217,176,106,0.6)' });
+        ctx.restore();
+      }
+
+      function render() {
+        stage.beginFrame();
+        const bg = ctx.createLinearGradient(0, 0, 0, H);
+        bg.addColorStop(0, '#0d1016');
+        bg.addColorStop(1, '#151a21');
+        ctx.fillStyle = bg;
+        ctx.fillRect(0, 0, W, H);
+        const glow = ctx.createRadialGradient(W / 2, 370, 60, W / 2, 370, 430);
+        glow.addColorStop(0, 'rgba(217,176,106,0.07)');
+        glow.addColorStop(0.55, 'rgba(217,176,106,0.02)');
+        glow.addColorStop(1, 'rgba(0,0,0,0)');
+        ctx.fillStyle = glow;
+        ctx.fillRect(0, 0, W, H);
+
+        drawStatus();
+        drawBoard();
+        drawStones();
+        drawWinLine();
+        drawPreviewMarks();
+        drawHintMark();
+        drawPlaceButton();
+        drawFooter();
+      }
+
+      function update(dt) {
+        animTime += dt;
+        if (state === 'paused' || state === 'over' || state === 'ready') {
+          input.endFrame();
+          return;
+        }
+        autosave.tick(dt);
+        if (hintTimer > 0) {
+          hintTimer = Math.max(0, hintTimer - dt);
+          if (hintTimer === 0) {
+            hint = null;
+            joyTools.sync();
+            autosave.saveNow();
+          }
+        }
+        if (turn === WHITE && state === 'playing') {
+          aiDelay = Math.max(0, aiDelay - dt);
+          if (aiDelay === 0) performAIMove();
+        }
+        if (state === 'playing' && input.pointer.wentDown) tapAt(input.pointer.x, input.pointer.y);
+        input.endFrame();
+      }
+
+      const loop = A.createLoop({
+        update,
+        render,
+        onAutoPause() {
+          if (state === 'playing') pauseByUser();
+        },
+      });
+
+      const pauseUi = A.bindPause({
+        button: dom.pause,
+        pause: pauseByUser,
+        resume: resumeGame,
+        isPlaying: () => state === 'playing',
+        isPaused: () => state === 'paused',
+      });
+
+      function syncMute() {
+        dom.mute.textContent = A.Sfx.muted ? '🔇' : '🔊';
+      }
+      dom.mute.addEventListener('click', () => {
+        A.Sfx.setMuted(!A.Sfx.muted);
+        syncMute();
+      });
+      syncMute();
+
+      /* ----------------------------------------------------------
+       * 测试钩子（仅 #test 下挂载）
+       * ---------------------------------------------------------- */
+      function boardToLetters(bd) {
+        return bd.map((row) => row.map((v) => (v === BLACK ? 'B' : v === WHITE ? 'W' : '.')));
+      }
+
+      function resetStateForTest() {
+        board = emptyBoard();
+        turn = BLACK;
+        moves = 0;
+        score = 0;
+        result = null;
+        winInfo = null;
+        preview = null;
+        lastMove = null;
+        state = 'playing';
+        recordSaved = false;
+        tools = { undo: TOOL_START.undo, hint: TOOL_START.hint };
+        undoStack = [];
+        hint = null;
+        hintTimer = 0;
+        aiDelay = 0;
+        aiSeed = TEST_SEED;
+        aiCalls = 0;
+        rng = makeRng(aiSeed);
+      }
+
+      function captureState() {
+        return {
+          board: cloneBoard(board),
+          turn,
+          moves,
+          score,
+          result,
+          winInfo: winInfo ? { winner: winInfo.winner, line: winInfo.line.map((p) => ({ r: p.r, c: p.c })) } : null,
+          preview: preview ? { r: preview.r, c: preview.c } : null,
+          lastMove: lastMove ? { r: lastMove.r, c: lastMove.c } : null,
+          state,
+          recordSaved,
+          lastRecord: lastRecord ? { plays: lastRecord.plays, high: lastRecord.high, isNewHigh: lastRecord.isNewHigh } : null,
+          tools: { undo: tools.undo, hint: tools.hint },
+          undoStack: undoStack.map((snap) => ({
+            board: cloneBoard(snap.board),
+            turn: snap.turn,
+            moves: snap.moves,
+            score: snap.score,
+            aiSeed: snap.aiSeed,
+            aiCalls: snap.aiCalls,
+            lastMove: snap.lastMove ? { r: snap.lastMove.r, c: snap.lastMove.c } : null,
+          })),
+          hint: hint ? { r: hint.r, c: hint.c } : null,
+          hintTimer,
+          aiSeed,
+          aiCalls,
+          aiDelay,
+        };
+      }
+
+      function restoreState(saved) {
+        board = cloneBoard(saved.board);
+        turn = saved.turn;
+        moves = saved.moves;
+        score = saved.score;
+        result = saved.result;
+        winInfo = saved.winInfo;
+        preview = saved.preview ? { r: saved.preview.r, c: saved.preview.c } : null;
+        lastMove = saved.lastMove ? { r: saved.lastMove.r, c: saved.lastMove.c } : null;
+        state = saved.state;
+        recordSaved = saved.recordSaved;
+        lastRecord = saved.lastRecord ? { plays: saved.lastRecord.plays, high: saved.lastRecord.high, isNewHigh: saved.lastRecord.isNewHigh } : null;
+        tools = { undo: saved.tools.undo, hint: saved.tools.hint };
+        undoStack = saved.undoStack.map((snap) => ({
+          board: cloneBoard(snap.board),
+          turn: snap.turn,
+          moves: snap.moves,
+          score: snap.score,
+          aiSeed: snap.aiSeed,
+          aiCalls: snap.aiCalls,
+          lastMove: snap.lastMove ? { r: snap.lastMove.r, c: snap.lastMove.c } : null,
+        }));
+        hint = saved.hint ? { r: saved.hint.r, c: saved.hint.c } : null;
+        hintTimer = saved.hintTimer;
+        aiSeed = saved.aiSeed;
+        aiCalls = saved.aiCalls;
+        aiDelay = saved.aiDelay;
+        rebuildRng(aiSeed, aiCalls);
+      }
+
+      function fixture(bd, list) {
+        for (let i = 0; i < list.length; i += 1) {
+          const item = list[i];
+          bd[item[0]][item[1]] = item[2];
+        }
+        return bd;
+      }
+
+      function selftest() {
+        const before = captureState();
+        const beforeSave = A.RunSave.get('gomoku');
+        const details = [];
+        function ok(name, cond, detail) {
+          details.push({ name, ok: !!cond, detail: cond ? '' : String(detail == null ? '' : detail) });
+        }
+        try {
+          /* 1–4：横 / 竖 / 两条斜线五连 */
+          const h = fixture(emptyBoard(), [[5, 3, BLACK], [5, 4, BLACK], [5, 5, BLACK], [5, 6, BLACK], [5, 7, BLACK]]);
+          ok('横向五连判定', (winLineAt(h, 5, 4, BLACK) || []).length >= 5, JSON.stringify(winLineAt(h, 5, 4, BLACK)));
+          const v = fixture(emptyBoard(), [[2, 2, BLACK], [3, 2, BLACK], [4, 2, BLACK], [5, 2, BLACK], [6, 2, BLACK]]);
+          ok('竖向五连判定', (winLineAt(v, 4, 2, BLACK) || []).length >= 5, JSON.stringify(winLineAt(v, 4, 2, BLACK)));
+          const d1 = fixture(emptyBoard(), [[1, 1, BLACK], [2, 2, BLACK], [3, 3, BLACK], [4, 4, BLACK], [5, 5, BLACK]]);
+          ok('斜向五连判定（↘）', (winLineAt(d1, 3, 3, BLACK) || []).length >= 5, JSON.stringify(winLineAt(d1, 3, 3, BLACK)));
+          const d2 = fixture(emptyBoard(), [[6, 1, BLACK], [5, 2, BLACK], [4, 3, BLACK], [3, 4, BLACK], [2, 5, BLACK]]);
+          ok('斜向五连判定（↗）', (winLineAt(d2, 4, 3, BLACK) || []).length >= 5, JSON.stringify(winLineAt(d2, 4, 3, BLACK)));
+
+          /* 5：长连 ≥5 仍判胜 */
+          const over = fixture(emptyBoard(), [[7, 1, BLACK], [7, 2, BLACK], [7, 3, BLACK], [7, 4, BLACK], [7, 5, BLACK], [7, 6, BLACK]]);
+          const overLine = winLineAt(over, 7, 3, BLACK);
+          ok('长连 ≥5 仍判胜', overLine && overLine.length === 6 && evaluateEnd(over, 12).result === 'win', overLine ? overLine.length : 'null');
+
+          /* 6：平局判定（下满且无五连） */
+          const fullDraw = DRAW_PATTERN.map((row) => row.map((value) => (value === 1 ? BLACK : WHITE)));
+          const drawEnd = evaluateEnd(fullDraw, N * N);
+          ok('棋盘下满且无五连判平局', !findWinner(fullDraw) && isBoardFull(fullDraw) && drawEnd.result === 'draw' && drawEnd.score === 300, JSON.stringify(drawEnd));
+
+          /* 7：计分公式 胜 = max(300, 1000-10×总步数) / 平 = 300 / 负 = 0 */
+          const blackFive = h;
+          const whiteFive = whiteFiveBoard();
+          const win10 = evaluateEnd(blackFive, 10);
+          const win80 = evaluateEnd(blackFive, 80);
+          const lose = evaluateEnd(whiteFive, 10);
+          ok(
+            '结算分数公式（胜/平/负）',
+            win10.score === 900 && win80.score === 300 && win10.result === 'win' && lose.result === 'lose' && lose.score === 0 && drawEnd.score === 300,
+            JSON.stringify({ win10: win10.score, win80: win80.score, lose: lose.score, draw: drawEnd.score })
+          );
+
+          /* 8：AI 有立即五连直接取胜 */
+          const aiBoard = fixture(emptyBoard(), [[5, 3, WHITE], [5, 4, WHITE], [5, 5, WHITE], [5, 6, WHITE], [0, 0, BLACK], [0, 2, BLACK], [9, 9, BLACK], [10, 0, BLACK]]);
+          const aiWinMove = chooseAIMove(aiBoard, WHITE, makeRng(7));
+          ok('AI 立即取胜优先', aiWinMove && wouldWin(aiBoard, aiWinMove.r, aiWinMove.c, WHITE), aiWinMove ? coordName(aiWinMove) : 'null');
+
+          /* 9：AI 封堵对手四（黑四 5,3–5,6，左边被白堵，只余 5,7） */
+          const blockBoard = fixture(emptyBoard(), [[5, 3, BLACK], [5, 4, BLACK], [5, 5, BLACK], [5, 6, BLACK], [5, 2, WHITE], [8, 8, WHITE], [9, 9, WHITE]]);
+          const blockMove = chooseAIMove(blockBoard, WHITE, makeRng(9));
+          ok(
+            'AI 封堵对手四',
+            blockMove && blockMove.r === 5 && blockMove.c === 7 && wouldWin(blockBoard, 5, 7, BLACK),
+            blockMove ? coordName(blockMove) : 'null'
+          );
+
+          /* 10：AI 落点合法且靠近已有棋子（不乱下） */
+          const nearBoard = fixture(emptyBoard(), [[5, 5, BLACK], [5, 6, WHITE], [4, 6, BLACK], [6, 5, WHITE]]);
+          const solid = chooseAIMove(nearBoard, WHITE, makeRng(11));
+          ok(
+            'AI 落点合法且靠近已有棋子',
+            solid && nearBoard[solid.r][solid.c] === EMPTY && hasNeighborWithin2(nearBoard, solid.r, solid.c),
+            solid ? coordName(solid) : 'null'
+          );
+
+          /* 11：悔棋撤销自己一步 + AI 一步 */
+          resetStateForTest();
+          applyPlayerMove(5, 5);
+          performAIMove();
+          const aiPoint = lastMove ? { r: lastMove.r, c: lastMove.c } : null;
+          const beforeUndoMoves = moves;
+          const undoOk = applyUndo();
+          ok(
+            '悔棋撤销自己一步 + AI 一步',
+            undoOk &&
+              beforeUndoMoves === 2 &&
+              moves === 0 &&
+              board[5][5] === EMPTY &&
+              (!aiPoint || board[aiPoint.r][aiPoint.c] === EMPTY) &&
+              turn === BLACK &&
+              tools.undo === TOOL_START.undo - 1,
+            JSON.stringify({ undoOk, beforeUndoMoves, moves, aiPoint, turn, undoLeft: tools.undo })
+          );
+
+          /* 12：提示返回合法空位 */
+          const hintBoard = fixture(emptyBoard(), [[5, 5, BLACK], [6, 6, WHITE]]);
+          const hintPoint = recommendMove(hintBoard, BLACK);
+          ok(
+            '提示返回合法空位',
+            hintPoint && hintBoard[hintPoint.r][hintPoint.c] === EMPTY && hasNeighborWithin2(hintBoard, hintPoint.r, hintPoint.c),
+            hintPoint ? coordName(hintPoint) : 'null'
+          );
+
+          /* 13：同 seed 复现相同 AI 落点 */
+          const repBoard = fixture(emptyBoard(), [[5, 5, BLACK], [6, 6, WHITE], [4, 6, BLACK], [5, 7, WHITE]]);
+          const rep1 = chooseAIMove(repBoard, WHITE, makeRng(4321));
+          const rep2 = chooseAIMove(repBoard, WHITE, makeRng(4321));
+          const rngA = makeRng(4321);
+          const rngB = makeRng(4321);
+          const seqSame = rngA() === rngB() && rngA() === rngB() && rngA() === rngB();
+          ok(
+            '种子复现相同 AI 落点',
+            rep1 && rep2 && rep1.r === rep2.r && rep1.c === rep2.c && seqSame,
+            JSON.stringify({ rep1, rep2, seqSame })
+          );
+
+          /* 14：先预览再确认（第一次只预览，第二次才落子） */
+          resetStateForTest();
+          tapAt(px(5), py(5));
+          const previewOnly = board[5][5] === EMPTY && preview && preview.r === 5 && preview.c === 5 && moves === 0;
+          tapAt(px(5), py(5));
+          const confirmed = board[5][5] === BLACK && moves === 1 && preview === null;
+          ok('先预览再确认的两步落子', previewOnly && confirmed, JSON.stringify({ previewOnly, confirmed }));
+
+          /* 15：存档序列化 / 恢复往返一致（含逐字段校验） */
+          const savedData = JSON.parse(JSON.stringify(serialize()));
+          const expectedBoard = boardToLetters(board);
+          resetStateForTest();
+          const restored = restore(savedData);
+          const roundTrip = restored && JSON.stringify(boardToLetters(board)) === JSON.stringify(expectedBoard) && moves === 1 && turn === WHITE;
+          const invalidRejected = restore({ v: 1, board: [] }) === false;
+          ok('存档序列化/恢复往返一致', roundTrip && invalidRejected, JSON.stringify({ restored, roundTrip, invalidRejected }));
+        } catch (err) {
+          details.push({ name: '自测异常', ok: false, detail: String((err && err.message) || err) });
+        } finally {
+          restoreState(before);
+          if (beforeSave) A.RunSave.save('gomoku', beforeSave.data, { score: beforeSave.score, summary: beforeSave.summary });
+          else autosave.clear();
+          syncAll();
+        }
+        const fail = details.filter((item) => !item.ok).length;
+        return { pass: details.length - fail, fail, details };
+      }
+
+      function whiteFiveBoard() {
+        return fixture(emptyBoard(), [[2, 1, WHITE], [2, 2, WHITE], [2, 3, WHITE], [2, 4, WHITE], [2, 5, WHITE]]);
+      }
+
+      function playToEnd(seedOverride) {
+        /* 用确定性策略自动下完一局，走真实结算路径（recordPlay + 结算弹层）。
+           可选 seed 仅用于验收时复现不同对局；不传则用固定 TEST_SEED。 */
+        startGame();
+        const seed = Number.isInteger(seedOverride) && seedOverride >= 0 ? seedOverride >>> 0 : TEST_SEED;
+        aiSeed = seed;
+        aiCalls = 0;
+        rng = makeRng(aiSeed);
+        let guard = 0;
+        while (state === 'playing' && guard < 400) {
+          guard += 1;
+          if (turn === BLACK) {
+            const mv = pickAutoMove();
+            if (!mv) break;
+            applyPlayerMove(mv.r, mv.c);
+          } else {
+            performAIMove();
+          }
+          if (state === 'playing' && turn === WHITE) performAIMove();
+        }
+        if (state === 'playing') finishGame('draw', null);
+        const rec = A.Progress.get('gomoku');
+        return {
+          result,
+          moves,
+          score,
+          plays: rec.plays,
+          high: rec.high,
+          overlay: !dom.overlay.hidden,
+          overlayTitle: dom.ovTitle.textContent,
+          last: lastRecord,
+        };
+      }
+
+      function pickAutoMove() {
+        const cands = candidateMoves(board);
+        if (!cands.length) return { r: 5, c: 5 };
+        for (let i = 0; i < cands.length; i += 1) {
+          if (wouldWin(board, cands[i].r, cands[i].c, BLACK)) return cands[i];
+        }
+        for (let i = 0; i < cands.length; i += 1) {
+          if (wouldWin(board, cands[i].r, cands[i].c, WHITE)) return cands[i];
+        }
+        return chooseAIMove(board, BLACK, null) || cands[0];
+      }
+
+      if (location.hash === '#test') {
+        window.__arcadeTest = {
+          info() {
+            const progress = A.Progress.get('gomoku');
+            return {
+              state,
+              turn,
+              turnName: turn === BLACK ? 'black' : 'white',
+              moves,
+              score,
+              result,
+              preview: preview ? { r: preview.r, c: preview.c } : null,
+              lastMove: lastMove ? { r: lastMove.r, c: lastMove.c } : null,
+              winLine: winInfo ? winInfo.line.map((p) => ({ r: p.r, c: p.c })) : null,
+              seed: aiSeed,
+              randCalls: aiCalls,
+              tools: { undo: tools.undo, hint: tools.hint },
+              hint: hint && hintTimer > 0 ? { r: hint.r, c: hint.c, seconds: Math.round(hintTimer * 10) / 10 } : null,
+              plays: progress.plays,
+              high: progress.high,
+              overlay: !dom.overlay.hidden,
+              overlayTitle: dom.ovTitle.textContent,
+            };
+          },
+          joyInfo() {
+            return { tools: { undo: tools.undo, hint: tools.hint }, state, turn, moves, seed: aiSeed };
+          },
+          board() {
+            return boardToLetters(board);
+          },
+          setSeed(value) {
+            const seed = Number(value);
+            if (!Number.isInteger(seed)) return false;
+            aiSeed = seed >>> 0;
+            aiCalls = 0;
+            rng = makeRng(aiSeed);
+            return true;
+          },
+          place(r, c) {
+            const rr = Math.floor(Number(r));
+            const cc = Math.floor(Number(c));
+            if (!inBoard(rr, cc)) return false;
+            if (state !== 'playing') {
+              if (state === 'paused') resumeGame();
+              else startGame();
+            }
+            if (state !== 'playing' || board[rr][cc] !== EMPTY) return false;
+            board[rr][cc] = BLACK;
+            moves += 1;
+            lastMove = { r: rr, c: cc };
+            preview = null;
+            hint = null;
+            hintTimer = 0;
+            aiDelay = 0;
+            const end = evaluateEnd(board, moves);
+            if (end.over) finishGame(end.result, end.winInfo);
+            else {
+              turn = BLACK;
+              syncAll();
+              autosave.saveNow();
+            }
+            return true;
+          },
+          aiMove() {
+            if (state !== 'playing') {
+              if (state === 'paused') resumeGame();
+              else startGame();
+            }
+            if (state !== 'playing') return null;
+            aiDelay = 0;
+            return performAIMove();
+          },
+          playToEnd(seed) {
+            return playToEnd(seed);
+          },
+          selftest() {
+            return selftest();
+          },
+        };
+      }
+
+      /* ----------------------------------------------------------
+       * 启动
+       * ---------------------------------------------------------- */
+      resetGame();
+      state = 'ready';
+      const saved = autosave.load();
+      if (saved && saved.data && typeof saved.data === 'object') {
+        A.showResumePrompt(ui, saved, {
+          name: '五子棋 · 静局',
+          onResume: () => {
+            if (restore(saved.data)) {
+              state = 'playing';
+              ui.hide();
+              loop.resume();
+              input.endFrame();
+              syncAll();
+              autosave.saveNow();
+            } else {
+              autosave.clear();
+              showStart();
+            }
+          },
+          onRestart: () => {
+            autosave.clear();
+            showStart();
+          },
+        });
+      } else {
+        showStart();
+      }
+      loop.start();
+    })();
+  </script>
+</body>
+</html>

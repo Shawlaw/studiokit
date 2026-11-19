@@ -1,0 +1,1166 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
+  <meta name="description" content="二十一点 · 静局：不下注、无倒计时的平和 21 点。一局固定 6 手，要牌或停牌，随时暂停与续玩，适合单手点按的竖屏小游戏。" />
+  <meta name="theme-color" content="#0b1020" />
+  <link rel="stylesheet" href="../../../shared/site.css" />
+  <link rel="stylesheet" href="../arcade.css" />
+  <script src="../../../shared/site-shell.js" defer></script>
+  <script src="../engine.js"></script>
+  <title>二十一点 · 静局 · 街机厅 · StudioKit</title>
+</head>
+<body class="arcade-body" data-studiokit-app="arcade" data-studiokit-app-title="街机厅 Arcade" style="--ac-accent:#ffd23f; --card-accent:#e0688a">
+  <noscript><p class="ac-noscript">此游戏需要启用 JavaScript 才能运行。</p></noscript>
+  <main class="game-page">
+    <header class="game-topbar">
+      <a class="ac-back" href="../index.html" aria-label="返回街机厅"><span class="ac-back-icon" aria-hidden="true">‹</span><span class="ac-back-label">街机厅</span></a>
+      <h1 class="game-title">🂡 二十一点 · 静局</h1>
+      <div class="game-hud">
+        <span>分数 <strong data-hud-score>0</strong></span>
+        <span>最高 <strong data-hud-high>0</strong></span>
+      </div>
+      <button type="button" class="ac-icon-btn" data-pause aria-label="暂停游戏" title="暂停游戏（P / Esc）">⏸</button>
+      <button type="button" class="ac-icon-btn" data-mute aria-label="切换音效">🔊</button>
+    </header>
+    <div class="stage-wrap">
+      <div class="stage-box">
+        <canvas class="game-canvas" aria-label="二十一点 · 静局游戏画面"></canvas>
+        <div class="overlay" data-overlay hidden>
+          <div class="overlay-panel">
+            <h2 data-ov-title>二十一点 · 静局</h2>
+            <p data-ov-text>不下注、不计时，一局固定 6 手</p>
+            <button type="button" class="ac-btn" data-ov-btn>开始游戏</button>
+            <button type="button" class="ac-btn ac-btn-secondary" data-ov-btn2 hidden>重新开始</button>
+          </div>
+        </div>
+      </div>
+    </div>
+    <p class="game-hint">点按「要牌 / 停牌」或按 H / S · 空格 下一手 · 下方可选道具：🂠 换一张、👁 看底牌 · P / Esc 暂停</p>
+  </main>
+  <script>
+    (() => {
+      'use strict';
+      const A = window.Arcade;
+      const { clamp } = A.utils;
+
+      const W = 420;
+      const H = 740;
+      const HANDS_TOTAL = 6;
+      const TOOL_START = { swap: 1, peek: 2 };
+      const TOOL_CAPS = { swap: 1, peek: 2 };
+      const CARD_W = 82;
+      const CARD_H = 118;
+      const CARD_GAP = 12;
+      const BTN_Y = 506;
+      const BTN_H = 120;
+      const HIT_RECT = { x: 24, y: BTN_Y, w: 180, h: BTN_H };
+      const STAND_RECT = { x: 216, y: BTN_Y, w: 180, h: BTN_H };
+      const NEXT_RECT = { x: 84, y: BTN_Y, w: 252, h: BTN_H };
+      const SUITS = ['♠', '♥', '♦', '♣'];
+      const RANKS = ['A', '2', '3', '4', '5', '6', '7', '8', '9', '10', 'J', 'Q', 'K'];
+      const RESULT_TEXT = {
+        blackjack: ['Blackjack！', '+250'],
+        'twenty-one': ['普通 21 点', '+150'],
+        win: ['你赢了', '+100'],
+        push: ['平局', '+25'],
+        'push-blackjack': ['双方 Blackjack · 平局', '+25'],
+        bust: ['你爆牌了', '+0'],
+        'dealer-blackjack': ['庄家 Blackjack', '+0'],
+        lose: ['庄家更接近', '+0'],
+      };
+
+      const canvas = document.querySelector('.game-canvas');
+      const stage = A.createStage(canvas, W, H);
+      const ctx = stage.ctx;
+      const input = A.createInput(canvas);
+      A.installSfxUnlock();
+
+      const dom = {
+        overlay: document.querySelector('[data-overlay]'),
+        ovTitle: document.querySelector('[data-ov-title]'),
+        ovText: document.querySelector('[data-ov-text]'),
+        ovBtn: document.querySelector('[data-ov-btn]'),
+        ovBtn2: document.querySelector('[data-ov-btn2]'),
+        hudScore: document.querySelector('[data-hud-score]'),
+        hudHigh: document.querySelector('[data-hud-high]'),
+        pause: document.querySelector('[data-pause]'),
+        mute: document.querySelector('[data-mute]'),
+      };
+      const ui = A.createOverlayUi(dom);
+      let high = A.Progress.get('blackjack').high;
+
+      /* ---------- 牌面与 21 点规则（纯函数，供游戏与自检共用） ---------- */
+
+      function rankIndex(code) {
+        return Math.floor(code / 4);
+      }
+
+      function suitIndex(code) {
+        return code % 4;
+      }
+
+      /* A 的基础值为 11；J/Q/K 为 10。soft/hard 由 handValue 自动切换。 */
+      function cardBase(code) {
+        const rank = rankIndex(code);
+        return rank === 0 ? 11 : Math.min(rank + 1, 10);
+      }
+
+      function isRedCode(code) {
+        const suit = suitIndex(code);
+        return suit === 1 || suit === 2;
+      }
+
+      function handValue(cards) {
+        let total = 0;
+        let softAces = 0;
+        for (let i = 0; i < cards.length; i++) {
+          const value = cardBase(cards[i]);
+          total += value;
+          if (value === 11) softAces += 1;
+        }
+        while (total > 21 && softAces > 0) {
+          total -= 10;
+          softAces -= 1;
+        }
+        return {
+          total,
+          soft: softAces > 0,
+          bust: total > 21,
+          blackjack: cards.length === 2 && total === 21,
+        };
+      }
+
+      /* 庄家 17 点停牌，软 17 也停：只要最优点数达到 17 就不再要牌。 */
+      function dealerShouldStand(cards) {
+        return handValue(cards).total >= 17;
+      }
+
+      /* 确定性结算：爆牌 0；Blackjack +250；普通 21 点 +150；赢 +100；平局 +25。 */
+      function settleOutcome(playerCards, dealerCards) {
+        const player = handValue(playerCards);
+        const dealer = handValue(dealerCards);
+        const base = {
+          playerTotal: player.total,
+          dealerTotal: dealer.total,
+          playerBlackjack: player.blackjack,
+          dealerBlackjack: dealer.blackjack,
+          playerBust: player.bust,
+          dealerBust: dealer.bust,
+        };
+        if (player.bust) return Object.assign({ result: 'bust', points: 0 }, base);
+        /* 双方 natural 21 为 push（无下注，按守住 +25 计），避免「玩家 BJ 恒拿 250」。 */
+        if (player.blackjack && dealer.blackjack) return Object.assign({ result: 'push-blackjack', points: 25 }, base);
+        if (player.blackjack) return Object.assign({ result: 'blackjack', points: 250 }, base);
+        if (dealer.blackjack) return Object.assign({ result: 'dealer-blackjack', points: 0 }, base);
+        if (player.total === 21) return Object.assign({ result: 'twenty-one', points: 150 }, base);
+        if (dealer.bust) return Object.assign({ result: 'win', points: 100 }, base);
+        if (player.total > dealer.total) return Object.assign({ result: 'win', points: 100 }, base);
+        if (player.total === dealer.total) return Object.assign({ result: 'push', points: 25 }, base);
+        return Object.assign({ result: 'lose', points: 0 }, base);
+      }
+
+      /* ---------- 自带 mulberry32：setSeed 后洗牌完全确定，便于测试 ---------- */
+
+      function mulberry32(seed) {
+        let state = seed >>> 0;
+        return function nextRandom() {
+          state = (state + 0x6d2b79f5) >>> 0;
+          let t = state;
+          t = Math.imul(t ^ (t >>> 15), t | 1);
+          t ^= t + Math.imul(t ^ (t >>> 7), t | 61);
+          return ((t ^ (t >>> 14)) >>> 0) / 4294967296;
+        };
+      }
+
+      let rng = Math.random;
+      let seedExplicit = false;
+      const PLAY_TO_END_SEED = 0x5eed21;
+
+      function seedRandom(value) {
+        const seed = Number(value);
+        rng = mulberry32(Number.isFinite(seed) ? seed : 0);
+        seedExplicit = true;
+      }
+
+      function shuffledDeck() {
+        const cards = [];
+        for (let code = 0; code < 52; code++) cards.push(code);
+        for (let i = cards.length - 1; i > 0; i--) {
+          const j = Math.floor(rng() * (i + 1));
+          const swap = cards[i];
+          cards[i] = cards[j];
+          cards[j] = swap;
+        }
+        return cards;
+      }
+
+      /* 每手重新洗一副牌；牌堆意外取空时也安全补一副。 */
+      function drawFromDeck() {
+        if (!deck.length) deck = shuffledDeck();
+        return deck.pop();
+      }
+
+      /* ---------- 局内状态 ---------- */
+
+      let state = 'ready';
+      let phase = 'idle';
+      let handNo = 1;
+      let score = 0;
+      let deck = [];
+      let player = [];
+      let dealer = [];
+      let holeRevealed = false;
+      let handResult = null;
+      let handLog = [];
+      let tools = { swap: TOOL_START.swap, peek: TOOL_START.peek };
+      let assisted = false;
+      let recordSaved = false;
+      let pressTimer = 0;
+      let pressChoice = '';
+
+      function syncHud() {
+        dom.hudScore.textContent = String(score);
+        dom.hudHigh.textContent = String(Math.max(high, score));
+      }
+
+      function cardInfo(code) {
+        return {
+          rank: RANKS[rankIndex(code)],
+          suit: SUITS[suitIndex(code)],
+          value: cardBase(code),
+          red: isRedCode(code),
+        };
+      }
+
+      function dealerCardHidden(index) {
+        return index === 1 && !holeRevealed;
+      }
+
+      /* ---------- 局内存档：serialize / restore ---------- */
+
+      function serialize() {
+        if (state !== 'playing' && state !== 'paused') return null;
+        return {
+          v: 1,
+          hand: handNo,
+          handNo,
+          handsTotal: HANDS_TOTAL,
+          score,
+          phase,
+          deck: deck.slice(),
+          player: player.slice(),
+          dealer: dealer.slice(),
+          holeRevealed,
+          handResult: handResult
+            ? {
+                result: handResult.result,
+                points: handResult.points,
+                playerTotal: handResult.playerTotal,
+                dealerTotal: handResult.dealerTotal,
+              }
+            : null,
+          handLog: handLog.map((item) => ({
+            hand: item.hand,
+            result: item.result,
+            points: item.points,
+            player: item.player,
+            dealer: item.dealer,
+          })),
+          tools: { swap: tools.swap, peek: tools.peek },
+          assisted,
+          recordSaved,
+        };
+      }
+
+      function readCardList(value) {
+        if (!Array.isArray(value)) return null;
+        const cards = [];
+        for (let i = 0; i < value.length; i++) {
+          const code = Number(value[i]);
+          if (!Number.isInteger(code) || code < 0 || code >= 52) return null;
+          cards.push(code);
+        }
+        return cards;
+      }
+
+      function restore(data) {
+        try {
+          if (!data || typeof data !== 'object' || Array.isArray(data)) return false;
+          const nextDeck = readCardList(data.deck);
+          const nextPlayer = readCardList(data.player);
+          const nextDealer = readCardList(data.dealer);
+          if (!nextDeck || !nextPlayer || !nextDealer) return false;
+          if (nextPlayer.length < 2 || nextPlayer.length > 12) return false;
+          if (nextDealer.length < 2 || nextDealer.length > 12) return false;
+          const totalCards = nextDeck.length + nextPlayer.length + nextDealer.length;
+          if (totalCards > 52) return false;
+          const seen = new Set();
+          const all = nextDeck.concat(nextPlayer, nextDealer);
+          for (let i = 0; i < all.length; i++) {
+            if (seen.has(all[i])) return false;
+            seen.add(all[i]);
+          }
+          const nextPhase = data.phase === 'settled' ? 'settled' : 'player';
+          const playerValue = handValue(nextPlayer);
+          if (nextPhase === 'player') {
+            if (!nextDeck.length) return false;
+            if (playerValue.bust || playerValue.total === 21) return false;
+          }
+          const savedHand = data.handNo != null ? data.handNo : data.hand;
+          const nextHandNo = clamp(Math.floor(Number(savedHand) || 1), 1, HANDS_TOTAL);
+          const nextScore = clamp(Math.floor(Number(data.score) || 0), 0, 999999);
+          const toolData = data.tools && typeof data.tools === 'object' ? data.tools : {};
+          const nextTools = {
+            swap: Number.isFinite(Number(toolData.swap)) ? clamp(Math.floor(Number(toolData.swap)), 0, TOOL_CAPS.swap) : TOOL_START.swap,
+            peek: Number.isFinite(Number(toolData.peek)) ? clamp(Math.floor(Number(toolData.peek)), 0, TOOL_CAPS.peek) : TOOL_START.peek,
+          };
+          const nextHandResult = nextPhase === 'settled' ? settleOutcome(nextPlayer, nextDealer) : null;
+          const nextHandLog = [];
+          if (Array.isArray(data.handLog)) {
+            data.handLog.slice(0, HANDS_TOTAL).forEach((item) => {
+              if (!item || typeof item !== 'object') return;
+              if (typeof item.result !== 'string' || !Object.prototype.hasOwnProperty.call(RESULT_TEXT, item.result)) return;
+              nextHandLog.push({
+                hand: clamp(Math.floor(Number(item.hand) || nextHandLog.length + 1), 1, HANDS_TOTAL),
+                result: item.result,
+                points: clamp(Math.floor(Number(item.points) || 0), 0, 250),
+                player: clamp(Math.floor(Number(item.player) || 0), 0, 31),
+                dealer: clamp(Math.floor(Number(item.dealer) || 0), 0, 31),
+              });
+            });
+          }
+          deck = nextDeck;
+          player = nextPlayer;
+          dealer = nextDealer;
+          phase = nextPhase;
+          handNo = nextHandNo;
+          score = nextScore;
+          holeRevealed = nextPhase === 'settled' ? true : !!data.holeRevealed;
+          handResult = nextHandResult;
+          handLog = nextHandLog;
+          tools = nextTools;
+          assisted = !!data.assisted;
+          recordSaved = !!data.recordSaved;
+          pressTimer = 0;
+          pressChoice = '';
+          syncHud();
+          joyTools.sync();
+          return true;
+        } catch (err) {
+          return false;
+        }
+      }
+
+      const autosave = A.createRunAutosave('blackjack', serialize, {
+        every: 3,
+        meta: () => ({
+          score,
+          summary: `第 ${handNo} / ${HANDS_TOTAL} 手 · 本局 ${score} 分`,
+        }),
+      });
+
+      /* ---------- 一局的开始、发牌与结算 ---------- */
+
+      function resetRound() {
+        phase = 'idle';
+        handNo = 1;
+        score = 0;
+        deck = [];
+        player = [];
+        dealer = [];
+        holeRevealed = false;
+        handResult = null;
+        handLog = [];
+        tools = { swap: TOOL_START.swap, peek: TOOL_START.peek };
+        assisted = false;
+        recordSaved = false;
+        pressTimer = 0;
+        pressChoice = '';
+        syncHud();
+      }
+
+      function dealHand() {
+        deck = shuffledDeck();
+        player = [];
+        dealer = [];
+        holeRevealed = false;
+        handResult = null;
+        pressTimer = 0;
+        pressChoice = '';
+        /* 交替发牌：玩家、庄家、玩家、庄家；庄家第二张为暗牌。 */
+        player.push(drawFromDeck());
+        dealer.push(drawFromDeck());
+        player.push(drawFromDeck());
+        dealer.push(drawFromDeck());
+        phase = 'player';
+        joyTools.sync();
+        syncHud();
+        if (handValue(player).blackjack) {
+          finishHand();
+          return;
+        }
+        A.Sfx.play('ui');
+      }
+
+      function startRound() {
+        autosave.clear();
+        resetRound();
+        state = 'playing';
+        ui.hide();
+        loop.resume();
+        pauseUi.sync();
+        dealHand();
+        joyTools.sync();
+        autosave.saveNow();
+      }
+
+      function startGame() {
+        startRound();
+      }
+
+      function showStart() {
+        state = 'ready';
+        resetRound();
+        ui.show({
+          title: '二十一点 · 静局',
+          text:
+            '不下注、不计时，一局固定 6 手。<br/>' +
+            '点按「要牌 / 停牌」，把点数稳稳停在 21 附近。<br/>' +
+            'Blackjack +250 · 普通 21 点 +150 · 赢 +100 · 平局 +25',
+          btn: '开始游戏',
+          onBtn: startGame,
+        });
+        pauseUi.sync();
+        joyTools.sync();
+        loop.resume();
+      }
+
+      function resumeGame() {
+        if (state !== 'paused') return;
+        state = 'playing';
+        ui.hide();
+        loop.resume();
+        pauseUi.sync();
+        joyTools.sync();
+        autosave.saveNow();
+      }
+
+      function pauseByUser() {
+        if (state !== 'playing') return;
+        state = 'paused';
+        loop.pause();
+        autosave.saveNow();
+        joyTools.sync();
+        pauseUi.sync();
+        const handText = phase === 'settled' ? `第 ${handNo} 手已结算` : `第 ${handNo} / ${HANDS_TOTAL} 手`;
+        ui.show({
+          title: '已暂停',
+          text: `${handText} · 本局 ${score} 分。<br/>局面已保存在本机，可以继续，也可以提前收局并记录。`,
+          btn: '继续',
+          onBtn: resumeGame,
+          btn2: '结束本局并记录',
+          onBtn2: settleEarly,
+        });
+      }
+
+      function settleEarly() {
+        if (state !== 'paused') return false;
+        return finishGame(true);
+      }
+
+      function dealerPlay() {
+        holeRevealed = true;
+        while (!dealerShouldStand(dealer)) dealer.push(drawFromDeck());
+      }
+
+      function playResultSound(outcome) {
+        if (outcome.result === 'push') A.Sfx.play('bell');
+        else if (outcome.points >= 100) A.Sfx.play('perfect');
+        else A.Sfx.play('land');
+      }
+
+      function finishHand() {
+        holeRevealed = true;
+        const outcome = settleOutcome(player, dealer);
+        handResult = outcome;
+        score += outcome.points;
+        handLog.push({
+          hand: handNo,
+          result: outcome.result,
+          points: outcome.points,
+          player: outcome.playerTotal,
+          dealer: outcome.dealerTotal,
+        });
+        phase = 'settled';
+        syncHud();
+        playResultSound(outcome);
+        autosave.saveNow();
+        joyTools.sync();
+        if (handNo >= HANDS_TOTAL) finishGame(false);
+      }
+
+      function finishGame(early) {
+        if (state === 'over') return false;
+        state = 'over';
+        pressTimer = 0;
+        pressChoice = '';
+        autosave.clear();
+        let rec = null;
+        if (!recordSaved) {
+          rec = A.Progress.recordPlay('blackjack', score);
+          if (rec && Number.isFinite(rec.high)) high = Math.max(high, rec.high);
+          recordSaved = true;
+        }
+        syncHud();
+        loop.pause();
+        joyTools.sync();
+        pauseUi.sync();
+        let wins = 0;
+        let pushes = 0;
+        handLog.forEach((item) => {
+          if (item.result === 'push') pushes += 1;
+          else if (item.points > 0) wins += 1;
+        });
+        const summary = early
+          ? `提前收局 · 已记录第 ${handNo} 手时的成绩`
+          : `共 ${HANDS_TOTAL} 手 · 赢 ${wins} 手 · 平 ${pushes} 手`;
+        const assistLine = assisted ? '<br/>本局使用了辅助道具' : '';
+        ui.show({
+          title: early ? '本局已结束' : '六手结束',
+          text:
+            `<span class="ac-score">${score}</span>` +
+            (rec && rec.isNewHigh ? '<span class="ac-newhigh">★ 新纪录</span><br/>' : '') +
+            `${summary}${assistLine}<br/>无倒计时、无下注，随时可以再来。`,
+          btn: '再来一局',
+          onBtn: showStart,
+        });
+        return true;
+      }
+
+      function hit() {
+        if (state !== 'playing' || phase !== 'player') return false;
+        player.push(drawFromDeck());
+        A.Sfx.play('ui');
+        const value = handValue(player);
+        if (value.bust) {
+          finishHand();
+          return true;
+        }
+        if (value.total === 21) {
+          dealerPlay();
+          finishHand();
+          return true;
+        }
+        autosave.saveNow();
+        return true;
+      }
+
+      function stand() {
+        if (state !== 'playing' || phase !== 'player') return false;
+        dealerPlay();
+        finishHand();
+        return true;
+      }
+
+      function next() {
+        if (state !== 'playing' || phase !== 'settled') return false;
+        if (handNo >= HANDS_TOTAL) return false;
+        handNo += 1;
+        dealHand();
+        autosave.saveNow();
+        return true;
+      }
+
+      /* ---------- 可选道具：换一张 / 看底牌（每局有限，使用即 assisted） ---------- */
+
+      function toolAvailable(id) {
+        if (state !== 'playing' || phase !== 'player') return false;
+        if (id === 'swap') return tools.swap > 0 && player.length > 0;
+        if (id === 'peek') return tools.peek > 0 && !holeRevealed;
+        return false;
+      }
+
+      function useTool(id) {
+        if (!toolAvailable(id)) return false;
+        assisted = true;
+        if (id === 'swap') {
+          tools.swap = Math.max(0, tools.swap - 1);
+          const replacement = drawFromDeck();
+          player[player.length - 1] = replacement;
+          A.Sfx.play('ui');
+          A.showToast('换一张：最后一张牌已替换');
+          const value = handValue(player);
+          autosave.saveNow();
+          joyTools.sync();
+          /* 换牌后若爆牌或凑到 21，立即按当前手结算，效果不会遗留到下一手。 */
+          if (value.bust) {
+            finishHand();
+          } else if (value.total === 21) {
+            dealerPlay();
+            finishHand();
+          }
+          return true;
+        }
+        if (id === 'peek') {
+          tools.peek = Math.max(0, tools.peek - 1);
+          holeRevealed = true;
+          A.Sfx.play('bell');
+          A.showToast('看底牌：庄家的暗牌已揭示');
+          autosave.saveNow();
+          joyTools.sync();
+          return true;
+        }
+        return false;
+      }
+
+      const joyTools = A.createToolbelt(
+        [
+          {
+            id: 'swap',
+            icon: '🂠',
+            name: '换一张',
+            description: '替换你最后一张牌，每局 1 次',
+            getCount: () => tools.swap,
+            canUse: () => toolAvailable('swap'),
+            use: () => useTool('swap'),
+          },
+          {
+            id: 'peek',
+            icon: '👁',
+            name: '看底牌',
+            description: '本手揭示庄家暗牌，每局 2 次',
+            getCount: () => tools.peek,
+            canUse: () => toolAvailable('peek'),
+            use: () => useTool('peek'),
+            active: () => holeRevealed && state === 'playing' && phase === 'player',
+          },
+        ],
+        { isPlaying: () => state === 'playing', keys: ['1', '2'], label: '二十一点可选道具', placement: 'below' }
+      );
+
+      /* ---------- 点按与键盘 ---------- */
+
+      function inRect(rect, x, y) {
+        return x >= rect.x && x <= rect.x + rect.w && y >= rect.y && y <= rect.y + rect.h;
+      }
+
+      function handleTap() {
+        const x = input.pointer.x;
+        const y = input.pointer.y;
+        if (phase === 'player') {
+          if (inRect(HIT_RECT, x, y)) {
+            pressTimer = 0.12;
+            pressChoice = 'hit';
+            hit();
+            return;
+          }
+          if (inRect(STAND_RECT, x, y)) {
+            pressTimer = 0.12;
+            pressChoice = 'stand';
+            stand();
+            return;
+          }
+        } else if (phase === 'settled') {
+          if (inRect(NEXT_RECT, x, y)) {
+            pressTimer = 0.12;
+            pressChoice = 'next';
+            next();
+          }
+        }
+      }
+
+      window.addEventListener('keydown', (event) => {
+        if (event.repeat || event.ctrlKey || event.metaKey || event.altKey || event.isComposing) return;
+        const target = event.target;
+        if (target && target.tagName) {
+          const tag = target.tagName.toLowerCase();
+          if (tag === 'input' || tag === 'textarea' || tag === 'select' || target.isContentEditable) return;
+        }
+        if (event.key === 'h' || event.key === 'H') {
+          if (hit()) event.preventDefault();
+        } else if (event.key === 's' || event.key === 'S') {
+          if (stand()) event.preventDefault();
+        } else if (event.key === ' ' || event.key === 'Spacebar') {
+          if (next()) event.preventDefault();
+        }
+      });
+
+      function syncMute() {
+        dom.mute.textContent = A.Sfx.muted ? '🔇' : '🔊';
+      }
+      dom.mute.addEventListener('click', () => {
+        A.Sfx.setMuted(!A.Sfx.muted);
+        syncMute();
+      });
+
+      /* ---------- 更新与绘制 ---------- */
+
+      function update(dt) {
+        if (pressTimer > 0) pressTimer = Math.max(0, pressTimer - dt);
+        if (state !== 'playing') {
+          input.endFrame();
+          return;
+        }
+        autosave.tick(dt);
+        if (input.pointer.wentDown) handleTap();
+        input.endFrame();
+      }
+
+      function drawBackground() {
+        const bg = ctx.createLinearGradient(0, 0, 0, H);
+        bg.addColorStop(0, '#0b1020');
+        bg.addColorStop(0.55, '#0d1630');
+        bg.addColorStop(1, '#101b3a');
+        ctx.fillStyle = bg;
+        ctx.fillRect(0, 0, W, H);
+        const glow = ctx.createRadialGradient(W / 2, 300, 30, W / 2, 300, 380);
+        glow.addColorStop(0, 'rgba(224,104,138,0.08)');
+        glow.addColorStop(1, 'rgba(224,104,138,0)');
+        ctx.fillStyle = glow;
+        ctx.fillRect(0, 0, W, H);
+        ctx.save();
+        ctx.font = '120px system-ui, serif';
+        ctx.fillStyle = 'rgba(255,210,63,0.045)';
+        ctx.textAlign = 'left';
+        ctx.textBaseline = 'top';
+        ctx.fillText('♠', -26, 470);
+        ctx.textAlign = 'right';
+        ctx.fillText('♥', W + 26, 40);
+        ctx.restore();
+        ctx.strokeStyle = 'rgba(255,210,63,0.14)';
+        ctx.lineWidth = 1;
+        ctx.beginPath();
+        ctx.moveTo(24, 90);
+        ctx.lineTo(W - 24, 90);
+        ctx.stroke();
+      }
+
+      function drawHeader() {
+        A.draw.label(ctx, '二十一点 · 静局', W / 2, 28, { font: 'bold 18px system-ui, sans-serif', color: '#ffd23f' });
+        A.draw.label(ctx, `第 ${handNo} / ${HANDS_TOTAL} 手 · 本局 ${score} 分`, W / 2, 52, {
+          font: '13px system-ui, sans-serif',
+          color: '#eef1ff',
+        });
+        const assist = assisted ? ' · 本局已用辅助' : '';
+        A.draw.label(ctx, `最高 ${Math.max(high, score)} 分${assist}`, W / 2, 74, {
+          font: '12px system-ui, sans-serif',
+          color: '#93a0c8',
+        });
+      }
+
+      function drawPill(text, rightEdge, centerY, gold) {
+        ctx.save();
+        ctx.font = 'bold 13px system-ui, sans-serif';
+        const width = ctx.measureText(text).width + 22;
+        const height = 28;
+        const x = rightEdge - width;
+        const y = centerY - height / 2;
+        A.draw.roundRect(ctx, x, y, width, height, 14);
+        ctx.fillStyle = gold ? 'rgba(255,210,63,0.14)' : 'rgba(21,29,58,0.88)';
+        ctx.fill();
+        ctx.strokeStyle = gold ? 'rgba(255,210,63,0.45)' : '#2a3560';
+        ctx.lineWidth = 1;
+        ctx.stroke();
+        A.draw.label(ctx, text, x + width / 2, centerY + 1, {
+          font: 'bold 13px system-ui, sans-serif',
+          color: gold ? '#ffe08a' : '#dbe4ff',
+        });
+        ctx.restore();
+      }
+
+      function drawCard(x, y, code, hidden) {
+        ctx.save();
+        ctx.fillStyle = 'rgba(0,0,0,0.35)';
+        A.draw.roundRect(ctx, x + 2, y + 4, CARD_W, CARD_H, 12);
+        ctx.fill();
+        A.draw.roundRect(ctx, x, y, CARD_W, CARD_H, 12);
+        if (hidden) {
+          const back = ctx.createLinearGradient(x, y, x + CARD_W, y + CARD_H);
+          back.addColorStop(0, '#22305c');
+          back.addColorStop(1, '#141d3c');
+          ctx.fillStyle = back;
+          ctx.fill();
+          ctx.strokeStyle = '#4a5f9e';
+          ctx.lineWidth = 2;
+          ctx.stroke();
+          ctx.save();
+          ctx.clip();
+          ctx.fillStyle = 'rgba(255,210,63,0.18)';
+          for (let dy = 16; dy < CARD_H - 8; dy += 22) {
+            for (let dx = 16; dx < CARD_W - 8; dx += 22) {
+              ctx.beginPath();
+              ctx.arc(x + dx, y + dy, 2.2, 0, Math.PI * 2);
+              ctx.fill();
+            }
+          }
+          ctx.restore();
+          A.draw.label(ctx, '?', x + CARD_W / 2, y + CARD_H / 2 - 2, { font: 'bold 34px system-ui, sans-serif', color: '#ffd23f' });
+          A.draw.label(ctx, '暗牌', x + CARD_W / 2, y + CARD_H - 20, { font: '11px system-ui, sans-serif', color: '#93a0c8' });
+        } else {
+          ctx.fillStyle = '#f6f8ff';
+          ctx.fill();
+          ctx.strokeStyle = '#d0daf2';
+          ctx.lineWidth = 1.5;
+          ctx.stroke();
+          const color = isRedCode(code) ? '#c53a5c' : '#20284a';
+          const rank = RANKS[rankIndex(code)];
+          const suit = SUITS[suitIndex(code)];
+          A.draw.label(ctx, rank, x + 12, y + 24, { align: 'left', font: 'bold 28px system-ui, sans-serif', color });
+          A.draw.label(ctx, suit, x + 12, y + 50, { align: 'left', font: '22px system-ui, sans-serif', color });
+          A.draw.label(ctx, suit, x + CARD_W / 2, y + CARD_H - 36, { font: '34px system-ui, sans-serif', color, alpha: 0.9 });
+          A.draw.label(ctx, rank, x + CARD_W - 10, y + CARD_H - 14, {
+            align: 'right',
+            font: 'bold 12px system-ui, sans-serif',
+            color,
+            alpha: 0.7,
+          });
+        }
+        ctx.restore();
+      }
+
+      function drawRow(cards, isDealer) {
+        const labelY = isDealer ? 102 : 302;
+        const rowY = isDealer ? 112 : 312;
+        A.draw.label(ctx, isDealer ? '庄家' : '你', 26, labelY, {
+          align: 'left',
+          font: 'bold 14px system-ui, sans-serif',
+          color: '#dbe4ff',
+        });
+        let pillText;
+        let gold = false;
+        if (!cards.length) {
+          pillText = isDealer ? '庄家' : '你的牌';
+        } else if (isDealer && dealerCardHidden(1)) {
+          const visible = handValue(cards.slice(0, 1));
+          pillText = `庄家 ${visible.total} + ?`;
+        } else {
+          const value = handValue(cards);
+          const suffix = value.bust ? ' 爆牌' : value.blackjack ? ' Blackjack' : '';
+          pillText = `${isDealer ? '庄家' : '你'} ${value.total}${suffix}`;
+          gold = value.blackjack && !isDealer;
+        }
+        drawPill(pillText, W - 26, labelY, gold);
+        if (!cards.length) {
+          const start = W / 2 - (CARD_W * 2 + CARD_GAP) / 2;
+          ctx.save();
+          ctx.setLineDash([7, 7]);
+          ctx.strokeStyle = 'rgba(147,160,200,0.3)';
+          ctx.lineWidth = 2;
+          for (let i = 0; i < 2; i++) {
+            A.draw.roundRect(ctx, start + i * (CARD_W + CARD_GAP), rowY, CARD_W, CARD_H, 12);
+            ctx.stroke();
+          }
+          ctx.restore();
+          return;
+        }
+        const count = cards.length;
+        let step = CARD_W + CARD_GAP;
+        if (count > 4) step = Math.min(step, (W - 52 - CARD_W) / (count - 1));
+        const span = CARD_W + (count - 1) * step;
+        const start = (W - span) / 2;
+        for (let i = 0; i < count; i++) {
+          drawCard(start + i * step, rowY, cards[i], isDealer && dealerCardHidden(i));
+        }
+      }
+
+      function drawMessage() {
+        if (phase === 'settled' && handResult) {
+          const text = RESULT_TEXT[handResult.result] || ['本手结束', '+0'];
+          A.draw.label(ctx, `${text[0]} ${text[1]}`, W / 2, 252, {
+            font: 'bold 20px system-ui, sans-serif',
+            color: handResult.points > 0 ? '#ffd23f' : '#a9b5d8',
+          });
+          A.draw.label(ctx, `你 ${handResult.playerTotal} · 庄家 ${handResult.dealerTotal} · 本局 ${score} 分`, W / 2, 278, {
+            font: '13px system-ui, sans-serif',
+            color: '#93a0c8',
+          });
+        } else if (phase === 'player') {
+          A.draw.label(ctx, '要牌，还是停牌？', W / 2, 252, { font: 'bold 20px system-ui, sans-serif', color: '#eef1ff' });
+          A.draw.label(ctx, '让点数更接近 21；超过 21 就爆牌', W / 2, 278, { font: '13px system-ui, sans-serif', color: '#93a0c8' });
+        } else {
+          A.draw.label(ctx, '准备好就开始', W / 2, 252, { font: 'bold 20px system-ui, sans-serif', color: '#eef1ff' });
+          A.draw.label(ctx, '固定 6 手 · 不下注 · 无倒计时', W / 2, 278, { font: '13px system-ui, sans-serif', color: '#93a0c8' });
+        }
+      }
+
+      function drawToolLine() {
+        const text = `换一张 ×${tools.swap} · 看底牌 ×${tools.peek}${assisted ? ' · 本局已用辅助' : ''}`;
+        A.draw.label(ctx, text, W / 2, 456, { font: '12px system-ui, sans-serif', color: '#93a0c8' });
+      }
+
+      function drawButton(rect, label, sub, primary, pressed) {
+        ctx.save();
+        A.draw.roundRect(ctx, rect.x, rect.y, rect.w, rect.h, 18);
+        if (primary) {
+          const fill = ctx.createLinearGradient(rect.x, rect.y, rect.x, rect.y + rect.h);
+          fill.addColorStop(0, pressed ? '#ffe27a' : '#ffd23f');
+          fill.addColorStop(1, pressed ? '#f2bd2a' : '#e8a92a');
+          ctx.fillStyle = fill;
+        } else {
+          ctx.fillStyle = pressed ? 'rgba(80,100,160,0.45)' : 'rgba(28,38,72,0.92)';
+        }
+        ctx.fill();
+        ctx.strokeStyle = primary ? 'rgba(255,236,160,0.8)' : '#3a4a80';
+        ctx.lineWidth = 1.5;
+        ctx.stroke();
+        A.draw.label(ctx, label, rect.x + rect.w / 2, rect.y + rect.h / 2 - 10, {
+          font: 'bold 26px system-ui, sans-serif',
+          color: primary ? '#241800' : '#eef1ff',
+        });
+        A.draw.label(ctx, sub, rect.x + rect.w / 2, rect.y + rect.h / 2 + 24, {
+          font: '12px system-ui, sans-serif',
+          color: primary ? '#5a4400' : '#93a0c8',
+        });
+        ctx.restore();
+      }
+
+      function drawActions() {
+        if (phase === 'player') {
+          drawButton(HIT_RECT, '要牌', 'H', true, pressTimer > 0 && pressChoice === 'hit');
+          drawButton(STAND_RECT, '停牌', 'S', false, pressTimer > 0 && pressChoice === 'stand');
+        } else if (phase === 'settled') {
+          drawButton(NEXT_RECT, '下一手', '空格', true, pressTimer > 0 && pressChoice === 'next');
+        }
+      }
+
+      function drawFooter() {
+        A.draw.label(ctx, 'H / S 要牌停牌 · 空格 下一手 · P / Esc 暂停', W / 2, 660, {
+          font: '12px system-ui, sans-serif',
+          color: '#93a0c8',
+        });
+        A.draw.label(ctx, '无倒计时 · 无下注 · 固定 6 手', W / 2, 686, {
+          font: '11px system-ui, sans-serif',
+          color: 'rgba(147,160,200,0.7)',
+        });
+      }
+
+      function render() {
+        stage.beginFrame();
+        drawBackground();
+        drawHeader();
+        drawRow(dealer, true);
+        drawRow(player, false);
+        drawMessage();
+        drawToolLine();
+        drawActions();
+        drawFooter();
+      }
+
+      const loop = A.createLoop({
+        update,
+        render,
+        onAutoPause() {
+          if (state === 'playing') pauseByUser();
+        },
+      });
+
+      const pauseUi = A.bindPause({
+        button: dom.pause,
+        pause: pauseByUser,
+        resume: resumeGame,
+        isPlaying: () => state === 'playing',
+        isPaused: () => state === 'paused',
+      });
+
+      window.addEventListener('pagehide', () => {
+        if (state === 'playing' || state === 'paused') autosave.saveNow();
+      });
+      document.addEventListener('visibilitychange', () => {
+        if (document.hidden && (state === 'playing' || state === 'paused')) autosave.saveNow();
+      });
+
+      /* ---------- 确定性自检：纯函数断言，不修改局内状态 ---------- */
+
+      function runSelftest() {
+        const details = [];
+        let pass = 0;
+        let fail = 0;
+        function check(name, ok, info) {
+          details.push({ name, ok: !!ok, info: info === undefined ? null : info });
+          if (ok) pass += 1;
+          else fail += 1;
+        }
+        function testCard(rank, suit) {
+          return (rank - 1) * 4 + suit;
+        }
+
+        const blackjackCards = [testCard(1, 0), testCard(13, 1)];
+        const blackjackValue = handValue(blackjackCards);
+        check('A+K 两张 21 点为 Blackjack', blackjackValue.total === 21 && blackjackValue.blackjack && !blackjackValue.bust, blackjackValue);
+        check('Blackjack 结算 +250', settleOutcome(blackjackCards, [testCard(9, 0), testCard(8, 0)]).points === 250);
+
+        check('A+9 = 20（A 按 11）', handValue([testCard(1, 0), testCard(9, 0)]).total === 20);
+        check('A+9+9 = 19（A 自动按 1）', handValue([testCard(1, 0), testCard(9, 0), testCard(9, 1)]).total === 19);
+        check('A+A+9 = 21（一张 A 仍按 11）', handValue([testCard(1, 0), testCard(1, 1), testCard(9, 0)]).total === 21);
+
+        const bustCards = [testCard(13, 0), testCard(12, 0), testCard(5, 0)];
+        const bustValue = handValue(bustCards);
+        check('K+Q+5 = 25 爆牌', bustValue.total === 25 && bustValue.bust, bustValue);
+        check('玩家爆牌结算 +0', settleOutcome(bustCards, [testCard(10, 0), testCard(7, 0)]).points === 0);
+
+        check(
+          '庄家 17 点停牌（含软 17）',
+          dealerShouldStand([testCard(10, 0), testCard(7, 0)]) &&
+            dealerShouldStand([testCard(1, 0), testCard(6, 0)]) &&
+            !dealerShouldStand([testCard(10, 0), testCard(6, 0)])
+        );
+        check('20 对 20 平局 +25', settleOutcome([testCard(10, 0), testCard(10, 1)], [testCard(10, 2), testCard(10, 3)]).points === 25);
+        check(
+          '普通 21 点（3 张）+150',
+          settleOutcome([testCard(7, 0), testCard(7, 1), testCard(7, 2)], [testCard(10, 0), testCard(9, 0)]).points === 150
+        );
+        check(
+          '庄家爆牌 +100',
+          settleOutcome([testCard(10, 0), testCard(9, 0)], [testCard(10, 1), testCard(6, 0), testCard(8, 0)]).points === 100
+        );
+        check(
+          '庄家 Blackjack 压过普通 21 点',
+          settleOutcome([testCard(7, 0), testCard(7, 1), testCard(7, 2)], [testCard(1, 0), testCard(13, 0)]).points === 0
+        );
+        check(
+          '双方 Blackjack 为平局 +25',
+          (() => {
+            const both = settleOutcome([testCard(1, 0), testCard(13, 0)], [testCard(1, 1), testCard(12, 1)]);
+            return both.points === 25 && both.result === 'push-blackjack' && both.playerBlackjack && both.dealerBlackjack;
+          })()
+        );
+
+        const sixHands = [
+          settleOutcome([testCard(10, 0), testCard(9, 0)], [testCard(10, 1), testCard(7, 0)]),
+          settleOutcome([testCard(10, 0), testCard(10, 1)], [testCard(10, 2), testCard(10, 3)]),
+          settleOutcome([testCard(1, 0), testCard(13, 0)], [testCard(9, 0), testCard(8, 0)]),
+          settleOutcome([testCard(13, 1), testCard(12, 0), testCard(5, 0)], [testCard(10, 1), testCard(7, 0)]),
+          settleOutcome([testCard(7, 0), testCard(7, 1), testCard(7, 2)], [testCard(10, 0), testCard(9, 0)]),
+          settleOutcome([testCard(10, 0), testCard(8, 0)], [testCard(10, 1), testCard(9, 0)]),
+        ];
+        let total = 0;
+        sixHands.forEach((item) => {
+          total += item.points;
+        });
+        const expectedResults = ['win', 'push', 'blackjack', 'bust', 'twenty-one', 'lose'];
+        const resultsMatch = sixHands.every((item, index) => item.result === expectedResults[index]);
+        check('一局固定 6 手、逐手结算', HANDS_TOTAL === 6 && sixHands.length === 6 && resultsMatch, { results: sixHands.map((item) => item.result) });
+        check('六手总分累计 525', total === 525, { total });
+
+        return { pass, fail, details };
+      }
+
+      /* ---------- 测试钩子（只在 #test 下暴露） ---------- */
+
+      if (location.hash.indexOf('#test') !== -1) {
+        window.__arcadeTest = {
+          joyInfo() {
+            return { tools: { swap: tools.swap, peek: tools.peek }, state };
+          },
+          info() {
+            return {
+              state,
+              hand: handNo,
+              score,
+              player: player.map(cardInfo),
+              dealer: dealer.map((code, index) => Object.assign(cardInfo(code), { hidden: dealerCardHidden(index) })),
+              phase,
+              tools: { swap: tools.swap, peek: tools.peek },
+            };
+          },
+          setSeed(value) {
+            seedRandom(value);
+            return true;
+          },
+          deal() {
+            if (state === 'ready' || state === 'over') {
+              startRound();
+              return state === 'playing';
+            }
+            if (state === 'paused') {
+              state = 'playing';
+              ui.hide();
+              loop.resume();
+              pauseUi.sync();
+              joyTools.sync();
+            }
+            if (phase === 'settled') return next();
+            dealHand();
+            autosave.saveNow();
+            return state === 'playing';
+          },
+          hit() {
+            return hit();
+          },
+          stand() {
+            return stand();
+          },
+          next() {
+            return next();
+          },
+          /* 确定性自动打完 6 手（<17 要牌，否则停牌），走真实结算与 recordPlay 路径。 */
+          playToEnd() {
+            /* 未显式 setSeed 时用固定种子，保证同一版本的自动对局可复现。 */
+            if (!seedExplicit) rng = mulberry32(PLAY_TO_END_SEED);
+            startRound();
+            let guard = 0;
+            while (state === 'playing' && guard < 200) {
+              guard += 1;
+              if (phase === 'player') {
+                if (handValue(player).total < 17) hit();
+                else stand();
+              } else if (phase === 'settled') {
+                if (!next()) break;
+              } else {
+                break;
+              }
+            }
+            const progress = A.Progress.get('blackjack');
+            return { hands: handLog.length, score, plays: progress.plays, high: progress.high };
+          },
+          selftest() {
+            return runSelftest();
+          },
+          useJoyTool(id) {
+            const button = joyTools.buttons[id];
+            if (!button) return false;
+            button.click();
+            return true;
+          },
+        };
+      }
+
+      /* ---------- 初始化 ---------- */
+
+      syncMute();
+      resetRound();
+      state = 'ready';
+      const saved = autosave.load();
+      if (saved) {
+        A.showResumePrompt(ui, saved, {
+          name: '二十一点 · 静局',
+          onResume: () => {
+            if (restore(saved.data)) {
+              state = 'playing';
+              ui.hide();
+              loop.resume();
+              pauseUi.sync();
+              joyTools.sync();
+              autosave.saveNow();
+            } else {
+              autosave.clear();
+              showStart();
+            }
+          },
+          onRestart: () => {
+            autosave.clear();
+            showStart();
+          },
+        });
+        pauseUi.sync();
+        joyTools.sync();
+      } else {
+        showStart();
+      }
+      loop.start();
+    })();
+  </script>
+</body>
+</html>

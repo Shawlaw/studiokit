@@ -3,7 +3,7 @@
 <head>
   <meta charset="utf-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
-  <meta name="description" content="街机厅 Arcade：13 款竖屏街机小游戏合集，由简到难，随时暂停，局内进度本地自动保存；支持游玩时长/轮次统计、分享、安装到桌面与离线预载。" />
+  <meta name="description" content="街机厅 Arcade：16 款竖屏小游戏合集（13 款挑战 + 3 款平和棋牌），由简到难，随时暂停，局内进度本地自动保存；支持游玩时长/轮次统计、分享、安装到桌面与离线预载。" />
   <meta name="theme-color" content="#0b1020" />
   <link rel="manifest" href="./manifest.webmanifest" />
   <link rel="icon" type="image/png" sizes="192x192" href="./icons/icon-192.png" />
@@ -23,7 +23,7 @@
     <header class="hall-head">
       <div>
         <h1>🕹 街机厅 Arcade</h1>
-        <p class="hall-sub">13 款竖屏小游戏 · 每款可选道具 + 6 关挑战 · 自动收集积分记录 · 无签到与每日奖励 · 随时圆满收工 · v<span data-hall-version>0.8.6</span></p>
+        <p class="hall-sub">16 款竖屏小游戏 · 13 款 6 关挑战 + 3 款平和棋牌 · 自动收集积分记录 · 无签到与每日奖励 · 随时圆满收工 · v<span data-hall-version>0.9.0</span></p>
       </div>
       <div class="hall-stats">
         <span>累计时长 <strong data-stat-time>0 分钟</strong></span>
@@ -150,7 +150,7 @@
       <p>点右上角 ⛶ 或按 F 进入全屏沉浸；手机浏览器不支持网页全屏时会自动切换为沉浸布局。每款游戏都有 2 个主动可选道具，黄金矿工保留 4 个；按按钮或页面提示的快捷键使用。</p>
       <p>快乐约定：没有签到、每日奖励、付费抽奖或限时回归任务。道具每局固定补给，不需要刷奖励；多款游戏达到小目标就能圆满收工。</p>
       <p>每款游戏都从轻松开局，随分数、关卡或时间逐步加速；离开页面会自动暂停并保存局内进度，下次打开可继续。连续有效游玩 20 分钟只会温柔提醒一次，不会强制暂停或反复催促。</p>
-      <p>「预载全部游戏」会把中心页、引擎与 13 款游戏写入浏览器缓存；之后即使断网，也能从桌面图标或本页直接进入。首次预载需要联网，游戏更新后重新预载即可。</p>
+      <p>「预载全部游戏」会把中心页、引擎与 16 款游戏写入浏览器缓存；之后即使断网，也能从桌面图标或本页直接进入。首次预载需要联网，游戏更新后重新预载即可。</p>
       <p>物理与绘制由 apps/arcade/engine.js 自研实现，无任何外部依赖或网络请求。</p>
     </footer>
 
@@ -983,7 +983,7 @@
           dom.offlineStatus.textContent = `已缓存 ${status.gamesCached}/${status.gamesTotal} 款游戏；未缓存的游戏断网时无法打开。${tail}`;
         } else if (status.coreCached >= status.coreTotal && status.coreTotal > 0) {
           dom.offline.textContent = '⇩ 预载全部游戏';
-          dom.offlineStatus.textContent = '中心页外壳已离线可用；预载 13 款游戏后断网也能直接开玩。' + tail;
+          dom.offlineStatus.textContent = '中心页外壳已离线可用；预载 16 款游戏后断网也能直接开玩。' + tail;
         } else {
           dom.offline.textContent = '⇩ 预载全部游戏';
           dom.offlineStatus.textContent = '正在准备离线缓存…' + tail;
@@ -1024,7 +1024,7 @@
         offlineState.busy = true;
         dom.offline.disabled = true;
         dom.offline.textContent = '⇩ 正在预载…';
-        dom.offlineStatus.textContent = '正在把中心页、引擎与 13 款游戏写入浏览器缓存，请保持联网…';
+        dom.offlineStatus.textContent = '正在把中心页、引擎与 16 款游戏写入浏览器缓存，请保持联网…';
         setOfflineBar(0, 1);
         try {
           const urls = A.Offline.preloadUrls();
