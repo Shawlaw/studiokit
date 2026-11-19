@@ -1462,7 +1462,7 @@
       "id": "T082",
       "title": "Arcade 新版本发布：main 双端部署与线上验证",
       "kind": "agent",
-      "status": "IN_PROGRESS",
+      "status": "DONE",
       "dependsOn": [
         "T081"
       ],
@@ -1475,7 +1475,9 @@
         "双端线上真实浏览器验证新棋牌游戏、代表性挑战优化、SW 与零 console error",
         "发布后证据和任务状态同步；真机未实测项如实记录"
       ],
-      "claimedAt": "2026-11-20T01:55:00+08:00"
+      "claimedAt": "2026-11-20T01:55:00+08:00",
+      "completedAt": "2026-11-20T02:20:00+08:00",
+      "evidence": "提交 eb5e641 推送 main；Actions run 44582961215 的 Validate and build / Deploy GitHub Pages / Deploy Cloudflare Pages / Verify both deployments 四 job 全成功；CI 与本地 tools/verify_deploy.py 均 41/41 文件 SHA-256 双端一致（Arcade 0.9.0 / Badge 2.2.1 / Venue 0.2.0）；双端线上无头 Chrome 各 20/20（中心页 0.9.0 + 16 卡 + 三款棋牌注册、三款棋牌 selftest/开始/暂停/续玩、SW 缓存键 studiokit-arcade-0.9.0-v1、0 console error）。真机触控与五子棋 AI 手感仍 UNVERIFIED。"
     }
   ]
 }

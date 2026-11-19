@@ -1,6 +1,6 @@
 # Arcade Changelog
 
-## 0.9.0 — 2026-11-20
+## 0.9.0 — 2026-11-20（已双端发布）
 
 在 0.8.6 基础上做两件事：逐款修复挑战模式的公平性/续档/计分问题，并新增三款无倒计时单机棋牌。设计与回滚见 `DESIGN-0.9.0.md`；**不改挑战关卡数据、localStorage key 与 Schema**（2048 继续挑战记录语义除外）。
 
@@ -9,7 +9,8 @@
 - **公平性与可读性**：2048 滑动阈值按 CSS 尺寸换算；方块挑战换块同步队列；雪铃按 kind 区分休止/彩铃/蓝红铃并禁用无效安可；砖块 C03/C06 锁定门常驻提示；层塔挑战对齐改用关卡目标偏置并记录真实最大倾斜；矿工标注价值/重量；极速车道近距奖励由误算的 5 改为 10+5，出生车道不安全时自动移位；影跃最佳成绩改为跨重试累计时间并可视化易碎平台；星海挑战刷新恢复 Boss 计时与拾取游标、隐藏重复 HUD。
 - **兼容**：三款新游戏只使用 `studiokit:arcade:progress:v1` 与 `studiokit:arcade:runs:v1`，不新增 key；既有备份、导入导出与积分记录格式不变。
 - **版本**：`ARCADE_VERSION`、注册表、中心页与 SW `VERSION` 统一升至 `0.9.0`，缓存键 `studiokit-arcade-0.9.0-v1`。
-- **测试**：`arcade_smoke.mjs`、`arcade_zen_scores_test.mjs`、`arcade_gameplay_test.mjs --suite=base --repeat=2`、新增 `arcade_calm_games_test.mjs`、`validate_site.py` / `build_site.py` / `node --check` / `check_inline_scripts.mjs` 全部通过（具体数字见发布记录）；真机触控与 AI 手感 UNVERIFIED。
+- **测试**：`arcade_smoke.mjs` **94/94**、`arcade_zen_scores_test.mjs` **14/14**、`arcade_gameplay_test.mjs --suite=all --repeat=1` **104/104** 与 base **22/22**、新增 `arcade_calm_games_test.mjs` **17/17**、`validate_site.py` / `build_site.py` / `node --check` / `check_inline_scripts.mjs` 全部通过；真机触控与 AI 手感 UNVERIFIED。
+- **发布**：提交 `eb5e641` 推送 `main`；Actions run `44582961215` 的 Validate and build / Deploy GitHub Pages / Deploy Cloudflare Pages / Verify both deployments 四个 job 全部成功；CI 与本地 `tools/verify_deploy.py` 均 **41/41** 文件 SHA-256 双端一致（Arcade `0.9.0` / Badge `2.2.1` / Venue `0.2.0`，manifest `application/manifest+json`）；双端线上无头 Chrome 各 20/20（中心页 0.9.0 + 16 卡 + 三款棋牌注册、三款棋牌规则自检/开始/暂停/续玩、SW 缓存键 `studiokit-arcade-0.9.0-v1`、0 console error）。
 
 ## 0.8.6 — 2026-11-19（已双端发布）
 

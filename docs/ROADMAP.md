@@ -167,9 +167,9 @@
 - [x] 门禁：`arcade_smoke.mjs` **91/91**、`arcade_zen_scores_test.mjs` **14/14**、gameplay base **22/22**，validate/build/node 全过；320/375/390/430 布局通过，真机手感 UNVERIFIED。
 - [x] 发布证据：提交 `14a9160` 推送 `main`；Actions `44553437432` 四 job 全成功；CI 与本地 `verify_deploy.py` 均 **38/38** 双端一致；双端线上无头 Chrome **20/20**（SW、双按钮、经典/挑战相对转向、结算重选、方块三入口、0 console error）；SW 缓存键 `studiokit-arcade-0.8.6-v1`。
 
-## 0.9.0 发布批次（2026-11-20，待发布）
+## 0.9.0 发布批次（2026-11-20 已双端发布）
 
-### Arcade 0.9.0 — 挑战公平性修复 + 三款平和棋牌（本地门禁通过，待双端发布）
+### Arcade 0.9.0 — 挑战公平性修复 + 三款平和棋牌（已发布）
 
 - [x] 审查口径：把「自动回放能通关」与「真人是否好玩/公平」分开；逐款核对代码事实、挑战数据与测试证据，识别出阻断级缺陷、公平性缺陷与内容密度不足三类问题（见 `apps/arcade/DESIGN-0.9.0.md` §1–§2）。
 - [x] 阻断级修复：记忆翻牌挑战 peek 锁死翻牌与续档丢道具；2048 继续挑战后最终成绩丢失；砖块首次拖动误发球；层塔续档重开一箱；矿工最后一钩不结算。
@@ -177,7 +177,7 @@
 - [x] 新增棋牌 3 款：二十一点（6 手无下注）、五子棋（11 路本地 AI）、纸牌接龙（Klondike 抽 1）；均为点按优先、无倒计时、无签到/每日奖励，复用 `progress:v1` / `runs:v1` 不新增 key。
 - [x] 兼容：挑战关卡数据与参考解不变；localStorage key/Schema 不变；导出/导入格式不变；2048 记录语义变化仅影响“胜利后继续”的最终落库时机。
 - [x] 门禁：`arcade_smoke.mjs` **94/94**、`arcade_zen_scores_test.mjs` **14/14**、`arcade_gameplay_test.mjs --suite=all --repeat=1` **104/104** 与 base **22/22**、新增 `arcade_calm_games_test.mjs` **17/17**、validate/build/node/`check_inline_scripts` 全过；真机与 AI 手感 UNVERIFIED。
-- [ ] 发布证据（待回填）：提交推送 `main`、Actions 四 job、`verify_deploy.py` 41 项双端一致与线上浏览器结果；成功后才更新 `docs/RELEASE-RUNBOOK.md`、`TASKS.md` 与本文件。
+- [x] 发布证据：提交 `eb5e641` 推送 `main`；Actions run `44582961215` 的 Validate and build / Deploy GitHub Pages / Deploy Cloudflare Pages / Verify both deployments 四个 job 全部成功；CI 与本地 `tools/verify_deploy.py` 均 **41/41** 文件 SHA-256 双端一致（Arcade `0.9.0` / Badge `2.2.1` / Venue `0.2.0`，manifest `application/manifest+json`）；双端线上无头 Chrome 各 20/20（中心页 0.9.0 + 16 卡 + 三款棋牌注册、三款棋牌规则自检/开始/暂停/续玩、SW 缓存键 `studiokit-arcade-0.9.0-v1`、0 console error）。（详细记录见 `docs/RELEASE-RUNBOOK.md`）
 
 ## Now
 

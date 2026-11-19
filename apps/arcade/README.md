@@ -1,6 +1,6 @@
 # 街机厅 Arcade
 
-**应用版本：0.9.0（2026-11-20）｜进度 Schema：v1｜局内存档 Schema：v1｜游玩统计 Schema：v1｜积分记录 Schema：v1**
+**应用版本：0.9.0（2026-11-20 已双端发布）｜进度 Schema：v1｜局内存档 Schema：v1｜游玩统计 Schema：v1｜积分记录 Schema：v1**
 
 竖屏街机小游戏合集：网页加载后纯本地游玩，自带自研轻量物理引擎（重力、AABB/圆碰撞、单向平台、单摆积分、塔体倾斜力矩）。所有游戏由简到难、随时可暂停，并会把未完成的局内进度自动保存在本机。0.4.0 起支持全屏/沉浸游玩，黄金矿工加入限量主动道具与更平缓的起始摆速；0.5.0 新增游玩时长/轮次统计、分享、可安装 PWA 与手动离线预载；0.6.0 加入星海突击 30 秒关卡 Boss、弹种叠加与全屏纵向移动，黄金矿工瞄准线按秒计费，并修复瞄准后摆幅衰减与点开始误触全屏；0.6.1 修复 Boss 入场阶段穿过贴顶玩家的碰撞问题；0.6.2 修复黄金矿工目标金额小数，重排俄罗斯方块触屏按钮并区分「加速 / 落底」。
 
@@ -37,6 +37,7 @@
 - 新增 `tools/arcade_calm_games_test.mjs`（三款棋牌规则自检/结算/四档布局 + 10 款游戏 regression 回归）、`tools/arcade_calm_probe.mjs`（单页接入探针）与 `tools/check_inline_scripts.mjs`（内联脚本语法）。
 - 门禁：`arcade_smoke.mjs`、`arcade_zen_scores_test.mjs`、`arcade_gameplay_test.mjs --suite=base --repeat=2`、`arcade_calm_games_test.mjs`、`validate_site.py` / `build_site.py` / `node --check` 全部通过（具体数字见发布记录）。
 - 真机 iOS/Android 触控、AI 难度手感与低端机帧率仍为 **UNVERIFIED**。
+- **发布**：提交 `eb5e641` 推送 `main`；Actions `44582961215` 四 job 全成功；CI 与本地 `tools/verify_deploy.py` 均 **41/41** 文件 SHA-256 双端一致（Arcade `0.9.0` / Badge `2.2.1` / Venue `0.2.0`）；双端线上无头 Chrome 各 20/20（中心页 0.9.0 + 16 卡、三款棋牌注册与规则自检/开始/暂停/续玩、SW 缓存键 `studiokit-arcade-0.9.0-v1`、0 console error）。
 
 ## 0.8.6 交互优化：结算重选模式 / 贪吃蛇双拇指相对转向（2026-11-19 已双端发布）
 

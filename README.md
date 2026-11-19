@@ -6,7 +6,7 @@
 - **源码：** <https://github.com/Shawlaw/studiokit>（MIT 许可）
 - **当前工具：** Badge Studio `2.2.1`；街机厅 Arcade `0.9.0`（16 款竖屏小游戏：13 款带 78 关挑战模式 + 二十一点/五子棋/纸牌接龙三款平和棋牌；俄罗斯方块禅模式 + 积分记录表 + 极速车道转向灯换道/连超/拾取 + 结算重选模式）；Venue Compare `0.2.0`（餐厅考察对比、地图标注与外部链接 / 备注，已发布）
 - **计划中的工具：** Rounded Image（尚未实现，等待原始需求/规格）
-- **待发布：** 2026-11-20，Arcade 0.9.0（三款无倒计时棋牌 + 10 款挑战公平性/续档/计分修复；GitHub Pages + Cloudflare Pages 双端流程已就绪，发布成功后回填 Actions 与 `verify_deploy.py` 证据）
+- **最近发布：** 2026-11-20，Arcade 0.9.0（三款无倒计时棋牌 + 10 款挑战公平性/续档/计分修复；GitHub Pages + Cloudflare Pages 双端；提交 `eb5e641`，Actions `44582961215` 四 job 成功，`verify_deploy.py` 41/41，双端线上无头 Chrome 20/20）
 - **运行方式：** 纯静态文件；无后端、无账号、无构建依赖、无第三方 CDN
 
 ## 目录结构
@@ -175,8 +175,8 @@ Cloudflare Pages 部署在域名根路径（当前为 `studiokit.pages.dev`，�
 
 ## 当前状态
 
-- 当前线上：Badge Studio `2.2.1`、Venue Compare `0.2.0`、街机厅 Arcade `0.8.6`。本次待发布 Arcade `0.9.0`（16 款游戏 = 13 款 6 关挑战 + 三款无倒计时平和棋牌；每款 2 个主动道具、自然收尾、一次性 20 分钟提醒与中心页随机入口；没有签到、每日奖励或付费抽奖）。
-- Arcade 0.9.0 本地门禁已通过 94 项无头浏览器冒烟、`arcade_zen_scores_test.mjs` 14/14、`arcade_gameplay_test.mjs --suite=all` 104/104 与 base 22/22、`arcade_calm_games_test.mjs` 17/17、`validate_site.py`、`build_site.py`、`check_inline_scripts.mjs` 与全部 `node --check`；双端部署与线上结果待发布后回填。
+- 已发布：Badge Studio `2.2.1`、Venue Compare `0.2.0`、街机厅 Arcade `0.9.0`（16 款游戏 = 13 款 6 关挑战 + 三款无倒计时平和棋牌；每款 2 个主动道具、自然收尾、一次性 20 分钟提醒与中心页随机入口；没有签到、每日奖励或付费抽奖）。
+- Arcade 0.9.0 本地门禁已通过 94 项无头浏览器冒烟、`arcade_zen_scores_test.mjs` 14/14、`arcade_gameplay_test.mjs --suite=all` 104/104 与 base 22/22、`arcade_calm_games_test.mjs` 17/17、`validate_site.py`、`build_site.py`、`check_inline_scripts.mjs` 与全部 `node --check`；GitHub Pages 与 Cloudflare Pages 双端逐文件一致（41/41），线上版本 `0.9.0`。
 - 真机 iOS/Android 试玩、原生全屏与系统分享面板仍为 UNVERIFIED；320/375 下五子棋/纸牌接龙的点按精度（画布内格点约 14–20 CSS px）需真机试玩裁决。
 - 规划中：Rounded Image（等待原始需求/规格，不凭空复刻）。
 - 任务、证据和未决项见 [`TASKS.md`](TASKS.md)；后续方向见 [`docs/ROADMAP.md`](docs/ROADMAP.md)。

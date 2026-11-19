@@ -84,7 +84,7 @@
 | T079 | agent | Arcade：13 游戏与 78 关趣味性审查及针对性优化 | DONE | T078 | 只读审查 13 款 × 6 关，区分代码事实/自动回放/真人未验证；修复 10 款阻断与公平性问题（记忆翻牌 peek 锁死与续档、2048 继续挑战丢分、砖块拖动误发球、层塔续档重开一箱、矿工最后一钩、车道近距奖励算反、影跃刷最佳、星海 Boss 计时、方块换块队列、雪铃铃铛可读性）；每款补 `regression()`，CG-06 107 条断言全过 |
 | T080 | agent | Arcade：新增竖屏平和单机棋牌类小游戏 | DONE | T078 | 新增二十一点/五子棋/纸牌接龙三款（无倒计时、无下注、无签到、离线）；复用 progress/runs 不新增 key；`arcade_calm_games_test` 17/17（规则自检 42 条、结算与积分记录、四档布局、2 个 44px 道具）；320/375 画布内点按粒度小于 44px 已披露为 UNVERIFIED |
 | T081 | review | Arcade 新版本集成、独立游戏性复审与发布前门禁 | DONE | T079,T080 | 独立 Reviewer：APPROVE-WITH-NOTES（0 Blocker / 3 Major / 12 Minor），Major 已闭环或披露，见 `docs/arcade/0.9.0-REVIEW.md`；smoke 94/94、zen 14/14、gameplay all 104/104、base 22/22、calm 17/17、validate/build/node/inline 全过；版本链与 41 项部署清单同步 |
-| T082 | agent | Arcade 新版本发布：main 双端部署与线上验证 | IN_PROGRESS | T081 | Owner 当前指令「都弄完之后就再发一个版本吧」即 `OWNER_AUTHORIZATION: PUBLISH_TO_MAIN`；推送后须看到四 job 成功并双端逐文件与线上实测通过 |
+| T082 | agent | Arcade 新版本发布：main 双端部署与线上验证 | DONE | T081 | Owner 当前指令「都弄完之后就再发一个版本吧」即 `OWNER_AUTHORIZATION: PUBLISH_TO_MAIN`；提交 `eb5e641` 推送 `main`；Actions `44582961215` 四 job 全成功；CI 与本地 `verify_deploy.py` **41/41** 双端一致（Arcade `0.9.0` / Badge `2.2.1` / Venue `0.2.0`）；双端线上无头 Chrome 各 20/20（中心页 0.9.0 + 16 卡、三款棋牌规则自检/开始/暂停/续玩、SW `0.9.0`、0 console error）；真机触控与 AI 手感仍 UNVERIFIED |
 
 ## 任务命令
 

@@ -2,7 +2,7 @@
 
 StudioKit 门户本身没有独立的 semver；以下按仓库里程碑与工具版本记录。各工具的详细变更见 `apps/<tool>/CHANGELOG.md`。
 
-## Arcade 0.9.0 — 2026-11-20（待发布）
+## Arcade 0.9.0 — 2026-11-20（已双端发布）
 
 ### Added
 - 新增三款无倒计时、无下注、无联网的单机棋牌小游戏：二十一点（6 手、A 自动 11/1、换牌/看底牌）、五子棋（11 路、本地启发式 AI、悔棋/提示、先预览再确认防误触）、纸牌接龙（Klondike 抽 1、点选后点目标移动、无限翻回牌库、撤销/提示）。三款复用既有 `studiokit:arcade:progress:v1` 与 `studiokit:arcade:runs:v1`，不新增 localStorage key。
@@ -24,7 +24,7 @@ StudioKit 门户本身没有独立的 semver；以下按仓库里程碑与工具
 - `arcade_smoke.mjs` **94/94**、`arcade_zen_scores_test.mjs` **14/14**、`arcade_gameplay_test.mjs --suite=all --repeat=1` **104/104** 与 base **22/22**、`arcade_calm_games_test.mjs` **17/17**（含 107 条修复 regression 断言）；`validate_site.py` / `build_site.py` / `check_inline_scripts.mjs` / `node --check` 全部通过。
 - localStorage key / Schema 不变；挑战关卡数据与参考解不变；旧备份导入与旧档恢复通过自动化验证。
 - 独立评审：0 Blocker / 3 Major / 12 Minor，Major 已在发布前闭环或写入已知限制；真机触控与五子棋 AI 手感仍 UNVERIFIED。
-- 发布计划：本次提交推送 `main` 触发 GitHub Pages + Cloudflare Pages 双端部署；`tools/verify_deploy.py` 覆盖 41 个文件逐文件比对。Actions run、双端校验与线上结果在发布成功后回填 `docs/RELEASE-RUNBOOK.md` 与 `TASKS.md`。
+- 双端发布：提交 `eb5e641` 推送 `main`；Actions run `44582961215` 的 Validate and build / Deploy GitHub Pages / Deploy Cloudflare Pages / Verify both deployments 四个 job 全部成功；CI 与本地 `tools/verify_deploy.py` 均 **41/41** 文件 SHA-256 双端一致（Arcade `0.9.0` / Badge `2.2.1` / Venue `0.2.0`，manifest `application/manifest+json`）；双端线上无头 Chrome 各 20/20（中心页 0.9.0 + 16 卡 + 三款棋牌注册、三款棋牌规则自检/开始/暂停/续玩、SW 缓存键 `studiokit-arcade-0.9.0-v1`、0 console error）。
 
 ## Arcade 0.8.6 — 2026-11-19（已双端发布）
 
