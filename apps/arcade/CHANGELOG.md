@@ -13,7 +13,7 @@ Owner 试玩反馈 6 条：极速车道卡死/车辆消失、远车临近才出�
 - 兼容：不改 localStorage key/Schema、挑战数据与其余 10 款游戏；旧局内档缺新字段按保守默认恢复。
 - 版本：`ARCADE_VERSION`、注册表、中心页版本标记与 SW `VERSION` 统一升至 `0.8.5`，缓存键 `studiokit-arcade-0.8.5-v1`。
 - 测试：`arcade_smoke.mjs` **89/89**（新增极速车道远景/打灯换道/拾取/连超与贪吃蛇棋盘/四向/提速 2 项）、`arcade_zen_scores_test.mjs` **14/14**、`arcade_gameplay_test.mjs --suite=base --repeat=2` **22/22**、`validate_site.py` / `build_site.py` / `node --check` 通过。
-- 发布：发布证据（提交区间 / Actions run / verify_deploy / 线上无头 Chrome）在发布完成后回填。
+- 发布：提交 `bdb1176..ee9b45b`（5 个提交：`cf8979e` 极速车道 / `211d8ca` 贪吃蛇 / `16a2a8b` 方块积分 / `35394a2` 测试 / `ee9b45b` 文档）推送 `main`；Actions `44472286080` 的 Validate and build / Deploy GitHub Pages / Deploy Cloudflare Pages / Verify both deployments 四个 job 全部成功；CI 与本地 `tools/verify_deploy.py` 均 **38/38** 文件 SHA-256 双端一致（Arcade `0.8.5` / Badge `2.2.1` / Venue `0.2.0`，manifest `application/manifest+json`）；双端线上无头 Chrome **20/20**（中心页 0.8.5 + 13 卡、SW `VERSION 0.8.5`、极速车道地平线车身 6.43×9.96px + 打灯车 0→1 完成、贪吃蛇棋盘 309px + 4×58px 按钮 + 向下转向、方块运行时 0.8.5、0 console error）；SW 缓存键 `studiokit-arcade-0.8.5-v1`。
 
 ## 0.8.4 — 2026-11-18（已发布）
 

@@ -6,7 +6,7 @@
 - **源码：** <https://github.com/Shawlaw/studiokit>（MIT 许可）
 - **当前工具：** Badge Studio `2.2.1`；街机厅 Arcade `0.8.5`（13 款竖屏小游戏 + 78 关挑战模式 + 俄罗斯方块禅模式 + 积分记录表 + 极速车道转向灯换道/连超/拾取 + 贪吃蛇四向按钮与棋盘优先画布）；Venue Compare `0.2.0`（餐厅考察对比、地图标注与外部链接 / 备注，已发布）
 - **计划中的工具：** Rounded Image（尚未实现，等待原始需求/规格）
-- **最近发布：** 2026-11-18，Arcade 0.8.4（棋盘优先画布 340×610、道具坞、地铁单手暂停、`.tool-icon` 冲突修复；GitHub Pages + Cloudflare Pages 双端；提交 `ecfdda4`，Actions `44122372096`，`verify_deploy.py` 38/38）
+- **最近发布：** 2026-11-19，Arcade 0.8.5（极速车道卡死修复 + 转向灯换道/连超/加速带/维修箱/评价、贪吃蛇棋盘优先与四向按钮、方块积分消去层数；GitHub Pages + Cloudflare Pages 双端；提交 `ee9b45b`，Actions `44472286080`，`verify_deploy.py` 38/38，线上无头 Chrome 20/20）
 - **运行方式：** 纯静态文件；无后端、无账号、无构建依赖、无第三方 CDN
 
 ## 目录结构

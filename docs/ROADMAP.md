@@ -154,7 +154,7 @@
 - [x] 贪吃蛇：逻辑画布 420×740→360×430（375×667 棋盘 180→273px）、四向 58px 按钮（与键盘/滑动同规则、拦掉头）、挑战 HUD 移顶栏、底部常驻目标；提速 20 果实 11.8→7.7 格/秒。
 - [x] 方块：经典局积分记录写入 `lines/level/detail`，中心页详情列显示当次消去层数。
 - [x] 测试：`arcade_smoke.mjs` **89/89**（新增 2 项、方块追加消去层数断言）、`arcade_zen_scores_test.mjs` **14/14**、gameplay base **22/22**、`validate_site.py` / `build_site.py` / `node --check` 通过；4× 快进自动驾驶压力跑 0 console error。
-- [x] 发布证据：见 `apps/arcade/CHANGELOG.md` 0.8.5 小节（发布后回填）。
+- [x] 发布证据：提交 `bdb1176..ee9b45b`（5 个提交：`cf8979e` 极速车道 / `211d8ca` 贪吃蛇 / `16a2a8b` 方块积分 / `35394a2` 测试 / `ee9b45b` 文档）推送 `main`；Actions `44472286080` 的 Validate and build / Deploy GitHub Pages / Deploy Cloudflare Pages / Verify both deployments 四个 job 全部成功；CI 与本地 `tools/verify_deploy.py` 均 **38/38** 文件 SHA-256 双端一致（Arcade `0.8.5` / Badge `2.2.1` / Venue `0.2.0`，manifest `application/manifest+json`）；双端线上无头 Chrome **20/20**（中心页 0.8.5 + 13 卡、SW `VERSION 0.8.5`、极速车道地平线车身 6.43×9.96px + 打灯车 0→1 完成、贪吃蛇棋盘 309px + 4×58px 按钮 + 向下转向、方块运行时 0.8.5、0 console error）；SW 缓存键 `studiokit-arcade-0.8.5-v1`。
 - 未验证：iOS/Android 真机按钮手感、转向灯可读性与双击暂停仍 UNVERIFIED。
 
 ## Now

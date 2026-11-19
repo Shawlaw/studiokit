@@ -6,7 +6,7 @@
 - **仓库：** <https://github.com/Shawlaw/studiokit>
 - **已发布工具：** Badge Studio `2.2.1`、街机厅 Arcade `0.8.5`（13 款竖屏小游戏 + 78 关挑战 + 禅模式 + 积分记录 + 极速车道转向灯换道/连超/拾取 + 贪吃蛇四向按钮与棋盘优先画布）、Venue Compare `0.2.0`（餐厅考察对比、地图标注与外部链接 / 备注）
 - **规划中：** Rounded Image（尚未实现；等待原始需求/规格，不凭空复刻）
-- **最近发布：** 2026-11-18，Arcade 0.8.4（棋盘优先画布、道具坞、地铁单手暂停）；提交 `ecfdda4`，Actions `44122372096` 四个 job 成功，GitHub Pages 与 Cloudflare Pages 双端 38/38 文件一致
+- **最近发布：** 2026-11-19，Arcade 0.8.5（极速车道卡死修复与转向灯换道/连超/拾取、贪吃蛇棋盘优先与四向按钮、方块积分消去层数）；提交 `ee9b45b`，Actions `44472286080` 四个 job 成功，GitHub Pages 与 Cloudflare Pages 双端 38/38 文件一致，线上无头 Chrome 20/20
 
 首次建仓与首次发布的完整步骤保留在 [`docs/RELEASE-RUNBOOK.md`](docs/RELEASE-RUNBOOK.md)；`prompts/` 下的启动/发布 Prompt 是历史脚本，不再代表当前流程。
 

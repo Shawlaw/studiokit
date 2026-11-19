@@ -1330,7 +1330,26 @@
         "localStorage key/Schema、挑战数据与其余 10 款游戏零回归；文档/版本/任务状态同步"
       ],
       "completedAt": "2026-11-19T00:00:00+08:00",
-      "evidence": "Owner 试玩反馈 6 条。极速车道卡死根因：卡车在 z=1 时 drawCar 固定像素内缩产生负宽度 → A.draw.roundRect 负圆角 → Canvas roundRect() 抛 RangeError；异常在 render() 内使 rAF 永久停链，画面停在车辆全消失的半帧（4× 快进复现栈到 engine.js:2076）。修复：roundRect 非负半径夹取、drawCar 比例内缩/亚像素跳过、createLoop 逐帧兜底、z>2 隐形车回收；scaleAt 改为与路面同一透视（地平线保留 16.1% 车身），车辆在 z=1.02~1.52 预生成；新增 signal 0.55s→moving 0.5s 转向灯换道（车灯/箭头/虚线导引，targetLaneFree + futureSafe 公平性）、相邻车道连超尾流、加速带（3s +0.16，上限 1.2）、维修箱（+1 车况）、每 1000m 车流加密 5s、S+/S/A/B/C 评价与积分详情。贪吃蛇逻辑画布 420×740→360×430（CELL 17，375×667 棋盘 180→273px），新增四向 58px 按钮（与键盘/滑动同规则、拦掉头），挑战 HUD 移顶栏、底部常驻目标，提速 20 果实 11.8→7.7 格/秒。方块经典 recordPlay 追加 lines/level/detail。门禁：smoke 89/89（新增 2 项）、zen 14/14、gameplay base 22/22、validate/build/node --check 通过；4× 快进自动驾驶约 3 分钟游戏时间 0 console error。设计/根因/回滚见 apps/arcade/DESIGN-0.8.5.md；未推送/未发布，真机手感 UNVERIFIED。"
+      "evidence": "Owner 试玩反馈 6 条。极速车道卡死根因：卡车在 z=1 时 drawCar 固定像素内缩产生负宽度 → A.draw.roundRect 负圆角 → Canvas roundRect() 抛 RangeError；异常在 render() 内使 rAF 永久停链，画面停在车辆全消失的半帧（4× 快进复现栈到 engine.js:2076）。修复：roundRect 非负半径夹取、drawCar 比例内缩/亚像素跳过、createLoop 逐帧兜底、z>2 隐形车回收；scaleAt 改为与路面同一透视（地平线保留 16.1% 车身），车辆在 z=1.02~1.52 预生成；新增 signal 0.55s→moving 0.5s 转向灯换道（车灯/箭头/虚线导引，targetLaneFree + futureSafe 公平性）、相邻车道连超尾流、加速带（3s +0.16，上限 1.2）、维修箱（+1 车况）、每 1000m 车流加密 5s、S+/S/A/B/C 评价与积分详情。贪吃蛇逻辑画布 420×740→360×430（CELL 17，375×667 棋盘 180→273px），新增四向 58px 按钮（与键盘/滑动同规则、拦掉头），挑战 HUD 移顶栏、底部常驻目标，提速 20 果实 11.8→7.7 格/秒。方块经典 recordPlay 追加 lines/level/detail。门禁：smoke 89/89（新增 2 项）、zen 14/14、gameplay base 22/22、validate/build/node --check 通过；4× 快进自动驾驶约 3 分钟游戏时间 0 console error。设计/根因/回滚见 apps/arcade/DESIGN-0.8.5.md；已由 T076 双端发布。"
+    },
+    {
+      "id": "T076",
+      "title": "Arcade 0.8.5 发布：推送 main 并双端验证（GitHub Pages + Cloudflare Pages）",
+      "kind": "agent",
+      "status": "DONE",
+      "dependsOn": ["T075"],
+      "ownerAuthorizationRequired": true,
+      "ownerAuthorizationVerifiedByAgentFlag": true,
+      "ownerAuthorizationNote": "Owner 本轮明确指令「大概是这些，你多开subagent全力推进优化开发测试以及提交发布吧」；据此按 StudioKit 双目标规则同时发布 GitHub Pages + Cloudflare Pages，并在发布后回填证据。",
+      "acceptance": [
+        "main 接收 5 个已通过门禁的提交并推送 origin/main",
+        "Actions 四个 job 全部成功（Validate/Deploy GH Pages/Deploy CF Pages/Verify）",
+        "verify_deploy 对两个最终 URL 逐文件一致，Arcade 0.8.5 与注册表/SW 一致",
+        "双端线上无头 Chrome 核心路径通过（中心页/极速车道/贪吃蛇/方块）",
+        "文档、注册表、版本、任务状态同步，无未授权发布动作"
+      ],
+      "completedAt": "2026-11-19T14:28:30+08:00",
+      "evidence": "推送 bdb1176..ee9b45b（cf8979e 极速车道 / 211d8ca 贪吃蛇 / 16a2a8b 方块积分 / 35394a2 测试 / ee9b45b 文档）；Actions run 44472286080 四 job 全成功；CI 与本地 tools/verify_deploy.py 均 38/38 文件 SHA-256 双端一致（Arcade 0.8.5 / Badge 2.2.1 / Venue 0.2.0 available，manifest application/manifest+json）；双端线上无头 Chrome 20/20：中心页 0.8.5 + 13 卡、SW VERSION 0.8.5、极速车道地平线车身 6.43x9.96px + 打灯车 0→1 完成、贪吃蛇棋盘 309px + 4x58px 按钮 + 向下转向、方块运行时 0.8.5、0 console error；SW 缓存键 studiokit-arcade-0.8.5-v1。真机 iOS/Android 按钮手感与转向灯可读性仍 UNVERIFIED。"
     }
   ]
 }

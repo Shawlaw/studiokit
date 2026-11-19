@@ -5,10 +5,14 @@
 - 仓库：<https://github.com/Shawlaw/studiokit>
 - GitHub Pages：<https://shawlaw.github.io/studiokit/>
 - Cloudflare Pages：<https://studiokit.pages.dev/>
-- 最近发布：Arcade `0.8.4`（2026-11-18，已发布）
+- 最近发布：Arcade `0.8.5`（2026-11-19，已发布）
+  - 批次内容：极速车道修复卡死/车辆消失与远景透视，新增转向灯换道、连超尾流、加速带、维修箱、每 1000m 车流加密与 S+/S/A/B/C 评价；贪吃蛇棋盘优先 360×430 + 四向按钮 + 放缓提速；方块经典积分记录补当次消去层数；引擎 `roundRect` 夹取与逐帧兜底
+  - 提交 `bdb1176..ee9b45b`（`cf8979e` / `211d8ca` / `16a2a8b` / `35394a2` / `ee9b45b`）推送 `main`；Actions `44472286080` 四个 job 均成功
+  - 双端验证：CI 与本地 `tools/verify_deploy.py` 均 **38/38** 文件 SHA-256 一致（Arcade `0.8.5` / Badge `2.2.1` / Venue `0.2.0`）；双端线上无头 Chrome **20/20**（中心页 0.8.5 + 13 卡、SW `VERSION 0.8.5`、极速车道地平线车身 6.43×9.96px + 打灯车 0→1 完成、贪吃蛇棋盘 309px + 4×58px 按钮 + 向下转向、方块运行时 0.8.5、0 console error）；SW 缓存键 `studiokit-arcade-0.8.5-v1`；真机触控/转向灯可读性仍 UNVERIFIED
+- 上一个发布：Arcade `0.8.4`（2026-11-18，已发布）
   - 批次内容：棋盘优先画布 340×610（经典棋盘占屏 +58%～+89%）、道具坞（经典 3 格 / 禅 4 格，含暂停）、地铁单手暂停（拇指区暂停键 + 触屏双击画面暂停）、`.tool-icon` 同名 class 冲突修复；无数据/玩法变更
   - 提交 `77cb02a..ecfdda4`（`853739c` / `0756490` / `ecfdda4`）推送 `main`；Actions `44122372096` 四个 job 均成功
-  - 双端验证：CI 与本地 `tools/verify_deploy.py` 均 **38/38** 文件 SHA-256 一致（Arcade `0.8.4` / Badge `2.2.1` / Venue `0.2.0`）；双端线上无头 Chrome **18/18**（中心页 0.8.4 + 13 卡、SW 0.8.4、方块页棋盘 257×513 @390×844、道具坞 3/4 格、hint 隐藏、0 console error）；SW 缓存键 `studiokit-arcade-0.8.4-v1`；真机触控仍 UNVERIFIED
+  - 双端验证：CI 与本地 `tools/verify_deploy.py` 均 **38/38** 文件 SHA-256 一致（Arcade `0.8.4` / Badge `2.2.1` / Venue `0.2.0`）；双端线上无头 Chrome **18/18**；SW 缓存键 `studiokit-arcade-0.8.4-v1`
 - 上一个发布：Venue Compare `0.2.0`（2026-11-16，已发布）
   - 批次内容：新工具从 draft 转 available：餐厅考察对比、地图标注、外部链接 / 分享备注；单页 HTML + 共享 shell；自包含只读 HTML 导出；无第三方运行时
   - 提交 `2276194`（含 `81684b9` / `f7146f8` / `ec0359d`）推送 `main`；Actions `43809215680` 四个 job 均成功
@@ -129,9 +133,9 @@ OWNER_AUTHORIZATION: PUBLISH_TO_MAIN
      --retries 15 --delay 8
    ```
 
-   预期：两个 URL 的 38 个关键文件哈希一致（含 13 款游戏页与 `arcade.css`），Arcade 版本为 `0.8.4`，Badge 为 `2.2.1`，Venue 为 `0.2.0`，manifest 为 `application/manifest+json`。
+   预期：两个 URL 的 38 个关键文件哈希一致（含 13 款游戏页与 `arcade.css`），Arcade 版本为 `0.8.5`，Badge 为 `2.2.1`，Venue 为 `0.2.0`，manifest 为 `application/manifest+json`。
 4. 打开两个门户，确认工具卡片加载、源码链接、Badge Studio 与街机厅入口可点击。
-5. 打开 Arcade 中心页，确认线上版本 `0.7.0` / 13 款，并检查：
+5. 打开 Arcade 中心页，确认线上版本 `0.8.5` / 13 款，并检查：
    - 每款游戏都有 2 个主动道具按钮（黄金矿工保留 4 个），按钮在画布外/内均不遮挡核心操作；无签到、每日奖励或付费抽奖入口。
    - 中心页「惊喜一下」可随机打开一款，返回后再点不会立刻重复；页脚显示「快乐约定」。
    - `游玩统计`、`分享`、`安装到桌面`、`预载全部游戏` 的既有行为无回归；SW 缓存键为 `studiokit-arcade-0.7.0-v1`。
