@@ -2,6 +2,17 @@
 
 本目录保存 Arcade 各版本的设计/验收支撑文档，不是产品文档，也不进入发布产物（`tools/build_site.py` 的白名单只含 `index.html`、`favicon.svg`、`shared`、`apps`）。
 
+## 0.8.5（极速车道车流规则 + 贪吃蛇棋盘优先 + 积分记录消去层数；2026-11-19 已双端发布）
+
+| 文档 | 内容 | 状态 |
+| --- | --- | --- |
+| `apps/arcade/DESIGN-0.8.5.md` | 卡死根因（负圆角 `RangeError` → rAF 断链）、远景透视、转向灯换道与公平性、连超/加速带/维修箱/评价、贪吃蛇 360×430 与四向按钮、提速曲线、方块积分消去层数、兼容与逐文件回滚 | 已随 0.8.5 发布 |
+| `apps/arcade/CHANGELOG.md` / `apps/arcade/README.md` | 变更摘要、门禁与发布证据 | 已随 0.8.5 发布 |
+
+门禁：`arcade_smoke.mjs` **89/89**、`arcade_zen_scores_test.mjs` **14/14**、`arcade_gameplay_test.mjs --suite=base --repeat=2` **22/22**、`validate_site.py` / `build_site.py` / `node --check` 通过。
+
+发布证据（0.8.5）：发布完成后回填（提交区间 / Actions / `verify_deploy.py` / 线上无头 Chrome）。
+
 ## 0.8.4（棋盘优先画布 + 道具坞 + 地铁单手暂停；2026-11-18 已双端发布）
 
 | 文档 | 内容 | 状态 |
