@@ -1844,6 +1844,19 @@
     let userPaused = false;
     let autoPaused = false;
     let lastPausedRender = 0;
+    let frameErrors = 0;
+
+    /* 0.8.5：单帧异常（例如某款游戏在极端缩放下画不出图形）不能让 rAF 链断掉，
+       否则整个游戏会永久停在半张画面上、只能刷新页面。这里逐帧兜底并把前几次
+       错误打到 console，既有测试仍能通过 console error 发现回归。 */
+    function guard(fn, label) {
+      try {
+        fn();
+      } catch (err) {
+        frameErrors += 1;
+        if (frameErrors <= 3) console.error('[arcade] ' + label + ' failed: ' + (err && err.message ? err.message : err));
+      }
+    }
 
     function frame(now) {
       if (!running) return;
@@ -1853,17 +1866,17 @@
         /* 暂停时 resize 会重建 canvas 像素缓冲；低频重绘保证不出现空白画布。 */
         if (now - lastPausedRender > 200) {
           lastPausedRender = now;
-          render();
+          guard(render, 'render');
         }
         rafId = requestAnimationFrame(frame);
         return;
       }
       acc += delta;
       while (acc >= step) {
-        update(step);
+        guard(() => update(step), 'update');
         acc -= step;
       }
-      render();
+      guard(render, 'render');
       rafId = requestAnimationFrame(frame);
     }
 
@@ -2070,7 +2083,11 @@
    * ---------------------------------------------------------- */
   const draw = {
     roundRect(ctx, x, y, w, h, r) {
-      const rr = Math.min(r, w / 2, h / 2);
+      /* 0.8.5：远端缩放到 0 附近时固定像素内缩会让 w/h 变成负数，Canvas 的 roundRect
+         对负半径直接抛 RangeError；一帧异常就会让 rAF 循环永久停摆。统一夹到非负半径，
+         任何缩放/负尺寸都只画出退化图形而不抛异常。 */
+      if (!Number.isFinite(x) || !Number.isFinite(y) || !Number.isFinite(w) || !Number.isFinite(h)) return;
+      const rr = Math.max(0, Math.min(r, Math.abs(w) / 2, Math.abs(h) / 2));
       ctx.beginPath();
       if (typeof ctx.roundRect === 'function') {
         ctx.roundRect(x, y, w, h, rr);
