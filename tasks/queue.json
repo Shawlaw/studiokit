@@ -1349,7 +1349,7 @@
         "文档、注册表、版本、任务状态同步，无未授权发布动作"
       ],
       "completedAt": "2026-11-19T14:28:30+08:00",
-      "evidence": "推送 bdb1176..ee9b45b（cf8979e 极速车道 / 211d8ca 贪吃蛇 / 16a2a8b 方块积分 / 35394a2 测试 / ee9b45b 文档）；Actions run 44472286080 四 job 全成功；CI 与本地 tools/verify_deploy.py 均 38/38 文件 SHA-256 双端一致（Arcade 0.8.5 / Badge 2.2.1 / Venue 0.2.0 available，manifest application/manifest+json）；双端线上无头 Chrome 20/20：中心页 0.8.5 + 13 卡、SW VERSION 0.8.5、极速车道地平线车身 6.43x9.96px + 打灯车 0→1 完成、贪吃蛇棋盘 309px + 4x58px 按钮 + 向下转向、方块运行时 0.8.5、0 console error；SW 缓存键 studiokit-arcade-0.8.5-v1。真机 iOS/Android 按钮手感与转向灯可读性仍 UNVERIFIED。"
+      "evidence": "推送 bdb1176..ee9b45b（cf8979e 极速车道 / 211d8ca 贪吃蛇 / 16a2a8b 方块积分 / 35394a2 测试 / ee9b45b 文档）；Actions run 44472286080 四 job 全成功；CI 与本地 tools/verify_deploy.py 均 38/38 文件 SHA-256 双端一致（Arcade 0.8.5 / Badge 2.2.1 / Venue 0.2.0 available，manifest application/manifest+json）；双端线上无头 Chrome 20/20：中心页 0.8.5 + 13 卡、SW VERSION 0.8.5、极速车道地平线车身 6.43x9.96px + 打灯车 0→1 完成、贪吃蛇棋盘 309px + 4x58px 按钮 + 向下转向、方块运行时 0.8.5、0 console error；SW 缓存键 studiokit-arcade-0.8.5-v1；发布后证据文档提交 a14e6fb 触发 Actions run 44472920425 同样四 job success。真机 iOS/Android 按钮手感与转向灯可读性仍 UNVERIFIED。"
     }
   ]
 }
