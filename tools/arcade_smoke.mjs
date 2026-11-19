@@ -46,8 +46,8 @@ async function main() {
     })()`);
     assert(home.cards >= 2, 'home cards=' + home.cards);
     assert(home.href.indexOf('apps/arcade') !== -1, 'arcade card not clickable: ' + JSON.stringify(home));
-    assert(home.version.indexOf('0.8.4') !== -1, 'arcade version missing on home card');
-    record('门户街机厅卡片可点击且版本 0.8.4', true);
+    assert(home.version.indexOf('0.8.5') !== -1, 'arcade version missing on home card');
+    record('门户街机厅卡片可点击且版本 0.8.5', true);
 
     /* ---------- GitHub Pages 项目子路径：shell 返回链接 ---------- */
     await cdp.navigate(base + '/studiokit/apps/arcade/games/star-raid.html');
@@ -65,10 +65,10 @@ async function main() {
       cards: document.querySelectorAll('.hall-card').length,
       runs: window.Arcade && Arcade.RunSave.count()
     })`);
-    assert(hallInfo.version === '0.8.4', 'version is ' + hallInfo.version);
+    assert(hallInfo.version === '0.8.5', 'version is ' + hallInfo.version);
     assert(hallInfo.games === 13, 'game count is ' + hallInfo.games);
     assert(hallInfo.cards === 13, 'card count is ' + hallInfo.cards);
-    record('中心页 13 款游戏与版本 0.8.4', true);
+    record('中心页 13 款游戏与版本 0.8.5', true);
 
     await cdp.evaluate(`(() => { const i = document.querySelector('[data-search]'); i.value = '雪铃'; i.dispatchEvent(new Event('input', { bubbles: true })); })()`);
     await sleep(120);
@@ -617,6 +617,80 @@ async function main() {
     const oldRunInfo = await cdp.evaluate(`window.__arcadeTest.info()`);
     assert(oldRunInfo.lane === 3, 'old road run lane migration failed: ' + JSON.stringify(oldRunInfo));
     record('极速车道 0.3.0 旧档 lane 迁移', true);
+
+    /* ---------- 0.8.5 极速车道：远景出场 / 打灯换道 / 拾取 / 连超评价 ---------- */
+    await cdp.evaluate(`Arcade.RunSave.clear('road-rush')`);
+    await cdp.navigate(base + '/apps/arcade/games/road-rush.html#test');
+    await cdp.click('[data-ov-btn]');
+    await sleep(220);
+    const roadVisual = await cdp.evaluate(`__arcadeTest.visualInfo()`);
+    assert(
+      roadVisual.horizonCarWidth >= 5 && roadVisual.horizonCarHeight >= 7 && roadVisual.horizonScale < 0.25,
+      '极速车道 地平线车辆过小（仍会凭空放大）: ' + JSON.stringify(roadVisual)
+    );
+
+    /* 玩家先挪到 3 号车道，让 0→1 的换道车在不撞人的情况下完成整段动作。 */
+    await cdp.key('ArrowRight', 'down');
+    await sleep(70);
+    await cdp.key('ArrowRight', 'up');
+    await sleep(70);
+    await cdp.key('ArrowRight', 'down');
+    await sleep(70);
+    await cdp.key('ArrowRight', 'up');
+    await sleep(140);
+    const sigLaneInfo = await cdp.evaluate(`__arcadeTest.info()`);
+    assert(sigLaneInfo.lane === 3, '极速车道 换道测试未就位: ' + JSON.stringify(sigLaneInfo));
+    await cdp.evaluate(`__arcadeTest.clearCars()`);
+    const sigSpawn = await cdp.evaluate(`__arcadeTest.spawnSignalCar(0, 1, 0.9)`);
+    assert(sigSpawn && sigSpawn.signalDir === 1 && sigSpawn.targetLane === 1, '打灯车未生成: ' + JSON.stringify(sigSpawn));
+    await sleep(150);
+    const sigAnnounced = await cdp.evaluate(`({ info: __arcadeTest.info(), cars: __arcadeTest.carsSnapshot() })`);
+    const sigCar = sigAnnounced.cars.filter((c) => c.targetLane === 1 && c.lane === 0)[0];
+    assert(
+      sigAnnounced.info.signalingCars >= 1 && sigCar && (sigCar.changeState === 'signal' || sigCar.changeState === 'moving'),
+      '转向灯没有预告阶段: ' + JSON.stringify(sigAnnounced)
+    );
+    await sleep(900);
+    const sigDone = await cdp.evaluate(`__arcadeTest.carsSnapshot()`);
+    const sigDoneCar = sigDone.filter((c) => c.targetLane === 1)[0];
+    assert(
+      sigDoneCar && sigDoneCar.lane === 1 && sigDoneCar.lanePos === 1 && sigDoneCar.changeState === 'none',
+      '打灯后没有完成横向并线: ' + JSON.stringify(sigDone)
+    );
+
+    /* 连超：相邻车道超车计数；隔两条车道不续连击。 */
+    await cdp.evaluate(`__arcadeTest.clearCars(); __arcadeTest.setCombo(0)`);
+    await cdp.evaluate(`__arcadeTest.spawnCarForTest(2, 0.1, 0.05)`);
+    await cdp.waitFor(`__arcadeTest.info().passedCars >= 1`, { timeout: 4000 });
+    const nearPass = await cdp.evaluate(`__arcadeTest.info()`);
+    assert(nearPass.combo === 1 && nearPass.nearPasses === 1, '相邻车道超车未累计连超: ' + JSON.stringify(nearPass));
+    await cdp.evaluate(`__arcadeTest.spawnCarForTest(0, 0.1, 0.05)`);
+    await cdp.waitFor(`__arcadeTest.info().passedCars >= 2`, { timeout: 4000 });
+    const farPass = await cdp.evaluate(`__arcadeTest.info()`);
+    assert(farPass.combo === 1, '隔两条车道的超车不应该续连击: ' + JSON.stringify(farPass));
+
+    /* 加速带：拾取后获得冲刺；维修箱：撞掉 1 点车况后补回。 */
+    await cdp.evaluate(`__arcadeTest.clearCars(); __arcadeTest.spawnPickupForTest('boost')`);
+    await cdp.waitFor(`__arcadeTest.info().boostTimer > 0 && __arcadeTest.info().speed - __arcadeTest.info().cruise >= 0.15`, { timeout: 5000 });
+    const boosted = await cdp.evaluate(`__arcadeTest.info()`);
+    assert(boosted.boostTimer > 0 && boosted.speed - boosted.cruise >= 0.15, '加速带没有生效: ' + JSON.stringify(boosted));
+    await cdp.evaluate(`__arcadeTest.forceCollision()`);
+    await sleep(220);
+    const hurtInfo = await cdp.evaluate(`__arcadeTest.info()`);
+    assert(hurtInfo.lives === 2 && hurtInfo.crashes === 1, '撞车后车况/事故计数不对: ' + JSON.stringify(hurtInfo));
+    await cdp.evaluate(`__arcadeTest.clearCars(); __arcadeTest.spawnPickupForTest('repair')`);
+    await cdp.waitFor(`__arcadeTest.info().lives >= 3`, { timeout: 6000 });
+    const repaired = await cdp.evaluate(`__arcadeTest.info()`);
+    assert(repaired.lives === 3, '维修箱没有补回车况: ' + JSON.stringify(repaired));
+
+    /* 评价与积分详情：1 次事故 + 最高连超 9 = A。 */
+    const rated = await cdp.evaluate(`(() => { __arcadeTest.setCombo(9); return __arcadeTest.info(); })()`);
+    assert(rated.rating === 'A' && rated.comboBest >= 9, '本局评价/最高连超异常: ' + JSON.stringify(rated));
+    await cdp.evaluate(`__arcadeTest.clearCars(); __arcadeTest.setDist(4999)`);
+    await cdp.waitFor(`__arcadeTest.info().state === 'over'`, { timeout: 4000 });
+    const roadRecord = await cdp.evaluate(`(() => { const list = Arcade.Scores.list({ gameId: 'road-rush', mode: 'classic' }); return list.length ? list[0] : null; })()`);
+    assert(roadRecord && /评价/.test(roadRecord.detail || '') && roadRecord.score >= 5000, '极速车道积分详情缺少评价: ' + JSON.stringify(roadRecord));
+    record('极速车道 远景出场/打灯换道/加速带/维修箱/连超评价', true);
 
     /* ---------- 黄金矿工：关卡可行性 + 提前结算 ---------- */
     await cdp.evaluate(`Arcade.RunSave.clear('gold-miner')`);
@@ -1275,7 +1349,15 @@ async function main() {
     assert(clearInfo.lines >= 1 && clearInfo.score > 0, 'line clear failed: ' + JSON.stringify(clearInfo));
     const topOut = await cdp.evaluate(`window.__arcadeTest.topOutScenario()`);
     assert(topOut === 'over', 'top-out did not end game: ' + topOut);
-    record('俄罗斯方块 7-bag + 1 行消除计分 + 顶部失败', true);
+    const dropRecord = await cdp.evaluate(`(() => {
+      const list = Arcade.Scores.list({ gameId: 'block-drop', mode: 'classic' });
+      return list.length ? list[0] : null;
+    })()`);
+    assert(
+      dropRecord && Number(dropRecord.lines) >= 1 && /行/.test(dropRecord.detail || '') && Number(dropRecord.level) >= 1,
+      '俄罗斯方块积分记录缺少当次消去层数: ' + JSON.stringify(dropRecord)
+    );
+    record('俄罗斯方块 7-bag + 1 行消除计分 + 顶部失败 + 积分记录消去层数', true);
 
     /* ---------- 中心页续玩区与导出导入 ---------- */
     /* 先为每款游戏各留一条未完成进度，确保续玩区覆盖全部 13 款。 */
@@ -1664,6 +1746,67 @@ async function main() {
     if (cdp.errors.length) throw new Error('touch pad console errors: ' + cdp.errors.join(' | '));
     record('俄罗斯方块 375px 双手按钮面板 + 画布触摸区不再误触', true);
     await cdp.screenshot('touch-block-drop.png');
+
+    /* ---------- 0.8.5 贪吃蛇：四向按钮 + 棋盘优先画布 + 放缓提速 ---------- */
+    for (const [width, height, minCanvas] of [[320, 568, 250], [375, 667, 300]]) {
+      await cdp.send('Emulation.setDeviceMetricsOverride', { width, height, deviceScaleFactor: 1, mobile: true });
+      await cdp.evaluate(`Arcade.RunSave.clear('snake-run')`);
+      await cdp.navigate(base + '/apps/arcade/games/snake-run.html#test');
+      await cdp.waitFor('document.readyState === "complete" && window.__arcadeTest', { timeout: 8000 });
+      const snakeLayout = await cdp.evaluate(`(() => {
+        const c = document.querySelector('.game-canvas').getBoundingClientRect();
+        const pad = document.querySelector('[data-dpad]');
+        const btns = [...pad.querySelectorAll('[data-dir]')].map((b) => { const r = b.getBoundingClientRect(); return { dir: b.dataset.dir, w: Math.round(r.width), h: Math.round(r.height) }; });
+        return {
+          canvas: { w: Math.round(c.width), h: Math.round(c.height) },
+          boardPx: Math.round(c.width * 306 / 360),
+          btns,
+          padDisplay: getComputedStyle(pad).display,
+          sw: document.documentElement.scrollWidth,
+          cw: document.documentElement.clientWidth,
+          docH: document.documentElement.scrollHeight,
+          vh: innerHeight,
+          hudInTopbar: !!document.querySelector('.game-hud [data-ch-hud]'),
+        };
+      })()`);
+      assert(snakeLayout.sw <= snakeLayout.cw + 1, '贪吃蛇 ' + width + 'px 横向溢出: ' + JSON.stringify(snakeLayout));
+      assert(snakeLayout.canvas.h > minCanvas, '贪吃蛇 ' + width + 'px 画布过小: ' + JSON.stringify(snakeLayout));
+      assert(snakeLayout.boardPx >= (width === 375 ? 250 : 190), '贪吃蛇 ' + width + 'px 棋盘没有放大: ' + JSON.stringify(snakeLayout));
+      assert(snakeLayout.padDisplay === 'grid', '贪吃蛇四向面板未显示: ' + JSON.stringify(snakeLayout));
+      assert(snakeLayout.btns.length === 4 && snakeLayout.btns.every((b) => b.w >= 44 && b.h >= 44), '贪吃蛇方向键小于 44px: ' + JSON.stringify(snakeLayout.btns));
+      assert(snakeLayout.hudInTopbar, '贪吃蛇挑战 HUD 没有移出画布');
+      assert(snakeLayout.docH <= snakeLayout.vh + 1, '贪吃蛇 ' + width + 'px 纵向溢出: ' + JSON.stringify(snakeLayout));
+    }
+    await cdp.screenshot('touch-snake-run.png');
+
+    await cdp.send('Emulation.setDeviceMetricsOverride', { width: 375, height: 667, deviceScaleFactor: 1, mobile: true });
+    await cdp.evaluate(`Arcade.RunSave.clear('snake-run')`);
+    await cdp.navigate(base + '/apps/arcade/games/snake-run.html#test');
+    await cdp.waitFor('document.readyState === "complete" && window.__arcadeTest', { timeout: 8000 });
+    await cdp.click('[data-ov-btn]');
+    await sleep(220);
+    const snakeDpadReady = await cdp.evaluate(`__arcadeTest.info()`);
+    assert(snakeDpadReady.dpadDisabled.every((d) => d === false), '贪吃蛇开局后方向键仍禁用: ' + JSON.stringify(snakeDpadReady));
+    await cdp.buttonPointer('[data-dir="down"]', 'pointerdown');
+    await sleep(420);
+    const snakeTurnDown = await cdp.evaluate(`__arcadeTest.info()`);
+    assert(snakeTurnDown.dir.y === 1 && snakeTurnDown.dir.x === 0, '贪吃蛇「下」按钮未转向: ' + JSON.stringify(snakeTurnDown));
+    await cdp.buttonPointer('[data-dir="up"]', 'pointerdown');
+    await sleep(200);
+    const snakeReverse = await cdp.evaluate(`__arcadeTest.info()`);
+    assert(snakeReverse.dir.y !== -1 && snakeReverse.nextDir.y !== -1, '贪吃蛇按钮允许原地掉头: ' + JSON.stringify(snakeReverse));
+    await cdp.buttonPointer('[data-dir="right"]', 'pointerdown');
+    await sleep(300);
+    const snakeTurnRight = await cdp.evaluate(`__arcadeTest.info()`);
+    assert(snakeTurnRight.dir.x === 1 || snakeTurnRight.nextDir.x === 1, '贪吃蛇「右」按钮未转向: ' + JSON.stringify(snakeTurnRight));
+    const snakeSpeed = await cdp.evaluate(`(() => {
+      const t = __arcadeTest;
+      for (let i = 0; i < 20; i++) t.eatNext();
+      return t.info();
+    })()`);
+    assert(snakeSpeed.foodsEaten >= 20 && snakeSpeed.stepInterval >= 0.12 && snakeSpeed.stepInterval < 0.16, '贪吃蛇 20 果实后仍然提速过快: ' + JSON.stringify(snakeSpeed));
+    if (cdp.errors.length) throw new Error('snake dpad console errors: ' + cdp.errors.join(' | '));
+    record('贪吃蛇 棋盘优先画布 + 四向按钮 + 提速放缓', true);
 
     /* ---------- 俄罗斯方块拇指区暂停键 + 双击画面暂停（0.8.4 地铁单手） ---------- */
     for (const [width, height] of [[320, 568], [375, 667], [390, 844], [430, 932]]) {
@@ -2078,7 +2221,7 @@ async function main() {
       version: window.Arcade && Arcade.version,
       title: document.title
     })`);
-    assert(offlineHall.cards === 13 && offlineHall.version === '0.8.4', 'offline hall failed: ' + JSON.stringify(offlineHall));
+    assert(offlineHall.cards === 13 && offlineHall.version === '0.8.5', 'offline hall failed: ' + JSON.stringify(offlineHall));
     const offlineStatus = await cdp.evaluate(`(async () => {
       try {
         await Arcade.Offline.register();
@@ -2100,7 +2243,7 @@ async function main() {
       overlay: !!document.querySelector('[data-overlay]'),
       version: window.Arcade && window.Arcade.version
     })`);
-    assert(offlineGame.hasArcade && offlineGame.overlay && offlineGame.version === '0.8.4', 'offline game failed: ' + JSON.stringify(offlineGame));
+    assert(offlineGame.hasArcade && offlineGame.overlay && offlineGame.version === '0.8.5', 'offline game failed: ' + JSON.stringify(offlineGame));
     await cdp.navigate(base + '/apps/arcade/games/not-preloaded.html');
     const offlineMissing = await cdp.text('body');
     assert(offlineMissing && offlineMissing.includes('还没有预载'), 'offline missing page: ' + String(offlineMissing).slice(0, 120));
