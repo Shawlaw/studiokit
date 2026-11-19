@@ -17,19 +17,52 @@
     .challenge-layer .ac-btn[hidden] { display: none; }
     .challenge-layer .ac-challenge-panel { flex: 0 0 auto; }
     .challenge-layer .ac-btn { flex: 0 0 auto; width: 100%; min-height: 44px; }
-    .stage-box > .ac-challenge-hud { position: absolute; left: 8px; right: 8px; top: 8px; width: auto; z-index: 4; pointer-events: none; }
+    /* 0.8.4 棋盘优先画布：四向按钮自带文字，触屏隐藏重复 hint；舞台高度按 360×430 逻辑比例计算。 */
+    .touch-pad.snake-pad { grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 8px; }
+    .snake-pad .snake-dir { display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 2px; min-height: 58px; font-size: 22px; padding: 4px 0; }
+    .snake-dir-glyph { font-size: 23px; line-height: 1; }
+    .snake-dir-label { font-size: 10px; line-height: 1; font-weight: 600; letter-spacing: .5px; color: var(--ac-muted); }
+    .snake-pad .snake-dir:active .snake-dir-label { color: var(--ac-ink); }
+    @media (hover: none), (max-width: 620px) { .snake-hint { display: none; } }
+    /* 共享 .stage-box 的 aspect-ratio:420/740 会让新逻辑画布被纵向拉长、格子变长方形；
+       本页按 360×430 覆盖，保证 scaleX===scaleY、棋盘不变形。 */
+    .stage-box { aspect-ratio: 360 / 430; }
+    /* 全屏模式同样按 360:430 取高度，否则共享的 740/420 规则会把画布纵向拉伸。 */
+    body.arcade-immersive .stage-box {
+      height: min(
+        100%,
+        calc((100vw - env(safe-area-inset-left, 0px) - env(safe-area-inset-right, 0px)) * 430 / 360)
+      );
+    }
+    /* 页面样式在 arcade.css 之后加载，高优先级选择器覆盖共享的 740/420 高度规则。 */
+    body.has-game-tools.has-snake-pad:not(.arcade-immersive) .stage-box {
+      height: min(
+        calc(100dvh - var(--studiokit-shellbar-h, 0px) - 243px - env(safe-area-inset-bottom, 0px)),
+        calc(min(520px, 100vw - 24px) * 430 / 360)
+      );
+    }
+    /* 横屏矮视口：与共享 120px 规则一致，允许纵向滚动去找按钮，但别把棋盘压成一条。 */
+    @media (orientation: landscape) and (max-height: 560px) {
+      body.has-game-tools.has-snake-pad:not(.arcade-immersive) .stage-box {
+        height: min(
+          calc(100dvh - var(--studiokit-shellbar-h, 0px) - 120px),
+          calc(min(520px, 100vw - 24px) * 430 / 360)
+        );
+      }
+    }
   </style>
   <title>贪吃蛇 · 街机厅 · StudioKit</title>
 </head>
-<body class="arcade-body has-extra-controls has-game-tools" data-studiokit-app="arcade" data-studiokit-app-title="街机厅 Arcade" style="--ac-accent:#66d36e; --card-accent:#66d36e">
+<body class="arcade-body has-extra-controls has-game-tools has-snake-pad" data-studiokit-app="arcade" data-studiokit-app-title="街机厅 Arcade" style="--ac-accent:#66d36e; --card-accent:#66d36e">
   <noscript><p class="ac-noscript">此游戏需要启用 JavaScript 才能运行。</p></noscript>
   <main class="game-page">
     <header class="game-topbar">
       <a class="ac-back" href="../index.html" aria-label="返回街机厅"><span class="ac-back-icon" aria-hidden="true">‹</span><span class="ac-back-label">街机厅</span></a>
       <h1 class="game-title">🐍 贪吃蛇</h1>
       <div class="game-hud">
-        <span>分数 <strong data-hud-score>0</strong></span>
-        <span>最高 <strong data-hud-high>0</strong></span>
+        <span data-hud-classic>分数 <strong data-hud-score>0</strong></span>
+        <span data-hud-classic>最高 <strong data-hud-high>0</strong></span>
+        <span class="ac-challenge-hud" data-ch-hud hidden></span>
       </div>
       <button type="button" class="ac-icon-btn" data-pause aria-label="暂停游戏" title="暂停游戏（P / Esc）">⏸</button>
       <button type="button" class="ac-icon-btn" data-mute aria-label="切换音效">🔊</button>
@@ -45,12 +78,17 @@
             <button type="button" class="ac-btn ac-btn-secondary" data-ov-btn2 hidden>重新开始</button>
           </div>
         </div>
-        <div class="ac-challenge-hud" data-ch-hud hidden></div>
         <div class="challenge-layer" data-ch-layer hidden>
           <div data-ch-panel></div>
           <button type="button" class="ac-btn ac-btn-secondary" data-ch-back>返回开始</button>
         </div>
       </div>
+    </div>
+    <div class="touch-pad snake-pad" data-dpad aria-label="贪吃蛇方向操作面板">
+      <button type="button" class="touch-btn snake-dir" data-dir="left" aria-label="向左转"><span class="snake-dir-glyph" aria-hidden="true">←</span><span class="snake-dir-label" aria-hidden="true">左</span></button>
+      <button type="button" class="touch-btn snake-dir" data-dir="up" aria-label="向上转"><span class="snake-dir-glyph" aria-hidden="true">↑</span><span class="snake-dir-label" aria-hidden="true">上</span></button>
+      <button type="button" class="touch-btn snake-dir" data-dir="down" aria-label="向下转"><span class="snake-dir-glyph" aria-hidden="true">↓</span><span class="snake-dir-label" aria-hidden="true">下</span></button>
+      <button type="button" class="touch-btn snake-dir" data-dir="right" aria-label="向右转"><span class="snake-dir-glyph" aria-hidden="true">→</span><span class="snake-dir-label" aria-hidden="true">右</span></button>
     </div>
     <div class="touch-pad game-tools" data-game-tools aria-label="主动道具（快捷键 1 / 2）">
       <button type="button" class="touch-btn" data-joy-tool="slow" aria-label="慢速泡泡 6 秒，剩余 2 次（快捷键 1）" title="慢速泡泡（1）：6 秒内每格间隔增加 0.06 秒">
@@ -60,7 +98,7 @@
         <span aria-hidden="true">✂</span><span>轻身</span><span data-joy-count aria-hidden="true">1</span>
       </button>
     </div>
-    <p class="game-hint">方向键 / WASD 或滑动转向 · 道具 1/2 · 吃满 20 个果实丰收收局 · P / Esc 暂停</p>
+    <p class="game-hint snake-hint">方向键 / WASD / 滑动转向 · 触屏四向按钮 · 道具 1/2 · 吃满 20 个果实丰收收局 · P / Esc 暂停</p>
   </main>
   <script>
     (() => {
@@ -68,13 +106,15 @@
       const A = window.Arcade;
       const { clamp, rand, randInt, TAU } = A.utils;
 
-      const W = 420;
-      const H = 740;
+      /* 0.8.4 棋盘优先画布：420×740 → 360×430，18×18 棋盘从 y=70 撑到 y=376（占画布 71%），
+         上下只留 70/54 标签与留白；createStage 按逻辑尺寸缩放，同样的屏高格子放大近一倍。 */
+      const W = 360;
+      const H = 430;
       const N = 18;
-      const CELL = 18;
+      const CELL = 17;
       const BOARD = N * CELL;
       const BOARD_X = (W - BOARD) / 2;
-      const BOARD_Y = 190;
+      const BOARD_Y = 70;
 
       const canvas = document.querySelector('.game-canvas');
       const stage = A.createStage(canvas, W, H);
@@ -90,6 +130,8 @@
         ovBtn2: document.querySelector('[data-ov-btn2]'),
         hudScore: document.querySelector('[data-hud-score]'),
         hudHigh: document.querySelector('[data-hud-high]'),
+        hudClassic: document.querySelectorAll('[data-hud-classic]'),
+        dpadButtons: document.querySelectorAll('[data-dir]'),
         pause: document.querySelector('[data-pause]'),
         mute: document.querySelector('[data-mute]'),
         joySlow: document.querySelector('[data-joy-tool="slow"]'),
@@ -137,7 +179,7 @@
       let foodsEaten = 0;
       let lives = 3;
       let stepTimer = 0;
-      let stepInterval = 0.19;
+      let stepInterval = 0.2;
       let stun = 0;
       let invul = 0;
       let state = 'ready';
@@ -196,7 +238,46 @@
         return stepInterval + (slowTimer > 0 ? SLOW_INTERVAL : 0);
       }
 
+      /* 0.8.4 四向按钮：只在局内可用，方向与键盘/滑动共用同一套规则（掉头无效）。 */
+      const DIR_WANT = { left: { x: -1, y: 0 }, up: { x: 0, y: -1 }, down: { x: 0, y: 1 }, right: { x: 1, y: 0 } };
+
+      function syncDpad() {
+        dom.dpadButtons.forEach((button) => {
+          button.disabled = state !== 'playing';
+        });
+      }
+
+      function handleDirInput(name) {
+        if (state !== 'playing') return;
+        const want = DIR_WANT[name];
+        if (!want) return;
+        if (mode === 'challenge') {
+          /* 先剔除与待执行方向重复的点击，再由 queueChallengeDir 校验掉头与队列长度。 */
+          const last = chDirQueue.length ? chDirQueue[chDirQueue.length - 1] : dir;
+          if (last.x === want.x && last.y === want.y) return;
+          queueChallengeDir(want);
+          return;
+        }
+        if (nextDir.x === want.x && nextDir.y === want.y) return;
+        if (want.x === -dir.x && want.y === -dir.y) return;
+        nextDir = want;
+      }
+
+      function bindDpad() {
+        const pad = document.querySelector('[data-dpad]');
+        if (!pad) return;
+        dom.dpadButtons.forEach((button) => {
+          button.addEventListener('pointerdown', (e) => {
+            e.preventDefault();
+            handleDirInput(button.dataset.dir);
+          });
+          button.addEventListener('contextmenu', (e) => e.preventDefault());
+        });
+        syncDpad();
+      }
+
       function syncJoyTools() {
+        syncDpad();
         if (!dom.joySlow || !dom.joyTrim) return;
         dom.joySlow.querySelector('[data-joy-count]').textContent = String(tools.slow);
         dom.joyTrim.querySelector('[data-joy-count]').textContent = String(tools.trim);
@@ -284,7 +365,7 @@
         score = 0;
         foodsEaten = 0;
         lives = 3;
-        stepInterval = 0.19;
+        stepInterval = 0.2;
         stun = 0;
         invul = 0;
         golden = null;
@@ -310,8 +391,7 @@
       function startGame() {
         mode = 'classic';
         hideChallengePanel();
-        if (chDom.hud) chDom.hud.hidden = true;
-        if (gameHudEl) gameHudEl.hidden = false;
+        syncChallengeHud();
         autosave.clear();
         reset();
         state = 'playing';
@@ -375,11 +455,10 @@
       function showStart() {
         mode = 'classic';
         hideChallengePanel();
-        if (chDom.hud) chDom.hud.hidden = true;
-        if (gameHudEl) gameHudEl.hidden = false;
+        syncChallengeHud();
         ui.show({
           title: '贪吃蛇',
-          text: '吃果实变长，别撞墙、别咬到自己。<br/>道具 1/2 主动使用 · 吃满 20 个果实丰收收局<br/>生命 ×3 · 支持方向键 / 滑动',
+          text: '吃果实变长，别撞墙、别咬到自己。<br/>触屏方向键 / ←↑↓→ / 滑动转向 · 道具 1/2<br/>吃满 20 个果实丰收收局 · 生命 ×3',
           btn: '开始游戏',
           onBtn: startGame,
           btn2: challengeAvailable ? '挑战 6 关' : '挑战数据不可用',
@@ -445,7 +524,7 @@
           spawnFood();
           if (foodsEaten % 5 === 0) spawnGolden();
           if (foodsEaten % 5 === 0) addObstacles(2);
-          stepInterval = Math.max(0.085, 0.19 - foodsEaten * 0.006);
+          stepInterval = Math.max(0.12, 0.2 - foodsEaten * 0.0035);
         }
         if (golden && golden.x === nx && golden.y === ny) {
           score += 30;
@@ -588,7 +667,7 @@
           foodsEaten = Math.max(0, Number(data.foodsEaten) || 0);
           lives = clamp(Number(data.lives) || 3, 1, 3);
           stepTimer = Number(data.stepTimer) || 0;
-          stepInterval = clamp(Number(data.stepInterval) || 0.19, 0.08, 0.25);
+          stepInterval = clamp(Number(data.stepInterval) || 0.2, 0.11, 0.26);
           stun = Math.max(0, Number(data.stun) || 0);
           invul = Math.max(0, Number(data.invul) || 0);
           if (data.tools && typeof data.tools === 'object') {
@@ -671,8 +750,7 @@
         mode = 'classic';
         chStage = null;
         chStageIndex = -1;
-        if (chDom.hud) chDom.hud.hidden = true;
-        if (gameHudEl) gameHudEl.hidden = false;
+        syncChallengeHud();
         reset();
         state = 'ready';
         showStart();
@@ -736,10 +814,14 @@
       }
 
       function syncChallengeHud() {
-        if (mode !== 'challenge' || !chStage) return;
-        if (gameHudEl) gameHudEl.hidden = true;
+        /* 0.8.4：HUD 容器始终可见，只切换经典分数/最高与顶栏挑战徽标两组子项；
+           旧版把整个 .game-hud 藏掉会连同子挑战徽标一起隐藏。 */
+        const inChallenge = mode === 'challenge' && !!chStage;
+        if (gameHudEl) gameHudEl.hidden = false;
+        dom.hudClassic.forEach((el) => { el.hidden = inChallenge; });
         if (!chDom.hud) return;
-        chDom.hud.hidden = false;
+        chDom.hud.hidden = !inChallenge;
+        if (!inChallenge) return;
         const second = Math.floor(chElapsed);
         if (second === chHudSecond && state === 'playing') return;
         chHudSecond = second;
@@ -925,8 +1007,7 @@
         chErrorReason = '';
         chDirQueue = [];
         autosave.clear();
-        if (chDom.hud) chDom.hud.hidden = true;
-        if (gameHudEl) gameHudEl.hidden = false;
+        syncChallengeHud();
         reset();
         state = 'ready';
         pauseUi.sync();
@@ -942,8 +1023,7 @@
         chStageIndex = -1;
         chDirQueue = [];
         autosave.clear();
-        if (chDom.hud) chDom.hud.hidden = true;
-        if (gameHudEl) gameHudEl.hidden = false;
+        syncChallengeHud();
         reset();
         state = 'ready';
         pauseUi.sync();
@@ -1108,33 +1188,33 @@
         particles.draw(ctx);
 
         if (mode === 'challenge' && chStage) {
+          /* 棋盘从 y=70 开始：挑战信息压在 0..64 顶栏带，基线最高只到 y=60。 */
           const chLabel = 'C' + String(chStage.stageNumber || 0).padStart(2, '0') + ' ' + chStage.title;
-          A.draw.label(ctx, chLabel, 12, 24, { align: 'left', font: 'bold 14px system-ui', color: '#66d36e' });
-          A.draw.label(ctx, '果实 ' + chFruitsEaten + '/' + chWinCount() + ' · 步数 ' + chSteps, W / 2, 24, {
-            font: '12px system-ui',
+          A.draw.label(ctx, chLabel, 12, 20, { align: 'left', font: 'bold 13px system-ui', color: '#66d36e' });
+          A.draw.label(ctx, '用时 ' + A.Challenge.formatTime(chElapsed), W - 12, 20, { align: 'right', font: 'bold 13px system-ui', color: '#ffd23f' });
+          A.draw.label(ctx, '果实 ' + chFruitsEaten + '/' + chWinCount() + ' · 步数 ' + chSteps, W / 2, 44, {
+            font: '11px system-ui',
             color: '#93a0c8',
           });
-          A.draw.label(ctx, '用时 ' + A.Challenge.formatTime(chElapsed), W - 12, 24, { align: 'right', font: 'bold 14px system-ui', color: '#ffd23f' });
-          if (chGoalHintTimer > 0) {
-            A.draw.label(ctx, chStage.goalStatement || '', W / 2, 52, { font: '12px system-ui', color: '#ffe08a' });
-          }
+          /* 手机顶栏在 ≤460px 会隐藏挑战徽标：底部留白常驻显示本关目标，随时可读。 */
+          A.draw.label(ctx, chStage.goalStatement || '', W / 2, H - 18, { font: '11px system-ui', color: '#ffe08a' });
         } else {
-          A.draw.label(ctx, 'SCORE ' + score, 12, 24, { align: 'left', font: 'bold 14px system-ui', color: '#ffd23f' });
-          A.draw.label(ctx, '长度 ' + snake.length + ' · ' + (1 / stepInterval).toFixed(1) + ' 格/秒', W / 2, 24, {
-            font: '12px system-ui',
+          A.draw.label(ctx, 'SCORE ' + score, 12, 20, { align: 'left', font: 'bold 14px system-ui', color: '#ffd23f' });
+          A.draw.label(ctx, '长度 ' + snake.length + ' · ' + (1 / stepInterval).toFixed(1) + ' 格/秒', W / 2, 20, {
+            font: '11px system-ui',
             color: '#93a0c8',
           });
           for (let i = 0; i < lives; i++) {
             ctx.fillStyle = '#ff5d7a';
             ctx.beginPath();
-            ctx.arc(W - 20 - i * 17, 24, 5, 0, TAU);
+            ctx.arc(W - 18 - i * 15, 20, 4.5, 0, TAU);
             ctx.fill();
           }
+          /* 两条次级提示共用 y=44，只显示优先级更高的一条，避免文字叠印。 */
           if (invul > 0) {
-            A.draw.label(ctx, '无敌 ' + invul.toFixed(1) + 's', W / 2, 52, { font: '12px system-ui', color: '#66d36e' });
-          }
-          if (goldenTimer > 0) {
-            A.draw.label(ctx, '★ 金果实 ' + goldenTimer.toFixed(1) + 's', W / 2, 52, { font: '12px system-ui', color: '#ffd23f' });
+            A.draw.label(ctx, '无敌 ' + invul.toFixed(1) + 's', W / 2, 44, { font: '11px system-ui', color: '#66d36e' });
+          } else if (goldenTimer > 0) {
+            A.draw.label(ctx, '★ 金果实 ' + goldenTimer.toFixed(1) + 's', W / 2, 44, { font: '11px system-ui', color: '#ffd23f' });
           }
         }
       }
@@ -1167,6 +1247,7 @@
       reset();
       state = 'ready';
       bindJoyTools();
+      bindDpad();
       syncChallengePanel();
       if (location.hash === '#test') {
         window.__arcadeTest = {
@@ -1183,6 +1264,10 @@
               tools: { slow: tools.slow, trim: tools.trim },
               golden: !!golden,
               food: food ? { x: food.x, y: food.y } : null,
+              /* 0.8.4 四向按钮验收：暴露当前/待执行方向，便于验证按钮转向与掉头拦截。 */
+              dir: { x: dir.x, y: dir.y },
+              nextDir: { x: nextDir.x, y: nextDir.y },
+              dpadDisabled: Array.from(dom.dpadButtons).map((b) => b.disabled),
             };
           },
           joyInfo() {
