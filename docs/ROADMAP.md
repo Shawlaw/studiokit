@@ -157,15 +157,15 @@
 - [x] 发布证据：提交 `bdb1176..ee9b45b`（5 个提交：`cf8979e` 极速车道 / `211d8ca` 贪吃蛇 / `16a2a8b` 方块积分 / `35394a2` 测试 / `ee9b45b` 文档）推送 `main`；Actions `44472286080` 的 Validate and build / Deploy GitHub Pages / Deploy Cloudflare Pages / Verify both deployments 四个 job 全部成功；CI 与本地 `tools/verify_deploy.py` 均 **38/38** 文件 SHA-256 双端一致（Arcade `0.8.5` / Badge `2.2.1` / Venue `0.2.0`，manifest `application/manifest+json`）；双端线上无头 Chrome **20/20**（中心页 0.8.5 + 13 卡、SW `VERSION 0.8.5`、极速车道地平线车身 6.43×9.96px + 打灯车 0→1 完成、贪吃蛇棋盘 309px + 4×58px 按钮 + 向下转向、方块运行时 0.8.5、0 console error）；SW 缓存键 `studiokit-arcade-0.8.5-v1`。
 - 未验证：iOS/Android 真机按钮手感、转向灯可读性与双击暂停仍 UNVERIFIED。
 
-## 0.8.6 发布批次（2026-11-19 待发布）
+## 0.8.6 发布批次（2026-11-19 已双端发布）
 
-### Arcade 0.8.6 — 结算重选模式 + 贪吃蛇双拇指相对转向（待发布）
+### Arcade 0.8.6 — 结算重选模式 + 贪吃蛇双拇指相对转向（已发布）
 
 - [x] 13 款游戏经典局与俄罗斯方块禅模式的「再来一局」回到开始弹层重新选模式；俄罗斯方块完整复位三入口，2048 继续挑战与挑战关重试/选关不变。
 - [x] 贪吃蛇触屏改为左右相对转向双按钮，64px 高、等宽分区；经典两级缓冲与挑战队列按格执行连点，键盘/WASD/滑动保持绝对方向。
 - [x] 兼容：localStorage key/Schema、挑战数据、玩法数值与积分规则不变；设计见 `apps/arcade/DESIGN-0.8.6.md`。
 - [x] 门禁：`arcade_smoke.mjs` **91/91**、`arcade_zen_scores_test.mjs` **14/14**、gameplay base **22/22**，validate/build/node 全过；320/375/390/430 布局通过，真机手感 UNVERIFIED。
-- [ ] 双端发布与线上证据：待 Actions 四 job、`verify_deploy.py` 与双端无头 Chrome 核验后回填。
+- [x] 发布证据：提交 `14a9160` 推送 `main`；Actions `44553437432` 四 job 全成功；CI 与本地 `verify_deploy.py` 均 **38/38** 双端一致；双端线上无头 Chrome **20/20**（SW、双按钮、经典/挑战相对转向、结算重选、方块三入口、0 console error）；SW 缓存键 `studiokit-arcade-0.8.6-v1`。
 
 ## Now
 

@@ -80,7 +80,7 @@
 | T076 | agent | Arcade 0.8.5 发布：推送 main 并双端验证（GitHub Pages + Cloudflare Pages） | DONE | T075 | Owner 明确指令「多开 subagent 全力推进优化开发测试以及提交发布」；推送 `bdb1176..ee9b45b`（5 个提交）；Actions `44472286080` 四 job 全成功；`verify_deploy.py` **38/38** 双端一致（Arcade `0.8.5` / Badge `2.2.1` / Venue `0.2.0`，manifest 正确）；双端线上无头 Chrome **20/20**（中心页 0.8.5 + 13 卡、SW 0.8.5、极速车道地平线车身 6.43×9.96px + 打灯车 0→1、贪吃蛇棋盘 309px + 4×58px 按钮、方块运行时 0.8.5、0 console error）；SW 缓存键 `studiokit-arcade-0.8.5-v1`；发布后证据文档提交 `a14e6fb` 触发 Actions `44472920425` 同样四 job success；真机手感仍 UNVERIFIED |
 
 | T077 | agent | Arcade 0.8.6：结算重新选模式与贪吃蛇双拇指相对转向 | DONE | T076 | 修改前真实浏览器复现再来一局直接 over→playing 与四向按钮。13 款经典/禅结算回到开始弹层重选模式；方块完整复位经典/挑战/禅三入口；2048 继续挑战与挑战重试/选关不变。贪吃蛇改左右相对转向双按钮（375px 每枚 170×64），经典两级缓冲与挑战队列按格执行连点、无单格掉头，键盘/WASD/滑动不变。门禁 smoke **91/91**、zen **14/14**、gameplay base **22/22**、validate/build/node 全过；320/375/390/430 布局通过；版本链 0.8.6，设计见 `apps/arcade/DESIGN-0.8.6.md`；真机手感 UNVERIFIED |
-| T078 | agent | Arcade 0.8.6 发布：推送 main 并双端验证（GitHub Pages + Cloudflare Pages） | IN_PROGRESS | T077 | Owner 当前任务明确指令「你弄完优化完就直接发个版吧」，即 `OWNER_AUTHORIZATION: PUBLISH_TO_MAIN`；按双目标规则发布。待 Actions 四 job、`verify_deploy.py` 38/38 与双端线上无头 Chrome 核验后回填证据 |
+| T078 | agent | Arcade 0.8.6 发布：推送 main 并双端验证（GitHub Pages + Cloudflare Pages） | DONE | T077 | Owner 当前任务明确指令「你弄完优化完就直接发个版吧」，即 `OWNER_AUTHORIZATION: PUBLISH_TO_MAIN`；提交 `14a9160` 推送 `main`；Actions `44553437432` 四 job 全成功；CI 与本地 `verify_deploy.py` 均 **38/38** 双端一致（Arcade `0.8.6` / Badge `2.2.1` / Venue `0.2.0`，manifest 正确）；双端线上无头 Chrome **20/20**（SW 0.8.6、中心页 13 卡、双按钮、经典/挑战相对转向、贪吃蛇结算重选、方块三入口 ready、0 console error）；SW 缓存键 `studiokit-arcade-0.8.6-v1`；真机双手手感仍 UNVERIFIED |
 
 ## 任务命令
 

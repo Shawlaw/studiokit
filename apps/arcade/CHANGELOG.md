@@ -1,6 +1,6 @@
 # Arcade Changelog
 
-## 0.8.6 — 2026-11-19（待发布）
+## 0.8.6 — 2026-11-19（已双端发布）
 
 Owner 试玩反馈两项：结算「再来一局」应等价于重新开始并支持改选模式；贪吃蛇移动端只需要相对蛇头方向的左右转向按钮。设计与回滚见 `DESIGN-0.8.6.md`。
 
@@ -9,6 +9,7 @@ Owner 试玩反馈两项：结算「再来一局」应等价于重新开始并�
 - **兼容**：localStorage key / Schema、挑战数据、玩法数值、积分记录均不变；触屏附加缓冲不写入存档。
 - **版本**：`ARCADE_VERSION`、注册表、中心页与 SW `VERSION` 统一升至 `0.8.6`，缓存键 `studiokit-arcade-0.8.6-v1`。
 - **测试**：`arcade_smoke.mjs` **91/91**、`arcade_zen_scores_test.mjs` **14/14**、`arcade_gameplay_test.mjs --suite=base --repeat=2` **22/22**；`validate_site.py`（含全 13 游戏结算回调与贪吃蛇按钮静态检查）/ `build_site.py` / `node --check` 全部通过；320/375/390/430 布局通过，真机手感 UNVERIFIED。
+- **发布**：提交 `14a9160` 推送 `main`；Actions `44553437432` 四 job 全成功；CI 与本地 `tools/verify_deploy.py` 均 **38/38** 双端一致；双端线上无头 Chrome **20/20**，覆盖 SW、双按钮、经典/挑战相对转向、结算重选、方块三入口与 0 console error；SW 缓存键 `studiokit-arcade-0.8.6-v1`。
 
 ## 0.8.5 — 2026-11-19（已发布）
 

@@ -2,7 +2,7 @@
 
 StudioKit 门户本身没有独立的 semver；以下按仓库里程碑与工具版本记录。各工具的详细变更见 `apps/<tool>/CHANGELOG.md`。
 
-## Arcade 0.8.6 — 2026-11-19（待发布）
+## Arcade 0.8.6 — 2026-11-19（已双端发布）
 
 ### Changed
 - 13 款游戏经典局与俄罗斯方块禅模式的结算「再来一局」统一回到开始弹层，支持重新选择当前游戏的模式；俄罗斯方块完整复位到经典入口态并显示经典 / 挑战 / 禅模式三入口。2048「继续挑战」与挑战关「重试 / 下一关 / 返回选关」不变。
@@ -11,6 +11,7 @@ StudioKit 门户本身没有独立的 semver；以下按仓库里程碑与工具
 ### Verification
 - `arcade_smoke.mjs` **91/91**（新增 2 项结算模式选择；贪吃蛇覆盖四档竖屏、双按钮、相对转向与连点）、`arcade_zen_scores_test.mjs` **14/14**、`arcade_gameplay_test.mjs --suite=base --repeat=2` **22/22**；`validate_site.py` / `build_site.py` / `node --check` 全部通过。
 - localStorage key / Schema、挑战数据、玩法数值与积分规则不变；真机 iOS/Android 双手手感仍 UNVERIFIED。设计与回滚见 `apps/arcade/DESIGN-0.8.6.md`。
+- 双端发布：提交 `14a9160` 推送 `main`；Actions `44553437432` 四 job 全成功；CI 与本地 `tools/verify_deploy.py` 均 **38/38** 文件一致（Arcade `0.8.6` / Badge `2.2.1` / Venue `0.2.0`）；双端线上无头 Chrome **20/20**，SW 缓存键 `studiokit-arcade-0.8.6-v1`。
 
 ## Arcade 0.8.5 — 2026-11-19（已发布）
 

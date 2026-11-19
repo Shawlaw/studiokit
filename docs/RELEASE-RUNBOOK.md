@@ -5,7 +5,11 @@
 - 仓库：<https://github.com/Shawlaw/studiokit>
 - GitHub Pages：<https://shawlaw.github.io/studiokit/>
 - Cloudflare Pages：<https://studiokit.pages.dev/>
-- 最近发布：Arcade `0.8.5`（2026-11-19，已发布）
+- 最近发布：Arcade `0.8.6`（2026-11-19，已发布）
+  - 批次内容：13 款游戏经典局与俄罗斯方块禅模式结算「再来一局」回到开始弹层重新选模式；俄罗斯方块完整复位三入口；贪吃蛇改为左右相对转向双按钮，经典/挑战连点按格执行；不改数据 key/Schema 或玩法数值
+  - 提交 `14a9160` 推送 `main`；Actions `44553437432` 四个 job 均成功
+  - 双端验证：CI 与本地 `tools/verify_deploy.py` 均 **38/38** 文件 SHA-256 一致（Arcade `0.8.6` / Badge `2.2.1` / Venue `0.2.0`）；双端线上无头 Chrome **20/20**（SW、中心页、双按钮、经典/挑战相对转向、贪吃蛇结算重选、方块三入口 ready、0 console error）；SW 缓存键 `studiokit-arcade-0.8.6-v1`；真机双手手感仍 UNVERIFIED
+- 上一个发布：Arcade `0.8.5`（2026-11-19，已发布）
   - 批次内容：极速车道修复卡死/车辆消失与远景透视，新增转向灯换道、连超尾流、加速带、维修箱、每 1000m 车流加密与 S+/S/A/B/C 评价；贪吃蛇棋盘优先 360×430 + 四向按钮 + 放缓提速；方块经典积分记录补当次消去层数；引擎 `roundRect` 夹取与逐帧兜底
   - 提交 `bdb1176..ee9b45b`（`cf8979e` / `211d8ca` / `16a2a8b` / `35394a2` / `ee9b45b`）推送 `main`；Actions `44472286080` 四个 job 均成功
   - 双端验证：CI 与本地 `tools/verify_deploy.py` 均 **38/38** 文件 SHA-256 一致（Arcade `0.8.5` / Badge `2.2.1` / Venue `0.2.0`）；双端线上无头 Chrome **20/20**（中心页 0.8.5 + 13 卡、SW `VERSION 0.8.5`、极速车道地平线车身 6.43×9.96px + 打灯车 0→1 完成、贪吃蛇棋盘 309px + 4×58px 按钮 + 向下转向、方块运行时 0.8.5、0 console error）；SW 缓存键 `studiokit-arcade-0.8.5-v1`；真机触控/转向灯可读性仍 UNVERIFIED

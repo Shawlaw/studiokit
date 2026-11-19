@@ -2,7 +2,7 @@
 
 - 版本：Arcade `0.8.6`（`ARCADE_VERSION` / 注册表 / 中心页 / SW `VERSION` 同步）
 - 日期：2026-11-19
-- 状态：已实现；发布证据在双端部署核验后回填
+- 状态：已实现并双端发布；本地与线上证据见下文
 - 范围：13 款游戏的经典/禅模式结算入口、`snake-run.html` 触屏方向控制、对应测试与版本文档；不改 localStorage key / Schema、挑战关卡数据或玩法数值。
 
 ## 1. 结算「再来一局」回到重新开始
@@ -66,7 +66,7 @@
 - `arcade_smoke.mjs` 新增经典与俄罗斯方块三模式重选断言，并把贪吃蛇用例改为双按钮、左右转向、两级连点及四档竖屏布局；另从结算重选挑战，验证挑战触屏方向队列按格消费。
 - `arcade_zen_scores_test.mjs` 的经典第二局改为「再来一局 → 开始弹层 → 开始游戏」，ZS-06 增加禅模式三入口与 `ready` 复位断言；挑战失败重试测试不变。
 - 最终本地门禁：`arcade_smoke.mjs` **91/91**、`arcade_zen_scores_test.mjs` **14/14**、`arcade_gameplay_test.mjs --suite=base --repeat=2` **22/22**；`validate_site.py` / `build_site.py` / `node --check`（共享脚本、engine、sw、测试与 13 款页内联脚本）全部通过。
-- 发布证据：待双端部署与逐文件核验完成后回填。
+- 发布证据：提交 `14a9160` 推送 `main`；Actions `44553437432` 四 job 全成功；CI 与本地 `verify_deploy.py` 均 **38/38** 文件 SHA-256 双端一致（Arcade `0.8.6` / Badge `2.2.1` / Venue `0.2.0`，manifest 正确）；双端线上无头 Chrome **20/20**，覆盖 SW、中心页、双按钮、经典/挑战相对转向、贪吃蛇结算重选、方块三入口 ready 与 0 console error；SW 缓存键 `studiokit-arcade-0.8.6-v1`。
 
 ## 4. 兼容与回滚
 

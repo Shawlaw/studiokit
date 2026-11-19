@@ -1372,7 +1372,7 @@
       "id": "T078",
       "title": "Arcade 0.8.6 发布：推送 main 并双端验证（GitHub Pages + Cloudflare Pages）",
       "kind": "agent",
-      "status": "IN_PROGRESS",
+      "status": "DONE",
       "dependsOn": ["T077"],
       "ownerAuthorizationRequired": true,
       "ownerAuthorizationVerifiedByAgentFlag": true,
@@ -1383,7 +1383,9 @@
         "verify_deploy 对两个最终 URL 38/38 文件一致，Arcade 0.8.6 与注册表/SW 一致",
         "双端线上无头 Chrome 验证版本、结算模式重选、贪吃蛇左右相对转向与布局",
         "文档、注册表、版本、任务状态同步，无未授权发布动作"
-      ]
+      ],
+      "completedAt": "2026-11-19T23:25:13+08:00",
+      "evidence": "提交 14a9160 fast-forward 推送 origin/main；Actions run 44553437432 的 Validate and build / Deploy GitHub Pages / Deploy Cloudflare Pages / Verify both deployments 四 job 全成功；CI 与本地 tools/verify_deploy.py 均 38/38 文件 SHA-256 双端一致（Arcade 0.8.6 / Badge 2.2.1 / Venue 0.2.0 available，manifest application/manifest+json）；双端线上无头 Chrome 各 10/10、合计 20/20（SW 0.8.6、中心页 13 卡、双按钮布局、经典相对转向两级连点、挑战触屏队列、贪吃蛇结算重选、方块三入口 ready、窄屏无溢出、0 console error）；SW 缓存键 studiokit-arcade-0.8.6-v1。真机 iOS/Android 双手手感仍 UNVERIFIED。"
     }
   ]
 }
