@@ -59,6 +59,8 @@
       const GRID_Y = 200;
       const BOARD = { x: 18, y: 178, w: 384, h: 384 };
       const PLACE_BTN = { x: 110, y: 590, w: 200, h: 56 };
+      /* 0.10.0：窄屏逻辑按钮缩放到 CSS px 后不足 44px，额外提供画布内 DOM 覆盖按钮。 */
+      const PLACE_BTN_MIN_CSS = 44;
       const STONE_R = 14;
       const TOOL_START = { undo: 3, hint: 2 };
       const TOOL_CAPS = { undo: 3, hint: 2 };
@@ -456,7 +458,7 @@
         syncAll();
         ui.show({
           title: '五子棋 · 静局',
-          text: '你执黑先行，与本地 AI 对弈。<br/>点空格先预览，再点同一点确认落子。<br/>五子连珠即胜 · 没有倒计时，慢慢想。',
+          text: '你执黑先行，与本地启发式对手对弈。<br/>点空格先预览，再点同一点确认落子。<br/>提示为启发式推荐，不代表最优解。<br/>五子连珠即胜 · 没有倒计时，慢慢想。',
           btn: '开始游戏',
           onBtn: startGame,
         });
@@ -681,7 +683,7 @@
           hint = { r: mv.r, c: mv.c };
           hintTimer = HINT_SECONDS;
           A.Sfx.play('bell', 2);
-          A.showToast('推荐落点已高亮 ' + HINT_SECONDS + ' 秒');
+          A.showToast('启发式推荐落点已高亮 ' + HINT_SECONDS + ' 秒');
           autosave.saveNow();
           joyTools.sync();
           return true;
@@ -729,6 +731,56 @@
         joyTools.sync();
         return true;
       }
+
+      /* ----------------------------------------------------------
+       * 0.10.0：窄屏 ≥44px 落子确认按钮（DOM 覆盖，逻辑坐标保持不变）
+       * - 只覆盖 PLACE_BTN 对应的画布区域；不新增画布外道具，不改 2 个道具契约。
+       * - 用绝对定位放进 .stage-box（overflow:hidden），因此不产生横向/纵向溢出。
+       * ---------------------------------------------------------- */
+      const placeButton = document.createElement('button');
+      placeButton.type = 'button';
+      placeButton.className = 'gomoku-place-confirm';
+      placeButton.setAttribute('data-place-confirm', '');
+      placeButton.setAttribute('aria-label', '确认落子');
+      placeButton.style.position = 'absolute';
+      placeButton.style.margin = '0';
+      placeButton.style.padding = '0';
+      placeButton.style.borderRadius = '12px';
+      placeButton.style.border = '1px solid rgba(231,201,131,0.55)';
+      placeButton.style.background = 'rgba(217,176,106,0.16)';
+      placeButton.style.color = '#f3e3c3';
+      placeButton.style.font = '600 15px system-ui, sans-serif';
+      placeButton.style.textAlign = 'center';
+      placeButton.style.touchAction = 'manipulation';
+      placeButton.textContent = '落子';
+      const stageBox = document.querySelector('.game-page .stage-box');
+      if (stageBox) stageBox.appendChild(placeButton);
+
+      let placeButtonBox = '';
+      function syncPlaceButton() {
+        if (!placeButton.parentNode) return;
+        const scale = stage.canvas ? stage.canvas.clientHeight / H : 0;
+        const w = Math.max(PLACE_BTN_MIN_CSS, Math.round(PLACE_BTN.w * scale));
+        const h = Math.max(PLACE_BTN_MIN_CSS, Math.round(PLACE_BTN.h * scale));
+        const x = Math.max(0, Math.round(PLACE_BTN.x * scale));
+        const y = Math.max(0, Math.round(PLACE_BTN.y * scale));
+        const enabled = state === 'playing' && turn === BLACK && !!preview;
+        const box = [x, y, w, h, enabled ? '1' : '0'].join(',');
+        if (box !== placeButtonBox) {
+          placeButtonBox = box;
+          placeButton.style.left = x + 'px';
+          placeButton.style.top = y + 'px';
+          placeButton.style.width = w + 'px';
+          placeButton.style.height = h + 'px';
+        }
+        placeButton.style.opacity = enabled ? '1' : '0';
+        placeButton.disabled = !enabled;
+      }
+      placeButton.addEventListener('click', () => {
+        confirmPreview();
+      });
+      window.addEventListener('resize', syncPlaceButton);
+      window.addEventListener('orientationchange', syncPlaceButton);
 
       /* ----------------------------------------------------------
        * 局内存档（棋盘 / 回合 / 步数 / 分数 / 工具次数 / AI 种子状态 / 最后落点 / 预览 / 悔棋栈）
@@ -896,7 +948,7 @@
             id: 'hint',
             icon: '💡',
             name: '提示',
-            description: '高亮 AI 推荐的落点 3 秒',
+            description: '高亮启发式推荐的落点 3 秒',
             getCount: () => tools.hint,
             canUse: () => state === 'playing' && turn === BLACK && tools.hint > 0,
             use: () => useTool('hint'),
@@ -1042,7 +1094,7 @@
             main = '轮到你落子';
             sub = '你执黑 · 已落 ' + moves + ' 手 · 没有倒计时';
             if (hintTimer > 0 && hint) {
-              guide = '提示：' + coordName(hint) + ' 附近（' + Math.ceil(hintTimer) + ' 秒）';
+              guide = '启发式推荐：' + coordName(hint) + ' 附近（' + Math.ceil(hintTimer) + ' 秒）';
               guideColor = '#e7c983';
             } else if (preview) {
               guide = '已选 ' + coordName(preview) + ' · 再点同一点确认';
@@ -1219,6 +1271,7 @@
 
       function update(dt) {
         animTime += dt;
+        syncPlaceButton();
         if (state === 'paused' || state === 'over' || state === 'ready') {
           input.endFrame();
           return;
@@ -1237,6 +1290,7 @@
           if (aiDelay === 0) performAIMove();
         }
         if (state === 'playing' && input.pointer.wentDown) tapAt(input.pointer.x, input.pointer.y);
+        syncPlaceButton();
         input.endFrame();
       }
 
@@ -1482,6 +1536,22 @@
           const roundTrip = restored && JSON.stringify(boardToLetters(board)) === JSON.stringify(expectedBoard) && moves === 1 && turn === WHITE;
           const invalidRejected = restore({ v: 1, board: [] }) === false;
           ok('存档序列化/恢复往返一致', roundTrip && invalidRejected, JSON.stringify({ restored, roundTrip, invalidRejected }));
+
+          /* 16（0.10.0）：提示文案为「启发式推荐」，不声称最优 / 强 AI。 */
+          const hintTitle = joyTools.buttons.hint && joyTools.buttons.hint.title ? joyTools.buttons.hint.title : '';
+          ok(
+            'AI 建议文案为启发式推荐',
+            /启发式推荐/.test(hintTitle) && !/最优|强\s*AI/.test(hintTitle),
+            hintTitle
+          );
+
+          /* 17（0.10.0）：落子确认按钮存在且逻辑常量 ≥44px（窄屏由 DOM 覆盖保证实际尺寸）。 */
+          const placeRect = placeButton.getBoundingClientRect();
+          ok(
+            '落子确认按钮 DOM 存在且触控目标足够',
+            !!placeButton.parentNode && placeRect.width >= PLACE_BTN_MIN_CSS - 1 && placeRect.height >= PLACE_BTN_MIN_CSS - 1,
+            { w: placeRect.width, h: placeRect.height, min: PLACE_BTN_MIN_CSS }
+          );
         } catch (err) {
           details.push({ name: '自测异常', ok: false, detail: String((err && err.message) || err) });
         } finally {
@@ -1500,27 +1570,60 @@
 
       function playToEnd(seedOverride) {
         /* 用确定性策略自动下完一局，走真实结算路径（recordPlay + 结算弹层）。
-           可选 seed 仅用于验收时复现不同对局；不传则用固定 TEST_SEED。 */
+           可选 seed 仅用于验收时复现不同对局；不传则用固定 TEST_SEED。
+           0.10.0：异常或无合法落点时如实返回失败，不伪装和棋、不弹结算、不写记录。 */
         startGame();
         const seed = Number.isInteger(seedOverride) && seedOverride >= 0 ? seedOverride >>> 0 : TEST_SEED;
         aiSeed = seed;
         aiCalls = 0;
         rng = makeRng(aiSeed);
         let guard = 0;
-        while (state === 'playing' && guard < 400) {
-          guard += 1;
-          if (turn === BLACK) {
-            const mv = pickAutoMove();
-            if (!mv) break;
-            applyPlayerMove(mv.r, mv.c);
-          } else {
-            performAIMove();
+        let reason = null;
+        try {
+          while (state === 'playing' && guard < 400) {
+            guard += 1;
+            if (turn === BLACK) {
+              const mv = pickAutoMove();
+              if (!mv) {
+                reason = 'no-move';
+                break;
+              }
+              if (!applyPlayerMove(mv.r, mv.c)) {
+                reason = 'place-failed';
+                break;
+              }
+            } else {
+              if (!performAIMove()) {
+                reason = 'ai-failed';
+                break;
+              }
+            }
+            if (state === 'playing' && turn === WHITE) {
+              if (!performAIMove()) {
+                reason = 'ai-failed';
+                break;
+              }
+            }
           }
-          if (state === 'playing' && turn === WHITE) performAIMove();
+          if (!reason && state === 'playing' && guard >= 400) reason = 'guard-exceeded';
+        } catch (err) {
+          reason = 'exception';
         }
-        if (state === 'playing') finishGame('draw', null);
+        if (reason) {
+          return {
+            ok: false,
+            reason,
+            result: null,
+            moves,
+            score,
+            recorded: recordSaved,
+            overlay: !dom.overlay.hidden,
+          };
+        }
         const rec = A.Progress.get('gomoku');
         return {
+          ok: true,
+          reason: null,
           result,
           moves,
           score,
@@ -1530,6 +1633,50 @@
           overlayTitle: dom.ovTitle.textContent,
           last: lastRecord,
         };
+      }
+
+      /* 0.10.0：异常退出不伪装和棋/不写记录的确定性回归。 */
+      function runRegression() {
+        const details = [];
+        let pass = 0;
+        let fail = 0;
+        function ok(name, cond, detail) {
+          details.push({ name, ok: !!cond, detail: cond ? '' : String(detail == null ? '' : detail) });
+          if (cond) pass += 1;
+          else fail += 1;
+        }
+        const before = captureState();
+        const beforeSave = A.RunSave.get('gomoku');
+        const originalPick = pickAutoMove;
+        const originalRecord = A.Progress.recordPlay;
+        let recorded = 0;
+        try {
+          /* 强制自动落子失败：playToEnd 必须返回 ok=false，不进入 over，不弹结算，不写记录。 */
+          pickAutoMove = function forcedNoMove() {
+            return null;
+          };
+          A.Progress.recordPlay = function regressionSpy() {
+            recorded += 1;
+            return { isNewHigh: false, high: 0, plays: 0 };
+          };
+          const failed = playToEnd(TEST_SEED);
+          ok(
+            'playToEnd 异常退出不伪装和棋/不写记录',
+            failed && failed.ok === false && failed.reason === 'no-move' && state === 'playing' && dom.overlay.hidden === true && recorded === 0 && result === null,
+            JSON.stringify({ failed, state, overlayHidden: dom.overlay.hidden, recorded, result })
+          );
+        } catch (err) {
+          ok('回归执行无异常', false, String(err && err.stack ? err.stack : err));
+        } finally {
+          pickAutoMove = originalPick;
+          A.Progress.recordPlay = originalRecord;
+          restoreState(before);
+          if (beforeSave) A.RunSave.save('gomoku', beforeSave.data, { score: beforeSave.score, summary: beforeSave.summary });
+          else autosave.clear();
+          syncAll();
+          syncPlaceButton();
+        }
+        return { pass, fail, details };
       }
 
       function pickAutoMove() {
@@ -1621,6 +1768,9 @@
           },
           selftest() {
             return selftest();
+          },
+          regression() {
+            return runRegression();
           },
         };
       }

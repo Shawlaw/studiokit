@@ -154,6 +154,8 @@
         if (player.blackjack && dealer.blackjack) return Object.assign({ result: 'push-blackjack', points: 25 }, base);
         if (player.blackjack) return Object.assign({ result: 'blackjack', points: 250 }, base);
         if (dealer.blackjack) return Object.assign({ result: 'dealer-blackjack', points: 0 }, base);
+        /* 同点 push 优先于「普通 21 +150」：双方都是三张 21 时算平局，而不是白拿奖励。 */
+        if (player.total === dealer.total) return Object.assign({ result: 'push', points: 25 }, base);
         if (player.total === 21) return Object.assign({ result: 'twenty-one', points: 150 }, base);
         if (dealer.bust) return Object.assign({ result: 'win', points: 100 }, base);
         if (player.total > dealer.total) return Object.assign({ result: 'win', points: 100 }, base);
@@ -397,7 +399,8 @@
         phase = 'player';
         joyTools.sync();
         syncHud();
-        if (handValue(player).blackjack) {
+        /* 初发四张后任一方 natural 立即结算：庄家 BJ 玩家非 BJ 直接 0，双方 BJ push。 */
+        if (handValue(player).blackjack || handValue(dealer).blackjack) {
           finishHand();
           return;
         }
@@ -482,6 +485,8 @@
       }
 
       function finishHand() {
+        /* 一手只结算一次：重复调用（延迟动画、双击、测试）不得重复计分或写记录。 */
+        if (phase === 'settled' || state === 'over') return false;
         holeRevealed = true;
         const outcome = settleOutcome(player, dealer);
         handResult = outcome;
@@ -576,6 +581,7 @@
       /* ---------- 可选道具：换一张 / 看底牌（每局有限，使用即 assisted） ---------- */
 
       function toolAvailable(id) {
+        /* 仅玩家决策期可用；已结算的手（含庄家 natural 立即结算）不可再换牌/看底牌。 */
         if (state !== 'playing' || phase !== 'player') return false;
         if (id === 'swap') return tools.swap > 0 && player.length > 0;
         if (id === 'peek') return tools.peek > 0 && !holeRevealed;
@@ -1026,6 +1032,22 @@
             return both.points === 25 && both.result === 'push-blackjack' && both.playerBlackjack && both.dealerBlackjack;
           })()
         );
+        /* 0.10.0 反例：庄家 natural 压过玩家非 natural 的 18。 */
+        check(
+          '庄家 natural 立即判负 +0',
+          (() => {
+            const out = settleOutcome([testCard(1, 0), testCard(7, 0)], [testCard(10, 0), testCard(1, 1)]);
+            return out.result === 'dealer-blackjack' && out.dealerBlackjack && out.points === 0;
+          })()
+        );
+        /* 0.10.0 反例：双方三张 21 点同点 push，不能按普通 21 点给 +150。 */
+        check(
+          '双方三张 21 点同点 push +25',
+          (() => {
+            const out = settleOutcome([testCard(7, 0), testCard(7, 1), testCard(7, 2)], [testCard(6, 0), testCard(6, 1), testCard(9, 0)]);
+            return out.result === 'push' && out.points === 25 && out.playerTotal === 21 && out.dealerTotal === 21;
+          })()
+        );
 
         const sixHands = [
           settleOutcome([testCard(10, 0), testCard(9, 0)], [testCard(10, 1), testCard(7, 0)]),
@@ -1044,6 +1066,120 @@
         check('一局固定 6 手、逐手结算', HANDS_TOTAL === 6 && sixHands.length === 6 && resultsMatch, { results: sixHands.map((item) => item.result) });
         check('六手总分累计 525', total === 525, { total });
 
+        return { pass, fail, details };
+      }
+
+      /* ---------- 0.10.0 状态化回归：真实走发牌/道具/结算路径 ---------- */
+
+      function runRegression() {
+        const details = [];
+        let pass = 0;
+        let fail = 0;
+        function check(name, ok, info) {
+          details.push({ name, ok: !!ok, info: info === undefined ? null : info });
+          if (ok) pass += 1;
+          else fail += 1;
+        }
+        const saved = {
+          state,
+          phase,
+          handNo,
+          score,
+          deck: deck.slice(),
+          player: player.slice(),
+          dealer: dealer.slice(),
+          holeRevealed,
+          handResult,
+          handLog: handLog.slice(),
+          tools: { swap: tools.swap, peek: tools.peek },
+          assisted,
+          recordSaved,
+          rng,
+          seedExplicit,
+        };
+        try {
+          /* 反例 1：seed 39 初发即庄家 natural，必须立即结算为 0，玩家没有决策机会。 */
+          seedRandom(39);
+          startRound();
+          const seed39 = {
+            phase,
+            score,
+            playerTotal: handValue(player).total,
+            dealerBJ: handValue(dealer).blackjack,
+            result: handResult && handResult.result,
+            holeRevealed,
+            logCount: handLog.length,
+          };
+          check(
+            'seed39 庄家 natural 立即结算为 0',
+            seed39.phase === 'settled' && seed39.dealerBJ && seed39.result === 'dealer-blackjack' && seed39.score === 0 && seed39.holeRevealed && seed39.logCount === 1,
+            seed39
+          );
+          const swapBefore = tools.swap;
+          const swapUsed = useTool('swap');
+          check(
+            'seed39 已结算手不能用 swap 补救庄家 BJ',
+            swapUsed === false && tools.swap === swapBefore && !assisted && handLog.length === 1,
+            { swapUsed, swapBefore, swapAfter: tools.swap, assisted, logCount: handLog.length }
+          );
+          /* 再结算一次不得重复加分或重复写记录。 */
+          const scoreBefore = score;
+          const logBefore = handLog.length;
+          finishHand();
+          check('重复 finishHand 不再结算一次', score === scoreBefore && handLog.length === logBefore, { scoreBefore, score, logBefore, logAfter: handLog.length });
+
+          /* 反例 2：双方三张 21 应 push +25，而非普通 21 +150。 */
+          const cards21a = [0, 1, 32]; // A♠ + A♥ + 9♠ = 21（一张 A 按 1）
+          const cards21b = [24, 25, 26]; // 7♠ + 7♥ + 7♦ = 21
+          const both21 = settleOutcome(cards21a, cards21b);
+          check(
+            '双方三张 21 同点 push +25',
+            both21.result === 'push' && both21.points === 25 && both21.playerTotal === 21 && both21.dealerTotal === 21,
+            both21
+          );
+
+          /* 反例 3：playToEnd 仍只结算一次（6 手、只写一条积分记录）。 */
+          const originalRecord = A.Progress.recordPlay;
+          let recordCalls = 0;
+          A.Progress.recordPlay = function regressionSpy() {
+            recordCalls += 1;
+            return { isNewHigh: false, high: 0, plays: 0 };
+          };
+          let played = null;
+          try {
+            played = window.__arcadeTest.playToEnd();
+          } finally {
+            A.Progress.recordPlay = originalRecord;
+          }
+          check(
+            'playToEnd 六手只结算一次',
+            played && played.hands === HANDS_TOTAL && recordCalls === 1 && state === 'over' && handLog.length === HANDS_TOTAL,
+            { played, recordCalls, state, logCount: handLog.length }
+          );
+        } catch (err) {
+          check('回归执行无异常', false, String(err && err.stack ? err.stack : err));
+        } finally {
+          /* 恢复自检前的完整局面与随机数状态，避免污染玩家正在进行的对局。 */
+          state = saved.state;
+          phase = saved.phase;
+          handNo = saved.handNo;
+          score = saved.score;
+          deck = saved.deck;
+          player = saved.player;
+          dealer = saved.dealer;
+          holeRevealed = saved.holeRevealed;
+          handResult = saved.handResult;
+          handLog = saved.handLog;
+          tools = saved.tools;
+          assisted = saved.assisted;
+          recordSaved = saved.recordSaved;
+          rng = saved.rng;
+          seedExplicit = saved.seedExplicit;
+          syncHud();
+          joyTools.sync();
+          pauseUi.sync();
+          if (state === 'playing' || state === 'paused') autosave.saveNow();
+        }
         return { pass, fail, details };
       }
 
@@ -1117,6 +1253,9 @@
           },
           selftest() {
             return runSelftest();
+          },
+          regression() {
+            return runRegression();
           },
           useJoyTool(id) {
             const button = joyTools.buttons[id];

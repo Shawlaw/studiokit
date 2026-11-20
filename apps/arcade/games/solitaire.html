@@ -33,6 +33,7 @@
             <p data-ov-text>一个人慢慢理牌</p>
             <button type="button" class="ac-btn" data-ov-btn>开始游戏</button>
             <button type="button" class="ac-btn ac-btn-secondary" data-ov-btn2 hidden>重新开始</button>
+            <button type="button" class="ac-btn ac-btn-secondary" data-ov-btn3 hidden>重发一局</button>
           </div>
         </div>
       </div>
@@ -87,6 +88,7 @@
         ovText: document.querySelector('[data-ov-text]'),
         ovBtn: document.querySelector('[data-ov-btn]'),
         ovBtn2: document.querySelector('[data-ov-btn2]'),
+        ovBtn3: document.querySelector('[data-ov-btn3]'),
         hudScore: document.querySelector('[data-hud-score]'),
         hudHigh: document.querySelector('[data-hud-high]'),
         pause: document.querySelector('[data-pause]'),
@@ -385,7 +387,39 @@
           score: computeScore(),
           tools: { undo: tools.undo, hint: tools.hint },
           selected: selected ? { from: selected.from, pile: selected.pile, index: selected.index } : null,
+          /* 0.10.0：刷新续档恢复撤销栈与已显示的提示（含剩余秒数）。 */
+          undoStack: undoStack.map(snapshot),
+          hintMoves: hintMoves.map((move) => ({ from: move.from, to: move.to, priority: move.priority, order: move.order })),
+          hintTimer: Math.round(hintTimer * 10) / 10,
         };
+      }
+      /* 0.10.0：提示续档只接受结构合法、索引在范围内的条目；坏提示清空但不影响牌局。 */
+      function sanitizeHintMoves(value) {
+        if (!Array.isArray(value)) return [];
+        const out = [];
+        for (let i = 0; i < value.length && out.length < 3; i += 1) {
+          const move = value[i];
+          if (!move || typeof move !== 'object') return [];
+          const from = move.from;
+          const to = move.to;
+          if (!from || typeof from !== 'object' || !to || typeof to !== 'object') return [];
+          if (from.pile === 'tableau' || from.pile === 'foundation') {
+            if (!Number.isInteger(from.index) || from.index < 0 || from.index > (from.pile === 'tableau' ? 6 : 3)) return [];
+          } else if (from.pile !== 'waste' && from.pile !== 'stock') return [];
+          if (to.pile === 'tableau') {
+            if (!Number.isInteger(to.index) || to.index < 0 || to.index > 6) return [];
+          } else if (to.pile === 'foundation') {
+            if (!Number.isInteger(to.index) || to.index < 0 || to.index > 3) return [];
+          } else if (to.pile !== 'stock') return [];
+          if (from.cardIndex !== undefined && (!Number.isInteger(from.cardIndex) || from.cardIndex < 0)) return [];
+          out.push({
+            from: Object.assign({}, from),
+            to: Object.assign({}, to),
+            priority: Number.isFinite(Number(move.priority)) ? Number(move.priority) : 9,
+            order: Number.isInteger(move.order) ? move.order : out.length,
+          });
+        }
+        return out;
       }
       function restore(data) {
         if (!data || typeof data !== 'object') return false;
@@ -413,6 +447,33 @@
           selection = normalizeSelection(data.selected, layout);
           if (!selection) return false;
         }
+        /* 撤销栈是可选字段：坏档只清空撤销栈，不丢牌局与道具次数。 */
+        let restoredUndo = [];
+        if (data.undoStack !== undefined && data.undoStack !== null) {
+          if (!Array.isArray(data.undoStack) || data.undoStack.length > 60) restoredUndo = [];
+          else {
+            for (let i = 0; i < data.undoStack.length; i += 1) {
+              const snap = parseLayout(data.undoStack[i], true);
+              const snapMoves = Number(data.undoStack[i] && data.undoStack[i].moves);
+              if (!snap || !Number.isInteger(snapMoves) || snapMoves < 0 || snapMoves > 10000000) {
+                restoredUndo = [];
+                break;
+              }
+              restoredUndo.push({ stock: snap.stock, waste: snap.waste, tableau: snap.tableau, foundations: snap.foundations, moves: snapMoves });
+            }
+          }
+        }
+        /* 提示续档：坏提示（结构/秒数非法）安全清空，牌局与道具保持原样。 */
+        let restoredHints = [];
+        let restoredHintTimer = 0;
+        if (data.hintTimer !== undefined && data.hintTimer !== null) {
+          const ht = Number(data.hintTimer);
+          if (Number.isFinite(ht) && ht > 0 && ht <= HINT_SECONDS) {
+            restoredHints = sanitizeHintMoves(data.hintMoves);
+            /* 结构坏档或空提示：只清空提示，不因此拒绝整份续档。 */
+            restoredHintTimer = restoredHints.length ? ht : 0;
+          }
+        }
         seed = seedValue >>> 0;
         rng = makeRng(seed);
         stock = layout.stock;
@@ -422,10 +483,11 @@
         moves = movesValue;
         tools = { undo: undoCount, hint: hintCount };
         selected = selection;
-        undoStack = [];
+        undoStack = restoredUndo;
         recordSaved = false;
         lastRecord = null;
-        clearHint();
+        hintMoves = restoredHints;
+        hintTimer = restoredHintTimer;
         state = 'playing';
         syncHud();
         syncTools();
@@ -697,11 +759,68 @@
         else if (waste.length) list.push({ type: 'recycle' });
         return list;
       }
+      /* 0.10.0：整列 K 从空列倒到另一空列是等价移动，提示里过滤掉避免谎报「有一步可走」。 */
+      function isEmptyColumnKingMove(from, to) {
+        if (!from || !to || from.pile !== 'tableau' || to.pile !== 'tableau') return false;
+        if (from.index === to.index) return false;
+        const source = tableau[from.index];
+        const target = tableau[to.index];
+        if (!source || source.length !== 1 || !source[0].up || rankOf(source[0].c) !== 13) return false;
+        if (!target || target.length !== 0) return false;
+        return from.cardIndex === undefined ? true : from.cardIndex === 0;
+      }
       function collectHintMoves() {
         const list = [];
         let order = 0;
         function add(priority, from, to) {
+          if (isEmptyColumnKingMove(from, to)) return;
           list.push({ priority: priority, order: order++, from: from, to: to });
+        }
+        /* 全局提示：翻牌 / 揭暗牌优先，其次归位，再是普通列间移动。 */
+        function collectGlobal() {
+          if (waste.length) {
+            const card = waste[waste.length - 1];
+            const from = { pile: 'waste' };
+            for (let f = 0; f < 4; f += 1) if (canPlaceOnFoundation(card, f)) add(0, from, { pile: 'foundation', index: f });
+            for (let t = 0; t < 7; t += 1) if (canPlaceOnTableau(card, t)) add(3, from, { pile: 'tableau', index: t });
+          }
+          for (let t = 0; t < 7; t += 1) {
+            const col = tableau[t];
+            for (let i = 0; i < col.length; i += 1) {
+              if (!col[i].up) continue;
+              const cards = [];
+              let valid = true;
+              for (let k = i; k < col.length; k += 1) {
+                if (!col[k].up) {
+                  valid = false;
+                  break;
+                }
+                cards.push(col[k].c);
+              }
+              if (!valid || !isRunValid(cards)) continue;
+              const from = { pile: 'tableau', index: t, cardIndex: i };
+              const reveals = i > 0 && !col[i - 1].up;
+              if (i === col.length - 1) {
+                for (let f = 0; f < 4; f += 1) {
+                  if (canPlaceOnFoundation(col[i].c, f)) add(0, from, { pile: 'foundation', index: f });
+                }
+              }
+              for (let d = 0; d < 7; d += 1) {
+                if (d === t) continue;
+                if (canPlaceOnTableau(col[i].c, d)) add(reveals ? 1 : 4, from, { pile: 'tableau', index: d });
+              }
+            }
+          }
+          for (let f = 0; f < 4; f += 1) {
+            const pile = foundations[f];
+            if (!pile.length) continue;
+            for (let t = 0; t < 7; t += 1) {
+              if (canPlaceOnTableau(pile[pile.length - 1], t)) add(6, { pile: 'foundation', index: f }, { pile: 'tableau', index: t });
+            }
+          }
+          /* 翻牌优先于普通列间腾挪（但排在揭暗牌与归位之后）。 */
+          if (stock.length) add(2, { pile: 'stock' }, { pile: 'stock' });
+          else if (waste.length) add(7, { pile: 'waste' }, { pile: 'stock' });
         }
         if (selected) {
           const cards = selectedCards();
@@ -717,51 +836,12 @@
               if (canPlaceOnTableau(cards[0], t)) add(1, from, { pile: 'tableau', index: t });
             }
           }
+          /* 选中牌没有合法目标时回退全局提示，不谎报死局。 */
+          if (!list.length) collectGlobal();
           list.sort((a, b) => a.priority - b.priority || a.order - b.order);
           return list;
         }
-        if (waste.length) {
-          const card = waste[waste.length - 1];
-          const from = { pile: 'waste' };
-          for (let f = 0; f < 4; f += 1) if (canPlaceOnFoundation(card, f)) add(0, from, { pile: 'foundation', index: f });
-          for (let t = 0; t < 7; t += 1) if (canPlaceOnTableau(card, t)) add(2, from, { pile: 'tableau', index: t });
-        }
-        for (let t = 0; t < 7; t += 1) {
-          const col = tableau[t];
-          for (let i = 0; i < col.length; i += 1) {
-            if (!col[i].up) continue;
-            const cards = [];
-            let valid = true;
-            for (let k = i; k < col.length; k += 1) {
-              if (!col[k].up) {
-                valid = false;
-                break;
-              }
-              cards.push(col[k].c);
-            }
-            if (!valid || !isRunValid(cards)) continue;
-            const from = { pile: 'tableau', index: t, cardIndex: i };
-            const reveals = i > 0 && !col[i - 1].up;
-            if (i === col.length - 1) {
-              for (let f = 0; f < 4; f += 1) {
-                if (canPlaceOnFoundation(col[i].c, f)) add(0, from, { pile: 'foundation', index: f });
-              }
-            }
-            for (let d = 0; d < 7; d += 1) {
-              if (d === t) continue;
-              if (canPlaceOnTableau(col[i].c, d)) add(reveals ? 1 : 3, from, { pile: 'tableau', index: d });
-            }
-          }
-        }
-        for (let f = 0; f < 4; f += 1) {
-          const pile = foundations[f];
-          if (!pile.length) continue;
-          for (let t = 0; t < 7; t += 1) {
-            if (canPlaceOnTableau(pile[pile.length - 1], t)) add(6, { pile: 'foundation', index: f }, { pile: 'tableau', index: t });
-          }
-        }
-        if (stock.length) add(4, { pile: 'stock' }, { pile: 'stock' });
-        else if (waste.length) add(7, { pile: 'waste' }, { pile: 'stock' });
+        collectGlobal();
         list.sort((a, b) => a.priority - b.priority || a.order - b.order);
         return list;
       }
@@ -992,6 +1072,8 @@
             '52 张牌全部归位 · ' + moves + ' 步<br/>慢慢来，随时可以再来一局。',
           btn: '再来一局',
           onBtn: showStart,
+          btn2: '重发一局',
+          onBtn2: restartDeal,
         });
         return true;
       }
@@ -1014,7 +1096,22 @@
             '归位 ' + foundationCount() + ' / 52 · ' + moves + ' 步<br/>谢谢你陪这些牌坐一会儿。',
           btn: '再来一局',
           onBtn: showStart,
+          btn2: '重发一局',
+          onBtn2: restartDeal,
         });
+        return true;
+      }
+      /* 0.10.0：低摩擦重发——从结算/暂停弹层一步进入新牌局，不经过开始弹层。 */
+      function restartDeal() {
+        autosave.clear();
+        beginDeal(randomSeed());
+        state = 'playing';
+        ui.hide();
+        loop.resume();
+        pauseUi.sync();
+        syncHud();
+        syncTools();
+        autosave.saveNow();
         return true;
       }
       function startGame() {
@@ -1050,6 +1147,8 @@
           onBtn: resumeGame,
           btn2: '结束本局并记录',
           onBtn2: finishManually,
+          btn3: '重发一局',
+          onBtn3: restartDeal,
         });
         pauseUi.sync();
       }
@@ -1537,6 +1636,64 @@
             restored: restoredOk,
             badRejected: badRejected,
           });
+
+          /* 0.10.0：等价 K 移动过滤 + 选中牌无目标时回退全局提示（不谎报死局）。 */
+          applySetDeal(layoutWithTableau([[{ c: 51, up: true }], [], [], [], [], [], []]));
+          const kCol = 0;
+          const globalHints = collectHintMoves();
+          const isEquivalentK = (m) =>
+            m && m.from.pile === 'tableau' && m.to.pile === 'tableau' &&
+            tableau[m.from.index] && tableau[m.from.index].length === 1 &&
+            rankOf(tableau[m.from.index][0].c) === 13 &&
+            tableau[m.to.index] && tableau[m.to.index].length === 0;
+          check(
+            '等价 K 移动（空列到空列）被过滤',
+            !globalHints.some(isEquivalentK) && globalHints.some((m) => m.from.pile === 'stock'),
+            { count: globalHints.length, hasStock: globalHints.some((m) => m.from.pile === 'stock') }
+          );
+          selected = { from: 'tableau', pile: kCol, index: 0 };
+          const fallbackHints = collectHintMoves();
+          check(
+            '选中牌无合法目标时回退全局提示',
+            fallbackHints.length > 0 &&
+              fallbackHints.some((m) => m.from.pile === 'stock') &&
+              !fallbackHints.some(isEquivalentK),
+            { count: fallbackHints.length, sources: fallbackHints.slice(0, 3).map((m) => m.from.pile) }
+          );
+          selected = null;
+
+          /* 0.10.0：撤销栈与提示（含剩余秒数）刷新恢复，坏字段安全清空但不丢牌局/道具。 */
+          applySetDeal(emptyLayout);
+          drawStock();
+          const usedHint = useHint();
+          const savedWithExtras = serialize();
+          const expectedFingerprint = stateFingerprint();
+          const expectedTools = { undo: tools.undo, hint: tools.hint };
+          beginDeal(7);
+          const resumed = restore(savedWithExtras);
+          const resumedUndo = undoStack.length;
+          const resumedTimer = hintTimer;
+          const resumedHints = hintMoves.length;
+          const resumedTools = { undo: tools.undo, hint: tools.hint };
+          const resumedFingerprint = stateFingerprint();
+          const undoAfterResume = useUndo();
+          check(
+            '刷新后撤销仍可用且提示剩余秒数恢复',
+            usedHint && resumed && resumedUndo === 1 && resumedTimer > 0 && resumedHints > 0 &&
+              resumedFingerprint === expectedFingerprint && resumedTools.undo === expectedTools.undo &&
+              undoAfterResume && tools.undo === expectedTools.undo - 1,
+            { usedHint, resumed, resumedUndo, resumedTimer, resumedHints, resumedTools, undoAfterResume, undoNow: tools.undo, expectedUndo: expectedTools.undo, resumedFpMatch: resumedFingerprint === expectedFingerprint }
+          );
+          const brokenExtras = JSON.parse(JSON.stringify(savedWithExtras));
+          brokenExtras.hintTimer = -1;
+          brokenExtras.undoStack = 'not-an-array';
+          const brokenResumed = restore(brokenExtras);
+          check(
+            '坏撤销/提示字段安全清空但不丢牌局与道具',
+            brokenResumed && undoStack.length === 0 && hintTimer === 0 && hintMoves.length === 0 &&
+              stateFingerprint() === expectedFingerprint && tools.undo === expectedTools.undo && tools.hint === expectedTools.hint,
+            { brokenResumed, undo: undoStack.length, timer: hintTimer, tools: JSON.stringify(tools) }
+          );
           let recorded = [];
           const originalRecordPlay = A.Progress.recordPlay;
           A.Progress.recordPlay = function recordSpy(gameId, score) {
@@ -1559,6 +1716,8 @@
               recorded: recorded.slice(),
               overlayVisible: !dom.overlay.hidden,
               overlayBtn: dom.ovBtn.textContent,
+              replayBtn: dom.ovBtn2 ? dom.ovBtn2.textContent : '',
+              replayHidden: dom.ovBtn2 ? dom.ovBtn2.hidden : true,
             };
           } finally {
             A.Progress.recordPlay = originalRecordPlay;
@@ -1575,6 +1734,11 @@
             settlement
           );
           check('胜利按公式计分（520 - 4 步 = 516）', settlement.recorded.length === 1 && settlement.recorded[0].score === 516, settlement.recorded);
+          check(
+            '结算弹层提供低摩擦重发入口',
+            settlement.overlayVisible && settlement.replayHidden === false && /重发一局/.test(settlement.replayBtn),
+            { replayBtn: settlement.replayBtn, replayHidden: settlement.replayHidden }
+          );
         } catch (err) {
           check('自检执行无异常', false, String(err && err.stack ? err.stack : err));
         } finally {
@@ -1672,6 +1836,9 @@
           },
           undo() {
             return useUndo();
+          },
+          hint() {
+            return useHint();
           },
           winState() {
             return {
