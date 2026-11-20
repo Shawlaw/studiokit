@@ -527,11 +527,11 @@
           ' · ' + (chStage.decision || '提前变道，避开被占用车道') +
           (chStartMoved ? ' · 已移到安全车道' : '');
       }
-      function startChallenge(ref) {
+      function startChallenge(ref, skipLock) {
         if (!challengeAvailable || !A.Challenge) return false;
         const stage = A.Challenge.stage(GAME_ID, ref);
         if (!stage) return false;
-        if (!A.Challenge.isUnlocked(GAME_ID, stage.id)) return false;
+        if (!skipLock && !A.Challenge.isUnlocked(GAME_ID, stage.id)) return false;
         autosave.clear();
         mode = 'challenge';
         chStage = stage;
@@ -1826,6 +1826,8 @@
         ctx.restore();
       }
 
+      /* 0.10.0：#test 可观测的门牌绘制计数（仅诊断，不写任何存档）。 */
+      const bonusSignDraws = { telegraphSlots: 0, gateSigns: 0, lanes: [] };
       /* 挑战模式：按固定时间轴绘制被占用车道上的车流与预告。 */
       function drawChallengeTraffic() {
         const laneCount = chLaneCount();
@@ -1852,6 +1854,57 @@
                 ctx.closePath();
                 ctx.fill();
               });
+              /* 0.10.0：预告期对奖励车道画 +5 门牌与高亮（仅视觉，不改时隙/距离语义）。 */
+              const bonusLanes = slot.optionalNearPassBonusLanes || [];
+              if (bonusLanes.length) {
+                bonusSignDraws.telegraphSlots += 1;
+                bonusSignDraws.gateSigns += bonusLanes.length;
+                bonusSignDraws.lanes = bonusSignDraws.lanes.concat(bonusLanes);
+                const bonusTopY = yAt(uTop);
+                const bonusBottomY = yAt(uBottom);
+                const gateU = uOf(0.32);
+                const gateY = yAt(gateU);
+                const gateH = Math.max(14, bonusBottomY - bonusTopY);
+                bonusLanes.forEach((lane) => {
+                  const xTop = laneCenterX(lane, uTop);
+                  const xBottom = laneCenterX(lane, uBottom);
+                  const gateX = laneCenterX(lane, gateU);
+                  ctx.save();
+                  ctx.globalAlpha = 0.5 + warn * 0.5;
+                  ctx.fillStyle = 'rgba(255,210,63,0.20)';
+                  ctx.beginPath();
+                  ctx.moveTo(xTop - laneWidthTop * 0.42, bonusTopY);
+                  ctx.lineTo(xTop + laneWidthTop * 0.42, bonusTopY);
+                  ctx.lineTo(xBottom + laneWidthBottom * 0.42, bonusBottomY);
+                  ctx.lineTo(xBottom - laneWidthBottom * 0.42, bonusBottomY);
+                  ctx.closePath();
+                  ctx.fill();
+                  ctx.strokeStyle = '#ffd23f';
+                  ctx.lineWidth = 2;
+                  ctx.setLineDash([5, 4]);
+                  ctx.beginPath();
+                  ctx.moveTo(xTop, bonusTopY);
+                  ctx.lineTo(xBottom, bonusBottomY);
+                  ctx.stroke();
+                  ctx.setLineDash([]);
+                  /* 门牌：双层描边保证在浅色路面上可读。 */
+                  const signW = Math.max(34, (laneWidthTop + laneWidthBottom) * 0.44);
+                  const signH = Math.max(18, gateH * 0.06);
+                  ctx.fillStyle = 'rgba(24,18,4,0.9)';
+                  A.draw.roundRect(ctx, gateX - signW / 2, gateY - signH / 2, signW, signH, 4);
+                  ctx.fill();
+                  ctx.strokeStyle = '#ffd23f';
+                  ctx.lineWidth = 2;
+                  ctx.stroke();
+                  A.draw.label(ctx, '+5', gateX, gateY, {
+                    font: 'bold ' + Math.max(11, Math.round(signH * 0.62)) + 'px system-ui',
+                    color: '#ffe98a',
+                    align: 'center',
+                    baseline: 'middle',
+                  });
+                  ctx.restore();
+                });
+              }
               ctx.restore();
             }
             return;
@@ -1935,6 +1988,11 @@
           A.draw.label(ctx, '路段 ' + chProgressLabel() + ' · 得分 ' + chScore + (chNear > 0 ? ' · 近距 ' + chNear : ''), W / 2, 48, {
             font: 'bold 12px system-ui',
             color: '#7ce8e0',
+          });
+          /* 0.10.0：HUD 明示计分规则，门牌 +5 为可选近距奖励（基础 10）。 */
+          A.draw.label(ctx, '普通 10 / 近距 15（门牌 +5）', W / 2, 66, {
+            font: 'bold 11px system-ui',
+            color: '#ffe08a',
           });
           if (chFailedSlot) {
             A.draw.label(ctx, '第 ' + chFailedSlot.slot + ' 段撞车', W / 2, 70, { font: 'bold 12px system-ui', color: '#ff8f8f' });
@@ -2225,11 +2283,29 @@
               checkedSlots: chSlotCheck,
               passedSlots: chPassed,
               nearPasses: chNear,
+              bonusSignDraws: {
+                telegraphSlots: bonusSignDraws.telegraphSlots,
+                gateSigns: bonusSignDraws.gateSigns,
+                lanes: bonusSignDraws.lanes.slice(),
+              },
               lastSlotScore: chLastSlotScore,
               lastSlotNear: chLastSlotNear,
               startLaneMoved: chStartMoved,
               failedSlot: chFailedSlot ? chFailedSlot.slot : null,
             };
+          },
+          /* 0.10.0：#test 进入 C05 并渲染首时隙预告期（含 +5 门牌），供画面证据采集。 */
+          renderBonusTelegraph() {
+            const started = startChallenge('road-rush-C05', true);
+            if (!started) return { started: false };
+            const slot = chSlots.find((s) => s.optionalNearPassBonusLanes.length > 0);
+            if (!slot) return { started: true, slot: null };
+            chSimTime = Math.max(0, slot.atSec - slot.telegraphLeadSec + 0.1);
+            bonusSignDraws.telegraphSlots = 0;
+            bonusSignDraws.gateSigns = 0;
+            bonusSignDraws.lanes = [];
+            render();
+            return { started: true, slot: slot.slot, atSec: slot.atSec, lead: slot.telegraphLeadSec, bonusLanes: slot.optionalNearPassBonusLanes.slice(), draws: { ...bonusSignDraws } };
           },
           forceStageClear(assisted) {
             if (mode !== 'challenge' || !chStage) return false;
@@ -2300,6 +2376,36 @@
               fail += 1;
               details.push('FAIL regression 异常：' + (err && err.message ? err.message : err));
             } finally {
+              /* 0.10.0：奖励车道门牌数据必须可见（HUD 规则 + 预告期 +5 门牌）。
+               * 以 C05 为例，数据含 optionalNearPassBonusLanes 时驱动 drawChallengeTraffic 画门牌。 */
+              const c05 = A.Challenge && A.Challenge.stage ? A.Challenge.stage(GAME_ID, 'road-rush-C05') : null;
+              if (c05) {
+                const slots = chBuildSlots(c05);
+                const withBonus = slots.filter((slot) => slot.optionalNearPassBonusLanes.length > 0);
+                check(withBonus.length > 0, 'C05 存在奖励车道数据（optionalNearPassBonusLanes）');
+                const rules = c05.content.scoreRules || {};
+                check(Math.max(0, Number(rules.passBonus) || 0) === 10 && Math.max(0, Number(rules.nearPassBonus) || 0) === 5,
+                  '计分规则为 普通 10 / 近距 15（门牌 +5），实际 ' + JSON.stringify(rules));
+                /* 真实渲染：预告期由 drawChallengeTraffic 画 +5 门牌，读取绘制计数确认数据可见。 */
+                const before = { slots: bonusSignDraws.telegraphSlots, signs: bonusSignDraws.gateSigns };
+                const startedBonus = startChallenge('road-rush-C05', true);
+                check(startedBonus === true && mode === 'challenge' && state === 'playing', '可进入 C05 挑战');
+                if (startedBonus) {
+                  chSimTime = Math.max(0, withBonus[0].atSec - withBonus[0].telegraphLeadSec + 0.1);
+                  bonusSignDraws.telegraphSlots = 0;
+                  bonusSignDraws.gateSigns = 0;
+                  bonusSignDraws.lanes = [];
+                  drawChallengeTraffic();
+                  check(bonusSignDraws.telegraphSlots > before.slots && bonusSignDraws.gateSigns > 0,
+                    '预告期 drawChallengeTraffic 画出 +5 奖励门牌（门牌数 ' + bonusSignDraws.gateSigns + '）');
+                  check(bonusSignDraws.lanes.length > 0 && bonusSignDraws.lanes.every((lane) => withBonus.some((slot) => slot.optionalNearPassBonusLanes.indexOf(lane) !== -1)),
+                    '奖励门牌车道来自 optionalNearPassBonusLanes（实际 ' + bonusSignDraws.lanes.join(',') + '）');
+                  /* 一次一车道保持：换道过渡仍是单车道，门牌只做提示不改车道数。 */
+                  const laneCount = chLaneCount();
+                  check(laneCount === 4 && chLaneChangeTotal === Math.max(0.05, Number(c05.content.laneChangeTimeSec) || 0.22),
+                    'C05 仍为 4 车道、单次换道时长不变（' + chLaneChangeTotal + 's）');
+                }
+              }
               if (snapshot && restore(snapshot)) {
                 state = 'playing';
                 if (snapshotState === 'paused') {

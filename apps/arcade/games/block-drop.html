@@ -389,6 +389,8 @@
       let chLines = 0;
       let chTarget = 1;
       let chMaxPieces = 1;
+      /* 0.10.0：挑战重力语义由 data 决定（content.gravityModel），不在运行时硬编码关卡几何/节奏。 */
+      let chGravityModel = 'gravity';
       let chElapsed = 0;
       let chAssisted = false;
       let chTipTimer = 0;
@@ -466,10 +468,16 @@
         while (!collides(cur.m, cur.x, y + 1)) y++;
         return y;
       }
-      function gravSec() {
-        /* 禅模式按 zenSpeedLevel（可冻结）计速；经典/挑战继续按 level，行为零回归。 */
-        const speedLevel = mode === 'zen' ? zenSpeedLevel : level;
+      /* 0.10.0：纯函数——重力语义完全由 (playMode, gravityModel, speedLevel) 决定，便于 regression
+       * 注入数据覆盖「place-by-place 无自然重力」与「自然重力」两种契约。 */
+      function gravitySecFor(playMode, gravityModel, speedLevel) {
+        if (playMode === 'challenge' && gravityModel === 'place-by-place') return Infinity;
         return Math.max(0.06, 0.8 * Math.pow(0.85, speedLevel - 1));
+      }
+      function gravSec() {
+        /* 禅模式按 zenSpeedLevel（可冻结）计速；经典继续按 level，行为零回归。 */
+        const speedLevel = mode === 'zen' ? zenSpeedLevel : level;
+        return gravitySecFor(mode, chGravityModel, speedLevel);
       }
       function syncHud() {
         dom.hudScore.textContent = String(score);
@@ -1042,6 +1050,9 @@
         const queue = (Array.isArray(content.pieceQueue) ? content.pieceQueue : []).filter((k) => PIECES[k]);
         if (!queue.length) return false;
         const win = content.win && typeof content.win === 'object' ? content.win : {};
+        /* 0.10.0：只消费 data 的结构化字段；design-data 同步 gravityModel='place-by-place' 后自动生效，
+         * 旧档/旧数据缺省按自然重力处理（零回归）。gravityMode 文案字段仅供展示，不在此硬编码。 */
+        chGravityModel = content.gravityModel === 'place-by-place' ? 'place-by-place' : 'gravity';
         mode = 'challenge';
         chStage = stage;
         chStageId = stage.id;
@@ -1657,10 +1668,19 @@
         }
 
         /* 重力 + 软降：软降是“加速”，仍逐格下落；落底键才会立即锁定。 */
-        const interval = softHeld ? SOFT_DROP_SEC : gravSec();
-        /* 只缩放自然重力的计时增量，避免切换 interval 时补掉多格；主动软降不受影响。 */
-        dropTimer += dt * (!softHeld && slowTimer > 0 ? 0.5 : 1);
-        while (dropTimer >= interval) {
+        const naturalInterval = gravSec();
+        const naturalGravityOff = !Number.isFinite(naturalInterval);
+        /* 软降是玩家的主动下落，即便 place-by-place 无自然重力也必须继续生效。 */
+        const interval = softHeld ? SOFT_DROP_SEC : naturalInterval;
+        /* place-by-place 关闭自然重力时不累加计时，避免留下隐藏的自然下落债。 */
+        if (softHeld || !naturalGravityOff) {
+          /* 只缩放自然重力的计时增量，避免切换 interval 时补掉多格；主动软降不受影响。 */
+          dropTimer += dt * (!softHeld && slowTimer > 0 ? 0.5 : 1);
+        } else {
+          dropTimer = 0;
+        }
+        while (!naturalGravityOff || softHeld) {
+          if (dropTimer < interval) break;
           dropTimer -= interval;
           if (!collides(cur.m, cur.x, cur.y + 1)) {
             cur.y++;
@@ -2044,6 +2064,9 @@
               queue: chQueue.slice(),
               queueIndex: chQueueIndex,
               queueRemaining: Math.max(0, chQueue.length - chQueueIndex),
+              gravityModel: chGravityModel,
+              gravityModeText: chStage && chStage.content ? (chStage.content.gravityMode || null) : null,
+              gravitySec: gravSec(),
               lines: chLines,
               targetLines: chTarget,
               piecesPlaced: chPieces,
@@ -2193,6 +2216,12 @@
                   const spawned = { mode: mode, state: state, curKey: cur ? cur.key : null, nextKey: nextKey, index: chQueueIndex };
                   check(spawned.curKey === savedNext, '挑战换块后实际出块与 NEXT 一致', JSON.stringify({ expected: savedNext, spawned: spawned }));
                   check(spawned.nextKey === (chQueue[chQueueIndex] || null), '后续 NEXT 仍取自固定队列', JSON.stringify({ next: spawned.nextKey, expected: chQueue[chQueueIndex] || null }));
+                  /* A2. 0.10.0 自然重力契约：place-by-place 由 data 决定「无自然重力」，其余保持自然重力；不硬编码关卡几何。 */
+                  check(gravitySecFor('challenge', 'place-by-place', 1) === Infinity, 'place-by-place 挑战：gravSec=∞（无自然重力）');
+                  check(gravitySecFor('challenge', 'gravity', 1) === 0.8 && gravitySecFor('classic', 'place-by-place', 1) === 0.8, '自然重力/经典模式仍按 level 计速（零回归）');
+                  check(gravitySecFor('zen', 'gravity', 3) < gravitySecFor('zen', 'gravity', 1), 'zen 自然重力仍随 speedLevel 递减');
+                  const pbpStages = stages.filter((stage) => stage.content && stage.content.gravityModel === 'place-by-place');
+                  check(pbpStages.length === 0 || pbpStages.every((stage) => !/"(referencePlan|acceptance)"/.test(JSON.stringify(stage))), 'gravityModel 来自运行时 data，不引入剧透字段');
                   /* B. 挑战失败弹层追加 practicedSkill / goalStatement 建议（缺陷 9，判定不变）。 */
                   applyChallengeStage(c06);
                   challengeFail('出块次数用完了');

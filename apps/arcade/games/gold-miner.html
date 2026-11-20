@@ -576,7 +576,7 @@
           winchArmed,
           aimLineActive,
           tntCount: items.filter((o) => o.type === 'tnt').length,
-          referenceOrder: chContent && Array.isArray(chContent.referenceCatchOrder) ? chContent.referenceCatchOrder.slice() : null,
+          /* 0.10.0 防剧透：运行时不再投影 content.referenceCatchOrder；夹具侧仍可读取。 */
           cashoutVisible: !dom.cashout.hidden,
           panelVisible: !!(dom.chPanel && !dom.chPanel.hidden),
         };
@@ -2096,6 +2096,7 @@
               chTipTimer,
               chHudTimer,
               autoRelease,
+              itemFloor,
             };
             const restoreSnapshot = () => {
               mode = snapshot.mode;
@@ -2134,6 +2135,7 @@
               chTipTimer = snapshot.chTipTimer;
               chHudTimer = snapshot.chHudTimer;
               autoRelease = snapshot.autoRelease;
+              itemFloor = snapshot.itemFloor;
               lastHudTime = -1;
               setChallengeChrome(mode === 'challenge');
               syncTools();
@@ -2193,6 +2195,58 @@
               timeUp = false;
               update(1 / 60);
               check(money === 250 && level === 2 && state === 'playing' && timeUp === false, '最后一钩宽限：回收完成 cashIn 后 money 100→250，按最终金额达标晋级（旧逻辑会按 100 直接判负）');
+              /* 5) 0.10.0：C03/C05 路线与时间完全由设计源驱动（注入数据验证消费链路）。
+               * 使用几何 + 运行时伸缩速度模型计算每条抓取顺序的时间预算；不硬编码设计答案。 */
+              const mkStage = (id, num, content) => ({ id, stageNumber: num, title: '注入' + num, goalStatement: '注入', decision: '', content });
+              const rawItems = [
+                { id: 'a', type: 'goldM', x: 154, y: 360, value: 300, weight: 4 },
+                { id: 'b', type: 'goldL', x: 265, y: 520, value: 350, weight: 8 },
+                { id: 't', type: 'tnt', x: 210, y: 430, value: 0, weight: 0 },
+              ];
+              const c03 = mkStage('gold-miner-C03', 3, { timeLimitSec: 58, targetMoney: 650, items: rawItems });
+              resetChallenge(c03);
+              check(target === 650 && Math.abs(timeLeft - 58) < 1e-6 && items.length === 3, 'C03 注入数据被消费：目标$' + target + ' 时长' + timeLeft + 's 物品' + items.length);
+              const injectedM1 = items.filter((o) => o.id === 'a')[0];
+              check(!!injectedM1 && injectedM1.value === 300 && injectedM1.x === 154 && injectedM1.y === 360, 'C03 m1.value=300/位置由 items 数据驱动（value=' + (injectedM1 && injectedM1.value) + '）');
+              /* 抓钩时间模型（与运行时 EXTEND_SPEED/retractSpeed/MIN_LEN 同源，不用设计答案）：
+               * 伸出距离≈hypot(x-210,y-104)-r*0.5；回收距离=伸出距离-(MIN_LEN-88 的相对量已含)；
+               * 用 retractSpeed 的运行时公式（无 winch）计算。 */
+              const catchSeconds = (o) => {
+                const reach = Math.max(0, Math.hypot(o.x - PIVOT.x, o.y - PIVOT.y) - o.r * 0.5);
+                const pull = Math.max(0, reach);
+                const speed = clamp(200 + 2600 / o.weight, 200, 840);
+                return (reach - MIN_LEN) / EXTEND_SPEED + (pull - MIN_LEN) / speed;
+              };
+              const costs = { a: catchSeconds(injectedM1), b: catchSeconds(items.filter((o) => o.id === 'b')[0]) };
+              /* 双路线：a→b 与 b→a 两个不同抓取顺序均可达（几何在时间预算内）。 */
+              const orderAB = ['a', 'b'];
+              const orderBA = ['b', 'a'];
+              const sumOrder = (order) => order.reduce((acc, id) => acc + costs[id], 0);
+              const moneyOrder = (order) => order.reduce((acc, id) => acc + (items.filter((o) => o.id === id)[0] || { value: 0 }).value, 0);
+              check(sumOrder(orderAB) < 58 && moneyOrder(orderAB) >= 650, 'C03 路线 a→b 可达：预算 ' + sumOrder(orderAB).toFixed(2) + 's < 58s，收益 $' + moneyOrder(orderAB));
+              check(sumOrder(orderBA) < 58 && moneyOrder(orderBA) >= 650, 'C03 路线 b→a 可达：预算 ' + sumOrder(orderBA).toFixed(2) + 's < 58s，收益 $' + moneyOrder(orderBA));
+              /* 6) C05 时间窗口：timeLimitSec 收窄到 30，注入数据生效且两条顺序仍可在窗口内达标。 */
+              const c05 = mkStage('gold-miner-C05', 5, {
+                timeLimitSec: 30,
+                targetMoney: 950,
+                items: [
+                  { id: 'd', type: 'diamond', x: 331, y: 523, value: 600, weight: 1.5 },
+                  { id: 'l', type: 'goldL', x: 100, y: 578, value: 350, weight: 8 },
+                  { id: 'm', type: 'goldM', x: 214, y: 360, value: 150, weight: 4 },
+                ],
+              });
+              resetChallenge(c05);
+              check(target === 950 && Math.abs(timeLeft - 30) < 1e-6, 'C05 timeLimitSec=30/targetMoney=950 注入生效：timeLeft=' + timeLeft + 's target=' + target);
+              const costs5 = {};
+              items.forEach((o) => { costs5[o.id] = catchSeconds(o); });
+              const route1 = ['d', 'l'];
+              const route2 = ['l', 'd'];
+              const sum5 = (route) => route.reduce((acc, id) => acc + costs5[id], 0);
+              const money5 = (route) => route.reduce((acc, id) => acc + (items.filter((o) => o.id === id)[0] || { value: 0 }).value, 0);
+              check(sum5(route1) < 30 && money5(route1) >= 950, 'C05 路线 d→l 在 30s 窗口内达标：' + sum5(route1).toFixed(2) + 's / $' + money5(route1));
+              check(sum5(route2) < 30 && money5(route2) >= 950, 'C05 路线 l→d 在 30s 窗口内达标：' + sum5(route2).toFixed(2) + 's / $' + money5(route2));
+              /* 防剧透断言：运行时观察接口不再投影 referenceCatchOrder。 */
+              check(!Object.prototype.hasOwnProperty.call(stageObservable(), 'referenceOrder'), 'stageObservable 不再投影 referenceCatchOrder（防剧透）');
             } catch (err) {
               fail += 1;
               details.push('FAIL regression 异常：' + (err && err.message ? err.message : String(err)));

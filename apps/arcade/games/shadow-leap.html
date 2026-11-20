@@ -115,7 +115,8 @@
       const CH_SCROLL_W = 18;
       const CH_SCROLL_H = 22;
       const CH_SCROLL_LIFT = 46;
-      const CH_GOAL_RADIUS_FALLBACK = 38;
+      /* 0.10.0：影门半径只消费 content.goal.radius；缺省兜底 20，不再硬编码 38。 */
+      const CH_GOAL_RADIUS_FALLBACK = 20;
       const CH_TIP_SECONDS = 3;
       const CH_OPTIONAL_TAG = '（可选）';
       const CLASSIC_HINT = '←→ / A D 或触摸左右半屏移动 · Shift / J 或点 💨 影冲（着陆补充） · 1 羽落 / 2 月弹 · P / Esc 暂停';
@@ -130,6 +131,8 @@
       };
       const CH_FAIL_SCROLL_NOTE = '卷轴是可选的，不影响通关与解锁。';
       const CH_GOAL_LOCKED_TEXT = '影门未开启：还需触碰 {n} 座半月雕像。';
+      /* 0.10.0：requireDash 门禁未达成时的归因提示（与开关提示互斥）。 */
+      const CH_GOAL_DASH_TEXT = '影门未开启：本次尝试需先用一次影冲（Shift / J / 💨）。';
 
       const CH_DATA = (() => {
         try {
@@ -225,11 +228,18 @@
         const spawnPlatform = byId[String(spawnRaw.platformId || '')] || byId[mainRouteIds[0]];
         const spawnOffsetX = clamp(Number(spawnRaw.offsetX) || 0, -spawnPlatform.w / 2, spawnPlatform.w / 2);
         const goalRaw = content.goal && typeof content.goal === 'object' ? content.goal : {};
+        /* 0.10.0：半径/高度完全由运行时数据提供；只有字段缺失/非法时按兜底处理。
+         * radius 用 Number.isFinite 判定，0 或非数值走兜底；height 0 是合法值（地面门）。 */
+        const radiusRaw = Number(goalRaw.radius);
+        const heightRaw = Number(goalRaw.height);
         const goal = {
           cx: clamp(Number(goalRaw.xCenter) || spawnPlatform.x + spawnPlatform.w / 2, 0, W),
-          cy: CH_START_WORLD_Y - (Number(goalRaw.height) || 0),
-          r: clamp(Number(goalRaw.radius) || CH_GOAL_RADIUS_FALLBACK, 12, 80),
+          cy: CH_START_WORLD_Y - (Number.isFinite(heightRaw) ? heightRaw : 0),
+          r: clamp(Number.isFinite(radiusRaw) && radiusRaw > 0 ? radiusRaw : CH_GOAL_RADIUS_FALLBACK, 12, 80),
           unlock: typeof goalRaw.unlock === 'string' ? goalRaw.unlock : null,
+          /* 0.10.0：仅当设计数据显式给出 requireDash === true 才启用影冲门禁；
+           * null/false/缺失保持 0.9 旧行为（任何方式触门即通关）。 */
+          requireDash: goalRaw.requireDash === true,
         };
         const switches = (Array.isArray(content.switches) ? content.switches : [])
           .map((s) => {
@@ -366,6 +376,8 @@
       let chSwitches = [];
       let challengeAssisted = false;
       let chDashes = 0;
+      /* 0.10.0：本次尝试是否用过影冲（影门 requireDash 门禁用；重试清零，与 chDashes 跨重试累计区分）。 */
+      let chDashUsedThisAttempt = false;
       let chResults = [];
       let lastChSecond = -1;
       /* 死亡检查点：最近一次成功着陆的平台（死亡策略：最近房间检查点重试，关卡任务不回退）。 */
@@ -594,7 +606,10 @@
         dashCharges -= 1;
         dashTimer = DASH_TIME;
         dashCarryTimer = 0;
-        if (mode === 'challenge') chDashes += 1;
+        if (mode === 'challenge') {
+          chDashes += 1;
+          chDashUsedThisAttempt = true;
+        }
         A.Sfx.play('jump');
         emitDashTrail(6);
         syncJoyTools();
@@ -705,6 +720,7 @@
         chSwitches = [];
         challengeAssisted = false;
         chDashes = 0;
+        chDashUsedThisAttempt = false;
         chResults = [];
         chCheckpoint = null;
         chRouteLanded = [];
@@ -931,6 +947,7 @@
         chSwitches = [];
         challengeAssisted = false;
         chDashes = 0;
+        chDashUsedThisAttempt = false;
         lastChSecond = -1;
         chCheckpoint = null;
         chRouteLanded = [];
@@ -951,6 +968,8 @@
         if (!buildChallengeWorld(index)) return false;
         /* 0.9.0 修复（缺陷 6）：新进关/新一关重置累计时间；失败重试（keep）跨重试累加。 */
         if (!keep) chTotalElapsed = 0;
+        /* 0.10.0：影冲门禁按“本次尝试”判定；重试清零（chDashes 仍跨重试累计，用于结算展示）。 */
+        chDashUsedThisAttempt = false;
         if (keep) {
           chCollectibles = Array.isArray(keep.collectibles) ? keep.collectibles.slice() : [];
           chSwitches = Array.isArray(keep.switches) ? keep.switches.slice() : [];
@@ -1022,6 +1041,7 @@
         chResults = [];
         challengeAssisted = false;
         chDashes = 0;
+        chDashUsedThisAttempt = false;
         chCheckpoint = null;
         chRouteLanded = [];
         chRouteShared = false;
@@ -1049,6 +1069,14 @@
       function chRemainingSwitches() {
         if (!stageDef) return 0;
         return stageDef.switches.filter((s) => chSwitches.indexOf(s.platformId) === -1).length;
+      }
+
+      /* 0.10.0：影门当前未开启原因（requireDash 优先展示影冲提示；开关未点亮仍按原文案）。 */
+      function chGoalLockedText() {
+        if (!stageDef) return '';
+        if (!chGoalUnlocked()) return CH_GOAL_LOCKED_TEXT.replace('{n}', String(chRemainingSwitches()));
+        if (stageDef.goal.requireDash && !chDashUsedThisAttempt) return CH_GOAL_DASH_TEXT;
+        return '';
       }
 
       function chRouteLabel(routeId) {
@@ -1305,10 +1333,12 @@
             autosave.saveNow();
           }
         }
-        /* 影门：圆（xCenter,height,radius）与角色矩形相交；C06 需先点亮两座半月雕像。 */
+        /* 影门：圆（xCenter,height,radius 数据驱动）与角色矩形相交。
+         * 0.10.0：C06 需先点亮两座半月雕像；若 design 数据 goal.requireDash === true，
+         * 本次尝试未用过影冲则不得触门（未冲不算通关），null/false 保持旧行为。 */
         const goal = stageDef.goal;
         if (A.Physics.circleBox(goal.cx, goal.cy, goal.r, player)) {
-          if (chGoalUnlocked()) {
+          if (chGoalUnlocked() && (!goal.requireDash || chDashUsedThisAttempt)) {
             stageClear();
             return;
           }
@@ -1378,6 +1408,8 @@
             switches: chSwitches.slice(),
             assisted: challengeAssisted,
             dashes: chDashes,
+            /* 0.10.0：旧档缺 dashUsedThisAttempt 时按 chDashes>0 近似，兼容旧档且不伪造本次尝试记录。 */
+            dashUsedThisAttempt: chDashUsedThisAttempt,
             checkpoint: chCheckpoint ? { platformIndex: chCheckpoint.platformIndex, x: chCheckpoint.x } : null,
             routeLanded: chRouteLanded.slice(),
             routeShared: chRouteShared,
@@ -1445,6 +1477,10 @@
               : [];
             challengeAssisted = !!cs.assisted;
             chDashes = clamp(Math.floor(Number(cs.dashes) || 0), 0, 9999);
+            /* 旧档缺字段时按 chDashes>0 退化；新档严格使用本次尝试标志。 */
+            chDashUsedThisAttempt = cs.dashUsedThisAttempt === undefined || cs.dashUsedThisAttempt === null
+              ? chDashes > 0
+              : !!cs.dashUsedThisAttempt;
             const routeIds = (stageDef.routes || []).map((r) => r.id);
             chRouteLanded = Array.isArray(cs.routeLanded)
               ? cs.routeLanded.map((id) => String(id)).filter((id) => routeIds.indexOf(id) !== -1)
@@ -2068,8 +2104,9 @@
               color: 'rgba(124,240,210,0.7)',
             });
           }
-          if (chGoalLockedTimer > 0) {
-            A.draw.label(ctx, CH_GOAL_LOCKED_TEXT.replace('{n}', String(chRemainingSwitches())), W / 2, 94, {
+          const goalLockText = chGoalLockedText();
+          if (chGoalLockedTimer > 0 && goalLockText) {
+            A.draw.label(ctx, goalLockText, W / 2, 94, {
               font: 'bold 12px system-ui, sans-serif',
               color: '#ffb3c6',
             });
@@ -2133,6 +2170,7 @@
         chSwitches = [];
         challengeAssisted = false;
         chDashes = 0;
+        chDashUsedThisAttempt = false;
         chResults = [];
         lastChSecond = -1;
         chCheckpoint = null;
@@ -2339,9 +2377,10 @@
               routeInfo: buildChallengeRouteInfo(),
               checkpoint: chCheckpoint ? { platformIndex: chCheckpoint.platformIndex } : null,
               dashes: chDashes,
+              dashUsedThisAttempt: chDashUsedThisAttempt,
               failure: chFailDetail,
               failReason: chFailReason,
-              goal: stageDef ? { cx: stageDef.goal.cx, cy: stageDef.goal.cy, r: stageDef.goal.r, unlocked: chGoalUnlocked() } : null,
+              goal: stageDef ? { cx: stageDef.goal.cx, cy: stageDef.goal.cy, r: stageDef.goal.r, height: CH_START_WORLD_Y - stageDef.goal.cy, requireDash: stageDef.goal.requireDash, unlocked: chGoalUnlocked() } : null,
               player: testPlayer(),
               panelOpen: chPanelOpen,
               challengeDataAvailable: CH_DATA_AVAILABLE,
@@ -2368,7 +2407,7 @@
                 crackVisual: chCrackVisual(p),
               })),
               player: testPlayer(),
-              goal: stageDef ? { cx: stageDef.goal.cx, cy: stageDef.goal.cy, r: stageDef.goal.r, unlocked: chGoalUnlocked() } : null,
+              goal: stageDef ? { cx: stageDef.goal.cx, cy: stageDef.goal.cy, r: stageDef.goal.r, height: CH_START_WORLD_Y - stageDef.goal.cy, requireDash: stageDef.goal.requireDash, dashUsedThisAttempt: chDashUsedThisAttempt, unlocked: chGoalUnlocked() } : null,
               mainRoute: stageDef ? stageDef.mainRoute.slice() : [],
               alternativeRoute: stageDef ? stageDef.alternativeRoute.slice() : [],
               routeStep: chRouteStep,
@@ -2543,6 +2582,73 @@
               const bestRecord = A.Challenge.progress(CHALLENGE_GAME_ID).best[stageDef.id];
               const expectBest = Math.round(totalAtClear * 10) / 10;
               check(!!bestRecord && Math.abs(bestRecord.timeSec - expectBest) < 0.05 && bestRecord.timeSec > 0, '最佳时间 = 累计时间且不为 0（' + (bestRecord ? bestRecord.timeSec : 'null') + 's）');
+              /* 0.10.0 影门数据驱动 + 影冲门禁：注入数据断言，结束后恢复原 stageDef/goal。 */
+              enterStage(0, null);
+              state = 'playing';
+              const goalDef = stageDef.goal;
+              const goalSnapshot = { r: goalDef.r, cy: goalDef.cy, requireDash: goalDef.requireDash };
+              /* 主路线可达性：原始数据的末台高于/低于门高对比（在注入前判定，读数保持设计源原值）。 */
+              const mainRoute = stageDef.mainRoute.slice();
+              check(mainRoute.length >= 2 && mainRoute[0] === stageDef.spawn.platformId && mainRoute.every((id) => stageDef.byId[id]), '主路线数据连贯且引用真实平台（' + mainRoute.join('→') + '）');
+              const lastPlat = stageDef.byId[mainRoute[mainRoute.length - 1]];
+              check(!!lastPlat && CH_START_WORLD_Y - lastPlat.y < CH_START_WORLD_Y - stageDef.goal.cy + stageDef.goal.r, '主路线末台低于影门高度，路线可达（末台 height=' + (CH_START_WORLD_Y - lastPlat.y) + '，门高=' + (CH_START_WORLD_Y - stageDef.goal.cy) + '）');
+              const obsGoal0 = this.stageObservable().goal;
+              check(obsGoal0.r === goalDef.r && obsGoal0.height === CH_START_WORLD_Y - goalDef.cy, '影门半径/高度来自运行时数据（r=' + obsGoal0.r + '，height=' + obsGoal0.height + '）');
+              /* 注入数据：radius=20（≠旧硬编码 38）/ height=500 应被完全消费（圆-矩判定跟随 r/cy）。
+               * 由于 stageDef.goal 在运行时由 normalize 生成并固定，这里对已归一化对象注入，
+               * 验证所有消费点（判定/绘制/观察）都读取同一对象字段，而非任何常量。 */
+              goalDef.r = 20;
+              goalDef.cy = CH_START_WORLD_Y - 500;
+              const obsGoal1 = this.stageObservable().goal;
+              check(obsGoal1.r === 20 && obsGoal1.height === 500, '注入 radius=20（非 38）/height=500 后运行时使用数据（r=' + obsGoal1.r + '，height=' + obsGoal1.height + '）');
+              check(CH_GOAL_RADIUS_FALLBACK === 20, '缺省兜底半径为 20，代码中无 38 硬编码（fallback=' + CH_GOAL_RADIUS_FALLBACK + '）');
+              /* 数据归一化层：注入 raw stage 的 content.goal 字段，验证 normalize 完整消费。 */
+              const injectedRaw = JSON.parse(JSON.stringify(stageDef.raw));
+              injectedRaw.content.goal.radius = 20;
+              injectedRaw.content.goal.height = 500;
+              injectedRaw.content.goal.requireDash = true;
+              const normalized = chNormalizeStage(injectedRaw, 0);
+              check(!!normalized && normalized.goal.r === 20 && normalized.goal.cy === CH_START_WORLD_Y - 500 && normalized.goal.requireDash === true, 'chNormalizeStage 消费注入 content.goal（r=' + (normalized && normalized.goal.r) + '，height=' + (normalized && CH_START_WORLD_Y - normalized.goal.cy) + '，requireDash=' + (normalized && normalized.goal.requireDash) + '）');
+              /* 缺省字段兼容：goal 字段缺失时按兜底（r=20、height=0、requireDash=false），不崩溃。 */
+              const bareRaw = JSON.parse(JSON.stringify(stageDef.raw));
+              delete bareRaw.content.goal;
+              const bareNormalized = chNormalizeStage(bareRaw, 0);
+              check(!!bareNormalized && bareNormalized.goal.r === 20 && bareNormalized.goal.cy === CH_START_WORLD_Y && bareNormalized.goal.requireDash === false, 'goal 字段缺省兼容：r=20/height=0/requireDash=false');
+              /* 无影冲负向：requireDash=true 且本次未用影冲时，站在门中心不得通关。 */
+              goalDef.requireDash = true;
+              chDashUsedThisAttempt = false;
+              player.x = clamp(goalDef.cx - player.w / 2, -player.w / 2, W - player.w / 2);
+              player.y = clamp(goalDef.cy - player.h / 2, 0, H);
+              player.vx = 0;
+              player.vy = 0;
+              player.prevBottom = player.y + player.h;
+              update(1 / 60);
+              check(state === 'playing', 'requireDash=true 未用影冲触门不通关（state=' + state + '）');
+              check(chGoalLockedTimer > 0 && /影冲/.test(chGoalLockedText()), '影冲门禁给出可归因提示：' + chGoalLockedText());
+              /* 正向：同一门，用一次影冲后可通关。 */
+              chDashUsedThisAttempt = true;
+              player.x = clamp(goalDef.cx - player.w / 2, -player.w / 2, W - player.w / 2);
+              player.y = clamp(goalDef.cy - player.h / 2, 0, H);
+              player.vx = 0;
+              player.vy = 0;
+              player.prevBottom = player.y + player.h;
+              update(1 / 60);
+              check(state === 'cleared', 'requireDash=true 用过影冲后触门通关（state=' + state + '）');
+              /* requireDash=false/null 旧行为：未用影冲也照常通关（同一 goal 对象仅改 requireDash）。 */
+              enterStage(0, null);
+              state = 'playing';
+              goalDef.requireDash = false;
+              chDashUsedThisAttempt = false;
+              player.x = clamp(goalDef.cx - player.w / 2, -player.w / 2, W - player.w / 2);
+              player.y = clamp(goalDef.cy - player.h / 2, 0, H);
+              player.vx = 0;
+              player.vy = 0;
+              player.prevBottom = player.y + player.h;
+              update(1 / 60);
+              check(state === 'cleared', 'requireDash=false 未用影冲触门仍通关（旧行为兼容）');
+              goalDef.r = goalSnapshot.r;
+              goalDef.cy = goalSnapshot.cy;
+              goalDef.requireDash = goalSnapshot.requireDash;
               /* 缺陷 7：易碎平台裂纹渲染读取 crackTimer；越接近破碎越明显。 */
               const crackFull = chCrackVisual({ kind: 'fragile', crackTimer: 0.65, breakDelay: 0.65 });
               const crackMid = chCrackVisual({ kind: 'fragile', crackTimer: 0.3, breakDelay: 0.65 });

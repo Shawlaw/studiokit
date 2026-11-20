@@ -73,6 +73,8 @@
       const MAGNET_DURATION = 6;
       const MAGNET_BONUS = 14;
       const ENCORE_HITS = 2;
+      /* 0.10.0：彩铃命中基础加分；本局可见，不写经典最高分。 */
+      const CH_BONUS_POINTS = 25;
       const JOY_START = { magnet: 2, encore: 2 };
       const JOY_CAPS = { magnet: 2, encore: 2 };
 
@@ -122,10 +124,15 @@
       let chOptional = [];
       let chCollectibles = [];
       let chWrongHits = 0;
+      /* 0.10.0：本局彩铃加分（+25/颗），仅本局可见，不写经典最高分/Progress。 */
+      let chBonusScore = 0;
       let chElapsed = 0;
       let chAssisted = false;
       let chErrorReason = '';
       let chLastResult = null;
+      /* 0.10.0：纯视觉隐藏雪花乐谱，通关即时显示、不持久化、不影响战力。 */
+      let snowflakeScoreTimer = 0;
+      let snowflakeScoreVisible = false;
       let chCombo = 0;
       let chGoalHintTimer = 0;
       let chHudSecond = -1;
@@ -462,11 +469,14 @@
         chSeqIndex = 0;
         chCollectibles = [];
         chWrongHits = 0;
+        chBonusScore = 0;
         chElapsed = 0;
         chAssisted = false;
         chErrorReason = '';
         chLastResult = null;
         chCombo = 0;
+        snowflakeScoreTimer = 0;
+        snowflakeScoreVisible = false;
         chGoalHintTimer = 3;
         chHudSecond = -1;
         bells = [];
@@ -510,6 +520,7 @@
           '<span>下一铃 ' + chEsc(next) + '</span>' +
           '<span>进度 ' + chEsc((done ? done + '→' : '') + next) + (chSeqIndex >= chSequence.length ? '' : '') + '</span>' +
           '<span>连击 ×' + chCombo + ' · 错 ' + chWrongHits + '</span>' +
+          '<span>彩铃加分 +' + chBonusScore + '（本局可见）</span>' +
           '<span>用时 ' + A.Challenge.formatTime(chElapsed) + '</span>';
       }
 
@@ -539,9 +550,11 @@
           if (bell.consumed) return;
           bell.consumed = true;
           chCollectibles.push(bell.id);
+          chBonusScore += CH_BONUS_POINTS;
           player.vy = BOUNCE_V;
           A.Sfx.play('bell', 6);
-          rings.push({ x: bell.x, y: bell.y, r: bell.r + 4, life: 0.65, maxLife: 0.65, text: '彩铃 +' + bell.id });
+          rings.push({ x: bell.x, y: bell.y, r: bell.r + 4, life: 0.65, maxLife: 0.65, text: '彩铃 +' + bell.id + ' +' + CH_BONUS_POINTS + ' 分' });
+          /* 彩铃加分只进入本局可见反馈，绝不写 progress:v1 经典最高分。 */
           syncChallengeHud();
           autosave.saveNow();
           return;
@@ -649,6 +662,12 @@
         input.endFrame();
       }
 
+      /* 纯视觉开关：不写存档、不改分数、不参与任何通关判定。 */
+      function triggerSnowflakeScore(show) {
+        snowflakeScoreVisible = !!show;
+        snowflakeScoreTimer = show ? 6 : 0;
+      }
+
       function challengeClear() {
         if (mode !== 'challenge' || !chStage) return false;
         state = 'cleared';
@@ -661,9 +680,13 @@
         if (A.Challenge) A.Challenge.markCleared(gameId, chStage.id, result);
         const isLast = chStageIndex >= challengeData.length - 1;
         const marks = chCollectibles.length ? '彩铃 ' + chCollectibles.join('/') : '未收集彩铃';
+        /* 0.10.0：C06 无错通关 → 触发纯视觉雪花乐谱（仅本局渲染，不写存档/不参与判定）。 */
+        const perfectFinale = Number(chStage && chStage.stageNumber) === 6 && chWrongHits === 0;
+        triggerSnowflakeScore(perfectFinale);
         ui.show({
           title: '挑战通关',
-          text: A.Challenge.resultHtml(chStage, result) + '<p class="ac-challenge-tip">' + chEsc(chStage.goalStatement || '') + ' · ' + chEsc(marks) + '</p>',
+          text: A.Challenge.resultHtml(chStage, result) + '<p class="ac-challenge-tip">' + chEsc(chStage.goalStatement || '') + ' · ' + chEsc(marks) + ' · 彩铃加分 +' + chBonusScore + '（本局，不计经典最高分）</p>' +
+            (perfectFinale ? '<p class="ac-challenge-tip">❄ 完美终曲 · 雪花乐谱（纯视觉，不影响战力）</p>' : ''),
           btn: isLast ? '返回选关' : '下一关',
           onBtn: () => {
             if (isLast) exitToChallengeSelect();
@@ -780,6 +803,8 @@
           combo: chCombo,
           wrongHits: chWrongHits,
           collectibles: chCollectibles.slice(),
+          bonusScore: chBonusScore,
+          snowflakeScore: { visible: snowflakeScoreVisible, timer: Math.round(snowflakeScoreTimer * 10) / 10 },
           player: { x: player.x, y: player.y, vx: player.vx, vy: player.vy },
           elapsedSec: Math.round(chElapsed * 10) / 10,
           assisted: chAssisted,
@@ -874,6 +899,10 @@
 
       /* ---------- 更新 ---------- */
       function update(dt) {
+        if (snowflakeScoreTimer > 0) {
+          snowflakeScoreTimer = Math.max(0, snowflakeScoreTimer - dt);
+          if (snowflakeScoreTimer === 0) snowflakeScoreVisible = false;
+        }
         if (mode === 'challenge') {
           updateChallenge(dt);
           return;
@@ -1243,6 +1272,11 @@
         });
         ctx.globalAlpha = 1;
 
+        /* 0.10.0：C06 无错通关的纯视觉雪花乐谱（五线谱 + 雪花音符），只在本次结算展示。 */
+        if (snowflakeScoreVisible && snowflakeScoreTimer > 0) {
+          drawSnowflakeScore();
+        }
+
         if (mode === 'challenge' && chStage) {
           const label = 'C' + String(chStage.stageNumber || 0).padStart(2, '0') + ' ' + chStage.title;
           A.draw.label(ctx, label, 12, 20, { align: 'left', font: 'bold 14px system-ui', color: '#63e0c8' });
@@ -1250,6 +1284,11 @@
             align: 'right',
             font: 'bold 13px system-ui',
             color: '#ffd23f',
+          });
+          A.draw.label(ctx, '彩铃 +' + chBonusScore + ' 分（本局）', W - 12, 40, {
+            align: 'right',
+            font: 'bold 11px system-ui',
+            color: '#ff9de2',
           });
           if (chGoalHintTimer > 0) {
             A.draw.label(ctx, chStage.goalStatement || '', W / 2, 46, { font: '12px system-ui', color: '#ffe08a' });
@@ -1260,6 +1299,48 @@
             A.draw.label(ctx, 'COMBO ×' + combo, W - 12, 20, { align: 'right', font: 'bold 13px system-ui', color: '#63e0c8' });
           }
         }
+      }
+
+      /* 纯视觉：五线谱 + 六枚雪花音符，随本局结算淡出；不写任何存档、不改分数/战力。 */
+      function drawSnowflakeScore() {
+        const alpha = clamp(snowflakeScoreTimer / 1.2, 0, 1);
+        const baseY = H * 0.42;
+        const left = 44;
+        const right = W - 44;
+        ctx.save();
+        ctx.globalAlpha = alpha;
+        ctx.fillStyle = 'rgba(9,16,35,0.82)';
+        A.draw.roundRect(ctx, left - 14, baseY - 70, right - left + 28, 140, 12);
+        ctx.fill();
+        ctx.strokeStyle = 'rgba(180,220,255,0.85)';
+        ctx.lineWidth = 1;
+        for (let i = 0; i < 5; i += 1) {
+          const y = baseY - 24 + i * 12;
+          ctx.beginPath();
+          ctx.moveTo(left, y);
+          ctx.lineTo(right, y);
+          ctx.stroke();
+        }
+        A.draw.label(ctx, '❄ 雪花乐谱 · 完美终曲', W / 2, baseY - 52, { font: 'bold 14px system-ui', color: '#bfe9ff' });
+        const notes = [0, 1, 2, 3, 4, 5];
+        notes.forEach((i) => {
+          const x = left + 22 + i * ((right - left - 44) / 5);
+          const y = baseY - 24 + (i % 5) * 12;
+          ctx.strokeStyle = '#ffffff';
+          ctx.lineWidth = 1.5;
+          for (let k = 0; k < 3; k += 1) {
+            const a = (k * Math.PI) / 3;
+            ctx.beginPath();
+            ctx.moveTo(x - Math.cos(a) * 6, y - Math.sin(a) * 6);
+            ctx.lineTo(x + Math.cos(a) * 6, y + Math.sin(a) * 6);
+            ctx.stroke();
+          }
+          ctx.fillStyle = '#bfe9ff';
+          ctx.beginPath();
+          ctx.arc(x, y, 2, 0, Math.PI * 2);
+          ctx.fill();
+        });
+        ctx.restore();
       }
 
       const loop = A.createLoop({
@@ -1329,6 +1410,20 @@
             player.vy = 120;
             return true;
           },
+          /* 0.10.0：#test 触发纯视觉雪花乐谱，供画面/像素证据采集。 */
+          forceSnowflakeScore() {
+            triggerSnowflakeScore(true);
+            loop.renderOnce();
+            return { visible: snowflakeScoreVisible, timer: snowflakeScoreTimer };
+          },
+          /* 0.10.0：#test 确定性触发一颗挑战彩铃命中（走真实 challengeHitBell 分支）。 */
+          hitChallengeBonus(id) {
+            if (mode !== 'challenge' || !chStage) return false;
+            const bell = chBells.find((b) => b.kind === 'bonus' && !b.consumed && (!id || b.id === id));
+            if (!bell) return false;
+            challengeHitBell(bell);
+            return true;
+          },
           /* ---------- 0.9 挑战模式钩子（契约见 docs/arcade/0.9/INTEGRATION-CONTRACT.md §5） ---------- */
           /* 修复回归：同步、确定性断言（#test 专用；调用后会清理临时状态）。 */
           regression() {
@@ -1370,7 +1465,7 @@
                 'drawBell 实际命中 classic/rest/bonus/blue/red 五条绘制分支'
               );
               /* 3) 挑战下「安可」被诚实拒绝且不消耗；经典模式效果保留。 */
-              const snapshot = { mode, state, magnetTimer, encoreHits, chAssisted, magnet: tools.magnet, encore: tools.encore };
+              const snapshot = { mode, state, magnetTimer, encoreHits, chAssisted, magnet: tools.magnet, encore: tools.encore, chStage, chStageIndex, chBells, chWrongHits, chBonusScore, chCollectibles, snowflakeScoreVisible, snowflakeScoreTimer, rings: rings.slice() };
               mode = 'challenge';
               state = 'playing';
               tools.encore = 2;
@@ -1385,6 +1480,35 @@
               chAssisted = false;
               const classicUsed = useJoy('encore');
               check(classicUsed === true && tools.encore === 1 && encoreHits === ENCORE_HITS && chAssisted === false, '经典模式 encore 仍生效（次数 -1、双倍命中 2 颗）');
+              /* 0.10.0 回归 1：彩铃命中产生本局可见加分，不写经典最高分。 */
+              const c06 = challengeData.find((s) => s.stageNumber === 6) || null;
+              if (c06) {
+                const c06Index = challengeData.findIndex((item) => item.id === c06.id);
+                const started = c06Index >= 0 && buildChallengeStage(c06Index);
+                if (started) state = 'playing';
+                check(started === true, 'C06 可进入（雪花乐谱/彩铃回归依赖）');
+                if (started) {
+                  const highBefore = A.Progress.get(gameId).high;
+                  const scoreBefore = chBonusScore;
+                  const bonusBell = chBells.find((b) => b.kind === 'bonus' && !b.consumed);
+                  const hit = !!bonusBell;
+                  if (bonusBell) challengeHitBell(bonusBell);
+                  check(hit === true && chBonusScore === scoreBefore + CH_BONUS_POINTS, '彩铃命中本局加分 +' + CH_BONUS_POINTS + '（实际 +' + (chBonusScore - scoreBefore) + '）');
+                  check(A.Progress.get(gameId).high === highBefore, '彩铃加分不写经典最高分（保持 ' + highBefore + '）');
+                  check(chCollectibles.length > 0 && rings.length > 0 && /\+25/.test(rings[rings.length - 1].text || ''), '彩铃加分进入本局可见反馈（收集物 + 提示环）');
+                  /* 0.10.0 回归 2：C06 wrongHits===0 通关显示纯视觉雪花乐谱，不持久化。 */
+                  chWrongHits = 0;
+                  triggerSnowflakeScore(false);
+                  /* 与 challengeClear 的判定条件一致：stageNumber===6 && wrongHits===0。 */
+                  const perfectFinale = Number(chStage && chStage.stageNumber) === 6 && chWrongHits === 0;
+                  triggerSnowflakeScore(perfectFinale);
+                  check(snowflakeScoreVisible === true && snowflakeScoreTimer > 0, 'C06 无错通关触发雪花乐谱（纯视觉，timer=' + snowflakeScoreTimer + '）');
+                  const runsRaw = localStorage.getItem('studiokit:arcade:runs:v1');
+                  check(!runsRaw || JSON.stringify(JSON.parse(runsRaw)).indexOf('snowflakeScore') === -1, '雪花乐谱不写入 runs:v1 存档');
+                  /* 0.10.0 回归 3：安可继续禁用、不消耗（与旧用例合并覆盖，此处仅复核 C06）。 */
+                  check(joyUsable('encore') === false, '挑战关安可仍禁用（joyUsable=false）');
+                }
+              }
               mode = snapshot.mode;
               state = snapshot.state;
               magnetTimer = snapshot.magnetTimer;
@@ -1392,6 +1516,15 @@
               chAssisted = snapshot.chAssisted;
               tools.magnet = snapshot.magnet;
               tools.encore = snapshot.encore;
+              chStage = snapshot.chStage;
+              chStageIndex = snapshot.chStageIndex;
+              chBells = snapshot.chBells;
+              chWrongHits = snapshot.chWrongHits;
+              chBonusScore = snapshot.chBonusScore;
+              chCollectibles = snapshot.chCollectibles;
+              snowflakeScoreVisible = snapshot.snowflakeScoreVisible;
+              snowflakeScoreTimer = snapshot.snowflakeScoreTimer;
+              rings = snapshot.rings;
               syncJoyTools();
               autosave.clear();
             } catch (err) {
@@ -1445,6 +1578,8 @@
               nextBellId: chSeqIndex < chSequence.length ? chSequence[chSeqIndex] : null,
               combo: chCombo,
               wrongHits: chWrongHits,
+              bonusScore: chBonusScore,
+              snowflakeScore: { visible: snowflakeScoreVisible, timer: Math.round(snowflakeScoreTimer * 10) / 10 },
               errorReason: chErrorReason,
             };
           },

@@ -373,11 +373,28 @@
       function stageLabel(stage) {
         return stage ? 'C' + String(stage.stageNumber || 0).padStart(2, '0') : 'C--';
       }
-      /* 关卡文案里的「N 步内」可能与 content.maxValidMoves 不一致（C06 文案六步、实际上限五步），
-         展示层统一用真实上限覆盖，不修改生成的挑战数据。 */
+      /* 0.10.0：目标文案展示层统一为「最多 N 步，参考 M 步」口径，不修改生成的挑战数据。
+         N = content.maxValidMoves（实际上限）；M = content.win.referenceSteps（设计源 BFS 最短步数，动态读取）。
+         旧档 / 未同步字段时 referenceSteps 缺省为 null：只显示「最多 N 步」，不伪造参考值。 */
+      const CN_DIGITS = ['零', '一', '二', '三', '四', '五', '六', '七', '八', '九', '十'];
+      function chineseStepWord(n) {
+        if (!Number.isInteger(n) || n < 0) return '';
+        if (n === 2) return '两';
+        if (n <= 10) return CN_DIGITS[n] || '';
+        if (n < 20) return '十' + (n % 10 ? CN_DIGITS[n % 10] : '');
+        return String(n);
+      }
+      function referenceStepsOf(stage) {
+        const raw = stage && stage.content && stage.content.win ? stage.content.win.referenceSteps : undefined;
+        const n = Math.floor(Number(raw));
+        return Number.isFinite(n) && n >= 0 ? n : null;
+      }
       function challengeGoalDisplay(stage, maxMoves) {
-        const raw = String((stage && stage.goalStatement) || '');
-        return raw.replace(/([0-9]+|[一二两三四五六七八九十]+)\s*步内/g, String(maxMoves) + ' 步内');
+        const max = Math.max(1, Math.floor(Number(maxMoves) || 1));
+        const ref = referenceStepsOf(stage);
+        let text = '最多 ' + (chineseStepWord(max) || String(max)) + ' 步';
+        if (ref !== null) text += '，参考 ' + (chineseStepWord(ref) || String(ref)) + ' 步';
+        return text;
       }
       function syncChallengeHud() {
         const inChallenge = mode === 'challenge';
@@ -405,7 +422,7 @@
         dom.chTip.hidden = false;
         dom.chTip.innerHTML =
           '<strong>' + stageLabel(chStage) + ' ' + chStage.title + '</strong> · ' + challengeGoalDisplay(chStage, chMaxMoves) +
-          '<br/>操作：方向键 / 滑动移动。目标方块 ' + chTarget + '，最多 ' + chMaxMoves + ' 步有效移动（无随机新块）。';
+          '<br/>操作：方向键 / 滑动移动。目标方块 ' + chTarget + '（无随机新块）。';
       }
       function renderChallengePanel() {
         if (!dom.chPanel) return;
@@ -550,6 +567,7 @@
           title: '关卡完成',
           text:
             A.Challenge.resultHtml(chStage, result) +
+            '<p class="ac-challenge-result-row">目标口径：' + challengeGoalDisplay(chStage, chMaxMoves) + '</p>' +
             '<p class="ac-challenge-result-row">本关有效步数 <strong>' + chMoves + '/' + chMaxMoves + '</strong></p>',
           btn: isLast ? '返回选关' : '下一关',
           onBtn: isLast ? openChallengePanel : () => startChallenge(stages[index + 1].id),
@@ -1338,14 +1356,22 @@
                 '胜利弹层直接再来一局只记录一次且为最终分',
                 JSON.stringify({ plays: restarted.plays, scores: restarted.scores.length })
               );
-              /* D. C06 文案「六步」必须显示实际 maxValidMoves（缺陷 6）。 */
+              /* D. 0.10.0 C06 目标文案口径「最多 N 步，参考 M 步」；M 从 content.win.referenceSteps 动态读取。 */
               const stages = challengeStagesData();
               const c06 = stages.filter((stage) => stage.stageNumber === 6)[0];
               if (!c06) {
                 check(false, 'C06 挑战数据存在');
               } else {
                 const cMax = Math.max(1, Math.floor(Number(c06.content.maxValidMoves) || 1));
+                const cRef = referenceStepsOf(c06);
                 const goalText = challengeGoalDisplay(c06, cMax);
+                /* 纯函数覆盖：注入不同 referenceSteps，口径与中文数字都正确。 */
+                const injected = { content: { maxValidMoves: 5, win: { referenceSteps: 4 } } };
+                const injectedText = challengeGoalDisplay(injected, 5);
+                check(injectedText === '最多 五 步，参考 四 步', '注入数据：文案为「最多 五 步，参考 四 步」', injectedText);
+                check(challengeGoalDisplay({ content: { maxValidMoves: 3, win: { referenceSteps: 2 } } }, 3) === '最多 三 步，参考 两 步', '注入数据：两 用中文数字');
+                check(challengeGoalDisplay({ content: { maxValidMoves: 6, win: {} } }, 6) === '最多 六 步', '旧档缺 referenceSteps：只显示最多 N 步，不伪造参考值');
+                check(cRef === null || /参考/.test(goalText), '运行时 C06 若有 referenceSteps 则展示参考步数', JSON.stringify({ cRef, goalText }));
                 mode = 'challenge';
                 chStage = c06;
                 chStageId = c06.id;
@@ -1359,8 +1385,8 @@
                 const hudText = dom.chHud.textContent || '';
                 const tipText = dom.chTip.textContent || '';
                 check(hudText.indexOf('2/' + cMax) !== -1, 'C06 HUD 显示实际步数上限', JSON.stringify({ hud: hudText, max: cMax }));
-                check(tipText.indexOf(cMax + ' 步有效移动') !== -1 && tipText.indexOf('六步') === -1, 'C06 提示用实际步数上限覆盖文案', JSON.stringify({ tip: tipText }));
-                check(goalText.indexOf(cMax + ' 步内') !== -1 && goalText.indexOf('六步') === -1, 'C06 目标文案按实际上限展示', goalText);
+                check(tipText.indexOf(chineseStepWord(cMax) + ' 步') !== -1 && tipText.indexOf('六步内') === -1, 'C06 提示用新口径「最多 N 步」', JSON.stringify({ tip: tipText, max: cMax }));
+                check(goalText.indexOf('最多 ' + chineseStepWord(cMax) + ' 步') === 0 && goalText.indexOf('六步内') === -1, 'C06 目标文案为新口径且不使用旧「步内」', goalText);
                 mode = 'classic';
                 chStage = null;
                 chStageId = null;

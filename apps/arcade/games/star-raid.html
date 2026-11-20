@@ -712,7 +712,18 @@
         tools.shield = 1;
         shieldTimer = 0;
         particles.clear();
-        chEvents = (Array.isArray(chContent.events) ? chContent.events : []).map((event, index) => ({
+        /* 0.10.0：content.splits 为可选字段。设计源若提供，则把 replaces 指向的单个事件
+         * 展开为两个连续安全段（各自有独立 safeBandXRatio / atSec / telegraphSec），
+         * 要求玩家在两段之间第二次换位；未提供时完全保持旧的 events 时间轴，不造随机弹。
+         * 所有段仍沿用同一套安全走廊绘制/弹幕约束，不新增随机刷怪。 */
+        const rawSplits = Array.isArray(chContent.splits) ? chContent.splits.filter((item) => item && typeof item === 'object' && typeof item.replaces === 'string') : [];
+        const splitGroups = rawSplits.reduce((groups, item) => {
+          const key = String(item.replaces);
+          if (!groups[key]) groups[key] = [];
+          groups[key].push(item);
+          return groups;
+        }, Object.create(null));
+        const makeEvent = (event, index, meta) => ({
           id: String(event.id || 'w' + (index + 1)),
           atSec: Math.max(0, Number(event.atSec) || 0),
           enemyType: String(event.enemyType || 'scout'),
@@ -721,13 +732,29 @@
           attackActiveSec: Math.max(0.5, Number(event.attackActiveSec) || 3.4),
           spawnXRatio: clamp(Number(event.spawnXRatio) || 0.5, 0, 1),
           safeBandXRatio: event.safeBandXRatio || { center: 0.5, halfWidth: 0.12 },
+          fromSplit: !!(meta && meta.fromSplit),
+          splitGroup: meta && meta.splitGroup ? String(meta.splitGroup) : null,
+          splitIndex: meta && Number.isInteger(meta.splitIndex) ? meta.splitIndex : -1,
           started: false,
           phase: 'pending',
           phaseTime: 0,
           salvoIndex: 0,
           lastSalvo: 0,
           done: false,
-        }));
+        });
+        chEvents = [];
+        (Array.isArray(chContent.events) ? chContent.events : []).forEach((event, index) => {
+          const key = event && typeof event.id === 'string' ? event.id : '';
+          const segments = key && splitGroups[key] ? splitGroups[key].slice().sort((a, b) => (Number(a.atSec) || 0) - (Number(b.atSec) || 0)) : null;
+          if (segments && segments.length === 2) {
+            segments.forEach((segment, splitIndex) => {
+              chEvents.push(makeEvent(segment, index, { fromSplit: true, splitGroup: key, splitIndex }));
+            });
+            return;
+          }
+          /* 缺字段/非两段时 fail closed：保持原事件，不把半成品拆段塞进时间轴。 */
+          chEvents.push(makeEvent(event, index, null));
+        });
         syncHud();
         syncJoyTools();
         setChallengeChrome(true);
@@ -827,6 +854,11 @@
           activeEvent: active ? { id: active.id, phase: active.phase, pattern: active.attackPattern } : null,
           eventsDone: chEvents.filter((ev) => ev.done).length,
           eventsTotal: chEvents.length,
+          splitGroups: Object.keys(chEvents.reduce((acc, ev) => {
+            if (ev.fromSplit && ev.splitGroup) acc[ev.splitGroup] = true;
+            return acc;
+          }, Object.create(null))),
+          splitSegments: chEvents.filter((ev) => ev.fromSplit).map((ev) => ({ id: ev.id, group: ev.splitGroup, index: ev.splitIndex, atSec: ev.atSec, safeCenter: challengeBand(ev).center })),
           boss: boss ? { hp: boss.hp, maxHp: boss.maxHp, phase: boss.phase, exposed: boss.exposed !== false, weakSide: boss.weakSide, fireTimer: boss.fireTimer, t: boss.t } : null,
           bossDefeated: chBossDefeated,
           bossMaxPhase: chBossMaxPhase,
@@ -855,6 +887,9 @@
             started: ev.started,
             done: ev.done,
             safeBand: challengeBand(ev),
+            fromSplit: !!ev.fromSplit,
+            splitGroup: ev.splitGroup || null,
+            splitIndex: ev.fromSplit ? ev.splitIndex : -1,
           })),
           activeEventIds: challengeActiveEvents().map((ev) => ev.id),
           safeBand: challengeCurrentBand(),
@@ -2703,6 +2738,19 @@
           startChallenge(ref) {
             return startChallenge(ref);
           },
+          /* #test：跳过解锁直接进入关卡，供拆段回放/观测使用（不写挑战记录）。 */
+          forceStartChallenge(ref) {
+            const stage = challengeStageByRef(ref);
+            if (!stage) return false;
+            mode = 'challenge';
+            chStage = stage;
+            chContent = stage.content || {};
+            resetChallenge(stage);
+            state = 'playing';
+            ui.hide();
+            loop.resume();
+            return true;
+          },
           challengeInfo() {
             return challengeInfo();
           },
@@ -2818,6 +2866,53 @@
               check(dom.chHud && dom.chHud.hidden === true, '挑战模式 DOM 挑战 HUD 已隐藏（只保留画布内 HUD）');
               const gameHud = document.querySelector('.game-hud');
               check(!gameHud || getComputedStyle(gameHud).display === 'none', '挑战模式顶部 DOM 游戏 HUD 已隐藏');
+              /* 0.10.0：content.splits 可选字段——设计源同步时拆成两段连续安全走廊；
+               * 未同步时保持原 events 时间轴且不崩。C03/C04 各至少一段要求第二次换位。 */
+              const splitStages = ['star-raid-C03', 'star-raid-C04'];
+              let splitStageCount = 0;
+              let relocatingCount = 0;
+              let noSplitOk = true;
+              splitStages.forEach((ref) => {
+                const stage = challengeStageByRef(ref);
+                check(!!stage, ref + ' 挑战关卡数据可用');
+                if (!stage) { noSplitOk = false; return; }
+                const content = stage.content || {};
+                const segments = Array.isArray(content.splits) ? content.splits : [];
+                resetChallenge(stage);
+                const splitEvents = chEvents.filter((ev) => ev.fromSplit);
+                if (!segments.length) {
+                  check(splitEvents.length === 0 && chEvents.length === (Array.isArray(content.events) ? content.events.length : 0) && chEvents.every((ev) => challengeBand(ev) && Number.isFinite(challengeBand(ev).left)),
+                    ref + ' 未拆分路径：按原 events 时间轴构建且安全走廊有效（不崩）');
+                  return;
+                }
+                check(splitEvents.length === segments.length && splitEvents.length === 2, ref + ' splits 展开为两个安全段（实际 ' + splitEvents.length + ' 段）');
+                const pairs = splitEvents.slice().sort((a, b) => a.atSec - b.atSec);
+                const valid = pairs.length === 2 &&
+                  pairs.every((ev) => ev.safeBandXRatio && Number.isFinite(Number(ev.safeBandXRatio.center)) && ev.telegraphSec >= 0.2 && Number.isFinite(ev.atSec)) &&
+                  pairs[1].atSec > pairs[0].atSec;
+                check(valid, ref + ' 两安全段各含 atSec/telegraphSec/safeBandXRatio 且顺序连续');
+                const centers = pairs.map((ev) => challengeBand(ev).center);
+                const relocated = valid && Math.abs(centers[1] - centers[0]) > 0.2;
+                if (relocated) relocatingCount += 1;
+                check(relocated, ref + ' 两段安全走廊中心明显不同，要求第二次换位（' + centers.map((c) => c.toFixed(2)).join(' → ') + '）');
+                /* 安全走廊内不放弹：用两段的危险列生成规则反证走廊不重叠危险弹。 */
+                const corridorClear = pairs.every((ev) => {
+                  const band = challengeBand(ev);
+                  return challengeDangerColumns(band).every((x) => x <= band.left - 16 || x >= band.right + 16);
+                });
+                check(corridorClear, ref + ' 拆分后仍保留可达安全走廊、不随机塞弹');
+                splitStageCount += 1;
+              });
+              check(splitStageCount === 0 || splitStageCount === 2, 'C03/C04 拆分状态一致（均已拆或均未拆，实际 ' + splitStageCount + ' 关；未拆等待 design-data 同步）');
+              if (splitStageCount === 2) check(relocatingCount >= 2, 'C03/C04 至少各有一段要求玩家第二次换位（实际 ' + relocatingCount + ' 关）');
+              /* 设计源未同步时如实标注 fail，不谎称已拆分。 */
+              if (splitStageCount === 0) check(false, '设计源未同步 splits：等待 design-data 同步 C03/C04 splits 后再验证第二次换位');
+              /* 未拆路径无 splits 时不能凭空生成 split 事件。 */
+              const noSplitStage = challengeStageByRef('star-raid-C01');
+              if (noSplitStage) {
+                resetChallenge(noSplitStage);
+                check(chEvents.every((ev) => !ev.fromSplit), 'C01（无 splits）不产生拆分事件，旧时间轴保持不变');
+              }
               /* 缺陷 3：C03 目标文案与实际「只看存活」判定一致。 */
               const c03 = challengeStageByRef('star-raid-C03');
               const c03Text = challengeGoalText(c03);

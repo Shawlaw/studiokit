@@ -751,6 +751,35 @@
         }
       }
 
+      /** 0.10.0：推荐窗口判定完全由 content.recommendedFlipWindows 驱动；不改物理。
+       * 返回在给定世界 offset 处的安全窗口命中：{ index, xCenter, tolerancePx, toward, edge }
+       * edge ∈ 'early'（早沿，含端点）、'center'（中心）、'late'（晚沿，含端点）、null（端外）。
+       * 判定口径：|offset - xCenter| <= tolerancePx 即窗口内；早沿=左端、晚沿=右端、中心=正中。 */
+      function chWindowVerdict(offset, windowIndex) {
+        if (!ch.windows.length) return null;
+        const idx = clamp(Math.floor(Number(windowIndex) || 0), 0, ch.windows.length - 1);
+        const w = ch.windows[idx];
+        const tol = Number(w.tolerancePx);
+        const center = Number(w.xCenter);
+        if (!Number.isFinite(tol) || !Number.isFinite(center) || tol < 0) return null;
+        const delta = offset - center;
+        let edge = null;
+        if (Math.abs(delta) <= tol) {
+          if (delta === 0) edge = 'center';
+          else if (Math.abs(delta) >= tol) edge = delta < 0 ? 'early' : 'late';
+          else edge = 'inside';
+        }
+        return {
+          index: idx,
+          xCenter: center,
+          tolerancePx: tol,
+          toward: w.toward || null,
+          offset,
+          delta,
+          inWindow: Math.abs(delta) <= tol,
+          edge,
+        };
+      }
       /** 仅 #test：固定 1/60 步长驱动同一份 updateChallenge 物理，按推荐窗口早沿自动翻转，逐关验证可达性。 */
       function challengeReplayFlip(ref) {
         const started = startChallenge(ref);
@@ -1484,6 +1513,73 @@
           },
           challengeReplayFlip(ref) {
             return challengeReplayFlip(ref);
+          },
+          windowVerdict(offset, windowIndex) {
+            return chWindowVerdict(Number(offset) || 0, windowIndex);
+          },
+          setChallengeWindows(windows) {
+            if (!inChallenge()) return false;
+            ch.windows = Array.isArray(windows) ? windows.map((w) => ({ ...w })) : [];
+            return true;
+          },
+          /** 0.10.0 回归：推荐窗口完全由 content 驱动，验证早沿/中心/晚沿/端外判定；不改物理。 */
+          regression() {
+            const details = [];
+            let pass = 0;
+            let fail = 0;
+            const check = (ok, message) => {
+              if (ok) {
+                pass += 1;
+                details.push('PASS ' + message);
+              } else {
+                fail += 1;
+                details.push('FAIL ' + message);
+              }
+            };
+            const snapshot = {
+              mode, state, active: ch.active, stage: ch.stage, index: ch.index,
+              stageState: ch.stageState, windows: ch.windows.slice(), done: ch.done,
+            };
+            try {
+              /* 用注入数据驱动窗口判定；窄窗口 tolerancePx=35（设计源收窄口径）。 */
+              const injected = [
+                { xCenter: 250, toward: 'ceiling', tolerancePx: 35 },
+                { xCenter: 690, toward: 'floor', tolerancePx: 35 },
+              ];
+              mode = 'challenge';
+              ch.active = true;
+              ch.stage = ch.stage || null;
+              ch.windows = injected.map((w) => ({ ...w }));
+              const early = chWindowVerdict(215, 0);
+              const center = chWindowVerdict(250, 0);
+              const late = chWindowVerdict(285, 0);
+              const outsideLeft = chWindowVerdict(214, 0);
+              const outsideRight = chWindowVerdict(286, 0);
+              check(!!early && early.inWindow && early.edge === 'early' && early.toward === 'ceiling', '早沿 offset=215 命中窗口且 toward=ceiling：' + JSON.stringify(early));
+              check(!!center && center.inWindow && center.edge === 'center', '中心 offset=250 命中且 edge=center：' + JSON.stringify(center));
+              check(!!late && late.inWindow && late.edge === 'late', '晚沿 offset=285 命中且 edge=late：' + JSON.stringify(late));
+              check(!!outsideLeft && !outsideLeft.inWindow && outsideLeft.edge === null, '端外 offset=214 不命中（仅验证判定，不要求通关）');
+              check(!!outsideRight && !outsideRight.inWindow && outsideRight.edge === null, '端外 offset=286 不命中（仅验证判定，不要求通关）');
+              /* 数据驱动：第二个窗口 xCenter=690/toward=floor 生效，非硬编码第一窗口。 */
+              const secondCenter = chWindowVerdict(690, 1);
+              check(!!secondCenter && secondCenter.inWindow && secondCenter.edge === 'center' && secondCenter.toward === 'floor', '第二窗口按数据 xCenter=690/toward=floor 命中：' + JSON.stringify(secondCenter));
+              /* 设计源缺省/非法 tolerance 时 fail closed（不谎报安全窗口）。 */
+              ch.windows = [{ xCenter: 100, toward: 'floor' }];
+              check(chWindowVerdict(100, 0) === null, '窗口缺 tolerancePx 时判定为 null（fail closed，不伪造安全窗口）');
+            } catch (err) {
+              fail += 1;
+              details.push('FAIL regression 异常：' + (err && err.message ? err.message : String(err)));
+            } finally {
+              mode = snapshot.mode;
+              state = snapshot.state;
+              ch.active = snapshot.active;
+              ch.stage = snapshot.stage;
+              ch.index = snapshot.index;
+              ch.stageState = snapshot.stageState;
+              ch.windows = snapshot.windows;
+              ch.done = snapshot.done;
+            }
+            return { pass, fail, details };
           },
         };
       }

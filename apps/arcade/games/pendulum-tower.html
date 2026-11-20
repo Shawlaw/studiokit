@@ -130,6 +130,9 @@
       let chMaxLean = LEAN_LIMIT;
       let chPeakLean = 0;
       let chWin = { floorsAtLeast: 4, noCollapse: true };
+      /* 0.10.0：C05 连续容差内层数门槛 / C06 塔顶中心最终偏移上限，缺省 null 表示不启用。 */
+      let chMinConsecutiveWithinTolerance = null;
+      let chMaxFinalTopCenterOffsetPx = null;
       let chLimits = { maxDroppedBoxes: 5, braceUsesAllowed: 0, guideUsesAllowed: 0 };
       let chToolsUsed = { guide: 0, brace: 0 };
       let chGoalHintTimer = 0;
@@ -467,6 +470,43 @@
         return { overlapPx: overlap, ratio: overlap / BOX_W, aligned: overlap >= BOX_W * 0.85 };
       }
 
+      /* 0.10.0：连续「容差内」层数（逐层落箱后 marks 的最长连续 true 段）。 */
+      function consecutiveWithinTolerance(marks) {
+        let run = 0;
+        let best = 0;
+        (Array.isArray(marks) ? marks : []).forEach((mark) => {
+          if (mark && mark.withinTolerance === true) {
+            run += 1;
+            if (run > best) best = run;
+          } else {
+            run = 0;
+          }
+        });
+        return { current: run, best: best };
+      }
+
+      /* 0.10.0：塔顶中心相对 baseCenterX 的最终偏移（绝对值）。 */
+      function finalTopCenterOffset() {
+        const top = towerTop();
+        if (!top) return null;
+        const baseCenterX = Number(chStage && chStage.content ? chStage.content.baseCenterX : NaN);
+        const base = Number.isFinite(baseCenterX) ? baseCenterX : W / 2;
+        return Math.abs(top.x + top.w / 2 - base);
+      }
+
+      /* 0.10.0：交付中事件的文本（等待设计源同步，运行时不硬编码箱序/方案数）。 */
+      function deliveryText() {
+        const parts = [];
+        if (chMinConsecutiveWithinTolerance !== null) {
+          parts.push('连续容差内 ' + consecutiveWithinTolerance(chMarks).best + '/' + chMinConsecutiveWithinTolerance + ' 层');
+        }
+        if (chMaxFinalTopCenterOffsetPx !== null) {
+          const offset = finalTopCenterOffset();
+          parts.push('塔顶中心偏差 ' + (offset === null ? '—' : Math.round(offset * 10) / 10 + 'px') + '/' + chMaxFinalTopCenterOffsetPx + 'px');
+        }
+        return parts.join(' · ');
+      }
+
       /* 挑战倾斜峰值：记录整局真实最大 |towerLean|，结算/复盘用它而不是当前瞬时值。 */
       function recordPeakLean() {
         chPeakLean = Math.max(chPeakLean, Math.abs(towerLean));
@@ -482,6 +522,7 @@
         const noMiss = chMisses === 0;
         if (allWithin && noTools && noMiss) return 'gold';
         if (allWithin) return 'silver';
+        if (chMinConsecutiveWithinTolerance !== null && consecutiveWithinTolerance(chMarks).best < chMinConsecutiveWithinTolerance) return 'bronze';
         return 'bronze';
       }
 
@@ -509,6 +550,13 @@
         chHudSecond = -1;
         chLimits = Object.assign({ maxDroppedBoxes: 5, braceUsesAllowed: 0, guideUsesAllowed: 0 }, content.limits || {});
         chWin = Object.assign({ floorsAtLeast: chBoxesData.length, noCollapse: true, allMarkTargetsWithinTolerance: false }, content.win || {});
+        /* 0.10.0：win 新增字段可缺省；null/undefined/负值/非法值 fail closed（视为不启用该门槛）。
+         * 注意 Number(null)===0，必须先排除空值，否则显式 null 会被误读成门槛 0。 */
+        const optNum = (value) => (value === null || value === undefined || value === '' ? null : (Number.isFinite(Number(value)) && Number(value) >= 0 ? Number(value) : null));
+        const minRaw = optNum(chWin.minConsecutiveWithinTolerance);
+        const maxRaw = optNum(chWin.maxFinalTopCenterOffsetPx);
+        chMinConsecutiveWithinTolerance = minRaw === null ? null : Math.floor(minRaw);
+        chMaxFinalTopCenterOffsetPx = maxRaw;
         chMaxLean = Number(chLimits.maxTowerLeanAbs) || LEAN_LIMIT;
         chPeakLean = 0;
         const pendulum = content.pendulum || {};
@@ -563,6 +611,7 @@
           '<span>' + chEsc(targetText) + '</span>' +
           '<span>倾斜 ' + Math.abs(towerLean).toFixed(3) + '/' + chMaxLean + '</span>' +
           '<span>落空 ' + chMisses + '/' + (chLimits.maxDroppedBoxes || 0) + '</span>' +
+          (deliveryText() ? '<span>交付核验：' + chEsc(deliveryText()) + '</span>' : '') +
           '<span>用时 ' + A.Challenge.formatTime(chElapsed) + '</span>';
       }
 
@@ -697,8 +746,28 @@
         input.endFrame();
       }
 
+      /* 0.10.0：交付前门槛（纯函数，便于 regression 用注入数据覆盖正反例）。
+       * 只消费 win 数据，缺省即不启用，旧关零回归。 */
+      function evaluateWinGates(marks, minConsecutive, maxOffsetPx, finalOffsetPx) {
+        if (minConsecutive !== null && consecutiveWithinTolerance(marks).best < minConsecutive) {
+          return '连续容差内仅 ' + consecutiveWithinTolerance(marks).best + ' 层，未达到 ' + minConsecutive + ' 层';
+        }
+        if (maxOffsetPx !== null) {
+          if (finalOffsetPx === null || finalOffsetPx > maxOffsetPx) {
+            return '塔顶中心偏差 ' + (finalOffsetPx === null ? '—' : Math.round(finalOffsetPx * 10) / 10 + 'px') + ' 超过 ' + maxOffsetPx + 'px';
+          }
+        }
+        return '';
+      }
+
+      function challengeWinBlocker() {
+        return evaluateWinGates(chMarks, chMinConsecutiveWithinTolerance, chMaxFinalTopCenterOffsetPx, finalTopCenterOffset());
+      }
+
       function challengeClear() {
         if (mode !== 'challenge' || !chStage) return false;
+        const blocker = challengeWinBlocker();
+        if (blocker) return challengeFail('未满足交付条件：' + blocker);
         state = 'cleared';
         chGoalHintTimer = 0;
         autosave.clear();
@@ -710,9 +779,11 @@
         if (A.Challenge) A.Challenge.markCleared(gameId, chStage.id, result);
         const isLast = chStageIndex >= challengeData.length - 1;
         const marksText = chMarks.map((mark) => mark.order + ':' + mark.actualOffsetPx + 'px' + (mark.withinTolerance ? '✓' : '✗')).join(' ');
+        const delivery = deliveryText();
         const resultText =
           A.Challenge.resultHtml(chStage, result) +
-          '<p class="ac-challenge-tip">' + chEsc(evaluationLabel(chEvaluation)) + '<br/>落点 ' + chEsc(marksText || '—') + ' · 落空 ' + chMisses + ' · 倾斜峰值 ' + peakLeanText() + '</p>';
+          '<p class="ac-challenge-tip">' + chEsc(evaluationLabel(chEvaluation)) + '<br/>落点 ' + chEsc(marksText || '—') + ' · 落空 ' + chMisses + ' · 倾斜峰值 ' + peakLeanText() + '</p>' +
+          (delivery ? '<p class="ac-challenge-result-row">交付核验：' + chEsc(delivery) + '</p>' : '');
         ui.show({
           title: '挑战通关',
           text: resultText,
@@ -742,7 +813,10 @@
           title: '挑战失败',
           text:
             '<p class="ac-challenge-tip">' + chEsc(chErrorReason) + '</p>' +
-            '<p class="ac-challenge-result-row">本关目标：' + chEsc(chStage.goalStatement || '') + ' · 已放 ' + chPlaced + ' 层</p>',
+            '<p class="ac-challenge-result-row">本关目标：' + chEsc(chStage.goalStatement || '') + ' · 已放 ' + chPlaced + ' 层</p>' +
+            (chMinConsecutiveWithinTolerance !== null || chMaxFinalTopCenterOffsetPx !== null
+              ? '<p class="ac-challenge-result-row">交付核验：' + chEsc(deliveryText()) + '</p>'
+              : ''),
           btn: '重试本关',
           onBtn: () => startChallenge(chStage.id),
           btn2: '返回选关',
@@ -888,6 +962,10 @@
           maxLean: chMaxLean,
           peakLean: chPeakLean,
           marks: chMarks.slice(),
+          consecutiveWithinTolerance: consecutiveWithinTolerance(chMarks),
+          minConsecutiveWithinTolerance: chMinConsecutiveWithinTolerance,
+          maxFinalTopCenterOffsetPx: chMaxFinalTopCenterOffsetPx,
+          finalTopCenterOffsetPx: finalTopCenterOffset(),
           currentTargetOffsetPx: chTargetOffset(),
           currentTolerancePx: chTolerance(),
           misses: chMisses,
@@ -1639,6 +1717,30 @@
               recordPeakLean();
               const peak = chPeakLean;
               check(Math.abs(peak - 0.06) < 1e-9 && peakLeanText() === '0.060', '倾斜峰值记录整局最大 |lean|（0.060），结算文案使用峰值');
+              /* 4) 0.10.0 C05/C06 win 门槛：注入数据覆盖正反例（不依赖设计源是否已同步字段）。 */
+              const m = (within) => ({ withinTolerance: within });
+              check(consecutiveWithinTolerance([m(true), m(true), m(true)]).best === 3, '连续容差计数：连续三层全在内 → best=3');
+              check(consecutiveWithinTolerance([m(true), m(true), m(false), m(true)]).best === 2, '连续容差计数：中断后只算最长连续段 → best=2');
+              check(consecutiveWithinTolerance([m(false), m(true), m(true)]).current === 2, '连续容差计数：current 表示末尾连续段');
+              const c05Run = [m(true), m(false), m(true), m(true), m(false), m(true)];
+              check(evaluateWinGates(c05Run, 3, null, null) !== '', 'C05 反例：无连续三层容差内 → 不放行（带原因）');
+              const c05Pass = [m(false), m(true), m(true), m(true), m(false)];
+              check(evaluateWinGates(c05Pass, 3, null, null) === '', 'C05 正例：存在连续三层容差内 → 放行');
+              check(evaluateWinGates([m(true), m(true), m(true)], 2, null, null) === '', 'C05 门槛可调（2 层）仍按数据放行');
+              check(evaluateWinGates([m(true), m(true), m(true)], null, null, null) === '', '旧关缺省 min=null：不启用连续层门槛（零回归）');
+              check(evaluateWinGates([], 3, 15, 10) !== '', 'C06 反例：无 marks 时 C05 门槛仍生效');
+              check(evaluateWinGates(c05Pass, 3, 15, 16) !== '', 'C06 反例：塔顶偏移 16px > 15px → 不放行');
+              check(evaluateWinGates(c05Pass, 3, 15, 15) === '', 'C06 正例：塔顶偏移等于 15px → 放行');
+              check(evaluateWinGates(c05Pass, 3, 15, 8) === '', 'C06 正例：塔顶偏移 8px < 15px → 放行');
+              check(evaluateWinGates(c05Pass, 3, null, null) === '', '旧关缺省 max=null：不启用塔顶偏移门槛（零回归）');
+              const winRead = { minConsecutiveWithinTolerance: 3, maxFinalTopCenterOffsetPx: 15, floorsAtLeast: 6 };
+              const readOpt = (v) => (v === null || v === undefined || v === '' ? null : (Number.isFinite(Number(v)) && Number(v) >= 0 ? Number(v) : null));
+              check(
+                readOpt(winRead.minConsecutiveWithinTolerance) === 3 &&
+                readOpt(winRead.maxFinalTopCenterOffsetPx) === 15 &&
+                readOpt({}.minConsecutiveWithinTolerance) === null,
+                'win 字段读取：3/15 生效，缺省为 null'
+              );
             } catch (err) {
               fail += 1;
               details.push('FAIL regression 异常：' + (err && err.message ? err.message : String(err)));
@@ -1689,6 +1791,10 @@
               floors: chPlaced,
               floorsRequired: chWin.floorsAtLeast || chBoxesData.length,
               marks: chMarks.slice(),
+              consecutiveWithinTolerance: consecutiveWithinTolerance(chMarks),
+              minConsecutiveWithinTolerance: chMinConsecutiveWithinTolerance,
+              maxFinalTopCenterOffsetPx: chMaxFinalTopCenterOffsetPx,
+              finalTopCenterOffsetPx: finalTopCenterOffset(),
               misses: chMisses,
               maxDroppedBoxes: chLimits.maxDroppedBoxes,
               towerLean,
@@ -1712,6 +1818,16 @@
           },
           forceStageFail(reason) {
             return challengeFail(typeof reason === 'string' && reason ? reason : '测试强制失败');
+          },
+          /* 0.10.0：注入数据的纯门槛判定（给 CDP 验证读正反例，不改游戏状态）。 */
+          checkWinGates(opts) {
+            const o = opts && typeof opts === 'object' ? opts : {};
+            const marks = Array.isArray(o.marks) ? o.marks : [];
+            const min = o.minConsecutive === null || o.minConsecutive === undefined ? null : (Number.isFinite(Number(o.minConsecutive)) && Number(o.minConsecutive) >= 0 ? Math.floor(Number(o.minConsecutive)) : null);
+            const maxOffset = o.maxOffsetPx === null || o.maxOffsetPx === undefined ? null : (Number.isFinite(Number(o.maxOffsetPx)) && Number(o.maxOffsetPx) >= 0 ? Number(o.maxOffsetPx) : null);
+            const finalOffset = o.finalOffsetPx === null || o.finalOffsetPx === undefined ? null : Number(o.finalOffsetPx);
+            const blocker = evaluateWinGates(marks, min, maxOffset, Number.isFinite(finalOffset) ? finalOffset : null);
+            return { blocker, pass: blocker === '', consecutive: consecutiveWithinTolerance(marks) };
           },
           exitChallenge() {
             return exitChallengeToStart();
