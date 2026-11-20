@@ -1,6 +1,6 @@
 # Arcade Changelog
 
-## 0.11.0 — 2026-11-21（本地待发布）
+## 0.11.0 — 2026-11-21（已双端发布）
 
 ### Added
 - 结算回看：16 款游戏共 45 处结算弹层不再用暗色蒙层盖住最终游戏画面；结算卡片移到底部、取消遮罩与模糊，新增「回看棋盘」按钮与「查看结算」胶囊一键切换，玩家可完整回顾终局棋盘/场景。开局、暂停、错误与续玩弹层外观与行为不变（共享引擎 `createOverlayUi` 的 `result:true` 选项，页面 HTML 模板零改动）。
@@ -10,7 +10,8 @@
 - 版本链升至 `0.11.0`，SW 缓存键 `studiokit-arcade-0.11.0-v1`。
 
 ### Verification
-- 新增 `tools/arcade_review_test.mjs` 5/5（静态 45 处标记 + gomoku/block 运行时回看切换 + 320/375/390/430 布局）；`validate_site.py`、`build_site.py`、`check_inline_scripts.mjs`、全量 Arcade 门禁在发布前复跑（证据见 TASKS.md）。设计见 `DESIGN-0.11.0.md`。
+- 全量门禁 `tools/arcade_run_all_gates.py` ALL PASSED：validate/build/design 143/inline/stage 78/smoke 94/94/zen 14/14/calm 17/17/review 5/5/gameplay all 104/104/base 22/22。设计见 `DESIGN-0.11.0.md`。
+- 双端发布：提交 `8453baf` 推送 `main`；Actions run `44774786680` 首次 Verify 因 CF 生产域传播延迟 1 文件 hash 差异，同一 SHA `--failed` 重跑后四 job 全绿；CI 与本地 `tools/verify_deploy.py` 均 **41/41** 文件 SHA-256 双端一致（Arcade `0.11.0` / Badge `2.2.1` / Venue `0.2.0`）；双端线上无头 Chrome 各 6/6（中心页/棋盘 400/结算透明/回看切换/0 console error）；SW 缓存键 `studiokit-arcade-0.11.0-v1`。
 
 ## 0.10.0 — 2026-11-20（已双端发布）
 

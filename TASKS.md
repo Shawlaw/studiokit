@@ -88,7 +88,7 @@
 | T083 | agent | Arcade 0.10.0 质量优化：棋牌规则、挑战深度与数据管线 | DONE | T082 | Owner 本轮明确指令「提交发布吧」即 `OWNER_AUTHORIZATION: PUBLISH_TO_MAIN`；4 个本地提交 `3771a9e`/`f3ca60a`/`d14433d`/`fc37d2b`；独立复核 Blocker 已闭环；全量门禁 smoke 94/94、zen 14/14、calm 17/17、gameplay all 104/104、base 22/22、派生重生成 143/143。 |
 | T084 | agent | Arcade 0.10.0 发布：main 双端部署与线上验证 | DONE | T083 | 提交 `fc37d2b` 推送 `main`；Actions run `44681529684` 的 Validate and build / Deploy GitHub Pages / Deploy Cloudflare Pages / Verify both deployments 四 job 全成功；CI 与本地 `tools/verify_deploy.py` 均 **41/41** 文件 SHA-256 双端一致（Arcade `0.10.0` / Badge `2.2.1` / Venue `0.2.0`，manifest 正确）；双端线上无头 Chrome 各 26/26（中心页 0.10.0 + 16 卡、三款棋牌 selftest/regression/开始/暂停、0.10.0 挑战数据字段、SW `0.10.0`、0 console error）；真机触控与 AI 手感仍 UNVERIFIED |
 | T085 | agent | Arcade 0.11.0：结算可回看最终画面 + 五子棋棋盘放大 | DONE | T084 | Owner 反馈「五子棋输了蒙层盖住棋盘，所有游戏结束后想回顾最终画面，棋盘再大点」；共享 `createOverlayUi` 增 `result:true`：结算去暗色/去模糊、卡片移底部、动态注入「回看棋盘」按钮与「查看结算」胶囊（一键隐藏/恢复面板，≥44px，320/375/390/430 不溢出；开局/暂停/错误弹层零变化）；16 款游戏 45 处结算全标记；五子棋棋盘 384→400、格距 34→36、棋子 14→15，状态栏/落子按钮/页脚不变，旧档与几何钩子兼容；新增 `tools/arcade_review_test.mjs` 5/5 + 截图复核；版本链 0.11.0、`DESIGN-0.11.0.md`、SW 缓存键同步 |
-| T086 | agent | Arcade 0.11.0 发布：main 双端部署与线上验证 | PENDING | T085 | Owner 当前任务明确指令「你弄完测试完就发版更新吧」= `OWNER_AUTHORIZATION: PUBLISH_TO_MAIN`；待全量门禁通过后推送 main 并双端验证 |
+| T086 | agent | Arcade 0.11.0 发布：main 双端部署与线上验证 | DONE | T085 | Owner 当前任务明确指令「你弄完测试完就发版更新吧」= `OWNER_AUTHORIZATION: PUBLISH_TO_MAIN`；提交 `8453baf` ff 合入 main 推送；Actions run `44774786680` 首次 Verify 因 CF 生产域传播延迟 1 文件 hash 差异，同一 SHA `--failed` 重跑后四 job 全绿；CI 与本地 `verify_deploy.py` 均 **41/41** 双端一致（Arcade `0.11.0`）；双端线上无头 Chrome 各 6/6（中心页/棋盘 400/结算透明/回看切换/0 console error）；SW `studiokit-arcade-0.11.0-v1`；真机触控 UNVERIFIED |
 
 ## 任务命令
 
