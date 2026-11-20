@@ -5,6 +5,11 @@ window.ArcadeChallengeData['snowbells'] = {
   "gameId": "snowbells",
   "gameName": "雪铃",
   "packVersion": "0.9.0-design-v1",
+  "supportedFeatures": [
+    "stage_bell_sequence",
+    "color_bells",
+    "bonus_route"
+  ],
   "stages": [
     {
       "id": "snowbells-C01",
@@ -69,7 +74,8 @@ window.ArcadeChallengeData['snowbells'] = {
         "comboBreakPolicy": "落空/错序会失去本关完美奖励，普通通关可恢复继续",
         "startBell": "A",
         "goalAfterLast": true
-      }
+      },
+      "contentRevision": "snowbells-C01@0.9.0-design-v1@f78e74f6c654"
     },
     {
       "id": "snowbells-C02",
@@ -143,7 +149,8 @@ window.ArcadeChallengeData['snowbells'] = {
         "comboBreakPolicy": "落空/错序会失去本关完美奖励，普通通关可恢复继续",
         "startBell": "A",
         "goalAfterLast": true
-      }
+      },
+      "contentRevision": "snowbells-C02@0.9.0-design-v1@067a2fc07b23"
     },
     {
       "id": "snowbells-C03",
@@ -217,7 +224,8 @@ window.ArcadeChallengeData['snowbells'] = {
         "comboBreakPolicy": "落空/错序会失去本关完美奖励，普通通关可恢复继续",
         "startBell": "A",
         "goalAfterLast": true
-      }
+      },
+      "contentRevision": "snowbells-C03@0.9.0-design-v1@5b8d5b190693"
     },
     {
       "id": "snowbells-C04",
@@ -311,12 +319,49 @@ window.ArcadeChallengeData['snowbells'] = {
           "E",
           "F"
         ],
-        "completion": "按顺序命中指定铃铛，休止铃只反弹不加连击，不强制收集bonus",
+        "completion": "按顺序命中指定铃铛，休止铃只反弹不加连击，不强制收集bonus；彩铃支路见 bonusRoutes，命中彩铃只增加本局可见分（不写经典最高分）",
         "wrongBellPolicy": "可反弹但不给计分；0.8s内显示下一个正确目标",
         "comboBreakPolicy": "落空/错序会失去本关完美奖励，普通通关可恢复继续",
         "startBell": "A",
-        "goalAfterLast": true
-      }
+        "goalAfterLast": true,
+        "bonusRoutes": [
+          {
+            "id": "branch-q",
+            "branchFrom": "D",
+            "sequence": [
+              "D",
+              "q1",
+              "q2",
+              "F"
+            ],
+            "branchBackTo": "F",
+            "bonusBellIds": [
+              "q1",
+              "q2"
+            ],
+            "scoreBonusPerBell": 25,
+            "heightSteps": [
+              {
+                "from": "D",
+                "to": "q1",
+                "rise": -15
+              },
+              {
+                "from": "q1",
+                "to": "q2",
+                "rise": 77
+              },
+              {
+                "from": "q2",
+                "to": "F",
+                "rise": 87
+              }
+            ],
+            "note": "右侧彩铃支路存在真实可达弹道；命中彩铃只增加本局可见分，不写经典最高分"
+          }
+        ]
+      },
+      "contentRevision": "snowbells-C04@0.9.0-design-v1@c5655b7c7915"
     },
     {
       "id": "snowbells-C05",
@@ -399,7 +444,8 @@ window.ArcadeChallengeData['snowbells'] = {
         "comboBreakPolicy": "落空/错序会失去本关完美奖励，普通通关可恢复继续",
         "startBell": "A",
         "goalAfterLast": true
-      }
+      },
+      "contentRevision": "snowbells-C05@0.9.0-design-v1@bd41e9492924"
     },
     {
       "id": "snowbells-C06",
@@ -494,12 +540,48 @@ window.ArcadeChallengeData['snowbells'] = {
           "F",
           "G"
         ],
-        "completion": "按顺序命中指定铃铛，休止铃只反弹不加连击，不强制收集bonus",
+        "completion": "按顺序命中指定铃铛，休止铃只反弹不加连击，不强制收集bonus；彩铃支路见 bonusRoutes，命中彩铃只增加本局可见分（不写经典最高分）",
         "wrongBellPolicy": "可反弹但不给计分；0.8s内显示下一个正确目标",
         "comboBreakPolicy": "落空/错序会失去本关完美奖励，普通通关可恢复继续",
         "startBell": "A",
-        "goalAfterLast": true
-      }
+        "goalAfterLast": true,
+        "bonusRoutes": [
+          {
+            "id": "finale-q",
+            "branchFrom": "E",
+            "sequence": [
+              "E",
+              "q1",
+              "F",
+              "G"
+            ],
+            "branchBackTo": "F",
+            "bonusBellIds": [
+              "q1"
+            ],
+            "scoreBonusPerBell": 25,
+            "heightSteps": [
+              {
+                "from": "E",
+                "to": "q1",
+                "rise": 1
+              },
+              {
+                "from": "q1",
+                "to": "F",
+                "rise": 73
+              },
+              {
+                "from": "F",
+                "to": "G",
+                "rise": 75
+              }
+            ],
+            "note": "终曲彩铃支路 1 次上升可达；wrongHits===0 通关显示纯视觉雪花乐谱，不持久化"
+          }
+        ]
+      },
+      "contentRevision": "snowbells-C06@0.9.0-design-v1@34306af98517"
     }
   ]
 };

@@ -5,6 +5,12 @@ window.ArcadeChallengeData['block-drop'] = {
   "gameId": "block-drop",
   "gameName": "俄罗斯方块",
   "packVersion": "0.9.0-design-v1",
+  "supportedFeatures": [
+    "puzzle_board_preset",
+    "puzzle_piece_queue",
+    "clear_line_goal",
+    "place_by_place_gravity"
+  ],
   "stages": [
     {
       "id": "block-drop-C01",
@@ -139,8 +145,10 @@ window.ArcadeChallengeData['block-drop'] = {
             ]
           ]
         },
-        "coordinates": "reference placements give top-left bounding-box column. Rotation system in game must support these orientations without clipping."
-      }
+        "coordinates": "reference placements give top-left bounding-box column. Rotation system in game must support these orientations without clipping.",
+        "gravityModel": "place-by-place"
+      },
+      "contentRevision": "block-drop-C01@0.9.0-design-v1@bdc9009f7e02"
     },
     {
       "id": "block-drop-C02",
@@ -275,8 +283,10 @@ window.ArcadeChallengeData['block-drop'] = {
             ]
           ]
         },
-        "coordinates": "reference placements give top-left bounding-box column. Rotation system in game must support these orientations without clipping."
-      }
+        "coordinates": "reference placements give top-left bounding-box column. Rotation system in game must support these orientations without clipping.",
+        "gravityModel": "place-by-place"
+      },
+      "contentRevision": "block-drop-C02@0.9.0-design-v1@2bf369d93c00"
     },
     {
       "id": "block-drop-C03",
@@ -411,18 +421,20 @@ window.ArcadeChallengeData['block-drop'] = {
             ]
           ]
         },
-        "coordinates": "reference placements give top-left bounding-box column. Rotation system in game must support these orientations without clipping."
-      }
+        "coordinates": "reference placements give top-left bounding-box column. Rotation system in game must support these orientations without clipping.",
+        "gravityModel": "place-by-place"
+      },
+      "contentRevision": "block-drop-C03@0.9.0-design-v1@d914a1025a8d"
     },
     {
       "id": "block-drop-C04",
       "stageNumber": 4,
       "title": "两次横修",
       "difficulty": 4,
-      "goalStatement": "两个 I 逐层修复横井",
+      "goalStatement": "两个 I 分别落入错开的不同横井",
       "decision": "选择摆放方向和顺序（挑战模式固定出块）",
-      "practicedSkill": "先放下层，再补新掉落的一层",
-      "discovery": "消行后重力会让上层自然下落",
+      "practicedSkill": "先放上层右侧井(列3-6)清一行，再放下层左侧井(列1-4)",
+      "discovery": "上层清除后下层井才从上方可达，两 I 落点不同",
       "targetDurationSec": [
         25,
         110
@@ -455,7 +467,7 @@ window.ArcadeChallengeData['block-drop'] = {
           "..........",
           "..........",
           "###....###",
-          "###....###"
+          "#....#####"
         ],
         "pieceQueue": [
           "I",
@@ -548,18 +560,20 @@ window.ArcadeChallengeData['block-drop'] = {
             ]
           ]
         },
-        "coordinates": "reference placements give top-left bounding-box column. Rotation system in game must support these orientations without clipping."
-      }
+        "coordinates": "reference placements give top-left bounding-box column. Rotation system in game must support these orientations without clipping.",
+        "gravityModel": "place-by-place"
+      },
+      "contentRevision": "block-drop-C04@0.9.0-design-v1@4a036ee7312a"
     },
     {
       "id": "block-drop-C05",
       "stageNumber": 5,
       "title": "T形锁孔",
       "difficulty": 5,
-      "goalStatement": "T形正确方向放入非矩形锁孔",
+      "goalStatement": "先 O 填上方方井，再以 T 锁下方异形孔",
       "decision": "选择摆放方向和顺序（挑战模式固定出块）",
-      "practicedSkill": "左右平移与旋转要配合",
-      "discovery": "读懂不规则凹槽而非盲目直落",
+      "practicedSkill": "两个落点都可试放，但只有 O 先上、T 后下能清四行",
+      "discovery": "旋转与顺序共同决定成败，直落任意一孔会留残砖",
       "targetDurationSec": [
         25,
         110
@@ -589,22 +603,23 @@ window.ArcadeChallengeData['block-drop'] = {
           "..........",
           "..........",
           "..........",
-          "..........",
-          "..........",
+          "###..#####",
+          "###..#####",
           "####...###",
           "#####.####"
         ],
         "pieceQueue": [
+          "O",
           "T"
         ],
         "holdEnabled": false,
         "gravityMode": "place-by-place with no time pressure, hard drop + rotate",
         "spawnPolicy": "only fixed pieceQueue; no bag-7 randomness",
-        "initialActivePiece": "T",
+        "initialActivePiece": "O",
         "win": {
           "type": "clear-lines",
-          "count": 2,
-          "maxPlacedPieces": 1
+          "count": 4,
+          "maxPlacedPieces": 2
         },
         "lose": {
           "type": "queue-exhausted-or-top-out",
@@ -684,8 +699,28 @@ window.ArcadeChallengeData['block-drop'] = {
             ]
           ]
         },
-        "coordinates": "reference placements give top-left bounding-box column. Rotation system in game must support these orientations without clipping."
-      }
+        "coordinates": "reference placements give top-left bounding-box column. Rotation system in game must support these orientations without clipping.",
+        "gravityModel": "place-by-place",
+        "placementSpace": {
+          "description": "每块存在多个可硬降落点，只有特定朝向/列组合能完成目标；参考解是众多合法落点中的一种",
+          "legalButLosingExamples": [
+            {
+              "piece": "O",
+              "orientation": "N",
+              "leftCol": 1,
+              "result": "偏离方井，无法配合 T 清四行"
+            },
+            {
+              "piece": "T",
+              "orientation": "STEM-DOWN",
+              "leftCol": 4,
+              "result": "无 O 垫底，T 落入异形孔仍剩残砖"
+            }
+          ],
+          "winningPlacementCount": 1
+        }
+      },
+      "contentRevision": "block-drop-C05@0.9.0-design-v1@c1a477056fbb"
     },
     {
       "id": "block-drop-C06",
@@ -821,8 +856,28 @@ window.ArcadeChallengeData['block-drop'] = {
             ]
           ]
         },
-        "coordinates": "reference placements give top-left bounding-box column. Rotation system in game must support these orientations without clipping."
-      }
+        "coordinates": "reference placements give top-left bounding-box column. Rotation system in game must support these orientations without clipping.",
+        "gravityModel": "place-by-place",
+        "placementSpace": {
+          "description": "每块存在多个可硬降落点，只有特定朝向/列组合能完成目标；参考解是众多合法落点中的一种",
+          "legalButLosingExamples": [
+            {
+              "piece": "O",
+              "orientation": "N",
+              "leftCol": 0,
+              "result": "无法落入方井，停在顶端"
+            },
+            {
+              "piece": "T",
+              "orientation": "STEM-UP",
+              "leftCol": 4,
+              "result": "只清1行"
+            }
+          ],
+          "winningPlacementCount": 1
+        }
+      },
+      "contentRevision": "block-drop-C06@0.9.0-design-v1@bdc3c4429963"
     }
   ]
 };

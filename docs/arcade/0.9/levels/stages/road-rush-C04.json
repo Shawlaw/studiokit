@@ -7,8 +7,8 @@
   "title": "车队夹缝",
   "difficulty": 4,
   "targetDurationSec": [
-    20,
-    75
+    13,
+    23
   ],
   "goalStatement": "以两车道内的安全空间连续变道",
   "decision": "避让是硬目标，近距超车只增加评价",

@@ -46,8 +46,8 @@ async function main() {
     })()`);
     assert(home.cards >= 2, 'home cards=' + home.cards);
     assert(home.href.indexOf('apps/arcade') !== -1, 'arcade card not clickable: ' + JSON.stringify(home));
-    assert(home.version.indexOf('0.9.0') !== -1, 'arcade version missing on home card');
-    record('门户街机厅卡片可点击且版本 0.9.0', true);
+    assert(home.version.indexOf('0.10.0') !== -1, 'arcade version missing on home card');
+    record('门户街机厅卡片可点击且版本 0.10.0', true);
 
     /* ---------- GitHub Pages 项目子路径：shell 返回链接 ---------- */
     await cdp.navigate(base + '/studiokit/apps/arcade/games/star-raid.html');
@@ -65,10 +65,10 @@ async function main() {
       cards: document.querySelectorAll('.hall-card').length,
       runs: window.Arcade && Arcade.RunSave.count()
     })`);
-    assert(hallInfo.version === '0.9.0', 'version is ' + hallInfo.version);
+    assert(hallInfo.version === '0.10.0', 'version is ' + hallInfo.version);
     assert(hallInfo.games === 16, 'game count is ' + hallInfo.games);
     assert(hallInfo.cards === 16, 'card count is ' + hallInfo.cards);
-    record('中心页 16 款游戏与版本 0.9.0', true);
+    record('中心页 16 款游戏与版本 0.10.0', true);
 
     await cdp.evaluate(`(() => { const i = document.querySelector('[data-search]'); i.value = '雪铃'; i.dispatchEvent(new Event('input', { bubbles: true })); })()`);
     await sleep(120);
@@ -1018,7 +1018,7 @@ async function main() {
     assert(mergeTools.armed.armedTool === 'hammer' && mergeTools.hammered.board[0][0] === 0 && mergeTools.hammered.tools.hammer === 1, 'merge hammer: ' + JSON.stringify(mergeTools));
     assert(mergeTools.undone.board[0][0] === 2 && mergeTools.undone.tools.hammer === 2, 'merge undo duplicated/lost tool: ' + JSON.stringify(mergeTools.undone));
     assert(mergeTools.upgraded.board[0][1] === 8 && mergeTools.upgraded.tools.upgrade === 0, 'merge upgrade: ' + JSON.stringify(mergeTools.upgraded));
-    /* 0.9.0：首次 2048 胜利弹层不再落记录，继续挑战后最终结束才记录一次。 */
+    /* 0.10.0：首次 2048 胜利弹层不再落记录，继续挑战后最终结束才记录一次。 */
     assert(mergeTools.won.won && mergeTools.playCount === 0 && mergeTools.scores === 0, '2048 win overlay must not record yet: ' + JSON.stringify(mergeTools.won));
     await cdp.click('[data-ov-btn]');
     await sleep(220);
@@ -2282,7 +2282,7 @@ async function main() {
       version: window.Arcade && Arcade.version,
       title: document.title
     })`);
-    assert(offlineHall.cards === 16 && offlineHall.version === '0.9.0', 'offline hall failed: ' + JSON.stringify(offlineHall));
+    assert(offlineHall.cards === 16 && offlineHall.version === '0.10.0', 'offline hall failed: ' + JSON.stringify(offlineHall));
     const offlineStatus = await cdp.evaluate(`(async () => {
       try {
         await Arcade.Offline.register();
@@ -2304,7 +2304,7 @@ async function main() {
       overlay: !!document.querySelector('[data-overlay]'),
       version: window.Arcade && window.Arcade.version
     })`);
-    assert(offlineGame.hasArcade && offlineGame.overlay && offlineGame.version === '0.9.0', 'offline game failed: ' + JSON.stringify(offlineGame));
+    assert(offlineGame.hasArcade && offlineGame.overlay && offlineGame.version === '0.10.0', 'offline game failed: ' + JSON.stringify(offlineGame));
     await cdp.navigate(base + '/apps/arcade/games/not-preloaded.html');
     const offlineMissing = await cdp.text('body');
     assert(offlineMissing && offlineMissing.includes('还没有预载'), 'offline missing page: ' + String(offlineMissing).slice(0, 120));

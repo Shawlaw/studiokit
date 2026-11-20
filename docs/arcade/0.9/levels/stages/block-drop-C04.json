@@ -10,10 +10,10 @@
     25,
     110
   ],
-  "goalStatement": "两个 I 逐层修复横井",
+  "goalStatement": "两个 I 分别落入错开的不同横井",
   "decision": "选择摆放方向和顺序（挑战模式固定出块）",
-  "practicedSkill": "先放下层，再补新掉落的一层",
-  "discovery": "消行后重力会让上层自然下落",
+  "practicedSkill": "先放上层右侧井(列3-6)清一行，再放下层左侧井(列1-4)",
+  "discovery": "上层清除后下层井才从上方可达，两 I 落点不同",
   "mode": "challenge",
   "content": {
     "boardWidth": 10,
@@ -38,7 +38,7 @@
       "..........",
       "..........",
       "###....###",
-      "###....###"
+      "#....#####"
     ],
     "pieceQueue": [
       "I",
@@ -131,7 +131,8 @@
         ]
       ]
     },
-    "coordinates": "reference placements give top-left bounding-box column. Rotation system in game must support these orientations without clipping."
+    "coordinates": "reference placements give top-left bounding-box column. Rotation system in game must support these orientations without clipping.",
+    "gravityModel": "place-by-place"
   },
   "referencePlan": [
     {
@@ -143,7 +144,7 @@
     {
       "piece": "I",
       "orientation": "H",
-      "leftCol": 3,
+      "leftCol": 1,
       "action": "rotate/place/hardDrop"
     }
   ],

@@ -61,19 +61,19 @@
   ],
   "recommendedFlipWindows": [
     {
-      "xCenter": 250,
+      "xCenter": 210,
       "toward": "ceiling",
-      "tolerancePx": 70
+      "tolerancePx": 35
     },
     {
-      "xCenter": 790,
+      "xCenter": 750,
       "toward": "floor",
-      "tolerancePx": 70
+      "tolerancePx": 35
     },
     {
-      "xCenter": 1310,
+      "xCenter": 1270,
       "toward": "ceiling",
-      "tolerancePx": 70
+      "tolerancePx": 35
     }
   ],
   "bonusStars": [],
@@ -167,14 +167,14 @@
   ],
   "recommendedFlipWindows": [
     {
-      "xCenter": 220,
+      "xCenter": 180,
       "toward": "ceiling",
-      "tolerancePx": 70
+      "tolerancePx": 35
     },
     {
-      "xCenter": 1100,
+      "xCenter": 1060,
       "toward": "floor",
-      "tolerancePx": 70
+      "tolerancePx": 35
     }
   ],
   "bonusStars": [
@@ -391,24 +391,24 @@
   ],
   "recommendedFlipWindows": [
     {
-      "xCenter": 220,
+      "xCenter": 180,
       "toward": "ceiling",
-      "tolerancePx": 70
+      "tolerancePx": 35
     },
     {
-      "xCenter": 730,
+      "xCenter": 690,
       "toward": "floor",
-      "tolerancePx": 70
+      "tolerancePx": 35
     },
     {
-      "xCenter": 1260,
+      "xCenter": 1220,
       "toward": "ceiling",
-      "tolerancePx": 70
+      "tolerancePx": 35
     },
     {
-      "xCenter": 1800,
+      "xCenter": 1760,
       "toward": "floor",
-      "tolerancePx": 70
+      "tolerancePx": 35
     }
   ],
   "bonusStars": [

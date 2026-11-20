@@ -8,7 +8,10 @@
  * - 其它为 engine-replay。
  */
 
+import { loadChallengeFixture } from '../lib/arcade_fixture.mjs';
+
 const GAME_ID = 'pendulum-tower';
+const FIXTURE = loadChallengeFixture(GAME_ID);
 
 async function unlockThrough(cdp, ctx, lastIndex) {
   for (let index = 1; index <= lastIndex; index += 1) {
@@ -86,7 +89,7 @@ export default {
       'C01 referencePlan.releaseOffsetsPx 参考释放通关（engine-replay）',
       async (cdp, ctx) => {
         await enterStageFromPanel(cdp, ctx, 'pendulum-tower-C01');
-        const plan = [0, 0, 0, 0];
+        const plan = FIXTURE.stage('pendulum-tower-C01').referencePlan.releaseOffsetsPx.slice();
         for (let index = 0; index < plan.length; index += 1) {
           await dropAligned(cdp, ctx, plan[index]);
           await cdp.waitFor('window.__arcadeTest.stageObservable().floors >= ' + (index + 1), { timeout: 8000 });

@@ -5,6 +5,11 @@ window.ArcadeChallengeData['star-raid'] = {
   "gameId": "star-raid",
   "gameName": "星海突击",
   "packVersion": "0.9.0-design-v1",
+  "supportedFeatures": [
+    "fixed_wave_timeline",
+    "boss_phase_script",
+    "split_events"
+  ],
   "stages": [
     {
       "id": "star-raid-C01",
@@ -122,7 +127,8 @@ window.ArcadeChallengeData['star-raid'] = {
           "phase-sweep-and-core": "第1阶段扫线，第2阶段中央核心暴露3s，循环"
         },
         "bulletSafeSpace": "所有攻击段至少保留一条玩家可达≥56逻辑px宽的安全走廊，待模拟验证"
-      }
+      },
+      "contentRevision": "star-raid-C01@0.9.0-design-v1@17c0bba6b9ce"
     },
     {
       "id": "star-raid-C02",
@@ -240,7 +246,8 @@ window.ArcadeChallengeData['star-raid'] = {
           "phase-sweep-and-core": "第1阶段扫线，第2阶段中央核心暴露3s，循环"
         },
         "bulletSafeSpace": "所有攻击段至少保留一条玩家可达≥56逻辑px宽的安全走廊，待模拟验证"
-      }
+      },
+      "contentRevision": "star-raid-C02@0.9.0-design-v1@0b27d48dfba0"
     },
     {
       "id": "star-raid-C03",
@@ -357,8 +364,43 @@ window.ArcadeChallengeData['star-raid'] = {
           "weak-left-right": "先左翼2.5s后右翼2.5s，重复至弱点耗尽",
           "phase-sweep-and-core": "第1阶段扫线，第2阶段中央核心暴露3s，循环"
         },
-        "bulletSafeSpace": "所有攻击段至少保留一条玩家可达≥56逻辑px宽的安全走廊，待模拟验证"
-      }
+        "bulletSafeSpace": "所有攻击段至少保留一条玩家可达≥56逻辑px宽的安全走廊，待模拟验证",
+        "splits": [
+          {
+            "id": "w3a",
+            "replaces": "w3",
+            "atSec": 20,
+            "enemyType": "pair",
+            "spawnXRatio": 0.52,
+            "attackPattern": "fan5",
+            "telegraphSec": 0.9,
+            "attackActiveSec": 2,
+            "safeBandXRatio": {
+              "center": 0.15,
+              "halfWidth": 0.12
+            },
+            "stopNewThreatsUntilSec": 22.2,
+            "segment": 1
+          },
+          {
+            "id": "w3b",
+            "replaces": "w3",
+            "atSec": 24,
+            "enemyType": "pair",
+            "spawnXRatio": 0.52,
+            "attackPattern": "fan5",
+            "telegraphSec": 0.9,
+            "attackActiveSec": 2,
+            "safeBandXRatio": {
+              "center": 0.85,
+              "halfWidth": 0.12
+            },
+            "stopNewThreatsUntilSec": 26.2,
+            "segment": 2
+          }
+        ]
+      },
+      "contentRevision": "star-raid-C03@0.9.0-design-v1@ba7fc35001f2"
     },
     {
       "id": "star-raid-C04",
@@ -481,8 +523,43 @@ window.ArcadeChallengeData['star-raid'] = {
           "weak-left-right": "先左翼2.5s后右翼2.5s，重复至弱点耗尽",
           "phase-sweep-and-core": "第1阶段扫线，第2阶段中央核心暴露3s，循环"
         },
-        "bulletSafeSpace": "所有攻击段至少保留一条玩家可达≥56逻辑px宽的安全走廊，待模拟验证"
-      }
+        "bulletSafeSpace": "所有攻击段至少保留一条玩家可达≥56逻辑px宽的安全走廊，待模拟验证",
+        "splits": [
+          {
+            "id": "w4a",
+            "replaces": "w4",
+            "atSec": 28,
+            "enemyType": "charger",
+            "spawnXRatio": 0.24,
+            "attackPattern": "mark-charge",
+            "telegraphSec": 1.4,
+            "attackActiveSec": 2,
+            "safeBandXRatio": {
+              "center": 0.85,
+              "halfWidth": 0.12
+            },
+            "stopNewThreatsUntilSec": 30.2,
+            "segment": 1
+          },
+          {
+            "id": "w4b",
+            "replaces": "w4",
+            "atSec": 32,
+            "enemyType": "charger",
+            "spawnXRatio": 0.24,
+            "attackPattern": "mark-charge",
+            "telegraphSec": 1.4,
+            "attackActiveSec": 2,
+            "safeBandXRatio": {
+              "center": 0.15,
+              "halfWidth": 0.12
+            },
+            "stopNewThreatsUntilSec": 34.2,
+            "segment": 2
+          }
+        ]
+      },
+      "contentRevision": "star-raid-C04@0.9.0-design-v1@de6eb50fd44c"
     },
     {
       "id": "star-raid-C05",
@@ -601,7 +678,8 @@ window.ArcadeChallengeData['star-raid'] = {
           "phase-sweep-and-core": "第1阶段扫线，第2阶段中央核心暴露3s，循环"
         },
         "bulletSafeSpace": "所有攻击段至少保留一条玩家可达≥56逻辑px宽的安全走廊，待模拟验证"
-      }
+      },
+      "contentRevision": "star-raid-C05@0.9.0-design-v1@9d2893eeda41"
     },
     {
       "id": "star-raid-C06",
@@ -740,7 +818,8 @@ window.ArcadeChallengeData['star-raid'] = {
           "phase-sweep-and-core": "第1阶段扫线，第2阶段中央核心暴露3s，循环"
         },
         "bulletSafeSpace": "所有攻击段至少保留一条玩家可达≥56逻辑px宽的安全走廊，待模拟验证"
-      }
+      },
+      "contentRevision": "star-raid-C06@0.9.0-design-v1@4b9530193d77"
     }
   ]
 };

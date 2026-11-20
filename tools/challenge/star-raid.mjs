@@ -316,7 +316,13 @@ export default {
           ctx.assert(replay.started === true, ref + ' 未能进入挑战');
           ctx.assert(replay.final.state === 'cleared', ref + ' 回放未通关：' + JSON.stringify(replay.final));
           ctx.assert(replay.final.health === 3 && replay.final.damage.length === 0, ref + ' 回放出现伤害：' + JSON.stringify(replay.final.damage));
-          ctx.assert(replay.steps.length === stage.content.events.length, ref + ' 事件数不符：' + JSON.stringify(replay.steps.map((step) => step.event)));
+          const replaced = Array.isArray(stage.content.splits)
+            ? stage.content.splits.reduce((set, split) => set.add(split.replaces), new Set()).size
+            : 0;
+          const expectedEvents = Array.isArray(stage.content.splits)
+            ? stage.content.events.length - replaced + stage.content.splits.length
+            : stage.content.events.length;
+          ctx.assert(replay.steps.length === expectedEvents, ref + ' 事件数不符：' + JSON.stringify(replay.steps.map((step) => step.event)) + '，期望 ' + expectedEvents);
           ctx.assert(replay.steps.every((step) => step.unsafe === false), ref + ' 敌弹进入安全走廊：' + JSON.stringify(replay.steps.filter((step) => step.unsafe)));
           results.push({ id: ref, clearTime: Math.round(replay.final.time * 10) / 10, events: replay.steps.length });
           await ctx.sleep(100);

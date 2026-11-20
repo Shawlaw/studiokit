@@ -5,6 +5,11 @@ window.ArcadeChallengeData['snake-run'] = {
   "gameId": "snake-run",
   "gameName": "贪吃蛇",
   "packVersion": "0.9.0-design-v1",
+  "supportedFeatures": [
+    "fixed_snake_map",
+    "scripted_fruit_queue",
+    "direction_queue"
+  ],
   "stages": [
     {
       "id": "snake-run-C01",
@@ -117,7 +122,8 @@ window.ArcadeChallengeData['snake-run'] = {
         },
         "turnBuffer": "最大队列2方向，按蛇每一逻辑步出队，拒绝反向180度",
         "bonus": "在不碰任何障碍前提下减少总步数"
-      }
+      },
+      "contentRevision": "snake-run-C01@0.9.0-design-v1@881e200a420d"
     },
     {
       "id": "snake-run-C02",
@@ -234,7 +240,8 @@ window.ArcadeChallengeData['snake-run'] = {
         },
         "turnBuffer": "最大队列2方向，按蛇每一逻辑步出队，拒绝反向180度",
         "bonus": "在不碰任何障碍前提下减少总步数"
-      }
+      },
+      "contentRevision": "snake-run-C02@0.9.0-design-v1@6a163c2edbda"
     },
     {
       "id": "snake-run-C03",
@@ -371,7 +378,8 @@ window.ArcadeChallengeData['snake-run'] = {
         },
         "turnBuffer": "最大队列2方向，按蛇每一逻辑步出队，拒绝反向180度",
         "bonus": "在不碰任何障碍前提下减少总步数"
-      }
+      },
+      "contentRevision": "snake-run-C03@0.9.0-design-v1@3e3d420e2e71"
     },
     {
       "id": "snake-run-C04",
@@ -580,7 +588,8 @@ window.ArcadeChallengeData['snake-run'] = {
         },
         "turnBuffer": "最大队列2方向，按蛇每一逻辑步出队，拒绝反向180度",
         "bonus": "在不碰任何障碍前提下减少总步数"
-      }
+      },
+      "contentRevision": "snake-run-C04@0.9.0-design-v1@10b40f6c4f41"
     },
     {
       "id": "snake-run-C05",
@@ -797,7 +806,8 @@ window.ArcadeChallengeData['snake-run'] = {
         },
         "turnBuffer": "最大队列2方向，按蛇每一逻辑步出队，拒绝反向180度",
         "bonus": "在不碰任何障碍前提下减少总步数"
-      }
+      },
+      "contentRevision": "snake-run-C05@0.9.0-design-v1@c0495f8344f8"
     },
     {
       "id": "snake-run-C06",
@@ -1018,7 +1028,8 @@ window.ArcadeChallengeData['snake-run'] = {
         },
         "turnBuffer": "最大队列2方向，按蛇每一逻辑步出队，拒绝反向180度",
         "bonus": "在不碰任何障碍前提下减少总步数"
-      }
+      },
+      "contentRevision": "snake-run-C06@0.9.0-design-v1@35ac88d0bed1"
     }
   ]
 };

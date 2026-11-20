@@ -5,6 +5,11 @@ window.ArcadeChallengeData['road-rush'] = {
   "gameId": "road-rush",
   "gameName": "极速车道",
   "packVersion": "0.9.0-design-v1",
+  "supportedFeatures": [
+    "fixed_traffic_timeline",
+    "time_expanded_lane_validator",
+    "bonus_preview"
+  ],
   "stages": [
     {
       "id": "road-rush-C01",
@@ -16,8 +21,8 @@ window.ArcadeChallengeData['road-rush'] = {
       "practicedSkill": "慢车停留的车道一段时间保持不变",
       "discovery": "分数奖励安全超车而不是随机变道",
       "targetDurationSec": [
-        20,
-        75
+        14,
+        24
       ],
       "requiredFeatures": [
         "fixed_traffic_timeline",
@@ -181,7 +186,8 @@ window.ArcadeChallengeData['road-rush'] = {
         },
         "spawnerPolicy": "challenge only; disable classic random spawn while timeline active",
         "pathProofModel": "at each slot lane must not be occupied, consecutive lane indices differ ≤1; physics transitions must also be tested"
-      }
+      },
+      "contentRevision": "road-rush-C01@0.9.0-design-v1@ac239faea417"
     },
     {
       "id": "road-rush-C02",
@@ -193,8 +199,8 @@ window.ArcadeChallengeData['road-rush'] = {
       "practicedSkill": "贴近拥堵时可以选择暂留安全车道",
       "discovery": "看预告比最后时刻换道更好",
       "targetDurationSec": [
-        20,
-        75
+        14,
+        24
       ],
       "requiredFeatures": [
         "fixed_traffic_timeline",
@@ -362,7 +368,8 @@ window.ArcadeChallengeData['road-rush'] = {
         },
         "spawnerPolicy": "challenge only; disable classic random spawn while timeline active",
         "pathProofModel": "at each slot lane must not be occupied, consecutive lane indices differ ≤1; physics transitions must also be tested"
-      }
+      },
+      "contentRevision": "road-rush-C02@0.9.0-design-v1@211526d6da19"
     },
     {
       "id": "road-rush-C03",
@@ -374,8 +381,8 @@ window.ArcadeChallengeData['road-rush'] = {
       "practicedSkill": "中途选择左绕还是右绕",
       "discovery": "施工障碍不应瞬间刷新",
       "targetDurationSec": [
-        20,
-        75
+        14,
+        24
       ],
       "requiredFeatures": [
         "fixed_traffic_timeline",
@@ -543,7 +550,8 @@ window.ArcadeChallengeData['road-rush'] = {
         },
         "spawnerPolicy": "challenge only; disable classic random spawn while timeline active",
         "pathProofModel": "at each slot lane must not be occupied, consecutive lane indices differ ≤1; physics transitions must also be tested"
-      }
+      },
+      "contentRevision": "road-rush-C03@0.9.0-design-v1@f9800e578bd9"
     },
     {
       "id": "road-rush-C04",
@@ -555,8 +563,8 @@ window.ArcadeChallengeData['road-rush'] = {
       "practicedSkill": "放弃贴身超车奖励或挑战高分",
       "discovery": "优先看未来两个位置而不是当前空挡",
       "targetDurationSec": [
-        20,
-        75
+        13,
+        23
       ],
       "requiredFeatures": [
         "fixed_traffic_timeline",
@@ -734,7 +742,8 @@ window.ArcadeChallengeData['road-rush'] = {
         },
         "spawnerPolicy": "challenge only; disable classic random spawn while timeline active",
         "pathProofModel": "at each slot lane must not be occupied, consecutive lane indices differ ≤1; physics transitions must also be tested"
-      }
+      },
+      "contentRevision": "road-rush-C04@0.9.0-design-v1@7b566626c2fa"
     },
     {
       "id": "road-rush-C05",
@@ -746,8 +755,8 @@ window.ArcadeChallengeData['road-rush'] = {
       "practicedSkill": "拥堵车道额外加分但不强迫冒险",
       "discovery": "看懂奖励门牌并在恰当时刻避开",
       "targetDurationSec": [
-        20,
-        75
+        13,
+        23
       ],
       "requiredFeatures": [
         "fixed_traffic_timeline",
@@ -915,8 +924,29 @@ window.ArcadeChallengeData['road-rush'] = {
           "noDamageGold": true
         },
         "spawnerPolicy": "challenge only; disable classic random spawn while timeline active",
-        "pathProofModel": "at each slot lane must not be occupied, consecutive lane indices differ ≤1; physics transitions must also be tested"
-      }
+        "pathProofModel": "at each slot lane must not be occupied, consecutive lane indices differ ≤1; physics transitions must also be tested",
+        "bonusPreview": {
+          "leadSlots": 1,
+          "ruleText": "预告期高亮近距奖励车道：普通超车 +10，近距超车 +15；不强迫冒险",
+          "previewField": "optionalNearPassBonusLanes",
+          "hudText": "普通10 / 近距15",
+          "rewardedLaneSlots": [
+            1,
+            2,
+            3,
+            4,
+            5,
+            6,
+            7,
+            8,
+            9,
+            10,
+            11,
+            12
+          ]
+        }
+      },
+      "contentRevision": "road-rush-C05@0.9.0-design-v1@18a0e3689984"
     },
     {
       "id": "road-rush-C06",
@@ -928,8 +958,8 @@ window.ArcadeChallengeData['road-rush'] = {
       "practicedSkill": "先作安全变道规划，再考虑高分贴近车流",
       "discovery": "将前五关的选择合并为连续动作",
       "targetDurationSec": [
-        20,
-        75
+        15,
+        25
       ],
       "requiredFeatures": [
         "fixed_traffic_timeline",
@@ -1135,7 +1165,8 @@ window.ArcadeChallengeData['road-rush'] = {
         },
         "spawnerPolicy": "challenge only; disable classic random spawn while timeline active",
         "pathProofModel": "at each slot lane must not be occupied, consecutive lane indices differ ≤1; physics transitions must also be tested"
-      }
+      },
+      "contentRevision": "road-rush-C06@0.9.0-design-v1@c39dc05e8201"
     }
   ]
 };

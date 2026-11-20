@@ -10,7 +10,7 @@
     15,
     95
   ],
-  "goalStatement": "六步内获得32",
+  "goalStatement": "最多五步获得32，参考四步",
   "decision": "每一步选择朝向并预判合并次序",
   "practicedSkill": "允许暂时远离目标，先安排大数对位",
   "discovery": "分辨合并不能直接跨越不同数值",
@@ -22,27 +22,27 @@
     },
     "initialBoard": [
       [
-        4,
+        2,
         0,
         0,
         0
       ],
       [
+        2,
+        4,
+        0,
+        0
+      ],
+      [
+        4,
+        8,
+        0,
+        0
+      ],
+      [
+        8,
         16,
-        2,
-        8,
-        2
-      ],
-      [
-        4,
         0,
-        4,
-        0
-      ],
-      [
-        0,
-        2,
-        8,
         0
       ]
     ],
@@ -51,7 +51,8 @@
     "undoAllowed": true,
     "undoDoesNotRefundMoveOnRankedAttempt": true,
     "win": {
-      "anyTileAtLeast": 32
+      "anyTileAtLeast": 32,
+      "referenceSteps": 4
     },
     "lose": "valid moves used up without target or no legal move",
     "scorePolicy": "挑战按有效步数、辅助使用分层统计；经典分数保持不变",
@@ -60,26 +61,26 @@
   "referencePlan": {
     "directions": [
       "U",
-      "L",
+      "U",
       "L",
       "U"
     ],
     "resultBoard": [
       [
-        32,
-        2,
-        0,
-        0
-      ],
-      [
-        4,
-        4,
-        0,
-        0
-      ],
-      [
-        0,
         8,
+        4,
+        0,
+        0
+      ],
+      [
+        32,
+        0,
+        0,
+        0
+      ],
+      [
+        0,
+        0,
         0,
         0
       ],

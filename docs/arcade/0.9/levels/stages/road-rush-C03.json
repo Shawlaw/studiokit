@@ -7,8 +7,8 @@
   "title": "施工收窄",
   "difficulty": 3,
   "targetDurationSec": [
-    20,
-    75
+    14,
+    24
   ],
   "goalStatement": "提前避开占据两个车道的施工路段",
   "decision": "避让是硬目标，近距超车只增加评价",

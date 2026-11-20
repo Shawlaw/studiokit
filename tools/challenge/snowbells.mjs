@@ -6,7 +6,10 @@
  * - 其它为 engine-replay（#test 钩子驱动状态机 + 真实 DOM 点击）。
  */
 
+import { loadChallengeFixture } from '../lib/arcade_fixture.mjs';
+
 const GAME_ID = 'snowbells';
+const FIXTURE = loadChallengeFixture(GAME_ID);
 
 async function pressKey(cdp, key, down) {
   await cdp.key(key, down ? 'down' : 'up');
@@ -93,7 +96,7 @@ export default {
       'C01 requiredSequence 真实方向键踩铃通关（real-input-replay）',
       async (cdp, ctx) => {
         await enterStageFromPanel(cdp, ctx, 'snowbells-C01');
-        const expectOrder = ['A', 'B', 'C', 'D'];
+        const expectOrder = FIXTURE.stage('snowbells-C01').referencePlan.bellOrder.slice();
         for (const id of expectOrder) {
           const info = await cdp.evaluate('window.__arcadeTest.challengeInfo()');
           if (info.state !== 'playing') break;

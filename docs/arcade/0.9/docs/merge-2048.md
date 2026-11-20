@@ -13,8 +13,8 @@
 | 2 | 双排规划 | 形成一枚8 | 同一滑动可能发生两次不同合并 | 观察合并是“每一格每回合最多合并一次” |
 | 3 | 先八后十六 | 三步内得到16 | 先把两枚4合成8，再用两个8合16 | 第二次同向移动仍然可能有效 |
 | 4 | 纵向接力 | 最多三步得到8 | 先横向再纵向组合两排 | 合并顺序会影响最终位置 |
-| 5 | 双列八进位 | 四步内获得16 | 先合并列再观察8如何重合 | 棋盘上下移动可改变相邻关系 |
-| 6 | 终极转位 | 六步内获得32 | 允许暂时远离目标，先安排大数对位 | 分辨合并不能直接跨越不同数值 |
+| 5 | 横向整理 | 最多五步获得16，参考两步横向整理 | 把分散在两列的相同数字先横向合并再纵向对齐 | 棋盘左右滑动可改变上下行的相邻关系 |
+| 6 | 终极转位 | 最多五步获得32，参考四步 | 允许暂时远离目标，先安排大数对位 | 分辨合并不能直接跨越不同数值 |
 
 ## 逐关详细规格
 
@@ -64,7 +64,8 @@
   "undoAllowed": true,
   "undoDoesNotRefundMoveOnRankedAttempt": true,
   "win": {
-    "anyTileAtLeast": 4
+    "anyTileAtLeast": 4,
+    "referenceSteps": 1
   },
   "lose": "valid moves used up without target or no legal move",
   "scorePolicy": "挑战按有效步数、辅助使用分层统计；经典分数保持不变",
@@ -165,7 +166,8 @@
   "undoAllowed": true,
   "undoDoesNotRefundMoveOnRankedAttempt": true,
   "win": {
-    "anyTileAtLeast": 8
+    "anyTileAtLeast": 8,
+    "referenceSteps": 1
   },
   "lose": "valid moves used up without target or no legal move",
   "scorePolicy": "挑战按有效步数、辅助使用分层统计；经典分数保持不变",
@@ -266,7 +268,8 @@
   "undoAllowed": true,
   "undoDoesNotRefundMoveOnRankedAttempt": true,
   "win": {
-    "anyTileAtLeast": 16
+    "anyTileAtLeast": 16,
+    "referenceSteps": 2
   },
   "lose": "valid moves used up without target or no legal move",
   "scorePolicy": "挑战按有效步数、辅助使用分层统计；经典分数保持不变",
@@ -368,7 +371,8 @@
   "undoAllowed": true,
   "undoDoesNotRefundMoveOnRankedAttempt": true,
   "win": {
-    "anyTileAtLeast": 8
+    "anyTileAtLeast": 8,
+    "referenceSteps": 2
   },
   "lose": "valid moves used up without target or no legal move",
   "scorePolicy": "挑战按有效步数、辅助使用分层统计；经典分数保持不变",
@@ -424,12 +428,12 @@
 
 ---
 
-### C05 · 双列八进位
+### C05 · 横向整理
 
-- **通关目标**：四步内获得16
+- **通关目标**：最多五步获得16，参考两步横向整理
 - **关卡决策**：每一步选择朝向并预判合并次序
-- **练习重点**：先合并列再观察8如何重合
-- **探索反馈**：棋盘上下移动可改变相邻关系
+- **练习重点**：把分散在两列的相同数字先横向合并再纵向对齐
+- **探索反馈**：棋盘左右滑动可改变上下行的相邻关系
 - **建议有效时长**：15–95 秒
 - **角色/地图/时间轴/布局精确配置（适配当前游戏架构）**：
 
@@ -442,35 +446,36 @@
   "initialBoard": [
     [
       2,
-      4,
       2,
+      4,
       0
     ],
     [
-      2,
       4,
-      2,
-      0
-    ],
-    [
       4,
       8,
-      4,
       0
     ],
     [
+      2,
+      2,
       0,
-      0,
+      0
+    ],
+    [
+      4,
+      4,
       0,
       0
     ]
   ],
   "challengeSpawnPolicy": "none (no new random or scripted tile after move)",
-  "maxValidMoves": 4,
+  "maxValidMoves": 5,
   "undoAllowed": true,
   "undoDoesNotRefundMoveOnRankedAttempt": true,
   "win": {
-    "anyTileAtLeast": 16
+    "anyTileAtLeast": 16,
+    "referenceSteps": 2
   },
   "lose": "valid moves used up without target or no legal move",
   "scorePolicy": "挑战按有效步数、辅助使用分层统计；经典分数保持不变",
@@ -483,30 +488,30 @@
 ```json
 {
   "directions": [
-    "U",
-    "U"
+    "L",
+    "L"
   ],
   "resultBoard": [
     [
       8,
+      0,
+      0,
+      0
+    ],
+    [
       16,
+      0,
+      0,
+      0
+    ],
+    [
+      4,
+      0,
+      0,
+      0
+    ],
+    [
       8,
-      0
-    ],
-    [
-      0,
-      0,
-      0,
-      0
-    ],
-    [
-      0,
-      0,
-      0,
-      0
-    ],
-    [
-      0,
       0,
       0,
       0
@@ -528,7 +533,7 @@
 
 ### C06 · 终极转位
 
-- **通关目标**：六步内获得32
+- **通关目标**：最多五步获得32，参考四步
 - **关卡决策**：每一步选择朝向并预判合并次序
 - **练习重点**：允许暂时远离目标，先安排大数对位
 - **探索反馈**：分辨合并不能直接跨越不同数值
@@ -543,27 +548,27 @@
   },
   "initialBoard": [
     [
-      4,
+      2,
       0,
       0,
       0
     ],
     [
+      2,
+      4,
+      0,
+      0
+    ],
+    [
+      4,
+      8,
+      0,
+      0
+    ],
+    [
+      8,
       16,
-      2,
-      8,
-      2
-    ],
-    [
-      4,
       0,
-      4,
-      0
-    ],
-    [
-      0,
-      2,
-      8,
       0
     ]
   ],
@@ -572,7 +577,8 @@
   "undoAllowed": true,
   "undoDoesNotRefundMoveOnRankedAttempt": true,
   "win": {
-    "anyTileAtLeast": 32
+    "anyTileAtLeast": 32,
+    "referenceSteps": 4
   },
   "lose": "valid moves used up without target or no legal move",
   "scorePolicy": "挑战按有效步数、辅助使用分层统计；经典分数保持不变",
@@ -586,26 +592,26 @@
 {
   "directions": [
     "U",
-    "L",
+    "U",
     "L",
     "U"
   ],
   "resultBoard": [
     [
-      32,
-      2,
-      0,
-      0
-    ],
-    [
-      4,
-      4,
-      0,
-      0
-    ],
-    [
-      0,
       8,
+      4,
+      0,
+      0
+    ],
+    [
+      32,
+      0,
+      0,
+      0
+    ],
+    [
+      0,
+      0,
       0,
       0
     ],

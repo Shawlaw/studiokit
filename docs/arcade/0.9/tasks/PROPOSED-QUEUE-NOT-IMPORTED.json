@@ -1810,7 +1810,7 @@
       "type": "implement-stage",
       "gameId": "merge-2048",
       "stageId": "merge-2048-C05",
-      "title": "2048合成 C05 双列八进位",
+      "title": "2048合成 C05 横向整理",
       "dependsOn": [
         "LD90-MERGE2048-04"
       ],

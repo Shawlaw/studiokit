@@ -5,6 +5,11 @@ window.ArcadeChallengeData['shadow-leap'] = {
   "gameId": "shadow-leap",
   "gameName": "影跃",
   "packVersion": "0.9.0-design-v1",
+  "supportedFeatures": [
+    "challenge_mode",
+    "stage_gate",
+    "air_dash"
+  ],
   "stages": [
     {
       "id": "shadow-leap-C01",
@@ -97,7 +102,7 @@ window.ArcadeChallengeData['shadow-leap'] = {
           "type": "gate",
           "xCenter": 210,
           "height": 402,
-          "radius": 38
+          "radius": 20
         },
         "requiredAbility": "none",
         "stageRule": "side-scroll",
@@ -109,7 +114,8 @@ window.ArcadeChallengeData['shadow-leap'] = {
           }
         ],
         "deathPolicy": "落出关卡边界后从最近房间检查点重试，关卡任务不回退"
-      }
+      },
+      "contentRevision": "shadow-leap-C01@0.9.0-design-v1@8d5ed484c56d"
     },
     {
       "id": "shadow-leap-C02",
@@ -217,13 +223,14 @@ window.ArcadeChallengeData['shadow-leap'] = {
           "type": "gate",
           "xCenter": 210,
           "height": 405,
-          "radius": 38
+          "radius": 20
         },
         "requiredAbility": "none",
         "stageRule": "fork",
         "collectibles": [],
         "deathPolicy": "落出关卡边界后从最近房间检查点重试，关卡任务不回退"
-      }
+      },
+      "contentRevision": "shadow-leap-C02@0.9.0-design-v1@305e98dc0c57"
     },
     {
       "id": "shadow-leap-C03",
@@ -317,7 +324,7 @@ window.ArcadeChallengeData['shadow-leap'] = {
           "type": "gate",
           "xCenter": 225,
           "height": 428,
-          "radius": 38
+          "radius": 20
         },
         "requiredAbility": "dash",
         "stageRule": "gap",
@@ -329,7 +336,8 @@ window.ArcadeChallengeData['shadow-leap'] = {
           }
         ],
         "deathPolicy": "落出关卡边界后从最近房间检查点重试，关卡任务不回退"
-      }
+      },
+      "contentRevision": "shadow-leap-C03@0.9.0-design-v1@9038369e2adb"
     },
     {
       "id": "shadow-leap-C04",
@@ -372,9 +380,9 @@ window.ArcadeChallengeData['shadow-leap'] = {
           },
           {
             "id": "p2",
-            "xCenter": 322,
+            "xCenter": 352,
             "height": 152,
-            "width": 86,
+            "width": 74,
             "kind": "moving",
             "amplitude": 14,
             "periodSec": 3.2,
@@ -434,12 +442,20 @@ window.ArcadeChallengeData['shadow-leap'] = {
           "type": "gate",
           "xCenter": 210,
           "height": 431,
-          "radius": 38
+          "radius": 20,
+          "requireDash": true
         },
         "requiredAbility": "dash",
         "stageRule": "wind",
         "collectibles": [],
         "deathPolicy": "落出关卡边界后从最近房间检查点重试，关卡任务不回退",
+        "dashShortcut": {
+          "required": true,
+          "kind": "gap",
+          "fromPlatform": "p1",
+          "toPlatform": "p2",
+          "note": "捷径缺口仅影冲可越；长路线 alternativeRoute 不使用影冲仍可通关"
+        },
         "winds": [
           {
             "heightFrom": 110,
@@ -448,7 +464,8 @@ window.ArcadeChallengeData['shadow-leap'] = {
             "telegraph": "旗子+粒子"
           }
         ]
-      }
+      },
+      "contentRevision": "shadow-leap-C04@0.9.0-design-v1@4be4f9e9aede"
     },
     {
       "id": "shadow-leap-C05",
@@ -512,9 +529,9 @@ window.ArcadeChallengeData['shadow-leap'] = {
           },
           {
             "id": "r2",
-            "xCenter": 357,
+            "xCenter": 378,
             "height": 153,
-            "width": 78,
+            "width": 64,
             "kind": "static"
           },
           {
@@ -566,7 +583,8 @@ window.ArcadeChallengeData['shadow-leap'] = {
           "type": "gate",
           "xCenter": 210,
           "height": 425,
-          "radius": 38
+          "radius": 20,
+          "requireDash": true
         },
         "requiredAbility": "dash",
         "stageRule": "fork",
@@ -577,8 +595,16 @@ window.ArcadeChallengeData['shadow-leap'] = {
             "optional": true
           }
         ],
-        "deathPolicy": "落出关卡边界后从最近房间检查点重试，关卡任务不回退"
-      }
+        "deathPolicy": "落出关卡边界后从最近房间检查点重试，关卡任务不回退",
+        "dashShortcut": {
+          "required": true,
+          "kind": "gap",
+          "fromPlatform": "p1",
+          "toPlatform": "l2",
+          "note": "捷径缺口仅影冲可越；长路线 alternativeRoute 不使用影冲仍可通关"
+        }
+      },
+      "contentRevision": "shadow-leap-C05@0.9.0-design-v1@717c251e5ead"
     },
     {
       "id": "shadow-leap-C06",
@@ -631,9 +657,9 @@ window.ArcadeChallengeData['shadow-leap'] = {
           },
           {
             "id": "right-switch",
-            "xCenter": 326,
+            "xCenter": 350,
             "height": 159,
-            "width": 96,
+            "width": 72,
             "kind": "moving",
             "amplitude": 13,
             "periodSec": 3.4,
@@ -685,13 +711,21 @@ window.ArcadeChallengeData['shadow-leap'] = {
           "type": "gate",
           "xCenter": 210,
           "height": 435,
-          "radius": 38,
+          "radius": 20,
+          "requireDash": true,
           "unlock": "all-switches"
         },
         "requiredAbility": "dash",
         "stageRule": "two-switch",
         "collectibles": [],
         "deathPolicy": "落出关卡边界后从最近房间检查点重试，关卡任务不回退",
+        "dashShortcut": {
+          "required": true,
+          "kind": "gap",
+          "fromPlatform": "p1",
+          "toPlatform": "left-switch",
+          "note": "捷径缺口仅影冲可越；长路线 alternativeRoute 不使用影冲仍可通关"
+        },
         "switches": [
           {
             "platformId": "left-switch",
@@ -702,7 +736,8 @@ window.ArcadeChallengeData['shadow-leap'] = {
             "persistentWithinAttempt": true
           }
         ]
-      }
+      },
+      "contentRevision": "shadow-leap-C06@0.9.0-design-v1@01c72791a35d"
     }
   ]
 };

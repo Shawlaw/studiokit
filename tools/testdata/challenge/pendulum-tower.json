@@ -4,6 +4,12 @@
   "gameId": "pendulum-tower",
   "gameName": "层塔",
   "sourceFile": "pendulum-tower.html",
+  "supportedFeatures": [
+    "commission_mode",
+    "fixed_marks",
+    "min_consecutive_tolerance",
+    "final_offset_cap"
+  ],
   "stages": [
     {
       "schemaVersion": "1.0.0",
@@ -104,7 +110,8 @@
         ],
         "adaptToHead": true
       },
-      "designerNotes": "禁止运行时强行吸附到targetOffset；mark 是目标提示，真实释放与物理判定必须保留"
+      "designerNotes": "禁止运行时强行吸附到targetOffset；mark 是目标提示，真实释放与物理判定必须保留",
+      "contentRevision": "pendulum-tower-C01@0.9.0-design-v1@54c4aaaa71e3"
     },
     {
       "schemaVersion": "1.0.0",
@@ -205,7 +212,8 @@
         ],
         "adaptToHead": true
       },
-      "designerNotes": "禁止运行时强行吸附到targetOffset；mark 是目标提示，真实释放与物理判定必须保留"
+      "designerNotes": "禁止运行时强行吸附到targetOffset；mark 是目标提示，真实释放与物理判定必须保留",
+      "contentRevision": "pendulum-tower-C02@0.9.0-design-v1@1ceb303cb7f8"
     },
     {
       "schemaVersion": "1.0.0",
@@ -314,7 +322,8 @@
         ],
         "adaptToHead": true
       },
-      "designerNotes": "禁止运行时强行吸附到targetOffset；mark 是目标提示，真实释放与物理判定必须保留"
+      "designerNotes": "禁止运行时强行吸附到targetOffset；mark 是目标提示，真实释放与物理判定必须保留",
+      "contentRevision": "pendulum-tower-C03@0.9.0-design-v1@9f723a16c479"
     },
     {
       "schemaVersion": "1.0.0",
@@ -423,7 +432,8 @@
         ],
         "adaptToHead": true
       },
-      "designerNotes": "禁止运行时强行吸附到targetOffset；mark 是目标提示，真实释放与物理判定必须保留"
+      "designerNotes": "禁止运行时强行吸附到targetOffset；mark 是目标提示，真实释放与物理判定必须保留",
+      "contentRevision": "pendulum-tower-C04@0.9.0-design-v1@fe8a98f9fb6b"
     },
     {
       "schemaVersion": "1.0.0",
@@ -505,7 +515,8 @@
         "win": {
           "floorsAtLeast": 6,
           "noCollapse": true,
-          "allMarkTargetsWithinTolerance": false
+          "allMarkTargetsWithinTolerance": false,
+          "minConsecutiveWithinTolerance": 3
         },
         "evaluation": {
           "bronze": "完成并保持稳定",
@@ -540,7 +551,8 @@
         ],
         "adaptToHead": true
       },
-      "designerNotes": "禁止运行时强行吸附到targetOffset；mark 是目标提示，真实释放与物理判定必须保留"
+      "designerNotes": "禁止运行时强行吸附到targetOffset；mark 是目标提示，真实释放与物理判定必须保留",
+      "contentRevision": "pendulum-tower-C05@0.9.0-design-v1@7aa405a6597f"
     },
     {
       "schemaVersion": "1.0.0",
@@ -555,7 +567,7 @@
         170
       ],
       "goalStatement": "综合六层，并保持塔顶中心距基座≤15px",
-      "decision": "两种可行箱序的风险收益",
+      "decision": "偏置修正与终态中心控制的权衡",
       "practicedSkill": "交替偏置、修正和有限容错",
       "discovery": "结束时展示结构剖面与偏移走势图",
       "mode": "challenge",
@@ -622,7 +634,8 @@
         "win": {
           "floorsAtLeast": 6,
           "noCollapse": true,
-          "allMarkTargetsWithinTolerance": false
+          "allMarkTargetsWithinTolerance": false,
+          "maxFinalTopCenterOffsetPx": 15
         },
         "evaluation": {
           "bronze": "完成并保持稳定",
@@ -657,7 +670,8 @@
         ],
         "adaptToHead": true
       },
-      "designerNotes": "禁止运行时强行吸附到targetOffset；mark 是目标提示，真实释放与物理判定必须保留"
+      "designerNotes": "禁止运行时强行吸附到targetOffset；mark 是目标提示，真实释放与物理判定必须保留",
+      "contentRevision": "pendulum-tower-C06@0.9.0-design-v1@6191c2d651d1"
     }
   ]
 }

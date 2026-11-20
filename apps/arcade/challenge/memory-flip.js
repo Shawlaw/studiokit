@@ -5,6 +5,10 @@ window.ArcadeChallengeData['memory-flip'] = {
   "gameId": "memory-flip",
   "gameName": "记忆翻牌",
   "packVersion": "0.9.0-design-v1",
+  "supportedFeatures": [
+    "fixed_memory_board",
+    "cognitive_clue_mode"
+  ],
   "stages": [
     {
       "id": "memory-flip-C01",
@@ -57,7 +61,8 @@ window.ArcadeChallengeData['memory-flip'] = {
         ],
         "transformsApplyToEntireBoard": true,
         "progressPersist": "matched ids + mismatches + active two flips + preview timer"
-      }
+      },
+      "contentRevision": "memory-flip-C01@0.9.0-design-v1@44671ee7c20e"
     },
     {
       "id": "memory-flip-C02",
@@ -114,7 +119,8 @@ window.ArcadeChallengeData['memory-flip'] = {
         ],
         "transformsApplyToEntireBoard": true,
         "progressPersist": "matched ids + mismatches + active two flips + preview timer"
-      }
+      },
+      "contentRevision": "memory-flip-C02@0.9.0-design-v1@1e38ff5c6704"
     },
     {
       "id": "memory-flip-C03",
@@ -180,7 +186,8 @@ window.ArcadeChallengeData['memory-flip'] = {
         ],
         "transformsApplyToEntireBoard": true,
         "progressPersist": "matched ids + mismatches + active two flips + preview timer"
-      }
+      },
+      "contentRevision": "memory-flip-C03@0.9.0-design-v1@8ea879a69bf1"
     },
     {
       "id": "memory-flip-C04",
@@ -251,7 +258,8 @@ window.ArcadeChallengeData['memory-flip'] = {
         ],
         "transformsApplyToEntireBoard": true,
         "progressPersist": "matched ids + mismatches + active two flips + preview timer"
-      }
+      },
+      "contentRevision": "memory-flip-C04@0.9.0-design-v1@d3830900f92d"
     },
     {
       "id": "memory-flip-C05",
@@ -323,7 +331,8 @@ window.ArcadeChallengeData['memory-flip'] = {
         ],
         "transformsApplyToEntireBoard": true,
         "progressPersist": "matched ids + mismatches + active two flips + preview timer"
-      }
+      },
+      "contentRevision": "memory-flip-C05@0.9.0-design-v1@ed00c316fba4"
     },
     {
       "id": "memory-flip-C06",
@@ -394,7 +403,8 @@ window.ArcadeChallengeData['memory-flip'] = {
         ],
         "transformsApplyToEntireBoard": true,
         "progressPersist": "matched ids + mismatches + active two flips + preview timer"
-      }
+      },
+      "contentRevision": "memory-flip-C06@0.9.0-design-v1@cce641a898d6"
     }
   ]
 };

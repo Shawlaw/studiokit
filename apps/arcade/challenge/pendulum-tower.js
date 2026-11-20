@@ -5,6 +5,12 @@ window.ArcadeChallengeData['pendulum-tower'] = {
   "gameId": "pendulum-tower",
   "gameName": "层塔",
   "packVersion": "0.9.0-design-v1",
+  "supportedFeatures": [
+    "commission_mode",
+    "fixed_marks",
+    "min_consecutive_tolerance",
+    "final_offset_cap"
+  ],
   "stages": [
     {
       "id": "pendulum-tower-C01",
@@ -80,7 +86,8 @@ window.ArcadeChallengeData['pendulum-tower'] = {
           "gold": "满足银牌且零道具、零失误"
         },
         "physicsNote": "本配置仅规定目标/条件；实际放置是否稳定必须在当前 Lean 模型中按帧仿真"
-      }
+      },
+      "contentRevision": "pendulum-tower-C01@0.9.0-design-v1@54c4aaaa71e3"
     },
     {
       "id": "pendulum-tower-C02",
@@ -156,7 +163,8 @@ window.ArcadeChallengeData['pendulum-tower'] = {
           "gold": "满足银牌且零道具、零失误"
         },
         "physicsNote": "本配置仅规定目标/条件；实际放置是否稳定必须在当前 Lean 模型中按帧仿真"
-      }
+      },
+      "contentRevision": "pendulum-tower-C02@0.9.0-design-v1@1ceb303cb7f8"
     },
     {
       "id": "pendulum-tower-C03",
@@ -239,7 +247,8 @@ window.ArcadeChallengeData['pendulum-tower'] = {
           "gold": "满足银牌且零道具、零失误"
         },
         "physicsNote": "本配置仅规定目标/条件；实际放置是否稳定必须在当前 Lean 模型中按帧仿真"
-      }
+      },
+      "contentRevision": "pendulum-tower-C03@0.9.0-design-v1@9f723a16c479"
     },
     {
       "id": "pendulum-tower-C04",
@@ -322,7 +331,8 @@ window.ArcadeChallengeData['pendulum-tower'] = {
           "gold": "满足银牌且零道具、零失误"
         },
         "physicsNote": "本配置仅规定目标/条件；实际放置是否稳定必须在当前 Lean 模型中按帧仿真"
-      }
+      },
+      "contentRevision": "pendulum-tower-C04@0.9.0-design-v1@fe8a98f9fb6b"
     },
     {
       "id": "pendulum-tower-C05",
@@ -404,7 +414,8 @@ window.ArcadeChallengeData['pendulum-tower'] = {
         "win": {
           "floorsAtLeast": 6,
           "noCollapse": true,
-          "allMarkTargetsWithinTolerance": false
+          "allMarkTargetsWithinTolerance": false,
+          "minConsecutiveWithinTolerance": 3
         },
         "evaluation": {
           "bronze": "完成并保持稳定",
@@ -412,7 +423,8 @@ window.ArcadeChallengeData['pendulum-tower'] = {
           "gold": "满足银牌且零道具、零失误"
         },
         "physicsNote": "本配置仅规定目标/条件；实际放置是否稳定必须在当前 Lean 模型中按帧仿真"
-      }
+      },
+      "contentRevision": "pendulum-tower-C05@0.9.0-design-v1@7aa405a6597f"
     },
     {
       "id": "pendulum-tower-C06",
@@ -420,7 +432,7 @@ window.ArcadeChallengeData['pendulum-tower'] = {
       "title": "城市小塔",
       "difficulty": 6,
       "goalStatement": "综合六层，并保持塔顶中心距基座≤15px",
-      "decision": "两种可行箱序的风险收益",
+      "decision": "偏置修正与终态中心控制的权衡",
       "practicedSkill": "交替偏置、修正和有限容错",
       "discovery": "结束时展示结构剖面与偏移走势图",
       "targetDurationSec": [
@@ -494,7 +506,8 @@ window.ArcadeChallengeData['pendulum-tower'] = {
         "win": {
           "floorsAtLeast": 6,
           "noCollapse": true,
-          "allMarkTargetsWithinTolerance": false
+          "allMarkTargetsWithinTolerance": false,
+          "maxFinalTopCenterOffsetPx": 15
         },
         "evaluation": {
           "bronze": "完成并保持稳定",
@@ -502,7 +515,8 @@ window.ArcadeChallengeData['pendulum-tower'] = {
           "gold": "满足银牌且零道具、零失误"
         },
         "physicsNote": "本配置仅规定目标/条件；实际放置是否稳定必须在当前 Lean 模型中按帧仿真"
-      }
+      },
+      "contentRevision": "pendulum-tower-C06@0.9.0-design-v1@6191c2d651d1"
     }
   ]
 };

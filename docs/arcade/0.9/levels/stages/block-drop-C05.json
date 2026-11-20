@@ -10,10 +10,10 @@
     25,
     110
   ],
-  "goalStatement": "T形正确方向放入非矩形锁孔",
+  "goalStatement": "先 O 填上方方井，再以 T 锁下方异形孔",
   "decision": "选择摆放方向和顺序（挑战模式固定出块）",
-  "practicedSkill": "左右平移与旋转要配合",
-  "discovery": "读懂不规则凹槽而非盲目直落",
+  "practicedSkill": "两个落点都可试放，但只有 O 先上、T 后下能清四行",
+  "discovery": "旋转与顺序共同决定成败，直落任意一孔会留残砖",
   "mode": "challenge",
   "content": {
     "boardWidth": 10,
@@ -35,22 +35,23 @@
       "..........",
       "..........",
       "..........",
-      "..........",
-      "..........",
+      "###..#####",
+      "###..#####",
       "####...###",
       "#####.####"
     ],
     "pieceQueue": [
+      "O",
       "T"
     ],
     "holdEnabled": false,
     "gravityMode": "place-by-place with no time pressure, hard drop + rotate",
     "spawnPolicy": "only fixed pieceQueue; no bag-7 randomness",
-    "initialActivePiece": "T",
+    "initialActivePiece": "O",
     "win": {
       "type": "clear-lines",
-      "count": 2,
-      "maxPlacedPieces": 1
+      "count": 4,
+      "maxPlacedPieces": 2
     },
     "lose": {
       "type": "queue-exhausted-or-top-out",
@@ -130,9 +131,34 @@
         ]
       ]
     },
-    "coordinates": "reference placements give top-left bounding-box column. Rotation system in game must support these orientations without clipping."
+    "coordinates": "reference placements give top-left bounding-box column. Rotation system in game must support these orientations without clipping.",
+    "gravityModel": "place-by-place",
+    "placementSpace": {
+      "description": "每块存在多个可硬降落点，只有特定朝向/列组合能完成目标；参考解是众多合法落点中的一种",
+      "legalButLosingExamples": [
+        {
+          "piece": "O",
+          "orientation": "N",
+          "leftCol": 1,
+          "result": "偏离方井，无法配合 T 清四行"
+        },
+        {
+          "piece": "T",
+          "orientation": "STEM-DOWN",
+          "leftCol": 4,
+          "result": "无 O 垫底，T 落入异形孔仍剩残砖"
+        }
+      ],
+      "winningPlacementCount": 1
+    }
   },
   "referencePlan": [
+    {
+      "piece": "O",
+      "orientation": "N",
+      "leftCol": 3,
+      "action": "rotate/place/hardDrop"
+    },
     {
       "piece": "T",
       "orientation": "STEM-DOWN",

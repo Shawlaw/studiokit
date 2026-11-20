@@ -5,6 +5,9 @@ window.ArcadeChallengeData['mole-whack'] = {
   "gameId": "mole-whack",
   "gameName": "打地鼠",
   "packVersion": "0.9.0-design-v1",
+  "supportedFeatures": [
+    "scripted_spawn_wave"
+  ],
   "stages": [
     {
       "id": "mole-whack-C01",
@@ -118,7 +121,8 @@ window.ArcadeChallengeData['mole-whack'] = {
         },
         "tapRule": "仅洞口可点击范围判定，每个事件最多命中一次",
         "time": "使用暂停感知逻辑时钟；进入后台事件不推进"
-      }
+      },
+      "contentRevision": "mole-whack-C01@0.9.0-design-v1@3ae80fb8edf1"
     },
     {
       "id": "mole-whack-C02",
@@ -241,7 +245,8 @@ window.ArcadeChallengeData['mole-whack'] = {
         },
         "tapRule": "仅洞口可点击范围判定，每个事件最多命中一次",
         "time": "使用暂停感知逻辑时钟；进入后台事件不推进"
-      }
+      },
+      "contentRevision": "mole-whack-C02@0.9.0-design-v1@cc50267610ca"
     },
     {
       "id": "mole-whack-C03",
@@ -382,7 +387,8 @@ window.ArcadeChallengeData['mole-whack'] = {
         },
         "tapRule": "仅洞口可点击范围判定，每个事件最多命中一次",
         "time": "使用暂停感知逻辑时钟；进入后台事件不推进"
-      }
+      },
+      "contentRevision": "mole-whack-C03@0.9.0-design-v1@af4873ebc7dd"
     },
     {
       "id": "mole-whack-C04",
@@ -541,7 +547,8 @@ window.ArcadeChallengeData['mole-whack'] = {
         },
         "tapRule": "仅洞口可点击范围判定，每个事件最多命中一次",
         "time": "使用暂停感知逻辑时钟；进入后台事件不推进"
-      }
+      },
+      "contentRevision": "mole-whack-C04@0.9.0-design-v1@6e1d6d6dae30"
     },
     {
       "id": "mole-whack-C05",
@@ -682,7 +689,8 @@ window.ArcadeChallengeData['mole-whack'] = {
         },
         "tapRule": "仅洞口可点击范围判定，每个事件最多命中一次",
         "time": "使用暂停感知逻辑时钟；进入后台事件不推进"
-      }
+      },
+      "contentRevision": "mole-whack-C05@0.9.0-design-v1@75e38ee057b0"
     },
     {
       "id": "mole-whack-C06",
@@ -859,7 +867,8 @@ window.ArcadeChallengeData['mole-whack'] = {
         },
         "tapRule": "仅洞口可点击范围判定，每个事件最多命中一次",
         "time": "使用暂停感知逻辑时钟；进入后台事件不推进"
-      }
+      },
+      "contentRevision": "mole-whack-C06@0.9.0-design-v1@ffef6d0af6e9"
     }
   ]
 };

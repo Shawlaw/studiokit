@@ -17,9 +17,9 @@
         "shadow-leap-C05",
         "shadow-leap-C06"
       ],
-      "sha256": "a78a82f3f9c4927ec20c9c56cec9b00ef8a169ffd6c3a264dc6b8b0317565f8f",
-      "sourceSha256": "88f943f3bb306e7a168f41067c118a0ae2aed28e15018109e6463525e920fe84",
-      "runtimeSha256": "838fca8dbd98497a7e46499dec6828901ea68ea825838304d95779072f5b44f0"
+      "sha256": "505bf926fc68793caa465f9e376f65f5f5fbef263c4fb8fcd927385ecea510aa",
+      "sourceSha256": "d58b291cdeb7d3b388f209af4ce7a0fcedffcbfa42f372bf8295e6b841c6e386",
+      "runtimeSha256": "e7017749cb085cd6aedeaecbfb66c492381a91ed29c657d47ac3744bf894d1e1"
     },
     {
       "gameId": "snowbells",
@@ -33,9 +33,9 @@
         "snowbells-C05",
         "snowbells-C06"
       ],
-      "sha256": "54b86a03b38a200fb1f7adc91e0fb67640cfa9a6bfe4106c723ae67afba50f5d",
-      "sourceSha256": "76b468e321248b6f0305f8f04e1a95556574feb71c7a4b382fbf300d64bf2d12",
-      "runtimeSha256": "3baa6529175830eb8e1fe733c0708d2b1cb9fd3420cc7d72cb38b29252dfe946"
+      "sha256": "6f6f2b5d134d31902956436346eb39ae3700f10118702ab48951e550c7b8673e",
+      "sourceSha256": "b037e9e8c70483efd7dde498d1e1ebbdd73080a57731f8e6628c2511b8edc476",
+      "runtimeSha256": "f421646fb9b96f4176184420b3c28faee59dd815b457ab8a443211e32745baab"
     },
     {
       "gameId": "star-raid",
@@ -49,9 +49,9 @@
         "star-raid-C05",
         "star-raid-C06"
       ],
-      "sha256": "54c6d2233c6a1763540fac061842ae9efdf2a08395f6b166d84909dc7f84a504",
-      "sourceSha256": "5abad25ec4a5c8510dd9e1e4cef9b1ac8efdf2c40b1d02cc12ab5eb987bceead",
-      "runtimeSha256": "cb44d2f7d35d60e3a1f96a3a8a03361b8155f65e8da292fe7983a49a387af384"
+      "sha256": "e6ffffca0e200da7479a3866f17e85272962e50389d0fecc22228744685295b8",
+      "sourceSha256": "858b194a1c5c6528d62c4c007807f0643152dee7da73048ed02a3e20ef1940b8",
+      "runtimeSha256": "7ac49c61e754f3a813100d027d7df7770aaf3fd35fc589452fdd11b88c07f382"
     },
     {
       "gameId": "pendulum-tower",
@@ -65,9 +65,9 @@
         "pendulum-tower-C05",
         "pendulum-tower-C06"
       ],
-      "sha256": "6f4cb87336543179ee5f7a9cfc14b395c82e69dbaf2660ca39d4bfe64edaef94",
-      "sourceSha256": "d4fed7f20807be0727b9c961052ea29fbc8ff1cb692ac243704be04345997f35",
-      "runtimeSha256": "1280a30a51fcfd6630e59df3638694e12b2ad83d00d9b549d48c3e648994aa8c"
+      "sha256": "cfa959501f40dedd761dded9f631c6360caa8270a5e985197efc98dc78ad80eb",
+      "sourceSha256": "946b8fa0fdf61f92a45c1fde8ff396471eefdb81808356df458137f273c30440",
+      "runtimeSha256": "93d8b53cf909e42444e0cbee4804e347a098966a18bb87d6b75a097b2605cbda"
     },
     {
       "gameId": "block-drop",
@@ -81,9 +81,9 @@
         "block-drop-C05",
         "block-drop-C06"
       ],
-      "sha256": "ec155d808bd7a70a3b206dadffdc5e32b1bdfd05a92b03b0e906a75a98a577a3",
-      "sourceSha256": "8cfd98b0d508aef5940aff62dce7f294835e8a70477287e9e4e821029c905f40",
-      "runtimeSha256": "ae9e10169e6a4f45509a0ea28ffb5c14c8b5825fb749168f2713632a7cdf1390"
+      "sha256": "ec97a66a2062220e193e74bd920d771bf26a5de1ba375c33559079dfb3e638a4",
+      "sourceSha256": "7dbc6770d45ef33ce717e0182f46319ab0c24e257f9981d0f9084c3763270c5d",
+      "runtimeSha256": "55691ecdaf686cd48482acc9bf8308e64af80b0a0ed7da5ee5e3f638a1706b14"
     },
     {
       "gameId": "road-rush",
@@ -97,9 +97,9 @@
         "road-rush-C05",
         "road-rush-C06"
       ],
-      "sha256": "d9ddc4d4943c0063a78bbd772750e7d52c2caa3b60aa3a90ed721e512a4d57a5",
-      "sourceSha256": "3c1942e1faf764a177697bb4495a390b9caf0fca5189051ba9d362698551b148",
-      "runtimeSha256": "104594dc30118d3bda56e4714c07d31383e9d9534e56eae3cead13b0bbf2a401"
+      "sha256": "a7199f5148d94e98222fdf679055490a5da85870edfc96b664591d48b974b262",
+      "sourceSha256": "5816604b9ae3f54c293e90031e5d019ca2ef1159019e9a97b99052f44c8b25dc",
+      "runtimeSha256": "a4038ddb91a4ab5a257f0b1411bd17fa7afbbd62e2cb227a1558e9b749fe9136"
     },
     {
       "gameId": "gold-miner",
@@ -113,9 +113,9 @@
         "gold-miner-C05",
         "gold-miner-C06"
       ],
-      "sha256": "36bd92dea41d7b7ce58a68ddb40a965a7f75f4d82f26c48e94fb5a5268f625c0",
-      "sourceSha256": "ad3e4a4116aa435ede87cb0169a00c917b559ae8f91a5e70a275f8c4b9886db4",
-      "runtimeSha256": "439781a8f0995418f0c95e8e0077fc9a148bf32e8fc5633385e649baf0dc0f46"
+      "sha256": "9450f672c772b7b8bc399efb1610400cf07ee3a08e16e9d5d5404725b3cc362f",
+      "sourceSha256": "0500e1af734a438a3aeeaeb10e37c06be70ed47a37a0d63f58e3478c612f9b1d",
+      "runtimeSha256": "2f7cbf6c7f9dc487373b4880594519fb20a009e9235d03453d100ed6c56936f0"
     },
     {
       "gameId": "brick-breaker",
@@ -129,9 +129,9 @@
         "brick-breaker-C05",
         "brick-breaker-C06"
       ],
-      "sha256": "9e52f10977db0c94222e671404f2a3ed7fee8c6f2fcd7618620d4a96aad8e536",
+      "sha256": "e02c95b4bf5d1663d7608d17d9565a6f6bc7ef80aabbd14f9066ba4122455c8e",
       "sourceSha256": "5e3499cfc7126513472960a907d9260fd8f8ab83bca807c98b9200a2f8ae8b9b",
-      "runtimeSha256": "844cef11cc5e82a3e7f5943e5a13b286b3724aea13027371e1679433f2b5a635"
+      "runtimeSha256": "82afe2014c3a7d1718550d0b3a068d180aec6ad58b3e9dbad52a90830907a561"
     },
     {
       "gameId": "gravity-flip",
@@ -145,9 +145,9 @@
         "gravity-flip-C05",
         "gravity-flip-C06"
       ],
-      "sha256": "724eb19ac15a0c68e8955a40cb2a87d3cb5b0272c6e3adddb233b8c06f3beded",
-      "sourceSha256": "d097bba5ba0802968d52da0beb029deb9e48cfd0c91882a2b156668d5049a496",
-      "runtimeSha256": "a45223ca8de1ef67900345e4d633b4d94c27203ce88fbde95029ba0a9a35ea40"
+      "sha256": "e5e70fe22a2053afd7b4a919a0b1f70bddd0fc1a162515d3d9185accbbe35902",
+      "sourceSha256": "4f0762efeb9bf1c5fee758fc182d4b30b1f209a9bcc8d2e8b1ecf9f6033d41b4",
+      "runtimeSha256": "ff64cf8d02e5d6f7d4d64508154423a105dc18473ea19bbb960a1716340a4f22"
     },
     {
       "gameId": "snake-run",
@@ -161,9 +161,9 @@
         "snake-run-C05",
         "snake-run-C06"
       ],
-      "sha256": "1eea77b87212d9473d39005f86d470bee6fcf3c9750b2a02d1e96e0e35ca483b",
+      "sha256": "e8427eadfcba3d88d349c6d9c75b4cb26375eea12c9fb472484d28439236aa21",
       "sourceSha256": "31675ce5f14471cb5576efa7654d733a1dab0fe03e7e802ad5c96f661cda767b",
-      "runtimeSha256": "3450976f88d0d6055ab641e297339d89f85b402cb68ca98bdc2b1e7ead051e83"
+      "runtimeSha256": "349157bb40cdfcce05e15df67de5ffa93813213d0158bf22908f1a7d13eddadc"
     },
     {
       "gameId": "mole-whack",
@@ -177,9 +177,9 @@
         "mole-whack-C05",
         "mole-whack-C06"
       ],
-      "sha256": "8bc7b031441f60973fba7cb920b0f1697a3e41816e50a2159aaf2a162cea0db3",
+      "sha256": "4a236ff34199acca6c692caf99daecb43806879631ea3b6ea161c4014e93ec5e",
       "sourceSha256": "25559c82f6501fdc0a03382fce42cf2d8d1d7a6e51eecc8077bdea07601e2fae",
-      "runtimeSha256": "4e26e0aa53a35c3416bce909cd1aadd9194738a96f79dd252e38f5972a8e22d9"
+      "runtimeSha256": "8d6f4b294fa25acbb9b4666df274bb3b9136f74ed054f6605836a3633865df7a"
     },
     {
       "gameId": "memory-flip",
@@ -193,9 +193,9 @@
         "memory-flip-C05",
         "memory-flip-C06"
       ],
-      "sha256": "a889bea6f4a37c965c167aa14cce7f9cbf7dfdd8da0f87cdc5f8f7086a121e17",
+      "sha256": "5720327bfefb8d7aec2c8d5b6328969a457c8b55bdc818baa1165ff4a484bd91",
       "sourceSha256": "cc2c34a2bfd150ac980ff85f8a6883468d48758211ecc2667163f8e91ec397e2",
-      "runtimeSha256": "7ed1c588618063458632f6bee6423ea84b6840a6747850b7783d1335211bba4b"
+      "runtimeSha256": "10b8965eb6adca2784e20e976db817d2c74cdb0e0fecb5be6d84d35c096305f3"
     },
     {
       "gameId": "merge-2048",
@@ -209,9 +209,9 @@
         "merge-2048-C05",
         "merge-2048-C06"
       ],
-      "sha256": "c59c2fdeea629900d153c82a999b9eddac6f1248bf429d4e994945acf140c9df",
-      "sourceSha256": "e451af94504b64ece8d603653c9dd7660de1bfb68d6a706c18d5b67c26ae5578",
-      "runtimeSha256": "6f3d2fdaa6196e5873b986dd078a9139e3adce767321f9fd0887d7df1250b6de"
+      "sha256": "f076bd9927ca164e93b5d71475c9b5fdb0107520fdade3d16d2ebbbc8ee8a364",
+      "sourceSha256": "eab28fd4fe9f817b5fde6856f6b1219783e031326644d733ea0f178e4ad91752",
+      "runtimeSha256": "939b2270eb9beeeb7921c3d8d1a020034439f0f16e4a9364c799c5e75402aa2d"
     }
   ]
 }

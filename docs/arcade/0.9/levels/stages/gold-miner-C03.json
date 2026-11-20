@@ -50,18 +50,18 @@
       {
         "id": "r1",
         "type": "rockS",
-        "x": 174,
-        "y": 370,
+        "x": 85,
+        "y": 330,
         "value": 15,
         "weight": 9,
-        "aimAngleDeg": -7.7
+        "aimAngleDeg": -28.9
       },
       {
         "id": "m1",
         "type": "goldM",
         "x": 360,
         "y": 590,
-        "value": 150,
+        "value": 300,
         "weight": 4,
         "aimAngleDeg": 17.2
       }
@@ -86,7 +86,8 @@
     },
     "complete": "达标即可选择立即结算，不要求抓光",
     "fail": "倒计时归零且未达标",
-    "hazards": "TNT碰到立即销毁本次抓取收益，损失时间；不直接结束全局游戏"
+    "hazards": "TNT碰到立即销毁本次抓取收益，损失时间；不直接结束全局游戏",
+    "designNote": "m1.value=300（非标准 goldM 150）；r1 已从 (174,370) 移到 (85,330) 避开 l1 射线"
   },
   "referencePlan": [
     {

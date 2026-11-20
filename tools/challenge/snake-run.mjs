@@ -6,7 +6,10 @@
  * - 其它为 engine-replay（#test 钩子驱动状态机 + 真实 DOM 点击）。
  */
 
+import { loadChallengeFixture, parseMovesRLE } from '../lib/arcade_fixture.mjs';
+
 const GAME_ID = 'snake-run';
+const FIXTURE = loadChallengeFixture(GAME_ID);
 const KEY = { R: 'ArrowRight', L: 'ArrowLeft', U: 'ArrowUp', D: 'ArrowDown' };
 
 async function pressKey(cdp, key) {
@@ -78,11 +81,12 @@ export default {
       'C01 referencePlan.movesRLE 真实方向键通关（real-input-replay）',
       async (cdp, ctx) => {
         await enterStageFromPanel(cdp, ctx, 'snake-run-C01');
-        const plan = [['R', 6], ['D', 7], ['L', 1]];
+        const stage = FIXTURE.stage('snake-run-C01');
+        const keys = parseMovesRLE(stage.referencePlan.movesRLE);
         let target = 0;
-        for (const [key, count] of plan) {
-          target += count;
-          await pressKey(cdp, KEY[key]);
+        for (const key of keys) {
+          target += 1;
+          await pressKey(cdp, key);
           await cdp.waitFor(
             'window.__arcadeTest.challengeInfo().state === "cleared" || window.__arcadeTest.stageObservable().steps >= ' + target,
             { timeout: 9000, interval: 40 }
@@ -95,7 +99,7 @@ export default {
           title: document.querySelector('[data-ov-title]').textContent,
           progress: Arcade.Challenge.progress('snake-run')
         })`);
-        ctx.assert(cleared.obs.steps === 14, '参考路线步数 ' + cleared.obs.steps + ' ≠ 14');
+        ctx.assert(cleared.obs.steps === stage.referencePlan.totalSteps, '参考路线步数 ' + cleared.obs.steps + ' ≠ ' + stage.referencePlan.totalSteps);
         ctx.assert(cleared.info.fruitsEaten === 3 && cleared.info.fruitTotal === 3 && cleared.info.cleared === true, 'C01 通关信息错误：' + JSON.stringify(cleared.info));
         ctx.assert(cleared.title === '挑战通关', '通关标题 ' + cleared.title);
         ctx.assert(cleared.progress.cleared.indexOf('snake-run-C01') !== -1, '挑战记录未写入：' + JSON.stringify(cleared.progress));

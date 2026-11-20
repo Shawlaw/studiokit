@@ -4,16 +4,16 @@
   "gameId": "merge-2048",
   "stageNumber": 5,
   "chapter": "数字残局",
-  "title": "双列八进位",
+  "title": "横向整理",
   "difficulty": 5,
   "targetDurationSec": [
     15,
     95
   ],
-  "goalStatement": "四步内获得16",
+  "goalStatement": "最多五步获得16，参考两步横向整理",
   "decision": "每一步选择朝向并预判合并次序",
-  "practicedSkill": "先合并列再观察8如何重合",
-  "discovery": "棋盘上下移动可改变相邻关系",
+  "practicedSkill": "把分散在两列的相同数字先横向合并再纵向对齐",
+  "discovery": "棋盘左右滑动可改变上下行的相邻关系",
   "mode": "challenge",
   "content": {
     "grid": {
@@ -23,35 +23,36 @@
     "initialBoard": [
       [
         2,
-        4,
         2,
+        4,
         0
       ],
       [
-        2,
         4,
-        2,
-        0
-      ],
-      [
         4,
         8,
-        4,
         0
       ],
       [
+        2,
+        2,
         0,
-        0,
+        0
+      ],
+      [
+        4,
+        4,
         0,
         0
       ]
     ],
     "challengeSpawnPolicy": "none (no new random or scripted tile after move)",
-    "maxValidMoves": 4,
+    "maxValidMoves": 5,
     "undoAllowed": true,
     "undoDoesNotRefundMoveOnRankedAttempt": true,
     "win": {
-      "anyTileAtLeast": 16
+      "anyTileAtLeast": 16,
+      "referenceSteps": 2
     },
     "lose": "valid moves used up without target or no legal move",
     "scorePolicy": "挑战按有效步数、辅助使用分层统计；经典分数保持不变",
@@ -59,30 +60,30 @@
   },
   "referencePlan": {
     "directions": [
-      "U",
-      "U"
+      "L",
+      "L"
     ],
     "resultBoard": [
       [
         8,
+        0,
+        0,
+        0
+      ],
+      [
         16,
+        0,
+        0,
+        0
+      ],
+      [
+        4,
+        0,
+        0,
+        0
+      ],
+      [
         8,
-        0
-      ],
-      [
-        0,
-        0,
-        0,
-        0
-      ],
-      [
-        0,
-        0,
-        0,
-        0
-      ],
-      [
-        0,
         0,
         0,
         0

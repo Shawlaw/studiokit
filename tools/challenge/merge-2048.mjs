@@ -122,7 +122,10 @@ export default {
         await replayStage(cdp, stage, ctx);
         const after = await cdp.evaluate(`({ info: window.__arcadeTest.challengeInfo(), ov: { title: document.querySelector('[data-ov-title]').textContent, text: document.querySelector('[data-ov-text]').textContent }, progress: Arcade.Challenge.progress('merge-2048') })`);
         ctx.assert(after.info.state === 'cleared' && after.info.bestTile >= after.info.target, 'C01 未按参考方向达标：' + JSON.stringify(after.info));
-        ctx.assert(after.ov.title === '关卡完成' && after.ov.text.includes('C01'), '通关结算文案异常：' + after.ov.text);
+        ctx.assert(
+          after.ov.title === '关卡完成' && after.ov.text.includes(stage.id.toUpperCase().replace('MERGE-2048-', '')) && after.ov.text.includes('目标口径'),
+          '通关结算文案异常：' + after.ov.text
+        );
         ctx.assert(after.progress.cleared.includes(stage.id), '通关未写入挑战记录');
         await cdp.click('[data-ov-btn]');
         await cdp.waitFor('window.__arcadeTest.challengeInfo().stageId === "merge-2048-C02" && window.__arcadeTest.challengeInfo().state === "playing"', { timeout: 6000 });
@@ -171,7 +174,10 @@ export default {
         const failed = await cdp.evaluate(`({ info: window.__arcadeTest.challengeInfo(), title: document.querySelector('[data-ov-title]').textContent, text: document.querySelector('[data-ov-text]').textContent, progress: Arcade.Challenge.progress('merge-2048') })`);
         ctx.assert(failed.title === '挑战失败', '失败弹层标题异常：' + failed.title);
         ctx.assert(failed.text.includes('步数用完'), '失败文案缺少可归因原因：' + failed.text);
-        ctx.assert(failed.text.includes('目标：' + stage.goalStatement), '失败文案缺少本关目标：' + failed.text);
+        ctx.assert(
+          failed.text.includes('目标：') && failed.text.includes('最多') && failed.text.includes('步'),
+          '失败文案缺少本关步数目标口径：' + failed.text
+        );
         ctx.assert(failed.info.movesUsed === failed.info.maxValidMoves, '失败时应已用完有效步数：' + JSON.stringify(failed.info));
         ctx.assert(failed.progress.cleared.length === 0, '失败不应写入通关记录');
         await cdp.click('[data-ov-btn]');

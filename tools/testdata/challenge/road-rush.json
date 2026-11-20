@@ -4,6 +4,11 @@
   "gameId": "road-rush",
   "gameName": "极速车道",
   "sourceFile": "road-rush.html",
+  "supportedFeatures": [
+    "fixed_traffic_timeline",
+    "time_expanded_lane_validator",
+    "bonus_preview"
+  ],
   "stages": [
     {
       "schemaVersion": "1.0.0",
@@ -14,8 +19,8 @@
       "title": "入门超车",
       "difficulty": 1,
       "targetDurationSec": [
-        20,
-        75
+        14,
+        24
       ],
       "goalStatement": "识别阻挡车道并提前改变车道",
       "decision": "避让是硬目标，近距超车只增加评价",
@@ -214,7 +219,8 @@
         ],
         "adaptToHead": true
       },
-      "designerNotes": "lane proof只按离散格成立；真正实现必须把相邻车道过渡也纳入碰撞测试"
+      "designerNotes": "lane proof只按离散格成立；真正实现必须把相邻车道过渡也纳入碰撞测试",
+      "contentRevision": "road-rush-C01@0.9.0-design-v1@ac239faea417"
     },
     {
       "schemaVersion": "1.0.0",
@@ -225,8 +231,8 @@
       "title": "左右交替",
       "difficulty": 2,
       "targetDurationSec": [
-        20,
-        75
+        14,
+        24
       ],
       "goalStatement": "交错车流中识别下一秒的安全区域",
       "decision": "避让是硬目标，近距超车只增加评价",
@@ -429,7 +435,8 @@
         ],
         "adaptToHead": true
       },
-      "designerNotes": "lane proof只按离散格成立；真正实现必须把相邻车道过渡也纳入碰撞测试"
+      "designerNotes": "lane proof只按离散格成立；真正实现必须把相邻车道过渡也纳入碰撞测试",
+      "contentRevision": "road-rush-C02@0.9.0-design-v1@211526d6da19"
     },
     {
       "schemaVersion": "1.0.0",
@@ -440,8 +447,8 @@
       "title": "施工收窄",
       "difficulty": 3,
       "targetDurationSec": [
-        20,
-        75
+        14,
+        24
       ],
       "goalStatement": "提前避开占据两个车道的施工路段",
       "decision": "避让是硬目标，近距超车只增加评价",
@@ -644,7 +651,8 @@
         ],
         "adaptToHead": true
       },
-      "designerNotes": "lane proof只按离散格成立；真正实现必须把相邻车道过渡也纳入碰撞测试"
+      "designerNotes": "lane proof只按离散格成立；真正实现必须把相邻车道过渡也纳入碰撞测试",
+      "contentRevision": "road-rush-C03@0.9.0-design-v1@f9800e578bd9"
     },
     {
       "schemaVersion": "1.0.0",
@@ -655,8 +663,8 @@
       "title": "车队夹缝",
       "difficulty": 4,
       "targetDurationSec": [
-        20,
-        75
+        13,
+        23
       ],
       "goalStatement": "以两车道内的安全空间连续变道",
       "decision": "避让是硬目标，近距超车只增加评价",
@@ -869,7 +877,8 @@
         ],
         "adaptToHead": true
       },
-      "designerNotes": "lane proof只按离散格成立；真正实现必须把相邻车道过渡也纳入碰撞测试"
+      "designerNotes": "lane proof只按离散格成立；真正实现必须把相邻车道过渡也纳入碰撞测试",
+      "contentRevision": "road-rush-C04@0.9.0-design-v1@7b566626c2fa"
     },
     {
       "schemaVersion": "1.0.0",
@@ -880,8 +889,8 @@
       "title": "近距奖励",
       "difficulty": 5,
       "targetDurationSec": [
-        20,
-        75
+        13,
+        23
       ],
       "goalStatement": "在保命路线之外选择近车道超车积分",
       "decision": "避让是硬目标，近距超车只增加评价",
@@ -1050,7 +1059,27 @@
           "noDamageGold": true
         },
         "spawnerPolicy": "challenge only; disable classic random spawn while timeline active",
-        "pathProofModel": "at each slot lane must not be occupied, consecutive lane indices differ ≤1; physics transitions must also be tested"
+        "pathProofModel": "at each slot lane must not be occupied, consecutive lane indices differ ≤1; physics transitions must also be tested",
+        "bonusPreview": {
+          "leadSlots": 1,
+          "ruleText": "预告期高亮近距奖励车道：普通超车 +10，近距超车 +15；不强迫冒险",
+          "previewField": "optionalNearPassBonusLanes",
+          "hudText": "普通10 / 近距15",
+          "rewardedLaneSlots": [
+            1,
+            2,
+            3,
+            4,
+            5,
+            6,
+            7,
+            8,
+            9,
+            10,
+            11,
+            12
+          ]
+        }
       },
       "referencePlan": {
         "safeLaneBySlot": [
@@ -1085,7 +1114,8 @@
         ],
         "adaptToHead": true
       },
-      "designerNotes": "lane proof只按离散格成立；真正实现必须把相邻车道过渡也纳入碰撞测试"
+      "designerNotes": "lane proof只按离散格成立；真正实现必须把相邻车道过渡也纳入碰撞测试",
+      "contentRevision": "road-rush-C05@0.9.0-design-v1@18a0e3689984"
     },
     {
       "schemaVersion": "1.0.0",
@@ -1096,8 +1126,8 @@
       "title": "最终路书",
       "difficulty": 6,
       "targetDurationSec": [
-        20,
-        75
+        15,
+        25
       ],
       "goalStatement": "持续读出拥堵变化，抵达最后路标",
       "decision": "避让是硬目标，近距超车只增加评价",
@@ -1340,7 +1370,8 @@
         ],
         "adaptToHead": true
       },
-      "designerNotes": "lane proof只按离散格成立；真正实现必须把相邻车道过渡也纳入碰撞测试"
+      "designerNotes": "lane proof只按离散格成立；真正实现必须把相邻车道过渡也纳入碰撞测试",
+      "contentRevision": "road-rush-C06@0.9.0-design-v1@c39dc05e8201"
     }
   ]
 }

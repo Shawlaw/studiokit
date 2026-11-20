@@ -131,7 +131,26 @@
         ]
       ]
     },
-    "coordinates": "reference placements give top-left bounding-box column. Rotation system in game must support these orientations without clipping."
+    "coordinates": "reference placements give top-left bounding-box column. Rotation system in game must support these orientations without clipping.",
+    "gravityModel": "place-by-place",
+    "placementSpace": {
+      "description": "每块存在多个可硬降落点，只有特定朝向/列组合能完成目标；参考解是众多合法落点中的一种",
+      "legalButLosingExamples": [
+        {
+          "piece": "O",
+          "orientation": "N",
+          "leftCol": 0,
+          "result": "无法落入方井，停在顶端"
+        },
+        {
+          "piece": "T",
+          "orientation": "STEM-UP",
+          "leftCol": 4,
+          "result": "只清1行"
+        }
+      ],
+      "winningPlacementCount": 1
+    }
   },
   "referencePlan": [
     {

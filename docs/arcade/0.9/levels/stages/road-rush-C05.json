@@ -7,8 +7,8 @@
   "title": "近距奖励",
   "difficulty": 5,
   "targetDurationSec": [
-    20,
-    75
+    13,
+    23
   ],
   "goalStatement": "在保命路线之外选择近车道超车积分",
   "decision": "避让是硬目标，近距超车只增加评价",
@@ -177,7 +177,27 @@
       "noDamageGold": true
     },
     "spawnerPolicy": "challenge only; disable classic random spawn while timeline active",
-    "pathProofModel": "at each slot lane must not be occupied, consecutive lane indices differ ≤1; physics transitions must also be tested"
+    "pathProofModel": "at each slot lane must not be occupied, consecutive lane indices differ ≤1; physics transitions must also be tested",
+    "bonusPreview": {
+      "leadSlots": 1,
+      "ruleText": "预告期高亮近距奖励车道：普通超车 +10，近距超车 +15；不强迫冒险",
+      "previewField": "optionalNearPassBonusLanes",
+      "hudText": "普通10 / 近距15",
+      "rewardedLaneSlots": [
+        1,
+        2,
+        3,
+        4,
+        5,
+        6,
+        7,
+        8,
+        9,
+        10,
+        11,
+        12
+      ]
+    }
   },
   "referencePlan": {
     "safeLaneBySlot": [

@@ -4,6 +4,9 @@
   "gameId": "mole-whack",
   "gameName": "打地鼠",
   "sourceFile": "mole-whack.html",
+  "supportedFeatures": [
+    "scripted_spawn_wave"
+  ],
   "stages": [
     {
       "schemaVersion": "1.0.0",
@@ -149,7 +152,8 @@
         ],
         "adaptToHead": true
       },
-      "designerNotes": ""
+      "designerNotes": "",
+      "contentRevision": "mole-whack-C01@0.9.0-design-v1@3ae80fb8edf1"
     },
     {
       "schemaVersion": "1.0.0",
@@ -305,7 +309,8 @@
         ],
         "adaptToHead": true
       },
-      "designerNotes": ""
+      "designerNotes": "",
+      "contentRevision": "mole-whack-C02@0.9.0-design-v1@cc50267610ca"
     },
     {
       "schemaVersion": "1.0.0",
@@ -478,7 +483,8 @@
         ],
         "adaptToHead": true
       },
-      "designerNotes": ""
+      "designerNotes": "",
+      "contentRevision": "mole-whack-C03@0.9.0-design-v1@af4873ebc7dd"
     },
     {
       "schemaVersion": "1.0.0",
@@ -673,7 +679,8 @@
         ],
         "adaptToHead": true
       },
-      "designerNotes": ""
+      "designerNotes": "",
+      "contentRevision": "mole-whack-C04@0.9.0-design-v1@6e1d6d6dae30"
     },
     {
       "schemaVersion": "1.0.0",
@@ -846,7 +853,8 @@
         ],
         "adaptToHead": true
       },
-      "designerNotes": ""
+      "designerNotes": "",
+      "contentRevision": "mole-whack-C05@0.9.0-design-v1@75e38ee057b0"
     },
     {
       "schemaVersion": "1.0.0",
@@ -1059,7 +1067,8 @@
         ],
         "adaptToHead": true
       },
-      "designerNotes": ""
+      "designerNotes": "",
+      "contentRevision": "mole-whack-C06@0.9.0-design-v1@ffef6d0af6e9"
     }
   ]
 }

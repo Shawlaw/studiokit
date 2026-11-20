@@ -15,7 +15,12 @@
  *    - docs/arcade/0.9/DATA-INTEGRATION-REPORT.md（源 sha256、生成字节、校验摘要、字段取舍、重跑方式）
  *
  * 运行：node tools/arcade_09_data.mjs
+ *       node tools/arcade_09_data.mjs --check（仅内存生成并与入库文件逐字节比较，不写文件）
  * 输出确定性：不使用时间戳 / 随机数，同一输入重复运行输出字节一致（幂等）。
+ *
+ * 0.10.0 变更：每游戏 content 字段白名单（未知字段默认 FAIL）、supportedFeatures 概念、
+ * contentRevision（packVersion + stage id + content canonical hash）、运行时投影删除
+ * referenceCatchOrder（夹具保留）、SHA256SUMS.txt 以 canonical JSON + UTF-8 + LF 重算并纳入 --check。
  */
 import { createHash } from 'node:crypto';
 import { execFileSync } from 'node:child_process';
@@ -30,6 +35,8 @@ const LEVELS_DIR = path.join(DESIGN_PACK_DIR, 'levels');
 const RUNTIME_DIR = path.join(ROOT, 'apps', 'arcade', 'challenge');
 const FIXTURE_DIR = path.join(ROOT, 'tools', 'testdata', 'challenge');
 const REPORT_FILE = path.join(DESIGN_PACK_DIR, 'DATA-INTEGRATION-REPORT.md');
+const SHA256_FILE = path.join(DESIGN_PACK_DIR, 'SHA256SUMS.txt');
+const CHECK_MODE = process.argv.includes('--check');
 
 /** 13 款游戏的稳定顺序（与设计包 scripts/validate_levels.py 的 GAMES 一致）。 */
 const GAMES = [
@@ -52,10 +59,53 @@ const PACK_VERSION = '0.9.0-design-v1';
 const STAGE_SCHEMA_VERSION = '1.0.0';
 const RUNTIME_SCHEMA_VERSION = '1.0.0';
 const EXPECTED_STAGE_COUNT = 6;
-const EXPECTED_DESIGN_ASSERTIONS = 1088;
+const EXPECTED_DESIGN_ASSERTIONS = 1090;
 const REQUIRED_TEXT_FIELDS = ['title', 'goalStatement', 'decision', 'practicedSkill', 'discovery'];
 const WIN_CONDITION_KEYS = ['goal', 'win', 'complete', 'completion', 'endCondition'];
 const REQUIRED_ABILITY_VALUES = ['none', 'dash'];
+
+/**
+ * 每游戏 content 顶层字段白名单（0.10.0）。设计源新增字段必须在此登记并通过评审；
+ * 未知字段默认 FAIL（fail closed），防止误把剧透/未实现字段送进运行时。
+ */
+const CONTENT_WHITELIST = {
+  'shadow-leap': ['alternativeRoute', 'collectibles', 'coordinates', 'dashShortcut', 'deathPolicy', 'goal', 'mainRoute', 'platforms', 'playerSpawn', 'requiredAbility', 'stageRule', 'switches', 'winds'],
+  snowbells: ['bells', 'bonusRoutes', 'comboBreakPolicy', 'completion', 'coordinates', 'goalAfterLast', 'requiredSequence', 'startBell', 'wrongBellPolicy'],
+  'star-raid': ['bulletSafeSpace', 'endCondition', 'events', 'patternContract', 'playerSpawn', 'powerups', 'splits', 'stageDurationSec', 'startingHealth'],
+  'pendulum-tower': ['baseCenterX', 'boxes', 'coordinates', 'evaluation', 'limits', 'pendulum', 'physicsNote', 'win'],
+  'block-drop': ['boardHeight', 'boardTopToBottom', 'boardWidth', 'coordinates', 'gravityMode', 'gravityModel', 'holdEnabled', 'initialActivePiece', 'lose', 'pieceDefinitions', 'pieceQueue', 'placementSpace', 'spawnPolicy', 'win'],
+  'road-rush': ['bonusPreview', 'goal', 'laneChangeTimeSec', 'laneCount', 'pathProofModel', 'scoreRules', 'slotDurationSec', 'spawnerPolicy', 'startLane', 'timeline'],
+  'gold-miner': ['alternativeCatchOrders', 'complete', 'coordinates', 'designNote', 'fail', 'hazards', 'hook', 'initialTools', 'items', 'referenceCatchOrder', 'targetMoney', 'timeLimitSec'],
+  'brick-breaker': ['ball', 'brickRows', 'coordinates', 'mechanics', 'stuckBallRecovery', 'tokenLegend', 'win'],
+  'gravity-flip': ['bonusStars', 'collision', 'coordinates', 'distanceToFinish', 'gravity', 'obstacles', 'recommendedFlipWindows', 'scrollSpeedPxSec', 'startGravity', 'win'],
+  'snake-run': ['bonus', 'fruitQueue', 'fruitSpawnMode', 'grid', 'initialDirection', 'initialSnake', 'lose', 'stepIntervalMs', 'turnBuffer', 'walls', 'win'],
+  'mole-whack': ['events', 'grid', 'scoring', 'stageDurationSec', 'tapRule', 'time', 'win'],
+  'memory-flip': ['clues', 'faces', 'goal', 'grid', 'layoutTransforms', 'maxMismatches', 'previewSeconds', 'progressPersist', 'transformsApplyToEntireBoard', 'turnRules'],
+  'merge-2048': ['challengeSpawnPolicy', 'controls', 'grid', 'initialBoard', 'lose', 'maxValidMoves', 'scorePolicy', 'undoAllowed', 'undoDoesNotRefundMoveOnRankedAttempt', 'win'],
+};
+
+/**
+ * 每游戏声明支持的运行时特性（0.10.0 supportedFeatures 概念）。
+ * 关卡 integration.requiredFeatures 必须是该集合的子集；运行时 payload 也会带上该列表供游戏页自检。
+ */
+const SUPPORTED_FEATURES = {
+  'shadow-leap': ['challenge_mode', 'stage_gate', 'air_dash'],
+  snowbells: ['stage_bell_sequence', 'color_bells', 'bonus_route'],
+  'star-raid': ['fixed_wave_timeline', 'boss_phase_script', 'split_events'],
+  'pendulum-tower': ['commission_mode', 'fixed_marks', 'min_consecutive_tolerance', 'final_offset_cap'],
+  'block-drop': ['puzzle_board_preset', 'puzzle_piece_queue', 'clear_line_goal', 'place_by_place_gravity'],
+  'road-rush': ['fixed_traffic_timeline', 'time_expanded_lane_validator', 'bonus_preview'],
+  'gold-miner': ['fixed_item_layout', 'hook_time_simulator'],
+  'brick-breaker': ['fixed_brick_layout', 'gate_brick'],
+  'gravity-flip': ['fixed_obstacle_sequence', 'narrow_flip_windows'],
+  'snake-run': ['fixed_snake_map', 'scripted_fruit_queue', 'direction_queue'],
+  'mole-whack': ['scripted_spawn_wave'],
+  'memory-flip': ['fixed_memory_board', 'cognitive_clue_mode'],
+  'merge-2048': ['fixed_2048_board', 'challenge_no_spawn', 'target_tile', 'reference_steps'],
+};
+
+/** 运行时投影必须删除的剧透字段（夹具保留）。 */
+const RUNTIME_FORBIDDEN_CONTENT_KEYS = ['referenceCatchOrder'];
 
 let checks = 0;
 const failures = [];
@@ -80,6 +130,32 @@ function isFiniteNumber(value) {
 
 function sha256(buffer) {
   return createHash('sha256').update(buffer).digest('hex');
+}
+
+/** 递归按 key 排序的 canonical JSON（UTF-8 + LF 由调用方决定结尾）。 */
+function canonicalJson(value) {
+  if (Array.isArray(value)) return `[${value.map(canonicalJson).join(',')}]`;
+  if (value && typeof value === 'object') {
+    const keys = Object.keys(value).sort();
+    return `{${keys.map((key) => `${JSON.stringify(key)}:${canonicalJson(value[key])}`).join(',')}}`;
+  }
+  return JSON.stringify(value);
+}
+
+/** contentRevision = packVersion + stage id + content canonical hash（短哈希 12 位）。 */
+function contentRevision(stage) {
+  const hash = createHash('sha256').update(canonicalJson(stage.content), 'utf8').digest('hex').slice(0, 12);
+  return `${stage.id}@${PACK_VERSION}@${hash}`;
+}
+
+/** 生成 SHA256SUMS 条目文本：JSON 用 canonical JSON，其它文本统一 LF。 */
+function canonicalHashForFile(file, buffer) {
+  const name = path.basename(file).toLowerCase();
+  if (name.endsWith('.json')) {
+    const parsed = JSON.parse(buffer.toString('utf8'));
+    return sha256(Buffer.from(`${canonicalJson(parsed)}\n`, 'utf8'));
+  }
+  return sha256(Buffer.from(buffer.toString('utf8').replace(/\r\n/g, '\n'), 'utf8'));
 }
 
 function readJsonFile(file) {
@@ -221,6 +297,19 @@ function validateStage(stage, gameId, index, label) {
   const content = isPlainObject(stage.content) ? stage.content : null;
   if (!content) return;
   check(Object.keys(content).length > 0, `${stageLabel}: content must not be empty`);
+
+  // 0.10.0: 每游戏 content 字段白名单；未知字段默认 FAIL。
+  const whitelist = CONTENT_WHITELIST[gameId] || [];
+  for (const key of Object.keys(content)) {
+    check(whitelist.includes(key), `${stageLabel}: unknown content field ${key} (not in ${gameId} whitelist)`);
+  }
+  // 0.10.0: requiredFeatures 必须属于该游戏 supportedFeatures。
+  if (isPlainObject(stage.integration) && Array.isArray(stage.integration.requiredFeatures)) {
+    const supported = SUPPORTED_FEATURES[gameId] || [];
+    for (const feature of stage.integration.requiredFeatures) {
+      check(supported.includes(feature), `${stageLabel}: required feature ${feature} is not declared in ${gameId} supportedFeatures`);
+    }
+  }
   check(
     WIN_CONDITION_KEYS.some((key) => Object.prototype.hasOwnProperty.call(content, key)),
     `${stageLabel}: content must declare a win/complete condition (one of ${WIN_CONDITION_KEYS.join('/')})`
@@ -326,6 +415,12 @@ function parseDesignValidatorOutput(output) {
  * 3. 生成内容（运行时数据 / 测试夹具 / 索引 / 报告）
  * ---------------------------------------------------------- */
 function projectStage(stage) {
+  // 0.10.0 防剧透：运行时投影删除 referenceCatchOrder；夹具保留完整 stage。
+  const projectedContent = {};
+  for (const [key, value] of Object.entries(stage.content)) {
+    if (RUNTIME_FORBIDDEN_CONTENT_KEYS.includes(key)) continue;
+    projectedContent[key] = value;
+  }
   return {
     id: stage.id,
     stageNumber: stage.stageNumber,
@@ -337,7 +432,8 @@ function projectStage(stage) {
     discovery: stage.discovery,
     targetDurationSec: stage.targetDurationSec,
     requiredFeatures: stage.integration.requiredFeatures.slice(),
-    content: stage.content,
+    content: projectedContent,
+    contentRevision: contentRevision(stage),
   };
 }
 
@@ -350,6 +446,7 @@ function renderRuntimeFile(game) {
     gameId: game.gameId,
     gameName: game.gameName,
     packVersion: PACK_VERSION,
+    supportedFeatures: (SUPPORTED_FEATURES[game.gameId] || []).slice(),
     stages: game.stages.map(projectStage),
   };
   const text =
@@ -369,7 +466,7 @@ function findForbiddenKey(value, trail) {
     return null;
   }
   for (const key of Object.keys(value)) {
-    if (key === 'referencePlan' || key === 'acceptance') return `${trail}.${key}`;
+    if (key === 'referencePlan' || key === 'acceptance' || RUNTIME_FORBIDDEN_CONTENT_KEYS.includes(key)) return `${trail}.${key}`;
     const hit = findForbiddenKey(value[key], `${trail}.${key}`);
     if (hit) return hit;
   }
@@ -388,7 +485,8 @@ function renderFixture(game) {
     gameId: game.gameId,
     gameName: game.gameName,
     sourceFile: game.sourceFile,
-    stages: game.stages,
+    supportedFeatures: (SUPPORTED_FEATURES[game.gameId] || []).slice(),
+    stages: game.stages.map((stage) => ({ ...stage, contentRevision: contentRevision(stage) })),
   };
   return `${JSON.stringify(payload, null, 2)}\n`;
 }
@@ -437,6 +535,34 @@ function buildOutputs(games) {
   };
   const indexText = `${JSON.stringify(index, null, 2)}\n`;
   return { runtime, fixtures, indexText };
+}
+
+/**
+ * 生成 SHA256SUMS.txt（canonical JSON + UTF-8 + LF）。
+ * 哈希对象：设计包内除 SHA256SUMS.txt 自身以外的所有文件；路径相对设计包目录。
+ */
+function collectSha256Entries(overrides = {}) {
+  const entries = [];
+  const walk = (dir, rel) => {
+    for (const name of fs.readdirSync(dir).sort()) {
+      const full = path.join(dir, name);
+      const relativePath = rel ? `${rel}/${name}` : name;
+      if (relativePath === 'SHA256SUMS.txt') continue;
+      const stat = fs.statSync(full);
+      if (stat.isDirectory()) walk(full, relativePath);
+      else if (stat.isFile()) {
+        const buffer = Object.prototype.hasOwnProperty.call(overrides, relativePath)
+          ? Buffer.from(overrides[relativePath], 'utf8')
+          : fs.readFileSync(full);
+        entries.push({ file: relativePath, hash: canonicalHashForFile(full, buffer) });
+      }
+    }
+  };
+  walk(DESIGN_PACK_DIR, '');
+  entries.sort((a, b) => a.file.localeCompare(b.file));
+  const header = '# canonical JSON (sorted keys, UTF-8, LF) for *.json; LF-normalized UTF-8 for other text files.';
+  const verify = '# verify with: node tools/arcade_09_data.mjs --check';
+  return `${header}\n${verify}\n${entries.map((item) => `${item.hash}  ${item.file}`).join('\n')}\n`;
 }
 
 function renderReport(games, outputs, designResult, designParsed) {
@@ -495,15 +621,18 @@ function renderReport(games, outputs, designResult, designParsed) {
   lines.push("window.ArcadeChallengeData = window.ArcadeChallengeData || {};");
   lines.push("window.ArcadeChallengeData['<gameId>'] = {");
   lines.push("  schemaVersion: '1.0.0', gameId, gameName, packVersion: '0.9.0-design-v1',");
+  lines.push('  supportedFeatures: [...], // 每游戏声明的运行时特性白名单');
   lines.push('  stages: [{ id, stageNumber, title, difficulty, goalStatement, decision,');
-  lines.push('             practicedSkill, discovery, targetDurationSec, requiredFeatures, content }]');
+  lines.push('             practicedSkill, discovery, targetDurationSec, requiredFeatures, content,');
+  lines.push('             contentRevision }] // contentRevision = stageId@packVersion@contentHash12');
   lines.push('};');
   lines.push('```');
   lines.push('');
-  lines.push('- **保留**：`id` / `stageNumber` / `title` / `difficulty` / `goalStatement` / `decision` / `practicedSkill` / `discovery` / `targetDurationSec` / `requiredFeatures`（由 `integration.requiredFeatures` 拍平）/ `content`（设计源原样，含坐标语义、固定盘面、时间轴、棋子队列等权威规则）。');
+  lines.push('- **保留**：`id` / `stageNumber` / `title` / `difficulty` / `goalStatement` / `decision` / `practicedSkill` / `discovery` / `targetDurationSec` / `requiredFeatures`（由 `integration.requiredFeatures` 拍平）/ `content`（按每游戏白名单校验后原样保留）/ `contentRevision`（packVersion + stage id + content canonical hash）。');
   lines.push('- **不进入运行时**：`referencePlan`（设计者参考路线/答案）、`acceptance`（验收脚本与自动回放）、`integration` 对象本体、`chapter` / `designerNotes`（设计备注）。目的：防剧透 + 运行时最小化；测试所需信息在夹具文件中。');
-  lines.push('- **测试夹具** `tools/testdata/challenge/<gameId>.json` 保留完整 stage（含 `referencePlan` / `acceptance` / `integration`），仅供测试与 Reviewer 使用，不随静态站点发布。');
-  lines.push('- `content` 内的设计字段不做改名/裁剪（例如黄金矿工的 `referenceCatchOrder` 属于设计 content，测试可用；游戏实现只按 `content` 构建关卡，不按屏幕坐标硬编码）。');
+  lines.push('- **0.10.0 防剧透收敛**：`content.referenceCatchOrder` 从运行时投影删除（黄金矿工运行时不再拿到抓序答案）；测试夹具仍完整保留该字段。运行时最小化旨在避免误用，不声称源码保密。');
+  lines.push('- **测试夹具** `tools/testdata/challenge/<gameId>.json` 保留完整 stage（含 `referencePlan` / `acceptance` / `integration` / `referenceCatchOrder` / `contentRevision`），仅供测试与 Reviewer 使用，不随静态站点发布。');
+  lines.push('- **0.10.0 content 字段白名单**：每游戏 `CONTENT_WHITELIST` 列出允许的 content 顶层字段；未知字段默认 FAIL（fail closed），防止未评审字段进入运行时。`integration.requiredFeatures` 必须是 `SUPPORTED_FEATURES[gameId]` 子集，否则 FAIL。');
   lines.push('- 数据由页面 `<script src="../challenge/<gameId>.js">` 同步加载：无 fetch、无网络、无构建步骤；缺失或不足 6 关时 `A.Challenge` fail closed 返回空。');
   lines.push('');
   lines.push('## 4. 校验输出摘要');
@@ -519,18 +648,20 @@ function renderReport(games, outputs, designResult, designParsed) {
   lines.push('## 5. 如何重跑');
   lines.push('');
   lines.push('```powershell');
-  lines.push('node tools/arcade_09_data.mjs');
+  lines.push('node tools/arcade_09_data.mjs            # 生成并写入全部派生文件');
+  lines.push('node tools/arcade_09_data.mjs --check    # 仅内存生成，逐字节对比入库文件，不写文件');
   lines.push('```');
   lines.push('');
   lines.push('- 前置：Node ≥ 22（仅用内置模块，零 npm 依赖）、`py -3`（Python 3）可运行设计包校验脚本。');
-  lines.push('- 行为：读设计源 → 结构校验（fail closed，非 0 退出且不写文件）→ 复跑设计包校验（要求 1088 断言 PASS）→ 生成 13 个运行时数据、13 个测试夹具、`index.json` 与本报告。');
+  lines.push(`- 行为：读设计源 → 结构校验（含 content 白名单 / supportedFeatures，fail closed，非 0 退出且不写文件）→ 复跑设计包校验（要求 ${EXPECTED_DESIGN_ASSERTIONS} 断言 PASS）→ 内存生成 13 个运行时数据、13 个测试夹具、index.json、本报告与 SHA256SUMS.txt → 写入或 --check 对比。`);
   lines.push('- 校验生成物语法：`node --check apps/arcade/challenge/shadow-leap.js`（13 个文件均应通过）。');
-  lines.push('- 幂等：重复运行输出字节一致；如需核对可用 `Get-FileHash` / `sha256sum`。');
+  lines.push('- 幂等：重复运行输出字节一致；`--check` 会用 canonical JSON（递归排序 key、UTF-8、LF）重算 SHA256SUMS.txt 并与入库文件逐字节比较，任一漂移即 FAIL。');
+  lines.push('- SHA256SUMS.txt 采用 canonical JSON + UTF-8 + LF 口径，不能用 `sha256sum -c` 直接按原始字节校验；请用 `--check`。');
   lines.push('');
   lines.push('## 6. 已知事项 / 发布前处理');
   lines.push('');
-  lines.push('- `apps/arcade/sw.js` 的 shell 预缓存包含这 13 个数据文件；0.8.0 发布时缓存 `VERSION` 已升至 `0.8.0`，老用户会更新缓存。');
-  lines.push('- `ARCADE_VERSION` 为 `0.8.0`；不存在构建步骤，生成物入库供静态站点直接加载。');
+  lines.push('- `apps/arcade/sw.js` 的 shell 预缓存包含这 13 个数据文件；缓存版本由 Lead 在 0.10.0 版本链中统一处理。');
+  lines.push('- 版本目标为 Arcade 0.10.0；`ARCADE_VERSION` / manifest / README 等版本链由 Lead 统一同步，本生成器只负责数据派生。');
   lines.push('- 设计包校验只证明设计数据存在参考解，不代表真实引擎物理/移动端可玩；后者由各游戏 `impl/<gameId>.md` 与测试证据补齐。');
   lines.push('');
   return lines.join('\n');
@@ -540,6 +671,7 @@ function renderReport(games, outputs, designResult, designParsed) {
  * 4. 主流程
  * ---------------------------------------------------------- */
 function main() {
+  console.log(`Arcade 0.9 data: mode=${CHECK_MODE ? '--check (memory only, no writes)' : 'generate (writes derived files)'}`);
   collectLevelFiles();
   const games = loadGames();
 
@@ -566,11 +698,46 @@ function main() {
 
   const outputs = buildOutputs(games);
   const reportText = renderReport(games, outputs, designResult, designParsed);
+  // SHA256SUMS 依赖报告内容，故报告以内存文本覆盖后再算哈希。
+  const shaText = collectSha256Entries({ 'DATA-INTEGRATION-REPORT.md': reportText });
 
   if (failures.length) {
     for (const message of failures) console.error(`FAIL: ${message}`);
     console.error(`Arcade 0.9 data: FAILED (${checks} checks, ${failures.length} errors); no files written.`);
     process.exit(1);
+  }
+
+  const expected = new Map();
+  for (const game of games) {
+    expected.set(path.join(RUNTIME_DIR, `${game.gameId}.js`), outputs.runtime.get(game.gameId));
+    expected.set(path.join(FIXTURE_DIR, `${game.gameId}.json`), outputs.fixtures.get(game.gameId));
+  }
+  expected.set(path.join(FIXTURE_DIR, 'index.json'), outputs.indexText);
+  expected.set(REPORT_FILE, reportText);
+  expected.set(SHA256_FILE, shaText);
+
+  if (CHECK_MODE) {
+    let drift = 0;
+    for (const [file, text] of expected) {
+      if (!fs.existsSync(file)) {
+        console.error(`CHECK FAIL: missing generated file ${relative(file)}`);
+        drift += 1;
+        continue;
+      }
+      const actual = fs.readFileSync(file, 'utf8');
+      if (actual !== text) {
+        console.error(`CHECK FAIL: drift in ${relative(file)} (expected ${Buffer.byteLength(text, 'utf8')} bytes, actual ${Buffer.byteLength(actual, 'utf8')} bytes)`);
+        drift += 1;
+      }
+    }
+    if (drift) {
+      console.error(`Arcade 0.9 data --check: FAILED (${drift} file(s) drifted); no files written.`);
+      process.exit(1);
+    }
+    console.log(`Arcade 0.9 data --check: PASS (${expected.size} generated files byte-identical, includes SHA256SUMS.txt canonical hashes).`);
+    console.log(`Self-check: PASS (${checks} assertions); Design pack validator: PASS (${designParsed.total} assertions).`);
+    console.log('OK: memory-only generation matches repository; no files written.');
+    return;
   }
 
   const write = (file, text) => {
@@ -584,13 +751,15 @@ function main() {
   for (const game of games) fixtureBytes += write(path.join(FIXTURE_DIR, `${game.gameId}.json`), outputs.fixtures.get(game.gameId));
   fixtureBytes += write(path.join(FIXTURE_DIR, 'index.json'), outputs.indexText);
   const reportBytes = write(REPORT_FILE, reportText);
+  const shaBytes = write(SHA256_FILE, shaText);
 
   console.log(`Arcade 0.9 data: ${games.length} games, ${games.reduce((sum, game) => sum + game.stages.length, 0)} stages, self-check PASS (${checks} assertions)`);
   console.log(`Design pack validator: PASS (${designParsed.total} assertions: ${designParsed.categories.map((item) => `${item.name} ${item.count}`).join(', ')})`);
   console.log(`Generated runtime data: ${RUNTIME_DIR.replace(ROOT + path.sep, '')} (${games.length} files, ${runtimeBytes} bytes)`);
   console.log(`Generated test fixtures: ${FIXTURE_DIR.replace(ROOT + path.sep, '')} (${games.length + 1} files, ${fixtureBytes} bytes)`);
   console.log(`Generated report: ${relative(REPORT_FILE)} (${reportBytes} bytes)`);
-  console.log('OK: rerun is byte-identical (deterministic output).');
+  console.log(`Generated checksums: ${relative(SHA256_FILE)} (${shaBytes} bytes, canonical JSON + UTF-8 + LF)`);
+  console.log('OK: rerun is byte-identical (deterministic output); verify with --check.');
 }
 
 main();

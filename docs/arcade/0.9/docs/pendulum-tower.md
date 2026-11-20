@@ -487,7 +487,8 @@
   "win": {
     "floorsAtLeast": 6,
     "noCollapse": true,
-    "allMarkTargetsWithinTolerance": false
+    "allMarkTargetsWithinTolerance": false,
+    "minConsecutiveWithinTolerance": 3
   },
   "evaluation": {
     "bronze": "完成并保持稳定",
@@ -528,7 +529,7 @@
 ### C06 · 城市小塔
 
 - **通关目标**：综合六层，并保持塔顶中心距基座≤15px
-- **关卡决策**：两种可行箱序的风险收益
+- **关卡决策**：偏置修正与终态中心控制的权衡
 - **练习重点**：交替偏置、修正和有限容错
 - **探索反馈**：结束时展示结构剖面与偏移走势图
 - **建议有效时长**：60–170 秒
@@ -598,7 +599,8 @@
   "win": {
     "floorsAtLeast": 6,
     "noCollapse": true,
-    "allMarkTargetsWithinTolerance": false
+    "allMarkTargetsWithinTolerance": false,
+    "maxFinalTopCenterOffsetPx": 15
   },
   "evaluation": {
     "bronze": "完成并保持稳定",

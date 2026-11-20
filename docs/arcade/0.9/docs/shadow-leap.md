@@ -102,7 +102,7 @@
     "type": "gate",
     "xCenter": 210,
     "height": 402,
-    "radius": 38
+    "radius": 20
   },
   "requiredAbility": "none",
   "stageRule": "side-scroll",
@@ -248,7 +248,7 @@
     "type": "gate",
     "xCenter": 210,
     "height": 405,
-    "radius": 38
+    "radius": 20
   },
   "requiredAbility": "none",
   "stageRule": "fork",
@@ -374,7 +374,7 @@
     "type": "gate",
     "xCenter": 225,
     "height": 428,
-    "radius": 38
+    "radius": 20
   },
   "requiredAbility": "dash",
   "stageRule": "gap",
@@ -454,9 +454,9 @@
     },
     {
       "id": "p2",
-      "xCenter": 322,
+      "xCenter": 352,
       "height": 152,
-      "width": 86,
+      "width": 74,
       "kind": "moving",
       "amplitude": 14,
       "periodSec": 3.2,
@@ -516,12 +516,20 @@
     "type": "gate",
     "xCenter": 210,
     "height": 431,
-    "radius": 38
+    "radius": 20,
+    "requireDash": true
   },
   "requiredAbility": "dash",
   "stageRule": "wind",
   "collectibles": [],
   "deathPolicy": "落出关卡边界后从最近房间检查点重试，关卡任务不回退",
+  "dashShortcut": {
+    "required": true,
+    "kind": "gap",
+    "fromPlatform": "p1",
+    "toPlatform": "p2",
+    "note": "捷径缺口仅影冲可越；长路线 alternativeRoute 不使用影冲仍可通关"
+  },
   "winds": [
     {
       "heightFrom": 110,
@@ -551,7 +559,7 @@
     "q3",
     "p4"
   ],
-  "tactics": "风区域 height=[115,225] 加速度按 x 方向±65px/s²；风矢量始终可视"
+  "tactics": "风区域 height=[115,225] 加速度按 x 方向±65px/s²；p1→p2 捷径缺口需影冲，q2/q3 长路线可无影冲"
 }
 ```
 
@@ -562,7 +570,7 @@
 3. **移动端**：左右持续按压与影冲按钮支持两指并发，屏幕边缘影冲按钮≥44CSS px
 4. **AFK**：任一有效游玩时刻切后台/锁屏/恢复，剩余时间、玩家位置与未完成目标不变化；恢复后手动继续
 
-**策划备注**：风区域 height=[115,225] 加速度按 x 方向±65px/s²；风矢量始终可视
+**策划备注**：风区域 height=[115,225] 加速度按 x 方向±65px/s²；p1→p2 捷径缺口需影冲，q2/q3 长路线可无影冲
 
 ---
 
@@ -620,9 +628,9 @@
     },
     {
       "id": "r2",
-      "xCenter": 357,
+      "xCenter": 378,
       "height": 153,
-      "width": 78,
+      "width": 64,
       "kind": "static"
     },
     {
@@ -674,7 +682,8 @@
     "type": "gate",
     "xCenter": 210,
     "height": 425,
-    "radius": 38
+    "radius": 20,
+    "requireDash": true
   },
   "requiredAbility": "dash",
   "stageRule": "fork",
@@ -685,7 +694,14 @@
       "optional": true
     }
   ],
-  "deathPolicy": "落出关卡边界后从最近房间检查点重试，关卡任务不回退"
+  "deathPolicy": "落出关卡边界后从最近房间检查点重试，关卡任务不回退",
+  "dashShortcut": {
+    "required": true,
+    "kind": "gap",
+    "fromPlatform": "p1",
+    "toPlatform": "l2",
+    "note": "捷径缺口仅影冲可越；长路线 alternativeRoute 不使用影冲仍可通关"
+  }
 }
 ```
 
@@ -708,7 +724,7 @@
     "r4",
     "p5"
   ],
-  "tactics": "影冲短路与主线都能通关；卷轴仅影响收藏记录，不影响解锁"
+  "tactics": "右侧 r2/r3/r4 影冲捷径需真实缺口冲刺；左侧 l2/l3/l4 长路线无影冲可通关；卷轴仅影响收藏记录"
 }
 ```
 
@@ -719,7 +735,7 @@
 3. **移动端**：左右持续按压与影冲按钮支持两指并发，屏幕边缘影冲按钮≥44CSS px
 4. **AFK**：任一有效游玩时刻切后台/锁屏/恢复，剩余时间、玩家位置与未完成目标不变化；恢复后手动继续
 
-**策划备注**：影冲短路与主线都能通关；卷轴仅影响收藏记录，不影响解锁
+**策划备注**：右侧 r2/r3/r4 影冲捷径需真实缺口冲刺；左侧 l2/l3/l4 长路线无影冲可通关；卷轴仅影响收藏记录
 
 ---
 
@@ -766,9 +782,9 @@
     },
     {
       "id": "right-switch",
-      "xCenter": 326,
+      "xCenter": 350,
       "height": 159,
-      "width": 96,
+      "width": 72,
       "kind": "moving",
       "amplitude": 13,
       "periodSec": 3.4,
@@ -820,13 +836,21 @@
     "type": "gate",
     "xCenter": 210,
     "height": 435,
-    "radius": 38,
+    "radius": 20,
+    "requireDash": true,
     "unlock": "all-switches"
   },
   "requiredAbility": "dash",
   "stageRule": "two-switch",
   "collectibles": [],
   "deathPolicy": "落出关卡边界后从最近房间检查点重试，关卡任务不回退",
+  "dashShortcut": {
+    "required": true,
+    "kind": "gap",
+    "fromPlatform": "p1",
+    "toPlatform": "left-switch",
+    "note": "捷径缺口仅影冲可越；长路线 alternativeRoute 不使用影冲仍可通关"
+  },
   "switches": [
     {
       "platformId": "left-switch",
@@ -863,7 +887,7 @@
     "upper",
     "p6"
   ],
-  "tactics": "开关触发顺序不限；回中心平台不会重置开关；死亡从房间检查点重试"
+  "tactics": "右侧开关平台缺口需影冲捷径，左侧开关经中心平台长路线可无影冲到达；顺序不限；死亡从房间检查点重试"
 }
 ```
 
@@ -874,7 +898,7 @@
 3. **移动端**：左右持续按压与影冲按钮支持两指并发，屏幕边缘影冲按钮≥44CSS px
 4. **AFK**：任一有效游玩时刻切后台/锁屏/恢复，剩余时间、玩家位置与未完成目标不变化；恢复后手动继续
 
-**策划备注**：开关触发顺序不限；回中心平台不会重置开关；死亡从房间检查点重试
+**策划备注**：右侧开关平台缺口需影冲捷径，左侧开关经中心平台长路线可无影冲到达；顺序不限；死亡从房间检查点重试
 
 ---
 

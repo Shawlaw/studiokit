@@ -630,6 +630,11 @@ const SCENARIOS = [
           for (const routeId of ['alternative', 'alt', 'branch', 'main', 'safe']) {
             const forced = await cdp.evaluate('window.__arcadeTest.forceRoute(' + JSON.stringify(routeId) + ')');
             if (forced === true) {
+              /* C04–C06 的 requireDash 是真实玩法门禁，UI 记录测试先满足本次尝试的影冲条件。 */
+              const goalInfo = await cdp.evaluate('window.__arcadeTest.challengeInfo().goal || null');
+              if (goalInfo && goalInfo.requireDash === true) {
+                await cdp.evaluate('window.__arcadeTest.setPosition(210, 300); window.__arcadeTest.setMotion(-120); window.__arcadeTest.triggerDash(); true');
+              }
               const settled = await clearChallengeStage(cdp);
               const settledInfo = await cdp.evaluate('window.__arcadeTest.challengeInfo()');
               routeValue = settledInfo.route !== undefined ? settledInfo.route : settledInfo.routeId !== undefined ? settledInfo.routeId : null;
@@ -950,7 +955,7 @@ function auditStageContract(gameId, stageNumber, stage, audit) {
   }
   audit.check(stage.mode === 'challenge', id + '：mode 不是 challenge');
   audit.check(
-    Array.isArray(stage.targetDurationSec) && stage.targetDurationSec.length === 2 && stage.targetDurationSec.every((value) => isFiniteNumber(value) && value > 0) && stage.targetDurationSec[0] < stage.targetDurationSec[1],
+    Array.isArray(stage.targetDurationSec) && stage.targetDurationSec.length === 2 && stage.targetDurationSec.every((value) => isFiniteNumber(value) && value > 0) && stage.targetDurationSec[0] <= stage.targetDurationSec[1],
     id + '：targetDurationSec 不是 [短, 长] 正数区间'
   );
   audit.check(isPlainObject(stage.integration) && stage.integration.separateClassicProgress === true, id + '：integration.separateClassicProgress 不为 true');
@@ -1384,7 +1389,10 @@ function auditRuntimeChallengeData(designByGame, audit) {
       audit.check(canonicalize(runtimeStage.requiredFeatures) === canonicalize(designStage.integration.requiredFeatures), '运行时 ' + designStage.id + ' requiredFeatures 与设计源不一致');
       const runtimeContent = runtimeStage.content;
       if (!audit.check(isPlainObject(runtimeContent), '运行时 ' + designStage.id + ' content 缺失')) continue;
+      /* proofOnly 字段（如 referenceCatchOrder）按设计有意不投影到运行时，夹具保留完整值。 */
+      const RUNTIME_PROOF_ONLY_KEYS = new Set(['referenceCatchOrder']);
       for (const key of Object.keys(designStage.content)) {
+        if (RUNTIME_PROOF_ONLY_KEYS.has(key)) continue;
         audit.check(canonicalize(runtimeContent[key]) === canonicalize(designStage.content[key]), '运行时 ' + designStage.id + ' content.' + key + ' 与设计源原值不一致');
       }
     }

@@ -4,6 +4,11 @@
   "gameId": "snake-run",
   "gameName": "贪吃蛇",
   "sourceFile": "snake-run.html",
+  "supportedFeatures": [
+    "fixed_snake_map",
+    "scripted_fruit_queue",
+    "direction_queue"
+  ],
   "stages": [
     {
       "schemaVersion": "1.0.0",
@@ -140,7 +145,8 @@
         ],
         "adaptToHead": true
       },
-      "designerNotes": "BFS 参考路线只是可行路线，不保证步数最优；不要在UI中强行提示整条路线"
+      "designerNotes": "BFS 参考路线只是可行路线，不保证步数最优；不要在UI中强行提示整条路线",
+      "contentRevision": "snake-run-C01@0.9.0-design-v1@881e200a420d"
     },
     {
       "schemaVersion": "1.0.0",
@@ -286,7 +292,8 @@
         ],
         "adaptToHead": true
       },
-      "designerNotes": "BFS 参考路线只是可行路线，不保证步数最优；不要在UI中强行提示整条路线"
+      "designerNotes": "BFS 参考路线只是可行路线，不保证步数最优；不要在UI中强行提示整条路线",
+      "contentRevision": "snake-run-C02@0.9.0-design-v1@6a163c2edbda"
     },
     {
       "schemaVersion": "1.0.0",
@@ -450,7 +457,8 @@
         ],
         "adaptToHead": true
       },
-      "designerNotes": "BFS 参考路线只是可行路线，不保证步数最优；不要在UI中强行提示整条路线"
+      "designerNotes": "BFS 参考路线只是可行路线，不保证步数最优；不要在UI中强行提示整条路线",
+      "contentRevision": "snake-run-C03@0.9.0-design-v1@3e3d420e2e71"
     },
     {
       "schemaVersion": "1.0.0",
@@ -689,7 +697,8 @@
         ],
         "adaptToHead": true
       },
-      "designerNotes": "BFS 参考路线只是可行路线，不保证步数最优；不要在UI中强行提示整条路线"
+      "designerNotes": "BFS 参考路线只是可行路线，不保证步数最优；不要在UI中强行提示整条路线",
+      "contentRevision": "snake-run-C04@0.9.0-design-v1@10b40f6c4f41"
     },
     {
       "schemaVersion": "1.0.0",
@@ -941,7 +950,8 @@
         ],
         "adaptToHead": true
       },
-      "designerNotes": "BFS 参考路线只是可行路线，不保证步数最优；不要在UI中强行提示整条路线"
+      "designerNotes": "BFS 参考路线只是可行路线，不保证步数最优；不要在UI中强行提示整条路线",
+      "contentRevision": "snake-run-C05@0.9.0-design-v1@c0495f8344f8"
     },
     {
       "schemaVersion": "1.0.0",
@@ -1195,7 +1205,8 @@
         ],
         "adaptToHead": true
       },
-      "designerNotes": "BFS 参考路线只是可行路线，不保证步数最优；不要在UI中强行提示整条路线"
+      "designerNotes": "BFS 参考路线只是可行路线，不保证步数最优；不要在UI中强行提示整条路线",
+      "contentRevision": "snake-run-C06@0.9.0-design-v1@35ac88d0bed1"
     }
   ]
 }

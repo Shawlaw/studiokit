@@ -89,7 +89,7 @@
       "type": "gate",
       "xCenter": 210,
       "height": 402,
-      "radius": 38
+      "radius": 20
     },
     "requiredAbility": "none",
     "stageRule": "side-scroll",

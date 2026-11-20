@@ -89,7 +89,7 @@
       "type": "gate",
       "xCenter": 225,
       "height": 428,
-      "radius": 38
+      "radius": 20
     },
     "requiredAbility": "dash",
     "stageRule": "gap",

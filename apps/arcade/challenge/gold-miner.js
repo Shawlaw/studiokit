@@ -5,6 +5,10 @@ window.ArcadeChallengeData['gold-miner'] = {
   "gameId": "gold-miner",
   "gameName": "黄金矿工",
   "packVersion": "0.9.0-design-v1",
+  "supportedFeatures": [
+    "fixed_item_layout",
+    "hook_time_simulator"
+  ],
   "stages": [
     {
       "id": "gold-miner-C01",
@@ -74,11 +78,6 @@ window.ArcadeChallengeData['gold-miner'] = {
             "aimAngleDeg": -12.7
           }
         ],
-        "referenceCatchOrder": [
-          "m1",
-          "m2",
-          "l1"
-        ],
         "initialTools": {
           "aim": 0,
           "winch": 0,
@@ -96,7 +95,8 @@ window.ArcadeChallengeData['gold-miner'] = {
         "complete": "达标即可选择立即结算，不要求抓光",
         "fail": "倒计时归零且未达标",
         "hazards": "TNT碰到立即销毁本次抓取收益，损失时间；不直接结束全局游戏"
-      }
+      },
+      "contentRevision": "gold-miner-C01@0.9.0-design-v1@7959cc8f0097"
     },
     {
       "id": "gold-miner-C02",
@@ -166,10 +166,6 @@ window.ArcadeChallengeData['gold-miner'] = {
             "aimAngleDeg": -7.8
           }
         ],
-        "referenceCatchOrder": [
-          "d1",
-          "m1"
-        ],
         "initialTools": {
           "aim": 0,
           "winch": 0,
@@ -187,7 +183,8 @@ window.ArcadeChallengeData['gold-miner'] = {
         "complete": "达标即可选择立即结算，不要求抓光",
         "fail": "倒计时归零且未达标",
         "hazards": "TNT碰到立即销毁本次抓取收益，损失时间；不直接结束全局游戏"
-      }
+      },
+      "contentRevision": "gold-miner-C02@0.9.0-design-v1@c2e1db4c7ca4"
     },
     {
       "id": "gold-miner-C03",
@@ -241,25 +238,21 @@ window.ArcadeChallengeData['gold-miner'] = {
           {
             "id": "r1",
             "type": "rockS",
-            "x": 174,
-            "y": 370,
+            "x": 85,
+            "y": 330,
             "value": 15,
             "weight": 9,
-            "aimAngleDeg": -7.7
+            "aimAngleDeg": -28.9
           },
           {
             "id": "m1",
             "type": "goldM",
             "x": 360,
             "y": 590,
-            "value": 150,
+            "value": 300,
             "weight": 4,
             "aimAngleDeg": 17.2
           }
-        ],
-        "referenceCatchOrder": [
-          "l1",
-          "d1"
         ],
         "initialTools": {
           "aim": 0,
@@ -277,8 +270,10 @@ window.ArcadeChallengeData['gold-miner'] = {
         },
         "complete": "达标即可选择立即结算，不要求抓光",
         "fail": "倒计时归零且未达标",
-        "hazards": "TNT碰到立即销毁本次抓取收益，损失时间；不直接结束全局游戏"
-      }
+        "hazards": "TNT碰到立即销毁本次抓取收益，损失时间；不直接结束全局游戏",
+        "designNote": "m1.value=300（非标准 goldM 150）；r1 已从 (174,370) 移到 (85,330) 避开 l1 射线"
+      },
+      "contentRevision": "gold-miner-C03@0.9.0-design-v1@4ed92b8de405"
     },
     {
       "id": "gold-miner-C04",
@@ -348,10 +343,6 @@ window.ArcadeChallengeData['gold-miner'] = {
             "aimAngleDeg": -7.5
           }
         ],
-        "referenceCatchOrder": [
-          "d1",
-          "d2"
-        ],
         "initialTools": {
           "aim": 0,
           "winch": 0,
@@ -369,7 +360,8 @@ window.ArcadeChallengeData['gold-miner'] = {
         "complete": "达标即可选择立即结算，不要求抓光",
         "fail": "倒计时归零且未达标",
         "hazards": "TNT碰到立即销毁本次抓取收益，损失时间；不直接结束全局游戏"
-      }
+      },
+      "contentRevision": "gold-miner-C04@0.9.0-design-v1@d858fda0969a"
     },
     {
       "id": "gold-miner-C05",
@@ -378,11 +370,11 @@ window.ArcadeChallengeData['gold-miner'] = {
       "difficulty": 5,
       "goalStatement": "在倒计时内取得至少$1000",
       "decision": "选择短钩低价/长钩高价和炸药风险",
-      "practicedSkill": "规划三次抓取路线",
+      "practicedSkill": "在30秒内规划两次主要抓取顺序",
       "discovery": "抢近件还是等高值件的摆动相位",
       "targetDurationSec": [
         30,
-        52
+        30
       ],
       "requiredFeatures": [
         "fixed_item_layout",
@@ -390,7 +382,7 @@ window.ArcadeChallengeData['gold-miner'] = {
       ],
       "content": {
         "coordinates": "420×740；钩爪轴(210,104)；item.xy为逻辑像素；角度为 atan2(x-210,y-104) 角度，向右为正；禁止自动随机重排",
-        "timeLimitSec": 52,
+        "timeLimitSec": 30,
         "targetMoney": 1000,
         "items": [
           {
@@ -439,11 +431,6 @@ window.ArcadeChallengeData['gold-miner'] = {
             "aimAngleDeg": 8.7
           }
         ],
-        "referenceCatchOrder": [
-          "d1",
-          "l1",
-          "m1"
-        ],
         "initialTools": {
           "aim": 0,
           "winch": 0,
@@ -460,8 +447,27 @@ window.ArcadeChallengeData['gold-miner'] = {
         },
         "complete": "达标即可选择立即结算，不要求抓光",
         "fail": "倒计时归零且未达标",
-        "hazards": "TNT碰到立即销毁本次抓取收益，损失时间；不直接结束全局游戏"
-      }
+        "hazards": "TNT碰到立即销毁本次抓取收益，损失时间；不直接结束全局游戏",
+        "alternativeCatchOrders": [
+          {
+            "order": [
+              "d1",
+              "l1",
+              "m1"
+            ],
+            "totalValue": 1100
+          },
+          {
+            "order": [
+              "l1",
+              "d1",
+              "m1"
+            ],
+            "totalValue": 1100
+          }
+        ]
+      },
+      "contentRevision": "gold-miner-C05@0.9.0-design-v1@9dd5828bf57e"
     },
     {
       "id": "gold-miner-C06",
@@ -540,11 +546,6 @@ window.ArcadeChallengeData['gold-miner'] = {
             "aimAngleDeg": 20.6
           }
         ],
-        "referenceCatchOrder": [
-          "d1",
-          "d2",
-          "l1"
-        ],
         "initialTools": {
           "aim": 0,
           "winch": 0,
@@ -562,7 +563,8 @@ window.ArcadeChallengeData['gold-miner'] = {
         "complete": "达标即可选择立即结算，不要求抓光",
         "fail": "倒计时归零且未达标",
         "hazards": "TNT碰到立即销毁本次抓取收益，损失时间；不直接结束全局游戏"
-      }
+      },
+      "contentRevision": "gold-miner-C06@0.9.0-design-v1@34bb6f9d1514"
     }
   ]
 };

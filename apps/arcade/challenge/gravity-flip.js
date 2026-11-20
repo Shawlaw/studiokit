@@ -5,6 +5,10 @@ window.ArcadeChallengeData['gravity-flip'] = {
   "gameId": "gravity-flip",
   "gameName": "重力翻转",
   "packVersion": "0.9.0-design-v1",
+  "supportedFeatures": [
+    "fixed_obstacle_sequence",
+    "narrow_flip_windows"
+  ],
   "stages": [
     {
       "id": "gravity-flip-C01",
@@ -55,26 +59,27 @@ window.ArcadeChallengeData['gravity-flip'] = {
         ],
         "recommendedFlipWindows": [
           {
-            "xCenter": 250,
+            "xCenter": 210,
             "toward": "ceiling",
-            "tolerancePx": 70
+            "tolerancePx": 35
           },
           {
-            "xCenter": 790,
+            "xCenter": 750,
             "toward": "floor",
-            "tolerancePx": 70
+            "tolerancePx": 35
           },
           {
-            "xCenter": 1310,
+            "xCenter": 1270,
             "toward": "ceiling",
-            "tolerancePx": 70
+            "tolerancePx": 35
           }
         ],
         "bonusStars": [],
         "startGravity": "floor",
         "win": "pass finish marker alive",
         "collision": "lives=2; collision respawn at most recent safe segment, no auto-use shield"
-      }
+      },
+      "contentRevision": "gravity-flip-C01@0.9.0-design-v1@b7427724320a"
     },
     {
       "id": "gravity-flip-C02",
@@ -133,14 +138,14 @@ window.ArcadeChallengeData['gravity-flip'] = {
         ],
         "recommendedFlipWindows": [
           {
-            "xCenter": 220,
+            "xCenter": 180,
             "toward": "ceiling",
-            "tolerancePx": 70
+            "tolerancePx": 35
           },
           {
-            "xCenter": 1100,
+            "xCenter": 1060,
             "toward": "floor",
-            "tolerancePx": 70
+            "tolerancePx": 35
           }
         ],
         "bonusStars": [
@@ -153,7 +158,8 @@ window.ArcadeChallengeData['gravity-flip'] = {
         "startGravity": "floor",
         "win": "pass finish marker alive",
         "collision": "lives=2; collision respawn at most recent safe segment, no auto-use shield"
-      }
+      },
+      "contentRevision": "gravity-flip-C02@0.9.0-design-v1@1f3b32fdd72f"
     },
     {
       "id": "gravity-flip-C03",
@@ -242,7 +248,8 @@ window.ArcadeChallengeData['gravity-flip'] = {
         "startGravity": "floor",
         "win": "pass finish marker alive",
         "collision": "lives=2; collision respawn at most recent safe segment, no auto-use shield"
-      }
+      },
+      "contentRevision": "gravity-flip-C03@0.9.0-design-v1@4d7bf2fb020e"
     },
     {
       "id": "gravity-flip-C04",
@@ -301,24 +308,24 @@ window.ArcadeChallengeData['gravity-flip'] = {
         ],
         "recommendedFlipWindows": [
           {
-            "xCenter": 220,
+            "xCenter": 180,
             "toward": "ceiling",
-            "tolerancePx": 70
+            "tolerancePx": 35
           },
           {
-            "xCenter": 730,
+            "xCenter": 690,
             "toward": "floor",
-            "tolerancePx": 70
+            "tolerancePx": 35
           },
           {
-            "xCenter": 1260,
+            "xCenter": 1220,
             "toward": "ceiling",
-            "tolerancePx": 70
+            "tolerancePx": 35
           },
           {
-            "xCenter": 1800,
+            "xCenter": 1760,
             "toward": "floor",
-            "tolerancePx": 70
+            "tolerancePx": 35
           }
         ],
         "bonusStars": [
@@ -336,7 +343,8 @@ window.ArcadeChallengeData['gravity-flip'] = {
         "startGravity": "floor",
         "win": "pass finish marker alive",
         "collision": "lives=2; collision respawn at most recent safe segment, no auto-use shield"
-      }
+      },
+      "contentRevision": "gravity-flip-C04@0.9.0-design-v1@59fdbb539d19"
     },
     {
       "id": "gravity-flip-C05",
@@ -419,7 +427,8 @@ window.ArcadeChallengeData['gravity-flip'] = {
         "startGravity": "floor",
         "win": "pass finish marker alive",
         "collision": "lives=2; collision respawn at most recent safe segment, no auto-use shield"
-      }
+      },
+      "contentRevision": "gravity-flip-C05@0.9.0-design-v1@9b7cd3ed7b9e"
     },
     {
       "id": "gravity-flip-C06",
@@ -526,7 +535,8 @@ window.ArcadeChallengeData['gravity-flip'] = {
         "startGravity": "floor",
         "win": "pass finish marker alive",
         "collision": "lives=2; collision respawn at most recent safe segment, no auto-use shield"
-      }
+      },
+      "contentRevision": "gravity-flip-C06@0.9.0-design-v1@96dc4868e49d"
     }
   ]
 };

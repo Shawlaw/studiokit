@@ -11,7 +11,10 @@
  *   KeyboardEvent keydown/keyup / Shift，经 engine createInput 的真实输入管线驱动角色）。
  *   不使用传送到目标位置的通关捷径；only 失败重试/记录类场景使用 force* 钩子。
  */
+import { loadChallengeFixture } from '../lib/arcade_fixture.mjs';
+
 const GAME_URL = '/apps/arcade/games/shadow-leap.html';
+const FIXTURE = loadChallengeFixture('shadow-leap');
 const STAGE_IDS = [
   'shadow-leap-C01',
   'shadow-leap-C02',
@@ -20,7 +23,7 @@ const STAGE_IDS = [
   'shadow-leap-C05',
   'shadow-leap-C06',
 ];
-const STAGE_TITLES = ['初入影林', '月下断桥', '影冲试炼', '风之回廊', '双影岔路', '月门守卫'];
+const STAGE_TITLES = FIXTURE.data.stages.map((stage) => stage.title);
 
 /** 页面内自动操作器：读取 #test 观察数据，用真实 KeyboardEvent 驱动一关到影门。 */
 const AUTOPILOT_SOURCE = [
@@ -29,10 +32,12 @@ const AUTOPILOT_SOURCE = [
   '  return new Promise(function (resolve) {',
   '    var t = window.__arcadeTest;',
   '    var st = { key: null, done: false, log: [] };',
-  '    var route = t.stageObservable().mainRoute;',
+  '    var initial = t.stageObservable();',
+  '    var route = initial.mainRoute;',
   '    var step = 1;',
   '    var seen = 0;',
   '    var dashes = 0;',
+  '    var needDash = !!(initial.goal && initial.goal.requireDash);',
   '    var start = performance.now();',
   '    function press(name) {',
   '      if (st.key === name) return;',
@@ -70,6 +75,14 @@ const AUTOPILOT_SOURCE = [
   '        var gx = obs.player.x + obs.player.w / 2;',
   '        var gdx = g.cx - gx;',
   '        press(Math.abs(gdx) > 6 ? (gdx > 0 ? "ArrowRight" : "ArrowLeft") : null);',
+  '        if (needDash && !dashes) {',
+  '          var gdi = t.dashInfo();',
+  '          if (gdi.dashCharges > 0 && !gdi.dashing) {',
+  '            window.dispatchEvent(new KeyboardEvent("keydown", { key: "Shift", bubbles: true }));',
+  '            dashes += 1;',
+  '            st.log.push({ t: Math.round(performance.now() - start), dash: "goal-required" });',
+  '          }',
+  '        }',
   '        return;',
   '      }',
   '      var targetId = route[step];',

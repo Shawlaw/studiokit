@@ -35,14 +35,19 @@ shadow=[
 ('影冲试炼','用至少一次影冲越过月蚀裂隙','保留影冲以越过横向大缺口；卷轴奖励需额外精度','起跳后蓄势，空中定向影冲，落地刷新','左端石碑明确标示冲刺仅落地恢复',[
  platform('p0',110,0,118),platform('p1',66,78,76),platform('p2',365,155,76),platform('p3',285,234,99),platform('p4',191,310,103),platform('p5',225,386,98),platform('secret',349,264,66)],['p0','p1','p2','p3','p4','p5'],['p2','secret','p3'],428,'dash','gap','平台 p1→p2 需以真实轨迹证明无影冲不可达、有影冲可达；若达不到，必须调整间距并保留测试'),
 ('风之回廊','在两段风口中抵达高门','逆风短路要精确影冲，背风外圈更稳定','提前看风向旗、对冲时机作选择','壁画揭示风向每次固定，不做随机风',[
- platform('p0',202,0,119),platform('p1',253,76,105),platform('p2',322,152,86,'moving',amplitude=14,periodSec=3.2,phase=0),platform('p3',244,230,92),platform('p4',159,309,100),platform('p5',220,390,102),platform('q2',170,151,92),platform('q3',135,231,98)],['p0','p1','p2','p3','p4','p5'],['p1','q2','q3','p4'],431,'dash','wind','风区域 height=[115,225] 加速度按 x 方向±65px/s²；风矢量始终可视'),
+ platform('p0',202,0,119),platform('p1',253,76,105),platform('p2',352,152,74,'moving',amplitude=14,periodSec=3.2,phase=0),platform('p3',244,230,92),platform('p4',159,309,100),platform('p5',220,390,102),platform('q2',170,151,92),platform('q3',135,231,98)],['p0','p1','p2','p3','p4','p5'],['p1','q2','q3','p4'],431,'dash','wind','风区域 height=[115,225] 加速度按 x 方向±65px/s²；p1→p2 捷径缺口需影冲，q2/q3 长路线可无影冲'),
 ('双影岔路','任选一条主路线抵达分岔山门','右侧影冲捷径节省两跳；左侧宽平台收集线索','读地图构图决定风险与步数','在左下角的发光纹样发现门钥匙线索',[
- platform('p0',205,0,120),platform('p1',182,77,100),platform('l2',102,153,98),platform('l3',121,229,94),platform('l4',179,305,99),platform('r2',357,153,78),platform('r3',336,231,78,'fragile',breakDelaySec=.7),platform('r4',293,307,86),platform('p5',239,382,102),platform('secret',92,273,72)],['p0','p1','l2','l3','l4','p5'],['p1','r2','r3','r4','p5'],425,'dash','fork','影冲短路与主线都能通关；卷轴仅影响收藏记录，不影响解锁'),
+ platform('p0',205,0,120),platform('p1',182,77,100),platform('l2',102,153,98),platform('l3',121,229,94),platform('l4',179,305,99),platform('r2',378,153,64),platform('r3',336,231,78,'fragile',breakDelaySec=.7),platform('r4',293,307,86),platform('p5',239,382,102),platform('secret',92,273,72)],['p0','p1','l2','l3','l4','p5'],['p1','r2','r3','r4','p5'],425,'dash','fork','右侧 r2/r3/r4 影冲捷径需真实缺口冲刺；左侧 l2/l3/l4 长路线无影冲可通关；卷轴仅影响收藏记录'),
 ('月门守卫','集齐两座房间开关后抵达最终影门','先左开关还是右开关自由，回中央安全平台调整','连续预判相位、冲刺与保留检查点','两个半月雕像需要被亲自触碰，不能隔空触发',[
- platform('p0',210,0,120),platform('p1',210,82,105),platform('left-switch',95,157,94,'moving',amplitude=13,periodSec=3.4,phase=0),platform('right-switch',326,159,96,'moving',amplitude=13,periodSec=3.4,phase=3.14),platform('center',210,233,119),platform('upper',253,312,95,'fragile',breakDelaySec=.8),platform('p6',210,390,115)],['p0','p1','left-switch','center','right-switch','center','upper','p6'],['p1','right-switch','center','left-switch','center','upper','p6'],435,'dash','two-switch','开关触发顺序不限；回中心平台不会重置开关；死亡从房间检查点重试')
+ platform('p0',210,0,120),platform('p1',210,82,105),platform('left-switch',95,157,94,'moving',amplitude=13,periodSec=3.4,phase=0),platform('right-switch',350,159,72,'moving',amplitude=13,periodSec=3.4,phase=3.14),platform('center',210,233,119),platform('upper',253,312,95,'fragile',breakDelaySec=.8),platform('p6',210,390,115)],['p0','p1','left-switch','center','right-switch','center','upper','p6'],['p1','right-switch','center','left-switch','center','upper','p6'],435,'dash','two-switch','右侧开关平台缺口需影冲捷径，左侧开关经中心平台长路线可无影冲到达；顺序不限；死亡从房间检查点重试')
 ]
 for i,(title,goal,dec,skill,disc,plats,main,alt,end,ability,kind,note) in enumerate(shadow,1):
-  content={'coordinates':'420×740逻辑像素；平台 xCenter 与 height 均为世界坐标；height=0为出发平台，向上为正；禁止按屏幕坐标硬编码','playerSpawn':{'platformId':'p0','offsetX':0},'platforms':plats,'mainRoute':main,'alternativeRoute':alt,'goal':{'type':'gate','xCenter':210 if i!=3 else 225,'height':end,'radius':38},'requiredAbility':ability,'stageRule':kind,'collectibles':[{'id':'scroll','platformId': 'secret', 'optional':True}] if any(p['id']=='secret' for p in plats) else [],'deathPolicy':'落出关卡边界后从最近房间检查点重试，关卡任务不回退'}
+  content={'coordinates':'420×740逻辑像素；平台 xCenter 与 height 均为世界坐标；height=0为出发平台，向上为正；禁止按屏幕坐标硬编码','playerSpawn':{'platformId':'p0','offsetX':0},'platforms':plats,'mainRoute':main,'alternativeRoute':alt,'goal':{'type':'gate','xCenter':210 if i!=3 else 225,'height':end,'radius':20},'requiredAbility':ability,'stageRule':kind,'collectibles':[{'id':'scroll','platformId': 'secret', 'optional':True}] if any(p['id']=='secret' for p in plats) else [],'deathPolicy':'落出关卡边界后从最近房间检查点重试，关卡任务不回退'}
+  # 0.10.0: 影门半径 20；影门高于最后主路线平台 ≥30（本表各关均满足 41–45）。
+  # C04–C06 收紧捷径缺口：捷径段 requireDash=true；alternativeRoute 仍保留为无需影冲的长路线。
+  if i>=4:
+    content['goal']['requireDash']=True
+    content['dashShortcut']={'required':True,'kind':'gap','fromPlatform':main[1] if len(main)>2 else main[0],'toPlatform':main[2] if len(main)>2 else main[-1],'note':'捷径缺口仅影冲可越；长路线 alternativeRoute 不使用影冲仍可通关'}
   if i==4: content['winds']=[{'heightFrom':110,'heightTo':230,'forceX':-65,'telegraph':'旗子+粒子'}]
   if i==6:content['switches']=[{'platformId':'left-switch','persistentWithinAttempt':True},{'platformId':'right-switch','persistentWithinAttempt':True}]; content['goal']['unlock']='all-switches'
   make('shadow-leap',i,title,goal,dec,skill,disc,content,{'main':main,'optional':alt,'tactics':note},[f'主路径 {main} 能在允许动作集下连贯落地并触发出口','无影冲前两关必须可解；S3 起必需动作与奖励路线独立；死亡返回关内检查点','左右持续按压与影冲按钮支持两指并发，屏幕边缘影冲按钮≥44CSS px'],(45,155),notes=note,feature=['challenge_mode','stage_gate','air_dash'] if i>=3 else ['challenge_mode','stage_gate'])
@@ -58,6 +63,13 @@ for i,(title,seq,raw,goal,dec,skill,disc) in enumerate(snow,1):
   bells=[{'id':bid,'xCenter':x,'height':h,'kind':k,'radius':9,'consumable':True} for bid,x,h,k in raw]
   normal=[b for b in bells if b['id'] in seq]
   content={'coordinates':'420x740；bell.height相对起点向上；每次命中刷新向上初速 -655，最大理论上升159，实际还需验证横向可达','bells':bells,'requiredSequence':seq,'completion':'按顺序命中指定铃铛，休止铃只反弹不加连击，不强制收集bonus','wrongBellPolicy':'可反弹但不给计分；0.8s内显示下一个正确目标','comboBreakPolicy':'落空/错序会失去本关完美奖励，普通通关可恢复继续','startBell':'A','goalAfterLast':True}
+  # 0.10.0: 真实彩铃支路数据——从主线某铃切入 bonus 铃再汇合，高度差均在 159 上升上限内；不引入不存在的跳跃。
+  if i==4:
+    content['bonusRoutes']=[{'id':'branch-q','branchFrom':'D','sequence':['D','q1','q2','F'],'branchBackTo':'F','bonusBellIds':['q1','q2'],'scoreBonusPerBell':25,'heightSteps':[{'from':'D','to':'q1','rise':-15},{'from':'q1','to':'q2','rise':77},{'from':'q2','to':'F','rise':87}],'note':'右侧彩铃支路存在真实可达弹道；命中彩铃只增加本局可见分，不写经典最高分'}]
+  if i==6:
+    content['bonusRoutes']=[{'id':'finale-q','branchFrom':'E','sequence':['E','q1','F','G'],'branchBackTo':'F','bonusBellIds':['q1'],'scoreBonusPerBell':25,'heightSteps':[{'from':'E','to':'q1','rise':1},{'from':'q1','to':'F','rise':73},{'from':'F','to':'G','rise':75}],'note':'终曲彩铃支路 1 次上升可达；wrongHits===0 通关显示纯视觉雪花乐谱，不持久化'}]
+  if i in (4,6):
+    content['completion']+='；彩铃支路见 bonusRoutes，命中彩铃只增加本局可见分（不写经典最高分）'
   make('snowbells',i,title,goal,dec,skill,disc,content,{'bellOrder':seq,'optional': [b['id'] for b in bells if b['kind']=='bonus'], 'tactics':'命中后先看下一个目标再进行横移，不依赖局内道具'},['指定铃铛间距和弹跳时间允许物理命中且不可重复计分','无道具可完成必经序列；休止铃能弹但不计分','显示下一个目标，左右多指操作无粘滞'],(45,140),notes='请使用确定性铃点图；连击只统计首次正确命中。',feature=['stage_bell_sequence'])
 
 bricks=[
@@ -79,12 +91,15 @@ flips=[
 ('双窄门',[(490,'floor',190),(990,'ceiling',190),(1510,'floor',205),(2050,'ceiling',205)],[(210,'ceiling'),(690,'floor'),(1220,'ceiling'),(1740,'floor')],[], '障碍高度明显增加但预告更早','练习观察到行动的稳定延迟'),
 ('重力终章',[(500,'floor',155),(940,'ceiling',165),(1370,'floor',165),(1810,'ceiling',185),(2260,'floor',195)],[(210,'ceiling'),(650,'floor'),(1090,'ceiling'),(1520,'floor'),(1960,'ceiling')],[(730,270),(1600,380)],'交错障碍+一次中间奖励路线选择','目标是完成清晰的动作序列，不靠纯随机')]
 for i,(title,obs,flps,coins,tech,disc) in enumerate(flips,1):
- content={'coordinates':'世界 x 单位 px，player固定屏幕 x=112，障碍的世界x是首次进入场景的路标，不是生成时相机x；场景需换算 cameraOffset','distanceToFinish':max(2200,obs[-1][0]+270),'scrollSpeedPxSec':260,'gravity':2100,'obstacles':[{'id':f'o{k}','x':x,'side':side,'height':h,'width':42,'telegraphLeadPx':360} for k,(x,side,h) in enumerate(obs,1)],'recommendedFlipWindows':[{'xCenter':x,'toward':to,'tolerancePx':70} for x,to in flps], 'bonusStars':[{'x':x,'y':y,'required':False} for x,y in coins],'startGravity':'floor','win':'pass finish marker alive','collision':'lives=2; collision respawn at most recent safe segment, no auto-use shield'}
+ # 0.10.0: C01/C02/C04 收窄翻转窗口到早沿安全范围（中心左移 40、容差 35）；其余关卡保持原值。
+ narrow = i in (1,2,4)
+ windows=[{'xCenter':(x-40 if narrow else x),'toward':to,'tolerancePx':35 if narrow else 70} for x,to in flps]
+ content={'coordinates':'世界 x 单位 px，player固定屏幕 x=112，障碍的世界x是首次进入场景的路标，不是生成时相机x；场景需换算 cameraOffset','distanceToFinish':max(2200,obs[-1][0]+270),'scrollSpeedPxSec':260,'gravity':2100,'obstacles':[{'id':f'o{k}','x':x,'side':side,'height':h,'width':42,'telegraphLeadPx':360} for k,(x,side,h) in enumerate(obs,1)],'recommendedFlipWindows':windows, 'bonusStars':[{'x':x,'y':y,'required':False} for x,y in coins],'startGravity':'floor','win':'pass finish marker alive','collision':'lives=2; collision respawn at most recent safe segment, no auto-use shield'}
  make('gravity-flip',i,title,'从起点通过全部固定尖刺并抵达终点','先保持当前安全侧还是提前翻转',tech,disc,content,{'flipWindows':flps,'skill':tech},['物理仿真至少存在一条可无伤通过的翻转时间序列，角度窗口允许手机响应','在无道具前提下可通过；任一尖刺须满足可观察反应窗口','整个画布点击与空格一致，停顿后不会误触翻转'],(45,115),notes='推荐翻转点是待物理验证的设计初值，不可把列表直接当成无碰撞证明',feature=['fixed_obstacle_sequence'])
 
 # write first 4 games
 for g in ('shadow-leap','snowbells','brick-breaker','gravity-flip'):
- (LEV/(g+'.json')).write_text(json.dumps({'gameId':g,'gameName':meta[g][0],'sourceFile':meta[g][1],'stages':all_games[g]},ensure_ascii=False,indent=2)+'\n')
+ (LEV/(g+'.json')).write_text(json.dumps({'gameId':g,'gameName':meta[g][0],'sourceFile':meta[g][1],'stages':all_games[g]},ensure_ascii=False,indent=2)+'\n',encoding='utf-8',newline='\n')
 print('PART1',len(all_games),sum(map(len,all_games.values())))
 
 # 星海突击：每关逐秒事件脚本，敌机出现前向玩家告知预警与安全通道
@@ -100,6 +115,16 @@ for i,(title,dur,raw,pick,skill,disc,goal) in enumerate(star,1):
  for k,(t,typ,x,pat,safe) in enumerate(raw,1):
   ev.append({'id':f'w{k}','atSec':t,'enemyType':typ,'spawnXRatio':x,'attackPattern':pat,'telegraphSec':1.4 if typ=='charger' else (1.25 if typ=='boss' else .9),'safeBandXRatio':{'center':safe,'halfWidth':.12},'attackActiveSec':3.4 if typ!='boss' else 16,'stopNewThreatsUntilSec':t+2.2})
  content={'stageDurationSec':dur,'playerSpawn':{'xRatio':.5,'yRatio':.85},'startingHealth':3,'events':ev,'powerups':[{'atSec':t,'kind':k,'xRatio':x,'required':False} for t,k,x in pick],'endCondition':('defeat-boss' if any(e['enemyType']=='boss' for e in ev) else 'survive-and-clear-events'),'patternContract':{'single':'向下单发，瞄准当前位置后锁定','aimed':'预警瞄准后单发','fan3':'三个固定发散角-22/0/+22度','fan5':'五个固定发散角-32/-16/0/+16/+32度','sweep-lr':'左向右扫描危险带，预先显示扫线','sweep-rl':'右向左扫描危险带，预先显示扫线','mark-charge':'标线1.4秒后沿直线冲锋，标线期间锁定落点','weak-left-right':'先左翼2.5s后右翼2.5s，重复至弱点耗尽','phase-sweep-and-core':'第1阶段扫线，第2阶段中央核心暴露3s，循环'},'bulletSafeSpace':'所有攻击段至少保留一条玩家可达≥56逻辑px宽的安全走廊，待模拟验证'}
+ if i==3:
+   src=ev[2]
+   content['splits']=[
+     {'id':'w3a','replaces':'w3','atSec':src['atSec'],'enemyType':src['enemyType'],'spawnXRatio':src['spawnXRatio'],'attackPattern':src['attackPattern'],'telegraphSec':src['telegraphSec'],'attackActiveSec':2.0,'safeBandXRatio':{'center':.15,'halfWidth':.12},'stopNewThreatsUntilSec':src['atSec']+2.2,'segment':1},
+     {'id':'w3b','replaces':'w3','atSec':src['atSec']+4,'enemyType':src['enemyType'],'spawnXRatio':src['spawnXRatio'],'attackPattern':src['attackPattern'],'telegraphSec':src['telegraphSec'],'attackActiveSec':2.0,'safeBandXRatio':{'center':.85,'halfWidth':.12},'stopNewThreatsUntilSec':src['atSec']+6.2,'segment':2}]
+ if i==4:
+   src=ev[3]
+   content['splits']=[
+     {'id':'w4a','replaces':'w4','atSec':src['atSec'],'enemyType':src['enemyType'],'spawnXRatio':src['spawnXRatio'],'attackPattern':src['attackPattern'],'telegraphSec':src['telegraphSec'],'attackActiveSec':2.0,'safeBandXRatio':{'center':.85,'halfWidth':.12},'stopNewThreatsUntilSec':src['atSec']+2.2,'segment':1},
+     {'id':'w4b','replaces':'w4','atSec':src['atSec']+4,'enemyType':src['enemyType'],'spawnXRatio':src['spawnXRatio'],'attackPattern':src['attackPattern'],'telegraphSec':src['telegraphSec'],'attackActiveSec':2.0,'safeBandXRatio':{'center':.15,'halfWidth':.12},'stopNewThreatsUntilSec':src['atSec']+6.2,'segment':2}]
  make('star-raid',i,title,goal,'继续待在安全带还是穿越危险区取武器',skill,disc,content,{'events':[e['id'] for e in ev], 'plan':'读取预警线，移向 safeBandXRatio，Boss 露弱点后再进攻'},['定时事件不依赖Math.random且预警与伤害开始时间可复测','弹幕演算留出可达安全区；阶段目标可在基础武器下完成','按住拖动+技能点击两指并发，子弹/弱点在小屏可辨'],(dur,dur+35),feature=['fixed_wave_timeline']+(['boss_phase_script'] if i>=5 else []))
 
 # 层塔：所有块中心偏移相对于基座中心210px；强调设计目标，不把预设落点冒称物理自动通关
@@ -109,9 +134,11 @@ stacks=[
 ('偏右的委托',[5,10,-4,-10,0],[5,10,-4,-10,0],.11,5,'前两层右偏，后两层向左矫正','优先贴标记还是先修正中心','连续两次偏置后的重心修复','从重心可视化读出倾斜的累积'),
 ('有限配重',[-12,-8,6,10,2],[-12,-8,6,10,2],.11,5,'5层达到目标且配重最多用1次','何时保留配重机会','预测下一层是否值得修正','对比用/不用配重的结构差异'),
 ('窄层挑战',[0,12,-10,8,-8,0],[0,12,-10,8,-8,0],.095,6,'六层且连续三层无大偏差','更慢找中心还是拿较小的时间收益','追踪稳定区宽度随楼层变化','发现摆动速度不是唯一难度来源'),
-('城市小塔',[-8,8,-12,10,-6,3],[ -8,8,-12,10,-6,3],.115,6,'综合六层，并保持塔顶中心距基座≤15px','两种可行箱序的风险收益','交替偏置、修正和有限容错','结束时展示结构剖面与偏移走势图')]
+('城市小塔',[-8,8,-12,10,-6,3],[ -8,8,-12,10,-6,3],.115,6,'综合六层，并保持塔顶中心距基座≤15px','偏置修正与终态中心控制的权衡','交替偏置、修正和有限容错','结束时展示结构剖面与偏移走势图')]
 for i,(title,marks,reference,maxlean,count,goal,dec,skill,disc) in enumerate(stacks,1):
  content={'coordinates':'420x740；每箱宽64高40，baseCenterX=210；targetOffsetsPx 是箱心相对基座中心的目标偏置，允许±8px','baseCenterX':210,'boxes':[{'order':j+1,'width':64,'height':40,'targetOffsetPx':v,'tolerancePx':8 if i<5 else 7} for j,v in enumerate(marks)],'pendulum':{'pivotX':210,'pivotY':64,'length':135,'speedFactor':round(1+.06*(i-1),2),'deterministicStartPhaseRad':0},'limits':{'maxTowerLeanAbs':maxlean,'maxDroppedBoxes':count+1,'braceUsesAllowed':1 if i==4 else 0,'guideUsesAllowed':0},'win':{'floorsAtLeast':count,'noCollapse':True,'allMarkTargetsWithinTolerance':False},'evaluation':{'bronze':'完成并保持稳定','silver':'全部偏置目标±8px内','gold':'满足银牌且零道具、零失误'},'physicsNote':'本配置仅规定目标/条件；实际放置是否稳定必须在当前 Lean 模型中按帧仿真'}
+ if i==5: content['win']['minConsecutiveWithinTolerance']=3
+ if i==6: content['win']['maxFinalTopCenterOffsetPx']=15
  make('pendulum-tower',i,title,goal,dec,skill,disc,content,{'releaseOffsetsPx':reference,'strategy':'按目标标记释放，偏置纠正后再看重心指示'},['物理模拟能以一组真实释放时机稳定完成目标楼层','超出倾斜极限判倒塔，配重上限按关卡校验','放箱是清晰的独立点击，底部按钮不遮住钟摆轨迹'],(60,170),notes='禁止运行时强行吸附到targetOffset；mark 是目标提示，真实释放与物理判定必须保留',feature=['commission_mode','fixed_marks'])
 
 # 俄罗斯方块：底部棋盘字符串（.为无块，#为既有垃圾块）；定义固定方块队列与参考摆法
@@ -119,13 +146,15 @@ TetrisData=[
 ('第一道横井',{'19':'###....###'},['I'],[('I','H',3)],1,'用横向 I 填平一行','横向 I 一次清行；不要空场堆叠','横井的宽度等于4格'),
 ('双行方井',{'18':'####..####','19':'####..####'},['O'],[('O','N',4)],2,'用 O 一次清两行','精确移动到中央两格','理解O方块落在连续2×2空间'),
 ('纵井四消',{'16':'#####.####','17':'#####.####','18':'#####.####','19':'#####.####'},['I'],[('I','V',5)],4,'用竖直 I 清四行','需要旋转 I 而非横放','知道Tetris四消的井的开法'),
-('两次横修',{'18':'###....###','19':'###....###'},['I','I'],[('I','H',3),('I','H',3)],2,'两个 I 逐层修复横井','先放下层，再补新掉落的一层','消行后重力会让上层自然下落'),
-('T形锁孔',{'18':'####...###','19':'#####.####'},['T'],[('T','STEM-DOWN',4)],2,'T形正确方向放入非矩形锁孔','左右平移与旋转要配合','读懂不规则凹槽而非盲目直落'),
+('两次横修',{'18':'###....###','19':'#....#####'},['I','I'],[('I','H',3),('I','H',1)],2,'两个 I 分别落入错开的不同横井','先放上层右侧井(列3-6)清一行，再放下层左侧井(列1-4)','上层清除后下层井才从上方可达，两 I 落点不同'),
+('T形锁孔',{'16':'###..#####','17':'###..#####','18':'####...###','19':'#####.####'},['O','T'],[('O','N',3),('T','STEM-DOWN',4)],4,'先 O 填上方方井，再以 T 锁下方异形孔','两个落点都可试放，但只有 O 先上、T 后下能清四行','旋转与顺序共同决定成败，直落任意一孔会留残砖'),
 ('复合工坊',{'16':'#..#######','17':'#..#######','18':'####...###','19':'#####.####'},['O','T'],[('O','N',1),('T','STEM-DOWN',4)],4,'先 O 后 T，完成连续四行清除','若先考虑下方T，会被上方方井阻挡','清除顺序就是核心解题空间')]
 for i,(title,rows,queue,sol,nlines,goal,skill,disc) in enumerate(TetrisData,1):
  board=['..........']*20
  for k,v in rows.items():board[int(k)]=v
- content={'boardWidth':10,'boardHeight':20,'boardTopToBottom':board,'pieceQueue':queue,'holdEnabled':False,'gravityMode':'place-by-place with no time pressure, hard drop + rotate','spawnPolicy':'only fixed pieceQueue; no bag-7 randomness','initialActivePiece':queue[0],'win':{'type':'clear-lines','count':nlines,'maxPlacedPieces':len(queue)},'lose':{'type':'queue-exhausted-or-top-out','ifGoalUnmet':True},'pieceDefinitions':{'I-H':[[0,0],[1,0],[2,0],[3,0]],'I-V':[[0,0],[0,1],[0,2],[0,3]],'O-N':[[0,0],[1,0],[0,1],[1,1]],'T-STEM-DOWN':[[0,0],[1,0],[2,0],[1,1]]},'coordinates':'reference placements give top-left bounding-box column. Rotation system in game must support these orientations without clipping.'}
+ content={'boardWidth':10,'boardHeight':20,'boardTopToBottom':board,'pieceQueue':queue,'holdEnabled':False,'gravityMode':'place-by-place with no time pressure, hard drop + rotate','spawnPolicy':'only fixed pieceQueue; no bag-7 randomness','initialActivePiece':queue[0],'win':{'type':'clear-lines','count':nlines,'maxPlacedPieces':len(queue)},'lose':{'type':'queue-exhausted-or-top-out','ifGoalUnmet':True},'pieceDefinitions':{'I-H':[[0,0],[1,0],[2,0],[3,0]],'I-V':[[0,0],[0,1],[0,2],[0,3]],'O-N':[[0,0],[1,0],[0,1],[1,1]],'T-STEM-DOWN':[[0,0],[1,0],[2,0],[1,1]]},'coordinates':'reference placements give top-left bounding-box column. Rotation system in game must support these orientations without clipping.','gravityModel':'place-by-place'}
+ if i in (5,6):
+  content['placementSpace']={'description':'每块存在多个可硬降落点，只有特定朝向/列组合能完成目标；参考解是众多合法落点中的一种','legalButLosingExamples':([{'piece':'O','orientation':'N','leftCol':0,'result':'无法落入方井，停在顶端'},{'piece':'T','orientation':'STEM-UP','leftCol':4,'result':'只清1行'}] if i==6 else [{'piece':'O','orientation':'N','leftCol':1,'result':'偏离方井，无法配合 T 清四行'},{'piece':'T','orientation':'STEM-DOWN','leftCol':4,'result':'无 O 垫底，T 落入异形孔仍剩残砖'}]),'winningPlacementCount':1 if i==6 else 1}
  plan=[{'piece':p,'orientation':o,'leftCol':x,'action':'rotate/place/hardDrop'} for p,o,x in sol]
  make('block-drop',i,title,goal,'选择摆放方向和顺序（挑战模式固定出块）',skill,disc,content,plan,['按参考队列执行能在最大置块数内清行并达标','提前耗尽队列而未达标应失败，且经典7-bag绝不改动','左右/旋转/硬降有独立触摸按钮，连续点击不会粘键'],(25,110),feature=['puzzle_board_preset','puzzle_piece_queue','clear_line_goal'])
 
@@ -149,27 +178,42 @@ def road_path(blocks, start=1):
  return min(paths.values(),key=lambda p:sum(p[i]!=p[i+1] for i in range(len(p)-1)))
 for i,(title,blocked,goal,skill,disc) in enumerate(road_patterns,1):
  witness=road_path(blocked)
- content={'laneCount':4,'slotDurationSec':1.15 if i<4 else 1.05,'laneChangeTimeSec':.22,'startLane':1,'timeline':[{'slot':k,'atSec':round((k-1)*(1.15 if i<4 else 1.05),2),'occupiedLanes':b,'telegraphLeadSec':1.5,'optionalNearPassBonusLanes':[l for l in range(4) if l not in b and any(abs(l-o)==1 for o in b)]} for k,b in enumerate(blocked,1)],'goal':{'type':'survive-all-slots','minDistanceMeters':400+i*140},'scoreRules':{'passBonus':10,'nearPassBonus':5,'noDamageGold':True},'spawnerPolicy':'challenge only; disable classic random spawn while timeline active','pathProofModel':'at each slot lane must not be occupied, consecutive lane indices differ ≤1; physics transitions must also be tested'}
- make('road-rush',i,title,goal,'避让是硬目标，近距超车只增加评价',skill,disc,content,{'safeLaneBySlot':witness,'bonusStrategy':'不求最高分，只给出可活着完成的安全车道序列'},['时间展开DP存在连续相邻车道安全路径，并检查换道过渡0.22秒内的碰撞','把任一车阵改到无可行路径时校验器必须拒绝；碰撞有清晰责任归因','左右手势和按键一次恰好一车道，按住不重复跳道'],(20,75),notes='lane proof只按离散格成立；真正实现必须把相邻车道过渡也纳入碰撞测试',feature=['fixed_traffic_timeline','time_expanded_lane_validator'])
+ slot_sec=1.15 if i<4 else 1.05
+ span=round(len(blocked)*slot_sec,2)
+ content={'laneCount':4,'slotDurationSec':slot_sec,'laneChangeTimeSec':.22,'startLane':1,'timeline':[{'slot':k,'atSec':round((k-1)*slot_sec,2),'occupiedLanes':b,'telegraphLeadSec':1.5,'optionalNearPassBonusLanes':[l for l in range(4) if l not in b and any(abs(l-o)==1 for o in b)]} for k,b in enumerate(blocked,1)],'goal':{'type':'survive-all-slots','minDistanceMeters':400+i*140},'scoreRules':{'passBonus':10,'nearPassBonus':5,'noDamageGold':True},'spawnerPolicy':'challenge only; disable classic random spawn while timeline active','pathProofModel':'at each slot lane must not be occupied, consecutive lane indices differ ≤1; physics transitions must also be tested'}
+ # 0.10.0: C01–C06 时长目标按实际时隙跨度校准，统一口径不混用旧 20–75。
+ duration=(math.ceil(span),math.ceil(span)+10)
+ if i==5:
+  content['bonusPreview']={'leadSlots':1,'ruleText':'预告期高亮近距奖励车道：普通超车 +10，近距超车 +15；不强迫冒险','previewField':'optionalNearPassBonusLanes','hudText':'普通10 / 近距15','rewardedLaneSlots':[k for k,entry in enumerate(content['timeline'],1) if entry['optionalNearPassBonusLanes']]}
+ make('road-rush',i,title,goal,'避让是硬目标，近距超车只增加评价',skill,disc,content,{'safeLaneBySlot':witness,'bonusStrategy':'不求最高分，只给出可活着完成的安全车道序列'},['时间展开DP存在连续相邻车道安全路径，并检查换道过渡0.22秒内的碰撞','把任一车阵改到无可行路径时校验器必须拒绝；碰撞有清晰责任归因','左右手势和按键一次恰好一车道，按住不重复跳道'],duration,notes='lane proof只按离散格成立；真正实现必须把相邻车道过渡也纳入碰撞测试',feature=['fixed_traffic_timeline','time_expanded_lane_validator'])
 
 # 黄金矿工：使用当前源码 TYPES 实值，固定位置和参考抓取顺序
 items_gold=[
 ('轻金快取',550,60,[('m1','goldM',154,360),('m2','goldM',265,350),('l1','goldL',216,525),('s1','goldS',330,550),('r1','rockS',105,570)],['m1','m2','l1'],'精准地选择三条不重合角度','分辨深处重金与近处轻金的回收时间'),
 ('钻石的代价',750,58,[('d1','diamond',340,470),('m1','goldM',98,450),('m2','goldM',215,400),('r1','rockL',290,590),('s1','goldS',145,580)],['d1','m1'],'先拿远钻石还是先拿近金块','比较价值和钩爪占用时间'),
-('第一颗炸药',900,58,[('l1','goldL',110,520),('d1','diamond',310,450),('t1','tnt',245,415),('r1','rockS',174,370),('m1','goldM',360,590)],['l1','d1'],'避开中央炸药的优先路径','炸药对摆角构成可预判禁止区域'),
+('第一颗炸药',900,58,[('l1','goldL',110,520),('d1','diamond',310,450),('t1','tnt',245,415),('r1','rockS',85,330),('m1','goldM',360,590)],['l1','d1'],'避开中央炸药的优先路径','炸药对摆角构成可预判禁止区域'),
 ('双钻矿脉',1200,55,[('d1','diamond',104,440),('d2','diamond',318,475),('t1','tnt',225,340),('r1','rockL',290,560),('m1','goldM',145,600)],['d1','d2'],'两钻足够达标，但经过空角度需要等待摆动','不要贪近处低价值石块'),
-('限时三钩',1000,52,[('d1','diamond',331,523),('l1','goldL',100,578),('m1','goldM',214,360),('t1','tnt',338,350),('r1','rockS',260,430)],['d1','l1','m1'],'规划三次抓取路线','抢近件还是等高值件的摆动相位'),
+('限时三钩',1000,30,[('d1','diamond',331,523),('l1','goldL',100,578),('m1','goldM',214,360),('t1','tnt',338,350),('r1','rockS',260,430)],['d1','l1','m1'],'在30秒内规划两次主要抓取顺序','抢近件还是等高值件的摆动相位'),
 ('矿工毕业考',1300,52,[('d1','diamond',115,600),('d2','diamond',318,600),('l1','goldL',210,476),('t1','tnt',346,350),('m1','goldM',75,425),('r1','rockL',340,450)],['d1','d2','l1'],'三次主抓在有限时间完成，炸药与石头是视觉干扰','综合重量、伸缩时间和角度等待')]
 VALUES={'goldS':50,'goldM':150,'goldL':350,'diamond':600,'rockS':15,'rockL':20,'tnt':0}
 WEIGHT={'goldS':2,'goldM':4,'goldL':8,'diamond':1.5,'rockS':9,'rockL':14,'tnt':0}
 for i,(title,target,dur,raw,order,skill,disc) in enumerate(items_gold,1):
  items=[{'id':item_id,'type':typ,'x':x,'y':y,'value':VALUES[typ],'weight':WEIGHT[typ],'aimAngleDeg':round(math.degrees(math.atan2(x-210,y-104)),1)} for item_id,typ,x,y in raw]
+ # 0.10.0: C03 m1 改为 300，制造“先近金还是先钻石”的真实价值权衡。
+ if i==3:
+  for item in items:
+   if item['id']=='m1': item['value']=300
+ # 0.10.0: C05 两条抓取顺序都满足目标且角度互不遮挡；运行时/夹具只消费 items 与 timeLimitSec。
+ if i==5:
+  content_c05_alternatives=[['d1','l1','m1'],['l1','d1','m1']]
  content={'coordinates':'420×740；钩爪轴(210,104)；item.xy为逻辑像素；角度为 atan2(x-210,y-104) 角度，向右为正；禁止自动随机重排','timeLimitSec':dur,'targetMoney':target,'items':items,'referenceCatchOrder':order,'initialTools':{'aim':0,'winch':0,'time':0},'hook':{'pivot':[210,104],'extendSpeedPxSec':560,'baseRetractSpeed':'inherit engine','swing':'inherit engine but use deterministic phase at stage start'},'complete':'达标即可选择立即结算，不要求抓光','fail':'倒计时归零且未达标','hazards':'TNT碰到立即销毁本次抓取收益，损失时间；不直接结束全局游戏'}
+ if i==3: content['designNote']='m1.value=300（非标准 goldM 150）；r1 已从 (174,370) 移到 (85,330) 避开 l1 射线'
+ if i==5: content['alternativeCatchOrders']=[{'order':o,'totalValue':sum(next(v['value'] for v in items if v['id']==item_id) for item_id in o)} for o in content_c05_alternatives]
  witness=[{'itemId':id,'angleDeg':next(v['aimAngleDeg'] for v in items if v['id']==id),'priority':k+1} for k,id in enumerate(order)]
  make('gold-miner',i,title,'在倒计时内取得至少$'+str(target),'选择短钩低价/长钩高价和炸药风险',skill,disc,content,witness,['参考物品总价值满足目标；接入原钩爪物理后需实测全部抓取+摆动等待≤时限','禁用道具仍存在可行路线；炸药碰撞与钩爪先后顺序必须确定','手机短按放钩、长按瞄准线不能冲突；道具点击不触发放钩'],(30,dur),notes='表内参考捕获只证明价值充足，不证明角度遮挡/物理时间可行；必须记录运行回放验证',feature=['fixed_item_layout','hook_time_simulator'])
 
 for g in ('star-raid','pendulum-tower','block-drop','road-rush','gold-miner'):
- (LEV/(g+'.json')).write_text(json.dumps({'gameId':g,'gameName':meta[g][0],'sourceFile':meta[g][1],'stages':all_games[g]},ensure_ascii=False,indent=2)+'\n')
+ (LEV/(g+'.json')).write_text(json.dumps({'gameId':g,'gameName':meta[g][0],'sourceFile':meta[g][1],'stages':all_games[g]},ensure_ascii=False,indent=2)+'\n',encoding='utf-8',newline='\n')
 print('PART2',len(all_games),sum(map(len,all_games.values())))
 
 # 贪吃蛇：18x18稳定地图，固定水果顺序；参考路线由逐帧蛇身 BFS 算出（不是抽象曼哈顿路径）
@@ -251,8 +295,8 @@ merge_boards=[
 ('双排规划',[[2,2,4,4],[0,0,0,0],[0,0,0,0],[0,0,0,0]],8,2,'形成一枚8','同一滑动可能发生两次不同合并','观察合并是“每一格每回合最多合并一次”'),
 ('先八后十六',[[4,4,8,0],[0,0,0,0],[0,0,0,0],[0,0,0,0]],16,3,'三步内得到16','先把两枚4合成8，再用两个8合16','第二次同向移动仍然可能有效'),
 ('纵向接力',[[2,2,0,0],[2,2,0,0],[0,0,0,0],[0,0,0,0]],8,3,'最多三步得到8','先横向再纵向组合两排','合并顺序会影响最终位置'),
-('双列八进位',[[2,4,2,0],[2,4,2,0],[4,8,4,0],[0,0,0,0]],16,4,'四步内获得16','先合并列再观察8如何重合','棋盘上下移动可改变相邻关系'),
-('终极转位',[[4,0,0,0],[16,2,8,2],[4,0,4,0],[0,2,8,0]],32,5,'六步内获得32','允许暂时远离目标，先安排大数对位','分辨合并不能直接跨越不同数值')]
+('横向整理',[[2,2,4,0],[4,4,8,0],[2,2,0,0],[4,4,0,0]],16,5,'最多五步获得16，参考两步横向整理','把分散在两列的相同数字先横向合并再纵向对齐','棋盘左右滑动可改变上下行的相邻关系'),
+('终极转位',[[2,0,0,0],[2,4,0,0],[4,8,0,0],[8,16,0,0]],32,5,'最多五步获得32，参考四步','允许暂时远离目标，先安排大数对位','分辨合并不能直接跨越不同数值')]
 def merge_line(v):
  a=[x for x in v if x];o=[];i=0
  while i<len(a):
@@ -287,11 +331,11 @@ def merge_solve(board,target,maxmoves):
  return None,None
 for i,(title,board,target,moves,goal,skill,disc) in enumerate(merge_boards,1):
  route,after=merge_solve(board,target,moves)
- content={'grid':{'rows':4,'cols':4},'initialBoard':board,'challengeSpawnPolicy':'none (no new random or scripted tile after move)','maxValidMoves':moves,'undoAllowed':True,'undoDoesNotRefundMoveOnRankedAttempt':True,'win':{'anyTileAtLeast':target},'lose':'valid moves used up without target or no legal move','scorePolicy':'挑战按有效步数、辅助使用分层统计；经典分数保持不变','controls':'四方向滑动；仅有效改变盘面的滑动计步'}
+ content={'grid':{'rows':4,'cols':4},'initialBoard':board,'challengeSpawnPolicy':'none (no new random or scripted tile after move)','maxValidMoves':moves,'undoAllowed':True,'undoDoesNotRefundMoveOnRankedAttempt':True,'win':{'anyTileAtLeast':target,'referenceSteps':len(route) if route is not None else None},'lose':'valid moves used up without target or no legal move','scorePolicy':'挑战按有效步数、辅助使用分层统计；经典分数保持不变','controls':'四方向滑动；仅有效改变盘面的滑动计步'}
  make('merge-2048',i,title,goal,'每一步选择朝向并预判合并次序',skill,disc,content,{'directions':list(route) if route is not None else None,'resultBoard':[list(x) for x in after] if after else None},['宽搜可在限定步数找到方案；无解题卡不可入库','超出有效步数/无可移动后失败，撤销的成绩标签与普通成绩不同','四向滑动阈值一致，不因页面滚动误触，画布外不禁用普通触摸'],(15,95),feature=['fixed_2048_board','challenge_no_spawn','target_tile'])
 
 for g in ('snake-run','mole-whack','memory-flip','merge-2048'):
- (LEV/(g+'.json')).write_text(json.dumps({'gameId':g,'gameName':meta[g][0],'sourceFile':meta[g][1],'stages':all_games[g]},ensure_ascii=False,indent=2)+'\n')
+ (LEV/(g+'.json')).write_text(json.dumps({'gameId':g,'gameName':meta[g][0],'sourceFile':meta[g][1],'stages':all_games[g]},ensure_ascii=False,indent=2)+'\n',encoding='utf-8',newline='\n')
 print('ALL',len(all_games),sum(map(len,all_games.values())))
 print('2048 witnesses',[(x['id'],x['referencePlan']['directions']) for x in all_games['merge-2048']])
 print('SNAKE',[(x['id'],x['referencePlan']['totalSteps']) for x in all_games['snake-run']])

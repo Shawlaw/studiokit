@@ -4,6 +4,10 @@
   "gameId": "memory-flip",
   "gameName": "记忆翻牌",
   "sourceFile": "memory-flip.html",
+  "supportedFeatures": [
+    "fixed_memory_board",
+    "cognitive_clue_mode"
+  ],
   "stages": [
     {
       "schemaVersion": "1.0.0",
@@ -116,7 +120,8 @@
         ],
         "adaptToHead": true
       },
-      "designerNotes": "布局对称变换仅用于重玩变化，关卡原理不变；不能对称变换卡片却不更新线索"
+      "designerNotes": "布局对称变换仅用于重玩变化，关卡原理不变；不能对称变换卡片却不更新线索",
+      "contentRevision": "memory-flip-C01@0.9.0-design-v1@44671ee7c20e"
     },
     {
       "schemaVersion": "1.0.0",
@@ -246,7 +251,8 @@
         ],
         "adaptToHead": true
       },
-      "designerNotes": "布局对称变换仅用于重玩变化，关卡原理不变；不能对称变换卡片却不更新线索"
+      "designerNotes": "布局对称变换仅用于重玩变化，关卡原理不变；不能对称变换卡片却不更新线索",
+      "contentRevision": "memory-flip-C02@0.9.0-design-v1@1e38ff5c6704"
     },
     {
       "schemaVersion": "1.0.0",
@@ -411,7 +417,8 @@
         ],
         "adaptToHead": true
       },
-      "designerNotes": "布局对称变换仅用于重玩变化，关卡原理不变；不能对称变换卡片却不更新线索"
+      "designerNotes": "布局对称变换仅用于重玩变化，关卡原理不变；不能对称变换卡片却不更新线索",
+      "contentRevision": "memory-flip-C03@0.9.0-design-v1@8ea879a69bf1"
     },
     {
       "schemaVersion": "1.0.0",
@@ -607,7 +614,8 @@
         ],
         "adaptToHead": true
       },
-      "designerNotes": "布局对称变换仅用于重玩变化，关卡原理不变；不能对称变换卡片却不更新线索"
+      "designerNotes": "布局对称变换仅用于重玩变化，关卡原理不变；不能对称变换卡片却不更新线索",
+      "contentRevision": "memory-flip-C04@0.9.0-design-v1@d3830900f92d"
     },
     {
       "schemaVersion": "1.0.0",
@@ -804,7 +812,8 @@
         ],
         "adaptToHead": true
       },
-      "designerNotes": "布局对称变换仅用于重玩变化，关卡原理不变；不能对称变换卡片却不更新线索"
+      "designerNotes": "布局对称变换仅用于重玩变化，关卡原理不变；不能对称变换卡片却不更新线索",
+      "contentRevision": "memory-flip-C05@0.9.0-design-v1@ed00c316fba4"
     },
     {
       "schemaVersion": "1.0.0",
@@ -1000,7 +1009,8 @@
         ],
         "adaptToHead": true
       },
-      "designerNotes": "布局对称变换仅用于重玩变化，关卡原理不变；不能对称变换卡片却不更新线索"
+      "designerNotes": "布局对称变换仅用于重玩变化，关卡原理不变；不能对称变换卡片却不更新线索",
+      "contentRevision": "memory-flip-C06@0.9.0-design-v1@cce641a898d6"
     }
   ]
 }

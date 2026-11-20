@@ -59,9 +59,9 @@
       },
       {
         "id": "r2",
-        "xCenter": 357,
+        "xCenter": 378,
         "height": 153,
-        "width": 78,
+        "width": 64,
         "kind": "static"
       },
       {
@@ -113,7 +113,8 @@
       "type": "gate",
       "xCenter": 210,
       "height": 425,
-      "radius": 38
+      "radius": 20,
+      "requireDash": true
     },
     "requiredAbility": "dash",
     "stageRule": "fork",
@@ -124,7 +125,14 @@
         "optional": true
       }
     ],
-    "deathPolicy": "落出关卡边界后从最近房间检查点重试，关卡任务不回退"
+    "deathPolicy": "落出关卡边界后从最近房间检查点重试，关卡任务不回退",
+    "dashShortcut": {
+      "required": true,
+      "kind": "gap",
+      "fromPlatform": "p1",
+      "toPlatform": "l2",
+      "note": "捷径缺口仅影冲可越；长路线 alternativeRoute 不使用影冲仍可通关"
+    }
   },
   "referencePlan": {
     "main": [
@@ -142,7 +150,7 @@
       "r4",
       "p5"
     ],
-    "tactics": "影冲短路与主线都能通关；卷轴仅影响收藏记录，不影响解锁"
+    "tactics": "右侧 r2/r3/r4 影冲捷径需真实缺口冲刺；左侧 l2/l3/l4 长路线无影冲可通关；卷轴仅影响收藏记录"
   },
   "acceptance": {
     "success": "主路径 ['p0', 'p1', 'l2', 'l3', 'l4', 'p5'] 能在允许动作集下连贯落地并触发出口",
@@ -160,5 +168,5 @@
     ],
     "adaptToHead": true
   },
-  "designerNotes": "影冲短路与主线都能通关；卷轴仅影响收藏记录，不影响解锁"
+  "designerNotes": "右侧 r2/r3/r4 影冲捷径需真实缺口冲刺；左侧 l2/l3/l4 长路线无影冲可通关；卷轴仅影响收藏记录"
 }

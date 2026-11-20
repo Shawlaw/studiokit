@@ -78,7 +78,8 @@
     "win": {
       "floorsAtLeast": 6,
       "noCollapse": true,
-      "allMarkTargetsWithinTolerance": false
+      "allMarkTargetsWithinTolerance": false,
+      "minConsecutiveWithinTolerance": 3
     },
     "evaluation": {
       "bronze": "完成并保持稳定",

@@ -5,6 +5,10 @@ window.ArcadeChallengeData['brick-breaker'] = {
   "gameId": "brick-breaker",
   "gameName": "砖块计划",
   "packVersion": "0.9.0-design-v1",
+  "supportedFeatures": [
+    "fixed_brick_layout",
+    "gate_brick"
+  ],
   "stages": [
     {
       "id": "brick-breaker-C01",
@@ -53,7 +57,8 @@ window.ArcadeChallengeData['brick-breaker'] = {
           "ifNoBrickContactSec": 12,
           "action": "给反弹方向微调且展示提示，不扣命；首次试图只提示"
         }
-      }
+      },
+      "contentRevision": "brick-breaker-C01@0.9.0-design-v1@7fc6ce4b88ab"
     },
     {
       "id": "brick-breaker-C02",
@@ -102,7 +107,8 @@ window.ArcadeChallengeData['brick-breaker'] = {
           "ifNoBrickContactSec": 12,
           "action": "给反弹方向微调且展示提示，不扣命；首次试图只提示"
         }
-      }
+      },
+      "contentRevision": "brick-breaker-C02@0.9.0-design-v1@d6f2dfa5994e"
     },
     {
       "id": "brick-breaker-C03",
@@ -154,7 +160,8 @@ window.ArcadeChallengeData['brick-breaker'] = {
           "ifNoBrickContactSec": 12,
           "action": "给反弹方向微调且展示提示，不扣命；首次试图只提示"
         }
-      }
+      },
+      "contentRevision": "brick-breaker-C03@0.9.0-design-v1@ad008dbe9a18"
     },
     {
       "id": "brick-breaker-C04",
@@ -203,7 +210,8 @@ window.ArcadeChallengeData['brick-breaker'] = {
           "ifNoBrickContactSec": 12,
           "action": "给反弹方向微调且展示提示，不扣命；首次试图只提示"
         }
-      }
+      },
+      "contentRevision": "brick-breaker-C04@0.9.0-design-v1@39845441f2dd"
     },
     {
       "id": "brick-breaker-C05",
@@ -252,7 +260,8 @@ window.ArcadeChallengeData['brick-breaker'] = {
           "ifNoBrickContactSec": 12,
           "action": "给反弹方向微调且展示提示，不扣命；首次试图只提示"
         }
-      }
+      },
+      "contentRevision": "brick-breaker-C05@0.9.0-design-v1@306604925d85"
     },
     {
       "id": "brick-breaker-C06",
@@ -304,7 +313,8 @@ window.ArcadeChallengeData['brick-breaker'] = {
           "ifNoBrickContactSec": 12,
           "action": "给反弹方向微调且展示提示，不扣命；首次试图只提示"
         }
-      }
+      },
+      "contentRevision": "brick-breaker-C06@0.9.0-design-v1@d8a1945d5284"
     }
   ]
 };

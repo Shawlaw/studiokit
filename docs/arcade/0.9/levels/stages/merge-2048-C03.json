@@ -51,7 +51,8 @@
     "undoAllowed": true,
     "undoDoesNotRefundMoveOnRankedAttempt": true,
     "win": {
-      "anyTileAtLeast": 16
+      "anyTileAtLeast": 16,
+      "referenceSteps": 2
     },
     "lose": "valid moves used up without target or no legal move",
     "scorePolicy": "挑战按有效步数、辅助使用分层统计；经典分数保持不变",

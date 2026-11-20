@@ -38,9 +38,9 @@
       },
       {
         "id": "p2",
-        "xCenter": 322,
+        "xCenter": 352,
         "height": 152,
-        "width": 86,
+        "width": 74,
         "kind": "moving",
         "amplitude": 14,
         "periodSec": 3.2,
@@ -100,12 +100,20 @@
       "type": "gate",
       "xCenter": 210,
       "height": 431,
-      "radius": 38
+      "radius": 20,
+      "requireDash": true
     },
     "requiredAbility": "dash",
     "stageRule": "wind",
     "collectibles": [],
     "deathPolicy": "落出关卡边界后从最近房间检查点重试，关卡任务不回退",
+    "dashShortcut": {
+      "required": true,
+      "kind": "gap",
+      "fromPlatform": "p1",
+      "toPlatform": "p2",
+      "note": "捷径缺口仅影冲可越；长路线 alternativeRoute 不使用影冲仍可通关"
+    },
     "winds": [
       {
         "heightFrom": 110,
@@ -130,7 +138,7 @@
       "q3",
       "p4"
     ],
-    "tactics": "风区域 height=[115,225] 加速度按 x 方向±65px/s²；风矢量始终可视"
+    "tactics": "风区域 height=[115,225] 加速度按 x 方向±65px/s²；p1→p2 捷径缺口需影冲，q2/q3 长路线可无影冲"
   },
   "acceptance": {
     "success": "主路径 ['p0', 'p1', 'p2', 'p3', 'p4', 'p5'] 能在允许动作集下连贯落地并触发出口",
@@ -148,5 +156,5 @@
     ],
     "adaptToHead": true
   },
-  "designerNotes": "风区域 height=[115,225] 加速度按 x 方向±65px/s²；风矢量始终可视"
+  "designerNotes": "风区域 height=[115,225] 加速度按 x 方向±65px/s²；p1→p2 捷径缺口需影冲，q2/q3 长路线可无影冲"
 }

@@ -7,8 +7,8 @@
   "title": "最终路书",
   "difficulty": 6,
   "targetDurationSec": [
-    20,
-    75
+    15,
+    25
   ],
   "goalStatement": "持续读出拥堵变化，抵达最后路标",
   "decision": "避让是硬目标，近距超车只增加评价",

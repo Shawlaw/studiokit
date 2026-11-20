@@ -56,14 +56,14 @@
     ],
     "recommendedFlipWindows": [
       {
-        "xCenter": 220,
+        "xCenter": 180,
         "toward": "ceiling",
-        "tolerancePx": 70
+        "tolerancePx": 35
       },
       {
-        "xCenter": 1100,
+        "xCenter": 1060,
         "toward": "floor",
-        "tolerancePx": 70
+        "tolerancePx": 35
       }
     ],
     "bonusStars": [

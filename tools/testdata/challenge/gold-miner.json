@@ -4,6 +4,10 @@
   "gameId": "gold-miner",
   "gameName": "黄金矿工",
   "sourceFile": "gold-miner.html",
+  "supportedFeatures": [
+    "fixed_item_layout",
+    "hook_time_simulator"
+  ],
   "stages": [
     {
       "schemaVersion": "1.0.0",
@@ -128,7 +132,8 @@
         ],
         "adaptToHead": true
       },
-      "designerNotes": "表内参考捕获只证明价值充足，不证明角度遮挡/物理时间可行；必须记录运行回放验证"
+      "designerNotes": "表内参考捕获只证明价值充足，不证明角度遮挡/物理时间可行；必须记录运行回放验证",
+      "contentRevision": "gold-miner-C01@0.9.0-design-v1@7959cc8f0097"
     },
     {
       "schemaVersion": "1.0.0",
@@ -247,7 +252,8 @@
         ],
         "adaptToHead": true
       },
-      "designerNotes": "表内参考捕获只证明价值充足，不证明角度遮挡/物理时间可行；必须记录运行回放验证"
+      "designerNotes": "表内参考捕获只证明价值充足，不证明角度遮挡/物理时间可行；必须记录运行回放验证",
+      "contentRevision": "gold-miner-C02@0.9.0-design-v1@c2e1db4c7ca4"
     },
     {
       "schemaVersion": "1.0.0",
@@ -301,18 +307,18 @@
           {
             "id": "r1",
             "type": "rockS",
-            "x": 174,
-            "y": 370,
+            "x": 85,
+            "y": 330,
             "value": 15,
             "weight": 9,
-            "aimAngleDeg": -7.7
+            "aimAngleDeg": -28.9
           },
           {
             "id": "m1",
             "type": "goldM",
             "x": 360,
             "y": 590,
-            "value": 150,
+            "value": 300,
             "weight": 4,
             "aimAngleDeg": 17.2
           }
@@ -337,7 +343,8 @@
         },
         "complete": "达标即可选择立即结算，不要求抓光",
         "fail": "倒计时归零且未达标",
-        "hazards": "TNT碰到立即销毁本次抓取收益，损失时间；不直接结束全局游戏"
+        "hazards": "TNT碰到立即销毁本次抓取收益，损失时间；不直接结束全局游戏",
+        "designNote": "m1.value=300（非标准 goldM 150）；r1 已从 (174,370) 移到 (85,330) 避开 l1 射线"
       },
       "referencePlan": [
         {
@@ -366,7 +373,8 @@
         ],
         "adaptToHead": true
       },
-      "designerNotes": "表内参考捕获只证明价值充足，不证明角度遮挡/物理时间可行；必须记录运行回放验证"
+      "designerNotes": "表内参考捕获只证明价值充足，不证明角度遮挡/物理时间可行；必须记录运行回放验证",
+      "contentRevision": "gold-miner-C03@0.9.0-design-v1@4ed92b8de405"
     },
     {
       "schemaVersion": "1.0.0",
@@ -485,7 +493,8 @@
         ],
         "adaptToHead": true
       },
-      "designerNotes": "表内参考捕获只证明价值充足，不证明角度遮挡/物理时间可行；必须记录运行回放验证"
+      "designerNotes": "表内参考捕获只证明价值充足，不证明角度遮挡/物理时间可行；必须记录运行回放验证",
+      "contentRevision": "gold-miner-C04@0.9.0-design-v1@d858fda0969a"
     },
     {
       "schemaVersion": "1.0.0",
@@ -497,16 +506,16 @@
       "difficulty": 5,
       "targetDurationSec": [
         30,
-        52
+        30
       ],
       "goalStatement": "在倒计时内取得至少$1000",
       "decision": "选择短钩低价/长钩高价和炸药风险",
-      "practicedSkill": "规划三次抓取路线",
+      "practicedSkill": "在30秒内规划两次主要抓取顺序",
       "discovery": "抢近件还是等高值件的摆动相位",
       "mode": "challenge",
       "content": {
         "coordinates": "420×740；钩爪轴(210,104)；item.xy为逻辑像素；角度为 atan2(x-210,y-104) 角度，向右为正；禁止自动随机重排",
-        "timeLimitSec": 52,
+        "timeLimitSec": 30,
         "targetMoney": 1000,
         "items": [
           {
@@ -576,7 +585,25 @@
         },
         "complete": "达标即可选择立即结算，不要求抓光",
         "fail": "倒计时归零且未达标",
-        "hazards": "TNT碰到立即销毁本次抓取收益，损失时间；不直接结束全局游戏"
+        "hazards": "TNT碰到立即销毁本次抓取收益，损失时间；不直接结束全局游戏",
+        "alternativeCatchOrders": [
+          {
+            "order": [
+              "d1",
+              "l1",
+              "m1"
+            ],
+            "totalValue": 1100
+          },
+          {
+            "order": [
+              "l1",
+              "d1",
+              "m1"
+            ],
+            "totalValue": 1100
+          }
+        ]
       },
       "referencePlan": [
         {
@@ -610,7 +637,8 @@
         ],
         "adaptToHead": true
       },
-      "designerNotes": "表内参考捕获只证明价值充足，不证明角度遮挡/物理时间可行；必须记录运行回放验证"
+      "designerNotes": "表内参考捕获只证明价值充足，不证明角度遮挡/物理时间可行；必须记录运行回放验证",
+      "contentRevision": "gold-miner-C05@0.9.0-design-v1@9dd5828bf57e"
     },
     {
       "schemaVersion": "1.0.0",
@@ -744,7 +772,8 @@
         ],
         "adaptToHead": true
       },
-      "designerNotes": "表内参考捕获只证明价值充足，不证明角度遮挡/物理时间可行；必须记录运行回放验证"
+      "designerNotes": "表内参考捕获只证明价值充足，不证明角度遮挡/物理时间可行；必须记录运行回放验证",
+      "contentRevision": "gold-miner-C06@0.9.0-design-v1@34bb6f9d1514"
     }
   ]
 }

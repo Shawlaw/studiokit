@@ -130,7 +130,8 @@
         ]
       ]
     },
-    "coordinates": "reference placements give top-left bounding-box column. Rotation system in game must support these orientations without clipping."
+    "coordinates": "reference placements give top-left bounding-box column. Rotation system in game must support these orientations without clipping.",
+    "gravityModel": "place-by-place"
   },
   "referencePlan": [
     {

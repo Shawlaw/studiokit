@@ -4,6 +4,10 @@
   "gameId": "gravity-flip",
   "gameName": "重力翻转",
   "sourceFile": "gravity-flip.html",
+  "supportedFeatures": [
+    "fixed_obstacle_sequence",
+    "narrow_flip_windows"
+  ],
   "stages": [
     {
       "schemaVersion": "1.0.0",
@@ -55,19 +59,19 @@
         ],
         "recommendedFlipWindows": [
           {
-            "xCenter": 250,
+            "xCenter": 210,
             "toward": "ceiling",
-            "tolerancePx": 70
+            "tolerancePx": 35
           },
           {
-            "xCenter": 790,
+            "xCenter": 750,
             "toward": "floor",
-            "tolerancePx": 70
+            "tolerancePx": 35
           },
           {
-            "xCenter": 1310,
+            "xCenter": 1270,
             "toward": "ceiling",
-            "tolerancePx": 70
+            "tolerancePx": 35
           }
         ],
         "bonusStars": [],
@@ -106,7 +110,8 @@
         ],
         "adaptToHead": true
       },
-      "designerNotes": "推荐翻转点是待物理验证的设计初值，不可把列表直接当成无碰撞证明"
+      "designerNotes": "推荐翻转点是待物理验证的设计初值，不可把列表直接当成无碰撞证明",
+      "contentRevision": "gravity-flip-C01@0.9.0-design-v1@b7427724320a"
     },
     {
       "schemaVersion": "1.0.0",
@@ -166,14 +171,14 @@
         ],
         "recommendedFlipWindows": [
           {
-            "xCenter": 220,
+            "xCenter": 180,
             "toward": "ceiling",
-            "tolerancePx": 70
+            "tolerancePx": 35
           },
           {
-            "xCenter": 1100,
+            "xCenter": 1060,
             "toward": "floor",
-            "tolerancePx": 70
+            "tolerancePx": 35
           }
         ],
         "bonusStars": [
@@ -214,7 +219,8 @@
         ],
         "adaptToHead": true
       },
-      "designerNotes": "推荐翻转点是待物理验证的设计初值，不可把列表直接当成无碰撞证明"
+      "designerNotes": "推荐翻转点是待物理验证的设计初值，不可把列表直接当成无碰撞证明",
+      "contentRevision": "gravity-flip-C02@0.9.0-design-v1@1f3b32fdd72f"
     },
     {
       "schemaVersion": "1.0.0",
@@ -340,7 +346,8 @@
         ],
         "adaptToHead": true
       },
-      "designerNotes": "推荐翻转点是待物理验证的设计初值，不可把列表直接当成无碰撞证明"
+      "designerNotes": "推荐翻转点是待物理验证的设计初值，不可把列表直接当成无碰撞证明",
+      "contentRevision": "gravity-flip-C03@0.9.0-design-v1@4d7bf2fb020e"
     },
     {
       "schemaVersion": "1.0.0",
@@ -400,24 +407,24 @@
         ],
         "recommendedFlipWindows": [
           {
-            "xCenter": 220,
+            "xCenter": 180,
             "toward": "ceiling",
-            "tolerancePx": 70
+            "tolerancePx": 35
           },
           {
-            "xCenter": 730,
+            "xCenter": 690,
             "toward": "floor",
-            "tolerancePx": 70
+            "tolerancePx": 35
           },
           {
-            "xCenter": 1260,
+            "xCenter": 1220,
             "toward": "ceiling",
-            "tolerancePx": 70
+            "tolerancePx": 35
           },
           {
-            "xCenter": 1800,
+            "xCenter": 1760,
             "toward": "floor",
-            "tolerancePx": 70
+            "tolerancePx": 35
           }
         ],
         "bonusStars": [
@@ -471,7 +478,8 @@
         ],
         "adaptToHead": true
       },
-      "designerNotes": "推荐翻转点是待物理验证的设计初值，不可把列表直接当成无碰撞证明"
+      "designerNotes": "推荐翻转点是待物理验证的设计初值，不可把列表直接当成无碰撞证明",
+      "contentRevision": "gravity-flip-C04@0.9.0-design-v1@59fdbb539d19"
     },
     {
       "schemaVersion": "1.0.0",
@@ -591,7 +599,8 @@
         ],
         "adaptToHead": true
       },
-      "designerNotes": "推荐翻转点是待物理验证的设计初值，不可把列表直接当成无碰撞证明"
+      "designerNotes": "推荐翻转点是待物理验证的设计初值，不可把列表直接当成无碰撞证明",
+      "contentRevision": "gravity-flip-C05@0.9.0-design-v1@9b7cd3ed7b9e"
     },
     {
       "schemaVersion": "1.0.0",
@@ -739,7 +748,8 @@
         ],
         "adaptToHead": true
       },
-      "designerNotes": "推荐翻转点是待物理验证的设计初值，不可把列表直接当成无碰撞证明"
+      "designerNotes": "推荐翻转点是待物理验证的设计初值，不可把列表直接当成无碰撞证明",
+      "contentRevision": "gravity-flip-C06@0.9.0-design-v1@96dc4868e49d"
     }
   ]
 }
