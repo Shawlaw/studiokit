@@ -275,7 +275,13 @@
           : `<span class="ac-score">${score}</span>` +
             (rec && rec.isNewHigh ? '<span class="ac-newhigh">★ 新纪录</span><br/>' : '') +
             `第 ${level} 关 · ${moves} 次翻牌`;
-        ui.show({ title: won ? '全部通关！' : '游戏结束', text, btn: '再来一局', onBtn: showStart });
+        ui.show({
+          result: true,
+          title: won ? '全部通关！' : '游戏结束',
+          text,
+          btn: '再来一局',
+          onBtn: showStart,
+        });
         pauseUi.sync();
       }
 
@@ -577,6 +583,7 @@
         const isLast = chStageIndex >= challengeData.length - 1;
         const tip = '<p class="ac-challenge-tip">本关目标：' + chEsc(chStage.goalStatement || '') + '</p>';
         ui.show({
+          result: true,
           title: '挑战通关',
           text: A.Challenge.resultHtml(chStage, result) + tip,
           btn: isLast ? '返回选关' : '下一关',
@@ -601,6 +608,7 @@
         loop.pause();
         joyTools.sync();
         ui.show({
+          result: true,
           title: '挑战失败',
           text:
             '<p class="ac-challenge-tip">' + chEsc(chErrorReason) + '</p>' +

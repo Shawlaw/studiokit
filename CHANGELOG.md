@@ -2,6 +2,15 @@
 
 StudioKit 门户本身没有独立的 semver；以下按仓库里程碑与工具版本记录。各工具的详细变更见 `apps/<tool>/CHANGELOG.md`。
 
+## Arcade 0.11.0 — 2026-11-21（本地待发布）
+
+### Changed
+- 结算回看：16 款游戏结算不再用暗色蒙层盖住最终游戏画面；底部结算卡片 + 「回看棋盘 / 查看结算」一键切换，满足玩家回顾终局画面的需求（共享引擎实现，开局/暂停弹层不变）。
+- 五子棋棋盘放大：384×384 → 400×400，格距 34 → 36，棋子半径 14 → 15。
+
+### Verification
+- 新增 `tools/arcade_review_test.mjs` 5/5；`validate_site.py` / `build_site.py` / 全量 Arcade 门禁发布前复跑（证据见 TASKS.md）。
+
 ## Arcade 0.10.0 — 2026-11-20（已双端发布）
 
 ### Added

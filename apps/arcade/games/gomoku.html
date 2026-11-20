@@ -54,14 +54,16 @@
       const EMPTY = 0;
       const BLACK = 1; // 玩家执黑
       const WHITE = 2; // 本地 AI 执白
-      const GRID = 34; // 格点间距 ≈34px
-      const GRID_X = 40;
-      const GRID_Y = 200;
-      const BOARD = { x: 18, y: 178, w: 384, h: 384 };
+      /* 0.11.0：棋盘适度放大（384→400，格距 34→36，棋子 14→15），
+         仍保持状态栏(y≤146)、落子按钮(y=590)、页脚(y=674)互不遮挡。 */
+      const GRID = 36; // 格点间距
+      const GRID_X = 42;
+      const GRID_Y = 196;
+      const BOARD = { x: 10, y: 174, w: 400, h: 400 };
       const PLACE_BTN = { x: 110, y: 590, w: 200, h: 56 };
       /* 0.10.0：窄屏逻辑按钮缩放到 CSS px 后不足 44px，额外提供画布内 DOM 覆盖按钮。 */
       const PLACE_BTN_MIN_CSS = 44;
-      const STONE_R = 14;
+      const STONE_R = 15;
       const TOOL_START = { undo: 3, hint: 2 };
       const TOOL_CAPS = { undo: 3, hint: 2 };
       const AI_DELAY = 0.22; // 玩家落子后 AI 回应间隔（≤300ms）
@@ -518,6 +520,7 @@
         else if (kind === 'lose') title = 'AI 连成五子';
         else if (kind === 'resign') title = '已认输';
         ui.show({
+          result: true,
           title,
           text: head + detail + '<br/>点「再来一局」回到开始弹层。',
           btn: '再来一局',
@@ -1696,6 +1699,8 @@
           info() {
             const progress = A.Progress.get('gomoku');
             return {
+              boardGeometry: { x: BOARD.x, y: BOARD.y, w: BOARD.w, h: BOARD.h, grid: GRID, gridX: GRID_X, gridY: GRID_Y, stoneR: STONE_R },
+              resultReview: { isResult: dom.overlay.classList.contains('is-result') && !dom.overlay.hidden, reviewVisible: ui.reviewVisible, hidden: !dom.overlay.hidden && !!dom.overlay.querySelector('.overlay-panel.review-hidden'), fabVisible: ui.reviewState.fabVisible },
               state,
               turn,
               turnName: turn === BLACK ? 'black' : 'white',

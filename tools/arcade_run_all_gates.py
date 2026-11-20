@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Run all offline/regression gates used for Arcade 0.10 local verification.
+"""Run all offline/regression gates used for Arcade 0.11 local verification.
 
 The script is intentionally simple: each entry is argv for a native tool. Ports are
 fixed high values to reduce collisions with interactive test sessions. Environment
@@ -45,6 +45,10 @@ def main() -> int:
         ('calm_games', ['node', 'tools/arcade_calm_games_test.mjs'], {
             'ARCADE_CALM_PORT': os.environ.get('ARCADE_CALM_PORT', '8823'),
             'ARCADE_CALM_CDP_PORT': os.environ.get('ARCADE_CALM_CDP_PORT', '9423'),
+        }),
+        ('review', ['node', 'tools/arcade_review_test.mjs'], {
+            'ARCADE_REVIEW_PORT': os.environ.get('ARCADE_REVIEW_PORT', '8826'),
+            'ARCADE_REVIEW_CDP_PORT': os.environ.get('ARCADE_REVIEW_CDP_PORT', '9426'),
         }),
         ('gameplay_all', ['node', 'tools/arcade_gameplay_test.mjs', '--suite=all', '--repeat=1'], {
             'ARCADE_GAMEPLAY_PORT': os.environ.get('ARCADE_GAMEPLAY_PORT', '8824'),

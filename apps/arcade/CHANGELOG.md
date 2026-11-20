@@ -1,5 +1,17 @@
 # Arcade Changelog
 
+## 0.11.0 — 2026-11-21（本地待发布）
+
+### Added
+- 结算回看：16 款游戏共 45 处结算弹层不再用暗色蒙层盖住最终游戏画面；结算卡片移到底部、取消遮罩与模糊，新增「回看棋盘」按钮与「查看结算」胶囊一键切换，玩家可完整回顾终局棋盘/场景。开局、暂停、错误与续玩弹层外观与行为不变（共享引擎 `createOverlayUi` 的 `result:true` 选项，页面 HTML 模板零改动）。
+
+### Changed
+- 五子棋棋盘适度放大：逻辑画布仍 420×740，棋盘 384×384 → 400×400（+8.5% 面积），格距 34 → 36，棋子半径 14 → 15；状态栏、落子按钮与页脚位置不变，旧局内存档与 AI 逻辑不受几何变化影响。
+- 版本链升至 `0.11.0`，SW 缓存键 `studiokit-arcade-0.11.0-v1`。
+
+### Verification
+- 新增 `tools/arcade_review_test.mjs` 5/5（静态 45 处标记 + gomoku/block 运行时回看切换 + 320/375/390/430 布局）；`validate_site.py`、`build_site.py`、`check_inline_scripts.mjs`、全量 Arcade 门禁在发布前复跑（证据见 TASKS.md）。设计见 `DESIGN-0.11.0.md`。
+
 ## 0.10.0 — 2026-11-20（已双端发布）
 
 ### Added

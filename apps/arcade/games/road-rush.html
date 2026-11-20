@@ -371,16 +371,17 @@
           dom.hudHigh.textContent = String(Math.max(high, finalDist));
         }
         loop.pause();
-        showOverlay(
-          wonRun ? '抵达终点！' : '车辆损毁',
-          `<span class="ac-score">${finalDist}m</span>` +
+        ui.show({
+          title: wonRun ? '抵达终点！' : '车辆损毁',
+          text: `<span class="ac-score">${finalDist}m</span>` +
             (rec && rec.isNewHigh ? '<span class="ac-newhigh">★ 新纪录</span><br/>' : '') +
             `行驶距离 · 最高 ${Math.max(high, finalDist)}m<br/>` +
             `评价 <strong>${rating}</strong> · 最高连超 ×${comboBest} · 超车 ${passedCars} 次` +
             (wonRun ? ` · 用时 ${runSeconds.toFixed(1)}s` : ''),
-          '再来一局',
-          showStart
-        );
+          btn: '再来一局',
+          onBtn: showStart,
+          result: true,
+        });
         pauseUi.sync();
         syncTouchPad();
       }
@@ -639,6 +640,7 @@
           },
           btn2: '重玩本关',
           onBtn2: () => startChallenge(chStage.id),
+          result: true,
         });
         pauseUi.sync();
         syncChallengeHud();
@@ -663,6 +665,7 @@
           onBtn: () => startChallenge(chStage.id),
           btn2: '返回选关',
           onBtn2: exitToChallengeSelect,
+          result: true,
         });
         pauseUi.sync();
         syncChallengeHud();

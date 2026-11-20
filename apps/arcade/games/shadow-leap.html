@@ -765,6 +765,7 @@
         }
         loop.pause();
         ui.show({
+          result: true,
           title: '坠落',
           text:
             `<span class="ac-score">${score}m</span>` +
@@ -1227,6 +1228,7 @@
             : '下一关已解锁：C' + chPad2(nextDef.stageNumber) + ' ' + A.escapeHtml(nextDef.title)) +
           '</p>';
         ui.show({
+          result: true,
           title: '影门开启',
           text: resultHtml + extra,
           btn: isLast ? '返回选关' : '下一关',
@@ -1286,6 +1288,7 @@
         const hint = CH_FAIL_HINTS[stageDef ? stageDef.stageRule : ''] || '先观察下一块平台的落点，再起跳。';
         const hasCheckpoint = !!(chCheckpoint && platforms.some((p) => p.index === chCheckpoint.platformIndex));
         ui.show({
+          result: true,
           title: '失足',
           text:
             (stageDef ? 'C' + chPad2(stageDef.stageNumber) + ' ' + stageDef.title + ' · ' : '') +

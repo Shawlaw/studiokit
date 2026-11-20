@@ -336,6 +336,7 @@
             ` · ${floorsReached} 层`,
           btn: '再来一局',
           onBtn: showStart,
+          result: true,
         });
         pauseUi.sync(); syncJoyTools();
       }
@@ -794,6 +795,7 @@
           },
           btn2: '重玩本关',
           onBtn2: () => startChallenge(chStage.id),
+          result: true,
         });
         pauseUi.sync();
         syncChallengeHud();
@@ -821,6 +823,7 @@
           onBtn: () => startChallenge(chStage.id),
           btn2: '返回选关',
           onBtn2: exitToChallengeSelect,
+          result: true,
         });
         pauseUi.sync();
         syncChallengeHud();

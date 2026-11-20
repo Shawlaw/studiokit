@@ -832,15 +832,16 @@
             recordSaved = true;
           }
           loop.pause();
-          showOverlay(
-            title || '禅模式结束',
-            `<span class="ac-score">${score}</span>` +
+          ui.show({
+            title: title || '禅模式结束',
+            text: `<span class="ac-score">${score}</span>` +
               `${lines} 行 · Lv.${level} · 速度 Lv.${zenSpeedLevel}` +
               (zenElapsed > 0 ? ` · 用时 ${A.formatDuration(zenElapsed * 1000)}` : '') +
               '<br/>本局已记录到积分表（禅模式不计经典最高分）',
-            '再来一局',
-            returnToStart
-          );
+            btn: '再来一局',
+            onBtn: returnToStart,
+            result: true,
+          });
           syncZenHud();
           syncZenBar();
           pauseUi.sync();
@@ -860,14 +861,15 @@
           dom.hudHigh.textContent = String(Math.max(high, score));
         }
         loop.pause();
-        showOverlay(
-          title || '游戏结束',
-          `<span class="ac-score">${score}</span>` +
+        ui.show({
+          title: title || '游戏结束',
+          text: `<span class="ac-score">${score}</span>` +
             (rec && rec.isNewHigh ? '<span class="ac-newhigh">★ 新纪录</span><br/>' : '') +
             `${lines} 行 · Lv.${level} · 最高 ${Math.max(high, score)}`,
-          '再来一局',
-          returnToStart
-        );
+          btn: '再来一局',
+          onBtn: returnToStart,
+          result: true,
+        });
         pauseUi.sync();
         syncTouchPad();
       }
@@ -1155,6 +1157,7 @@
           onBtn: isLast ? openChallengePanel : () => startChallenge(stages[index + 1].id),
           btn2: '重玩本关',
           onBtn2: () => startChallenge(chStageId),
+          result: true,
         });
         chTipTimer = 0;
         updateChallengeTip();
@@ -1194,6 +1197,7 @@
           onBtn: () => startChallenge(chStageId),
           btn2: '返回选关',
           onBtn2: openChallengePanel,
+          result: true,
         });
         chTipTimer = 0;
         updateChallengeTip();

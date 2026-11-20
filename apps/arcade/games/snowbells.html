@@ -343,6 +343,7 @@
         }
         loop.pause();
         ui.show({
+          result: true,
           title: '坠入雪夜',
           text:
             `<span class="ac-score">${score}</span>` +
@@ -684,6 +685,7 @@
         const perfectFinale = Number(chStage && chStage.stageNumber) === 6 && chWrongHits === 0;
         triggerSnowflakeScore(perfectFinale);
         ui.show({
+          result: true,
           title: '挑战通关',
           text: A.Challenge.resultHtml(chStage, result) + '<p class="ac-challenge-tip">' + chEsc(chStage.goalStatement || '') + ' · ' + chEsc(marks) + ' · 彩铃加分 +' + chBonusScore + '（本局，不计经典最高分）</p>' +
             (perfectFinale ? '<p class="ac-challenge-tip">❄ 完美终曲 · 雪花乐谱（纯视觉，不影响战力）</p>' : ''),
@@ -709,6 +711,7 @@
         loop.pause();
         syncJoyTools();
         ui.show({
+          result: true,
           title: '挑战失败',
           text:
             '<p class="ac-challenge-tip">' + chEsc(chErrorReason) + '</p>' +

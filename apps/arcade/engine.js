@@ -7,7 +7,7 @@
 (() => {
   'use strict';
 
-  const ARCADE_VERSION = '0.10.0';
+  const ARCADE_VERSION = '0.11.0';
   const PROGRESS_KEY = 'studiokit:arcade:progress:v1';
   const PREFS_KEY = 'studiokit:arcade:prefs:v1';
   const RUNS_KEY = 'studiokit:arcade:runs:v1';
@@ -2434,8 +2434,67 @@
     }
     /* 0.8.1 可选第三按钮：页面不提供 dom.ovBtn3 时行为与旧版完全一致。 */
     if (dom.ovBtn3) dom.ovBtn3.hidden = true;
+
+    /* 0.11.0 结算回看：结算弹层不再用暗色蒙层盖住最终游戏画面。
+       引擎动态创建两个控件（页面 HTML 无需改动）：
+       - 面板内「回看棋盘」按钮：隐藏面板，只看画布最终帧；
+       - 角落「查看结算」胶囊：在回看模式下恢复面板。
+       只有在 show({ result:true }) 时才启用；其余弹层 DOM/样式零变化。 */
+    let reviewInit = false;
+    let reviewHidden = false;
+    let reviewBtn = null;
+    let reviewFab = null;
+    function setReviewHidden(value) {
+      reviewHidden = !!value;
+      if (!reviewInit) return;
+      const panel = dom.overlay.querySelector('.overlay-panel');
+      if (panel) panel.classList.toggle('review-hidden', reviewHidden);
+      reviewFab.hidden = !reviewHidden;
+      reviewBtn.textContent = reviewHidden ? '查看结算' : '回看棋盘';
+      reviewBtn.setAttribute('aria-pressed', reviewHidden ? 'true' : 'false');
+      reviewFab.setAttribute('aria-pressed', reviewHidden ? 'true' : 'false');
+      if (reviewHidden) {
+        try {
+          reviewFab.focus({ preventScroll: true });
+        } catch (err) {
+          /* 忽略焦点设置失败 */
+        }
+      }
+    }
+    function ensureReviewControls() {
+      if (reviewInit || !dom.overlay) return;
+      const panel = dom.overlay.querySelector('.overlay-panel');
+      reviewBtn = document.createElement('button');
+      reviewBtn.type = 'button';
+      reviewBtn.className = 'ac-btn ac-btn-review';
+      reviewBtn.setAttribute('data-ov-review', '');
+      reviewBtn.setAttribute('aria-pressed', 'false');
+      reviewBtn.textContent = '回看棋盘';
+      reviewBtn.onclick = () => {
+        Sfx.play('ui');
+        setReviewHidden(!reviewHidden);
+      };
+      if (panel && dom.ovBtn) panel.insertBefore(reviewBtn, dom.ovBtn);
+      reviewFab = document.createElement('button');
+      reviewFab.type = 'button';
+      reviewFab.className = 'ac-review-fab';
+      reviewFab.setAttribute('data-ov-review-fab', '');
+      reviewFab.setAttribute('aria-label', '查看结算');
+      reviewFab.setAttribute('aria-pressed', 'false');
+      reviewFab.textContent = '查看结算';
+      reviewFab.hidden = true;
+      reviewFab.onclick = () => {
+        Sfx.play('ui');
+        setReviewHidden(false);
+      };
+      dom.overlay.appendChild(reviewFab);
+      reviewInit = true;
+    }
+
     function hide() {
       dom.overlay.hidden = true;
+      dom.overlay.classList.remove('is-result');
+      setReviewHidden(false);
       if (previousFocus && typeof previousFocus.focus === 'function') {
         try {
           previousFocus.focus({ preventScroll: true });
@@ -2477,6 +2536,13 @@
             }
           : null;
       }
+      dom.overlay.classList.toggle('is-result', !!o.result);
+      if (o.result) {
+        ensureReviewControls();
+        setReviewHidden(false);
+      } else if (reviewInit) {
+        setReviewHidden(false);
+      }
       dom.overlay.hidden = false;
       try {
         dom.ovBtn.focus({ preventScroll: true });
@@ -2487,6 +2553,18 @@
     return {
       show,
       hide,
+      setReviewHidden,
+      get reviewState() {
+        return {
+          isResult: !!dom.overlay && dom.overlay.classList.contains('is-result'),
+          panelHidden: reviewInit && reviewHidden,
+          fabVisible: reviewInit && !!reviewFab && !reviewFab.hidden,
+          buttonVisible: reviewInit && !!reviewBtn && !reviewBtn.hidden,
+        };
+      },
+      get reviewVisible() {
+        return reviewInit && !reviewHidden;
+      },
       get visible() {
         return !dom.overlay.hidden;
       },
@@ -2505,6 +2583,15 @@
       hide() {
         ui.hide();
         Playtime.setOverlayVisible(false);
+      },
+      setReviewHidden(value) {
+        ui.setReviewHidden(value);
+      },
+      get reviewState() {
+        return ui.reviewState;
+      },
+      get reviewVisible() {
+        return ui.reviewVisible;
       },
       get visible() {
         return ui.visible;

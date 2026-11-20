@@ -533,6 +533,7 @@
           : `共 ${HANDS_TOTAL} 手 · 赢 ${wins} 手 · 平 ${pushes} 手`;
         const assistLine = assisted ? '<br/>本局使用了辅助道具' : '';
         ui.show({
+          result: true,
           title: early ? '本局已结束' : '六手结束',
           text:
             `<span class="ac-score">${score}</span>` +

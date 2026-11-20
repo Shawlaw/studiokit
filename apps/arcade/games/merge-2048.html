@@ -313,6 +313,7 @@
             (rec && rec.isNewHigh ? '<span class="ac-newhigh">★ 新纪录</span><br/>' : '') +
             `${moves} 步 · 最大方块 ${bestTile()} · 本局成绩已记录一次`;
         const options = {
+          result: true,
           title: title,
           text: text,
           btn: winPopup ? '继续挑战' : '再来一局',
@@ -564,6 +565,7 @@
         const index = stages.findIndex((s) => s.id === chStageId);
         const isLast = index < 0 || index >= stages.length - 1;
         ui.show({
+          result: true,
           title: '关卡完成',
           text:
             A.Challenge.resultHtml(chStage, result) +
@@ -589,6 +591,7 @@
         loop.pause();
         const goal = chStage ? challengeGoalDisplay(chStage, chMaxMoves) : '';
         ui.show({
+          result: true,
           title: '挑战失败',
           text:
             `<span class="ac-score">${chMoves}/${chMaxMoves} 步</span>` +

@@ -4,7 +4,7 @@
 
 - **线上站点：** <https://shawlaw.github.io/studiokit/> · <https://studiokit.pages.dev/>
 - **源码：** <https://github.com/Shawlaw/studiokit>（MIT 许可）
-- **当前工具：** Badge Studio `2.2.1`；街机厅 Arcade `0.10.0`（16 款竖屏小游戏：13 款带 78 关挑战模式 + 二十一点/五子棋/纸牌接龙三款平和棋牌；俄罗斯方块禅模式 + 积分记录表 + 极速车道转向灯换道/连超/拾取 + 结算重选模式）；Venue Compare `0.2.0`（餐厅考察对比、地图标注与外部链接 / 备注，已发布）
+- **当前工具：** Badge Studio `2.2.1`；街机厅 Arcade `0.11.0`（16 款竖屏小游戏：13 款带 78 关挑战模式 + 二十一点/五子棋/纸牌接龙三款平和棋牌；俄罗斯方块禅模式 + 积分记录表 + 极速车道转向灯换道/连超/拾取 + 结算重选模式）；Venue Compare `0.2.0`（餐厅考察对比、地图标注与外部链接 / 备注，已发布）
 - **计划中的工具：** Rounded Image（尚未实现，等待原始需求/规格）
 - **最近发布：** 2026-11-20，Arcade 0.10.0（棋牌规则修复 + 挑战深度与数据管线升级；GitHub Pages + Cloudflare Pages 双端；提交 `fc37d2b` 推送 `main`；Actions run `44681529684` 的 Validate and build / Deploy GitHub Pages / Deploy Cloudflare Pages / Verify both deployments 四个 job 全部成功；CI 与本地 `tools/verify_deploy.py` 均 **41/41** 文件 SHA-256 双端一致（Arcade `0.10.0` / Badge `2.2.1` / Venue `0.2.0`，manifest `application/manifest+json`）；双端线上无头 Chrome 各 26/26（中心页 0.10.0 + 16 卡 + 三款棋牌注册、三款棋牌 selftest/regression/开始/暂停、0.10.0 挑战数据字段、0 console error）；SW 缓存键 `studiokit-arcade-0.10.0-v1`。）
 - **运行方式：** 纯静态文件；无后端、无账号、无构建依赖、无第三方 CDN
@@ -175,7 +175,7 @@ Cloudflare Pages 部署在域名根路径（当前为 `studiokit.pages.dev`，�
 
 ## 当前状态
 
-- 已发布：Badge Studio `2.2.1`、Venue Compare `0.2.0`、街机厅 Arcade `0.10.0`（16 款游戏 = 13 款 6 关挑战 + 三款无倒计时平和棋牌；每款 2 个主动道具、自然收尾、一次性 20 分钟提醒与中心页随机入口；没有签到、每日奖励或付费抽奖）。
+- 已发布：Badge Studio `2.2.1`、Venue Compare `0.2.0`、街机厅 Arcade `0.11.0`（16 款游戏 = 13 款 6 关挑战 + 三款无倒计时平和棋牌；每款 2 个主动道具、自然收尾、一次性 20 分钟提醒与中心页随机入口；没有签到、每日奖励或付费抽奖）。
 - Arcade 0.10.0 本地门禁：smoke 94/94、zen 14/14、calm 17/17、gameplay all 104/104、base 22/22、派生重生成 143/143；提交 `fc37d2b` 推送 `main`；Actions run `44681529684` 的 Validate and build / Deploy GitHub Pages / Deploy Cloudflare Pages / Verify both deployments 四个 job 全部成功；CI 与本地 `tools/verify_deploy.py` 均 **41/41** 文件 SHA-256 双端一致（Arcade `0.10.0` / Badge `2.2.1` / Venue `0.2.0`，manifest `application/manifest+json`）；双端线上无头 Chrome 各 26/26（中心页 0.10.0 + 16 卡 + 三款棋牌注册、三款棋牌 selftest/regression/开始/暂停、0.10.0 挑战数据字段、0 console error）；SW 缓存键 `studiokit-arcade-0.10.0-v1`。
 - 真机 iOS/Android 试玩、原生全屏与系统分享面板仍为 UNVERIFIED；320/375 下五子棋/纸牌接龙的点按精度（画布内格点约 14–20 CSS px）需真机试玩裁决。
 - 规划中：Rounded Image（等待原始需求/规格，不凭空复刻）。
