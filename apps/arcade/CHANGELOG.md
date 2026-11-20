@@ -1,5 +1,23 @@
 # Arcade Changelog
 
+## 0.10.0 — 2026-11-20（本地）
+
+### Added
+- 新增 `tools/arcade_fixture.mjs`、`tools/arcade_stage_coverage.mjs`、`tools/arcade_design_check.py`、`tools/arcade_run_all_gates.py`：统一夹具读取、78 关证据矩阵、派生文件重生成一致性与一键门禁。
+
+### Fixed
+- 二十一点：庄家 natural 立即结算，同点 push 优先于普通 21 奖励，`swap` 不再救援已结算手。
+- 五子棋：`playToEnd()` 异常不再伪装和棋；320/375 增加 44px DOM 落子确认按钮；AI 文案改为启发式、不代表最优。
+- 纸牌接龙：修正提示谎报死局和无意义 K 倒列；刷新恢复撤销栈与提示剩余秒数；新增低摩擦重发。
+- 挑战：层塔 C05/C06 目标进入判定；方块换块队列/自然重力契约；2048 目标步数口径；星海 C03/C04 二次换位；车道 +5 门牌与时长校准；雪铃彩铃收益/雪花乐谱；影跃影门半径 20 与 `requireDash`；重力窗口收窄；矿工双路线与移除运行时参考顺序。
+
+### Changed
+- 设计源统一以 `docs/arcade/0.9/scripts/build_pack.py` 为最终 authoring 源，全链路重生成 78 关派生物；新增每关 contentRevision、按游戏字段白名单、supportedFeatures 与 `--check` 幂等比对。
+- 测试侧将贪吃蛇/雪铃/层塔/影跃硬编码答案改为夹具读取；设计包静态断言 1088 → 1090，生成器自检 2128 → 3020。
+- 哈希口径改为 canonical JSON + UTF-8 + LF，`SHA256SUMS.txt` 纳入 `--check`；运行时删除 `referenceCatchOrder`，防剧透口径改为“运行时最小化，不声称源码保密”。
+
+### Verification
+- 本地完整门禁待集成收口后填入；本版本只本地提交，未推送、未发布。
 ## 0.9.0 — 2026-11-20（已双端发布）
 
 在 0.8.6 基础上做两件事：逐款修复挑战模式的公平性/续档/计分问题，并新增三款无倒计时单机棋牌。设计与回滚见 `DESIGN-0.9.0.md`；**不改挑战关卡数据、localStorage key 与 Schema**（2048 继续挑战记录语义除外）。

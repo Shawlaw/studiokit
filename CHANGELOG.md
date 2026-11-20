@@ -2,29 +2,22 @@
 
 StudioKit 门户本身没有独立的 semver；以下按仓库里程碑与工具版本记录。各工具的详细变更见 `apps/<tool>/CHANGELOG.md`。
 
-## Arcade 0.9.0 — 2026-11-20（已双端发布）
+## Arcade 0.10.0 — 2026-11-20（本地，未发布）
 
 ### Added
-- 新增三款无倒计时、无下注、无联网的单机棋牌小游戏：二十一点（6 手、A 自动 11/1、换牌/看底牌）、五子棋（11 路、本地启发式 AI、悔棋/提示、先预览再确认防误触）、纸牌接龙（Klondike 抽 1、点选后点目标移动、无限翻回牌库、撤销/提示）。三款复用既有 `studiokit:arcade:progress:v1` 与 `studiokit:arcade:runs:v1`，不新增 localStorage key。
-- 新增 `tools/arcade_calm_games_test.mjs`（三款棋牌规则自检/结算/四档布局 + 10 款修复 regression）、`tools/arcade_calm_probe.mjs`（单页接入探针）、`tools/check_inline_scripts.mjs`（全站 HTML 内联脚本语法）。
+- 新增夹具驱动测试工具：`tools/lib/arcade_fixture.mjs`、`tools/arcade_stage_coverage.mjs`、`tools/arcade_design_check.py`、`tools/arcade_run_all_gates.py`。
 
 ### Fixed
-- **记忆翻牌**：挑战「再看一眼」计时器不递减导致牌面常亮且无法继续翻牌（阻断）；挑战续档丢失道具与计时；C03/C05 分区预览最后区域 0 秒曝光；暂停时未真正盖牌。
-- **2048**：达成 2048 后「继续挑战」，最终更高分不再写入；挑战 HUD 与关卡实际步数上限不一致；320px 滑动阈值过小。
-- **俄罗斯方块**：挑战「换块」未同步固定队列导致 NEXT 与实际出块不一致；失败复盘追加本关技巧提示。
-- **雪铃**：休止铃/彩铃/蓝红铃绘制完全相同；挑战中无效的「安可」扣次数。
-- **砖块计划**：触屏按住拖动挡板会同时发球；C03/C06 锁定门/钥匙无提示。
-- **层塔**：挑战对齐提示用经典重叠率而非本关目标偏置；下落中刷新会重开一箱/补回道具；结算倾斜峰值取当前值。
-- **黄金矿工**：时间归零时已夹中的最后一钩不结算；矿物缺少价值/重量信息。
-- **极速车道**：近距超车奖励算反（近距 5 < 普通 10）；C02 出生车道被首时隙占用。
-- **影跃**：重试清零计时可刷最佳成绩；易碎平台无裂纹预警；失败复盘无落点信息。
-- **星海突击**：挑战刷新后 Boss 射击计时被重置、固定拾取物游标未保存；挑战顶部 DOM HUD 与画布 HUD 重叠。
+- 三款棋牌：二十一点庄家 natural 立即结算、同点 push 优先；五子棋异常自动对局不再伪装和棋，320/375 增加 44px DOM 确认按钮；纸牌接龙修正提示谎报死局/无意义 K 倒列，刷新恢复撤销栈与提示，增加重发入口。
+- 挑战：层塔 C05/C06 目标进入判定；方块 C04–C06 改成真实不同落点/摆法空间并支持 data 驱动的“无自然重力”；2048 文案与步数上限一致；星海 C03/C04 二次换位；车道 +5 门牌与时长校准；雪铃彩铃收益与雪花乐谱；影跃影门半径 20 与 `requireDash`；重力窗口收窄；矿工双路线与移除运行时参考顺序。
+
+### Changed
+- 设计源以 `docs/arcade/0.9/scripts/build_pack.py` 为最终 authoring 源，全链路重生成；新增 contentRevision、按游戏字段白名单、supportedFeatures、`--check` 生成一致性校验；设计包断言 1088 → 1090，生成器自检 2128 → 3020。
+- 参考回放测试从硬编码答案改为统一夹具读取；哈希统一 canonical JSON + UTF-8 + LF。
 
 ### Verification
-- `arcade_smoke.mjs` **94/94**、`arcade_zen_scores_test.mjs` **14/14**、`arcade_gameplay_test.mjs --suite=all --repeat=1` **104/104** 与 base **22/22**、`arcade_calm_games_test.mjs` **17/17**（含 107 条修复 regression 断言）；`validate_site.py` / `build_site.py` / `check_inline_scripts.mjs` / `node --check` 全部通过。
-- localStorage key / Schema 不变；挑战关卡数据与参考解不变；旧备份导入与旧档恢复通过自动化验证。
-- 独立评审：0 Blocker / 3 Major / 12 Minor，Major 已在发布前闭环或写入已知限制；真机触控与五子棋 AI 手感仍 UNVERIFIED。
-- 双端发布：提交 `eb5e641` 推送 `main`；Actions run `44582961215` 的 Validate and build / Deploy GitHub Pages / Deploy Cloudflare Pages / Verify both deployments 四个 job 全部成功；CI 与本地 `tools/verify_deploy.py` 均 **41/41** 文件 SHA-256 双端一致（Arcade `0.9.0` / Badge `2.2.1` / Venue `0.2.0`，manifest `application/manifest+json`）；双端线上无头 Chrome 各 20/20（中心页 0.9.0 + 16 卡 + 三款棋牌注册、三款棋牌规则自检/开始/暂停/续玩、SW 缓存键 `studiokit-arcade-0.9.0-v1`、0 console error）。
+- 本地门禁：`arcade_smoke.mjs` 94/94、zen 14/14、`arcade_calm_games_test.mjs` 17/17、gameplay all 104/104、base 22/22、派生文件重生成 143/143。
+- 本版本只本地提交，未推送、未发布；线上仍为 Arcade 0.9.0。
 
 ## Arcade 0.8.6 — 2026-11-19（已双端发布）
 

@@ -167,21 +167,20 @@
 - [x] 门禁：`arcade_smoke.mjs` **91/91**、`arcade_zen_scores_test.mjs` **14/14**、gameplay base **22/22**，validate/build/node 全过；320/375/390/430 布局通过，真机手感 UNVERIFIED。
 - [x] 发布证据：提交 `14a9160` 推送 `main`；Actions `44553437432` 四 job 全成功；CI 与本地 `verify_deploy.py` 均 **38/38** 双端一致；双端线上无头 Chrome **20/20**（SW、双按钮、经典/挑战相对转向、结算重选、方块三入口、0 console error）；SW 缓存键 `studiokit-arcade-0.8.6-v1`。
 
-## 0.9.0 发布批次（2026-11-20 已双端发布）
+## 0.10.0 本地开发批次（2026-11-20，未发布）
 
-### Arcade 0.9.0 — 挑战公平性修复 + 三款平和棋牌（已发布）
+### Arcade 0.10.0 — 棋牌规则修复、挑战深度与数据管线（本地门禁通过，未推送）
 
-- [x] 审查口径：把「自动回放能通关」与「真人是否好玩/公平」分开；逐款核对代码事实、挑战数据与测试证据，识别出阻断级缺陷、公平性缺陷与内容密度不足三类问题（见 `apps/arcade/DESIGN-0.9.0.md` §1–§2）。
-- [x] 阻断级修复：记忆翻牌挑战 peek 锁死翻牌与续档丢道具；2048 继续挑战后最终成绩丢失；砖块首次拖动误发球；层塔续档重开一箱；矿工最后一钩不结算。
-- [x] 公平性修复：2048 滑动阈值按 CSS 尺寸；方块挑战换块同步固定队列；雪铃按 kind 区分铃铛并禁用无效安可；砖块锁定门常驻提示；层塔挑战对齐改用关卡目标偏置、记录真实最大倾斜；矿工标注价值/重量；极速车道近距奖励改为 10+5 并处理出生车道不安全；影跃最佳成绩改为跨重试累计时间、可视化易碎平台、失败复盘给落点；星海刷新恢复 Boss 计时/拾取游标、隐藏重复 HUD。
-- [x] 新增棋牌 3 款：二十一点（6 手无下注）、五子棋（11 路本地 AI）、纸牌接龙（Klondike 抽 1）；均为点按优先、无倒计时、无签到/每日奖励，复用 `progress:v1` / `runs:v1` 不新增 key。
-- [x] 兼容：挑战关卡数据与参考解不变；localStorage key/Schema 不变；导出/导入格式不变；2048 记录语义变化仅影响“胜利后继续”的最终落库时机。
-- [x] 门禁：`arcade_smoke.mjs` **94/94**、`arcade_zen_scores_test.mjs` **14/14**、`arcade_gameplay_test.mjs --suite=all --repeat=1` **104/104** 与 base **22/22**、新增 `arcade_calm_games_test.mjs` **17/17**、validate/build/node/`check_inline_scripts` 全过；真机与 AI 手感 UNVERIFIED。
-- [x] 发布证据：提交 `eb5e641` 推送 `main`；Actions run `44582961215` 的 Validate and build / Deploy GitHub Pages / Deploy Cloudflare Pages / Verify both deployments 四个 job 全部成功；CI 与本地 `tools/verify_deploy.py` 均 **41/41** 文件 SHA-256 双端一致（Arcade `0.9.0` / Badge `2.2.1` / Venue `0.2.0`，manifest `application/manifest+json`）；双端线上无头 Chrome 各 20/20（中心页 0.9.0 + 16 卡 + 三款棋牌注册、三款棋牌规则自检/开始/暂停/续玩、SW 缓存键 `studiokit-arcade-0.9.0-v1`、0 console error）。（详细记录见 `docs/RELEASE-RUNBOOK.md`）
+- [x] 三款棋牌规则修复：二十一点 natural 立即结算与同点 push；五子棋异常自动对局不伪装和棋、320/375 DOM 44px 确认按钮；纸牌接龙提示回退/等价移动过滤/撤销与提示续档/重发入口。
+- [x] 挑战实现修复：层塔 C05/C06 目标进入判定；方块摆法空间与 place-by-place 重力；2048 步数口径；星海 splits 二次换位；车道 +5 门牌与时长；雪铃彩铃收益/雪花乐谱；影跃半径 20 与 requireDash；重力窗口收窄；矿工双路线与防剧透。
+- [x] 数据管线：build_pack.py 为最终 authoring 源；contentRevision、字段白名单、supportedFeatures、canonical 哈希、shadow-summary 不泄答案，运行时删除 referenceCatchOrder，夹具保留。
+- [x] 测试：权威夹具读取替换硬编码答案；78 关证据覆盖矩阵；派生文件重生成一致性检查；`arcade_run_all_gates.py` 一键跑全部门禁。
+- [x] 本地门禁：`arcade_smoke.mjs` **94/94**、`arcade_zen_scores_test.mjs` **14/14**、`arcade_gameplay_test.mjs --suite=all --repeat=1` **104/104** 与 base **22/22**、`arcade_calm_games_test.mjs` **17/17**、派生重生成 **143/143**；真机与 AI 手感 UNVERIFIED。
+- [ ] 待 Owner 授权后推送 `main` 并双端部署；发布后再回填 Actions run、`verify_deploy.py` 与线上浏览器证据（当前线上仍为 0.9.0）。
 
 ## Now
 
-1. **Arcade 0.9.0 真机试玩**：重点验证三款棋牌的点按精度（320px 五子棋/接龙）、五子棋 AI 难度是否合适、挑战修复后的手感（砖块拖动发球、层塔对齐提示、矿工最后一钩、影跃累计计时文案）。
+1. **Arcade 0.10.0 真机试玩**：重点验证三款棋牌的点按精度（320px 五子棋/接龙）、五子棋 AI 难度是否合适、挑战修复后的手感（砖块拖动发球、层塔对齐提示、矿工最后一钩、影跃累计计时文案）。
 2. **挑战内容密度**：俄罗斯方块 C04 重复、2048 C05 一步可解、影跃参考通关过短等内容问题需要改设计源 + 生成器 + 参考解，另行排期；本轮只修判定/提示/续档/计分。
 3. **Arcade 0.8.0/0.9 设计差量试玩**：按 `docs/arcade/0.8.0-PLAYTEST.md` 与 `docs/arcade/0.9/PLAYTEST.md` 在真机做两轮试玩并裁决 5 项设计差量；真机未验证前不宣称通过。
 4. **数值反馈**：收集道具次数、自然收尾目标与休息提醒时长的真实反馈，再决定是否微调。

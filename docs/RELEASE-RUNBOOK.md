@@ -6,9 +6,12 @@
 - GitHub Pages：<https://shawlaw.github.io/studiokit/>
 - Cloudflare Pages：<https://studiokit.pages.dev/>
 - 最近发布：Arcade `0.9.0`（2026-11-20，已双端发布）
-  - 批次内容：新增二十一点 / 五子棋 / 纸牌接龙三款无倒计时单机棋牌（16 款 = 13 挑战 + 3 棋牌）；修复 10 款既有游戏的挑战公平性、续档与计分问题（记忆翻牌 peek 锁死/续档、2048 继续挑战丢分、砖块拖动误发球、层塔续档重开一箱、矿工最后一钩、车道近距奖励、影跃刷最佳、星海 Boss 计时、方块换块队列、雪铃铃铛可读性）；localStorage key/Schema 与挑战关卡数据不变
-  - 提交 `eb5e641` 推送 `main`；Actions run `44582961215` 的 Validate and build / Deploy GitHub Pages / Deploy Cloudflare Pages / Verify both deployments 四个 job 全部成功；CI 与本地 `tools/verify_deploy.py` 均 **41/41** 文件 SHA-256 双端一致（Arcade `0.9.0` / Badge `2.2.1` / Venue `0.2.0`，manifest `application/manifest+json`）；双端线上无头 Chrome 各 20/20（中心页 0.9.0 + 16 卡 + 三款棋牌注册、三款棋牌规则自检/开始/暂停/续玩、SW 缓存键 `studiokit-arcade-0.9.0-v1`、0 console error）。
-  - 独立评审：APPROVE-WITH-NOTES（0 Blocker / 3 Major / 12 Minor），见 `docs/arcade/0.9.0-REVIEW.md`；320/375 下五子棋/接龙画布内点按粒度小于 44px 仍为 UNVERIFIED
+  - 批次内容：新增二十一点 / 五子棋 / 纸牌接龙三款无倒计时单机棋牌（16 款 = 13 挑战 + 3 棋牌）；修复 10 款既有游戏的挑战公平性、续档与计分问题；localStorage key/Schema 与挑战关卡数据不变
+  - 提交 `eb5e641` 推送 `main`；Actions run `44582961215` 四 job 全成功；CI 与本地 `tools/verify_deploy.py` 均 **41/41** 文件 SHA-256 双端一致（Arcade `0.9.0` / Badge `2.2.1` / Venue `0.2.0`）；双端线上无头 Chrome 各 20/20；SW 缓存键 `studiokit-arcade-0.9.0-v1`。
+- 本地待发布：Arcade `0.10.0`（2026-11-20，分支 `feat/arcade-calm-cards`/`feat/arcade-0.10-quality`，未推送）
+  - 批次内容：棋牌规则修复、挑战深度优化、设计源/生成器/参考解升级；不新增 key/Schema
+  - 本地门禁：smoke 94/94、zen 14/14、calm 17/17、gameplay all 104/104、base 22/22、派生重生成 143/143；独立评审 Blocker 已闭环
+  - 发布后须回填本条 Actions run、双端 verify 与线上浏览器证据；当前线上仍为 `0.9.0`
 - 上一个发布：Arcade `0.8.6`（2026-11-19，已发布）
   - 批次内容：13 款游戏经典局与俄罗斯方块禅模式结算「再来一局」回到开始弹层重新选模式；俄罗斯方块完整复位三入口；贪吃蛇改为左右相对转向双按钮，经典/挑战连点按格执行；不改数据 key/Schema 或玩法数值
   - 提交 `14a9160` 推送 `main`；Actions `44553437432` 四个 job 均成功
