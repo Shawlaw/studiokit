@@ -167,16 +167,16 @@
 - [x] 门禁：`arcade_smoke.mjs` **91/91**、`arcade_zen_scores_test.mjs` **14/14**、gameplay base **22/22**，validate/build/node 全过；320/375/390/430 布局通过，真机手感 UNVERIFIED。
 - [x] 发布证据：提交 `14a9160` 推送 `main`；Actions `44553437432` 四 job 全成功；CI 与本地 `verify_deploy.py` 均 **38/38** 双端一致；双端线上无头 Chrome **20/20**（SW、双按钮、经典/挑战相对转向、结算重选、方块三入口、0 console error）；SW 缓存键 `studiokit-arcade-0.8.6-v1`。
 
-## 0.10.0 本地开发批次（2026-11-20，未发布）
+## 0.10.0 发布批次（2026-11-20 已双端发布）
 
-### Arcade 0.10.0 — 棋牌规则修复、挑战深度与数据管线（本地门禁通过，未推送）
+### Arcade 0.10.0 — 棋牌规则修复、挑战深度与数据管线（已发布）
 
 - [x] 三款棋牌规则修复：二十一点 natural 立即结算与同点 push；五子棋异常自动对局不伪装和棋、320/375 DOM 44px 确认按钮；纸牌接龙提示回退/等价移动过滤/撤销与提示续档/重发入口。
 - [x] 挑战实现修复：层塔 C05/C06 目标进入判定；方块摆法空间与 place-by-place 重力；2048 步数口径；星海 splits 二次换位；车道 +5 门牌与时长；雪铃彩铃收益/雪花乐谱；影跃半径 20 与 requireDash；重力窗口收窄；矿工双路线与防剧透。
 - [x] 数据管线：build_pack.py 为最终 authoring 源；contentRevision、字段白名单、supportedFeatures、canonical 哈希、shadow-summary 不泄答案，运行时删除 referenceCatchOrder，夹具保留。
 - [x] 测试：权威夹具读取替换硬编码答案；78 关证据覆盖矩阵；派生文件重生成一致性检查；`arcade_run_all_gates.py` 一键跑全部门禁。
 - [x] 本地门禁：`arcade_smoke.mjs` **94/94**、`arcade_zen_scores_test.mjs` **14/14**、`arcade_gameplay_test.mjs --suite=all --repeat=1` **104/104** 与 base **22/22**、`arcade_calm_games_test.mjs` **17/17**、派生重生成 **143/143**；真机与 AI 手感 UNVERIFIED。
-- [ ] 待 Owner 授权后推送 `main` 并双端部署；发布后再回填 Actions run、`verify_deploy.py` 与线上浏览器证据（当前线上仍为 0.9.0）。
+- [x] 发布证据：提交 `fc37d2b` 推送 `main`；Actions run `44681529684` 的 Validate and build / Deploy GitHub Pages / Deploy Cloudflare Pages / Verify both deployments 四个 job 全部成功；CI 与本地 `tools/verify_deploy.py` 均 **41/41** 文件 SHA-256 双端一致（Arcade `0.10.0` / Badge `2.2.1` / Venue `0.2.0`，manifest `application/manifest+json`）；双端线上无头 Chrome 各 26/26（中心页 0.10.0 + 16 卡 + 三款棋牌注册、三款棋牌 selftest/regression/开始/暂停、0.10.0 挑战数据字段、0 console error）；SW 缓存键 `studiokit-arcade-0.10.0-v1`。（详细记录见 `docs/RELEASE-RUNBOOK.md`）
 
 ## Now
 

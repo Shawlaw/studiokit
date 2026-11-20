@@ -1,6 +1,6 @@
 # Arcade Changelog
 
-## 0.10.0 — 2026-11-20（本地）
+## 0.10.0 — 2026-11-20（已双端发布）
 
 ### Added
 - 新增 `tools/arcade_fixture.mjs`、`tools/arcade_stage_coverage.mjs`、`tools/arcade_design_check.py`、`tools/arcade_run_all_gates.py`：统一夹具读取、78 关证据矩阵、派生文件重生成一致性与一键门禁。
@@ -17,7 +17,7 @@
 - 哈希口径改为 canonical JSON + UTF-8 + LF，`SHA256SUMS.txt` 纳入 `--check`；运行时删除 `referenceCatchOrder`，防剧透口径改为“运行时最小化，不声称源码保密”。
 
 ### Verification
-- 本地完整门禁待集成收口后填入；本版本只本地提交，未推送、未发布。
+- 双端发布：提交 `fc37d2b` 推送 `main`；Actions run `44681529684` 四 job 全成功；CI 与本地 `tools/verify_deploy.py` 均 **41/41** 文件 SHA-256 双端一致（Arcade `0.10.0` / Badge `2.2.1` / Venue `0.2.0`）；双端线上无头 Chrome 各 26/26（中心页 0.10.0 + 16 卡、三款棋牌 selftest/regression/开始/暂停、0.10.0 挑战数据字段、0 console error）；SW 缓存键 `studiokit-arcade-0.10.0-v1`。
 ## 0.9.0 — 2026-11-20（已双端发布）
 
 在 0.8.6 基础上做两件事：逐款修复挑战模式的公平性/续档/计分问题，并新增三款无倒计时单机棋牌。设计与回滚见 `DESIGN-0.9.0.md`；**不改挑战关卡数据、localStorage key 与 Schema**（2048 继续挑战记录语义除外）。

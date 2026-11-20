@@ -2,7 +2,7 @@
 
 StudioKit 门户本身没有独立的 semver；以下按仓库里程碑与工具版本记录。各工具的详细变更见 `apps/<tool>/CHANGELOG.md`。
 
-## Arcade 0.10.0 — 2026-11-20（本地，未发布）
+## Arcade 0.10.0 — 2026-11-20（已双端发布）
 
 ### Added
 - 新增夹具驱动测试工具：`tools/lib/arcade_fixture.mjs`、`tools/arcade_stage_coverage.mjs`、`tools/arcade_design_check.py`、`tools/arcade_run_all_gates.py`。
@@ -17,7 +17,7 @@ StudioKit 门户本身没有独立的 semver；以下按仓库里程碑与工具
 
 ### Verification
 - 本地门禁：`arcade_smoke.mjs` 94/94、zen 14/14、`arcade_calm_games_test.mjs` 17/17、gameplay all 104/104、base 22/22、派生文件重生成 143/143。
-- 本版本只本地提交，未推送、未发布；线上仍为 Arcade 0.9.0。
+- 双端发布：提交 `fc37d2b` 推送 `main`；Actions run `44681529684` 的 Validate and build / Deploy GitHub Pages / Deploy Cloudflare Pages / Verify both deployments 四个 job 全部成功；CI 与本地 `tools/verify_deploy.py` 均 **41/41** 文件 SHA-256 双端一致（Arcade `0.10.0` / Badge `2.2.1` / Venue `0.2.0`，manifest `application/manifest+json`）；双端线上无头 Chrome 各 26/26（中心页 0.10.0 + 16 卡 + 三款棋牌注册、三款棋牌 selftest/regression/开始/暂停、0.10.0 挑战数据字段、0 console error）；SW 缓存键 `studiokit-arcade-0.10.0-v1`。
 
 ## Arcade 0.8.6 — 2026-11-19（已双端发布）
 

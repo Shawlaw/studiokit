@@ -26,7 +26,7 @@ Current Venue Compare baseline facts:
 
 Current Arcade baseline facts:
 
-- App version: `0.9.0`（`apps/arcade/engine.js` 的 `ARCADE_VERSION` 与注册表保持一致；2026-11-20 已双端发布）
+- App version: `0.10.0`（`apps/arcade/engine.js` 的 `ARCADE_VERSION` 与注册表保持一致；2026-11-20 已双端发布）
 - Registry entry: `shared/tool-registry.json` → `id: "arcade"`，`href: "./apps/arcade/"`
 - Games: 16（13 款带 6 关挑战 + 3 款平和棋牌：二十一点、五子棋、纸牌接龙；清单唯一来源是 `engine.js` 顶部的 `GAMES` 数组）
 - Run state schema: `v1`（`studiokit:arcade:runs:v1`）

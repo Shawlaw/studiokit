@@ -1,10 +1,10 @@
 # Arcade 0.10.0 设计：棋牌规则修复、挑战深度与关卡数据管线
 
-- 版本：Arcade `0.10.0`（本地分支 `feat/arcade-0.10-quality`，未推送/未发布）
+- 版本：Arcade `0.10.0`（2026-11-20 已双端发布）
 - 日期：2026-11-20
 - 范围：三款棋牌的规则/交互修复；13 款挑战的语义与内容优化；设计源、生成器、派生数据和测试链路升级。
 - 不变项：所有 localStorage key 与 Schema 版本（progress/runs/prefs/playtime/challenge/scores 均为 v1）；三款新棋牌之外不新增发布文件；无网络/CDN/框架。
-- 本轮只本地提交，不推送、不打 Tag、不发布。
+- 发布证据：提交 `fc37d2b` 推送 `main`；Actions run `44681529684` 四 job 全成功；双端 `verify_deploy.py` 41/41 一致；双端线上无头 Chrome 各 26/26；SW 缓存键 `studiokit-arcade-0.10.0-v1`。
 
 ## 1. 为什么做这一版
 
