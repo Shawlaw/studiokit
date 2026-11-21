@@ -1,6 +1,6 @@
 # Arcade Changelog
 
-## 0.11.2 — 2026-11-21（本地实现，未发布）
+## 0.11.2 — 2026-11-21（已双端发布）
 
 ### Added
 - PWA 更新检测：中心页「检查更新」按钮 + 更新横幅（发现新版本时提示「立即刷新 / 稍后」，不自动刷新打断游玩）；SW 激活后主动向受控页面广播新版本，`A.Offline` 新增 `checkForUpdate` / `applyUpdate` / `onUpdate` / `swVersion`，首次安装不误报更新。
@@ -11,7 +11,8 @@
 - 新增 `tools/arcade_pwa_update_test.mjs`（6 项：更新 UI/API、SW 版本握手、更新横幅、独立窗口深色 shellbar 与清晰顶栏、普通标签页不回归）。
 
 ### Verification
-- `arcade_pwa_update_test.mjs` 6/6、`arcade_smoke.mjs` 94/94、`arcade_zen_scores_test.mjs` 14/14、`arcade_calm_games_test.mjs` 17/17、`arcade_review_test.mjs` 5/5、`arcade_gameplay_test.mjs --suite=base` 11/11、`validate_site.py` / `build_site.py` / `check_inline_scripts.mjs` / 全部 `node --check` 通过。无 Schema/key 变更。真机 iOS 顶部观感与系统更新提示时机 UNVERIFIED。设计见 `DESIGN-0.11.2.md`。
+- 门禁：`arcade_pwa_update_test.mjs` 6/6、`arcade_smoke.mjs` 94/94、`arcade_zen_scores_test.mjs` 14/14、`arcade_calm_games_test.mjs` 17/17、`arcade_review_test.mjs` 5/5、`arcade_gameplay_test.mjs --suite=base` 11/11、`validate_site.py` / `build_site.py` / `check_inline_scripts.mjs` / 全部 `node --check` 通过。无 Schema/key 变更。设计见 `DESIGN-0.11.2.md`。
+- 发布：提交 `f2f1cd1` 推送 `main`；Actions run `44899492208` 四个 job 全绿（Validate and build / Deploy GitHub Pages / Deploy Cloudflare Pages / Verify both deployments）；CI 与本地 `tools/verify_deploy.py` 均 **41/41** 文件 SHA-256 双端一致（Arcade `0.11.2` / Badge `2.2.1` / Venue `0.2.0`，manifest 正确）；双端线上无头 Chrome 各 7/7（中心页 0.11.2 + 16 卡 + 深色 shellbar + 检查更新按钮 + 独立窗口安全区 + checkForUpdate 可用 + 五子棋沉浸顶栏清晰，0 console error）；SW 缓存键 `studiokit-arcade-0.11.2-v1`。真机 iOS 顶部观感与系统更新提示时机 UNVERIFIED。
 
 ## 0.11.1 — 2026-11-21（已双端发布）
 

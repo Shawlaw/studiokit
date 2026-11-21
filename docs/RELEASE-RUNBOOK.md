@@ -5,7 +5,12 @@
 - 仓库：<https://github.com/Shawlaw/studiokit>
 - GitHub Pages：<https://shawlaw.github.io/studiokit/>
 - Cloudflare Pages：<https://studiokit.pages.dev/>
-- 最近发布：Arcade `0.9.0`（2026-11-20，已双端发布）
+- 最近发布：Arcade `0.11.2`（2026-11-21，已双端发布）
+  - 批次内容：PWA 更新检测（中心页「检查更新」+ SW 版本握手 + 更新横幅，不自动刷新）与 iPhone 安装版顶部修复（深色不透明 shellbar + 安全区纯色底 + 游戏顶栏独立合成层，消除灰白渐层与文字发虚）；不改 localStorage key/Schema、玩法或数据
+  - 门禁：`arcade_pwa_update_test` 6/6、smoke 94/94、zen 14/14、calm 17/17、review 5/5、gameplay base 11/11、validate/build/inline/node --check 全过
+  - 提交 `f2f1cd1` 推送 `main`；Actions run `44899492208` 四 job 全成功；CI 与本地 `tools/verify_deploy.py` 均 **41/41** 文件 SHA-256 双端一致（Arcade `0.11.2` / Badge `2.2.1` / Venue `0.2.0`，manifest 正确）；双端线上无头 Chrome 各 7/7（中心页 0.11.2 + 16 卡 + 深色 shellbar + 检查更新按钮 + 独立窗口安全区 + checkForUpdate 可用 + 五子棋沉浸顶栏清晰，0 console error）；SW 缓存键 `studiokit-arcade-0.11.2-v1`；真机 iOS 顶部观感与系统更新提示时机 UNVERIFIED
+- 上一个发布：Arcade `0.11.1`（2026-11-21，已双端发布）：结算默认保留模糊蒙层 + 回看按钮按游戏命名；提交 `d51c87e` / Actions `44876176661` / verify 41/41
+- 历史发布：Arcade `0.9.0`（2026-11-20，已双端发布）
   - 批次内容：新增二十一点 / 五子棋 / 纸牌接龙三款无倒计时单机棋牌（16 款 = 13 挑战 + 3 棋牌）；修复 10 款既有游戏的挑战公平性、续档与计分问题；localStorage key/Schema 与挑战关卡数据不变
   - 提交 `eb5e641` 推送 `main`；Actions run `44582961215` 四 job 全成功；CI 与本地 `tools/verify_deploy.py` 均 **41/41** 文件 SHA-256 双端一致（Arcade `0.9.0` / Badge `2.2.1` / Venue `0.2.0`）；双端线上无头 Chrome 各 20/20；SW 缓存键 `studiokit-arcade-0.9.0-v1`。
 - 最近发布：Arcade `0.10.0`（2026-11-20，已双端发布）
