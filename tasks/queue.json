@@ -1679,6 +1679,24 @@
       "evidence": "Owner 反馈三点并在浏览器中复现确认。双击放大：17 页 viewport 加 maximum-scale=1/user-scalable=no、html touch-action manipulation 兜底、engine.js installSfxUnlock() 全局拦 dblclick 默认行为（不 stopPropagation，不破坏方块双击暂停）。五子棋重影根因：画布 drawPlaceButton 与 DOM placeButton 各画一份「落子」（字号/位置不同，全屏错位）；修复为画布 drawActionButton 唯一文字源，DOM 两枚透明命中层（data-cancel-preview/data-place-confirm，无文字/边框/底色）。预览出口：新增 cancelPreview()，取消只清 preview；逻辑按钮区 200→280 保证 320px 两半各 ≥44px；hint/开始弹层/画布引导/页脚文案同步。五子棋 selftest 新增第 18 条（预览取消与落子确认互不干扰），第 17 条改校验两枚透明命中层；新增 __arcadeTest.cancelPreview()/actionButtons() 钩子。新增 tools/arcade_interaction_test.mjs（IX-01…IX-05）：17 页 viewport / dblclick 拦截 / 透明命中层 / 四档+全屏布局 / 取消与落子。门禁：interaction 5/5、smoke 94/94、zen 14/14、calm 17/17（gomoku selftest 18 条）、review 5/5、gameplay base 11/11、pwa 7/7、validate/build/inline/node --check 全过；真机双击防护待 Owner 复测 UNVERIFIED；无 localStorage key/Schema 变更；版本链 0.11.5 / SW studiokit-arcade-0.11.5-v1；设计见 DESIGN-0.11.5.md。已并入 0.12.0 待发布。"
     },
     {
+      "id": "T100",
+      "title": "Arcade 0.12.2：集装箱释放水平速度（抛物线落点）",
+      "kind": "agent",
+      "status": "DONE",
+      "dependsOn": [
+        "T099"
+      ],
+      "ownerAuthorizationRequired": false,
+      "acceptance": [
+        "释放的箱子继承真实切向水平速度并产生可预测横移",
+        "落点预测与实际落点一致（误差可量化且很小）",
+        "加入速度后游戏仍可完美对齐、挑战 6 关仍可解",
+        "全量门禁通过；无 key/Schema/关卡数据变更"
+      ],
+      "completedAt": "2026-11-22T07:55:00+08:00",
+      "evidence": "Owner 反馈箱子释放没有合理水平速度。核查 releaseBox 只写 {x,y,vy}、update 只积分 vy、drop.x 不变 ⇒ 永远垂直落下。先做可行性扫描（k∈{0,0.15,0.25,0.35,0.5,0.75,1.0} × g∈{680,1020,1360,1700}，A=0.95）：k=0.45 时完美对齐窗口 63–115ms（旧 k=0 为 43–69ms，反而更宽），0.15–1.0 全区间均可解。实现 RELEASE_VX_K=0.45、RELEASE_VX_MAX=240、DROP_VY0=60；pendulumBoxVx=clamp(cosθ·θ̇·L·k)；releaseBox 写入 drop.vx；两处落体分支 drop.x += vx*dt；新增 dropFallTime(releaseScreenY) 与 landingForecast(centerX, vx, releaseScreenY) 返回 landingX/drift/overlap；画布把垂直虚线升级为按落体参数采样的 10 段抛物线 + 释放点虚影 + 预计落点方框 + 「横移 ±N px」；挑战 releaseWhenAligned 改用预测落点；serialize/restore 增可选 drop.vx（旧档缺省 0 即垂直下落，向后兼容）；#test 新增 releaseVx/releaseVxK/fallTime/lastRelease{predicted,drift,fallTime,topCenterAtRelease} 探针。门禁：arcade_tower_test 17→18/18（新增 TP-10：vx 峰值>50px/s、整段摆幅仍存在 |offset|≤9.6 完美相位、lastRelease.drift>10px、lastRelease.predicted 与真实落定塔顶中心误差≤3px）、smoke 94/94、zen 14/14、calm 17/17、review 5/5、gameplay base 11/11、tower challenge 6/6、pwa 7/7、interaction 5/5、immersive 16/16、validate/build/inline/node --check 全过。实测：vx 峰值 111–134px/s、预测误差 ≤0.6px（多数样本 0–1px）、单次落箱横移 40–45px；模拟「预测落点对准就松手」的玩家 3 局分别堆到 22/22/14 层且 0 次落空（完美对齐使 COM 保持 ~0）。无 localStorage key/Schema/挑战关卡数据变更；仅改 pendulum-tower.html + 测试/文档；版本链 0.12.2 / SW studiokit-arcade-0.12.2-v1；设计见 DESIGN-0.12.2.md。"
+    },
+    {
       "id": "T099",
       "title": "Arcade 0.12.1 发布：main 双端部署与线上验证",
       "kind": "agent",

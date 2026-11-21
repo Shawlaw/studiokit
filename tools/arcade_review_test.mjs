@@ -216,7 +216,7 @@ try {
     if (!shouldRun(scenario.id)) continue;
     await scenario.run(cdp);
   }
-  const result = summary('Arcade 0.12.1 结算回看门禁');
+  const result = summary('Arcade 0.12.2 结算回看门禁');
   process.exitCode = result.failed ? 1 : 0;
 } catch (err) {
   console.error(err && err.stack ? err.stack : err);

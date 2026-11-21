@@ -82,6 +82,11 @@
          JIB_MIN/MAX 保证吊钩在最大摆角下仍留在画布内：pivot ± sin(1.05)*135 ≈ ±118。 */
       const JIB_MIN_X = 120;
       const JIB_MAX_X = 300;
+      /* 0.12.2 释放水平速度：箱子离钩时继承钟摆切向速度（吊具阻尼后按系数传递），
+         系数与上限经可行性扫描确定——0.15~1.0 都能对齐，0.45 兼顾「看得见的抛物线」与手感。 */
+      const RELEASE_VX_K = 0.45;
+      const RELEASE_VX_MAX = 240;
+      const DROP_VY0 = 60;
       const LEAN_LIMIT = 0.35;
       /* 持久重心模型：支撑半宽按箱体宽度计，重心投影超出即倾覆；
        * 稳定阈值比硬极限保守，避免“持续偏心晃一晃又归零”永不倒的假象。 */
@@ -177,7 +182,9 @@
       let pendReload = 0;
       let towerLean = 0;
       let leanVel = 0;
-      let jibXCur = PIVOT_X;  // 吊臂小车当前 x（向 jibTargetX() 平滑滑移）
+      let jibXCur = PIVOT_X;
+      /* 0.12.2：记录最近一次释放的预测（同一 JS 轮次内计算，供门禁精确比对）。 */
+      let lastRelease = null;  // 吊臂小车当前 x（向 jibTargetX() 平滑滑移）
       let comOffset = 0;      // 当前重心相对地基中心的水平投影（逻辑 px）
       let comMoment = 0;      // 累计未抵消的倾覆力矩（重量×偏心，逻辑力矩单位）
       let comLoad = 0;        // 当前塔上总重量
@@ -312,13 +319,36 @@
         const span = Math.min(1, Math.sin(Math.min(Math.PI / 2, Math.max(0.08, amp)))) * pend.length;
         return { pivotX, amp, min: pivotX - span, max: pivotX + span };
       }
-      function landingForecast(centerX) {
+      function landingForecast(centerX, vx, releaseScreenY) {
         const top = towerTop();
-        if (!top) return { landable: false, perfect: false, overlap: 0, offset: 0, topCenter: W / 2 };
+        if (!top) return { landable: false, perfect: false, overlap: 0, offset: 0, topCenter: W / 2, landingX: centerX, drift: 0 };
         const topCenter = top.x + top.w / 2;
-        const offset = centerX - topCenter;
-        const overlap = Math.min(centerX + BOX_W / 2, top.x + top.w) - Math.max(centerX - BOX_W / 2, top.x);
-        return { landable: overlap > 6, perfect: overlap >= BOX_W * 0.85, overlap, offset, topCenter };
+        /* 0.12.2：落点必须计入释放瞬间继承的水平速度（水平位移 = vx × 下落时间）。 */
+        const speed = Number.isFinite(vx) ? vx : 0;
+        const fromY = Number.isFinite(releaseScreenY) ? releaseScreenY : PIVOT_Y + pend.length;
+        const drift = speed * dropFallTime(fromY);
+        const landingX = centerX + drift;
+        const offset = landingX - topCenter;
+        const overlap = Math.min(landingX + BOX_W / 2, top.x + top.w) - Math.max(landingX - BOX_W / 2, top.x);
+        return { landable: overlap > 6, perfect: overlap >= BOX_W * 0.85, overlap, offset, topCenter, landingX, drift };
+      }
+
+      /* 释放瞬间的水平速度：真实钟摆切向速度 dx/dt = L·cosθ·θ̇，
+         经吊具/钢丝绳阻尼后按 RELEASE_VX_K 传递（放大到 1.0 也能对齐，但手感过飘）。 */
+      function pendulumBoxVx(angle, vel) {
+        const a = Number.isFinite(angle) ? angle : pend.angle;
+        const v = Number.isFinite(vel) ? vel : pend.vel;
+        return clamp(Math.cos(a) * v * pend.length * RELEASE_VX_K, -RELEASE_VX_MAX, RELEASE_VX_MAX);
+      }
+
+      /* 从当前吊钩位置自由下落到塔顶所需的秒数（与 releaseBox/update 的落体参数一致）。 */
+      function dropFallTime(releaseScreenY) {
+        const top = towerTop();
+        if (!top) return 0;
+        const startBottom = releaseScreenY + camY + BOX_H / 2;
+        const distance = Math.max(1, top.y - startBottom);
+        const vy0 = DROP_VY0;
+        return (-vy0 + Math.sqrt(vy0 * vy0 + 2 * GRAVITY * distance)) / GRAVITY;
       }
 
       /* ---------- 每局主动道具 ---------- */
@@ -915,6 +945,8 @@
           drop.prevBottom = drop.y + drop.h;
           drop.vy += GRAVITY * dt;
           drop.y += drop.vy * dt;
+          /* 0.12.2：水平方向保持释放瞬间继承的速度（自由落体无水平加速度）。 */
+          drop.x += (drop.vx || 0) * dt;
           drop.squash = Math.max(0, drop.squash - dt);
           const top = towerTop();
           if (drop.vy > 0 && drop.prevBottom <= top.y + 1 && drop.y + drop.h >= top.y) {
@@ -1086,6 +1118,7 @@
             y: Number(d.drop.y),
             w: clamp(Number(d.drop.w) || BOX_W, 20, 200),
             h: clamp(Number(d.drop.h) || BOX_H, 12, 80),
+            vx: Number(d.drop.vx) || 0,
             vy: Number(d.drop.vy) || 0,
             prevBottom: Number(d.drop.prevBottom) || 0,
             missed: !!d.drop.missed,
@@ -1218,7 +1251,9 @@
               return;
             }
             const p = pendulumBoxScreen();
-            if (Math.abs(p.x - target) <= tol) {
+            /* 0.12.2：按「预测落点」判定，而不是松手瞬间的位置（箱子带水平速度会横移）。 */
+            const predicted = landingForecast(p.x, pendulumBoxVx(p.angle, pend.vel), p.y).landingX;
+            if (Math.abs(predicted - target) <= tol) {
               releaseBox();
               resolve(true);
               return;
@@ -1247,7 +1282,7 @@
           chToolsUsed: { guide: chToolsUsed.guide, brace: chToolsUsed.brace },
           boxes: boxes.map((b) => ({ x: b.x, y: b.y, w: b.w, h: b.h, base: !!b.base, cargo: b.cargo ? b.cargo.id : null })),
           drop: drop
-            ? { x: drop.x, y: drop.y, w: drop.w, h: drop.h, vy: drop.vy, prevBottom: drop.prevBottom, missed: !!drop.missed, squash: drop.squash, cargo: drop.cargo ? drop.cargo.id : null }
+            ? { x: drop.x, y: drop.y, w: drop.w, h: drop.h, vx: drop.vx || 0, vy: drop.vy, prevBottom: drop.prevBottom, missed: !!drop.missed, squash: drop.squash, cargo: drop.cargo ? drop.cargo.id : null }
             : null,
           pend: { angle: pend.angle, vel: pend.vel, length: pend.length, gravity: pend.gravity, damping: pend.damping },
           pendHasBox,
@@ -1291,6 +1326,7 @@
               y: Number(data.drop.y),
               w: BOX_W,
               h: BOX_H,
+              vx: Number(data.drop.vx) || 0,
               vy: Number(data.drop.vy) || 0,
               prevBottom: Number(data.drop.prevBottom) || 0,
               missed: !!data.drop.missed,
@@ -1368,13 +1404,17 @@
           y: p.y + camY - BOX_H / 2,
           w: BOX_W,
           h: BOX_H,
-          vy: 60,
+          vx: pendulumBoxVx(p.angle, pend.vel),
+          vy: DROP_VY0,
           prevBottom: 0,
           landed: false,
           squash: 0,
           cargo: activeCargo,
         };
         drop.prevBottom = drop.y + drop.h;
+        /* 同一轮次记录预测落点：预测 = 释放点 + vx x 下落时间。 */
+        { const rsy = drop.y - camY + BOX_H / 2; const fc = landingForecast(drop.x + drop.w / 2, drop.vx, rsy);
+          lastRelease = { vx: drop.vx, releaseX: drop.x + drop.w / 2, predicted: fc.landingX, drift: fc.drift, fallTime: dropFallTime(rsy), topCenterAtRelease: fc.topCenter }; }
         const usedGuide = guideArmed;
         guideArmed = false;
         if (usedGuide) {
@@ -1595,6 +1635,8 @@
           drop.prevBottom = drop.y + drop.h;
           drop.vy += GRAVITY * dt;
           drop.y += drop.vy * dt;
+          /* 0.12.2：水平方向保持释放瞬间继承的速度（自由落体无水平加速度）。 */
+          drop.x += (drop.vx || 0) * dt;
           drop.squash = Math.max(0, drop.squash - dt);
           const top = towerTop();
           if (drop.missed) {
@@ -1948,37 +1990,54 @@
           const top = towerTop();
           const topScreenY = top.y - camY;
           const precise = floorsReached < 3 || guideArmed;
-          const forecast = landingForecast(pb.x);
+          /* 0.12.2：预测必须带水平速度——落点 = 释放点 + vx × 下落时间。 */
+          const relVx = pendulumBoxVx(pb.angle, pend.vel);
+          const forecast = landingForecast(pb.x, relVx, pb.y);
+          const landingX = forecast.landingX;
           /* 落点预测分三态：会落空(红) / 能落但会偏(黄) / 完美对齐(绿)。 */
           const willMiss = !forecast.landable;
-          const aligned = mode === 'challenge' && chStage ? challengeAlignNow(pb.x).aligned : forecast.perfect;
+          const aligned = mode === 'challenge' && chStage ? challengeAlignNow(landingX).aligned : forecast.perfect;
           let labelText;
           let labelX;
           if (mode === 'challenge' && chStage) {
-            const model = challengeAlignNow(pb.x);
+            const model = challengeAlignNow(landingX);
             const rounded = Math.round(model.offsetPx);
             labelText = precise
               ? '预计偏差 ' + (rounded > 0 ? '+' : '') + rounded + 'px' + (model.aligned ? ' · 对齐' : ' / ±' + Math.round(model.tolerancePx) + 'px')
               : (model.aligned ? '对齐' : '偏差 ' + (rounded > 0 ? '+' : '') + rounded + 'px');
-            labelX = clamp(pb.x, 96, W - 96);
+            labelX = clamp(landingX, 96, W - 96);
           } else {
-            labelText = willMiss ? '会落空！' : forecast.perfect ? '完美对齐' : precise ? '偏 ' + Math.round(forecast.offset) + 'px' : '偏离 ' + Math.round(Math.abs(forecast.offset)) + 'px';
-            labelX = clamp(pb.x, 46, W - 46);
+            const driftText = Math.abs(forecast.drift) >= 6 ? ' · 横移 ' + (forecast.drift > 0 ? '+' : '') + Math.round(forecast.drift) + 'px' : '';
+            labelText = (willMiss ? '会落空！' : forecast.perfect ? '完美对齐' : precise ? '偏 ' + Math.round(forecast.offset) + 'px' : '偏离 ' + Math.round(Math.abs(forecast.offset)) + 'px') + driftText;
+            labelX = clamp(landingX, 60, W - 60);
           }
           const guideColor = willMiss ? 'rgba(255,93,93,0.85)' : aligned ? 'rgba(99,214,140,0.8)' : 'rgba(255,210,63,0.65)';
           ctx.save();
+          /* 抛物线预测：按真实落体参数采样，直接展示「带着水平速度下落」的轨迹。 */
+          const fallT = dropFallTime(pb.y);
+          const STEPS = 10;
           ctx.strokeStyle = guideColor;
           ctx.lineWidth = willMiss ? 2 : 1.5;
           ctx.setLineDash(precise || willMiss ? [5, 5] : [2, 7]);
           ctx.beginPath();
           ctx.moveTo(pb.x, pb.y + BOX_H / 2);
-          ctx.lineTo(pb.x, topScreenY);
+          for (let i = 1; i <= STEPS; i += 1) {
+            const tt = (fallT * i) / STEPS;
+            const sx = pb.x + relVx * tt;
+            const sy = pb.y + BOX_H / 2 + DROP_VY0 * tt + 0.5 * GRAVITY * tt * tt;
+            ctx.lineTo(sx, Math.min(sy, topScreenY));
+          }
           ctx.stroke();
           ctx.setLineDash([]);
-          /* 预计落点方块：常显，红框表示必然落空。 */
+          /* 释放点虚影（松手瞬间的位置）与预计落点方框。 */
+          ctx.globalAlpha = 0.45;
+          ctx.strokeStyle = 'rgba(238,241,255,0.7)';
+          ctx.lineWidth = 1;
+          ctx.strokeRect(pb.x - BOX_W / 2, pb.y - BOX_H / 2, BOX_W, BOX_H);
+          ctx.globalAlpha = 1;
           ctx.strokeStyle = guideColor;
           ctx.lineWidth = willMiss ? 2 : 1.2;
-          ctx.strokeRect(pb.x - BOX_W / 2, topScreenY, BOX_W, 4);
+          ctx.strokeRect(landingX - BOX_W / 2, topScreenY, BOX_W, 4);
           ctx.fillStyle = willMiss ? 'rgba(255,93,93,0.55)' : aligned ? 'rgba(99,214,140,0.55)' : 'rgba(255,210,63,0.45)';
           ctx.fillRect(top.x, topScreenY - 5, top.w, 5);
           A.draw.label(ctx, labelText, labelX, Math.max(88, topScreenY - 18), {
@@ -2199,7 +2258,8 @@
             const reach = swingReach();
             const top = towerTop();
             const topCenter = top ? top.x + top.w / 2 : W / 2;
-            const forecast = landingForecast(pb.x);
+            const relVx = pendulumBoxVx(pb.angle, pend.vel);
+            const forecast = landingForecast(pb.x, relVx, pb.y);
             return {
               mode,
               pivotX: reach.pivotX,
@@ -2209,6 +2269,11 @@
               pendX: pb.x,
               pendAngle: pend.angle,
               pendVel: pend.vel,
+              /* 0.12.2：释放瞬间继承的水平速度与按下落时间换算的横移量。 */
+              releaseVx: relVx,
+              lastRelease,
+              releaseVxK: RELEASE_VX_K,
+              fallTime: dropFallTime(pb.y),
               reach,
               topCenter,
               topY: top ? top.y : null,

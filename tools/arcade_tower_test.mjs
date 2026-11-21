@@ -376,7 +376,62 @@ const TP_CONSISTENCY = {
   },
 };
 
-const SCENARIOS = [TP_STATIC, TP_PHYSICS, TP_OVERVIEW, TP_CARGO, TP_SAVE, TP_LAYOUT, TP_REACH, TP_ZOOM, TP_CONSISTENCY];
+/* ---------------- TP-10 释放水平速度（0.12.2） ---------------- */
+const TP_RELEASE_VX = {
+  id: 'TP-10',
+  async run(cdp) {
+    await prepare(cdp, 'vx');
+    await cdp.evaluate('__arcadeTest.stackTo(2)');
+    await sleep(150);
+
+    /* 1) 存在真实水平速度：摆到中段时 |vx| 明显 > 0，且落点横移量 = vx × 下落时间（量级一致）。 */
+    let sawVx = 0;
+    let bestPerfect = Infinity;
+    for (let i = 0; i < 45; i += 1) {
+      const p = await cdp.evaluate('__arcadeTest.physicsInfo()');
+      sawVx = Math.max(sawVx, Math.abs(p.releaseVx));
+      bestPerfect = Math.min(bestPerfect, Math.abs(p.forecast.offset));
+      await sleep(35);
+    }
+    assert(sawVx > 50, '释放瞬间没有继承水平速度（releaseVx 恒为 0）：' + sawVx);
+    /* 2) 仍然可完美对齐：整段摆幅里总能找到一个相位让预测落点落在完美区间（±9.6px）。 */
+    assert(bestPerfect <= 9.6, '加入水平速度后仍找不到完美对齐的释放相位（不可解）：最优 |偏移|=' + bestPerfect.toFixed(1));
+
+    /* 3) 预测精度：同一 JS 轮次记录 lastRelease.predicted，落定后与真实塔顶中心比对。 */
+    let checked = 0;
+    let maxErr = 0;
+    for (let attempt = 0; attempt < 6 && checked < 2; attempt += 1) {
+      let released = false;
+      for (let i = 0; i < 60; i += 1) {
+        const p = await cdp.evaluate('__arcadeTest.physicsInfo()');
+        /* 只在「不触发完美吸附」的偏移区间取样，避免吸附掩盖真实落点。 */
+        if (Math.abs(p.forecast.offset) >= 12 && Math.abs(p.forecast.offset) <= 50 && Math.abs(p.releaseVx) > 60) {
+          await cdp.evaluate('__arcadeTest.releaseNow()');
+          released = true;
+          break;
+        }
+        await sleep(35);
+      }
+      if (!released) continue;
+      await sleep(950);
+      const r = await cdp.evaluate(`(() => {
+        const p = __arcadeTest.physicsInfo();
+        const j = __arcadeTest.joyInfo();
+        return { last: p.lastRelease, topCenter: p.topCenter, state: j.state };
+      })()`);
+      assert(r.state === 'playing', '释放后意外结束（预测应为可落上）：' + JSON.stringify(r));
+      assert(r.last && Math.abs(r.last.drift) > 10, '水平横移量过小（未真正生效）：' + JSON.stringify(r.last));
+      const err = Math.abs(r.topCenter - r.last.predicted);
+      maxErr = Math.max(maxErr, err);
+      assert(err <= 3, '预测落点与真实落点偏差过大：predicted=' + r.last.predicted.toFixed(1) + ' actual=' + r.topCenter.toFixed(1) + ' err=' + err.toFixed(1));
+      checked += 1;
+    }
+    assert(checked >= 2, '未能取得足够的落点精度样本：' + checked);
+    record('释放水平速度：vx 峰值 ' + Math.round(sawVx) + 'px/s、可完美对齐（最优偏移 ' + bestPerfect.toFixed(1) + 'px）、预测落点误差 ≤' + maxErr.toFixed(1) + 'px', true);
+  },
+};
+
+const SCENARIOS = [TP_STATIC, TP_PHYSICS, TP_OVERVIEW, TP_CARGO, TP_SAVE, TP_LAYOUT, TP_REACH, TP_ZOOM, TP_CONSISTENCY, TP_RELEASE_VX];
 
 let server, launched, cdp;
 try {

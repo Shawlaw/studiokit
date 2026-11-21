@@ -1,5 +1,18 @@
 # Arcade Changelog
 
+## 0.12.2 — 2026-11-22
+
+### Added
+- **集装箱释放水平速度（抛物线落点）**：此前 `drop` 只有 `vy`、箱子永远垂直落下。现按真实单摆切向速度 `L·cosθ·θ̇` 经吊具阻尼（`RELEASE_VX_K=0.45`、上限 240px/s）传给箱子，落体水平匀速 ⇒ 可见抛物线。先做 7×4 参数扫描再定系数：0.45 时**完美对齐窗口 63–115ms 反而比旧的 43–69ms 更宽**（技能从「等摆到正中」变成「提前放手、看预测落点」），0.15–1.0 全区间均可解。
+- **预测升级**：落点预测改为 `释放点 + vx × t`（`t` 由真实落体参数反解），画布从垂直虚线改为**按落体参数采样的抛物线** + 释放点虚影 + 预计落点方框 + 「横移 ±N px」文案；挑战 `releaseWhenAligned()` 改用预测落点判定。
+- `#test` 新增 `releaseVx / fallTime / lastRelease{predicted,drift}` 探针；`serialize/restore` 增可选 `drop.vx`（旧档缺省 0，向后兼容垂直下落）。
+
+### Changed
+- 版本链升至 `0.12.2`，SW 缓存键 `studiokit-arcade-0.12.2-v1`。无 localStorage key / Schema / 挑战关卡数据变更；只改 `pendulum-tower.html`。
+
+### Verification
+- `arcade_tower_test` **18/18**（新增 TP-10：vx 峰值 >50px/s、仍存在完美相位、真实横移 >10px、**预测落点误差 ≤3px**）、smoke 94/94、zen 14/14、calm 17/17、review 5/5、gameplay base 11/11、tower challenge 6/6、pwa 7/7、interaction 5/5、immersive 16/16、validate/build/inline/node --check 全过。实测 vx 峰值 111–134px/s、预测误差 ≤0.6px、单次横移 40–45px。设计见 `DESIGN-0.12.2.md`。
+
 ## 0.12.1 — 2026-11-22（已双端发布）
 
 ### Fixed

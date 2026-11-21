@@ -5,6 +5,10 @@
 - 仓库：<https://github.com/Shawlaw/studiokit>
 - GitHub Pages：<https://shawlaw.github.io/studiokit/>
 - Cloudflare Pages：<https://studiokit.pages.dev/>
+- 本地待发布（未推送 main）：Arcade `0.12.2`（2026-11-22）
+  - 批次内容：集装箱释放水平速度（真实单摆切向速度 × 吊具阻尼 0.45，上限 240px/s）+ 落点预测改为 `释放点 + vx·t` 并画真实抛物线 + 释放点虚影/横移量提示 + 挑战 releaseWhenAligned 改用预测落点；`serialize/restore` 增可选 `drop.vx`（旧档缺省 0）；无 key/Schema/关卡数据变更，仅改 `pendulum-tower.html`
+  - 门禁：`arcade_tower_test` **18/18**（新增 TP-10 释放水平速度：vx 峰值、可解性、横移量、预测误差 ≤3px）、smoke 94/94、zen 14/14、calm 17/17、review 5/5、gameplay base 11/11、tower challenge 6/6、pwa 7/7、interaction 5/5、immersive 16/16、validate/build/inline/node --check 全过；实测 vx 峰值 111–134px/s、预测误差 ≤0.6px、单次横移 40–45px；真机手感 UNVERIFIED
+  - 设计见 `apps/arcade/DESIGN-0.12.2.md`；SW 缓存键 `studiokit-arcade-0.12.2-v1`；**未发布，无 Actions run / verify_deploy 证据**
 - 最近发布：Arcade `0.12.1`（2026-11-22，已双端发布）
   - 批次内容：层塔物理一致性（站立塔不再整体旋转、倾斜改支撑面/重心可视化、经典模式吊臂跟随塔顶保证可达、完美吸附力矩改用吸附后偏移）+ 全览真正 zoom-to-fit（40 层 0.29×、3 层 1.0×）+ 层号屏幕空间抽稀 + 落点投影常显含「会落空！」预警；无 localStorage key/Schema/挑战关卡数据变更，仅改 `pendulum-tower.html`
   - 门禁：`arcade_tower_test` **17/17**（新增 TP-07 可达性 / TP-08 zoom-to-fit / TP-09 所见即所判 + 结算保持缩放）、smoke 94/94、zen 14/14、calm 17/17、review 5/5、gameplay base 11/11、tower challenge 6/6、pwa 7/7、interaction 5/5、immersive 16/16、validate/build/inline/node --check 全过；真机手感 UNVERIFIED
