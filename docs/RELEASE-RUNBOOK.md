@@ -5,7 +5,11 @@
 - 仓库：<https://github.com/Shawlaw/studiokit>
 - GitHub Pages：<https://shawlaw.github.io/studiokit/>
 - Cloudflare Pages：<https://studiokit.pages.dev/>
-- 最近发布：Arcade `0.11.2`（2026-11-21，已双端发布）
+- 最近发布：Arcade `0.11.3`（2026-11-21，已双端发布）
+  - 批次内容：真机修复 iPhone 独立模式 PWA 顶部系统模糊（移除 `viewport-fit=cover` + 半透明状态栏 meta，保留 fixed 顶边纯色条兜底）；PWA 更新检测（0.11.2）不变；不改 localStorage key/Schema、玩法或数据
+  - 门禁：`arcade_pwa_update_test` 7/7（新增 PU-00 meta 防护）、smoke 94/94、zen 14/14、calm 17/17、review 5/5、gameplay base 11/11、validate/build/inline/node --check 全过
+  - 提交 `82db383` 推送 `main`；Actions run `44904562855` 四 job 全成功；CI 与本地 `tools/verify_deploy.py` 均 **41/41** 文件 SHA-256 双端一致（Arcade `0.11.3` / Badge `2.2.1` / Venue `0.2.0`，manifest 正确）；两端线上 HTML 实测无 `viewport-fit=cover` 与半透明状态栏声明；SW 缓存键 `studiokit-arcade-0.11.3-v1`；真机 iOS 顶部观感待 Owner 复测确认
+- 上一个发布：Arcade `0.11.2`（2026-11-21，已双端发布）
   - 批次内容：PWA 更新检测（中心页「检查更新」+ SW 版本握手 + 更新横幅，不自动刷新）与 iPhone 安装版顶部修复（深色不透明 shellbar + 安全区纯色底 + 游戏顶栏独立合成层，消除灰白渐层与文字发虚）；不改 localStorage key/Schema、玩法或数据
   - 门禁：`arcade_pwa_update_test` 6/6、smoke 94/94、zen 14/14、calm 17/17、review 5/5、gameplay base 11/11、validate/build/inline/node --check 全过
   - 提交 `f2f1cd1` 推送 `main`；Actions run `44899492208` 四 job 全成功；CI 与本地 `tools/verify_deploy.py` 均 **41/41** 文件 SHA-256 双端一致（Arcade `0.11.2` / Badge `2.2.1` / Venue `0.2.0`，manifest 正确）；双端线上无头 Chrome 各 7/7（中心页 0.11.2 + 16 卡 + 深色 shellbar + 检查更新按钮 + 独立窗口安全区 + checkForUpdate 可用 + 五子棋沉浸顶栏清晰，0 console error）；SW 缓存键 `studiokit-arcade-0.11.2-v1`；真机 iOS 顶部观感与系统更新提示时机 UNVERIFIED

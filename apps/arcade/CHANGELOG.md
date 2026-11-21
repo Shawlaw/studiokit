@@ -1,6 +1,6 @@
 # Arcade Changelog
 
-## 0.11.3 — 2026-11-21（本地实现，未发布）
+## 0.11.3 — 2026-11-21（已双端发布）
 
 ### Fixed
 - iPhone 安装版顶部模糊真机修复：0.11.2 用 CSS 盖不住 iOS 26+ 的系统级顶缘模糊（真机复测仍发虚）。根因是 `viewport-fit=cover` + 半透明状态栏样式让页面画到状态栏下方，系统在顶缘叠加模糊。本版移除全部 17 页的 `viewport-fit=cover` 与中心页的半透明状态栏 meta（根本），并保留贴住顶边的 fixed 不透明深色条让 WebKit 用纯色替换残留模糊（兜底）。
@@ -11,7 +11,8 @@
 - `validate_site.py` 增加防回归断言；`arcade_pwa_update_test.mjs` 新增 PU-00 元信息防护与 fixed 顶边条断言（7/7）。
 
 ### Verification
-- 门禁：`arcade_pwa_update_test` 7/7、`arcade_smoke` 94/94、zen 14/14、calm 17/17、review 5/5、gameplay base 11/11、validate/build/inline/node --check 全过。无 Schema/key 变更。设计见 `DESIGN-0.11.3.md`。真机 iOS 顶部观感需 Owner 再次确认（无头 Chrome 无法重现系统级模糊）。
+- 门禁：`arcade_pwa_update_test` 7/7、`arcade_smoke` 94/94、zen 14/14、calm 17/17、review 5/5、gameplay base 11/11、validate/build/inline/node --check 全过。无 Schema/key 变更。设计见 `DESIGN-0.11.3.md`。
+- 发布：提交 `82db383` 推送 `main`；Actions run `44904562855` 四 job 全绿；CI 与本地 `tools/verify_deploy.py` 均 **41/41** 双端一致（Arcade `0.11.3` / Badge `2.2.1` / Venue `0.2.0`）；两端线上 HTML 实测无 `viewport-fit=cover` 与半透明状态栏声明。真机 iOS 顶部观感待 Owner 复测确认（无头 Chrome 无法重现系统级模糊）。
 
 ## 0.11.2 — 2026-11-21（已双端发布）
 
