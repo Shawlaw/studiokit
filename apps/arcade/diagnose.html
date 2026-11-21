@@ -1,0 +1,203 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <meta name="theme-color" content="#0b1020" />
+  <title>iOS PWA 顶部诊断 · 街机厅</title>
+  <style>
+    * { box-sizing: border-box; }
+    html, body { margin: 0; padding: 0; }
+    body {
+      min-height: 100dvh;
+      background: #0b1020;
+      color: #eef1ff;
+      font-family: system-ui, -apple-system, "PingFang SC", "Microsoft YaHei", sans-serif;
+    }
+
+    /* 被诊断的顶栏：贴住视口最顶部，字号/颜色与真实游戏顶栏一致 */
+    .diag-top {
+      position: fixed;
+      top: 0; left: 0; right: 0;
+      height: 96px;
+      padding: 47px 12px 4px;
+      display: flex;
+      align-items: flex-end;
+      gap: 10px;
+      background: #05070f;
+      border-bottom: 1px solid #2a3560;
+      z-index: 5;
+    }
+    .diag-top .t {
+      font-size: 24px;
+      font-weight: 750;
+      letter-spacing: .02em;
+      color: #ffffff;
+    }
+    .diag-top .b {
+      margin-left: auto;
+      width: 46px; height: 46px;
+      border-radius: 10px;
+      border: 1px solid #3a4780;
+      background: #1b2444;
+      display: grid; place-items: center;
+      font-size: 20px;
+    }
+
+    .panel {
+      position: fixed;
+      left: 0; right: 0; bottom: 0;
+      max-height: 48dvh;
+      overflow: auto;
+      padding: 14px 14px 22px;
+      background: #111a33;
+      border-top: 1px solid #2a3560;
+      z-index: 20;
+    }
+    .panel h1 { font-size: 15px; margin: 0 0 6px; color: #ffd23f; }
+    .panel .hint { font-size: 12px; line-height: 1.6; color: #a7b0d0; margin: 0 0 10px; }
+    .opts { display: grid; grid-template-columns: 1fr 1fr; gap: 7px; }
+    .opt {
+      min-height: 46px;
+      padding: 8px 9px;
+      border: 1px solid #3a4780;
+      border-radius: 10px;
+      background: #1b2444;
+      color: #eef1ff;
+      font-size: 12px;
+      text-align: left;
+      line-height: 1.35;
+    }
+    .opt.on { background: #ffd23f; color: #1a1405; border-color: #ffd23f; font-weight: 700; }
+    .metrics {
+      margin-top: 12px;
+      font: 11px/1.7 ui-monospace, SFMono-Regular, Menlo, monospace;
+      color: #93a0c8;
+      word-break: break-all;
+    }
+    .metrics b { color: #ffd23f; font-weight: 600; }
+    .spacer { height: 52dvh; }
+
+    /* ===== 各方案差异样式，通过 body.diag-N 切换。0 = 当前线上配置 ===== */
+
+    /* 1：顶栏独立合成层（translateZ） */
+    body.diag-1 .diag-top { transform: translateZ(0); -webkit-transform: translateZ(0); }
+
+    /* 2：贴顶 fixed 纯色条 80px，压在系统模糊之上 */
+    body.diag-2::before {
+      content: ""; position: fixed; top: 0; left: 0; right: 0;
+      height: 80px; background: #05070f; z-index: 4; pointer-events: none;
+    }
+
+    /* 3：字体 subpixel 抗锯齿 */
+    body.diag-3 .diag-top, body.diag-3 .t {
+      -webkit-font-smoothing: subpixel-antialiased;
+      text-rendering: auto;
+    }
+
+    /* 4：禁用所有 backdrop-filter / filter 影响 */
+    body.diag-4 * { -webkit-backdrop-filter: none !important; backdrop-filter: none !important; }
+
+    /* 5：顶栏改非 fixed（普通文档流，排除 fixed 层光栅化问题） */
+    body.diag-5 .diag-top { position: static; }
+
+    /* 6：contain + will-change 强制独立层 */
+    body.diag-6 .diag-top { contain: paint; will-change: transform; }
+
+    /* 7：全部触控合成属性关闭（overscroll/touch-action/user-select） */
+    body.diag-7 { overscroll-behavior: auto !important; -webkit-user-select: auto !important; user-select: auto !important; touch-action: auto !important; }
+
+    /* 8：顶栏纯黑 + 粗体加大字号（判断题是否是视觉对比度问题） */
+    body.diag-8 .diag-top { background: #000; }
+    body.diag-8 .t { font-size: 32px; font-weight: 800; }
+
+    /* 9：顶栏文字加 text-shadow（重影问题常用缓解） */
+    body.diag-9 .t { text-shadow: 0 0 1px rgba(255,255,255,.35); }
+
+    /* 10：scale 微调，避开半像素渲染 */
+    body.diag-10 .diag-top { -webkit-transform: translate3d(0,0,0); transform: translate3d(0,0,0); }
+    body.diag-10 .t { -webkit-transform: translateZ(0); transform: translateZ(0); }
+
+    @media (max-width: 400px) { .diag-top .t { font-size: 20px; } }
+  </style>
+</head>
+<body class="diag-0">
+  <div class="diag-top">
+    <span class="t">顶部诊断文字 ABC 12345</span>
+    <span class="b">⛶</span>
+  </div>
+  <div class="spacer"></div>
+  <div class="panel">
+    <h1>iOS PWA 顶部发虚 · 诊断对比</h1>
+    <p class="hint">
+      从主屏幕 PWA 打开此页（不是 Safari 标签页）。逐个点下面按钮，<b>盯着最顶部那行白字</b>，看哪种方案下最清晰/无重影，然后告诉我<b>方案编号</b>。<br>
+      每次点只改顶部渲染方式，方便对比。方案 0 是当前线上配置（基线）。
+    </p>
+    <div class="opts" id="opts"></div>
+    <div class="metrics" id="metrics"></div>
+    <p class="hint" style="margin-top:10px">
+      此页仅用于诊断，可随时删除。<a href="./index.html" style="color:#4fc3f7">← 返回中心页</a>
+    </p>
+  </div>
+
+  <script>
+    (() => {
+      const names = [
+        '0 当前线上（基线）',
+        '1 顶栏独立层 translateZ',
+        '2 贴顶 80px 纯色条',
+        '3 字体 subpixel 抗锯齿',
+        '4 禁用全部 backdrop-filter',
+        '5 顶栏改非 fixed',
+        '6 contain+will-change',
+        '7 关闭触控合成属性',
+        '8 纯黑背景+大粗体',
+        '9 文字 text-shadow',
+        '10 translate3d 避开半像素',
+      ];
+      const opts = document.getElementById('opts');
+      let current = 0;
+      function set(i) {
+        current = i;
+        document.body.className = 'diag-' + i;
+        [...opts.children].forEach((b, idx) => b.classList.toggle('on', idx === i));
+        try { history.replaceState(null, '', '?diag=' + i); } catch (e) {}
+        renderMetrics();
+      }
+      names.forEach((n, i) => {
+        const b = document.createElement('button');
+        b.type = 'button';
+        b.className = 'opt' + (i === 0 ? ' on' : '');
+        b.textContent = n;
+        b.addEventListener('click', () => set(i));
+        opts.appendChild(b);
+      });
+
+      // 用探针元素测量真实 safe-area-inset-top（env() 无法直接读取）
+      const probe = document.createElement('div');
+      probe.style.cssText = 'position:fixed;top:0;left:0;height:env(safe-area-inset-top,0px);width:0;pointer-events:none';
+      document.body.appendChild(probe);
+      const sat = probe.getBoundingClientRect().height;
+
+      const vv = window.visualViewport || {};
+      function renderMetrics() {
+        const m = {
+          '当前方案': current,
+          'devicePixelRatio': window.devicePixelRatio || 0,
+          'innerWidth×innerHeight': innerWidth + '×' + innerHeight,
+          'visualViewport 宽/scale': (vv.width || 0) + ' / ' + (vv.scale || 0),
+          'safe-area-inset-top(实测)': sat + 'px',
+          'standalone': (window.navigator.standalone === true || matchMedia('(display-mode: standalone)').matches),
+          'backdrop-filter 支持': CSS.supports('backdrop-filter', 'blur(2px)') || CSS.supports('-webkit-backdrop-filter', 'blur(2px)'),
+          'UA': navigator.userAgent,
+        };
+        document.getElementById('metrics').innerHTML =
+          Object.entries(m).map(([k, v]) => `<b>${k}</b>: ${String(v).replace(/</g, '&lt;')}`).join('<br>');
+      }
+      renderMetrics();
+      const q = location.search.match(/diag=(\d+)/);
+      if (q) set(Math.min(10, Math.max(0, parseInt(q[1], 10))));
+    })();
+  </script>
+</body>
+</html>
