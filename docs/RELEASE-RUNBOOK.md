@@ -5,7 +5,11 @@
 - 仓库：<https://github.com/Shawlaw/studiokit>
 - GitHub Pages：<https://shawlaw.github.io/studiokit/>
 - Cloudflare Pages：<https://studiokit.pages.dev/>
-- 最近发布：Arcade `0.11.3`（2026-11-21，已双端发布）
+- 最近发布：Arcade `0.11.4`（2026-11-21，已双端发布）
+  - 批次内容：真机诊断定位「被模糊」对象是中心页共享 shellbar（非游戏标题栏），修复为 standalone 下 shellbar `position: sticky; top: 0` 贴顶（真机方案 1/9/10 清晰无副作用；fixed 会致下方贴边）；删除临时诊断页；不改 localStorage key/Schema/玩法
+  - 门禁：`arcade_pwa_update_test` 7/7（PU-04 增 sticky 断言）、smoke 94/94、zen 14/14、calm 17/17、review 5/5、gameplay base 11/11、validate/build/inline/node --check 全过
+  - 提交 `87795d7` 推送 `main`；Actions run `44909647508` 四 job 全成功；CI 与本地 `tools/verify_deploy.py` 均 **41/41** 文件 SHA-256 双端一致（Arcade `0.11.4` / Badge `2.2.1` / Venue `0.2.0`，manifest 正确）；线上 arcade.css 含 sticky 规则、中心页版本 0.11.4、诊断页 404；SW 缓存键 `studiokit-arcade-0.11.4-v1`；真机 iOS 顶部观感待 Owner 复测确认
+- 上一个发布：Arcade `0.11.3`（2026-11-21，已双端发布）
   - 批次内容：真机修复 iPhone 独立模式 PWA 顶部系统模糊（移除 `viewport-fit=cover` + 半透明状态栏 meta，保留 fixed 顶边纯色条兜底）；PWA 更新检测（0.11.2）不变；不改 localStorage key/Schema、玩法或数据
   - 门禁：`arcade_pwa_update_test` 7/7（新增 PU-00 meta 防护）、smoke 94/94、zen 14/14、calm 17/17、review 5/5、gameplay base 11/11、validate/build/inline/node --check 全过
   - 提交 `82db383` 推送 `main`；Actions run `44904562855` 四 job 全成功；CI 与本地 `tools/verify_deploy.py` 均 **41/41** 文件 SHA-256 双端一致（Arcade `0.11.3` / Badge `2.2.1` / Venue `0.2.0`，manifest 正确）；两端线上 HTML 实测无 `viewport-fit=cover` 与半透明状态栏声明；SW 缓存键 `studiokit-arcade-0.11.3-v1`；真机 iOS 顶部观感待 Owner 复测确认

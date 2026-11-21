@@ -99,6 +99,8 @@
 
 | T093 | agent | Arcade 0.11.4：真机定位 shellbar 模糊 + sticky 贴顶修复 + 删除诊断页 | DONE | T092 | Owner 真机诊断确认「被模糊」对象是中心页最顶部共享 shellbar（StudioKit/街机厅 Arcade/源码），非游戏标题栏；方案 1/9/10（shellbar sticky 贴顶）清晰无副作用、方案 3（fixed）清晰但下方贴边。修复：standalone 下 shellbar `position:sticky; top:0; z-index:9998`（仍在文档流不挤压内容）；滚动 600px 后 top=0/h=85、下方内容正常。删除临时 diagnose.html；版本链 0.11.4 / SW `studiokit-arcade-0.11.4-v1`；`arcade_pwa_update_test` PU-04 增 sticky 断言 7/7；smoke 94/94、zen 14/14、calm 17/17、review 5/5、base 11/11、validate/build/inline/node --check 全过；无 key/Schema 变更；设计见 `DESIGN-0.11.4.md`；本地未提交未发布；真机观感待复测 |
 
+| T094 | agent | Arcade 0.11.4 发布：main 双端部署与线上验证 | DONE | T093 | Owner 明确选择「直接推送 main 双端发布」= `OWNER_AUTHORIZATION: PUBLISH_TO_MAIN`；提交 `87795d7` ff 合入 main 推送；Actions run `44909647508` 四 job 全绿；CI 与本地 `verify_deploy.py` 均 **41/41** 双端一致（Arcade `0.11.4` / Badge `2.2.1` / Venue `0.2.0`）；线上 arcade.css 含 sticky 规则、中心页版本 0.11.4、诊断页 404；SW `studiokit-arcade-0.11.4-v1`；真机顶部观感待 Owner 复测确认 |
+
 ## 任务命令
 
 ```powershell
