@@ -77,6 +77,11 @@
       const PIVOT_X = W / 2;
       const PIVOT_Y = 64;
       const PEND_LEN = 135;
+      /* 0.12.1 可达性修复：经典模式吊臂小车沿臂架滑移跟随塔顶（真实塔吊就靠变幅对位），
+         使「摆幅可达范围」始终覆盖落点；挑战模式仍按关卡数据固定 pivotX（合同不变）。
+         JIB_MIN/MAX 保证吊钩在最大摆角下仍留在画布内：pivot ± sin(1.05)*135 ≈ ±118。 */
+      const JIB_MIN_X = 120;
+      const JIB_MAX_X = 300;
       const LEAN_LIMIT = 0.35;
       /* 持久重心模型：支撑半宽按箱体宽度计，重心投影超出即倾覆；
        * 稳定阈值比硬极限保守，避免“持续偏心晃一晃又归零”永不倒的假象。 */
@@ -172,6 +177,7 @@
       let pendReload = 0;
       let towerLean = 0;
       let leanVel = 0;
+      let jibXCur = PIVOT_X;  // 吊臂小车当前 x（向 jibTargetX() 平滑滑移）
       let comOffset = 0;      // 当前重心相对地基中心的水平投影（逻辑 px）
       let comMoment = 0;      // 累计未抵消的倾覆力矩（重量×偏心，逻辑力矩单位）
       let comLoad = 0;        // 当前塔上总重量
@@ -183,6 +189,7 @@
       let overviewT = 1;
       let overviewHold = 0;
       let overviewReveal = null;
+      let overviewSettled = false; // 结算拉远后保持全塔缩放视图（不要弹层出现时缩回 1:1）
       let camY = -474;
       let score = 0;
       let perfectCombo = 0;
@@ -236,20 +243,82 @@
         collapsed.forEach((b) => { topY = Math.min(topY, b.y); });
         return { bottom: BASE_Y + 60, top: topY };
       }
-      function overviewTargetCam() {
+      /* 0.12.1 全览重做：真正的 zoom-to-fit。
+         旧实现只平移相机、没有缩放，几十层时塔身远超 740 画布而被裁掉。
+         现在按「地基→塔顶」跨度算缩放比，把整塔压进可视区（上下各留白），
+         再与跟随视角按 overviewT 插值，得到统一的 {scale, centerY} 视图参数。 */
+      /* 上下留白：顶部要避开 HUD(y=20/44/62) 与全览横幅(74–102)，故取 116。 */
+      const VIEW_MARGIN_Y = 116;
+      function overviewFit() {
         const e = towerExtent();
-        const span = Math.max(180, e.bottom - e.top);
-        return e.top - Math.max(40, (H - span) / 2);
+        const span = Math.max(140, e.bottom - e.top);
+        const avail = Math.max(140, H - VIEW_MARGIN_Y * 2);
+        const scale = clamp(avail / span, 0.08, 1);
+        return { scale, span, extent: e, centerY: (e.top + e.bottom) / 2 };
       }
-      function currentTargetCam(forceOverview) {
-        if (forceOverview || overviewActive || overviewReveal) return overviewTargetCam();
+      /* 跟随视角：把塔顶固定在屏幕 y≈430（与原实现等价）。 */
+      function currentTargetCam() {
         return towerTop().y - 430;
       }
+      /* 统一视图：scale=1 时世界 x 不变、y 减 camY（等价旧渲染）；全览时整体缩小居中。 */
+      function viewParams() {
+        const t = clamp(overviewT, 0, 1);
+        const followCenterY = camY + H / 2;
+        if (t <= 0.0004) return { scale: 1, centerY: followCenterY };
+        const fit = overviewFit();
+        const scale = lerp(1, fit.scale, t);
+        return { scale, centerY: lerp(followCenterY, fit.centerY, t) };
+      }
+      /* 世界坐标 → 屏幕坐标（供屏幕空间的层号/标注使用，避免文字被缩小）。 */
+      function worldToScreen(view, x, y) {
+        return {
+          x: x * view.scale + W / 2 * (1 - view.scale),
+          y: y * view.scale + H / 2 - view.centerY * view.scale,
+        };
+      }
+      /* 吊臂小车 x：挑战模式用关卡固定 pivotX；经典模式滑移到塔顶正上方，
+         这样「塔顶」永远落在钟摆摆幅的中心，不会出现塔没倒却再也够不到的必败局面。 */
+      /* 吊臂小车的目标 x。挑战模式的 pivotX 在 content.pendulum 里（关卡数据契约），
+         经典模式跟随塔顶中心并在 JIB_MIN..JIB_MAX 行程内。 */
+      function jibTargetX() {
+        if (mode === 'challenge' && chStage && chStage.content) {
+          const cfg = chStage.content.pendulum || {};
+          const fixed = Number(cfg.pivotX);
+          if (Number.isFinite(fixed)) return clamp(fixed, 0, W);
+          if (Number.isFinite(Number(chStage.content.pivotX))) return clamp(Number(chStage.content.pivotX), 0, W);
+        }
+        const top = towerTop();
+        const topCenter = top ? top.x + top.w / 2 : PIVOT_X;
+        return clamp(topCenter, JIB_MIN_X, JIB_MAX_X);
+      }
+      /* 实际吊臂位置：向目标平滑滑移（真实塔吊变幅需要时间，也避免整根吊臂瞬移跳变）。 */
+      function jibPivotX() {
+        return jibXCur;
+      }
+
       function pendulumBoxScreen() {
         const ang = pend.angle;
-        const px = PIVOT_X + Math.sin(ang) * pend.length;
+        const pivotX = jibPivotX();
+        const px = pivotX + Math.sin(ang) * pend.length;
         const py = PIVOT_Y + Math.cos(ang) * pend.length;
-        return { x: px, y: py, angle: ang };
+        return { x: px, y: py, angle: ang, pivotX };
+      }
+
+      /* 摆幅可达区间（当前振幅下吊钩中心能到的 x 范围）与落点可达性判定。
+         用于 HUD 提示 + #test 门禁，避免「看不见的必败释放」。 */
+      function swingReach() {
+        const pivotX = jibPivotX();
+        const amp = Math.abs(pend.angle) + Math.abs(pend.vel) / Math.sqrt(pend.gravity / pend.length);
+        const span = Math.min(1, Math.sin(Math.min(Math.PI / 2, Math.max(0.08, amp)))) * pend.length;
+        return { pivotX, amp, min: pivotX - span, max: pivotX + span };
+      }
+      function landingForecast(centerX) {
+        const top = towerTop();
+        if (!top) return { landable: false, perfect: false, overlap: 0, offset: 0, topCenter: W / 2 };
+        const topCenter = top.x + top.w / 2;
+        const offset = centerX - topCenter;
+        const overlap = Math.min(centerX + BOX_W / 2, top.x + top.w) - Math.max(centerX - BOX_W / 2, top.x);
+        return { landable: overlap > 6, perfect: overlap >= BOX_W * 0.85, overlap, offset, topCenter };
       }
 
       /* ---------- 每局主动道具 ---------- */
@@ -355,6 +424,7 @@
         pendReload = 0;
         towerLean = 0;
         leanVel = 0;
+        jibXCur = PIVOT_X;
         comOffset = 0;
         comMoment = 0;
         comLoad = 0;
@@ -363,7 +433,8 @@
         nextCargo = rollCargo();
         fragileArmed = true;
         overviewActive = false;
-        overviewT = 1;
+        overviewSettled = false;
+        overviewT = 0;
         overviewHold = 0;
         overviewReveal = null;
         if (typeof syncOverviewButton === 'function') syncOverviewButton();
@@ -681,11 +752,13 @@
         collapsed = [];
         towerLean = 0;
         leanVel = 0;
+        jibXCur = PIVOT_X;
         comOffset = 0;
         comMoment = 0;
         comLoad = 0;
         overviewActive = false;
-        overviewT = 1;
+        overviewSettled = false;
+        overviewT = 0;
         overviewReveal = null;
         syncOverviewButton();
         camY = -474;
@@ -861,6 +934,8 @@
         if (!overviewActive && !overviewReveal && (input.pointer.wentDown || (spaceNow && !updateChallenge._space))) releaseBox();
         updateChallenge._space = spaceNow;
         camY = lerp(camY, currentTargetCam(), Math.min(1, 4 * dt));
+        /* 吊臂平滑滑移（~0.2s 时间常数），避免非完美落箱后整根吊臂瞬移。 */
+        jibXCur = lerp(jibXCur, jibTargetX(), Math.min(1, 12 * dt));
         if (!drop && chPlaced >= (chWin.floorsAtLeast || chBoxesData.length) && Math.abs(towerLean) <= chMaxLean * 0.98 && Math.abs(leanVel) < 0.4) {
           challengeClear();
           input.endFrame();
@@ -1069,7 +1144,8 @@
           computeComOffset();
         }
         overviewActive = false;
-        overviewT = 1;
+        overviewSettled = false;
+        overviewT = 0;
         overviewReveal = null;
         camY = Number(data.camY) || -474;
         /* 恢复 drop / pendHasBox / pendReload / tools / guideArmed（不再强制 drop=null 重给一箱）。 */
@@ -1361,10 +1437,12 @@
 
         if (!drop.missed) {
           drop.y = top.y - drop.h;
-          /* 持久倾覆力矩：相对塔顶的偏移 × 箱重 × 高度放大系数。
-           * 关键：对称交替落箱会互相抵消；一直偏置则持续累积。 */
           const heightGain = 1 + (boxes.length - 1) * 0.06;
-          comMoment += e * cargo.weight * heightGain;
+          /* 0.12.1：力矩用「吸附后的真实偏移」计算，而不是吸附前的 e。
+             旧实现完美分支会把 drop.x 吸附到 top.x（几何偏移归零）却仍按吸附前的 e 累积力矩，
+             于是「每次都完美但偏 +9.5px」能堆出 comOffset=0 却 comMoment 很大、塔永久歪而不倒。 */
+          const settledE = drop.x + drop.w / 2 - (top.x + top.w / 2);
+          comMoment += settledE * cargo.weight * heightGain;
           boxes.push({ x: drop.x, y: drop.y, w: drop.w, h: drop.h, cargo });
           computeComOffset();
           /* 属性真实生效：重量放大瞬时冲量；奖励直接加分；易碎箱仅在稳稳落定时一次性奖励。 */
@@ -1424,7 +1502,7 @@
       /* ---------- 更新 ---------- */
       /* 全览缩放插值：0.45s 动画；减少动态偏好下静态瞬切。 */
       function updateOverview(dt) {
-        const goal = overviewActive || overviewReveal ? 1 : 0;
+        const goal = overviewActive || overviewReveal || overviewSettled ? 1 : 0;
         if (A.reducedMotion) overviewT = goal;
         else overviewT += (goal - overviewT) * Math.min(1, 8 * dt);
         if (overviewReveal) {
@@ -1433,7 +1511,9 @@
             const done = overviewReveal.after;
             overviewReveal = null;
             overviewActive = false;
-            overviewT = 0;
+            /* 0.12.1：拉远完成后保持全塔缩放视图，让结算弹层出现时仍能看完整塔身；
+               旧实现这里把 overviewT 归 0，导致弹层一出现就缩回只看得见塔顶的 1:1。 */
+            overviewSettled = true;
             if (done) done();
           }
         } else if (overviewHold > 0) {
@@ -1551,6 +1631,8 @@
         update._space = spaceNow;
 
         camY = lerp(camY, currentTargetCam(), Math.min(1, 4 * dt));
+        /* 吊臂平滑滑移（~0.2s 时间常数），避免非完美落箱后整根吊臂瞬移。 */
+        jibXCur = lerp(jibXCur, jibTargetX(), Math.min(1, 12 * dt));
 
         const braceUsable = canBrace();
         if (update._braceUsable !== braceUsable) {
@@ -1648,19 +1730,45 @@
         drawSky();
 
         ctx.save();
-        ctx.translate(0, -camY);
+        /* 0.12.1：统一视图变换（scale=1 时与旧的 translate(0,-camY) 完全等价；
+           全览时整体缩小居中，几十层也能一屏看完）。 */
+        const view = viewParams();
+        ctx.translate((W / 2) * (1 - view.scale), H / 2 - view.centerY * view.scale);
+        ctx.scale(view.scale, view.scale);
 
         ctx.fillStyle = '#3a2f28';
         ctx.fillRect(-40, BASE_Y, W + 80, 60);
         ctx.fillStyle = '#4d4036';
         ctx.fillRect(-40, BASE_Y, W + 80, 6);
 
+        /* 0.12.1：站立塔的稳定性改为「地基支撑面 + 重心投影」可视化（代替原先会误导的整塔旋转）：
+           重心投影一旦越过支撑面，玩家立刻能看出塔要倒。 */
+        if (boxes.length && (state === 'playing' || state === 'paused')) {
+          const baseX = baseCenter();
+          const danger = Math.abs(comOffset) > STABILITY_LIMIT * 0.62;
+          ctx.save();
+          ctx.strokeStyle = danger ? 'rgba(255,93,93,0.9)' : 'rgba(99,224,200,0.55)';
+          ctx.lineWidth = 3;
+          ctx.beginPath();
+          ctx.moveTo(baseX - SUPPORT_HALF, BASE_Y + 4);
+          ctx.lineTo(baseX + SUPPORT_HALF, BASE_Y + 4);
+          ctx.stroke();
+          const comX = clamp(baseX + comOffset, 2, W - 2);
+          ctx.fillStyle = danger ? '#ff5d5d' : '#63d68c';
+          ctx.beginPath();
+          ctx.arc(comX, BASE_Y + 4, 3.5, 0, TAU);
+          ctx.fill();
+          ctx.restore();
+        }
+
         if (boxes.length) {
           ctx.save();
-          const pivot = boxes[0];
-          ctx.translate(pivot.x + pivot.w / 2, pivot.y + pivot.h);
-          ctx.rotate(towerLean);
-          ctx.translate(-(pivot.x + pivot.w / 2), -(pivot.y + pivot.h));
+          /* 0.12.1 物理一致性修复：站立中的塔不再按 towerLean 整体旋转。
+             旧实现把整塔绕塔底转最多 0.35rad≈20°，而 settleDrop / 落点判定 / towerLean
+             全用未旋转坐标 —— 10 层塔在 lean=0.19 时视觉塔顶偏 ~83px、超过箱宽 64px，
+             玩家对着看到的塔顶松手必然判偏，且新箱会「跟着转」出现在没点的位置。
+             现在塔身始终轴对齐（所见即所判），倾斜改用底部重心/支撑面指示 + 预警表达；
+             真正的旋转只发生在倒塌动画里。 */
           boxes.forEach((b) => {
             if (b.base) {
               ctx.fillStyle = '#6b7590';
@@ -1672,15 +1780,29 @@
             }
           });
           ctx.restore();
-          /* 全览层号标注：从地基到塔顶逐层可读，属性图标随箱体绘制。 */
-          if (overviewT > 0.35) {
+        }
+
+        /* 0.12.1：塔不再靠「整体歪斜」表达不稳定，改用塔顶的警示描边 + 文案，
+           既保留「快倒了」的空间反馈，又不会让玩家误判落点。 */
+        if (boxes.length > 1 && (state === 'playing' || state === 'paused')) {
+          const stress = Math.max(
+            Math.abs(comOffset) / STABILITY_LIMIT,
+            Math.abs(towerLean) / LEAN_LIMIT
+          );
+          if (stress > 0.62) {
+            const top = towerTop();
+            const warn = stress > 0.85;
+            const pulse = A.reducedMotion ? 0.75 : 0.55 + 0.4 * ((Math.sin(Date.now() / 1000 * 9) + 1) / 2);
             ctx.save();
-            ctx.globalAlpha = clamp((overviewT - 0.35) / 0.65, 0, 1);
-            boxes.forEach((b, i) => {
-              if (b.base) return;
-              A.draw.label(ctx, '#' + (i), b.x - 8, b.y + b.h / 2, {
-                align: 'right', font: 'bold 12px system-ui', color: '#ffe08a',
-              });
+            ctx.globalAlpha = clamp((stress - 0.6) * 2.2, 0, 1) * pulse;
+            ctx.strokeStyle = warn ? '#ff5d5d' : '#ffd23f';
+            ctx.lineWidth = 3;
+            ctx.setLineDash([7, 5]);
+            A.draw.roundRect(ctx, top.x - 4, top.y - 4, top.w + 8, top.h * 2 + 8, 8);
+            ctx.stroke();
+            ctx.setLineDash([]);
+            A.draw.label(ctx, warn ? '⚠ 塔身将倾' : '塔身不稳', top.x + top.w / 2, top.y - 14, {
+              font: 'bold 12px system-ui', color: warn ? '#ff8a8a' : '#ffe08a',
             });
             ctx.restore();
           }
@@ -1723,28 +1845,59 @@
         particles.draw(ctx);
         ctx.restore();
 
-        /* 塔吊：桁架吊臂 + 塔身 + 配重臂 + 吊具（随钟摆摇摆平移释放）。 */
+        /* 0.12.1：全览层号在屏幕空间绘制（不随缩放变小），几十层时按可读间距抽稀。 */
+        if (overviewT > 0.35 && boxes.length > 1) {
+          const alpha = clamp((overviewT - 0.35) / 0.65, 0, 1);
+          const spacing = BOX_H * view.scale;
+          const step = Math.max(1, Math.ceil(16 / Math.max(1, spacing)));
+          const rows = boxes.filter((b) => !b.base);
+          ctx.save();
+          ctx.globalAlpha = alpha;
+          rows.forEach((b, i) => {
+            const floor = i + 1;
+            const isEdge = floor === 1 || floor === rows.length;
+            if (!isEdge && floor % step !== 0) return;
+            const p = worldToScreen(view, b.x + b.w / 2, b.y + b.h / 2);
+            A.draw.label(ctx, '#' + floor, p.x - Math.max(18, (b.w * view.scale) / 2 + 10), p.y, {
+              align: 'right', font: 'bold 11px system-ui', color: '#ffe08a',
+            });
+            /* 抽稀时给首尾箱补属性图标，保证属性仍可读。 */
+            if (isEdge) {
+              const cargo = b.cargo || CARGO_TYPES[0];
+              A.draw.label(ctx, cargo.icon, p.x + Math.max(18, (b.w * view.scale) / 2 + 10), p.y, {
+                align: 'left', font: '11px system-ui', color: '#fff',
+              });
+            }
+          });
+          ctx.restore();
+        }
+
+        /* 塔吊：桁架吊臂 + 塔身 + 配重臂 + 吊具（吊臂小车滑移跟塔顶对位）。
+           全览/结算拉远时随缩放淡出，避免与缩小的塔身脱节。 */
+        const jibX = jibPivotX();
+        const jibAlpha = clamp(1 - overviewT * 1.6, 0, 1);
         ctx.save();
+        ctx.globalAlpha = jibAlpha;
         ctx.strokeStyle = '#e0b13c';
         ctx.lineWidth = 7;
         ctx.beginPath();
-        ctx.moveTo(PIVOT_X - 140, PIVOT_Y - 30);
-        ctx.lineTo(PIVOT_X + 150, PIVOT_Y - 30);
+        ctx.moveTo(jibX - 140, PIVOT_Y - 30);
+        ctx.lineTo(jibX + 150, PIVOT_Y - 30);
         ctx.stroke();
         ctx.strokeStyle = 'rgba(60,50,20,0.5)';
         ctx.lineWidth = 2;
         ctx.beginPath();
-        for (let gx = PIVOT_X - 130; gx <= PIVOT_X + 140; gx += 22) {
+        for (let gx = jibX - 130; gx <= jibX + 140; gx += 22) {
           ctx.moveTo(gx, PIVOT_Y - 34);
           ctx.lineTo(gx + 11, PIVOT_Y - 26);
         }
         ctx.stroke();
         ctx.fillStyle = '#c9962a';
-        ctx.fillRect(PIVOT_X - 156, PIVOT_Y - 40, 26, 20);
+        ctx.fillRect(jibX - 156, PIVOT_Y - 40, 26, 20);
         ctx.fillStyle = '#7a5a14';
-        ctx.fillRect(PIVOT_X - 150, PIVOT_Y - 20, 14, 14);
+        ctx.fillRect(jibX - 150, PIVOT_Y - 20, 14, 14);
         ctx.fillStyle = '#e0b13c';
-        ctx.fillRect(PIVOT_X - 6, PIVOT_Y - 52, 12, 26);
+        ctx.fillRect(jibX - 6, PIVOT_Y - 52, 12, 26);
 
         const pb = pendulumBoxScreen();
         if (overviewT < 0.5) {
@@ -1752,7 +1905,7 @@
           ctx.lineWidth = 2;
           ctx.setLineDash(pendHasBox ? [] : [4, 6]);
           ctx.beginPath();
-          ctx.moveTo(PIVOT_X, PIVOT_Y - 24);
+          ctx.moveTo(jibX, PIVOT_Y - 24);
           ctx.lineTo(pb.x, pb.y - 18);
           ctx.stroke();
           ctx.setLineDash([]);
@@ -1768,7 +1921,7 @@
         }
         ctx.fillStyle = '#fff4d0';
         ctx.beginPath();
-        ctx.arc(PIVOT_X, PIVOT_Y - 26, 5, 0, TAU);
+        ctx.arc(jibX, PIVOT_Y - 26, 5, 0, TAU);
         ctx.fill();
         ctx.restore();
 
@@ -1786,42 +1939,51 @@
           }
         }
 
-        /* 前 3 层免费教学；之后仅玩家主动消耗“垂线预览”时显示。
-         * 挑战关用「投影箱心 vs 关卡 targetOffsetPx ± tolerancePx」判定（容差内才变绿），
-         * 并常显「预计偏差 N px」；经典模式保持原 85% 重叠判定。 */
-        if (state === 'playing' && pendHasBox && overviewT < 0.3 && (floorsReached < 3 || guideArmed)) {
+        /* 0.12.1：落点投影常显（此前只在 前 3 层 / 用掉垂线道具 时显示，
+           第 4 层以后玩家看不见落点，容易「莫名落空」）。
+           - 常显细虚线 + 落点方块：红=这一下的确会落空；
+           - 前 3 层教学、或消耗「垂线预览」道具时，追加精确偏差数值与延长引导线（道具价值保留）。
+           挑战关用「投影箱心 vs 关卡 targetOffsetPx ± tolerancePx」判定。 */
+        if (state === 'playing' && pendHasBox && overviewT < 0.3) {
           const top = towerTop();
           const topScreenY = top.y - camY;
-          let aligned;
+          const precise = floorsReached < 3 || guideArmed;
+          const forecast = landingForecast(pb.x);
+          /* 落点预测分三态：会落空(红) / 能落但会偏(黄) / 完美对齐(绿)。 */
+          const willMiss = !forecast.landable;
+          const aligned = mode === 'challenge' && chStage ? challengeAlignNow(pb.x).aligned : forecast.perfect;
           let labelText;
           let labelX;
           if (mode === 'challenge' && chStage) {
             const model = challengeAlignNow(pb.x);
-            aligned = model.aligned;
             const rounded = Math.round(model.offsetPx);
-            labelText = '预计偏差 ' + (rounded > 0 ? '+' : '') + rounded + 'px' + (aligned ? ' · 对齐' : ' / ±' + Math.round(model.tolerancePx) + 'px');
-            /* 挑战文案较长：靠近画布边缘时内收，避免被裁切。 */
+            labelText = precise
+              ? '预计偏差 ' + (rounded > 0 ? '+' : '') + rounded + 'px' + (model.aligned ? ' · 对齐' : ' / ±' + Math.round(model.tolerancePx) + 'px')
+              : (model.aligned ? '对齐' : '偏差 ' + (rounded > 0 ? '+' : '') + rounded + 'px');
             labelX = clamp(pb.x, 96, W - 96);
           } else {
-            const model = classicAlignState(pb.x, top);
-            aligned = model.aligned;
-            labelText = aligned ? '对齐' : '左右微调';
-            labelX = pb.x;
+            labelText = willMiss ? '会落空！' : forecast.perfect ? '完美对齐' : precise ? '偏 ' + Math.round(forecast.offset) + 'px' : '偏离 ' + Math.round(Math.abs(forecast.offset)) + 'px';
+            labelX = clamp(pb.x, 46, W - 46);
           }
+          const guideColor = willMiss ? 'rgba(255,93,93,0.85)' : aligned ? 'rgba(99,214,140,0.8)' : 'rgba(255,210,63,0.65)';
           ctx.save();
-          ctx.strokeStyle = aligned ? 'rgba(99,214,140,0.8)' : 'rgba(255,210,63,0.65)';
-          ctx.lineWidth = 1.5;
-          ctx.setLineDash([5, 5]);
+          ctx.strokeStyle = guideColor;
+          ctx.lineWidth = willMiss ? 2 : 1.5;
+          ctx.setLineDash(precise || willMiss ? [5, 5] : [2, 7]);
           ctx.beginPath();
           ctx.moveTo(pb.x, pb.y + BOX_H / 2);
           ctx.lineTo(pb.x, topScreenY);
           ctx.stroke();
           ctx.setLineDash([]);
-          ctx.fillStyle = aligned ? 'rgba(99,214,140,0.55)' : 'rgba(255,210,63,0.45)';
+          /* 预计落点方块：常显，红框表示必然落空。 */
+          ctx.strokeStyle = guideColor;
+          ctx.lineWidth = willMiss ? 2 : 1.2;
+          ctx.strokeRect(pb.x - BOX_W / 2, topScreenY, BOX_W, 4);
+          ctx.fillStyle = willMiss ? 'rgba(255,93,93,0.55)' : aligned ? 'rgba(99,214,140,0.55)' : 'rgba(255,210,63,0.45)';
           ctx.fillRect(top.x, topScreenY - 5, top.w, 5);
           A.draw.label(ctx, labelText, labelX, Math.max(88, topScreenY - 18), {
             font: 'bold 12px system-ui',
-            color: aligned ? '#63d68c' : '#ffd23f',
+            color: willMiss ? '#ff9a9a' : aligned ? '#63d68c' : '#ffd23f',
           });
           ctx.restore();
         }
@@ -1889,23 +2051,38 @@
           ctx.fillStyle = 'rgba(10,16,30,0.72)';
           A.draw.roundRect(ctx, W / 2 - 108, 74, 216, 28, 8);
           ctx.fill();
-          A.draw.label(ctx, '🗺 全览 · 共 ' + Math.max(0, boxes.length - 1) + ' 层 · 再按 3 返回', W / 2, 89, {
+          /* 结算拉远时不可再按 3（overviewBtn 已禁用），文案不要承诺无效操作。 */
+          const canToggle = state === 'playing';
+          A.draw.label(ctx, '🗺 全览 · 共 ' + Math.max(0, boxes.length - 1) + ' 层' + (canToggle ? ' · 再按 3 返回' : ''), W / 2, 89, {
             font: 'bold 12px system-ui', color: '#ffe08a',
           });
-          /* 地基支撑面与重心投影 */
+          /* 地基支撑面与重心投影：用 worldToScreen 换算，缩放后仍贴着地基绘制。 */
           const e = towerExtent();
           const baseX = baseCenter();
-          ctx.strokeStyle = 'rgba(99,224,200,0.7)';
+          const supportL = worldToScreen(view, baseX - SUPPORT_HALF, e.bottom + 10);
+          const supportR = worldToScreen(view, baseX + SUPPORT_HALF, e.bottom + 10);
+          const comPt = worldToScreen(view, clamp(baseX + comOffset, 6, W - 6), e.bottom + 10);
+          ctx.strokeStyle = 'rgba(99,224,200,0.75)';
           ctx.lineWidth = 2;
           ctx.beginPath();
-          ctx.moveTo(baseX - SUPPORT_HALF, e.bottom + 8); ctx.lineTo(baseX + SUPPORT_HALF, e.bottom + 8);
+          ctx.moveTo(supportL.x, supportL.y);
+          ctx.lineTo(supportR.x, supportR.y);
           ctx.stroke();
-          const comX = baseX + comOffset;
+          /* 重心垂线：重心投影若落在支撑面外，视觉上立刻能看出会倒。 */
+          const comTop = worldToScreen(view, clamp(baseX + comOffset, 6, W - 6), e.top);
+          ctx.strokeStyle = Math.abs(comOffset) > STABILITY_LIMIT ? 'rgba(255,93,93,0.75)' : 'rgba(99,214,140,0.55)';
+          ctx.lineWidth = 1.5;
+          ctx.setLineDash([4, 6]);
+          ctx.beginPath();
+          ctx.moveTo(comTop.x, comTop.y);
+          ctx.lineTo(comPt.x, comPt.y);
+          ctx.stroke();
+          ctx.setLineDash([]);
           ctx.fillStyle = Math.abs(comOffset) > STABILITY_LIMIT ? '#ff5d5d' : '#63d68c';
           ctx.beginPath();
-          ctx.arc(clamp(comX, 12, W - 12), e.bottom + 8, 4, 0, TAU);
+          ctx.arc(comPt.x, comPt.y, 4, 0, TAU);
           ctx.fill();
-          A.draw.label(ctx, '重心 ' + (comOffset >= 0 ? '+' : '') + comOffset.toFixed(1) + 'px', W / 2, e.bottom + 24, {
+          A.draw.label(ctx, '重心 ' + (comOffset >= 0 ? '+' : '') + comOffset.toFixed(1) + 'px / 支撑 ±' + STABILITY_LIMIT.toFixed(1), W / 2, Math.min(H - 52, supportL.y + 18), {
             font: 'bold 10px system-ui', color: Math.abs(comOffset) > STABILITY_LIMIT ? '#ff9a9a' : '#93e8c8',
           });
           ctx.restore();
@@ -2015,6 +2192,51 @@
             settleDrop();
             syncJoyTools();
             return feedback ? feedback.text : null;
+          },
+          /* 0.12.1 物理可达性探针：塔顶是否仍在摆幅可达范围、落点是否必然失败。 */
+          physicsInfo() {
+            const pb = pendulumBoxScreen();
+            const reach = swingReach();
+            const top = towerTop();
+            const topCenter = top ? top.x + top.w / 2 : W / 2;
+            const forecast = landingForecast(pb.x);
+            return {
+              mode,
+              pivotX: reach.pivotX,
+              jibTargetX: jibTargetX(),
+              jibMinX: JIB_MIN_X,
+              jibMaxX: JIB_MAX_X,
+              pendX: pb.x,
+              pendAngle: pend.angle,
+              pendVel: pend.vel,
+              reach,
+              topCenter,
+              topY: top ? top.y : null,
+              /* 塔顶中心是否落在摆幅可达区间内（含半个箱宽容差） */
+              topReachable: topCenter + BOX_W / 2 >= reach.min && topCenter - BOX_W / 2 <= reach.max,
+              /* 现在松手会不会落空 */
+              forecast,
+              floors: Math.max(0, boxes.length - 1),
+            };
+          },
+          /* 0.12.1 视图探针：全览缩放是否真的把整塔装进画布。 */
+          viewInfo() {
+            const fit = overviewFit();
+            const view = viewParams();
+            const e = towerExtent();
+            const topPt = worldToScreen(view, baseCenter(), e.top);
+            const bottomPt = worldToScreen(view, baseCenter(), e.bottom);
+            return {
+              overviewT,
+              scale: view.scale,
+              centerY: view.centerY,
+              fitScale: fit.scale,
+              span: fit.span,
+              extent: e,
+              screen: { topY: topPt.y, bottomY: bottomPt.y, canvasH: H },
+              /* 整塔是否完整落在画布内（含留白） */
+              fitsOnScreen: topPt.y >= 0 && bottomPt.y <= H && view.scale > 0,
+            };
           },
           /* 全览钩子（真实输入之外的状态探针；按钮/快捷键仍走 toggleOverview）。 */
           toggleOverview() {

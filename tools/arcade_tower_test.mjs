@@ -243,7 +243,140 @@ const TP_LAYOUT = {
   },
 };
 
-const SCENARIOS = [TP_STATIC, TP_PHYSICS, TP_OVERVIEW, TP_CARGO, TP_SAVE, TP_LAYOUT];
+/* ---------------- TP-07 可达性：单向偏置后塔顶仍在摆幅可达范围 ---------------- */
+const TP_REACH = {
+  id: 'TP-07',
+  async run(cdp) {
+    await prepare(cdp, 'reach');
+    /* 连续单向偏置落箱：每一步都必须满足
+       a) 塔顶中心落在摆幅可达区间内（jib 跟随塔顶）；
+       b) 让钟摆停在塔顶正上方时，落点预测为「可落上」（不会必然失败）；
+       c) 塔没倒之前一定不能出现「够不到」的死局。 */
+    const steps = [];
+    for (let i = 1; i <= 5; i++) {
+      await cdp.evaluate('__arcadeTest.forceSettle(18)');
+      await sleep(180);
+      const st = await cdp.evaluate('__arcadeTest.joyInfo().state');
+      if (st !== 'playing') break;
+      /* 吊臂是平滑滑移（≈0.2s 时间常数），等它收敛后再断言对位。 */
+      await cdp.waitFor(`(() => { const p = __arcadeTest.physicsInfo(); return Math.abs(p.pivotX - p.jibTargetX) < 0.4; })()`, { timeout: 3000 });
+      const ph = await cdp.evaluate('__arcadeTest.physicsInfo()');
+      assert(ph.topReachable === true, '第 ' + i + ' 层后塔顶已超出摆幅可达范围（死局）：' + JSON.stringify({ topCenter: ph.topCenter, reach: ph.reach }));
+      assert(ph.pivotX >= ph.jibMinX - 0.01 && ph.pivotX <= ph.jibMaxX + 0.01, '吊臂小车越界：' + ph.pivotX);
+      /* 关键 1：吊臂收敛后必须对上 jibTargetX（塔顶在行程内时即为塔顶中心）。 */
+      assert(Math.abs(ph.pivotX - ph.jibTargetX) < 0.5, '吊臂未收敛到目标：pivot=' + ph.pivotX + ' target=' + ph.jibTargetX);
+      if (ph.topCenter > ph.jibMinX && ph.topCenter < ph.jibMaxX) {
+        assert(Math.abs(ph.pivotX - ph.topCenter) < 0.5, '吊臂未跟住塔顶：pivot=' + ph.pivotX + ' top=' + ph.topCenter);
+      }
+      /* 关键 2：摆幅区间必须覆盖塔顶中心 —— 即钟摆每一摆都会经过塔顶正上方，
+         玩家总能等到「落点可正中」的相位；否则就是「释放必然失败」的死局。 */
+      assert(ph.reach.min <= ph.topCenter && ph.topCenter <= ph.reach.max,
+        '摆幅区间未覆盖塔顶（释放必然失败的死局）：reach [' + ph.reach.min.toFixed(1) + ',' + ph.reach.max.toFixed(1) + '] top ' + ph.topCenter);
+      steps.push({ floor: i, topCenter: Math.round(ph.topCenter), pivot: Math.round(ph.pivotX) });
+    }
+    assert(steps.length >= 3, '偏置堆叠未产生有效楼层（无法验证可达性）：' + JSON.stringify(steps));
+
+    /* 挑战模式必须保持关卡固定的 pivotX（合同不变）。 */
+    await prepare(cdp, 'reach-challenge');
+    const started = await cdp.evaluate(`(() => { try { return __arcadeTest.startChallenge('pendulum-tower-C01'); } catch (e) { return false; } })()`);
+    if (started) {
+      await sleep(250);
+      const ch = await cdp.evaluate('__arcadeTest.physicsInfo()');
+      assert(ch.mode === 'challenge', '未进入挑战模式：' + ch.mode);
+      assert(Math.abs(ch.pivotX - 210) < 0.5, '挑战模式 pivotX 被改动（应固定 210）：' + ch.pivotX);
+    }
+    record('可达性：单向偏置后塔顶始终在摆幅可达范围内，且吊臂精确跟位（' + steps.map((s) => s.floor + ':' + s.topCenter).join(' ') + '）', true);
+  },
+};
+
+/* ---------------- TP-08 全览 zoom-to-fit：几十层也要一屏装下 ---------------- */
+const TP_ZOOM = {
+  id: 'TP-08',
+  async run(cdp) {
+    /* 3 层：正常视角不应缩放（scale 保持 1）。 */
+    await prepare(cdp, 'zoom-small');
+    await cdp.evaluate('__arcadeTest.stackTo(3)');
+    await sleep(150);
+    await cdp.evaluate('__arcadeTest.toggleOverview()');
+    await sleep(800);
+    const small = await cdp.evaluate('__arcadeTest.viewInfo()');
+    assert(small.overviewT > 0.9, '全览动画未到位：' + small.overviewT);
+    assert(small.fitsOnScreen === true, '3 层全览未完整显示：' + JSON.stringify(small.screen));
+    assert(small.scale > 0.9, '3 层不该明显缩小（应接近 1）：' + small.scale);
+
+    /* 40 层：必须整体缩小到画布内（这正是 Owner 的核心诉求）。 */
+    await prepare(cdp, 'zoom-40');
+    await cdp.evaluate('__arcadeTest.stackTo(40)');
+    await sleep(200);
+    await cdp.evaluate('__arcadeTest.toggleOverview()');
+    await sleep(900);
+    const big = await cdp.evaluate('__arcadeTest.viewInfo()');
+    assert(big.overviewT > 0.9, '40 层全览动画未到位：' + big.overviewT);
+    assert(big.extent.top < big.extent.bottom, '全览范围异常：' + JSON.stringify(big.extent));
+    assert(big.scale < 0.9, '40 层没有真正缩小（仍是旧版只平移）：scale=' + big.scale);
+    assert(big.fitsOnScreen === true,
+      '40 层全览未完整装进画布：top=' + Math.round(big.screen.topY) + ' bottom=' + Math.round(big.screen.bottomY) + ' H=' + big.screen.canvasH);
+    assert(big.screen.topY >= 0 && big.screen.bottomY <= big.screen.canvasH,
+      '40 层全览越界：top=' + Math.round(big.screen.topY) + ' bottom=' + Math.round(big.screen.bottomY));
+    /* 缩放比要跟着层数单调变小：层数越多、缩得越小。 */
+    assert(big.scale < small.scale, '缩放比未随层数增加而缩小：3 层 ' + small.scale + ' vs 40 层 ' + big.scale);
+
+    /* 退出全览必须回到 1:1 跟随视角（不能残留缩放）。 */
+    await cdp.evaluate('__arcadeTest.toggleOverview()');
+    await sleep(800);
+    const back = await cdp.evaluate('__arcadeTest.viewInfo()');
+    assert(back.overviewT < 0.1 && Math.abs(back.scale - 1) < 0.01, '退出全览未恢复 1:1：' + JSON.stringify({ t: back.overviewT, scale: back.scale }));
+    record('全览 zoom-to-fit：3 层 ' + small.scale.toFixed(2) + '× / 40 层 ' + big.scale.toFixed(2) + '× 均完整入屏（top ' + Math.round(big.screen.topY) + '–bottom ' + Math.round(big.screen.bottomY) + ' / ' + big.screen.canvasH + '）', true);
+
+    /* 开局必须是 1:1（不得因 overviewT 初值而先缩小再放大）。 */
+    await prepare(cdp, 'zoom-start');
+    await sleep(120);
+    const startView = await cdp.evaluate('__arcadeTest.viewInfo()');
+    assert(Math.abs(startView.scale - 1) < 0.02, '开局视角不是 1:1（存在启动缩放）：' + startView.scale);
+
+    /* 结算动画拉远后必须「保持」全塔缩放（塔没塌的结局才有塔可看）：旧实现弹层出现即缩回 1:1。 */
+    await cdp.evaluate('__arcadeTest.stackTo(14)');
+    await sleep(200);
+    await cdp.evaluate('__arcadeTest.forceSettle(200)');
+    await cdp.waitFor('window.__arcadeTest.joyInfo().overview.revealing === true', { timeout: 5000 });
+    await cdp.waitFor('document.querySelector("[data-overlay]").hidden === false', { timeout: 6000 });
+    await sleep(250);
+    const settle = await cdp.evaluate('__arcadeTest.viewInfo()');
+    assert(settle.scale < 0.95, '结算后未保持全塔缩放（弹层出现就缩回）：scale=' + settle.scale);
+    assert(settle.fitsOnScreen === true && settle.screen.topY >= 0 && settle.screen.bottomY <= settle.screen.canvasH,
+      '结算后整塔未完整入屏：' + JSON.stringify(settle.screen));
+    record('结算拉远保持缩放：14 层结案后 scale ' + settle.scale.toFixed(2) + '×（y ' + Math.round(settle.screen.topY) + '–' + Math.round(settle.screen.bottomY) + '）', true);
+  },
+};
+
+/* ---------------- TP-09 所见即所判：站立塔不再整体旋转 ---------------- */
+const TP_CONSISTENCY = {
+  id: 'TP-09',
+  async run(cdp) {
+    const src = fs.readFileSync(path.join(REPO_ROOT, 'apps/arcade/games/pendulum-tower.html'), 'utf8');
+    /* 站立塔绘制段内不得再出现 rotate(towerLean)：否则视觉塔顶与落点判定错位。 */
+    const standBlock = src.slice(src.indexOf('if (boxes.length) {'), src.indexOf('collapsed.forEach'));
+    assert(!/rotate\(\s*towerLean\s*\)/.test(standBlock), '站立塔仍按 towerLean 整体旋转（视觉与判定会错位）');
+    /* 倒塌动画必须保留真实旋转（可玩性/观赏性）。 */
+    assert(/ctx\.rotate\(b\.rot\)/.test(src), '倒塌动画缺少逐箱旋转');
+
+    await prepare(cdp, 'consistency');
+    await cdp.evaluate('__arcadeTest.stackTo(6)');
+    await sleep(150);
+    /* 即使人为把倾斜推到接近极限，塔顶逻辑位置也不得漂移（不再被旋转误导）。 */
+    const base = await cdp.evaluate('__arcadeTest.physicsInfo().topCenter');
+    await cdp.evaluate('__arcadeTest.setLean(0.3, 0)');
+    await sleep(120);
+    const leaned = await cdp.evaluate('__arcadeTest.physicsInfo().topCenter');
+    assert(Math.abs(leaned - base) < 0.01, '倾斜值影响了塔顶逻辑位置：' + base + '→' + leaned);
+    /* 落点投影常显（不再只在 3 层内可见）：第 6 层时仍应给得出预测。 */
+    const ph = await cdp.evaluate('__arcadeTest.physicsInfo()');
+    assert(ph.forecast && typeof ph.forecast.landable === 'boolean', '落点预测缺失：' + JSON.stringify(ph.forecast));
+    record('所见即所判：站立塔不整体旋转（倾斜 0.3 时塔顶位置不变 ' + Math.round(base) + 'px），倒塌动画保留旋转', true);
+  },
+};
+
+const SCENARIOS = [TP_STATIC, TP_PHYSICS, TP_OVERVIEW, TP_CARGO, TP_SAVE, TP_LAYOUT, TP_REACH, TP_ZOOM, TP_CONSISTENCY];
 
 let server, launched, cdp;
 try {

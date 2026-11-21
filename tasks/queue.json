@@ -1679,6 +1679,25 @@
       "evidence": "Owner 反馈三点并在浏览器中复现确认。双击放大：17 页 viewport 加 maximum-scale=1/user-scalable=no、html touch-action manipulation 兜底、engine.js installSfxUnlock() 全局拦 dblclick 默认行为（不 stopPropagation，不破坏方块双击暂停）。五子棋重影根因：画布 drawPlaceButton 与 DOM placeButton 各画一份「落子」（字号/位置不同，全屏错位）；修复为画布 drawActionButton 唯一文字源，DOM 两枚透明命中层（data-cancel-preview/data-place-confirm，无文字/边框/底色）。预览出口：新增 cancelPreview()，取消只清 preview；逻辑按钮区 200→280 保证 320px 两半各 ≥44px；hint/开始弹层/画布引导/页脚文案同步。五子棋 selftest 新增第 18 条（预览取消与落子确认互不干扰），第 17 条改校验两枚透明命中层；新增 __arcadeTest.cancelPreview()/actionButtons() 钩子。新增 tools/arcade_interaction_test.mjs（IX-01…IX-05）：17 页 viewport / dblclick 拦截 / 透明命中层 / 四档+全屏布局 / 取消与落子。门禁：interaction 5/5、smoke 94/94、zen 14/14、calm 17/17（gomoku selftest 18 条）、review 5/5、gameplay base 11/11、pwa 7/7、validate/build/inline/node --check 全过；真机双击防护待 Owner 复测 UNVERIFIED；无 localStorage key/Schema 变更；版本链 0.11.5 / SW studiokit-arcade-0.11.5-v1；设计见 DESIGN-0.11.5.md。已并入 0.12.0 待发布。"
     },
     {
+      "id": "T098",
+      "title": "Arcade 0.12.1：层塔物理一致性 + 全览 zoom-to-fit（含独立审计）",
+      "kind": "agent",
+      "status": "DONE",
+      "dependsOn": [
+        "T097"
+      ],
+      "ownerAuthorizationRequired": false,
+      "acceptance": [
+        "站立塔不再整体旋转，所见即所判；倾斜有诚实的空间反馈",
+        "单向偏置堆叠后塔顶始终在摆幅可达范围内，不存在释放必失败",
+        "挑战模式仍按关卡数据固定 pivotX，6 关语义不变",
+        "全览对几十层真正缩放适配，整塔一屏可见",
+        "全量门禁通过；无 key/Schema/关卡数据变更"
+      ],
+      "completedAt": "2026-11-22T01:05:00+08:00",
+      "evidence": "Owner 反馈层塔物理与全览两项，先开独立只读审计 subagent（基线 HEAD bf9fbe2，2268 行）复核，确认并量化 2 个 Blocker：(D01/D02) render 站立塔 ctx.rotate(towerLean) 最多 20°，而 settleDrop/落点判定/towerTop 全用未旋转坐标，10 层 h=464 在 lean=0.19 视觉塔顶偏 87.6px、40 层 lean=0.286 偏 469px，均超 58px 落空阈值 ⇒ 对着看到的塔顶松手 100% 落空并立即终局；同时审计用解析上界 |D|−r ≤ 0.35×117 ≈ 41 < 58 证明「塔没倒却够不到」的摆幅死局并不存在，真正体感来自旋转误导。(D03) 全览只平移 camY 无缩放，40 层 span=1704 vs H=740 ⇒ 地面屏幕 y=1744、越界 1004px、仅见约 17.5/40 层，第 15 层起越界。修复：移除站立塔旋转（塔身轴对齐，倒塌动画保留逐箱旋转）；倾斜改为地基支撑面+重心投影常显（越界变红）+ 塔顶应力>0.62 时虚线描边与「塔身不稳/⚠塔身将倾」；新增 JIB_MIN_X=120/JIB_MAX_X=300 与 jibTargetX()/jibXCur 平滑滑移（≈0.2s），经典模式吊臂跟随塔顶使摆幅区间恒覆盖塔顶、挑战模式改读 content.pendulum.pivotX 固定 210（审计指出草稿误读 content.pivotX 恒 undefined）；comMoment 改用吸附后 settledE 消除「完美吸附但力矩仍累积」的假状态；新增 overviewFit()/viewParams()/worldToScreen() 真正 zoom-to-fit（40 层 scale 0.29、整塔 y 116–624/740；12 层 0.81；3 层 1.0 不缩），VIEW_MARGIN_Y=116 避开 HUD 与横幅，层号改屏幕空间并按 BOX_H×scale 抽稀（首尾层必标+属性图标），重心标注随缩放换算，吊臂随 overviewT 淡出，结算 0.9s 拉远真正缩放；落点投影常显 + 失配红字「会落空！」；移除 overviewTargetCam 使 camY 恒为跟随相机（顺带消除审计 D04 全览退出窗口内松手把箱子生成到塔顶下方穿塔被判负）；结算态横幅不再承诺无效的「再按 3 返回」；新增 #test 探针 physicsInfo()/viewInfo()。门禁：arcade_tower_test 13→17/17（新增 TP-07 可达性：偏置后 topReachable 恒真、吊臂收敛 jibTargetX<0.5px、摆幅区间覆盖塔顶、挑战 pivotX=210；TP-08 zoom-to-fit：3 层>0.9 且入屏、40 层<0.9 且 topY≥0/bottomY≤740、层多更小、退出回 1.0；TP-09 所见即所判：站立段无 rotate(towerLean)、setLean(0.3) 塔顶逻辑位置不变<0.01px、倒塌动画保留旋转；另含开局必须 1:1、结算拉远后必须保持全塔缩放）、smoke 94/94、zen 14/14、calm 17/17、review 5/5、gameplay base 11/11、tower challenge 6/6、pwa 7/7、interaction 5/5、immersive 16/16、validate/build/inline/node --check 全过。过程事故与处置：一次 PowerShell 数组扁平化错误把多处替换退化成「单字符替换」，导致 engine.js/registry/多个测试与校验文件被污染；立即 git checkout 还原全部受影响文件，仅保留本轮真实改动（pendulum-tower.html + arcade_tower_test.mjs），改用 Python 精确替换重做版本 bump，validate/JSON 解析/engine 语法均复验通过。无 localStorage key/Schema/挑战关卡数据变更；仅改 pendulum-tower.html + 测试/文档；版本链 0.12.1 / SW studiokit-arcade-0.12.1-v1；设计见 DESIGN-0.12.1.md；本地提交待发布。"
+    },
+    {
       "id": "T097",
       "title": "Arcade 0.12.0 发布：main 双端部署与线上验证",
       "kind": "agent",
