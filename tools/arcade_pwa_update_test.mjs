@@ -1,6 +1,6 @@
 #!/usr/bin/env node
 /**
- * Arcade 0.11.4 门禁：PWA 更新检测 + iPhone 独立窗口顶部安全区布局。
+ * Arcade 0.11.5 门禁：PWA 更新检测 + iPhone 独立窗口顶部安全区布局。
  *
  * 覆盖：
  * - PU-01 中心页「检查更新」按钮存在且可触发 checkForUpdate()
@@ -66,7 +66,7 @@ async function main() {
         version: window.Arcade && Arcade.version
       };
     })()`);
-    assert(ui.version === '0.11.4', 'Arcade version=' + ui.version);
+    assert(ui.version === '0.11.5', 'Arcade version=' + ui.version);
     assert(ui.hasCheck && ui.checkVisible, '检查更新按钮缺失或不可见: ' + JSON.stringify(ui));
     assert(ui.hasBanner && ui.bannerHidden, '更新横幅初始应隐藏: ' + JSON.stringify(ui));
     assert(ui.api.length === 4, 'A.Offline update API 不完整: ' + JSON.stringify(ui.api));
@@ -75,13 +75,13 @@ async function main() {
     const checked = await cdp.evaluate(`Arcade.Offline.checkForUpdate()`);
     assert(checked && checked.supported === true && checked.checked === true, 'checkForUpdate 结果异常: ' + JSON.stringify(checked));
     const swVersion = await cdp.evaluate(`Arcade.Offline.swVersion()`);
-    assert(typeof swVersion === 'string' && swVersion.indexOf('0.11.4') !== -1, 'swVersion 未返回 0.11.4: ' + JSON.stringify(swVersion));
+    assert(typeof swVersion === 'string' && swVersion.indexOf('0.11.5') !== -1, 'swVersion 未返回 0.11.5: ' + JSON.stringify(swVersion));
     record('PU-02 checkForUpdate / swVersion 与 SW 版本握手', true);
 
     /* ---------- PU-03 模拟新版本通知，更新横幅出现且可关闭 ----------
        直接派发 SW → 页面 的 message 事件（与真实 SW 激活后通知一致）。 */
     await cdp.evaluate(`(() => {
-      const event = new MessageEvent('message', { data: { type: 'arcade-sw-update-ready', version: '0.11.4' } });
+      const event = new MessageEvent('message', { data: { type: 'arcade-sw-update-ready', version: '0.11.5' } });
       navigator.serviceWorker.dispatchEvent(event);
     })()`);
     await sleep(200);
@@ -89,7 +89,7 @@ async function main() {
       const b = document.querySelector('[data-update-banner]');
       return { hidden: b.hidden, text: document.querySelector('[data-update-text]').textContent };
     })()`);
-    assert(shown.hidden === false && shown.text.indexOf('0.11.4') !== -1, '更新横幅未正确显示: ' + JSON.stringify(shown));
+    assert(shown.hidden === false && shown.text.indexOf('0.11.5') !== -1, '更新横幅未正确显示: ' + JSON.stringify(shown));
     await cdp.click('[data-update-dismiss]');
     await sleep(120);
     const dismissed = await cdp.evaluate(`document.querySelector('[data-update-banner]').hidden`);

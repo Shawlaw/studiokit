@@ -7,7 +7,7 @@
 (() => {
   'use strict';
 
-  const ARCADE_VERSION = '0.11.4';
+  const ARCADE_VERSION = '0.11.5';
   const PROGRESS_KEY = 'studiokit:arcade:progress:v1';
   const PREFS_KEY = 'studiokit:arcade:prefs:v1';
   const RUNS_KEY = 'studiokit:arcade:runs:v1';
@@ -1664,6 +1664,11 @@
 
   /* 在首次用户手势时解锁 AudioContext（浏览器自动播放策略）。 */
   function installSfxUnlock() {
+    /* 0.11.5：游戏页全局拦掉 dblclick 默认行为（桌面双击选中/移动端双击放大后的
+       合成 dblclick），避免误触把页面放大或选中文字。主防线仍是 viewport 的
+       maximum-scale=1/user-scalable=no。只拦默认行为，不 stopPropagation，
+       不影响各游戏自己绑定的单击/双击逻辑（如方块双击暂停）。 */
+    document.addEventListener('dblclick', (e) => e.preventDefault(), { passive: false });
     const unlock = () => {
       Sfx.unlock();
       window.removeEventListener('pointerdown', unlock);

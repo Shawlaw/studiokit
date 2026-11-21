@@ -9,7 +9,7 @@
 - 首页工具清单唯一来源为 `shared/tool-registry.json`。
 - 共享运行时仅限 `shared/site.css` 与 `shared/site-shell.js`；不要引入大型框架。
 - 当前 Badge Studio 版本为 2.2.1，配置 Schema 为 v3，基线见 `docs/BASELINE.md`。
-- 当前 Arcade 版本为 0.11.4（2026-11-21 发布）：16 款竖屏小游戏（13 款带 78 关挑战模式 + 二十一点/五子棋/纸牌接龙三款平和棋牌）+ 俄罗斯方块禅模式 + 积分记录表 + 棋盘优先画布 + 极速车道转向灯换道/连超/加速带/维修箱；结算「再来一局」重新打开模式选择，贪吃蛇触屏为相对蛇头方向的左右双按钮；0.11.2 新增 PWA 更新检测（中心页「检查更新」+ SW 版本握手），0.11.3 移除 `viewport-fit=cover` + 半透明状态栏 meta；0.11.4 真机定位「被模糊」对象是中心页共享 shellbar（`StudioKit / 街机厅 Arcade / 源码 ↗`），修复为 standalone 下 shellbar `position: sticky; top: 0` 贴顶（方案 1/9/10 真机确认清晰无副作用，fixed 会致下方贴边）；其运行时 `apps/arcade/engine.js` 是工具内共享，不要提升为全站 shared；设计与回滚见 `apps/arcade/DESIGN-0.11.4.md`（历史版本见 `DESIGN-0.4.0` … `DESIGN-0.11.3`）与 `apps/arcade/DESIGN-block-controls.md`。
+- 当前 Arcade 版本为 0.11.5（2026-11-21，本地未发布）：16 款竖屏小游戏（13 款带 78 关挑战模式 + 二十一点/五子棋/纸牌接龙三款平和棋牌）+ 俄罗斯方块禅模式 + 积分记录表 + 棋盘优先画布 + 极速车道转向灯换道/连超/加速带/维修箱；结算「再来一局」重新打开模式选择，贪吃蛇触屏为相对蛇头方向的左右双按钮；0.11.2 新增 PWA 更新检测（中心页「检查更新」+ SW 版本握手），0.11.3 移除 `viewport-fit=cover` + 半透明状态栏 meta；0.11.4 真机定位「被模糊」对象是中心页共享 shellbar（`StudioKit / 街机厅 Arcade / 源码 ↗`），修复为 standalone 下 shellbar `position: sticky; top: 0` 贴顶（方案 1/9/10 真机确认清晰无副作用，fixed 会致下方贴边）；0.11.5 本地修复移动端双击误触放大（17 页 viewport + dblclick 拦截）与五子棋全屏落子按钮文字重影（画布单一文字源 + 透明命中层）及预览取消出口；其运行时 `apps/arcade/engine.js` 是工具内共享，不要提升为全站 shared；设计与回滚见 `apps/arcade/DESIGN-0.11.5.md`（历史版本见 `DESIGN-0.4.0` … `DESIGN-0.11.4`）与 `apps/arcade/DESIGN-block-controls.md`。
 - Arcade 的离线能力仅限同源缓存：`apps/arcade/sw.js` 作用域为 `apps/arcade/`，可缓存 `shared/site.css` 与 `shared/site-shell.js`；不得借此引入远程资源、分析或后端。
 - Venue Compare（`restaurant-compare`）当前 0.2.0 / `available`：餐厅考察对比、地图标注与外部链接 / 备注（仅 http/https）；IndexedDB 命名空间为 `studiokit:restaurant-compare`，导出为自包含只读 HTML；2026-11-16 双端发布。
 - Rounded Image 尚未实现，不得假设旧功能、控件或参数。

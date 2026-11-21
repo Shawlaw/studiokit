@@ -2,7 +2,8 @@
 <html lang="zh-CN">
 <head>
   <meta charset="utf-8" />
-  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <!-- 0.11.5：禁止移动端双击误触放大（游戏误操作防护）。 -->
+  <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no" />
   <meta name="description" content="五子棋 · 静局：11 路单机五子棋，玩家执黑先行，对本地 AI。点空格先预览、再点同一点确认落子，没有倒计时，适合通勤时慢慢下的一局。" />
   <meta name="theme-color" content="#0d1016" />
   <link rel="stylesheet" href="../../../shared/site.css" />
@@ -37,7 +38,7 @@
         </div>
       </div>
     </div>
-    <p class="game-hint">点空格先预览，再点同一点落子（防误触）· 道具 1 悔棋 / 2 提示 · P / Esc 暂停</p>
+    <p class="game-hint">点空格先预览，点同一点或「落子」确认，点「取消」退出预览 · 道具 1 悔棋 / 2 提示 · P / Esc 暂停</p>
   </main>
   <script>
     (() => {
@@ -60,7 +61,17 @@
       const GRID_X = 42;
       const GRID_Y = 196;
       const BOARD = { x: 10, y: 174, w: 400, h: 400 };
-      const PLACE_BTN = { x: 110, y: 590, w: 200, h: 56 };
+      /* 0.11.5：加宽逻辑按钮区（200→280，x 110→70），使拆出的「取消 / 落子」
+         两半在 320px 窄屏（画布缩放 ~0.41）下各仍 ≥44px 命中区。 */
+      const PLACE_BTN = { x: 70, y: 590, w: 280, h: 56 };
+      /* 0.11.5：预览确认区拆成「取消 / 落子」两枚按钮。
+         - 取消：给「单击棋盘进入预览后」一个明确的操作出口（Owner 反馈）；
+         - 画布只负责画按钮外观与文字，DOM 覆盖按钮仅作 ≥44px 透明命中区，
+           两者不再各画一份文字，消除全屏下的文字重影。 */
+      const BTN_GAP = 8;
+      const BTN_HALF = (PLACE_BTN.w - BTN_GAP) / 2; // 136
+      const CANCEL_BTN = { x: PLACE_BTN.x, y: PLACE_BTN.y, w: BTN_HALF, h: PLACE_BTN.h };
+      const PLACE_RECT = { x: PLACE_BTN.x + BTN_HALF + BTN_GAP, y: PLACE_BTN.y, w: BTN_HALF, h: PLACE_BTN.h };
       /* 0.10.0：窄屏逻辑按钮缩放到 CSS px 后不足 44px，额外提供画布内 DOM 覆盖按钮。 */
       const PLACE_BTN_MIN_CSS = 44;
       const STONE_R = 15;
@@ -460,7 +471,7 @@
         syncAll();
         ui.show({
           title: '五子棋 · 静局',
-          text: '你执黑先行，与本地启发式对手对弈。<br/>点空格先预览，再点同一点确认落子。<br/>提示为启发式推荐，不代表最优解。<br/>五子连珠即胜 · 没有倒计时，慢慢想。',
+          text: '你执黑先行，与本地启发式对手对弈。<br/>点空格预览，再点同一点或「落子」确认；点「取消」退出预览。<br/>提示为启发式推荐，不代表最优解。<br/>五子连珠即胜 · 没有倒计时，慢慢想。',
           btn: '开始游戏',
           onBtn: startGame,
         });
@@ -720,9 +731,21 @@
         return applyPlayerMove(preview.r, preview.c);
       }
 
+      /* 0.11.5：预览取消出口 —— 单击棋盘进入预览后，可点「取消」退出，
+         不必被迫落子或换个格子。取消只清预览，不动棋盘/回合/存档内容。 */
+      function cancelPreview() {
+        if (state !== 'playing' || turn !== BLACK || !preview) return false;
+        preview = null;
+        A.Sfx.play('ui');
+        autosave.saveNow();
+        syncAll();
+        return true;
+      }
+
       function tapAt(x, y) {
         if (state !== 'playing') return false;
-        if (pointInRect(x, y, PLACE_BTN)) return confirmPreview();
+        if (pointInRect(x, y, CANCEL_BTN)) return cancelPreview();
+        if (pointInRect(x, y, PLACE_RECT)) return confirmPreview();
         if (turn !== BLACK) return false;
         const cell = cellAt(x, y);
         if (!cell) return false;
@@ -740,48 +763,50 @@
        * - 只覆盖 PLACE_BTN 对应的画布区域；不新增画布外道具，不改 2 个道具契约。
        * - 用绝对定位放进 .stage-box（overflow:hidden），因此不产生横向/纵向溢出。
        * ---------------------------------------------------------- */
-      const placeButton = document.createElement('button');
-      placeButton.type = 'button';
-      placeButton.className = 'gomoku-place-confirm';
-      placeButton.setAttribute('data-place-confirm', '');
-      placeButton.setAttribute('aria-label', '确认落子');
-      placeButton.style.position = 'absolute';
-      placeButton.style.margin = '0';
-      placeButton.style.padding = '0';
-      placeButton.style.borderRadius = '12px';
-      placeButton.style.border = '1px solid rgba(231,201,131,0.55)';
-      placeButton.style.background = 'rgba(217,176,106,0.16)';
-      placeButton.style.color = '#f3e3c3';
-      placeButton.style.font = '600 15px system-ui, sans-serif';
-      placeButton.style.textAlign = 'center';
-      placeButton.style.touchAction = 'manipulation';
-      placeButton.textContent = '落子';
+      /* 0.11.5：落子区加宽至 280；改为「取消 / 落子」两枚透明命中层；外观与文字只由画布绘制一次，
+         DOM 按钮不再自带文字/边框/背景，从根上消除全屏缩放后的文字重影。 */
       const stageBox = document.querySelector('.game-page .stage-box');
-      if (stageBox) stageBox.appendChild(placeButton);
+      function makeHitTarget(attr, label, onClick) {
+        const btn = document.createElement('button');
+        btn.type = 'button';
+        btn.className = 'gomoku-place-confirm';
+        btn.setAttribute(attr, '');
+        btn.setAttribute('aria-label', label);
+        /* 透明命中层：无文字/边框/底色/阴影，避免与画布按钮产生双份文字。 */
+        btn.style.cssText =
+          'position:absolute;margin:0;padding:0;border:0;border-radius:14px;background:transparent;' +
+          'color:transparent;font:inherit;text-align:center;touch-action:manipulation;' +
+          '-webkit-tap-highlight-color:transparent;';
+        btn.addEventListener('click', onClick);
+        if (stageBox) stageBox.appendChild(btn);
+        return btn;
+      }
+      const cancelButton = makeHitTarget('data-cancel-preview', '取消预览', () => cancelPreview());
+      const placeButton = makeHitTarget('data-place-confirm', '确认落子', () => confirmPreview());
 
       let placeButtonBox = '';
       function syncPlaceButton() {
-        if (!placeButton.parentNode) return;
+        if (!placeButton.parentNode || !cancelButton.parentNode) return;
         const scale = stage.canvas ? stage.canvas.clientHeight / H : 0;
-        const w = Math.max(PLACE_BTN_MIN_CSS, Math.round(PLACE_BTN.w * scale));
-        const h = Math.max(PLACE_BTN_MIN_CSS, Math.round(PLACE_BTN.h * scale));
-        const x = Math.max(0, Math.round(PLACE_BTN.x * scale));
-        const y = Math.max(0, Math.round(PLACE_BTN.y * scale));
         const enabled = state === 'playing' && turn === BLACK && !!preview;
-        const box = [x, y, w, h, enabled ? '1' : '0'].join(',');
-        if (box !== placeButtonBox) {
-          placeButtonBox = box;
-          placeButton.style.left = x + 'px';
-          placeButton.style.top = y + 'px';
-          placeButton.style.width = w + 'px';
-          placeButton.style.height = h + 'px';
+        function layout(btn, rect) {
+          const w = Math.max(PLACE_BTN_MIN_CSS, Math.round(rect.w * scale));
+          const h = Math.max(PLACE_BTN_MIN_CSS, Math.round(rect.h * scale));
+          const x = Math.max(0, Math.round(rect.x * scale));
+          const y = Math.max(0, Math.round(rect.y * scale));
+          btn.style.left = x + 'px';
+          btn.style.top = y + 'px';
+          btn.style.width = w + 'px';
+          btn.style.height = h + 'px';
+          btn.style.opacity = enabled ? '1' : '0';
+          btn.disabled = !enabled;
+          return [x, y, w, h].join(',');
         }
-        placeButton.style.opacity = enabled ? '1' : '0';
-        placeButton.disabled = !enabled;
+        /* 尺寸每帧都同步（禁用态也要保持 ≥44px，供门禁与辅助技术读取真实命中区），
+           仅在位置变化时写 left/top，避免无谓重排。 */
+        const box = layout(cancelButton, CANCEL_BTN) + '|' + layout(placeButton, PLACE_RECT);
+        if (box !== placeButtonBox) placeButtonBox = box;
       }
-      placeButton.addEventListener('click', () => {
-        confirmPreview();
-      });
       window.addEventListener('resize', syncPlaceButton);
       window.addEventListener('orientationchange', syncPlaceButton);
 
@@ -1100,10 +1125,10 @@
               guide = '启发式推荐：' + coordName(hint) + ' 附近（' + Math.ceil(hintTimer) + ' 秒）';
               guideColor = '#e7c983';
             } else if (preview) {
-              guide = '已选 ' + coordName(preview) + ' · 再点同一点确认';
+              guide = '已选 ' + coordName(preview) + ' · 点「落子」确认 / 「取消」退出';
               guideColor = '#e7c983';
             } else {
-              guide = '先点空格预览，再点同一点落子';
+              guide = '先点空格预览，再点同一点或「落子」确认';
             }
           } else {
             main = 'AI 正在回应';
@@ -1216,24 +1241,45 @@
         ctx.restore();
       }
 
-      function drawPlaceButton() {
-        const enabled = state === 'playing' && turn === BLACK && !!preview;
-        A.draw.roundRect(ctx, PLACE_BTN.x, PLACE_BTN.y, PLACE_BTN.w, PLACE_BTN.h, 16);
-        ctx.fillStyle = enabled ? 'rgba(217,176,106,0.2)' : 'rgba(255,255,255,0.04)';
+      function drawActionButton(rect, label, opts) {
+        const o = opts || {};
+        A.draw.roundRect(ctx, rect.x, rect.y, rect.w, rect.h, 14);
+        ctx.fillStyle = o.fill || 'rgba(255,255,255,0.04)';
         ctx.fill();
-        ctx.strokeStyle = enabled ? 'rgba(231,201,131,0.88)' : 'rgba(147,160,200,0.24)';
+        ctx.strokeStyle = o.stroke || 'rgba(147,160,200,0.24)';
         ctx.lineWidth = 1.5;
         ctx.stroke();
-        A.draw.label(ctx, enabled ? '落子' : '先预览再落子', W / 2, PLACE_BTN.y + PLACE_BTN.h / 2 + 1, {
-          font: enabled ? 'bold 18px system-ui, sans-serif' : '13px system-ui, sans-serif',
-          color: enabled ? '#f3e3c3' : 'rgba(200,206,222,0.55)',
+        A.draw.label(ctx, label, rect.x + rect.w / 2, rect.y + rect.h / 2 + 1, {
+          font: o.font || '13px system-ui, sans-serif',
+          color: o.color || 'rgba(200,206,222,0.55)',
         });
+      }
+
+      function drawPlaceButton() {
+        const enabled = state === 'playing' && turn === BLACK && !!preview;
+        if (enabled) {
+          /* 预览中：左「取消」出口 + 右「落子」确认；与 DOM 透明命中层一一对应。 */
+          drawActionButton(CANCEL_BTN, '取消', {
+            fill: 'rgba(255,255,255,0.05)',
+            stroke: 'rgba(147,160,200,0.5)',
+            font: 'bold 17px system-ui, sans-serif',
+            color: 'rgba(214,220,236,0.9)',
+          });
+          drawActionButton(PLACE_RECT, '落子', {
+            fill: 'rgba(217,176,106,0.2)',
+            stroke: 'rgba(231,201,131,0.88)',
+            font: 'bold 18px system-ui, sans-serif',
+            color: '#f3e3c3',
+          });
+        } else {
+          drawActionButton(PLACE_BTN, '先预览再落子');
+        }
       }
 
       function drawFooter() {
         let line = '静局 · 没有倒计时 · 慢慢想';
         if (state === 'playing' && turn === BLACK) {
-          line = preview ? '再点同一点，或按「落子」确认' : '「落子」按钮在有预览时可确认';
+          line = preview ? '点「落子」确认 / 「取消」退出预览' : '点空格预览后，用「落子 / 取消」确认';
         } else if (state === 'playing' && turn === WHITE) {
           line = 'AI 落子后轮到你';
         }
@@ -1548,13 +1594,32 @@
             hintTitle
           );
 
-          /* 17（0.10.0）：落子确认按钮存在且逻辑常量 ≥44px（窄屏由 DOM 覆盖保证实际尺寸）。 */
+          /* 17（0.10.0 / 0.11.5）：取消 + 落子两枚透明命中层存在且触控目标 ≥44px，
+             且二者无自身文字（消除与画布按钮的重影）。 */
           const placeRect = placeButton.getBoundingClientRect();
+          const cancelRect = cancelButton.getBoundingClientRect();
           ok(
-            '落子确认按钮 DOM 存在且触控目标足够',
-            !!placeButton.parentNode && placeRect.width >= PLACE_BTN_MIN_CSS - 1 && placeRect.height >= PLACE_BTN_MIN_CSS - 1,
-            { w: placeRect.width, h: placeRect.height, min: PLACE_BTN_MIN_CSS }
+            '取消 / 落子按钮 DOM 存在且触控目标足够',
+            !!placeButton.parentNode && !!cancelButton.parentNode &&
+              placeRect.width >= PLACE_BTN_MIN_CSS - 1 && placeRect.height >= PLACE_BTN_MIN_CSS - 1 &&
+              cancelRect.width >= PLACE_BTN_MIN_CSS - 1 && cancelRect.height >= PLACE_BTN_MIN_CSS - 1 &&
+              !placeButton.textContent && !cancelButton.textContent,
+            { placeW: placeRect.width, placeH: placeRect.height, cancelW: cancelRect.width, cancelH: cancelRect.height, min: PLACE_BTN_MIN_CSS }
           );
+
+          /* 18（0.11.5）：预览取消出口 —— 取消只清预览，不动棋盘/回合/步数。 */
+          resetStateForTest();
+          tapAt(px(5), py(5));
+          const hadPreview = !!preview && board[5][5] === EMPTY && moves === 0;
+          const canceled = cancelPreview();
+          const cancelOk = canceled && hadPreview && !preview && board[5][5] === EMPTY && moves === 0 && turn === BLACK;
+          /* 落子命中区仍可正常确认（先用 DOM 按钮的真实点击路径）。 */
+          tapAt(px(5), py(5));
+          syncAll();
+          syncPlaceButton();
+          placeButton.click();
+          const confirmOk = board[5][5] === BLACK && moves === 1 && !preview;
+          ok('预览取消出口与落子确认互不干扰', cancelOk && confirmOk, JSON.stringify({ cancelOk, confirmOk }));
         } catch (err) {
           details.push({ name: '自测异常', ok: false, detail: String((err && err.message) || err) });
         } finally {
@@ -1770,6 +1835,14 @@
           },
           playToEnd(seed) {
             return playToEnd(seed);
+          },
+          /* 0.11.5：预览取消出口钩子（供 CDP 门禁验证取消/确认互不干扰）。 */
+          cancelPreview() {
+            return cancelPreview();
+          },
+          actionButtons() {
+            const rect = (el) => { const r = el.getBoundingClientRect(); return { x: Math.round(r.x), y: Math.round(r.y), w: Math.round(r.width), h: Math.round(r.height), text: el.textContent, disabled: el.disabled, opacity: getComputedStyle(el).opacity }; };
+            return { cancel: rect(cancelButton), place: rect(placeButton), geometry: { cancel: CANCEL_BTN, place: PLACE_RECT, minCss: PLACE_BTN_MIN_CSS } };
           },
           selftest() {
             return selftest();

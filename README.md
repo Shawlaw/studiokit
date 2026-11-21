@@ -4,7 +4,7 @@
 
 - **线上站点：** <https://shawlaw.github.io/studiokit/> · <https://studiokit.pages.dev/>
 - **源码：** <https://github.com/Shawlaw/studiokit>（MIT 许可）
-- **当前工具：** Badge Studio `2.2.1`；街机厅 Arcade `0.11.4`（16 款竖屏小游戏：13 款带 78 关挑战模式 + 二十一点/五子棋/纸牌接龙三款平和棋牌；俄罗斯方块禅模式 + 积分记录表 + 极速车道转向灯换道/连超/拾取 + 结算重选模式 + 结算回看（自定义按钮文案/保留模糊蒙层）+ PWA 更新检测 + iPhone 安装版顶部修复）；Venue Compare `0.2.0`（餐厅考察对比、地图标注与外部链接 / 备注，已发布）
+- **当前工具：** Badge Studio `2.2.1`；街机厅 Arcade `0.11.5`（16 款竖屏小游戏：13 款带 78 关挑战模式 + 二十一点/五子棋/纸牌接龙三款平和棋牌；俄罗斯方块禅模式 + 积分记录表 + 极速车道转向灯换道/连超/拾取 + 结算重选模式 + 结算回看（自定义按钮文案/保留模糊蒙层）+ PWA 更新检测 + iPhone 安装版顶部修复 + 双击放大防护 + 五子棋落子按钮防重影/预览取消出口；本地未发布）；Venue Compare `0.2.0`（餐厅考察对比、地图标注与外部链接 / 备注，已发布）
 - **计划中的工具：** Rounded Image（尚未实现，等待原始需求/规格）
 - **最近发布：** 2026-11-21，Arcade 0.11.1（结算默认保留高级模糊蒙层、按钮按游戏命名，点回看才透明看终局；五子棋棋盘放大；GitHub Pages + Cloudflare Pages 双端；提交 `d51c87e` 推送 `main`；Actions run `44876176661` 四 job 全绿；CI 与本地 `tools/verify_deploy.py` 均 **41/41** 文件 SHA-256 双端一致（Arcade `0.11.1` / Badge `2.2.1` / Venue `0.2.0`，manifest `application/manifest+json`）；双端线上无头浏览器 12/12（中心页 0.11.1 + 五子棋棋盘 400/格距 36 + 默认模糊蒙层 + 按游戏文案「回看棋盘/回看果园」+ 回看透明/胶囊 + 0 console error）；SW 缓存键 `studiokit-arcade-0.11.1-v1`。）
 - **运行方式：** 纯静态文件；无后端、无账号、无构建依赖、无第三方 CDN

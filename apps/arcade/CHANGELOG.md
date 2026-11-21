@@ -1,5 +1,21 @@
 # Arcade Changelog
 
+## 0.11.5 — 2026-11-21（本地提交，未发布）
+
+### Fixed
+- **移动端双击误触放大**：17 个页面 viewport meta 统一加 `maximum-scale=1, user-scalable=no`；`arcade.css` 给 html 补 `touch-action: manipulation` 兜底；`engine.js` 的 `installSfxUnlock()` 全局拦截 `dblclick` 默认行为。不引入 `viewport-fit` 回归。
+- **五子棋全屏落子按钮文字重影**：根因是画布 `drawPlaceButton()` 与 DOM 覆盖按钮各画一份「落子」（字号/位置不同，全屏缩放后错位）。改为画布为唯一文字源，DOM 层退化为两枚**透明命中层**（无文字/边框/底色），重影消失。
+- **五子棋预览无操作出口**：预览确认区拆为「取消 / 落子」两枚按钮，点「取消」只清预览、不动棋盘/回合；画布/提示/页脚文案同步说明。逻辑按钮区 200→280 保证 320px 窄屏两半各 ≥44px。
+
+### Added
+- `tools/arcade_interaction_test.mjs`（IX-01…IX-05）：17 页 viewport 防护、dblclick 拦截、透明命中层、四档 + 全屏布局、取消/落子互不干扰。五子棋 `selftest()` 新增第 18 条。
+
+### Changed
+- 版本链升至 `0.11.5`，SW 缓存键 `studiokit-arcade-0.11.5-v1`。无 localStorage key / Schema / 玩法数值变更。
+
+### Verification
+- 门禁：`arcade_interaction_test` 5/5、smoke 94/94、zen 14/14、calm 17/17（五子棋自检 18 条）、review 5/5、gameplay base 11/11、validate/build/inline/node --check 全过；真机触控与双击放大防护待 Owner 复测（UNVERIFIED）。设计见 `DESIGN-0.11.5.md`。
+
 ## 0.11.4 — 2026-11-21（已双端发布）
 
 ### Fixed

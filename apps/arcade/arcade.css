@@ -17,6 +17,11 @@
 
 * { box-sizing: border-box; }
 html, body { margin: 0; }
+/* 0.11.5：移动端双击误触放大防护。主防线是 17 页 viewport 的
+   maximum-scale=1/user-scalable=no；这里给 html 补一条 manipulation 兜底
+   （touch-action 不继承，显式声明可覆盖非交互区域），与 body 既有值一致，
+   不影响捏合缩放等可访问性手势。 */
+html { touch-action: manipulation; -ms-touch-action: manipulation; }
 
 body.arcade-body {
   color: var(--ac-ink);

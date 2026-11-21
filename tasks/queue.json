@@ -1659,6 +1659,24 @@
       ],
       "completedAt": "2026-11-21T21:42:00+08:00",
       "evidence": "提交 87795d7 ff 合入 main 推送；Actions run 44909647508 四 job 全绿（Validate and build / Deploy GitHub Pages / Deploy Cloudflare Pages / Verify both deployments）；CI 与本地 tools/verify_deploy.py 均 41/41 文件 SHA-256 双端一致（Arcade 0.11.4 / Badge 2.2.1 / Venue 0.2.0，manifest application/manifest+json）；线上 arcade.css 确认含 studiokit-shellbar position:sticky 规则、中心页版本 0.11.4、诊断页 diagnose.html 已 404 移除；SW 缓存键 studiokit-arcade-0.11.4-v1；真机 iOS 顶部观感待 Owner 复测确认。"
+    },
+    {
+      "id": "T095",
+      "title": "Arcade 0.11.5：移动端双击放大防护 + 五子棋落子按钮重影 / 预览取消出口",
+      "kind": "agent",
+      "status": "DONE",
+      "dependsOn": [
+        "T094"
+      ],
+      "ownerAuthorizationRequired": false,
+      "acceptance": [
+        "所有游戏页双击不再误触放大（17 页 viewport + dblclick 拦截）",
+        "五子棋全屏落子按钮文字无重影（画布单一文字源 + DOM 透明命中层）",
+        "五子棋预览有明确取消出口，取消只清预览；落子确认仍正常",
+        "全量门禁通过；无 key/Schema/玩法数值变更；本地未发布"
+      ],
+      "completedAt": "2026-11-21T22:20:00+08:00",
+      "evidence": "Owner 反馈三点并在浏览器中复现确认。双击放大：17 页 viewport 加 maximum-scale=1/user-scalable=no、html touch-action manipulation 兜底、engine.js installSfxUnlock() 全局拦 dblclick 默认行为（不 stopPropagation，不破坏方块双击暂停）。五子棋重影根因：画布 drawPlaceButton 与 DOM placeButton 各画一份「落子」（字号/位置不同，全屏错位）；修复为画布 drawActionButton 唯一文字源，DOM 两枚透明命中层（data-cancel-preview/data-place-confirm，无文字/边框/底色）。预览出口：新增 cancelPreview()，取消只清 preview；逻辑按钮区 200→280 保证 320px 两半各 ≥44px；hint/开始弹层/画布引导/页脚文案同步。五子棋 selftest 新增第 18 条（预览取消与落子确认互不干扰），第 17 条改校验两枚透明命中层；新增 __arcadeTest.cancelPreview()/actionButtons() 钩子。新增 tools/arcade_interaction_test.mjs（IX-01…IX-05）：17 页 viewport / dblclick 拦截 / 透明命中层 / 四档+全屏布局 / 取消与落子。门禁：interaction 5/5、smoke 94/94、zen 14/14、calm 17/17（gomoku selftest 18 条）、review 5/5、gameplay base 11/11、pwa 7/7、validate/build/inline/node --check 全过；真机双击防护待 Owner 复测 UNVERIFIED；无 localStorage key/Schema 变更；版本链 0.11.5 / SW studiokit-arcade-0.11.5-v1；设计见 DESIGN-0.11.5.md。"
     }
   ]
 }
