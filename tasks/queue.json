@@ -1624,6 +1624,23 @@
       ],
       "completedAt": "2026-11-21T20:42:00+08:00",
       "evidence": "提交 82db383 ff 合入 main 推送；Actions run 44904562855 四 job 全绿（Validate and build / Deploy GitHub Pages / Deploy Cloudflare Pages / Verify both deployments）；CI 与本地 tools/verify_deploy.py 均 41/41 文件 SHA-256 双端一致（Arcade 0.11.3 / Badge 2.2.1 / Venue 0.2.0，manifest application/manifest+json）；双端线上 HTML 实测 version=0.11.3、viewport-fit-cover=false、statusbar-style=false；SW 缓存键 studiokit-arcade-0.11.3-v1；真机 iOS 顶部观感待 Owner 复测确认。"
+    },
+    {
+      "id": "T093",
+      "title": "Arcade 0.11.4：真机定位 shellbar 模糊 + sticky 贴顶修复 + 删除诊断页",
+      "kind": "agent",
+      "status": "DONE",
+      "dependsOn": [
+        "T092"
+      ],
+      "ownerAuthorizationRequired": false,
+      "acceptance": [
+        "真机诊断确认被模糊对象是中心页共享 shellbar（非游戏标题栏）",
+        "shellbar standalone sticky 贴顶（真机方案 1/9/10 清晰无副作用，fixed 致贴边不可用）",
+        "删除临时诊断页；不改 key/Schema/玩法；全量门禁通过；本地未发布"
+      ],
+      "completedAt": "2026-11-21T21:35:00+08:00",
+      "evidence": "Owner 真机反馈方案 1/9/10（shellbar position:sticky; top:0）清晰无副作用、方案 3（fixed）清晰但下方贴边、且原 static shellbar 发虚；明确被模糊对象是中心页最顶部共享 shellbar（StudioKit/街机厅 Arcade/源码），前几轮改游戏标题栏方向错误。修复：arcade.css 增 html.studiokit-shell-standalone body.arcade-body > .studiokit-shellbar { position:sticky; top:0; z-index:9998 }，仅 standalone 生效、仍在文档流不挤压内容。验证滚动 600px 后 shellbar top=0/h=85/sticky、下方可命中内容无贴边。删除临时 diagnose.html。版本链 0.11.4 / SW studiokit-arcade-0.11.4-v1；arcade_pwa_update_test PU-04 增 sticky 断言 7/7；smoke 94/94、zen 14/14、calm 17/17、review 5/5、base 11/11、validate/build/inline/node --check 全过；无 key/Schema 变更；DESIGN-0.11.4.md；本地未提交未发布（本任务无 PUBLISH_TO_MAIN 授权）；真机观感待 Owner 复测。"
     }
   ]
 }

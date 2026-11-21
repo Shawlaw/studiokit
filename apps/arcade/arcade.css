@@ -81,6 +81,18 @@ html.studiokit-shell-standalone body.arcade-body::before {
   pointer-events: none;
 }
 
+/* 0.11.4 真机定位的正解：iOS 26+ 系统级顶缘模糊需要一个「贴住视口顶边的不透明元素」
+   让 WebKit 用其纯色替换模糊。真机诊断（diagnose.html）结论：
+   - 方案 1/9/10（shellbar 改 position:sticky; top:0）→ 文字清晰、无副作用；
+   - 方案 3（position:fixed）→ 清晰但脱离文档流导致下方内容贴边（不可用）；
+   - 原 static 的 shellbar 会被系统模糊冲淡。
+   sticky 仍在文档流，不挤压下方内容；仅安装版 standalone 生效，普通标签页不变。 */
+html.studiokit-shell-standalone body.arcade-body > .studiokit-shellbar {
+  position: sticky;
+  top: 0;
+  z-index: 9998;
+}
+
 /* 游戏顶栏自成一个层，且明确不透明，避免被舞台模糊蒙层影响文字清晰度。 */
 body.arcade-body .game-topbar {
   position: relative;

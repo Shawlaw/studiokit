@@ -1,5 +1,5 @@
 /*
- * 街机厅 Arcade Service Worker（0.11.3）
+ * 街机厅 Arcade Service Worker（0.11.4）
  * - 作用域：apps/arcade/；同时缓存 Arcade 页面引用的 shared/site.css 与 site-shell.js。
  * - 安装时缓存中心页外壳；16 款游戏由中心页「预载全部游戏」按钮按需缓存。
  * - 0.9 挑战数据（./challenge/<gameId>.js，13 个）随外壳预缓存，保证离线可玩挑战模式；
@@ -9,7 +9,7 @@
  *   页面通过 arcade-sw-version 查询当前 SW 版本；不再让已安装 PWA 静默停留在旧版本。
  * - 不使用任何远程资源、分析或第三方 API（AGENTS.md 约束 4）。
  */
-const VERSION = '0.11.3';
+const VERSION = '0.11.4';
 const CACHE_PREFIX = 'studiokit-arcade-';
 const CACHE_NAME = `${CACHE_PREFIX}${VERSION}-v1`;
 const BASE = new URL('./', self.location.href);

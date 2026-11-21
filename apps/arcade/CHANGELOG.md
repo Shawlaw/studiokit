@@ -1,5 +1,18 @@
 # Arcade Changelog
 
+## 0.11.4 — 2026-11-21（本地实现，未发布）
+
+### Fixed
+- iPhone PWA 顶部导航条（共享 shellbar「StudioKit / 街机厅 Arcade / 源码 ↗」）发虚真机修复：之前几轮误改游戏标题栏。真机诊断页逐方案对比确认——把 shellbar 改为 `position: sticky; top: 0`（方案 1/9/10）后文字清晰且无副作用，`fixed`（方案 3）会致下方贴边不可用。本版仅 standalone 下让 shellbar sticky 贴顶，让 WebKit 用其深色纯色替换 iOS 26+ 系统顶缘模糊。
+- 移除临时诊断页 `diagnose.html`（定位完成）。
+
+### Changed
+- 版本链升至 `0.11.4`，SW 缓存键 `studiokit-arcade-0.11.4-v1`。
+- `arcade_pwa_update_test` PU-04 新增 sticky 贴顶断言。
+
+### Verification
+- 门禁：`arcade_pwa_update_test` 7/7、`arcade_smoke` 94/94、zen 14/14、calm 17/17、review 5/5、gameplay base 11/11、validate/build/inline/node --check 全过；滚动 600px 后 shellbar 仍 sticky 贴顶且下方内容正常。无 Schema/key 变更。设计见 `DESIGN-0.11.4.md`。真机 iOS 顶部观感待 Owner 复测确认。
+
 ## 0.11.3 — 2026-11-21（已双端发布）
 
 ### Fixed

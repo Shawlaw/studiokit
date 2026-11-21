@@ -97,6 +97,8 @@
 | T091 | agent | Arcade 0.11.3：iPhone 安装版顶部系统模糊真机修复 | DONE | T090 | Owner 真机复测：0.11.2 更新检测已生效，但顶部仍模糊。重新定位根因：iOS 26+ 独立模式 `viewport-fit=cover` + 半透明状态栏样式使页面画到状态栏下、系统叠加顶缘模糊（CSS 盖不住，Chrome 无法重现）。修复：17 页移除 `viewport-fit=cover`、中心页移除半透明状态栏 meta，保留并修正 fixed 顶边不透明深色条让 WebKit 用纯色替换残留模糊；validate_site 加防回归断言，`arcade_pwa_update_test` 7/7（新增 PU-00）；版本链 0.11.3 / SW `studiokit-arcade-0.11.3-v1`；门禁 smoke 94/94、zen 14/14、calm 17/17、review 5/5、base 11/11、validate/build/inline/node --check 全过；无 key/Schema 变更 |
 | T092 | agent | Arcade 0.11.3 发布：main 双端部署与线上验证 | DONE | T091 | Owner 当前任务明确选择「直接推送 main 双端发布」= `OWNER_AUTHORIZATION: PUBLISH_TO_MAIN`；提交 `82db383` ff 合入 main 推送；Actions run `44904562855` 四 job 全绿；CI 与本地 `verify_deploy.py` 均 **41/41** 双端一致（Arcade `0.11.3` / Badge `2.2.1` / Venue `0.2.0`）；两端线上 HTML 实测无 `viewport-fit=cover` 与半透明状态栏声明；SW `studiokit-arcade-0.11.3-v1`；真机顶部观感待 Owner 复测确认 |
 
+| T093 | agent | Arcade 0.11.4：真机定位 shellbar 模糊 + sticky 贴顶修复 + 删除诊断页 | DONE | T092 | Owner 真机诊断确认「被模糊」对象是中心页最顶部共享 shellbar（StudioKit/街机厅 Arcade/源码），非游戏标题栏；方案 1/9/10（shellbar sticky 贴顶）清晰无副作用、方案 3（fixed）清晰但下方贴边。修复：standalone 下 shellbar `position:sticky; top:0; z-index:9998`（仍在文档流不挤压内容）；滚动 600px 后 top=0/h=85、下方内容正常。删除临时 diagnose.html；版本链 0.11.4 / SW `studiokit-arcade-0.11.4-v1`；`arcade_pwa_update_test` PU-04 增 sticky 断言 7/7；smoke 94/94、zen 14/14、calm 17/17、review 5/5、base 11/11、validate/build/inline/node --check 全过；无 key/Schema 变更；设计见 `DESIGN-0.11.4.md`；本地未提交未发布；真机观感待复测 |
+
 ## 任务命令
 
 ```powershell
