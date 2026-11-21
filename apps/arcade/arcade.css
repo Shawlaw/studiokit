@@ -204,47 +204,22 @@ body.has-subhud .stage-box {
 }
 .overlay[hidden] { display: none; }
 
-/* ---------- 0.11.0 结算回看：结算不遮住最终游戏画面 ----------
-   只有 .is-result 弹层应用；开局/暂停/错误弹层保持原有暗色遮罩。 */
-.overlay.is-result {
+/* ---------- 0.11.1 结算回看 ----------
+   结算弹层默认保持 0.10.0 的高级模糊蒙层样式（居中卡片 + 暗色背景 + 模糊）；
+   玩家点面板内专用回看按钮后引擎加 .is-reviewing，此时才隐藏面板、去掉蒙层，
+   让画布最终画面完整可见，并用角落胶囊唤回结算。 */
+.overlay.is-result.is-reviewing {
   background: transparent;
   backdrop-filter: none;
   -webkit-backdrop-filter: none;
-  align-items: flex-end;
-  pointer-events: none; /* 画布区域可看、不接收误触；面板按钮单独打开 */
+  pointer-events: none; /* 回看时画布只用于查看，游戏已结束，不接收输入 */
 }
 .overlay.is-result .overlay-panel {
-  pointer-events: auto;
-  align-self: flex-end;
-  width: min(100%, 420px);
-  max-width: min(360px, calc(100% - 16px));
-  max-height: 46%;
-  margin: 0 auto 8px;
-  padding: 10px 14px 12px;
-  border-radius: 14px;
-  background: rgba(10, 14, 26, 0.93);
-  border-color: rgba(255, 210, 63, 0.38);
-  box-shadow: 0 8px 24px rgba(0, 0, 0, 0.6);
-  overflow-y: auto;
   transition: opacity 0.14s ease, transform 0.14s ease;
 }
-.overlay.is-result .overlay-panel h2 { font-size: 17px; margin-bottom: 2px; }
-.overlay.is-result .overlay-panel p {
-  font-size: 12px;
-  line-height: 1.5;
-  margin-bottom: 8px;
-}
-.overlay.is-result .overlay-panel .ac-score { font-size: 24px; margin: 0; }
-.overlay.is-result .overlay-panel .ac-newhigh { margin-bottom: 6px; }
-.overlay.is-result .overlay-panel .ac-btn {
-  min-height: 44px;
-  padding: 6px 16px;
-  font-size: 14px;
-}
-.overlay.is-result .overlay-panel .ac-btn-secondary { margin: 6px 0 0; }
 .overlay.is-result .overlay-panel.review-hidden {
   opacity: 0;
-  transform: translateY(12px);
+  transform: translateY(10px);
   pointer-events: none;
   visibility: hidden;
 }
@@ -269,7 +244,7 @@ body.has-subhud .stage-box {
 .overlay.is-result .ac-btn-review {
   display: block;
   width: 100%;
-  margin: 6px 0 0;
+  margin: 8px 0 0;
   border-color: var(--ac-line);
   background: transparent;
   color: var(--ac-muted);
@@ -1191,11 +1166,6 @@ body.has-subhud .stage-box {
   .overlay-panel p { font-size: 12px; line-height: 1.5; margin-bottom: 10px; }
   .overlay-panel .ac-btn { font-size: 13px; padding: 8px 16px; }
   .overlay-panel .ac-btn-secondary { margin-top: 6px; }
-  .overlay.is-result .overlay-panel { max-height: 50%; padding: 8px 10px 10px; margin: 0 auto 6px; }
-  .overlay.is-result .overlay-panel h2 { font-size: 15px; }
-  .overlay.is-result .overlay-panel p { font-size: 11px; line-height: 1.4; margin-bottom: 6px; }
-  .overlay.is-result .overlay-panel .ac-score { font-size: 21px; }
-  .overlay.is-result .overlay-panel .ac-btn { font-size: 12px; min-height: 44px; padding: 6px 10px; }
   .overlay.is-result .ac-review-fab { min-width: 80px; min-height: 44px; font-size: 12px; top: 6px; right: 6px; }
   .stage-box {
     height: min(

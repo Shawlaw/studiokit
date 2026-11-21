@@ -336,7 +336,7 @@
             ` · ${floorsReached} 层`,
           btn: '再来一局',
           onBtn: showStart,
-          result: true,
+          result: '回看塔身',
         });
         pauseUi.sync(); syncJoyTools();
       }
@@ -795,7 +795,7 @@
           },
           btn2: '重玩本关',
           onBtn2: () => startChallenge(chStage.id),
-          result: true,
+          result: '回看塔身',
         });
         pauseUi.sync();
         syncChallengeHud();
@@ -823,7 +823,7 @@
           onBtn: () => startChallenge(chStage.id),
           btn2: '返回选关',
           onBtn2: exitToChallengeSelect,
-          result: true,
+          result: '回看塔身',
         });
         pauseUi.sync();
         syncChallengeHud();

@@ -1,6 +1,6 @@
 #!/usr/bin/env node
 /**
- * Arcade 0.11.0 门禁：三款平和棋牌小游戏 + 挑战公平性修复回归。
+ * Arcade 0.11.1 门禁：三款平和棋牌小游戏 + 挑战公平性修复回归。
  *
  * 覆盖：
  * - CG-01 中心页 16 款、棋牌分类、离线预载总数
@@ -74,7 +74,7 @@ const CG_HUB = {
       const cards = document.querySelectorAll('.hall-card').length;
       return { version: Arcade.version, games, chips, cards, offlineTotal: Arcade.Offline && Arcade.Offline.status ? null : null };
     })()`);
-    assert(hall.version === '0.11.0', '版本=' + hall.version + '，期望 0.11.0');
+    assert(hall.version === '0.11.1', '版本=' + hall.version + '，期望 0.11.1');
     assert(hall.games.length === 16 && hall.cards === 16, '游戏数=' + hall.games.length + '，卡片=' + hall.cards + '，期望 16');
     assert(hall.chips.indexOf('棋牌') !== -1, '缺少「棋牌」分类 chip：' + JSON.stringify(hall.chips));
     for (const game of CALM_GAMES) {

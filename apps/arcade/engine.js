@@ -7,7 +7,7 @@
 (() => {
   'use strict';
 
-  const ARCADE_VERSION = '0.11.0';
+  const ARCADE_VERSION = '0.11.1';
   const PROGRESS_KEY = 'studiokit:arcade:progress:v1';
   const PREFS_KEY = 'studiokit:arcade:prefs:v1';
   const RUNS_KEY = 'studiokit:arcade:runs:v1';
@@ -2435,13 +2435,13 @@
     /* 0.8.1 可选第三按钮：页面不提供 dom.ovBtn3 时行为与旧版完全一致。 */
     if (dom.ovBtn3) dom.ovBtn3.hidden = true;
 
-    /* 0.11.0 结算回看：结算弹层不再用暗色蒙层盖住最终游戏画面。
-       引擎动态创建两个控件（页面 HTML 无需改动）：
-       - 面板内「回看棋盘」按钮：隐藏面板，只看画布最终帧；
-       - 角落「查看结算」胶囊：在回看模式下恢复面板。
-       只有在 show({ result:true }) 时才启用；其余弹层 DOM/样式零变化。 */
+    /* 0.11.1 结算回看：结算弹层默认保留原有高级模糊蒙层；玩家点面板内专用回看按钮后
+       才切到透明回看模式（面板隐藏、角落胶囊恢复）。
+       - show({ result:'回看赛道' }) 里的字符串即按钮文案；result:true 时用通用「回看终局」；
+       - 非结算弹层（开局/暂停/错误）DOM 与样式零变化。 */
     let reviewInit = false;
     let reviewHidden = false;
+    let reviewLabel = '回看终局';
     let reviewBtn = null;
     let reviewFab = null;
     function setReviewHidden(value) {
@@ -2449,8 +2449,9 @@
       if (!reviewInit) return;
       const panel = dom.overlay.querySelector('.overlay-panel');
       if (panel) panel.classList.toggle('review-hidden', reviewHidden);
+      dom.overlay.classList.toggle('is-reviewing', reviewHidden);
       reviewFab.hidden = !reviewHidden;
-      reviewBtn.textContent = reviewHidden ? '查看结算' : '回看棋盘';
+      reviewBtn.textContent = reviewHidden ? '查看结算' : reviewLabel;
       reviewBtn.setAttribute('aria-pressed', reviewHidden ? 'true' : 'false');
       reviewFab.setAttribute('aria-pressed', reviewHidden ? 'true' : 'false');
       if (reviewHidden) {
@@ -2469,7 +2470,7 @@
       reviewBtn.className = 'ac-btn ac-btn-review';
       reviewBtn.setAttribute('data-ov-review', '');
       reviewBtn.setAttribute('aria-pressed', 'false');
-      reviewBtn.textContent = '回看棋盘';
+      reviewBtn.textContent = reviewLabel;
       reviewBtn.onclick = () => {
         Sfx.play('ui');
         setReviewHidden(!reviewHidden);
@@ -2493,7 +2494,7 @@
 
     function hide() {
       dom.overlay.hidden = true;
-      dom.overlay.classList.remove('is-result');
+      dom.overlay.classList.remove('is-result', 'is-reviewing');
       setReviewHidden(false);
       if (previousFocus && typeof previousFocus.focus === 'function') {
         try {
@@ -2536,9 +2537,15 @@
             }
           : null;
       }
-      dom.overlay.classList.toggle('is-result', !!o.result);
-      if (o.result) {
+      const isResult = !!o.result;
+      if (isResult) {
+        reviewLabel = typeof o.result === 'string' && o.result.trim() ? o.result.trim() : '回看终局';
+      }
+      dom.overlay.classList.toggle('is-result', isResult);
+      if (isResult) {
         ensureReviewControls();
+        /* 首次创建时按钮文案取 reviewLabel；重复显示结算时同步最新文案。 */
+        reviewBtn.textContent = reviewLabel;
         setReviewHidden(false);
       } else if (reviewInit) {
         setReviewHidden(false);
@@ -2557,9 +2564,11 @@
       get reviewState() {
         return {
           isResult: !!dom.overlay && dom.overlay.classList.contains('is-result'),
+          reviewing: !!dom.overlay && dom.overlay.classList.contains('is-reviewing'),
           panelHidden: reviewInit && reviewHidden,
           fabVisible: reviewInit && !!reviewFab && !reviewFab.hidden,
           buttonVisible: reviewInit && !!reviewBtn && !reviewBtn.hidden,
+          label: reviewLabel,
         };
       },
       get reviewVisible() {

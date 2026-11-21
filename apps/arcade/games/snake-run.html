@@ -427,7 +427,7 @@
         }
         loop.pause();
         ui.show({
-          result: true,
+          result: '回看果园',
           title: wonRun ? '果园丰收！' : '游戏结束',
           text:
             `<span class="ac-score">${score}</span>` +
@@ -889,7 +889,7 @@
         const isLast = chStageIndex >= challengeData.length - 1;
         const tip = '<p class="ac-challenge-tip">本关目标：' + chEsc(chStage.goalStatement || '') + '</p>';
         ui.show({
-          result: true,
+          result: '回看果园',
           title: '挑战通关',
           text: A.Challenge.resultHtml(chStage, result) + tip,
           btn: isLast ? '返回选关' : '下一关',
@@ -915,7 +915,7 @@
         loop.pause();
         syncJoyTools();
         ui.show({
-          result: true,
+          result: '回看果园',
           title: '挑战失败',
           text:
             '<p class="ac-challenge-tip">' + chEsc(chErrorReason) + '</p>' +

@@ -1516,6 +1516,42 @@
       ],
       "completedAt": "2026-11-21T00:40:00+08:00",
       "evidence": "Owner 本轮明确指令「你弄完测试完就发版更新吧」= OWNER_AUTHORIZATION: PUBLISH_TO_MAIN；本地 feat/arcade-result-review 提交 8453baf fast-forward 合入 main 并推送（794ad54..8453baf）；Actions run 44774786680 首次 Verify job 因 Cloudflare 生产域传播延迟出现 1 个文件 hash 差异（分支预览域与 GH 一致），按 runbook 用 gh run rerun --failed 在同一 SHA 重跑后四 job 全绿（Validate and build / Deploy GitHub Pages / Deploy Cloudflare Pages / Verify both deployments）；CI 与本地 tools/verify_deploy.py 均 41/41 文件 SHA-256 双端一致（Arcade 0.11.0 / Badge 2.2.1 / Venue 0.2.0，manifest application/manifest+json）；双端线上无头 Chrome 各 6/6（中心页 0.11.0 + 16 卡、五子棋棋盘 400/格距 36、结算 is-result 透明无遮罩、回看按钮/胶囊切换、0 console error）；SW 缓存键 studiokit-arcade-0.11.0-v1；真机触控 UNVERIFIED。"
+    },
+    {
+      "id": "T087",
+      "title": "Arcade 0.11.1：结算默认恢复模糊蒙层 + 回看按钮按游戏命名",
+      "kind": "agent",
+      "status": "DONE",
+      "dependsOn": [
+        "T086"
+      ],
+      "ownerAuthorizationRequired": false,
+      "acceptance": [
+        "结算默认保留 0.10.0 模糊蒙层高级样式，仅点专用按钮后透明回看",
+        "16 款游戏回看按钮按游戏场景命名，不再统一叫回看棋盘",
+        "arcade_review_test 断言默认 blur/回看透明/文案映射",
+        "全量门禁通过，版本链 0.11.1"
+      ],
+      "completedAt": "2026-11-21T14:28:00+08:00",
+      "evidence": "Owner 反馈两点：①全部叫回看棋盘不合理 ②独立切换按钮已有，应保留原模糊蒙层。引擎 result 支持字符串文案（布尔兼容回退回看终局），setReviewHidden 同步 .is-reviewing：默认 .is-result 保持原模糊蒙层，仅 .is-reviewing 透明；45 处结算按游戏配置文案（回看赛道/矿场/牌桌/果园/影林等）；CSS 移除 0.11.0 的底部卡片压缩规则，恢复原结算样式；新增 DESIGN-0.11.1.md；arcade_review_test 5/5（静态文案映射+默认blur/回看透明+四档布局）；全量门禁 ALL GATES PASSED（首次 smoke 贪吃蛇 eatNext 时序偶发失败，同代码重跑 94/94 与全量通过）。"
+    },
+    {
+      "id": "T088",
+      "title": "Arcade 0.11.1 发布：main 双端部署与线上验证",
+      "kind": "agent",
+      "status": "DONE",
+      "dependsOn": [
+        "T087"
+      ],
+      "ownerAuthorizationRequired": true,
+      "ownerAuthorizationNote": "Owner 当前对话延续此前发版授权，并对 0.11.0 提出修正要求；按既有 Shawlaw/studiokit 双端目标发布。",
+      "acceptance": [
+        "Actions 四 job 全绿",
+        "verify_deploy 双端一致",
+        "线上验证结算默认模糊/回看切换/按钮文案"
+      ],
+      "completedAt": "PENDING_RELEASE",
+      "evidence": "PENDING_RELEASE"
     }
   ]
 }

@@ -482,7 +482,7 @@
         autosave.clear();
         loop.pause();
         ui.show({
-          result: true,
+          result: '回看矿场',
           title: '挑战失败',
           text:
             '<b>' + challengeLabel(chStage) + '</b><br/>' +
@@ -510,7 +510,7 @@
         syncCashout();
         const next = nextChallengeStage();
         ui.show({
-          result: true,
+          result: '回看矿场',
           title: '挑战通关 · C' + pad2(chStage.stageNumber || 0),
           text: A.Challenge.resultHtml(chStage, result),
           btn: next ? '下一关' : '返回选关',
@@ -1010,7 +1010,7 @@
         }
         loop.pause();
         ui.show({
-          result: true,
+          result: '回看矿场',
           title: '收工',
           text:
             `<span class="ac-score">$${total}</span>` +

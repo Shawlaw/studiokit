@@ -799,7 +799,7 @@
         autosave.clear();
         loop.pause();
         ui.show({
-          result: true,
+          result: '回看战场',
           title: '挑战失败',
           text:
             '<b>' + challengeLabel(chStage) + '</b><br/>' +
@@ -825,7 +825,7 @@
         loop.pause();
         const next = nextChallengeStage();
         ui.show({
-          result: true,
+          result: '回看战场',
           title: '挑战通关 · C' + pad2(chStage.stageNumber || 0),
           text: A.Challenge.resultHtml(chStage, result),
           btn: next ? '下一关' : '返回选关',
@@ -1224,7 +1224,7 @@
       /* CLEAR 选择弹层抽成函数：刷新恢复后也能重新给出「下一关 / 圆满收局」。 */
       function showClearPanel(cleared) {
         ui.show({
-          result: true,
+          result: '回看战场',
           title: 'STAGE ' + cleared + ' CLEAR',
           text: '击坠得分 ' + score + ' · 道具各补给 1 次<br/>可以继续下一关，也可以轻松收局。',
           btn: '下一关',
@@ -1334,7 +1334,7 @@
         dom.hudHigh.textContent = String(Math.max(high, score));
         loop.pause();
         ui.show({
-          result: true,
+          result: '回看战场',
           title: wonRun ? '星海凯旋！' : '机体损毁',
           text:
             `<span class="ac-score">${score}</span>` +

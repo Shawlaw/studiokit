@@ -42,31 +42,37 @@ const STATIC = {
   id: 'RV-01',
   async run() {
     const engine = fs.readFileSync(path.join(REPO_ROOT, 'apps', 'arcade', 'engine.js'), 'utf8');
-    assert(/classList\.toggle\('is-result',\s*!!o\.result\)/.test(engine), 'engine: show() 未根据 o.result 切换 is-result');
+    assert(/reviewLabel = typeof o\.result/.test(engine), 'engine: show() 未读取回看按钮文案');
+    assert(/classList\.toggle\('is-reviewing'/.test(engine), 'engine: 未根据回看状态切换 is-reviewing');
     assert(/get reviewState\(\)/.test(engine), 'engine: 缺少 reviewState getter');
     assert(/data-ov-review-fab/.test(engine), 'engine: 缺少回看胶囊控件');
     const css = fs.readFileSync(path.join(REPO_ROOT, 'apps', 'arcade', 'arcade.css'), 'utf8');
-    assert(/\.overlay\.is-result\s*\{[\s\S]*?background:\s*transparent/.test(css), 'CSS: .is-result 未移除暗色背景');
+    assert(/\.overlay\.is-result\.is-reviewing\s*\{[\s\S]*?background:\s*transparent/.test(css), 'CSS: 仅回看模式应移除暗色背景');
+    assert(!/\.overlay\.is-result\s*\{[\s\S]*?background:\s*transparent/.test(css), 'CSS: 默认结算仍应保持模糊蒙层');
     assert(/\.overlay\.is-result \.overlay-panel\.review-hidden/.test(css), 'CSS: 缺少 review-hidden 规则');
 
     /* 每款游戏的结算标记数量来自 0.10.0 结算弹层逐页审计（共 45 处）；
        用精确数量防止漏标或误标到开局/暂停/错误弹层。 */
     const EXPECTED = {
-      blackjack: 1, 'block-drop': 4, 'brick-breaker': 3, 'gold-miner': 3,
-      gomoku: 1, 'gravity-flip': 3, 'memory-flip': 3, 'merge-2048': 3,
-      'mole-whack': 3, 'pendulum-tower': 3, 'road-rush': 3, 'shadow-leap': 3,
-      'snake-run': 3, snowbells: 3, solitaire: 2, 'star-raid': 4,
+      blackjack: ['回看牌桌', 1], 'block-drop': ['回看井口', 4], 'brick-breaker': ['回看砖场', 3],
+      'gold-miner': ['回看矿场', 3], gomoku: ['回看棋盘', 1], 'gravity-flip': ['回看关卡', 3],
+      'memory-flip': ['回看牌面', 3], 'merge-2048': ['回看棋盘', 3], 'mole-whack': ['回看鼹鼠洞', 3],
+      'pendulum-tower': ['回看塔身', 3], 'road-rush': ['回看赛道', 3], 'shadow-leap': ['回看影林', 3],
+      'snake-run': ['回看果园', 3], snowbells: ['回看雪夜', 3], solitaire: ['回看牌桌', 2],
+      'star-raid': ['回看战场', 4],
     };
     let resultCount = 0;
     for (const game of GAMES) {
       const file = path.join(GAME_DIR, game + '.html');
       const src = fs.readFileSync(file, 'utf8');
-      const occurrences = (src.match(/result:\s*true/g) || []).length;
-      assert(occurrences === EXPECTED[game], game + ': result:true 数量 ' + occurrences + '，期望 ' + EXPECTED[game]);
+      const [label, count] = EXPECTED[game];
+      const occurrences = (src.match(new RegExp("result: '" + label + "'", 'g')) || []).length;
+      assert(occurrences === count, game + ': result:"' + label + '" 数量 ' + occurrences + '，期望 ' + count);
+      assert(!/result:\s*true/.test(src), game + ': 仍有未带文案的 result:true');
       resultCount += occurrences;
     }
     assert(resultCount === 45, '结算标记总数 ' + resultCount + '，期望 45');
-    record('静态：engine/CSS/16 款结算标记 ' + resultCount + ' 处', true);
+    record('静态：engine/CSS/16 款结算标记 ' + resultCount + ' 处（按游戏区分文案）', true);
   },
 };
 
@@ -115,17 +121,20 @@ const RV_GOMOKU = {
     assert(ended.info.state === 'over' && ended.info.result, 'gomoku 结算状态异常：' + JSON.stringify({ state: ended.info.state, result: ended.info.result }));
     const snap = await cdp.evaluate(reviewSnapshot());
     assert(snap.hidden === false && snap.isResult === true, '结算蒙层未进入 is-result：' + JSON.stringify(snap));
-    assert(snap.background === 'rgba(0, 0, 0, 0)' || snap.background === 'transparent', '结算蒙层仍有暗色背景：' + snap.background);
-    assert(!/blur/.test(String(snap.backdrop || '')), '结算蒙层仍有模糊：' + snap.backdrop);
+    assert(!/transparent|rgba\(0, 0, 0, 0\)/.test(snap.background), '结算默认背景不应透明：' + snap.background);
+    assert(/blur/.test(String(snap.backdrop || '')), '结算默认应保留高级模糊蒙层：' + snap.backdrop);
     assert(snap.btnText === '回看棋盘' && snap.fabHidden === true, '回看按钮初始状态异常：' + JSON.stringify(snap));
 
     await cdp.click('[data-ov-review]');
     let after = await cdp.evaluate(reviewSnapshot());
     assert(after.panelHidden === true && after.fabHidden === false && after.fabText === '查看结算', '点击回看棋盘后状态异常：' + JSON.stringify(after));
+    assert(after.background === 'rgba(0, 0, 0, 0)' || after.background === 'transparent', '回看模式背景应透明：' + after.background);
+    assert(!/blur/.test(String(after.backdrop || '')), '回看模式应去掉模糊：' + after.backdrop);
 
     await cdp.click('[data-ov-review-fab]');
     after = await cdp.evaluate(reviewSnapshot());
     assert(after.panelHidden === false && after.fabHidden === true && after.btnText === '回看棋盘', '点击胶囊恢复结算失败：' + JSON.stringify(after));
+    assert(/blur/.test(String(after.backdrop || '')), '恢复结算后应回到模糊蒙层：' + after.backdrop);
 
     const info = await cdp.evaluate('window.__arcadeTest.info()');
     /* 胶囊只在回看模式（面板隐藏）可见；此时面板已恢复，应为 false。 */
@@ -150,7 +159,8 @@ const RV_BLOCK = {
     const finalInfo = await cdp.evaluate('window.__arcadeTest.joyInfo()');
     assert(finalInfo && finalInfo.state === 'over', 'block 未进入结算：' + JSON.stringify(finalInfo));
     const snap = await cdp.evaluate(reviewSnapshot());
-    assert(snap.isResult === true && snap.background === 'rgba(0, 0, 0, 0)', 'block 结算样式异常：' + JSON.stringify(snap));
+    assert(snap.isResult === true && /blur/.test(String(snap.backdrop || '')), 'block 结算默认应保留模糊蒙层：' + JSON.stringify(snap));
+    assert(snap.btnText === '回看井口', 'block 回看按钮文案异常：' + snap.btnText);
     await cdp.click('[data-ov-review]');
     const after = await cdp.evaluate(reviewSnapshot());
     assert(after.panelHidden === true && after.fabHidden === false, 'block 回看切换失败：' + JSON.stringify(after));
@@ -206,7 +216,7 @@ try {
     if (!shouldRun(scenario.id)) continue;
     await scenario.run(cdp);
   }
-  const result = summary('Arcade 0.11.0 结算回看门禁');
+  const result = summary('Arcade 0.11.1 结算回看门禁');
   process.exitCode = result.failed ? 1 : 0;
 } catch (err) {
   console.error(err && err.stack ? err.stack : err);

@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Run all offline/regression gates used for Arcade 0.11 local verification.
+"""Run all offline/regression gates used for Arcade 0.11.1 local verification.
 
 The script is intentionally simple: each entry is argv for a native tool. Ports are
 fixed high values to reduce collisions with interactive test sessions. Environment

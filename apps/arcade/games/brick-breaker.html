@@ -298,7 +298,7 @@
             `第 ${level} 关 · 最高 ${Math.max(high, score)}`,
           btn: '再来一局',
           onBtn: showStart,
-          result: true,
+          result: '回看砖场',
         });
         pauseUi.sync();
       }
@@ -1285,7 +1285,7 @@
           onBtn: next ? () => startChallenge(next.id) : () => openChallengePanel(),
           btn2: '重玩本关',
           onBtn2: () => startChallenge(ch.stage.id),
-          result: true,
+          result: '回看砖场',
         });
         pauseUi.sync();
         syncModeUi();
@@ -1308,7 +1308,7 @@
           onBtn: () => startChallenge(ch.stage.id),
           btn2: '返回选关',
           onBtn2: () => openChallengePanel(),
-          result: true,
+          result: '回看砖场',
         });
         pauseUi.sync();
         syncModeUi();

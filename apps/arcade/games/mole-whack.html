@@ -239,7 +239,7 @@
         }
         loop.pause();
         ui.show({
-          result: true,
+          result: '回看鼹鼠洞',
           title: hearts <= 0 ? '被炸弹炸晕了' : '时间到',
           text:
             `<span class="ac-score">${score}</span>` +
@@ -513,7 +513,7 @@
         joyTools.sync();
         const isLast = chStageIndex >= challengeData.length - 1;
         ui.show({
-          result: true,
+          result: '回看鼹鼠洞',
           title: '挑战通关',
           text:
             A.Challenge.resultHtml(chStage, chResult) +
@@ -541,7 +541,7 @@
         loop.pause();
         joyTools.sync();
         ui.show({
-          result: true,
+          result: '回看鼹鼠洞',
           title: '挑战失败',
           text:
             '<p class="ac-challenge-tip">' + chEsc(chErrorReason) + '</p>' +

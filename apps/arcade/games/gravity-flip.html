@@ -316,7 +316,7 @@
             `飞行距离 · 最高 ${Math.max(high, finalDist)}m`,
           btn: '再来一局',
           onBtn: showStart,
-          result: true,
+          result: '回看关卡',
         });
         pauseUi.sync();
         syncJoyTools();
@@ -636,7 +636,7 @@
           onBtn: next ? () => startChallenge(next.id) : () => openChallengePanel(),
           btn2: '重玩本关',
           onBtn2: () => startChallenge(ch.stage.id),
-          result: true,
+          result: '回看关卡',
         });
         pauseUi.sync();
         syncModeUi();
@@ -659,7 +659,7 @@
           onBtn: () => startChallenge(ch.stage.id),
           btn2: '返回选关',
           onBtn2: () => openChallengePanel(),
-          result: true,
+          result: '回看关卡',
         });
         pauseUi.sync();
         syncModeUi();

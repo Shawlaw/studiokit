@@ -840,7 +840,7 @@
               '<br/>本局已记录到积分表（禅模式不计经典最高分）',
             btn: '再来一局',
             onBtn: returnToStart,
-            result: true,
+            result: '回看井口',
           });
           syncZenHud();
           syncZenBar();
@@ -868,7 +868,7 @@
             `${lines} 行 · Lv.${level} · 最高 ${Math.max(high, score)}`,
           btn: '再来一局',
           onBtn: returnToStart,
-          result: true,
+          result: '回看井口',
         });
         pauseUi.sync();
         syncTouchPad();
@@ -1157,7 +1157,7 @@
           onBtn: isLast ? openChallengePanel : () => startChallenge(stages[index + 1].id),
           btn2: '重玩本关',
           onBtn2: () => startChallenge(chStageId),
-          result: true,
+          result: '回看井口',
         });
         chTipTimer = 0;
         updateChallengeTip();
@@ -1197,7 +1197,7 @@
           onBtn: () => startChallenge(chStageId),
           btn2: '返回选关',
           onBtn2: openChallengePanel,
-          result: true,
+          result: '回看井口',
         });
         chTipTimer = 0;
         updateChallengeTip();
