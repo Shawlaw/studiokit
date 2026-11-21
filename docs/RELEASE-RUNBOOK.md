@@ -5,10 +5,10 @@
 - 仓库：<https://github.com/Shawlaw/studiokit>
 - GitHub Pages：<https://shawlaw.github.io/studiokit/>
 - Cloudflare Pages：<https://studiokit.pages.dev/>
-- 本地待发布（未推送 main）：Arcade `0.12.0`（2026-11-21）
+- 最近发布：Arcade `0.12.0`（2026-11-22，已双端发布）
   - 批次内容：全屏/PWA 底部按钮抬升（`--ac-thumb-lift`，四档 6→42px、安全区 34→70px，toast 同步抬升）；层塔持久重心/支撑物理模型（连续右偏 4 层塌、左右交替 14 层稳）；层塔全览（按钮+快捷键 3、0.45s 缩放、结算前 0.9s 动画拉远）；层塔工地集装箱皮肤 + 4 种真实生效属性；合并 0.11.5 三项修复（双击放大防护 / 五子棋落子重影 / 预览取消出口）。无 localStorage key/Schema/关卡数据变更
-  - 门禁：`arcade_immersive_buttons_test` 16/16、`arcade_tower_test` 13/13、`arcade_interaction_test` 5/5、smoke 94/94、zen 14/14、calm 17/17、review 5/5、gameplay base 11/11、tower challenge 6/6、pwa 7/7、validate/build/inline/node --check 全过；真机手感 UNVERIFIED
-  - 设计见 `apps/arcade/DESIGN-0.12.0.md`；SW 缓存键 `studiokit-arcade-0.12.0-v1`；**未发布，无 Actions run / verify_deploy 证据**
+  - 门禁：`arcade_immersive_buttons_test` 16/16、`arcade_tower_test` 13/13、`arcade_interaction_test` 5/5、smoke 94/94（一次星海拾取同帧抖动 flake，复跑 94/94）、zen 14/14、calm 17/17、review 5/5、gameplay base 11/11、tower challenge 6/6、pwa 7/7、validate/build/inline/node --check 全过；真机手感 UNVERIFIED
+  - 发布：本地提交 `29141c1`（0.11.5）+ `874b72b`（0.12.0）ff 合入 `main` 推送（首次 SSH 连接被断开，重试成功）；Actions run `44923180812` 四 job 全绿（Validate and build / Deploy GitHub Pages / Deploy Cloudflare Pages / Verify both deployments）；本地 `tools/verify_deploy.py` **41/41** 双端逐文件一致（arcade 0.12.0 / badge 2.2.1 / venue 0.2.0）；双端线上无头 Chrome 各 6/6（中心页 0.12.0 + 16 卡、层塔全览钩子/按钮、沉浸按钮距底 42px、0 console error）；SW 缓存键 `studiokit-arcade-0.12.0-v1`；设计见 `apps/arcade/DESIGN-0.12.0.md`
 - 最近发布：Arcade `0.11.4`（2026-11-21，已双端发布）
   - 批次内容：真机诊断定位「被模糊」对象是中心页共享 shellbar（非游戏标题栏），修复为 standalone 下 shellbar `position: sticky; top: 0` 贴顶（真机方案 1/9/10 清晰无副作用；fixed 会致下方贴边）；删除临时诊断页；不改 localStorage key/Schema/玩法
   - 门禁：`arcade_pwa_update_test` 7/7（PU-04 增 sticky 断言）、smoke 94/94、zen 14/14、calm 17/17、review 5/5、gameplay base 11/11、validate/build/inline/node --check 全过
