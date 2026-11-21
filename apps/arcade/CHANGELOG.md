@@ -1,6 +1,6 @@
 # Arcade Changelog
 
-## 0.11.1 — 2026-11-21（本地待发布）
+## 0.11.1 — 2026-11-21（已双端发布）
 
 ### Changed
 - 结算样式回归：默认恢复 0.10.0 的高级模糊蒙层结算弹层（居中卡片 + 暗色背景 + 模糊），只有点专用回看按钮后才切换到透明回看模式，右上角胶囊可唤回结算卡片。
@@ -8,7 +8,7 @@
 - 版本链升至 `0.11.1`，SW 缓存键 `studiokit-arcade-0.11.1-v1`。
 
 ### Verification
-- `tools/arcade_review_test.mjs` 5/5（静态文案映射 + 默认 blur/回看透明切换 + 四档布局）；全量门禁与双端发布证据发布后补记。设计见 `DESIGN-0.11.1.md`。
+- `tools/arcade_review_test.mjs` 5/5（静态文案映射 + 默认 blur/回看透明切换 + 四档布局）；全量门禁 ALL GATES PASSED；提交 d51c87e 推送 main、Actions run 44876176661 四 job 全绿、verify_deploy 41/41 双端一致（Arcade 0.11.1）；双端线上 12/12（默认模糊蒙层 + 按游戏文案 + 回看切换，0 console error）；SW `studiokit-arcade-0.11.1-v1`。设计见 `DESIGN-0.11.1.md`。
 
 ## 0.11.0 — 2026-11-21（已双端发布）
 

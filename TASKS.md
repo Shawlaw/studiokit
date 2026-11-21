@@ -90,7 +90,7 @@
 | T085 | agent | Arcade 0.11.0：结算可回看最终画面 + 五子棋棋盘放大 | DONE | T084 | Owner 反馈「五子棋输了蒙层盖住棋盘，所有游戏结束后想回顾最终画面，棋盘再大点」；共享 `createOverlayUi` 增 `result:true`：结算去暗色/去模糊、卡片移底部、动态注入「回看棋盘」按钮与「查看结算」胶囊（一键隐藏/恢复面板，≥44px，320/375/390/430 不溢出；开局/暂停/错误弹层零变化）；16 款游戏 45 处结算全标记；五子棋棋盘 384→400、格距 34→36、棋子 14→15，状态栏/落子按钮/页脚不变，旧档与几何钩子兼容；新增 `tools/arcade_review_test.mjs` 5/5 + 截图复核；版本链 0.11.0、`DESIGN-0.11.0.md`、SW 缓存键同步 |
 | T086 | agent | Arcade 0.11.0 发布：main 双端部署与线上验证 | DONE | T085 | Owner 当前任务明确指令「你弄完测试完就发版更新吧」= `OWNER_AUTHORIZATION: PUBLISH_TO_MAIN`；提交 `8453baf` ff 合入 main 推送；Actions run `44774786680` 首次 Verify 因 CF 生产域传播延迟 1 文件 hash 差异，同一 SHA `--failed` 重跑后四 job 全绿；CI 与本地 `verify_deploy.py` 均 **41/41** 双端一致（Arcade `0.11.0`）；双端线上无头 Chrome 各 6/6（中心页/棋盘 400/结算透明/回看切换/0 console error）；SW `studiokit-arcade-0.11.0-v1`；真机触控 UNVERIFIED |
 | T087 | agent | Arcade 0.11.1：结算默认恢复模糊蒙层 + 回看按钮按游戏命名 | DONE | T086 | Owner 反馈「全都叫回看棋盘不对；既然有独立切换按钮，原模糊蒙层高级样式应保留」；引擎 `result` 支持字符串文案（布尔兼容回退「回看终局」），`setReviewHidden` 同步 `.is-reviewing`：默认 `.is-result` 保留原模糊蒙层、仅回看时透明；45 处按游戏命名（赛道/矿场/牌桌/果园/影林等）；`DESIGN-0.11.1.md`；`arcade_review_test` 5/5（静态文案映射 + 默认 blur/回看透明 + 四档布局）；全量门禁 ALL GATES PASSED |
-| T088 | agent | Arcade 0.11.1 发布：main 双端部署与线上验证 | PENDING | T087 | 待提交推送 main 并双端验证（结算默认模糊 + 回看切换 + 按钮文案） |
+| T088 | agent | Arcade 0.11.1 发布：main 双端部署与线上验证 | DONE | T087 | 提交 `d51c87e` 推送 main；Actions run `44876176661` 四 job 全绿；CI 与本地 `verify_deploy.py` 均 **41/41** 双端一致（Arcade `0.11.1`）；双端线上无头浏览器 12/12（hub 0.11.1/16 卡、五子棋默认模糊+「回看棋盘」+回看透明/胶囊、贪吃蛇「回看果园」+默认模糊，0 console error）；SW `studiokit-arcade-0.11.1-v1`；真机触控 UNVERIFIED |
 
 ## 任务命令
 

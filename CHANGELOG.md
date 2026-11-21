@@ -2,14 +2,14 @@
 
 StudioKit 门户本身没有独立的 semver；以下按仓库里程碑与工具版本记录。各工具的详细变更见 `apps/<tool>/CHANGELOG.md`。
 
-## Arcade 0.11.1 — 2026-11-21（本地待发布）
+## Arcade 0.11.1 — 2026-11-21（已双端发布）
 
 ### Changed
 - 结算默认恢复高级模糊蒙层；点专用回看按钮后才透明回看，胶囊可唤回结算。
 - 回看按钮按游戏定制文案（赛道/矿场/牌桌/果园等），不再统一叫「回看棋盘」。
 
 ### Verification
-- `tools/arcade_review_test.mjs` 5/5；全量门禁与双端发布证据发布后补记。
+- `tools/arcade_review_test.mjs` 5/5；全量门禁 ALL GATES PASSED；提交 d51c87e 双端发布，verify_deploy 41/41，线上 12/12（默认模糊蒙层 + 按游戏文案 + 回看切换）。
 
 ## Arcade 0.11.0 — 2026-11-21（已双端发布）
 

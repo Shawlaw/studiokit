@@ -1550,8 +1550,8 @@
         "verify_deploy 双端一致",
         "线上验证结算默认模糊/回看切换/按钮文案"
       ],
-      "completedAt": "PENDING_RELEASE",
-      "evidence": "PENDING_RELEASE"
+      "completedAt": "2026-11-21T14:42:00+08:00",
+      "evidence": "提交 d51c87e 推送 main；Actions run 44876176661 四 job 全绿（Validate and build / Deploy GitHub Pages / Deploy Cloudflare Pages / Verify both deployments）；CI 与本地 tools/verify_deploy.py 均 41/41 文件 SHA-256 双端一致（Arcade 0.11.1 / Badge 2.2.1 / Venue 0.2.0，manifest application/manifest+json）；双端线上无头浏览器：hub 0.11.1/16 卡、五子棋默认模糊蒙层+文案「回看棋盘」+回看透明/胶囊、贪吃蛇文案「回看果园」+默认模糊，共 12/12；0 console error；SW 缓存键 studiokit-arcade-0.11.1-v1；真机触控 UNVERIFIED。"
     }
   ]
 }
