@@ -1303,6 +1303,12 @@ body.arcade-immersive {
   height: 100vh;
   height: 100dvh;
   overscroll-behavior: none;
+  /* 拇指可达区抬升量：全屏/PWA 独立窗口下，底部按钮从贴底(6px)抬到约 42px，
+     让单手拇指更容易够到。横屏短视口降到 20px，优先保住画布可玩尺寸。 */
+  --ac-thumb-lift: 36px;
+}
+@media (orientation: landscape) and (max-height: 560px) {
+  body.arcade-immersive { --ac-thumb-lift: 20px; }
 }
 
 body.arcade-immersive .studiokit-shellbar {
@@ -1355,8 +1361,16 @@ body.arcade-immersive .stage-wrap {
   min-height: 0;
   width: 100%;
   align-items: center;
+  /* 0.11.5-interaction：原安全区 padding 保留。画布外道具行靠 touch-pad 的 padding-bottom 抬升，
+     舞台无需额外缩小（负 padding 会覆盖按钮命中层）；仅矿工(has-subhud)的画布内道具坞
+     需要让画布真实缩小 lift，见下方 .has-subhud 规则。 */
   padding: 0 max(0px, env(safe-area-inset-right)) max(0px, env(safe-area-inset-bottom))
     max(0px, env(safe-area-inset-left));
+}
+/* 矿工道具坞绝对定位在画布内：让画布底部上移 lift，道具坞随之抬到拇指区，
+   游戏的 ResizeObserver + measureItemFloor() 会按新位置重算矿物地面，不遮挡矿物。 */
+body.arcade-immersive.has-subhud .stage-wrap {
+  padding-bottom: calc(var(--ac-thumb-lift) + max(0px, env(safe-area-inset-bottom)));
 }
 
 /* 画布始终保持 420:740：高度吃满剩余空间，宽度不够时反向收缩。 */
@@ -1385,7 +1399,10 @@ body.arcade-immersive .touch-pad {
   flex: 0 0 auto;
   width: min(520px, 100%);
   margin: 4px auto 0;
-  padding: 0 max(8px, env(safe-area-inset-right)) max(6px, env(safe-area-inset-bottom))
+  /* 0.11.5-interaction：按钮行底部内边距叠加拇指抬升量，把整行按钮抬高到更易够到的位置；
+     画布外道具行的舞台不额外缩小，避免牺牲画面尺寸；按钮仍留在画布下沿之外。 */
+  padding: 0 max(8px, env(safe-area-inset-right))
+    calc(max(6px, env(safe-area-inset-bottom)) + var(--ac-thumb-lift))
     max(8px, env(safe-area-inset-left));
 }
 
@@ -1531,9 +1548,11 @@ body.arcade-immersive .toolbelt {
   transform: translate(-50%, 0);
 }
 
-/* 沉浸模式下把提示抬到道具条上方，避免首次进入时挡住道具。 */
+/* 沉浸模式下把提示抬到道具条上方，避免首次进入时挡住道具。
+   0.11.5-interaction：道具坞随画布缩短上移 lift，Toast 同步抬升并保持 clear；
+   安全区翻倍计入，避免独立窗口(34px 底安全区)下 Toast 压住道具坞。 */
 body.arcade-immersive .ac-toast {
-  bottom: calc(84px + env(safe-area-inset-bottom));
+  bottom: calc(100px + 2 * var(--ac-thumb-lift) + 2 * env(safe-area-inset-bottom));
 }
 
 /* 普通模式下，画布外道具行占底部空间：把 Toast 抬到按钮上方，避免 8 秒遮住次数。 */

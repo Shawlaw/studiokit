@@ -1,6 +1,24 @@
 # Arcade Changelog
 
-## 0.11.5 — 2026-11-21（本地提交，未发布）
+## 0.12.0 — 2026-11-21（待发布）
+
+### Fixed
+- **全屏/PWA 底部按钮抬升**：`--ac-thumb-lift=36px`（横屏 20px）让沉浸式道具行从贴底升到拇指区；四档按钮距底 6→42px、安全区 34→70px；toast 同步抬升避免压住道具坞。
+- **层塔「偏置堆叠不塌」物理 bug**：根因是 lean 弹簧平衡点恒为 0、盒子 x 从不位移。新增持久重心/支撑模型：偏心×重量×高度为 comMoment，弹簧平衡点随 comOffset 偏移，重心超出支撑半宽且塔体明显倾斜即倒塌；配重道具真实减重心。连续右偏 4 层塌，左右交替 14 层稳。
+- 合并 0.11.5（本地未发布）的三项修复：双击放大防护、五子棋落子重影、预览取消出口。
+
+### Added
+- **层塔全览**：「🗺 全览」按钮 + 快捷键 3，0.45s 缩放动画、层号/属性/重心标尺，全览期间禁止落箱；结算前 0.9s 动画拉远展示全塔，结算弹层保留「回看塔身」。
+- **层塔工地集装箱皮肤**：黄昏工地/塔吊桁架/吊具随钟摆摇摆，集装箱波纹板/角件/编号；4 种真实生效属性（标准/重型 1.65×/易碎完美 +20/奖励 +25），确定性伪随机，画布可读提示。
+- 新增门禁 `tools/arcade_immersive_buttons_test.mjs`（16/16）与 `tools/arcade_tower_test.mjs`（13/13）。
+
+### Changed
+- 版本链升至 `0.12.0`，SW 缓存键 `studiokit-arcade-0.12.0-v1`。无 localStorage key / Schema / 关卡数据变更；挑战 6 关 6/6。
+
+### Verification
+- `arcade_immersive_buttons_test` 16/16、`arcade_tower_test` 13/13、`arcade_interaction_test` 5/5、smoke 94/94、zen 14/14、calm 17/17、review 5/5、gameplay base 11/11、tower challenge 6/6、pwa 7/7、validate/build/inline/node --check 全过；真机触控 UNVERIFIED。设计见 `DESIGN-0.12.0.md`。
+
+## 0.11.5 — 2026-11-21（本地提交，未发布，已并入 0.12.0）
 
 ### Fixed
 - **移动端双击误触放大**：17 个页面 viewport meta 统一加 `maximum-scale=1, user-scalable=no`；`arcade.css` 给 html 补 `touch-action: manipulation` 兜底；`engine.js` 的 `installSfxUnlock()` 全局拦截 `dblclick` 默认行为。不引入 `viewport-fit` 回归。

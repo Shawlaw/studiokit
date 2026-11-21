@@ -1676,7 +1676,26 @@
         "全量门禁通过；无 key/Schema/玩法数值变更；本地未发布"
       ],
       "completedAt": "2026-11-21T22:20:00+08:00",
-      "evidence": "Owner 反馈三点并在浏览器中复现确认。双击放大：17 页 viewport 加 maximum-scale=1/user-scalable=no、html touch-action manipulation 兜底、engine.js installSfxUnlock() 全局拦 dblclick 默认行为（不 stopPropagation，不破坏方块双击暂停）。五子棋重影根因：画布 drawPlaceButton 与 DOM placeButton 各画一份「落子」（字号/位置不同，全屏错位）；修复为画布 drawActionButton 唯一文字源，DOM 两枚透明命中层（data-cancel-preview/data-place-confirm，无文字/边框/底色）。预览出口：新增 cancelPreview()，取消只清 preview；逻辑按钮区 200→280 保证 320px 两半各 ≥44px；hint/开始弹层/画布引导/页脚文案同步。五子棋 selftest 新增第 18 条（预览取消与落子确认互不干扰），第 17 条改校验两枚透明命中层；新增 __arcadeTest.cancelPreview()/actionButtons() 钩子。新增 tools/arcade_interaction_test.mjs（IX-01…IX-05）：17 页 viewport / dblclick 拦截 / 透明命中层 / 四档+全屏布局 / 取消与落子。门禁：interaction 5/5、smoke 94/94、zen 14/14、calm 17/17（gomoku selftest 18 条）、review 5/5、gameplay base 11/11、pwa 7/7、validate/build/inline/node --check 全过；真机双击防护待 Owner 复测 UNVERIFIED；无 localStorage key/Schema 变更；版本链 0.11.5 / SW studiokit-arcade-0.11.5-v1；设计见 DESIGN-0.11.5.md。"
+      "evidence": "Owner 反馈三点并在浏览器中复现确认。双击放大：17 页 viewport 加 maximum-scale=1/user-scalable=no、html touch-action manipulation 兜底、engine.js installSfxUnlock() 全局拦 dblclick 默认行为（不 stopPropagation，不破坏方块双击暂停）。五子棋重影根因：画布 drawPlaceButton 与 DOM placeButton 各画一份「落子」（字号/位置不同，全屏错位）；修复为画布 drawActionButton 唯一文字源，DOM 两枚透明命中层（data-cancel-preview/data-place-confirm，无文字/边框/底色）。预览出口：新增 cancelPreview()，取消只清 preview；逻辑按钮区 200→280 保证 320px 两半各 ≥44px；hint/开始弹层/画布引导/页脚文案同步。五子棋 selftest 新增第 18 条（预览取消与落子确认互不干扰），第 17 条改校验两枚透明命中层；新增 __arcadeTest.cancelPreview()/actionButtons() 钩子。新增 tools/arcade_interaction_test.mjs（IX-01…IX-05）：17 页 viewport / dblclick 拦截 / 透明命中层 / 四档+全屏布局 / 取消与落子。门禁：interaction 5/5、smoke 94/94、zen 14/14、calm 17/17（gomoku selftest 18 条）、review 5/5、gameplay base 11/11、pwa 7/7、validate/build/inline/node --check 全过；真机双击防护待 Owner 复测 UNVERIFIED；无 localStorage key/Schema 变更；版本链 0.11.5 / SW studiokit-arcade-0.11.5-v1；设计见 DESIGN-0.11.5.md。已并入 0.12.0 待发布。"
+    },
+    {
+      "id": "T096",
+      "title": "Arcade 0.12.0：全屏拇指抬升 + 层塔物理/全览/工地集装箱改造",
+      "kind": "agent",
+      "status": "DONE",
+      "dependsOn": [
+        "T095"
+      ],
+      "ownerAuthorizationRequired": false,
+      "acceptance": [
+        "全屏/PWA 底部按钮抬升到拇指区，四档+安全区+横屏布局无回归",
+        "层塔偏置堆叠会塌、对称交替稳定，挑战 6 关判定不变",
+        "层塔全览（游戏中切换 + 结束动画拉远）可用",
+        "层塔工地皮肤 + 4 种真实生效属性",
+        "全量门禁通过；无 key/Schema/关卡数据变更；待发布"
+      ],
+      "completedAt": "2026-11-21T23:55:00+08:00",
+      "evidence": "Owner 一轮四条反馈，2 个并行 worker（immersive-buttons / tower-rework）按不重叠写入范围实现，Lead 集成。全屏底部按钮：arcade.css 加 --ac-thumb-lift=36px（横屏 20px），touch-pad padding-bottom 叠加 lift；矿工 has-subhud 画布同步上移；toast bottom 抬升修复 smoke 覆盖道具坞回归。实测四档按钮距底 6→42px、安全区 34→70px、横屏 6→26px；新增 tools/arcade_immersive_buttons_test.mjs 16/16。层塔物理根因：lean 弹簧平衡点恒 0、盒 x 不动、只视觉旋转；新模型每箱偏心×重量×(1+层数×0.06) 累积 comMoment，加权箱心 comOffset 偏移弹簧平衡点，重心超支撑半宽 0.62×BOX_W 且倾斜即塌；配重额外 comMoment×0.75；连续右偏 18px 第 4 层塌、左右交替 ±18px 14 层稳（COM 7.3px<19.84px）。挑战用低增益 comGain=0.0016、箱重统一 1，仍按关卡 chMaxLean 判定，6/6 PASS。全览：第三枚 44px 按钮+快捷键 3，overviewT 0→1 约 0.45s 缩放、层号/属性/重心标尺、全览禁落箱、结算前 0.9s 动画拉远，result:'回看塔身' 3 处保留。皮肤：黄昏工地/塔吊桁架/吊具摇摆/集装箱波纹板角件编号；属性 4 种（标准 1 / 重型 1.65 / 易碎完美+20 / 奖励+25）确定性 LCG，真实影响物理或计分。serialize/restore 新字段缺省兼容旧档，key/Schema 不变。门禁：immersive 16/16、tower 13/13、interaction 5/5、smoke 94/94、zen 14/14、calm 17/17、review 5/5、gameplay base 11/11、tower challenge 6/6、pwa 7/7、validate/build/inline/node --check 全过；真机手感 UNVERIFIED；版本链 0.12.0 / SW studiokit-arcade-0.12.0-v1；设计见 DESIGN-0.12.0.md。"
     }
   ]
 }

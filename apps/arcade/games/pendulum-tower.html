@@ -18,6 +18,9 @@
     .challenge-layer .ac-challenge-panel { flex: 0 0 auto; }
     .challenge-layer .ac-btn { flex: 0 0 auto; width: 100%; min-height: 44px; }
     .stage-box > .ac-challenge-hud { position: absolute; left: 8px; right: 8px; top: 8px; width: auto; z-index: 4; pointer-events: none; }
+    /* 全览按钮保持 44px 触控目标；三列等宽，与 1 垂线 / 2 配重同排不冲突。 */
+    .touch-pad.tower-tools { grid-template-columns: repeat(3, minmax(0, 1fr)); }
+    .touch-pad.tower-tools .touch-btn { min-height: 44px; }
   </style>
   <title>层塔 · 街机厅 · StudioKit</title>
 </head>
@@ -53,11 +56,12 @@
         </div>
       </div>
     </div>
-    <div class="touch-pad game-tools" aria-label="可选道具（快捷键 1 / 2）">
+    <div class="touch-pad game-tools tower-tools" aria-label="可选道具与全览（快捷键 1 / 2 / 3）">
       <button type="button" class="touch-btn" data-joy-tool="guide" aria-label="垂线预览，剩余 3 次（快捷键 1）"><span aria-hidden="true">📐</span> 垂线 <strong data-joy-count>3</strong></button>
       <button type="button" class="touch-btn" data-joy-tool="brace" aria-label="配重，剩余 2 次（快捷键 2）"><span aria-hidden="true">⚖️</span> 配重 <strong data-joy-count>2</strong></button>
+      <button type="button" class="touch-btn" data-overview-btn aria-label="全览全塔（快捷键 3）" aria-pressed="false"><span aria-hidden="true">🗺</span> 全览</button>
     </div>
-    <p class="game-hint">看准时机点击 / 空格松手 · 1 垂线 / 2 配重 · 完美对齐有连击 · P / Esc 暂停</p>
+    <p class="game-hint">吊臂摇摆吊装集装箱 · 点击 / 空格松手 · 1 垂线 / 2 配重 / 3 全览 · 完美对齐有连击 · P / Esc 暂停</p>
   </main>
   <script>
     (() => {
@@ -74,11 +78,32 @@
       const PIVOT_Y = 64;
       const PEND_LEN = 135;
       const LEAN_LIMIT = 0.35;
+      /* 持久重心模型：支撑半宽按箱体宽度计，重心投影超出即倾覆；
+       * 稳定阈值比硬极限保守，避免“持续偏心晃一晃又归零”永不倒的假象。 */
+      const SUPPORT_HALF = BOX_W / 2;
+      const STABILITY_LIMIT = SUPPORT_HALF * 0.62;
       const BASE_Y = 0;
       const JOY_START = { guide: 3, brace: 2 };
       const JOY_CAPS = { guide: 3, brace: 2 };
       const BRACE_MIN_LEAN = 0.015;
       const BRACE_MIN_VEL = 0.04;
+      /* 集装箱属性：确定性伪随机（每局 seed），全部真实影响物理或计分。 */
+      const CARGO_TYPES = [
+        { id: 'std',    icon: '📦', label: '标准',     color: '#c8792f', trim: '#7a4a1c', weight: 1,    bonus: 0 },
+        { id: 'heavy',  icon: '⚓', label: '重型',     color: '#c0552d', trim: '#77331a', weight: 1.65, bonus: 5 },
+        { id: 'fragile',icon: '🍷', label: '易碎',     color: '#d98fae', trim: '#8c4f68', weight: 0.8,  bonus: 8 },
+        { id: 'bonus',  icon: '💎', label: '奖励',     color: '#2f9e8f', trim: '#176259', weight: 1,    bonus: 25 },
+      ];
+      let cargoSeed = 1;
+      function nextRandom() {
+        cargoSeed = (cargoSeed * 1664525 + 1013904223) >>> 0;
+        return cargoSeed / 4294967296;
+      }
+      function rollCargo() {
+        const r = nextRandom();
+        const t = r < 0.5 ? 0 : r < 0.72 ? 1 : r < 0.9 ? 2 : 3;
+        return CARGO_TYPES[t];
+      }
 
       const canvas = document.querySelector('.game-canvas');
       const stage = A.createStage(canvas, W, H);
@@ -147,6 +172,17 @@
       let pendReload = 0;
       let towerLean = 0;
       let leanVel = 0;
+      let comOffset = 0;      // 当前重心相对地基中心的水平投影（逻辑 px）
+      let comMoment = 0;      // 累计未抵消的倾覆力矩（重量×偏心，逻辑力矩单位）
+      let comLoad = 0;        // 当前塔上总重量
+      let activeCargo = CARGO_TYPES[0]; // 吊钩当前集装箱属性
+      let nextCargo = CARGO_TYPES[0];   // 下一箱预告
+      let fragileArmed = true;         // 本局易碎箱奖励可否触发（每局限一次）
+      /* 全览：0=正常跟随塔顶，1=地基到塔顶总览；overviewReveal 为结算前动画式拉远。 */
+      let overviewActive = false;
+      let overviewT = 1;
+      let overviewHold = 0;
+      let overviewReveal = null;
       let camY = -474;
       let score = 0;
       let perfectCombo = 0;
@@ -177,7 +213,36 @@
       function towerTop() {
         return boxes[boxes.length - 1];
       }
-      function currentTargetCam() {
+      function baseCenter() {
+        if (mode === 'challenge' && chStage && chStage.content) return Number(chStage.content.baseCenterX) || W / 2;
+        return boxes[0] ? boxes[0].x + boxes[0].w / 2 : W / 2;
+      }
+      /* 重心投影：每只箱按自身重量加权，持久累积；左右对称放置会互相抵消。 */
+      function computeComOffset() {
+        let sum = 0;
+        let load = 0;
+        boxes.forEach((b) => {
+          const w = b.base ? 3.2 : (b.cargo ? b.cargo.weight : 1);
+          sum += (b.x + b.w / 2 - baseCenter()) * w;
+          load += w;
+        });
+        comLoad = load;
+        comOffset = load > 0 ? sum / load : 0;
+        return comOffset;
+      }
+      function towerExtent() {
+        let topY = BASE_Y;
+        boxes.forEach((b) => { topY = Math.min(topY, b.y); });
+        collapsed.forEach((b) => { topY = Math.min(topY, b.y); });
+        return { bottom: BASE_Y + 60, top: topY };
+      }
+      function overviewTargetCam() {
+        const e = towerExtent();
+        const span = Math.max(180, e.bottom - e.top);
+        return e.top - Math.max(40, (H - span) / 2);
+      }
+      function currentTargetCam(forceOverview) {
+        if (forceOverview || overviewActive || overviewReveal) return overviewTargetCam();
         return towerTop().y - 430;
       }
       function pendulumBoxScreen() {
@@ -208,6 +273,7 @@
           button.setAttribute('aria-pressed', String(active));
           button.setAttribute('aria-label', name + '，' + detail + '，剩余 ' + tools[id] + ' 次（快捷键 ' + (id === 'guide' ? '1' : '2') + '）');
         });
+        if (typeof syncOverviewButton === 'function') syncOverviewButton();
       }
       function useJoy(id) {
         if (state !== 'playing' || !Object.prototype.hasOwnProperty.call(tools, id) || tools[id] <= 0) return false;
@@ -223,6 +289,9 @@
           tools.brace -= 1;
           towerLean *= 0.5;
           leanVel *= 0.25;
+          /* 配重真实抵消一部分持久重心偏移（不只是压低瞬时晃动）。 */
+          comMoment *= 0.75;
+          computeComOffset();
           if (mode === 'challenge') {
             chAssisted = true;
             chToolsUsed.brace += 1;
@@ -239,6 +308,27 @@
       Object.keys(joyButtons).forEach((id) => {
         joyButtons[id].addEventListener('click', () => useJoy(id));
       });
+
+      /* ---------- 全览（地图式缩放）：按钮 / 快捷键 3，切换时动画，期间禁止落箱 ---------- */
+      const overviewBtn = document.querySelector('[data-overview-btn]');
+      function syncOverviewButton() {
+        if (!overviewBtn) return;
+        const on = overviewActive || !!overviewReveal;
+        overviewBtn.setAttribute('aria-pressed', String(overviewActive));
+        overviewBtn.classList.toggle('is-armed', overviewActive);
+        overviewBtn.disabled = state !== 'playing' && !overviewReveal;
+        overviewBtn.setAttribute('aria-label', overviewActive ? '返回跟随视角（快捷键 3）' : '全览全塔（快捷键 3）');
+        overviewBtn.querySelector('[aria-hidden]').textContent = on ? '🔙' : '🗺';
+      }
+      function toggleOverview() {
+        if (state !== 'playing' || overviewReveal) return false;
+        overviewActive = !overviewActive;
+        A.Sfx.play('ui');
+        syncOverviewButton();
+        syncJoyTools();
+        return overviewActive;
+      }
+      if (overviewBtn) overviewBtn.addEventListener('click', toggleOverview);
       window.addEventListener('keydown', (e) => {
         if (e.repeat || e.metaKey || e.ctrlKey || e.altKey) return;
         const target = e.target;
@@ -246,6 +336,7 @@
           const tag = target.tagName.toLowerCase();
           if (tag === 'input' || tag === 'textarea' || tag === 'select' || target.isContentEditable) return;
         }
+        if (e.key === '3') { e.preventDefault(); toggleOverview(); return; }
         const id = { '1': 'guide', '2': 'brace' }[e.key];
         if (!id) return;
         e.preventDefault();
@@ -264,6 +355,18 @@
         pendReload = 0;
         towerLean = 0;
         leanVel = 0;
+        comOffset = 0;
+        comMoment = 0;
+        comLoad = 0;
+        cargoSeed = (Date.now() >>> 0) || 1;
+        activeCargo = rollCargo();
+        nextCargo = rollCargo();
+        fragileArmed = true;
+        overviewActive = false;
+        overviewT = 1;
+        overviewHold = 0;
+        overviewReveal = null;
+        if (typeof syncOverviewButton === 'function') syncOverviewButton();
         camY = -474;
         score = 0;
         perfectCombo = 0;
@@ -278,7 +381,8 @@
         guideArmed = false;
         particles.clear();
         boxes.push({ x: W / 2 - 55, y: -44, w: 110, h: 44, base: true });
-        boxes.push({ x: W / 2 - BOX_W / 2, y: -44 - BOX_H, w: BOX_W, h: BOX_H });
+        boxes.push({ x: W / 2 - BOX_W / 2, y: -44 - BOX_H, w: BOX_W, h: BOX_H, cargo: CARGO_TYPES[0] });
+        computeComOffset();
         syncHud();
         syncJoyTools();
       }
@@ -327,19 +431,22 @@
           recordSaved = true;
           dom.hudHigh.textContent = String(Math.max(high, score));
         }
-        loop.pause();
-        ui.show({
-          title,
-          text:
-            `<span class="ac-score">${score}</span>` +
-            (rec && rec.isNewHigh ? '<span class="ac-newhigh">★ 新纪录</span><br/>' : '') +
-            subtitle +
-            ` · ${floorsReached} 层`,
-          btn: '再来一局',
-          onBtn: showStart,
-          result: '回看塔身',
-        });
-        pauseUi.sync(); syncJoyTools();
+        const showResult = () => {
+          loop.pause();
+          ui.show({
+            title,
+            text:
+              `<span class="ac-score">${score}</span>` +
+              (rec && rec.isNewHigh ? '<span class="ac-newhigh">★ 新纪录</span><br/>' : '') +
+              subtitle +
+              ` · ${floorsReached} 层`,
+            btn: '再来一局',
+            onBtn: showStart,
+            result: '回看塔身',
+          });
+          pauseUi.sync(); syncJoyTools();
+        };
+        revealThen(showResult);
       }
 
       function gameOver() {
@@ -574,6 +681,13 @@
         collapsed = [];
         towerLean = 0;
         leanVel = 0;
+        comOffset = 0;
+        comMoment = 0;
+        comLoad = 0;
+        overviewActive = false;
+        overviewT = 1;
+        overviewReveal = null;
+        syncOverviewButton();
         camY = -474;
         score = 0;
         perfectCombo = 0;
@@ -664,6 +778,10 @@
         boxes.push({ x: drop.x, y, w: drop.w, h: drop.h });
         const e = center - (top.x + top.w / 2);
         leanVel += e * 0.006 * (1 + chPlaced * 0.02);
+        /* 挑战重量归一化：关卡目标 ±12px、5–6 层，统一真实箱重 1；
+         * 只累积真实重心投影（低增益），不改变 targetOffsetPx/tolerancePx 判定语义。 */
+        comMoment += (center - baseCenter()) * 1;
+        computeComOffset();
         perfectCombo = 0;
         feedback = { text: (within ? '标记内 ' : '偏离 ') + Math.round(actualOffset) + 'px', color: within ? '#ffd23f' : '#93a0c8', life: 1.1 };
         A.Sfx.play(within ? 'perfect' : 'land');
@@ -706,9 +824,13 @@
             syncJoyTools();
           }
         }
+        /* 挑战：瞬时晃动弹簧 + 持久重心 restoring；chMaxLean 仍按关卡数据判定，
+         * 重心力用较小增益避免已有关卡字面不可解（挑战目标最大 ±12px）。 */
         const stiffness = 6.2;
         const damp = 0.9;
-        leanVel += (-stiffness * towerLean - damp * leanVel) * dt;
+        const comGain = 0.0016;
+        const equilibrium = comGain * comOffset;
+        leanVel += (-stiffness * (towerLean - equilibrium) - damp * leanVel) * dt;
         towerLean += leanVel * dt;
         recordPeakLean();
         if (Math.abs(towerLean) > chMaxLean) {
@@ -736,7 +858,7 @@
           }
         }
         const spaceNow = input.isDown(' ');
-        if (input.pointer.wentDown || (spaceNow && !updateChallenge._space)) releaseBox();
+        if (!overviewActive && !overviewReveal && (input.pointer.wentDown || (spaceNow && !updateChallenge._space))) releaseBox();
         updateChallenge._space = spaceNow;
         camY = lerp(camY, currentTargetCam(), Math.min(1, 4 * dt));
         if (!drop && chPlaced >= (chWin.floorsAtLeast || chBoxesData.length) && Math.abs(towerLean) <= chMaxLean * 0.98 && Math.abs(leanVel) < 0.4) {
@@ -768,12 +890,11 @@
 
       function challengeClear() {
         if (mode !== 'challenge' || !chStage) return false;
+        if (state === 'revealing' || state === 'cleared' || state === 'failed') return false;
         const blocker = challengeWinBlocker();
         if (blocker) return challengeFail('未满足交付条件：' + blocker);
-        state = 'cleared';
         chGoalHintTimer = 0;
         autosave.clear();
-        loop.pause();
         syncJoyTools();
         chEvaluation = evaluationLevel();
         const result = { timeSec: Math.round(chElapsed * 10) / 10, assisted: chAssisted, collectibles: [] };
@@ -786,48 +907,58 @@
           A.Challenge.resultHtml(chStage, result) +
           '<p class="ac-challenge-tip">' + chEsc(evaluationLabel(chEvaluation)) + '<br/>落点 ' + chEsc(marksText || '—') + ' · 落空 ' + chMisses + ' · 倾斜峰值 ' + peakLeanText() + '</p>' +
           (delivery ? '<p class="ac-challenge-result-row">交付核验：' + chEsc(delivery) + '</p>' : '');
-        ui.show({
-          title: '挑战通关',
-          text: resultText,
-          btn: isLast ? '返回选关' : '下一关',
-          onBtn: () => {
-            if (isLast) exitToChallengeSelect();
-            else startChallenge(challengeData[chStageIndex + 1].id);
-          },
-          btn2: '重玩本关',
-          onBtn2: () => startChallenge(chStage.id),
-          result: '回看塔身',
+        state = 'revealing';
+        revealThen(() => {
+          state = 'cleared';
+          loop.pause();
+          ui.show({
+            title: '挑战通关',
+            text: resultText,
+            btn: isLast ? '返回选关' : '下一关',
+            onBtn: () => {
+              if (isLast) exitToChallengeSelect();
+              else startChallenge(challengeData[chStageIndex + 1].id);
+            },
+            btn2: '重玩本关',
+            onBtn2: () => startChallenge(chStage.id),
+            result: '回看塔身',
+          });
+          pauseUi.sync();
+          syncJoyTools();
+          syncChallengeHud();
         });
-        pauseUi.sync();
-        syncChallengeHud();
         return true;
       }
 
       function challengeFail(reason) {
         if (mode !== 'challenge' || !chStage) return false;
-        if (state === 'failed' || state === 'cleared') return false;
-        state = 'failed';
+        if (state === 'failed' || state === 'cleared' || state === 'revealing') return false;
         chErrorReason = reason || '本关失败';
         chEvaluation = evaluationLevel();
         autosave.clear();
-        loop.pause();
         syncJoyTools();
-        ui.show({
-          title: '挑战失败',
-          text:
-            '<p class="ac-challenge-tip">' + chEsc(chErrorReason) + '</p>' +
-            '<p class="ac-challenge-result-row">本关目标：' + chEsc(chStage.goalStatement || '') + ' · 已放 ' + chPlaced + ' 层</p>' +
-            (chMinConsecutiveWithinTolerance !== null || chMaxFinalTopCenterOffsetPx !== null
-              ? '<p class="ac-challenge-result-row">交付核验：' + chEsc(deliveryText()) + '</p>'
-              : ''),
-          btn: '重试本关',
-          onBtn: () => startChallenge(chStage.id),
-          btn2: '返回选关',
-          onBtn2: exitToChallengeSelect,
-          result: '回看塔身',
+        const stageTitle = chStage.goalStatement || '';
+        const placed = chPlaced;
+        const delivery = (chMinConsecutiveWithinTolerance !== null || chMaxFinalTopCenterOffsetPx !== null) ? deliveryText() : '';
+        state = 'revealing';
+        revealThen(() => {
+          state = 'failed';
+          loop.pause();
+          ui.show({
+            title: '挑战失败',
+            text:
+              '<p class="ac-challenge-tip">' + chEsc(chErrorReason) + '</p>' +
+              '<p class="ac-challenge-result-row">本关目标：' + chEsc(stageTitle) + ' · 已放 ' + placed + ' 层</p>' +
+              (delivery ? '<p class="ac-challenge-result-row">交付核验：' + chEsc(delivery) + '</p>' : ''),
+            btn: '重试本关',
+            onBtn: () => startChallenge(chStage.id),
+            btn2: '返回选关',
+            onBtn2: exitToChallengeSelect,
+            result: '回看塔身',
+          });
+          pauseUi.sync();
+          syncChallengeHud();
         });
-        pauseUi.sync();
-        syncChallengeHud();
         return true;
       }
 
@@ -928,6 +1059,18 @@
         chToolsUsed = data.chToolsUsed && typeof data.chToolsUsed === 'object' ? { guide: Number(data.chToolsUsed.guide) || 0, brace: Number(data.chToolsUsed.brace) || 0 } : { guide: 0, brace: 0 };
         towerLean = Number(data.towerLean) || 0;
         leanVel = Number(data.leanVel) || 0;
+        /* 新增重心字段缺省值：旧档无字段时按箱体几何重算（挑战箱统一重量 1）。 */
+        if (Number.isFinite(Number(data.comOffset)) && Number.isFinite(Number(data.comMoment))) {
+          comOffset = Number(data.comOffset);
+          comMoment = Number(data.comMoment);
+          comLoad = Number(data.comLoad) || 0;
+        } else {
+          comMoment = 0;
+          computeComOffset();
+        }
+        overviewActive = false;
+        overviewT = 1;
+        overviewReveal = null;
         camY = Number(data.camY) || -474;
         /* 恢复 drop / pendHasBox / pendReload / tools / guideArmed（不再强制 drop=null 重给一箱）。 */
         const restored = normalizeChallengeRestore(data, caps);
@@ -1026,15 +1169,22 @@
           chElapsed,
           chAssisted,
           chToolsUsed: { guide: chToolsUsed.guide, brace: chToolsUsed.brace },
-          boxes: boxes.map((b) => ({ x: b.x, y: b.y, w: b.w, h: b.h, base: !!b.base })),
+          boxes: boxes.map((b) => ({ x: b.x, y: b.y, w: b.w, h: b.h, base: !!b.base, cargo: b.cargo ? b.cargo.id : null })),
           drop: drop
-            ? { x: drop.x, y: drop.y, w: drop.w, h: drop.h, vy: drop.vy, prevBottom: drop.prevBottom, missed: !!drop.missed, squash: drop.squash }
+            ? { x: drop.x, y: drop.y, w: drop.w, h: drop.h, vy: drop.vy, prevBottom: drop.prevBottom, missed: !!drop.missed, squash: drop.squash, cargo: drop.cargo ? drop.cargo.id : null }
             : null,
           pend: { angle: pend.angle, vel: pend.vel, length: pend.length, gravity: pend.gravity, damping: pend.damping },
           pendHasBox,
           pendReload,
           towerLean,
           leanVel,
+          comOffset,
+          comMoment,
+          comLoad,
+          cargoSeed,
+          activeCargo: activeCargo.id,
+          nextCargo: nextCargo.id,
+          fragileArmed,
           camY,
           score,
           perfectCombo,
@@ -1056,6 +1206,7 @@
               w: clamp(Number(b.w), 20, 200),
               h: clamp(Number(b.h), 12, 80),
               base: !!b.base,
+              cargo: CARGO_TYPES.find((c) => c.id === b.cargo) || CARGO_TYPES[0],
             }));
           if (boxes.length < 2) return false;
           if (data.drop && isFinite(data.drop.x) && isFinite(data.drop.y)) {
@@ -1068,6 +1219,7 @@
               prevBottom: Number(data.drop.prevBottom) || 0,
               missed: !!data.drop.missed,
               squash: Number(data.drop.squash) || 0,
+              cargo: CARGO_TYPES.find((c) => c.id === data.drop.cargo) || activeCargo,
             };
           } else {
             drop = null;
@@ -1082,6 +1234,19 @@
           pendReload = Number(data.pendReload) || 0;
           towerLean = Number(data.towerLean) || 0;
           leanVel = Number(data.leanVel) || 0;
+          /* 新增重心/属性字段缺省值：旧档无字段时从箱体几何反推，保持兼容。 */
+          cargoSeed = Number.isFinite(Number(data.cargoSeed)) ? (Number(data.cargoSeed) >>> 0) : (Date.now() >>> 0) || 1;
+          activeCargo = CARGO_TYPES.find((c) => c.id === data.activeCargo) || CARGO_TYPES[0];
+          nextCargo = CARGO_TYPES.find((c) => c.id === data.nextCargo) || CARGO_TYPES[0];
+          fragileArmed = data.fragileArmed !== false;
+          if (Number.isFinite(Number(data.comOffset)) && Number.isFinite(Number(data.comMoment))) {
+            comOffset = Number(data.comOffset);
+            comMoment = Number(data.comMoment);
+            comLoad = Number(data.comLoad) || 0;
+          } else {
+            comMoment = 0;
+            computeComOffset();
+          }
           camY = Number(data.camY) || -474;
           score = Math.max(0, Number(data.score) || 0);
           perfectCombo = Math.max(0, Number(data.perfectCombo) || 0);
@@ -1116,7 +1281,8 @@
       });
 
       /* ---------- 松手放箱 ---------- */
-      function releaseBox() {
+      function releaseBox(force) {
+        if (!force && (overviewActive || overviewReveal)) return;
         if (!pendHasBox || drop) return;
         const p = pendulumBoxScreen();
         pendHasBox = false;
@@ -1130,6 +1296,7 @@
           prevBottom: 0,
           landed: false,
           squash: 0,
+          cargo: activeCargo,
         };
         drop.prevBottom = drop.y + drop.h;
         const usedGuide = guideArmed;
@@ -1151,12 +1318,15 @@
         const overlap = Math.min(drop.x + drop.w, top.x + top.w) - Math.max(drop.x, top.x);
         const e = drop.x + drop.w / 2 - (top.x + top.w / 2);
 
+        const cargo = drop.cargo || CARGO_TYPES[0];
+        let points = 10;
+        let perfect = false;
         if (overlap >= BOX_W * 0.85) {
           drop.x = top.x;
           perfectCombo += 1;
-          score += 10 + perfectCombo * 10;
+          points = 10 + perfectCombo * 10;
+          perfect = true;
           flash = 0.5;
-          feedback = { text: '完美对齐 +' + (10 + perfectCombo * 10), color: '#ffd23f', life: 1.1 };
           A.Sfx.play('perfect');
           particles.emit(drop.x + drop.w / 2, drop.y, {
             count: A.reducedMotion ? 8 : 22,
@@ -1170,8 +1340,6 @@
           leanVel += e * 0.0006;
         } else if (overlap > 6) {
           perfectCombo = 0;
-          score += 10;
-          feedback = { text: (e < 0 ? '偏左 ' : '偏右 ') + Math.round(Math.abs(e)) + 'px · +10', color: '#93a0c8', life: 1.1 };
           A.Sfx.play('land');
           particles.emit(drop.x + drop.w / 2, drop.y + drop.h, {
             count: 6,
@@ -1183,7 +1351,8 @@
             gravity: 600,
           });
           const n = boxes.length - 1;
-          leanVel += e * 0.01 * (1 + n * 0.022);
+          /* 瞬时晃动冲量保留，但不再作为唯一稳定性来源。 */
+          leanVel += e * 0.006 * (1 + n * 0.022);
         } else {
           perfectCombo = 0;
           drop.missed = true;
@@ -1192,7 +1361,35 @@
 
         if (!drop.missed) {
           drop.y = top.y - drop.h;
-          boxes.push({ x: drop.x, y: drop.y, w: drop.w, h: drop.h });
+          /* 持久倾覆力矩：相对塔顶的偏移 × 箱重 × 高度放大系数。
+           * 关键：对称交替落箱会互相抵消；一直偏置则持续累积。 */
+          const heightGain = 1 + (boxes.length - 1) * 0.06;
+          comMoment += e * cargo.weight * heightGain;
+          boxes.push({ x: drop.x, y: drop.y, w: drop.w, h: drop.h, cargo });
+          computeComOffset();
+          /* 属性真实生效：重量放大瞬时冲量；奖励直接加分；易碎箱仅在稳稳落定时一次性奖励。 */
+          points += cargo.bonus;
+          /* 反馈文案前缀始终是方向/偏差（保持既有「偏右 18px」语义），属性信息追加在后。 */
+          const alignText = perfect ? '完美对齐 +' + (10 + perfectCombo * 10) : (e < 0 ? '偏左 ' : '偏右 ') + Math.round(Math.abs(e)) + 'px';
+          if (cargo.id === 'fragile') {
+            if (perfect && fragileArmed) {
+              points += 20;
+              fragileArmed = false;
+              feedback = { text: alignText + ' · 🍷 易碎箱稳放 +20', color: '#ff9ac2', life: 1.4 };
+            } else {
+              feedback = { text: alignText + ' · 🍷 易碎箱轻放', color: '#ff9ac2', life: 1.1 };
+            }
+          } else {
+            feedback = {
+              text: alignText + (cargo.bonus ? ' · ' + cargo.icon + cargo.label + ' +' + cargo.bonus : (perfect ? '' : ' · +10')),
+              color: perfect ? '#ffd23f' : '#93a0c8',
+              life: 1.1,
+            };
+          }
+          score += points;
+          /* 下一箱属性入钩，保持确定性可预告。 */
+          activeCargo = nextCargo;
+          nextCargo = rollCargo();
           drop.squash = 0.25;
           drop = null;
           syncHud();
@@ -1218,17 +1415,49 @@
             rot: 0,
             vr: dir * rand(0.6, 2.4),
             base: b.base,
+            cargo: b.cargo || null,
           });
         });
         boxes = [];
       }
 
       /* ---------- 更新 ---------- */
+      /* 全览缩放插值：0.45s 动画；减少动态偏好下静态瞬切。 */
+      function updateOverview(dt) {
+        const goal = overviewActive || overviewReveal ? 1 : 0;
+        if (A.reducedMotion) overviewT = goal;
+        else overviewT += (goal - overviewT) * Math.min(1, 8 * dt);
+        if (overviewReveal) {
+          overviewReveal.remaining -= dt;
+          if (overviewReveal.remaining <= 0) {
+            const done = overviewReveal.after;
+            overviewReveal = null;
+            overviewActive = false;
+            overviewT = 0;
+            if (done) done();
+          }
+        } else if (overviewHold > 0) {
+          overviewHold = Math.max(0, overviewHold - dt);
+        }
+      }
+
+      /* 结算前动画式拉远全塔（<=1s）；减少动态偏好下静态瞬切。 */
+      function revealThen(after) {
+        if (overviewReveal) return;
+        const duration = A.reducedMotion ? 0.06 : 0.9;
+        overviewActive = false;
+        overviewReveal = { remaining: duration, after };
+        syncOverviewButton();
+        syncJoyTools();
+      }
+
       function update(dt) {
         if (mode === 'challenge') {
           updateChallenge(dt);
+          updateOverview(dt);
           return;
         }
+        updateOverview(dt);
         particles.update(dt);
         flash = Math.max(0, flash - dt);
         shakeVal = Math.max(0, shakeVal - dt * 20);
@@ -1265,12 +1494,19 @@
           }
         }
 
+        /* 持久重心模型：弹簧平衡点由 comOffset 决定，不再总是回归 0；
+         * 同时 comMoment 产生的静态倾斜使持续偏心最终超出支撑面而倒塌。 */
+        computeComOffset();
         const stiffness = 6.2;
         const damp = 0.9;
-        const leanAcc = -stiffness * towerLean - damp * leanVel;
+        const comGain = 0.0075;
+        const equilibrium = clamp(comGain * comOffset + comMoment * 0.00035, -LEAN_LIMIT * 1.6, LEAN_LIMIT * 1.6);
+        const leanAcc = -stiffness * (towerLean - equilibrium) - damp * leanVel;
         leanVel += leanAcc * dt;
         towerLean += leanVel * dt;
-        if (Math.abs(towerLean) > LEAN_LIMIT) {
+        /* 倒塌判定：瞬时倾角硬极限，或重心投影持续超出支撑面（带轻微宽限避免单箱误杀）。 */
+        const supportExceeded = Math.abs(comOffset) > STABILITY_LIMIT && Math.abs(towerLean) > LEAN_LIMIT * 0.34;
+        if (Math.abs(towerLean) > LEAN_LIMIT || supportExceeded) {
           startCollapse();
           return;
         }
@@ -1309,9 +1545,9 @@
           }
         }
 
-        /* 松手输入（指针边沿 / 空格边沿） */
+        /* 松手输入（指针边沿 / 空格边沿）；全览期间不允许落箱。 */
         const spaceNow = input.isDown(' ');
-        if (input.pointer.wentDown || (spaceNow && !update._space)) releaseBox();
+        if (!overviewActive && !overviewReveal && (input.pointer.wentDown || (spaceNow && !update._space))) releaseBox();
         update._space = spaceNow;
 
         camY = lerp(camY, currentTargetCam(), Math.min(1, 4 * dt));
@@ -1325,8 +1561,10 @@
       }
 
       /* ---------- 渲染 ---------- */
+      /* 工地集装箱：波纹侧板 + 角件 + 编号 + 属性色带/图标。 */
       function drawCrate(x, y, w, h, opts) {
-        const o = Object.assign({ squash: 0, alpha: 1 }, opts);
+        const o = Object.assign({ squash: 0, alpha: 1, cargo: null, floor: 0 }, opts);
+        const cargo = o.cargo || CARGO_TYPES[0];
         ctx.save();
         ctx.globalAlpha = o.alpha;
         const sy = 1 - o.squash * 0.4;
@@ -1334,45 +1572,73 @@
         ctx.translate(x + w / 2, y + h);
         ctx.scale(sx, sy);
         ctx.translate(-(x + w / 2), -(y + h));
-        ctx.fillStyle = '#c9884b';
+        /* 箱体底色 */
+        ctx.fillStyle = cargo.color;
         ctx.fillRect(x, y, w, h);
-        ctx.strokeStyle = '#7a5222';
-        ctx.lineWidth = 3;
-        ctx.strokeRect(x + 1.5, y + 1.5, w - 3, h - 3);
-        ctx.lineWidth = 2;
-        ctx.strokeStyle = 'rgba(122,82,34,0.75)';
-        ctx.beginPath();
-        ctx.moveTo(x + 4, y + 4);
-        ctx.lineTo(x + w - 4, y + h - 4);
-        ctx.moveTo(x + w - 4, y + 4);
-        ctx.lineTo(x + 4, y + h - 4);
-        ctx.stroke();
-        ctx.fillStyle = 'rgba(255,220,160,0.28)';
-        ctx.fillRect(x + 4, y + 4, w - 8, 4);
+        /* 竖向波纹板 */
+        ctx.strokeStyle = 'rgba(0,0,0,0.18)';
+        ctx.lineWidth = 1;
+        for (let gx = x + 6; gx < x + w - 4; gx += 7) {
+          ctx.beginPath();
+          ctx.moveTo(gx, y + 4);
+          ctx.lineTo(gx, y + h - 4);
+          ctx.stroke();
+        }
+        /* 上下横梁 + 四角角件 */
+        ctx.fillStyle = cargo.trim;
+        ctx.fillRect(x, y, w, 5);
+        ctx.fillRect(x, y + h - 5, w, 5);
+        ctx.fillStyle = 'rgba(255,255,255,0.55)';
+        [[x + 2, y + 2], [x + w - 8, y + 2], [x + 2, y + h - 8], [x + w - 8, y + h - 8]].forEach((p) => {
+          ctx.fillRect(p[0], p[1], 6, 6);
+        });
+        /* 属性色带 + 图标 + 箱号（可读提示） */
+        ctx.fillStyle = cargo.trim;
+        ctx.fillRect(x + 2, y + h / 2 - 7, 14, 14);
+        ctx.font = 'bold 11px system-ui';
+        ctx.textAlign = 'center';
+        ctx.textBaseline = 'middle';
+        ctx.fillStyle = '#fff';
+        ctx.fillText(cargo.icon, x + 9, y + h / 2);
+        ctx.textAlign = 'left';
+        ctx.font = 'bold 9px monospace';
+        ctx.fillStyle = 'rgba(255,255,255,0.92)';
+        ctx.fillText('SK-' + String(o.floor || 0).padStart(2, '0') + '-' + cargo.id.slice(0, 2).toUpperCase(), x + 20, y + h - 12);
+        ctx.strokeStyle = cargo.trim;
+        ctx.lineWidth = 2.5;
+        ctx.strokeRect(x + 1, y + 1, w - 2, h - 2);
         ctx.restore();
       }
 
       function drawSky() {
+        /* 工地黄昏：暖灰天空 + 远处城市剪影 + 地面。 */
         const bg = ctx.createLinearGradient(0, 0, 0, H);
-        bg.addColorStop(0, '#2c2560');
-        bg.addColorStop(0.55, '#7a4a86');
-        bg.addColorStop(1, '#e08d5a');
+        bg.addColorStop(0, '#3b4a5e');
+        bg.addColorStop(0.55, '#8a7a68');
+        bg.addColorStop(1, '#d8b483');
         ctx.fillStyle = bg;
         ctx.fillRect(0, 0, W, H);
-        ctx.fillStyle = 'rgba(255,214,150,0.85)';
+        ctx.fillStyle = 'rgba(255,228,170,0.7)';
         ctx.beginPath();
-        ctx.arc(W / 2, H - 210, 64, 0, TAU);
+        ctx.arc(W / 2, H - 240, 54, 0, TAU);
         ctx.fill();
-        const par = (camY * 0.18) % 260;
-        ctx.fillStyle = 'rgba(30,20,50,0.55)';
+        const par = (camY * 0.16) % 260;
+        ctx.fillStyle = 'rgba(38,42,50,0.4)';
         for (let k = -1; k < 4; k++) {
-          const rowY = 470 + k * 260 + par;
+          const rowY = 520 + k * 260 + par;
           for (let b = 0; b < 7; b++) {
             const bw = 44 + ((b * 37) % 30);
-            const bh = 60 + ((b * 53 + k * 31) % 110);
+            const bh = 50 + ((b * 53 + k * 31) % 90);
             ctx.fillRect(b * 62 - 10, rowY - bh, bw, bh);
           }
         }
+        /* 远处塔吊剪影 */
+        ctx.strokeStyle = 'rgba(30,34,40,0.35)';
+        ctx.lineWidth = 2;
+        ctx.beginPath();
+        ctx.moveTo(40, 430 + par); ctx.lineTo(40, 250 + par); ctx.lineTo(150, 250 + par);
+        ctx.moveTo(40, 300 + par); ctx.lineTo(150, 250 + par);
+        ctx.stroke();
       }
 
       function render() {
@@ -1402,10 +1668,22 @@
               ctx.fillStyle = '#8b96b3';
               ctx.fillRect(b.x, b.y, b.w, 6);
             } else {
-              drawCrate(b.x, b.y, b.w, b.h, {});
+              drawCrate(b.x, b.y, b.w, b.h, { cargo: b.cargo, floor: boxes.indexOf(b) });
             }
           });
           ctx.restore();
+          /* 全览层号标注：从地基到塔顶逐层可读，属性图标随箱体绘制。 */
+          if (overviewT > 0.35) {
+            ctx.save();
+            ctx.globalAlpha = clamp((overviewT - 0.35) / 0.65, 0, 1);
+            boxes.forEach((b, i) => {
+              if (b.base) return;
+              A.draw.label(ctx, '#' + (i), b.x - 8, b.y + b.h / 2, {
+                align: 'right', font: 'bold 12px system-ui', color: '#ffe08a',
+              });
+            });
+            ctx.restore();
+          }
         }
 
         collapsed.forEach((b) => {
@@ -1413,11 +1691,11 @@
           ctx.translate(b.x + b.w / 2, b.y + b.h / 2);
           ctx.rotate(b.rot);
           ctx.translate(-(b.x + b.w / 2), -(b.y + b.h / 2));
-          drawCrate(b.x, b.y, b.w, b.h, {});
+          drawCrate(b.x, b.y, b.w, b.h, { cargo: b.cargo });
           ctx.restore();
         });
 
-        if (drop) drawCrate(drop.x, drop.y, drop.w, drop.h, { squash: drop.squash });
+        if (drop) drawCrate(drop.x, drop.y, drop.w, drop.h, { squash: drop.squash, cargo: drop.cargo, floor: boxes.length });
 
         /* 挑战委托：在塔顶画出当前箱的目标偏置标记（不吸附，只提示）。 */
         if (mode === 'challenge' && chStage && chPlaced < chBoxesData.length) {
@@ -1445,43 +1723,73 @@
         particles.draw(ctx);
         ctx.restore();
 
-        /* 吊臂 */
-        ctx.strokeStyle = '#3b466f';
-        ctx.lineWidth = 6;
+        /* 塔吊：桁架吊臂 + 塔身 + 配重臂 + 吊具（随钟摆摇摆平移释放）。 */
+        ctx.save();
+        ctx.strokeStyle = '#e0b13c';
+        ctx.lineWidth = 7;
         ctx.beginPath();
-        ctx.moveTo(PIVOT_X - 130, PIVOT_Y - 26);
-        ctx.lineTo(PIVOT_X + 130, PIVOT_Y - 26);
+        ctx.moveTo(PIVOT_X - 140, PIVOT_Y - 30);
+        ctx.lineTo(PIVOT_X + 150, PIVOT_Y - 30);
         ctx.stroke();
-        ctx.fillStyle = '#2a3358';
-        ctx.fillRect(PIVOT_X - 150, PIVOT_Y - 34, 24, 16);
-        ctx.fillRect(PIVOT_X + 126, PIVOT_Y - 34, 24, 16);
+        ctx.strokeStyle = 'rgba(60,50,20,0.5)';
+        ctx.lineWidth = 2;
+        ctx.beginPath();
+        for (let gx = PIVOT_X - 130; gx <= PIVOT_X + 140; gx += 22) {
+          ctx.moveTo(gx, PIVOT_Y - 34);
+          ctx.lineTo(gx + 11, PIVOT_Y - 26);
+        }
+        ctx.stroke();
+        ctx.fillStyle = '#c9962a';
+        ctx.fillRect(PIVOT_X - 156, PIVOT_Y - 40, 26, 20);
+        ctx.fillStyle = '#7a5a14';
+        ctx.fillRect(PIVOT_X - 150, PIVOT_Y - 20, 14, 14);
+        ctx.fillStyle = '#e0b13c';
+        ctx.fillRect(PIVOT_X - 6, PIVOT_Y - 52, 12, 26);
 
         const pb = pendulumBoxScreen();
-        ctx.strokeStyle = pendHasBox ? '#d8dcf0' : 'rgba(216,220,240,0.35)';
-        ctx.lineWidth = 2;
-        ctx.setLineDash(pendHasBox ? [] : [4, 6]);
+        if (overviewT < 0.5) {
+          ctx.strokeStyle = pendHasBox ? '#ffe4a0' : 'rgba(255,228,160,0.35)';
+          ctx.lineWidth = 2;
+          ctx.setLineDash(pendHasBox ? [] : [4, 6]);
+          ctx.beginPath();
+          ctx.moveTo(PIVOT_X, PIVOT_Y - 24);
+          ctx.lineTo(pb.x, pb.y - 18);
+          ctx.stroke();
+          ctx.setLineDash([]);
+          /* 吊具横梁 */
+          ctx.fillStyle = '#e0b13c';
+          ctx.fillRect(pb.x - 22, pb.y - 24, 44, 6);
+          ctx.strokeStyle = '#ffe4a0';
+          ctx.lineWidth = 1.5;
+          ctx.beginPath();
+          ctx.moveTo(pb.x - 18, pb.y - 18); ctx.lineTo(pb.x - 26, pb.y - 10);
+          ctx.moveTo(pb.x + 18, pb.y - 18); ctx.lineTo(pb.x + 26, pb.y - 10);
+          ctx.stroke();
+        }
+        ctx.fillStyle = '#fff4d0';
         ctx.beginPath();
-        ctx.moveTo(PIVOT_X, PIVOT_Y);
-        ctx.lineTo(pb.x, pb.y);
-        ctx.stroke();
-        ctx.setLineDash([]);
-        ctx.fillStyle = '#e8ecff';
-        ctx.beginPath();
-        ctx.arc(PIVOT_X, PIVOT_Y, 5, 0, TAU);
+        ctx.arc(PIVOT_X, PIVOT_Y - 26, 5, 0, TAU);
         ctx.fill();
+        ctx.restore();
 
-        if (pendHasBox && (state === 'playing' || state === 'paused')) {
+        if (pendHasBox && overviewT < 0.5 && (state === 'playing' || state === 'paused')) {
           ctx.save();
           ctx.translate(pb.x, pb.y);
           ctx.rotate(pb.angle * 0.35);
-          drawCrate(-BOX_W / 2, -BOX_H / 2, BOX_W, BOX_H, {});
+          drawCrate(-BOX_W / 2, -BOX_H / 2, BOX_W, BOX_H, { cargo: activeCargo, floor: boxes.length });
           ctx.restore();
+          /* 下一箱属性预告（吊钩旁可读提示）。 */
+          if (overviewT < 0.3) {
+            A.draw.label(ctx, '下一箱 ' + nextCargo.icon + nextCargo.label, pb.x, pb.y + BOX_H / 2 + 16, {
+              font: 'bold 10px system-ui', color: '#ffd23f', alpha: 0.85,
+            });
+          }
         }
 
         /* 前 3 层免费教学；之后仅玩家主动消耗“垂线预览”时显示。
          * 挑战关用「投影箱心 vs 关卡 targetOffsetPx ± tolerancePx」判定（容差内才变绿），
          * 并常显「预计偏差 N px」；经典模式保持原 85% 重叠判定。 */
-        if (state === 'playing' && pendHasBox && (floorsReached < 3 || guideArmed)) {
+        if (state === 'playing' && pendHasBox && overviewT < 0.3 && (floorsReached < 3 || guideArmed)) {
           const top = towerTop();
           const topScreenY = top.y - camY;
           let aligned;
@@ -1569,6 +1877,38 @@
           if (perfectCombo >= 2) {
             A.draw.label(ctx, 'PERFECT ×' + perfectCombo, W - 12, 20, { align: 'right', font: 'bold 13px system-ui', color: '#63d68c' });
           }
+          /* 当前吊运属性可读提示 */
+          A.draw.label(ctx, '吊运 ' + activeCargo.icon + activeCargo.label + ' ×' + activeCargo.weight, W / 2, 62, {
+            font: 'bold 11px system-ui', color: '#ffd23f', alpha: 0.9,
+          });
+        }
+        /* 全览模式横幅与重心指示 */
+        if (overviewT > 0.05) {
+          ctx.save();
+          ctx.globalAlpha = clamp(overviewT * 1.4, 0, 1);
+          ctx.fillStyle = 'rgba(10,16,30,0.72)';
+          A.draw.roundRect(ctx, W / 2 - 108, 74, 216, 28, 8);
+          ctx.fill();
+          A.draw.label(ctx, '🗺 全览 · 共 ' + Math.max(0, boxes.length - 1) + ' 层 · 再按 3 返回', W / 2, 89, {
+            font: 'bold 12px system-ui', color: '#ffe08a',
+          });
+          /* 地基支撑面与重心投影 */
+          const e = towerExtent();
+          const baseX = baseCenter();
+          ctx.strokeStyle = 'rgba(99,224,200,0.7)';
+          ctx.lineWidth = 2;
+          ctx.beginPath();
+          ctx.moveTo(baseX - SUPPORT_HALF, e.bottom + 8); ctx.lineTo(baseX + SUPPORT_HALF, e.bottom + 8);
+          ctx.stroke();
+          const comX = baseX + comOffset;
+          ctx.fillStyle = Math.abs(comOffset) > STABILITY_LIMIT ? '#ff5d5d' : '#63d68c';
+          ctx.beginPath();
+          ctx.arc(clamp(comX, 12, W - 12), e.bottom + 8, 4, 0, TAU);
+          ctx.fill();
+          A.draw.label(ctx, '重心 ' + (comOffset >= 0 ? '+' : '') + comOffset.toFixed(1) + 'px', W / 2, e.bottom + 24, {
+            font: 'bold 10px system-ui', color: Math.abs(comOffset) > STABILITY_LIMIT ? '#ff9a9a' : '#93e8c8',
+          });
+          ctx.restore();
         }
         ctx.restore();
       }
@@ -1614,6 +1954,12 @@
               towerLean,
               leanVel,
               leanMeter,
+              comOffset,
+              comMoment,
+              comLoad,
+              stabilityLimit: STABILITY_LIMIT,
+              cargo: { active: activeCargo.id, next: nextCargo.id, seed: cargoSeed },
+              overview: { active: overviewActive, t: overviewT, revealing: !!overviewReveal },
               floorsReached,
               score,
               state,
@@ -1639,19 +1985,20 @@
             const target = clamp(Math.floor(Number(floors) || 0), 0, 40);
             while (floorsReached < target) {
               const top = towerTop();
-              boxes.push({ x: top.x, y: top.y - BOX_H, w: BOX_W, h: BOX_H });
+              boxes.push({ x: top.x, y: top.y - BOX_H, w: BOX_W, h: BOX_H, cargo: CARGO_TYPES[0] });
               syncHud();
             }
+            computeComOffset();
             updateSwingDifficulty();
             syncJoyTools();
             return floorsReached;
           },
           releaseNow() {
             const available = pendHasBox && !drop;
-            releaseBox();
+            releaseBox(true);
             return !!(available && !pendHasBox && drop);
           },
-          forceSettle(offset) {
+          forceSettle(offset, cargoId) {
             const top = towerTop();
             const e = Number(offset) || 0;
             drop = {
@@ -1663,10 +2010,35 @@
               prevBottom: top.y - BOX_H,
               missed: false,
               squash: 0,
+              cargo: CARGO_TYPES.find((c) => c.id === cargoId) || activeCargo,
             };
             settleDrop();
             syncJoyTools();
             return feedback ? feedback.text : null;
+          },
+          /* 全览钩子（真实输入之外的状态探针；按钮/快捷键仍走 toggleOverview）。 */
+          toggleOverview() {
+            return toggleOverview();
+          },
+          overviewInfo() {
+            return {
+              active: overviewActive, t: overviewT, revealing: !!overviewReveal,
+              button: overviewBtn ? { pressed: overviewBtn.getAttribute('aria-pressed'), disabled: overviewBtn.disabled } : null,
+              extent: towerExtent(),
+              layers: boxes.filter((b) => !b.base).map((b, i) => ({ floor: i + 1, icon: (b.cargo || CARGO_TYPES[0]).icon })),
+            };
+          },
+          forceCargo(id) {
+            const cargo = CARGO_TYPES.find((c) => c.id === id);
+            if (!cargo) return false;
+            activeCargo = cargo;
+            pendHasBox = true;
+            drop = null;
+            syncJoyTools();
+            return true;
+          },
+          cargoTypes() {
+            return CARGO_TYPES.map((c) => ({ id: c.id, label: c.label, icon: c.icon, weight: c.weight, bonus: c.bonus }));
           },
           /* ---------- 0.9 挑战模式钩子（契约见 docs/arcade/0.9/INTEGRATION-CONTRACT.md §5） ---------- */
           /* 修复回归：同步、确定性断言（#test 专用；调用结束后恢复被临时改动的标量）。 */
@@ -1745,6 +2117,33 @@
                 readOpt({}.minConsecutiveWithinTolerance) === null,
                 'win 字段读取：3/15 生效，缺省为 null'
               );
+              /* 5) 持久重心模型：一直偏置 → comOffset 单调累积；交替左右 → 重心抵消。 */
+              const oldBoxes = boxes.slice();
+              const oldCom = comOffset;
+              const oldMoment = comMoment;
+              const oldLoad = comLoad;
+              const mkBox = (dx) => ({ x: 210 - BOX_W / 2 + dx, y: -84, w: BOX_W, h: BOX_H, cargo: CARGO_TYPES[0] });
+              boxes = [{ x: 155, y: -44, w: 110, h: 44, base: true }];
+              comMoment = 0;
+              computeComOffset();
+              const com0 = comOffset;
+              boxes.push(mkBox(20)); comMoment += 20; computeComOffset(); const com1 = comOffset;
+              boxes.push(mkBox(40)); comMoment += 20; computeComOffset(); const com2 = comOffset;
+              boxes.push(mkBox(60)); comMoment += 20; computeComOffset(); const com3 = comOffset;
+              check(com0 === 0 && com1 > 0 && com2 > com1 && com3 > com2, '持续右偏堆叠：重心投影单调右移（' + [com0, com1, com2, com3].map((v) => v.toFixed(1)).join('/') + '）');
+              check(com3 > STABILITY_LIMIT * 0.5, '持续偏置 3 层后重心明显超出稳定半宽（' + com3.toFixed(1) + ' > ' + (STABILITY_LIMIT / 2).toFixed(1) + '）');
+              boxes = [{ x: 155, y: -44, w: 110, h: 44, base: true }];
+              comMoment = 0;
+              computeComOffset();
+              boxes.push(mkBox(20)); comMoment += 20; computeComOffset();
+              boxes.push(mkBox(-20)); comMoment -= 20; computeComOffset();
+              boxes.push(mkBox(20)); comMoment += 20; computeComOffset();
+              boxes.push(mkBox(-20)); comMoment -= 20; computeComOffset();
+              check(Math.abs(comOffset) < 1, '左右交替对称堆叠：重心投影回到中心附近（' + comOffset.toFixed(2) + 'px）');
+              boxes = oldBoxes;
+              comOffset = oldCom;
+              comMoment = oldMoment;
+              comLoad = oldLoad;
             } catch (err) {
               fail += 1;
               details.push('FAIL regression 异常：' + (err && err.message ? err.message : String(err)));
