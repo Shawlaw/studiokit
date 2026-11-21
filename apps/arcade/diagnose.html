@@ -3,63 +3,32 @@
 <head>
   <meta charset="utf-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <meta name="description" content="iOS PWA 顶部诊断：与真实游戏页完全相同的 CSS 与结构，用于对比不同顶部渲染方案。" />
   <meta name="theme-color" content="#0b1020" />
+  <link rel="stylesheet" href="../../shared/site.css" />
+  <link rel="stylesheet" href="./arcade.css" />
+  <script src="../../shared/site-shell.js" defer></script>
   <title>iOS PWA 顶部诊断 · 街机厅</title>
   <style>
-    * { box-sizing: border-box; }
-    html, body { margin: 0; padding: 0; }
-    body {
-      min-height: 100dvh;
-      background: #0b1020;
-      color: #eef1ff;
-      font-family: system-ui, -apple-system, "PingFang SC", "Microsoft YaHei", sans-serif;
-    }
-
-    /* 被诊断的顶栏：贴住视口最顶部，字号/颜色与真实游戏顶栏一致 */
-    .diag-top {
-      position: fixed;
-      top: 0; left: 0; right: 0;
-      height: 96px;
-      padding: 47px 12px 4px;
-      display: flex;
-      align-items: flex-end;
-      gap: 10px;
-      background: #05070f;
-      border-bottom: 1px solid #2a3560;
-      z-index: 5;
-    }
-    .diag-top .t {
-      font-size: 24px;
-      font-weight: 750;
-      letter-spacing: .02em;
-      color: #ffffff;
-    }
-    .diag-top .b {
-      margin-left: auto;
-      width: 46px; height: 46px;
-      border-radius: 10px;
-      border: 1px solid #3a4780;
-      background: #1b2444;
-      display: grid; place-items: center;
-      font-size: 20px;
-    }
-
-    .panel {
+    /* 仅底部诊断面板为诊断页独有；顶部结构与样式 100% 复用真实游戏页。 */
+    .diag-panel {
       position: fixed;
       left: 0; right: 0; bottom: 0;
-      max-height: 48dvh;
+      max-height: 50dvh;
       overflow: auto;
-      padding: 14px 14px 22px;
+      padding: 12px 12px 18px;
       background: #111a33;
       border-top: 1px solid #2a3560;
-      z-index: 20;
+      z-index: 9999;
+      -webkit-user-select: text;
+      user-select: text;
     }
-    .panel h1 { font-size: 15px; margin: 0 0 6px; color: #ffd23f; }
-    .panel .hint { font-size: 12px; line-height: 1.6; color: #a7b0d0; margin: 0 0 10px; }
-    .opts { display: grid; grid-template-columns: 1fr 1fr; gap: 7px; }
-    .opt {
-      min-height: 46px;
-      padding: 8px 9px;
+    .diag-panel h1 { font-size: 14px; margin: 0 0 5px; color: #ffd23f; }
+    .diag-panel .hint { font-size: 12px; line-height: 1.55; color: #a7b0d0; margin: 0 0 9px; }
+    .diag-opts { display: grid; grid-template-columns: 1fr 1fr; gap: 7px; }
+    .diag-opt {
+      min-height: 44px;
+      padding: 7px 9px;
       border: 1px solid #3a4780;
       border-radius: 10px;
       background: #1b2444;
@@ -68,98 +37,80 @@
       text-align: left;
       line-height: 1.35;
     }
-    .opt.on { background: #ffd23f; color: #1a1405; border-color: #ffd23f; font-weight: 700; }
-    .metrics {
-      margin-top: 12px;
-      font: 11px/1.7 ui-monospace, SFMono-Regular, Menlo, monospace;
+    .diag-opt.on { background: #ffd23f; color: #1a1405; border-color: #ffd23f; font-weight: 700; }
+    .diag-metrics {
+      margin-top: 10px;
+      font: 11px/1.65 ui-monospace, SFMono-Regular, Menlo, monospace;
       color: #93a0c8;
       word-break: break-all;
     }
-    .metrics b { color: #ffd23f; font-weight: 600; }
-    .spacer { height: 52dvh; }
-
-    /* ===== 各方案差异样式，通过 body.diag-N 切换。0 = 当前线上配置 ===== */
-
-    /* 1：顶栏独立合成层（translateZ） */
-    body.diag-1 .diag-top { transform: translateZ(0); -webkit-transform: translateZ(0); }
-
-    /* 2：贴顶 fixed 纯色条 80px，压在系统模糊之上 */
-    body.diag-2::before {
-      content: ""; position: fixed; top: 0; left: 0; right: 0;
-      height: 80px; background: #05070f; z-index: 4; pointer-events: none;
-    }
-
-    /* 3：字体 subpixel 抗锯齿 */
-    body.diag-3 .diag-top, body.diag-3 .t {
-      -webkit-font-smoothing: subpixel-antialiased;
-      text-rendering: auto;
-    }
-
-    /* 4：禁用所有 backdrop-filter / filter 影响 */
-    body.diag-4 * { -webkit-backdrop-filter: none !important; backdrop-filter: none !important; }
-
-    /* 5：顶栏改非 fixed（普通文档流，排除 fixed 层光栅化问题） */
-    body.diag-5 .diag-top { position: static; }
-
-    /* 6：contain + will-change 强制独立层 */
-    body.diag-6 .diag-top { contain: paint; will-change: transform; }
-
-    /* 7：全部触控合成属性关闭（overscroll/touch-action/user-select） */
-    body.diag-7 { overscroll-behavior: auto !important; -webkit-user-select: auto !important; user-select: auto !important; touch-action: auto !important; }
-
-    /* 8：顶栏纯黑 + 粗体加大字号（判断题是否是视觉对比度问题） */
-    body.diag-8 .diag-top { background: #000; }
-    body.diag-8 .t { font-size: 32px; font-weight: 800; }
-
-    /* 9：顶栏文字加 text-shadow（重影问题常用缓解） */
-    body.diag-9 .t { text-shadow: 0 0 1px rgba(255,255,255,.35); }
-
-    /* 10：scale 微调，避开半像素渲染 */
-    body.diag-10 .diag-top { -webkit-transform: translate3d(0,0,0); transform: translate3d(0,0,0); }
-    body.diag-10 .t { -webkit-transform: translateZ(0); transform: translateZ(0); }
-
-    @media (max-width: 400px) { .diag-top .t { font-size: 20px; } }
+    .diag-metrics b { color: #ffd23f; font-weight: 600; }
   </style>
 </head>
-<body class="diag-0">
-  <div class="diag-top">
-    <span class="t">顶部诊断文字 ABC 12345</span>
-    <span class="b">⛶</span>
-  </div>
-  <div class="spacer"></div>
-  <div class="panel">
-    <h1>iOS PWA 顶部发虚 · 诊断对比</h1>
+<body class="arcade-body" data-studiokit-app="arcade" data-studiokit-app-title="街机厅 Arcade" style="--ac-accent:#d9b06a; --card-accent:#d9b06a">
+  <noscript><p class="ac-noscript">此页需要启用 JavaScript。</p></noscript>
+
+  <!-- 与 gomoku.html 完全相同的真实页面结构 -->
+  <main class="game-page">
+    <header class="game-topbar">
+      <a class="ac-back" href="./index.html" aria-label="返回街机厅"><span class="ac-back-icon" aria-hidden="true">‹</span><span class="ac-back-label">街机厅</span></a>
+      <h1 class="game-title">五子棋 · 静局</h1>
+      <div class="game-hud">
+        <span>分数 <strong data-hud-score>0</strong></span>
+        <span>最高 <strong data-hud-high>0</strong></span>
+      </div>
+      <button type="button" class="ac-icon-btn" data-pause aria-label="暂停游戏" title="暂停游戏（P / Esc）">⏸</button>
+      <button type="button" class="ac-icon-btn" data-mute aria-label="切换音效">🔊</button>
+    </header>
+    <div class="stage-wrap">
+      <div class="stage-box">
+        <canvas class="game-canvas" aria-label="诊断用画布"></canvas>
+        <div class="overlay" data-overlay>
+          <div class="overlay-panel">
+            <h2 data-ov-title>五子棋 · 静局</h2>
+            <p data-ov-text>你执黑先行，与本地启发式对手对弈。点空格先预览，再点同一点确认落子。提示为启发式推荐，不代表最优解。五子连珠即胜 · 没有倒计时，慢慢想。</p>
+            <button type="button" class="ac-btn" data-ov-btn>开始游戏</button>
+          </div>
+        </div>
+      </div>
+    </div>
+    <p class="game-hint">点空格先预览，再点同一点落子（防误触）· 道具 1 悔棋 / 2 提示 · P / Esc 暂停</p>
+  </main>
+
+  <div class="diag-panel">
+    <h1>iOS PWA 顶部发虚 · 真实页面方案对比</h1>
     <p class="hint">
-      从主屏幕 PWA 打开此页（不是 Safari 标签页）。逐个点下面按钮，<b>盯着最顶部那行白字</b>，看哪种方案下最清晰/无重影，然后告诉我<b>方案编号</b>。<br>
-      每次点只改顶部渲染方式，方便对比。方案 0 是当前线上配置（基线）。
+      此页顶栏与真实五子棋页<b>结构和 CSS 完全相同</b>，方案 0 就是当前线上效果。<br>
+      从主屏幕 PWA 打开，逐个点下面按钮，盯住最顶部「五子棋 · 静局」那行字，找出<b>最清晰/无重影</b>的方案编号告诉我。
     </p>
-    <div class="opts" id="opts"></div>
-    <div class="metrics" id="metrics"></div>
-    <p class="hint" style="margin-top:10px">
-      此页仅用于诊断，可随时删除。<a href="./index.html" style="color:#4fc3f7">← 返回中心页</a>
+    <div class="diag-opts" id="diagOpts"></div>
+    <div class="diag-metrics" id="diagMetrics"></div>
+    <p class="hint" style="margin-top:9px">
+      此页仅用于诊断，定位后会删除。<a href="./index.html" style="color:#4fc3f7">← 返回中心页</a>
     </p>
   </div>
 
   <script>
     (() => {
+      'use strict';
       const names = [
         '0 当前线上（基线）',
         '1 顶栏独立层 translateZ',
-        '2 贴顶 80px 纯色条',
-        '3 字体 subpixel 抗锯齿',
-        '4 禁用全部 backdrop-filter',
-        '5 顶栏改非 fixed',
-        '6 contain+will-change',
-        '7 关闭触控合成属性',
-        '8 纯黑背景+大粗体',
+        '2 禁用 backdrop-filter',
+        '3 顶栏去 z-index/非固定',
+        '4 字体 subpixel 抗锯齿',
+        '5 贴顶纯色遮挡条',
+        '6 顶栏纯黑背景',
+        '7 contain + will-change',
+        '8 关闭触控合成属性',
         '9 文字 text-shadow',
-        '10 translate3d 避开半像素',
+        '10 顶栏 translate3d',
       ];
-      const opts = document.getElementById('opts');
+      const opts = document.getElementById('diagOpts');
       let current = 0;
       function set(i) {
         current = i;
-        document.body.className = 'diag-' + i;
+        document.body.className = 'arcade-body diag-' + i;
         [...opts.children].forEach((b, idx) => b.classList.toggle('on', idx === i));
         try { history.replaceState(null, '', '?diag=' + i); } catch (e) {}
         renderMetrics();
@@ -167,33 +118,56 @@
       names.forEach((n, i) => {
         const b = document.createElement('button');
         b.type = 'button';
-        b.className = 'opt' + (i === 0 ? ' on' : '');
+        b.className = 'diag-opt' + (i === 0 ? ' on' : '');
         b.textContent = n;
         b.addEventListener('click', () => set(i));
         opts.appendChild(b);
       });
 
-      // 用探针元素测量真实 safe-area-inset-top（env() 无法直接读取）
       const probe = document.createElement('div');
       probe.style.cssText = 'position:fixed;top:0;left:0;height:env(safe-area-inset-top,0px);width:0;pointer-events:none';
       document.body.appendChild(probe);
       const sat = probe.getBoundingClientRect().height;
 
-      const vv = window.visualViewport || {};
       function renderMetrics() {
+        const bar = document.querySelector('.game-topbar').getBoundingClientRect();
+        const shell = document.querySelector('.studiokit-shellbar');
+        const shellH = shell ? Math.round(shell.getBoundingClientRect().height) : 0;
         const m = {
           '当前方案': current,
+          'shellbar 高': shellH + 'px',
+          'game-topbar top/高': Math.round(bar.top) + 'px / ' + Math.round(bar.height) + 'px',
+          'safe-area-inset-top': sat + 'px',
           'devicePixelRatio': window.devicePixelRatio || 0,
-          'innerWidth×innerHeight': innerWidth + '×' + innerHeight,
-          'visualViewport 宽/scale': (vv.width || 0) + ' / ' + (vv.scale || 0),
-          'safe-area-inset-top(实测)': sat + 'px',
-          'standalone': (window.navigator.standalone === true || matchMedia('(display-mode: standalone)').matches),
-          'backdrop-filter 支持': CSS.supports('backdrop-filter', 'blur(2px)') || CSS.supports('-webkit-backdrop-filter', 'blur(2px)'),
-          'UA': navigator.userAgent,
+          'visualViewport 宽/scale': ((window.visualViewport || {}).width || 0) + ' / ' + ((window.visualViewport || {}).scale || 0),
+          'standalone': (navigator.standalone === true || matchMedia('(display-mode: standalone)').matches),
         };
-        document.getElementById('metrics').innerHTML =
+        document.getElementById('diagMetrics').innerHTML =
           Object.entries(m).map(([k, v]) => `<b>${k}</b>: ${String(v).replace(/</g, '&lt;')}`).join('<br>');
       }
+
+      // 各方案只作用于真实页面元素，与真实 CSS 叠加。
+      const style = document.createElement('style');
+      style.textContent = `
+        body.diag-1 .game-topbar { transform: translateZ(0); -webkit-transform: translateZ(0); }
+        body.diag-2 .overlay, body.diag-2 .ac-dialog::backdrop,
+        body.diag-2 .ac-dialog::backdrop { -webkit-backdrop-filter: none !important; backdrop-filter: none !important; }
+        body.diag-2 .overlay { -webkit-backdrop-filter: none !important; backdrop-filter: none !important; }
+        body.diag-3 .game-topbar { position: static !important; z-index: auto !important; }
+        body.diag-4 .game-topbar, body.diag-4 .game-title, body.diag-4 .ac-back {
+          -webkit-font-smoothing: subpixel-antialiased; text-rendering: auto; }
+        body.diag-5::before {
+          content:""; position:fixed; top:0; left:0; right:0; height:120px;
+          background:#05070f; z-index:4; pointer-events:none; }
+        body.diag-6 .game-topbar { background:#000 !important; }
+        body.diag-7 .game-topbar { contain:paint; will-change:transform; }
+        body.diag-8 { overscroll-behavior:auto !important; -webkit-user-select:auto !important;
+          user-select:auto !important; touch-action:auto !important; }
+        body.diag-9 .game-title { text-shadow:0 0 1px rgba(255,255,255,.4); }
+        body.diag-10 .game-topbar { transform:translate3d(0,0,0); -webkit-transform:translate3d(0,0,0); }
+      `;
+      document.head.appendChild(style);
+
       renderMetrics();
       const q = location.search.match(/diag=(\d+)/);
       if (q) set(Math.min(10, Math.max(0, parseInt(q[1], 10))));
