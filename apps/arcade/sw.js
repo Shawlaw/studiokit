@@ -1,13 +1,15 @@
 /*
- * 街机厅 Arcade Service Worker（0.9.0）
+ * 街机厅 Arcade Service Worker（0.11.2）
  * - 作用域：apps/arcade/；同时缓存 Arcade 页面引用的 shared/site.css 与 site-shell.js。
  * - 安装时缓存中心页外壳；16 款游戏由中心页「预载全部游戏」按钮按需缓存。
  * - 0.9 挑战数据（./challenge/<gameId>.js，13 个）随外壳预缓存，保证离线可玩挑战模式；
- *   缓存 VERSION 与引擎/注册表保持一致（0.9.0）。
+ *   缓存 VERSION 与引擎/注册表保持一致。
  * - 导航网络优先（离线回退缓存），静态资源缓存优先；跨域请求一律不拦截。
+ * - 0.11.2 更新检测：安装新版本后主动通知所有受控页面（arcade-sw-update-ready），
+ *   页面通过 arcade-sw-version 查询当前 SW 版本；不再让已安装 PWA 静默停留在旧版本。
  * - 不使用任何远程资源、分析或第三方 API（AGENTS.md 约束 4）。
  */
-const VERSION = '0.11.1';
+const VERSION = '0.11.2';
 const CACHE_PREFIX = 'studiokit-arcade-';
 const CACHE_NAME = `${CACHE_PREFIX}${VERSION}-v1`;
 const BASE = new URL('./', self.location.href);
@@ -175,11 +177,29 @@ async function cacheFirst(request) {
   }
 }
 
+/* 通知所有受控页面：有新版本 SW 已激活，供页面提示用户「刷新以更新」。
+   只在「接管已存在的页面」时通知，首次安装（没有旧客户端）不打扰用户。 */
+let firstActivation = true;
+async function notifyUpdateReady() {
+  try {
+    const clients = await self.clients.matchAll({ type: 'window', includeUncontrolled: false });
+    const isUpdate = !firstActivation && clients.length > 0;
+    firstActivation = false;
+    if (!isUpdate) return;
+    for (const client of clients) {
+      client.postMessage({ type: 'arcade-sw-update-ready', version: VERSION });
+    }
+  } catch (err) {
+    /* 扩展页面不可用时不影响 SW 生命周期 */
+  }
+}
+
 self.addEventListener('install', (event) => {
   event.waitUntil(
     (async () => {
       await cacheCore();
       await self.skipWaiting();
+      // skipWaiting 后新 SW 立即进入 activate；activate 里再通知受控页面。
     })()
   );
 });
@@ -194,6 +214,7 @@ self.addEventListener('activate', (event) => {
           .map((key) => caches.delete(key))
       );
       await self.clients.claim();
+      await notifyUpdateReady();
     })()
   );
 });
@@ -217,6 +238,15 @@ self.addEventListener('fetch', (event) => {
 
 self.addEventListener('message', (event) => {
   const data = event.data || {};
+  if (data.type === 'arcade-sw-version') {
+    const port = event.ports && event.ports[0];
+    if (port) port.postMessage({ type: 'arcade-sw-version', version: VERSION });
+    return;
+  }
+  if (data.type === 'arcade-sw-skip-waiting') {
+    event.waitUntil(self.skipWaiting());
+    return;
+  }
   if (data.type !== 'arcade-precache' || !Array.isArray(data.urls)) return;
   const port = event.ports && event.ports[0] ? event.ports[0] : null;
   event.waitUntil(precache(data.urls, port));

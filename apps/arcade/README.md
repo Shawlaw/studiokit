@@ -1,10 +1,18 @@
 # 街机厅 Arcade
 
-**应用版本：0.10.0（2026-11-20 已双端发布）｜进度 Schema：v1｜局内存档 Schema：v1｜游玩统计 Schema：v1｜积分记录 Schema：v1**
+**应用版本：0.11.2（本地实现，未发布；上一个线上版本为 0.11.1）｜进度 Schema：v1｜局内存档 Schema：v1｜游玩统计 Schema：v1｜积分记录 Schema：v1**
 
 竖屏街机小游戏合集：网页加载后纯本地游玩，自带自研轻量物理引擎（重力、AABB/圆碰撞、单向平台、单摆积分、塔体倾斜力矩）。所有游戏由简到难、随时可暂停，并会把未完成的局内进度自动保存在本机。0.4.0 起支持全屏/沉浸游玩，黄金矿工加入限量主动道具与更平缓的起始摆速；0.5.0 新增游玩时长/轮次统计、分享、可安装 PWA 与手动离线预载；0.6.0 加入星海突击 30 秒关卡 Boss、弹种叠加与全屏纵向移动，黄金矿工瞄准线按秒计费，并修复瞄准后摆幅衰减与点开始误触全屏；0.6.1 修复 Boss 入场阶段穿过贴顶玩家的碰撞问题；0.6.2 修复黄金矿工目标金额小数，重排俄罗斯方块触屏按钮并区分「加速 / 落底」。
 
 0.7.0 为全部 13 款游戏补充符合各自玩法的主动道具、即时反馈或自然终点，并坚持“快乐不用赶进度”：没有签到、每日奖励、付费抽奖、商店或跨局成长；道具每局固定补给，中心页可随机选游戏，连续有效游玩 20 分钟只提醒一次且绝不强制暂停。0.7.0 已双端发布（GitHub Pages + Cloudflare Pages，提交 `34f03df`，Actions `43274342320` 四个 job 成功，`tools/verify_deploy.py` 24/24 文件一致）。
+
+## 0.11.2 PWA 更新检测 + iPhone 安装版顶部修复（本地实现，未发布）
+
+Owner 反馈两点：已安装的 PWA 长期停在旧版本（中心页仍显示 v0.10.0）；iPhone 上 PWA 顶部状态栏到导航条之间是一条灰白渐层，文字像「被模糊掉一半」，游戏页顶栏也发虚。0.11.2 只修这两点，不改玩法、存档 key/Schema 或积分/挑战数据。
+
+- **更新检测**：中心页新增「🔄 检查更新」按钮；SW 激活后广播 `arcade-sw-update-ready`，`A.Offline` 订阅 `updatefound` / `controllerchange` / SW 消息，发现新版本时显示更新横幅（「立即刷新 / 稍后」，不自动刷新）。首次安装不误报更新。新增 `checkForUpdate` / `applyUpdate` / `onUpdate` / `swVersion`。设计、兼容与回滚见 `DESIGN-0.11.2.md`。
+- **iPhone 顶部**：Arcade shell 导航条改为深色不透明背景、独立窗口安全区铺纯深色底，消除半透明状态栏下的灰白渐层；游戏顶栏提升为独立合成层并给舞台加 `isolation: isolate`，`backdrop-filter` 不再渗到顶栏文字。0.11.1 结算模糊蒙层与回看切换外观不变。
+- **测试**：`tools/arcade_pwa_update_test.mjs` 6/6；回归 `arcade_smoke.mjs` 94/94、`arcade_zen_scores_test.mjs` 14/14、`arcade_calm_games_test.mjs` 17/17、`arcade_review_test.mjs` 5/5、`arcade_gameplay_test.mjs --suite=base` 11/11、validate/build/inline/node --check 全过。真机 iOS 顶部观感与系统更新提示时机 UNVERIFIED。
 
 ## 0.10.0 棋牌规则修复 + 挑战深度与数据管线（2026-11-20 已双端发布）
 
@@ -226,6 +234,7 @@ Owner 实机反馈 Android 手机浏览器里中心页顶部导航条上方多�
 - `DESIGN-0.9.0.md` — 13 款既有游戏挑战公平性修复清单、三款平和棋牌（二十一点/五子棋/纸牌接龙）设计与交互契约、兼容与回滚（0.9.0）。
 - `DESIGN-0.10.0.md` — 棋牌规则修复、挑战深度优化、设计源/生成器/参考解升级与本地验收（0.10.0）。
 - `docs/arcade/`（仓库根目录）— 0.8.0 事实冻结、六维量表、S1–S3 关卡数据与设计、确定性测试基座、独立评审与 Owner 试玩包；**不属于发布产物**（`tools/build_site.py` 白名单不包含 `docs/`）。
+- `DESIGN-0.11.2.md` — PWA 更新检测（SW 版本握手 / 横幅提示）与 iPhone 安装版顶部安全区修复的设计、兼容、门禁与回滚（0.11.2）。
 - `DESIGN-block-controls.md` — 俄罗斯方块触屏按钮的参考布局、双手分区方案、画布触摸区移除、兼容与验收说明（0.6.2 已发布）。
 
 ## 在 StudioKit 中的位置
@@ -264,6 +273,7 @@ node tools/arcade_smoke.mjs            # 需要本机 Chrome；自动启动本�
 node tools/arcade_zen_scores_test.mjs  # 禅模式/积分记录确定性测试（默认端口 8770/9338，可 --port/--cdp-port）
 node tools/arcade_calm_games_test.mjs  # 0.9.0 三款棋牌规则/结算/四档布局 + 10 款修复 regression（默认端口 8771/9339）
 node tools/arcade_gameplay_test.mjs    # 确定性玩法场景（默认端口 8766/9334，可 --game/--suite/--scenario/--repeat）
+node tools/arcade_pwa_update_test.mjs       # PWA 更新检测 + iPhone 独立窗口顶部安全区（6 项）
 node tools/arcade_calm_probe.mjs --game=blackjack.html  # 单页接入探针（开始/暂停/存档/续玩/320+375 布局）
 node tools/arcade_stage_solver.mjs --stages=docs/arcade/stages-0.8.json   # S1–S3 独立可达性
 node tools/arcade_stage_solver.mjs --stages=apps/arcade/games/shadow-leap.html  # 校验页面内嵌数据

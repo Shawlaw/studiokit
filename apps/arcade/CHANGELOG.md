@@ -1,5 +1,18 @@
 # Arcade Changelog
 
+## 0.11.2 — 2026-11-21（本地实现，未发布）
+
+### Added
+- PWA 更新检测：中心页「检查更新」按钮 + 更新横幅（发现新版本时提示「立即刷新 / 稍后」，不自动刷新打断游玩）；SW 激活后主动向受控页面广播新版本，`A.Offline` 新增 `checkForUpdate` / `applyUpdate` / `onUpdate` / `swVersion`，首次安装不误报更新。
+- iPhone 安装版顶部修复：Arcade shell 导航条改为深色不透明背景、独立窗口顶部安全区铺纯深色底，消除状态栏下的灰白渐层；游戏顶栏提升为独立合成层、舞台 `isolation: isolate` 约束 `backdrop-filter`，顶栏文字不再发虚。
+
+### Changed
+- 版本链升至 `0.11.2`，SW 缓存键 `studiokit-arcade-0.11.2-v1`。
+- 新增 `tools/arcade_pwa_update_test.mjs`（6 项：更新 UI/API、SW 版本握手、更新横幅、独立窗口深色 shellbar 与清晰顶栏、普通标签页不回归）。
+
+### Verification
+- `arcade_pwa_update_test.mjs` 6/6、`arcade_smoke.mjs` 94/94、`arcade_zen_scores_test.mjs` 14/14、`arcade_calm_games_test.mjs` 17/17、`arcade_review_test.mjs` 5/5、`arcade_gameplay_test.mjs --suite=base` 11/11、`validate_site.py` / `build_site.py` / `check_inline_scripts.mjs` / 全部 `node --check` 通过。无 Schema/key 变更。真机 iOS 顶部观感与系统更新提示时机 UNVERIFIED。设计见 `DESIGN-0.11.2.md`。
+
 ## 0.11.1 — 2026-11-21（已双端发布）
 
 ### Changed

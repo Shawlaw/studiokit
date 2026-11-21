@@ -23,7 +23,7 @@
     <header class="hall-head">
       <div>
         <h1>🕹 街机厅 Arcade</h1>
-        <p class="hall-sub">16 款竖屏小游戏 · 13 款 6 关挑战 + 3 款平和棋牌 · 自动收集积分记录 · 无签到与每日奖励 · 随时圆满收工 · v<span data-hall-version>0.11.1</span></p>
+        <p class="hall-sub">16 款竖屏小游戏 · 13 款 6 关挑战 + 3 款平和棋牌 · 自动收集积分记录 · 无签到与每日奖励 · 随时圆满收工 · v<span data-hall-version>0.11.2</span></p>
       </div>
       <div class="hall-stats">
         <span>累计时长 <strong data-stat-time>0 分钟</strong></span>
@@ -37,10 +37,16 @@
       <button type="button" class="ac-btn-ghost hall-action" data-random>🎲 惊喜一下</button>
       <button type="button" class="ac-btn-ghost hall-action" data-share>↗ 分享给朋友</button>
       <button type="button" class="ac-btn-ghost hall-action" data-install>📲 安装到桌面</button>
+      <button type="button" class="ac-btn-ghost hall-action" data-update-check hidden>🔄 检查更新</button>
       <button type="button" class="ac-btn-ghost hall-action" data-offline>⇩ 预载全部游戏</button>
       <span class="hall-utility-status" data-offline-status role="status">正在检查离线支持…</span>
       <div class="hall-offline-progress" data-offline-progress hidden role="progressbar" aria-label="离线预载进度" aria-valuemin="0" aria-valuemax="100">
         <span class="hall-offline-bar" data-offline-bar></span>
+      </div>
+      <div class="hall-update-banner" data-update-banner hidden role="status" aria-live="polite">
+        <span data-update-text>发现新版本，刷新后生效。</span>
+        <button type="button" class="ac-btn hall-update-btn" data-update-reload>立即刷新</button>
+        <button type="button" class="ac-btn-ghost hall-update-btn" data-update-dismiss>稍后</button>
       </div>
     </div>
 
@@ -176,6 +182,11 @@
         statTime: document.querySelector('[data-stat-time]'),
         share: document.querySelector('[data-share]'),
         install: document.querySelector('[data-install]'),
+        updateCheck: document.querySelector('[data-update-check]'),
+        updateBanner: document.querySelector('[data-update-banner]'),
+        updateText: document.querySelector('[data-update-text]'),
+        updateReload: document.querySelector('[data-update-reload]'),
+        updateDismiss: document.querySelector('[data-update-dismiss]'),
         offline: document.querySelector('[data-offline]'),
         offlineStatus: document.querySelector('[data-offline-status]'),
         offlineProgress: document.querySelector('[data-offline-progress]'),
@@ -952,6 +963,56 @@
         showInstallHelp();
       });
       syncInstallButton();
+
+      /* ---------- PWA 更新检测（0.11.2） ----------
+         安装到桌面后浏览器可能长期缓存旧版本；这里监听 Service Worker 的更新事件，
+         并提供「检查更新」按钮主动触发。发现新版本只提示，不自动刷新以免打断游玩。 */
+      let updateDismissed = false;
+      function showUpdateBanner(version) {
+        if (!dom.updateBanner) return;
+        updateDismissed = false;
+        dom.updateText.textContent = version
+          ? `发现新版本（${version}），刷新后生效。`
+          : '发现新版本，刷新后生效。';
+        dom.updateBanner.hidden = false;
+      }
+      function hideUpdateBanner() {
+        if (dom.updateBanner) dom.updateBanner.hidden = true;
+      }
+      if (dom.updateBanner) {
+        if (A.Offline.supported) {
+          dom.updateCheck.hidden = false;
+        }
+        if (typeof A.Offline.onUpdate === 'function') {
+          A.Offline.onUpdate((state) => {
+            if (state && state.available && !updateDismissed) showUpdateBanner(state.version);
+          });
+        }
+        dom.updateCheck.addEventListener('click', async () => {
+          if (typeof A.Offline.checkForUpdate !== 'function') return;
+          dom.updateCheck.disabled = true;
+          dom.updateCheck.textContent = '🔄 检查中…';
+          const result = await A.Offline.checkForUpdate();
+          dom.updateCheck.disabled = false;
+          dom.updateCheck.textContent = '🔄 检查更新';
+          if (!result.supported) {
+            A.showToast('当前环境不支持更新检测（需 HTTPS 或 localhost）。');
+          } else if (result.updateFound) {
+            showUpdateBanner(result.version);
+            A.showToast('发现新版本，请按提示刷新。');
+          } else {
+            A.showToast('已是最新版本。');
+          }
+        });
+        dom.updateReload.addEventListener('click', async () => {
+          if (typeof A.Offline.applyUpdate === 'function') await A.Offline.applyUpdate();
+          location.reload();
+        });
+        dom.updateDismiss.addEventListener('click', () => {
+          updateDismissed = true;
+          hideUpdateBanner();
+        });
+      }
 
       /* ---------- 离线预载 ---------- */
       const offlineState = { busy: false };

@@ -179,8 +179,11 @@ def validate(root=ROOT):
     arcade_engine = root / 'apps/arcade/engine.js'
     if arcade_engine.exists():
         source = arcade_engine.read_text(encoding='utf-8')
-        if "const ARCADE_VERSION = '0.11.1'" not in source:
+        if "const ARCADE_VERSION = '0.11.2'" not in source:
             ok = fail('Arcade ARCADE_VERSION drifted; update registry/README/CHANGELOG together') and ok
+        for update_marker in ('function checkForUpdate', 'function onUpdate', 'function applyUpdate', "type === 'arcade-sw-update-ready'"):
+            if update_marker not in source:
+                ok = fail(f'Arcade PWA update-detection marker missing in engine.js: {update_marker}') and ok
         if source.count("file: '") < 16:
             ok = fail('Arcade GAMES list should contain at least 16 games') and ok
         if "const RUNS_KEY = 'studiokit:arcade:runs:v1'" not in source:
@@ -230,9 +233,9 @@ def validate(root=ROOT):
         arcade_index = root / 'apps/arcade/index.html'
         if arcade_index.exists():
             index_source = arcade_index.read_text(encoding='utf-8')
-            for marker in ('rel="manifest"', 'data-playtime-section', 'data-scores-section', 'data-scores-body', 'data-scores-empty', 'data-offline', 'data-install', 'data-share', 'data-random', '无签到', 'data-hall-version>0.11.1'):
+            for marker in ('rel="manifest"', 'data-playtime-section', 'data-scores-section', 'data-scores-body', 'data-scores-empty', 'data-offline', 'data-install', 'data-share', 'data-random', 'data-update-check', 'data-update-banner', 'data-update-reload', '无签到', 'data-hall-version>0.11.2'):
                 if marker not in index_source:
-                    ok = fail(f'Arcade hub 0.11.1 marker missing: {marker}') and ok
+                    ok = fail(f'Arcade hub 0.11.2 marker missing: {marker}') and ok
         arcade_block = root / 'apps/arcade/games/block-drop.html'
         if arcade_block.exists():
             block_source = arcade_block.read_text(encoding='utf-8')
@@ -274,7 +277,7 @@ def validate(root=ROOT):
         arcade_sw = root / 'apps/arcade/sw.js'
         if arcade_sw.exists():
             sw_source = arcade_sw.read_text(encoding='utf-8')
-            for marker in ("const VERSION = '0.11.1'", 'arcade-precache', 'skipWaiting', 'clients.claim'):
+            for marker in ("const VERSION = '0.11.2'", 'arcade-precache', 'skipWaiting', 'clients.claim', "type === 'arcade-sw-version'", "type: 'arcade-sw-update-ready'", 'notifyUpdateReady'):
                 if marker not in sw_source:
                     ok = fail(f'Arcade service worker marker missing: {marker}') and ok
             # 0.9：13 个挑战数据文件必须进入 shell 预缓存（相对路径写法，兼容子路径部署）。
@@ -299,8 +302,8 @@ def validate(root=ROOT):
             try:
                 registry = json.loads(registry_path.read_text(encoding='utf-8'))
                 arcade = next((t for t in registry.get('tools', []) if t.get('id') == 'arcade'), None)
-                if arcade and arcade.get('version') != '0.11.1':
-                    ok = fail('Arcade registry version must match engine 0.11.1') and ok
+                if arcade and arcade.get('version') != '0.11.2':
+                    ok = fail('Arcade registry version must match engine 0.11.2') and ok
             except Exception:
                 pass
 

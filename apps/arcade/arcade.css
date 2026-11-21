@@ -42,6 +42,50 @@ body.arcade-body {
   color: #7a1f1f;
 }
 
+/* ---------- 安装到主屏幕（iOS standalone）顶部状态栏修复 ----------
+   iPhone 上 PWA 用 black-translucent 状态栏，页面会延伸到状态栏下方。
+   共享 shell 的导航条默认是浅色，47px 顶部安全区被浅色填充后在半透明状态栏下
+   呈现一条灰白渐层，文字看起来“被模糊掉一半”；游戏页顶栏与画布的模糊蒙层
+   在 iOS Safari 的合成层里还会渗到顶栏文字上。这里：
+   1) 让 Arcade 的 shell 导航条用与主题一致的深色不透明背景，状态栏文字保持白色；
+   2) 给独立窗口的安全区加一层纯色背景，避免半透明状态栏与浅色叠加；
+   3) 提升游戏顶栏到独立合成层并去掉其背景模糊渗色，保证文字清晰。 */
+
+body.arcade-body > .studiokit-shellbar {
+  background: #0b1020;
+  border-bottom-color: #2a3560;
+  color: #93a0c8;
+}
+body.arcade-body > .studiokit-shellbar .studiokit-shell-home { color: #ffd23f !important; }
+body.arcade-body > .studiokit-shellbar .studiokit-shell-separator { color: #5a6688; }
+body.arcade-body > .studiokit-shellbar .studiokit-shell-current { color: #eef1ff; }
+body.arcade-body > .studiokit-shellbar .studiokit-shell-source { color: #93a0c8; }
+body.arcade-body > .studiokit-shellbar .studiokit-shell-source:hover,
+body.arcade-body > .studiokit-shellbar .studiokit-shell-source:focus-visible { color: #ffd23f; }
+
+/* 独立窗口时安全区用纯深色铺底（状态栏放在其上），消除灰白渐层。 */
+html.studiokit-shell-standalone body.arcade-body::before {
+  content: "";
+  position: fixed;
+  top: 0;
+  left: 0;
+  right: 0;
+  height: env(safe-area-inset-top, 0px);
+  background: #0b1020;
+  z-index: 61;
+  pointer-events: none;
+}
+
+/* 游戏顶栏自成一个层，且明确不透明，避免被舞台模糊蒙层影响文字清晰度。 */
+body.arcade-body .game-topbar {
+  position: relative;
+  z-index: 5;
+  background: #0b1020;
+}
+body.arcade-immersive .game-topbar {
+  background: #05070f;
+}
+
 /* ---------- 游戏页 ---------- */
 
 .game-page {
@@ -164,6 +208,9 @@ body.arcade-body {
 }
 .stage-box {
   position: relative;
+  /* iOS Safari 上 backdrop-filter 的合成层偶尔会渗到相邻元素（顶栏文字发虚），
+     用 isolation 把模糊蒙层限制在舞台内部；不改变 0.11.1 结算模糊蒙层的外观。 */
+  isolation: isolate;
   height: min(
     calc(100vh - var(--studiokit-shellbar-h, 0px) - 160px),
     calc(min(520px, 100vw - 24px) * 740 / 420)
@@ -199,6 +246,7 @@ body.has-subhud .stage-box {
   align-items: center;
   justify-content: center;
   background: rgba(7, 11, 24, 0.72);
+  -webkit-backdrop-filter: blur(2px);
   backdrop-filter: blur(2px);
   z-index: 4;
 }
@@ -210,8 +258,8 @@ body.has-subhud .stage-box {
    让画布最终画面完整可见，并用角落胶囊唤回结算。 */
 .overlay.is-result.is-reviewing {
   background: transparent;
-  backdrop-filter: none;
   -webkit-backdrop-filter: none;
+  backdrop-filter: none;
   pointer-events: none; /* 回看时画布只用于查看，游戏已结束，不接收输入 */
 }
 .overlay.is-result .overlay-panel {
@@ -786,6 +834,22 @@ body.has-subhud .stage-box {
   border: 1px solid var(--ac-line);
 }
 .hall-offline-progress[hidden] { display: none; }
+.hall-update-banner {
+  flex: 1 1 100%;
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px;
+  padding: 10px 12px;
+  border: 1px solid rgba(255, 210, 63, 0.45);
+  border-radius: 10px;
+  background: rgba(255, 210, 63, 0.09);
+  color: var(--ac-ink);
+  font-size: 13px;
+}
+.hall-update-banner[hidden] { display: none; }
+.hall-update-banner > span { flex: 1 1 220px; min-width: 0; }
+.hall-update-btn { min-height: 36px; }
 .hall-offline-bar {
   display: block;
   width: 0;
@@ -1090,7 +1154,7 @@ body.has-subhud .stage-box {
   color: var(--ac-ink);
   box-shadow: 0 24px 70px rgba(0, 0, 0, 0.55);
 }
-.ac-dialog::backdrop { background: rgba(4, 7, 16, 0.72); backdrop-filter: blur(3px); }
+.ac-dialog::backdrop { background: rgba(4, 7, 16, 0.72); -webkit-backdrop-filter: blur(3px); backdrop-filter: blur(3px); }
 .ac-dialog-inner { padding: 22px; text-align: center; }
 .ac-dialog h2 { margin: 0 0 8px; font-size: 18px; color: var(--ac-accent); }
 .ac-dialog p { margin: 0 0 16px; color: var(--ac-muted); font-size: 13px; line-height: 1.7; white-space: pre-line; }

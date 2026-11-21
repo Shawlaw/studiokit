@@ -7,7 +7,7 @@
 (() => {
   'use strict';
 
-  const ARCADE_VERSION = '0.11.1';
+  const ARCADE_VERSION = '0.11.2';
   const PROGRESS_KEY = 'studiokit:arcade:progress:v1';
   const PREFS_KEY = 'studiokit:arcade:prefs:v1';
   const RUNS_KEY = 'studiokit:arcade:runs:v1';
@@ -2785,9 +2785,12 @@
   }
 
   /* ----------------------------------------------------------
-   * 离线缓存（0.5.0）
+   * 离线缓存（0.5.0，0.11.2 增加更新检测）
    * - 任意 Arcade 页面都会注册 apps/arcade/sw.js；中心页负责“预载全部游戏”UI。
    * - 核心外壳在 SW 安装时缓存；16 款游戏由用户点按钮后逐项缓存并反馈进度。
+   * - 0.11.2：监听 registration.updatefound / controllerchange 与 SW 的
+   *   arcade-sw-update-ready 消息，向订阅者报告“发现新版本”；提供 checkForUpdate()
+   *   供中心页「检查更新」按钮主动触发，解决了安装版 PWA 静默停留在旧版本的问题。
    * - file:// 或非安全上下文自动降级为 unsupported，不抛错、不影响游戏。
    * ---------------------------------------------------------- */
   const Offline = (() => {
@@ -2809,6 +2812,66 @@
       '../../shared/site-shell.js',
     ];
     let registerPromise = null;
+    const updateListeners = new Set();
+    let updateState = { available: false, version: null };
+    let watchedRegistration = null;
+    let watchingUpdates = false;
+    // 页面首次加载时若尚无 SW 控制器，说明是初次安装而非版本更新；
+    // 只有原本已被 SW 控制的页面被新 SW 接管才算「有新版本」。
+    let hadControllerAtWatch = !!(navigator.serviceWorker && navigator.serviceWorker.controller);
+
+    function emitUpdate(payload) {
+      updateState = { available: true, version: payload && payload.version ? payload.version : null };
+      updateListeners.forEach((fn) => {
+        try {
+          fn(updateState);
+        } catch (err) {
+          /* 单个订阅者异常不影响其它订阅者 */
+        }
+      });
+    }
+
+    function installUpdateWatching(registration) {
+      if (!registration || watchingUpdates) return;
+      watchingUpdates = true;
+      watchedRegistration = registration;
+
+      // 新 SW 安装完成（waiting）时立即提示；不强制刷新，交由用户决定。
+      try {
+        registration.addEventListener('updatefound', () => {
+          const incoming = registration.installing;
+          if (!incoming) return;
+          incoming.addEventListener('statechange', () => {
+            if (incoming.state === 'installed' && navigator.serviceWorker.controller) {
+              emitUpdate({ version: null });
+            }
+          });
+        });
+      } catch (err) {
+        /* 老浏览器可能不支持 updatefound 事件 */
+      }
+
+      // 新 SW 通过 skipWaiting 接管后也会触发，覆盖已在后台完成更新的场景。
+      // 仅当页面原本受控（真正被替换）时才提示；首次安装不提示。
+      try {
+        navigator.serviceWorker.addEventListener('controllerchange', () => {
+          if (hadControllerAtWatch) emitUpdate({ version: null });
+          hadControllerAtWatch = true;
+        });
+      } catch (err) {
+        /* 忽略事件绑定失败 */
+      }
+
+      // SW 主动通知（activate 阶段），带上确切版本号。
+      try {
+        navigator.serviceWorker.addEventListener('message', (event) => {
+          const data = event.data || {};
+          if (data.type === 'arcade-sw-update-ready') emitUpdate({ version: data.version });
+        });
+      } catch (err) {
+        /* 忽略消息监听失败 */
+      }
+    }
 
     function absolute(path) {
       return new URL(path, ARCADE_BASE).href;
@@ -2833,6 +2896,7 @@
       registerPromise = navigator.serviceWorker
         .register(scriptUrl, { scope: ARCADE_BASE.pathname })
         .then((registration) => {
+          installUpdateWatching(registration);
           try {
             const update = registration.update();
             if (update && typeof update.catch === 'function') update.catch(() => {});
@@ -2940,11 +3004,98 @@
       };
     }
 
+    /* 查询当前 SW 的版本（供诊断/测试），通过 MessageChannel 与 SW 握手。 */
+    function swVersion() {
+      if (!supported || typeof MessageChannel === 'undefined') return Promise.resolve(null);
+      return register().then(
+        (registration) =>
+          new Promise((resolve) => {
+            const target = registration.active || registration.waiting || registration.installing;
+            if (!target) {
+              resolve(null);
+              return;
+            }
+            const channel = new MessageChannel();
+            const timer = setTimeout(() => {
+              channel.port1.close();
+              resolve(null);
+            }, 3000);
+            channel.port1.onmessage = (event) => {
+              clearTimeout(timer);
+              channel.port1.close();
+              const data = event.data || {};
+              resolve(data.type === 'arcade-sw-version' ? data.version : null);
+            };
+            target.postMessage({ type: 'arcade-sw-version' }, [channel.port2]);
+          }),
+        () => null
+      );
+    }
+
+    /* 主动检查更新：触发 registration.update()，返回是否有新版本可用。
+       安装版 PWA 不会自动刷新页面，这里只检测并提示，是否刷新由用户决定。 */
+    async function checkForUpdate() {
+      if (!supported) return { supported: false, checked: false, updateFound: false };
+      try {
+        const registration = await register();
+        installUpdateWatching(registration);
+        await registration.update();
+        return {
+          supported: true,
+          checked: true,
+          updateFound: !!(registration.waiting || registration.installing),
+          version: ARCADE_VERSION,
+        };
+      } catch (err) {
+        return { supported: true, checked: false, updateFound: false, error: String(err) };
+      }
+    }
+
+    /* 让已 installing/waiting 的新 SW 立即激活（配合页面刷新完成升级）。 */
+    async function applyUpdate() {
+      if (!supported) return false;
+      try {
+        const registration = await activeRegistration();
+        const target = registration.waiting || registration.installing;
+        if (target) {
+          try {
+            target.postMessage({ type: 'arcade-sw-skip-waiting' });
+          } catch (err) {
+            /* 忽略：SW 安装时已调用 skipWaiting */
+          }
+        }
+        await registration.update();
+        return true;
+      } catch (err) {
+        return false;
+      }
+    }
+
+    function onUpdate(listener) {
+      if (typeof listener !== 'function') return () => {};
+      updateListeners.add(listener);
+      if (updateState.available) {
+        try {
+          listener(updateState);
+        } catch (err) {
+          /* 忽略订阅者异常 */
+        }
+      }
+      return () => updateListeners.delete(listener);
+    }
+
     function autoRegister() {
       if (!supported) return;
       register().catch(() => {
         /* 离线不可用不应影响在线游玩 */
       });
+      // 老 SW 可能未主动通知；获取现有注册时补上事件订阅。
+      if (typeof navigator.serviceWorker.getRegistration === 'function') {
+        navigator.serviceWorker
+          .getRegistration(ARCADE_BASE.href)
+          .then((registration) => installUpdateWatching(registration))
+          .catch(() => {});
+      }
     }
 
     if (document.readyState === 'loading') {
@@ -2961,6 +3112,10 @@
       preloadUrls,
       coreUrls,
       gameUrls,
+      checkForUpdate,
+      applyUpdate,
+      onUpdate,
+      swVersion,
     };
   })();
 
