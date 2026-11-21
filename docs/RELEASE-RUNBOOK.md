@@ -5,10 +5,10 @@
 - 仓库：<https://github.com/Shawlaw/studiokit>
 - GitHub Pages：<https://shawlaw.github.io/studiokit/>
 - Cloudflare Pages：<https://studiokit.pages.dev/>
-- 本地待发布（未推送 main）：Arcade `0.12.1`（2026-11-22）
+- 最近发布：Arcade `0.12.1`（2026-11-22，已双端发布）
   - 批次内容：层塔物理一致性（站立塔不再整体旋转、倾斜改支撑面/重心可视化、经典模式吊臂跟随塔顶保证可达、完美吸附力矩改用吸附后偏移）+ 全览真正 zoom-to-fit（40 层 0.29×、3 层 1.0×）+ 层号屏幕空间抽稀 + 落点投影常显含「会落空！」预警；无 localStorage key/Schema/挑战关卡数据变更，仅改 `pendulum-tower.html`
   - 门禁：`arcade_tower_test` **17/17**（新增 TP-07 可达性 / TP-08 zoom-to-fit / TP-09 所见即所判 + 结算保持缩放）、smoke 94/94、zen 14/14、calm 17/17、review 5/5、gameplay base 11/11、tower challenge 6/6、pwa 7/7、interaction 5/5、immersive 16/16、validate/build/inline/node --check 全过；真机手感 UNVERIFIED
-  - 设计见 `apps/arcade/DESIGN-0.12.1.md`；SW 缓存键 `studiokit-arcade-0.12.1-v1`；**未发布，无 Actions run / verify_deploy 证据**
+  - 发布：提交 `7d2a80a` 推送 `main`；Actions run `44961843208` 四 job 全绿（Validate and build / Deploy GitHub Pages / Deploy Cloudflare Pages / Verify both deployments）；CI 与本地 `tools/verify_deploy.py` 均 **41/41** 双端逐文件一致（arcade 0.12.1 / badge 2.2.1 / venue 0.2.0）；双端线上无头 Chrome 各 6/6（中心页 0.12.1 + 16 卡、`physicsInfo/viewInfo` 钩子、偏置后 `topReachable=true` 且 `pivot==target==topCenter`、摆幅区间覆盖塔顶、40 层全览 `scale=0.292` 整塔 y 116–624/740、0 console error）；SW 缓存键 `studiokit-arcade-0.12.1-v1`；设计见 `apps/arcade/DESIGN-0.12.1.md`；真机手感待 Owner 复测
 - 最近发布：Arcade `0.12.0`（2026-11-22，已双端发布）
   - 批次内容：全屏/PWA 底部按钮抬升（`--ac-thumb-lift`，四档 6→42px、安全区 34→70px，toast 同步抬升）；层塔持久重心/支撑物理模型（连续右偏 4 层塌、左右交替 14 层稳）；层塔全览（按钮+快捷键 3、0.45s 缩放、结算前 0.9s 动画拉远）；层塔工地集装箱皮肤 + 4 种真实生效属性；合并 0.11.5 三项修复（双击放大防护 / 五子棋落子重影 / 预览取消出口）。无 localStorage key/Schema/关卡数据变更
   - 门禁：`arcade_immersive_buttons_test` 16/16、`arcade_tower_test` 13/13、`arcade_interaction_test` 5/5、smoke 94/94（一次星海拾取同帧抖动 flake，复跑 94/94）、zen 14/14、calm 17/17、review 5/5、gameplay base 11/11、tower challenge 6/6、pwa 7/7、validate/build/inline/node --check 全过；真机手感 UNVERIFIED

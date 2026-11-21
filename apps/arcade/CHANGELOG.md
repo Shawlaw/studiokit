@@ -1,6 +1,6 @@
 # Arcade Changelog
 
-## 0.12.1 — 2026-11-22
+## 0.12.1 — 2026-11-22（已双端发布）
 
 ### Fixed
 - **层塔「物理不对劲」根因**：站立中的塔被 `ctx.rotate(towerLean)` 整体绕塔底旋转最多 20°，而落点判定/堆叠/投影全用未旋转坐标。10 层在 lean=0.19 时视觉塔顶偏 **87.6px**（>58px 落空阈值）、40 层偏 469px ⇒ 玩家对着看到的塔顶松手必然判偏并立即终局。现塔身始终轴对齐（所见即所判），倒塌动画仍逐箱旋转；倾斜改为「支撑面 + 重心投影」常显指示、塔顶虚线与「塔身不稳/将倾」预警。
@@ -16,6 +16,7 @@
 
 ### Verification
 - `arcade_tower_test` **17/17**（新增 TP-07 可达性 / TP-08 zoom-to-fit / TP-09 所见即所判）、smoke 94/94、zen 14/14、calm 17/17、review 5/5、gameplay base 11/11、tower challenge 6/6、pwa 7/7、interaction 5/5、immersive 16/16、validate/build/inline/node --check 全过。独立只读审计（subagent）复核并确认根因与遗留项。设计见 `DESIGN-0.12.1.md`。
+- 发布：提交 `7d2a80a` 推送 `main`；Actions run `44961843208` 四 job 全绿；CI 与本地 `verify_deploy.py` 均 **41/41** 双端一致（arcade 0.12.1）；双端线上无头 Chrome 各 6/6；SW `studiokit-arcade-0.12.1-v1`。
 
 ## 0.12.0 — 2026-11-22（已双端发布）
 
