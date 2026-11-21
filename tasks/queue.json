@@ -1588,6 +1588,24 @@
       ],
       "completedAt": "2026-11-21T19:36:00+08:00",
       "evidence": "提交 f2f1cd1 ff 合入 main 推送；Actions run 44899492208 四 job 全绿（Validate and build / Deploy GitHub Pages / Deploy Cloudflare Pages / Verify both deployments）；CI 与本地 tools/verify_deploy.py 均 41/41 文件 SHA-256 双端一致（Arcade 0.11.2 / Badge 2.2.1 / Venue 0.2.0，manifest application/manifest+json）；CF 预览域 468ecc64.studiokit.pages.dev 亦 41/41 一致；双端线上无头 Chrome 各 7/7（中心页 0.11.2 + 16 卡 + 深色 shellbar rgb(11,16,32) + 顶部安全区 47px + 检查更新按钮可见 + checkForUpdate 可用 + 五子棋沉浸顶栏 rgb(5,7,15)/z-index 5/stage isolation:isolate，0 console error）；SW 缓存键 studiokit-arcade-0.11.2-v1；真机 iOS 顶部观感与系统更新提示时机 UNVERIFIED。"
+    },
+    {
+      "id": "T091",
+      "title": "Arcade 0.11.3：iPhone 安装版顶部系统模糊真机修复",
+      "kind": "agent",
+      "status": "DONE",
+      "dependsOn": [
+        "T090"
+      ],
+      "ownerAuthorizationRequired": false,
+      "acceptance": [
+        "真机复测顶部仍模糊的根因重新定位并修复",
+        "移除 viewport-fit=cover 与半透明状态栏 meta，保留 fixed 顶边纯色条兜底",
+        "更新检测（0.11.2）行为不变；不改 key/Schema/玩法",
+        "全量门禁通过；本地未发布"
+      ],
+      "completedAt": "2026-11-21T20:20:00+08:00",
+      "evidence": "Owner 真机复测：0.11.2 已显示新版本号（更新检测生效），但中心页与游戏页顶部仍被模糊。重新定位根因：iOS 26+ 独立模式 PWA 若声明 viewport-fit=cover + 半透明状态栏样式，页面画到状态栏下，系统叠加顶缘模糊（CSS 盖不住，Chrome 无头无法重现）—— 0.11.2 用 CSS 背景覆盖无效即为此因。修复：全部 17 个 Arcade HTML 去掉 viewport-fit=cover，中心页去掉 apple-mobile-web-app-status-bar-style；保留并修正 fixed 顶边不透明深色条（height: max(1px, env(safe-area-inset-top))）让 WebKit 用纯色替换残留模糊；保留深色 shellbar / 顶栏独立层 / 舞台 isolation。validate_site 增加禁用两项 meta 的防回归断言；arcade_pwa_update_test 新增 PU-00（7/7）。版本链 0.11.3 / SW studiokit-arcade-0.11.3-v1；门禁 pwa 7/7、smoke 94/94、zen 14/14、calm 17/17、review 5/5、base 11/11、validate/build/inline/node --check 全过；无 key/Schema 变更；DESIGN-0.11.3.md 记录根因/修复/回滚与真机复测步骤；本地未提交未发布（本任务无 PUBLISH_TO_MAIN 授权）；真机顶部观感待 Owner 再次确认。"
     }
   ]
 }

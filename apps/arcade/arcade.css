@@ -43,13 +43,16 @@ body.arcade-body {
 }
 
 /* ---------- 安装到主屏幕（iOS standalone）顶部状态栏修复 ----------
-   iPhone 上 PWA 用 black-translucent 状态栏，页面会延伸到状态栏下方。
-   共享 shell 的导航条默认是浅色，47px 顶部安全区被浅色填充后在半透明状态栏下
-   呈现一条灰白渐层，文字看起来“被模糊掉一半”；游戏页顶栏与画布的模糊蒙层
-   在 iOS Safari 的合成层里还会渗到顶栏文字上。这里：
-   1) 让 Arcade 的 shell 导航条用与主题一致的深色不透明背景，状态栏文字保持白色；
-   2) 给独立窗口的安全区加一层纯色背景，避免半透明状态栏与浅色叠加；
-   3) 提升游戏顶栏到独立合成层并去掉其背景模糊渗色，保证文字清晰。 */
+   0.11.3 根因：iOS 26+ 的独立模式 PWA 若声明 viewport-fit=cover +
+   apple-mobile-web-app-status-bar-style=black-translucent，页面会画到状态栏下方，
+   系统在视口顶缘叠加一层「渐进模糊/淡出」，把顶栏文字冲淡 —— 这是系统级叠加，
+   普通 CSS 背景盖不住（0.11.2 在真机无效即为此因）。
+   修复双保险：
+   1) HTML 移除 viewport-fit=cover 与 black-translucent（根本：页面不再画到状态栏下）；
+   2) 贴住视口顶边的 fixed 深色条：WebKit 会用这个纯色替换残留的系统模糊，
+      即使旧主屏图标缓存了半透明 chrome 也不会再发虚；
+   3) shell 导航条 / 游戏顶栏用与主题一致的深色不透明背景并自成分层，
+      避免被舞台模糊蒙层的合成层影响。 */
 
 body.arcade-body > .studiokit-shellbar {
   background: #0b1020;
@@ -63,14 +66,16 @@ body.arcade-body > .studiokit-shellbar .studiokit-shell-source { color: #93a0c8;
 body.arcade-body > .studiokit-shellbar .studiokit-shell-source:hover,
 body.arcade-body > .studiokit-shellbar .studiokit-shell-source:focus-visible { color: #ffd23f; }
 
-/* 独立窗口时安全区用纯深色铺底（状态栏放在其上），消除灰白渐层。 */
+/* 贴住顶边的固定深色条，取代 iOS 顶缘系统模糊。仅安装版 standalone 生效，
+   普通标签页无需（顶部已被浏览器 UI 占据）。高度取安全区，没有安全区时取 1px
+   仍能命中「有元素贴住顶边」的判定，让 WebKit 用纯色渲染整个顶部边缘。 */
 html.studiokit-shell-standalone body.arcade-body::before {
   content: "";
   position: fixed;
   top: 0;
   left: 0;
   right: 0;
-  height: env(safe-area-inset-top, 0px);
+  height: max(1px, env(safe-area-inset-top, 0px));
   background: #0b1020;
   z-index: 61;
   pointer-events: none;

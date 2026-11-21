@@ -1,6 +1,6 @@
 #!/usr/bin/env node
 /**
- * Arcade 0.11.2 门禁：PWA 更新检测 + iPhone 独立窗口顶部安全区布局。
+ * Arcade 0.11.3 门禁：PWA 更新检测 + iPhone 独立窗口顶部安全区布局。
  *
  * 覆盖：
  * - PU-01 中心页「检查更新」按钮存在且可触发 checkForUpdate()
@@ -38,6 +38,18 @@ async function main() {
     cdp = await openPage({ port: CDP_PORT, width: 390, height: 844, deviceScaleFactor: 2, mobile: true, artifactsDir: ARTIFACTS });
     await cdp.send('Network.enable');
 
+    /* ---------- PU-00 iOS 顶缘模糊根因防护：不得声明 cover / black-translucent ---------- */
+    await cdp.navigate(BASE + '/apps/arcade/');
+    await sleep(250);
+    const meta = await cdp.evaluate(`(() => {
+      const vp = (document.querySelector('meta[name="viewport"]') || {}).content || '';
+      const sb = (document.querySelector('meta[name="apple-mobile-web-app-status-bar-style"]') || {}).content || '';
+      return { viewport: vp, statusBar: sb };
+    })()`);
+    assert(meta.viewport.indexOf('viewport-fit') === -1, 'viewport 仍声明 viewport-fit（iOS 顶缘模糊根因）: ' + JSON.stringify(meta));
+    assert(meta.statusBar.indexOf('black-translucent') === -1, '仍声明 black-translucent（iOS 顶缘模糊根因）: ' + JSON.stringify(meta));
+    record('PU-00 未声明 viewport-fit=cover / black-translucent（iOS 顶部模糊根因防护）', true);
+
     /* ---------- PU-01/02 中心页更新 UI 与 API ---------- */
     await setViewport(cdp);
     await cdp.navigate(BASE + '/apps/arcade/');
@@ -54,7 +66,7 @@ async function main() {
         version: window.Arcade && Arcade.version
       };
     })()`);
-    assert(ui.version === '0.11.2', 'Arcade version=' + ui.version);
+    assert(ui.version === '0.11.3', 'Arcade version=' + ui.version);
     assert(ui.hasCheck && ui.checkVisible, '检查更新按钮缺失或不可见: ' + JSON.stringify(ui));
     assert(ui.hasBanner && ui.bannerHidden, '更新横幅初始应隐藏: ' + JSON.stringify(ui));
     assert(ui.api.length === 4, 'A.Offline update API 不完整: ' + JSON.stringify(ui.api));
@@ -63,7 +75,7 @@ async function main() {
     const checked = await cdp.evaluate(`Arcade.Offline.checkForUpdate()`);
     assert(checked && checked.supported === true && checked.checked === true, 'checkForUpdate 结果异常: ' + JSON.stringify(checked));
     const swVersion = await cdp.evaluate(`Arcade.Offline.swVersion()`);
-    assert(typeof swVersion === 'string' && swVersion.indexOf('0.11.2') !== -1, 'swVersion 未返回 0.11.2: ' + JSON.stringify(swVersion));
+    assert(typeof swVersion === 'string' && swVersion.indexOf('0.11.3') !== -1, 'swVersion 未返回 0.11.3: ' + JSON.stringify(swVersion));
     record('PU-02 checkForUpdate / swVersion 与 SW 版本握手', true);
 
     /* ---------- PU-03 模拟新版本通知，更新横幅出现且可关闭 ----------
@@ -105,8 +117,14 @@ async function main() {
     assert(hubTop.standalone, '未应用独立窗口标记');
     assert(hubTop.padTop >= 47, '顶部安全区未让出: ' + JSON.stringify(hubTop));
     assert(hubTop.bg === 'rgb(11, 16, 32)', '独立窗口 shellbar 应为深色主题: ' + JSON.stringify(hubTop));
+    const topStrip = await cdp.evaluate(`(() => {
+      const cs = getComputedStyle(document.body, '::before');
+      return { position: cs.position, top: cs.top, bg: cs.backgroundColor, z: cs.zIndex };
+    })()`);
+    assert(topStrip.position === 'fixed' && topStrip.top === '0px' && topStrip.bg === 'rgb(11, 16, 32)',
+      '顶边 fixed 深色条缺失（iOS 系统模糊替换层）: ' + JSON.stringify(topStrip));
     await cdp.screenshot('pwa-hub-standalone-top.png');
-    record('PU-04 独立窗口中心页顶部：深色 shellbar + 安全区', true);
+    record('PU-04 独立窗口中心页顶部：深色 shellbar + 安全区 + fixed 顶边条', true);
 
     await cdp.navigate(BASE + '/apps/arcade/games/gomoku.html');
     await sleep(300);
