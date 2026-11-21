@@ -1,6 +1,6 @@
 # Arcade Changelog
 
-## 0.12.2 — 2026-11-22
+## 0.12.2 — 2026-11-22（已双端发布）
 
 ### Added
 - **集装箱释放水平速度（抛物线落点）**：此前 `drop` 只有 `vy`、箱子永远垂直落下。现按真实单摆切向速度 `L·cosθ·θ̇` 经吊具阻尼（`RELEASE_VX_K=0.45`、上限 240px/s）传给箱子，落体水平匀速 ⇒ 可见抛物线。先做 7×4 参数扫描再定系数：0.45 时**完美对齐窗口 63–115ms 反而比旧的 43–69ms 更宽**（技能从「等摆到正中」变成「提前放手、看预测落点」），0.15–1.0 全区间均可解。
@@ -12,6 +12,7 @@
 
 ### Verification
 - `arcade_tower_test` **18/18**（新增 TP-10：vx 峰值 >50px/s、仍存在完美相位、真实横移 >10px、**预测落点误差 ≤3px**）、smoke 94/94、zen 14/14、calm 17/17、review 5/5、gameplay base 11/11、tower challenge 6/6、pwa 7/7、interaction 5/5、immersive 16/16、validate/build/inline/node --check 全过。实测 vx 峰值 111–134px/s、预测误差 ≤0.6px、单次横移 40–45px。设计见 `DESIGN-0.12.2.md`。
+- 发布：提交 `7c6a4a9` 推送 `main`；Actions run `44964004148` 四 job 全绿；CI 与本地 `verify_deploy.py` 均 **41/41** 双端一致（arcade 0.12.2）；双端线上实测释放 vx 124–138px/s、预测落点误差 **0px**、0 console error；SW `studiokit-arcade-0.12.2-v1`。
 
 ## 0.12.1 — 2026-11-22（已双端发布）
 
