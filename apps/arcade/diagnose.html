@@ -3,90 +3,73 @@
 <head>
   <meta charset="utf-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1" />
-  <meta name="description" content="iOS PWA 顶部诊断：与真实游戏页完全相同的 CSS 与结构，用于对比不同顶部渲染方案。" />
+  <meta name="description" content="iOS PWA 顶部导航条（StudioKit / 街机厅 Arcade / 源码）模糊诊断：使用站点真实 shellbar。" />
   <meta name="theme-color" content="#0b1020" />
   <link rel="stylesheet" href="../../shared/site.css" />
   <link rel="stylesheet" href="./arcade.css" />
   <script src="../../shared/site-shell.js" defer></script>
-  <title>iOS PWA 顶部诊断 · 街机厅</title>
+  <title>iOS PWA 顶部导航条模糊诊断 · 街机厅</title>
   <style>
-    /* 仅底部诊断面板为诊断页独有；顶部结构与样式 100% 复用真实游戏页。 */
+    /* 页面占位内容，让 shellbar 停在真实位置（文档流最顶部） */
+    .diag-body { padding: 20px 16px 60vh; color: #c9d2ee; font: 14px/1.7 system-ui, sans-serif; }
+    .diag-body h2 { color: #ffd23f; font-size: 16px; }
+
+    /* 底部方案面板（诊断页独有，不遮挡顶部观察） */
     .diag-panel {
-      position: fixed;
-      left: 0; right: 0; bottom: 0;
-      max-height: 50dvh;
-      overflow: auto;
+      position: fixed; left: 0; right: 0; bottom: 0;
+      max-height: 52dvh; overflow: auto;
       padding: 12px 12px 18px;
-      background: #111a33;
-      border-top: 1px solid #2a3560;
-      z-index: 9999;
-      -webkit-user-select: text;
-      user-select: text;
+      background: #111a33; border-top: 1px solid #2a3560;
+      z-index: 100000;
+      -webkit-user-select: text; user-select: text;
     }
     .diag-panel h1 { font-size: 14px; margin: 0 0 5px; color: #ffd23f; }
     .diag-panel .hint { font-size: 12px; line-height: 1.55; color: #a7b0d0; margin: 0 0 9px; }
     .diag-opts { display: grid; grid-template-columns: 1fr 1fr; gap: 7px; }
     .diag-opt {
-      min-height: 44px;
-      padding: 7px 9px;
-      border: 1px solid #3a4780;
-      border-radius: 10px;
-      background: #1b2444;
-      color: #eef1ff;
-      font-size: 12px;
-      text-align: left;
-      line-height: 1.35;
+      min-height: 44px; padding: 7px 9px;
+      border: 1px solid #3a4780; border-radius: 10px;
+      background: #1b2444; color: #eef1ff;
+      font-size: 12px; text-align: left; line-height: 1.35;
     }
     .diag-opt.on { background: #ffd23f; color: #1a1405; border-color: #ffd23f; font-weight: 700; }
-    .diag-metrics {
-      margin-top: 10px;
-      font: 11px/1.65 ui-monospace, SFMono-Regular, Menlo, monospace;
-      color: #93a0c8;
-      word-break: break-all;
-    }
+    .diag-metrics { margin-top: 10px; font: 11px/1.65 ui-monospace, Menlo, monospace; color: #93a0c8; word-break: break-all; }
     .diag-metrics b { color: #ffd23f; font-weight: 600; }
+
+    /* ===== 各方案只作用于真实 shellbar（由 site-shell.js 注入） ===== */
+    body.diag-1 .studiokit-shellbar { position: sticky !important; top: 0 !important; z-index: 9998 !important; }
+    body.diag-2 .studiokit-shellbar { transform: translateZ(0); -webkit-transform: translateZ(0); }
+    body.diag-3 .studiokit-shellbar { position: fixed !important; top: 0 !important; left: 0 !important; right: 0 !important; z-index: 9998 !important; }
+    body.diag-4::before {
+      content: ""; position: fixed; top: 0; left: 0; right: 0;
+      height: 100px; background: #0b1020; z-index: 9997; pointer-events: none;
+    }
+    body.diag-5 .studiokit-shellbar { will-change: transform; }
+    body.diag-6 .studiokit-shellbar { contain: layout paint; }
+    body.diag-7 * { -webkit-backdrop-filter: none !important; backdrop-filter: none !important; }
+    body.diag-8 .studiokit-shellbar { isolation: isolate; }
+    body.diag-9 .studiokit-shellbar { position: sticky !important; top: 0 !important; z-index: 99999 !important; background: #0b1020 !important; }
+    body.diag-10 .studiokit-shellbar { position: sticky !important; top: 0 !important; z-index: 9998 !important; transform: translateZ(0); -webkit-transform: translateZ(0); background: #0b1020 !important; }
   </style>
 </head>
-<body class="arcade-body" data-studiokit-app="arcade" data-studiokit-app-title="街机厅 Arcade" style="--ac-accent:#d9b06a; --card-accent:#d9b06a">
+<body class="arcade-body" data-studiokit-app="arcade" data-studiokit-app-title="街机厅 Arcade">
   <noscript><p class="ac-noscript">此页需要启用 JavaScript。</p></noscript>
 
-  <!-- 与 gomoku.html 完全相同的真实页面结构 -->
-  <main class="game-page">
-    <header class="game-topbar">
-      <a class="ac-back" href="./index.html" aria-label="返回街机厅"><span class="ac-back-icon" aria-hidden="true">‹</span><span class="ac-back-label">街机厅</span></a>
-      <h1 class="game-title">五子棋 · 静局</h1>
-      <div class="game-hud">
-        <span>分数 <strong data-hud-score>0</strong></span>
-        <span>最高 <strong data-hud-high>0</strong></span>
-      </div>
-      <button type="button" class="ac-icon-btn" data-pause aria-label="暂停游戏" title="暂停游戏（P / Esc）">⏸</button>
-      <button type="button" class="ac-icon-btn" data-mute aria-label="切换音效">🔊</button>
-    </header>
-    <div class="stage-wrap">
-      <div class="stage-box">
-        <canvas class="game-canvas" aria-label="诊断用画布"></canvas>
-        <div class="overlay" data-overlay>
-          <div class="overlay-panel">
-            <h2 data-ov-title>五子棋 · 静局</h2>
-            <p data-ov-text>你执黑先行，与本地启发式对手对弈。点空格先预览，再点同一点确认落子。提示为启发式推荐，不代表最优解。五子连珠即胜 · 没有倒计时，慢慢想。</p>
-            <button type="button" class="ac-btn" data-ov-btn>开始游戏</button>
-          </div>
-        </div>
-      </div>
-    </div>
-    <p class="game-hint">点空格先预览，再点同一点落子（防误触）· 道具 1 悔棋 / 2 提示 · P / Esc 暂停</p>
-  </main>
+  <div class="diag-body">
+    <h2>诊断对象：最顶部那条导航条</h2>
+    <p>请看屏幕最顶上那一行 —— <b>StudioKit / 街机厅 Arcade ···· 源码 ↗</b>（深色/浅色横条）。<br>下面是方案按钮，点一个就切换一次顶部渲染方式。</p>
+  </div>
 
   <div class="diag-panel">
-    <h1>iOS PWA 顶部发虚 · 真实页面方案对比</h1>
+    <h1>iOS PWA 顶部导航条发虚 · 方案对比</h1>
     <p class="hint">
-      此页顶栏与真实五子棋页<b>结构和 CSS 完全相同</b>，方案 0 就是当前线上效果。<br>
-      从主屏幕 PWA 打开，逐个点下面按钮，盯住最顶部「五子棋 · 静局」那行字，找出<b>最清晰/无重影</b>的方案编号告诉我。
+      从主屏幕 PWA 打开此页。<b>盯住最顶部「StudioKit / 街机厅 Arcade / 源码」那一行字</b>，逐个点按钮，找出<b>最清晰、不发虚</b>的方案编号告诉我。<br>
+      方案 0 = 当前线上效果（基线）。此页用的是站点真实的导航条，和中心页完全一致。
     </p>
     <div class="diag-opts" id="diagOpts"></div>
     <div class="diag-metrics" id="diagMetrics"></div>
     <p class="hint" style="margin-top:9px">
-      此页仅用于诊断，定位后会删除。<a href="./index.html" style="color:#4fc3f7">← 返回中心页</a>
+      定位后会删除此页。<a href="./index.html" style="color:#4fc3f7">← 返回中心页</a>
     </p>
   </div>
 
@@ -95,16 +78,16 @@
       'use strict';
       const names = [
         '0 当前线上（基线）',
-        '1 顶栏独立层 translateZ',
-        '2 禁用 backdrop-filter',
-        '3 顶栏去 z-index/非固定',
-        '4 字体 subpixel 抗锯齿',
-        '5 贴顶纯色遮挡条',
-        '6 顶栏纯黑背景',
-        '7 contain + will-change',
-        '8 关闭触控合成属性',
-        '9 文字 text-shadow',
-        '10 顶栏 translate3d',
+        '1 shellbar 改 sticky 贴顶',
+        '2 shellbar 独立渲染层',
+        '3 shellbar 改 fixed 贴顶',
+        '4 顶部加 100px 纯色条',
+        '5 shellbar will-change',
+        '6 shellbar contain:paint',
+        '7 禁用全部毛玻璃滤镜',
+        '8 shellbar 隔离层',
+        '9 sticky + 深色不透明',
+        '10 sticky + 独立层 + 深色',
       ];
       const opts = document.getElementById('diagOpts');
       let current = 0;
@@ -124,53 +107,38 @@
         opts.appendChild(b);
       });
 
-      const probe = document.createElement('div');
-      probe.style.cssText = 'position:fixed;top:0;left:0;height:env(safe-area-inset-top,0px);width:0;pointer-events:none';
-      document.body.appendChild(probe);
-      const sat = probe.getBoundingClientRect().height;
-
       function renderMetrics() {
-        const bar = document.querySelector('.game-topbar').getBoundingClientRect();
-        const shell = document.querySelector('.studiokit-shellbar');
-        const shellH = shell ? Math.round(shell.getBoundingClientRect().height) : 0;
+        const bar = document.querySelector('.studiokit-shellbar');
+        if (!bar) { document.getElementById('diagMetrics').textContent = 'shellbar 未注入（请刷新）'; return; }
+        const r = bar.getBoundingClientRect();
+        const cs = getComputedStyle(bar);
+        const probe = document.createElement('div');
+        probe.style.cssText = 'position:fixed;top:0;left:0;height:env(safe-area-inset-top,0px);width:0;pointer-events:none';
+        document.body.appendChild(probe);
+        const sat = probe.getBoundingClientRect().height;
+        probe.remove();
         const m = {
           '当前方案': current,
-          'shellbar 高': shellH + 'px',
-          'game-topbar top/高': Math.round(bar.top) + 'px / ' + Math.round(bar.height) + 'px',
+          'shellbar top/高': Math.round(r.top) + 'px / ' + Math.round(r.height) + 'px',
+          'shellbar position': cs.position,
+          'shellbar z-index': cs.zIndex,
+          'shellbar 背景': cs.backgroundColor,
           'safe-area-inset-top': sat + 'px',
           'devicePixelRatio': window.devicePixelRatio || 0,
-          'visualViewport 宽/scale': ((window.visualViewport || {}).width || 0) + ' / ' + ((window.visualViewport || {}).scale || 0),
           'standalone': (navigator.standalone === true || matchMedia('(display-mode: standalone)').matches),
         };
         document.getElementById('diagMetrics').innerHTML =
           Object.entries(m).map(([k, v]) => `<b>${k}</b>: ${String(v).replace(/</g, '&lt;')}`).join('<br>');
       }
 
-      // 各方案只作用于真实页面元素，与真实 CSS 叠加。
-      const style = document.createElement('style');
-      style.textContent = `
-        body.diag-1 .game-topbar { transform: translateZ(0); -webkit-transform: translateZ(0); }
-        body.diag-2 .overlay, body.diag-2 .ac-dialog::backdrop,
-        body.diag-2 .ac-dialog::backdrop { -webkit-backdrop-filter: none !important; backdrop-filter: none !important; }
-        body.diag-2 .overlay { -webkit-backdrop-filter: none !important; backdrop-filter: none !important; }
-        body.diag-3 .game-topbar { position: static !important; z-index: auto !important; }
-        body.diag-4 .game-topbar, body.diag-4 .game-title, body.diag-4 .ac-back {
-          -webkit-font-smoothing: subpixel-antialiased; text-rendering: auto; }
-        body.diag-5::before {
-          content:""; position:fixed; top:0; left:0; right:0; height:120px;
-          background:#05070f; z-index:4; pointer-events:none; }
-        body.diag-6 .game-topbar { background:#000 !important; }
-        body.diag-7 .game-topbar { contain:paint; will-change:transform; }
-        body.diag-8 { overscroll-behavior:auto !important; -webkit-user-select:auto !important;
-          user-select:auto !important; touch-action:auto !important; }
-        body.diag-9 .game-title { text-shadow:0 0 1px rgba(255,255,255,.4); }
-        body.diag-10 .game-topbar { transform:translate3d(0,0,0); -webkit-transform:translate3d(0,0,0); }
-      `;
-      document.head.appendChild(style);
-
-      renderMetrics();
-      const q = location.search.match(/diag=(\d+)/);
-      if (q) set(Math.min(10, Math.max(0, parseInt(q[1], 10))));
+      // site-shell.js 是 defer，等它注入 shellbar 后再测量
+      function boot() {
+        renderMetrics();
+        const q = location.search.match(/diag=(\d+)/);
+        if (q) set(Math.min(10, Math.max(0, parseInt(q[1], 10))));
+      }
+      if (document.readyState === 'loading') document.addEventListener('DOMContentLoaded', () => setTimeout(boot, 50));
+      else setTimeout(boot, 50);
     })();
   </script>
 </body>
