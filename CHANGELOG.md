@@ -2,6 +2,205 @@
 
 StudioKit 门户本身没有独立的 semver；以下按仓库里程碑与工具版本记录。各工具的详细变更见 `apps/<tool>/CHANGELOG.md`。
 
+> 说明：Arcade `0.11.2`–`0.14.0` 的条目于 2026-11-22 依据 [`apps/arcade/CHANGELOG.md`](apps/arcade/CHANGELOG.md) 补齐（本文件当时落后于工具版本），逐条数值与证据以工具 CHANGELOG 与对应 `DESIGN-*.md` 为准。
+
+## Site — 2026-11-22（文档体系重排、归档与状态徽章）
+
+### Changed
+- 重写全部 README（根、Arcade、Badge Studio、Venue Compare、`docs/arcade/`、`docs/arcade/0.9/`、模板），统一为「状态 → 用法 → 架构 → 数据 → 测试 → 边界 → 档案」结构；Arcade README 从 89.8 KB 逐版流水压缩为 33 KB 的当前状态文档，版本历史交给 CHANGELOG 与 `DESIGN-*.md`。
+- 根 README 新增纯文本状态徽章区、`文档地图` 与工具/脚本索引；新增 `tools/check_readme_links.py` 校验文档的相对链接、章节锚点与表格列数。
+
+### Fixed
+- 修正文档与源码不一致的事实：Arcade 版本链（0.12.6/0.13.0 → 0.14.0）、五子棋与纸牌接龙难度（轻松 → 适中）、积分记录覆盖范围（13 → 16 款）、暂停入口归属、Venue Compare 的链接列行为 / 示例存档语义 / 标记坐标夹取 / 导出体积判断、Badge Studio 的共享导航描述与 `py -3` 用法、`docs/ARCHITECTURE.md` 的存储键清单等。
+- 根 README 与 `CONTRIBUTING.md` 不再写死易漂移的门禁项数，改为「以实际输出为准」；`validate_site.py` 新增徽章计数守卫，注册表可用工具数与徽章不一致时直接失败。
+
+### Removed
+- 删除 `prompts/`（建仓期的一次性启动 / 发布 Prompt，已由 `START-HERE.md` 与 `docs/RELEASE-RUNBOOK.md` 取代；历史留在 git）。
+- 0.8.0 / 0.8.1 / 0.8.2 / 0.9.0 的一次性过程记录（规划、事实冻结、契约、独立评审、试玩包、导入报告等 19 份）归档到 [`docs/archive/`](docs/archive/README.md)，正文与内部链接保持可用，全仓库引用同步改写。设计源与生成产物（`docs/arcade/0.9/levels|docs|scripts|impl|tasks`）仍被门禁读取，**不归档**。
+
+## Arcade 0.14.0 — 2026-11-22（已双端发布）
+
+### Added
+- **星海割草（无尽演武）**：开始弹层第 4 按钮（引擎可选 `btn4`，其余 15 款不传、零变化）。四种弹种常驻、火力固定 MAX、大杀器 3 槽满载且用后不消耗、脉冲 / 星盾 / 编队无限次；敌潮 0.26s 刷怪、同屏 32、血量 ×3.2，Boss 战 20 架护卫持续补充；掉落 12% 能量核心（8 杀保底）与大量火力核心 / 军械；Boss 四套专属弹幕（扇形齐射 / 螺旋星雨 / 交叉扫射 / 环爆三连）。受击只扣 22% 能量不掉命，能量是唯一瓶颈。
+
+### Changed
+- 同种弹种拾取由 `max(剩余, 固定时长)` 改为 `min(180s, 剩余 + 固定时长)`（散射 12s / 激光 10s / 追踪 11s / 速射 9s），浮字与 HUD 显示累计时长。
+- 割草不写分数、不给星币、不写局内档（`serialize()` 在 `mode === 'mow'` 返回 `null`），也不参与最高分与积分记录；真实游玩时长仍计入 `Playtime`。无新增 localStorage key / Schema，挑战 6 关数据与判定零改动。
+
+### Verification
+- `arcade_smoke` **113/113**（新增叠加时长 / 上限 / 实际拾取、割草常驻无限与密集掉落、Boss 四套弹幕 / 自动进潮 / 受击扣能量 / 无积分、320px 4 按钮与 6 列道具行）；`arcade_pwa_update_test` 9/9、`zen` 17/17、`calm` 17/17、`tower` 23/23、`immersive` 32/32、`gameplay` all 104/104 + base 22/22、挑战矩阵 78 关；`arcade_run_all_gates.py` ALL GATES PASSED。
+- 双端发布：提交 `4c90a4c` 推送 `main`；Actions run `45010510889` 四 job 全绿；CI 与本地 `verify_deploy.py` 均 **41/41** 双端一致（arcade 0.14.0 / badge 2.2.1 / venue 0.2.0）；双端线上无头 Chrome 实测 `Arcade.version=0.14.0`、第 4 按钮可见、`mode=mow` 常驻满载且 `score=0`、0 console error；SW `studiokit-arcade-0.14.0-v1`；真机手感 UNVERIFIED。
+
+## Arcade 0.13.3 — 2026-11-22（已双端发布）
+
+### Fixed
+- **Cloudflare Pages 无后缀 URL 导致所有游戏计时为 0**：CF Pages 把 `/games/x.html` **308** 到 `/games/x`，而 `detectCurrentGame()` 用 `g.file === 'x.html'` 精确比较 → `currentGame` 恒为 `null` → `Playtime` 不装载、时间片不启动、`recordRound()` 返回 0（积分记录照常写入）。现改为去 `.html` 后缀 + 小写化比较，并兼容尾斜杠、URL 编码与按游戏 id 兜底。
+- 历史上已记成 `0ms` 的轮次无法回填；修复后从下一局开始正常累计。诊断页 `apps/arcade/diag.html` 保留供真机复验。
+
+### Verification
+- `arcade_smoke` 108 → **109/109**（测试服务器新增无后缀回退）；线上实测 CF 无后缀 URL `currentGame="block-drop"`、游玩 1.6s 记到 1606ms，GitHub Pages 的 `.html` 路径正常，0 console error。
+- 双端发布：提交 `b3a8c7e` 推送 `main`；Actions run `45007754972` 四 job 全绿；`verify_deploy.py` **41/41** 双端一致（arcade 0.13.3）；SW `studiokit-arcade-0.13.3-v1`。
+
+## Arcade 0.13.2 — 2026-11-22（已双端发布）
+
+### Fixed
+- **PWA「检查更新」显示已安装版本**：`checkForUpdate()` 旧实现直接返回页面自身的 `ARCADE_VERSION`（= 已安装版本），从不读线上版本。现解析线上 `sw.js` 的 `VERSION` 作为最新版本，再与页面 / SW 版本比较，返回 `latestVersion` / `installedVersion` / `pageVersion` / `updateReason`。
+- **SW 从不广播新版本**：`firstActivation` 在每个 SW 实例都从 `true` 开始且 `activate` 只调用一次，`!firstActivation` 恒为 `false`，`arcade-sw-update-ready` 从未发出。改为在清理旧缓存前用「旧版本缓存是否存在」判断升级接管后再广播。
+- `updateFound` 改为按版本号比较（新 SW 已接管但页面未刷新也提示刷新）；`controllerchange` 不再用 `null` 覆盖已知版本号；读不到线上版本时提示「检查更新失败」而不谎报「已是最新」；SW 不再缓存 `sw.js` 自身请求。
+- **iOS 主屏 PWA 游玩时长永久停摆**：`Playtime` 旧实现要求 `focused`，而 `focused` 只在 window `focus` 恢复；iOS 主屏 PWA 回前台常常只有 `visibilitychange`，漏一次 `focus` 后这一页永久不计时（`scores:v1` 仍照写）。现只认「页面可见 + 弹层关闭」，新增 `syncSegment()` 在可见性 / `pageshow` / 用户点按按键 / 15 秒 tick 上自愈，`recordRound()` 结算后续开时间片。
+
+### Verification
+- `arcade_pwa_update_test` 6 → **9/9**（新增真实发版链路与读取失败两条）；`arcade_smoke` **108/108**（新增 3 项「漏发 focus」计时回归）；tower 23/23、zen 14/14、calm 17/17、review 5/5、interaction 5/5、immersive 32/32、gameplay all 104/104 + base 22/22、320–430 与 standalone 布局全过。
+- 双端发布：提交 `8493cf7` + `78858e0` ff 合入 `main`；Actions run `45002523350` 四 job 全绿；`verify_deploy.py` **41/41** 双端一致（arcade 0.13.2）；双端线上各 8 项全过、0 console error；SW `studiokit-arcade-0.13.2-v1`；真机更新提示时机待 Owner 复测（UNVERIFIED）。
+
+## Arcade 0.13.1 — 2026-11-22（已双端发布）
+
+### Fixed
+- iPhone 非全屏 PWA 看不到大杀器道具栏：4 个军械槽并入主道具行（3 主动 + 最多 3 军械，默认 5 列、`bay` 满级 6 列），空槽常显「▢ 军械」，删除第二行与 `has-star-items` 高度规则。
+- 核弹改为追踪弹：Boss 在场实时追踪、无 Boss 飞向画面中央，命中后才清弹 / 结算伤害并播放白闪 + 震屏 + 双层冲击波；追踪弹随局内档保存（`run.nukeShots` ≤3）。
+- 「机动强化」（`engine` id 不变，兼容老档）：效果由移速 +6% 改为受击无敌 +0.12s/级与拾取吸附 +6%/级（触屏有效），键盘基础移速固定 320。
+- 机库面板打开时显式暂停 `Playtime`，收起后不再被计成有效游玩。
+
+### Verification
+- `arcade_smoke` **105/105**、tower 23/23、星海挑战 7/7、层塔挑战 6/6、gameplay base 11/11、zen 17/17、calm 7/7、review 5/5、pwa 7/7、interaction 5/5、immersive 32/32、320–430 + standalone 布局 **43/43**。
+- 双端发布：提交 `01eb5b4` 推送 `main`；Actions run `44996450758` 四 job 全绿；`verify_deploy.py` **41/41** 双端一致（arcade 0.13.1）；双端线上实测主道具行 5 列、核弹 0.26s 仍在飞行且 Boss 480 血不变、命中后 354 血 + 冲击波 ×2、0 console error；SW `studiokit-arcade-0.13.1-v1`。
+
+## Arcade 0.13.0 — 2026-11-22（已双端发布）
+
+### Added
+- 星海突击「星域远征」三层循环（战斗 → 关卡 → 远征）：机库六项永久改装与星币结算（`floor(score / 16)` + 整备「军费补给 +40」）、局内火力等级 1–5、能量与枯竭、临时编队、核弹级大杀器（反物质核弹 / 轨道炮 / 时空锚）、6 星区主题轮转（带分数补偿）、CLEAR 三选一整备（卡池 8 种）、动画与打击反馈。
+- 引擎新增通用游戏数据 `A.GameMeta` + key `studiokit:arcade:meta:v1`（机库存于 `games['star-raid'].hangar`，`formula: 1` 锁公式版本）；备份 JSON 新增可选 `gameMeta`，中心页「清除记录」同步清理机库。
+
+### Changed
+- **挑战 6 关数据与判定零改动**，挑战分支不读机库、不写星币；`runs:v1` 只在 `data` 内追加 `run` 字段（挑战为 `run: null`），既有 6 个 key 与 Schema 不变。
+- 星币只来自游玩得分：没有内购、广告、签到或每日奖励；其余 15 款游戏保持「无跨局成长」约定。
+
+### Verification
+- `arcade_smoke` **103/103**（新增 9 项：主题轮转与陨石、火力 1/3/5 弹道、能量消耗 / 枯竭 / 核心恢复、编队与能量归零返航、核弹清弹与 Boss 480→360、CLEAR 三选一、机库购买 / 持久化 / 备份 / 清除、320 与 390 布局）；星海挑战 7/7、tower 23/23 与层塔挑战 6/6（0.12.7 基线同批复跑）、其余门禁全过。
+- 双端发布：提交 `faf1772` 推送 `main`；Actions run `44990933121` 四 job 全绿；`verify_deploy.py` **41/41** 双端一致（arcade 0.13.0）；SW `studiokit-arcade-0.13.0-v1`。
+
+## Arcade 0.12.7 — 2026-11-22（已双端发布）
+
+### Fixed
+- 层塔高层「太快太难」：0.12.5 把难度上限推到 4000 后，封顶完美窗口只剩 24–28ms（1.4–1.7 帧，短于一次显示刷新，也只有触摸→显示固有延迟 ~78ms 的 1/3），命中靠运气。按人类计时能力重标定：上限 4000→**1500**、起始 g 680→560、两段斜率 34/14→**4/8**（约 146 层封顶）、振幅 `0.80 − 0.0015f`。
+- 结果：封顶完美窗口 **28 → 56.5ms**、可落窗口 178 → 335ms；封顶仍是 10 层的 71% 窗口 / 63% 周期。挑战模式完全隔离，关卡摆速仍为 `680 × speedFactor`。
+
+### Verification
+- `arcade_tower_test` 21 → **23/23**（新增 TP-14 真实毫秒窗口守卫）；层塔挑战 6/6；smoke 94/94、zen 14/14、calm 17/17、review 5/5、gameplay base 11/11、pwa 7/7、interaction 5/5、immersive 32/32。
+- 双端发布：提交 `0d267d9` 推送 `main`；Actions run `44986037865` 四 job 全绿；`verify_deploy.py` **41/41** 双端一致（arcade 0.12.7）；线上实测 0/30/200 层 g 560/680/1500、周期 3085/2800/1885ms、0 console error；SW `studiokit-arcade-0.12.7-v1`。
+
+## Arcade 0.12.6 — 2026-11-22（已双端发布）
+
+### Fixed
+- PWA 独立窗口底部按钮比全屏更靠下：`--ac-thumb-lift` 只定义在 `body.arcade-immersive`，安装为 PWA 后拿不到拇指抬升；画布下方与顶栏重复的 `.game-hint` 还占着高度。现在独立窗口套用同一套 36px 抬升、收起重复 hint、去掉残留留白，并把省下的 34px 还给画布。
+- 修后 PWA 与全屏按钮距底完全一致（无安全区 42px / 有安全区 70px），画布增大 34px；横屏沿用既有滚动策略。
+
+### Verification
+- `arcade_immersive_buttons_test` 16 → **32/32**（新增 IB-06：4 档竖屏 × 2 种安全区 × 2 游戏，断言 PWA 与全屏按钮距底差 ≤2px）；smoke 94/94、tower 21/21、其余门禁全过。
+- 双端发布：提交 `c1c2186` 推送 `main`；Actions run `44977911963` 四 job 全绿；`verify_deploy.py` **41/41** 双端一致（arcade 0.12.6）；线上实测 Δ=0（42/42、70/70）、0 console error；SW `studiokit-arcade-0.12.6-v1`。
+
+## Arcade 0.12.5 — 2026-11-22（已双端发布）
+
+### Fixed
+- 层塔难度在 30 层就触顶（`min(1700, 680+34f)`），200 层与 30 层手感相同。改为两段式 `min(4000, 680 + 34·min(f,56) + 14·max(0,f−56))`，约 157 层封顶。
+- 升速时 `g` 阶跃会悄悄吃掉能量、摆幅从 216px 塌到 154px 并抖动；现在按「当前角度 + 目标振幅」反解速度做**振幅归一**，摆幅恒等目标 `max(0.62, 0.92 − 0.004f)`。挑战模式隔离。
+
+### Verification
+- `arcade_tower_test` **21/21**（新增 TP-13 难度曲线：单调性 + 每档更快 + 振幅归一 + 摆幅下限）；实测周期 2800→1154ms、完美窗口 61→24ms、摆幅稳定 159px；层塔挑战 6/6，其余门禁全过。
+- 双端发布：提交 `7593b0a` 推送 `main`；Actions run `44973571565` 四 job 全绿；`verify_deploy.py` **41/41** 双端一致（arcade 0.12.5）；SW `studiokit-arcade-0.12.5-v1`。
+
+## Arcade 0.12.4 — 2026-11-22（已双端发布）
+
+### Fixed
+- 回归：0.12.3 的 LOD 判据含 `boxes.length > 60`，导致塔一超 60 层，**普通 1:1 近景**也退化成纯色方块（波纹 / 角件 / 编号全丢）。现 LOD **只由缩放决定**（`dense = view.scale < 0.2`），性能改用视口裁剪（1000 层近景每帧只画 23–24 只），结构轮廓只在 `scale < 0.35` 绘制。
+
+### Verification
+- `arcade_tower_test` **20/20**（新增 TP-12 `renderLod` 探针：3/40/120/1000 层近景必须 `dense=false`）；smoke 94/94、其余门禁全过。
+- 双端发布：提交 `d79d500` 推送 `main`；Actions 四 job 全绿；`verify_deploy.py` **41/41** 双端一致（arcade 0.12.4）；线上实测近景 scale=1 细节保留、全览 0.2913/0.1028/0.0127 完整入屏；SW `studiokit-arcade-0.12.4-v1`。
+
+## Arcade 0.12.3 — 2026-11-22（已双端发布）
+
+### Fixed
+- 全览存在缩放下限（`clamp(avail/span, 0.08, 1)`）：200 层需 0.0624 溢出 144px、1000 层需 0.0127 溢出 2704px。现改为 `Math.min(1, avail/span)`，并让 `overviewT` 接近目标时吸附，消除塔顶塔底各溢出十几 px 的残差。
+
+### Added
+- 超高塔 LOD（属性色块 + 最小 8px 屏宽脊线 + 结构轮廓，1000 层每帧绘制 ~9000 → ~1000 次 `fillRect`）；层号按屏幕间距抽稀；横幅显示「压缩 0.013×」；`#test` 的 `stackTo` 上限提到 1200。
+
+### Verification
+- `arcade_tower_test` **19/19**（新增 TP-11：40/200/1000 层均完整入屏）；实测 scale 0.2913/0.0624/0.0127、屏幕范围均 116–624、0 溢出；smoke 94/94、其余门禁全过。
+- 双端发布：提交 `79be219` 推送 `main`；Actions run `44968445299` 四 job 全绿；`verify_deploy.py` **41/41** 双端一致（arcade 0.12.3）；SW `studiokit-arcade-0.12.3-v1`。
+
+## Arcade 0.12.2 — 2026-11-22（已双端发布）
+
+### Added
+- 集装箱释放水平速度：吊钩释放时把单摆切向速度 `L·cosθ·θ̇` 经阻尼（`RELEASE_VX_K = 0.45`、上限 240px/s）传给箱子，落体水平匀速 ⇒ 真实抛物线。落点预测改为 `释放点 + vx·t`，画布升级为抛物线 + 释放点虚影 + 预计落点方框，挑战 `releaseWhenAligned()` 同源。`drop.vx` 为可选字段（旧档缺省 0）。
+
+### Verification
+- `arcade_tower_test` **18/18**（新增 TP-10：vx 峰值 >50px/s、预测误差 ≤3px）；参数扫描证实 0.45 时完美窗口 63–115ms，比旧的 43–69ms 更宽；实测 vx 峰值 111–134px/s、预测误差 ≤0.6px。
+- 双端发布：提交 `7c6a4a9` 推送 `main`；Actions run `44964004148` 四 job 全绿；`verify_deploy.py` **41/41** 双端一致（arcade 0.12.2）；SW `studiokit-arcade-0.12.2-v1`。
+
+## Arcade 0.12.1 — 2026-11-22（已双端发布）
+
+### Fixed
+- 层塔「物理不对劲」根因：站立中的塔被 `ctx.rotate(towerLean)` 整体旋转最多 20°，而落点判定 / 堆叠 / 投影全用未旋转坐标 —— 10 层时视觉塔顶已偏 87.6px，玩家对着看到的塔顶松手必然判偏并终局。现塔身始终轴对齐（**所见即所判**），倾斜改为支撑面 + 重心投影可视化与「塔身不稳」预警。
+- 经典模式吊臂小车跟随塔顶（挑战仍按关卡固定 `pivotX`），塔顶恒处摆幅中心；完美吸附力矩改用吸附后偏移；全览从「只平移」改为真正的 zoom-to-fit（40 层 0.29×）；落点投影常显并新增「会落空！」预警；结算拉远后保持全塔缩放。
+
+### Verification
+- `arcade_tower_test` **17/17**（新增 TP-07 可达性 / TP-08 zoom-to-fit / TP-09 所见即所判）；独立只读审计复核根因与遗留项；其余门禁全过。
+- 双端发布：提交 `7d2a80a` 推送 `main`；Actions run `44961843208` 四 job 全绿；`verify_deploy.py` **41/41** 双端一致（arcade 0.12.1）；双端线上各 6/6；SW `studiokit-arcade-0.12.1-v1`。
+
+## Arcade 0.12.0 — 2026-11-22（已双端发布）
+
+### Fixed
+- 全屏 / PWA 底部按钮贴底不好够：新增 `--ac-thumb-lift = 36px`（横屏 20px），四档按钮距底 6→42px、安全区 34→70px，toast 同步抬升。
+- 层塔「偏置堆叠不塌」物理 bug：根因是 lean 弹簧平衡点恒为 0、盒子 x 从不位移。新增持久重心 / 支撑模型（偏心 × 重量 × 高度为 comMoment，重心超出支撑半宽且明显倾斜即倒塌），配重道具真实减重心。
+
+### Added
+- 层塔「🗺 全览」按钮 + 快捷键 3（0.45s 缩放、层号 / 属性 / 重心标尺、全览期间禁止落箱、结算前 0.9s 拉远）；工地集装箱皮肤与 4 种真实生效属性（标准 / 重型 1.65× / 易碎完美 +20 / 奖励 +25）。
+- 合并 0.11.5 的三项修复（双击放大防护、五子棋落子按钮重影、预览取消出口）；新增门禁 `arcade_immersive_buttons_test`（16/16）与 `arcade_tower_test`（13/13）。
+
+### Verification
+- immersive 16/16、tower 13/13、interaction 5/5、smoke 94/94、zen 14/14、calm 17/17、review 5/5、gameplay base 11/11、层塔挑战 6/6、pwa 7/7、validate/build/inline/node --check 全过；真机手感 UNVERIFIED。
+- 双端发布，SW 缓存键 `studiokit-arcade-0.12.0-v1`；无 localStorage key / Schema / 挑战关卡数据变更。
+
+## Arcade 0.11.5 — 2026-11-21（本地提交，已并入 0.12.0）
+
+### Fixed
+- 移动端双击误触放大：17 个页面 viewport 统一加 `maximum-scale=1, user-scalable=no`，`arcade.css` 给 html 补 `touch-action: manipulation`，引擎全局拦截 `dblclick` 默认行为。
+- 五子棋全屏落子按钮文字重影：画布与 DOM 各画一份「落子」，改为**画布为唯一文字源**、DOM 退化为两枚透明命中层。
+- 五子棋预览无操作出口：拆出「取消 / 落子」两枚按钮，取消只清预览、不动棋盘与回合。
+
+### Verification
+- 新增 `tools/arcade_interaction_test.mjs`（5/5）；smoke 94/94、zen 14/14、calm 17/17（五子棋自检 18 条）、review 5/5、gameplay base 11/11 全过；真机双击防护待 Owner 复测（UNVERIFIED）。本版未单独发布，随 0.12.0 上线。
+
+## Arcade 0.11.4 — 2026-11-21（已双端发布）
+
+### Fixed
+- iPhone PWA 顶部「被模糊」的真身是**中心页共享 shellbar**（`StudioKit / 街机厅 Arcade / 源码 ↗`），此前几轮误改游戏标题栏。真机诊断页逐方案对比后，改为 standalone 下 `position: sticky; top: 0` 让 shellbar 贴顶，使 WebKit 用其深色纯色替换 iOS 26+ 系统顶缘模糊（`fixed` 方案会导致下方贴边，已排除）。临时诊断页随后删除。
+
+### Verification
+- `arcade_pwa_update_test` **7/7**（PU-04 新增 sticky 贴顶断言）；smoke 94/94 等全过；滚动 600px 后 shellbar 仍贴顶。
+- 双端发布：提交 `87795d7` 推送 `main`；Actions run `44909647508` 四 job 全绿；`verify_deploy.py` **41/41** 双端一致（arcade 0.11.4）；线上确认 `arcade.css` 含 sticky 规则；SW `studiokit-arcade-0.11.4-v1`。
+
+## Arcade 0.11.3 — 2026-11-21（已双端发布）
+
+### Fixed
+- iPhone 安装版顶部模糊真机修复：0.11.2 用 CSS 盖不住 iOS 26+ 的系统级顶缘模糊。根因是 `viewport-fit=cover` + 半透明状态栏让页面画到状态栏下方，系统在顶缘叠加模糊。本版移除全部 17 页的 `viewport-fit=cover` 与中心页半透明状态栏 meta，并保留贴顶的固定不透明深色条作为兜底。
+
+### Verification
+- `arcade_pwa_update_test` **7/7**（新增 PU-00 元信息防护与 fixed 顶边条断言）；`validate_site.py` 增加防回归断言；smoke 94/94 等全过。
+- 双端发布：提交 `82db383` 推送 `main`；Actions run `44904562855` 四 job 全绿；`verify_deploy.py` **41/41** 双端一致（arcade 0.11.3）；两端线上 HTML 确认无 `viewport-fit=cover`；SW `studiokit-arcade-0.11.3-v1`；真机观感待复测（UNVERIFIED）。
+
+## Arcade 0.11.2 — 2026-11-21（已双端发布）
+
+### Added
+- PWA 更新检测：中心页「🔄 检查更新」按钮 + 更新横幅（发现新版本时提示「立即刷新 / 稍后」，不自动刷新打断游玩）；SW 激活后主动向受控页面广播版本，`A.Offline` 新增 `checkForUpdate` / `applyUpdate` / `onUpdate` / `swVersion`，首次安装不误报更新。
+- iPhone 安装版顶部修复：Arcade shell 导航条改为深色不透明背景、独立窗口安全区铺纯深色底，消除状态栏下的灰白渐层；游戏顶栏提升为独立合成层、舞台 `isolation: isolate` 约束 `backdrop-filter`。
+
+### Verification
+- 新增 `tools/arcade_pwa_update_test.mjs`（6/6）；smoke 94/94、zen 14/14、calm 17/17、review 5/5、gameplay base 11/11、validate/build/inline/node --check 全过。
+- 双端发布：提交 `f2f1cd1` 推送 `main`；Actions run `44899492208` 四 job 全绿；`verify_deploy.py` **41/41** 双端一致（arcade 0.11.2）；双端线上各 7/7、0 console error；SW `studiokit-arcade-0.11.2-v1`。
+
 ## Arcade 0.11.1 — 2026-11-21（已双端发布）
 
 ### Changed
@@ -110,7 +309,7 @@ StudioKit 门户本身没有独立的 semver；以下按仓库里程碑与工具
 ### Added
 - 俄罗斯方块禅模式：开始弹层第三入口「🧘 禅模式」，无限游玩（不设 40 行收局与关卡终点）；速度随等级提升，键盘 `Z` / 画布下方「❄ 冻结提速」可停止速率增加，「▶ 恢复提速」立即追平当前等级；顶栏与画布内禅模式 HUD、暂停「结束本局并记录」与井口结束结算；禅模式局内状态写入既有 `runs:v1` data，刷新可恢复；不写经典最高分。
 - 中心页积分记录表：新增 `A.Scores` 与独立存储 `studiokit:arcade:scores:v1`（Schema v1，最新在前、最多 300 条）；13 款游戏统一结算点自动收集经典积分，禅模式结算追加 `mode:'zen'` 记录；中心页「游玩统计」之后新增表格（时间 / 游戏 / 模式 / 得分 / 详情），支持游戏与模式筛选、单独清除、导出/导入。
-- 0.8.1 设计/契约：`apps/arcade/DESIGN-0.8.1.md`、`docs/arcade/0.8.1-CONTRACT.md`、`docs/arcade/0.8.1-REVIEW.md`。
+- 0.8.1 设计/契约：`apps/arcade/DESIGN-0.8.1.md`、`docs/archive/0.8.1-CONTRACT.md`、`docs/archive/0.8.1-REVIEW.md`。
 
 ### Changed
 - `ARCADE_VERSION`、注册表、中心页版本标记与 Service Worker 缓存键统一升至 `0.8.1`；共享弹层支持可选第三按钮（其他游戏零改动）。
@@ -120,7 +319,7 @@ StudioKit 门户本身没有独立的 semver；以下按仓库里程碑与工具
 - `progress:v1` / `runs:v1` / `prefs:v1` / `playtime:v1` / `challenge:v1` 的 key 与 Schema 全部未变；只新增 `scores:v1`。旧备份导入时保留当前积分记录；损坏积分数据读取 fail-closed；禅模式不改变经典最高分与挑战记录。
 
 ### Verification
-- 发布前独立评审：**APPROVE-WITH-NOTES / 0 Blocker / 2 Major / 8 Minor / 9 UNVERIFIED**（`docs/arcade/0.8.1-REVIEW.md`）；2 Major（发布声明时序、320/375 窄屏禅模式入口被裁剪）与相关 Minor 已在发布前修复/记录。
+- 发布前独立评审：**APPROVE-WITH-NOTES / 0 Blocker / 2 Major / 8 Minor / 9 UNVERIFIED**（`docs/archive/0.8.1-REVIEW.md`）；2 Major（发布声明时序、320/375 窄屏禅模式入口被裁剪）与相关 Minor 已在发布前修复/记录。
 - 门禁：`arcade_zen_scores_test.mjs` **14/14**（含新增四档三入口可见断言）；`arcade_smoke.mjs` **85/85**；`arcade_gameplay_test.mjs --suite=base --repeat=2` **22/22**；`validate_site.py` / `build_site.py` / 全部 `node --check` / `git diff --check` 通过；commit-time-policy 2/2 合规。
 - 双端发布：提交 `575a766`（功能）+ `41fa79e`（评审修复）推送 `main`；Actions `43423208129` 的 Validate and build / Deploy GitHub Pages / Deploy Cloudflare Pages / Verify both deployments 四个 job 全部成功；`tools/verify_deploy.py` **37/37** 文件 SHA-256 双端一致，线上 Arcade `0.8.1` / Badge `2.2.1`；双端线上无头 Chrome **10/10**（门户/中心页/积分记录区/方块页 0.8.1/禅模式无限/冻结恢复/结算不污染最高分/中心页表格显示禅记录）；SW 缓存键 `studiokit-arcade-0.8.1-v1`。iOS/Android 真机触控、30 分钟以上长局与真人理解度仍 UNVERIFIED。
 

@@ -101,7 +101,7 @@
 - [x] 积分记录平台：`A.Scores` + `studiokit:arcade:scores:v1`（Schema v1，最新在前、300 条上限）；13 款游戏统一结算点自动收集经典积分，禅模式追加 `mode:'zen'`；`Progress.recordPlay` 模式感知、导出/导入/清除/单游戏清除接入；共享弹层可选第三按钮。
 - [x] 中心页「积分记录」表：时间/游戏/模式/得分/详情，游戏与模式筛选，最新在前、最多 50 条，空状态与单独清除；四档视口无横向溢出，表格容器内部滚动。
 - [x] 测试与验证：新增 `tools/arcade_zen_scores_test.mjs` 14 场景；`arcade_smoke.mjs` 85/85、`arcade_gameplay_test.mjs --suite=base --repeat=2` 22/22；独立 Reviewer 评审；`validate_site.py` / `build_site.py` / 全部 `node --check` 通过。
-- [x] 独立评审与发布前修复：`docs/arcade/0.8.1-REVIEW.md` APPROVE-WITH-NOTES（0 Blocker / 2 Major / 8 Minor / 9 UNVERIFIED）；M1 改为发布后证据提交时序，M2 修复 320/375 开始弹层禅模式入口被裁剪（窄屏短文案+紧凑样式，ZS-14 加四档三入口可见断言），m-1/m-2/m-5 已修、m-3/m-4/m-7/m-8 已记录。
+- [x] 独立评审与发布前修复：`docs/archive/0.8.1-REVIEW.md` APPROVE-WITH-NOTES（0 Blocker / 2 Major / 8 Minor / 9 UNVERIFIED）；M1 改为发布后证据提交时序，M2 修复 320/375 开始弹层禅模式入口被裁剪（窄屏短文案+紧凑样式，ZS-14 加四档三入口可见断言），m-1/m-2/m-5 已修、m-3/m-4/m-7/m-8 已记录。
 - [x] 发布证据：提交 `575a766`（功能）+ `41fa79e`（评审修复）推送 `main`；Actions `43423208129` 四个 job 全成功；CI 与本地 `verify_deploy.py` 均 **37/37** 文件双端一致（Arcade `0.8.1` / Badge `2.2.1`）；双端线上无头 Chrome **10/10**；SW 缓存键 `studiokit-arcade-0.8.1-v1`。
 - 未验证：iOS/Android 真机触控（禅模式按钮与 Z 键替代）与低端机帧率仍 UNVERIFIED；积分记录不提供排行榜/跨设备同步。
 
@@ -167,6 +167,16 @@
 - [x] 门禁：`arcade_smoke.mjs` **91/91**、`arcade_zen_scores_test.mjs` **14/14**、gameplay base **22/22**，validate/build/node 全过；320/375/390/430 布局通过，真机手感 UNVERIFIED。
 - [x] 发布证据：提交 `14a9160` 推送 `main`；Actions `44553437432` 四 job 全成功；CI 与本地 `verify_deploy.py` 均 **38/38** 双端一致；双端线上无头 Chrome **20/20**（SW、双按钮、经典/挑战相对转向、结算重选、方块三入口、0 console error）；SW 缓存键 `studiokit-arcade-0.8.6-v1`。
 
+## 0.9.0 发布批次（2026-11-20 已双端发布）
+
+### Arcade 0.9.0 — 挑战公平性修复 + 三款平和棋牌（已发布）
+
+- [x] 13 款既有游戏的挑战模式按「是否公平、是否可读、续档是否可信」逐项修复：记忆翻牌道具锁死与续档、2048 继续挑战丢分、俄罗斯方块挑战换块队列、雪铃无效安可不消耗、砖块拖动误发球、层塔挑战落点偏置与续档、矿工最后一钩结算、极速车道近距超车算反、影跃重试刷最佳时间、星海挑战刷新后续档。**不改挑战关卡数据**。
+- [x] 新增三款无倒计时 / 无下注 / 无联网的竖屏单机棋牌：二十一点、五子棋、纸牌接龙（各 2 个可选辅助道具），只复用 `progress:v1` 与 `runs:v1`，不新增存储 key。
+- [x] 新增门禁 `tools/arcade_calm_games_test.mjs`（三款棋牌规则自检 / 结算 / 四档布局 + 10 款修复 regression）、`tools/arcade_calm_probe.mjs`（单页接入探针）、`tools/check_inline_scripts.mjs`（全站内联脚本语法）。
+- [x] 本地门禁：`arcade_smoke.mjs` **94/94**（17 页 / 16 款）、zen 14/14、gameplay base 22/22、`--suite=all` 104/104、calm 17/17；真机触控、五子棋 AI 手感与 320px 点按精度 UNVERIFIED。
+- [x] 发布证据：提交 `eb5e641` 推送 `main`；Actions `44582961215` 四 job 全成功；CI 与本地 `verify_deploy.py` 均 **41/41** 双端一致（Arcade `0.9.0` / Badge `2.2.1` / Venue `0.2.0`）；双端线上无头 Chrome 各 20/20；SW 缓存键 `studiokit-arcade-0.9.0-v1`。设计与回滚见 `apps/arcade/DESIGN-0.9.0.md`，评审见 `docs/archive/0.9.0-REVIEW.md`。
+
 ## 0.10.0 发布批次（2026-11-20 已双端发布）
 
 ### Arcade 0.10.0 — 棋牌规则修复、挑战深度与数据管线（已发布）
@@ -177,6 +187,30 @@
 - [x] 测试：权威夹具读取替换硬编码答案；78 关证据覆盖矩阵；派生文件重生成一致性检查；`arcade_run_all_gates.py` 一键跑全部门禁。
 - [x] 本地门禁：`arcade_smoke.mjs` **94/94**、`arcade_zen_scores_test.mjs` **14/14**、`arcade_gameplay_test.mjs --suite=all --repeat=1` **104/104** 与 base **22/22**、`arcade_calm_games_test.mjs` **17/17**、派生重生成 **143/143**；真机与 AI 手感 UNVERIFIED。
 - [x] 发布证据：提交 `fc37d2b` 推送 `main`；Actions run `44681529684` 的 Validate and build / Deploy GitHub Pages / Deploy Cloudflare Pages / Verify both deployments 四个 job 全部成功；CI 与本地 `tools/verify_deploy.py` 均 **41/41** 文件 SHA-256 双端一致（Arcade `0.10.0` / Badge `2.2.1` / Venue `0.2.0`，manifest `application/manifest+json`）；双端线上无头 Chrome 各 26/26（中心页 0.10.0 + 16 卡 + 三款棋牌注册、三款棋牌 selftest/regression/开始/暂停、0.10.0 挑战数据字段、0 console error）；SW 缓存键 `studiokit-arcade-0.10.0-v1`。（详细记录见 `docs/RELEASE-RUNBOOK.md`）
+
+## 0.11.0 / 0.11.1 发布批次（2026-11-21 已双端发布）
+
+- [x] 0.11.0 — 16 款游戏共 45 处结算弹层不再用暗色蒙层盖住终局画面：结算卡片移到底部、新增「回看」按钮与「查看结算」胶囊一键切换（共享引擎 `result:true`，页面模板零改动）；五子棋棋盘 384→400、格距 34→36、棋子半径 14→15。门禁 `arcade_run_all_gates.py` ALL PASSED（smoke 94/94、zen 14/14、calm 17/17、review 5/5、gameplay all 104/104、base 22/22，新增 `arcade_review_test.mjs` 5/5）。发布：`8453baf` / Actions `44774786680`（首次 Verify 遇 CF 传播延迟，同 SHA `--failed` 重跑通过）。
+- [x] 0.11.1 — 结算默认恢复高级模糊蒙层，点专用回看按钮才透明回看；回看按钮按游戏定制文案（赛道 / 矿场 / 牌桌 / 果园等）。发布：`d51c87e` / Actions `44876176661` / `verify_deploy.py` 41/41 / 线上 12/12。设计见 `apps/arcade/DESIGN-0.11.0.md`、`DESIGN-0.11.1.md`。
+
+## 0.11.2–0.11.5 修复批次（2026-11-21）
+
+- [x] 0.11.2 — PWA 更新检测（中心页「检查更新」按钮 + 更新横幅 + SW 主动广播 + `checkForUpdate/applyUpdate/onUpdate/swVersion`），并修 iPhone 安装版顶部灰白渐层与顶栏文字发虚；新增 `tools/arcade_pwa_update_test.mjs`（6/6）。发布：`f2f1cd1` / Actions `44899492208` / 41/41 / SW `0.11.2-v1`。
+- [x] 0.11.3 — 移除全部 17 页 `viewport-fit=cover` 与中心页半透明状态栏 meta（iOS 26+ 系统级顶缘模糊的真因），保留贴顶不透明深色条兜底；validate 增加防回归断言。发布：`82db383` / Actions `44904562855` / SW `0.11.3-v1`。
+- [x] 0.11.4 — 真机诊断确认「被模糊」对象是中心页共享 shellbar；standalone 下改 `position: sticky; top: 0` 贴顶，临时诊断页删除；PU-04 新增 sticky 断言。发布：`87795d7` / Actions `44909647508` / SW `0.11.4-v1`。
+- [x] 0.11.5（未单独发布，已并入 0.12.0）— 移动端双击误触放大防护（17 页 viewport + `touch-action` + `dblclick` 拦截）、五子棋落子按钮文字重影（画布为唯一文字源 + DOM 透明命中层）、预览取消出口（拆「取消 / 落子」）；新增 `tools/arcade_interaction_test.mjs`（5/5）。
+- [ ] 真机复测：iOS 26+ 顶部观感与 PWA 更新提示时机待 Owner 确认（UNVERIFIED，无头 Chrome 无法重现系统级模糊）。
+
+## 0.12.0–0.12.7 层塔与拇指区批次（2026-11-22 已双端发布）
+
+- [x] 0.12.0 — 全屏 / PWA 底部按钮拇指区抬升（`--ac-thumb-lift` 36px）；层塔持久重心 / 支撑物理模型（偏置堆叠会真的塌）；层塔全览（按钮 + 快捷键 3）；工地集装箱皮肤与 4 种真实生效属性；合并 0.11.5。新增 `arcade_immersive_buttons_test`（16/16）与 `arcade_tower_test`（13/13）。
+- [x] 0.12.1 — 层塔「所见即所判」：塔身轴对齐（不再整体旋转但用未旋转坐标判定）、倾斜改为支撑面 / 重心可视化、经典模式吊臂跟随塔顶、完美吸附力矩修正、全览 zoom-to-fit、落点投影常显；tower **17/17**。发布：`7d2a80a` / Actions `44961843208`。
+- [x] 0.12.2 — 集装箱释放水平速度（`L·cosθ·θ̇ × 0.45`，上限 240px/s）与抛物线落点预测；tower **18/18**（预测误差 ≤3px，实测 ≤0.6px）。发布：`7c6a4a9` / Actions `44964004148`。
+- [x] 0.12.3 — 全览去掉缩放下限（200 / 1000 层都能一屏看全塔）+ 超高塔 LOD + 层号抽稀；tower **19/19**。发布：`79be219` / Actions `44968445299`。
+- [x] 0.12.4 — 修复 LOD 误按层数触发导致近景集装箱退化成色块（LOD 只看缩放 + 视口裁剪）；tower **20/20**。发布：`d79d500`。
+- [x] 0.12.5 — 层塔难度两段式曲线（约 157 层封顶）+ 升速时振幅归一（摆幅不再塌缩）；tower **21/21**。发布：`7593b0a` / Actions `44973571565`。
+- [x] 0.12.6 — PWA 独立窗口套用拇指抬升并收起重复 hint（底部按钮与全屏同高、画布 +34px）；immersive **32/32**（新增 IB-06）。发布：`c1c2186` / Actions `44977911963`。
+- [x] 0.12.7 — 层塔难度按人类计时能力重标定（封顶完美窗口 28→56.5ms、可落 178→335ms，挑战零改动）；tower **23/23**（新增 TP-14 真实毫秒窗口守卫）。发布：`0d267d9` / Actions `44986037865`。
 
 ## 0.13.0 发布批次（2026-11-22 已双端发布）
 
@@ -247,7 +281,7 @@ Owner 在 iPhone 主屏 PWA（Cloudflare Pages）复测 0.13.2：星海/2048/俄
 1. **Arcade 0.13.0 真机试玩**：已双端发布（见上一节）；剩余真机试玩（星币节奏/能量取舍/核弹稀缺度/主题可感知度）。
 2. **Arcade 0.10.0 真机试玩**：重点验证三款棋牌的点按精度（320px 五子棋/接龙）、五子棋 AI 难度是否合适、挑战修复后的手感（砖块拖动发球、层塔对齐提示、矿工最后一钩、影跃累计计时文案）。
 3. **挑战内容密度**：俄罗斯方块 C04 重复、2048 C05 一步可解、影跃参考通关过短等内容问题需要改设计源 + 生成器 + 参考解，另行排期；本轮只修判定/提示/续档/计分。
-4. **Arcade 0.8.0/0.9 设计差量试玩**：按 `docs/arcade/0.8.0-PLAYTEST.md` 与 `docs/arcade/0.9/PLAYTEST.md` 在真机做两轮试玩并裁决 5 项设计差量；真机未验证前不宣称通过。
+4. **Arcade 0.8.0/0.9 设计差量试玩**：按 `docs/archive/0.8.0-PLAYTEST.md` 与 `docs/archive/arcade-0.9-PLAYTEST.md` 在真机做两轮试玩并裁决 5 项设计差量；真机未验证前不宣称通过。
 5. **数值反馈**：收集道具次数、自然收尾目标与休息提醒时长的真实反馈，再决定是否微调。
 6. **双端发布维护**：观察 GitHub Pages 与 Cloudflare Pages 版本一致性；需要时再绑定自定义域名或调整缓存策略。
 
