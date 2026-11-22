@@ -69,7 +69,7 @@
 | Chrome/CDP | `career_db_test` 38/38；`career_backup_test` 34/34；`career_games_reachability_test` 161/161（16/16 真实可达）；`career_discovery_accessibility_test` 75/75；`career_pwa_offline_test` 17/17 | 全部 exit 0 |
 | 既有回归（聚合器） | `py -3 tools/arcade_run_all_gates.py`：validate/build/design/inline/stage + career 全组 + smoke 113/113 + zen + calm + review + gameplay all/base | `ALL GATES PASSED` |
 | 既有回归（聚合器外） | `arcade_tower_test` 23/23、`arcade_immersive_buttons_test` 32/32、`arcade_interaction_test` 5/5、`arcade_pwa_update_test` 9/9 | 全部 exit 0 |
-| 独立门禁 | G15 Reviewer 复跑（见 `G15-EVIDENCE.md` 与仓库外证据） | 待/见该文件 |
+| 独立门禁 | G15 Reviewer 复跑；非剧透摘要见 `docs/arcade-life/G15-EVIDENCE.md`，完整证据在仓库外 `qa/evidence/G15-EVIDENCE.md` | 首轮 FAIL（挑战事件泄漏+工作树不干净）→ 修复后复评 |
 
 > 说明：一次并行运行（多个 Chrome 门禁同时跑）曾导致 smoke 的星海核弹时序断言偶发失败；单独复跑 113/113 通过，并在无并发 Chrome 的干净环境重跑聚合器确认。报告与证据中保留该事实，不把并发抖动写成产品缺陷。
 

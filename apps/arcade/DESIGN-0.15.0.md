@@ -52,7 +52,7 @@ apps/arcade/career/
 - 纯 Node：`career_registry_test`（90 项，含虚拟第 17 款插拔）、`career_discovery_test`（84 项，16 源单源可达）、`career_legacy_baseline_test`（78 项，0.14.0 契约金样）。
 - Chrome/CDP：`career_db_test`（38 项：事务/幂等/多标签/配额失败）、`career_backup_test`（格式/迁移/旧档/坏档回滚）、16 款游戏适配的 CDP 实测（每组独立证据）。
 - 既有回归：`arcade_smoke`、`arcade_gameplay_test --suite=all`、`arcade_tower_test`、`arcade_zen_scores_test`、`arcade_calm_games_test`、`arcade_review_test`、`arcade_interaction_test`、`arcade_immersive_buttons_test`、`arcade_pwa_update_test`，以及 `validate_site/build_site/check_inline_scripts/design_check/stage_coverage`。
-- 全部证据路径与命令见仓库外 `qa/evidence/`；G15 门禁另见 `docs/arcade-life/G15-EVIDENCE.md`（生成后）。
+- 全部证据路径与命令见仓库外 `qa/evidence/`；G15 门禁的非剧透摘要见 `docs/arcade-life/G15-EVIDENCE.md`，完整原始证据（命令输出/探针/截图）只在仓库外。
 - 真机 iPhone/Android 触控与 PWA 安装/更新时机：**UNVERIFIED**，需 Owner 复测。
 
 ## 6. 已知风险
