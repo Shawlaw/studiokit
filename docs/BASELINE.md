@@ -26,13 +26,16 @@ Current Venue Compare baseline facts:
 
 Current Arcade baseline facts:
 
-- App version: `0.10.0`（`apps/arcade/engine.js` 的 `ARCADE_VERSION` 与注册表保持一致；2026-11-20 已双端发布）
+- App version: `0.13.0`（`apps/arcade/engine.js` 的 `ARCADE_VERSION` 与注册表保持一致；**0.13.0 开发中、未发布**，门禁与验收清单见 `apps/arcade/DESIGN-0.13.0.md` §8，结果以实际执行输出为准）
 - Registry entry: `shared/tool-registry.json` → `id: "arcade"`，`href: "./apps/arcade/"`
 - Games: 16（13 款带 6 关挑战 + 3 款平和棋牌：二十一点、五子棋、纸牌接龙；清单唯一来源是 `engine.js` 顶部的 `GAMES` 数组）
 - Run state schema: `v1`（`studiokit:arcade:runs:v1`）
 - Progress schema: `v1`（`studiokit:arcade:progress:v1`）
 - Playtime schema: `v1`（`studiokit:arcade:playtime:v1`；0.5.0 新增，独立 key）
 - Preferences key: `studiokit:arcade:prefs:v1`；字段 `muted`、`immersive`
+- 0.13.0 新增 key：`studiokit:arcade:meta:v1`（引擎通用游戏数据，Schema `v1`，`{ schemaVersion: 1, games: { <gameId>: {...} } }`；只存普通 JSON、单游戏 ≤32KB、损坏 fail closed，API `A.GameMeta.get/set/clear/clearAll/exportData/importData`）。目前仅星海突击使用：`games['star-raid'].hangar = { v: 1, formula: 1, credits, upgrades{hull,power,engine,energy,bay,wing}, runs, best }`，`formula: 1` 锁定星币公式版本；星币 = `floor(score / 16)` + 整备「军费补给 +40」，只由游玩得分产生，无内购/签到/广告。原有 `progress:v1` / `runs:v1` / `prefs:v1` / `playtime:v1` / `scores:v1` / `challenge:v1` 的 key 与 Schema 版本不变
+- 0.13.0 备份与重置：备份 JSON 新增可选 `gameMeta`（`A.GameMeta.exportData()` 快照）；旧备份无 `gameMeta` 时保留当前机库，导入失败整体回滚（含 meta key）；中心页「清除记录」与 `Progress.resetGame/resetAll` 调用 `A.GameMeta.clear(gameId)` 同步清理；既有备份字段含义不变
+- 0.13.0 星海突击经典模式：机库六项改装（装甲强化 `hull` 0–3、火力校准 `power` 0–5、引擎调校 `engine` 0–5、反应堆 `energy` 0–5、弹仓扩容 `bay` 0–1、僚机中队 `wing` 0–3；初始生命 `3+hull`、上限生命 `5+hull`）、局内火力等级 1–5、能量与枯竭（基础 1.2/s、枯竭被动 2.2/s 回能到 25 解除、掉命能量保底 40%）、临时编队、大杀器（反物质核弹 / 轨道炮 / 时空锚）、6 星区主题轮转（`themeIndex = (level - 1) % 6`，各带分数补偿）、Boss 血量 `480 + (level-1) × 280` × 主题 `bossHp`、CLEAR 三选一整备（卡池 8 种）；**挑战 6 关数据与判定零改动**，挑战分支不读机库、不写星币
 - 0.4.0 的黄金矿工道具状态是局内档 `data` 的追加字段（`tools` / `winchArmed`），不新增 localStorage key，不改变 Schema 版本
 - 0.5.0 的游玩统计按游戏保存总时长、完成轮次、最近 30 轮与最近 120 天日汇总；备份新增可选 `playtime` 字段，旧备份兼容
 - 0.5.1 修复连续游玩超过 15 秒后计时停止：每次定时落盘后重新开启时间片；Service Worker 缓存版本同步升至 0.5.1
@@ -51,7 +54,8 @@ Current Arcade baseline facts:
 - 全屏/沉浸模式：原生 Fullscreen API 优先，不支持时使用 CSS 沉浸；iPhone Safari 不支持网页元素全屏，**真机与原生全屏仍未验证**
 - PWA/离线：manifest + `apps/arcade/sw.js`，作用域 `apps/arcade/`；显式预载 27 项（11 外壳 + 16 游戏），断网回归已自动化；**iOS/Android 真机安装与系统分享面板仍未验证**
 - Automated coverage: `node tools/arcade_smoke.mjs` **94/94**（需要本机 Chrome）；`node tools/arcade_zen_scores_test.mjs` **14/14**；`node tools/arcade_gameplay_test.mjs --suite=all --repeat=1` **104/104** 与 `--suite=base --repeat=2` **22/22**；`node tools/arcade_calm_games_test.mjs` **6 场景**（三款棋牌规则自检/结算/四档布局 + 10 款修复 regression）；`check_inline_scripts.mjs` 覆盖 19 个 HTML 的 20 段内联脚本
-- Design/rollback reference: `apps/arcade/DESIGN-0.4.0.md`、`DESIGN-0.5.0.md`、`DESIGN-0.6.0.md`、`DESIGN-0.7.0.md`、`DESIGN-0.8.0.md`、`DESIGN-0.8.1.md`、`DESIGN-0.8.2.md`、`DESIGN-0.8.4.md`、`DESIGN-0.8.5.md`、`DESIGN-0.8.6.md`、`DESIGN-0.9.0.md`
+- 0.13.0 已在 `arcade_smoke.mjs` 落地的回归（主题轮转与陨石、火力 1/3/5 弹道、能量消耗/枯竭/核心恢复、编队充能与能量归零返航、核弹清弹/重创 Boss/反馈、CLEAR 整备三选一、机库购买/刷新持久化/备份/清除记录；smoke 103/103），并已复跑挑战 6 关 7/7与挑战 6 关 `arcade_challenge_test.mjs` **尚未执行**；本文件不记录未发生的门禁结论，数字以实际执行输出为准
+- Design/rollback reference: `apps/arcade/DESIGN-0.4.0.md` … `DESIGN-0.9.0.md`（逐版一份）、`DESIGN-0.10.0.md` 之后的逐版设计文件（0.11.x / 0.12.x 全量保留）、最新 `DESIGN-0.13.0.md`
 - Arcade README/CHANGELOG: `apps/arcade/README.md`、`apps/arcade/CHANGELOG.md`
 
 变更 Arcade 版本、GAMES 数量、存储 key、Schema 或玩法基线时，必须同步更新本文件、注册表、Arcade README/CHANGELOG 与相关测试。变更 Venue Compare 版本、存储 Schema 或链接限制时，必须同步更新本文件、注册表、README/CHANGELOG 与 `restaurant_compare_smoke.mjs`。

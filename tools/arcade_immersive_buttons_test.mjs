@@ -1,6 +1,6 @@
 #!/usr/bin/env node
 /**
- * Arcade 0.12.7-interaction 门禁：全屏(immersive)/PWA 独立窗口底部道具按钮拇指区抬升。
+ * Arcade 0.13.0-interaction 门禁：全屏(immersive)/PWA 独立窗口底部道具按钮拇指区抬升。
  *
  * 覆盖：
  * - IB-00 CSS 契约：--ac-thumb-lift 变量、stage-wrap / touch-pad / toolbelt / toast 抬升规则存在
@@ -277,7 +277,7 @@ async function main() {
     assert(m.canvas.h > 100, label + ' 横屏画布不可玩 h=' + m.canvas.h);
     record(label + ' 20px 小抬升 + 画布可玩 + 按钮可点无溢出', true);
 
-    /* ---------- IB-06 PWA 独立窗口（非全屏）底部适配（0.12.7） ----------
+    /* ---------- IB-06 PWA 独立窗口（非全屏）底部适配（0.13.0） ----------
        Owner 反馈「PWA 时按钮比全屏更靠下」。原因：--ac-thumb-lift 只定义在 .arcade-immersive 上，
        独立窗口既没有拇指抬升、又被画布下方 .game-hint 挤占高度（实测按钮距底 60px vs 全屏 42px）。
        现在独立窗口也套用同一抬升 + 收起 hint，按钮位置必须与全屏一致（±2px）且画布更大。 */

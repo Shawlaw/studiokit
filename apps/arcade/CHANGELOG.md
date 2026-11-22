@@ -1,5 +1,46 @@
 # Arcade Changelog
 
+
+
+## 0.13.0 — 2026-11-22（未发布 · 本地门禁已通过）
+
+星海突击「星域远征」：把 Owner 反馈的六件事——每关都是白板装备、关卡难度没有差异、机体没有大升级与常态 buff、想要稀缺的核弹级大伤害道具、想要油量/能量这类局限、想要临时编队等出击状态——落到一条「战斗 → 关卡 → 远征」的三层循环里。**经典模式全部改动；挑战 6 关的数据与判定零改动。** 设计、数值与回滚见 `DESIGN-0.13.0.md`。
+
+### Added
+
+- **机库永久改装与星币（跨局成长）**：结算按 `floor(score / 16)` + 整备卡「军费补给 +40」发放星币，写入**引擎新增的通用游戏数据** `studiokit:arcade:meta:v1` 的 `games['star-raid'].hangar`（Schema `v1`，机库内 `formula: 1` 锁定公式版本）——0.13.0 不新增专属机库 key。开始弹层第三入口与结算弹层第二入口进入「机库改装」，退出回到开始弹层；CLEAR 整备摘要显示「星币 +N」，结算弹层显示「+N 星币（机库共 M）」。六项改装：装甲强化 `hull`（0–3，初始生命 +1、上限生命 +1）、火力校准 `power`（0–5，全部子弹伤害 +6%/级）、引擎调校 `engine`（0–5，移动速度 +6%/级）、反应堆 `energy`（0–5，能量上限 +10/级）、弹仓扩容 `bay`（0–1，大杀器槽 2→3，220 星币）、僚机中队 `wing`（0–3，编队时长 +2s、编队充能 +1）；成本 60–600 星币/级。初始生命 = `3 + hull`，上限生命 = `5 + hull`，每关 CLEAR 回 1 生命但不超上限。
+- **局内火力等级 `power` 1–5**：等级 1 双发 → 2 加中央 → 3 加两发内斜 → 4 加两发外侧 → 5 加中央重弹（单发 2 伤害），射击间隔 0.13s → 0.127s / 0.124s / ≈0.117s。Boss 击破必 +1（封顶 5）、整备卡「火力核心」+1、重装敌机 30% 掉落火力核心；受击时 `power = max(1, power - 1)`，保底不回到白板。
+- **能量与枯竭**：上限 `100 + 10 × energy改装`，开局满、跨关保留，CLEAR +40、Boss 击破 +45；消耗为基础 **1.2/s**，每种「第二份起」的弹种 Buff 额外 +0.45/s、编队期间 +3.0/s、电磁风暴主题 ×1.6；恢复为击杀 +0.6/架、能量核心（普通击杀 7%、18 杀保底，+18）、火力核心满级转 +12 能量、道具槽满时拾取 +10。能量 ≤0 即枯竭：射击间隔 ×1.8、伤害 ×0.7、移速 ×0.92、无法启动编队并强制结束当前编队、HUD 红色警告；枯竭时被动回能 2.2/s，回到 25 解除，吃到能量核心立即解除。掉命时能量保底到上限的 40%，避免「掉命 → 没能量 → 再掉命」的死亡螺旋。画布顶部能量条在低于 25% 时脉冲高亮。
+- **临时编队（僚机）**：初始充能 1 + `wing` 改装等级（上限 3），每局重置；启动消耗 1 充能，2 架僚机入场 `8 + 2×wing` 秒，跟随玩家左右 ±34px，每 0.22s 各射 1 发（伤害 0.8 + 火力修正），各有 2 点耐久可拦截敌弹（命中白闪 + 碎片）后损毁，全部损毁或能量枯竭立即结束；结束前 2 秒有浮动文字预警。HUD 显示充能数与剩余时间，僚机有独立受击闪白与拖尾。
+- **大杀器（稀缺道具，携带/使用）**：槽位 `2 + bay改装`（最多 3），按槽保存、跨关携带，新开一局清空；击杀稀有掉落 0.6%（核弹 / 轨道炮 / 时空锚同池，180 击杀保底），也可由 Boss 后整备卡获得；触屏按钮或快捷键 4–7 使用，用后槽位清空。反物质核弹清空全部敌弹（普通敌机 80 伤害；Boss 受 `max(120, min(260, 25% maxHp))`）+ 全屏白闪与强震屏；轨道炮 3.2s 垂直光柱（宽 28px，跟随玩家 x，每 0.2s 对柱内目标 40/55 伤害）；时空锚 5s 内敌弹速度 ×0.25、敌机速度 ×0.3、Boss 行动 ×0.55，并叠蓝色时停滤镜。
+- **6 星区主题轮转（带分数补偿）**：`themeIndex = (level - 1) % 6`，同一关固定不随机。巡逻星域（无修正，分数 ×1.00）、陨石带（每 4.2s 刷陨石，HP 4+，撞机扣命、可击碎，敌机生命 ×1.05，×1.05）、电磁风暴（能量消耗 ×1.6、敌弹速度 ×1.12、星空电弧特效，×1.10）、舰队封锁（刷怪 ×1.22、重装敌机权重 ×2、敌机生命 ×1.08，×1.15）、星云迷雾（边缘暗角雾、敌弹 ×0.88、瞄准抖动 ±0.08rad、掉落 +20%，×1.10）、母舰防线（Boss 生命 ×1.35、射击间隔 ×0.9、普通刷怪 ×0.8，×1.20）。分数补偿计入击杀/Boss 分与星币，避免只刷最容易的关卡。Boss 血量按「白板 DPS × 可接受时长」重标为 `480 + (level-1) × 280`（0.12 的 700/300 偏肉），再乘主题 `bossHp`。关卡基础缩放仍沿用 0.12 的线性递增，主题只做乘法叠加。
+- **CLEAR 三选一整备**：Boss 击破后保留旧行为（火力 +1、生命 +1、能量 +45、脉冲/星盾补给），并给出 3 张整备卡。卡池共 8 种：火力核心（power +1，满级转 +20 能量）、装甲修复（+1 生命）、能量电池（回满 + 本局上限 +10）、僚机补给（+1 充能）、军费补给（本局结算 +40 星币）、核弹 ×1、轨道炮 ×1、时空锚 ×1（后三种仅在道具槽未满时进入卡池）。卡片按局内种子确定性抽取（便于刷新恢复与回归测试），一次只可选 1 张；主按钮「下一关」、次按钮「圆满收局」保持旧契约。
+- **动画与打击反馈**：双层视差星空 + 关卡切换跃迁光带 + 主题染色（陨石褐 / 风暴青 / 母舰红）；玩家推进器粒子拖尾、左右移动机身倾斜（只影响绘制）、枪口闪光；敌机 70ms 白闪、Boss 伤害数字、击杀冲击波圆环；受击红屏闪、核弹白闪、Boss 入场警戒横幅、能量条低电量脉冲、编队入场光环与结束预警、陨石旋转、时空锚蓝色滤镜。全部动效读取 `A.reducedMotion`，降级时减粒子/取消震屏，不改判定与数值。
+- **引擎通用游戏数据 `A.GameMeta`**：新增独立 key `studiokit:arcade:meta:v1`（Schema v1，`{ schemaVersion: 1, games: { <gameId>: {...} } }`；只存普通 JSON、单游戏 ≤32KB、损坏数据 fail closed 且不覆盖原值），提供 `get/set/clear/clearAll/exportData/importData`。星海突击用 `A.GameMeta.get('star-raid')` / `A.GameMeta.set('star-raid', { hangar })` 读写机库；中心页「清除记录」与 `Progress.resetGame/resetAll` 调 `A.GameMeta.clear` 同步清理；备份 JSON 新增可选 `gameMeta` 字段，旧备份缺该字段时保留当前机库，导入失败整体回滚（含 meta key）。
+
+### Changed
+
+- 版本链升至 `0.13.0`，SW 缓存键 `studiokit-arcade-0.13.0-v1`；中心页 `data-hall-version`、注册表 `version` 与 `ARCADE_VERSION` 同步。
+- 星海突击 HUD 扩为「生命 / 火力等级 / 能量条 / 编队充能 / 大杀器槽 / 主题名」；「机库改装」入口在开始弹层第三按钮与结算弹层第二按钮，退出后回到开始弹层；CLEAR 整备弹层摘要显示「星币 +N」，结算弹层显示「+N 星币（机库共 M）」。
+- **挑战 6 关数据与判定零改动**：`challenge/star-raid.js` 的关卡数据、Boss 规格与判定链路未修改；挑战分支不读机库改装、不写星币，序列化结构也与旧版一致。
+
+### Compatibility
+
+- 新增 localStorage key：只有引擎通用游戏数据 `studiokit:arcade:meta:v1` 一个（Schema v1），机库存于 `games['star-raid'].hangar = { v, formula, credits, upgrades{hull,power,engine,energy,bay,wing}, runs, best }`，`formula: 1` 锁定星币公式版本。原有 `progress:v1` / `runs:v1` / `prefs:v1` / `playtime:v1` / `scores:v1` / `challenge:v1` 的 key 与 Schema 不变。
+- 局内存档 `serialize()` 在 `data` 内新增 `run` 字段（power / energy / maxEnergy / depleted / items / formationCharges / formationTimer / combo / comboTimer / creditsBonus / refitOfferIds / refitChosen / seed / lance / freezeTimer），挑战分支为 `run: null`、结构不变；旧档缺失时按默认值恢复，不迁移、不中断旧局。
+- 机库 `hangar` 带 `v` 与 `formula`；非法 JSON、单游戏超过 32KB 或越界数值按 fail closed 回退默认且不覆盖原值；清空只需删 key 或调 `A.GameMeta.clear(gameId)`。
+- 备份 JSON 新增可选 `gameMeta` 字段（`A.GameMeta.exportData()` 的快照）；旧备份无该字段时保留当前机库，导入失败回滚相关存储 key（含 meta key）。
+- 回滚：删 `studiokit:arcade:meta:v1` + 还原相关文件即可；旧版页面会忽略 `run` 字段与 `gameMeta`。
+
+### Verification
+
+- 静态：`node tools/check_inline_scripts.mjs` PASS（19 个 HTML / 20 段脚本）、`node --check apps/arcade/engine.js` / `sw.js` PASS、`python tools/validate_site.py` PASS、`python tools/build_site.py` PASS。
+- `node tools/arcade_smoke.mjs` **103/103**（原 94 项 + 0.13.0 新增 9 项：六星区主题轮转与陨石、火力 1/3/5 弹道、能量被动消耗/枯竭/核心恢复、编队充能/双僚机/能量归零返航、核弹清弹/重创 Boss/反馈、CLEAR 整备三选一 + Boss 火力 +1、机库购买/刷新持久化/备份/清除记录、机库面板 390px、道具行与整备卡 320px）。375px 全游戏页布局、320px 全游戏页布局、PWA/离线、导入导出与版本链断言同步为 0.13.0。
+- 挑战 6 关零回归：`node tools/arcade_gameplay_test.mjs --suite=challenge --game=star-raid` **7/7**（C01/C02–C04/C05–C06 仍 engine-replay 零伤害通关，失败归因、暂停刷新恢复、320/390 面板无溢出均通过）。
+- 其余门禁：gameplay base **11/11**、zen **17/17**、calm **7/7**、review **5/5**、pwa **7/7**、interaction **5/5**、immersive **32/32**、stage coverage 78 关矩阵正常。
+- 新 UI 布局：320 / 375 / 390 / 430px 下机库面板、道具行、编队按钮、CLEAR 整备卡无横向溢出、按钮 ≥44px（320/390 已固化为 smoke 回归）。
+- 真机手感（能量节奏、核弹手感、编队拦截反馈）UNVERIFIED；发布：待授权后回填（提交 SHA / Actions run / `verify_deploy.py` 双端文件数）。
+
 ## 0.12.7 — 2026-11-22（已双端发布）
 
 ### Fixed

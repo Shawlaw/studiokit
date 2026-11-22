@@ -4,9 +4,9 @@
 
 - **线上站点：** <https://shawlaw.github.io/studiokit/> · <https://studiokit.pages.dev/>
 - **源码：** <https://github.com/Shawlaw/studiokit>（MIT 许可）
-- **当前工具：** Badge Studio `2.2.1`；街机厅 Arcade `0.12.7`（16 款竖屏小游戏：13 款带 78 关挑战模式 + 二十一点/五子棋/纸牌接龙三款平和棋牌；俄罗斯方块禅模式 + 积分记录表 + 极速车道转向灯换道/连超/拾取 + 结算重选模式 + 结算回看 + PWA 更新检测 + iPhone 顶部修复 + 双击放大防护 + 五子棋落子防重影/预览取消 + 全屏拇指抬升 + 层塔持久重心物理/全览/工地集装箱皮肤与属性 + 层塔物理一致性与全览 zoom-to-fit + 集装箱释放水平速度（抛物线落点）+ 全览无缩放下限（千层也能看全塔）+ 近景集装箱细节（LOD 只看缩放）+ 难度两段式曲线与振幅归一 + PWA 独立窗口底部按钮与全屏同高；2026-11-22 已双端发布）；Venue Compare `0.2.0`（餐厅考察对比、地图标注与外部链接 / 备注，已发布）
+- **当前工具：** Badge Studio `2.2.1`；街机厅 Arcade `0.13.0`（开发中，未发布 · 本地门禁 103/103 已过；16 款竖屏小游戏：13 款带 78 关挑战模式 + 二十一点/五子棋/纸牌接龙三款平和棋牌；俄罗斯方块禅模式 + 积分记录表 + 极速车道转向灯换道/连超/拾取 + 结算重选模式 + 结算回看 + PWA 更新检测 + iPhone 顶部修复 + 双击放大防护 + 五子棋落子防重影/预览取消 + 全屏拇指抬升 + 层塔持久重心物理/全览/工地集装箱皮肤与属性 + 层塔物理一致性与全览 zoom-to-fit + 集装箱释放水平速度（抛物线落点）+ 全览无缩放下限（千层也能看全塔）+ 近景集装箱细节（LOD 只看缩放）+ 难度两段式曲线与振幅归一 + PWA 独立窗口底部按钮与全屏同高 + 层塔难度按人类计时能力重标定（封顶完美窗口 28→56.5ms）；0.13.0 给星海突击加入星币机库改装（星币 = `floor(score / 16)` + 军费补给）、局内火力等级与能量/枯竭、临时编队、核弹级大杀器、6 类星区主题与 CLEAR 三选一整备（挑战 6 关数据与判定零改动，星币只来自游玩得分）；上一版 0.12.7 于 2026-11-22 已双端发布）；Venue Compare `0.2.0`（餐厅考察对比、地图标注与外部链接 / 备注，已发布）
 - **计划中的工具：** Rounded Image（尚未实现，等待原始需求/规格）
-- **最近发布：** 2026-11-21，Arcade 0.11.1（结算默认保留高级模糊蒙层、按钮按游戏命名，点回看才透明看终局；五子棋棋盘放大；GitHub Pages + Cloudflare Pages 双端；提交 `d51c87e` 推送 `main`；Actions run `44876176661` 四 job 全绿；CI 与本地 `tools/verify_deploy.py` 均 **41/41** 文件 SHA-256 双端一致（Arcade `0.11.1` / Badge `2.2.1` / Venue `0.2.0`，manifest `application/manifest+json`）；双端线上无头浏览器 12/12（中心页 0.11.1 + 五子棋棋盘 400/格距 36 + 默认模糊蒙层 + 按游戏文案「回看棋盘/回看果园」+ 回看透明/胶囊 + 0 console error）；SW 缓存键 `studiokit-arcade-0.11.1-v1`。）
+- **最近发布：** 2026-11-22，Arcade `0.12.7`（层塔难度按人类计时能力重标定：上限 4000→1500、起始 g 680→560、两段斜率 4/8、振幅 0.80−0.0015f，封顶完美窗口 28→56.5ms、可落 178→335ms；挑战模式零改动；GitHub Pages + Cloudflare Pages 双端；提交 `0d267d9` 推送 `main`；Actions run `44986037865` 四 job 全绿；CI 与本地 `tools/verify_deploy.py` 均 **41/41** 文件 SHA-256 双端一致（Arcade `0.12.7` / Badge `2.2.1` / Venue `0.2.0`，manifest `application/manifest+json`）；SW 缓存键 `studiokit-arcade-0.12.7-v1`。**当前开发中：Arcade `0.13.0`，未发布、本地门禁 103/103 已过。**）
 - **运行方式：** 纯静态文件；无后端、无账号、无构建依赖、无第三方 CDN
 
 ## 目录结构
@@ -28,7 +28,7 @@ StudioKit/
 │   │   ├── index.html
 │   │   ├── README.md
 │   │   └── CHANGELOG.md
-│   └── arcade/                      # 街机厅，当前 v0.9.0（GitHub Pages + Cloudflare Pages 双端发布）
+│   └── arcade/                      # 街机厅，当前 v0.13.0（开发中，未发布；上一个已发布版本 v0.12.6）
 │       ├── index.html               # 游戏中心页（统计/分享/安装/预载）
 │       ├── engine.js                # 街机专用共享运行时
 │       ├── arcade.css               # 街机专用样式
@@ -175,8 +175,8 @@ Cloudflare Pages 部署在域名根路径（当前为 `studiokit.pages.dev`，�
 
 ## 当前状态
 
-- 已发布：Badge Studio `2.2.1`、Venue Compare `0.2.0`、街机厅 Arcade `0.11.0`（16 款游戏 = 13 款 6 关挑战 + 三款无倒计时平和棋牌；每款 2 个主动道具、自然收尾、一次性 20 分钟提醒与中心页随机入口；没有签到、每日奖励或付费抽奖）。
-- Arcade 0.10.0 本地门禁：smoke 94/94、zen 14/14、calm 17/17、gameplay all 104/104、base 22/22、派生重生成 143/143；提交 `fc37d2b` 推送 `main`；Actions run `44681529684` 的 Validate and build / Deploy GitHub Pages / Deploy Cloudflare Pages / Verify both deployments 四个 job 全部成功；CI 与本地 `tools/verify_deploy.py` 均 **41/41** 文件 SHA-256 双端一致（Arcade `0.10.0` / Badge `2.2.1` / Venue `0.2.0`，manifest `application/manifest+json`）；双端线上无头 Chrome 各 26/26（中心页 0.10.0 + 16 卡 + 三款棋牌注册、三款棋牌 selftest/regression/开始/暂停、0.10.0 挑战数据字段、0 console error）；SW 缓存键 `studiokit-arcade-0.10.0-v1`。
+- 已发布：Badge Studio `2.2.1`、Venue Compare `0.2.0`、街机厅 Arcade `0.12.6`（16 款游戏 = 13 款 6 关挑战 + 三款无倒计时平和棋牌；每款 2 个主动道具、自然收尾、一次性 20 分钟提醒与中心页随机入口；没有签到、每日奖励或付费抽奖）。**开发中：Arcade `0.13.0`（未发布、待门禁）**，其星海突击「星域远征」与存档兼容说明见 [`apps/arcade/README.md`](apps/arcade/README.md) 与 [`apps/arcade/DESIGN-0.13.0.md`](apps/arcade/DESIGN-0.13.0.md)。
+- Arcade 0.10.0（历史记录）本地门禁：smoke 94/94、zen 14/14、calm 17/17、gameplay all 104/104、base 22/22、派生重生成 143/143；提交 `fc37d2b` 推送 `main`；Actions run `44681529684` 的 Validate and build / Deploy GitHub Pages / Deploy Cloudflare Pages / Verify both deployments 四个 job 全部成功；CI 与本地 `tools/verify_deploy.py` 均 **41/41** 文件 SHA-256 双端一致（Arcade `0.10.0` / Badge `2.2.1` / Venue `0.2.0`，manifest `application/manifest+json`）；双端线上无头 Chrome 各 26/26（中心页 0.10.0 + 16 卡 + 三款棋牌注册、三款棋牌 selftest/regression/开始/暂停、0.10.0 挑战数据字段、0 console error）；SW 缓存键 `studiokit-arcade-0.10.0-v1`。
 - 真机 iOS/Android 试玩、原生全屏与系统分享面板仍为 UNVERIFIED；320/375 下五子棋/纸牌接龙的点按精度（画布内格点约 14–20 CSS px）需真机试玩裁决。
 - 规划中：Rounded Image（等待原始需求/规格，不凭空复刻）。
 - 任务、证据和未决项见 [`TASKS.md`](TASKS.md)；后续方向见 [`docs/ROADMAP.md`](docs/ROADMAP.md)。

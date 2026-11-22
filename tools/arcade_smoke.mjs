@@ -1,6 +1,6 @@
 #!/usr/bin/env node
 /**
- * 街机厅无头浏览器冒烟测试（91 项全链路回归）。
+ * 街机厅无头浏览器冒烟测试（103 项全链路回归）。
  * 零 npm 依赖：通用基础设施见 tools/lib/arcade_cdp.mjs（静态服务器 / Chrome 启动 / CDP / 断言记录器）。
  * 运行：node tools/arcade_smoke.mjs
  * 端口可用环境变量覆盖：ARCADE_SMOKE_PORT（默认 8765）/ ARCADE_CDP_PORT（默认 9333）。
@@ -46,8 +46,8 @@ async function main() {
     })()`);
     assert(home.cards >= 2, 'home cards=' + home.cards);
     assert(home.href.indexOf('apps/arcade') !== -1, 'arcade card not clickable: ' + JSON.stringify(home));
-    assert(home.version.indexOf('0.12.7') !== -1, 'arcade version missing on home card');
-    record('门户街机厅卡片可点击且版本 0.12.7', true);
+    assert(home.version.indexOf('0.13.0') !== -1, 'arcade version missing on home card');
+    record('门户街机厅卡片可点击且版本 0.13.0', true);
 
     /* ---------- GitHub Pages 项目子路径：shell 返回链接 ---------- */
     await cdp.navigate(base + '/studiokit/apps/arcade/games/star-raid.html');
@@ -65,10 +65,10 @@ async function main() {
       cards: document.querySelectorAll('.hall-card').length,
       runs: window.Arcade && Arcade.RunSave.count()
     })`);
-    assert(hallInfo.version === '0.12.7', 'version is ' + hallInfo.version);
+    assert(hallInfo.version === '0.13.0', 'version is ' + hallInfo.version);
     assert(hallInfo.games === 16, 'game count is ' + hallInfo.games);
     assert(hallInfo.cards === 16, 'card count is ' + hallInfo.cards);
-    record('中心页 16 款游戏与版本 0.12.7', true);
+    record('中心页 16 款游戏与版本 0.13.0', true);
 
     await cdp.evaluate(`(() => { const i = document.querySelector('[data-search]'); i.value = '雪铃'; i.dispatchEvent(new Event('input', { bubbles: true })); })()`);
     await sleep(120);
@@ -525,6 +525,154 @@ async function main() {
     const continued = await cdp.evaluate(`(() => { const ok = __arcadeTest.continueClear(); return { ok, info: __arcadeTest.info() }; })()`);
     assert(continued.ok && continued.info.state === 'playing', 'star-raid CLEAR continue failed: ' + JSON.stringify(continued));
     record('星海突击 关卡 Boss + 全屏移动 + CLEAR 继续进关', true);
+
+    /* ---------- 星海突击 0.13.0 星域远征：主题 / 火力 / 能量 / 编队 / 大杀器 / 整备 / 机库 ---------- */
+    await cdp.evaluate(`Arcade.RunSave.clear('star-raid')`);
+    await cdp.navigate(base + '/apps/arcade/games/star-raid.html?expedition=1#test');
+    await sleep(160);
+    /* 离开页面时 window blur 会自动暂停并写一次局内档，所以新页面可能先弹「继续上次」；
+       点「重新开始」拿到干净的开局弹层，避免把上一段测试的 buff/火力带进来。 */
+    const expeditionPrompt = await cdp.evaluate(`document.querySelector('[data-ov-title]').textContent`);
+    if (expeditionPrompt.indexOf('继续') !== -1) {
+      await cdp.click('[data-ov-btn2]');
+      await sleep(140);
+    }
+    await cdp.click('[data-ov-btn]');
+    await sleep(220);
+
+    const themeInfo = await cdp.evaluate(`(() => {
+      const t = __arcadeTest;
+      const list = [1, 2, 3, 4, 5, 6, 7].map((n) => t.themeInfo(n).id);
+      const names = [1, 2, 3, 4, 5, 6].map((n) => t.themeInfo(n).name);
+      t.setStage(2);
+      const stage2 = t.info();
+      t.spawnRockNow();
+      const afterRock = t.info();
+      const asteroid = t.themeInfo(2);
+      t.setStage(1);
+      return { list, names, stage2, afterRock, asteroid };
+    })()`);
+    assert(themeInfo.list.join(',') === 'patrol,asteroid,storm,blockade,nebula,mothership,patrol', 'star-raid theme cycle: ' + JSON.stringify(themeInfo.list));
+    assert(themeInfo.stage2.theme === 'asteroid' && themeInfo.afterRock.rocks >= 1 && themeInfo.asteroid.rockRate > 0, 'star-raid asteroid theme: ' + JSON.stringify(themeInfo));
+    assert(themeInfo.names.every((name) => typeof name === 'string' && name.length > 0), 'star-raid theme names: ' + JSON.stringify(themeInfo.names));
+    await cdp.screenshot('star-theme.png');
+    record('星海突击 六星区主题轮转 + 陨石带真实刷陨石', true);
+
+    await cdp.evaluate(`window.__arcadeTest.clearBuffs()`);
+    const powerVolley = await cdp.evaluate(`(() => {
+      const t = __arcadeTest;
+      t.setPower(1);
+      const low = t.fireNow();
+      t.setPower(3);
+      const mid = t.fireNow();
+      t.setPower(5);
+      const high = t.fireNow();
+      return { low, mid, high };
+    })()`);
+    assert(powerVolley.low.added === 2 && powerVolley.mid.added >= 5 && powerVolley.high.added > powerVolley.mid.added, 'star-raid power volley: ' + JSON.stringify(powerVolley));
+    record('星海突击 火力等级 1/3/5 弹道递增', true);
+
+    const energyDrain = await cdp.evaluate(`(() => { window.__arcadeTest.setEnergy(60); return window.__arcadeTest.info().energy; })()`);
+    await sleep(1200);
+    const energyAfter = await cdp.evaluate(`window.__arcadeTest.info()`);
+    assert(energyAfter.energy < energyDrain, 'star-raid energy should drain passively: ' + JSON.stringify({ before: energyDrain, after: energyAfter.energy }));
+    const energyEmpty = await cdp.evaluate(`window.__arcadeTest.forceEnergyDeplete()`);
+    assert(energyEmpty.depleted === true && energyEmpty.energy === 0, 'star-raid energy should deplete: ' + JSON.stringify({ energy: energyEmpty.energy, depleted: energyEmpty.depleted }));
+    await cdp.evaluate(`window.__arcadeTest.spawnSpecialPickup('energy')`);
+    await sleep(1100);
+    const energyBack = await cdp.evaluate(`window.__arcadeTest.info()`);
+    assert(energyBack.depleted === false && energyBack.energy > 10, 'star-raid energy pickup did not recover: ' + JSON.stringify({ energy: energyBack.energy, depleted: energyBack.depleted }));
+    record('星海突击 能量被动消耗/枯竭/能量核心恢复', true);
+
+    const formation = await cdp.evaluate(`(() => {
+      const t = __arcadeTest;
+      t.setEnergy(80);
+      const ok = t.useFormation();
+      const on = t.formationInfo();
+      t.setEnergy(2);
+      return { ok, on };
+    })()`);
+    await sleep(1400);
+    const formationOff = await cdp.evaluate(`window.__arcadeTest.formationInfo()`);
+    assert(formation.ok === true && formation.on.charges === 0 && formation.on.wingmen.length === 2 && formation.on.timer > 6, 'star-raid formation activate: ' + JSON.stringify(formation));
+    assert(formationOff.wingmen.length === 0 && formationOff.timer === 0, 'star-raid formation should end on energy empty: ' + JSON.stringify(formationOff));
+    record('星海突击 临时编队充能/双僚机/能量归零返航', true);
+
+    const nuke = await cdp.evaluate(`(() => {
+      const t = __arcadeTest;
+      t.setEnergy(80);
+      t.grantItem('nuke');
+      t.spawnBossNow();
+      t.spawnShotAtPlayer();
+      const before = t.info();
+      const used = t.useItemSlot(0);
+      const after = t.info();
+      return { before, used, after, effects: t.effectsInfo() };
+    })()`);
+    assert(nuke.used === true && nuke.after.items[0] === null && nuke.after.shots === 0, 'star-raid nuke consume/clear: ' + JSON.stringify({ used: nuke.used, items: nuke.after.items, shots: nuke.after.shots }));
+    assert(nuke.after.bossHp < nuke.before.bossHp, 'star-raid nuke boss damage: ' + JSON.stringify({ before: nuke.before.bossHp, after: nuke.after.bossHp }));
+    assert(nuke.effects.flash > 0 || nuke.effects.effects > 0, 'star-raid nuke feedback missing: ' + JSON.stringify(nuke.effects));
+    await cdp.screenshot('star-nuke.png');
+    record('星海突击 核弹清弹/重创 Boss/白闪冲击波', true);
+
+    const refit = await cdp.evaluate(`(() => {
+      const t = __arcadeTest;
+      t.setPower(3);
+      t.spawnBossNow();
+      const cleared = t.damageBoss(999999);
+      const offer = t.refitInfo();
+      const first = t.pickRefit(0);
+      const second = t.pickRefit(1);
+      const chosen = t.refitInfo();
+      return { cleared, offer, first, second, chosen };
+    })()`);
+    assert(refit.cleared.state === 'clear' && refit.cleared.power === 4, 'star-raid boss clear should raise power: ' + JSON.stringify({ state: refit.cleared.state, power: refit.cleared.power }));
+    assert(refit.offer.open === true && refit.offer.offer.length === 3, 'star-raid refit offer: ' + JSON.stringify(refit.offer));
+    assert(refit.first === true && refit.second === false && refit.chosen.chosen.length === 1, 'star-raid refit pick: ' + JSON.stringify(refit.chosen));
+    await cdp.evaluate(`window.__arcadeTest.continueClear()`);
+    await sleep(120);
+    record('星海突击 CLEAR 整备三选一 + 击破 Boss 火力 +1', true);
+
+    /* 机库：购买 → 刷新持久化 → 备份含机库 → 清除记录同步清空 */
+    await cdp.evaluate(`(() => { window.__arcadeTest.resetHangar(); window.__arcadeTest.addCredits(500); return true; })()`);
+    const bought = await cdp.evaluate(`window.__arcadeTest.buyUpgrade('hull')`);
+    assert(bought.ok === true && bought.hangar.upgrades.hull === 1 && bought.hangar.credits === 380 && bought.hangar.caps.startingLives === 4, 'star-raid hangar buy: ' + JSON.stringify(bought));
+    await cdp.evaluate(`Arcade.RunSave.clear('star-raid')`);
+    await cdp.navigate(base + '/apps/arcade/games/star-raid.html?hangar=1#test');
+    await sleep(160);
+    const persisted = await cdp.evaluate(`window.__arcadeTest.hangarInfo()`);
+    assert(persisted.credits === 380 && persisted.upgrades.hull === 1, 'star-raid hangar not persisted: ' + JSON.stringify({ credits: persisted.credits, hull: persisted.upgrades.hull }));
+    /* 离开页面时的 blur 自动存档会留下「继续上次」入口；点重新开始拿干净的开局。 */
+    const hangarPrompt = await cdp.evaluate(`document.querySelector('[data-ov-title]').textContent`);
+    if (hangarPrompt.indexOf('继续') !== -1) {
+      await cdp.click('[data-ov-btn2]');
+      await sleep(140);
+    }
+    await cdp.click('[data-ov-btn]');
+    await sleep(200);
+    const hangarLives = await cdp.evaluate(`window.__arcadeTest.info().lives`);
+    assert(hangarLives === 4, 'star-raid hangar hull should give 4 starting lives: ' + hangarLives);
+    const metaBackup = await cdp.evaluate(`(() => {
+      const text = Arcade.Progress.exportText();
+      const data = JSON.parse(text);
+      const stored = data.gameMeta && data.gameMeta.games['star-raid'] ? data.gameMeta.games['star-raid'].hangar : null;
+      Arcade.GameMeta.clear('star-raid');
+      const cleared = Arcade.GameMeta.get('star-raid');
+      const imported = Arcade.Progress.importText(text);
+      const restored = Arcade.GameMeta.get('star-raid');
+      const legacy = JSON.parse(text);
+      delete legacy.gameMeta;
+      const legacyImport = Arcade.Progress.importText(JSON.stringify(legacy));
+      const preserved = Arcade.GameMeta.get('star-raid');
+      return { stored, cleared, imported, restored, legacyImport, preserved };
+    })()`);
+    assert(metaBackup.stored && metaBackup.stored.credits === 380 && metaBackup.stored.upgrades.hull === 1, 'star-raid backup missing hangar: ' + JSON.stringify(metaBackup.stored));
+    assert(metaBackup.cleared === null && metaBackup.imported.ok && metaBackup.imported.metaImported && metaBackup.restored && metaBackup.restored.hangar.upgrades.hull === 1, 'star-raid meta import failed: ' + JSON.stringify(metaBackup.imported));
+    assert(metaBackup.legacyImport.ok && metaBackup.preserved && metaBackup.preserved.hangar.upgrades.hull === 1, 'star-raid old backup should preserve hangar: ' + JSON.stringify(metaBackup.legacyImport));
+    await cdp.evaluate(`(() => { Arcade.Progress.resetGame('star-raid'); return true; })()`);
+    const resetMeta = await cdp.evaluate(`Arcade.GameMeta.get('star-raid')`);
+    assert(resetMeta === null, 'star-raid resetGame should clear hangar: ' + JSON.stringify(resetMeta));
+    record('星海突击 机库购买/刷新持久化/备份含机库/清除记录', true);
 
     /* ---------- 雪铃：同一铃铛只奖励一次 ---------- */
     await cdp.evaluate(`Arcade.RunSave.clear('snowbells')`);
@@ -2282,7 +2430,7 @@ async function main() {
       version: window.Arcade && Arcade.version,
       title: document.title
     })`);
-    assert(offlineHall.cards === 16 && offlineHall.version === '0.12.7', 'offline hall failed: ' + JSON.stringify(offlineHall));
+    assert(offlineHall.cards === 16 && offlineHall.version === '0.13.0', 'offline hall failed: ' + JSON.stringify(offlineHall));
     const offlineStatus = await cdp.evaluate(`(async () => {
       try {
         await Arcade.Offline.register();
@@ -2304,13 +2452,99 @@ async function main() {
       overlay: !!document.querySelector('[data-overlay]'),
       version: window.Arcade && window.Arcade.version
     })`);
-    assert(offlineGame.hasArcade && offlineGame.overlay && offlineGame.version === '0.12.7', 'offline game failed: ' + JSON.stringify(offlineGame));
+    assert(offlineGame.hasArcade && offlineGame.overlay && offlineGame.version === '0.13.0', 'offline game failed: ' + JSON.stringify(offlineGame));
     await cdp.navigate(base + '/apps/arcade/games/not-preloaded.html');
     const offlineMissing = await cdp.text('body');
     assert(offlineMissing && offlineMissing.includes('还没有预载'), 'offline missing page: ' + String(offlineMissing).slice(0, 120));
     server = await startServer({ root: ROOT, port: SERVER_PORT });
     record('断网后中心页/已预载游戏可开，未预载页显示提示', true);
     await cdp.navigate(base + '/apps/arcade/');
+
+    /* ---------- 星海突击 0.13.0 新 UI：机库面板 / 道具行 / 整备卡窄屏布局 ---------- */
+    await cdp.send('Emulation.setDeviceMetricsOverride', { width: 390, height: 844, deviceScaleFactor: 1, mobile: true });
+    await cdp.navigate(base + '/apps/arcade/games/star-raid.html?ui=1#test');
+    await sleep(220);
+    const uiPrompt = await cdp.evaluate(`document.querySelector('[data-ov-title]').textContent`);
+    if (uiPrompt.indexOf('继续') !== -1) {
+      await cdp.click('[data-ov-btn2]');
+      await sleep(130);
+    }
+    const hangarLayout = await cdp.evaluate(`(() => {
+      const t = __arcadeTest;
+      t.resetHangar();
+      t.openHangar();
+      const panel = document.querySelector('[data-hangar-panel]');
+      const rect = (el) => el.getBoundingClientRect();
+      const buys = [...panel.querySelectorAll('.hangar-buy')];
+      const rows = [...panel.querySelectorAll('.hangar-row')];
+      const result = {
+        visible: !panel.hidden,
+        rows: rows.length,
+        docOverflow: document.documentElement.scrollWidth - document.documentElement.clientWidth,
+        panelOverflow: panel.scrollWidth - panel.clientWidth,
+        minBuyH: Math.min(...buys.map((b) => rect(b).height)),
+        maxRight: Math.max(...buys.map((b) => rect(b).right)),
+        backH: rect(panel.querySelector('[data-hangar-back]')).height,
+        creditText: (panel.querySelector('.hangar-credit') || {}).textContent || '',
+      };
+      t.closeHangar();
+      return result;
+    })()`);
+    assert(hangarLayout.visible && hangarLayout.rows === 6, 'star-raid hangar panel rows: ' + JSON.stringify(hangarLayout));
+    assert(hangarLayout.docOverflow <= 1 && hangarLayout.panelOverflow <= 1 && hangarLayout.maxRight <= 391, 'star-raid hangar panel overflow: ' + JSON.stringify(hangarLayout));
+    assert(hangarLayout.minBuyH >= 44 && hangarLayout.backH >= 44, 'star-raid hangar target size: ' + JSON.stringify(hangarLayout));
+    await cdp.screenshot('star-hangar-390.png');
+    record('星海突击 机库面板 390px 六项改装/44px 目标/无溢出', true);
+
+    await cdp.send('Emulation.setDeviceMetricsOverride', { width: 320, height: 568, deviceScaleFactor: 1, mobile: true });
+    await cdp.navigate(base + '/apps/arcade/games/star-raid.html?ui=2#test');
+    await sleep(220);
+    const uiPrompt2 = await cdp.evaluate(`document.querySelector('[data-ov-title]').textContent`);
+    if (uiPrompt2.indexOf('继续') !== -1) {
+      await cdp.click('[data-ov-btn2]');
+      await sleep(130);
+    }
+    await cdp.click('[data-ov-btn]');
+    await sleep(200);
+    await cdp.evaluate(`(() => { const t = __arcadeTest; t.grantItem('nuke'); t.grantItem('lance'); return true; })()`);
+    await sleep(120);
+    const itemLayout = await cdp.evaluate(`(() => {
+      const slots = document.querySelector('[data-item-slots]');
+      const items = [...document.querySelectorAll('[data-item-slot]')].filter((b) => !b.hidden);
+      const rect = (el) => el.getBoundingClientRect();
+      return {
+        slotsVisible: !slots.hidden,
+        items: items.map((b) => ({ w: Math.round(rect(b).width), h: Math.round(rect(b).height), right: Math.round(rect(b).right) })),
+        docOverflow: document.documentElement.scrollWidth - document.documentElement.clientWidth,
+        docH: document.documentElement.scrollHeight,
+        vh: innerHeight,
+      };
+    })()`);
+    assert(itemLayout.slotsVisible && itemLayout.items.length === 2 && itemLayout.items.every((b) => b.w >= 44 && b.h >= 44 && b.right <= 321), 'star-raid item row layout: ' + JSON.stringify(itemLayout));
+    assert(itemLayout.docOverflow <= 1 && itemLayout.docH <= itemLayout.vh + 2, 'star-raid item row overflow: ' + JSON.stringify(itemLayout));
+    const refitLayout = await cdp.evaluate(`(() => {
+      const t = __arcadeTest;
+      t.spawnBossNow();
+      t.damageBoss(999999);
+      const cards = [...document.querySelectorAll('.ac-refit-card')];
+      const panel = document.querySelector('.overlay-panel');
+      const rect = (el) => el.getBoundingClientRect();
+      const buttons = [document.querySelector('[data-ov-btn]'), document.querySelector('[data-ov-btn2]')].filter(Boolean);
+      return {
+        state: t.info().state,
+        cards: cards.length,
+        minCardH: Math.min(...cards.map((c) => rect(c).height)),
+        maxRight: Math.max(...cards.map((c) => rect(c).right)),
+        panelOverflow: panel.scrollWidth - panel.clientWidth,
+        docOverflow: document.documentElement.scrollWidth - document.documentElement.clientWidth,
+        buttons: buttons.map((b) => Math.round(rect(b).height)),
+      };
+    })()`);
+    assert(refitLayout.state === 'clear' && refitLayout.cards === 3, 'star-raid refit cards missing: ' + JSON.stringify(refitLayout));
+    assert(refitLayout.minCardH >= 44 && refitLayout.maxRight <= 321 && refitLayout.panelOverflow <= 1 && refitLayout.docOverflow <= 1, 'star-raid refit layout: ' + JSON.stringify(refitLayout));
+    assert(refitLayout.buttons.every((h) => h >= 44), 'star-raid refit buttons: ' + JSON.stringify(refitLayout.buttons));
+    await cdp.screenshot('star-refit-320.png');
+    record('星海突击 320px 道具行与整备三选一 44px/无溢出', true);
 
     /* ---------- 清理测试产生的本地数据 ---------- */
     await cdp.evaluate(`localStorage.clear()`);

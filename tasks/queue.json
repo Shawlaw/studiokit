@@ -1695,6 +1695,27 @@
       "evidence": "提交 79be219 推送 main；Actions run 44968445299 四 job 全绿；CI 与本地 tools/verify_deploy.py 均 41/41 双端一致（arcade 0.12.3 / badge 2.2.1 / venue 0.2.0）；双端线上无头 Chrome 实测 200 层 scale=0.0624、1000 层 scale=0.0127，屏幕 y 均 116–624（画布 740）、溢出 0、fitsOnScreen=true、0 console error；SW 缓存键 studiokit-arcade-0.12.3-v1；证据文档提交 6520003 触发 Actions 44968745329 四 job 同样全绿。"
     },
     {
+      "id": "T108",
+      "title": "Arcade 0.13.0：星海突击星域远征（机库/能量/编队/大杀器/主题/整备/动画）",
+      "kind": "agent",
+      "status": "DONE",
+      "dependsOn": [
+        "T107"
+      ],
+      "ownerAuthorizationRequired": false,
+      "acceptance": [
+        "每关不再白板：局内火力/能量/道具/编队跨关携带；机库永久改装跨局，星币只由游玩得分产生",
+        "关卡有可感知的主题差异并带分数补偿：6 星区轮转（数量/弹速/能量/视野/Boss）",
+        "稀缺大杀器可获取-携带-使用：核弹/轨道炮/时空锚，槽位有限、稀有掉落 + 保底 + 整备卡",
+        "能量/油量限制与临时编队等出击状态可观测、可恢复，且不逼玩家停火到无法通关",
+        "动画与打击反馈增强，全部尊重 prefers-reduced-motion",
+        "挑战 6 关数据与判定零改动；旧局内档可读；备份含机库；清除记录同步清机库",
+        "门禁通过：inline/node --check/validate/build、smoke 103/103、挑战 star-raid 7/7、gameplay base 11/11、zen/calm/review/pwa/interaction/immersive、320–430px 布局"
+      ],
+      "completedAt": "2026-11-22T12:42:00+08:00",
+      "evidence": "Owner 反馈六件事（每关白板装备/关卡难度无差异/机体没有大升级常态 buff/想要稀缺核弹级大伤害道具/想引入油量或能量局限/想要临时编队等出击状态），并要求补动画与调研参考（调研仅存 private/ 目录，公开文档不点名外部作品）。实现：①机库永久改装 + 星币：引擎新增通用游戏数据 key `studiokit:arcade:meta:v1`（Schema v1，`A.GameMeta.get/set/clear/exportData/importData`，单游戏 ≤32KB、损坏 fail closed），机库存 `games['star-raid'].hangar`（`formula: 1` 锁公式），星币 `floor(score/16)` + 整备「军费补给 +40」，六项改装 hull 0–3 / power 0–5 / engine 0–5 / energy 0–5 / bay 0–1 / wing 0–3，满配 6190 星币；初始生命 3+hull、上限 5+hull；②局内火力 1–5（双发→中央→内斜→外侧→重弹，Boss 击破必 +1，受击 -1 保底 1）、能量（上限 100+10×energy；基础 1.2/s、第二份起每种 Buff +0.45/s、编队 +3/s、电磁 ×1.6；击杀 +0.6、能量核心 +18；受击保底 40%；枯竭：间隔 ×1.8 / 伤害 ×0.7 / 移速 ×0.92 / 禁编队，2.2/s 回能到 25 解除）；③临时编队：1+wing 充能（上限 3），8+2×wing 秒，2 架僚机跟随 ±34px、0.22s/发、各 2 耐久可拦敌弹，能量枯竭立即结束，结束前 2s 预警；④大杀器：核弹/轨道炮/时空锚，槽 2+bay（最多 3）、跨关携带，稀有 0.6% + 180 杀保底 + Boss 后整备卡，核弹清弹 + Boss `max(120,min(260,25%maxHp))`，轨道炮 3.2s 光柱，时空锚 5s 减速；⑤6 星区主题（巡逻/陨石带/电磁风暴/舰队封锁/星云迷雾/母舰防线）+ 分数补偿 1.00/1.05/1.10/1.15/1.10/1.20，Boss 血量 `480+(level-1)×280` 再乘主题 bossHp；⑥CLEAR 三选一整备（8 卡池，种子确定性抽取）；⑦动画：双层视差、跃迁光带、推进器拖尾、机身倾斜、敌机 70ms 白闪、Boss 伤害数字、冲击波圆环、受击红闪、核弹白闪、能量低脉冲、编队入场/预警、陨石旋转、时空锚滤镜，全部尊重 reducedMotion；⑧隔离与兼容：挑战 6 关数据/判定/序列化零改动，能量/编队/道具/主题/整备只有 classic 生效；`serialize()` 新增 `run` 字段，旧档缺字段按默认恢复；备份新增 `gameMeta` 可选字段，旧备份缺字段保留当前机库、导入失败整体回滚（含 meta key），中心页「清除记录」同步清机库。门禁（本地实跑）：check_inline_scripts PASS（19 HTML/20 段脚本）、`node --check engine.js/sw.js` PASS、validate_site PASS、build_site PASS、**arcade_smoke 103/103**（原 94 + 0.13.0 新增 9 项，含 390 机库面板与 320 道具行/整备卡布局）、**挑战 star-raid 7/7**、gameplay base 11/11、zen 17/17、calm 7/7、review 5/5、pwa 7/7、interaction 5/5、immersive 32/32、stage coverage 78 关矩阵正常；320/375/390/430 布局无溢出且按钮 ≥44px（320/390 已固化进 smoke）。真机手感（能量节奏/核弹/僚机拦截）UNVERIFIED；未发布；版本链 0.13.0 / SW `studiokit-arcade-0.13.0-v1`；设计见 `apps/arcade/DESIGN-0.13.0.md`；私有调研与实现映射见 `private/star-raid-research/`（gitignored，不外发）。"
+    },
+    {
       "id": "T107",
       "title": "Arcade 0.12.7：层塔难度按人类计时能力重标定",
       "kind": "agent",
