@@ -13,6 +13,7 @@
 
 ### Verification
 - `arcade_tower_test` **20/20**（新增 TP-12：3/40/120/1000 层近景必须 `dense=false` 且有裁剪，40 层全览仍保留细节、120/1000 层全览才压缩）；实测近景绘制 5/22/24/24 只（对应总 5/42/122/1002），0 console error；smoke 94/94、zen 14/14、calm 17/17、review 5/5、gameplay base 11/11、tower challenge 6/6、pwa 7/7、interaction 5/5、immersive 16/16、validate/build/inline/node --check 全过。设计见 `DESIGN-0.12.4.md`。
+- 发布：提交 `d79d500` 推送 `main`；Actions 四 job 全绿；CI 与本地 `verify_deploy.py` 均 **41/41** 双端一致（arcade 0.12.4）；双端线上实测 40/120/1000 层近景 `dense=false` 且 scale=1（细节保留）、全览 0.2913/0.1028/0.0127 均完整入屏、0 console error；SW `studiokit-arcade-0.12.4-v1`。
 
 ## 0.12.3 — 2026-11-22（已双端发布）
 
