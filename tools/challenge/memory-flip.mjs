@@ -1,6 +1,6 @@
 /**
  * 0.9 挑战模式确定性场景：记忆翻牌（memory-flip）。
- * 协议见 docs/arcade/0.9/INTEGRATION-CONTRACT.md §6 / docs/arcade/0.9/TESTING.md。
+ * 协议见 docs/arcade/0.9/INTEGRATION-CONTRACT.md §6 / docs/archive/arcade-0.9-TESTING.md。
  * 证据等级：
  * - C01 参考通关为 real-input-replay（按参考配对表真实指针点击像素坐标）；
  * - 其它为 engine-replay（使用 #test 钩子驱动状态机与真实 DOM 点击）。

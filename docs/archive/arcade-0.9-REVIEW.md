@@ -42,7 +42,7 @@
 | `tools/lib/arcade_cdp.mjs` | `1C3BB40A4AA8BE5645104670D5316595797336140F49A1F523EFDB632478D0E9` | 16521 B |
 | `tools/arcade_smoke.mjs` | `E5A55B274AA995AFE2BEEBE2EE8C4D80C7021943E0CFF5559BE79947817479B1` | 139792 B |
 | `docs/arcade/0.9/INTEGRATION-CONTRACT.md` | `6CC7299C74F8BA5A7C7A05E4AECF15DF693C2F514E4042F0184C766E87F8C482` | 11648 B |
-| `docs/arcade/0.9/TESTING.md` | `09988CBD5813E026E7C4E22B37BF5C9D8F4871D881C23FF58A654ACD4F66FDF4` | 33915 B（最终版，§10 已回填） |
+| `docs/archive/arcade-0.9-TESTING.md` | `09988CBD5813E026E7C4E22B37BF5C9D8F4871D881C23FF58A654ACD4F66FDF4` | 33915 B（最终版，§10 已回填） |
 | `docs/arcade/0.9/DATA-INTEGRATION-REPORT.md` | `438F2535F48B29D876F8F6EEF62202780276A3AB9534F6104F0760C8805BF1BB` | 7957 B |
 
 分组摘要（按文件名升序拼接后 sha256）：13 个运行时数据 = `7E95E3C15CDD43027974D0F780ECD467F8FD081360275AC13CCD0D0F8EFE26E1`；13 个场景模块 = `6CA1E1508E3DE1ACC2E55BC5D6CDCA33CBDEB5DB8984EC259ABA764F4DAFA1BF`；13 个测试夹具 = `FC6B757E0F2FBB43D3E8A959E4422B29BE5DF907DE8024BF1108946E30FBA420`；13 份设计源 `levels/*.json` = `C2DA97BE924E028DB0A9C76F623069DB38EE901B55AFE7C7613044382B60454F`；13 份 `impl/*.md` = `64CEC596EE73D50F3D650E3B31A2BE4F9867FEB11FC89D9330F0969C4E239421`。
@@ -72,7 +72,7 @@
 | 评审开始（11:50 快照） | HEAD `6a7b246` + 未提交 0.9 工作树 | Reviewer 在此之前完成冻结快照 |
 | 评审期间 | Lead 提交 0.9（`1b530e4`…`fe79b0f`，共 5 个提交） | 文件内容与快照一致（Reviewer 逐文件对比：202 个关键文件在全部测试期间未变化） |
 | 12:09:17 | `tools/arcade_gameplay_test.mjs` 由 `6293C2F1…` 收口为 `F2942151…`（SC-SL-009/SC-SL-002 的 rAF 轮询加固 + 208/208 记录） | **被测产品代码未变**；聚合器门禁已用最终版复跑：**208/208，798.4s，exit 0**（见 §2.2） |
-| 12:10–12:24 | `docs/arcade/0.9/TESTING.md` 更新并回填 §10 证据等级汇总表（最终 `09988CBD…`，33915 B） | 仅测试文档；m7 收口项已 resolved |
+| 12:10–12:24 | `docs/archive/arcade-0.9-TESTING.md` 更新并回填 §10 证据等级汇总表（最终 `09988CBD…`，33915 B） | 仅测试文档；m7 收口项已 resolved |
 
 结论：`apps/arcade/**`（含 13 游戏页、13 运行时数据）、`tools/challenge/**`、`tools/lib/**`、设计源与夹具在 Reviewer 全部数据审计/实玩/API/布局测试期间**哈希未变**，因此这些结论对最终树有效；聚合器 208/208 已在最终 runner 上复跑（§2.2）。
 
@@ -236,7 +236,7 @@
 5. **影跃 C04–C06 原生输入**：模块用页面 DOM 事件回放通过；Reviewer 原生输入只到 C03。
 6. **≥5 分钟挂机/锁屏恢复**：已测 700ms–1.3s 级暂停/失焦；真机后台回收、长时间 AFK 未测。
 7. **断网/PWA 升级路径**：challenge 数据已进 shell 预缓存，但 SW 版本未升；老用户升级后能否取到新数据未验证（见 Minor-m2）。
-8. **Owner 两轮试玩结论**：未获得；见 `docs/arcade/0.9/PLAYTEST.md`。**Agent 不可代签。**
+8. **Owner 两轮试玩结论**：未获得；见 `docs/archive/arcade-0.9-PLAYTEST.md`。**Agent 不可代签。**
 9. **无障碍**：屏幕阅读器、色弱/对比度、纯键盘完成所有挑战（部分游戏需指针/键盘混合）未系统验证。
 10. **跨设备导出/导入**：仅无头浏览器内验证 `exportText/importText` 往返；真实换机/配额边界未测。
 
@@ -305,7 +305,7 @@ Get-ChildItem dist/apps/arcade/challenge -Name    # 13 个；与 apps/arcade/cha
 
 1. **技术侧可进入 Owner 试玩**：0 Blocker；数据/记录/存档/经典/布局/构建门禁全部通过；13 款游戏均可从「挑战 6 关」入口进入，记录/解锁/最佳/assisted/收集物写入 `challenge:v1`，经典模式零回归。
 2. **0.9 发布门槛未通过**：
-   - Owner 两轮试玩尚未进行（`docs/arcade/0.9/PLAYTEST.md`）；Agent 不能代签；
+   - Owner 两轮试玩尚未进行（`docs/archive/arcade-0.9-PLAYTEST.md`）；Agent 不能代签；
    - 5 个 Major 设计差量需 Owner 裁决（影跃捷径/时长、砖块 K/G、星海 Boss 时间窗、重力窗口、全局目标时长）；
    - 发布前必须：升 `ARCADE_VERSION` / SW 缓存版本 / 注册表 / 文档，重跑 `validate_site`+`build_site`，并再次全量回归。
 3. 建议 Owner 试玩优先级：**影跃 C01–C03**（验证影冲与捷径手感）→ **2048/方块**（残局快速反馈）→ **打地鼠/赛车**（时间轴可读性）→ **星海/矿工/砖块**（engine-replay 证据最弱、最需真人确认）→ **重力翻转**（重点验证推荐窗口晚半段是否被撞）。

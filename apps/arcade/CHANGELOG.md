@@ -472,7 +472,7 @@ Owner 对 0.8.1 的试玩反馈：「模式没问题，但是按钮区占了太�
 - 实测画布（经典 → 禅模式）：320×568 161×286 → 196×346、375×667 215×381 → 247×437、390×844 316×558 → 348×614、430×932 366×646 → 398×702、1280×900 348×614 → 379×670；**面积相对同版本经典模式 +18%～+47%**，相对 0.8.1 禅模式 **+41.6%～+126.8%**；四档与桌面 0 溢出，禅模式画布高度比经典多 56–60px。
 - 测试：`arcade_zen_scores_test.mjs` ZS-04 重写为「禅模式 HUD / 控件压缩 / 画布增量」（zen 道具行 3 按钮 ≥44px、无独立按钮行、hint 隐藏、四档画布比经典高 ≥40px），仍为 14 场景；`arcade_smoke.mjs` 85/85、`arcade_gameplay_test.mjs --suite=base --repeat=2` 22/22 零回归。
 - 版本：`ARCADE_VERSION`、注册表、中心页版本标记与 Service Worker 缓存键统一升至 `0.8.2`（`studiokit-arcade-0.8.2-v1`）。
-- 文档：新增 `apps/arcade/DESIGN-0.8.2.md`（前后对比/兼容/回滚）与 `docs/arcade/0.8.2-CONTRACT.md`、`docs/arcade/0.8.2-REVIEW.md`。
+- 文档：新增 `apps/arcade/DESIGN-0.8.2.md`（前后对比/兼容/回滚）与 `docs/archive/0.8.2-CONTRACT.md`、`docs/archive/0.8.2-REVIEW.md`。
 - 发布：提交 `077ccf5` 推送 `main`；Actions `43447829596` 四个 job 全部成功；CI 与本地 `tools/verify_deploy.py` 均 **37/37** 文件 SHA-256 双端一致（Arcade `0.8.2` / Badge `2.2.1`）；双端线上无头 Chrome **14/14**（门户/中心页 0.8.2 + 13 卡 + 积分区、方块页经典画布 316×558 → 禅模式 348×614（+56）、3 个道具行按钮 44px、hint 隐藏、真实点击冻结按钮切换文案/aria、结算写 zen 记录且经典 high 不变）；SW 缓存键 `studiokit-arcade-0.8.2-v1`。
 - 未验证：iOS/Android 真机触控手感与低端机帧率仍为 UNVERIFIED；窄屏 5 键触控面板高度保持不变（为保证「加速/落底」精度）。
 
@@ -485,7 +485,7 @@ Owner 对 0.8.1 的试玩反馈：「模式没问题，但是按钮区占了太�
 - 中心页积分记录表：「游玩统计」之后新增区块（时间 / 游戏 / 模式 / 得分 / 详情），按游戏与模式筛选，最新在前、最多展示最近 50 条，空状态与“仅显示最近 50 条”提示；单独「清除积分记录」只清 `scores:v1`，不影响最高分、游玩时长、局内进度与挑战记录；单游戏清除/清除全部/导入导出提示同步。
 - 版本：`ARCADE_VERSION`、注册表、中心页版本标记与 Service Worker 缓存键统一升至 `0.8.1`（`studiokit-arcade-0.8.1-v1`）。
 - 测试：新增零依赖 `tools/arcade_zen_scores_test.mjs`（14 场景：禅模式无限/冻结恢复/结算积分/表格筛选清除/导入导出/旧档与损坏兼容/320–430 布局，含四档开始弹层三入口完整可见断言）；`arcade_smoke.mjs` 85/85、`arcade_gameplay_test.mjs --suite=base --repeat=2` 22/22 零回归；独立评审 APPROVE-WITH-NOTES，发布前修复 320/375 窄屏禅模式入口被裁剪（M2）及相关 Minor。
-- 文档：新增 `apps/arcade/DESIGN-0.8.1.md`（设计/数值/数据模型/兼容/回滚）与仓库内 `docs/arcade/0.8.1-CONTRACT.md`（并行实施契约）、`docs/arcade/0.8.1-REVIEW.md`（独立评审与 Lead 处理记录）。
+- 文档：新增 `apps/arcade/DESIGN-0.8.1.md`（设计/数值/数据模型/兼容/回滚）与仓库内 `docs/archive/0.8.1-CONTRACT.md`（并行实施契约）、`docs/archive/0.8.1-REVIEW.md`（独立评审与 Lead 处理记录）。
 - 发布：提交 `575a766`（功能）+ `41fa79e`（评审修复）推送 `main`；Actions `43423208129` 四个 job 全部成功；CI 与本地 `tools/verify_deploy.py` 均 **37/37** 文件 SHA-256 双端一致（Arcade `0.8.1` / Badge `2.2.1`）；双端线上无头 Chrome **10/10**（门户、中心页积分记录区、方块页 0.8.1、禅模式无限/冻结恢复/结算不污染最高分、中心页表格展示禅记录）；SW 缓存键 `studiokit-arcade-0.8.1-v1`。
 - 未验证：iOS/Android 真机触控（含禅模式按钮与 Z 键替代）、低端机帧率仍为 UNVERIFIED；积分记录无跨设备同步/排行榜（离线优先约束）。
 

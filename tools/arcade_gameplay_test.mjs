@@ -24,7 +24,7 @@
  *   ARCADE_GAMEPLAY_PORT（默认 8766）/ ARCADE_GAMEPLAY_CDP_PORT（默认 9334）
  * 只有需要浏览器的场景才会启动静态服务器与 Chrome；CH-DATA-001 是纯 Node 数据审计。
  *
- * 场景模块协议、证据等级与端口/并发约定见 docs/arcade/0.9/TESTING.md。
+ * 场景模块协议、证据等级与端口/并发约定见 docs/archive/arcade-0.9-TESTING.md。
  * pending：场景对象可带 `pending: '原因'` —— 依赖钩子尚未交付时打印 SKIP 而不是误报 PASS/FAIL
  *   （显式 --scenario 指定 pending 场景同样 SKIP）；钩子稳定后删除该字段即启用。
  * 退出码：0 = 全部场景 PASS（正常 SKIP 不计失败）；1 = 至少一个场景/模块 FAIL 或运行环境失败；2 = CLI 用法错误。
@@ -145,7 +145,7 @@ async function startClassic(cdp) {
  * - run：读取 __arcadeTest 钩子，assert 失败即抛错；返回对象作为 PASS 行的证据摘要。
  * - 影跃 0.9 迁移：SC-SL-004..008 保留 ID，但断言语义从 0.8 trial(S1–S3) 改为
  *   0.9 挑战(C01–C06)；g-shadow stable 前标 pending，启用后必须真实跑绿。
- * - 场景模块协议与证据等级见 docs/arcade/0.9/TESTING.md。
+ * - 场景模块协议与证据等级见 docs/archive/arcade-0.9-TESTING.md。
  * ========================================================================== */
 const SCENARIOS = [
   {
@@ -1776,7 +1776,7 @@ function printUsage() {
   ARCADE_GAMEPLAY_CDP_PORT  Chrome DevTools 端口，默认 9334
   CHROME_PATH               自定义 Chrome 可执行文件路径
 
-场景模块协议 / 证据等级 / 端口并发约定见 docs/arcade/0.9/TESTING.md。`);
+场景模块协议 / 证据等级 / 端口并发约定见 docs/archive/arcade-0.9-TESTING.md。`);
 }
 
 function parseRepeat(raw) {
@@ -1906,7 +1906,7 @@ async function prepareScenario(cdp, scenario, attempt) {
 }
 
 /**
- * 传给场景 run(cdp, ctx) 的上下文（挑战模块协议，见 docs/arcade/0.9/TESTING.md）。
+ * 传给场景 run(cdp, ctx) 的上下文（挑战模块协议，见 docs/archive/arcade-0.9-TESTING.md）。
  * 游戏 Agent 的模块可只依赖 cdp；需要断言/等待/读设计源时用 ctx 里的通用 helper。
  */
 function buildScenarioContext(scenario, attempt, options) {
@@ -1988,7 +1988,7 @@ function printScenarioHeader(activeScenarios, pendingScenarios, options, catalog
   console.log('');
 }
 
-/** 挑战模块证据/结果汇总（供 Phase 2 写 docs/arcade/0.9/TESTING.md 的汇总表）。 */
+/** 挑战模块证据/结果汇总（供 Phase 2 写 docs/archive/arcade-0.9-TESTING.md 的汇总表）。 */
 function collectModuleResults(selected) {
   const stats = new Map();
   for (const scenario of selected) {

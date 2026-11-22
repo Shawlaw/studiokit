@@ -1,6 +1,6 @@
 # 打地鼠（mole-whack）0.9 挑战模式实现记录
 
-> 任务：T046 / task-11（时间轴型游戏组；`docs/arcade/0.9/PLAN.md` 中对应 LD90-MOLE / T048）。
+> 任务：T046 / task-11（时间轴型游戏组；`docs/archive/arcade-0.9-PLAN.md` 中对应 LD90-MOLE / T048）。
 > 分支 `feat/arcade-0.8-gameplay`（0.8/0.9 合并开发，未发布）。
 > 设计源（只读，未改）：`docs/arcade/0.9/levels/mole-whack.json`、`docs/arcade/0.9/levels/stages/mole-whack-C01..C06.json`、`docs/arcade/0.9/docs/mole-whack.md`。
 > 运行时数据（平台生成物，未手改）：`apps/arcade/challenge/mole-whack.js`；测试夹具：`tools/testdata/challenge/mole-whack.json`。

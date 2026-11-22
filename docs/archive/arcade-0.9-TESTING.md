@@ -1,7 +1,7 @@
 # Arcade 0.9 挑战模式测试基座（T056）
 
 > 状态：**T056 收口完成（阶段 1 + 阶段 2）**（分支 `feat/arcade-0.8-gameplay`；2026-11-13 本地全量回归通过，未发布）。
-> 上游依据：`docs/arcade/0.9/INTEGRATION-CONTRACT.md`（尤其 §5/§6）、`docs/arcade/0.9/PLAN.md`、`docs/arcade/0.8.0-TESTING.md`。
+> 上游依据：`docs/arcade/0.9/INTEGRATION-CONTRACT.md`（尤其 §5/§6）、`docs/archive/arcade-0.9-PLAN.md`、`docs/archive/0.8.0-TESTING.md`。
 > 一句话：**`arcade_smoke.mjs` 保证 0.7/0.8 经典全链路不回退；`arcade_gameplay_test.mjs` 用固定初始状态 + 稳定场景 ID 断言玩法不变量；0.9 起它同时是 13 款游戏挑战场景模块的聚合器与 78 关数据门禁。**
 
 ## 1. 三层测试的职责
@@ -251,7 +251,7 @@ g-shadow 把影跃从 0.8 的 S1–S3 trial 迁移到 0.9 的 C01–C06 挑战�
 - 环境：Windows 10/11、Node `v25.8.1`、Python `3.14.3`；无头 Chrome `C:\Program Files\Google\Chrome\Application\chrome.exe`。
 - 端口：gameplay 运行 `ARCADE_GAMEPLAY_PORT=8786` / `ARCADE_GAMEPLAY_CDP_PORT=9384`；smoke 运行 `ARCADE_SMOKE_PORT=8796` / `ARCADE_CDP_PORT=9396`。
 - 设计源 78 关：`docs/arcade/0.9/levels/*.json`；运行时 13 个数据文件：`apps/arcade/challenge/*.js`（平台 Agent 生成，`node --check` 通过）。
-- 0.8 base 证据摘要与 `docs/arcade/0.8.0-TESTING.md` 第 11 节一致（11 场景 ×2 全绿）。
+- 0.8 base 证据摘要与 `docs/archive/0.8.0-TESTING.md` 第 11 节一致（11 场景 ×2 全绿）。
 
 ## 10. 最终证据汇总（T056 收口，2026-11-13）
 

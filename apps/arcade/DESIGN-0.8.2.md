@@ -2,7 +2,7 @@
 
 > 版本：Arcade `0.8.2`（2026-11-13）｜数据 Schema：不变（沿用 0.8.1 的 `scores:v1` 与既有 5 个 key）
 > 需求来源：Owner 对 0.8.1 的试玩反馈——「模式没问题，但是按钮区占了太多游戏画面区域了，你想办法优化一下」。
-> 实施契约见 `docs/arcade/0.8.2-CONTRACT.md`。
+> 实施契约见 `docs/archive/0.8.2-CONTRACT.md`。
 
 ## 1. 问题
 

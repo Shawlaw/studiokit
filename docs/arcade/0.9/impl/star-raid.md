@@ -2,7 +2,7 @@
 
 > 任务：T049 星海突击 C01–C06 挑战模式；地基为 T042（`A.Challenge` + `apps/arcade/challenge/star-raid.js`）。
 > 设计源：`docs/arcade/0.9/levels/star-raid.json`、`docs/arcade/0.9/docs/star-raid.md`；测试夹具：`tools/testdata/challenge/star-raid.json`。
-> 证据等级定义见 `docs/arcade/0.9/TESTING.md` §6；本文件结论基于 2026-11-13 本机实测（Windows + Chrome headless）。
+> 证据等级定义见 `docs/archive/arcade-0.9-TESTING.md` §6；本文件结论基于 2026-11-13 本机实测（Windows + Chrome headless）。
 
 ## 1. 交付文件
 

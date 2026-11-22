@@ -1,6 +1,6 @@
 /**
  * 0.9 挑战模式确定性场景：雪铃（snowbells）。
- * 协议见 docs/arcade/0.9/INTEGRATION-CONTRACT.md §6 / docs/arcade/0.9/TESTING.md。
+ * 协议见 docs/arcade/0.9/INTEGRATION-CONTRACT.md §6 / docs/archive/arcade-0.9-TESTING.md。
  * 证据等级：
  * - C01 参考通关为 real-input-replay（按 requiredSequence 用真实左右方向键踩铃，真实碰撞反弹）；
  * - 其它为 engine-replay（#test 钩子驱动状态机 + 真实 DOM 点击）。

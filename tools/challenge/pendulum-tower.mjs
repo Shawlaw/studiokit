@@ -1,6 +1,6 @@
 /**
  * 0.9 挑战模式确定性场景：层塔（pendulum-tower）。
- * 协议见 docs/arcade/0.9/INTEGRATION-CONTRACT.md §6 / docs/arcade/0.9/TESTING.md。
+ * 协议见 docs/arcade/0.9/INTEGRATION-CONTRACT.md §6 / docs/archive/arcade-0.9-TESTING.md。
  * 证据等级：
  * - C01 委托通关为 engine-replay（真实钟摆物理 + 真实 releaseBox 落箱/倾斜判定；
  *   松手由 #test 便捷钩子在目标偏置对齐的下一帧触发，非逐像素人工点击 —— 差距见 impl 文档）；

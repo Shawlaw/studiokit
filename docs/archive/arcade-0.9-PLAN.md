@@ -1,7 +1,7 @@
 # Arcade 0.9 实施计划与任务映射
 
 > 基于 0.8.0 竖切片（分支 `feat/arcade-0.8-gameplay`，HEAD `6a7b246`）继续推进，**合并在同一工作分支**实现 0.9 设计包；不新建独立 0.9 分支、不 push/不发布。
-> 设计源与已验证事实见 [00-IMPORT-AND-STATUS.md](00-IMPORT-AND-STATUS.md)、[0.8-TO-0.9-DIFF.md](0.8-TO-0.9-DIFF.md)、[INTEGRATION-CONTRACT.md](INTEGRATION-CONTRACT.md)。
+> 设计源与已验证事实见 [00-IMPORT-AND-STATUS.md](arcade-0.9-00-IMPORT-AND-STATUS.md)、[0.8-TO-0.9-DIFF.md](arcade-0.9-0.8-TO-0.9-DIFF.md)、[INTEGRATION-CONTRACT.md](../arcade/0.9/INTEGRATION-CONTRACT.md)。
 
 ## 1. 波次与任务映射（GP → 仓库 T）
 

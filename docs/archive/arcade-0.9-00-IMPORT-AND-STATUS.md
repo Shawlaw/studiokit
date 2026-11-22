@@ -37,6 +37,6 @@ PASS: content contract and reference checks. NOT an original-engine physics or m
 ## 3. 当前落地方式
 
 - 设计源保留在原样路径，**不改动**；运行时数据由 `tools/arcade_09_data.mjs` 从 `levels/*.json` 生成到 `apps/arcade/challenge/<gameId>.js`（生成物入库，静态站点无构建步骤）。
-- 集成约定见 [INTEGRATION-CONTRACT.md](INTEGRATION-CONTRACT.md)，差异报告见 [0.8-TO-0.9-DIFF.md](0.8-TO-0.9-DIFF.md)，任务映射见 [PLAN.md](PLAN.md)。
+- 集成约定见 [INTEGRATION-CONTRACT.md](../arcade/0.9/INTEGRATION-CONTRACT.md)，差异报告见 [0.8-TO-0.9-DIFF.md](arcade-0.9-0.8-TO-0.9-DIFF.md)，任务映射见 [PLAN.md](arcade-0.9-PLAN.md)。
 - 0.9 设计包已随 **Arcade 0.8.0** 发布：13 游戏 × 6 关挑战模式上线，经典/无尽、旧高分与旧存档不被改写；应用版本为 `0.8.0`（设计包目录版本 0.9，不是应用版本）。
-- Owner 试玩门槛与设计差量裁决仍需收集；见 [../0.8.0-PLAYTEST.md](../0.8.0-PLAYTEST.md) 与各游戏 `impl/<gameId>.md` 的 UNVERIFIED 列表。
+- Owner 试玩门槛与设计差量裁决仍需收集；见 [../0.8.0-PLAYTEST.md](0.8.0-PLAYTEST.md) 与各游戏 `impl/<gameId>.md` 的 UNVERIFIED 列表。

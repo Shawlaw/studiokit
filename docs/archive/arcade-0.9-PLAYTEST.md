@@ -2,7 +2,7 @@
 
 > **状态：等待 Owner 试玩。Owner 两轮试玩结论尚未获得。**
 > **Agent 不可代签**：本文件只提供可复现的试玩脚本、观察问题清单与 Reviewer 已完成/未完成的验证；**0.9 发布门槛因此未通过**（且 0.8 的 Owner 试玩门槛也仍未签署）。未 push、未合并 `main`、未打 Tag、未发布双端，发布需要 Owner 明确授权（届时还需升 `ARCADE_VERSION`/SW 缓存版本/注册表）。
-> 试玩对象：`feat/arcade-0.8-gameplay` 冻结树（HEAD `6a7b246` + 未提交 0.9 改动；冻结 sha256 见 `docs/arcade/0.9/REVIEW.md` §1）。版本号故意保持 **0.7.0**。
+> 试玩对象：`feat/arcade-0.8-gameplay` 冻结树（HEAD `6a7b246` + 未提交 0.9 改动；冻结 sha256 见 `docs/archive/arcade-0.9-REVIEW.md` §1）。版本号故意保持 **0.7.0**。
 
 ---
 
@@ -185,7 +185,7 @@ py -3 -m http.server 8000
 
 ## 7. Reviewer 已做 / 未做
 
-### 已做（详见 `docs/arcade/0.9/REVIEW.md`）
+### 已做（详见 `docs/archive/arcade-0.9-REVIEW.md`）
 
 - 13 游戏 × 6 关设计源 ↔ 运行时 ↔ 夹具逐字段核对（PASS）；78 关 id 唯一；运行时无剧透字段。
 - 全量门禁：`arcade_gameplay_test --suite=all --repeat=2` **208/208**；`arcade_smoke.mjs` **85/85**；`validate_site`、`node --check`（44 处）、数据生成幂等、设计包 1088 断言、`git diff --check` 全 PASS。

@@ -106,7 +106,7 @@
 
 ## 5. 验收
 
-见 `apps/arcade/README.md`「0.9.0」章节与 `docs/arcade/0.9.0-REVIEW.md`（独立评审：0 Blocker / 3 Major / 12 Minor；Major 已闭环或转为已知限制）。
+见 `apps/arcade/README.md`「0.9.0」章节与 `docs/archive/0.9.0-REVIEW.md`（独立评审：0 Blocker / 3 Major / 12 Minor；Major 已闭环或转为已知限制）。
 
 ## 6. 回滚
 
