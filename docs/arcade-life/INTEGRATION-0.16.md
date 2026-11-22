@@ -46,9 +46,11 @@
 | Chrome/CDP | `career_run_resume_test` / `career_first_flight_test` / `career_mobile_016_test` | 45/45 · 192/192 · 318/318 |
 | Chrome/CDP | `career_discovery_accessibility_test` / `career_db_test` / `career_backup_test` / `career_pwa_offline_test` / `career_games_reachability_test` | 75/75 · 38/38 · 34/34 · 17/17 · 165/165 |
 | 既有回归 | `arcade_run_all_gates.py`（validate/build/design/inline/stage + career 全组 + smoke 113/113 + zen + calm + review + gameplay all/base） | 见 G16 复跑 |
-| 独立门禁 | G16 Reviewer | 待复评 |
+| 独立门禁 | G16 Reviewer 复跑 | **PASS**（HEAD `b494ee1`；16 起源首航 192/192、经济闭环、恢复 45/45、移动端 318/318、smoke 113/113；非剧透摘要见 `G16-EVIDENCE.md`） |
 
 > 0.16 期间发现并修复的测试/产品问题：①`arcade_smoke` 核弹固定槽位在随机整备后偶发失败（已按实际槽位修复）；②窄屏目标行 3–4 行（改为只显示标题）；③机库 Esc 同时关掉叠层两个面板（加最上层守卫）；④`bridge` 未公开 `api.items` 导致机体配置回退旧翼（已公开）；⑤`alternatives` 无产品入口（bridge preload + 告示板「港务处代办」）。
+>
+> 门禁脚本应串行运行：首次 4 个 Chrome 并行复跑 `career_run_resume_test` 出现 1 项 9s 超时（43/45），隔离复跑与历史多次均 45/45；`arcade_run_all_gates.py` 已串行。
 
 ## 5. 已知风险 / UNVERIFIED
 

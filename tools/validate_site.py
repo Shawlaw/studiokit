@@ -17,7 +17,7 @@ REQUIRED = [
     'apps/arcade/DESIGN-0.4.0.md', 'apps/arcade/DESIGN-0.5.0.md',
     'apps/arcade/DESIGN-0.6.0.md', 'apps/arcade/DESIGN-0.8.1.md', 'apps/arcade/DESIGN-0.8.2.md',
     'apps/arcade/DESIGN-0.8.6.md', 'apps/arcade/DESIGN-0.9.0.md', 'apps/arcade/DESIGN-0.10.0.md',
-    'apps/arcade/DESIGN-0.11.0.md', 'apps/arcade/DESIGN-0.11.1.md', 'apps/arcade/DESIGN-0.11.2.md', 'apps/arcade/DESIGN-0.11.3.md', 'apps/arcade/DESIGN-0.11.4.md', 'apps/arcade/DESIGN-0.11.5.md', 'apps/arcade/DESIGN-0.12.0.md', 'apps/arcade/DESIGN-0.12.1.md', 'apps/arcade/DESIGN-0.12.2.md', 'apps/arcade/DESIGN-0.12.3.md', 'apps/arcade/DESIGN-0.12.4.md', 'apps/arcade/DESIGN-0.12.5.md', 'apps/arcade/DESIGN-0.12.6.md', 'apps/arcade/DESIGN-0.12.7.md', 'apps/arcade/DESIGN-0.13.1.md', 'apps/arcade/DESIGN-0.13.2.md', 'apps/arcade/DESIGN-0.13.3.md', 'apps/arcade/DESIGN-0.14.0.md', 'apps/arcade/DESIGN-0.16.0.md', 'apps/arcade/DESIGN-0.16.0.md',
+    'apps/arcade/DESIGN-0.11.0.md', 'apps/arcade/DESIGN-0.11.1.md', 'apps/arcade/DESIGN-0.11.2.md', 'apps/arcade/DESIGN-0.11.3.md', 'apps/arcade/DESIGN-0.11.4.md', 'apps/arcade/DESIGN-0.11.5.md', 'apps/arcade/DESIGN-0.12.0.md', 'apps/arcade/DESIGN-0.12.1.md', 'apps/arcade/DESIGN-0.12.2.md', 'apps/arcade/DESIGN-0.12.3.md', 'apps/arcade/DESIGN-0.12.4.md', 'apps/arcade/DESIGN-0.12.5.md', 'apps/arcade/DESIGN-0.12.6.md', 'apps/arcade/DESIGN-0.12.7.md', 'apps/arcade/DESIGN-0.13.1.md', 'apps/arcade/DESIGN-0.13.2.md', 'apps/arcade/DESIGN-0.13.3.md', 'apps/arcade/DESIGN-0.14.0.md', 'apps/arcade/DESIGN-0.15.0.md', 'apps/arcade/DESIGN-0.16.0.md',
     'apps/arcade/engine.js', 'apps/arcade/arcade.css', 'apps/arcade/sw.js',
     'apps/arcade/manifest.webmanifest',
     'apps/arcade/career/registry.js', 'apps/arcade/career/discovery.js',
