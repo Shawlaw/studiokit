@@ -14,6 +14,7 @@
 ### Verification
 - 实测：周期 2800→1154ms（快 2.4×）、完美窗口 61→24ms（难约 2.5×）、摆幅 214→159px（不再塌缩）；`g` 与周期随层数单调，振幅与目标偏差 ≤0.012rad。
 - `arcade_tower_test` **21/21**（新增 TP-13 难度曲线门禁：单调性 + 每档必须更快 + 157 层附近收敛 + 振幅归一 + 摆幅下限）、smoke 94/94、zen 14/14、calm 17/17、review 5/5、gameplay base 11/11、tower challenge 6/6、pwa 7/7、interaction 5/5、immersive 16/16、validate/build/inline/node --check 全过。设计见 `DESIGN-0.12.5.md`。
+- 发布：提交 `7593b0a` 推送 `main`；Actions run `44973571565` 四 job 全绿；CI 与本地 `verify_deploy.py` 均 **41/41** 双端一致（arcade 0.12.5）；双端线上实测 0/30/100/200 层 g 680→4000、周期 2800→1154ms、振幅恒等目标、摆幅 217→159px、0 console error；SW `studiokit-arcade-0.12.5-v1`。
 
 ## 0.12.4 — 2026-11-22（已双端发布）
 
