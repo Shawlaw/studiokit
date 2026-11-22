@@ -17,16 +17,22 @@ REQUIRED = [
     'apps/arcade/DESIGN-0.4.0.md', 'apps/arcade/DESIGN-0.5.0.md',
     'apps/arcade/DESIGN-0.6.0.md', 'apps/arcade/DESIGN-0.8.1.md', 'apps/arcade/DESIGN-0.8.2.md',
     'apps/arcade/DESIGN-0.8.6.md', 'apps/arcade/DESIGN-0.9.0.md', 'apps/arcade/DESIGN-0.10.0.md',
-    'apps/arcade/DESIGN-0.11.0.md', 'apps/arcade/DESIGN-0.11.1.md', 'apps/arcade/DESIGN-0.11.2.md', 'apps/arcade/DESIGN-0.11.3.md', 'apps/arcade/DESIGN-0.11.4.md', 'apps/arcade/DESIGN-0.11.5.md', 'apps/arcade/DESIGN-0.12.0.md', 'apps/arcade/DESIGN-0.12.1.md', 'apps/arcade/DESIGN-0.12.2.md', 'apps/arcade/DESIGN-0.12.3.md', 'apps/arcade/DESIGN-0.12.4.md', 'apps/arcade/DESIGN-0.12.5.md', 'apps/arcade/DESIGN-0.12.6.md', 'apps/arcade/DESIGN-0.12.7.md', 'apps/arcade/DESIGN-0.13.1.md', 'apps/arcade/DESIGN-0.13.2.md', 'apps/arcade/DESIGN-0.13.3.md', 'apps/arcade/DESIGN-0.14.0.md', 'apps/arcade/DESIGN-0.15.0.md',
+    'apps/arcade/DESIGN-0.11.0.md', 'apps/arcade/DESIGN-0.11.1.md', 'apps/arcade/DESIGN-0.11.2.md', 'apps/arcade/DESIGN-0.11.3.md', 'apps/arcade/DESIGN-0.11.4.md', 'apps/arcade/DESIGN-0.11.5.md', 'apps/arcade/DESIGN-0.12.0.md', 'apps/arcade/DESIGN-0.12.1.md', 'apps/arcade/DESIGN-0.12.2.md', 'apps/arcade/DESIGN-0.12.3.md', 'apps/arcade/DESIGN-0.12.4.md', 'apps/arcade/DESIGN-0.12.5.md', 'apps/arcade/DESIGN-0.12.6.md', 'apps/arcade/DESIGN-0.12.7.md', 'apps/arcade/DESIGN-0.13.1.md', 'apps/arcade/DESIGN-0.13.2.md', 'apps/arcade/DESIGN-0.13.3.md', 'apps/arcade/DESIGN-0.14.0.md', 'apps/arcade/DESIGN-0.15.0.md', 'apps/arcade/DESIGN-0.16.0.md',
     'apps/arcade/engine.js', 'apps/arcade/arcade.css', 'apps/arcade/sw.js',
     'apps/arcade/manifest.webmanifest',
     'apps/arcade/career/registry.js', 'apps/arcade/career/discovery.js',
     'apps/arcade/career/career-core.js', 'apps/arcade/career/career-db.js',
     'apps/arcade/career/bridge.js', 'apps/arcade/career/router.js',
     'apps/arcade/career/entry-router.js', 'apps/arcade/career/backup.js',
+    'apps/arcade/career/commission-core.js', 'apps/arcade/career/star-combat-config.js',
+    'apps/arcade/career/rental.js', 'apps/arcade/career/alternatives.js',
     'apps/arcade/career/content/registry.json', 'apps/arcade/career/content/clues.json',
+    'apps/arcade/career/content/commissions.json', 'apps/arcade/career/content/items.json',
+    'apps/arcade/career/content/chapter-01.json',
     'apps/arcade/career/ui/clue-surface.js', 'apps/arcade/career/ui/clue-surface.css',
     'apps/arcade/career/ui/mailbox.js', 'apps/arcade/career/ui/settings.js',
+    'apps/arcade/career/ui/town.js', 'apps/arcade/career/ui/hangar.js',
+    'apps/arcade/career/ui/receipt.js',
     'apps/arcade/icons/icon-192.png', 'apps/arcade/icons/icon-512.png',
     'apps/arcade/icons/maskable-512.png', 'apps/arcade/icons/apple-touch-icon.png',
     'apps/arcade/games/star-raid.html', 'apps/arcade/games/shadow-leap.html',
@@ -47,6 +53,8 @@ REQUIRED = [
     'tools/career_db_test.mjs', 'tools/career_backup_test.mjs',
     'tools/career_entry_router_test.mjs', 'tools/career_discovery_accessibility_test.mjs',
     'tools/career_games_reachability_test.mjs', 'tools/career_pwa_offline_test.mjs',
+    'tools/career_commission_test.mjs', 'tools/career_star_combat_config_test.mjs',
+    'tools/career_rental_test.mjs', 'tools/career_alternatives_test.mjs',
     'tools/career_legacy_baseline_test.mjs',
 ]
 
@@ -355,6 +363,63 @@ def validate(root=ROOT):
                         ok = fail(f'Arcade sw.js CORE_PATHS missing career resource: {marker}') and ok
         else:
             ok = fail('Arcade career runtime directory is missing') and ok
+        # 0.16 First Flight：告示板/委托/机库/收据/职业入口的静态契约（内容与接口，不含剧透）。
+        career_root = root / 'apps/arcade/career'
+        if career_root.is_dir():
+            try:
+                commissions = json.loads((career_root / 'content/commissions.json').read_text(encoding='utf-8'))
+                chapter1 = json.loads((career_root / 'content/chapter-01.json').read_text(encoding='utf-8'))
+                items = json.loads((career_root / 'content/items.json').read_text(encoding='utf-8'))
+                registry_data = json.loads((career_root / 'content/registry.json').read_text(encoding='utf-8'))
+            except (json.JSONDecodeError, OSError) as exc:
+                ok = fail(f'Arcade 0.16 career content JSON invalid: {exc}') and ok
+            else:
+                watch_kinds = {}
+                for game in registry_data.get('games') or []:
+                    if isinstance(game, dict):
+                        watch_kinds[game.get('gameId')] = {w.get('kind') for w in game.get('watch') or [] if isinstance(w, dict)}
+                commission_ids = set()
+                for commission in commissions.get('commissions') or []:
+                    if not isinstance(commission, dict):
+                        continue
+                    commission_id = commission.get('commissionId')
+                    commission_ids.add(commission_id)
+                    game_id = commission.get('gameId')
+                    objective = commission.get('objective') or {}
+                    if objective.get('kind') not in watch_kinds.get(game_id, set()):
+                        ok = fail(f'Arcade 0.16 commission {commission_id}: objective kind must be in {game_id} watch kinds') and ok
+                    if not isinstance(commission.get('repeatSalaryCredits'), int):
+                        ok = fail(f'Arcade 0.16 commission {commission_id}: missing repeatSalaryCredits') and ok
+                for expected in ('pendulum-tower.T1', 'pendulum-tower.T2', 'star-raid.T1', 'star-raid.T2'):
+                    if expected not in commission_ids:
+                        ok = fail(f'Arcade 0.16 commission missing: {expected}') and ok
+                origins = chapter1.get('origins') or []
+                if len(origins) != len(ARCADE_ALL_GAMES):
+                    ok = fail(f'Arcade 0.16 chapter-01 origins must be {len(ARCADE_ALL_GAMES)}, found {len(origins)}') and ok
+                if {o.get('gameId') for o in origins if isinstance(o, dict)} != set(ARCADE_ALL_GAMES):
+                    ok = fail('Arcade 0.16 chapter-01 origins must cover all 16 games') and ok
+                ships = items.get('ships') or []
+                if len(ships) != 4:
+                    ok = fail(f'Arcade 0.16 items.json must define 4 ships, found {len(ships)}') and ok
+                prices = {s.get('price') for s in ships if isinstance(s, dict)}
+                if prices != {260, 480, 520, 540}:
+                    ok = fail(f'Arcade 0.16 ship prices changed: {sorted(prices)}') and ok
+            bridge_source = (career_root / 'bridge.js').read_text(encoding='utf-8')
+            for marker in ('TICKET_KEY', "commission-core.js", "lazy: true", 'getCommissionLoadout', 'openTown', 'openHangar', 'openReceipt'):
+                if marker not in bridge_source:
+                    ok = fail(f'Arcade 0.16 bridge marker missing: {marker}') and ok
+            sw_file = root / 'apps/arcade/sw.js'
+            if sw_file.exists():
+                sw_source = sw_file.read_text(encoding='utf-8')
+                for resource in ('commission-core.js', 'star-combat-config.js', 'rental.js', 'alternatives.js',
+                                 'content/commissions.json', 'content/items.json', 'content/chapter-01.json',
+                                 'ui/town.js', 'ui/hangar.js', 'ui/receipt.js'):
+                    if f"'./career/{resource}'" not in sw_source:
+                        ok = fail(f'Arcade 0.16 sw.js CORE_PATHS missing career resource: {resource}') and ok
+            for page_name, marker in (('pendulum-tower.html', 'careerGoal'), ('star-raid.html', 'career-mission-line')):
+                page_file = root / 'apps/arcade/games' / page_name
+                if page_file.exists() and marker not in page_file.read_text(encoding='utf-8'):
+                    ok = fail(f'Arcade 0.16 {page_name} career marker missing: {marker}') and ok
         # 0.8.6：所有经典/禅模式「再来一局」必须回到模式选择，不得直接 startGame/startZenRound。
         # 只在同一个 showOverlay/show 调用的参数范围内判断（遇到 } 即停），避免把后面紧邻的
         # function startGame() 定义误判成结算回调。

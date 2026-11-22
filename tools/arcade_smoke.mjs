@@ -797,11 +797,12 @@ async function main() {
       t.spawnBossNow();
       t.spawnShotAtPlayer();
       const before = t.info();
-      const used = t.useItemSlot(0);
+      const slot = t.itemsInfo().items.indexOf('nuke');
+      const used = t.useItemSlot(slot);
       const after = t.info();
-      return { before, used, after, flying: t.itemsInfo() };
+      return { before, slot, used, after, flying: t.itemsInfo() };
     })()`);
-    assert(nuke.used === true && nuke.after.items[0] === null && nuke.flying.nukes === 1, 'star-raid nuke should launch a tracking shell: ' + JSON.stringify({ used: nuke.used, items: nuke.after.items, nukes: nuke.flying.nukes }));
+    assert(nuke.used === true && nuke.slot >= 0 && nuke.after.items[nuke.slot] === null && nuke.flying.nukes === 1, 'star-raid nuke should launch a tracking shell: ' + JSON.stringify({ slot: nuke.slot, used: nuke.used, items: nuke.after.items, nukes: nuke.flying.nukes }));
     assert(nuke.after.bossHp === nuke.before.bossHp, 'star-raid nuke must not damage before impact: ' + JSON.stringify({ before: nuke.before.bossHp, after: nuke.after.bossHp }));
     let nukeBoom = { items: { nukes: 1 } };
     for (let i = 0; i < 20; i += 1) {
@@ -839,8 +840,9 @@ async function main() {
       const t = __arcadeTest;
       t.setEnergy(80);
       t.grantItem('nuke');
-      const used = t.useItemSlot(0);
-      return { used, flying: t.itemsInfo().nukes, boss: t.info().bossActive };
+      const slot = t.itemsInfo().items.indexOf('nuke');
+      const used = t.useItemSlot(slot);
+      return { used, slot, flying: t.itemsInfo().nukes, boss: t.info().bossActive };
     })()`);
     let nukeNoBossAfter = { nukes: 1 };
     for (let i = 0; i < 18; i += 1) {

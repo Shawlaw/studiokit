@@ -625,7 +625,7 @@ writeEquipment({careerId, patch, now}) -> Promise<{ok, equipment?} | {ok:false, 
 
 - 单事务读-合并-写；`patch` 只允许扁平 token 键（`isToken`），值为 boolean/string/非负有限数/普通对象；不可写 `careerId/updatedAt`；不存在的生涯返回 `no-wallet`。
 - equipment 扁平键约定：`ship:<shipId>:owned = true`、`equippedShip = '<shipId>'`、`module:<moduleId>:level = <n>`；旧 hangar（`studiokit:arcade:meta:v1` 的 `formula:1`）永不被职业读写。
-- 购买飞船走 `purchase({cost, grants:{equipment:{'ship:<id>:owned': true}}})`；切换/租用走 `writeEquipment`（零成本，不入账本，不发奖）。
+- 购买飞船走 `purchase({cost, costItems:<材料>, grants:{equipment:{'ship:<id>:owned': true}}})`：`costItems` 与信用点在同一事务内校验/扣减（材料不足返回 `insufficient-items`、零写入）；`grants.items` 只表示购买附带的材料增量，不能表达成本。切换/租用走 `writeEquipment`（零成本，不入账本，不发奖）。
 
 ### 18.6 items.json schema
 
