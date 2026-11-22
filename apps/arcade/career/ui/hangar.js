@@ -1415,6 +1415,9 @@
 
     function onKeyDown(event) {
       if (!event) return;
+      /* 只处理最上层 career 面板：town→hangar→receipt 叠层时 Esc 不得一次关两层。 */
+      const panels = doc.querySelectorAll('[data-career-panel]');
+      if (panels.length && panels[panels.length - 1] !== overlay) return;
       const key = typeof event.key === 'string' ? event.key : '';
       const code = typeof event.keyCode === 'number' ? event.keyCode : 0;
       if (key === 'Escape' || key === 'Esc' || code === 27) {

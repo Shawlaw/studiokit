@@ -270,7 +270,8 @@
       function careerGoalLine() {
         const goal = careerGoalParts();
         if (!goal) return '';
-        const text = [goal.title, goal.summary].filter(Boolean).join(' · ');
+        /* 0.16.0 窄屏：只显示委托标题 + 目标层数（summary 在告示板可读），保证 320/375 也不超过两行。 */
+        const text = goal.title || goal.summary;
         return '<span class="tower-career-goal" data-career-goal="1">委托：' + chEsc(text) + (goal.atLeast ? '（目标 ' + goal.atLeast + ' 层）' : '') + '</span>';
       }
 
