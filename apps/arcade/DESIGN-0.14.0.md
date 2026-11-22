@@ -121,3 +121,14 @@ after = min(180, before + added);      // BUFF_STACK_CAP = 180s
 - 320/375/390/430px：开始弹层 4 按钮、割草 6 列道具行、机库与整备卡无横向溢出；按钮 ≥44px。
 - 全量门禁：`py -3 tools/arcade_run_all_gates.py` → **ALL GATES PASSED**（smoke 112/112、zen 17/17、calm 17/17、review 5/5、gameplay all 104/104、base 22/22，含 validate/build/design/inline/stage）。
 - 真机手感（能量节奏、割草密度、Boss 弹幕可读性）仍 **UNVERIFIED**，待 Owner 试玩。
+
+## 5. 独立只读审查（Reviewer）
+
+对未提交 diff 的独立复核结论：**无 Blocker / Major**；核心不变量（无积分/货币/最高分/`scores:v1`/机库 runs-best、不写局内档）成立。Minor 已处理：
+
+1. `quitMow()` 结束后补 `syncJoyTools()` + `pauseUi.sync()`，避免割草 ∞ 计数与暂停按钮状态残留到开始界面。
+2. 割草 hint 文案由「P / Esc 结束演武」改为「P / Esc 暂停」（实际需要再点暂停层的「结束演武」）。
+3. smoke 增加真实 UI 路径「暂停 → 继续 → 暂停 → 结束演武」，并断言结束后道具计数不再是 ∞、暂停按钮禁用。
+4. Boss 四套弹幕断言改为读取 `bossPatterns` 已触发集合（必须长度 4），不再用最后一个招式名的字符串长度冒充覆盖。
+5. Boss 测试先记录 spawn 时 `maxHp`，再对 Boss 临时回血并持续输出 9s，避免 DPS 提前击杀导致假红。
+6. 设计文档「受击结束编队」与实现对齐：只有能量归零时才强制结束编队。
