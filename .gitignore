@@ -14,6 +14,9 @@ dist/
 test-artifacts/
 .zcode/
 
+# 本地私有讨论与调研（不外发、不进入公开仓库）
+private/
+
 # Editors / OS
 .DS_Store
 Thumbs.db
