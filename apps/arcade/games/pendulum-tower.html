@@ -177,7 +177,7 @@
 
       let boxes = [];
       let drop = null;
-      const pend = { angle: 0.95, vel: 0, length: PEND_LEN, gravity: 680, damping: 0.006 };
+      const pend = { angle: 0.95, vel: 0, length: PEND_LEN, gravity: 560, damping: 0.006 };
       let pendHasBox = true;
       let pendReload = 0;
       let towerLean = 0;
@@ -217,31 +217,42 @@
       let high = A.Progress.get('pendulum-tower').high;
       dom.hudHigh.textContent = String(high);
 
-      /* 0.12.5 难度曲线修正。
-         旧实现 `swingGravity = min(1700, 680 + floors*34)`：**30 层就撞上限**，之后摆速与摆幅完全不变，
-         所以 200 层和 30 层手感一模一样 —— 这正是「200 层后很容易完美连击」的原因。
-         另外 g 阶跃若发生在摆心附近，会把能量悄悄吃掉（实测摆幅 216px→154px），
-         于是又出现「层数越高摆幅越小、也快不起来」的观感。
-         现在：
-         ① 上限抬到 2600（约 56 层到顶），越往上越快地持续加速；
-         ② 每次升速都把摆幅归一到目标值，难度只由「更快」贡献，不再由「振幅无序塌缩」贡献。 */
-      const SWING_G_CAP = 4000;
-      /* 两段式：前 56 层 +34/层（快抬到有挑战的水平），之后 +14/层 缓慢加码，约 157 层触顶。
-         这样 200 层玩家不是「30 层手感重复 170 次」，而是爬过 157 层渐难曲线。 */
+      /* ===== 摆动难度曲线（本轮按人类计时能力重新标定） =====
+         难度看的是「完美窗口」：预测落点扫过 ±9.6px（完美吸附判定）所持续的毫秒数。
+         上一版曲线（680 + 34f/层 → 56 层后 +14，封顶 4000）实测窗口：0 层 63ms、30 层 41ms、
+         封顶层 28ms —— 28ms 只有 60fps 的 1.7 帧，比「手指按下到画面响应」的固有延迟
+         （26 款手机实测 display+touch 合计 35~140ms，均值约 78ms）还短，也远小于人类的
+         重合计时能力（coincidence-anticipation：训练者变量误差 ~20ms SD，普通玩家 60~100ms）。
+         窗口比手抖还窄 ⇒ 命中靠运气，玩家学不到技巧，只会觉得「太快太难」。
+         本轮目标：封顶完美窗口 ≥55ms（≥3 帧，约 2× 训练者 SD），
+         可落窗口（|offset| < 58px）保持 ≥150ms 让失误罕见，
+         同时封顶必须明显难于 10 层（完美窗口 ≤75% 的 10 层、周期 ≤65% 的 10 层），且 30 层后继续变难。
+         ── 关键物理事实：落点预测横移 = vx×下落时间，与 L·sinθ 同号叠加，
+         高阶时横移项主导（g=4000 时落点扫过 ~700px/s），所以窗口 ≈ 1/g² ——
+         只压上限撑不到 55ms，整条曲线都要重排：
+         ① 上限 4000→1500（封顶周期 1154→1885ms）：封顶完美窗口 28→55.6ms；
+         ② 起始 g 680→560：0 层窗口 63→81ms、10 层 79ms，封顶正好是 10 层的 70%；
+         ③ 振幅上限 0.92→0.80、斜率 0.004→0.0015（第 120 层收到 0.62rad）：
+            振幅收窄本身会让窗口变宽，收得太快会在前 30 层出现「先变易再变难」的锯齿；
+            现在 g 的增长始终压过振幅收窄的宽化，窗口逐层严格递减；
+         ④ 两段斜率 4/8（56 层换挡、146 层封顶）：前段是给新手的平缓入门坡，
+            后段 +8 保证 30→146 层持续变快，不会重演上一版「30 层封顶后手感停滞」。
+         挑战模式不受影响：updateSwingDifficulty() 提前返回，挑战的 g 仍由关卡 680×speedFactor 固定。 */
+      const SWING_G_CAP = 1500;
       function swingGravity(floors) {
         const f = Math.max(0, floors);
-        const fast = Math.min(f, 56) * 34;
-        const slow = Math.max(0, f - 56) * 14;
-        return Math.min(SWING_G_CAP, 680 + fast + slow);
+        const fast = Math.min(f, 56) * 4;
+        const slow = Math.max(0, f - 56) * 8;
+        return Math.min(SWING_G_CAP, 560 + fast + slow);
       }
       /* 目标角振幅：随层数缓慢收窄，但不低于 0.62rad —— 保证钟摆始终有可见摆幅，
          不会像旧版那样被动缩到几乎没有（那样反而让落点永远在中心附近）。 */
       function swingTargetAmplitude(floors) {
-        return Math.max(0.62, 0.92 - Math.max(0, floors) * 0.004);
+        return Math.max(0.62, 0.8 - Math.max(0, floors) * 0.0015);
       }
       /* 把当前摆状态的能量归一到目标振幅：保持当前角度与运动方向，只调整速度大小。 */
       function normalizeSwingAmplitude(floors) {
-        const g = Number(pend.gravity) || 680;
+        const g = Number(pend.gravity) || 560;
         const len = Number(pend.length) || PEND_LEN;
         const target = swingTargetAmplitude(floors);
         const eTarget = (g / len) * (1 - Math.cos(target));

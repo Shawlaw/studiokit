@@ -506,14 +506,22 @@ const TP_LOD = {
   },
 };
 
-/* ---------------- TP-13 难度曲线：层数越高越快，摆幅不塌（0.12.5） ---------------- */
+/* ---------------- TP-13 难度曲线：层数越高越快，摆幅不塌（结构保证） ---------------- */
 const TP_CURVE = {
   id: 'TP-13',
   async run(cdp) {
-    /* 旧曲线 swingGravity = min(1700, 680+34f) 在 30 层就撞顶 ⇒ 200 层与 30 层手感完全相同，
-       这正是「200 层后很容易完美连击」的根因；同时 g 阶跃时能量被吃掉，摆幅会无序塌到 154px。
-       现在：两段式 g（56 层前 +34/层、之后 +14/层，约 157 层封顶 4000）+ 升速时把振幅归一到目标值。 */
-    const floors = [0, 10, 20, 30, 56, 100, 157, 200, 1000];
+    /* 历史：`swingGravity = min(1700, 680+34f)` 在 30 层就撞顶 ⇒ 200 层与 30 层手感完全相同。
+       本轮按人类计时能力重标：封顶 1500（146 层触顶）、起始 560、两段斜率 4/8、振幅 0.80→0.62。
+       本场景只锁「结构」：g 单调不减 / 周期单调不增 / 30 层后继续变难 / 上限在 120~200 层之间收敛
+       / 振幅被归一到目标值。真实「完美窗口 / 可落窗口」时长由 TP-14 用毫秒测量。 */
+    const src = fs.readFileSync(path.join(REPO_ROOT, 'apps/arcade/games/pendulum-tower.html'), 'utf8');
+    /* 挑战模式物理必须保持「关卡固定」：难度曲线不得渗入挑战（回归保护）。 */
+    assert(/if \(mode === 'challenge'\) return;/.test(src), 'updateSwingDifficulty 不再对挑战模式提前返回');
+    assert(/pend\.gravity = 680 \* \(Number\(pendulum\.speedFactor\) \|\| 1\);/.test(src),
+      '挑战模式的摆速基准（680×speedFactor）被改动，挑战 6 关会受影响');
+    record('结构：难度曲线不渗入挑战模式（updateSwingDifficulty 提前返回 + 挑战 g=680×speedFactor）', true);
+
+    const floors = [0, 10, 20, 30, 56, 100, 120, 157, 200, 1000];
     const rows = [];
     for (const f of floors) {
       await prepare(cdp, 'curve' + f);
@@ -524,33 +532,202 @@ const TP_CURVE = {
       rows.push({ f, g: s.gravity, period: s.periodMs, amp: s.amplitudeRad, target: s.targetAmplitudeRad, span: s.xSpanPx });
     }
     const byFloors = (n) => rows.find((r) => r.f === n);
-    /* 1) 速度随层数单调递增（周期单调不增），且必须真的变快很多。 */
+    /* 1) 速度随层数单调递增（周期单调不增）。 */
     for (let i = 1; i < rows.length; i += 1) {
       assert(rows[i].g >= rows[i - 1].g, 'g 未随层数单调不减：' + rows[i - 1].f + '→' + rows[i].f + ' ' + rows[i - 1].g + '→' + rows[i].g);
       assert(rows[i].period <= rows[i - 1].period, '摆动周期未随层数单调不增：' + rows[i - 1].f + '→' + rows[i].f);
     }
     for (const pair of [[10, 30], [30, 56], [56, 100], [56, 200]]) {
-      const a = byFloors(pair[0]) || rows.find((r) => r.f === pair[0]);
-      const b = rows.find((r) => r.f === pair[1]);
+      const a = byFloors(pair[0]);
+      const b = byFloors(pair[1]);
       assert(b.period < a.period - 20, pair[1] + ' 层没有比 ' + pair[0] + ' 层更快（周期 ' + a.period + '→' + b.period + 'ms）');
     }
-    /* 2) 30 层之后必须继续变难（旧版在此封顶）。 */
-    assert(rows.find((r) => r.f === 200).g > rows.find((r) => r.f === 30).g * 1.8,
-      '200 层相对 30 层没有明显加速：' + rows.find((r) => r.f === 30).g + '→' + rows.find((r) => r.f === 200).g);
-    /* 3) 封顶存在但不早于 100 层（保证 200 层玩家确实爬过一段渐难曲线）。 */
-    assert(rows.find((r) => r.f === 100).g < rows.find((r) => r.f === 1000).g, '100 层就已经封顶（曲线太短）');
-    assert(Math.abs(rows.find((r) => r.f === 200).g - rows.find((r) => r.f === 1000).g) < 1, '难度上限未在 157 层附近收敛');
+    /* 2) 30 层之后必须继续明显变难（旧版在此封顶）：速度与周期双指标，不只看 g。 */
+    const cap = byFloors(1000);
+    assert(byFloors(200).g > byFloors(30).g * 1.5,
+      '200 层相对 30 层没有明显加速：' + byFloors(30).g + '→' + byFloors(200).g);
+    assert(byFloors(200).period < byFloors(30).period * 0.8,
+      '200 层的摆动周期没有明显短于 30 层：' + byFloors(30).period + '→' + byFloors(200).period + 'ms');
+    /* 3) 上限存在但不得早于 120 层，且必须在 200 层前收敛（曲线要够长）。 */
+    assert(byFloors(120).g < cap.g, '120 层就已经封顶（曲线太短）');
+    assert(Math.abs(byFloors(200).g - cap.g) < 1, '难度上限未在 200 层前收敛：' + byFloors(200).g + ' vs ' + cap.g);
     /* 4) 振幅必须归一到目标值（不再无序塌缩），且始终保留可见摆幅。 */
     for (const r of rows) {
       assert(Math.abs(r.amp - r.target) < 0.05, r.f + ' 层振幅未归一到目标：amp=' + r.amp.toFixed(3) + ' target=' + r.target.toFixed(3));
       assert(r.amp >= 0.55 && r.amp <= 1.05, r.f + ' 层振幅越界（摆幅塌缩或过大）：' + r.amp.toFixed(3));
       assert(r.span >= 120, r.f + ' 层摆幅过小（钟摆几乎不动）：' + r.span + 'px');
     }
-    record('难度曲线：g ' + rows[0].g + '→' + rows[rows.length - 1].g + '（157 层封顶）、周期 ' + rows[0].period + '→' + rows[rows.length - 1].period + 'ms、振幅 ' + rows[0].amp.toFixed(2) + '→' + rows[rows.length - 1].amp.toFixed(2) + 'rad 恒等于目标', true);
+    record('难度曲线：g ' + rows[0].g + '→' + cap.g + '（146 层封顶）、周期 ' + rows[0].period + '→' + cap.period + 'ms、振幅 ' + rows[0].amp.toFixed(2) + '→' + cap.amp.toFixed(2) + 'rad 恒等于目标', true);
   },
 };
 
-const SCENARIOS = [TP_STATIC, TP_PHYSICS, TP_OVERVIEW, TP_CARGO, TP_SAVE, TP_LAYOUT, TP_REACH, TP_ZOOM, TP_CONSISTENCY, TP_RELEASE_VX, TP_TALL, TP_LOD, TP_CURVE];
+/* ---------------- TP-14 真实时长：完美窗口 / 可落窗口（「太快太难」的守卫） ---------------- */
+/* 为什么必须用毫秒而不是帧计数：封顶完美窗口 ~55ms，60fps 一帧 16.7ms，
+   旧版 24~28ms 的窗口连两帧都盖不住，逐帧统计的误差比窗口本身还大。
+   所以本场景在页内做两件事，单个 CDP evaluate 完成（避免 1ms 级往返抖动）：
+     A) 采集真实 rAF 帧序列 max(2.4s, 1.7 个摆动周期)：交叉校验「活的游戏循环」确实
+        在扫过完美区间（min|offset| ≤ 12px）、周期与解析值一致、完美占空比与积分一致；
+     B) 用同一份摆状态按 0.5ms 步长积分 2.2 个周期（与 localStorage 无关、可复现），
+        把 |forecast.offset| ≤ 9.6px（完美吸附）与 < 58px（可落上）两种区间的持续毫秒数算出来。
+   人类计时依据：重合计时变量误差训练者 ~20ms SD、普通玩家 60~100ms；手机触摸到显示
+   display+touch 合计 35~140ms（26 机型实测）。所以封顶完美窗口必须 ≥55ms（≥3 帧、约 2× 训练者 SD），
+   可落窗口 ≥150ms（失误罕见）；同时封顶必须明显难于 10 层（≤75% 窗口、≤65% 周期）。 */
+const MEASURE_WINDOWS = `(async () => {
+  const A = window.Arcade;
+  const PERFECT_PX = 9.6;          // overlap >= BOX_W*0.85  =>  |offset| <= 64*0.15
+  const LANDABLE_PX = 58;          // overlap > 6            =>  |offset| < 58
+  const L = 135, BOX_H = 40, G_DROP = 1300, VY0 = 60, DAMP = 0.006;
+  const p0 = window.__arcadeTest.physicsInfo();
+  const g = p0.swing.gravity;
+  const omega = Math.sqrt(g / (p0.swing.length || L));
+  const periodS = (2 * Math.PI) / omega;
+  const liveMs = Math.max(2400, Math.round(1.7 * periodS * 1000));
+
+  /* ---- A) 活的游戏循环：rAF 采样 ---- */
+  const frames = [];
+  const t0 = performance.now();
+  await new Promise((resolve) => {
+    const tick = () => {
+      const p = window.__arcadeTest.physicsInfo();
+      frames.push({ t: performance.now() - t0, off: p.forecast.offset, vx: p.releaseVx });
+      if (performance.now() - t0 < liveMs) requestAnimationFrame(tick); else resolve();
+    };
+    requestAnimationFrame(tick);
+  });
+  const span = frames[frames.length - 1].t - frames[0].t;
+  const dtAvg = span / (frames.length - 1);
+  const crossT = [];
+  for (let i = 1; i < frames.length; i += 1) {
+    const a = frames[i - 1].off, b = frames[i].off;
+    if ((a < 0 && b >= 0) || (a > 0 && b <= 0)) {
+      const frac = a === b ? 0 : Math.abs(a) / (Math.abs(a) + Math.abs(b));
+      crossT.push(frames[i - 1].t + frac * (frames[i].t - frames[i - 1].t));
+    }
+  }
+  const gaps = [];
+  for (let i = 2; i < crossT.length; i += 1) gaps.push(crossT[i] - crossT[i - 2]);
+  const live = {
+    frames: frames.length,
+    perfDuty: frames.filter((f) => Math.abs(f.off) <= PERFECT_PX).length / frames.length,
+    landDuty: frames.filter((f) => Math.abs(f.off) < LANDABLE_PX).length / frames.length,
+    minAbsOffset: Math.min.apply(null, frames.map((f) => Math.abs(f.off))),
+    maxAbsOffset: Math.max.apply(null, frames.map((f) => Math.abs(f.off))),
+    periodMs: gaps.length ? gaps.reduce((s, v) => s + v, 0) / gaps.length : null,
+  };
+
+  /* ---- B) 0.5ms 积分：把区间时长算准 ---- */
+  const p = window.__arcadeTest.physicsInfo();
+  const length = p.swing.length || L;
+  const K = p.releaseVxK;
+  const pivotDelta = p.pivotX - p.topCenter;
+  const ft0 = p.fallTime;
+  const dist0 = ft0 * ((G_DROP * ft0) / 2 + VY0);   // 反解 fallTime 公式得到下落距离
+  const cos0 = Math.cos(p.pendAngle);
+  const fallTime = (th) => {
+    const dist = Math.max(1, dist0 + length * (cos0 - Math.cos(th)));
+    return (-VY0 + Math.sqrt(VY0 * VY0 + 2 * G_DROP * dist)) / G_DROP;
+  };
+  const clamp = (v, a, b) => (v < a ? a : v > b ? b : v);
+  const offsetAt = (th, om) => length * Math.sin(th) + clamp(Math.cos(th) * om * length * K, -240, 240) * fallTime(th) - pivotDelta;
+  const selfCheck = Math.abs(offsetAt(p.pendAngle, p.pendVel) - p.forecast.offset);
+
+  const DT = 0.0005;
+  const sim = { angle: p.pendAngle, vel: p.pendVel, length: length, gravity: g, damping: DAMP };
+  const steps = Math.round((periodS * 2.2) / DT);
+  const offs = [];
+  for (let i = 0; i <= steps; i += 1) { offs.push(offsetAt(sim.angle, sim.vel)); A.Physics.pendulumStep(sim, DT); }
+  const runs = (limit) => {
+    const out = []; let cur = 0, inside = false;
+    for (const o of offs) {
+      if (Math.abs(o) < limit) { cur += DT; inside = true; }
+      else if (inside) { out.push(cur); inside = false; cur = 0; }
+    }
+    return out; // 丢掉末尾不完整区间
+  };
+  const firstHalfMedian = (xs) => {
+    const half = xs.slice(0, Math.max(1, Math.floor(xs.length / 2))).sort((a, b) => a - b);
+    return half.length ? half[Math.floor(half.length / 2)] : 0;
+  };
+  const perfRuns = runs(PERFECT_PX);
+  const landRuns = runs(LANDABLE_PX);
+  return {
+    floors: window.__arcadeTest.joyInfo().floorsReached,
+    g: g,
+    periodMs: Math.round(periodS * 1000),
+    perfectMs: firstHalfMedian(perfRuns) * 1000,
+    landableMs: firstHalfMedian(landRuns) * 1000,
+    runs: { perfect: perfRuns.length, landable: landRuns.length },
+    selfCheck: selfCheck,
+    liveMs: liveMs,
+    live: live,
+  };
+})()`;
+
+const TP_WINDOW = {
+  id: 'TP-14',
+  async run(cdp) {
+    const floors = [0, 10, 30, 100, 150, 500];
+    const CAP_FLOOR = 150;   // ≥ 146 即为封顶层（曲线 146 层触顶）
+    const MIN_PERFECT = 54;  // 设计值 55.6ms；扣掉状态抖动余量，仍远高于人类 20ms 级 SD 的 2 倍
+    const MIN_LANDABLE = 150;
+    const rows = [];
+    for (const f of floors) {
+      await prepare(cdp, 'window' + f);
+      if (f > 0) await cdp.evaluate('__arcadeTest.stackTo(' + f + ')');
+      /* 等 camY 收敛（τ≈0.25s）与振幅归一稳定，否则 fallTime 会偏。 */
+      await sleep(1100);
+      const r = await cdp.evaluate(MEASURE_WINDOWS);
+      assert(r && r.perfectMs > 0 && r.landableMs > 0, f + ' 层窗口测量失败：' + JSON.stringify(r));
+      assert(r.selfCheck < 0.5, f + ' 层落点预测模型与游戏不一致（selfCheck=' + r.selfCheck + 'px）');
+      assert(r.live.minAbsOffset <= 12, f + ' 层活的循环里预测落点从未进入完美区间（窗口不存在）：min=' + r.live.minAbsOffset.toFixed(1) + 'px');
+      assert(r.live.maxAbsOffset >= 45, f + ' 层预测落点扫幅过小（说明没有真实摆动）：max=' + r.live.maxAbsOffset.toFixed(1) + 'px');
+      const simDuty = (2 * r.perfectMs) / r.periodMs;
+      assert(Math.abs(r.live.perfDuty - simDuty) <= Math.max(0.03, simDuty * 0.6),
+        f + ' 层实时采样占空比与 0.5ms 积分不一致：live=' + (r.live.perfDuty * 100).toFixed(1) + '% sim=' + (simDuty * 100).toFixed(1) + '%');
+      rows.push({ f, g: r.g, period: r.periodMs, perfect: r.perfectMs, landable: r.landableMs, livePeriod: r.live.periodMs });
+    }
+    /* 1) 两个窗口都必须随层数单调不增。
+       容差说明：完美窗口（~55-82ms）逐帧抖动 ~1ms，取 2.5ms；可落窗口（~364-526ms）跨到
+       摆幅极值附近（扫速慢），对实测振幅的 ±0.01rad 衰减非常敏感（同一封顶层两次测量可差 ~6ms），
+       所以取 10ms。真正相邻层的差距是 60~70ms，10ms 容差仍然抓得住「先易后难」的锯齿。 */
+    for (let i = 1; i < rows.length; i += 1) {
+      assert(rows[i].perfect <= rows[i - 1].perfect + 2.5,
+        '完美窗口未随层数单调不增（锯齿）：' + rows[i - 1].f + '层 ' + rows[i - 1].perfect.toFixed(1) + 'ms → ' + rows[i].f + '层 ' + rows[i].perfect.toFixed(1) + 'ms');
+      assert(rows[i].landable <= rows[i - 1].landable + 10,
+        '可落窗口未随层数单调不增（锯齿）：' + rows[i - 1].f + '层 ' + rows[i - 1].landable.toFixed(1) + 'ms → ' + rows[i].f + '层 ' + rows[i].landable.toFixed(1) + 'ms');
+    }
+    /* 1b) 还必须真的「越往上越难」，不能整条曲线持平（旧的 30 层封顶就是这样卡住的）。 */
+    assert(rows[0].perfect - rows[rows.length - 1].perfect >= 15,
+      '完美窗口从 0 层到高层几乎没有变窄：' + rows[0].perfect.toFixed(1) + '→' + rows[rows.length - 1].perfect.toFixed(1) + 'ms');
+    assert(rows[0].landable - rows[rows.length - 1].landable >= 80,
+      '可落窗口从 0 层到高层几乎没有变窄：' + rows[0].landable.toFixed(1) + '→' + rows[rows.length - 1].landable.toFixed(1) + 'ms');
+    const cap = rows.find((r) => r.f === CAP_FLOOR);
+    const f10 = rows.find((r) => r.f === 10);
+    /* 2) 封顶必须仍然「可以练出来」：完美窗口 ≥ 54ms（≥3 帧 @60fps）、可落窗口 ≥ 150ms。 */
+    assert(cap.perfect >= MIN_PERFECT,
+      '封顶完美窗口过窄（玩家只能靠运气）：' + cap.perfect.toFixed(1) + 'ms < ' + MIN_PERFECT + 'ms');
+    assert(cap.landable >= MIN_LANDABLE,
+      '封顶可落窗口过窄（失误会变得不公平）：' + cap.landable.toFixed(1) + 'ms < ' + MIN_LANDABLE + 'ms');
+    /* 3) 封顶必须仍然明显难过 10 层（否则难度曲线在封顶处「回退」）。 */
+    assert(cap.perfect <= f10.perfect * 0.75,
+      '封顶完美窗口没有明显窄于 10 层：' + cap.perfect.toFixed(1) + 'ms vs ' + f10.perfect.toFixed(1) + 'ms');
+    assert(cap.period <= f10.period * 0.65,
+      '封顶摆动周期没有明显短于 10 层：' + cap.period + 'ms vs ' + f10.period + 'ms');
+    /* 4) 活的循环与解析周期一致（±8%），确保积分用的就是真物理。 */
+    const livePeriods = rows.filter((r) => r.livePeriod).map((r) => r.livePeriod);
+    for (const r of rows) {
+      if (!r.livePeriod) continue;
+      assert(Math.abs(r.livePeriod - r.period) <= r.period * 0.08,
+        r.f + ' 层实时采样周期与解析周期不符：' + Math.round(r.livePeriod) + 'ms vs ' + r.period + 'ms');
+    }
+    record('真实窗口：完美 ' + rows.map((r) => r.f + '层 ' + r.perfect.toFixed(1) + 'ms').join(' → ') +
+      '（封顶 ≥' + MIN_PERFECT + 'ms）；可落 ' + cap.landable.toFixed(0) + 'ms@封顶 ≥' + MIN_LANDABLE +
+      'ms；封顶/10层 窗口 ' + (cap.perfect / f10.perfect).toFixed(2) + '、周期 ' + (cap.period / f10.period).toFixed(2) +
+      '（实时交叉校验 ' + livePeriods.map((v) => Math.round(v)).join('/') + 'ms）', true);
+  },
+};
+
+const SCENARIOS = [TP_STATIC, TP_PHYSICS, TP_OVERVIEW, TP_CARGO, TP_SAVE, TP_LAYOUT, TP_REACH, TP_ZOOM, TP_CONSISTENCY, TP_RELEASE_VX, TP_TALL, TP_LOD, TP_CURVE, TP_WINDOW];
 
 let server, launched, cdp;
 try {

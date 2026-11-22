@@ -1695,6 +1695,24 @@
       "evidence": "提交 79be219 推送 main；Actions run 44968445299 四 job 全绿；CI 与本地 tools/verify_deploy.py 均 41/41 双端一致（arcade 0.12.3 / badge 2.2.1 / venue 0.2.0）；双端线上无头 Chrome 实测 200 层 scale=0.0624、1000 层 scale=0.0127，屏幕 y 均 116–624（画布 740）、溢出 0、fitsOnScreen=true、0 console error；SW 缓存键 studiokit-arcade-0.12.3-v1；证据文档提交 6520003 触发 Actions 44968745329 四 job 同样全绿。"
     },
     {
+      "id": "T107",
+      "title": "Arcade 0.12.7：层塔难度按人类计时能力重标定",
+      "kind": "agent",
+      "status": "DONE",
+      "dependsOn": [
+        "T106"
+      ],
+      "ownerAuthorizationRequired": false,
+      "acceptance": [
+        "封顶层完美窗口 ≥55ms（至少 3 帧、≥2.75× 训练者 SD）",
+        "封顶可落窗口 ≥150ms",
+        "窗口严格随层数递减，且封顶明显难于 10 层",
+        "挑战 6 关零变化；全量门禁通过；无 key/Schema/关卡数据变更"
+      ],
+      "completedAt": "2026-11-22T12:30:00+08:00",
+      "evidence": "Owner 反馈 0.12.5 后高层太快太难。实测封顶完美窗口仅 24~28ms（1.4~1.7 帧）；根因：落点标记横向扫描由释放横移项主导（封顶约 700px/s），窗口近似按 1/g² 收缩，只压上限不够。按人因数据（CAT 变量误差：训练者 ~20ms SD、普通成人 60~100ms；手机 display+touch 35~140ms）重标定：SWING_G_CAP 4000→1500、起始 680→560、斜率 34/14→4/8（146 层封顶）、振幅 0.92−0.004f→0.80−0.0015f。实测：封顶周期 1154→1885ms、完美窗口 28.5→56.5ms、可落 178→335ms、封顶/10 层窗口 0.71、周期 0.63；命中率 45%→84%（训练者）/16%→36%（普通）。另用逐帧连续段方法独立复核一致。门禁 arcade_tower_test 23/23（新增 TP-14 真实毫秒窗口守卫 + 挑战隔离静态锁）、challenge 6/6、smoke 94/94、zen 14/14、calm 17/17、review 5/5、gameplay base 11/11、pwa 7/7、interaction 5/5、immersive 32/32、validate/build/inline/node --check 全过；在仅含本版改动的干净 worktree 上复跑确认不依赖其它在制品；无 key/Schema/关卡数据变更；版本链 0.12.7 / SW studiokit-arcade-0.12.7-v1；设计见 DESIGN-0.12.7.md；真机手感 UNVERIFIED。"
+    },
+    {
       "id": "T106",
       "title": "Arcade 0.12.6：PWA 独立窗口底部按钮与全屏同高",
       "kind": "agent",
