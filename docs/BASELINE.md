@@ -26,7 +26,7 @@ Current Venue Compare baseline facts:
 
 Current Arcade baseline facts:
 
-- App version: `0.13.2`（`apps/arcade/engine.js` 的 `ARCADE_VERSION` 与注册表保持一致；**0.13.2 为本地修复、尚未发布**——线上仍为已发布的 `0.13.1`，本版修复 PWA 更新检测版本来源与 iOS 主屏 PWA 游玩时长永久停摆，复现与设计见 `apps/arcade/DESIGN-0.13.2.md`；0.13.1 已于 2026-11-22 双端发布，见 `apps/arcade/DESIGN-0.13.1.md`；0.13.0 同已双端发布）
+- App version: `0.14.0`（功能分支 `feat/arcade-star-raid-mow` 本地开发，**未合并 main、未推送、未发布**；main 为 0.13.2 本地修复，线上仍为已发布的 `0.13.1`。0.14.0 在星海突击加入同种弹种叠加时长与无积分/无星币的「星海割草」无尽演武，设计与回滚见 `apps/arcade/DESIGN-0.14.0.md`；0.13.2 修复 PWA 更新检测版本来源与 iOS 主屏 PWA 游玩时长永久停摆，见 `apps/arcade/DESIGN-0.13.2.md`；0.13.1 已于 2026-11-22 双端发布，见 `apps/arcade/DESIGN-0.13.1.md`；0.13.0 同已双端发布）
 - Registry entry: `shared/tool-registry.json` → `id: "arcade"`，`href: "./apps/arcade/"`
 - Games: 16（13 款带 6 关挑战 + 3 款平和棋牌：二十一点、五子棋、纸牌接龙；清单唯一来源是 `engine.js` 顶部的 `GAMES` 数组）
 - Run state schema: `v1`（`studiokit:arcade:runs:v1`）

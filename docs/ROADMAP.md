@@ -201,6 +201,20 @@ Owner 反馈六件事（每关都是白板装备、难度没有差异、机体�
 - [x] 挑战 6 关零改动；无新增 localStorage key / Schema；版本链与 SW `studiokit-arcade-0.13.1-v1`
 - [x] 本机门禁：smoke 105/105、tower 23/23、挑战 7/7 + 6/6、base 11/11、zen/calm/review/pwa/interaction/immersive、320–430 + standalone 布局 43/43、validate/build/inline/design 全过
 - [x] 双端发布：Owner 本轮明确选择「确认发布 0.13.1（PUBLISH_TO_MAIN）」；提交 `01eb5b4` 推送 `main`；Actions run `44996450758` 四 job 全绿（Validate and build / Deploy GitHub Pages / Deploy Cloudflare Pages / Verify both deployments）；CI 与本地 `tools/verify_deploy.py` 均 **41/41** 双端逐文件一致（arcade 0.13.1 / badge 2.2.1 / venue 0.2.0）；双端线上无头 Chrome 实测：中心页 0.13.1、主道具行 5 列（3 主动 + 2 军械槽，空槽「军械」）、390×844 standalone 模拟行底 ≤ 视口、核弹发射后 0.26s 仍在飞行且 Boss 480 血不变、命中后 Boss 354 血 + flash 0.70 + 冲击波 2 + 0 console error；SW 缓存键 `studiokit-arcade-0.13.1-v1`。
+## 0.14.0 星海突击：弹种叠加 + 星海割草无尽演武（功能分支 `feat/arcade-star-raid-mow` 本地开发，未合并未发布）
+
+Owner 本轮两条：①同种弹药 Buff 多吃时叠加有效时长而不是重置；②新增“模拟割草”模式——所有弹药 Buff 常驻、大杀器库满载、手动道具无限，同时敌潮/掉落极为密集、Boss 招式更炫；玩家唯一瓶颈是能量，且不参与任何积分/货币获取。设计见 `apps/arcade/DESIGN-0.14.0.md`。
+
+- [x] 同种弹种拾取改为 `min(180s, 剩余 + 固定时长)`；浮字显示增加量/累计时长，HUD 显示累计剩余；挑战每关同类 powerup 不重复，实际数据零变化
+- [x] 星海割草：开始弹层第 4 按钮（engine 可选 `btn4`，其余游戏零变化）；四弹种常驻、火力 MAX、大杀器 3 槽满载无限次、脉冲/星盾/编队无限（均消耗能量）
+- [x] 密集敌潮/掉落：0.26s 刷怪、85% 双刷、同屏 32、敌人血量 ×3.2；Boss 战 20 架护卫持续补充；12% 能量核心（8 杀保底）、重装 50% 火力核心、2% 军械；拾取上限 90
+- [x] Boss 四套专属弹幕：扇形齐射 / 螺旋星雨 / 交叉扫射 / 环爆三连；血量 ×2.6、横向巡航、入场不清场、弹幕上限 100；警戒环/光晕/相位反馈并尊重 reduced-motion
+- [x] 唯一瓶颈能量：被动 `(1.2 + 3×0.45) × 2.6 ≈ 6.6/s`、击杀 +0.12、核心 +7；受击只扣 22% 能量不掉命；手动道具/编队消耗能量；枯竭沿用惩罚但不死亡
+- [x] 无积分/货币：割草不写 score、不调用 `settleCredits`/`Progress.recordPlay`、不更新最高分/机库 runs/best、不写 `scores:v1`；`serialize()` 在 `mode==='mow'` 返回 null，不写局内档
+- [x] 无新增 localStorage key / Schema；挑战 6 关数据与判定零改动；版本链 0.14.0 / SW `studiokit-arcade-0.14.0-v1`
+- [x] 门禁：smoke **112/112**（新增 4 项）、`SC-STAR-001` 经典 Boss 闭环、挑战矩阵 78 关、320px 4 按钮入口与 6 列道具行、validate/build/inline/design/node --check
+- [ ] 发布：功能分支本地开发，未合并 main、未推送、未发布；真机试玩（能量节奏、割草密度、Boss 弹幕可读性）仍 UNVERIFIED
+
 ## 0.13.2 修复批次（本地，待 Owner 授权发布）
 
 Owner 两条真机反馈：①已安装 PWA 点「检查更新」显示的是已安装版本，不是线上最新版本；②iPhone 主屏 PWA 玩一天后中心页「累计时长」一直为 `0 分钟`，但积分记录表格有数据。都已在无头 Chrome 复现并修复（设计与复现输出见 `apps/arcade/DESIGN-0.13.2.md`）：

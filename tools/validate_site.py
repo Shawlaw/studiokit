@@ -17,7 +17,7 @@ REQUIRED = [
     'apps/arcade/DESIGN-0.4.0.md', 'apps/arcade/DESIGN-0.5.0.md',
     'apps/arcade/DESIGN-0.6.0.md', 'apps/arcade/DESIGN-0.8.1.md', 'apps/arcade/DESIGN-0.8.2.md',
     'apps/arcade/DESIGN-0.8.6.md', 'apps/arcade/DESIGN-0.9.0.md', 'apps/arcade/DESIGN-0.10.0.md',
-    'apps/arcade/DESIGN-0.11.0.md', 'apps/arcade/DESIGN-0.11.1.md', 'apps/arcade/DESIGN-0.11.2.md', 'apps/arcade/DESIGN-0.11.3.md', 'apps/arcade/DESIGN-0.11.4.md', 'apps/arcade/DESIGN-0.11.5.md', 'apps/arcade/DESIGN-0.12.0.md', 'apps/arcade/DESIGN-0.12.1.md', 'apps/arcade/DESIGN-0.12.2.md', 'apps/arcade/DESIGN-0.12.3.md', 'apps/arcade/DESIGN-0.12.4.md', 'apps/arcade/DESIGN-0.12.5.md', 'apps/arcade/DESIGN-0.12.6.md', 'apps/arcade/DESIGN-0.12.7.md', 'apps/arcade/DESIGN-0.13.1.md', 'apps/arcade/DESIGN-0.13.2.md',
+    'apps/arcade/DESIGN-0.11.0.md', 'apps/arcade/DESIGN-0.11.1.md', 'apps/arcade/DESIGN-0.11.2.md', 'apps/arcade/DESIGN-0.11.3.md', 'apps/arcade/DESIGN-0.11.4.md', 'apps/arcade/DESIGN-0.11.5.md', 'apps/arcade/DESIGN-0.12.0.md', 'apps/arcade/DESIGN-0.12.1.md', 'apps/arcade/DESIGN-0.12.2.md', 'apps/arcade/DESIGN-0.12.3.md', 'apps/arcade/DESIGN-0.12.4.md', 'apps/arcade/DESIGN-0.12.5.md', 'apps/arcade/DESIGN-0.12.6.md', 'apps/arcade/DESIGN-0.12.7.md', 'apps/arcade/DESIGN-0.13.1.md', 'apps/arcade/DESIGN-0.13.2.md', 'apps/arcade/DESIGN-0.14.0.md',
     'apps/arcade/engine.js', 'apps/arcade/arcade.css', 'apps/arcade/sw.js',
     'apps/arcade/manifest.webmanifest',
     'apps/arcade/icons/icon-192.png', 'apps/arcade/icons/icon-512.png',
@@ -179,7 +179,7 @@ def validate(root=ROOT):
     arcade_engine = root / 'apps/arcade/engine.js'
     if arcade_engine.exists():
         source = arcade_engine.read_text(encoding='utf-8')
-        if "const ARCADE_VERSION = '0.13.2'" not in source:
+        if "const ARCADE_VERSION = '0.14.0'" not in source:
             ok = fail('Arcade ARCADE_VERSION drifted; update registry/README/CHANGELOG together') and ok
         for update_marker in ('function checkForUpdate', 'function onUpdate', 'function applyUpdate', "type === 'arcade-sw-update-ready'"):
             if update_marker not in source:
@@ -232,6 +232,22 @@ def validate(root=ROOT):
             ok = fail('window.Arcade.Scores export is missing from engine.js') and ok
         if 'recordPlay(gameId, score, meta) {' not in source:
             ok = fail('Arcade Progress.recordPlay mode-aware signature missing (0.8.1 zen scores)') and ok
+        # 0.14.0：同种弹种叠加 + 星海割草（engine 可选第 4 按钮，其余游戏零变化）。
+        for marker in ('dom.ovBtn4', 'o.btn4', 'onBtn4'):
+            if marker not in source:
+                ok = fail(f'Arcade 0.14.0 optional fourth overlay button marker missing in engine.js: {marker}') and ok
+        for stale in ('buffs[type] = Math.max(buffs[type], WEAPONS[type].duration)', 'buffs[p.type] = Math.max(buffs[p.type], WEAPONS[p.type].duration)'):
+            if stale in (root / 'apps/arcade/games/star-raid.html').read_text(encoding='utf-8'):
+                ok = fail('Arcade ammo buff must stack duration, not reset to a fixed value: ' + stale) and ok
+        star_raid = root / 'apps/arcade/games/star-raid.html'
+        star_source = star_raid.read_text(encoding='utf-8')
+        for marker in ('data-ov-btn4', 'const BUFF_STACK_CAP', 'function grantBuff', 'const MOW =', 'function startMow', 'function quitMow', 'function bossMowFire', 'function stageClearMow', '星海割草', 'buffPermanent'):
+            if marker not in star_source:
+                ok = fail(f'Arcade 0.14.0 star-raid marker missing: {marker}') and ok
+        # 0.14.0：割草模式不参与积分/货币，且必须有「无结算/无存档」守护。
+        for marker in ('if (mode === \'mow\') return null;', 'if (mode === \'mow\') return quitMow();', 'mowKills += 1'):
+            if marker not in star_source:
+                ok = fail(f'Arcade 0.14.0 mow no-score guard missing: {marker}') and ok
         challenge_dir = root / 'apps/arcade/challenge'
         for game_id in ARCADE_CHALLENGE_GAMES:
             data_file = challenge_dir / f'{game_id}.js'
@@ -254,7 +270,7 @@ def validate(root=ROOT):
         arcade_index = root / 'apps/arcade/index.html'
         if arcade_index.exists():
             index_source = arcade_index.read_text(encoding='utf-8')
-            for marker in ('rel="manifest"', 'data-playtime-section', 'data-scores-section', 'data-scores-body', 'data-scores-empty', 'data-offline', 'data-install', 'data-share', 'data-random', 'data-update-check', 'data-update-banner', 'data-update-reload', '无签到', 'data-hall-version>0.13.2', '发现新版本 v${latest}（当前 v${current}）', '已是最新版本（v'):
+            for marker in ('rel="manifest"', 'data-playtime-section', 'data-scores-section', 'data-scores-body', 'data-scores-empty', 'data-offline', 'data-install', 'data-share', 'data-random', 'data-update-check', 'data-update-banner', 'data-update-reload', '无签到', 'data-hall-version>0.14.0', '发现新版本 v${latest}（当前 v${current}）', '已是最新版本（v'):
                 if marker not in index_source:
                     ok = fail(f'Arcade hub 0.13.2 marker missing: {marker}') and ok
             # 0.11.4：iOS 26+ 独立模式顶部系统模糊根因，禁止回归。
@@ -306,7 +322,7 @@ def validate(root=ROOT):
         arcade_sw = root / 'apps/arcade/sw.js'
         if arcade_sw.exists():
             sw_source = arcade_sw.read_text(encoding='utf-8')
-            for marker in ("const VERSION = '0.13.2'", 'arcade-precache', 'skipWaiting', 'clients.claim', "type === 'arcade-sw-version'", "type: 'arcade-sw-update-ready'", 'notifyUpdateReady', 'isUpdateActivation', 'replacedOldVersion'):
+            for marker in ("const VERSION = '0.14.0'", 'arcade-precache', 'skipWaiting', 'clients.claim', "type === 'arcade-sw-version'", "type: 'arcade-sw-update-ready'", 'notifyUpdateReady', 'isUpdateActivation', 'replacedOldVersion'):
                 if marker not in sw_source:
                     ok = fail(f'Arcade service worker marker missing: {marker}') and ok
             # 0.13.2：activate 广播必须用「旧版本缓存是否还在」判断升级接管；
@@ -335,8 +351,8 @@ def validate(root=ROOT):
             try:
                 registry = json.loads(registry_path.read_text(encoding='utf-8'))
                 arcade = next((t for t in registry.get('tools', []) if t.get('id') == 'arcade'), None)
-                if arcade and arcade.get('version') != '0.13.2':
-                    ok = fail('Arcade registry version must match engine 0.13.2') and ok
+                if arcade and arcade.get('version') != '0.14.0':
+                    ok = fail('Arcade registry version must match engine 0.14.0') and ok
             except Exception:
                 pass
 

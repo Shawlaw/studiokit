@@ -66,6 +66,9 @@
     .ac-challenge-tip[data-ch-tip][hidden] { display: none; }
     body.has-challenge .game-hud { display: none; }
     body.has-challenge .touch-pad.game-tools.star-tools { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+    /* 0.14.0 星海割草：不记分、不给星币，顶栏只保留关卡/火力/弹种；提示行改为演武说明。 */
+    body.is-mow .mow-hide { display: none !important; }
+    body.is-mow .game-hint { color: #ffd23f; }
     /* ---------- 0.13.0 星域远征：机库 / 编队 / 大杀器 / 整备卡 ---------- */
     .stage-box > .hangar-panel {
       position: absolute;
@@ -174,6 +177,7 @@
     .touch-pad.game-tools.star-tools .touch-btn { font-size: 13px; }
     .touch-pad.game-tools.star-tools .touch-btn .item-name { display: block; font-size: 9px; line-height: 1.1; }
     .touch-pad.game-tools.star-tools .touch-btn .item-icon { display: block; font-size: 14px; line-height: 1.1; }
+    .touch-pad.game-tools.star-tools .touch-btn .item-cost { display: block; font-style: normal; font-size: 9px; line-height: 1; color: #ffd23f; }
     [data-joy-tool][hidden], [data-item-slot][hidden], [data-squad-tool][hidden] { display: none !important; }
     @media (max-width: 340px) {
       .hangar-buy { min-width: 64px; font-size: 11px; }
@@ -190,11 +194,11 @@
       <a class="ac-back" href="../index.html" aria-label="返回街机厅"><span class="ac-back-icon" aria-hidden="true">‹</span><span class="ac-back-label">街机厅</span></a>
       <h1 class="game-title">🚀 星海突击</h1>
       <div class="game-hud">
-        <span>分数 <strong data-hud-score>0</strong></span>
+        <span class="mow-hide">分数 <strong data-hud-score>0</strong></span>
         <span>关卡 <strong data-hud-stage>1</strong></span>
         <span>火力 <strong data-hud-power>LV1</strong></span>
-        <span>星币 <strong data-hud-credits>0</strong></span>
-        <span>最高 <strong data-hud-high>0</strong></span>
+        <span class="mow-hide">星币 <strong data-hud-credits>0</strong></span>
+        <span class="mow-hide">最高 <strong data-hud-high>0</strong></span>
         <span data-hud-buff hidden>弹种 <strong data-hud-weapon>普通</strong></span>
       </div>
       <button type="button" class="ac-icon-btn" data-pause aria-label="暂停游戏" title="暂停游戏（P / Esc）">⏸</button>
@@ -210,6 +214,7 @@
             <button type="button" class="ac-btn" data-ov-btn>开始游戏</button>
             <button type="button" class="ac-btn ac-btn-secondary" data-ov-btn2 hidden>重新开始</button>
             <button type="button" class="ac-btn ac-btn-secondary" data-ov-btn3 hidden>机库改装</button>
+            <button type="button" class="ac-btn ac-btn-secondary" data-ov-btn4 hidden>星海割草</button>
           </div>
         </div>
         <span class="ac-challenge-hud" data-ch-hud hidden></span>
@@ -233,7 +238,7 @@
       <button type="button" class="touch-btn item-slot" data-item-slot="2" hidden></button>
       <button type="button" class="touch-btn item-slot" data-item-slot="3" hidden></button>
     </div>
-    <p class="game-hint">拖动 / WASD 移动 · 自动开火 · 1 脉冲 2 星盾 3 编队 · 4–7 大杀器 · P / Esc 暂停</p>
+    <p class="game-hint" data-game-hint>拖动 / WASD 移动 · 自动开火 · 1 脉冲 2 星盾 3 编队 · 4–7 大杀器 · P / Esc 暂停</p>
   </main>
   <script>
     (() => {
@@ -256,6 +261,8 @@
         ovBtn: document.querySelector('[data-ov-btn]'),
         ovBtn2: document.querySelector('[data-ov-btn2]'),
         ovBtn3: document.querySelector('[data-ov-btn3]'),
+        ovBtn4: document.querySelector('[data-ov-btn4]'),
+        gameHint: document.querySelector('[data-game-hint]'),
         hudScore: document.querySelector('[data-hud-score]'),
         hudStage: document.querySelector('[data-hud-stage]'),
         hudPower: document.querySelector('[data-hud-power]'),
@@ -291,6 +298,40 @@
        * 之后每关 +280，配合火力等级/大杀器成长保持压力。 */
       const BOSS_BASE_HP = 480;
       const BOSS_HP_STEP = 280;
+      /* 0.14.0 星海割草（模拟割草）：无积分/无星币的常驻火力演武。
+       * 设计目标：弹药 Buff 全常驻、大杀器库满载且无限次、主动道具无限次；
+       * 敌潮与掉落更密、Boss 招式更炫；玩家唯一需要管理的资源是能量。
+       * 数值集中在这里，方便后续按真机手感调参；挑战 6 关完全不走这些分支。 */
+      const MOW = {
+        name: '星海割草',
+        short: '割草',
+        stageSeconds: 45,
+        drainMul: 2.6,
+        killEnergy: 0.12,
+        energyCoreAmount: 7,
+        energyDropChance: 0.12,
+        energyPity: 8,
+        powerCoreEnergy: 12,
+        itemEnergy: 12,
+        buffEnergy: 6,
+        hitEnergyRatio: 0.22,
+        bossEnergy: 30,
+        clearEnergy: 24,
+        pulseCost: 14,
+        shieldCost: 12,
+        formationCost: 16,
+        itemCost: { nuke: 30, lance: 24, freeze: 18 },
+        enemyHpMul: 3.2,
+        enemyCap: 32,
+        bossEscortCap: 20,
+        spawnDoubleChance: 0.85,
+        bossShotCap: 100,
+        bossHpMul: 2.6,
+        itemSlots: 3,
+        pickupCap: 90,
+      };
+      /* 同一弹种再次拾取改为叠加剩余时长；设 180s 护栏防止坏档/HUD 无限膨胀。 */
+      const BUFF_STACK_CAP = 180;
       const player = { x: W / 2, y: H - 90, w: 34, h: 30, cool: 0, invul: 0, tilt: 0, prevX: W / 2 };
       let bullets = [];
       let enemies = [];
@@ -299,6 +340,7 @@
       let floaters = [];
       let score = 0;
       let lives = 3;
+      let mowKills = 0;
       let spawnTimer = 0;
       let shake = 0;
       let state = 'ready';
@@ -335,7 +377,7 @@
        * ---------------------------------------------------------- */
       const CHALLENGE_GAME_ID = 'star-raid';
       const CHALLENGE_COLUMN_STEP = 36;
-      let mode = 'classic'; /* classic | challenge | panel */
+      let mode = 'classic'; /* classic | challenge | mow | panel | hangar */
       let chStage = null;
       let chContent = null;
       let chTime = 0;
@@ -477,6 +519,57 @@
       }
       function formationDuration() {
         return 8 + hangar.upgrades.wing * 2;
+      }
+      function isMow() {
+        return mode === 'mow';
+      }
+      function mowItemCost(type) {
+        return MOW.itemCost[type] || 0;
+      }
+      /* 拾取同种弹药改为「叠加剩余时长」而不是覆盖成固定时长（0.14.0）。
+       * 割草模式直接置为常驻（Infinity），不会参与存档/衰减。 */
+      function grantBuff(type) {
+        if (!WEAPONS[type] || type === 'normal') return 0;
+        if (isMow()) {
+          buffs[type] = Infinity;
+          lastBuff = type;
+          return Infinity;
+        }
+        const before = Math.max(0, Number(buffs[type]) || 0);
+        const after = Math.min(BUFF_STACK_CAP, before + WEAPONS[type].duration);
+        buffs[type] = after;
+        lastBuff = type;
+        return after - before;
+      }
+      function buffTimeLabel(type) {
+        const value = buffs[type];
+        return isFinite(value) ? Math.ceil(value) + 's' : '∞';
+      }
+      /* 割草模式的唯一成本：能量。不足时明确提示并放弃本次操作。 */
+      function spendEnergy(amount, label) {
+        const cost = Math.max(0, Number(amount) || 0);
+        if (!isMow() || cost <= 0) return true;
+        if (run.energy < cost) {
+          addFloater(player.x, player.y - 42, '能量不足 · ' + label, '#ff8f86');
+          A.Sfx.play('over');
+          return false;
+        }
+        run.energy = Math.max(0, run.energy - cost);
+        if (run.energy <= 0.001) {
+          run.energy = 0;
+          run.depleted = true;
+          endFormation('能量枯竭');
+        }
+        return true;
+      }
+      function setMowChrome(active) {
+        const on = !!active;
+        document.body.classList.toggle('is-mow', on);
+        if (dom.gameHint) {
+          dom.gameHint.textContent = on
+            ? '星海割草 · 弹种常驻 · 大杀器/道具无限（消耗能量）· 受击只扣能量 · P / Esc 暂停'
+            : '拖动 / WASD 移动 · 自动开火 · 1 脉冲 2 星盾 3 编队 · 4–7 大杀器 · P / Esc 暂停';
+        }
       }
 
       function themeForLevel(lv) {
@@ -638,7 +731,8 @@
       function energyDrainPerSecond() {
         const buffsActive = activeBuffs().length;
         const base = 1.2 + Math.max(0, buffsActive - 1) * 0.45 + (run.formationTimer > 0 ? 3 : 0);
-        return base * (run.theme ? run.theme.energyDrain : 1);
+        /* 割草模式四种弹种常驻，基础消耗本身更高；能量因此成为唯一瓶颈。 */
+        return base * (isMow() ? MOW.drainMul : 1) * (run.theme ? run.theme.energyDrain : 1);
       }
       function updateEnergy(dt) {
         if (run.depleted) {
@@ -662,9 +756,14 @@
 
       /* ---------- 临时编队 ---------- */
       function startFormation() {
-        if (state !== 'playing' || mode !== 'classic') return false;
-        if (run.formationCharges <= 0 || run.formationTimer > 0 || run.depleted) return false;
-        run.formationCharges -= 1;
+        if (state !== 'playing' || mode === 'challenge') return false;
+        if (mode !== 'mow' && (run.formationCharges <= 0 || run.formationTimer > 0 || run.depleted)) return false;
+        if (mode === 'mow') {
+          if (run.formationTimer > 0 || run.depleted) return false;
+          if (!spendEnergy(MOW.formationCost, '僚机编队')) return false;
+        } else {
+          run.formationCharges -= 1;
+        }
         run.formationTimer = formationDuration();
         run.formationWarned = false;
         run.wingmen = [
@@ -761,12 +860,20 @@
         A.Sfx.play('perfect');
       }
       function useItem(slot) {
-        if (state !== 'playing' || mode !== 'classic') return false;
+        if (state !== 'playing' || mode === 'challenge') return false;
         const index = Math.floor(Number(slot));
         if (!(index >= 0) || index >= run.items.length) return false;
         const type = run.items[index];
         if (!type || !ITEM_SPECS[type]) return false;
-        run.items[index] = null;
+        /* 割草模式：大杀器库满载且无限次使用，但每次消耗能量（唯一瓶颈）。 */
+        if (isMow()) {
+          if (!spendEnergy(mowItemCost(type), ITEM_SPECS[type].name)) {
+            syncHud();
+            return false;
+          }
+        } else {
+          run.items[index] = null;
+        }
         if (type === 'nuke') useNuke();
         else if (type === 'lance') useLance();
         else if (type === 'freeze') useFreeze();
@@ -1079,6 +1186,7 @@
         hangar = loadHangar();
         mode = 'hangar';
         state = 'ready';
+        setMowChrome(false);
         loop.pause();
         autosave.clear();
         hideChallengePanel();
@@ -1209,13 +1317,15 @@
           if (!inRange) return;
           const type = run.items[slot] || null;
           const spec = type ? ITEM_SPECS[type] : null;
+          const costText = isMow() && spec ? ' · 消耗 ' + mowItemCost(type) + ' 能量' : '';
           button.disabled = inChallenge || state !== 'playing' || !spec;
           button.classList.toggle('is-armed', !!spec);
           if (spec) {
             button.innerHTML =
-              '<span class="item-icon" aria-hidden="true">' + spec.icon + '</span><span class="item-name">' + spec.name + '</span>';
-            button.setAttribute('aria-label', spec.name + '（快捷键 ' + (4 + slot) + '）：' + spec.desc);
-            button.title = spec.name + '（' + (4 + slot) + '）：' + spec.desc;
+              '<span class="item-icon" aria-hidden="true">' + spec.icon + '</span><span class="item-name">' + spec.name +
+              (isMow() ? '<em class="item-cost">-' + mowItemCost(type) + '⚡</em>' : '') + '</span>';
+            button.setAttribute('aria-label', spec.name + '（快捷键 ' + (4 + slot) + '）：' + spec.desc + costText);
+            button.title = spec.name + '（' + (4 + slot) + '）：' + spec.desc + costText;
             button.style.borderColor = spec.color;
           } else {
             button.innerHTML = '<span class="item-icon" aria-hidden="true">▢</span><span class="item-name">军械</span>';
@@ -1651,6 +1761,7 @@
         }
         mode = 'panel';
         state = 'ready';
+        setMowChrome(false);
         loop.pause();
         autosave.clear();
         if (dom.hangarPanel) dom.hangarPanel.hidden = true;
@@ -1788,6 +1899,7 @@
           A.showToast('先通关上一关');
           return false;
         }
+        setMowChrome(false);
         autosave.clear();
         hideChallengePanel();
         if (dom.hangarPanel) dom.hangarPanel.hidden = true;
@@ -1952,24 +2064,31 @@
 
       function syncJoyTools() {
         if (!dom.joyPulse || !dom.joyShield) return;
-        dom.joyPulse.querySelector('[data-joy-count]').textContent = String(tools.pulse);
-        dom.joyShield.querySelector('[data-joy-count]').textContent = String(tools.shield);
-        dom.joyPulse.disabled = state !== 'playing' || tools.pulse <= 0;
-        dom.joyShield.disabled = state !== 'playing' || tools.shield <= 0 || shieldTimer > 0;
+        const mow = isMow();
+        dom.joyPulse.querySelector('[data-joy-count]').textContent = mow ? '∞' : String(tools.pulse);
+        dom.joyShield.querySelector('[data-joy-count]').textContent = mow ? '∞' : String(tools.shield);
+        dom.joyPulse.disabled = state !== 'playing' || (!mow && tools.pulse <= 0);
+        dom.joyShield.disabled = state !== 'playing' || (!mow && tools.shield <= 0) || shieldTimer > 0;
         dom.joyShield.setAttribute('aria-pressed', String(shieldTimer > 0));
-        dom.joyPulse.setAttribute('aria-label', '电磁脉冲，剩余 ' + tools.pulse + ' 次（快捷键 1）');
+        dom.joyPulse.setAttribute('aria-label', mow
+          ? '电磁脉冲，无限次（快捷键 1），消耗 ' + MOW.pulseCost + ' 能量'
+          : '电磁脉冲，剩余 ' + tools.pulse + ' 次（快捷键 1）');
         dom.joyShield.setAttribute('aria-label', shieldTimer > 0
           ? '星盾生效中，剩余 ' + shieldTimer.toFixed(1) + ' 秒'
-          : '星盾 5 秒，剩余 ' + tools.shield + ' 次（快捷键 2）');
+          : mow
+            ? '星盾 5 秒，无限次（快捷键 2），消耗 ' + MOW.shieldCost + ' 能量'
+            : '星盾 5 秒，剩余 ' + tools.shield + ' 次（快捷键 2）');
         if (dom.joyFormation) {
           const inChallenge = mode === 'challenge';
           dom.joyFormation.hidden = inChallenge;
-          dom.joyFormation.querySelector('[data-joy-count]').textContent = String(run.formationCharges);
-          dom.joyFormation.disabled = inChallenge || state !== 'playing' || run.formationCharges <= 0 || run.formationTimer > 0;
+          dom.joyFormation.querySelector('[data-joy-count]').textContent = mow ? '∞' : String(run.formationCharges);
+          dom.joyFormation.disabled = inChallenge || state !== 'playing' || (!mow && run.formationCharges <= 0) || run.formationTimer > 0;
           dom.joyFormation.setAttribute('aria-pressed', String(run.formationTimer > 0));
           dom.joyFormation.setAttribute('aria-label', run.formationTimer > 0
             ? '僚机编队生效中，剩余 ' + run.formationTimer.toFixed(1) + ' 秒'
-            : '僚机编队，剩余 ' + run.formationCharges + ' 次（快捷键 3）');
+            : mow
+              ? '僚机编队，无限次（快捷键 3），消耗 ' + MOW.formationCost + ' 能量'
+              : '僚机编队，剩余 ' + run.formationCharges + ' 次（快捷键 3）');
         }
         syncItemButtons();
       }
@@ -1977,8 +2096,13 @@
       function activateJoyTool(id) {
         if (state !== 'playing') return false;
         if (id === 'pulse') {
-          if (tools.pulse <= 0 || (!shots.length && !enemies.length)) return false;
-          tools.pulse -= 1;
+          if (!isMow() && (tools.pulse <= 0 || (!shots.length && !enemies.length))) return false;
+          if (isMow() && !shots.length && !enemies.length) return false;
+          if (isMow()) {
+            if (!spendEnergy(MOW.pulseCost, '电磁脉冲')) return false;
+          } else {
+            tools.pulse -= 1;
+          }
           if (mode === 'challenge') chAssisted = true;
           shots = [];
           enemies.slice().forEach((e) => {
@@ -2004,8 +2128,12 @@
           return true;
         }
         if (id === 'shield') {
-          if (tools.shield <= 0 || shieldTimer > 0) return false;
-          tools.shield -= 1;
+          if ((!isMow() && tools.shield <= 0) || shieldTimer > 0) return false;
+          if (isMow()) {
+            if (!spendEnergy(MOW.shieldCost, '星盾')) return false;
+          } else {
+            tools.shield -= 1;
+          }
           if (mode === 'challenge') chAssisted = true;
           shieldTimer = SHIELD_SECONDS;
           addFloater(player.x, player.y - 38, '星盾 5 秒', '#7ce8e0');
@@ -2090,7 +2218,7 @@
       }
       function buffHudText() {
         return activeBuffs()
-          .map((type) => WEAPONS[type].short + Math.ceil(buffs[type]) + 's')
+          .map((type) => WEAPONS[type].short + buffTimeLabel(type))
           .join(' ');
       }
 
@@ -2111,7 +2239,7 @@
           name: BOSS_NAMES[cycle % BOSS_NAMES.length] + ' MK.' + lv,
           w: 118,
           h: 86,
-          hp: Math.round((BOSS_BASE_HP + cycle * BOSS_HP_STEP) * theme.bossHp),
+          hp: Math.round((BOSS_BASE_HP + cycle * BOSS_HP_STEP) * theme.bossHp * (isMow() ? MOW.bossHpMul : 1)),
           score: 500 * lv,
         };
       }
@@ -2127,6 +2255,26 @@
       const WAVE_CYCLE = 103;
 
       function waveInfo() {
+        if (isMow()) {
+          /* 割草模式没有休整段：持续星潮，波次只用于 HUD 与强度递增。 */
+          const cycle = Math.floor(elapsed / 45);
+          return {
+            cycle,
+            phase: {
+              name: '星潮',
+              spawn: 0.26,
+              speed: 1.06,
+              kinds: ['drone', 'diver', 'sine', 'tank'],
+              fire: true,
+              maxEnemies: MOW.enemyCap,
+              maxShots: 90,
+            },
+            label: '潮 ' + (cycle + 1),
+            scale: 1 + cycle * 0.1,
+            maxEnemies: Math.min(36, MOW.enemyCap + cycle * 2),
+            maxShots: Math.min(120, 90 + cycle * 5),
+          };
+        }
         const cycle = Math.floor(elapsed / WAVE_CYCLE);
         const t = elapsed % WAVE_CYCLE;
         let phase = WAVES[0];
@@ -2149,6 +2297,7 @@
         const defs = wave.phase.kinds.map((k) => KINDS[k]);
         /* 舰队封锁：重装敌机权重加倍（只影响本主题）。 */
         if (theme.tankBias > 0) defs.push(KINDS.tank, KINDS.tank);
+        if (isMow()) defs.push(KINDS.tank, KINDS.sine);
         const def = pick(defs);
         const kind = Object.keys(KINDS).find((k) => KINDS[k] === def) || 'drone';
         const e = {
@@ -2158,12 +2307,12 @@
           y: -def.h - 6,
           w: def.w,
           h: def.h,
-          hp: Math.max(1, Math.round((def.hp + (kind === 'tank' ? Math.min(4, wave.cycle * 2) : 0) + (level - 1)) * theme.enemyHp)),
+          hp: Math.max(1, Math.round((def.hp + (kind === 'tank' ? Math.min(4, wave.cycle * 2) : 0) + (level - 1)) * theme.enemyHp * (isMow() ? MOW.enemyHpMul : 1))),
           score: def.score,
           color: def.color,
-          vy: rand(def.speed[0], def.speed[1]) * wave.phase.speed * (1 + wave.cycle * 0.06 + (level - 1) * 0.06),
+          vy: rand(def.speed[0], def.speed[1]) * wave.phase.speed * (1 + wave.cycle * 0.06 + (level - 1) * (isMow() ? 0.045 : 0.06)),
           t: rand(0, 10),
-          fireTimer: wave.phase.fire ? rand(0.8, 2.2) : 999,
+          fireTimer: wave.phase.fire ? rand(isMow() ? 0.45 : 0.8, isMow() ? 1.2 : 2.2) : 999,
           baseX: 0,
           vx: 0,
           flash: 0,
@@ -2191,7 +2340,8 @@
       function spawnBoss() {
         if (boss) return;
         const spec = bossSpec(level);
-        enemies = [];
+        /* 割草模式保留场上敌潮，Boss 与杂兵同时存在；普通模式仍清场。 */
+        if (!isMow()) enemies = [];
         boss = {
           uid: nextUid++,
           kind: 'boss',
@@ -2204,55 +2354,82 @@
           maxHp: spec.hp,
           score: spec.score,
           color: '#ff5d7a',
-          vy: 55,
+          vy: isMow() ? 70 : 55,
           t: 0,
           fireTimer: 1.4,
           baseX: (W - spec.w) / 2,
           vx: 0,
           phase: 1,
+          mowPatternIndex: 0,
+          mowPattern: '扇形齐射',
+          mowPatternsFired: [],
         };
         enemies.push(boss);
         shots = [];
-        spawnTimer = 999;
-        stageTime = STAGE_WAVE_SECONDS;
-        stageBannerText = 'WARNING · ' + (run.theme ? run.theme.name + ' · ' : '') + spec.name;
+        spawnTimer = isMow() ? 0.8 : 999;
+        stageTime = isMow() ? 0 : STAGE_WAVE_SECONDS;
+        stageBannerText = isMow() ? 'BOSS 来袭 · ' + spec.name : 'WARNING · ' + (run.theme ? run.theme.name + ' · ' : '') + spec.name;
         stageBanner = 2.0;
-        shake = A.reducedMotion ? 0 : 5;
+        shake = A.reducedMotion ? 0 : (isMow() ? 9 : 5);
+        if (isMow()) {
+          addRing(W / 2, 150, '#ffd23f', 320, 0.7, 6);
+          addFloater(player.x, player.y - 56, '敌潮未停 · Boss 加入战场！', '#ff9a9d');
+        }
         A.Sfx.play('explode');
         syncHud();
       }
 
       function updateBoss(b, dt) {
         b.t += dt;
-        if (b.y < 112) b.y += b.vy * dt;
-        else b.y = 112 + Math.sin(b.t * 1.4) * 9;
-        b.x = clamp(b.baseX + (b.t < 1.4 ? 0 : Math.sin(b.t * 0.75) * 90), 22, W - b.w - 22);
+        if (isMow()) {
+          /* 割草 Boss：更大范围横向巡航 + 更高的悬浮，招式期间更醒目。 */
+          if (b.y < 108) b.y += b.vy * dt;
+          else b.y = 108 + Math.sin(b.t * 1.8) * 14;
+          b.x = clamp(b.baseX + (b.t < 1.2 ? 0 : Math.sin(b.t * 1.05) * 120), 18, W - b.w - 18);
+        } else {
+          if (b.y < 112) b.y += b.vy * dt;
+          else b.y = 112 + Math.sin(b.t * 1.4) * 9;
+          b.x = clamp(b.baseX + (b.t < 1.4 ? 0 : Math.sin(b.t * 0.75) * 90), 22, W - b.w - 22);
+        }
 
         const ratio = b.hp / b.maxHp;
         if (ratio <= 0.6 && b.phase < 2) {
           b.phase = 2;
-          stageBannerText = 'BOSS 狂暴';
+          stageBannerText = isMow() ? 'BOSS 狂暴 · 弹幕升级' : 'BOSS 狂暴';
           stageBanner = 1.2;
-          shake = A.reducedMotion ? 0 : 6;
+          shake = A.reducedMotion ? 0 : (isMow() ? 9 : 6);
+          if (isMow()) {
+            flash = Math.max(flash, 0.28);
+            flashColor = '#ff9a3d';
+            addRing(b.x + b.w / 2, b.y + b.h / 2, '#ff9a3d', 220, 0.5, 4);
+          }
           A.Sfx.play('explode');
         }
         if (ratio <= 0.3 && b.phase < 3) {
           b.phase = 3;
-          stageBannerText = 'BOSS 濒危 · 火力全开';
+          stageBannerText = isMow() ? 'BOSS 濒危 · 全弹发射' : 'BOSS 濒危 · 火力全开';
           stageBanner = 1.2;
-          shake = A.reducedMotion ? 0 : 8;
+          shake = A.reducedMotion ? 0 : (isMow() ? 12 : 8);
+          if (isMow()) {
+            flash = Math.max(flash, 0.35);
+            flashColor = '#ff5d7a';
+            addRing(b.x + b.w / 2, b.y + b.h / 2, '#ff5d7a', 280, 0.6, 5);
+          }
           A.Sfx.play('explode');
         }
 
         b.fireTimer -= dt;
-        if (b.fireTimer <= 0 && b.y >= 104) {
+        if (b.fireTimer <= 0 && b.y >= (isMow() ? 96 : 104)) {
           bossFire(b);
           const themeInterval = run.theme ? run.theme.bossInterval : 1;
-          b.fireTimer = (ratio < 0.3 ? 0.72 : ratio < 0.6 ? 0.95 : 1.25) * themeInterval;
+          b.fireTimer = (isMow()
+            ? (ratio < 0.3 ? 0.46 : ratio < 0.6 ? 0.66 : 0.9)
+            : (ratio < 0.3 ? 0.72 : ratio < 0.6 ? 0.95 : 1.25)) * themeInterval;
         }
       }
 
       function bossFire(b) {
+        if (isMow()) return bossMowFire(b);
         const ratio = b.hp / b.maxHp;
         const spd = (160 + level * 12) * (run.theme ? run.theme.shotSpeed : 1);
         const cx = b.x + b.w / 2;
@@ -2272,6 +2449,84 @@
             shots.push({ x: cx, y: cy, vx: Math.cos(angle) * spd * 0.8, vy: Math.sin(angle) * spd * 0.8, r: 4 });
           }
         }
+        A.Sfx.play('shoot');
+      }
+
+      /* 割草 Boss 专属四套弹幕：扇形齐射 / 螺旋星雨 / 交叉扫射 / 环爆三连。
+       * 只改 Boss 主动弹，不触碰挑战模式的固定弹幕契约。 */
+      function bossMowFire(b) {
+        const theme = run.theme || THEMES[0];
+        const spd = (175 + level * 12) * (theme.shotSpeed || 1) * (1 + (b.phase - 1) * 0.08);
+        const cx = b.x + b.w / 2;
+        const cy = b.y + b.h * 0.7;
+        const base = Math.atan2(player.y - cy, player.x - cx);
+        const pattern = b.mowPatternIndex % 4;
+        const colors = ['#ff86c8', '#7ce8e0', '#ffd23f', '#ff9a3d'];
+        const color = colors[pattern];
+        const add = (x, y, angle, speed, radius, bulletColor) => {
+          if (shots.length >= MOW.bossShotCap) return;
+          shots.push({
+            x,
+            y,
+            vx: Math.cos(angle) * speed,
+            vy: Math.sin(angle) * speed,
+            r: radius || 4,
+            mowColor: bulletColor || color,
+          });
+        };
+        b.mowPatternIndex += 1;
+        if (pattern === 0) {
+          const fan = 7 + b.phase * 2;
+          for (let i = -(fan - 1) / 2; i <= (fan - 1) / 2; i += 1) {
+            add(cx, cy, base + i * 0.15, spd, 4.4);
+          }
+          for (const side of [-1, 1]) {
+            for (let k = 0; k < 3; k += 1) {
+              add(cx + side * 46, cy - 8, Math.PI / 2 + side * (0.55 + k * 0.12), spd * 0.9, 3.6, '#7ce8e0');
+            }
+          }
+          b.mowPattern = '扇形齐射';
+        } else if (pattern === 1) {
+          const arms = 4 + b.phase;
+          const steps = 8 + b.phase * 3;
+          for (let arm = 0; arm < arms; arm += 1) {
+            for (let step = 0; step < steps; step += 1) {
+              const angle = (arm / arms) * TAU + b.t * 0.9 + step * 0.12;
+              add(cx, cy, angle, spd * (0.78 + step * 0.02), 3.8, step % 2 ? '#ffd23f' : '#ff86c8');
+            }
+          }
+          b.mowPattern = '螺旋星雨';
+        } else if (pattern === 2) {
+          const rows = 8 + b.phase * 2;
+          for (let i = 0; i < rows; i += 1) {
+            const y = cy + 10 + i * 12;
+            add(18, y, 0.12, spd * 0.95, 3.6, '#7ce8e0');
+            add(W - 18, y, Math.PI - 0.12, spd * 0.95, 3.6, '#7ce8e0');
+          }
+          for (let i = -1; i <= 1; i += 1) add(cx, cy, base + i * 0.1, spd * 1.15, 4.6, '#ff9a3d');
+          b.mowPattern = '交叉扫射';
+        } else {
+          const count = 16 + b.phase * 4;
+          for (let i = 0; i < count; i += 1) {
+            const angle = (i / count) * TAU + b.t * 0.4;
+            add(cx, cy, angle, spd * 0.85, 4, i % 3 ? '#ffd23f' : '#ff86c8');
+          }
+          for (let i = -1; i <= 1; i += 1) add(cx, cy, base + i * 0.12, spd * 1.1, 4.8, '#ff9a3d');
+          b.mowPattern = '环爆三连';
+        }
+        if (b.mowPatternsFired && b.mowPatternsFired.indexOf(b.mowPattern) === -1) {
+          b.mowPatternsFired.push(b.mowPattern);
+        }
+        if (!A.reducedMotion) {
+          particles.emit(cx, cy, {
+            count: 4,
+            speed: [30, 120],
+            life: [0.1, 0.3],
+            size: [1.5, 3],
+            colors: [color, '#ffffff'],
+          });
+        }
+        addRing(cx, cy, color, 70 + pattern * 22, 0.28, 2);
         A.Sfx.play('shoot');
       }
 
@@ -2308,6 +2563,52 @@
         loop.pause();
         showClearPanel(cleared);
         pauseUi.sync();
+      }
+
+      /* 割草模式没有 CLEAR/整备弹层，也不写档：Boss 击破后自动进入下一潮。 */
+      function stageClearMow() {
+        if (mode !== 'mow') return false;
+        boss = null;
+        level += 1;
+        stageTime = 0;
+        shots = [];
+        spawnTimer = 0.5;
+        run.power = 5;
+        addEnergy(MOW.clearEnergy);
+        BUFF_TYPES.forEach((type) => {
+          buffs[type] = Infinity;
+        });
+        lastBuff = 'spread';
+        run.itemCap = MOW.itemSlots;
+        run.items = ['nuke', 'lance', 'freeze'];
+        run.formationCharges = 3;
+        run.bossDamageAcc = 0;
+        run.bossDamageTimer = 0;
+        run.freezeTimer = 0;
+        run.lance = null;
+        run.nukeShots = [];
+        syncRunTheme();
+        run.warpTint = 1;
+        stageBannerText = '第 ' + level + ' 潮 · ' + (run.theme ? run.theme.name : '');
+        stageBanner = 2.2;
+        state = 'playing';
+        pendingClearStage = 0;
+        A.Sfx.play('perfect');
+        syncHud();
+        syncJoyTools();
+        pauseUi.sync();
+        return true;
+      }
+
+      function dropMowBossLoot(e) {
+        const cx = e.x + e.w / 2;
+        const cy = e.y + e.h / 2;
+        for (let i = 0; i < 10; i += 1) {
+          dropEnergyCore({ x: cx + rand(-60, 60), y: cy + rand(-30, 30), w: 0, h: 0 });
+        }
+        for (let i = 0; i < 4; i += 1) {
+          dropPowerCore({ x: cx + rand(-50, 50), y: cy + rand(-20, 20), w: 0, h: 0 });
+        }
       }
 
       /* CLEAR 选择弹层抽成函数：刷新恢复后也能重新给出「下一关 / 圆满收局」。
@@ -2362,6 +2663,7 @@
         score = 0;
         initRunState();
         lives = startingLives();
+        mowKills = 0;
         spawnTimer = 0.4;
         shake = 0;
         recordSaved = false;
@@ -2396,8 +2698,8 @@
 
       function syncHud() {
         dom.hudScore.textContent = String(score);
-        if (dom.hudStage) dom.hudStage.textContent = String(level);
-        if (dom.hudPower) dom.hudPower.textContent = 'LV' + run.power;
+        if (dom.hudStage) dom.hudStage.textContent = isMow() ? '潮' + level : String(level);
+        if (dom.hudPower) dom.hudPower.textContent = isMow() ? 'MAX' : 'LV' + run.power;
         if (dom.hudCredits) dom.hudCredits.textContent = String(hangar.credits);
         const text = buffHudText();
         if (text) {
@@ -2411,6 +2713,7 @@
       function startGame() {
         autosave.clear();
         mode = 'classic';
+        setMowChrome(false);
         chStage = null;
         chContent = null;
         chEvents = [];
@@ -2439,6 +2742,82 @@
         syncJoyTools();
       }
 
+      /* ---------- 0.14.0 星海割草（模拟割草 / 无积分无星币） ---------- */
+      function fillMowArsenal() {
+        run.itemCap = MOW.itemSlots;
+        run.items = ['nuke', 'lance', 'freeze'];
+      }
+      function startMow() {
+        autosave.clear();
+        hideChallengePanel();
+        if (dom.hangarPanel) dom.hangarPanel.hidden = true;
+        hangarOpen = false;
+        setChallengeChrome(false);
+        reset();
+        mode = 'mow';
+        state = 'playing';
+        score = 0;
+        mowKills = 0;
+        recordSaved = true; /* 演武不参与最高分/积分记录/星币结算。 */
+        run.power = 5;
+        run.maxEnergy = energyCap();
+        run.energy = run.maxEnergy;
+        run.depleted = false;
+        fillMowArsenal();
+        run.formationCharges = 3;
+        run.formationTimer = 0;
+        run.wingmen = [];
+        run.freezeTimer = 0;
+        run.lance = null;
+        run.nukeShots = [];
+        BUFF_TYPES.forEach((type) => {
+          buffs[type] = Infinity;
+        });
+        lastBuff = 'spread';
+        lives = maxLives();
+        player.invul = invulSeconds();
+        spawnTimer = 0.1;
+        setMowChrome(true);
+        stageBannerText = '星海割草 · 弹药常驻 · 能量是唯一资源';
+        stageBanner = 2.6;
+        run.warpTint = 1;
+        syncRunTheme();
+        ui.hide();
+        loop.resume();
+        pauseUi.sync();
+        syncHud();
+        syncJoyTools();
+        return true;
+      }
+
+      function quitMow() {
+        if (mode !== 'mow') return false;
+        autosave.clear();
+        mode = 'classic';
+        state = 'ready';
+        mowKills = 0;
+        BUFF_TYPES.forEach((type) => {
+          buffs[type] = 0;
+        });
+        lastBuff = 'normal';
+        bullets = [];
+        enemies = [];
+        shots = [];
+        pickups = [];
+        floaters = [];
+        boss = null;
+        effects = [];
+        particles.clear();
+        stageBanner = 0;
+        stageBannerText = '';
+        setMowChrome(false);
+        syncHud();
+        showStart();
+        syncJoyTools();
+        pauseUi.sync();
+        return true;
+      }
+
       function settleCredits(wonRun) {
         /* 星币只由本局得分产生：floor(score/16) + 整备室军费补给。读档/重算都幂等。 */
         const earned = Math.max(0, Math.floor(score / 16) + run.creditsBonus);
@@ -2451,6 +2830,8 @@
       }
 
       function gameOver(won) {
+        /* 割草模式没有死亡结算：误触也只会回到演武开始界面，不写分/币。 */
+        if (mode === 'mow') return quitMow();
         if (state === 'over') return;
         const wonRun = won === true;
         state = 'over';
@@ -2493,6 +2874,19 @@
             btn2: '退出挑战',
             onBtn2: showChallengePanel,
           });
+        } else if (mode === 'mow') {
+          ui.show({
+            title: '已暂停 · 星海割草',
+            text:
+              '本模式不记分、不给星币，也不参与最高分与积分记录。<br/>' +
+              '弹药常驻 · 大杀器满载无限 · 敌潮与掉落密集 · 能量是唯一资源。<br/>' +
+              '当前：第 ' + level + ' 潮 · 击坠 ' + mowKills +
+              ' · 能量 ' + Math.round(run.energy) + '/' + run.maxEnergy,
+            btn: '继续演武',
+            onBtn: resumeGame,
+            btn2: '结束演武',
+            onBtn2: quitMow,
+          });
         } else {
           ui.show({
             title: '已暂停',
@@ -2513,6 +2907,7 @@
         initRunState();
         mode = 'classic';
         state = 'ready';
+        setMowChrome(false);
         chStage = null;
         chContent = null;
         chEvents = [];
@@ -2527,15 +2922,18 @@
           title: '星海突击',
           text:
             '纵版弹幕射击：击落敌机，躲开弹幕。<br/>' +
-            '吃下 <b>散射 / 激光 / 追踪 / 速射</b>，弹种可叠加；能量见底会火力下降，记得捡能量核心<br/>' +
+            '吃下 <b>散射 / 激光 / 追踪 / 速射</b>，同种可叠加时长；能量见底会火力下降，记得捡能量核心<br/>' +
             'Boss 后三选一整备继续下一星区 · 编队 3 · 大杀器 4–7<br/>' +
-            '机库星币 <b>' + hangar.credits + '</b> · 已远征 ' + hangar.runs + ' 次',
+            '机库星币 <b>' + hangar.credits + '</b> · 已远征 ' + hangar.runs + ' 次<br/>' +
+            '<b>星海割草</b>：模拟割草演武，弹种常驻 / 大杀器满载无限 / 敌潮密集；<b>不记分、不给星币</b>',
           btn: '开始游戏',
           onBtn: startGame,
           btn2: hasChallenge ? '挑战 6 关' : '挑战数据不可用',
           onBtn2: hasChallenge ? showChallengePanel : () => A.showToast('挑战数据不可用'),
           btn3: '机库改装',
           onBtn3: showHangar,
+          btn4: '星海割草（模拟割草）',
+          onBtn4: startMow,
         });
         syncHangarCredits();
         syncItemButtons();
@@ -2552,6 +2950,8 @@
 
       /* ---------- 局内存档 ---------- */
       function serialize() {
+        /* 星海割草是无结算演武：不写局内档，避免刷新恢复提示/进度串味。 */
+        if (mode === 'mow') return null;
         if (state !== 'playing' && state !== 'paused' && state !== 'clear') return null;
         return {
           mode,
@@ -3005,7 +3405,7 @@
         updateThemeField(dt);
         if (!boss) {
           stageTime += dt;
-          if (stageTime >= STAGE_WAVE_SECONDS) spawnBoss();
+          if (stageTime >= (isMow() ? MOW.stageSeconds : STAGE_WAVE_SECONDS)) spawnBoss();
         }
         updatePlayer(dt);
         updateEnemies(dt);
@@ -3016,20 +3416,21 @@
       }
 
       function fire() {
-        const depleted = mode === 'classic' && run.depleted;
+        const classicLike = mode === 'classic' || isMow();
+        const depleted = classicLike && run.depleted;
         let interval = buffs.rapid > 0 ? 0.075 : 0.13;
-        if (mode === 'classic') {
+        if (classicLike) {
           if (run.power >= 5) interval *= 0.94;
           if (run.power >= 3) interval *= 0.98;
           if (depleted) interval *= 1.8;
         }
         player.cool = interval;
         if (mode === 'challenge') chFiredVolleys += 1;
-        const mul = (mode === 'classic' ? damageMul() : 1) * (depleted ? 0.7 : 1);
+        const mul = (classicLike ? damageMul() : 1) * (depleted ? 0.7 : 1);
         /* 普通弹始终存在；每种已激活 Buff 在每一轮里追加自己的弹型，形成叠加。 */
         bullets.push({ x: player.x - 10, y: player.y - 14, vx: 0, vy: -640, r: 3, dmg: 1 * mul });
         bullets.push({ x: player.x + 10, y: player.y - 14, vx: 0, vy: -640, r: 3, dmg: 1 * mul });
-        if (mode === 'classic') {
+        if (classicLike) {
           /* 0.13.0 火力等级：每级追加弹道，视觉与伤害同步成长。 */
           if (run.power >= 2) bullets.push({ x: player.x, y: player.y - 16, vx: 0, vy: -680, r: 3.4, dmg: 1 * mul });
           if (run.power >= 3) {
@@ -3089,8 +3490,9 @@
       }
 
       function updatePlayer(dt) {
-        const depletedSlow = mode === 'classic' && run.depleted ? 0.92 : 1;
-        const speed = (mode === 'classic' ? moveSpeed() : 320) * depletedSlow;
+        const classicLike = mode === 'classic' || isMow();
+        const depletedSlow = classicLike && run.depleted ? 0.92 : 1;
+        const speed = (classicLike ? moveSpeed() : 320) * depletedSlow;
         if (input.isDown('ArrowLeft', 'a')) player.x -= speed * dt;
         if (input.isDown('ArrowRight', 'd')) player.x += speed * dt;
         if (input.isDown('ArrowUp', 'w')) player.y -= speed * dt;
@@ -3115,7 +3517,7 @@
         player.prevX = player.x;
         player.invul = Math.max(0, player.invul - dt);
         /* 推进器拖尾：纯反馈，不参与判定。 */
-        if (mode === 'classic' && !A.reducedMotion && Math.random() < 0.5) {
+        if ((mode === 'classic' || isMow()) && !A.reducedMotion && Math.random() < 0.5) {
           particles.emit(player.x + rand(-4, 4), player.y + 12, {
             count: 1,
             speed: [8, 30],
@@ -3131,6 +3533,7 @@
 
         let buffChanged = false;
         BUFF_TYPES.forEach((type) => {
+          if (!isFinite(buffs[type])) return; /* 割草常驻：不衰减 */
           if (buffs[type] <= 0) return;
           buffs[type] = Math.max(0, buffs[type] - dt);
           if (buffs[type] <= 0) {
@@ -3152,14 +3555,27 @@
         if (!boss) {
           if (shots.length > wave.maxShots) shots.length = wave.maxShots;
           spawnTimer -= dt;
-          const enemyCap = Math.min(16, wave.maxEnemies + (theme.tankBias > 0 ? 2 : 0));
+          const enemyCap = isMow()
+            ? Math.min(MOW.enemyCap, wave.maxEnemies)
+            : Math.min(16, wave.maxEnemies + (theme.tankBias > 0 ? 2 : 0));
           if (!wave.phase.rest && enemies.length < enemyCap) {
             if (spawnTimer <= 0) {
               spawnTimer = wave.phase.spawn / wave.scale / (theme.spawnRate || 1);
               spawnEnemy();
+              /* 割草：一次刷怪帧有概率再来一架，形成密集星潮。 */
+              if (isMow() && Math.random() < MOW.spawnDoubleChance && enemies.length < enemyCap) spawnEnemy();
             }
           } else if (spawnTimer < 0.2) {
             spawnTimer = 0.2;
+          }
+        } else if (isMow()) {
+          /* Boss 战不停潮：低频补充杂兵，与 Boss 招式叠加成割草战场。 */
+          if (shots.length > MOW.bossShotCap) shots.length = MOW.bossShotCap;
+          spawnTimer -= dt;
+          if (spawnTimer <= 0 && enemies.length < MOW.bossEscortCap) {
+            spawnTimer = 0.62;
+            spawnEnemy();
+            if (Math.random() < 0.45 && enemies.length < MOW.bossEscortCap) spawnEnemy();
           }
         } else if (shots.length > 60) {
           shots.length = 60;
@@ -3246,12 +3662,15 @@
       }
 
       function updatePickups(dt) {
+        if (isMow() && pickups.length > MOW.pickupCap) {
+          pickups.splice(0, pickups.length - MOW.pickupCap);
+        }
         for (let i = pickups.length - 1; i >= 0; i--) {
           const p = pickups[i];
           p.y += p.vy * dt;
           p.spin += dt * 3;
           /* 靠近玩家时轻微吸附，避免辛苦打出的 Buff 从旁边滑走；稀有军械吸得更紧。 */
-          const magnet = (p.type === 'item' ? 150 : 80) * magnetMultiplier();
+          const magnet = (p.type === 'item' ? 150 : 80) * magnetMultiplier() * (isMow() ? 1.35 : 1);
           if (p.y > H * 0.55) p.x += clamp(player.x - p.x, -magnet * dt, magnet * dt);
           const box = { x: p.x - p.r, y: p.y - p.r, w: p.r * 2, h: p.r * 2 };
           const hb = { x: player.x - 20, y: player.y - 20, w: 40, h: 40 };
@@ -3259,10 +3678,14 @@
             const special = SPECIAL_PICKUPS[p.type];
             if (special) {
               if (p.type === 'energy') {
-                addEnergy(18);
-                addFloater(player.x, player.y - 34, '能量 +18', special.color);
+                const energyGain = isMow() ? MOW.energyCoreAmount : 18;
+                addEnergy(energyGain);
+                addFloater(player.x, player.y - 34, '能量 +' + energyGain, special.color);
               } else if (p.type === 'core') {
-                if (run.power < 5) {
+                if (isMow()) {
+                  addEnergy(MOW.powerCoreEnergy);
+                  addFloater(player.x, player.y - 34, '火力核心 · 能量 +' + MOW.powerCoreEnergy, special.color);
+                } else if (run.power < 5) {
                   run.power += 1;
                   addFloater(player.x, player.y - 34, '火力 LV' + run.power, special.color);
                 } else {
@@ -3272,7 +3695,13 @@
                 syncHud();
               } else if (p.type === 'item') {
                 const type = ITEM_SPECS[p.itemType] ? p.itemType : 'nuke';
-                if (!giveItem(type)) addEnergy(10);
+                if (isMow()) {
+                  /* 大杀器库已满载：军械箱直接折算能量，保持掉落有收益。 */
+                  addEnergy(MOW.itemEnergy);
+                  addFloater(player.x, player.y - 34, '军械已满 · 能量 +' + MOW.itemEnergy, special.color);
+                } else if (!giveItem(type)) {
+                  addEnergy(10);
+                }
               }
               A.Sfx.play('perfect');
               particles.emit(p.x, p.y, {
@@ -3287,17 +3716,30 @@
               syncJoyTools();
               continue;
             }
-            buffs[p.type] = Math.max(buffs[p.type], WEAPONS[p.type].duration);
-            lastBuff = p.type;
-            if (mode === 'challenge') {
-              /* 挑战收集物：设计源 powerups 的拾取记录（不影响通关，不标记 assisted）。 */
-              const collectedId = p.chPowerup || p.type;
-              if (chCollectibles.indexOf(collectedId) === -1) chCollectibles.push(collectedId);
-              chPowerupLog.push({ atSec: Math.round(chTime * 10) / 10, kind: collectedId });
+            if (isMow()) {
+              /* 常驻模式下弹种拾取按能量结算，避免「拿了也没用」。 */
+              addEnergy(MOW.buffEnergy);
+              addFloater(player.x, player.y - 34, WEAPONS[p.type].name + '常驻 · 能量 +' + MOW.buffEnergy, WEAPONS[p.type].color);
+            } else {
+              const before = buffs[p.type];
+              const added = grantBuff(p.type);
+              if (mode === 'challenge') {
+                /* 挑战收集物：设计源 powerups 的拾取记录（不影响通关，不标记 assisted）。 */
+                const collectedId = p.chPowerup || p.type;
+                if (chCollectibles.indexOf(collectedId) === -1) chCollectibles.push(collectedId);
+                chPowerupLog.push({ atSec: Math.round(chTime * 10) / 10, kind: collectedId });
+              }
+              const total = buffTimeLabel(p.type);
+              addFloater(
+                player.x,
+                player.y - 34,
+                WEAPONS[p.type].name + '弹 +' + Math.round(added) + 's · 共 ' + total,
+                WEAPONS[p.type].color
+              );
+              if (before >= BUFF_STACK_CAP) addFloater(player.x, player.y - 48, '叠加上限 ' + BUFF_STACK_CAP + 's', '#93a0c8');
             }
             syncHud();
             A.Sfx.play('perfect');
-            addFloater(player.x, player.y - 34, (activeBuffs().length > 1 ? '叠加 ' : '') + WEAPONS[p.type].name + '弹！', WEAPONS[p.type].color);
             particles.emit(p.x, p.y, {
               count: A.reducedMotion ? 6 : 18,
               speed: [40, 180],
@@ -3345,10 +3787,12 @@
       function killEnemy(e, idx, award) {
         enemies.splice(idx, 1);
         if (e.kind === 'boss') {
-          const themeScore = mode === 'classic' && run.theme ? run.theme.scoreMul || 1 : 1;
-          const gained = Math.round(e.score * (mode === 'classic' ? comboMul() : 1) * themeScore);
-          score += gained;
-          addFloater(e.x + e.w / 2, e.y + e.h / 2, '+' + gained, '#ffd23f');
+          if (!isMow()) {
+            const themeScore = mode === 'classic' && run.theme ? run.theme.scoreMul || 1 : 1;
+            const gained = Math.round(e.score * (mode === 'classic' ? comboMul() : 1) * themeScore);
+            score += gained;
+            addFloater(e.x + e.w / 2, e.y + e.h / 2, '+' + gained, '#ffd23f');
+          }
           particles.emit(e.x + e.w / 2, e.y + e.h / 2, {
             count: A.reducedMotion ? 14 : 46,
             speed: [80, 360],
@@ -3375,6 +3819,19 @@
             syncHud();
             return;
           }
+          if (isMow()) {
+            /* 割草 Boss：无分数，只掉大量能量/火力核心并自动进入下一潮。 */
+            mowKills += 5;
+            addEnergy(MOW.bossEnergy);
+            dropMowBossLoot(e);
+            flash = Math.max(flash, 0.6);
+            flashColor = '#ffd23f';
+            run.bossDamageAcc = 0;
+            run.bossDamageTimer = 0;
+            stageClearMow();
+            syncHud();
+            return;
+          }
           /* 0.13.0：Boss 击破补给能量，接下来由 CLEAR 面板给出整备三选一。 */
           addEnergy(45);
           run.combo = 0;
@@ -3392,34 +3849,53 @@
           return;
         }
         if (award !== false) {
-          const themeScore = mode === 'classic' && run.theme ? run.theme.scoreMul || 1 : 1;
-          const gained = Math.round(e.score * (mode === 'classic' ? comboMul() : 1) * themeScore);
-          score += gained;
-          syncHud();
-          addFloater(e.x + e.w / 2, e.y, '+' + gained, '#ffd23f');
-          pickupPity += 1;
-          if (mode === 'classic') {
+          if (isMow()) {
+            /* 割草击杀：不记分，只回一点能量 + 密集掉落（能量核心为主）。 */
+            mowKills += 1;
+            addEnergy(MOW.killEnergy);
             bumpCombo();
-            /* 击杀回能：避免能量枯竭后陷入无补给的死亡螺旋。 */
-            addEnergy(0.6);
-            itemPity += 1;
             energyPity += 1;
             const theme = run.theme || themeForLevel(level);
             const dropRate = theme.dropRate || 1;
-            if (Math.random() < 0.006 * dropRate || itemPity >= 180) {
-              dropItemPickup(e);
-              itemPity = 0;
-            } else if (e.kind === 'tank' && Math.random() < 0.3) {
-              dropPowerCore(e);
-            } else if (Math.random() < 0.07 * dropRate || energyPity >= 18) {
+            if (Math.random() < MOW.energyDropChance * dropRate || energyPity >= MOW.energyPity) {
               dropEnergyCore(e);
               energyPity = 0;
-            } else if (Math.random() < (e.kind === 'tank' ? 0.8 : 0.1) || pickupPity >= 12) {
-              dropPickup(e);
+            } else if (e.kind === 'tank' && Math.random() < 0.5) {
+              dropPowerCore(e);
+            } else if (Math.random() < 0.02) {
+              dropItemPickup(e);
             }
-          } else {
-            /* 挑战模式不使用随机掉落：掉 Buff 只由设计源 powerups 时间轴决定。 */
             pickupPity = 0;
+          } else {
+            const themeScore = mode === 'classic' && run.theme ? run.theme.scoreMul || 1 : 1;
+            const gained = Math.round(e.score * (mode === 'classic' ? comboMul() : 1) * themeScore);
+            score += gained;
+            syncHud();
+            addFloater(e.x + e.w / 2, e.y, '+' + gained, '#ffd23f');
+            pickupPity += 1;
+            if (mode === 'classic') {
+              bumpCombo();
+              /* 击杀回能：避免能量枯竭后陷入无补给的死亡螺旋。 */
+              addEnergy(0.6);
+              itemPity += 1;
+              energyPity += 1;
+              const theme = run.theme || themeForLevel(level);
+              const dropRate = theme.dropRate || 1;
+              if (Math.random() < 0.006 * dropRate || itemPity >= 180) {
+                dropItemPickup(e);
+                itemPity = 0;
+              } else if (e.kind === 'tank' && Math.random() < 0.3) {
+                dropPowerCore(e);
+              } else if (Math.random() < 0.07 * dropRate || energyPity >= 18) {
+                dropEnergyCore(e);
+                energyPity = 0;
+              } else if (Math.random() < (e.kind === 'tank' ? 0.8 : 0.1) || pickupPity >= 12) {
+                dropPickup(e);
+              }
+            } else {
+              /* 挑战模式不使用随机掉落：掉 Buff 只由设计源 powerups 时间轴决定。 */
+              pickupPity = 0;
+            }
           }
         } else {
           addFloater(e.x + e.w / 2, e.y, '撞毁', '#ff9a9a');
@@ -3444,6 +3920,37 @@
           return;
         }
         if (player.invul > 0 || shieldTimer > 0) return;
+        if (isMow()) {
+          /* 割草模式不掉命：受击直接扣一大截能量。能量见底才会火力下降，
+           * 所以「唯一瓶颈」落在能量管理上，而不是生命数。 */
+          player.invul = invulSeconds();
+          const loss = Math.round(run.maxEnergy * MOW.hitEnergyRatio);
+          run.energy = Math.max(0, run.energy - loss);
+          if (run.energy <= 0.001) {
+            run.energy = 0;
+            run.depleted = true;
+            endFormation('能量枯竭');
+          }
+          run.combo = 0;
+          run.comboTimer = 0;
+          shake = A.reducedMotion ? 0 : 8;
+          flash = Math.max(flash, 0.55);
+          flashColor = '#ff5d7a';
+          addRing(player.x, player.y, '#ff8f86', 130, 0.5, 4);
+          addFloater(player.x, player.y - 44, '受击 · 能量 -' + loss, '#ff8f86');
+          A.Sfx.play('explode');
+          particles.emit(player.x, player.y, {
+            count: 24,
+            speed: [60, 260],
+            life: [0.3, 0.8],
+            size: [2, 5],
+            colors: ['#4f7cff', '#ffffff', '#ffd23f'],
+            gravity: 100,
+          });
+          syncHud();
+          syncJoyTools();
+          return;
+        }
         lives -= 1;
         player.invul = invulSeconds();
         shake = A.reducedMotion ? 0 : 8;
@@ -3472,7 +3979,7 @@
 
       function collide() {
         /* 僚机拦截敌弹：先于玩家判定，命中后僚机掉 1 点耐久。 */
-        if (mode === 'classic' && run.wingmen.length) {
+        if ((mode === 'classic' || isMow()) && run.wingmen.length) {
           for (let i = shots.length - 1; i >= 0; i -= 1) {
             const s = shots[i];
             let absorbed = false;
@@ -3649,6 +4156,37 @@
         for (const side of [-1, 1]) {
           ctx.fillStyle = '#4f7cff';
           ctx.fillRect(side * b.w * 0.3 - 4, -b.h * 0.08, 8, b.h * 0.32);
+        }
+        if (isMow()) {
+          /* 割草 Boss 专属外观：旋转警戒环 + 双层光晕 + 侧翼炮塔，招式更醒目。 */
+          const now = performance.now() / 1000;
+          const aura = ctx.createRadialGradient(0, 0, 10, 0, 0, Math.max(b.w, b.h) * 0.95);
+          aura.addColorStop(0, 'rgba(255, 154, 61, 0.20)');
+          aura.addColorStop(0.55, 'rgba(255, 93, 122, 0.10)');
+          aura.addColorStop(1, 'rgba(255, 93, 122, 0)');
+          ctx.fillStyle = aura;
+          ctx.beginPath();
+          ctx.arc(0, 0, Math.max(b.w, b.h) * 0.95, 0, TAU);
+          ctx.fill();
+          ctx.save();
+          ctx.rotate(now * 0.8);
+          ctx.strokeStyle = 'rgba(255, 210, 63, 0.55)';
+          ctx.lineWidth = 2;
+          for (let k = 0; k < 4; k += 1) {
+            ctx.beginPath();
+            ctx.arc(0, 0, Math.max(b.w, b.h) * 0.66 + pulse * 4, k * (TAU / 4), k * (TAU / 4) + 0.45);
+            ctx.stroke();
+          }
+          ctx.restore();
+          for (const side of [-1, 1]) {
+            ctx.fillStyle = '#ffd23f';
+            ctx.beginPath();
+            ctx.moveTo(side * b.w * 0.42, -10);
+            ctx.lineTo(side * b.w * 0.42, 16);
+            ctx.lineTo(side * b.w * 0.55, 3);
+            ctx.closePath();
+            ctx.fill();
+          }
         }
         if (mode === 'challenge' && b.exposed === false) {
           ctx.strokeStyle = 'rgba(124, 232, 224, 0.85)';
@@ -3986,7 +4524,7 @@
           font: 'bold 10px system-ui, sans-serif',
           color: run.depleted ? '#ff8f86' : low ? '#ffd23f' : '#93c8b4',
         });
-        A.draw.label(ctx, '火力 LV' + run.power, W - 12, 47, {
+        A.draw.label(ctx, isMow() ? '火力 MAX' : '火力 LV' + run.power, W - 12, 47, {
           align: 'right',
           font: 'bold 11px system-ui, sans-serif',
           color: '#ffd23f',
@@ -3999,7 +4537,7 @@
           });
         }
         if (run.formationTimer > 0) {
-          A.draw.label(ctx, '编队 ' + run.formationTimer.toFixed(1) + 's · 僚机 ×' + run.wingmen.length, W / 2, 61, {
+          A.draw.label(ctx, '编队 ' + run.formationTimer.toFixed(1) + 's · 僚机 ×' + run.wingmen.length, W / 2, isMow() ? 74 : 61, {
             font: 'bold 10px system-ui, sans-serif',
             color: '#7cf5b2',
           });
@@ -4030,7 +4568,16 @@
         pickups.forEach(drawPickup);
         drawBullets();
         shots.forEach((s) => {
-          ctx.fillStyle = '#ff86c8';
+          const color = s.mowColor || '#ff86c8';
+          if (s.mowColor) {
+            ctx.globalAlpha = 0.35;
+            ctx.fillStyle = color;
+            ctx.beginPath();
+            ctx.arc(s.x, s.y, s.r * 1.9, 0, TAU);
+            ctx.fill();
+            ctx.globalAlpha = 1;
+          }
+          ctx.fillStyle = color;
           ctx.beginPath();
           ctx.arc(s.x, s.y, s.r, 0, TAU);
           ctx.fill();
@@ -4069,30 +4616,44 @@
           ctx.restore();
           return;
         }
-        A.draw.label(ctx, 'SCORE ' + score, 12, 18, { align: 'left', font: 'bold 14px system-ui, sans-serif', color: '#ffd23f' });
+        A.draw.label(ctx, isMow() ? '割草 ' + mowKills : 'SCORE ' + score, 12, 18, { align: 'left', font: 'bold 14px system-ui, sans-serif', color: '#ffd23f' });
         const wave = waveInfo();
         const themeName = run.theme ? run.theme.name : '';
-        const centerLabel = boss ? 'STG ' + level + ' · ' + themeName + ' · BOSS' : 'STG ' + level + ' · ' + themeName + ' · ' + wave.label;
+        const centerLabel = isMow()
+          ? 'STG ' + level + ' · 星海割草'
+          : boss ? 'STG ' + level + ' · ' + themeName + ' · BOSS' : 'STG ' + level + ' · ' + themeName + ' · ' + wave.label;
         A.draw.label(ctx, centerLabel, W / 2, 18, {
           font: 'bold 11px system-ui, sans-serif',
           color: boss ? '#ff9a9d' : wave.phase.rest ? '#63d68c' : '#93a0c8',
         });
-        for (let i = 0; i < Math.min(lives, 8); i++) {
-          ctx.save();
-          ctx.translate(W - 18 - i * 15, 18);
-          ctx.fillStyle = '#4f7cff';
-          ctx.beginPath();
-          ctx.moveTo(0, -6);
-          ctx.lineTo(5, 5);
-          ctx.lineTo(-5, 5);
-          ctx.closePath();
-          ctx.fill();
-          ctx.restore();
+        if (isMow()) {
+          A.draw.label(ctx, '∞', W - 18, 18, { align: 'right', font: 'bold 15px system-ui, sans-serif', color: '#4f7cff' });
+        } else {
+          for (let i = 0; i < Math.min(lives, 8); i++) {
+            ctx.save();
+            ctx.translate(W - 18 - i * 15, 18);
+            ctx.fillStyle = '#4f7cff';
+            ctx.beginPath();
+            ctx.moveTo(0, -6);
+            ctx.lineTo(5, 5);
+            ctx.lineTo(-5, 5);
+            ctx.closePath();
+            ctx.fill();
+            ctx.restore();
+          }
         }
         drawEnergyHud();
+        if (isMow() && !boss && run.formationTimer <= 0) {
+          A.draw.label(ctx, '受击只扣能量 · 大杀器与主动道具消耗能量', W / 2, 74, {
+            font: 'bold 10px system-ui, sans-serif',
+            color: '#ffd23f',
+          });
+        }
         const active = activeBuffs();
         if (active.length) {
-          const text = active.map((type) => WEAPONS[type].short + Math.ceil(buffs[type])).join(' ');
+          const text = isMow()
+            ? '常驻 · ' + active.map((type) => WEAPONS[type].short).join('')
+            : active.map((type) => WEAPONS[type].short + buffTimeLabel(type)).join(' ');
           A.draw.label(ctx, text, W / 2, 60, {
             font: 'bold 11px system-ui, sans-serif',
             color: buffColor(),
@@ -4100,14 +4661,16 @@
         }
         if (boss) {
           const ratio = clamp(boss.hp / boss.maxHp, 0, 1);
-          A.draw.label(ctx, boss.name, W / 2, 76, {
+          const bossNameY = isMow() ? 88 : 76;
+          const bossBarY = isMow() ? 96 : 84;
+          A.draw.label(ctx, boss.name + (isMow() && boss.mowPattern ? ' · ' + boss.mowPattern : ''), W / 2, bossNameY, {
             font: 'bold 10px system-ui, sans-serif',
             color: '#ff9a9d',
           });
           ctx.fillStyle = 'rgba(7,11,24,0.72)';
-          ctx.fillRect(60, 84, 300, 6);
+          ctx.fillRect(60, bossBarY, 300, 6);
           ctx.fillStyle = boss.phase >= 3 ? '#ff5d7a' : boss.phase >= 2 ? '#ff9a3d' : '#ffd23f';
-          ctx.fillRect(60, 84, 300 * ratio, 6);
+          ctx.fillRect(60, bossBarY, 300 * ratio, 6);
         }
         if (stageBanner > 0) {
           A.draw.label(ctx, stageBannerText, W / 2, H * 0.34, {
@@ -4257,8 +4820,7 @@
         window.__arcadeTest = {
           giveBuff(type) {
             if (!WEAPONS[type] || type === 'normal') return false;
-            buffs[type] = Math.max(buffs[type], WEAPONS[type].duration);
-            lastBuff = type;
+            grantBuff(type);
             syncHud();
             return true;
           },
@@ -4285,6 +4847,11 @@
               shieldTimer,
               buffs: { ...buffs },
               pickups: pickups.length,
+              pickupKinds: pickups.reduce((acc, p) => {
+                const key = p.type === 'item' && p.itemType ? 'item:' + p.itemType : p.type;
+                acc[key] = (acc[key] || 0) + 1;
+                return acc;
+              }, {}),
               score,
               lives,
               stage: level,
@@ -4319,11 +4886,75 @@
               credits: hangar.credits,
               maxLives: maxLives(),
               effects: effects.length,
+              /* 0.14.0：弹种叠加 / 星海割草观测字段。 */
+              buffSeconds: {
+                spread: isFinite(buffs.spread) ? Math.round(buffs.spread * 10) / 10 : null,
+                laser: isFinite(buffs.laser) ? Math.round(buffs.laser * 10) / 10 : null,
+                homing: isFinite(buffs.homing) ? Math.round(buffs.homing * 10) / 10 : null,
+                rapid: isFinite(buffs.rapid) ? Math.round(buffs.rapid * 10) / 10 : null,
+              },
+              buffPermanent: active.length === BUFF_TYPES.length && active.every((type) => !isFinite(buffs[type])),
+              mow: isMow(),
+              mowKills,
+              toolsInfinite: isMow(),
+              itemCosts: isMow() ? { ...MOW.itemCost } : null,
+              bossPattern: boss ? boss.mowPattern || '' : '',
+              bossPatterns: boss && Array.isArray(boss.mowPatternsFired) ? boss.mowPatternsFired.slice() : [],
+              saveSuppressed: !autosave.load(),
             };
           },
           /* ---------- 0.13.0 星域远征测试钩子 ---------- */
           runInfo() {
             return this.info();
+          },
+          /* ---------- 0.14.0 星海割草测试钩子 ---------- */
+          startMow() {
+            return startMow();
+          },
+          quitMow() {
+            return quitMow();
+          },
+          advance(seconds) {
+            const total = Math.max(0, Number(seconds) || 0);
+            const step = 1 / 60;
+            let guard = Math.ceil(total / step) + 2;
+            while (guard-- > 0 && state === 'playing') update(step);
+            return { state, info: this.info() };
+          },
+          forceMowHit() {
+            if (!isMow()) return null;
+            player.invul = 0;
+            shieldTimer = 0;
+            hitPlayer();
+            return this.info();
+          },
+          spawnMowPack(count) {
+            if (!isMow()) return 0;
+            const n = Math.max(1, Math.min(40, Math.floor(Number(count) || 1)));
+            for (let i = 0; i < n; i += 1) spawnEnemy();
+            return enemies.filter((e) => e.kind !== 'boss').length;
+          },
+          killAllEnemies() {
+            let killed = 0;
+            for (let i = enemies.length - 1; i >= 0; i -= 1) {
+              if (state !== 'playing') break;
+              const enemy = enemies[i];
+              if (!enemy || enemy.kind === 'boss') continue;
+              killEnemy(enemy, i, true);
+              killed += 1;
+            }
+            syncHud();
+            return killed;
+          },
+          scoresInfo() {
+            const list = A.Scores && typeof A.Scores.list === 'function' ? A.Scores.list({ gameId: 'star-raid' }) : [];
+            return {
+              count: Array.isArray(list) ? list.length : 0,
+              high: A.Progress.get('star-raid').high,
+              plays: A.Progress.get('star-raid').plays,
+              credits: hangar.credits,
+              runs: hangar.runs,
+            };
           },
           hangarInfo() {
             return {

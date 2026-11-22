@@ -1,6 +1,6 @@
 #!/usr/bin/env node
 /**
- * 街机厅无头浏览器冒烟测试（108 项全链路回归）。
+ * 街机厅无头浏览器冒烟测试（112 项全链路回归）。
  * 零 npm 依赖：通用基础设施见 tools/lib/arcade_cdp.mjs（静态服务器 / Chrome 启动 / CDP / 断言记录器）。
  * 运行：node tools/arcade_smoke.mjs
  * 端口可用环境变量覆盖：ARCADE_SMOKE_PORT（默认 8765）/ ARCADE_CDP_PORT（默认 9333）。
@@ -46,8 +46,8 @@ async function main() {
     })()`);
     assert(home.cards >= 2, 'home cards=' + home.cards);
     assert(home.href.indexOf('apps/arcade') !== -1, 'arcade card not clickable: ' + JSON.stringify(home));
-    assert(home.version.indexOf('0.13.2') !== -1, 'arcade version missing on home card');
-    record('门户街机厅卡片可点击且版本 0.13.2', true);
+    assert(home.version.indexOf('0.14.0') !== -1, 'arcade version missing on home card');
+    record('门户街机厅卡片可点击且版本 0.14.0', true);
 
     /* ---------- GitHub Pages 项目子路径：shell 返回链接 ---------- */
     await cdp.navigate(base + '/studiokit/apps/arcade/games/star-raid.html');
@@ -65,10 +65,10 @@ async function main() {
       cards: document.querySelectorAll('.hall-card').length,
       runs: window.Arcade && Arcade.RunSave.count()
     })`);
-    assert(hallInfo.version === '0.13.2', 'version is ' + hallInfo.version);
+    assert(hallInfo.version === '0.14.0', 'version is ' + hallInfo.version);
     assert(hallInfo.games === 16, 'game count is ' + hallInfo.games);
     assert(hallInfo.cards === 16, 'card count is ' + hallInfo.cards);
-    record('中心页 16 款游戏与版本 0.13.2', true);
+    record('中心页 16 款游戏与版本 0.14.0', true);
 
     await cdp.evaluate(`(() => { const i = document.querySelector('[data-search]'); i.value = '雪铃'; i.dispatchEvent(new Event('input', { bubbles: true })); })()`);
     await sleep(120);
@@ -478,6 +478,197 @@ async function main() {
     const pickupInfo = await cdp.evaluate(`window.__arcadeTest.info()`);
     assert(pickupInfo.buffs.spread > 0, 'star-raid pickup not collected: ' + JSON.stringify(pickupInfo));
     record('星海突击 四种弹种叠加 + 实际拾取', true);
+
+    /* ---------- 星海突击 0.14.0：同种弹种再次拾取叠加剩余时长（不是重置） ---------- */
+    const stackInfo = await cdp.evaluate(`(() => {
+      const t = __arcadeTest;
+      t.clearBuffs();
+      t.giveBuff('spread');
+      const first = t.info();
+      t.giveBuff('spread');
+      const second = t.info();
+      for (let i = 0; i < 20; i += 1) t.giveBuff('spread');
+      const capped = t.info();
+      return { first: first.buffSeconds.spread, second: second.buffSeconds.spread, capped: capped.buffSeconds.spread };
+    })()`);
+    assert(Math.abs(stackInfo.second - stackInfo.first - 12) < 0.2, 'star-raid buff should stack +12s, not reset: ' + JSON.stringify(stackInfo));
+    assert(stackInfo.capped === 180, 'star-raid buff stack cap should be 180s: ' + JSON.stringify(stackInfo));
+    await cdp.evaluate(`(() => { __arcadeTest.clearBuffs(); __arcadeTest.spawnPickup('spread'); return true; })()`);
+    await sleep(600);
+    const pickupStackA = await cdp.evaluate(`__arcadeTest.info().buffSeconds.spread`);
+    await cdp.evaluate(`__arcadeTest.spawnPickup('spread')`);
+    await sleep(600);
+    const pickupStackB = await cdp.evaluate(`__arcadeTest.info().buffSeconds.spread`);
+    assert(pickupStackA > 10 && pickupStackB > pickupStackA + 9, 'star-raid pickup should append duration: ' + JSON.stringify({ pickupStackA, pickupStackB }));
+    const stackHud = await cdp.text('[data-hud-weapon]');
+    const stackHudMatch = /散(\d+)s/.exec(stackHud || '');
+    assert(stackHudMatch && Number(stackHudMatch[1]) > 12, 'star-raid stacked HUD should show accumulated spread time: ' + stackHud);
+    record('星海突击 同种弹种拾取叠加有效时长（上限 180s）', true);
+
+    /* ---------- 星海突击 0.14.0：星海割草（模拟割草） ---------- */
+    await cdp.evaluate(`window.Arcade && Arcade.RunSave.clear('star-raid')`);
+    await cdp.navigate(base + '/apps/arcade/games/star-raid.html?mow=1#test');
+    await sleep(240);
+    const mowPrompt = await cdp.evaluate(`document.querySelector('[data-ov-title]').textContent`);
+    if (mowPrompt.indexOf('继续') !== -1) {
+      await cdp.click('[data-ov-btn2]');
+      await sleep(130);
+    }
+    const entryLayout = await cdp.evaluate(`(() => {
+      const rect = (el) => el.getBoundingClientRect();
+      const btn4 = document.querySelector('[data-ov-btn4]');
+      const buttons = [...document.querySelectorAll('.overlay-panel .ac-btn')].filter((b) => !b.hidden);
+      const panel = document.querySelector('.overlay-panel');
+      return {
+        btn4: btn4 ? btn4.textContent : null,
+        visible: btn4 ? !btn4.hidden : false,
+        buttons: buttons.map((b) => ({ text: b.textContent, h: Math.round(rect(b).height) })),
+        panelOverflow: panel.scrollWidth - panel.clientWidth,
+        docOverflow: document.documentElement.scrollWidth - document.documentElement.clientWidth,
+      };
+    })()`);
+    assert(entryLayout.visible && entryLayout.btn4.includes('星海割草'), 'star-raid mow entry missing: ' + JSON.stringify(entryLayout));
+    assert(entryLayout.buttons.length === 4 && entryLayout.buttons.every((b) => b.h >= 44), 'star-raid mow entry buttons: ' + JSON.stringify(entryLayout));
+    assert(entryLayout.panelOverflow <= 1 && entryLayout.docOverflow <= 1, 'star-raid mow entry overflow: ' + JSON.stringify(entryLayout));
+    await cdp.click('[data-ov-btn4]');
+    await sleep(260);
+    const mowStart = await cdp.evaluate(`(() => {
+      const t = __arcadeTest;
+      const i = t.info();
+      const spans = {
+        score: document.querySelector('[data-hud-score]').closest('span'),
+        credits: document.querySelector('[data-hud-credits]').closest('span'),
+        high: document.querySelector('[data-hud-high]').closest('span'),
+      };
+      return {
+        info: i,
+        body: document.body.classList.contains('is-mow'),
+        btn4Visible: !document.querySelector('[data-ov-btn4]').hidden,
+        hudHidden: Object.keys(spans).map((key) => getComputedStyle(spans[key]).display === 'none'),
+        tools: ['pulse', 'shield'].map((id) => document.querySelector('[data-joy-tool="' + id + '"] [data-joy-count]').textContent),
+        formationCount: document.querySelector('[data-squad-tool="formation"] [data-joy-count]').textContent,
+        items: [...document.querySelectorAll('[data-item-slot]')].filter((b) => !b.hidden).length,
+        itemCostText: document.querySelector('[data-item-slot="0"]').textContent,
+        runSave: Arcade.RunSave.get('star-raid'),
+        overlayHidden: document.querySelector('[data-overlay]').hidden,
+        hint: document.querySelector('[data-game-hint]').textContent,
+      };
+    })()`);
+    assert(mowStart.info.mow === true && mowStart.info.state === 'playing' && mowStart.body && mowStart.overlayHidden, 'star-raid mow start: ' + JSON.stringify(mowStart));
+    assert(mowStart.info.buffPermanent === true && mowStart.info.power === 5 && mowStart.info.itemCap === 3 && mowStart.info.items.every(Boolean), 'star-raid mow permanent buffs/arsenal: ' + JSON.stringify(mowStart.info));
+    assert(mowStart.tools.every((text) => text.indexOf('∞') !== -1) && mowStart.formationCount.indexOf('∞') !== -1 && mowStart.items === 3, 'star-raid mow infinite tools: ' + JSON.stringify(mowStart));
+    assert(mowStart.hudHidden.every(Boolean) && mowStart.runSave === null, 'star-raid mow must hide score/credits/high and not autosave: ' + JSON.stringify({ hudHidden: mowStart.hudHidden, runSave: mowStart.runSave }));
+    assert(mowStart.hint.includes('能量'), 'star-raid mow hint: ' + mowStart.hint);
+    await cdp.screenshot('star-mow-start.png');
+
+    const mowDrain = await cdp.evaluate(`(() => {
+      const t = __arcadeTest;
+      t.setEnergy(80);
+      const before = t.info().energy;
+      t.spawnMowPack(12);
+      t.advance(3);
+      const after = t.info();
+      return { before, energy: after.energy, enemies: after.enemies, kills: after.mowKills, score: after.score, wave: after.wave, maxEnemies: after.maxEnemies };
+    })()`);
+    assert(mowDrain.energy < mowDrain.before, 'star-raid mow energy should drain: ' + JSON.stringify(mowDrain));
+    assert(mowDrain.maxEnemies >= 30 && mowDrain.wave === '潮 1' && mowDrain.kills > 0 && mowDrain.score === 0, 'star-raid mow dense wave: ' + JSON.stringify(mowDrain));
+
+    const mowDrops = await cdp.evaluate(`(() => {
+      const t = __arcadeTest;
+      t.spawnMowPack(14);
+      const killed = t.killAllEnemies();
+      const info = t.info();
+      return { killed, pickups: info.pickups, kinds: info.pickupKinds, kills: info.mowKills, energy: info.energy };
+    })()`);
+    assert(mowDrops.killed >= 10 && mowDrops.pickups >= 1 && (mowDrops.kinds.energy || 0) >= 1, 'star-raid mow drops: ' + JSON.stringify(mowDrops));
+    record('星海突击 星海割草 常驻弹种/满载无限/密集星潮与掉落', true);
+
+    const mowBoss = await cdp.evaluate(`(() => {
+      const t = __arcadeTest;
+      t.setEnergy(100);
+      const spawned = t.spawnBossNow();
+      /* 保留一个超高血量 Boss 以观察完整四套弹幕轮转，避免测试被 DPS 提前击杀。 */
+      t.damageBoss(-999999);
+      t.advance(9);
+      const active = t.info();
+      const cleared = t.damageBoss(2000000);
+      return {
+        spawned: { boss: spawned.bossActive, maxHp: spawned.bossMaxHp },
+        active: { boss: active.bossActive, patterns: active.bossPatterns, pattern: active.bossPattern, shots: active.shots, maxShots: active.maxShots },
+        cleared: { stage: cleared.stage, state: cleared.state, boss: cleared.bossActive, score: cleared.score, items: cleared.items, buffPermanent: cleared.buffPermanent, pickups: cleared.pickups },
+      };
+    })()`);
+    assert(mowBoss.spawned.boss === true && mowBoss.spawned.maxHp >= 1200, 'star-raid mow boss spawn: ' + JSON.stringify(mowBoss.spawned));
+    assert(mowBoss.active.boss === true && Array.isArray(mowBoss.active.patterns) && mowBoss.active.patterns.length === 4 && mowBoss.active.shots > 8 && mowBoss.active.shots <= 100, 'star-raid mow boss four patterns: ' + JSON.stringify(mowBoss.active));
+    assert(mowBoss.cleared.stage === 2 && mowBoss.cleared.state === 'playing' && mowBoss.cleared.boss === false && mowBoss.cleared.score === 0 && mowBoss.cleared.buffPermanent && mowBoss.cleared.items.every(Boolean), 'star-raid mow boss auto-clear: ' + JSON.stringify(mowBoss.cleared));
+    await cdp.screenshot('star-mow-boss.png');
+
+    const mowCosts = await cdp.evaluate(`(() => {
+      const t = __arcadeTest;
+      t.setEnergy(100);
+      const before = t.info();
+      const hit = t.forceMowHit();
+      const item = t.useItemSlot(0);
+      const itemAfter = { energy: t.info().energy, items: t.itemsInfo().items };
+      const formation = t.useFormation();
+      const formationAfter = t.formationInfo();
+      return {
+        lives: hit.lives,
+        hitEnergy: hit.energy,
+        item,
+        itemAfter,
+        formation,
+        formationAfter,
+        maxEnergy: before.maxEnergy,
+      };
+    })()`);
+    assert(mowCosts.lives === mowStart.info.lives, 'star-raid mow hit must not cost lives: ' + JSON.stringify(mowCosts));
+    assert(mowCosts.hitEnergy < 100 && mowCosts.hitEnergy > 0 && mowCosts.itemAfter.energy < mowCosts.hitEnergy && mowCosts.itemAfter.items[0] === 'nuke', 'star-raid mow item should stay full and cost energy: ' + JSON.stringify(mowCosts));
+    assert(mowCosts.formation === true && mowCosts.formationAfter.charges === 3, 'star-raid mow formation should be charge-free: ' + JSON.stringify(mowCosts.formationAfter));
+    const scoresDuring = await cdp.evaluate(`__arcadeTest.scoresInfo()`);
+    assert(scoresDuring.count === 0 && scoresDuring.high === 0 && scoresDuring.plays === 0 && scoresDuring.credits === 0 && scoresDuring.runs === 0, 'star-raid mow leaked score/currency: ' + JSON.stringify(scoresDuring));
+    await cdp.screenshot('star-mow-costs.png');
+
+    /* 暂停 → 继续 → 暂停 → 结束演武（真实 UI 路径；不只走测试钩子）。 */
+    await cdp.click('[data-pause]');
+    await sleep(160);
+    const mowPause = await cdp.evaluate(`({ title: document.querySelector('[data-ov-title]').textContent, btn2: document.querySelector('[data-ov-btn2]').textContent, overlay: !document.querySelector('[data-overlay]').hidden })`);
+    assert(mowPause.overlay && mowPause.title.indexOf('星海割草') !== -1 && mowPause.btn2.indexOf('结束演武') !== -1, 'star-raid mow pause panel: ' + JSON.stringify(mowPause));
+    await cdp.click('[data-ov-btn]');
+    await sleep(160);
+    const mowResumed = await cdp.evaluate(`({ state: __arcadeTest.info().state, overlayHidden: document.querySelector('[data-overlay]').hidden })`);
+    assert(mowResumed.state === 'playing' && mowResumed.overlayHidden, 'star-raid mow resume: ' + JSON.stringify(mowResumed));
+    await cdp.click('[data-pause]');
+    await sleep(140);
+    await cdp.click('[data-ov-btn2]');
+    await sleep(200);
+    const mowQuit = await cdp.evaluate(`(() => ({
+      title: document.querySelector('[data-ov-title]').textContent,
+      body: document.body.classList.contains('is-mow'),
+      btn4: !document.querySelector('[data-ov-btn4]').hidden,
+      save: Arcade.RunSave.get('star-raid'),
+      scores: __arcadeTest.scoresInfo(),
+      pulse: document.querySelector('[data-joy-tool="pulse"] [data-joy-count]').textContent,
+      pauseDisabled: document.querySelector('[data-pause]').disabled,
+    }))()`);
+    assert(mowQuit.title === '星海突击' && mowQuit.body === false && mowQuit.btn4 === true && mowQuit.save === null, 'star-raid mow quit: ' + JSON.stringify(mowQuit));
+    assert(mowQuit.pulse !== '∞' && mowQuit.pauseDisabled === true, 'star-raid mow quit UI state: ' + JSON.stringify(mowQuit));
+    assert(mowQuit.scores.count === 0 && mowQuit.scores.high === 0 && mowQuit.scores.plays === 0 && mowQuit.scores.credits === 0 && mowQuit.scores.runs === 0, 'star-raid mow wrote score/currency: ' + JSON.stringify(mowQuit.scores));
+    record('星海突击 星海割草 Boss 四套弹幕/自动进潮/受击扣能量/无积分无星币', true);
+
+    /* 回到干净经典局，避免后续 0.13.0 波次/撞机回归受割草结束态影响。 */
+    await cdp.evaluate(`Arcade.RunSave.clear('star-raid')`);
+    await cdp.navigate(base + '/apps/arcade/games/star-raid.html?postmow=1#test');
+    await sleep(220);
+    const postMowPrompt = await cdp.evaluate(`document.querySelector('[data-ov-title]').textContent`);
+    if (postMowPrompt.indexOf('继续') !== -1) {
+      await cdp.click('[data-ov-btn2]');
+      await sleep(130);
+    }
+    await cdp.click('[data-ov-btn]');
+    await sleep(220);
+    await cdp.evaluate(`__arcadeTest.clearBuffs()`);
+
 
     /* ---------- 星海突击 波次与撞机计分分离 ---------- */
     const waveLabels = [];
@@ -2532,7 +2723,7 @@ async function main() {
       version: window.Arcade && Arcade.version,
       title: document.title
     })`);
-    assert(offlineHall.cards === 16 && offlineHall.version === '0.13.2', 'offline hall failed: ' + JSON.stringify(offlineHall));
+    assert(offlineHall.cards === 16 && offlineHall.version === '0.14.0', 'offline hall failed: ' + JSON.stringify(offlineHall));
     const offlineStatus = await cdp.evaluate(`(async () => {
       try {
         await Arcade.Offline.register();
@@ -2554,7 +2745,7 @@ async function main() {
       overlay: !!document.querySelector('[data-overlay]'),
       version: window.Arcade && window.Arcade.version
     })`);
-    assert(offlineGame.hasArcade && offlineGame.overlay && offlineGame.version === '0.13.2', 'offline game failed: ' + JSON.stringify(offlineGame));
+    assert(offlineGame.hasArcade && offlineGame.overlay && offlineGame.version === '0.14.0', 'offline game failed: ' + JSON.stringify(offlineGame));
     await cdp.navigate(base + '/apps/arcade/games/not-preloaded.html');
     const offlineMissing = await cdp.text('body');
     assert(offlineMissing && offlineMissing.includes('还没有预载'), 'offline missing page: ' + String(offlineMissing).slice(0, 120));
@@ -2656,6 +2847,53 @@ async function main() {
     assert(refitLayout.buttons.every((h) => h >= 44), 'star-raid refit buttons: ' + JSON.stringify(refitLayout.buttons));
     await cdp.screenshot('star-refit-320.png');
     record('星海突击 320px 道具行与整备三选一 44px/无溢出', true);
+
+    /* ---------- 星海突击 0.14.0：320px 星海割草入口与 6 列道具行 ---------- */
+    await cdp.evaluate(`Arcade.RunSave.clear('star-raid')`);
+    await cdp.navigate(base + '/apps/arcade/games/star-raid.html?mowui=1#test');
+    await sleep(230);
+    const mowUiPrompt = await cdp.evaluate(`document.querySelector('[data-ov-title]').textContent`);
+    if (mowUiPrompt.indexOf('继续') !== -1) {
+      await cdp.click('[data-ov-btn2]');
+      await sleep(130);
+    }
+    const mowEntry320 = await cdp.evaluate(`(() => {
+      const rect = (el) => el.getBoundingClientRect();
+      const buttons = [...document.querySelectorAll('.overlay-panel .ac-btn')].filter((b) => !b.hidden);
+      const panel = document.querySelector('.overlay-panel');
+      return {
+        buttons: buttons.map((b) => ({ text: b.textContent, h: Math.round(rect(b).height), right: Math.round(rect(b).right) })),
+        panelOverflow: panel.scrollWidth - panel.clientWidth,
+        docOverflow: document.documentElement.scrollWidth - document.documentElement.clientWidth,
+        docH: document.documentElement.scrollHeight,
+        vh: innerHeight,
+      };
+    })()`);
+    assert(mowEntry320.buttons.length === 4 && mowEntry320.buttons.every((b) => b.h >= 44 && b.right <= 321), 'star-raid 320 mow entry: ' + JSON.stringify(mowEntry320));
+    assert(mowEntry320.panelOverflow <= 1 && mowEntry320.docOverflow <= 1 && mowEntry320.docH <= mowEntry320.vh + 2, 'star-raid 320 mow entry overflow: ' + JSON.stringify(mowEntry320));
+    await cdp.click('[data-ov-btn4]');
+    await sleep(220);
+    const mowTools320 = await cdp.evaluate(`(() => {
+      const tools = document.querySelector('[data-game-tools]');
+      const buttons = [...tools.querySelectorAll('.touch-btn')].filter((b) => !b.hidden);
+      const items = [...document.querySelectorAll('[data-item-slot]')].filter((b) => !b.hidden);
+      const rect = (el) => el.getBoundingClientRect();
+      return {
+        count: buttons.length,
+        cols: getComputedStyle(tools).gridTemplateColumns.split(' ').length,
+        items: items.map((b) => ({ w: Math.round(rect(b).width), h: Math.round(rect(b).height), right: Math.round(rect(b).right), text: b.textContent })),
+        costs: items.map((b) => (b.querySelector('.item-cost') || {}).textContent || ''),
+        docOverflow: document.documentElement.scrollWidth - document.documentElement.clientWidth,
+        docH: document.documentElement.scrollHeight,
+        vh: innerHeight,
+        rowBottom: Math.round(rect(tools).bottom),
+      };
+    })()`);
+    assert(mowTools320.count === 6 && mowTools320.cols === 6 && mowTools320.items.length === 3, 'star-raid 320 mow tools columns: ' + JSON.stringify(mowTools320));
+    assert(mowTools320.items.every((b) => b.w >= 44 && b.h >= 44 && b.right <= 321) && mowTools320.costs.every((text) => text.length > 0), 'star-raid 320 mow tools fit: ' + JSON.stringify(mowTools320));
+    assert(mowTools320.docOverflow <= 1 && mowTools320.docH <= mowTools320.vh + 2, 'star-raid 320 mow tools overflow: ' + JSON.stringify(mowTools320));
+    await cdp.screenshot('star-mow-320.png');
+    record('星海突击 320px 星海割草 4 按钮入口 + 6 列无限道具行无溢出', true);
 
     /* ---------- 清理测试产生的本地数据 ---------- */
     await cdp.evaluate(`localStorage.clear()`);

@@ -7,7 +7,7 @@
 (() => {
   'use strict';
 
-  const ARCADE_VERSION = '0.13.2';
+  const ARCADE_VERSION = '0.14.0';
   const PROGRESS_KEY = 'studiokit:arcade:progress:v1';
   const PREFS_KEY = 'studiokit:arcade:prefs:v1';
   const RUNS_KEY = 'studiokit:arcade:runs:v1';
@@ -196,14 +196,14 @@
       id: 'star-raid',
       file: 'star-raid.html',
       name: '星海突击',
-      tagline: '纵版弹幕射击 · 星域远征',
+      tagline: '纵版弹幕 · 星域远征 / 星海割草',
       icon: '🚀',
       accent: '#4f7cff',
       category: '动作',
       difficulty: 3,
       session: '2–5 分钟',
       tags: ['射击', '弹幕', '成长'],
-      how: '纵版射击，弹种可叠加；机库永久改装 + 能量/编队/大杀器，6 星区主题，击破 Boss 三选一整备后可继续或收局。',
+      how: '纵版射击，同种弹种叠加时长；机库永久改装 + 能量/编队/大杀器，6 星区主题，Boss 后三选一整备；另有常驻火力、能量唯一的无尽「星海割草」（不记分/不给星币）。',
     },
     {
       id: 'road-rush',
@@ -2603,8 +2603,10 @@
         dom.overlay.setAttribute('aria-labelledby', dom.ovTitle.id);
       }
     }
-    /* 0.8.1 可选第三按钮：页面不提供 dom.ovBtn3 时行为与旧版完全一致。 */
+    /* 0.8.1 可选第三按钮：页面不提供 dom.ovBtn3 时行为与旧版完全一致。
+     * 0.14.0 可选第四按钮（星海割草模式入口）：同样 fail closed，旧页面零变化。 */
     if (dom.ovBtn3) dom.ovBtn3.hidden = true;
+    if (dom.ovBtn4) dom.ovBtn4.hidden = true;
 
     /* 0.11.1 结算回看：结算弹层默认保留原有高级模糊蒙层；玩家点面板内专用回看按钮后
        才切到透明回看模式（面板隐藏、角落胶囊恢复）。
@@ -2705,6 +2707,17 @@
           ? () => {
               Sfx.play('ui');
               if (o.onBtn3) o.onBtn3();
+            }
+          : null;
+      }
+      if (dom.ovBtn4) {
+        const hasFourth = !!o.btn4;
+        dom.ovBtn4.hidden = !hasFourth;
+        dom.ovBtn4.textContent = o.btn4 || '';
+        dom.ovBtn4.onclick = hasFourth
+          ? () => {
+              Sfx.play('ui');
+              if (o.onBtn4) o.onBtn4();
             }
           : null;
       }

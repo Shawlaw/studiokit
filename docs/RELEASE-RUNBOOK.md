@@ -5,7 +5,7 @@
 - 仓库：<https://github.com/Shawlaw/studiokit>
 - GitHub Pages：<https://shawlaw.github.io/studiokit/>
 - Cloudflare Pages：<https://studiokit.pages.dev/>
-- 当前版本：Arcade `0.13.2`（**本地修复，未推送未发布**；线上仍为已发布的 `0.13.1`。0.13.2 修两块真机反馈：①PWA 更新检测版本来源与 SW 广播（`checkForUpdate()` 返回线上最新版本、读取失败不再谎报「已是最新」）；②iOS 主屏 PWA 游玩时长永久停摆（`Playtime` 不再依赖不可靠的 window `focus`，改为可见性/点按/15 秒 tick 自愈，积分记录本轮时长不再是 0）；无 key/Schema 变更。本地门禁：pwa **9/9**、smoke **108/108**、tower **23/23**、zen **14/14**、calm **17/17**、review **5/5**、interaction **5/5**、immersive **32/32**、gameplay all **104/104** + base **22/22**（11 场景 ×2 遍）、挑战矩阵 78 关、320–430 + standalone 布局、validate/build/inline/design 全过；设计与复现见 `apps/arcade/DESIGN-0.13.2.md`）
+- 当前版本：Arcade `0.14.0`（功能分支 `feat/arcade-star-raid-mow` **本地开发，未合并 main、未推送、未发布**；main 为 0.13.2 本地修复，线上仍为已发布的 `0.13.1`。0.14.0 内容：星海突击同种弹种叠加有效时长（上限 180s），新增无积分/无星币的「星海割草」无尽演武（弹种常驻、大杀器满载无限、密集敌潮/掉落、Boss 四套专属弹幕、能量唯一瓶颈、受击只扣能量、不写局内档）；挑战 6 关数据与判定零改动，无 key/Schema 变更。本地门禁：smoke **112/112**（新增 4 项）、`SC-STAR-001`、320px 4 按钮入口/6 列道具行、validate/build/inline/design 全过；设计与回滚见 `apps/arcade/DESIGN-0.14.0.md`）
 - 最近发布：Arcade `0.13.1`（2026-11-22，已双端发布）
   - 批次内容：星海突击真机反馈修复——大杀器栏并入主道具行（iPhone 非全屏 PWA 可见，空槽常显）、核弹追踪弹命中后爆炸（无 Boss 飞画面中央）、机动强化改为受击无敌 + 拾取吸附（触屏有效，engine id 不变）、机库浏览不再计入游玩时长；挑战 6 关零改动，无新增 key/Schema
   - 门禁：smoke **105/105**、tower **23/23**、star-raid 挑战 **7/7**、tower 挑战 **6/6**、gameplay base 11/11、zen 17/17、calm 7/7、review 5/5、pwa 7/7、interaction 5/5、immersive 32/32、320–430 + standalone 布局 43/43、validate/build/inline/design 全过

@@ -1,6 +1,36 @@
 # Arcade Changelog
 
 
+## 0.14.0 — 2026-11-22（功能分支 feat/arcade-star-raid-mow 本地开发，未合并未发布）
+
+Owner 本轮两条：①星海突击同种弹药 Buff 多吃时应**叠加有效时长**而不是重置；②新增“模拟割草”模式（实现命名「星海割草」）——所有弹药 Buff 常驻、大杀器库满载、手动道具无限，同时敌人/掉落极其密集、Boss 招式更炫，玩家唯一瓶颈是能量；该模式**不参与任何积分与货币获取**。设计与调参见 `DESIGN-0.14.0.md`；挑战 6 关数据与判定零改动。
+
+### Added
+- **星海割草（无尽演武）**：开始弹层第 4 按钮进入，engine `createOverlayUi` 新增可选 `btn4`（其他 15 款游戏不传，零变化）。
+  - 四种弹种常驻、火力固定 LV5；大杀器 3 槽满载 `核弹/轨道炮/时空锚`，使用后不消耗槽位；脉冲/星盾/编队无限次。所有手动道具与编队启动均消耗能量，能量是唯一资源。
+  - 敌潮密集：0.26s 刷怪、85% 双刷、同屏上限 32；敌人血量 ×3.2；Boss 战保留 20 架护卫持续补充。
+  - 掉落密集：12% 能量核心（8 杀保底，+7）、重装敌机 50% 火力核心、2% 军械箱；Boss 掉 10 能量核心 + 4 火力核心；拾取上限 90。
+  - Boss 四套专属弹幕：扇形齐射 / 螺旋星雨 / 交叉扫射 / 环爆三连；Boss 血量 ×2.6、横向巡航更大、入场不清场、弹幕上限 100；旋转警戒环 + 双层光晕 + 相位震屏/闪白；全部尊重 `prefers-reduced-motion`。
+  - 受击不掉命，改为扣 `maxEnergy × 22%` 能量并结束编队；Boss 击破自动进入下一潮（无 CLEAR 整备弹层）；暂停 →「结束演武」返回开始界面。
+- **HUD/入口**：割草顶栏隐藏分数/星币/最高，画布左上显示「割草 N」击坠数、右上 ∞、中央 `STG N · 星海割草`；道具按钮显示 `-30⚡` 等能量成本；320px 下 4 按钮入口与 6 列无限道具行均 ≥44px、无溢出。
+
+### Changed
+- **同种弹种叠加**：拾取由 `max(剩余, 固定时长)` 改为 `min(180s, 剩余 + 固定时长)`；浮字显示 `散射弹 +12s · 共 24s`，HUD 显示累计剩余时长；180s 为护栏上限。
+- 割草模式统一走经典战斗管线（能量/编队/大杀器/主题/掉落），但跳过 `stageClear`/`gameOver` 结算；`serialize()` 在 `mode === 'mow'` 返回 null，不写局内档，刷新不会出现「继续演武」残留。
+- 版本链升至 `0.14.0`，SW 缓存键 `studiokit-arcade-0.14.0-v1`；中心页 `data-hall-version`、注册表 `version`、`ARCADE_VERSION` 与 `GAMES` 文案同步。
+
+### Compatibility
+- 无新增 localStorage key / Schema；`progress` / `runs` / `prefs` / `playtime` / `scores` / `challenge` / `meta` 全部不动。
+- 挑战模式与经典模式的数值、弹道、结算路径不变；同种弹种叠加是唯一玩法差异，挑战每关同类 powerup 不重复，实际难度零变化。
+- 割草不写 `scores:v1`、不更新最高分/机库 `runs/best`、不调用 `Progress.recordPlay`/`settleCredits`；真实游玩时长仍计入 `Playtime`（统计，不是积分/货币）。
+
+### Verification
+- 本地实跑（Windows / Node v25.8.1 / Python 3.14 / 本机 Chrome）：`node tools/arcade_smoke.mjs` **112/112**（新增 4 项：叠加时长/上限/实际拾取、割草常驻无限与密集掉落、Boss 四套弹幕/自动进潮/受击扣能量/无积分、320px 4 按钮与 6 列道具行）；`--scenario=SC-STAR-001` 经典 Boss 闭环 **1/1**；挑战矩阵 78 关 **7/7**。
+- 其余门禁：`arcade_pwa_update_test` **9/9**（临时发版链路改 0.14.0→0.14.1）、`arcade_zen_scores_test` **17/17**、`arcade_calm_games_test` **17/17**、`arcade_interaction_test` **5/5**、`arcade_tower_test` **23/23**、`arcade_immersive_buttons_test` **32/32**、`arcade_review_test` **5/5**、`arcade_design_check` 143 文件、`arcade_stage_coverage` 78 关矩阵。
+- 全量门禁：`py -3 tools/arcade_run_all_gates.py` → **ALL GATES PASSED**（validate/build/design/inline/stage/smoke 112/112、zen 17/17、calm 17/17、review 5/5、gameplay all 104/104、base 22/22）。
+- 静态：`validate_site.py`（0.14.0 版本链 + 叠加/割草守护标记）、`build_site.py`、`check_inline_scripts.mjs`、`arcade_design_check.py`、`node --check engine.js/sw.js`。
+- **状态**：功能分支本地开发，**未合并 main、未推送、未发布**（无 `PUBLISH_TO_MAIN` 授权）；真机手感（能量节奏、割草密度、Boss 弹幕可读性）仍 **UNVERIFIED**，待 Owner 试玩。
+
 ## 0.13.2 — 2026-11-22（本地修复，待 Owner 授权发布）
 
 Owner 两条真机反馈：①已安装 PWA 的「🔄 检查更新」显示的是**已安装版本**，不是线上最新版本；②iPhone 主屏 PWA 玩一天后中心页「累计时长」始终为 `0 分钟`，但积分记录表格有数据。两条都用无头 Chrome 复现并逐条修复（复现命令与设计见 `DESIGN-0.13.2.md`）；**挑战/玩法/存档零改动**，无新增 localStorage key / Schema。
