@@ -1,34 +1,62 @@
 #!/usr/bin/env node
 /**
- * Arcade 0.13.1 门禁：PWA 更新检测 + iPhone 独立窗口顶部安全区布局。
+ * Arcade 0.13.2 门禁：PWA 更新检测（最新版本号 / SW 主动广播）+ iPhone 独立窗口顶部安全区布局。
  *
  * 覆盖：
- * - PU-01 中心页「检查更新」按钮存在且可触发 checkForUpdate()
- * - PU-02 A.Offline 更新 API（checkForUpdate / onUpdate / applyUpdate / swVersion）+ SW 版本握手
- * - PU-03 模拟新版本 SW 通知：出现更新横幅（立即刷新 / 稍后），「稍后」可关闭
- * - PU-04 独立窗口 + 顶部安全区：shellbar 为深色不透明背景、不被半透明状态栏冲淡，
- *   游戏顶栏文字不被舞台模糊蒙层影响（独立合成层 + 不透明背景）
- * - PU-05 普通标签页模式不受影响：shellbar 保持浅色、38px（Android 空白回归防护）
+ * - PU-00 未声明 viewport-fit=cover / black-translucent（iOS 顶缘模糊根因防护）
+ * - PU-01 中心页「检查更新」按钮 + 更新横幅 + 更新 API 齐全
+ * - PU-02 版本一致时 checkForUpdate() 返回「已是最新」且版本号 = 线上版本（不是已安装版本）
+ * - PU-03 模拟新版本 SW 通知：横幅显示「新版本 + 当前版本」，可「稍后」关闭
+ * - PU-04 独立窗口 + 顶部安全区：深色不透明 shellbar 贴顶，游戏顶栏独立合成层
+ * - PU-05 普通标签页模式不受影响：shellbar 保持浅色 38px
+ * - PU-06 真实发布新版本的完整链路（临时副本服务器，改 sw.js VERSION 模拟发版）：
+ *   检查更新返回最新版本 0.13.3（不是已安装的 0.13.2）→ 新 SW 主动广播
+ *   arcade-sw-update-ready(0.13.3) → 横幅文案含两个版本 → 新 SW 接管后页面未刷新时
+ *   仍判为「有更新」→ 按钮提示含新版本号。
+ * - PU-07 线上版本读取失败时不谎报「已是最新」：按钮提示「检查更新失败」。
  *
- * 零 npm 依赖：复用 tools/lib/arcade_cdp.mjs；端口默认 8797 / 9367。
+ * 零 npm 依赖：复用 tools/lib/arcade_cdp.mjs；端口默认 8797 / 9367（临时副本服务器 8798）。
  * 运行：node tools/arcade_pwa_update_test.mjs [--port=8797] [--cdp-port=9367]
  */
 import path from 'node:path';
+import fs from 'node:fs';
+import os from 'node:os';
 import { REPO_ROOT, createRecorder, envPort, launchChrome, openPage, sleep, startServer, stopChrome } from './lib/arcade_cdp.mjs';
 
 const ARTIFACTS = path.join(REPO_ROOT, 'test-artifacts');
 const SERVER_PORT = envPort('ARCADE_PWA_PORT', 8797);
+const TEMP_PORT = envPort('ARCADE_PWA_TEMP_PORT', SERVER_PORT + 1);
 const CDP_PORT = envPort('ARCADE_PWA_CDP', 9367);
 const { record, assert, summary } = createRecorder();
 
 const BASE = `http://127.0.0.1:${SERVER_PORT}`;
+const TEMP_BASE = `http://127.0.0.1:${TEMP_PORT}`;
 
 async function setViewport(cdp, width = 390, height = 844) {
   await cdp.send('Emulation.setDeviceMetricsOverride', { width, height, deviceScaleFactor: 2, mobile: true });
 }
 
+/* 复制 Center 页运行所需的最小站点到临时目录，用于安全地「发一个新版本」。 */
+function makeTempSite() {
+  const root = fs.mkdtempSync(path.join(os.tmpdir(), 'studiokit-pwa-'));
+  fs.cpSync(path.join(REPO_ROOT, 'apps'), path.join(root, 'apps'), { recursive: true });
+  fs.cpSync(path.join(REPO_ROOT, 'shared'), path.join(root, 'shared'), { recursive: true });
+  return root;
+}
+
+/* 改写临时副本里的 SW 版本，等价于「线上发布了一个新版本」。 */
+function publishTempVersion(root, from, to) {
+  const swPath = path.join(root, 'apps/arcade/sw.js');
+  const source = fs.readFileSync(swPath, 'utf8');
+  const next = source.replace(`const VERSION = '${from}'`, `const VERSION = '${to}'`);
+  assert(next !== source, '临时 SW 版本改写失败，找不到 ' + from);
+  fs.writeFileSync(swPath, next);
+}
+
 async function main() {
   let server = null;
+  let tempServer = null;
+  let tempRoot = null;
   let launched = null;
   let cdp = null;
   let stub = null;
@@ -50,7 +78,7 @@ async function main() {
     assert(meta.statusBar.indexOf('black-translucent') === -1, '仍声明 black-translucent（iOS 顶缘模糊根因）: ' + JSON.stringify(meta));
     record('PU-00 未声明 viewport-fit=cover / black-translucent（iOS 顶部模糊根因防护）', true);
 
-    /* ---------- PU-01/02 中心页更新 UI 与 API ---------- */
+    /* ---------- PU-01/02 中心页更新 UI 与 API + 版本一致时的检查结果 ---------- */
     await setViewport(cdp);
     await cdp.navigate(BASE + '/apps/arcade/');
     await sleep(500);
@@ -66,22 +94,28 @@ async function main() {
         version: window.Arcade && Arcade.version
       };
     })()`);
-    assert(ui.version === '0.13.1', 'Arcade version=' + ui.version);
+    assert(ui.version === '0.13.2', 'Arcade version=' + ui.version);
     assert(ui.hasCheck && ui.checkVisible, '检查更新按钮缺失或不可见: ' + JSON.stringify(ui));
     assert(ui.hasBanner && ui.bannerHidden, '更新横幅初始应隐藏: ' + JSON.stringify(ui));
     assert(ui.api.length === 4, 'A.Offline update API 不完整: ' + JSON.stringify(ui.api));
     record('PU-01 中心页检查更新按钮 + 横幅 + 更新 API', true);
 
-    const checked = await cdp.evaluate(`Arcade.Offline.checkForUpdate()`);
-    assert(checked && checked.supported === true && checked.checked === true, 'checkForUpdate 结果异常: ' + JSON.stringify(checked));
+    await cdp.waitFor('!!navigator.serviceWorker.controller', { timeout: 15000 });
+    const inSync = await cdp.evaluate(`Arcade.Offline.checkForUpdate()`);
+    assert(inSync && inSync.supported === true && inSync.checked === true, 'checkForUpdate 结果异常: ' + JSON.stringify(inSync));
+    // 核心回归：版本一致时返回「线上版本」，不是页面已安装版本以外的乱值；且不得报有更新。
+    assert(inSync.updateFound === false, '版本一致却报有更新: ' + JSON.stringify(inSync));
+    assert(inSync.version === '0.13.2', 'checkForUpdate.version 应为线上版本 0.13.2: ' + JSON.stringify(inSync));
+    assert(inSync.latestVersion === '0.13.2', 'latestVersion 应为 0.13.2: ' + JSON.stringify(inSync));
+    assert(inSync.pageVersion === '0.13.2', 'pageVersion 应为 0.13.2: ' + JSON.stringify(inSync));
     const swVersion = await cdp.evaluate(`Arcade.Offline.swVersion()`);
-    assert(typeof swVersion === 'string' && swVersion.indexOf('0.13.1') !== -1, 'swVersion 未返回 0.13.1: ' + JSON.stringify(swVersion));
-    record('PU-02 checkForUpdate / swVersion 与 SW 版本握手', true);
+    assert(typeof swVersion === 'string' && swVersion.indexOf('0.13.2') !== -1, 'swVersion 未返回 0.13.2: ' + JSON.stringify(swVersion));
+    record('PU-02 checkForUpdate 返回线上版本、版本一致时不误报更新 + SW 版本握手', true);
 
     /* ---------- PU-03 模拟新版本通知，更新横幅出现且可关闭 ----------
        直接派发 SW → 页面 的 message 事件（与真实 SW 激活后通知一致）。 */
     await cdp.evaluate(`(() => {
-      const event = new MessageEvent('message', { data: { type: 'arcade-sw-update-ready', version: '0.13.1' } });
+      const event = new MessageEvent('message', { data: { type: 'arcade-sw-update-ready', version: '0.13.3' } });
       navigator.serviceWorker.dispatchEvent(event);
     })()`);
     await sleep(200);
@@ -89,12 +123,14 @@ async function main() {
       const b = document.querySelector('[data-update-banner]');
       return { hidden: b.hidden, text: document.querySelector('[data-update-text]').textContent };
     })()`);
-    assert(shown.hidden === false && shown.text.indexOf('0.13.1') !== -1, '更新横幅未正确显示: ' + JSON.stringify(shown));
+    assert(shown.hidden === false, '更新横幅未正确显示: ' + JSON.stringify(shown));
+    assert(shown.text.indexOf('0.13.3') !== -1 && shown.text.indexOf('当前 v0.13.2') !== -1,
+      '横幅应同时显示新版本与当前版本: ' + JSON.stringify(shown));
     await cdp.click('[data-update-dismiss]');
     await sleep(120);
     const dismissed = await cdp.evaluate(`document.querySelector('[data-update-banner]').hidden`);
     assert(dismissed === true, '稍后按钮未关闭横幅');
-    record('PU-03 新版本通知横幅 + 稍后关闭', true);
+    record('PU-03 新版本通知横幅显示新版本 + 当前版本，稍后可关闭', true);
 
     /* ---------- PU-04 独立窗口 + 安全区：深色 shellbar 与清晰顶栏 ---------- */
     await cdp.send('Emulation.setSafeAreaInsetsOverride', { insets: { top: 47, left: 0, bottom: 34, right: 0 } });
@@ -171,11 +207,100 @@ async function main() {
     assert(!browserBar.standalone, '浏览器模式泄漏 standalone: ' + JSON.stringify(browserBar));
     assert(browserBar.padTop === 0 && Math.abs(browserBar.h - 38) <= 1, '普通标签页 shellbar 应保持 38px: ' + JSON.stringify(browserBar));
     record('PU-05 普通标签页 shellbar 浅色 38px 不受影响', true);
+
+    /* ---------- PU-06 真实发布新版本的完整链路（临时副本，改 sw.js VERSION） ---------- */
+    tempRoot = makeTempSite();
+    tempServer = await startServer({ root: tempRoot, port: TEMP_PORT });
+    await cdp.navigate(TEMP_BASE + '/apps/arcade/');
+    await cdp.waitFor('!!(window.Arcade && Arcade.Offline && navigator.serviceWorker.controller)', { timeout: 20000 });
+    await sleep(300);
+    const before = await cdp.evaluate(`Arcade.Offline.checkForUpdate()`);
+    assert(before.updateFound === false && before.version === '0.13.2', '副本站点初始版本应为 0.13.2 且无更新: ' + JSON.stringify(before));
+
+    // 收集 SW → 页面消息与 controllerchange；再模拟「线上发布 0.13.3」。
+    await cdp.evaluate(`(() => {
+      window.__swMsgs = [];
+      window.__swChanges = 0;
+      navigator.serviceWorker.addEventListener('message', (e) => window.__swMsgs.push(e.data));
+      navigator.serviceWorker.addEventListener('controllerchange', () => { window.__swChanges += 1; });
+      return true;
+    })()`);
+    publishTempVersion(tempRoot, '0.13.2', '0.13.3');
+
+    const after = await cdp.evaluate(`Arcade.Offline.checkForUpdate()`);
+    assert(after.supported === true && after.checked === true, '新版本检查失败: ' + JSON.stringify(after));
+    assert(after.updateFound === true, '发布 0.13.3 后未判为有更新: ' + JSON.stringify(after));
+    // 核心回归：必须返回线上最新版本，不能是页面已安装的 0.13.2。
+    assert(after.version === '0.13.3', 'checkForUpdate.version 应为新版本 0.13.3: ' + JSON.stringify(after));
+    assert(after.latestVersion === '0.13.3', 'latestVersion 应为 0.13.3: ' + JSON.stringify(after));
+    assert(after.installedVersion === '0.13.2', 'installedVersion 应为 0.13.2: ' + JSON.stringify(after));
+    assert(after.pageVersion === '0.13.2', 'pageVersion 应为 0.13.2: ' + JSON.stringify(after));
+    assert(after.updateReason === 'published', 'updateReason 应为 published: ' + JSON.stringify(after));
+
+    // SW 激活后必须主动广播新版本（0.13.1 及以前的 firstActivation 判断永不触发）。
+    await cdp.waitFor(`window.__swMsgs.some((m) => m && m.type === 'arcade-sw-update-ready' && m.version === '0.13.3')`, { timeout: 15000 });
+    const broadcast = await cdp.evaluate(`window.__swMsgs.filter((m) => m && m.type === 'arcade-sw-update-ready').map((m) => m.version)`);
+    assert(broadcast.indexOf('0.13.3') !== -1, 'SW 未广播新版本: ' + JSON.stringify(broadcast));
+    assert(await cdp.evaluate('window.__swChanges') >= 1, '新 SW 未接管页面（controllerchange 未触发）');
+
+    const banner = await cdp.evaluate(`(() => {
+      const b = document.querySelector('[data-update-banner]');
+      return { hidden: b.hidden, text: document.querySelector('[data-update-text]').textContent };
+    })()`);
+    assert(banner.hidden === false && banner.text.indexOf('0.13.3') !== -1 && banner.text.indexOf('当前 v0.13.2') !== -1,
+      '更新横幅应显示最新版本与当前版本: ' + JSON.stringify(banner));
+
+    const newSwVersion = await cdp.evaluate(`Arcade.Offline.swVersion()`);
+    assert(newSwVersion === '0.13.3', '新 SW 接管后 swVersion 应为 0.13.3: ' + JSON.stringify(newSwVersion));
+
+    // 新 SW 已接管但页面仍是 0.13.2：仍应提示「有更新（刷新页面）」而不是「已是最新」。
+    const stalePage = await cdp.evaluate(`Arcade.Offline.checkForUpdate()`);
+    assert(stalePage.updateFound === true && stalePage.version === '0.13.3',
+      '新 SW 接管后页面未刷新时仍应提示 0.13.3 可用: ' + JSON.stringify(stalePage));
+
+    // 按钮路径的提示文案必须带新版本号与当前版本。
+    await cdp.click('[data-update-check]');
+    await cdp.waitFor(`(() => { const t = document.querySelector('.ac-toast'); return !!t && t.textContent.indexOf('0.13.3') !== -1; })()`, { timeout: 15000 });
+    const toast = await cdp.evaluate(`document.querySelector('.ac-toast').textContent`);
+    assert(toast.indexOf('发现新版本 v0.13.3') !== -1 && toast.indexOf('当前 v0.13.2') !== -1,
+      '检查更新按钮提示应显示新版本与当前版本: ' + JSON.stringify(toast));
+    record('PU-06 真实发版链路：返回线上最新版本 + SW 主动广播 + 横幅/提示双版本 + 刷新前后均判有更新', true);
+
+    /* ---------- PU-07 线上版本读取失败：不得谎报「已是最新」 ----------
+       回到与 SW 完全同步的主站点（0.13.2），只拦截页面读取 sw.js 的请求，
+       模拟「读不到线上版本」：应报 checked=false（按钮提示失败），而不是「已是最新」。 */
+    await cdp.navigate(BASE + '/apps/arcade/');
+    await cdp.waitFor('!!(window.Arcade && Arcade.Offline && navigator.serviceWorker.controller)', { timeout: 20000 });
+    const inSyncAgain = await cdp.evaluate(`Arcade.Offline.checkForUpdate()`);
+    assert(inSyncAgain.checked === true && inSyncAgain.updateFound === false, '主站点应已同步: ' + JSON.stringify(inSyncAgain));
+    await cdp.evaluate(`(() => {
+      window.__realFetch = window.fetch.bind(window);
+      window.fetch = (input, init) => String(input && input.url ? input.url : input).indexOf('sw.js') !== -1
+        ? Promise.reject(new TypeError('simulated offline'))
+        : window.__realFetch(input, init);
+      return true;
+    })()`);
+    const failed = await cdp.evaluate(`Arcade.Offline.checkForUpdate()`);
+    assert(failed.checked === false, '线上版本读取失败时 checked 应为 false: ' + JSON.stringify(failed));
+    assert(failed.updateFound === false, '读取失败时不应凭空报有更新: ' + JSON.stringify(failed));
+    await cdp.evaluate(`(() => { document.querySelectorAll('.ac-toast').forEach((n) => n.remove()); return true; })()`);
+    await cdp.click('[data-update-check]');
+    await cdp.waitFor(`(() => { const t = document.querySelector('.ac-toast'); return !!t && t.textContent.indexOf('检查更新失败') !== -1; })()`, { timeout: 15000 });
+    await cdp.evaluate(`(() => { window.fetch = window.__realFetch; return true; })()`);
+    record('PU-07 线上版本读取失败时提示「检查更新失败」，不谎报「已是最新版本」', true);
   } finally {
     if (stub && cdp) await cdp.send('Page.removeScriptToEvaluateOnNewDocument', { identifier: stub.identifier }).catch(() => {});
     if (cdp) cdp.close();
+    if (tempServer) tempServer.close();
     if (server) server.close();
     await stopChrome(launched || {});
+    if (tempRoot) {
+      try {
+        fs.rmSync(tempRoot, { recursive: true, force: true });
+      } catch (err) {
+        /* 临时目录清理失败不影响结果 */
+      }
+    }
   }
   const outcome = summary();
   if (outcome.failed) process.exitCode = 1;

@@ -1,5 +1,5 @@
 /*
- * 街机厅 Arcade Service Worker（0.13.1）
+ * 街机厅 Arcade Service Worker（0.13.2）
  * - 作用域：apps/arcade/；同时缓存 Arcade 页面引用的 shared/site.css 与 site-shell.js。
  * - 安装时缓存中心页外壳；16 款游戏由中心页「预载全部游戏」按钮按需缓存。
  * - 0.9 挑战数据（./challenge/<gameId>.js，13 个）随外壳预缓存，保证离线可玩挑战模式；
@@ -9,9 +9,9 @@
  *   页面通过 arcade-sw-version 查询当前 SW 版本；不再让已安装 PWA 静默停留在旧版本。
  * - 不使用任何远程资源、分析或第三方 API（AGENTS.md 约束 4）。
  */
-const VERSION = '0.13.1';
+const VERSION = '0.13.2';
 const CACHE_PREFIX = 'studiokit-arcade-';
-/* 缓存键 = `studiokit-arcade-${VERSION}-v1`（0.13.1 → studiokit-arcade-0.13.1-v1），
+/* 缓存键 = `studiokit-arcade-${VERSION}-v1`（0.13.2 → studiokit-arcade-0.13.2-v1），
    全部读写都用 CACHE_NAME 常量，没有第二处硬编码的旧缓存名；
    激活时按 CACHE_PREFIX 前缀清理非当前版本缓存。 */
 const CACHE_NAME = `${CACHE_PREFIX}${VERSION}-v1`;
@@ -19,6 +19,9 @@ const BASE = new URL('./', self.location.href);
 const SCOPE_PATH = BASE.pathname;
 const SHARED_PATH = new URL('../../shared/', BASE).pathname;
 const INDEX_URL = new URL('./index.html', BASE).href;
+/* 页面「检查更新」会 fetch 这个脚本读取线上发布版本（VERSION），
+   必须交给网络而不是用当前缓存回答，否则页面永远只能看到已安装版本。 */
+const SW_PATH = new URL('./sw.js', BASE).pathname;
 
 const CORE_PATHS = [
   './',
@@ -181,14 +184,22 @@ async function cacheFirst(request) {
 }
 
 /* 通知所有受控页面：有新版本 SW 已激活，供页面提示用户「刷新以更新」。
-   只在「接管已存在的页面」时通知，首次安装（没有旧客户端）不打扰用户。 */
-let firstActivation = true;
+   必须在 activate 清理旧缓存之前判断「本次激活是否替换了旧版本」：旧版缓存还在
+   （前缀相同、名字不同）说明是升级接管；首次安装没有任何旧缓存，不打扰用户。
+   旧实现用模块级 firstActivation 标志判断，但每个 SW 实例的该标志都从 true 开始、
+   activate 只调用一次，导致广播永远不会发出（0.13.1 及以前「检查更新」拿不到新版本号）。 */
+async function isUpdateActivation() {
+  try {
+    const keys = await caches.keys();
+    return keys.some((key) => key.startsWith(CACHE_PREFIX) && key !== CACHE_NAME);
+  } catch (err) {
+    return false;
+  }
+}
+
 async function notifyUpdateReady() {
   try {
     const clients = await self.clients.matchAll({ type: 'window', includeUncontrolled: false });
-    const isUpdate = !firstActivation && clients.length > 0;
-    firstActivation = false;
-    if (!isUpdate) return;
     for (const client of clients) {
       client.postMessage({ type: 'arcade-sw-update-ready', version: VERSION });
     }
@@ -210,6 +221,8 @@ self.addEventListener('install', (event) => {
 self.addEventListener('activate', (event) => {
   event.waitUntil(
     (async () => {
+      // 先取「是否替换旧版本」的证据，再删旧缓存（顺序不能反）。
+      const replacedOldVersion = await isUpdateActivation();
       const keys = await caches.keys();
       await Promise.all(
         keys
@@ -217,7 +230,7 @@ self.addEventListener('activate', (event) => {
           .map((key) => caches.delete(key))
       );
       await self.clients.claim();
-      await notifyUpdateReady();
+      if (replacedOldVersion) await notifyUpdateReady();
     })()
   );
 });
@@ -232,6 +245,10 @@ self.addEventListener('fetch', (event) => {
     return;
   }
   if (!allowedUrl(url)) return;
+  /* SW 脚本本身一律交给网络：页面读取 sw.js 是为了知道「线上最新版本」，
+     若在这里用 cacheFirst 回答，拿到的会是已安装版本的旧脚本。
+     （浏览器自己的 SW 更新检查不会触发 fetch 事件，与此无关。） */
+  if (url.pathname === SW_PATH) return;
   if (request.mode === 'navigate') {
     event.respondWith(networkFirst(request));
   } else {

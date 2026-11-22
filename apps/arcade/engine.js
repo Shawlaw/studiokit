@@ -7,7 +7,7 @@
 (() => {
   'use strict';
 
-  const ARCADE_VERSION = '0.13.1';
+  const ARCADE_VERSION = '0.13.2';
   const PROGRESS_KEY = 'studiokit:arcade:progress:v1';
   const PREFS_KEY = 'studiokit:arcade:prefs:v1';
   const RUNS_KEY = 'studiokit:arcade:runs:v1';
@@ -2914,12 +2914,14 @@
   }
 
   /* ----------------------------------------------------------
-   * 离线缓存（0.5.0，0.11.2 增加更新检测）
+   * 离线缓存（0.5.0，0.11.2 增加更新检测，0.13.2 修正版本来源）
    * - 任意 Arcade 页面都会注册 apps/arcade/sw.js；中心页负责“预载全部游戏”UI。
    * - 核心外壳在 SW 安装时缓存；16 款游戏由用户点按钮后逐项缓存并反馈进度。
    * - 0.11.2：监听 registration.updatefound / controllerchange 与 SW 的
    *   arcade-sw-update-ready 消息，向订阅者报告“发现新版本”；提供 checkForUpdate()
    *   供中心页「检查更新」按钮主动触发，解决了安装版 PWA 静默停留在旧版本的问题。
+   * - 0.13.2：checkForUpdate() 改为对比线上 sw.js 的 VERSION 与页面/SW 版本，
+   *   返回「线上最新版本」（旧实现返回页面自身的 ARCADE_VERSION = 已安装版本）。
    * - file:// 或非安全上下文自动降级为 unsupported，不抛错、不影响游戏。
    * ---------------------------------------------------------- */
   const Offline = (() => {
@@ -2950,7 +2952,13 @@
     let hadControllerAtWatch = !!(navigator.serviceWorker && navigator.serviceWorker.controller);
 
     function emitUpdate(payload) {
-      updateState = { available: true, version: payload && payload.version ? payload.version : null };
+      /* 已知版本号一旦确定就不要被「无版本号」的信号（updatefound / controllerchange）
+         覆盖，否则横幅会从「发现新版本（0.13.2）」退回成不显示版本的泛化文案。 */
+      const incomingVersion = payload && payload.version ? payload.version : null;
+      updateState = {
+        available: true,
+        version: incomingVersion || (updateState.available ? updateState.version : null),
+      };
       updateListeners.forEach((fn) => {
         try {
           fn(updateState);
@@ -3133,51 +3141,135 @@
       };
     }
 
+    /* 版本比较：只用于判断「线上发布版本是否比当前页面 / 当前 SW 新」。
+       非法或缺失输入返回 0（视为相同），避免脏数据把「已是最新」误判成「有更新」。 */
+    function compareVersions(a, b) {
+      if (!a || !b) return 0;
+      const left = String(a).split('.').map((part) => parseInt(part, 10) || 0);
+      const right = String(b).split('.').map((part) => parseInt(part, 10) || 0);
+      const length = Math.max(left.length, right.length);
+      for (let i = 0; i < length; i += 1) {
+        const diff = (left[i] || 0) - (right[i] || 0);
+        if (diff !== 0) return diff > 0 ? 1 : -1;
+      }
+      return 0;
+    }
+
+    /* 读取线上「已发布」的 SW 版本（sw.js 里的 VERSION 常量）。
+       页面自身的 ARCADE_VERSION 只是已安装版本，回答不了「最新版本是多少」；
+       sw.js 与页面同源，配合 no-store 读到的是网络上的当前发布版本
+       （SW 的 fetch 处理对 sw.js 请求直接放行，不会用缓存里的旧脚本回答）。
+       离线或读取失败返回 null。 */
+    async function publishedVersion() {
+      try {
+        const response = await fetch(absolute('./sw.js'), {
+          cache: 'no-store',
+          credentials: 'same-origin',
+        });
+        if (!response || !response.ok) return null;
+        const source = await response.text();
+        const match = source.match(/const\s+VERSION\s*=\s*['"]([^'"]+)['"]/);
+        return match ? match[1] : null;
+      } catch (err) {
+        return null;
+      }
+    }
+
+    /* 向某个 SW 实例（active / waiting / installing）查询它自己的 VERSION。 */
+    function workerVersion(worker) {
+      if (!worker || typeof MessageChannel === 'undefined') return Promise.resolve(null);
+      return new Promise((resolve) => {
+        const channel = new MessageChannel();
+        const timer = setTimeout(() => {
+          channel.port1.close();
+          resolve(null);
+        }, 3000);
+        channel.port1.onmessage = (event) => {
+          clearTimeout(timer);
+          channel.port1.close();
+          const data = event.data || {};
+          resolve(data.type === 'arcade-sw-version' ? data.version : null);
+        };
+        try {
+          worker.postMessage({ type: 'arcade-sw-version' }, [channel.port2]);
+        } catch (err) {
+          clearTimeout(timer);
+          channel.port1.close();
+          resolve(null);
+        }
+      });
+    }
+
+    function activeWorker(registration) {
+      if (!registration) return null;
+      return registration.active || registration.waiting || registration.installing || null;
+    }
+
     /* 查询当前 SW 的版本（供诊断/测试），通过 MessageChannel 与 SW 握手。 */
     function swVersion() {
-      if (!supported || typeof MessageChannel === 'undefined') return Promise.resolve(null);
+      if (!supported) return Promise.resolve(null);
       return register().then(
-        (registration) =>
-          new Promise((resolve) => {
-            const target = registration.active || registration.waiting || registration.installing;
-            if (!target) {
-              resolve(null);
-              return;
-            }
-            const channel = new MessageChannel();
-            const timer = setTimeout(() => {
-              channel.port1.close();
-              resolve(null);
-            }, 3000);
-            channel.port1.onmessage = (event) => {
-              clearTimeout(timer);
-              channel.port1.close();
-              const data = event.data || {};
-              resolve(data.type === 'arcade-sw-version' ? data.version : null);
-            };
-            target.postMessage({ type: 'arcade-sw-version' }, [channel.port2]);
-          }),
+        (registration) => workerVersion(activeWorker(registration)),
         () => null
       );
     }
 
-    /* 主动检查更新：触发 registration.update()，返回是否有新版本可用。
-       安装版 PWA 不会自动刷新页面，这里只检测并提示，是否刷新由用户决定。 */
+    /* 主动检查更新：对比「线上已发布版本」与「正在运行的页面 / SW 版本」。
+       安装版 PWA 不会自动刷新页面，这里只检测并提示，是否刷新由用户决定。
+       返回 version = 线上最新版本（发现更新时就是新版本号，不是已安装版本），
+       latestVersion / installedVersion / pageVersion 供 UI 说明差异。 */
     async function checkForUpdate() {
       if (!supported) return { supported: false, checked: false, updateFound: false };
+      let registration = null;
       try {
-        const registration = await register();
+        registration = await register();
         installUpdateWatching(registration);
-        await registration.update();
-        return {
-          supported: true,
-          checked: true,
-          updateFound: !!(registration.waiting || registration.installing),
-          version: ARCADE_VERSION,
-        };
       } catch (err) {
-        return { supported: true, checked: false, updateFound: false, error: String(err) };
+        /* 注册失败（离线 / 权限）时仍继续对比线上版本 */
       }
+      // 先记录「已安装 SW 版本」，再触发 update()；否则新 SW 接管后会被当成旧版本。
+      const installedVersion = registration ? await workerVersion(activeWorker(registration)) : null;
+      let updateTriggered = false;
+      if (registration) {
+        try {
+          await registration.update();
+          updateTriggered = true;
+        } catch (err) {
+          /* 离线或网络抖动：继续用已读到的版本信息判断 */
+        }
+      }
+      const latestVersion = await publishedVersion();
+      /* 触发 update() 后可能已经换成新 SW（skipWaiting），waiting/installing 是瞬时的；
+         把「当前 active 版本」「安装中的版本」都当作已知版本一起取最大值，
+         这样即使线上脚本读取受缓存影响，也不会漏报刚装好的新版本。 */
+      const activeAfterVersion = registration ? await workerVersion(registration.active) : null;
+      let candidateVersion = null;
+      if (registration) {
+        const candidate = registration.installing || registration.waiting;
+        if (candidate) candidateVersion = await workerVersion(candidate);
+      }
+      const knownVersions = [latestVersion, activeAfterVersion, candidateVersion, installedVersion].filter(Boolean);
+      const newest = knownVersions.reduce(
+        (best, version) => (best === null || compareVersions(version, best) > 0 ? version : best),
+        null
+      );
+      const pageVersion = ARCADE_VERSION;
+      const newerThanPage = !!newest && compareVersions(newest, pageVersion) > 0;
+      const staleWorker =
+        !!newest && compareVersions(newest, installedVersion || pageVersion) > 0;
+      const updateFound = newerThanPage || staleWorker;
+      return {
+        supported: true,
+        // 只有真的读到线上版本才算「检查过」，否则 UI 不能谎报「已是最新」。
+        checked: !!latestVersion,
+        updateFound,
+        version: newest || pageVersion,
+        latestVersion: latestVersion || null,
+        installedVersion: installedVersion || null,
+        pageVersion,
+        updateReason: newerThanPage ? 'published' : staleWorker ? 'service-worker' : null,
+        triggeredUpdate: updateTriggered,
+      };
     }
 
     /* 让已 installing/waiting 的新 SW 立即激活（配合页面刷新完成升级）。 */

@@ -26,7 +26,7 @@
     <header class="hall-head">
       <div>
         <h1>🕹 街机厅 Arcade</h1>
-        <p class="hall-sub">16 款竖屏小游戏 · 13 款 6 关挑战 + 3 款平和棋牌 · 自动收集积分记录 · 无签到与每日奖励 · 随时圆满收工 · v<span data-hall-version>0.13.1</span></p>
+        <p class="hall-sub">16 款竖屏小游戏 · 13 款 6 关挑战 + 3 款平和棋牌 · 自动收集积分记录 · 无签到与每日奖励 · 随时圆满收工 · v<span data-hall-version>0.13.2</span></p>
       </div>
       <div class="hall-stats">
         <span>累计时长 <strong data-stat-time>0 分钟</strong></span>
@@ -967,16 +967,26 @@
       });
       syncInstallButton();
 
-      /* ---------- PWA 更新检测（0.11.2） ----------
+      /* ---------- PWA 更新检测（0.11.2，0.13.2 修正版本来源） ----------
          安装到桌面后浏览器可能长期缓存旧版本；这里监听 Service Worker 的更新事件，
-         并提供「检查更新」按钮主动触发。发现新版本只提示，不自动刷新以免打断游玩。 */
+         并提供「检查更新」按钮主动触发。发现新版本只提示，不自动刷新以免打断游玩。
+         0.13.2：checkForUpdate() 返回的 version 是「线上最新版本」，以前误用页面自身的
+         ARCADE_VERSION（已安装版本），导致提示里显示的是旧版本号。 */
       let updateDismissed = false;
       function showUpdateBanner(version) {
         if (!dom.updateBanner) return;
         updateDismissed = false;
-        dom.updateText.textContent = version
-          ? `发现新版本（${version}），刷新后生效。`
-          : '发现新版本，刷新后生效。';
+        const latest = version || null;
+        const current = A.version || null;
+        if (latest && current && latest !== current) {
+          dom.updateText.textContent = `发现新版本 v${latest}（当前 v${current}），刷新后生效。`;
+        } else if (latest && current) {
+          dom.updateText.textContent = `检测到更新缓存已就绪（当前 v${current}），刷新后生效。`;
+        } else if (latest) {
+          dom.updateText.textContent = `发现新版本 v${latest}，刷新后生效。`;
+        } else {
+          dom.updateText.textContent = '发现新版本，刷新后生效。';
+        }
         dom.updateBanner.hidden = false;
       }
       function hideUpdateBanner() {
@@ -995,16 +1005,28 @@
           if (typeof A.Offline.checkForUpdate !== 'function') return;
           dom.updateCheck.disabled = true;
           dom.updateCheck.textContent = '🔄 检查中…';
-          const result = await A.Offline.checkForUpdate();
-          dom.updateCheck.disabled = false;
-          dom.updateCheck.textContent = '🔄 检查更新';
+          let result;
+          try {
+            result = await A.Offline.checkForUpdate();
+          } catch (err) {
+            result = { supported: true, checked: false, updateFound: false };
+          } finally {
+            dom.updateCheck.disabled = false;
+            dom.updateCheck.textContent = '🔄 检查更新';
+          }
           if (!result.supported) {
             A.showToast('当前环境不支持更新检测（需 HTTPS 或 localhost）。');
           } else if (result.updateFound) {
             showUpdateBanner(result.version);
-            A.showToast('发现新版本，请按提示刷新。');
+            if (result.updateReason === 'service-worker') {
+              A.showToast(`离线缓存仍是旧版本（v${result.installedVersion || '?'}），请按提示刷新。`);
+            } else {
+              A.showToast(`发现新版本 v${result.version}（当前 v${A.version}），请按提示刷新。`);
+            }
+          } else if (result.checked) {
+            A.showToast(`已是最新版本（v${result.version || A.version}）。`);
           } else {
-            A.showToast('已是最新版本。');
+            A.showToast('检查更新失败，请检查网络后重试。');
           }
         });
         dom.updateReload.addEventListener('click', async () => {
