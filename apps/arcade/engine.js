@@ -7,7 +7,7 @@
 (() => {
   'use strict';
 
-  const ARCADE_VERSION = '0.12.7';
+  const ARCADE_VERSION = '0.13.0';
   const PROGRESS_KEY = 'studiokit:arcade:progress:v1';
   const PREFS_KEY = 'studiokit:arcade:prefs:v1';
   const RUNS_KEY = 'studiokit:arcade:runs:v1';
@@ -20,6 +20,11 @@
   const SCORES_KEY = 'studiokit:arcade:scores:v1';
   const SCORES_SCHEMA = 1;
   const SCORES_LIMIT = 300;
+  /* 0.13.0：游戏自定义长期数据（如星海突击机库改装）。独立 key + 独立 Schema，
+   * 由引擎统一读写、进备份、随「清除记录」清除；游戏页只负责校验自己的字段。 */
+  const META_KEY = 'studiokit:arcade:meta:v1';
+  const META_SCHEMA = 1;
+  const META_GAME_BYTES = 32 * 1024;
   const EXPORT_FORMAT = 'studiokit-arcade-progress';
 
   /* 引擎脚本自身的目录（apps/arcade/），用于子路径部署、分享链接与 Service Worker。 */
@@ -191,14 +196,14 @@
       id: 'star-raid',
       file: 'star-raid.html',
       name: '星海突击',
-      tagline: '雷电式纵版射击',
+      tagline: '纵版弹幕射击 · 星域远征',
       icon: '🚀',
       accent: '#4f7cff',
       category: '动作',
       difficulty: 3,
-      session: '2–4 分钟',
-      tags: ['射击', '弹幕'],
-      how: '纵版射击，弹种可叠加；1 电磁脉冲、2 星盾，击破 Boss 可继续或收局。',
+      session: '2–5 分钟',
+      tags: ['射击', '弹幕', '成长'],
+      how: '纵版射击，弹种可叠加；机库永久改装 + 能量/编队/大杀器，6 星区主题，击破 Boss 三选一整备后可继续或收局。',
     },
     {
       id: 'road-rush',
@@ -1347,6 +1352,96 @@
   };
 
   /* ----------------------------------------------------------
+   * 游戏自定义长期数据（0.13.0）
+   * - 独立 key：studiokit:arcade:meta:v1，Schema v1，`games` 按游戏 ID 存普通对象；
+   * - 读取 fail closed（损坏/Schema 不符时返回空），不做自动迁移、不覆盖原值；
+   * - 备份（Progress.exportText/importText）自动带上 gameMeta，旧备份缺字段时保留当前值；
+   * - 中心页「清除记录」（Progress.resetGame/resetAll）同步清除，避免长期数据游离在重置之外。
+   * ---------------------------------------------------------- */
+  function sanitizeGameMetaValue(value) {
+    if (!value || typeof value !== 'object' || Array.isArray(value)) return null;
+    try {
+      const roundTrip = JSON.parse(JSON.stringify(value));
+      if (!roundTrip || typeof roundTrip !== 'object' || Array.isArray(roundTrip)) return null;
+      if (JSON.stringify(roundTrip).length > META_GAME_BYTES) return null;
+      return roundTrip;
+    } catch (err) {
+      return null;
+    }
+  }
+
+  function readMetaData() {
+    const data = safeGetJSON(META_KEY);
+    if (data && typeof data === 'object' && data.schemaVersion === META_SCHEMA && data.games && typeof data.games === 'object' && !Array.isArray(data.games)) {
+      const games = Object.create(null);
+      Object.keys(data.games).forEach((id) => {
+        if (!GAME_ID_SET.has(id)) return;
+        const rec = sanitizeGameMetaValue(data.games[id]);
+        if (rec) games[id] = rec;
+      });
+      return { schemaVersion: META_SCHEMA, games };
+    }
+    return { schemaVersion: META_SCHEMA, games: Object.create(null) };
+  }
+
+  const GameMeta = {
+    SCHEMA_VERSION: META_SCHEMA,
+    STORAGE_KEY: META_KEY,
+    get(gameId) {
+      if (!GAME_ID_SET.has(gameId)) return null;
+      const data = readMetaData();
+      return data.games[gameId] ? sanitizeGameMetaValue(data.games[gameId]) : null;
+    },
+    set(gameId, value) {
+      if (!GAME_ID_SET.has(gameId)) return false;
+      const clean = sanitizeGameMetaValue(value);
+      if (!clean) return false;
+      const data = readMetaData();
+      data.games[gameId] = clean;
+      return safeSetJSON(META_KEY, { schemaVersion: META_SCHEMA, games: data.games });
+    },
+    clear(gameId) {
+      if (!GAME_ID_SET.has(gameId)) return false;
+      const data = readMetaData();
+      if (!data.games[gameId]) return true;
+      delete data.games[gameId];
+      return safeSetJSON(META_KEY, { schemaVersion: META_SCHEMA, games: data.games });
+    },
+    clearAll() {
+      try {
+        localStorage.removeItem(META_KEY);
+      } catch (err) {
+        /* 忽略存储不可用 */
+      }
+    },
+    exportData() {
+      return readMetaData();
+    },
+    importData(payload) {
+      if (!payload || typeof payload !== 'object' || Array.isArray(payload)) return { ok: false, count: 0, skipped: 0 };
+      if (payload.schemaVersion !== META_SCHEMA) return { ok: false, count: 0, skipped: 0, reason: 'schema' };
+      const games = payload.games && typeof payload.games === 'object' && !Array.isArray(payload.games) ? payload.games : null;
+      if (!games) return { ok: false, count: 0, skipped: 0, reason: 'games' };
+      const ids = Object.keys(games);
+      const next = Object.create(null);
+      let count = 0;
+      let skipped = 0;
+      for (let i = 0; i < ids.length; i += 1) {
+        const gameId = ids[i];
+        const rec = sanitizeGameMetaValue(games[gameId]);
+        if (!GAME_ID_SET.has(gameId) || !rec) {
+          skipped += 1;
+          continue;
+        }
+        next[gameId] = rec;
+        count += 1;
+      }
+      const ok = safeSetJSON(META_KEY, { schemaVersion: META_SCHEMA, games: next });
+      return { ok, count, skipped };
+    },
+  };
+
+  /* ----------------------------------------------------------
    * 进度（全部游戏共用一个 key，中心页一次读出即可管理）
    * ---------------------------------------------------------- */
   const Progress = {
@@ -1413,6 +1508,7 @@
       Playtime.resetGame(gameId);
       challengeResetGame(gameId);
       Scores.resetGame(gameId);
+      GameMeta.clear(gameId);
     },
     resetAll() {
       this.save({ schemaVersion: PROGRESS_SCHEMA, games: {} });
@@ -1420,6 +1516,7 @@
       Playtime.resetAll();
       challengeResetAll();
       Scores.resetAll();
+      GameMeta.clearAll();
     },
     exportText() {
       const payload = {
@@ -1432,6 +1529,8 @@
         playtime: Playtime.exportData(),
         challenge: Challenge.exportData(),
         scores: Scores.exportData(),
+        /* 0.13.0：游戏自定义长期数据（机库等）。旧版备份不带该字段。 */
+        gameMeta: GameMeta.exportData(),
       };
       return JSON.stringify(payload, null, 2);
     },
@@ -1461,13 +1560,15 @@
       const prevPlaytime = safeGetRaw(PLAYTIME_KEY);
       const prevChallenge = safeGetRaw(CHALLENGE_KEY);
       const prevScores = safeGetRaw(SCORES_KEY);
-      /* 任一子步骤写入失败时整体回滚，包括 0.8.1 新增的积分记录 key。 */
+      const prevMeta = safeGetRaw(META_KEY);
+      /* 任一子步骤写入失败时整体回滚，包括 0.8.1 积分记录与 0.13.0 机库数据。 */
       const restoreAll = () => {
         safeRestoreRaw(PROGRESS_KEY, prevProgress);
         safeRestoreRaw(RUNS_KEY, prevRuns);
         safeRestoreRaw(PLAYTIME_KEY, prevPlaytime);
         safeRestoreRaw(CHALLENGE_KEY, prevChallenge);
         safeRestoreRaw(SCORES_KEY, prevScores);
+        safeRestoreRaw(META_KEY, prevMeta);
       };
       const progressSaved = this.save({ schemaVersion: PROGRESS_SCHEMA, games });
       if (!progressSaved) return { ok: false, reason: '浏览器存储已满或不可用' };
@@ -1521,6 +1622,26 @@
         scoreCount = imported.count;
         scoreSkipped = imported.skipped;
       }
+      /* 0.13.0 备份包含游戏自定义长期数据（机库等）。
+       * - 旧备份没有 gameMeta 字段：保留当前数据（metaImported=false）。
+       * - Schema 不符：跳过不阻塞其余导入（metaSkipped=1）。
+       * - 写入失败：整体回滚并报告失败。 */
+      let metaCount = 0;
+      let metaSkipped = 0;
+      let metaImported = false;
+      if (parsed.gameMeta && typeof parsed.gameMeta === 'object') {
+        const imported = GameMeta.importData(parsed.gameMeta);
+        if (imported.ok) {
+          metaImported = true;
+          metaCount = imported.count;
+          metaSkipped = imported.skipped;
+        } else if (imported.reason === 'schema' || imported.reason === 'games') {
+          metaSkipped = 1;
+        } else {
+          restoreAll();
+          return { ok: false, reason: '浏览器存储已满或不可用' };
+        }
+      }
       return {
         ok: true,
         count: Object.keys(games).length,
@@ -1532,6 +1653,9 @@
         scoreCount,
         scoreSkipped,
         scoresImported,
+        metaCount,
+        metaSkipped,
+        metaImported,
       };
     },
   };
@@ -3351,6 +3475,7 @@
     Playtime,
     Challenge,
     Scores,
+    GameMeta,
     Share,
     Offline,
     Prefs,
