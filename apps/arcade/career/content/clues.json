@@ -1,0 +1,390 @@
+{
+  "schemaVersion": 1,
+  "contentVersion": "0.15.0",
+  "clues": [
+    {
+      "clueId": "CL-memory-flip",
+      "gameId": "memory-flip",
+      "family": "record",
+      "title": "牌背纸条",
+      "ambientLabel": "最后一张牌背面",
+      "ambientText": "翻到最后一张，背面还粘着半张没撕净的送货存根。",
+      "letter": {
+        "sender": "旧港收货处夜班",
+        "body": "存根是从牌堆里带出来的，我在这儿留了抽屉。等哪天有人把最后一张翻开，麻烦照下面地址送回旧港，别让它再跟着牌走。",
+        "address": "折光港旧码头C段 · 收货处抽屉",
+        "actionLabel": "按地址投递"
+      },
+      "trigger": {
+        "kind": "pair.match",
+        "atLeast": 2
+      },
+      "guarantee": {
+        "maxEligibleRuns": 3
+      },
+      "next": {
+        "kind": "letter"
+      }
+    },
+    {
+      "clueId": "CL-merge-2048",
+      "gameId": "merge-2048",
+      "family": "signal",
+      "title": "格缝镜片",
+      "ambientLabel": "棋格缝隙里的镜片",
+      "ambientText": "数字散尽时，棋格缝里卡着一片会反光的薄镜。",
+      "letter": {
+        "sender": "晶格室废料窗",
+        "body": "这片薄镜不是我们的料。登记本上它被划掉过，我照着划痕描了地址，你若有空就顺路送回去。",
+        "address": "折光港北环晶格室 · 废料窗",
+        "actionLabel": "按地址投递"
+      },
+      "trigger": {
+        "kind": "tile.merged",
+        "atLeast": 2
+      },
+      "guarantee": {
+        "maxEligibleRuns": 3
+      },
+      "next": {
+        "kind": "letter"
+      }
+    },
+    {
+      "clueId": "CL-blackjack",
+      "gameId": "blackjack",
+      "family": "record",
+      "title": "风险单残页",
+      "ambientLabel": "牌桌边角的单据",
+      "ambientText": "牌堆底下压着一张旧单据，签名处被磨得发白。",
+      "letter": {
+        "sender": "账房外柜",
+        "body": "这单子落款的人没能回来取。单上地址是他自己写的，柜里给他留着一格；麻烦转交，别写退回。",
+        "address": "折光港旧市场西巷 · 账房外柜",
+        "actionLabel": "按地址投递"
+      },
+      "trigger": {
+        "kind": "hand.settled",
+        "atLeast": 2
+      },
+      "guarantee": {
+        "maxEligibleRuns": 3
+      },
+      "next": {
+        "kind": "letter"
+      }
+    },
+    {
+      "clueId": "CL-gomoku",
+      "gameId": "gomoku",
+      "family": "record",
+      "title": "棋盘夹页",
+      "ambientLabel": "棋盘边的旧谱页",
+      "ambientText": "棋盘边上多出一角旧谱，中线画成一条港道。",
+      "letter": {
+        "sender": "对坐的棋友",
+        "body": "这盘棋我们下到一半，他被港口叫走了。照着这条线继续摆下去的人，麻烦把谱子塞进旧港的信箱。",
+        "address": "折光港旧港区 · 棋室门口信箱",
+        "actionLabel": "按地址投递"
+      },
+      "trigger": {
+        "kind": "stone.placed",
+        "atLeast": 4
+      },
+      "guarantee": {
+        "maxEligibleRuns": 3
+      },
+      "next": {
+        "kind": "letter"
+      }
+    },
+    {
+      "clueId": "CL-solitaire",
+      "gameId": "solitaire",
+      "family": "record",
+      "title": "卡背航单",
+      "ambientLabel": "翻出的船期小字",
+      "ambientText": "翻到一半时，牌背浮出一行极小的船期字。",
+      "letter": {
+        "sender": "排班房抄写员",
+        "body": "航道表被人划过一道，划掉的那条仍写着折光港。纸是从牌里出来的，我按旧规矩寄回排班房，谁收到都不必回话。",
+        "address": "折光港东堤排班房 · 航道表柜",
+        "actionLabel": "按地址投递"
+      },
+      "trigger": {
+        "kind": "card.moved",
+        "atLeast": 3
+      },
+      "guarantee": {
+        "maxEligibleRuns": 3
+      },
+      "next": {
+        "kind": "letter"
+      }
+    },
+    {
+      "clueId": "CL-snowbells",
+      "gameId": "snowbells",
+      "family": "bio",
+      "title": "铃音刻痕",
+      "ambientLabel": "雪面浮出的刻痕",
+      "ambientText": "铃声散了以后，雪面浮出一道很旧的刻痕。",
+      "letter": {
+        "sender": "雪谷巡守",
+        "body": "这调子我听了好几夜，不是本地山歌。我把它记在纸上，厚的留在雪屋，薄的一页投进折光港的听音室。",
+        "address": "折光港旧港区 · 听音室收件格",
+        "actionLabel": "按地址投递"
+      },
+      "trigger": {
+        "kind": "bell.rung",
+        "atLeast": 3
+      },
+      "guarantee": {
+        "maxEligibleRuns": 3
+      },
+      "next": {
+        "kind": "letter"
+      }
+    },
+    {
+      "clueId": "CL-brick-breaker",
+      "gameId": "brick-breaker",
+      "family": "industrial",
+      "title": "砖心铭牌",
+      "ambientLabel": "碎砖里的铁片",
+      "ambientText": "整排砖碎开，里面焊着一块带编号的铁片。",
+      "letter": {
+        "sender": "拆解班领班",
+        "body": "这些砖是回收料压的，没人说得清铁片怎么进去的。班里的规矩是出处不明的东西一并寄走，地址我抄在铭牌背面。",
+        "address": "折光港西环 · 三号拆解场门房",
+        "actionLabel": "按地址投递"
+      },
+      "trigger": {
+        "kind": "brick.destroyed",
+        "atLeast": 8
+      },
+      "guarantee": {
+        "maxEligibleRuns": 3
+      },
+      "next": {
+        "kind": "letter"
+      }
+    },
+    {
+      "clueId": "CL-gravity-flip",
+      "gameId": "gravity-flip",
+      "family": "signal",
+      "title": "校准打印条",
+      "ambientLabel": "仪表吐出的窄纸条",
+      "ambientText": "重力归零的一瞬，仪表侧面吐出一截窄纸条。",
+      "letter": {
+        "sender": "校准班交接",
+        "body": "读数里混进一小段不在册的东西，像远处的信标在回话。我按旧例打成条子，连同探头寄回北环校准室。",
+        "address": "折光港北环 · 校准室收件格",
+        "actionLabel": "按地址投递"
+      },
+      "trigger": {
+        "kind": "gravity.flip",
+        "atLeast": 3
+      },
+      "guarantee": {
+        "maxEligibleRuns": 3
+      },
+      "next": {
+        "kind": "letter"
+      }
+    },
+    {
+      "clueId": "CL-snake-run",
+      "gameId": "snake-run",
+      "family": "bio",
+      "title": "七点果核",
+      "ambientLabel": "果核表面的细孔",
+      "ambientText": "最后吞下的那颗，果核上排着匀称的孔。",
+      "letter": {
+        "sender": "标本绳签",
+        "body": "这核不是本地树种，孔是后来钻的。采集绳签上写了去处，标本归东堤接收棚，核可以跟着这封信一起寄。",
+        "address": "折光港东堤 · 标本接收棚绳架",
+        "actionLabel": "按地址投递"
+      },
+      "trigger": {
+        "kind": "fruit.eaten",
+        "atLeast": 3
+      },
+      "guarantee": {
+        "maxEligibleRuns": 3
+      },
+      "next": {
+        "kind": "letter"
+      }
+    },
+    {
+      "clueId": "CL-mole-whack",
+      "gameId": "mole-whack",
+      "family": "industrial",
+      "title": "检修工单",
+      "ambientLabel": "地面缝里的工单",
+      "ambientText": "敲空的地面下，压着一张褪色的检修工单。",
+      "letter": {
+        "sender": "夜班巡检",
+        "body": "这张单子登记的管井，图纸上并没有。我把复写联留下了，正联按规程寄去维护处；要是没人认，就当它一直没被挖出来。",
+        "address": "折光港西环 · 维护处收发箱",
+        "actionLabel": "按地址投递"
+      },
+      "trigger": {
+        "kind": "mole.hit",
+        "atLeast": 5
+      },
+      "guarantee": {
+        "maxEligibleRuns": 3
+      },
+      "next": {
+        "kind": "letter"
+      }
+    },
+    {
+      "clueId": "CL-block-drop",
+      "gameId": "block-drop",
+      "family": "industrial",
+      "title": "柜号木牌",
+      "ambientLabel": "消去箱体后的木牌",
+      "ambientText": "消去一排箱体，底下露出一块写柜号的木牌。",
+      "letter": {
+        "sender": "分拣线负责人",
+        "body": "柜号是P-07，但这号码在账上已经封了。木牌不该出现在线上，我把它摆在收货处等认，别登记进库。",
+        "address": "折光港旧码头 · 收货处认领架",
+        "actionLabel": "按地址投递"
+      },
+      "trigger": {
+        "kind": "lines.cleared",
+        "atLeast": 2
+      },
+      "guarantee": {
+        "maxEligibleRuns": 3
+      },
+      "next": {
+        "kind": "letter"
+      }
+    },
+    {
+      "clueId": "CL-star-raid",
+      "gameId": "star-raid",
+      "family": "signal",
+      "title": "杂音片段",
+      "ambientLabel": "交火间隙的杂音",
+      "ambientText": "交火间隙，频道挤进一句被削掉一半的呼叫。",
+      "letter": {
+        "sender": "值班报务",
+        "body": "这段杂音每天同一时刻出现，报头是失联信标的老格式。我抄成电文寄往折光港报务室，收件人一栏留空。",
+        "address": "折光港东堤报务室 · 留空格",
+        "actionLabel": "按地址投递"
+      },
+      "trigger": {
+        "kind": "enemy.killed",
+        "atLeast": 4
+      },
+      "guarantee": {
+        "maxEligibleRuns": 3
+      },
+      "next": {
+        "kind": "letter"
+      }
+    },
+    {
+      "clueId": "CL-road-rush",
+      "gameId": "road-rush",
+      "family": "route",
+      "title": "错投包裹",
+      "ambientLabel": "后座滑出的包裹",
+      "ambientText": "超车时后座滑出一件包裹，收件地址被划了。",
+      "letter": {
+        "sender": "夜班投递员",
+        "body": "这件包裹退过几回，每次收件地址都被改回同一个码头。我照规定把它搁进折光港待领格，路线单随信附上。",
+        "address": "折光港旧码头 · 待领格甲排",
+        "actionLabel": "按地址投递"
+      },
+      "trigger": {
+        "kind": "overtake",
+        "atLeast": 2
+      },
+      "guarantee": {
+        "maxEligibleRuns": 3
+      },
+      "next": {
+        "kind": "letter"
+      }
+    },
+    {
+      "clueId": "CL-shadow-leap",
+      "gameId": "shadow-leap",
+      "family": "signal",
+      "title": "墙角刻符",
+      "ambientLabel": "月光下的墙刻",
+      "ambientText": "跃到高处时，墙面旧刻符被月光填满了缝。",
+      "letter": {
+        "sender": "拓印的人",
+        "body": "刻符在背阴面，白天看不见。我拓了两张，一张留在崖壁下的石缝里，另一张照老地址寄回旧港的档室。",
+        "address": "折光港旧港区 · 旧档室石阶",
+        "actionLabel": "按地址投递"
+      },
+      "trigger": {
+        "kind": "height.reached",
+        "atLeast": 30
+      },
+      "guarantee": {
+        "maxEligibleRuns": 3
+      },
+      "next": {
+        "kind": "letter"
+      }
+    },
+    {
+      "clueId": "CL-pendulum-tower",
+      "gameId": "pendulum-tower",
+      "family": "industrial",
+      "title": "验收单背面",
+      "ambientLabel": "箱缝滑出的验收单",
+      "ambientText": "落稳那一瞬，验收单从箱缝里滑出半截。",
+      "letter": {
+        "sender": "验收组复写联",
+        "body": "背面压着一个不是印章的印记：P-07。验收组不敢签这张单，我按章程夹进塔架档案寄回码头，请那边核对原件。",
+        "address": "折光港旧码头 · 塔架档案柜",
+        "actionLabel": "按地址投递"
+      },
+      "trigger": {
+        "kind": "tower.floor_stable",
+        "atLeast": 2
+      },
+      "guarantee": {
+        "maxEligibleRuns": 3
+      },
+      "next": {
+        "kind": "letter"
+      }
+    },
+    {
+      "clueId": "CL-gold-miner",
+      "gameId": "gold-miner",
+      "family": "industrial",
+      "title": "刻字矿块",
+      "ambientLabel": "矿角上的刻字",
+      "ambientText": "拉上来的矿块一角，露出人工刻的齐整笔画。",
+      "letter": {
+        "sender": "矿场记账",
+        "body": "这角不是矿，是切下来的壳。上面刻的半行字我没见过，随车的化验单一起寄回折光港验货处，别磨了。",
+        "address": "折光港西环 · 验货处外窗",
+        "actionLabel": "按地址投递"
+      },
+      "trigger": {
+        "kind": "mineral.returned",
+        "atLeast": 1
+      },
+      "guarantee": {
+        "maxEligibleRuns": 3
+      },
+      "next": {
+        "kind": "letter"
+      }
+    }
+  ]
+}
