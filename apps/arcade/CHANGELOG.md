@@ -1,5 +1,19 @@
 # Arcade Changelog
 
+## 0.12.4 — 2026-11-22
+
+### Fixed
+- **回归：近景集装箱退化成纯色方块**。0.12.3 的 LOD 判据写成 `boxes.length > 60 || view.scale < 0.35`，于是塔一超过 60 层，**普通 1:1 跟随视角**也被判为 `dense`，波纹/角件/编号/属性图标全部丢失。现改为**只由缩放决定**：`dense = view.scale < 0.2`（0.2 以上箱体屏幕仍有 ~13×8px，细节保留更好看；120 层 0.10、1000 层 0.013 才压缩为色块）。
+- **性能改用视口裁剪**：正常视角按世界 y 范围裁掉不可见箱子（`H/2/scale + 2×BOX_H` 余量），实测 1000 层近景每帧只画 23~24 只（共 1002），因此「近景完整细节」与「千层不卡」可同时成立。
+- 结构轮廓只在 `view.scale < 0.35`（真正压缩视图）绘制，不再按层数触发。
+- 新增 `#test` 探针 `physicsInfo().renderLod = { dense, scale, drawnBoxes, totalBoxes }`。
+
+### Changed
+- 版本链升至 `0.12.4`，SW 缓存键 `studiokit-arcade-0.12.4-v1`。无 localStorage key / Schema / 挑战关卡数据变更；只改 `pendulum-tower.html`。
+
+### Verification
+- `arcade_tower_test` **20/20**（新增 TP-12：3/40/120/1000 层近景必须 `dense=false` 且有裁剪，40 层全览仍保留细节、120/1000 层全览才压缩）；实测近景绘制 5/22/24/24 只（对应总 5/42/122/1002），0 console error；smoke 94/94、zen 14/14、calm 17/17、review 5/5、gameplay base 11/11、tower challenge 6/6、pwa 7/7、interaction 5/5、immersive 16/16、validate/build/inline/node --check 全过。设计见 `DESIGN-0.12.4.md`。
+
 ## 0.12.3 — 2026-11-22（已双端发布）
 
 ### Fixed

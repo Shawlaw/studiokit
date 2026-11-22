@@ -466,7 +466,47 @@ const TP_TALL = {
   },
 };
 
-const SCENARIOS = [TP_STATIC, TP_PHYSICS, TP_OVERVIEW, TP_CARGO, TP_SAVE, TP_LAYOUT, TP_REACH, TP_ZOOM, TP_CONSISTENCY, TP_RELEASE_VX, TP_TALL];
+/* ---------------- TP-12 LOD 只跟缩放走（0.12.4 回归） ---------------- */
+const TP_LOD = {
+  id: 'TP-12',
+  async run(cdp) {
+    /* 0.12.3 的 bug：LOD 条件写成 `boxes.length > 60 || scale < 0.35`，
+       导致塔一旦超过 60 层，**普通 1:1 近景**也退化成纯色方块（集装箱波纹/角件/编号全丢）。
+       现在 LOD 只看缩放：近景必须完整细节，压缩到 <0.5 才简化，性能靠视口裁剪。 */
+    const cases = [
+      { floors: 3, expectOverviewDense: false },
+      { floors: 40, expectOverviewDense: false },   // 40 层全览 scale≈0.29，仍应保留细节
+      { floors: 120, expectOverviewDense: true },   // scale≈0.10 → 简化
+      { floors: 1000, expectOverviewDense: true },
+    ];
+    const rows = [];
+    for (const c of cases) {
+      await prepare(cdp, 'lod' + c.floors);
+      await cdp.evaluate('__arcadeTest.stackTo(' + c.floors + ')');
+      await sleep(300);
+      const normal = await cdp.evaluate('({ lod: __arcadeTest.physicsInfo().renderLod, scale: __arcadeTest.viewInfo().scale })');
+      assert(normal.lod, c.floors + ' 层缺少 renderLod 探针');
+      assert(Math.abs(normal.scale - 1) < 0.01, c.floors + ' 层近景缩放不是 1:1：' + normal.scale);
+      assert(normal.lod.dense === false,
+        c.floors + ' 层近景退化成纯色方块（LOD 误按层数触发）：' + JSON.stringify(normal.lod));
+      /* 视口裁剪：高层塔近景只画可见部分，保证细节与性能可以兼得。 */
+      assert(normal.lod.drawnBoxes <= 40, c.floors + ' 层近景绘制数量失控（裁剪未生效）：' + normal.lod.drawnBoxes);
+      if (c.floors >= 120) {
+        assert(normal.lod.drawnBoxes < normal.lod.totalBoxes, c.floors + ' 层近景未做视口裁剪：' + JSON.stringify(normal.lod));
+      }
+      await cdp.evaluate('__arcadeTest.toggleOverview()');
+      await sleep(900);
+      const ov = await cdp.evaluate('({ lod: __arcadeTest.physicsInfo().renderLod, scale: +__arcadeTest.viewInfo().scale.toFixed(3), fits: __arcadeTest.viewInfo().fitsOnScreen })');
+      assert(ov.lod.dense === c.expectOverviewDense,
+        c.floors + ' 层全览 LOD 判定不符（scale=' + ov.scale + '）：' + JSON.stringify(ov.lod));
+      assert(ov.fits === true, c.floors + ' 层全览未完整入屏');
+      rows.push(c.floors + '层近景细节✓(画' + normal.lod.drawnBoxes + '/' + normal.lod.totalBoxes + ') 全览' + (ov.lod.dense ? '压缩块' : '细节') + '@' + ov.scale + '×');
+    }
+    record('LOD 只跟缩放走：' + rows.join(' / '), true);
+  },
+};
+
+const SCENARIOS = [TP_STATIC, TP_PHYSICS, TP_OVERVIEW, TP_CARGO, TP_SAVE, TP_LAYOUT, TP_REACH, TP_ZOOM, TP_CONSISTENCY, TP_RELEASE_VX, TP_TALL, TP_LOD];
 
 let server, launched, cdp;
 try {

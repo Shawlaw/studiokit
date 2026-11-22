@@ -184,7 +184,9 @@
       let leanVel = 0;
       let jibXCur = PIVOT_X;
       /* 0.12.2：记录最近一次释放的预测（同一 JS 轮次内计算，供门禁精确比对）。 */
-      let lastRelease = null;  // 吊臂小车当前 x（向 jibTargetX() 平滑滑移）
+      let lastRelease = null;
+      /* 0.12.4：记录最近一帧的 LOD 状态（供门禁断言「近景必须是完整集装箱」）。 */
+      let lastRenderLod = null;  // 吊臂小车当前 x（向 jibTargetX() 平滑滑移）
       let comOffset = 0;      // 当前重心相对地基中心的水平投影（逻辑 px）
       let comMoment = 0;      // 累计未抵消的倾覆力矩（重量×偏心，逻辑力矩单位）
       let comLoad = 0;        // 当前塔上总重量
@@ -1820,13 +1822,23 @@
              玩家对着看到的塔顶松手必然判偏，且新箱会「跟着转」出现在没点的位置。
              现在塔身始终轴对齐（所见即所判），倾斜改用底部重心/支撑面指示 + 预警表达；
              真正的旋转只发生在倒塌动画里。 */
-          /* 0.12.3 LOD：层数很多或缩得很小时，箱体只画「可辨识的色块」。
-             原因有两个：1) 1000 层时每个箱子屏幕高度仅 0.5px，集装箱纹路/编号完全不可见却要花
-             7~8 次 path + 1 次 fillText；2) 极小时箱宽 <1px 会视觉消失，故给一条最小可见宽度
-             （屏幕 5px 的「塔身脊线」），保证 1000 层也能看出整塔轮廓与属性分布。 */
-          const dense = boxes.length > 60 || view.scale < 0.35;
+          /* 0.12.4 修正：LOD 只由「当前缩放」决定，不再看总层数。
+             0.12.3 用了 `boxes.length > 60 ||` —— 一旦塔超过 60 层，**普通 1:1 跟随视角**也会退化成
+             纯色方块（玩家明明在近景看得见每只集装箱，却丢了波纹/角件/编号）。层数多不等于看不清，
+             真正的判据是每箱的屏幕尺寸。性能靠下面的视口裁剪解决，不需要靠降细节。 */
+          /* 0.12.4：阈值取 0.2 —— 0.2 以上箱体屏幕仍有 ~13×8px，波纹/角件还看得见，
+             保留完整细节更好看；低于 0.2（如 120 层 0.10、1000 层 0.013）才退化为色块。 */
+          const dense = view.scale < 0.2;
           const minScreenW = dense ? 8 : 0;
+          /* 视口裁剪：正常视角下只画落在可视区（含少量余量）内的箱子，
+             千层塔也不会每帧跑上千次完整集装箱绘制。 */
+          const halfViewWorld = (H / 2) / Math.max(1e-6, view.scale) + BOX_H * 2;
+          const yMin = view.centerY - halfViewWorld;
+          const yMax = view.centerY + halfViewWorld;
+          let drawnBoxes = 0;
           boxes.forEach((b, bi) => {
+            if (b.y > yMax || b.y + b.h < yMin) return;
+            drawnBoxes += 1;
             if (b.base) {
               if (dense) {
                 ctx.fillStyle = '#6b7590';
@@ -1848,6 +1860,7 @@
               drawCrate(b.x, b.y, b.w, b.h, { cargo: b.cargo, floor: bi });
             }
           });
+          lastRenderLod = { dense, scale: view.scale, drawnBoxes, totalBoxes: boxes.length };
           ctx.restore();
         }
 
@@ -1924,7 +1937,7 @@
           const rows = boxes.filter((b) => !b.base);
           /* 0.12.3：极高压缩视图（1000 层时塔身仅 ~8px 宽）补一圈结构轮廓，
              让「一条竖线」读起来仍像一栋塔。 */
-          if (rows.length > 60) {
+          if (view.scale < 0.35) {
             const ext = towerExtent();
             const topPt = worldToScreen(view, baseCenter(), ext.top);
             const botPt = worldToScreen(view, baseCenter(), ext.bottom);
@@ -2318,6 +2331,7 @@
               /* 0.12.2：释放瞬间继承的水平速度与按下落时间换算的横移量。 */
               releaseVx: relVx,
               lastRelease,
+              renderLod: lastRenderLod,
               releaseVxK: RELEASE_VX_K,
               fallTime: dropFallTime(pb.y),
               reach,
