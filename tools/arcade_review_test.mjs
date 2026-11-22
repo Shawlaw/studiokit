@@ -51,7 +51,7 @@ const STATIC = {
     assert(!/\.overlay\.is-result\s*\{[\s\S]*?background:\s*transparent/.test(css), 'CSS: 默认结算仍应保持模糊蒙层');
     assert(/\.overlay\.is-result \.overlay-panel\.review-hidden/.test(css), 'CSS: 缺少 review-hidden 规则');
 
-    /* 每款游戏的结算标记数量来自 0.10.0 结算弹层逐页审计（共 45 处）；
+    /* 每款游戏的结算标记数量来自 0.10.0 结算弹层逐页审计；0.16.0 星海职业结算新增 1 处（共 46 处）。
        用精确数量防止漏标或误标到开局/暂停/错误弹层。 */
     const EXPECTED = {
       blackjack: ['回看牌桌', 1], 'block-drop': ['回看井口', 4], 'brick-breaker': ['回看砖场', 3],
@@ -59,7 +59,7 @@ const STATIC = {
       'memory-flip': ['回看牌面', 3], 'merge-2048': ['回看棋盘', 3], 'mole-whack': ['回看鼹鼠洞', 3],
       'pendulum-tower': ['回看塔身', 3], 'road-rush': ['回看赛道', 3], 'shadow-leap': ['回看影林', 3],
       'snake-run': ['回看果园', 3], snowbells: ['回看雪夜', 3], solitaire: ['回看牌桌', 2],
-      'star-raid': ['回看战场', 4],
+      'star-raid': ['回看战场', 5],
     };
     let resultCount = 0;
     for (const game of GAMES) {
@@ -71,7 +71,7 @@ const STATIC = {
       assert(!/result:\s*true/.test(src), game + ': 仍有未带文案的 result:true');
       resultCount += occurrences;
     }
-    assert(resultCount === 45, '结算标记总数 ' + resultCount + '，期望 45');
+    assert(resultCount === 46, '结算标记总数 ' + resultCount + '，期望 46');
     record('静态：engine/CSS/16 款结算标记 ' + resultCount + ' 处（按游戏区分文案）', true);
   },
 };
