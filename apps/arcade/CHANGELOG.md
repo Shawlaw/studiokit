@@ -1,7 +1,7 @@
 # Arcade Changelog
 
 
-## 0.13.2 — 2026-11-22（本地修复，待 Owner 授权发布）
+## 0.13.2 — 2026-11-22（已双端发布）
 
 Owner 两条真机反馈：①已安装 PWA 的「🔄 检查更新」显示的是**已安装版本**，不是线上最新版本；②iPhone 主屏 PWA 玩一天后中心页「累计时长」始终为 `0 分钟`，但积分记录表格有数据。两条都用无头 Chrome 复现并逐条修复（复现命令与设计见 `DESIGN-0.13.2.md`）；**挑战/玩法/存档零改动**，无新增 localStorage key / Schema。
 
@@ -31,7 +31,7 @@ Owner 两条真机反馈：①已安装 PWA 的「🔄 检查更新」显示的�
 - `node tools/arcade_pwa_update_test.mjs` **9/9**（新增 PU-06 真实发版链路、PU-07 读取失败诚实提示；PU-02/PU-03 改为断言最新版本与双版本文案）。
 - 回归：`arcade_smoke` **108/108**（新增 3 项 iOS 「漏发 focus」计时回归：开局前 blur 仍计时、失焦暂停后点继续仍计时、结算轮次时长 ≥900ms 写入积分记录）、`arcade_tower_test` **23/23**、`arcade_zen_scores_test` **14/14**、`arcade_calm_games_test` **17/17**、`arcade_review_test` **5/5**、`arcade_interaction_test` **5/5**、`arcade_immersive_buttons_test` **32/32**、`arcade_gameplay_test --suite=all` **104/104**、`--suite=base --repeat=2` **22/22**（11 场景 ×2 遍）、挑战矩阵 78 关、320/375/390/430 与 standalone 布局探针全过。
 - 静态：`validate_site.py`（新增 0.13.2 版本来源/广播断言 + 游玩计时自愈标记/旧 focus 门槛禁回归断言）、`build_site.py`、`check_inline_scripts.mjs`（19 HTML / 20 段脚本）、`arcade_design_check.py`（143 个设计包文件一致）、`node --check engine.js/sw.js` PASS。
-- **未发布**：本轮无 `OWNER_AUTHORIZATION: PUBLISH_TO_MAIN`，仅本地修改（未提交、未推送）；真机 iOS 主屏幕 PWA 的更新提示时机与游玩时长/积分记录时长待 Owner 复测（UNVERIFIED）。
+- **发布**：提交 `8493cf7`（PWA 更新检测）+ `78858e0`（游玩时长 + 文档）ff 合入 `main` 推送（`a98cb3d..78858e0`）；Actions run `45002523350` 四 job 全绿（Validate and build / Deploy GitHub Pages / Deploy Cloudflare Pages / Verify both deployments）；CI 与本地 `tools/verify_deploy.py` 均 **41/41** 双端逐文件一致（arcade 0.13.2 / badge 2.2.1 / venue 0.2.0）；双端线上无头 Chrome 各 8 项全过（中心页 0.13.2 + 16 卡 + 检查更新按钮、SW 版本握手 0.13.2、`checkForUpdate` 已同步并返回线上 0.13.2 不误报更新、线上 `sw.js` 含升级广播修复、缓存键 `studiokit-arcade-0.13.2-v1`、游戏页可加载、0 console error）；真机 iOS 主屏幕 PWA 的更新提示时机与游玩时长/积分记录时长待 Owner 复测（UNVERIFIED）。
 
 ## 0.13.1 — 2026-11-22（已双端发布）
 

@@ -201,7 +201,7 @@ Owner 反馈六件事（每关都是白板装备、难度没有差异、机体�
 - [x] 挑战 6 关零改动；无新增 localStorage key / Schema；版本链与 SW `studiokit-arcade-0.13.1-v1`
 - [x] 本机门禁：smoke 105/105、tower 23/23、挑战 7/7 + 6/6、base 11/11、zen/calm/review/pwa/interaction/immersive、320–430 + standalone 布局 43/43、validate/build/inline/design 全过
 - [x] 双端发布：Owner 本轮明确选择「确认发布 0.13.1（PUBLISH_TO_MAIN）」；提交 `01eb5b4` 推送 `main`；Actions run `44996450758` 四 job 全绿（Validate and build / Deploy GitHub Pages / Deploy Cloudflare Pages / Verify both deployments）；CI 与本地 `tools/verify_deploy.py` 均 **41/41** 双端逐文件一致（arcade 0.13.1 / badge 2.2.1 / venue 0.2.0）；双端线上无头 Chrome 实测：中心页 0.13.1、主道具行 5 列（3 主动 + 2 军械槽，空槽「军械」）、390×844 standalone 模拟行底 ≤ 视口、核弹发射后 0.26s 仍在飞行且 Boss 480 血不变、命中后 Boss 354 血 + flash 0.70 + 冲击波 2 + 0 console error；SW 缓存键 `studiokit-arcade-0.13.1-v1`。
-## 0.13.2 修复批次（本地，待 Owner 授权发布）
+## 0.13.2 修复批次（2026-11-22 已双端发布）
 
 Owner 两条真机反馈：①已安装 PWA 点「检查更新」显示的是已安装版本，不是线上最新版本；②iPhone 主屏 PWA 玩一天后中心页「累计时长」一直为 `0 分钟`，但积分记录表格有数据。都已在无头 Chrome 复现并修复（设计与复现输出见 `apps/arcade/DESIGN-0.13.2.md`）：
 
@@ -212,7 +212,8 @@ Owner 两条真机反馈：①已安装 PWA 点「检查更新」显示的是已
 - [x] **游玩时长停摆**：16 款游戏共用的 `Playtime` 不再要求 window `focus`（iOS 主屏 PWA 回前台常常只给 `visibilitychange`；漏一次 focus 就永久停摆，而 `scores:v1` 仍照写），改为「页面可见 + 弹层关闭」并新增 `syncSegment()` 在可见性/`pageshow`/用户点按按键/15 秒 tick 上自愈；`recordRound()` 结算后续开时间片
 - [x] 无 localStorage key / Schema 变更；挑战/玩法/存档零改动；版本链 0.13.2 / SW `studiokit-arcade-0.13.2-v1`
 - [x] 门禁：pwa **9/9**（新增真实发版链路与读取失败）、smoke **108/108**（新增 3 项 iOS 漏发 focus 计时回归）、tower 23/23、zen 14/14、calm 17/17、review 5/5、interaction 5/5、immersive 32/32、gameplay all 104/104 + base 22/22（11 场景 ×2 遍）、挑战矩阵 78 关、320–430 + standalone 布局、validate/build/inline/design 全过
-- [ ] 发布：需要 Owner 明确 `PUBLISH_TO_MAIN` 授权；真机 iOS 主屏幕 PWA 的更新提示时机与「游玩时长/积分记录时长」待 Owner 复测（UNVERIFIED）
+- [x] 双端发布：Owner 本轮明确授权发布（`PUBLISH_TO_MAIN`）；提交 `8493cf7`（PWA 更新检测）+ `78858e0`（游玩时长 + 文档）ff 合入 `main`；Actions run `45002523350` 四 job 全绿（Validate and build / Deploy GitHub Pages / Deploy Cloudflare Pages / Verify both deployments）；CI 与本地 `tools/verify_deploy.py` 均 **41/41** 双端逐文件一致（arcade 0.13.2 / badge 2.2.1 / venue 0.2.0）；双端线上无头 Chrome 各 8 项全过（中心页 0.13.2 + 检查更新返回线上 0.13.2 且不误报、SW 握手 0.13.2、缓存键 `studiokit-arcade-0.13.2-v1`、游戏页可加载、0 console error）
+- [ ] 真机复测：iOS 主屏幕 PWA 的「检查更新」提示时机与「累计时长/积分记录时长」待 Owner 确认（UNVERIFIED）
 
 ## Now
 
