@@ -383,6 +383,24 @@ def validate(root=ROOT):
             if marker not in source:
                 ok = fail(f'template missing placeholder {marker}') and ok
 
+    # 根 README 的状态徽章写死了可用工具数；注册表变化时必须同步，否则徽章会说谎。
+    readme_path = root / 'README.md'
+    if readme_path.exists() and registry_path.exists():
+        try:
+            registry = json.loads(registry_path.read_text(encoding='utf-8'))
+            available = sum(
+                1 for tool in registry.get('tools', [])
+                if isinstance(tool, dict) and tool.get('status') == 'available'
+            )
+            badge = re.search(r'已上线 (\d+) 个工具', readme_path.read_text(encoding='utf-8'))
+            if badge and int(badge.group(1)) != available:
+                ok = fail(
+                    f'README status badge says {badge.group(1)} available tools, '
+                    f'registry has {available}; update the badge with the registry'
+                ) and ok
+        except (ValueError, OSError):
+            pass
+
     if ok:
         print(f'PASS: StudioKit validation succeeded ({root})')
     return ok

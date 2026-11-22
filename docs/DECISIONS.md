@@ -47,4 +47,4 @@
 - **Status:** Accepted
 - **Decision:** 共享 shellbar 只在独立窗口（安装到桌面/主屏幕，`display-mode: standalone` 或 `navigator.standalone`）应用顶部 `safe-area-inset-top`，并把安全区加到 38px 导航行之外（`min-height: calc(38px + env(...))`）；普通浏览器标签页保持 38px，不因浏览器报告的顶部安全区产生内边距。
 - **Reason:** 普通浏览器标签页的顶部已被浏览器自身的地址栏/工具栏占据，页面并未铺到状态栏下面；但部分 Android 浏览器（Owner 实机反馈）仍返回约 40px 的非零 `safe-area-inset-top`，无条件内缩会在导航条上方留出一条空白，并把文字压到导航条底部。独立窗口下页面才真正铺到状态栏下面，需要安全区。
-- **Consequence:** 以后修 shellbar 间距时不能把顶部安全区重新放回无条件内边距；新增的 `arcade_smoke` 浏览器模式/独立窗口两组断言会拦截回归。`--studiokit-shellbar-h` 需要在 resize 时同步，游戏页用该变量扣减高度。SW 对 `shared/site.css` 是缓存优先，修改共享 shell 后必须递增 Arcade 缓存修订号（当前 `studiokit-arcade-0.8.3-v1`），否则已装 SW 的用户拿不到新样式。
+- **Consequence:** 以后修 shellbar 间距时不能把顶部安全区重新放回无条件内边距；新增的 `arcade_smoke` 浏览器模式/独立窗口两组断言会拦截回归。`--studiokit-shellbar-h` 需要在 resize 时同步，游戏页用该变量扣减高度。SW 对 `shared/site.css` 是缓存优先，修改共享 shell 后必须递增 Arcade 缓存修订号（写入 `apps/arcade/sw.js` 的 `VERSION`，随每次发版递增，当前为 `0.14.0`），否则已装 SW 的用户拿不到新样式。

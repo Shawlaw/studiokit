@@ -43,7 +43,7 @@ GitHub Pages 项目站点会部署在 `/<repository>/` 子路径下。所有站�
 - `apps/arcade/engine.js` 是 Arcade 内部共享运行时，负责固定步长循环、物理辅助、粒子和音效合成、局内存档、暂停/续玩 UI、全屏/沉浸模式，以及 0.5.0 的游玩计时、分享与 Service Worker 注册封装。
 - Arcade 画布逻辑分辨率固定 420×740，由 CSS 等比缩放；全屏时按可用视口和 `safe-area-inset-*` 重排，不改变逻辑坐标。
 - 全屏优先使用原生 Fullscreen API；不支持或被拒绝时使用 CSS 沉浸布局，不伪造全屏成功。
-- 离线能力由 `apps/arcade/sw.js` 提供，作用域为 `apps/arcade/`；安装时只缓存中心页外壳，13 款游戏由用户显式预载。SW 只处理同源 Arcade 与 `shared/` 请求，导航网络优先、静态资源缓存优先，版本更新清理旧缓存。
+- 离线能力由 `apps/arcade/sw.js` 提供，作用域为 `apps/arcade/`；安装时只缓存中心页外壳，16 款游戏由用户显式预载。SW 只处理同源 Arcade 与 `shared/` 请求，导航网络优先、静态资源缓存优先，版本更新清理旧缓存。
 - `apps/restaurant-compare/` 的展示 HTML 在导出时从当前文档克隆并注入 JSON，不依赖 `shared/`；外部链接只是用户点击后打开的普通 URL，打开项目本身不发起第三方请求。
 
 ## 状态与存储
@@ -56,6 +56,9 @@ GitHub Pages 项目站点会部署在 `/<repository>/` 子路径下。所有站�
   - `studiokit:arcade:runs:v1`（局内档，Schema v1）
   - `studiokit:arcade:prefs:v1`（静音、全屏偏好）
   - `studiokit:arcade:playtime:v1`（0.5.0 游玩统计，独立 Schema v1）
+  - `studiokit:arcade:scores:v1`（0.8.1 积分记录，Schema v1）
+  - `studiokit:arcade:challenge:v1`（0.8.0 挑战记录，Schema v1）
+  - `studiokit:arcade:meta:v1`（0.13.0 通用游戏数据，Schema v1；目前仅星海突击机库存于 `games['star-raid'].hangar`）
 - Venue Compare 使用 IndexedDB 数据库 `studiokit:restaurant-compare`（version 1，store `projects`，记录 key `current`，项目 Schema v3）；旧 `restaurant-compare-editor` 只读兼容，旧 Schema v2 项目保存时升级为 v3。
 - 每个工具的配置 Schema 与应用版本独立演进；Arcade 0.4.0 的道具状态是既有局内档 Schema v1 内的追加字段，不是新 key。0.5.0 的游玩统计使用新 key，不改变 progress/runs/prefs。
 - 离线缓存不是用户数据源：清空站点缓存只影响离线可玩性，不清除 localStorage；清空 localStorage 也不影响已预载的静态资源。

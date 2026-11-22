@@ -13,10 +13,13 @@ py -3 tools/build_site.py
 node --check shared/home.js
 node --check shared/site-shell.js
 node --check apps/arcade/engine.js
-node tools/arcade_smoke.mjs   # 需要本机 Chrome；当前 57 项
+node tools/check_inline_scripts.mjs
+node tools/arcade_smoke.mjs   # 需要本机 Chrome；项数以实际输出为准
+py -3 tools/arcade_run_all_gates.py   # Arcade 全部门禁串联（更省事的入口）
+py -3 tools/check_readme_links.py     # 文档改动后校验链接、锚点与表格
 ```
 
-涉及 UI 的改动请在桌面和 375px 左右窄屏各看一次；涉及 Arcade 的改动至少跑通 `arcade_smoke.mjs`，并在任务记录里写清未覆盖的真机/原生能力。
+涉及 UI 的改动请在桌面和 320/375/390/430px 窄屏各看一次；涉及 Arcade 的改动至少跑通 `arcade_smoke.mjs` 或 `arcade_run_all_gates.py`，并在任务记录里写清未覆盖的真机/原生能力。
 
 ## Commits
 

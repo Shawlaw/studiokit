@@ -1,193 +1,264 @@
 # StudioKit
 
-**StudioKit** 是一个面向个人使用的静态网页工具集合。一个 GitHub 仓库承载多个彼此独立的单页 HTML 工具，通过统一首页、轻量共享外壳，同时发布到 GitHub Pages 与 Cloudflare Pages。
+**轻量、离线优先的浏览器工具集合。** 一个静态仓库承载多个彼此独立的单页工具，共用一套门户与轻量外壳，同一份构建产物同时发布到 GitHub Pages 与 Cloudflare Pages。
 
-- **线上站点：** <https://shawlaw.github.io/studiokit/> · <https://studiokit.pages.dev/>
-- **源码：** <https://github.com/Shawlaw/studiokit>（MIT 许可）
-- **当前工具：** Badge Studio `2.2.1`；街机厅 Arcade `0.14.0`（2026-11-22 已双端发布，上一版 0.13.3 同日发布；16 款竖屏小游戏：13 款带 78 关挑战模式 + 二十一点/五子棋/纸牌接龙三款平和棋牌；俄罗斯方块禅模式 + 积分记录表 + 极速车道转向灯换道/连超/拾取 + 结算重选模式 + 结算回看 + PWA 更新检测 + iPhone 顶部修复 + 双击放大防护 + 五子棋落子防重影/预览取消 + 全屏拇指抬升 + 层塔持久重心物理/全览/工地集装箱皮肤与属性 + 层塔物理一致性与全览 zoom-to-fit + 集装箱释放水平速度（抛物线落点）+ 全览无缩放下限（千层也能看全塔）+ 近景集装箱细节（LOD 只看缩放）+ 难度两段式曲线与振幅归一 + PWA 独立窗口底部按钮与全屏同高 + 层塔难度按人类计时能力重标定（封顶完美窗口 28→56.5ms）；0.13.0 给星海突击加入星币机库改装（星币 = `floor(score / 16)` + 军费补给）、局内火力等级与能量/枯竭、临时编队、核弹级大杀器、6 类星区主题与 CLEAR 三选一整备（挑战 6 关数据与判定零改动，星币只来自游玩得分）；0.13.1 修复：大杀器栏并入主道具行（iPhone 非全屏 PWA 可见）、核弹追踪命中动画、机动强化触屏收益、机库浏览不再计入游玩时长；0.13.2 修复 PWA「检查更新」显示已安装版本（改为读取线上 sw.js 的 VERSION、SW 激活广播修复、横幅同时显示最新/当前版本）与 iOS 主屏 PWA 游玩时长永久停摆（计时不再依赖不可靠的 window focus，改为可见性/点按/15 秒 tick 自愈）；0.13.3 修复 Cloudflare Pages 无后缀 URL（`/games/x.html` 308 → `/games/x`）导致游戏识别失败、所有游戏计时为 0（去除 `.html` 后缀比较 + id 兜底）；0.14.0 星海突击：同种弹种再次拾取改为叠加剩余时长（上限 180s，不再重置）；新增「星海割草」无尽演武——四种弹种常驻、大杀器 3 槽满载且无限次、脉冲/星盾/编队无限（均消耗能量）、敌潮与掉落密集、Boss 四套专属炫技弹幕；受击只扣能量不掉命，能量是唯一瓶颈；不记分、不给星币、不写局内档，也不参与最高分/积分记录（挑战 6 关数据零改动）；上一版 0.12.7 也已双端发布）；Venue Compare `0.2.0`（餐厅考察对比、地图标注与外部链接 / 备注，已发布）
-- **计划中的工具：** Rounded Image（尚未实现，等待原始需求/规格）
-- **最近发布：** 2026-11-22，Arcade `0.14.0`（星海突击同种弹种叠加时长 + 「星海割草」无尽演武（常驻弹种/满载无限/密集敌潮/Boss 四套弹幕/能量唯一瓶颈，不记分不给星币）；挑战 6 关零改动；GitHub Pages + Cloudflare Pages 双端；提交 `4c90a4c` 推送 `main`；Actions run `45010510889` 四 job 全绿（Validate and build / Deploy GitHub Pages / Deploy Cloudflare Pages / Verify both deployments）；CI 与本地 `tools/verify_deploy.py` 均 **41/41** 双端逐文件一致（arcade 0.14.0 / badge 2.2.1 / venue 0.2.0）；双端线上无头 Chrome 实测星海页 0.14.0、第 4 按钮入口可见、进入后 `mode=mow`/四弹种常驻/火力 MAX/三槽满载/score=0、0 console error；SW 缓存键 `studiokit-arcade-0.14.0-v1`。）Cloudflare Pages 无后缀 URL 导致游戏识别失败、所有游戏计时为 0 的修复；挑战/玩法/存档零改动；提交 `b3a8c7e` 推送 `main`；Actions run `45007754972` 四 job 全绿（Validate and build / Deploy GitHub Pages / Deploy Cloudflare Pages / Verify both deployments）；CI 与本地 `tools/verify_deploy.py` 均 **41/41** 双端逐文件一致（arcade 0.13.3 / badge 2.2.1 / venue 0.2.0）；双端线上无头 Chrome 实测：CF 无后缀 URL `currentGame=block-drop`、游玩 1.6s 记到 1606ms，GH `.html` 正常，线上诊断页 iframe 显示「计时正常 3508ms」，0 console error。）
-- **上一次发布：** 2026-11-22，Arcade `0.13.2`（PWA「检查更新」显示已安装版本修复 + iOS 主屏 PWA 游玩时长永久停摆修复；挑战/玩法/存档零改动；GitHub Pages + Cloudflare Pages 双端；提交 `8493cf7` + `78858e0` 推送 `main`；Actions run `45002523350` 四 job 全绿（Validate and build / Deploy GitHub Pages / Deploy Cloudflare Pages / Verify both deployments）；CI 与本地 `tools/verify_deploy.py` 均 **41/41** 双端逐文件一致（arcade 0.13.2 / badge 2.2.1 / venue 0.2.0）；双端线上无头 Chrome 各 8 项全过（中心页 0.13.2、检查更新返回线上 0.13.2 且不误报、SW 握手 0.13.2、缓存键 `studiokit-arcade-0.13.2-v1`、游戏页可加载、0 console error）。）
-- **更早发布：** 2026-11-22，Arcade `0.13.1`（星海突击真机反馈修复：大杀器栏并入主道具行、核弹追踪命中动画、机动强化触屏收益、机库浏览不计游玩时长；挑战 6 关零改动；GitHub Pages + Cloudflare Pages 双端；提交 `01eb5b4` 推送 `main`；Actions run `44996450758` 四 job 全绿（Validate and build / Deploy GitHub Pages / Deploy Cloudflare Pages / Verify both deployments）；CI 与本地 `tools/verify_deploy.py` 均 **41/41** 双端逐文件一致（arcade 0.13.1 / badge 2.2.1 / venue 0.2.0）；双端线上无头 Chrome 实测：中心页 0.13.1、主道具行 5 列（3 主动 + 2 军械槽，空槽「军械」）、390×844 standalone 模拟行底 ≤ 视口、核弹发射后 0.26s 仍在飞行且 Boss 480 血不变、命中后 Boss 354 血 + flash 0.70 + 冲击波 2 + 0 console error；SW 缓存键 `studiokit-arcade-0.13.1-v1`。）
-- **运行方式：** 纯静态文件；无后端、无账号、无构建依赖、无第三方 CDN
+[`● 已上线 3 个工具`](#工具一览) · [`⇅ 双端部署`](#发布流程) · [`◇ 零构建依赖`](#快速开始) · [`⌁ 离线优先`](#数据与隐私) · [`MIT 许可`](#许可证)
 
-## 目录结构
+| | |
+| --- | --- |
+| 线上站点 | <https://shawlaw.github.io/studiokit/> · <https://studiokit.pages.dev/> |
+| 源码 | <https://github.com/Shawlaw/studiokit> |
+| 许可证 | [MIT](LICENSE)（「StudioKit」名称与视觉标识不随代码授权） |
+| 技术形态 | 纯静态 HTML / CSS / JavaScript；无框架、无打包器、无 `npm install` |
+| 数据 | 全部留在浏览器本地（`localStorage` / IndexedDB）；无后端、无账号、无埋点、无第三方 CDN |
+| 发布 | 一次构建 → 两个托管目标；GitHub Actions 校验、部署并逐文件比对两端一致性 |
 
-```text
-StudioKit/
-├── index.html                       # StudioKit 门户首页
-├── LICENSE                          # MIT 许可证
-├── shared/
-│   ├── site.css                     # 门户 + 工具顶部导航样式
-│   ├── site-shell.js                # 工具页统一返回 StudioKit 导航
-│   └── tool-registry.json           # 首页工具注册表（新增工具只需登记一次）
-├── apps/
-│   ├── badge-studio/                # 徽章工作台，当前 v2.2.1
-│   │   ├── index.html
-│   │   ├── README.md
-│   │   └── CHANGELOG.md
-│   ├── restaurant-compare/          # 餐厅考察对比，当前 v0.2.0（available）
-│   │   ├── index.html
-│   │   ├── README.md
-│   │   └── CHANGELOG.md
-│   └── arcade/                      # 街机厅，当前 v0.13.0（开发中，未发布；上一个已发布版本 v0.12.6）
-│       ├── index.html               # 游戏中心页（统计/分享/安装/预载）
-│       ├── engine.js                # 街机专用共享运行时
-│       ├── arcade.css               # 街机专用样式
-│       ├── sw.js                    # Service Worker 离线缓存
-│       ├── manifest.webmanifest     # PWA 清单
-│       ├── icons/*.png              # PWA / Apple Touch 图标
-│       ├── games/*.html             # 16 款独立游戏页（13 挑战 + 3 棋牌）
-│       ├── DESIGN-0.4.0.md          # 全屏/道具设计与回滚说明
-│       ├── DESIGN-0.5.0.md          # 统计/分享/PWA/离线设计与回滚说明
-│       ├── DESIGN-0.6.0.md          # 星海 Boss/叠加、矿工瞄准线与全屏说明
-│       ├── DESIGN-0.7.0.md          # 全游戏道具、短局目标与适度游玩设计
-│       ├── DESIGN-0.8.0.md          # 影冲/影之试炼与 13 游戏 78 关挑战架构、兼容与回滚
-│       ├── DESIGN-0.8.1.md          # 俄罗斯方块禅模式与积分记录表设计、兼容与回滚
-│       ├── DESIGN-0.8.2.md          # 俄罗斯方块控制区压缩与画布回收设计、兼容与回滚
-│       ├── DESIGN-0.8.6.md          # 结算重选模式与贪吃蛇双拇指相对转向设计、兼容与回滚
-│       ├── README.md
-│       └── CHANGELOG.md
-├── templates/single-page-tool/      # 新工具模板
-├── tools/
-│   ├── new_tool.py                  # 新建工具脚手架
-│   ├── validate_site.py             # 静态结构/本地资源/注册表检查
-│   ├── build_site.py                # 生成仅含网站文件的 dist/
-│   ├── arcade_smoke.mjs             # 街机无头浏览器冒烟测试（94 项）
-│   ├── arcade_zen_scores_test.mjs   # 禅模式/积分记录确定性测试
-│   ├── arcade_calm_games_test.mjs   # 0.9.0 三款棋牌规则/结算 + 10 款修复 regression
-│   ├── arcade_calm_probe.mjs        # 单页接入探针（开始/暂停/存档/续玩/布局）
-│   ├── check_inline_scripts.mjs     # 全站 HTML 内联脚本语法检查
-│   ├── restaurant_compare_smoke.mjs # Venue Compare 无头浏览器冒烟测试
-│   ├── verify_deploy.py             # 双端发布后的逐文件/版本校验
-│   └── agentctl.py                  # 轻量任务队列命令
-├── tasks/queue.json                 # 机器可读任务队列
-├── prompts/                         # 历史首次启动/首次发布 Prompt
-├── docs/                             # 架构、路线、基线、发布与决策文档
-└── .github/workflows/deploy.yml     # GitHub Actions 双端自动部署
-```
+## 目录
 
-先看 [`START-HERE.md`](START-HERE.md) 了解当前状态与 Agent 协作方式。
+- [工具一览](#工具一览)
+- [快速开始](#快速开始)
+- [项目结构](#项目结构)
+- [整体架构](#整体架构)
+- [新增一个工具](#新增一个工具)
+- [验证与构建](#验证与构建)
+- [测试工具](#测试工具)
+- [发布流程](#发布流程)
+- [数据与隐私](#数据与隐私)
+- [设计原则](#设计原则)
+- [文档地图](#文档地图)
+- [已知边界](#已知边界)
+- [贡献](#贡献)
+- [许可证](#许可证)
 
-## 本地预览
+## 工具一览
 
-建议使用本地 HTTP 服务（门户首页通过 `fetch()` 读取工具注册表，直接双击 `index.html` 会受到浏览器 `file://` 限制）：
+以下三个工具均已双端发布、注册表状态为 `available`；Rounded Image 仅为规划项，**尚未实现**。
+
+| 工具 | 版本 | 状态 | 入口 | 一句话说明 |
+| --- | --- | --- | --- | --- |
+| ◎ **Badge Studio** | `2.2.1` | `available` | [`apps/badge-studio/`](apps/badge-studio/) | 同心圆徽章工作台：弧形文字排版、多方案并排对比、透明 PNG / SVG 导出 |
+| 🕹 **街机厅 Arcade** | `0.14.0` | `available` | [`apps/arcade/`](apps/arcade/) | 16 款竖屏小游戏（13 款带 6 关挑战 + 三款平和棋牌），支持全屏、暂停、本地续玩、分享与离线预载 |
+| 🍽 **Venue Compare** | `0.2.0` | `available` | [`apps/restaurant-compare/`](apps/restaurant-compare/) | 餐厅考察对比：地图标注 + 横向对比表 + 外部链接备注，导出可转发的独立 HTML |
+| ▧ **Rounded Image** | — | `planned` | — | 预留给图片圆角工具，原始规格待恢复或重新定义；**当前没有实现** |
+
+工具卡片的唯一数据来源是 [`shared/tool-registry.json`](shared/tool-registry.json)（`schemaVersion: 1`），门户首页 [`index.html`](index.html) 通过 [`shared/home.js`](shared/home.js) 读取它渲染。注册表状态只有三种：`available`（可打开）、`draft`（开发中）、`planned`（规划中，不暴露 `href`）。
+
+## 快速开始
+
+零安装。项目本身不需要任何依赖；只是**必须用本地 HTTP 服务**打开门户，因为首页通过 `fetch()` 读取注册表，`file://` 下会被浏览器的同源策略拦住。
 
 ```powershell
+# 仓库根目录；Windows 上若 python 指向 2.x 请统一用 py -3
 py -3 -m http.server 8000
 ```
 
-Linux / macOS 使用 `python3 -m http.server 8000`。浏览器访问：
+Linux / macOS 使用 `python3 -m http.server 8000`。随后访问：
 
-- 门户：`http://localhost:8000/`
-- Badge Studio：`http://localhost:8000/apps/badge-studio/`
-- 街机厅：`http://localhost:8000/apps/arcade/`
-- Venue Compare：`http://localhost:8000/apps/restaurant-compare/`
+- 门户：<http://localhost:8000/>
+- Badge Studio：<http://localhost:8000/apps/badge-studio/>
+- 街机厅：<http://localhost:8000/apps/arcade/>
+- Venue Compare：<http://localhost:8000/apps/restaurant-compare/>
 
-Arcade 的游戏清单内联在 `apps/arcade/engine.js` 中，子游戏页也支持 `file://` 直接打开；但共享门户的注册表读取仍建议走 HTTP。
+Arcade 的游戏清单内联在 `apps/arcade/engine.js` 中，子游戏页也支持双击 `file://` 直接打开；但 PWA 安装、Service Worker 与离线预载只在 HTTPS 或 `localhost` 下生效。
 
-## 新增一个单页 HTML 工具
+## 项目结构
 
-推荐使用脚手架：
+```text
+StudioKit/
+├── index.html                   # 门户首页（读取注册表渲染工具卡片）
+├── favicon.svg
+├── LICENSE                      # MIT
+├── shared/                      # 共享层：仅门户、导航与稳定样式
+│   ├── site.css                 #   门户 + 工具页顶部导航样式
+│   ├── home.js                  #   读取 tool-registry.json 渲染首页
+│   ├── site-shell.js            #   向工具页注入返回门户的导航条
+│   └── tool-registry.json       #   首页工具清单的唯一来源
+├── apps/                        # 每个工具一个独立目录
+│   ├── badge-studio/            #   index.html + README + CHANGELOG
+│   ├── restaurant-compare/      #   index.html + README + CHANGELOG
+│   └── arcade/                  # 中心页 + 16 个游戏页 + 引擎 + PWA + 逐版设计文档
+├── templates/single-page-tool/  # 新工具脚手架模板
+├── tools/                       # 校验、构建、部署核对与测试脚本（不发布）
+├── tasks/queue.json             # 机器可读任务队列
+├── docs/                        # 架构、ADR、基线、路线、发布手册、Arcade 设计档案
+├── AGENTS.md                    # Agent 操作契约
+├── START-HERE.md                # Owner / Agent 入口
+├── TASKS.md                     # 人类可读任务与证据
+├── CHANGELOG.md                 # 全站变更记录
+├── CONTRIBUTING.md
+└── .github/workflows/deploy.yml # 校验 → 构建 → 双端部署 → 两端核对
+```
+
+## 整体架构
+
+StudioKit 是**静态多工具 Monorepo**，不是单一 SPA。核心边界如下（完整说明见 [`docs/ARCHITECTURE.md`](docs/ARCHITECTURE.md)）：
+
+- **门户与工具解耦。** 门户只渲染卡片；每个工具是 `apps/<tool-id>/index.html` 下可独立加载的单页。
+- **共享层保持最小。** `shared/` 只提供门户、`site-shell.js` 注入的返回导航和稳定样式；不把任何工具的业务运行时提升为全站共享。
+- **工具内允许自有运行时。** `apps/arcade/engine.js` 是 Arcade 内部共享引擎（固定步长循环、物理辅助、粒子、WebAudio 音效合成、存档、暂停/续玩、全屏/沉浸、游玩计时、分享与离线封装），只被 Arcade 页面引用。
+- **路径必须相对。** GitHub Pages 部署在 `/<repository>/` 子路径、Cloudflare Pages 部署在根路径，因此禁止 `/assets/...` 这类从域名根解析的绝对路径；`site-shell.js` 从自身脚本 URL 推导站点根，任意深度的子页面都能返回门户。
+- **状态按工具隔离。** 工具之间不共享 `localStorage` key、IndexedDB 数据库或业务对象；每个工具独立演进版本号、配置 Schema 与存储命名空间。
+- **构建按白名单。** [`tools/build_site.py`](tools/build_site.py) 只复制 `index.html`、`favicon.svg`、`shared/`、`apps/`，追加 `.nojekyll`；`docs/`、`tools/`、`tasks/`、根级 Markdown 与开发脚本都不会进入发布产物。注意 `apps/` 是按目录整体复制的，所以**各工具自己的 `README.md` / `CHANGELOG.md` / `DESIGN-*.md` 会随站点一起发布**。
+
+## 新增一个工具
+
+推荐用脚手架，它会创建目录、替换标题/ID/说明并在注册表登记为 `draft`：
 
 ```powershell
 py -3 tools/new_tool.py --id rounded-image --name "Rounded Image" --description "图片圆角处理与导出" --icon "▧"
 ```
 
-脚手架会：
+随后：
 
-1. 从 `templates/single-page-tool/` 创建 `apps/<id>/`。
-2. 替换页面标题、工具 ID 和说明。
-3. 在 `shared/tool-registry.json` 注册为 `draft`，首页展示但暂不可打开。
+1. 把完整单页 HTML 放进 `apps/<id>/index.html`，保留共享外壳引用：
 
-随后把已有 HTML 放入 `apps/<id>/index.html`，保留或补齐共享外壳引用：
+   ```html
+   <link rel="stylesheet" href="../../shared/site.css" />
+   <script src="../../shared/site-shell.js" defer></script>
+   ```
 
-```html
-<link rel="stylesheet" href="../../shared/site.css" />
-<script src="../../shared/site-shell.js" defer></script>
-```
+2. 在 `<body>` 上声明工具标识，`site-shell.js` 依赖它才会注入导航：
 
-并在 `<body>` 设置：
+   ```html
+   <body data-studiokit-app="rounded-image" data-studiokit-app-title="Rounded Image">
+   ```
 
-```html
-<body data-studiokit-app="rounded-image" data-studiokit-app-title="Rounded Image">
-```
+3. 多级子页面按实际深度调整相对路径（如 `apps/arcade/games/x.html` 用 `../../../shared/...`），并同样设置 `data-studiokit-app`。
+4. 补齐该工具自己的 `README.md` 与 `CHANGELOG.md`，完成验收后再把注册表状态从 `draft` 改成 `available`。
 
-如果工具包含多级子页面（参考 `apps/arcade/games/`），相对路径要按实际深度调整（例如 `../../../shared/...`）；`site-shell.js` 会从自身脚本 URL 推导站点根，因此任意深度都能返回门户。
-
-完成验收后，将注册表中的 `status` 改为 `available`。详细步骤见 [`docs/ADD-A-TOOL.md`](docs/ADD-A-TOOL.md)。
+`id` 使用小写 kebab-case，同时决定 URL 与存储命名空间，发布后不要改名。完整规范与验收清单见 [`docs/ADD-A-TOOL.md`](docs/ADD-A-TOOL.md)。
 
 ## 验证与构建
 
-不需要 `npm install`。Windows 下如果 `python` 指向 2.x，统一使用 `py -3`；CI 使用 Python 3.12。
+不需要 `npm install`。CI 使用 Python 3.12 与 Node.js 22（Node 仅在需要 JavaScript 语法检查与无头浏览器测试时使用）。
 
 ```powershell
-py -3 tools/validate_site.py
-py -3 tools/build_site.py
+py -3 tools/validate_site.py      # 静态结构与内容校验
+py -3 tools/build_site.py         # 先生成校验，再产出 dist/
 ```
 
-可选 JavaScript 语法检查（需要 Node.js）：
+`validate_site.py` 是主要的静态门禁，覆盖：必填文件存在性、注册表 Schema 与状态 / `href` 一致性、可用工具的入口页面存在、站内相对路径不越界且本地引用真实存在、禁止根绝对路径与外部运行时资源、CSS `url()` 不得从域名根解析、Badge Studio 版本与历史自动保存键未被擅改、Arcade 版本链（`engine.js` / `sw.js` / 注册表 / 中心页）与各项历史修复标记仍在、挑战数据不泄漏参考解、PWA 清单与图标齐全、`LICENSE` 与源码链接一致、模板占位符完整。
+
+可选 JavaScript 检查：
 
 ```powershell
 node --check shared/home.js
 node --check shared/site-shell.js
 node --check apps/arcade/engine.js
 node --check apps/arcade/sw.js
-node tools/check_inline_scripts.mjs
-node tools/arcade_smoke.mjs
-node tools/arcade_zen_scores_test.mjs
-node tools/arcade_calm_games_test.mjs
-node tools/arcade_gameplay_test.mjs --suite=base --repeat=2
+node tools/check_inline_scripts.mjs   # 覆盖所有 HTML 内联脚本，node --check 看不到它们
 ```
 
-`arcade_smoke.mjs` 需要本机 Chrome，会启动临时静态服务器与无头浏览器；当前覆盖 94 项检查（显式全屏、共享道具栏与 20 分钟提醒、16 款道具真实效果与旧档恢复、星海 Boss/弹种叠加、存档与游玩计时、分享、PWA 安装清单、离线预载/断网、320–430px 布局、子路径和刘海安全区）。`arcade_zen_scores_test.mjs` 覆盖禅模式无限/冻结恢复、积分记录收集与表格展示、导入导出与旧数据兼容；`arcade_calm_games_test.mjs` 覆盖三款棋牌规则自检/结算与 10 款修复 regression；`arcade_gameplay_test.mjs` 覆盖 104 个确定性玩法场景。
+改文档后可以顺手校验 README 集合的相对链接、章节锚点与表格列数：
 
-构建产物位于 `dist/`。它只包含要发布的网站资源，不包含 Agent Prompt、任务队列、内部文档和开发脚本。
-
-## 发布（GitHub Pages + Cloudflare Pages）
-
-站点已上线：
-
-- GitHub Pages：<https://shawlaw.github.io/studiokit/>
-- Cloudflare Pages：<https://studiokit.pages.dev/>
-
-1. 推送到 `main` 后，`.github/workflows/deploy.yml` 会执行一次校验/构建，把同一份 `dist/` 并行部署到 GitHub Pages 与 Cloudflare Pages。
-2. Actions 中应有 `Validate and build`、`Deploy GitHub Pages`、`Deploy Cloudflare Pages`、`Verify both deployments` 四个 job 成功。
-3. 发布后用 `py -3 tools/verify_deploy.py --base <Pages URL> --base <Cloudflare URL>` 复核：逐文件 SHA-256 一致，且 Arcade / Badge 版本与注册表一致。
-4. Cloudflare 侧项目为 `studiokit`（Production branch `main`），Secrets 为 `CLOUDFLARE_API_TOKEN` / `CLOUDFLARE_ACCOUNT_ID`，Variable 为 `CF_PAGES_URL`。完整设置、半发布恢复与回滚见 [`docs/RELEASE-RUNBOOK.md`](docs/RELEASE-RUNBOOK.md)。
-
-GitHub Pages 项目站点 URL 形如：
-
-```text
-https://<github-user>.github.io/<repository-name>/
+```powershell
+py -3 tools/check_readme_links.py
 ```
 
-Cloudflare Pages 部署在域名根路径（当前为 `studiokit.pages.dev`，以后可绑定自定义域名）。所有页面内的本地资源引用均使用相对路径，因此同一份 `dist/` 能同时适配子路径与根路径。
+## 测试工具
 
-**发布边界：** Agent 可以在授权范围内完成代码、测试、构建、提交和发布准备。推送到 `main` 或触发公开部署前，必须确认目标仓库、仓库可见性和 Owner 授权；一次授权覆盖两个部署目标，不能只发一端就宣称完成。具体流程见 [`docs/RELEASE-RUNBOOK.md`](docs/RELEASE-RUNBOOK.md)。
+无头浏览器测试需要本机 Chrome（可用 `CHROME_PATH` 覆盖路径），脚本会自行启动临时静态服务器与 Chrome，全部零 npm 依赖。**门禁项数以实际运行输出为准**，历史结果记录在 [`apps/arcade/CHANGELOG.md`](apps/arcade/CHANGELOG.md) 与 [`TASKS.md`](TASKS.md)，本文档不维护易漂移的计数。
+
+| 脚本 | 覆盖范围 |
+| --- | --- |
+| [`tools/arcade_run_all_gates.py`](tools/arcade_run_all_gates.py) | Arcade 全部离线门禁串联执行，失败即停；日常最省事的入口 |
+| [`tools/arcade_smoke.mjs`](tools/arcade_smoke.mjs) | 中心页 + 16 款游戏的全链路冒烟（道具真实效果、存档与计时、分享、PWA 清单、离线预载与断网、320–430px 布局、子路径与安全区） |
+| [`tools/arcade_gameplay_test.mjs`](tools/arcade_gameplay_test.mjs) | 确定性玩法场景回放（`--suite=base\|all`、`--repeat`、`--scenario`） |
+| [`tools/arcade_zen_scores_test.mjs`](tools/arcade_zen_scores_test.mjs) | 俄罗斯方块禅模式与中心页积分记录（含导入导出与旧档兼容） |
+| [`tools/arcade_calm_games_test.mjs`](tools/arcade_calm_games_test.mjs) | 三款棋牌规则自检/结算 + 10 款挑战修复 regression |
+| [`tools/arcade_tower_test.mjs`](tools/arcade_tower_test.mjs) | 层塔物理、全览缩放、集装箱属性与难度曲线 |
+| [`tools/arcade_interaction_test.mjs`](tools/arcade_interaction_test.mjs) | 移动端双击放大防护、五子棋落子按钮与预览取消 |
+| [`tools/arcade_immersive_buttons_test.mjs`](tools/arcade_immersive_buttons_test.mjs) | 全屏 / PWA 独立窗口底部按钮拇指区抬升 |
+| [`tools/arcade_pwa_update_test.mjs`](tools/arcade_pwa_update_test.mjs) | PWA 更新检测（线上版本来源、SW 广播）与独立窗口顶部布局 |
+| [`tools/arcade_review_test.mjs`](tools/arcade_review_test.mjs) | 结算回看最终画面、五子棋棋盘放大 |
+| [`tools/arcade_calm_probe.mjs`](tools/arcade_calm_probe.mjs) | 单页接入探针（开始 / 暂停 / 存档 / 续玩 / 窄屏布局） |
+| [`tools/arcade_stage_solver.mjs`](tools/arcade_stage_solver.mjs) | 《影跃》S1–S3 关卡独立可达性求解 |
+| [`tools/arcade_stage_coverage.mjs`](tools/arcade_stage_coverage.mjs) | 78 关证据覆盖矩阵（只登记证据等级，不声称通过） |
+| [`tools/arcade_09_data.mjs`](tools/arcade_09_data.mjs) | 78 关设计源校验并生成运行时数据 `apps/arcade/challenge/*.js` |
+| [`tools/arcade_design_check.py`](tools/arcade_design_check.py) | 在临时副本里重跑生成器，比对已提交的设计派生文档 |
+| [`tools/restaurant_compare_smoke.mjs`](tools/restaurant_compare_smoke.mjs) | Venue Compare 冒烟：空状态、地图标注、链接与备注、撤销、导入导出、独立 HTML、四档布局 |
+
+## 发布流程
+
+1. 推送到 `main`（或手动 `workflow_dispatch`）后，[`.github/workflows/deploy.yml`](.github/workflows/deploy.yml) 执行一次校验/构建，把**同一份** `dist/` 并行部署到 GitHub Pages 与 Cloudflare Pages。
+2. Actions 中应有四个 job 成功：`Validate and build`、`Deploy GitHub Pages`、`Deploy Cloudflare Pages`、`Verify both deployments`。
+3. 末尾的 `Verify both deployments` 会跑 [`tools/verify_deploy.py`](tools/verify_deploy.py)，对固定的 **41 个部署文件**做逐文件 SHA-256 比对，并核对 Arcade `engine.js` / `sw.js` / 注册表版本、Badge Studio 与 Venue Compare 版本一致。它是一份关键的部署清单，不是全站逐文件清单。
+4. 需要在本机复核时：`py -3 tools/verify_deploy.py --base https://shawlaw.github.io/studiokit/ --base https://studiokit.pages.dev/`。
+
+Cloudflare 侧项目为 `studiokit`（Production branch `main`），所需 Secrets 为 `CLOUDFLARE_API_TOKEN` / `CLOUDFLARE_ACCOUNT_ID`，Variable 为 `CF_PAGES_URL`。Pull Request 只跑校验与构建，不触发部署。
+
+一次双端发布是**不可分割**的：只发了 GitHub Pages 不能声明发布完成；任一端失败应使用 `Re-run failed jobs` 修复，而不是推空提交重试。首次建仓、半发布恢复与回滚步骤见 [`docs/RELEASE-RUNBOOK.md`](docs/RELEASE-RUNBOOK.md)；是否允许 Agent 推送 `main` 见 [Agent 授权边界](#贡献)。
+
+## 数据与隐私
+
+- 所有计算与导出都在浏览器内完成，没有项目自建的服务端接口、账号体系或云同步。
+- 存储命名空间按工具隔离，均为历史兼容标识，**不得擅自改名**（改名需双读旧键并提供迁移）：
+
+  | 工具 | 存储 | 键 / 数据库 |
+  | --- | --- | --- |
+  | Badge Studio | `localStorage` | `concentric_badge_editor_autosave_v2`（历史标识） |
+  | Arcade | `localStorage` | `studiokit:arcade:` 下的 `progress:v1`、`runs:v1`、`prefs:v1`、`playtime:v1`、`scores:v1`、`challenge:v1`、`meta:v1` |
+  | Venue Compare | IndexedDB | 数据库 `studiokit:restaurant-compare`（v1，store `projects`，记录 key `current`），项目 Schema v3 |
+
+- 两个托管域名是独立 origin：`localStorage`、Service Worker 缓存与已安装 PWA 互不共享，切换主域名需要用户自行导出/导入。
+- 清理站点数据会丢失本地记录；各工具都提供 JSON 备份/导入，属于常规操作路径而非兜底手段。
+- 新工具的 key 统一格式：`studiokit:<tool-id>:<purpose>:v<version>`。
 
 ## 设计原则
 
-- 每个工具是独立 HTML 页面；不把业务逻辑强行合并成一个 SPA。
-- 默认纯前端、本地处理；除非 Owner 明确要求，不接入后端、埋点、远程字体、CDN 或第三方分析。
-- 各工具独立版本号、配置 Schema 和本地存储命名空间。
-- 共享层只负责门户、导航和稳定的通用样式；不要为了抽象而抽象。
-- 原工具的配置格式、导入导出行为和用户本地数据必须优先兼容。
-- GitHub Pages / Cloudflare Pages 只托管静态文件；不会替工具保存编辑数据。
+1. **先读再改。** 动手前读 [`AGENTS.md`](AGENTS.md)、[`TASKS.md`](TASKS.md)、相关 ADR 与目标工具的 README。
+2. **工具独立优先。** 不把业务逻辑合并成 SPA；不为了抽象而抽象共享层。
+3. **保护既有工具与用户数据。** 未经明确授权不重写 Badge Studio 的绘制、配置 Schema、撤销/重做、导入导出或自动保存；不改历史 `localStorage` key 与字段。
+4. **默认离线优先。** 不引入 CDN、远程字体、分析 SDK、埋点、后端请求、第三方 API 或远程图片依赖，除非 Owner 明确授权。
+5. **路径兼容双托管。** 站内引用一律相对路径，同时适配项目站点子路径与根路径。
+6. **无构建依赖。** 默认不引入 npm、打包器或运行时框架；确有必要先提交 ADR 与成本说明。
+7. **小步提交。** Conventional Commits，一个提交聚焦一个意图；不 squash/rebase/force-push 未授权的分支。
+8. **不伪造结果。** 没有实际执行的测试不能声称通过；没看到 Actions 成功与线上页面可访问，不能声称发布成功。
+9. **不提交秘密。** Token、Cookie、个人配置、字体授权文件与本地数据不进仓库。
 
-## 当前状态
+约束的完整版本（含具体红线与完成定义）见 [`AGENTS.md`](AGENTS.md)。
 
-- 已发布：Badge Studio `2.2.1`、Venue Compare `0.2.0`、街机厅 Arcade `0.12.6`（16 款游戏 = 13 款 6 关挑战 + 三款无倒计时平和棋牌；每款 2 个主动道具、自然收尾、一次性 20 分钟提醒与中心页随机入口；没有签到、每日奖励或付费抽奖）。**开发中：Arcade `0.13.0`（未发布、待门禁）**，其星海突击「星域远征」与存档兼容说明见 [`apps/arcade/README.md`](apps/arcade/README.md) 与 [`apps/arcade/DESIGN-0.13.0.md`](apps/arcade/DESIGN-0.13.0.md)。
-- Arcade 0.10.0（历史记录）本地门禁：smoke 94/94、zen 14/14、calm 17/17、gameplay all 104/104、base 22/22、派生重生成 143/143；提交 `fc37d2b` 推送 `main`；Actions run `44681529684` 的 Validate and build / Deploy GitHub Pages / Deploy Cloudflare Pages / Verify both deployments 四个 job 全部成功；CI 与本地 `tools/verify_deploy.py` 均 **41/41** 文件 SHA-256 双端一致（Arcade `0.10.0` / Badge `2.2.1` / Venue `0.2.0`，manifest `application/manifest+json`）；双端线上无头 Chrome 各 26/26（中心页 0.10.0 + 16 卡 + 三款棋牌注册、三款棋牌 selftest/regression/开始/暂停、0.10.0 挑战数据字段、0 console error）；SW 缓存键 `studiokit-arcade-0.10.0-v1`。
-- 真机 iOS/Android 试玩、原生全屏与系统分享面板仍为 UNVERIFIED；320/375 下五子棋/纸牌接龙的点按精度（画布内格点约 14–20 CSS px）需真机试玩裁决。
-- 规划中：Rounded Image（等待原始需求/规格，不凭空复刻）。
-- 任务、证据和未决项见 [`TASKS.md`](TASKS.md)；后续方向见 [`docs/ROADMAP.md`](docs/ROADMAP.md)。
-- Arcade 的玩法、数据键和已知边界见 [`apps/arcade/README.md`](apps/arcade/README.md)。
+## 文档地图
 
-## 许可
+| 文档 | 作用 |
+| --- | --- |
+| [`START-HERE.md`](START-HERE.md) | 30 秒入口：当前状态、Owner 与 Agent 的分工和授权边界 |
+| [`AGENTS.md`](AGENTS.md) | Agent 操作契约：项目事实、不可破坏的约束、标准流程、DoD |
+| [`CONTRIBUTING.md`](CONTRIBUTING.md) | 环境要求、提交规范、PR 内容要求 |
+| [`TASKS.md`](TASKS.md) / [`tasks/queue.json`](tasks/queue.json) | 任务、证据与未决项（人类可读 / 机器可读） |
+| [`CHANGELOG.md`](CHANGELOG.md) | 全站变更记录（站点级与早期版本）；Arcade 逐版记录以 [`apps/arcade/CHANGELOG.md`](apps/arcade/CHANGELOG.md) 为准 |
+| [`docs/ARCHITECTURE.md`](docs/ARCHITECTURE.md) | 结构边界、路径策略、运行时边界、状态与存储、部署 |
+| [`docs/DECISIONS.md`](docs/DECISIONS.md) | 架构决策记录（ADR-0001 …） |
+| [`docs/BASELINE.md`](docs/BASELINE.md) | 已发布基线事实：版本、Schema、存储键、验收覆盖 |
+| [`docs/ADD-A-TOOL.md`](docs/ADD-A-TOOL.md) | 接入新工具的完整规范与验收清单 |
+| [`docs/RELEASE-RUNBOOK.md`](docs/RELEASE-RUNBOOK.md) | 首次建仓、双端发布、半发布恢复与回滚 |
+| [`docs/ROADMAP.md`](docs/ROADMAP.md) | 已交付版本与后续方向 |
+| [`docs/arcade/`](docs/arcade/) | Arcade 设计与证据索引：现行设计支撑、78 关设计源、游戏性量表 |
+| [`docs/archive/`](docs/archive/README.md) | 已完成周期的过程记录（并行契约、独立评审、试玩包）归档；不再更新 |
+| [`docs/badge-studio-upstream-readme.md`](docs/badge-studio-upstream-readme.md) | Badge Studio 上游 v2.2.0 说明原文存档（当前集成版本以 `BASELINE.md` 为准） |
+| [`apps/<tool>/README.md`](apps/) | 各工具的产品文档（功能、数据模型、边界、测试） |
+| [`apps/arcade/DESIGN-*.md`](apps/arcade/) | Arcade 逐版设计与回滚说明（`DESIGN-0.4.0` … `DESIGN-0.14.0`） |
 
-- 代码、文档与站点样式采用 [MIT 许可证](LICENSE)：可以自由使用、修改、分发和商用，只需保留版权与许可声明。
-- 许可允许商业使用，包括在部署方自己的站点上展示广告；是否展示广告由部署方决定。
-- 「StudioKit」名称、徽标与站点视觉标识不随 MIT 授权。基于本项目搭建的站点请使用自己的名称与标识，避免用户误认为官方版本。
-- 街机厅各游戏为自研代码与自绘图形，未引入第三方素材；玩法规则本身通常不受版权保护，但若游戏名称与现有商业作品重名（例如「俄罗斯方块」「黄金矿工」），相关商标风险由使用与部署方自行评估。
-- 变更授权需要全体版权人同意。目前版权人为单一作者，可直接替换根目录 `LICENSE`，并同步更新本文件、[`docs/DECISIONS.md`](docs/DECISIONS.md) 与 [`CHANGELOG.md`](CHANGELOG.md)。
+## 已知边界
+
+- **真机能力多为 UNVERIFIED。** iOS/Android 真机触控手感、原生全屏、系统分享面板、PWA 安装与更新提示时机均未在真机上逐项确认；文档中相关结论按 `UNVERIFIED` 处理，不写成已通过。
+- **iPhone Safari 不支持网页元素全屏。** Arcade 会退化到 CSS 沉浸布局，不能隐藏 Safari 地址栏；想要更纯粹的显示需要「分享 → 添加到主屏幕」。
+- **没有云能力。** 无排行榜、无云存档、无跨设备同步；分享只发送链接，不附带成绩。
+- **双端不是事务性的。** 两个部署 job 独立，任一端失败都可能短暂出现一端新一端旧，需要重跑修复。
+- **Arcade 挑战模式与经典模式数据完全分离。** 挑战记录走 `challenge:v1`，不进积分表、不写经典最高分；星币只由经典模式得分产生，挑战 6 关不读机库、不写星币。
+
+## 贡献
+
+- 环境：Python 3.12+（`tools/agentctl.py` 使用 3.12 语法）、可选 Node.js 20+（CI 用 22）；不需要 `npm install`。
+- 提交前至少跑通 `py -3 tools/validate_site.py` 与 `py -3 tools/build_site.py`；涉及 Arcade 的改动还要跑 `py -3 tools/arcade_run_all_gates.py`，涉及 UI 的改动在桌面与 320/375/390/430px 窄屏各看一次。
+- 提交信息用 Conventional Commits，一个提交一个意图；PR 需说明目的、用户可见变化、测试证据、数据/Schema 影响与回滚方式。
+- **发布授权：** 向 `main` 推送或触发公开部署必须在本次任务中收到明确的 Owner 授权（`OWNER_AUTHORIZATION: PUBLISH_TO_MAIN`），一次授权覆盖两个部署目标。详见 [`docs/RELEASE-RUNBOOK.md`](docs/RELEASE-RUNBOOK.md)。
+
+## 许可证
+
+[`LICENSE`](LICENSE) 为 MIT 许可证，覆盖代码、文档与站点样式：可自由使用、修改、分发与商用，只需保留版权与许可声明。
+
+- 允许商业使用，包括在部署方自己的站点上展示广告；是否展示由部署方决定。
+- 「StudioKit」名称、徽标与站点视觉标识不随 MIT 授权；基于本项目搭建的站点请使用自己的名称与标识，避免用户误认为官方版本。
+- 街机厅各游戏为自研代码与自绘图形，未引入第三方素材；若游戏名称与现有商业作品重名（如「俄罗斯方块」「黄金矿工」），相关商标风险由使用与部署方自行评估。
+- 变更授权需要全体版权人同意；当前为单一作者，可直接替换根目录 `LICENSE`，并同步更新本文件、[`docs/DECISIONS.md`](docs/DECISIONS.md) 与 [`CHANGELOG.md`](CHANGELOG.md)。
