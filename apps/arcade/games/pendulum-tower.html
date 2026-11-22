@@ -217,13 +217,50 @@
       let high = A.Progress.get('pendulum-tower').high;
       dom.hudHigh.textContent = String(high);
 
-      /* 钟摆速度随层数递增：低层慢悠悠，高层明显加速。 */
+      /* 0.12.5 难度曲线修正。
+         旧实现 `swingGravity = min(1700, 680 + floors*34)`：**30 层就撞上限**，之后摆速与摆幅完全不变，
+         所以 200 层和 30 层手感一模一样 —— 这正是「200 层后很容易完美连击」的原因。
+         另外 g 阶跃若发生在摆心附近，会把能量悄悄吃掉（实测摆幅 216px→154px），
+         于是又出现「层数越高摆幅越小、也快不起来」的观感。
+         现在：
+         ① 上限抬到 2600（约 56 层到顶），越往上越快地持续加速；
+         ② 每次升速都把摆幅归一到目标值，难度只由「更快」贡献，不再由「振幅无序塌缩」贡献。 */
+      const SWING_G_CAP = 4000;
+      /* 两段式：前 56 层 +34/层（快抬到有挑战的水平），之后 +14/层 缓慢加码，约 157 层触顶。
+         这样 200 层玩家不是「30 层手感重复 170 次」，而是爬过 157 层渐难曲线。 */
       function swingGravity(floors) {
-        return Math.min(1700, 680 + Math.max(0, floors) * 34);
+        const f = Math.max(0, floors);
+        const fast = Math.min(f, 56) * 34;
+        const slow = Math.max(0, f - 56) * 14;
+        return Math.min(SWING_G_CAP, 680 + fast + slow);
+      }
+      /* 目标角振幅：随层数缓慢收窄，但不低于 0.62rad —— 保证钟摆始终有可见摆幅，
+         不会像旧版那样被动缩到几乎没有（那样反而让落点永远在中心附近）。 */
+      function swingTargetAmplitude(floors) {
+        return Math.max(0.62, 0.92 - Math.max(0, floors) * 0.004);
+      }
+      /* 把当前摆状态的能量归一到目标振幅：保持当前角度与运动方向，只调整速度大小。 */
+      function normalizeSwingAmplitude(floors) {
+        const g = Number(pend.gravity) || 680;
+        const len = Number(pend.length) || PEND_LEN;
+        const target = swingTargetAmplitude(floors);
+        const eTarget = (g / len) * (1 - Math.cos(target));
+        const potential = (g / len) * (1 - Math.cos(pend.angle));
+        if (potential >= eTarget) {
+          /* 当前角度已经超过目标振幅：夹到目标振幅并瞬时静止（避免越界能量残留）。 */
+          pend.angle = (pend.angle < 0 ? -1 : 1) * target;
+          pend.vel = 0;
+          return;
+        }
+        const speed = Math.sqrt(Math.max(0, 2 * (eTarget - potential)));
+        pend.vel = (pend.vel < 0 ? -1 : 1) * speed;
       }
 
       function updateSwingDifficulty() {
+        /* 挑战模式的速度由关卡数据 speedFactor 决定，绝不能被经典难度曲线覆盖。 */
+        if (mode === 'challenge') return;
         pend.gravity = swingGravity(floorsReached);
+        normalizeSwingAmplitude(floorsReached);
       }
 
       function towerTop() {
@@ -454,8 +491,10 @@
         collapsed = [];
         drop = null;
         pend.angle = rand(0.75, 1.05) * (Math.random() > 0.5 ? 1 : -1);
+        /* 0.12.5：起始相位仍随机（保留每局手感差异），但振幅归一到目标值，难度曲线可复现。 */
         pend.vel = 0;
         pend.gravity = swingGravity(0);
+        normalizeSwingAmplitude(0);
         pendHasBox = true;
         pendReload = 0;
         towerLean = 0;
@@ -2332,6 +2371,7 @@
               releaseVx: relVx,
               lastRelease,
               renderLod: lastRenderLod,
+              swing: (() => { const g = pend.gravity, L = pend.length; const energy = 0.5 * pend.vel * pend.vel + (g / L) * (1 - Math.cos(pend.angle)); const amp = Math.acos(clamp(1 - (energy * L) / g, -1, 1)); return { gravity: g, length: L, angle: pend.angle, vel: pend.vel, amplitudeRad: amp, targetAmplitudeRad: swingTargetAmplitude(floorsReached), periodMs: Math.round((2 * Math.PI / Math.sqrt(g / L)) * 1000), xSpanPx: Math.round(2 * L * Math.sin(Math.min(Math.PI / 2, amp))) }; })(),
               releaseVxK: RELEASE_VX_K,
               fallTime: dropFallTime(pb.y),
               reach,

@@ -506,7 +506,51 @@ const TP_LOD = {
   },
 };
 
-const SCENARIOS = [TP_STATIC, TP_PHYSICS, TP_OVERVIEW, TP_CARGO, TP_SAVE, TP_LAYOUT, TP_REACH, TP_ZOOM, TP_CONSISTENCY, TP_RELEASE_VX, TP_TALL, TP_LOD];
+/* ---------------- TP-13 难度曲线：层数越高越快，摆幅不塌（0.12.5） ---------------- */
+const TP_CURVE = {
+  id: 'TP-13',
+  async run(cdp) {
+    /* 旧曲线 swingGravity = min(1700, 680+34f) 在 30 层就撞顶 ⇒ 200 层与 30 层手感完全相同，
+       这正是「200 层后很容易完美连击」的根因；同时 g 阶跃时能量被吃掉，摆幅会无序塌到 154px。
+       现在：两段式 g（56 层前 +34/层、之后 +14/层，约 157 层封顶 4000）+ 升速时把振幅归一到目标值。 */
+    const floors = [0, 10, 20, 30, 56, 100, 157, 200, 1000];
+    const rows = [];
+    for (const f of floors) {
+      await prepare(cdp, 'curve' + f);
+      if (f > 0) await cdp.evaluate('__arcadeTest.stackTo(' + f + ')');
+      await sleep(320);
+      const s = await cdp.evaluate('(() => { const p = __arcadeTest.physicsInfo(); return { floors: __arcadeTest.joyInfo().floorsReached, ...p.swing }; })()');
+      assert(s && s.gravity > 0, f + ' 层缺少 swing 探针');
+      rows.push({ f, g: s.gravity, period: s.periodMs, amp: s.amplitudeRad, target: s.targetAmplitudeRad, span: s.xSpanPx });
+    }
+    const byFloors = (n) => rows.find((r) => r.f === n);
+    /* 1) 速度随层数单调递增（周期单调不增），且必须真的变快很多。 */
+    for (let i = 1; i < rows.length; i += 1) {
+      assert(rows[i].g >= rows[i - 1].g, 'g 未随层数单调不减：' + rows[i - 1].f + '→' + rows[i].f + ' ' + rows[i - 1].g + '→' + rows[i].g);
+      assert(rows[i].period <= rows[i - 1].period, '摆动周期未随层数单调不增：' + rows[i - 1].f + '→' + rows[i].f);
+    }
+    for (const pair of [[10, 30], [30, 56], [56, 100], [56, 200]]) {
+      const a = byFloors(pair[0]) || rows.find((r) => r.f === pair[0]);
+      const b = rows.find((r) => r.f === pair[1]);
+      assert(b.period < a.period - 20, pair[1] + ' 层没有比 ' + pair[0] + ' 层更快（周期 ' + a.period + '→' + b.period + 'ms）');
+    }
+    /* 2) 30 层之后必须继续变难（旧版在此封顶）。 */
+    assert(rows.find((r) => r.f === 200).g > rows.find((r) => r.f === 30).g * 1.8,
+      '200 层相对 30 层没有明显加速：' + rows.find((r) => r.f === 30).g + '→' + rows.find((r) => r.f === 200).g);
+    /* 3) 封顶存在但不早于 100 层（保证 200 层玩家确实爬过一段渐难曲线）。 */
+    assert(rows.find((r) => r.f === 100).g < rows.find((r) => r.f === 1000).g, '100 层就已经封顶（曲线太短）');
+    assert(Math.abs(rows.find((r) => r.f === 200).g - rows.find((r) => r.f === 1000).g) < 1, '难度上限未在 157 层附近收敛');
+    /* 4) 振幅必须归一到目标值（不再无序塌缩），且始终保留可见摆幅。 */
+    for (const r of rows) {
+      assert(Math.abs(r.amp - r.target) < 0.05, r.f + ' 层振幅未归一到目标：amp=' + r.amp.toFixed(3) + ' target=' + r.target.toFixed(3));
+      assert(r.amp >= 0.55 && r.amp <= 1.05, r.f + ' 层振幅越界（摆幅塌缩或过大）：' + r.amp.toFixed(3));
+      assert(r.span >= 120, r.f + ' 层摆幅过小（钟摆几乎不动）：' + r.span + 'px');
+    }
+    record('难度曲线：g ' + rows[0].g + '→' + rows[rows.length - 1].g + '（157 层封顶）、周期 ' + rows[0].period + '→' + rows[rows.length - 1].period + 'ms、振幅 ' + rows[0].amp.toFixed(2) + '→' + rows[rows.length - 1].amp.toFixed(2) + 'rad 恒等于目标', true);
+  },
+};
+
+const SCENARIOS = [TP_STATIC, TP_PHYSICS, TP_OVERVIEW, TP_CARGO, TP_SAVE, TP_LAYOUT, TP_REACH, TP_ZOOM, TP_CONSISTENCY, TP_RELEASE_VX, TP_TALL, TP_LOD, TP_CURVE];
 
 let server, launched, cdp;
 try {

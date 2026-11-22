@@ -1,6 +1,6 @@
 #!/usr/bin/env node
 /**
- * Arcade 0.12.4-interaction 门禁：全屏(immersive)/PWA 独立窗口底部道具按钮拇指区抬升。
+ * Arcade 0.12.5-interaction 门禁：全屏(immersive)/PWA 独立窗口底部道具按钮拇指区抬升。
  *
  * 覆盖：
  * - IB-00 CSS 契约：--ac-thumb-lift 变量、stage-wrap / touch-pad / toolbelt / toast 抬升规则存在

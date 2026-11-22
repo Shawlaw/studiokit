@@ -5,6 +5,10 @@
 - 仓库：<https://github.com/Shawlaw/studiokit>
 - GitHub Pages：<https://shawlaw.github.io/studiokit/>
 - Cloudflare Pages：<https://studiokit.pages.dev/>
+- 本地待发布（未推送 main）：Arcade `0.12.5`（2026-11-22）
+  - 批次内容：层塔难度曲线修正——旧 `swingGravity` 30 层触顶导致 200 层与 30 层手感相同；改两段式（前 56 层 +34/层、之后 +14/层、约 157 层封顶 4000）+ 升速时振幅归一（消除 g 阶跃吃能量造成的摆幅塌缩）；挑战模式隔离不动；无 key/Schema/关卡数据变更
+  - 门禁：`arcade_tower_test` **21/21**（新增 TP-13 难度曲线）、smoke 94/94、zen 14/14、calm 17/17、review 5/5、gameplay base 11/11、tower challenge 6/6、pwa 7/7、interaction 5/5、immersive 16/16、validate/build/inline/node --check 全过；实测周期 2800→1154ms、完美窗口 61→24ms、摆幅 214→159px 稳定
+  - 设计见 `apps/arcade/DESIGN-0.12.5.md`；SW 缓存键 `studiokit-arcade-0.12.5-v1`；**未发布，无 Actions run / verify_deploy 证据**
 - 最近发布：Arcade `0.12.4`（2026-11-22，已双端发布）
   - 批次内容：修复 0.12.3 回归——LOD 判据 `boxes.length>60 || scale<0.35` 使 60 层以上近景退化成纯色块；改为只按缩放 `scale<0.2`，性能改视口裁剪（1000 层近景每帧 23~24/1002）；轮廓只在 scale<0.35 绘制；新增 renderLod 探针；无 key/Schema/关卡数据变更
   - 门禁：`arcade_tower_test` **20/20**（新增 TP-12）、smoke 94/94、zen 14/14、calm 17/17、review 5/5、gameplay base 11/11、tower challenge 6/6、pwa 7/7、interaction 5/5、immersive 16/16、validate/build/inline/node --check 全过；实测近景绘制 5/22/24/24（总 5/42/122/1002）、40 层全览仍保留细节、120/1000 层全览压缩

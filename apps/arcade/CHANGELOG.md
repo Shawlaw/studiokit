@@ -1,5 +1,20 @@
 # Arcade Changelog
 
+## 0.12.5 — 2026-11-22
+
+### Fixed
+- **层塔难度在 30 层就封顶**（`swingGravity = min(1700, 680+34f)`，34×30 已触顶），导致 200 层与 30 层手感完全相同 —— 这是「200 层后很容易完美连击」的根因。改为两段式：`min(4000, 680 + 34*min(f,56) + 14*max(0,f-56))`，前 56 层快速加压、之后缓慢加码、约 **157 层封顶**。
+- **摆幅无序塌缩**：`g` 在任意摆动相位阶跃时会把能量悄悄吃掉（实测 216px→154px 且抖动）。现在升速后按「当前角度 + 目标振幅」反解速度大小做**振幅归一**，摆幅恒等于目标值（`max(0.62, 0.92-0.004f) rad`，摆幅 214→159px 后稳定），不再塌到几乎没有。
+- 起始摆幅同样归一（保留随机起始相位，振幅可复现）。
+- 挑战模式隔离：`updateSwingDifficulty()` 在 challenge 下直接 return，关卡速度仍由 `content.pendulum.speedFactor` 决定。
+
+### Changed
+- 版本链升至 `0.12.5`，SW 缓存键 `studiokit-arcade-0.12.5-v1`。无 localStorage key / Schema / 挑战关卡数据变更；只改 `pendulum-tower.html`。
+
+### Verification
+- 实测：周期 2800→1154ms（快 2.4×）、完美窗口 61→24ms（难约 2.5×）、摆幅 214→159px（不再塌缩）；`g` 与周期随层数单调，振幅与目标偏差 ≤0.012rad。
+- `arcade_tower_test` **21/21**（新增 TP-13 难度曲线门禁：单调性 + 每档必须更快 + 157 层附近收敛 + 振幅归一 + 摆幅下限）、smoke 94/94、zen 14/14、calm 17/17、review 5/5、gameplay base 11/11、tower challenge 6/6、pwa 7/7、interaction 5/5、immersive 16/16、validate/build/inline/node --check 全过。设计见 `DESIGN-0.12.5.md`。
+
 ## 0.12.4 — 2026-11-22（已双端发布）
 
 ### Fixed
