@@ -52,6 +52,7 @@
   var FINISH_DEBOUNCE_MS = 800;
   /* 0.16 职业委托 ticket：仅当前标签页 sessionStorage，不是 localStorage 存档。 */
   var TICKET_KEY = 'studiokit:arcade:career:ticket.v1';
+  var RENTAL_KEY = 'studiokit:arcade:career:rental.v1';
   var TICKET_PARAM = 'career';
 
   /* 游戏页不得自填的事件信封/金额字段：静默丢弃，不算错误。 */
@@ -181,6 +182,8 @@
     commissionSeq: 0,
     commissionLastResult: null,
     commissionActivated: false,
+    commissionConfigured: false,
+    commissionLastCareerId: null,
   };
 
   /* ---------------------------------------------------------------- 基础工具 */
@@ -765,8 +768,10 @@
       if (result.ok && mod) {
         internal.loadedScripts[def.file] = { file: def.file, ok: true, required: false, detail: 'lazy-loaded' };
         if (def.global === 'backup') api.backup = mod;
-        else if (def.global === 'commission') api.commission = mod;
-        else if (def.global.indexOf('ui.') === 0) syncUiRefs();
+        else if (def.global === 'commission') {
+          api.commission = mod;
+          configureCommissionContent();
+        } else if (def.global.indexOf('ui.') === 0) syncUiRefs();
         return mod;
       }
       internal.loadedScripts[def.file] = { file: def.file, ok: false, required: false, detail: 'deferred-unavailable' };
@@ -877,13 +882,33 @@
       one('chapter-01.json', 'chapterContent', function (data) {
         return data && typeof data === 'object' ? data : null;
       }),
-    ]).then(function () {});
+    ]).then(function () {
+      if (commissionModule()) configureCommissionContent();
+    });
     internal.contentPromise = all;
     return all;
   }
 
   function commissionModule() {
     return readGlobal('commission') || null;
+  }
+
+  /** 把 commissions.json 交给 commission-core（只配置一次；缺失/失败保持 fail-open）。 */
+  function configureCommissionContent() {
+    var mod = commissionModule();
+    if (!mod || typeof mod.configure !== 'function') return mod;
+    if (internal.commissionConfigured) return mod;
+    if (!internal.commissionContent) return mod;
+    try {
+      var result = mod.configure({ content: internal.commissionContent });
+      internal.commissionConfigured = true;
+      if (result && result.errors && result.errors.length) {
+        warnOnce('commission-content', result.errors.join('; '));
+      }
+    } catch (err) {
+      warnOnce('commission-configure', err);
+    }
+    return mod;
   }
 
   function readStorage(storageName) {
@@ -908,11 +933,35 @@
     }
   }
 
+  /** 0.16 D16-07：本标签页的免费租机标记（不落 DB、不改变拥有）。 */
+  function readRentalMarker() {
+    var storage = readStorage('sessionStorage');
+    if (!storage) return null;
+    try {
+      var raw = storage.getItem(RENTAL_KEY);
+      if (!raw) return null;
+      var parsed = JSON.parse(raw);
+      return isObject(parsed) && typeof parsed.shipId === 'string' ? parsed : null;
+    } catch (err) {
+      return null;
+    }
+  }
+
   function clearStoredTicket() {
     var storage = readStorage('sessionStorage');
     if (!storage) return;
     try {
       storage.removeItem(TICKET_KEY);
+    } catch (err) {
+      /* ignore */
+    }
+  }
+
+  function clearRentalMarker() {
+    var storage = readStorage('sessionStorage');
+    if (!storage) return;
+    try {
+      storage.removeItem(RENTAL_KEY);
     } catch (err) {
       /* ignore */
     }
@@ -966,6 +1015,7 @@
           warnOnce('commission-module', 'commission-core.js unavailable; classic fallback');
           return null;
         }
+        configureCommissionContent();
         var stored = readStoredTicket();
         return Promise.resolve(mod.validateTicket({ ticketId: ticketId, ticket: stored, gameId: api.gameId })).then(function (result) {
           if (!result || !result.ok || !result.commission || !result.run) {
@@ -983,6 +1033,17 @@
           };
           internal.sourceMode = 'commission';
           api.commissionRun = clone(internal.commissionRun);
+          /* 免费租机：同一 careerId 的 marker 只影响本次出击，不改装备/拥有。 */
+          try {
+            var rental = readRentalMarker();
+            if (rental && (!rental.careerId || rental.careerId === result.run.careerId)) {
+              internal.commissionRun.startParams.rentalShipId = rental.shipId;
+              internal.commissionRun.rentalShipId = rental.shipId;
+              api.commissionRun = clone(internal.commissionRun);
+            }
+          } catch (err) {
+            warnOnce('commission-rental', err);
+          }
           try {
             if (typeof mod.markActive === 'function') mod.markActive(ticketId);
           } catch (err) {
@@ -1038,6 +1099,7 @@
     if (!mod || typeof mod.settle !== 'function') return Promise.resolve(commissionFailure('commission-module-missing'));
     var run = internal.commissionRun;
     if (!run) return Promise.resolve(null);
+    internal.commissionLastCareerId = run.careerId;
     internal.sourceMode = 'commission';
     return Promise.resolve(mod.settle({
       ticketId: run.ticketId,
@@ -1063,6 +1125,7 @@
         internal.commissionSeq = 0;
         api.commissionRun = null;
         clearStoredTicket();
+        clearRentalMarker();
         internal.finished = true;
         internal.finishedResult = normalized;
         renderCommissionReceipt(normalized);
@@ -1076,12 +1139,31 @@
 
   function renderCommissionReceipt(result) {
     var receiptUi = readUi('receipt');
-    if (!receiptUi || typeof receiptUi.show !== 'function') return;
+    if (!receiptUi || typeof receiptUi.show !== 'function') {
+      /* receipt.js 是 lazy 依赖：玩家本局没开过钱包时也要在结算后加载并展示收据。 */
+      ensureLazyModule('receipt')
+        .then(function (loaded) {
+          if (!loaded || typeof loaded.show !== 'function') return;
+          try {
+            loaded.show({
+              api: api,
+              result: clone(result),
+              careerId: internal.commissionLastCareerId || null,
+              announce: announceToUser,
+              reducedMotion: reducedMotionPreferred(),
+            });
+          } catch (err) {
+            warnOnce('commission-receipt-ui', err);
+          }
+        })
+        .catch(function () {});
+      return;
+    }
     try {
       receiptUi.show({
         api: api,
         result: clone(result),
-        careerId: internal.commissionRun ? internal.commissionRun.careerId : null,
+        careerId: internal.commissionLastCareerId || null,
         announce: announceToUser,
         reducedMotion: reducedMotionPreferred(),
       });
@@ -2416,53 +2498,77 @@
     );
   }
 
+  /** 0.16 D16-07：租机模块按需装载并注入 items + 本标签页 storage（不落 DB）。 */
+  function configureRentalModule() {
+    return ensureLazyModule('rental')
+      .then(function (mod) {
+        return loadCareerContent().then(function () {
+          if (mod && typeof mod.configure === 'function') {
+            mod.configure({ items: internal.itemsContent || null, storage: readStorage('sessionStorage') });
+          }
+          if (mod) api.rental = mod;
+          return mod;
+        });
+      })
+      .catch(function () {
+        return null;
+      });
+  }
+
   /** 0.16：港口告示板/飞船商店/钱包收据入口；UI 缺失时结构化失败，不做替代渲染。 */
   function openCareerUi(name, extra) {
     if (isSilentTestOnly()) return uiUnavailable('test-silent');
     warmLazyModules();
-    var uiModule = readUi(name);
-    if (!uiModule) {
-      return ensureLazyModule(name).then(function (loaded) {
-        if (!loaded) return uiUnavailable('ui-unavailable');
-        return openCareerUi(name, extra);
-      });
-    }
-    return safe(
-      'open-career-ui:' + name,
-      function () {
-        var target = typeof uiModule.open === 'function' ? uiModule.open : typeof uiModule.show === 'function' ? uiModule.show : null;
-        if (!target) return uiUnavailable('ui-unavailable');
-        var context = uiContext({
-          commission: commissionModule() || null,
-          commissionRun: internal.commissionRun ? clone(internal.commissionRun) : null,
-          commissions: internal.commissionContent ? clone(internal.commissionContent) : null,
-          items: internal.itemsContent ? clone(internal.itemsContent) : null,
-          chapter: internal.chapterContent ? clone(internal.chapterContent) : null,
-          openTown: openTown,
-          openHangar: openHangar,
-          openReceipt: openReceipt,
-          openSettings: openSettings,
+    /* town/hangar/receipt 都需要 commission-core 与委托目录在 ctx 里可用；机库还需要租机模块。 */
+    var preload = Promise.all([ensureLazyModule('commission'), loadCareerContent()]).then(function () {
+      configureCommissionContent();
+      return configureRentalModule();
+    });
+    return preload.then(function () {
+      var uiModule = readUi(name);
+      if (!uiModule) {
+        return ensureLazyModule(name).then(function (loaded) {
+          if (!loaded) return uiUnavailable('ui-unavailable');
+          return openCareerUi(name, extra);
         });
-        if (isObject(extra)) {
-          Object.keys(extra).forEach(function (key) {
-            context[key] = extra[key];
+      }
+      return safe(
+        'open-career-ui:' + name,
+        function () {
+          var target = typeof uiModule.open === 'function' ? uiModule.open : typeof uiModule.show === 'function' ? uiModule.show : null;
+          if (!target) return uiUnavailable('ui-unavailable');
+          var context = uiContext({
+            commission: commissionModule() || null,
+            commissionRun: internal.commissionRun ? clone(internal.commissionRun) : null,
+            commissions: internal.commissionContent ? clone(internal.commissionContent) : null,
+            items: internal.itemsContent ? clone(internal.itemsContent) : null,
+            chapter: internal.chapterContent ? clone(internal.chapterContent) : null,
+            openTown: openTown,
+            openHangar: openHangar,
+            openReceipt: openReceipt,
+            openSettings: openSettings,
           });
-        }
-        try {
-          var returned = target.call(uiModule, context);
-          if (returned && typeof returned.then === 'function') {
-            Promise.resolve(returned).catch(function (err) {
-              warnOnce('open-career-ui', err);
+          if (isObject(extra)) {
+            Object.keys(extra).forEach(function (key) {
+              context[key] = extra[key];
             });
           }
-        } catch (err) {
-          warnOnce('open-career-ui', err);
-          return uiUnavailable('ui-error');
-        }
-        return { ok: true };
-      },
-      uiUnavailable('ui-unavailable')
-    );
+          try {
+            var returned = target.call(uiModule, context);
+            if (returned && typeof returned.then === 'function') {
+              Promise.resolve(returned).catch(function (err) {
+                warnOnce('open-career-ui', err);
+              });
+            }
+          } catch (err) {
+            warnOnce('open-career-ui', err);
+            return uiUnavailable('ui-error');
+          }
+          return { ok: true };
+        },
+        uiUnavailable('ui-unavailable')
+      );
+    });
   }
 
   function openTown() {
@@ -2507,6 +2613,7 @@
             ok: true,
             careerId: run.careerId,
             equipment: clone(equipment),
+            rentalShipId: run.rentalShipId || null,
             wallet: { credits: wallet.credits || 0, items: clone(wallet.items || {}), equipment: clone(wallet.equipment || {}) },
           };
         });

@@ -744,6 +744,34 @@
     sequence(tasks, done);
   }
 
+  /** 0.16：材料成本原子扣减（不足时在事务内 fail，绝不写半成品）。 */
+  function applyInventoryCosts(ctx, core, careerId, costItems, at, done) {
+    const ids = Object.keys(costItems || {});
+    if (!ids.length) {
+      done();
+      return;
+    }
+    const store = ctx.store('inventory');
+    const tasks = ids.map((itemId) => (next) => {
+      ctx.bind(store.get([careerId, itemId]), (existing) => {
+        const prev = existing && Number.isFinite(Number(existing.count)) ? Math.max(0, Math.floor(Number(existing.count))) : 0;
+        const need = Math.max(0, Math.floor(Number(costItems[itemId]) || 0));
+        if (prev < need) {
+          ctx.fail('insufficient-items');
+          return;
+        }
+        const left = prev - need;
+        if (left === 0) {
+          ctx.bind(store.delete([careerId, itemId]), next);
+          return;
+        }
+        const row = { careerId, itemId, count: left, updatedAt: at };
+        ctx.bind(store.put(row), next);
+      });
+    });
+    sequence(tasks, done);
+  }
+
   function mergeEquipment(ctx, careerId, grants, at, done) {
     const keys = Object.keys(grants || {});
     if (!keys.length) {
@@ -784,7 +812,7 @@
 
   function receiptMismatch(provided, expected, core) {
     const receipt = isObject(provided) ? provided : {};
-    if (receipt.receiptId !== undefined && receipt.receiptId !== expected.runId) return 'receipt-mismatch';
+    if (receipt.receiptId !== undefined && receipt.receiptId !== (expected.receiptId || expected.runId)) return 'receipt-mismatch';
     if (receipt.careerId !== undefined && receipt.careerId !== expected.careerId) return 'receipt-mismatch';
     if (receipt.credits !== undefined && Number(receipt.credits) !== expected.credits) return 'receipt-mismatch';
     if (receipt.items !== undefined) {
@@ -995,6 +1023,7 @@
       return Promise.resolve(failure('bad-cost'));
     }
     const grants = isObject(options.grants) ? options.grants : {};
+    const costItems = isObject(options.costItems) ? options.costItems : {};
     const at = typeof options.now === 'string' && options.now ? options.now : nowIso();
     const contentVersion =
       typeof options.contentVersion === 'string' && options.contentVersion
@@ -1017,7 +1046,7 @@
           readInventoryMap(ctx, careerId, (items) => {
             let planResult;
             try {
-              planResult = core.purchasePlan({ cost, grants, wallet: { credits: balance.credits, items } });
+              planResult = core.purchasePlan({ cost, costItems, grants, wallet: { credits: balance.credits, items } });
             } catch (err) {
               ctx.fail('core-error', errorText(err));
               return;
@@ -1034,6 +1063,7 @@
               purchaseId,
               careerId,
               cost: plan.cost,
+              costItems: plan.costItems,
               items: plan.items,
               equipment: plan.equipment,
               txIds: [txId],
@@ -1051,6 +1081,7 @@
               step: 1,
               credits: plan.creditsDelta,
               cost: plan.cost,
+              costItems: plan.costItems,
               items: plan.items,
               equipment: plan.equipment,
               balanceAfter: plan.balanceAfter,
@@ -1071,6 +1102,7 @@
                 };
                 ctx.bind(ctx.store('balances').put(row), next);
               },
+              (next) => applyInventoryCosts(ctx, core, careerId, plan.costItems, at, next),
               (next) => incrementInventory(ctx, core, careerId, plan.items, at, next),
               (next) => mergeEquipment(ctx, careerId, plan.equipment, at, next),
             ];

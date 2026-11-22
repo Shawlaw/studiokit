@@ -16,6 +16,8 @@
  * - 只列 state.clues 中已发现的 clueId（按发现顺序），未发现的线索永不出现；
  * - 所有内容文本用 textContent 赋值，不拼 HTML 字符串；无网络请求、无声音；
  * - 投递只调用 ctx.followLetter()，成功后在同一个面板展示「折光港告示」。
+ * - 0.16（D16-01）最小入口：LOCAL/地址区块在 ctx.openTown 存在时增加
+ *   「按地址投递 · 去港口」按钮，只调用 ctx.openTown()，不改动既有投递逻辑。
  */
 (function (root) {
   'use strict';
@@ -38,8 +40,16 @@
   const DELIVERED_NOTE = '这封信已经按地址投递过，告示还留在信箱里。';
   const FALLBACK_TITLE = '来源不明的信';
 
+  /* 0.16（D16-01）：去港口告示板的最小入口文案与降级提示（戏内语言）。 */
+  const TOWN_LABEL = '按地址投递 · 去港口';
+  const TOWN_ARIA = '按地址投递，去港口告示板';
+  const TOWN_FAILED_TEXT = '港口那边没应声，过一会儿再试。';
+  const STAGE_RANK = { DORMANT: 0, GLIMPSED: 1, CURIOUS: 2, LOCAL: 3, RESIDENT: 4, EXPLORER: 5 };
+
   /* 本页会话内的投递记录：关闭面板后再打开仍能看到「已投递」。 */
   const followedClues = Object.create(null);
+  /* 去港口失败时重开信箱的可见提示（一次性）。 */
+  let pendingTownStatus = '';
   let panel = null;
 
   function documentOf() {
@@ -132,6 +142,30 @@
     } catch (err) {
       /* 焦点失败不影响面板可用性 */
     }
+  }
+
+  /** bridge 的 openTown；也接受通过 ctx.api 暴露的实现（降级/注入测试用）。 */
+  function townOpenerOf(context) {
+    if (!context) return null;
+    if (typeof context.openTown === 'function') return context.openTown;
+    if (isObject(context.api) && typeof context.api.openTown === 'function') return context.api.openTown;
+    return null;
+  }
+
+  /**
+   * 去港口入口的显示条件（lead 冻结）：
+   * - ctx.openTown 存在；
+   * - 且 state.stage 已到 LOCAL 或更后，或 state.firstClueId 存在（地址已到手）。
+   * 未发现任何信件时整块不显示。
+   */
+  function townEntryAllowed(context) {
+    if (!townOpenerOf(context)) return false;
+    const state = context && isObject(context.state) ? context.state : null;
+    if (!state) return false;
+    const stage = cleanText(state.stage).toUpperCase();
+    const rank = STAGE_RANK[stage] === undefined ? 0 : STAGE_RANK[stage];
+    if (rank >= STAGE_RANK.LOCAL) return true;
+    return !!cleanText(state.firstClueId);
   }
 
   /** 关闭当前信箱浮层并把焦点还给打开前的元素（可重复调用）。 */
@@ -229,12 +263,21 @@
     const followBtn = make('button', 'ac-career-btn', FOLLOW_FALLBACK);
     followBtn.type = 'button';
     letterActions.appendChild(followBtn);
+    /* D16-01 最小入口：只有 bridge 提供去港口动作时才出现；不改动上面的投递按钮。 */
+    const townBtn = make('button', 'ac-career-btn ac-career-btn--primary', TOWN_LABEL);
+    townBtn.type = 'button';
+    townBtn.setAttribute('aria-label', TOWN_ARIA);
+    townBtn.setAttribute('data-action', 'open-town');
+    townBtn.hidden = true;
+    const portActions = make('div', 'ac-career-letter__actions ac-career-mailbox__port');
+    portActions.appendChild(townBtn);
     letterDelivered.hidden = true;
     letter.appendChild(letterTitle);
     letter.appendChild(letterAmbient);
     letter.appendChild(letterSender);
     letter.appendChild(letterBody);
     letter.appendChild(letterAddress);
+    letter.appendChild(portActions);
     letter.appendChild(letterDelivered);
     letter.appendChild(letterActions);
 
@@ -306,6 +349,50 @@
       statusLine.textContent = value;
       statusLine.hidden = !value;
     }
+
+    /* ---------- 0.16（D16-01）：地址区块的去港口入口（最小接线） ---------- */
+
+    function townAllowedNow() {
+      /* 去港口动作缺失时整块不出现（会话内已投递也必须有 openTown 才显示）。 */
+      if (!townOpenerOf(context)) return false;
+      /* 本页会话内刚投递过信件也说明地址已到手；bridge 快照可能尚未刷新到 LOCAL。 */
+      return townEntryAllowed(context) || Object.keys(followedClues).length > 0;
+    }
+
+    function updateTownEntry() {
+      townBtn.hidden = !townAllowedNow();
+    }
+
+    function openTownFromLetter() {
+      const opener = townOpenerOf(context);
+      if (typeof opener !== 'function') {
+        setStatus(TOWN_FAILED_TEXT);
+        announce(TOWN_FAILED_TEXT);
+        return;
+      }
+      /* 先收起信件面板，避免两个对话框的焦点陷阱叠在一起；港口面板自己接管焦点。 */
+      close();
+      const settle = (result) => {
+        if (!result || (isObject(result) && result.ok === false)) {
+          pendingTownStatus = TOWN_FAILED_TEXT;
+          announce(TOWN_FAILED_TEXT);
+          open(context);
+        }
+      };
+      let returned = null;
+      try {
+        returned = opener();
+      } catch (err) {
+        returned = { ok: false };
+      }
+      if (returned && typeof returned.then === 'function') {
+        returned.then(settle, () => settle({ ok: false }));
+        return;
+      }
+      settle(returned);
+    }
+
+    townBtn.addEventListener('click', openTownFromLetter, false);
 
     const itemNodes = Object.create(null);
     let selectedId = '';
@@ -392,6 +479,10 @@
       setField(noticeAddress, letterContent.address);
       mailboxView.hidden = true;
       noticeView.hidden = false;
+      /* 告示视图也保留去港口入口（同一个按钮移动位置，不新增第二个）。 */
+      if (!townBtn.hidden && townBtn.parentNode !== noticeActions) {
+        noticeActions.insertBefore(townBtn, noticeActions.firstChild);
+      }
       safelyFocus(backBtn);
       announce('信已经按地址送出，折光港的告示留在信箱里。');
     }
@@ -408,6 +499,7 @@
         itemNodes[clueId].appendChild(make('span', 'ac-career-mailbox__flag', FOLLOWED_FLAG));
       }
       setStatus('');
+      updateTownEntry();
       noticeTitle.setAttribute('data-clue-id', clueId);
       showNotice();
     }
@@ -493,6 +585,14 @@
     }
 
     doc.addEventListener('keydown', onKeyDown, true);
+
+    /* 0.16（D16-01）：按 state/firstClueId 决定地址区块的去港口入口是否出现。 */
+    updateTownEntry();
+    if (pendingTownStatus) {
+      const pendingText = pendingTownStatus;
+      pendingTownStatus = '';
+      setStatus(pendingText);
+    }
 
     /* 对话框打开后把焦点放进面板（不抢游戏页焦点之外的东西）。 */
     safelyFocus(closeBtn);

@@ -22,6 +22,8 @@
     /* 全览按钮保持 44px 触控目标；三列等宽，与 1 垂线 / 2 配重同排不冲突。 */
     .touch-pad.tower-tools { grid-template-columns: repeat(3, minmax(0, 1fr)); }
     .touch-pad.tower-tools .touch-btn { min-height: 44px; }
+    /* 0.16 职业委托：开局/暂停弹层里的戏内目标一行（仅委托 run 渲染，经典/挑战 DOM 零变化）。 */
+    .tower-career-goal { display: inline-block; max-width: 100%; margin-top: 8px; padding: 4px 9px; border: 1px solid rgba(229, 148, 27, 0.55); border-radius: 10px; background: rgba(229, 148, 27, 0.12); color: #ffd9a0; font-size: 12px; line-height: 1.55; overflow-wrap: anywhere; }
   </style>
   <title>层塔 · 街机厅 · StudioKit</title>
 </head>
@@ -218,6 +220,73 @@
 
       let high = A.Progress.get('pendulum-tower').high;
       dom.hudHigh.textContent = String(high);
+
+      /* ===== 0.16 职业委托 run（ADR §18.3 / 18.4 / 18.8 / 18.9）=====
+         - 只有玩家从告示板接单后带 ?career=<ticketId> 进入本页才生效；
+         - 无 ticket / ticket 不匹配 / commission-core 缺失时完全走 0.15 经典路径；
+         - 委托 run 内不读不写旧 RunSave（studiokit:arcade:runs:v1），也不开挑战入口；
+         - 稳定层仍然只发真实物理提交点的 tower.floor_stable，不额外发分数/奖励。 */
+      let careerLocked = false;       // 已确认进入委托 run：本页生命周期内旧 RunSave 全禁用
+
+      function readCareerTicketParam() {
+        try {
+          const search = String((window.location && window.location.search) || '');
+          const match = /(?:^|[?&])career=([^&]+)/.exec(search);
+          if (!match) return '';
+          const value = decodeURIComponent(match[1].replace(/\+/g, ' '));
+          return /^[A-Za-z0-9._:-]{1,120}$/.test(value) ? value : '';
+        } catch (err) {
+          return '';
+        }
+      }
+
+      /* 本页当前是否有属于本游戏的委托 run（bridge 只在 ticket 校验通过时填充）。 */
+      function readCareerRun() {
+        try {
+          if (!career || typeof career.isCommissionRun !== 'function' || !career.isCommissionRun()) return null;
+          const run = career.commissionRun;
+          if (!run || run.gameId !== gameId) return null;
+          return run;
+        } catch (err) {
+          return null;
+        }
+      }
+
+      /* 戏内目标（只读 commissionRun.commission；内容缺失时返回 null，不发明文案）。 */
+      function careerGoalParts() {
+        const run = readCareerRun();
+        const commission = run && run.commission ? run.commission : null;
+        if (!commission) return null;
+        const title = typeof commission.title === 'string' ? commission.title : '';
+        const summary = typeof commission.summary === 'string' ? commission.summary : '';
+        if (!title && !summary) return null;
+        const objective = commission.objective && typeof commission.objective === 'object' ? commission.objective : {};
+        const raw = Number(objective.atLeast);
+        const atLeast = Number.isFinite(raw) && raw > 0 ? Math.floor(raw) : 0;
+        return { title, summary, atLeast };
+      }
+
+      /* 一行戏内目标（放在开局/暂停弹层的既有文案里，不新增按钮、不遮挡既有按钮）。 */
+      function careerGoalLine() {
+        const goal = careerGoalParts();
+        if (!goal) return '';
+        const text = [goal.title, goal.summary].filter(Boolean).join(' · ');
+        return '<span class="tower-career-goal" data-career-goal="1">委托：' + chEsc(text) + (goal.atLeast ? '（目标 ' + goal.atLeast + ' 层）' : '') + '</span>';
+      }
+
+      /* 委托 run 内断开旧 RunSave：serialize() 返回 null，且兜底替换 autosave 的四个出口。 */
+      function lockRunSave() {
+        if (careerLocked) return;
+        careerLocked = true;
+        try {
+          autosave.saveNow = function () { return false; };
+          autosave.tick = function () {};
+          autosave.clear = function () {};
+          autosave.load = function () { return null; };
+        } catch (err) {
+          /* 忽略：serialize() 的 career 门禁仍是最终兜底 */
+        }
+      }
 
       /* ===== 摆动难度曲线（本轮按人类计时能力重新标定） =====
          难度看的是「完美窗口」：预测落点扫过 ±9.6px（完美吸附判定）所持续的毫秒数。
@@ -618,9 +687,16 @@
         loop.pause();
         state = 'paused';
         autosave.saveNow();
+        /* 0.16 委托 run：局内进度不落旧 RunSave，文案改为戏内目标 + 真实进度（不谎称已保存）；
+           结算后的同页重开没有委托目标了，也要说明本局不写本机存档。 */
+        const careerGoal = careerLocked ? careerGoalParts() : null;
         const opts = {
           title: '已暂停',
-          text: '吊臂停住了。<br/>局内进度已保存，可以随时离开。',
+          text: careerLocked
+            ? (careerGoal
+              ? '吊臂停住了。<br/>' + careerGoalLine() + '<br/>已稳 ' + floorsReached + ' 层' + (careerGoal.atLeast ? '（目标 ' + careerGoal.atLeast + ' 层）' : '')
+              : '吊臂停住了。<br/>这一趟不写入本机存档，离开后从「开始游戏」重新来过。')
+            : '吊臂停住了。<br/>局内进度已保存，可以随时离开。',
           btn: '继续',
           onBtn: resumeGame,
         };
@@ -637,13 +713,16 @@
         hideChallengePanel();
         if (chDom.hud) chDom.hud.hidden = true;
         if (gameHudEl) gameHudEl.hidden = false;
+        /* 0.16 委托 run：追加一行戏内目标；挑战入口不可进入（职业 run 不写挑战记录）。 */
+        const careerGoal = careerGoalLine();
+        const challengeEntry = !careerLocked;
         ui.show({
           title: '层塔',
-          text: '钟摆叠箱：看准时机松手。<br/>钟摆会随层数慢慢加速<br/>偏心会让高塔晃动甚至倒塌 · 完美对齐有连击',
+          text: '钟摆叠箱：看准时机松手。<br/>钟摆会随层数慢慢加速<br/>偏心会让高塔晃动甚至倒塌 · 完美对齐有连击' + (careerGoal ? '<br/>' + careerGoal : ''),
           btn: '开始游戏',
           onBtn: startGame,
-          btn2: challengeAvailable ? '挑战 6 关' : '挑战数据不可用',
-          onBtn2: challengeAvailable ? showChallengePanel : null,
+          btn2: challengeEntry ? (challengeAvailable ? '挑战 6 关' : '挑战数据不可用') : '',
+          onBtn2: challengeEntry && challengeAvailable ? showChallengePanel : null,
         });
         if (dom.ovBtn2) dom.ovBtn2.disabled = !challengeAvailable;
       }
@@ -671,6 +750,8 @@
       }
 
       function showChallengePanel() {
+        /* 0.16：职业委托 run 内不开挑战入口（避免写挑战进度记录）。 */
+        if (careerLocked) return;
         if (!challengeAvailable) {
           ui.show({ title: '挑战数据不可用', text: '挑战关卡数据加载失败，经典模式不受影响。', btn: '返回', onBtn: showStart });
           return;
@@ -895,6 +976,8 @@
 
       function startChallenge(ref) {
         if (!challengeAvailable || !A.Challenge) return false;
+        /* 0.16：职业委托 run 内禁止进入挑战（不写挑战记录、不切换 mode）。 */
+        if (careerLocked) return false;
         const stage = A.Challenge.stage(gameId, ref);
         if (!stage) return false;
         if (!A.Challenge.isUnlocked(gameId, stage.id)) return false;
@@ -1330,6 +1413,8 @@
 
       function serialize() {
         if (state !== 'playing' && state !== 'paused') return null;
+        /* 0.16（ADR §18.9）：职业委托 run 一律返回 null，旧 RunSave 零读写；经典/挑战与 0.15 一致。 */
+        if (careerLocked) return null;
         return {
           mode,
           stageId: mode === 'challenge' && chStage ? chStage.id : null,
@@ -2638,31 +2723,83 @@
             return exitChallengeToStart();
           },
         };
+        /* 0.16（ADR §18.10）：职业委托只读钩子只在 ?careerTest=1 追加；生产 URL 与既有 #test 探针不变。 */
+        if (/(?:^|[?&])careerTest=1(?:&|$)/.test(String((window.location && window.location.search) || ''))) {
+          window.__arcadeTest.careerInfo = function () {
+            const run = readCareerRun();
+            const goal = careerGoalParts();
+            return {
+              isCommission: !!run,
+              locked: careerLocked,
+              commissionId: run ? run.commissionId : null,
+              objective: goal ? [goal.title, goal.summary].filter(Boolean).join(' · ') : null,
+              level: goal ? goal.atLeast : null,
+              floors: floorsReached,
+              serializeNull: serialize() === null,
+              goalLineVisible: !!document.querySelector('[data-career-goal]'),
+            };
+          };
+        }
       }
-      const saved = autosave.load();
-      if (saved) {
-        A.showResumePrompt(ui, saved, {
-          name: '层塔',
-          onResume: () => {
-            if (restore(saved.data)) {
-              state = 'playing';
-              ui.hide();
-              loop.resume();
-              pauseUi.sync(); syncJoyTools();
-              autosave.saveNow();
-            } else {
+      /* 开局弹层（0.15 行为逐字保留）：只有这条路径会读旧 RunSave。 */
+      function prepareStartScreen() {
+        const saved = autosave.load();
+        if (saved) {
+          A.showResumePrompt(ui, saved, {
+            name: '层塔',
+            onResume: () => {
+              if (restore(saved.data)) {
+                state = 'playing';
+                ui.hide();
+                loop.resume();
+                pauseUi.sync(); syncJoyTools();
+                autosave.saveNow();
+              } else {
+                autosave.clear();
+                showStart();
+              }
+            },
+            onRestart: () => {
               autosave.clear();
               showStart();
-            }
-          },
-          onRestart: () => {
-            autosave.clear();
-            showStart();
-          },
-        });
-      } else {
-        showStart();
+            },
+          });
+        } else {
+          showStart();
+        }
       }
+
+      /* 0.16 委托入口：URL 带 ?career=<ticketId> 时先等桥确认 ticket，再决定
+         「职业 run 开局弹层」还是「经典弹层」；无参数时同步走 0.15 路径（零延迟、零行为变化）。 */
+      function bootStartScreen() {
+        const ticketId = readCareerTicketParam();
+        const ready = career && career.ready;
+        if (!ticketId || !career || !ready || typeof ready.then !== 'function') {
+          prepareStartScreen();
+          return;
+        }
+        let settled = false;
+        let guard = null;
+        const finish = () => {
+          if (settled) return;
+          settled = true;
+          try {
+            if (guard) clearTimeout(guard);
+          } catch (err) {
+            /* ignore */
+          }
+          /* 只有桥确认了属于本游戏的 run 才锁死旧 RunSave；否则按 0.15 经典启动（fail-open）。 */
+          if (readCareerRun()) lockRunSave();
+          prepareStartScreen();
+        };
+        try {
+          guard = setTimeout(finish, 3500);
+        } catch (err) {
+          guard = null;
+        }
+        Promise.resolve(ready).then(finish, finish);
+      }
+      bootStartScreen();
       loop.start();
     })();
   </script>

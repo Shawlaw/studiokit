@@ -70,7 +70,9 @@
     badTxSteps: 'bad-txsteps',
     badCost: 'bad-cost',
     badGrants: 'bad-grants',
+    badCostItems: 'bad-cost-items',
     insufficient: 'insufficient',
+    insufficientItems: 'insufficient-items',
     walletUnavailable: 'wallet-unavailable',
     itemCap: 'item-cap',
     balanceCap: 'balance-cap',
@@ -621,6 +623,23 @@
       return { ok: false, reason: REASONS.badCost };
     }
     const grants = isObject(options.grants) ? options.grants : {};
+    /* 0.16：材料成本与信用点在同一交易内校验/扣减（飞船材料门槛不可被绕过）。 */
+    const costItemsRaw = options.costItems;
+    const costItems = {};
+    if (costItemsRaw !== undefined) {
+      if (!isObject(costItemsRaw)) return { ok: false, reason: REASONS.badCostItems };
+      const costIds = Object.keys(costItemsRaw);
+      if (costIds.length > RULESET.itemKindsCap) return { ok: false, reason: REASONS.badCostItems };
+      for (let i = 0; i < costIds.length; i += 1) {
+        const itemId = costIds[i];
+        const count = costItemsRaw[itemId];
+        if (!isToken(itemId)) return { ok: false, reason: REASONS.badCostItems };
+        if (!isFiniteNumber(count) || Math.floor(count) !== count || count <= 0 || count > RULESET.itemCapPerItem) {
+          return { ok: false, reason: REASONS.badCostItems };
+        }
+        costItems[itemId] = count;
+      }
+    }
     const unknownGrantKeys = Object.keys(grants).filter((key) => key !== 'items' && key !== 'equipment');
     if (unknownGrantKeys.length) return { ok: false, reason: REASONS.badGrants };
     const items = {};
@@ -661,6 +680,12 @@
     if (credits > RULESET.balanceCap) return { ok: false, reason: REASONS.balanceCap };
     if (credits < cost) return { ok: false, reason: REASONS.insufficient };
     const owned = isObject(wallet.items) ? wallet.items : {};
+    const costIds = Object.keys(costItems);
+    for (let i = 0; i < costIds.length; i += 1) {
+      const itemId = costIds[i];
+      const have = nonNegInt(owned[itemId], 0);
+      if (have < costItems[itemId]) return { ok: false, reason: REASONS.insufficientItems };
+    }
     const itemIds = Object.keys(items);
     for (let i = 0; i < itemIds.length; i += 1) {
       const itemId = itemIds[i];
@@ -675,6 +700,7 @@
         cost,
         creditsDelta: -cost,
         balanceAfter,
+        costItems,
         items,
         equipment,
       },
