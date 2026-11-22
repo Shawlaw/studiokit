@@ -185,11 +185,11 @@ function runStaticChecks(rec, content) {
   const gameById = new Map(games.map((game) => [game.gameId, game]));
 
   /* S01：chapter-01 版本与规模 */
-  expectEq('S01 chapter-01 contentVersion=0.16.0 / chapterId=C1 / 16 origins', {
+  expectEq('S01 chapter-01 contentVersion=0.17.0 / chapterId=C1 / 16 origins', {
     contentVersion: chapter.contentVersion,
     chapterId: chapter.chapterId,
     origins: origins.length,
-  }, { contentVersion: '0.16.0', chapterId: 'C1', origins: 16 });
+  }, { contentVersion: '0.17.0', chapterId: 'C1', origins: 16 });
   state.coverage.originsStatic = origins.length;
 
   /* S02：origin gameId 与 registry gameId 一一对应 */
@@ -290,11 +290,11 @@ function runStaticChecks(rec, content) {
   /* S11：commissions.json 4 条 T1/T2 委托 */
   const commissionList = Array.isArray(commissions.commissions) ? commissions.commissions : [];
   const commissionIds = commissionList.map((row) => row.commissionId);
-  expectEq('S11 commissions.json contentVersion=0.16.0 and 4 T1/T2 commissions', {
+  expectEq('S11 commissions.json contentVersion=0.17.0 and 4 T1/T2 commissions', {
     contentVersion: commissions.contentVersion,
     ids: commissionIds,
   }, {
-    contentVersion: '0.16.0',
+    contentVersion: '0.17.0',
     ids: ['pendulum-tower.T1', 'pendulum-tower.T2', 'star-raid.T1', 'star-raid.T2'],
   });
 
@@ -358,7 +358,7 @@ function runStaticChecks(rec, content) {
     cloudLarkRequires: cloudLark.requires,
     materials: (items.materials || []).map((row) => row.itemId),
   }, {
-    contentVersion: '0.16.0',
+    contentVersion: '0.17.0',
     shipIds: ['old-wing', 'cloud-lark', 'shield-whale', 'prism'],
     prices: { 'old-wing': 260, 'cloud-lark': 480, 'shield-whale': 520, prism: 540 },
     oldWingRental: true,

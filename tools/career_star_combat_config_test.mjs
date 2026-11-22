@@ -113,7 +113,7 @@ function snapshot(value) {
 const ZERO_LEVELS = Object.freeze({ hull: 0, power: 0, engine: 0, energy: 0, bay: 0, wing: 0 });
 
 const FIXTURE_ITEMS = deepFreeze({
-  contentVersion: '0.16.0',
+  contentVersion: '0.17.0',
   ships: [
     { shipId: 'old-wing', name: '旧翼', price: 260, rental: true, stats: { lives: 3, energy: 100, firepower: 0, speed: 0, magnet: 0 } },
     { shipId: 'cloud-lark', name: '云雀', price: 480, rental: true, stats: { lives: 3, energy: 95, firepower: 0.06, speed: 0.12, magnet: 0.06 } },

@@ -5,7 +5,7 @@
 - 仓库：<https://github.com/Shawlaw/studiokit>
 - GitHub Pages：<https://shawlaw.github.io/studiokit/>
 - Cloudflare Pages：<https://studiokit.pages.dev/>
-- 当前版本：Arcade `0.16.0`（本地未发布；线上已发布为 `0.14.0`）（2026-11-22 已双端发布；区块内容：同种弹种叠加有效时长（上限 180s）+「星海割草」无尽演武（四弹种常驻、大杀器满载无限、密集敌潮/掉落、Boss 四套专属弹幕、能量唯一瓶颈、受击只扣能量、不记分/不给星币/不写局内档）；挑战 6 关数据与判定零改动，无 key/Schema 变更。发布：提交 `4c90a4c` 推送 `main`；Actions run `45010510889` 四 job 全绿；CI 与本地 `tools/verify_deploy.py` 均 **41/41** 双端逐文件一致（arcade 0.14.0 / badge 2.2.1 / venue 0.2.0）；双端线上无头 Chrome 实测 0.14.0、星海割草入口/常驻状态/无 console error；SW `studiokit-arcade-0.14.0-v1`；设计与回滚见 `apps/arcade/DESIGN-0.14.0.md`；真机手感 UNVERIFIED。）
+- 当前版本：Arcade `0.17.0`（本地未发布；线上已发布为 `0.14.0`）（2026-11-22 已双端发布；区块内容：同种弹种叠加有效时长（上限 180s）+「星海割草」无尽演武（四弹种常驻、大杀器满载无限、密集敌潮/掉落、Boss 四套专属弹幕、能量唯一瓶颈、受击只扣能量、不记分/不给星币/不写局内档）；挑战 6 关数据与判定零改动，无 key/Schema 变更。发布：提交 `4c90a4c` 推送 `main`；Actions run `45010510889` 四 job 全绿；CI 与本地 `tools/verify_deploy.py` 均 **41/41** 双端逐文件一致（arcade 0.14.0 / badge 2.2.1 / venue 0.2.0）；双端线上无头 Chrome 实测 0.14.0、星海割草入口/常驻状态/无 console error；SW `studiokit-arcade-0.14.0-v1`；设计与回滚见 `apps/arcade/DESIGN-0.14.0.md`；真机手感 UNVERIFIED。）
 - 最近发布：Arcade `0.14.0`（`0.15.0` 尚未发布，等待 Owner 授权）（2026-11-22，已双端发布）
   - 批次内容：Cloudflare Pages 无后缀 URL 下的游戏识别修复（计时全 0 根因）；测试服务器新增无后缀回退、smoke 108 → 109；无 key/Schema 变更；保留 `apps/arcade/diag.html` 供真机复验
   - 发布：提交 `b3a8c7e` 推送 `main`；Actions run `45007754972` 四 job 全绿；CI 与本地 `tools/verify_deploy.py` 均 **41/41** 双端逐文件一致（arcade 0.13.3 / badge 2.2.1 / venue 0.2.0）；双端线上无头 Chrome 实测：CF 无后缀 URL `currentGame=block-drop`、游玩 1.6s 记到 1606ms，GH `.html` 正常，诊断页 iframe 显示「计时正常 3508ms」，0 console error；真机 iOS 复验待 Owner（UNVERIFIED）

@@ -41,8 +41,8 @@
    * 常量
    * ------------------------------------------------------------------ */
 
-  var MODULE_VERSION = '0.16.0';
-  var CONTENT_VERSION = '0.16.0';
+  var MODULE_VERSION = '0.17.0';
+  var CONTENT_VERSION = '0.17.0';
   /* ADR §18.3：ticket 与本凭证都只用于当前标签页会话，不是持久存档。 */
   var STORAGE_KEY = 'studiokit:arcade:career:rental.v1';
   var MARKER_SCHEMA_VERSION = 1;

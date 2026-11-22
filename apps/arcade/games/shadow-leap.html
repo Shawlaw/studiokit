@@ -562,10 +562,11 @@
 
       /* 真实最高探索高度：只在真实物理把 topY 上移、score 提交之后调用；20m 粒度提交真实米数。 */
       function noteCareerHeight() {
-        if (!careerLocked || mode !== 'classic' || state !== 'playing') return false;
+        if (mode !== 'classic' || state !== 'playing') return false;
         if (!career || typeof career.observe !== 'function') return false;
         if (score <= careerLastHeightMeters) return false;
-        const nextMilestone = (Math.floor(careerLastHeightMeters / CAREER_HEIGHT_STEP) + 1) * CAREER_HEIGHT_STEP;
+        const heightStep = careerLocked ? CAREER_HEIGHT_STEP : 1;
+        const nextMilestone = (Math.floor(careerLastHeightMeters / heightStep) + 1) * heightStep;
         if (score < nextMilestone) return false;
         careerLastHeightMeters = score;
         careerHeightEvents += 1;

@@ -1,6 +1,40 @@
 # Arcade Changelog
 
 
+## 0.17.0 — 2026-11-23（本地未发布；等待 Owner 发布授权）
+
+活世界：96 委托、五材商店、制造台、职业成长、剧情证据与单职业路线（分支 `feat/arcade-life-015`，不推送、不发布）。
+
+### Added
+- **96 份职业委托**（16 游戏 × T1–T6）：T1–T3 告示板公开；T4–T6 实现但由 `C3.truth_found` / `C4.city_power_restored` / `C5.star_tower_resolved` 旗标解锁，受控 fixture 证明。
+- **16 款游戏职业 run**：目标行（≤2 行）、真实目标事件、真实结算、职业专属收工出口；挑战/禅/割草不可进入。
+- **五类材料**：建材/合金/电子元件/星晶/生物材料；固定买卖价差，`crystal` 0.16 别名统一到 `starcrystal`。
+- **材料商店**（`ui/market.js`）：买/卖、余额/材料不足归因、请求中禁用、payout 拆单；卖料走 `db.sellItems` 单事务。
+- **制造台**（`ui/workshop.js` + `crafting.js`）：3 件生涯模块（相位护盾/货舱磁吸/能量电池）、15 层配方；材料+信用点原子扣减；模块只生涯生效。
+- **16 职业等级**（学徒/熟练/专家）：按已清委托/claims 去重，只影响可选订单/展示。
+- **剧情证据**（`story-evidence.js`）：`E/MAP/BP/DEC-*` 白名单、去重、不可消耗/重放；C2–C4 多路径。
+- **单职业路线**（`route-planner.js`）：16×16 组合可执行或可解释 blocker；免费租机/市场/代办替代。
+- **内容**：`commissions.json`（96）、`items.json`（五材/4 船/7 模块）、`chapter-01.json`（16 起源）。
+
+### Changed / Fixed
+- `career-core` 目标支持 `minValue` 数值阈值与 `value-not-met`；`commission-core` 失败返回 `reached`。
+- 新增真实事件：`session.finish`、`tile.created`、`move.legal`、`stock.face_up`、`foundation.move`、`bell.unique`、`stage.clear`、`distance.reached`、`combo.reached`、`wave.completed`、`scroll.collected` 等。
+- 职业隔离补全：层塔 `finishRun` 不再写经典记录；影跃经典 `height.reached` 恢复逐米、雪铃经典事件保持；`serialize()`/autosave/挑战/GameMeta 门禁逐页验证。
+- `bridge.js` 懒装载 materials/crafting/professions/storyEvidence/routePlanner，公开 `openMarket/openWorkshop`；结算后登记证据。
+- `career-db`：`sellItems` 原子卖料、`writeEquipment` 修复 `isFiniteNumber` 未定义、材料别名读取合并。
+- `review` 金样 55 处回看标记；SW `CORE_PATHS`/`verify_deploy.PATHS` 同步 0.17。
+
+### Tests
+- **96 委托回归**：`career_96_missions_test` **96/96 tiers、3792/3792 checks**（真实 Chrome/IndexedDB，16 游戏各 6 阶 success/failure/suspend/claim/幂等）。
+- fixture runner `--validate`：内容 96/96、16/16 fixture 形状 PASS；schema 负例矩阵。
+- 纯 Node：materials 32/32、professions 213/213、story-evidence 90/90、route-planner 214/214、economy-balance 47/47、commission 61/61、combat 379/379、legacy 78/78、registry 90/90、discovery 84/84、entry 37/37。
+- Chrome：reachability 165/165、a11y 75/75、db 38/38、backup 34/34、PWA 离线 17/17、smoke 113/113、review 5/5、zen 14/14、calm 17/17、tower 23/23、interaction 5/5、immersive 32/32、pwa_update 9/9。
+- 0.16 first-flight/resume/mobile 的 0.17 内容更新在 G17 前完成；真机 UNVERIFIED。
+
+### Notes
+- 版本链 0.17.0 / SW `studiokit-arcade-0.17.0-v1`；接口 ADR §19；设计与回滚 `DESIGN-0.17.0.md`；平衡 `BALANCE-017.md`；集成 `INTEGRATION-0.17.md`。
+- 未发布：无 `OWNER_AUTHORIZATION: PUBLISH_TO_MAIN`；远端 `main` 仍 `afc5fd4`。
+
 ## 0.16.0 — 2026-11-23（本地未发布；等待 Owner 发布授权）
 
 首航：旧港告示板委托、免费租机、飞船机库与职业收据（分支 `feat/arcade-life-015`，不推送、不发布）。

@@ -1865,7 +1865,7 @@ async function runSelfTest() {
     ['bad-flag', 'reward-flag-token', (content) => { content.commissions[0].reward.flags = ['not-a-flag']; }],
     ['bad-profession', 'profession-id-invalid', (content) => { content.commissions[0].professionId = 'nope.prof'; }],
     ['bad-star-startparams', 'startparams-star', (content) => { const target = content.commissions.filter((item) => item.gameId === 'star-raid')[0]; target.startParams = { startLevel: 2, themeId: 'storm' }; }],
-    ['bad-content-version', 'content-version', (content) => { content.contentVersion = '0.16.0'; }],
+    ['bad-content-version', 'content-version', (content) => { content.contentVersion = '0.17.0'; }],
     ['duplicate-commission-id', 'duplicate-commission-id', (content) => { content.commissions[1].commissionId = content.commissions[0].commissionId; }],
     ['missing-tier', 'content-count', (content) => { content.commissions.pop(); }],
   ];

@@ -30,7 +30,7 @@
   var DOC = typeof document !== 'undefined' ? document : null;
   if (!WINDOW || typeof WINDOW !== 'object') return;
 
-  var VERSION = '0.16.0';
+  var VERSION = '0.17.0';
   var CAREER_DB_NAME = 'studiokit:arcade:career';
   var STATE_KEY = 'discovery';
   var VALID_MODES = ['classic', 'challenge', 'zen', 'commission'];

@@ -4,6 +4,14 @@ StudioKit 门户本身没有独立的 semver；以下按仓库里程碑与工具
 
 > 说明：Arcade `0.11.2`–`0.14.0` 的条目于 2026-11-22 依据 [`apps/arcade/CHANGELOG.md`](apps/arcade/CHANGELOG.md) 补齐（本文件当时落后于工具版本），逐条数值与证据以工具 CHANGELOG 与对应 `DESIGN-*.md` 为准。
 
+## Arcade 0.17.0 — 2026-11-23（本地未发布）
+
+- 活世界：16×6 共 96 份职业委托（T1–T3 公开、T4–T6 剧情旗标解锁）、五材商店、模块制造台、16 职业成长、剧情证据与单职业路线；玩家仍只从 LOCAL 线索信进入。
+- 16 款游戏接入职业目标与真实事件；职业 run 不写经典局内档/Progress/Scores/挑战/旧机库/星币；补齐层塔隔离缺口、影跃/雪铃经典事件恢复。
+- `db.sellItems` 原子卖料；`crystal` 别名统一 `starcrystal`；`review` 55 处回看金样。
+- 测试：96/96 tiers（3792 checks）、materials 32、professions 213、story 90、route 214、balance 47；smoke 113、reachability 165、a11y 75、db 38、backup 34、PWA 17。
+- 未发布：无 `OWNER_AUTHORIZATION: PUBLISH_TO_MAIN`；详见 [`apps/arcade/CHANGELOG.md`](apps/arcade/CHANGELOG.md)、[`DESIGN-0.17.0.md`](apps/arcade/DESIGN-0.17.0.md)、[`INTEGRATION-0.17.md`](docs/arcade-life/INTEGRATION-0.17.md)。
+
 ## Arcade 0.16.0 — 2026-11-23（本地未发布）
 
 - 旧港告示板委托（层塔施工/星海护航 T1/T2）、免费租机、非战斗代办、飞船机库与职业收据；玩家从 LOCAL 线索信按地址进入，游戏页用真实事件结算。

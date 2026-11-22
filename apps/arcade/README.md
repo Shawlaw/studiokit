@@ -1,6 +1,6 @@
 # 街机厅 Arcade
 
-**应用版本 `0.16.0`**（本地分支 `feat/arcade-life-015`，未发布）｜进度 / 局内 / 游玩统计 / 积分记录 / 挑战记录 / 游戏数据 meta 的 Schema 均为 `v1`；0.15 新增独立生涯 IndexedDB（`studiokit:arcade:career` v1），不改变既有 localStorage 键
+**应用版本 `0.17.0`**（本地分支 `feat/arcade-life-015`，未发布）｜进度 / 局内 / 游玩统计 / 积分记录 / 挑战记录 / 游戏数据 meta 的 Schema 均为 `v1`；0.15 新增独立生涯 IndexedDB（`studiokit:arcade:career` v1），不改变既有 localStorage 键
 
 16 款竖屏小游戏合集的纯前端实现：加载后完全本地游玩，自带自研轻量物理引擎（重力、AABB 与圆碰撞、单向平台、单摆积分、塔体倾斜力矩），所有游戏由简到难、随时可暂停，并把未完成的局内进度自动保存在本机。支持全屏/沉浸、可安装 PWA、离线预载、游玩统计、积分记录与分享；连续有效游玩 20 分钟只温柔提醒一次，**没有签到、每日奖励、付费抽奖、内购或广告**。
 
@@ -285,7 +285,7 @@ node tools/arcade_stage_solver.mjs --stages=docs/arcade/stages-0.8.json  # 影�
 | 0.13.3 | [`DESIGN-0.13.3.md`](DESIGN-0.13.3.md) | Cloudflare Pages 无后缀 URL 导致游戏识别失败、计时全 0 |
 | 0.14.0 | [`DESIGN-0.14.0.md`](DESIGN-0.14.0.md) | 星海突击弹种叠加时长 + 「星海割草」无尽演武 |
 | 0.15.0 | [`DESIGN-0.15.0.md`](DESIGN-0.15.0.md) | 被动线索 + 独立生涯数据层（本地未发布） |
-| 0.16.0 | [`DESIGN-0.16.0.md`](DESIGN-0.16.0.md) | 告示板委托 + 免费租机 + 飞船机库 + 收据（本地未发布） |
+| 0.17.0 | [`DESIGN-0.17.0.md`](DESIGN-0.17.0.md) | 告示板委托 + 免费租机 + 飞船机库 + 收据（本地未发布） |
 
 ### 回滚要点
 

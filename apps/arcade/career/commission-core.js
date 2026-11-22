@@ -161,7 +161,7 @@
 
   /**
    * 兼容主键：0.x 预发布版本链把 “0.<minor>” 当主键（0.15 与 0.16 不兼容，
-   * 0.16.0/0.16.9 互相兼容）；>=1.0 只比 major。ADR §9 要求版本不一致拒绝委托结算。
+   * 0.17.0/0.16.9 互相兼容）；>=1.0 只比 major。ADR §9 要求版本不一致拒绝委托结算。
    */
   function versionKey(version) {
     if (typeof version !== 'string') return null;

@@ -249,6 +249,18 @@ Owner 两条真机反馈：①已安装 PWA 点「检查更新」显示的是已
 - [x] 双端发布：Owner 本轮明确授权发布（`PUBLISH_TO_MAIN`）；提交 `8493cf7`（PWA 更新检测）+ `78858e0`（游玩时长 + 文档）ff 合入 `main`；Actions run `45002523350` 四 job 全绿（Validate and build / Deploy GitHub Pages / Deploy Cloudflare Pages / Verify both deployments）；CI 与本地 `tools/verify_deploy.py` 均 **41/41** 双端逐文件一致（arcade 0.13.2 / badge 2.2.1 / venue 0.2.0）；双端线上无头 Chrome 各 8 项全过（中心页 0.13.2 + 检查更新返回线上 0.13.2 且不误报、SW 握手 0.13.2、缓存键 `studiokit-arcade-0.13.2-v1`、游戏页可加载、0 console error）
 - [ ] 真机复测：iOS 主屏幕 PWA 的「检查更新」提示时机与「累计时长/积分记录时长」待 Owner 确认（UNVERIFIED）
 
+## 0.17.0 活世界：96 委托、五材商店、制造台与职业成长（2026-11-23 本地未发布）
+
+- [x] 96 委托内容（16×T1–T6）：T1–T3 公开；T4–T6 由 C3/C4/C5 旗标解锁，受控 fixture 证明
+- [x] 16 游戏职业 run 真实目标/事件/隔离：新增 session.finish、tile.created、move.legal、stock.face_up、foundation.move、bell.unique、stage.clear、distance.reached、combo.reached、wave.completed、scroll.collected 等真实提交点；挑战/禅/割草不可进
+- [x] 五材（建材/合金/电子元件/星晶/生物材料）+ 固定价差商店；`db.sellItems` 原子卖料、purchase 材料成本
+- [x] 制造台：3 件生涯模块（相位护盾/货舱磁吸/能量电池）与 15 层配方；`MODULE_EFFECTS` 只生涯生效
+- [x] 16 职业学徒/熟练/专家（0–2/3–5/≥6 已清委托），只影响可选订单/展示
+- [x] 剧情证据去重（E/MAP/BP/DEC）与 C2–C4 多路径；单职业路线规划 16×16 可执行
+- [x] 96 委托回归：16 游戏 × 6 阶 96/96 tier、3792 checks；平衡测试 47/47
+- [x] 版本链 0.17.0；职业隔离补齐层塔 `finishRun` 缺口、阴影/雪铃经典事件恢复
+- [ ] 0.16 first-flight/resume/mobile 按 0.17 内容更新；G17 独立门禁与 Owner 发布授权；真机/PWA 安装态 UNVERIFIED
+
 ## 0.16.0 首航：告示板委托、免费租机与飞船机库（2026-11-23 本地未发布）
 
 - [x] 旧港告示板（town）：从 LOCAL 信件按地址进入，列出 T1/T2 委托、明码工钱/材料与时长，接单后跳转对应游戏页

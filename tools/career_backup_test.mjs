@@ -334,7 +334,7 @@ async function runNodeChecks() {
     assert(b.rulesetVersion === 3, 'meta rulesetVersion=' + b.rulesetVersion);
     assert(b.exportedAt === '2026-11-22T05:06:07.000Z', 'meta.now 未转 exportedAt：' + b.exportedAt);
     const c = backup.buildExportPayload({}, { contentVersion: '', rulesetVersion: 0 });
-    assert(c.contentVersion === '0.16.0', '默认 contentVersion 应为 0.16.0：' + c.contentVersion);
+    assert(c.contentVersion === '0.17.0', '默认 contentVersion 应为 0.17.0：' + c.contentVersion);
     assert(c.rulesetVersion === 1, '默认 rulesetVersion 应为 1：' + c.rulesetVersion);
     assert(!isNaN(Date.parse(c.exportedAt)), '默认 exportedAt 不是 ISO：' + c.exportedAt);
     const previousRuntime = globalThis.ArcadeCareer;
@@ -876,7 +876,7 @@ async function runChromeChecks(cdp) {
     );
     assert(result.exported.ok, '导出失败：' + detail(result.exported));
     assert(result.defaulted.ok, '默认导出失败：' + detail(result.defaulted));
-    assert(result.defaulted.payload.contentVersion === '0.16.0', '默认 contentVersion 应为 0.16.0：' + result.defaulted.payload.contentVersion);
+    assert(result.defaulted.payload.contentVersion === '0.17.0', '默认 contentVersion 应为 0.17.0：' + result.defaulted.payload.contentVersion);
     assert(result.defaulted.payload.rulesetVersion === 1, '默认 rulesetVersion 应为 1：' + result.defaulted.payload.rulesetVersion);
     assert(result.defaulted.payload.careerSchemaVersion === 1, '默认 careerSchemaVersion 应为 1');
     assert(/^studiokit-arcade-career-\d{8}-\d{6}\.json$/.test(result.exported.filename), 'filename=' + result.exported.filename);
