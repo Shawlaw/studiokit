@@ -1,6 +1,39 @@
 # Arcade Changelog
 
 
+## 0.16.0 — 2026-11-23（本地未发布；等待 Owner 发布授权）
+
+首航：旧港告示板委托、免费租机、飞船机库与职业收据（分支 `feat/arcade-life-015`，不推送、不发布）。
+
+### Added
+- 旧港告示板（`ui/town.js`）：仅从 LOCAL 线索信按地址进入；列出层塔施工 T1/T2、星海护航 T1/T2（戏内标题/一句话目标/工钱材料/时长），接单后带 ticket 跳转对应游戏页；另有「港务处代办」（明码标价，非战斗路径）与机库/钱包入口。
+- 委托运行时（`commission-core.js`）：ticket（`ticketId === runId`，sessionStorage）→ 游戏页 `?career=` 激活 → 真实事件缓冲 → 目标判定（`career-core.validateCommission`）→ 首发奖励/repeatSalary → `settleAndClaim` 单事务；重复结算返回原收据、失败零写入、刷新可恢复、放弃不发奖。
+- 层塔施工 T1/T2：职业 run 内开局弹层显示戏内目标，挑战入口隐藏，旧局内档 `runs:v1` 全程不读不写；稳定层仍由真实物理提交点产生。
+- 星海护航 T1/T2：`startParams.startLevel/themeId` 决定起始关/主题，职业 run `classicLike` 但跳过星币入账、旧机库读写、Progress/Scores/RunSave；Boss 事件带真实 level/theme。
+- 免费租机（`rental.js`）：会话 marker、零扣费、不改变拥有/装备；失败不丢装备。
+- 非战斗代办（`alternatives.js`）：明码标价、只扣信用点/材料与写 `alternative/story` 行，不发钱、不给战斗奖章。
+- 飞船机库（`ui/hangar.js`）：旧翼 260 / 云雀 480（合金 1）/ 盾鲸 520（合金 2）/ 棱镜 540（合金 2+棱晶 1）；`purchase.costItems` 同事务扣材料与信用点，切换走 `writeEquipment`；余额/材料不足可归因、purchaseId 幂等。
+- 钱包/收据（`ui/receipt.js`）：家当、原收据、最近流水；结算后收据卡懒加载显示；同 run/txId 不重复展示。
+- 内容：`commissions.json`（4 条 T1/T2）、`items.json`（4 船/模块/材料）、`chapter-01.json`（16 起源 C0 信 + C1 三路径）。
+
+### Changed / Fixed
+- 0.16 前置修复：星海 `GameMeta.set` 改为读-合并-写（旧字段保留，`formula:1` 不变）；`classicLike` 统一经典/职业玩法分支；`serialize()` 在职业 run/mow 返回 null。
+- `bridge.js`：新增 commission 模式、`openTown/openHangar/openReceipt`、`getCommissionLoadout`、`api.items`；新模块全部按需装载（普通页与 `#test` 零额外请求、零 404）。
+- `career-core.purchasePlan` 增加 `costItems`（材料成本同事务校验/扣减），`career-db.purchase` 原子扣减；新增 `getEquipment/writeEquipment/readLedger`。
+- `sw.js` CORE_PATHS 预缓存 0.16 career 资源；`verify_deploy.PATHS` 同步；中心页仍无生涯 CTA。
+- `arcade_smoke` 核弹用例改为按实际槽位取核弹（修复随机整备后偶发失败，非产品回归）。
+
+### Tests
+- 纯 Node：commission **61/61**（另真实 IDB 17/17、真实 bridge E2E 8/8）、star-combat-config **379/379**、rental **153/153**、alternatives **67/67**、legacy 金样 **78/78**、registry **90/90**、discovery **84/84**、router/entry **37/37**。
+- Chrome/CDP：resume **45/45**、first-flight **192/192**、mobile **318/318**、a11y **75/75**、career_db **38/38**、backup **34/34**、PWA 离线 **17/17**。
+- 既有回归：smoke、zen、calm、review、tower、interaction、immersive、pwa_update、gameplay all/base（G16 独立复跑）。
+- 真机 iPhone/Android 触控、安全区、VoiceOver/TalkBack、PWA 安装/更新时机：**UNVERIFIED**。
+
+### Notes
+- 复用 0.15 IDB v1（11 stores），无新 store、无 localStorage 新增/改名；sessionStorage 仅 ticket/rental 两个命名空间键。
+- 版本链 0.16.0 / SW `studiokit-arcade-0.16.0-v1`；接口见 ADR §18，设计/回滚见 `DESIGN-0.16.0.md`；证据在仓库外 `qa/evidence/`。
+- 未发布：无 `OWNER_AUTHORIZATION: PUBLISH_TO_MAIN`。
+
 ## 0.15.0 — 2026-11-22（本地未发布；等待 Owner 发布授权）
 
 新增「被动线索」与独立生涯数据层（分支 `feat/arcade-life-015`，不推送、不发布）。

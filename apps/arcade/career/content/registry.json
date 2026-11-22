@@ -1,6 +1,6 @@
 {
   "schemaVersion": 1,
-  "contentVersion": "0.15.0",
+  "contentVersion": "0.16.0",
   "note": "首季运行时注册表：游戏清单/职业多对多/委托与故事节点由后续版本追加。禁止把规模写死进代码；此处数组长度只是本季内容量。",
   "games": [
     {

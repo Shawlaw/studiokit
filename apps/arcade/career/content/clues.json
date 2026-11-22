@@ -1,6 +1,6 @@
 {
   "schemaVersion": 1,
-  "contentVersion": "0.15.0",
+  "contentVersion": "0.16.0",
   "clues": [
     {
       "clueId": "CL-memory-flip",

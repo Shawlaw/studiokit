@@ -47,6 +47,9 @@
   const HANGAR_LABEL = '去机库';
   const RECEIPT_LABEL = '钱包与收据';
   const SETTINGS_LABEL = '线索提示';
+  const ALT_TITLE = '港务处代办';
+  const ALT_EMPTY = '港务处今天没有跑腿的活。';
+  const ALT_BUY_LABEL = '接这单';
   const CLOSE_LABEL = '收起告示板';
   const HANGAR_FAILED = '机库那边灯还亮着，门暂时没开。';
   const RECEIPT_FAILED = '账房今天没开窗，收据先拿不到。';
@@ -550,6 +553,12 @@
     const empty = make('p', 'ac-career-town__empty', LIST_EMPTY);
     empty.hidden = true;
 
+    /* 0.16 非战斗代办（alternatives.js）：明码标价、只扣费，不产生战斗奖章。 */
+    const altHeading = make('h3', 'ac-career-town__subtitle', ALT_TITLE);
+    const altList = make('ul', 'ac-career-town__list ac-career-town__alts');
+    const altEmpty = make('p', 'ac-career-town__empty', ALT_EMPTY);
+    altEmpty.hidden = true;
+
     const statusLine = make('p', 'ac-career-status');
     statusLine.hidden = true;
 
@@ -572,6 +581,9 @@
     townView.appendChild(notice);
     townView.appendChild(list);
     townView.appendChild(empty);
+    townView.appendChild(altHeading);
+    townView.appendChild(altList);
+    townView.appendChild(altEmpty);
     townView.appendChild(statusLine);
     townView.appendChild(footer);
 
@@ -704,6 +716,87 @@
       empty.hidden = hasRows || !boardReady;
     }
 
+    function renderAlternatives() {
+      const alt = liveContext && liveContext.alternatives ? liveContext.alternatives : null;
+      while (altList.firstChild) altList.removeChild(altList.firstChild);
+      if (!alt || typeof alt.listOffers !== 'function') {
+        altHeading.hidden = true;
+        altList.hidden = true;
+        altEmpty.hidden = true;
+        return;
+      }
+      altHeading.hidden = false;
+      let result = null;
+      try {
+        result = alt.listOffers({ careerId: careerIdOf(liveContext) });
+      } catch (err) {
+        result = null;
+      }
+      const apply = (value) => {
+        if (!isCurrent()) return;
+        while (altList.firstChild) altList.removeChild(altList.firstChild);
+        const offers = value && Array.isArray(value.offers) ? value.offers : [];
+        offers.forEach((offer) => {
+          if (!offer || typeof offer.offerId !== 'string') return;
+          const item = make('li', 'ac-career-town__row');
+          const info = make('div', 'ac-career-town__row-main');
+          info.appendChild(make('strong', 'ac-career-town__row-title', String(offer.title || offer.offerId)));
+          const cost = offer.cost && typeof offer.cost === 'object' ? offer.cost : {};
+          const pieces = [];
+          if (cost.credits) pieces.push(cost.credits + ' 信用点');
+          if (cost.items && typeof cost.items === 'object') {
+            const names = materialNamesOf(liveContext);
+            Object.keys(cost.items).forEach((key) => pieces.push(cost.items[key] + ' ' + (names[key] || key)));
+          }
+          info.appendChild(make('span', 'ac-career-town__row-meta', pieces.length ? '工本：' + pieces.join(' + ') : '不用工本'));
+          if (offer.summary) info.appendChild(make('span', 'ac-career-town__row-summary', String(offer.summary)));
+          const actions = make('div', 'ac-career-town__row-actions');
+          const button = make('button', 'ac-career-btn', ALT_BUY_LABEL);
+          button.type = 'button';
+          button.setAttribute('data-alt-offer', offer.offerId);
+          button.disabled = offer.alreadyDone === true || offer.affordable === false;
+          button.addEventListener('click', () => buyAlternative(offer, button));
+          actions.appendChild(button);
+          item.appendChild(info);
+          item.appendChild(actions);
+          altList.appendChild(item);
+        });
+        altList.hidden = offers.length === 0;
+        altEmpty.hidden = offers.length > 0;
+      };
+      if (result && typeof result.then === 'function') result.then(apply, () => apply(null));
+      else apply(result);
+    }
+
+    function buyAlternative(offer, button) {
+      const alt = liveContext && liveContext.alternatives ? liveContext.alternatives : null;
+      if (!alt || typeof alt.buy !== 'function' || !offer) return;
+      if (button) button.disabled = true;
+      setStatus('正在跟港务处登记…');
+      let result = null;
+      try {
+        result = alt.buy({ careerId: careerIdOf(liveContext), offerId: offer.offerId });
+      } catch (err) {
+        result = null;
+      }
+      const done = (value) => {
+        if (!isCurrent()) return;
+        if (value && value.ok === true) {
+          setStatus('这单记在港务处账上了。');
+          announce('这单记在港务处账上了。');
+          renderWallet();
+          renderAlternatives();
+          return;
+        }
+        if (button) button.disabled = false;
+        const text = failTextOf(value);
+        setStatus(text);
+        announce(text);
+      };
+      if (result && typeof result.then === 'function') result.then(done, () => done(null));
+      else done(result);
+    }
+
     function loadUnlocks() {
       requestSeq += 1;
       const seq = requestSeq;
@@ -726,6 +819,7 @@
       const settle = (value) => {
         if (!isCurrent() || seq !== requestSeq) return;
         applyUnlocked(normalizeUnlocked(value));
+        renderAlternatives();
       };
       if (result && typeof result.then === 'function') {
         result.then(settle, () => settle(null));

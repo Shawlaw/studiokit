@@ -30,7 +30,7 @@
   var DOC = typeof document !== 'undefined' ? document : null;
   if (!WINDOW || typeof WINDOW !== 'object') return;
 
-  var VERSION = '0.15.0';
+  var VERSION = '0.16.0';
   var CAREER_DB_NAME = 'studiokit:arcade:career';
   var STATE_KEY = 'discovery';
   var VALID_MODES = ['classic', 'challenge', 'zen', 'commission'];
@@ -771,6 +771,8 @@
         else if (def.global === 'commission') {
           api.commission = mod;
           configureCommissionContent();
+        } else if (def.global === 'rental' || def.global === 'alternatives' || def.global === 'combatConfig') {
+          api[def.global] = mod;
         } else if (def.global.indexOf('ui.') === 0) syncUiRefs();
         return mod;
       }
@@ -883,6 +885,7 @@
         return data && typeof data === 'object' ? data : null;
       }),
     ]).then(function () {
+      if (internal.itemsContent) api.items = clone(internal.itemsContent);
       if (commissionModule()) configureCommissionContent();
     });
     internal.contentPromise = all;
@@ -2427,6 +2430,8 @@
       reducedMotion: reducedMotionPreferred(),
       api: api,
       commission: commissionModule() || null,
+      alternatives: readGlobal('alternatives') || null,
+      rental: readGlobal('rental') || null,
       commissionRun: internal.commissionRun ? clone(internal.commissionRun) : null,
       commissions: internal.commissionContent ? clone(internal.commissionContent) : null,
       items: internal.itemsContent ? clone(internal.itemsContent) : null,
@@ -2520,7 +2525,7 @@
     if (isSilentTestOnly()) return uiUnavailable('test-silent');
     warmLazyModules();
     /* town/hangar/receipt 都需要 commission-core 与委托目录在 ctx 里可用；机库还需要租机模块。 */
-    var preload = Promise.all([ensureLazyModule('commission'), loadCareerContent()]).then(function () {
+    var preload = Promise.all([ensureLazyModule('commission'), ensureLazyModule('alternatives'), loadCareerContent()]).then(function () {
       configureCommissionContent();
       return configureRentalModule();
     });
@@ -2539,6 +2544,8 @@
           if (!target) return uiUnavailable('ui-unavailable');
           var context = uiContext({
             commission: commissionModule() || null,
+            alternatives: readGlobal('alternatives') || null,
+            rental: readGlobal('rental') || null,
             commissionRun: internal.commissionRun ? clone(internal.commissionRun) : null,
             commissions: internal.commissionContent ? clone(internal.commissionContent) : null,
             items: internal.itemsContent ? clone(internal.itemsContent) : null,
@@ -3007,6 +3014,9 @@
     /* 0.16 职业委托（向后兼容扩展）：无 ticket 时 commissionRun=null，行为与 0.15 相同。 */
     api.commission = null;
     api.commissionRun = null;
+    api.items = null;
+    api.alternatives = null;
+    api.rental = null;
     api.isCommissionRun = function () {
       return !!internal.commissionRun;
     };
