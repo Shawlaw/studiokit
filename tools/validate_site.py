@@ -376,25 +376,45 @@ def validate(root=ROOT):
             except (json.JSONDecodeError, OSError) as exc:
                 ok = fail(f'Arcade 0.16 career content JSON invalid: {exc}') and ok
             else:
-                watch_kinds = {}
-                for game in registry_data.get('games') or []:
-                    if isinstance(game, dict):
-                        watch_kinds[game.get('gameId')] = {w.get('kind') for w in game.get('watch') or [] if isinstance(w, dict)}
+                commission_list = commissions.get('commissions') or []
+                if len(commission_list) != 96:
+                    ok = fail(f'Arcade 0.17 commissions must be 96 (16 games x 6 tiers), found {len(commission_list)}') and ok
                 commission_ids = set()
-                for commission in commissions.get('commissions') or []:
+                per_game_tiers = {}
+                kind_re = re.compile(r'^[a-z0-9][a-z0-9._-]{0,79}$')
+                for commission in commission_list:
                     if not isinstance(commission, dict):
                         continue
                     commission_id = commission.get('commissionId')
                     commission_ids.add(commission_id)
                     game_id = commission.get('gameId')
+                    tier = commission.get('tier')
+                    if game_id not in ARCADE_ALL_GAMES:
+                        ok = fail(f'Arcade 0.17 commission {commission_id}: unknown gameId') and ok
+                    if not isinstance(tier, int) or tier < 1 or tier > 6:
+                        ok = fail(f'Arcade 0.17 commission {commission_id}: tier must be 1..6') and ok
+                    elif not str(commission_id).startswith(f'{game_id}.T{tier}'):
+                        ok = fail(f'Arcade 0.17 commission {commission_id}: id/tier mismatch') and ok
+                    per_game_tiers.setdefault(game_id, set()).add(tier)
                     objective = commission.get('objective') or {}
-                    if objective.get('kind') not in watch_kinds.get(game_id, set()):
-                        ok = fail(f'Arcade 0.16 commission {commission_id}: objective kind must be in {game_id} watch kinds') and ok
-                    if not isinstance(commission.get('repeatSalaryCredits'), int):
-                        ok = fail(f'Arcade 0.16 commission {commission_id}: missing repeatSalaryCredits') and ok
-                for expected in ('pendulum-tower.T1', 'pendulum-tower.T2', 'star-raid.T1', 'star-raid.T2'):
-                    if expected not in commission_ids:
-                        ok = fail(f'Arcade 0.16 commission missing: {expected}') and ok
+                    if not kind_re.match(str(objective.get('kind') or '')):
+                        ok = fail(f'Arcade 0.17 commission {commission_id}: invalid objective kind') and ok
+                    if not isinstance(objective.get('atLeast'), int) or objective.get('atLeast') < 1:
+                        ok = fail(f'Arcade 0.17 commission {commission_id}: atLeast must be >=1') and ok
+                    min_value = objective.get('minValue')
+                    if min_value is not None:
+                        if not isinstance(min_value, dict) or not kind_re.match(str(min_value.get('field') or '')) or not isinstance(min_value.get('value'), (int, float)):
+                            ok = fail(f'Arcade 0.17 commission {commission_id}: invalid minValue') and ok
+                    if not isinstance(commission.get('unlock'), dict):
+                        ok = fail(f'Arcade 0.17 commission {commission_id}: missing unlock') and ok
+                    salary = commission.get('repeatSalaryCredits')
+                    if not isinstance(salary, int) or salary < 0 or salary > 400:
+                        ok = fail(f'Arcade 0.17 commission {commission_id}: bad repeatSalaryCredits') and ok
+                    if isinstance(tier, int) and tier >= 4 and not commission.get('chapterGate'):
+                        ok = fail(f'Arcade 0.17 commission {commission_id}: T4-T6 must declare chapterGate') and ok
+                for game_id in ARCADE_ALL_GAMES:
+                    if per_game_tiers.get(game_id) != {1, 2, 3, 4, 5, 6}:
+                        ok = fail(f'Arcade 0.17 game {game_id}: must define T1-T6') and ok
                 origins = chapter1.get('origins') or []
                 if len(origins) != len(ARCADE_ALL_GAMES):
                     ok = fail(f'Arcade 0.16 chapter-01 origins must be {len(ARCADE_ALL_GAMES)}, found {len(origins)}') and ok
@@ -406,6 +426,16 @@ def validate(root=ROOT):
                 prices = {s.get('price') for s in ships if isinstance(s, dict)}
                 if prices != {260, 480, 520, 540}:
                     ok = fail(f'Arcade 0.16 ship prices changed: {sorted(prices)}') and ok
+                materials = items.get('materials') or []
+                if len(materials) != 5:
+                    ok = fail(f'Arcade 0.17 items.json must define 5 materials, found {len(materials)}') and ok
+                for material in materials:
+                    if not isinstance(material, dict) or not material.get('itemId'):
+                        continue
+                    buy = material.get('buyPrice')
+                    sell = material.get('sellPrice')
+                    if not isinstance(buy, int) or not isinstance(sell, int) or sell > buy * 0.6:
+                        ok = fail(f'Arcade 0.17 material {material.get("itemId")}: sell price must be <= buy*0.6') and ok
             bridge_source = (career_root / 'bridge.js').read_text(encoding='utf-8')
             for marker in ('TICKET_KEY', "commission-core.js", "lazy: true", 'getCommissionLoadout', 'openTown', 'openHangar', 'openReceipt'):
                 if marker not in bridge_source:

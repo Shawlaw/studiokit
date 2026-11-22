@@ -39,10 +39,10 @@
    * 常量
    * ------------------------------------------------------------------ */
 
-  var VERSION = '0.16.0';
-  var MODULE_VERSION = '0.16.0';
+  var VERSION = '0.17.0';
+  var MODULE_VERSION = '0.17.0';
   /* 运行时内容版本：ticket / 收据上的 contentVersion（与 ADR §18.1 一致）。 */
-  var CONTENT_VERSION = '0.16.0';
+  var CONTENT_VERSION = '0.17.0';
   var SCHEMA_VERSION = 1;
   var RULESET_VERSION = 1;
   var TICKET_SCHEMA_VERSION = 1;
@@ -317,7 +317,21 @@
         context[field] = value;
       }
     }
-    return { kind: raw.kind, atLeast: toPositiveInt(raw.atLeast, 1), context: context };
+    var objectiveOut = { kind: raw.kind, atLeast: toPositiveInt(raw.atLeast, 1), context: context };
+    /* 0.17：达到阈值型目标（距离/高度/格子值/连击），由 career-core 用 payload 最大值判定。 */
+    if (raw.minValue !== undefined) {
+      if (!isObject(raw.minValue) || !isStableId(raw.minValue.field)) {
+        errors.push('objective-minvalue-invalid:' + id);
+        return null;
+      }
+      var minValue = Number(raw.minValue.value);
+      if (!isFinite(minValue)) {
+        errors.push('objective-minvalue-invalid:' + id);
+        return null;
+      }
+      objectiveOut.minValue = { field: raw.minValue.field, value: minValue };
+    }
+    return objectiveOut;
   }
 
   var UNLOCK_PREDICATE_KEYS = [

@@ -1,69 +1,3423 @@
 {
-  "contentVersion": "0.16.0",
+  "contentVersion": "0.17.0",
   "commissions": [
     {
-      "commissionId": "pendulum-tower.T1",
-      "gameId": "pendulum-tower",
-      "professionId": "engineering.structural",
-      "title": "试工：四层起步",
-      "summary": "在潮汐吊臂下把四层集装箱稳稳叠起。",
-      "issuer": "旧港施工队",
-      "objective": { "kind": "tower.floor_stable", "atLeast": 4, "context": {} },
+      "commissionId": "memory-flip.T1",
+      "gameId": "memory-flip",
+      "professionId": "research.archivist",
+      "tier": 1,
+      "title": "旧档案夹",
+      "summary": "完成一组牌的有效配对",
+      "issuer": "旧港职业中心",
+      "objective": {
+        "kind": "pair.match",
+        "atLeast": 3
+      },
       "objectiveBonus": 0,
       "startParams": {},
-      "reward": { "credits": 70, "items": { "alloy": 1 }, "evidence": ["E-C1-site"], "flags": ["C1.work_done"] },
-      "repeatSalaryCredits": 25,
-      "unlock": { "all": [] },
+      "reward": {
+        "credits": 70,
+        "items": {},
+        "evidence": [],
+        "flags": []
+      },
+      "repeatSalaryCredits": 75,
+      "unlock": {
+        "all": []
+      },
+      "chapterGate": null,
       "risk": "low",
-      "durationHint": "约 2–4 分钟"
+      "durationHint": "约 2–5 分钟"
     },
     {
-      "commissionId": "pendulum-tower.T2",
-      "gameId": "pendulum-tower",
-      "professionId": "engineering.structural",
-      "title": "夜班：六层结构",
-      "summary": "夜潮涨起来之前，把六层结构立稳。",
-      "issuer": "旧港施工队",
-      "objective": { "kind": "tower.floor_stable", "atLeast": 6, "context": {} },
-      "objectiveBonus": 10,
+      "commissionId": "memory-flip.T2",
+      "gameId": "memory-flip",
+      "professionId": "research.archivist",
+      "tier": 2,
+      "title": "差一张的照片",
+      "summary": "完成更多配对并揭示旧照片",
+      "issuer": "旧港职业中心",
+      "objective": {
+        "kind": "pair.match",
+        "atLeast": 5
+      },
+      "objectiveBonus": 0,
       "startParams": {},
-      "reward": { "credits": 110, "items": { "alloy": 2 }, "evidence": ["E-C1-site-2"], "flags": ["C1.foreman"] },
-      "repeatSalaryCredits": 35,
-      "unlock": { "all": [{ "kind": "chapterFlag", "value": "C1.work_done" }] },
+      "reward": {
+        "credits": 0,
+        "items": {},
+        "evidence": [
+          "E-memory-flip.T2"
+        ],
+        "flags": []
+      },
+      "repeatSalaryCredits": 80,
+      "unlock": {
+        "all": [
+          {
+            "commissionCleared": "memory-flip.T1"
+          }
+        ]
+      },
+      "chapterGate": null,
+      "risk": "low",
+      "durationHint": "约 2–5 分钟"
+    },
+    {
+      "commissionId": "memory-flip.T3",
+      "gameId": "memory-flip",
+      "professionId": "research.archivist",
+      "tier": 3,
+      "title": "七号索引",
+      "summary": "完成一盘档案翻牌",
+      "issuer": "旧港职业中心",
+      "objective": {
+        "kind": "session.finish",
+        "atLeast": 1
+      },
+      "objectiveBonus": 0,
+      "startParams": {},
+      "reward": {
+        "credits": 95,
+        "items": {},
+        "evidence": [],
+        "flags": []
+      },
+      "repeatSalaryCredits": 85,
+      "unlock": {
+        "all": [
+          {
+            "commissionCleared": "memory-flip.T2"
+          }
+        ]
+      },
+      "chapterGate": null,
       "risk": "medium",
-      "durationHint": "约 3–5 分钟"
+      "durationHint": "约 2–5 分钟"
+    },
+    {
+      "commissionId": "memory-flip.T4",
+      "gameId": "memory-flip",
+      "professionId": "research.archivist",
+      "tier": 4,
+      "title": "应急工单",
+      "summary": "完成指定的通信档案配对",
+      "issuer": "旧港职业中心",
+      "objective": {
+        "kind": "pair.match",
+        "atLeast": 7
+      },
+      "objectiveBonus": 0,
+      "startParams": {},
+      "reward": {
+        "credits": 0,
+        "items": {},
+        "evidence": [
+          "E-memory-flip.T4"
+        ],
+        "flags": []
+      },
+      "repeatSalaryCredits": 90,
+      "unlock": {
+        "all": [
+          {
+            "commissionCleared": "memory-flip.T3"
+          },
+          {
+            "chapterFlag": "C3.truth_found"
+          }
+        ]
+      },
+      "chapterGate": "C3.truth_found",
+      "risk": "high",
+      "durationHint": "约 2–5 分钟"
+    },
+    {
+      "commissionId": "memory-flip.T5",
+      "gameId": "memory-flip",
+      "professionId": "research.archivist",
+      "tier": 5,
+      "title": "远征工单",
+      "summary": "在较高难度档案内完成全部配对",
+      "issuer": "旧港职业中心",
+      "objective": {
+        "kind": "session.finish",
+        "atLeast": 1
+      },
+      "objectiveBonus": 0,
+      "startParams": {},
+      "reward": {
+        "credits": 0,
+        "items": {},
+        "evidence": [
+          "MAP-memory-flip.T5"
+        ],
+        "flags": []
+      },
+      "repeatSalaryCredits": 95,
+      "unlock": {
+        "all": [
+          {
+            "commissionCleared": "memory-flip.T4"
+          },
+          {
+            "chapterFlag": "C4.city_power_restored"
+          }
+        ]
+      },
+      "chapterGate": "C4.city_power_restored",
+      "risk": "high",
+      "durationHint": "约 2–5 分钟"
+    },
+    {
+      "commissionId": "memory-flip.T6",
+      "gameId": "memory-flip",
+      "professionId": "research.archivist",
+      "tier": 6,
+      "title": "余波工单",
+      "summary": "补全E-7的最终信息",
+      "issuer": "旧港职业中心",
+      "objective": {
+        "kind": "pair.match",
+        "atLeast": 9
+      },
+      "objectiveBonus": 0,
+      "startParams": {},
+      "reward": {
+        "credits": 0,
+        "items": {},
+        "evidence": [
+          "DEC-memory-flip.T6"
+        ],
+        "flags": []
+      },
+      "repeatSalaryCredits": 95,
+      "unlock": {
+        "all": [
+          {
+            "commissionCleared": "memory-flip.T5"
+          },
+          {
+            "chapterFlag": "C5.star_tower_resolved"
+          }
+        ]
+      },
+      "chapterGate": "C5.star_tower_resolved",
+      "risk": "medium",
+      "durationHint": "约 2–5 分钟"
+    },
+    {
+      "commissionId": "merge-2048.T1",
+      "gameId": "merge-2048",
+      "professionId": "research.lattice",
+      "tier": 1,
+      "title": "初阶晶格",
+      "summary": "在一局中生成数值32的格子",
+      "issuer": "旧港职业中心",
+      "objective": {
+        "kind": "tile.created",
+        "atLeast": 1,
+        "minValue": {
+          "field": "value",
+          "value": 32
+        }
+      },
+      "objectiveBonus": 0,
+      "startParams": {},
+      "reward": {
+        "credits": 70,
+        "items": {},
+        "evidence": [],
+        "flags": []
+      },
+      "repeatSalaryCredits": 75,
+      "unlock": {
+        "all": []
+      },
+      "chapterGate": null,
+      "risk": "low",
+      "durationHint": "约 2–5 分钟"
+    },
+    {
+      "commissionId": "merge-2048.T2",
+      "gameId": "merge-2048",
+      "professionId": "research.lattice",
+      "tier": 2,
+      "title": "碎片相容",
+      "summary": "在一局中生成数值64的格子",
+      "issuer": "旧港职业中心",
+      "objective": {
+        "kind": "tile.created",
+        "atLeast": 1,
+        "minValue": {
+          "field": "value",
+          "value": 64
+        }
+      },
+      "objectiveBonus": 0,
+      "startParams": {},
+      "reward": {
+        "credits": 0,
+        "items": {
+          "alloy": 1
+        },
+        "evidence": [],
+        "flags": []
+      },
+      "repeatSalaryCredits": 80,
+      "unlock": {
+        "all": [
+          {
+            "commissionCleared": "merge-2048.T1"
+          }
+        ]
+      },
+      "chapterGate": null,
+      "risk": "low",
+      "durationHint": "约 2–5 分钟"
+    },
+    {
+      "commissionId": "merge-2048.T3",
+      "gameId": "merge-2048",
+      "professionId": "research.lattice",
+      "tier": 3,
+      "title": "信标电路",
+      "summary": "在一局中生成数值128的格子",
+      "issuer": "旧港职业中心",
+      "objective": {
+        "kind": "tile.created",
+        "atLeast": 1,
+        "minValue": {
+          "field": "value",
+          "value": 128
+        }
+      },
+      "objectiveBonus": 0,
+      "startParams": {},
+      "reward": {
+        "credits": 0,
+        "items": {},
+        "evidence": [
+          "BP-merge-2048.T3"
+        ],
+        "flags": []
+      },
+      "repeatSalaryCredits": 85,
+      "unlock": {
+        "all": [
+          {
+            "commissionCleared": "merge-2048.T2"
+          }
+        ]
+      },
+      "chapterGate": null,
+      "risk": "medium",
+      "durationHint": "约 2–5 分钟"
+    },
+    {
+      "commissionId": "merge-2048.T4",
+      "gameId": "merge-2048",
+      "professionId": "research.lattice",
+      "tier": 4,
+      "title": "应急工单",
+      "summary": "在一局中生成数值256的格子",
+      "issuer": "旧港职业中心",
+      "objective": {
+        "kind": "tile.created",
+        "atLeast": 1,
+        "minValue": {
+          "field": "value",
+          "value": 256
+        }
+      },
+      "objectiveBonus": 0,
+      "startParams": {},
+      "reward": {
+        "credits": 120,
+        "items": {},
+        "evidence": [],
+        "flags": []
+      },
+      "repeatSalaryCredits": 90,
+      "unlock": {
+        "all": [
+          {
+            "commissionCleared": "merge-2048.T3"
+          },
+          {
+            "chapterFlag": "C3.truth_found"
+          }
+        ]
+      },
+      "chapterGate": "C3.truth_found",
+      "risk": "high",
+      "durationHint": "约 2–5 分钟"
+    },
+    {
+      "commissionId": "merge-2048.T5",
+      "gameId": "merge-2048",
+      "professionId": "research.lattice",
+      "tier": 5,
+      "title": "远征工单",
+      "summary": "在一局中生成数值512的格子",
+      "issuer": "旧港职业中心",
+      "objective": {
+        "kind": "tile.created",
+        "atLeast": 1,
+        "minValue": {
+          "field": "value",
+          "value": 512
+        }
+      },
+      "objectiveBonus": 0,
+      "startParams": {},
+      "reward": {
+        "credits": 0,
+        "items": {
+          "starcrystal": 1
+        },
+        "evidence": [],
+        "flags": []
+      },
+      "repeatSalaryCredits": 95,
+      "unlock": {
+        "all": [
+          {
+            "commissionCleared": "merge-2048.T4"
+          },
+          {
+            "chapterFlag": "C4.city_power_restored"
+          }
+        ]
+      },
+      "chapterGate": "C4.city_power_restored",
+      "risk": "high",
+      "durationHint": "约 2–5 分钟"
+    },
+    {
+      "commissionId": "merge-2048.T6",
+      "gameId": "merge-2048",
+      "professionId": "research.lattice",
+      "tier": 6,
+      "title": "余波工单",
+      "summary": "在一局中生成数值1024的格子",
+      "issuer": "旧港职业中心",
+      "objective": {
+        "kind": "tile.created",
+        "atLeast": 1,
+        "minValue": {
+          "field": "value",
+          "value": 1024
+        }
+      },
+      "objectiveBonus": 0,
+      "startParams": {},
+      "reward": {
+        "credits": 0,
+        "items": {},
+        "evidence": [
+          "DEC-merge-2048.T6"
+        ],
+        "flags": []
+      },
+      "repeatSalaryCredits": 95,
+      "unlock": {
+        "all": [
+          {
+            "commissionCleared": "merge-2048.T5"
+          },
+          {
+            "chapterFlag": "C5.star_tower_resolved"
+          }
+        ]
+      },
+      "chapterGate": "C5.star_tower_resolved",
+      "risk": "medium",
+      "durationHint": "约 2–5 分钟"
+    },
+    {
+      "commissionId": "blackjack.T1",
+      "gameId": "blackjack",
+      "professionId": "intel.risk",
+      "tier": 1,
+      "title": "六手评估",
+      "summary": "完成一场完整的六手牌训练",
+      "issuer": "旧港职业中心",
+      "objective": {
+        "kind": "hand.settled",
+        "atLeast": 6
+      },
+      "objectiveBonus": 0,
+      "startParams": {},
+      "reward": {
+        "credits": 70,
+        "items": {},
+        "evidence": [],
+        "flags": []
+      },
+      "repeatSalaryCredits": 75,
+      "unlock": {
+        "all": []
+      },
+      "chapterGate": null,
+      "risk": "low",
+      "durationHint": "约 2–5 分钟"
+    },
+    {
+      "commissionId": "blackjack.T2",
+      "gameId": "blackjack",
+      "professionId": "intel.risk",
+      "tier": 2,
+      "title": "保持冷静",
+      "summary": "在训练中完成至少4手有效决策",
+      "issuer": "旧港职业中心",
+      "objective": {
+        "kind": "hand.settled",
+        "atLeast": 4
+      },
+      "objectiveBonus": 0,
+      "startParams": {},
+      "reward": {
+        "credits": 85,
+        "items": {},
+        "evidence": [],
+        "flags": []
+      },
+      "repeatSalaryCredits": 80,
+      "unlock": {
+        "all": [
+          {
+            "commissionCleared": "blackjack.T1"
+          }
+        ]
+      },
+      "chapterGate": null,
+      "risk": "low",
+      "durationHint": "约 2–5 分钟"
+    },
+    {
+      "commissionId": "blackjack.T3",
+      "gameId": "blackjack",
+      "professionId": "intel.risk",
+      "tier": 3,
+      "title": "基础风控",
+      "summary": "完成第二场独立六手评估",
+      "issuer": "旧港职业中心",
+      "objective": {
+        "kind": "hand.settled",
+        "atLeast": 6
+      },
+      "objectiveBonus": 0,
+      "startParams": {},
+      "reward": {
+        "credits": 0,
+        "items": {},
+        "evidence": [
+          "E-blackjack.T3"
+        ],
+        "flags": []
+      },
+      "repeatSalaryCredits": 85,
+      "unlock": {
+        "all": [
+          {
+            "commissionCleared": "blackjack.T2"
+          }
+        ]
+      },
+      "chapterGate": null,
+      "risk": "medium",
+      "durationHint": "约 2–5 分钟"
+    },
+    {
+      "commissionId": "blackjack.T4",
+      "gameId": "blackjack",
+      "professionId": "intel.risk",
+      "tier": 4,
+      "title": "应急工单",
+      "summary": "完成一次完整训练并提交报告",
+      "issuer": "旧港职业中心",
+      "objective": {
+        "kind": "hand.settled",
+        "atLeast": 6
+      },
+      "objectiveBonus": 0,
+      "startParams": {},
+      "reward": {
+        "credits": 105,
+        "items": {},
+        "evidence": [],
+        "flags": []
+      },
+      "repeatSalaryCredits": 90,
+      "unlock": {
+        "all": [
+          {
+            "commissionCleared": "blackjack.T3"
+          },
+          {
+            "chapterFlag": "C3.truth_found"
+          }
+        ]
+      },
+      "chapterGate": "C3.truth_found",
+      "risk": "high",
+      "durationHint": "约 2–5 分钟"
+    },
+    {
+      "commissionId": "blackjack.T5",
+      "gameId": "blackjack",
+      "professionId": "intel.risk",
+      "tier": 5,
+      "title": "远征工单",
+      "summary": "完成第三份航线风险评估",
+      "issuer": "旧港职业中心",
+      "objective": {
+        "kind": "hand.settled",
+        "atLeast": 6
+      },
+      "objectiveBonus": 0,
+      "startParams": {},
+      "reward": {
+        "credits": 0,
+        "items": {},
+        "evidence": [
+          "MAP-blackjack.T5"
+        ],
+        "flags": []
+      },
+      "repeatSalaryCredits": 95,
+      "unlock": {
+        "all": [
+          {
+            "commissionCleared": "blackjack.T4"
+          },
+          {
+            "chapterFlag": "C4.city_power_restored"
+          }
+        ]
+      },
+      "chapterGate": "C4.city_power_restored",
+      "risk": "high",
+      "durationHint": "约 2–5 分钟"
+    },
+    {
+      "commissionId": "blackjack.T6",
+      "gameId": "blackjack",
+      "professionId": "intel.risk",
+      "tier": 6,
+      "title": "余波工单",
+      "summary": "完成最终决策演练",
+      "issuer": "旧港职业中心",
+      "objective": {
+        "kind": "hand.settled",
+        "atLeast": 6
+      },
+      "objectiveBonus": 0,
+      "startParams": {},
+      "reward": {
+        "credits": 0,
+        "items": {},
+        "evidence": [
+          "DEC-blackjack.T6"
+        ],
+        "flags": []
+      },
+      "repeatSalaryCredits": 95,
+      "unlock": {
+        "all": [
+          {
+            "commissionCleared": "blackjack.T5"
+          },
+          {
+            "chapterFlag": "C5.star_tower_resolved"
+          }
+        ]
+      },
+      "chapterGate": "C5.star_tower_resolved",
+      "risk": "medium",
+      "durationHint": "约 2–5 分钟"
+    },
+    {
+      "commissionId": "gomoku.T1",
+      "gameId": "gomoku",
+      "professionId": "intel.tactics",
+      "tier": 1,
+      "title": "布局练习",
+      "summary": "合法落子至少8手并正常结束对局",
+      "issuer": "旧港职业中心",
+      "objective": {
+        "kind": "move.legal",
+        "atLeast": 8
+      },
+      "objectiveBonus": 0,
+      "startParams": {},
+      "reward": {
+        "credits": 70,
+        "items": {},
+        "evidence": [],
+        "flags": []
+      },
+      "repeatSalaryCredits": 75,
+      "unlock": {
+        "all": []
+      },
+      "chapterGate": null,
+      "risk": "low",
+      "durationHint": "约 2–5 分钟"
+    },
+    {
+      "commissionId": "gomoku.T2",
+      "gameId": "gomoku",
+      "professionId": "intel.tactics",
+      "tier": 2,
+      "title": "破解防线",
+      "summary": "完整结束一次战术模拟对局",
+      "issuer": "旧港职业中心",
+      "objective": {
+        "kind": "session.finish",
+        "atLeast": 1
+      },
+      "objectiveBonus": 0,
+      "startParams": {},
+      "reward": {
+        "credits": 0,
+        "items": {},
+        "evidence": [
+          "E-gomoku.T2"
+        ],
+        "flags": []
+      },
+      "repeatSalaryCredits": 80,
+      "unlock": {
+        "all": [
+          {
+            "commissionCleared": "gomoku.T1"
+          }
+        ]
+      },
+      "chapterGate": null,
+      "risk": "low",
+      "durationHint": "约 2–5 分钟"
+    },
+    {
+      "commissionId": "gomoku.T3",
+      "gameId": "gomoku",
+      "professionId": "intel.tactics",
+      "tier": 3,
+      "title": "主轴争夺",
+      "summary": "在有效对局中落子至少12手",
+      "issuer": "旧港职业中心",
+      "objective": {
+        "kind": "move.legal",
+        "atLeast": 12
+      },
+      "objectiveBonus": 0,
+      "startParams": {},
+      "reward": {
+        "credits": 95,
+        "items": {},
+        "evidence": [],
+        "flags": []
+      },
+      "repeatSalaryCredits": 85,
+      "unlock": {
+        "all": [
+          {
+            "commissionCleared": "gomoku.T2"
+          }
+        ]
+      },
+      "chapterGate": null,
+      "risk": "medium",
+      "durationHint": "约 2–5 分钟"
+    },
+    {
+      "commissionId": "gomoku.T4",
+      "gameId": "gomoku",
+      "professionId": "intel.tactics",
+      "tier": 4,
+      "title": "应急工单",
+      "summary": "完成指定战术演练",
+      "issuer": "旧港职业中心",
+      "objective": {
+        "kind": "session.finish",
+        "atLeast": 1
+      },
+      "objectiveBonus": 0,
+      "startParams": {},
+      "reward": {
+        "credits": 100,
+        "items": {},
+        "evidence": [],
+        "flags": []
+      },
+      "repeatSalaryCredits": 90,
+      "unlock": {
+        "all": [
+          {
+            "commissionCleared": "gomoku.T3"
+          },
+          {
+            "chapterFlag": "C3.truth_found"
+          }
+        ]
+      },
+      "chapterGate": "C3.truth_found",
+      "risk": "high",
+      "durationHint": "约 2–5 分钟"
+    },
+    {
+      "commissionId": "gomoku.T5",
+      "gameId": "gomoku",
+      "professionId": "intel.tactics",
+      "tier": 5,
+      "title": "远征工单",
+      "summary": "完成一场高阶棋局演练",
+      "issuer": "旧港职业中心",
+      "objective": {
+        "kind": "session.finish",
+        "atLeast": 1
+      },
+      "objectiveBonus": 0,
+      "startParams": {},
+      "reward": {
+        "credits": 0,
+        "items": {},
+        "evidence": [
+          "MAP-gomoku.T5"
+        ],
+        "flags": []
+      },
+      "repeatSalaryCredits": 95,
+      "unlock": {
+        "all": [
+          {
+            "commissionCleared": "gomoku.T4"
+          },
+          {
+            "chapterFlag": "C4.city_power_restored"
+          }
+        ]
+      },
+      "chapterGate": "C4.city_power_restored",
+      "risk": "high",
+      "durationHint": "约 2–5 分钟"
+    },
+    {
+      "commissionId": "gomoku.T6",
+      "gameId": "gomoku",
+      "professionId": "intel.tactics",
+      "tier": 6,
+      "title": "余波工单",
+      "summary": "完成最终对局，保存纪念棋谱",
+      "issuer": "旧港职业中心",
+      "objective": {
+        "kind": "session.finish",
+        "atLeast": 1
+      },
+      "objectiveBonus": 0,
+      "startParams": {},
+      "reward": {
+        "credits": 0,
+        "items": {},
+        "evidence": [
+          "DEC-gomoku.T6"
+        ],
+        "flags": []
+      },
+      "repeatSalaryCredits": 95,
+      "unlock": {
+        "all": [
+          {
+            "commissionCleared": "gomoku.T5"
+          },
+          {
+            "chapterFlag": "C5.star_tower_resolved"
+          }
+        ]
+      },
+      "chapterGate": "C5.star_tower_resolved",
+      "risk": "medium",
+      "durationHint": "约 2–5 分钟"
+    },
+    {
+      "commissionId": "solitaire.T1",
+      "gameId": "solitaire",
+      "professionId": "engineering.dispatcher",
+      "tier": 1,
+      "title": "整理航单",
+      "summary": "翻开至少3张有效暗牌",
+      "issuer": "旧港职业中心",
+      "objective": {
+        "kind": "stock.face_up",
+        "atLeast": 3
+      },
+      "objectiveBonus": 0,
+      "startParams": {},
+      "reward": {
+        "credits": 70,
+        "items": {},
+        "evidence": [],
+        "flags": []
+      },
+      "repeatSalaryCredits": 75,
+      "unlock": {
+        "all": []
+      },
+      "chapterGate": null,
+      "risk": "low",
+      "durationHint": "约 2–5 分钟"
+    },
+    {
+      "commissionId": "solitaire.T2",
+      "gameId": "solitaire",
+      "professionId": "engineering.dispatcher",
+      "tier": 2,
+      "title": "货柜排序",
+      "summary": "翻开至少5张有效暗牌",
+      "issuer": "旧港职业中心",
+      "objective": {
+        "kind": "stock.face_up",
+        "atLeast": 5
+      },
+      "objectiveBonus": 0,
+      "startParams": {},
+      "reward": {
+        "credits": 85,
+        "items": {},
+        "evidence": [],
+        "flags": []
+      },
+      "repeatSalaryCredits": 80,
+      "unlock": {
+        "all": [
+          {
+            "commissionCleared": "solitaire.T1"
+          }
+        ]
+      },
+      "chapterGate": null,
+      "risk": "low",
+      "durationHint": "约 2–5 分钟"
+    },
+    {
+      "commissionId": "solitaire.T3",
+      "gameId": "solitaire",
+      "professionId": "engineering.dispatcher",
+      "tier": 3,
+      "title": "码头调度",
+      "summary": "至少向基础牌堆移动3张牌",
+      "issuer": "旧港职业中心",
+      "objective": {
+        "kind": "foundation.move",
+        "atLeast": 3
+      },
+      "objectiveBonus": 0,
+      "startParams": {},
+      "reward": {
+        "credits": 0,
+        "items": {},
+        "evidence": [
+          "E-solitaire.T3"
+        ],
+        "flags": []
+      },
+      "repeatSalaryCredits": 85,
+      "unlock": {
+        "all": [
+          {
+            "commissionCleared": "solitaire.T2"
+          }
+        ]
+      },
+      "chapterGate": null,
+      "risk": "medium",
+      "durationHint": "约 2–5 分钟"
+    },
+    {
+      "commissionId": "solitaire.T4",
+      "gameId": "solitaire",
+      "professionId": "engineering.dispatcher",
+      "tier": 4,
+      "title": "应急工单",
+      "summary": "在一盘里完成8次有效牌堆移动",
+      "issuer": "旧港职业中心",
+      "objective": {
+        "kind": "move.legal",
+        "atLeast": 8
+      },
+      "objectiveBonus": 0,
+      "startParams": {},
+      "reward": {
+        "credits": 105,
+        "items": {},
+        "evidence": [],
+        "flags": []
+      },
+      "repeatSalaryCredits": 90,
+      "unlock": {
+        "all": [
+          {
+            "commissionCleared": "solitaire.T3"
+          },
+          {
+            "chapterFlag": "C3.truth_found"
+          }
+        ]
+      },
+      "chapterGate": "C3.truth_found",
+      "risk": "high",
+      "durationHint": "约 2–5 分钟"
+    },
+    {
+      "commissionId": "solitaire.T5",
+      "gameId": "solitaire",
+      "professionId": "engineering.dispatcher",
+      "tier": 5,
+      "title": "远征工单",
+      "summary": "至少向基础牌堆移动7张牌",
+      "issuer": "旧港职业中心",
+      "objective": {
+        "kind": "foundation.move",
+        "atLeast": 7
+      },
+      "objectiveBonus": 0,
+      "startParams": {},
+      "reward": {
+        "credits": 0,
+        "items": {},
+        "evidence": [
+          "MAP-solitaire.T5"
+        ],
+        "flags": []
+      },
+      "repeatSalaryCredits": 95,
+      "unlock": {
+        "all": [
+          {
+            "commissionCleared": "solitaire.T4"
+          },
+          {
+            "chapterFlag": "C4.city_power_restored"
+          }
+        ]
+      },
+      "chapterGate": "C4.city_power_restored",
+      "risk": "high",
+      "durationHint": "约 2–5 分钟"
+    },
+    {
+      "commissionId": "solitaire.T6",
+      "gameId": "solitaire",
+      "professionId": "engineering.dispatcher",
+      "tier": 6,
+      "title": "余波工单",
+      "summary": "完成指定深度的牌堆调度",
+      "issuer": "旧港职业中心",
+      "objective": {
+        "kind": "move.legal",
+        "atLeast": 16
+      },
+      "objectiveBonus": 0,
+      "startParams": {},
+      "reward": {
+        "credits": 0,
+        "items": {},
+        "evidence": [
+          "DEC-solitaire.T6"
+        ],
+        "flags": []
+      },
+      "repeatSalaryCredits": 95,
+      "unlock": {
+        "all": [
+          {
+            "commissionCleared": "solitaire.T5"
+          },
+          {
+            "chapterFlag": "C5.star_tower_resolved"
+          }
+        ]
+      },
+      "chapterGate": "C5.star_tower_resolved",
+      "risk": "medium",
+      "durationHint": "约 2–5 分钟"
+    },
+    {
+      "commissionId": "snowbells.T1",
+      "gameId": "snowbells",
+      "professionId": "nature.snowscout",
+      "tier": 1,
+      "title": "第一声铃",
+      "summary": "踩中3个不同的铃铛",
+      "issuer": "旧港职业中心",
+      "objective": {
+        "kind": "bell.unique",
+        "atLeast": 3
+      },
+      "objectiveBonus": 0,
+      "startParams": {},
+      "reward": {
+        "credits": 70,
+        "items": {},
+        "evidence": [],
+        "flags": []
+      },
+      "repeatSalaryCredits": 75,
+      "unlock": {
+        "all": []
+      },
+      "chapterGate": null,
+      "risk": "low",
+      "durationHint": "约 2–5 分钟"
+    },
+    {
+      "commissionId": "snowbells.T2",
+      "gameId": "snowbells",
+      "professionId": "nature.snowscout",
+      "tier": 2,
+      "title": "山谷回声",
+      "summary": "踩中6个不同的铃铛",
+      "issuer": "旧港职业中心",
+      "objective": {
+        "kind": "bell.unique",
+        "atLeast": 6
+      },
+      "objectiveBonus": 0,
+      "startParams": {},
+      "reward": {
+        "credits": 0,
+        "items": {
+          "biomass": 1
+        },
+        "evidence": [],
+        "flags": []
+      },
+      "repeatSalaryCredits": 80,
+      "unlock": {
+        "all": [
+          {
+            "commissionCleared": "snowbells.T1"
+          }
+        ]
+      },
+      "chapterGate": null,
+      "risk": "low",
+      "durationHint": "约 2–5 分钟"
+    },
+    {
+      "commissionId": "snowbells.T3",
+      "gameId": "snowbells",
+      "professionId": "nature.snowscout",
+      "tier": 3,
+      "title": "冰桥观察",
+      "summary": "到达指定上跳高度",
+      "issuer": "旧港职业中心",
+      "objective": {
+        "kind": "height.reached",
+        "atLeast": 1,
+        "minValue": {
+          "field": "height",
+          "value": 240
+        }
+      },
+      "objectiveBonus": 0,
+      "startParams": {},
+      "reward": {
+        "credits": 0,
+        "items": {},
+        "evidence": [
+          "E-snowbells.T3"
+        ],
+        "flags": []
+      },
+      "repeatSalaryCredits": 85,
+      "unlock": {
+        "all": [
+          {
+            "commissionCleared": "snowbells.T2"
+          }
+        ]
+      },
+      "chapterGate": null,
+      "risk": "medium",
+      "durationHint": "约 2–5 分钟"
+    },
+    {
+      "commissionId": "snowbells.T4",
+      "gameId": "snowbells",
+      "professionId": "nature.snowscout",
+      "tier": 4,
+      "title": "应急工单",
+      "summary": "踩中8个不同的铃铛",
+      "issuer": "旧港职业中心",
+      "objective": {
+        "kind": "bell.unique",
+        "atLeast": 8
+      },
+      "objectiveBonus": 0,
+      "startParams": {},
+      "reward": {
+        "credits": 110,
+        "items": {},
+        "evidence": [],
+        "flags": []
+      },
+      "repeatSalaryCredits": 90,
+      "unlock": {
+        "all": [
+          {
+            "commissionCleared": "snowbells.T3"
+          },
+          {
+            "chapterFlag": "C3.truth_found"
+          }
+        ]
+      },
+      "chapterGate": "C3.truth_found",
+      "risk": "high",
+      "durationHint": "约 2–5 分钟"
+    },
+    {
+      "commissionId": "snowbells.T5",
+      "gameId": "snowbells",
+      "professionId": "nature.snowscout",
+      "tier": 5,
+      "title": "远征工单",
+      "summary": "到达更高观察位置",
+      "issuer": "旧港职业中心",
+      "objective": {
+        "kind": "height.reached",
+        "atLeast": 1,
+        "minValue": {
+          "field": "height",
+          "value": 400
+        }
+      },
+      "objectiveBonus": 0,
+      "startParams": {},
+      "reward": {
+        "credits": 0,
+        "items": {},
+        "evidence": [
+          "MAP-snowbells.T5"
+        ],
+        "flags": []
+      },
+      "repeatSalaryCredits": 95,
+      "unlock": {
+        "all": [
+          {
+            "commissionCleared": "snowbells.T4"
+          },
+          {
+            "chapterFlag": "C4.city_power_restored"
+          }
+        ]
+      },
+      "chapterGate": "C4.city_power_restored",
+      "risk": "high",
+      "durationHint": "约 2–5 分钟"
+    },
+    {
+      "commissionId": "snowbells.T6",
+      "gameId": "snowbells",
+      "professionId": "nature.snowscout",
+      "tier": 6,
+      "title": "余波工单",
+      "summary": "完成最终自然采样",
+      "issuer": "旧港职业中心",
+      "objective": {
+        "kind": "bell.unique",
+        "atLeast": 10
+      },
+      "objectiveBonus": 0,
+      "startParams": {},
+      "reward": {
+        "credits": 0,
+        "items": {},
+        "evidence": [
+          "DEC-snowbells.T6"
+        ],
+        "flags": []
+      },
+      "repeatSalaryCredits": 95,
+      "unlock": {
+        "all": [
+          {
+            "commissionCleared": "snowbells.T5"
+          },
+          {
+            "chapterFlag": "C5.star_tower_resolved"
+          }
+        ]
+      },
+      "chapterGate": "C5.star_tower_resolved",
+      "risk": "medium",
+      "durationHint": "约 2–5 分钟"
+    },
+    {
+      "commissionId": "brick-breaker.T1",
+      "gameId": "brick-breaker",
+      "professionId": "engineering.demolition",
+      "tier": 1,
+      "title": "旧墙清理",
+      "summary": "击碎至少8块砖",
+      "issuer": "旧港职业中心",
+      "objective": {
+        "kind": "brick.destroyed",
+        "atLeast": 8
+      },
+      "objectiveBonus": 0,
+      "startParams": {},
+      "reward": {
+        "credits": 70,
+        "items": {},
+        "evidence": [],
+        "flags": []
+      },
+      "repeatSalaryCredits": 75,
+      "unlock": {
+        "all": []
+      },
+      "chapterGate": null,
+      "risk": "low",
+      "durationHint": "约 2–5 分钟"
+    },
+    {
+      "commissionId": "brick-breaker.T2",
+      "gameId": "brick-breaker",
+      "professionId": "engineering.demolition",
+      "tier": 2,
+      "title": "材料回收",
+      "summary": "击碎至少15块砖",
+      "issuer": "旧港职业中心",
+      "objective": {
+        "kind": "brick.destroyed",
+        "atLeast": 15
+      },
+      "objectiveBonus": 0,
+      "startParams": {},
+      "reward": {
+        "credits": 0,
+        "items": {
+          "building": 2
+        },
+        "evidence": [],
+        "flags": []
+      },
+      "repeatSalaryCredits": 80,
+      "unlock": {
+        "all": [
+          {
+            "commissionCleared": "brick-breaker.T1"
+          }
+        ]
+      },
+      "chapterGate": null,
+      "risk": "low",
+      "durationHint": "约 2–5 分钟"
+    },
+    {
+      "commissionId": "brick-breaker.T3",
+      "gameId": "brick-breaker",
+      "professionId": "engineering.demolition",
+      "tier": 3,
+      "title": "旧站封条",
+      "summary": "完成一层障碍清除",
+      "issuer": "旧港职业中心",
+      "objective": {
+        "kind": "stage.clear",
+        "atLeast": 1
+      },
+      "objectiveBonus": 0,
+      "startParams": {},
+      "reward": {
+        "credits": 0,
+        "items": {
+          "alloy": 1
+        },
+        "evidence": [],
+        "flags": []
+      },
+      "repeatSalaryCredits": 85,
+      "unlock": {
+        "all": [
+          {
+            "commissionCleared": "brick-breaker.T2"
+          }
+        ]
+      },
+      "chapterGate": null,
+      "risk": "medium",
+      "durationHint": "约 2–5 分钟"
+    },
+    {
+      "commissionId": "brick-breaker.T4",
+      "gameId": "brick-breaker",
+      "professionId": "engineering.demolition",
+      "tier": 4,
+      "title": "应急工单",
+      "summary": "击碎至少22块指定障碍",
+      "issuer": "旧港职业中心",
+      "objective": {
+        "kind": "brick.destroyed",
+        "atLeast": 22
+      },
+      "objectiveBonus": 0,
+      "startParams": {},
+      "reward": {
+        "credits": 115,
+        "items": {},
+        "evidence": [],
+        "flags": []
+      },
+      "repeatSalaryCredits": 90,
+      "unlock": {
+        "all": [
+          {
+            "commissionCleared": "brick-breaker.T3"
+          },
+          {
+            "chapterFlag": "C3.truth_found"
+          }
+        ]
+      },
+      "chapterGate": "C3.truth_found",
+      "risk": "high",
+      "durationHint": "约 2–5 分钟"
+    },
+    {
+      "commissionId": "brick-breaker.T5",
+      "gameId": "brick-breaker",
+      "professionId": "engineering.demolition",
+      "tier": 5,
+      "title": "远征工单",
+      "summary": "完成第二处定向清障",
+      "issuer": "旧港职业中心",
+      "objective": {
+        "kind": "stage.clear",
+        "atLeast": 1
+      },
+      "objectiveBonus": 0,
+      "startParams": {},
+      "reward": {
+        "credits": 0,
+        "items": {},
+        "evidence": [
+          "MAP-brick-breaker.T5"
+        ],
+        "flags": []
+      },
+      "repeatSalaryCredits": 95,
+      "unlock": {
+        "all": [
+          {
+            "commissionCleared": "brick-breaker.T4"
+          },
+          {
+            "chapterFlag": "C4.city_power_restored"
+          }
+        ]
+      },
+      "chapterGate": "C4.city_power_restored",
+      "risk": "high",
+      "durationHint": "约 2–5 分钟"
+    },
+    {
+      "commissionId": "brick-breaker.T6",
+      "gameId": "brick-breaker",
+      "professionId": "engineering.demolition",
+      "tier": 6,
+      "title": "余波工单",
+      "summary": "完成最终工程拆除",
+      "issuer": "旧港职业中心",
+      "objective": {
+        "kind": "brick.destroyed",
+        "atLeast": 30
+      },
+      "objectiveBonus": 0,
+      "startParams": {},
+      "reward": {
+        "credits": 0,
+        "items": {},
+        "evidence": [
+          "DEC-brick-breaker.T6"
+        ],
+        "flags": []
+      },
+      "repeatSalaryCredits": 95,
+      "unlock": {
+        "all": [
+          {
+            "commissionCleared": "brick-breaker.T5"
+          },
+          {
+            "chapterFlag": "C5.star_tower_resolved"
+          }
+        ]
+      },
+      "chapterGate": "C5.star_tower_resolved",
+      "risk": "medium",
+      "durationHint": "约 2–5 分钟"
+    },
+    {
+      "commissionId": "gravity-flip.T1",
+      "gameId": "gravity-flip",
+      "professionId": "research.gravity",
+      "tier": 1,
+      "title": "反向实验",
+      "summary": "完成5次有效重力翻转并存活至结算",
+      "issuer": "旧港职业中心",
+      "objective": {
+        "kind": "gravity.flip",
+        "atLeast": 5
+      },
+      "objectiveBonus": 0,
+      "startParams": {},
+      "reward": {
+        "credits": 70,
+        "items": {},
+        "evidence": [],
+        "flags": []
+      },
+      "repeatSalaryCredits": 75,
+      "unlock": {
+        "all": []
+      },
+      "chapterGate": null,
+      "risk": "low",
+      "durationHint": "约 2–5 分钟"
+    },
+    {
+      "commissionId": "gravity-flip.T2",
+      "gameId": "gravity-flip",
+      "professionId": "research.gravity",
+      "tier": 2,
+      "title": "实验通道",
+      "summary": "前进至少500米",
+      "issuer": "旧港职业中心",
+      "objective": {
+        "kind": "distance.reached",
+        "atLeast": 1,
+        "minValue": {
+          "field": "meters",
+          "value": 500
+        }
+      },
+      "objectiveBonus": 0,
+      "startParams": {},
+      "reward": {
+        "credits": 85,
+        "items": {},
+        "evidence": [],
+        "flags": []
+      },
+      "repeatSalaryCredits": 80,
+      "unlock": {
+        "all": [
+          {
+            "commissionCleared": "gravity-flip.T1"
+          }
+        ]
+      },
+      "chapterGate": null,
+      "risk": "low",
+      "durationHint": "约 2–5 分钟"
+    },
+    {
+      "commissionId": "gravity-flip.T3",
+      "gameId": "gravity-flip",
+      "professionId": "research.gravity",
+      "tier": 3,
+      "title": "相位频率",
+      "summary": "前进至少800米",
+      "issuer": "旧港职业中心",
+      "objective": {
+        "kind": "distance.reached",
+        "atLeast": 1,
+        "minValue": {
+          "field": "meters",
+          "value": 800
+        }
+      },
+      "objectiveBonus": 0,
+      "startParams": {},
+      "reward": {
+        "credits": 0,
+        "items": {},
+        "evidence": [
+          "BP-gravity-flip.T3"
+        ],
+        "flags": []
+      },
+      "repeatSalaryCredits": 85,
+      "unlock": {
+        "all": [
+          {
+            "commissionCleared": "gravity-flip.T2"
+          }
+        ]
+      },
+      "chapterGate": null,
+      "risk": "medium",
+      "durationHint": "约 2–5 分钟"
+    },
+    {
+      "commissionId": "gravity-flip.T4",
+      "gameId": "gravity-flip",
+      "professionId": "research.gravity",
+      "tier": 4,
+      "title": "应急工单",
+      "summary": "前进至少1000米",
+      "issuer": "旧港职业中心",
+      "objective": {
+        "kind": "distance.reached",
+        "atLeast": 1,
+        "minValue": {
+          "field": "meters",
+          "value": 1000
+        }
+      },
+      "objectiveBonus": 0,
+      "startParams": {},
+      "reward": {
+        "credits": 115,
+        "items": {},
+        "evidence": [],
+        "flags": []
+      },
+      "repeatSalaryCredits": 90,
+      "unlock": {
+        "all": [
+          {
+            "commissionCleared": "gravity-flip.T3"
+          },
+          {
+            "chapterFlag": "C3.truth_found"
+          }
+        ]
+      },
+      "chapterGate": "C3.truth_found",
+      "risk": "high",
+      "durationHint": "约 2–5 分钟"
+    },
+    {
+      "commissionId": "gravity-flip.T5",
+      "gameId": "gravity-flip",
+      "professionId": "research.gravity",
+      "tier": 5,
+      "title": "远征工单",
+      "summary": "前进至少1600米",
+      "issuer": "旧港职业中心",
+      "objective": {
+        "kind": "distance.reached",
+        "atLeast": 1,
+        "minValue": {
+          "field": "meters",
+          "value": 1600
+        }
+      },
+      "objectiveBonus": 0,
+      "startParams": {},
+      "reward": {
+        "credits": 0,
+        "items": {
+          "starcrystal": 1
+        },
+        "evidence": [],
+        "flags": []
+      },
+      "repeatSalaryCredits": 95,
+      "unlock": {
+        "all": [
+          {
+            "commissionCleared": "gravity-flip.T4"
+          },
+          {
+            "chapterFlag": "C4.city_power_restored"
+          }
+        ]
+      },
+      "chapterGate": "C4.city_power_restored",
+      "risk": "high",
+      "durationHint": "约 2–5 分钟"
+    },
+    {
+      "commissionId": "gravity-flip.T6",
+      "gameId": "gravity-flip",
+      "professionId": "research.gravity",
+      "tier": 6,
+      "title": "余波工单",
+      "summary": "抵达3000米星门",
+      "issuer": "旧港职业中心",
+      "objective": {
+        "kind": "distance.reached",
+        "atLeast": 1,
+        "minValue": {
+          "field": "meters",
+          "value": 3000
+        }
+      },
+      "objectiveBonus": 0,
+      "startParams": {},
+      "reward": {
+        "credits": 0,
+        "items": {},
+        "evidence": [
+          "DEC-gravity-flip.T6"
+        ],
+        "flags": []
+      },
+      "repeatSalaryCredits": 95,
+      "unlock": {
+        "all": [
+          {
+            "commissionCleared": "gravity-flip.T5"
+          },
+          {
+            "chapterFlag": "C5.star_tower_resolved"
+          }
+        ]
+      },
+      "chapterGate": "C5.star_tower_resolved",
+      "risk": "medium",
+      "durationHint": "约 2–5 分钟"
+    },
+    {
+      "commissionId": "snake-run.T1",
+      "gameId": "snake-run",
+      "professionId": "nature.ecologist",
+      "tier": 1,
+      "title": "果园日报",
+      "summary": "在一局里吃到5个果实",
+      "issuer": "旧港职业中心",
+      "objective": {
+        "kind": "fruit.eaten",
+        "atLeast": 5
+      },
+      "objectiveBonus": 0,
+      "startParams": {},
+      "reward": {
+        "credits": 70,
+        "items": {},
+        "evidence": [],
+        "flags": []
+      },
+      "repeatSalaryCredits": 75,
+      "unlock": {
+        "all": []
+      },
+      "chapterGate": null,
+      "risk": "low",
+      "durationHint": "约 2–5 分钟"
+    },
+    {
+      "commissionId": "snake-run.T2",
+      "gameId": "snake-run",
+      "professionId": "nature.ecologist",
+      "tier": 2,
+      "title": "特殊作物",
+      "summary": "吃到8个果实",
+      "issuer": "旧港职业中心",
+      "objective": {
+        "kind": "fruit.eaten",
+        "atLeast": 8
+      },
+      "objectiveBonus": 0,
+      "startParams": {},
+      "reward": {
+        "credits": 0,
+        "items": {
+          "biomass": 2
+        },
+        "evidence": [],
+        "flags": []
+      },
+      "repeatSalaryCredits": 80,
+      "unlock": {
+        "all": [
+          {
+            "commissionCleared": "snake-run.T1"
+          }
+        ]
+      },
+      "chapterGate": null,
+      "risk": "low",
+      "durationHint": "约 2–5 分钟"
+    },
+    {
+      "commissionId": "snake-run.T3",
+      "gameId": "snake-run",
+      "professionId": "nature.ecologist",
+      "tier": 3,
+      "title": "生态样本",
+      "summary": "吃到10个果实",
+      "issuer": "旧港职业中心",
+      "objective": {
+        "kind": "fruit.eaten",
+        "atLeast": 10
+      },
+      "objectiveBonus": 0,
+      "startParams": {},
+      "reward": {
+        "credits": 0,
+        "items": {},
+        "evidence": [
+          "E-snake-run.T3"
+        ],
+        "flags": []
+      },
+      "repeatSalaryCredits": 85,
+      "unlock": {
+        "all": [
+          {
+            "commissionCleared": "snake-run.T2"
+          }
+        ]
+      },
+      "chapterGate": null,
+      "risk": "medium",
+      "durationHint": "约 2–5 分钟"
+    },
+    {
+      "commissionId": "snake-run.T4",
+      "gameId": "snake-run",
+      "professionId": "nature.ecologist",
+      "tier": 4,
+      "title": "应急工单",
+      "summary": "吃到14个果实",
+      "issuer": "旧港职业中心",
+      "objective": {
+        "kind": "fruit.eaten",
+        "atLeast": 14
+      },
+      "objectiveBonus": 0,
+      "startParams": {},
+      "reward": {
+        "credits": 120,
+        "items": {},
+        "evidence": [],
+        "flags": []
+      },
+      "repeatSalaryCredits": 90,
+      "unlock": {
+        "all": [
+          {
+            "commissionCleared": "snake-run.T3"
+          },
+          {
+            "chapterFlag": "C3.truth_found"
+          }
+        ]
+      },
+      "chapterGate": "C3.truth_found",
+      "risk": "high",
+      "durationHint": "约 2–5 分钟"
+    },
+    {
+      "commissionId": "snake-run.T5",
+      "gameId": "snake-run",
+      "professionId": "nature.ecologist",
+      "tier": 5,
+      "title": "远征工单",
+      "summary": "吃到17个果实",
+      "issuer": "旧港职业中心",
+      "objective": {
+        "kind": "fruit.eaten",
+        "atLeast": 17
+      },
+      "objectiveBonus": 0,
+      "startParams": {},
+      "reward": {
+        "credits": 0,
+        "items": {
+          "biomass": 3
+        },
+        "evidence": [],
+        "flags": []
+      },
+      "repeatSalaryCredits": 95,
+      "unlock": {
+        "all": [
+          {
+            "commissionCleared": "snake-run.T4"
+          },
+          {
+            "chapterFlag": "C4.city_power_restored"
+          }
+        ]
+      },
+      "chapterGate": "C4.city_power_restored",
+      "risk": "high",
+      "durationHint": "约 2–5 分钟"
+    },
+    {
+      "commissionId": "snake-run.T6",
+      "gameId": "snake-run",
+      "professionId": "nature.ecologist",
+      "tier": 6,
+      "title": "余波工单",
+      "summary": "达成游戏现有20果实自然终点",
+      "issuer": "旧港职业中心",
+      "objective": {
+        "kind": "fruit.eaten",
+        "atLeast": 20
+      },
+      "objectiveBonus": 0,
+      "startParams": {},
+      "reward": {
+        "credits": 0,
+        "items": {},
+        "evidence": [
+          "DEC-snake-run.T6"
+        ],
+        "flags": []
+      },
+      "repeatSalaryCredits": 95,
+      "unlock": {
+        "all": [
+          {
+            "commissionCleared": "snake-run.T5"
+          },
+          {
+            "chapterFlag": "C5.star_tower_resolved"
+          }
+        ]
+      },
+      "chapterGate": "C5.star_tower_resolved",
+      "risk": "medium",
+      "durationHint": "约 2–5 分钟"
+    },
+    {
+      "commissionId": "mole-whack.T1",
+      "gameId": "mole-whack",
+      "professionId": "engineering.maintenance",
+      "tier": 1,
+      "title": "管线检查",
+      "summary": "在45秒工作中正确击中8次",
+      "issuer": "旧港职业中心",
+      "objective": {
+        "kind": "mole.hit",
+        "atLeast": 8
+      },
+      "objectiveBonus": 0,
+      "startParams": {},
+      "reward": {
+        "credits": 70,
+        "items": {},
+        "evidence": [],
+        "flags": []
+      },
+      "repeatSalaryCredits": 75,
+      "unlock": {
+        "all": []
+      },
+      "chapterGate": null,
+      "risk": "low",
+      "durationHint": "约 2–5 分钟"
+    },
+    {
+      "commissionId": "mole-whack.T2",
+      "gameId": "mole-whack",
+      "professionId": "engineering.maintenance",
+      "tier": 2,
+      "title": "地下异响",
+      "summary": "正确击中12次",
+      "issuer": "旧港职业中心",
+      "objective": {
+        "kind": "mole.hit",
+        "atLeast": 12
+      },
+      "objectiveBonus": 0,
+      "startParams": {},
+      "reward": {
+        "credits": 0,
+        "items": {
+          "building": 1
+        },
+        "evidence": [],
+        "flags": []
+      },
+      "repeatSalaryCredits": 80,
+      "unlock": {
+        "all": [
+          {
+            "commissionCleared": "mole-whack.T1"
+          }
+        ]
+      },
+      "chapterGate": null,
+      "risk": "low",
+      "durationHint": "约 2–5 分钟"
+    },
+    {
+      "commissionId": "mole-whack.T3",
+      "gameId": "mole-whack",
+      "professionId": "engineering.maintenance",
+      "tier": 3,
+      "title": "检修记录",
+      "summary": "达到连续5次正确击中",
+      "issuer": "旧港职业中心",
+      "objective": {
+        "kind": "combo.reached",
+        "atLeast": 1,
+        "minValue": {
+          "field": "combo",
+          "value": 5
+        }
+      },
+      "objectiveBonus": 0,
+      "startParams": {},
+      "reward": {
+        "credits": 0,
+        "items": {},
+        "evidence": [
+          "E-mole-whack.T3"
+        ],
+        "flags": []
+      },
+      "repeatSalaryCredits": 85,
+      "unlock": {
+        "all": [
+          {
+            "commissionCleared": "mole-whack.T2"
+          }
+        ]
+      },
+      "chapterGate": null,
+      "risk": "medium",
+      "durationHint": "约 2–5 分钟"
+    },
+    {
+      "commissionId": "mole-whack.T4",
+      "gameId": "mole-whack",
+      "professionId": "engineering.maintenance",
+      "tier": 4,
+      "title": "应急工单",
+      "summary": "正确击中18次",
+      "issuer": "旧港职业中心",
+      "objective": {
+        "kind": "mole.hit",
+        "atLeast": 18
+      },
+      "objectiveBonus": 0,
+      "startParams": {},
+      "reward": {
+        "credits": 115,
+        "items": {},
+        "evidence": [],
+        "flags": []
+      },
+      "repeatSalaryCredits": 90,
+      "unlock": {
+        "all": [
+          {
+            "commissionCleared": "mole-whack.T3"
+          },
+          {
+            "chapterFlag": "C3.truth_found"
+          }
+        ]
+      },
+      "chapterGate": "C3.truth_found",
+      "risk": "high",
+      "durationHint": "约 2–5 分钟"
+    },
+    {
+      "commissionId": "mole-whack.T5",
+      "gameId": "mole-whack",
+      "professionId": "engineering.maintenance",
+      "tier": 5,
+      "title": "远征工单",
+      "summary": "达到连续8次正确击中",
+      "issuer": "旧港职业中心",
+      "objective": {
+        "kind": "combo.reached",
+        "atLeast": 1,
+        "minValue": {
+          "field": "combo",
+          "value": 8
+        }
+      },
+      "objectiveBonus": 0,
+      "startParams": {},
+      "reward": {
+        "credits": 0,
+        "items": {},
+        "evidence": [
+          "MAP-mole-whack.T5"
+        ],
+        "flags": []
+      },
+      "repeatSalaryCredits": 95,
+      "unlock": {
+        "all": [
+          {
+            "commissionCleared": "mole-whack.T4"
+          },
+          {
+            "chapterFlag": "C4.city_power_restored"
+          }
+        ]
+      },
+      "chapterGate": "C4.city_power_restored",
+      "risk": "high",
+      "durationHint": "约 2–5 分钟"
+    },
+    {
+      "commissionId": "mole-whack.T6",
+      "gameId": "mole-whack",
+      "professionId": "engineering.maintenance",
+      "tier": 6,
+      "title": "余波工单",
+      "summary": "正确击中22次",
+      "issuer": "旧港职业中心",
+      "objective": {
+        "kind": "mole.hit",
+        "atLeast": 22
+      },
+      "objectiveBonus": 0,
+      "startParams": {},
+      "reward": {
+        "credits": 0,
+        "items": {},
+        "evidence": [
+          "DEC-mole-whack.T6"
+        ],
+        "flags": []
+      },
+      "repeatSalaryCredits": 95,
+      "unlock": {
+        "all": [
+          {
+            "commissionCleared": "mole-whack.T5"
+          },
+          {
+            "chapterFlag": "C5.star_tower_resolved"
+          }
+        ]
+      },
+      "chapterGate": "C5.star_tower_resolved",
+      "risk": "medium",
+      "durationHint": "约 2–5 分钟"
+    },
+    {
+      "commissionId": "block-drop.T1",
+      "gameId": "block-drop",
+      "professionId": "engineering.warehouse",
+      "tier": 1,
+      "title": "整理第一批",
+      "summary": "有效消除2行",
+      "issuer": "旧港职业中心",
+      "objective": {
+        "kind": "lines.cleared",
+        "atLeast": 2
+      },
+      "objectiveBonus": 0,
+      "startParams": {},
+      "reward": {
+        "credits": 70,
+        "items": {},
+        "evidence": [],
+        "flags": []
+      },
+      "repeatSalaryCredits": 75,
+      "unlock": {
+        "all": []
+      },
+      "chapterGate": null,
+      "risk": "low",
+      "durationHint": "约 2–5 分钟"
+    },
+    {
+      "commissionId": "block-drop.T2",
+      "gameId": "block-drop",
+      "professionId": "engineering.warehouse",
+      "tier": 2,
+      "title": "压缩运输",
+      "summary": "有效消除4行",
+      "issuer": "旧港职业中心",
+      "objective": {
+        "kind": "lines.cleared",
+        "atLeast": 4
+      },
+      "objectiveBonus": 0,
+      "startParams": {},
+      "reward": {
+        "credits": 0,
+        "items": {
+          "electronics": 1
+        },
+        "evidence": [],
+        "flags": []
+      },
+      "repeatSalaryCredits": 80,
+      "unlock": {
+        "all": [
+          {
+            "commissionCleared": "block-drop.T1"
+          }
+        ]
+      },
+      "chapterGate": null,
+      "risk": "low",
+      "durationHint": "约 2–5 分钟"
+    },
+    {
+      "commissionId": "block-drop.T3",
+      "gameId": "block-drop",
+      "professionId": "engineering.warehouse",
+      "tier": 3,
+      "title": "仓库档案",
+      "summary": "有效消除6行",
+      "issuer": "旧港职业中心",
+      "objective": {
+        "kind": "lines.cleared",
+        "atLeast": 6
+      },
+      "objectiveBonus": 0,
+      "startParams": {},
+      "reward": {
+        "credits": 0,
+        "items": {},
+        "evidence": [
+          "E-block-drop.T3"
+        ],
+        "flags": []
+      },
+      "repeatSalaryCredits": 85,
+      "unlock": {
+        "all": [
+          {
+            "commissionCleared": "block-drop.T2"
+          }
+        ]
+      },
+      "chapterGate": null,
+      "risk": "medium",
+      "durationHint": "约 2–5 分钟"
+    },
+    {
+      "commissionId": "block-drop.T4",
+      "gameId": "block-drop",
+      "professionId": "engineering.warehouse",
+      "tier": 4,
+      "title": "应急工单",
+      "summary": "有效消除8行",
+      "issuer": "旧港职业中心",
+      "objective": {
+        "kind": "lines.cleared",
+        "atLeast": 8
+      },
+      "objectiveBonus": 0,
+      "startParams": {},
+      "reward": {
+        "credits": 115,
+        "items": {},
+        "evidence": [],
+        "flags": []
+      },
+      "repeatSalaryCredits": 90,
+      "unlock": {
+        "all": [
+          {
+            "commissionCleared": "block-drop.T3"
+          },
+          {
+            "chapterFlag": "C3.truth_found"
+          }
+        ]
+      },
+      "chapterGate": "C3.truth_found",
+      "risk": "high",
+      "durationHint": "约 2–5 分钟"
+    },
+    {
+      "commissionId": "block-drop.T5",
+      "gameId": "block-drop",
+      "professionId": "engineering.warehouse",
+      "tier": 5,
+      "title": "远征工单",
+      "summary": "有效消除12行",
+      "issuer": "旧港职业中心",
+      "objective": {
+        "kind": "lines.cleared",
+        "atLeast": 12
+      },
+      "objectiveBonus": 0,
+      "startParams": {},
+      "reward": {
+        "credits": 0,
+        "items": {
+          "electronics": 2
+        },
+        "evidence": [],
+        "flags": []
+      },
+      "repeatSalaryCredits": 95,
+      "unlock": {
+        "all": [
+          {
+            "commissionCleared": "block-drop.T4"
+          },
+          {
+            "chapterFlag": "C4.city_power_restored"
+          }
+        ]
+      },
+      "chapterGate": "C4.city_power_restored",
+      "risk": "high",
+      "durationHint": "约 2–5 分钟"
+    },
+    {
+      "commissionId": "block-drop.T6",
+      "gameId": "block-drop",
+      "professionId": "engineering.warehouse",
+      "tier": 6,
+      "title": "余波工单",
+      "summary": "有效消除16行",
+      "issuer": "旧港职业中心",
+      "objective": {
+        "kind": "lines.cleared",
+        "atLeast": 16
+      },
+      "objectiveBonus": 0,
+      "startParams": {},
+      "reward": {
+        "credits": 0,
+        "items": {},
+        "evidence": [
+          "DEC-block-drop.T6"
+        ],
+        "flags": []
+      },
+      "repeatSalaryCredits": 95,
+      "unlock": {
+        "all": [
+          {
+            "commissionCleared": "block-drop.T5"
+          },
+          {
+            "chapterFlag": "C5.star_tower_resolved"
+          }
+        ]
+      },
+      "chapterGate": "C5.star_tower_resolved",
+      "risk": "medium",
+      "durationHint": "约 2–5 分钟"
     },
     {
       "commissionId": "star-raid.T1",
       "gameId": "star-raid",
       "professionId": "adventure.pilot",
-      "title": "护航：第一巡逻区",
-      "summary": "跟着旧港的护航线走一趟，把巡防队赶回去。",
-      "issuer": "旧港护航处",
-      "objective": { "kind": "boss.defeated", "atLeast": 1, "context": { "level": 1 } },
+      "tier": 1,
+      "title": "首次巡航",
+      "summary": "击败第一阶段Boss",
+      "issuer": "旧港职业中心",
+      "objective": {
+        "kind": "boss.defeated",
+        "atLeast": 1,
+        "context": {
+          "level": 1
+        }
+      },
       "objectiveBonus": 0,
-      "startParams": { "startLevel": 1 },
-      "reward": { "credits": 90, "items": { "alloy": 1 }, "evidence": ["E-C1-patrol"], "flags": ["C1.flight_done"] },
-      "repeatSalaryCredits": 30,
-      "unlock": { "all": [] },
-      "risk": "medium",
-      "durationHint": "约 3–5 分钟"
+      "startParams": {
+        "startLevel": 1,
+        "themeId": "patrol"
+      },
+      "reward": {
+        "credits": 80,
+        "items": {},
+        "evidence": [
+          "E-C1-patrol"
+        ],
+        "flags": [
+          "C1.flight_done"
+        ]
+      },
+      "repeatSalaryCredits": 75,
+      "unlock": {
+        "all": []
+      },
+      "chapterGate": null,
+      "risk": "low",
+      "durationHint": "约 2–5 分钟"
     },
     {
       "commissionId": "star-raid.T2",
       "gameId": "star-raid",
       "professionId": "adventure.pilot",
-      "title": "护航：电磁风暴",
-      "summary": "风暴里有一艘母舰在等，把它挡在航道外。",
-      "issuer": "旧港护航处",
-      "objective": { "kind": "boss.defeated", "atLeast": 1, "context": { "level": 3, "theme": "storm" } },
-      "objectiveBonus": 15,
-      "startParams": { "startLevel": 3, "themeId": "storm" },
-      "reward": { "credits": 130, "items": { "alloy": 2, "crystal": 1 }, "evidence": ["E-C1-patrol-2"], "flags": ["C1.storm_done"] },
-      "repeatSalaryCredits": 40,
-      "unlock": { "all": [{ "kind": "chapterFlag", "value": "C1.flight_done" }] },
+      "tier": 2,
+      "title": "陨石航道",
+      "summary": "清理一波陨石威胁",
+      "issuer": "旧港职业中心",
+      "objective": {
+        "kind": "wave.completed",
+        "atLeast": 2
+      },
+      "objectiveBonus": 0,
+      "startParams": {
+        "startLevel": 2,
+        "themeId": "asteroid"
+      },
+      "reward": {
+        "credits": 0,
+        "items": {
+          "starcrystal": 1
+        },
+        "evidence": [
+          "E-C1-patrol-2"
+        ],
+        "flags": [
+          "C1.storm_done"
+        ]
+      },
+      "repeatSalaryCredits": 80,
+      "unlock": {
+        "all": [
+          {
+            "commissionCleared": "star-raid.T1"
+          }
+        ]
+      },
+      "chapterGate": null,
+      "risk": "low",
+      "durationHint": "约 2–5 分钟"
+    },
+    {
+      "commissionId": "star-raid.T3",
+      "gameId": "star-raid",
+      "professionId": "adventure.pilot",
+      "tier": 3,
+      "title": "电磁侦查",
+      "summary": "击败指定电磁区域Boss",
+      "issuer": "旧港职业中心",
+      "objective": {
+        "kind": "boss.defeated",
+        "atLeast": 1,
+        "context": {
+          "theme": "storm"
+        }
+      },
+      "objectiveBonus": 0,
+      "startParams": {
+        "startLevel": 3,
+        "themeId": "storm"
+      },
+      "reward": {
+        "credits": 0,
+        "items": {},
+        "evidence": [
+          "E-star-raid.T3"
+        ],
+        "flags": []
+      },
+      "repeatSalaryCredits": 85,
+      "unlock": {
+        "all": [
+          {
+            "commissionCleared": "star-raid.T2"
+          }
+        ]
+      },
+      "chapterGate": null,
+      "risk": "medium",
+      "durationHint": "约 2–5 分钟"
+    },
+    {
+      "commissionId": "star-raid.T4",
+      "gameId": "star-raid",
+      "professionId": "adventure.pilot",
+      "tier": 4,
+      "title": "应急工单",
+      "summary": "完成舰队封锁任务",
+      "issuer": "旧港职业中心",
+      "objective": {
+        "kind": "wave.completed",
+        "atLeast": 4
+      },
+      "objectiveBonus": 0,
+      "startParams": {
+        "startLevel": 4,
+        "themeId": "blockade"
+      },
+      "reward": {
+        "credits": 130,
+        "items": {},
+        "evidence": [],
+        "flags": []
+      },
+      "repeatSalaryCredits": 90,
+      "unlock": {
+        "all": [
+          {
+            "commissionCleared": "star-raid.T3"
+          },
+          {
+            "chapterFlag": "C3.truth_found"
+          }
+        ]
+      },
+      "chapterGate": "C3.truth_found",
       "risk": "high",
-      "durationHint": "约 4–6 分钟"
+      "durationHint": "约 2–5 分钟"
+    },
+    {
+      "commissionId": "star-raid.T5",
+      "gameId": "star-raid",
+      "professionId": "adventure.pilot",
+      "tier": 5,
+      "title": "远征工单",
+      "summary": "击败星云迷雾区域Boss",
+      "issuer": "旧港职业中心",
+      "objective": {
+        "kind": "boss.defeated",
+        "atLeast": 1,
+        "context": {
+          "theme": "nebula"
+        }
+      },
+      "objectiveBonus": 0,
+      "startParams": {
+        "startLevel": 5,
+        "themeId": "nebula"
+      },
+      "reward": {
+        "credits": 0,
+        "items": {},
+        "evidence": [
+          "MAP-star-raid.T5"
+        ],
+        "flags": []
+      },
+      "repeatSalaryCredits": 95,
+      "unlock": {
+        "all": [
+          {
+            "commissionCleared": "star-raid.T4"
+          },
+          {
+            "chapterFlag": "C4.city_power_restored"
+          }
+        ]
+      },
+      "chapterGate": "C4.city_power_restored",
+      "risk": "high",
+      "durationHint": "约 2–5 分钟"
+    },
+    {
+      "commissionId": "star-raid.T6",
+      "gameId": "star-raid",
+      "professionId": "adventure.pilot",
+      "tier": 6,
+      "title": "余波工单",
+      "summary": "击败母舰防线Boss",
+      "issuer": "旧港职业中心",
+      "objective": {
+        "kind": "boss.defeated",
+        "atLeast": 1,
+        "context": {
+          "theme": "mothership"
+        }
+      },
+      "objectiveBonus": 0,
+      "startParams": {
+        "startLevel": 6,
+        "themeId": "mothership"
+      },
+      "reward": {
+        "credits": 0,
+        "items": {},
+        "evidence": [
+          "DEC-star-raid.T6"
+        ],
+        "flags": []
+      },
+      "repeatSalaryCredits": 95,
+      "unlock": {
+        "all": [
+          {
+            "commissionCleared": "star-raid.T5"
+          },
+          {
+            "chapterFlag": "C5.star_tower_resolved"
+          }
+        ]
+      },
+      "chapterGate": "C5.star_tower_resolved",
+      "risk": "medium",
+      "durationHint": "约 2–5 分钟"
+    },
+    {
+      "commissionId": "road-rush.T1",
+      "gameId": "road-rush",
+      "professionId": "engineering.driver",
+      "tier": 1,
+      "title": "第一单快递",
+      "summary": "安全行驶至少500米",
+      "issuer": "旧港职业中心",
+      "objective": {
+        "kind": "distance.reached",
+        "atLeast": 1,
+        "minValue": {
+          "field": "meters",
+          "value": 500
+        }
+      },
+      "objectiveBonus": 0,
+      "startParams": {},
+      "reward": {
+        "credits": 70,
+        "items": {},
+        "evidence": [],
+        "flags": []
+      },
+      "repeatSalaryCredits": 75,
+      "unlock": {
+        "all": []
+      },
+      "chapterGate": null,
+      "risk": "low",
+      "durationHint": "约 2–5 分钟"
+    },
+    {
+      "commissionId": "road-rush.T2",
+      "gameId": "road-rush",
+      "professionId": "engineering.driver",
+      "tier": 2,
+      "title": "仪器急件",
+      "summary": "安全行驶至少1000米",
+      "issuer": "旧港职业中心",
+      "objective": {
+        "kind": "distance.reached",
+        "atLeast": 1,
+        "minValue": {
+          "field": "meters",
+          "value": 1000
+        }
+      },
+      "objectiveBonus": 0,
+      "startParams": {},
+      "reward": {
+        "credits": 0,
+        "items": {
+          "electronics": 1
+        },
+        "evidence": [],
+        "flags": []
+      },
+      "repeatSalaryCredits": 80,
+      "unlock": {
+        "all": [
+          {
+            "commissionCleared": "road-rush.T1"
+          }
+        ]
+      },
+      "chapterGate": null,
+      "risk": "low",
+      "durationHint": "约 2–5 分钟"
+    },
+    {
+      "commissionId": "road-rush.T3",
+      "gameId": "road-rush",
+      "professionId": "engineering.driver",
+      "tier": 3,
+      "title": "遗迹驿站",
+      "summary": "安全行驶至少1500米",
+      "issuer": "旧港职业中心",
+      "objective": {
+        "kind": "distance.reached",
+        "atLeast": 1,
+        "minValue": {
+          "field": "meters",
+          "value": 1500
+        }
+      },
+      "objectiveBonus": 0,
+      "startParams": {},
+      "reward": {
+        "credits": 0,
+        "items": {},
+        "evidence": [
+          "E-road-rush.T3"
+        ],
+        "flags": []
+      },
+      "repeatSalaryCredits": 85,
+      "unlock": {
+        "all": [
+          {
+            "commissionCleared": "road-rush.T2"
+          }
+        ]
+      },
+      "chapterGate": null,
+      "risk": "medium",
+      "durationHint": "约 2–5 分钟"
+    },
+    {
+      "commissionId": "road-rush.T4",
+      "gameId": "road-rush",
+      "professionId": "engineering.driver",
+      "tier": 4,
+      "title": "应急工单",
+      "summary": "安全行驶至少2200米",
+      "issuer": "旧港职业中心",
+      "objective": {
+        "kind": "distance.reached",
+        "atLeast": 1,
+        "minValue": {
+          "field": "meters",
+          "value": 2200
+        }
+      },
+      "objectiveBonus": 0,
+      "startParams": {},
+      "reward": {
+        "credits": 120,
+        "items": {},
+        "evidence": [],
+        "flags": []
+      },
+      "repeatSalaryCredits": 90,
+      "unlock": {
+        "all": [
+          {
+            "commissionCleared": "road-rush.T3"
+          },
+          {
+            "chapterFlag": "C3.truth_found"
+          }
+        ]
+      },
+      "chapterGate": "C3.truth_found",
+      "risk": "high",
+      "durationHint": "约 2–5 分钟"
+    },
+    {
+      "commissionId": "road-rush.T5",
+      "gameId": "road-rush",
+      "professionId": "engineering.driver",
+      "tier": 5,
+      "title": "远征工单",
+      "summary": "安全行驶至少3000米",
+      "issuer": "旧港职业中心",
+      "objective": {
+        "kind": "distance.reached",
+        "atLeast": 1,
+        "minValue": {
+          "field": "meters",
+          "value": 3000
+        }
+      },
+      "objectiveBonus": 0,
+      "startParams": {},
+      "reward": {
+        "credits": 0,
+        "items": {
+          "electronics": 2
+        },
+        "evidence": [],
+        "flags": []
+      },
+      "repeatSalaryCredits": 95,
+      "unlock": {
+        "all": [
+          {
+            "commissionCleared": "road-rush.T4"
+          },
+          {
+            "chapterFlag": "C4.city_power_restored"
+          }
+        ]
+      },
+      "chapterGate": "C4.city_power_restored",
+      "risk": "high",
+      "durationHint": "约 2–5 分钟"
+    },
+    {
+      "commissionId": "road-rush.T6",
+      "gameId": "road-rush",
+      "professionId": "engineering.driver",
+      "tier": 6,
+      "title": "余波工单",
+      "summary": "抵达既有5000米终点",
+      "issuer": "旧港职业中心",
+      "objective": {
+        "kind": "distance.reached",
+        "atLeast": 1,
+        "minValue": {
+          "field": "meters",
+          "value": 5000
+        }
+      },
+      "objectiveBonus": 0,
+      "startParams": {},
+      "reward": {
+        "credits": 0,
+        "items": {},
+        "evidence": [
+          "DEC-road-rush.T6"
+        ],
+        "flags": []
+      },
+      "repeatSalaryCredits": 95,
+      "unlock": {
+        "all": [
+          {
+            "commissionCleared": "road-rush.T5"
+          },
+          {
+            "chapterFlag": "C5.star_tower_resolved"
+          }
+        ]
+      },
+      "chapterGate": "C5.star_tower_resolved",
+      "risk": "medium",
+      "durationHint": "约 2–5 分钟"
+    },
+    {
+      "commissionId": "shadow-leap.T1",
+      "gameId": "shadow-leap",
+      "professionId": "adventure.relicseeker",
+      "tier": 1,
+      "title": "月下脚印",
+      "summary": "到达指定探索高度",
+      "issuer": "旧港职业中心",
+      "objective": {
+        "kind": "height.reached",
+        "atLeast": 1,
+        "minValue": {
+          "field": "meters",
+          "value": 120
+        }
+      },
+      "objectiveBonus": 0,
+      "startParams": {},
+      "reward": {
+        "credits": 70,
+        "items": {},
+        "evidence": [],
+        "flags": []
+      },
+      "repeatSalaryCredits": 75,
+      "unlock": {
+        "all": []
+      },
+      "chapterGate": null,
+      "risk": "low",
+      "durationHint": "约 2–5 分钟"
+    },
+    {
+      "commissionId": "shadow-leap.T2",
+      "gameId": "shadow-leap",
+      "professionId": "adventure.relicseeker",
+      "tier": 2,
+      "title": "失落卷轴",
+      "summary": "取得一枚可选卷轴",
+      "issuer": "旧港职业中心",
+      "objective": {
+        "kind": "scroll.collected",
+        "atLeast": 1
+      },
+      "objectiveBonus": 0,
+      "startParams": {},
+      "reward": {
+        "credits": 0,
+        "items": {},
+        "evidence": [
+          "E-shadow-leap.T2"
+        ],
+        "flags": []
+      },
+      "repeatSalaryCredits": 80,
+      "unlock": {
+        "all": [
+          {
+            "commissionCleared": "shadow-leap.T1"
+          }
+        ]
+      },
+      "chapterGate": null,
+      "risk": "low",
+      "durationHint": "约 2–5 分钟"
+    },
+    {
+      "commissionId": "shadow-leap.T3",
+      "gameId": "shadow-leap",
+      "professionId": "adventure.relicseeker",
+      "tier": 3,
+      "title": "跃迁台阶",
+      "summary": "到达更高探索位置",
+      "issuer": "旧港职业中心",
+      "objective": {
+        "kind": "height.reached",
+        "atLeast": 1,
+        "minValue": {
+          "field": "meters",
+          "value": 260
+        }
+      },
+      "objectiveBonus": 0,
+      "startParams": {},
+      "reward": {
+        "credits": 100,
+        "items": {},
+        "evidence": [],
+        "flags": []
+      },
+      "repeatSalaryCredits": 85,
+      "unlock": {
+        "all": [
+          {
+            "commissionCleared": "shadow-leap.T2"
+          }
+        ]
+      },
+      "chapterGate": null,
+      "risk": "medium",
+      "durationHint": "约 2–5 分钟"
+    },
+    {
+      "commissionId": "shadow-leap.T4",
+      "gameId": "shadow-leap",
+      "professionId": "adventure.relicseeker",
+      "tier": 4,
+      "title": "应急工单",
+      "summary": "取得第二枚档案卷轴",
+      "issuer": "旧港职业中心",
+      "objective": {
+        "kind": "scroll.collected",
+        "atLeast": 1
+      },
+      "objectiveBonus": 0,
+      "startParams": {},
+      "reward": {
+        "credits": 0,
+        "items": {},
+        "evidence": [
+          "MAP-shadow-leap.T4"
+        ],
+        "flags": []
+      },
+      "repeatSalaryCredits": 90,
+      "unlock": {
+        "all": [
+          {
+            "commissionCleared": "shadow-leap.T3"
+          },
+          {
+            "chapterFlag": "C3.truth_found"
+          }
+        ]
+      },
+      "chapterGate": "C3.truth_found",
+      "risk": "high",
+      "durationHint": "约 2–5 分钟"
+    },
+    {
+      "commissionId": "shadow-leap.T5",
+      "gameId": "shadow-leap",
+      "professionId": "adventure.relicseeker",
+      "tier": 5,
+      "title": "远征工单",
+      "summary": "到达指定遗迹上层",
+      "issuer": "旧港职业中心",
+      "objective": {
+        "kind": "height.reached",
+        "atLeast": 1,
+        "minValue": {
+          "field": "meters",
+          "value": 420
+        }
+      },
+      "objectiveBonus": 0,
+      "startParams": {},
+      "reward": {
+        "credits": 0,
+        "items": {
+          "starcrystal": 1
+        },
+        "evidence": [],
+        "flags": []
+      },
+      "repeatSalaryCredits": 95,
+      "unlock": {
+        "all": [
+          {
+            "commissionCleared": "shadow-leap.T4"
+          },
+          {
+            "chapterFlag": "C4.city_power_restored"
+          }
+        ]
+      },
+      "chapterGate": "C4.city_power_restored",
+      "risk": "high",
+      "durationHint": "约 2–5 分钟"
+    },
+    {
+      "commissionId": "shadow-leap.T6",
+      "gameId": "shadow-leap",
+      "professionId": "adventure.relicseeker",
+      "tier": 6,
+      "title": "余波工单",
+      "summary": "完成最终遗迹勘查",
+      "issuer": "旧港职业中心",
+      "objective": {
+        "kind": "height.reached",
+        "atLeast": 1,
+        "minValue": {
+          "field": "meters",
+          "value": 600
+        }
+      },
+      "objectiveBonus": 0,
+      "startParams": {},
+      "reward": {
+        "credits": 0,
+        "items": {},
+        "evidence": [
+          "DEC-shadow-leap.T6"
+        ],
+        "flags": []
+      },
+      "repeatSalaryCredits": 95,
+      "unlock": {
+        "all": [
+          {
+            "commissionCleared": "shadow-leap.T5"
+          },
+          {
+            "chapterFlag": "C5.star_tower_resolved"
+          }
+        ]
+      },
+      "chapterGate": "C5.star_tower_resolved",
+      "risk": "medium",
+      "durationHint": "约 2–5 分钟"
+    },
+    {
+      "commissionId": "pendulum-tower.T1",
+      "gameId": "pendulum-tower",
+      "professionId": "engineering.structural",
+      "tier": 1,
+      "title": "港口实习",
+      "summary": "完成稳定的4层塔",
+      "issuer": "旧港职业中心",
+      "objective": {
+        "kind": "tower.floor_stable",
+        "atLeast": 4
+      },
+      "objectiveBonus": 0,
+      "startParams": {},
+      "reward": {
+        "credits": 90,
+        "items": {},
+        "evidence": [
+          "E-C1-site"
+        ],
+        "flags": [
+          "C1.work_done"
+        ]
+      },
+      "repeatSalaryCredits": 75,
+      "unlock": {
+        "all": []
+      },
+      "chapterGate": null,
+      "risk": "low",
+      "durationHint": "约 2–5 分钟"
+    },
+    {
+      "commissionId": "pendulum-tower.T2",
+      "gameId": "pendulum-tower",
+      "professionId": "engineering.structural",
+      "tier": 2,
+      "title": "码头脚手架",
+      "summary": "完成稳定的6层塔",
+      "issuer": "旧港职业中心",
+      "objective": {
+        "kind": "tower.floor_stable",
+        "atLeast": 6
+      },
+      "objectiveBonus": 0,
+      "startParams": {},
+      "reward": {
+        "credits": 0,
+        "items": {
+          "building": 2
+        },
+        "evidence": [
+          "E-C1-site-2"
+        ],
+        "flags": [
+          "C1.foreman"
+        ]
+      },
+      "repeatSalaryCredits": 80,
+      "unlock": {
+        "all": [
+          {
+            "commissionCleared": "pendulum-tower.T1"
+          }
+        ]
+      },
+      "chapterGate": null,
+      "risk": "low",
+      "durationHint": "约 2–5 分钟"
+    },
+    {
+      "commissionId": "pendulum-tower.T3",
+      "gameId": "pendulum-tower",
+      "professionId": "engineering.structural",
+      "tier": 3,
+      "title": "观测塔基础",
+      "summary": "完成稳定的8层塔",
+      "issuer": "旧港职业中心",
+      "objective": {
+        "kind": "tower.floor_stable",
+        "atLeast": 8
+      },
+      "objectiveBonus": 0,
+      "startParams": {},
+      "reward": {
+        "credits": 105,
+        "items": {},
+        "evidence": [],
+        "flags": []
+      },
+      "repeatSalaryCredits": 85,
+      "unlock": {
+        "all": [
+          {
+            "commissionCleared": "pendulum-tower.T2"
+          }
+        ]
+      },
+      "chapterGate": null,
+      "risk": "medium",
+      "durationHint": "约 2–5 分钟"
+    },
+    {
+      "commissionId": "pendulum-tower.T4",
+      "gameId": "pendulum-tower",
+      "professionId": "engineering.structural",
+      "tier": 4,
+      "title": "应急工单",
+      "summary": "完成稳定的10层塔",
+      "issuer": "旧港职业中心",
+      "objective": {
+        "kind": "tower.floor_stable",
+        "atLeast": 10
+      },
+      "objectiveBonus": 0,
+      "startParams": {},
+      "reward": {
+        "credits": 0,
+        "items": {
+          "building": 3
+        },
+        "evidence": [],
+        "flags": []
+      },
+      "repeatSalaryCredits": 90,
+      "unlock": {
+        "all": [
+          {
+            "commissionCleared": "pendulum-tower.T3"
+          },
+          {
+            "chapterFlag": "C3.truth_found"
+          }
+        ]
+      },
+      "chapterGate": "C3.truth_found",
+      "risk": "high",
+      "durationHint": "约 2–5 分钟"
+    },
+    {
+      "commissionId": "pendulum-tower.T5",
+      "gameId": "pendulum-tower",
+      "professionId": "engineering.structural",
+      "tier": 5,
+      "title": "远征工单",
+      "summary": "完成稳定的12层塔",
+      "issuer": "旧港职业中心",
+      "objective": {
+        "kind": "tower.floor_stable",
+        "atLeast": 12
+      },
+      "objectiveBonus": 0,
+      "startParams": {},
+      "reward": {
+        "credits": 130,
+        "items": {},
+        "evidence": [],
+        "flags": []
+      },
+      "repeatSalaryCredits": 95,
+      "unlock": {
+        "all": [
+          {
+            "commissionCleared": "pendulum-tower.T4"
+          },
+          {
+            "chapterFlag": "C4.city_power_restored"
+          }
+        ]
+      },
+      "chapterGate": "C4.city_power_restored",
+      "risk": "high",
+      "durationHint": "约 2–5 分钟"
+    },
+    {
+      "commissionId": "pendulum-tower.T6",
+      "gameId": "pendulum-tower",
+      "professionId": "engineering.structural",
+      "tier": 6,
+      "title": "余波工单",
+      "summary": "完成稳定的15层塔",
+      "issuer": "旧港职业中心",
+      "objective": {
+        "kind": "tower.floor_stable",
+        "atLeast": 15
+      },
+      "objectiveBonus": 0,
+      "startParams": {},
+      "reward": {
+        "credits": 0,
+        "items": {},
+        "evidence": [
+          "DEC-pendulum-tower.T6"
+        ],
+        "flags": []
+      },
+      "repeatSalaryCredits": 95,
+      "unlock": {
+        "all": [
+          {
+            "commissionCleared": "pendulum-tower.T5"
+          },
+          {
+            "chapterFlag": "C5.star_tower_resolved"
+          }
+        ]
+      },
+      "chapterGate": "C5.star_tower_resolved",
+      "risk": "medium",
+      "durationHint": "约 2–5 分钟"
+    },
+    {
+      "commissionId": "gold-miner.T1",
+      "gameId": "gold-miner",
+      "professionId": "nature.miner",
+      "tier": 1,
+      "title": "入井勘探",
+      "summary": "成功吊回两件矿物",
+      "issuer": "旧港职业中心",
+      "objective": {
+        "kind": "mineral.returned",
+        "atLeast": 2
+      },
+      "objectiveBonus": 0,
+      "startParams": {},
+      "reward": {
+        "credits": 75,
+        "items": {},
+        "evidence": [],
+        "flags": []
+      },
+      "repeatSalaryCredits": 75,
+      "unlock": {
+        "all": []
+      },
+      "chapterGate": null,
+      "risk": "low",
+      "durationHint": "约 2–5 分钟"
+    },
+    {
+      "commissionId": "gold-miner.T2",
+      "gameId": "gold-miner",
+      "professionId": "nature.miner",
+      "tier": 2,
+      "title": "金属订单",
+      "summary": "成功吊回三件矿物",
+      "issuer": "旧港职业中心",
+      "objective": {
+        "kind": "mineral.returned",
+        "atLeast": 3
+      },
+      "objectiveBonus": 0,
+      "startParams": {},
+      "reward": {
+        "credits": 0,
+        "items": {
+          "alloy": 2
+        },
+        "evidence": [],
+        "flags": []
+      },
+      "repeatSalaryCredits": 80,
+      "unlock": {
+        "all": [
+          {
+            "commissionCleared": "gold-miner.T1"
+          }
+        ]
+      },
+      "chapterGate": null,
+      "risk": "low",
+      "durationHint": "约 2–5 分钟"
+    },
+    {
+      "commissionId": "gold-miner.T3",
+      "gameId": "gold-miner",
+      "professionId": "nature.miner",
+      "tier": 3,
+      "title": "未知晶脉",
+      "summary": "成功吊回四件矿物",
+      "issuer": "旧港职业中心",
+      "objective": {
+        "kind": "mineral.returned",
+        "atLeast": 4
+      },
+      "objectiveBonus": 0,
+      "startParams": {},
+      "reward": {
+        "credits": 0,
+        "items": {
+          "starcrystal": 1
+        },
+        "evidence": [],
+        "flags": []
+      },
+      "repeatSalaryCredits": 85,
+      "unlock": {
+        "all": [
+          {
+            "commissionCleared": "gold-miner.T2"
+          }
+        ]
+      },
+      "chapterGate": null,
+      "risk": "medium",
+      "durationHint": "约 2–5 分钟"
+    },
+    {
+      "commissionId": "gold-miner.T4",
+      "gameId": "gold-miner",
+      "professionId": "nature.miner",
+      "tier": 4,
+      "title": "应急工单",
+      "summary": "成功吊回五件矿物",
+      "issuer": "旧港职业中心",
+      "objective": {
+        "kind": "mineral.returned",
+        "atLeast": 5
+      },
+      "objectiveBonus": 0,
+      "startParams": {},
+      "reward": {
+        "credits": 0,
+        "items": {
+          "alloy": 3
+        },
+        "evidence": [],
+        "flags": []
+      },
+      "repeatSalaryCredits": 90,
+      "unlock": {
+        "all": [
+          {
+            "commissionCleared": "gold-miner.T3"
+          },
+          {
+            "chapterFlag": "C3.truth_found"
+          }
+        ]
+      },
+      "chapterGate": "C3.truth_found",
+      "risk": "high",
+      "durationHint": "约 2–5 分钟"
+    },
+    {
+      "commissionId": "gold-miner.T5",
+      "gameId": "gold-miner",
+      "professionId": "nature.miner",
+      "tier": 5,
+      "title": "远征工单",
+      "summary": "成功吊回六件矿物",
+      "issuer": "旧港职业中心",
+      "objective": {
+        "kind": "mineral.returned",
+        "atLeast": 6
+      },
+      "objectiveBonus": 0,
+      "startParams": {},
+      "reward": {
+        "credits": 0,
+        "items": {
+          "starcrystal": 2
+        },
+        "evidence": [],
+        "flags": []
+      },
+      "repeatSalaryCredits": 95,
+      "unlock": {
+        "all": [
+          {
+            "commissionCleared": "gold-miner.T4"
+          },
+          {
+            "chapterFlag": "C4.city_power_restored"
+          }
+        ]
+      },
+      "chapterGate": "C4.city_power_restored",
+      "risk": "high",
+      "durationHint": "约 2–5 分钟"
+    },
+    {
+      "commissionId": "gold-miner.T6",
+      "gameId": "gold-miner",
+      "professionId": "nature.miner",
+      "tier": 6,
+      "title": "余波工单",
+      "summary": "成功吊回八件矿物",
+      "issuer": "旧港职业中心",
+      "objective": {
+        "kind": "mineral.returned",
+        "atLeast": 8
+      },
+      "objectiveBonus": 0,
+      "startParams": {},
+      "reward": {
+        "credits": 0,
+        "items": {},
+        "evidence": [
+          "DEC-gold-miner.T6"
+        ],
+        "flags": []
+      },
+      "repeatSalaryCredits": 95,
+      "unlock": {
+        "all": [
+          {
+            "commissionCleared": "gold-miner.T5"
+          },
+          {
+            "chapterFlag": "C5.star_tower_resolved"
+          }
+        ]
+      },
+      "chapterGate": "C5.star_tower_resolved",
+      "risk": "medium",
+      "durationHint": "约 2–5 分钟"
     }
   ]
 }

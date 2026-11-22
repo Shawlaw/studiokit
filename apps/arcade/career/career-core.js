@@ -73,6 +73,7 @@
     badCostItems: 'bad-cost-items',
     insufficient: 'insufficient',
     insufficientItems: 'insufficient-items',
+    valueNotMet: 'value-not-met',
     walletUnavailable: 'wallet-unavailable',
     itemCap: 'item-cap',
     balanceCap: 'balance-cap',
@@ -202,7 +203,7 @@
   }
 
   function emptyDigest() {
-    return { schemaVersion: SCHEMA_VERSION, counts: {}, facets: {}, total: 0 };
+    return { schemaVersion: SCHEMA_VERSION, counts: {}, facets: {}, maxima: {}, total: 0 };
   }
 
   /**
@@ -244,6 +245,19 @@
         facets[key] += 1;
       }
     };
+    /* 0.17：数值型目标的“达到/超过”证据（距离、高度、格子值等），按 kind/field 取最大值。 */
+    const addMaxima = (kind, payload) => {
+      if (!isObject(payload)) return;
+      const fields = Object.keys(payload);
+      for (let i = 0; i < fields.length; i += 1) {
+        const field = fields[i];
+        const value = payload[field];
+        if (!isToken(field) && !KIND_RE.test(field)) continue;
+        if (!isFiniteNumber(value)) continue;
+        const byField = digest.maxima[kind] && isObject(digest.maxima[kind]) ? digest.maxima[kind] : (digest.maxima[kind] = {});
+        if (byField[field] === undefined || value > byField[field]) byField[field] = value;
+      }
+    };
     if (Array.isArray(events)) {
       events.forEach((event) => {
         if (typeof event === 'string') {
@@ -260,6 +274,7 @@
         }
         addCount(kind, amount);
         addFacets(kind, event.payload);
+        addMaxima(kind, event.payload);
       });
       return digest;
     }
@@ -284,6 +299,18 @@
           }
         });
       }
+      if (isObject(events.maxima)) {
+        Object.keys(events.maxima).forEach((kind) => {
+          if (!isKind(kind) || !isObject(events.maxima[kind])) return;
+          const fields = Object.keys(events.maxima[kind]);
+          fields.forEach((field) => {
+            const parsed = Number(events.maxima[kind][field]);
+            if (!isFiniteNumber(parsed)) return;
+            const byField = digest.maxima[kind] && isObject(digest.maxima[kind]) ? digest.maxima[kind] : (digest.maxima[kind] = {});
+            if (byField[field] === undefined || parsed > byField[field]) byField[field] = parsed;
+          });
+        });
+      }
     }
     return digest;
   }
@@ -300,6 +327,17 @@
       Object.keys(part.facets).forEach((key) => {
         out.facets[key] = (out.facets[key] || 0) + part.facets[key];
       });
+      if (isObject(part.maxima)) {
+        Object.keys(part.maxima).forEach((kind) => {
+          if (!isObject(part.maxima[kind])) return;
+          const byField = out.maxima[kind] && isObject(out.maxima[kind]) ? out.maxima[kind] : (out.maxima[kind] = {});
+          Object.keys(part.maxima[kind]).forEach((field) => {
+            const value = Number(part.maxima[kind][field]);
+            if (!isFiniteNumber(value)) return;
+            if (byField[field] === undefined || value > byField[field]) byField[field] = value;
+          });
+        });
+      }
       out.total += part.total;
     });
     return out;
@@ -321,11 +359,22 @@
     if (!isObject(raw)) return null;
     if (!isKind(raw.kind)) return null;
     const atLeast = Number(raw.atLeast);
-    return {
+    const objective = {
       kind: raw.kind,
       atLeast: Number.isFinite(atLeast) && atLeast > 0 ? Math.floor(atLeast) : 1,
       context: isObject(raw.context) ? deepClone(raw.context) : {},
     };
+    /* 0.17：达到阈值型目标（距离/高度/格子值/连击等），按 payload 字段最大值判定。 */
+    if (isObject(raw.minValue)) {
+      const field = raw.minValue.field;
+      const value = Number(raw.minValue.value);
+      if ((typeof field === 'string' && (isToken(field) || KIND_RE.test(field))) && isFiniteNumber(value)) {
+        objective.minValue = { field, value };
+      } else {
+        return null;
+      }
+    }
+    return objective;
   }
 
   function contextMatches(objective, digest, ctx) {
@@ -371,6 +420,13 @@
     }
     if (!contextMatches(objective, summary, options)) {
       return { ok: false, reason: REASONS.contextMismatch, observed, digest: summary, objective };
+    }
+    if (objective.minValue) {
+      const byField = summary.maxima && summary.maxima[objective.kind];
+      const reached = byField && isFiniteNumber(byField[objective.minValue.field]) ? byField[objective.minValue.field] : null;
+      if (reached === null || reached < objective.minValue.value) {
+        return { ok: false, reason: REASONS.valueNotMet, observed, reached, digest: summary, objective };
+      }
     }
     return { ok: true, observed, digest: summary, objective };
   }

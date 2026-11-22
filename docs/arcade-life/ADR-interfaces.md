@@ -669,3 +669,129 @@ writeEquipment({careerId, patch, now}) -> Promise<{ok, equipment?} | {ok:false, 
 
 - 不新增顶层游戏模式入口；不改中心页卡片结构；不做每日/签到/概率/推送。
 - 不做真实时间等待、不做云存档/账号；不做 96 委托与六章结局（0.17/0.18）。
+
+## 19. 0.17 活世界增补契约（冻结）
+
+0.17 在 0.16 首航闭环上扩到 **16 游戏 × 6 阶 = 96 委托**、五材/商店/制造/职业成长/证据与路线；T1–T3 对外可见，T4–T6 必须实现并用受控故事旗标 fixture 证明，但运行时由 C3/C4/C5 剧情旗标解锁（禁止提前剧透）。
+
+### 19.1 新增运行时文件
+
+| 文件 | 职责 |
+|---|---|
+| `career/commission-schema.js` | 96 委托内容 schema 校验、tier/gate 规则、事件目录校验（纯 UMD） |
+| `career/materials.js` | 五类材料目录、买卖价、来源、别名（`crystal→starcrystal`） |
+| `career/crafting.js` | 模块制造计划/预览/材料与信用点校验（不写库） |
+| `career/professions.js` | 16 职业的学徒/熟练/专家等级与可选订单（不自动改游戏） |
+| `career/story-evidence.js` | 委托/路线产生的证据标记：去重、不可重放、C2–C4 上下文 |
+| `career/route-planner.js` | 单职业主线必需品路线（工作/研究/贸易/租机/代办） |
+| `career/ui/market.js` | 材料买卖面板（固定价差、原子事务、失败可归因） |
+| `career/ui/workshop.js` | 制造台：模块预览/制造/拥有状态 |
+| `tools/career_mission_fixture_runner.mjs` | 通用 fixture 装载/校验/驱动（D17-02） |
+| `tools/career_fixture_<gameId>.mjs` | 每游戏 6 阶成功/失败驱动（D17-03..18） |
+
+### 19.2 96 委托内容 schema（`content/commissions.json`）
+
+```json
+{ "contentVersion": "0.17.0", "commissions": [{
+  "commissionId": "pendulum-tower.T1",
+  "gameId": "pendulum-tower",
+  "professionId": "engineering.structural",
+  "tier": 1,
+  "title": "戏内短标题（T4–T6 用中性工单名，避免剧透）",
+  "summary": "一句话可验证目标（T1–T3 可见；T4–T6 只写玩法事实）",
+  "issuer": "旧港职业中心",
+  "objective": { "kind": "tower.floor_stable", "atLeast": 4, "context": {}, "minValue": { "field": "meters", "value": 500 } },
+  "objectiveBonus": 0,
+  "startParams": { "startLevel": 1, "themeId": "patrol" },
+  "reward": { "credits": 70, "items": {}, "evidence": ["E-…"], "flags": [] },
+  "repeatSalaryCredits": 75,
+  "unlock": { "all": [{ "commissionCleared": "pendulum-tower.T1" }] },
+  "chapterGate": null,
+  "risk": "low|medium|high",
+  "durationHint": "约 2–5 分钟"
+}]}
+```
+
+规则：
+- `objective.kind` 必须来自 19.4 的真实事件目录；`atLeast` 是同 run 事件次数；`minValue` 对 payload 数值字段取最大值（`career-core` 已扩展，reason=`value-not-met`）；`context` 仍为逐字段相等。
+- tier 解锁：T1 无前置；T2 需 T1 `commissionCleared`；T3 需 T2；T4 另需 `C3.truth_found`；T5 另需 `C4.city_power_restored`；T6 另需 `C5.star_tower_resolved`。`unlock` 由 `commission-core` + `registry.conditionMatches` 求值。
+- 首次奖励只发一次（claim/quest 去重）；每个新的有效 run 发 `repeatSalaryCredits`；金额/材料上限由 `career-core.RULESET` 兜底。
+- `reward.evidence` 只放稳定 token（`E-<commissionId>`、`MAP-…`、`BP-…`、`DEC-…`），不得是可交易材料；`flags` 只放 `C1.*/C2.*/C3.*` 等稳定剧情 token。
+- 公开内容禁止：结局树、谜底、阈值之外的解释、外部策划路径、Agent Prompt。T4–T6 标题必须中性（见内容字段）。
+- `startParams`：星海按 tier 设 `startLevel`/`themeId`（patrol/asteroid/storm/blockade/nebula/mothership）；其他游戏默认 `{}`，游戏页不得自造起始条件。
+
+### 19.3 职业隔离（16 款全部，0.17 起强制）
+
+当 `ArcadeCareer.isCommissionRun()` 为真：
+- 页面显示一行戏内目标（只 title + 目标，320/375 ≤2 行）；
+- 真实事件 `career.observe(kind,payload)` 走 bridge 的委托缓冲（不进发现/微线索）；
+- 结算调用 `career.finish({mode:'classic',…})`，由 bridge 结算委托；页面不得自行发钱/写库；
+- **不得写** `studiokit:arcade:runs:v1`、`progress/scores/challenge`（即跳过 `A.Progress.recordPlay`/`A.Scores`/RunSave/挑战记录/GameMeta）；经典页的 `serialize()` 在职业 run 返回 null；
+- 挑战/禅/割草入口在职业 run 内不可进入；无 ticket 时与 0.16 行为一致。
+- 每款游戏的 `#test`/`?careerTest=1` 不得因职业分支新增生产入口。
+
+### 19.4 真实事件目录（0.17 新增/复用；payload 字段必须逐字一致）
+
+| gameId | 事件 kind（payload） |
+|---|---|
+| memory-flip | `pair.match`（已有）；`session.finish`（level, matches, outcome） |
+| merge-2048 | `tile.created`（value；合并/生成时提交）；`tile.merged`（已有） |
+| blackjack | `hand.settled`（已有；用其计数） |
+| gomoku | `move.legal`（moves）；`session.finish`（result, moves） |
+| solitaire | `stock.face_up`（count）；`foundation.move`（count） |
+| snowbells | `bell.rung`（已有）；`bell.unique`（bellId, count）；`height.reached`（height） |
+| brick-breaker | `brick.destroyed`（已有）；`stage.clear`（level） |
+| gravity-flip | `gravity.flip`（已有）；`distance.reached`（meters） |
+| snake-run | `fruit.eaten`（已有） |
+| mole-whack | `mole.hit`（已有）；`combo.reached`（combo） |
+| block-drop | `lines.cleared`（已有） |
+| star-raid | `enemy.killed`/`boss.defeated`（已有）；`wave.completed`（level, theme） |
+| road-rush | `overtake`（已有）；`distance.reached`（meters） |
+| shadow-leap | `height.reached`（meters）；`scroll.collected`（scrollId） |
+| pendulum-tower | `tower.floor_stable`（floor；每稳定一层一次，倒塌不计） |
+| gold-miner | `mineral.returned`（value） |
+
+- 所有事件必须在真实状态提交后产生；不得由 DOM 文本/最高分/计分板反推；同一局同一次动作只发一次。
+- 值阈值事件（distance/height/tile/combo）可在变化时多次发送，`minValue` 取最大；不得为达标伪造跳变。
+
+### 19.5 材料/市场/制造
+
+- 五材：`building`（建材）、`alloy`（合金）、`electronics`（电子元件）、`starcrystal`（星晶）、`biomass`（生物材料）；`crystal` 为 0.16 遗留别名，读取时映射到 `starcrystal`。
+- 固定买卖价（买/卖）：45/22、80/38、65/30、100/48、55/25；`卖价 ≤ 买价×0.6`，禁止无损往返。
+- `market.js`：`listMarket()`、`previewBuy/Sell`、`buy({items})`（`db.purchase`，材料入账）、`sell({items})`（`db.sellItems` 原子：扣库存→加信用点→ledger `kind:'sale'`，同一 `saleId` 幂等）；不得由 UI 提交价格。
+- 制造：`crafting.plan({moduleId})` 返回 `{ok,cost,costItems,grants}`；UI 用 `db.purchase({cost,costItems,grants:{equipment:{'module:<id>:owned':true}}})` 原子制造；重复制造同一模块返回已有/幂等，不得重复扣费。
+- 模块：`phase-shield`、`cargo-magnet`、`energy-cell`；只在生涯星海战斗生效，不改经典/挑战/割草。
+
+### 19.6 职业/证据/路线
+
+- `professions.js`：按已清委托数与职业域推导 `apprentice|veteran|expert`；只影响可选订单/展示，不自动通关、不改经典得分倍率；同一生涯可并行多职业。
+- `story-evidence.js`：`recordFromReceipt(receipt)` 只接受稳定 evidence token，去重、不可重放；同一 token 重复返回 duplicate；为 C2–C4 提供 `storyFlags()` 只读上下文。
+- `route-planner.js`：输入职业/钱包/已完成委托，输出一条不依赖战斗的合理路线（工作/研究/贸易/租机/代办），并标注缺失材料/信用点；不得把某 gameId 作为唯一前置。
+
+### 19.7 DB 增补（§7.3 可加项）
+
+```js
+sellItems({ careerId, saleId, items, now }) -> {ok, receipt, credits, items} // 原子卖材料
+```
+- 价格由调用方（market.js，基于内容）计算为 `plan` 传入，但 DB 必须重算/校验库存与余额上限；`saleId` 幂等；失败零写入。
+- 不改 11 stores / DB_VERSION；0.16 数据（含 `crystal` 库存）继续可读，UI 显示时走别名映射。
+
+### 19.8 fixture 契约（`tools/career_fixture_<gameId>.mjs`）
+
+```js
+export const gameId = 'pendulum-tower';
+export const tiers = {
+  1: { async success(ctx) { /* 用真实钩子达成目标；返回 {events, stats} */ },
+       async failure(ctx) { /* 至少一个可归因失败；返回 {events, stats} */ } },
+  // 2..6
+};
+export async function cleanup(ctx) {}
+```
+- `ctx = { cdp, page, port, tier, helpers }`；`helpers` 由 runner 提供：`startCommission(tier)`、`navigateGame()`、`readState()`、`reload()`、`settle()`、`snapshot()`。
+- 每 tier 至少 success/failure；T4–T6 fixture 需先注入受控剧情旗标（helper `seedStoryFlags([...])`）再启动；不得改生产可见性。
+- runner 负责 suspension/receipt/claim 通用证据；fixture 只负责把真实游戏状态驱动到目标附近。
+
+### 19.9 UI
+
+- 告示板新增「商店」「制造台」入口（数据来自 `materials/crafting`）；材料/模块价格只读内容；按钮 ≥44px；320–430 无溢出；关闭/Esc/焦点返回。
+- 所有面板仍只从信件/告示板打开；中心页无 CTA；不新增顶层入口。

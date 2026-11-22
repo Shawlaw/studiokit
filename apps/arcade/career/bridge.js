@@ -94,12 +94,19 @@
     { file: 'star-combat-config.js', global: 'combatConfig', required: false, lazy: true },
     { file: 'rental.js', global: 'rental', required: false, lazy: true },
     { file: 'alternatives.js', global: 'alternatives', required: false, lazy: true },
+    { file: 'materials.js', global: 'materials', required: false, lazy: true },
+    { file: 'crafting.js', global: 'crafting', required: false, lazy: true },
+    { file: 'professions.js', global: 'professions', required: false, lazy: true },
+    { file: 'story-evidence.js', global: 'storyEvidence', required: false, lazy: true },
+    { file: 'route-planner.js', global: 'routePlanner', required: false, lazy: true },
     { file: 'ui/clue-surface.js', global: 'ui.clueSurface', required: false },
     { file: 'ui/mailbox.js', global: 'ui.mailbox', required: false },
     { file: 'ui/settings.js', global: 'ui.settings', required: false },
     { file: 'ui/town.js', global: 'ui.town', required: false, lazy: true },
     { file: 'ui/hangar.js', global: 'ui.hangar', required: false, lazy: true },
     { file: 'ui/receipt.js', global: 'ui.receipt', required: false, lazy: true },
+    { file: 'ui/market.js', global: 'ui.market', required: false, lazy: true },
+    { file: 'ui/workshop.js', global: 'ui.workshop', required: false, lazy: true },
   ];
 
   var OVERLAY_ANCHOR_SELECTORS = [
@@ -568,9 +575,16 @@
     combatConfig: { file: 'star-combat-config.js', global: 'combatConfig' },
     rental: { file: 'rental.js', global: 'rental' },
     alternatives: { file: 'alternatives.js', global: 'alternatives' },
+    materials: { file: 'materials.js', global: 'materials' },
+    crafting: { file: 'crafting.js', global: 'crafting' },
+    professions: { file: 'professions.js', global: 'professions' },
+    storyEvidence: { file: 'story-evidence.js', global: 'storyEvidence' },
+    routePlanner: { file: 'route-planner.js', global: 'routePlanner' },
     town: { file: 'ui/town.js', global: 'ui.town' },
     hangar: { file: 'ui/hangar.js', global: 'ui.hangar' },
     receipt: { file: 'ui/receipt.js', global: 'ui.receipt' },
+    market: { file: 'ui/market.js', global: 'ui.market' },
+    workshop: { file: 'ui/workshop.js', global: 'ui.workshop' },
   };
 
   function loadDependency(dep) {
@@ -771,8 +785,11 @@
         else if (def.global === 'commission') {
           api.commission = mod;
           configureCommissionContent();
-        } else if (def.global === 'rental' || def.global === 'alternatives' || def.global === 'combatConfig') {
+        } else if (def.global === 'rental' || def.global === 'alternatives' || def.global === 'combatConfig'
+          || def.global === 'materials' || def.global === 'crafting' || def.global === 'professions'
+          || def.global === 'storyEvidence' || def.global === 'routePlanner') {
           api[def.global] = mod;
+          configureCareerModules();
         } else if (def.global.indexOf('ui.') === 0) syncUiRefs();
         return mod;
       }
@@ -887,9 +904,28 @@
     ]).then(function () {
       if (internal.itemsContent) api.items = clone(internal.itemsContent);
       if (commissionModule()) configureCommissionContent();
+      configureCareerModules();
     });
     internal.contentPromise = all;
     return all;
+  }
+
+  /** 把 0.17 内容交给材料/制造/职业/证据/路线模块（缺模块或接口时静默）。 */
+  function configureCareerModules() {
+    var payload = {
+      items: internal.itemsContent || null,
+      commissions: internal.commissionContent || null,
+      chapter: internal.chapterContent || null,
+    };
+    ['materials', 'crafting', 'professions', 'storyEvidence', 'routePlanner'].forEach(function (name) {
+      var mod = readGlobal(name);
+      if (!mod || typeof mod.configure !== 'function') return;
+      try {
+        mod.configure(payload);
+      } catch (err) {
+        warnOnce('career-module-configure:' + name, err);
+      }
+    });
   }
 
   function commissionModule() {
@@ -2432,6 +2468,13 @@
       commission: commissionModule() || null,
       alternatives: readGlobal('alternatives') || null,
       rental: readGlobal('rental') || null,
+      materials: readGlobal('materials') || null,
+      crafting: readGlobal('crafting') || null,
+      professions: readGlobal('professions') || null,
+      storyEvidence: readGlobal('storyEvidence') || null,
+      routePlanner: readGlobal('routePlanner') || null,
+      openMarket: openMarket,
+      openWorkshop: openWorkshop,
       commissionRun: internal.commissionRun ? clone(internal.commissionRun) : null,
       commissions: internal.commissionContent ? clone(internal.commissionContent) : null,
       items: internal.itemsContent ? clone(internal.itemsContent) : null,
@@ -2546,6 +2589,13 @@
             commission: commissionModule() || null,
             alternatives: readGlobal('alternatives') || null,
             rental: readGlobal('rental') || null,
+            materials: readGlobal('materials') || null,
+            crafting: readGlobal('crafting') || null,
+            professions: readGlobal('professions') || null,
+            storyEvidence: readGlobal('storyEvidence') || null,
+            routePlanner: readGlobal('routePlanner') || null,
+            openMarket: openMarket,
+            openWorkshop: openWorkshop,
             commissionRun: internal.commissionRun ? clone(internal.commissionRun) : null,
             commissions: internal.commissionContent ? clone(internal.commissionContent) : null,
             items: internal.itemsContent ? clone(internal.itemsContent) : null,
@@ -2588,6 +2638,14 @@
 
   function openReceipt() {
     return openCareerUi('receipt');
+  }
+
+  function openMarket() {
+    return openCareerUi('market');
+  }
+
+  function openWorkshop() {
+    return openCareerUi('workshop');
   }
 
   /** 0.16：职业 run 的只读装备/钱包快照，供星海生涯战斗读取（不写库、不改旧机库）。 */
@@ -3023,6 +3081,13 @@
     api.openTown = openTown;
     api.openHangar = openHangar;
     api.openReceipt = openReceipt;
+    api.openMarket = openMarket;
+    api.openWorkshop = openWorkshop;
+    api.materials = null;
+    api.crafting = null;
+    api.professions = null;
+    api.storyEvidence = null;
+    api.routePlanner = null;
     api.getCommissionLoadout = getCommissionLoadout;
     api.ui = previousUi || (isObject(api.ui) ? api.ui : {});
     /* backup.js（D15-14）异步装载：模块会自行挂到 ArcadeCareer.backup；缺失时为 null。 */

@@ -47,6 +47,8 @@
   const HANGAR_LABEL = '去机库';
   const RECEIPT_LABEL = '钱包与收据';
   const SETTINGS_LABEL = '线索提示';
+  const MARKET_LABEL = '材料商店';
+  const WORKSHOP_LABEL = '制造台';
   const ALT_TITLE = '港务处代办';
   const ALT_EMPTY = '港务处今天没有跑腿的活。';
   const ALT_BUY_LABEL = '接这单';
@@ -572,8 +574,16 @@
     const settingsBtn = make('button', 'ac-career-btn ac-career-btn--ghost', SETTINGS_LABEL);
     settingsBtn.type = 'button';
     settingsBtn.setAttribute('data-town-action', 'settings');
+    const marketBtn = make('button', 'ac-career-btn ac-career-btn--ghost', MARKET_LABEL);
+    marketBtn.type = 'button';
+    marketBtn.setAttribute('data-town-action', 'market');
+    const workshopBtn = make('button', 'ac-career-btn ac-career-btn--ghost', WORKSHOP_LABEL);
+    workshopBtn.type = 'button';
+    workshopBtn.setAttribute('data-town-action', 'workshop');
     footer.appendChild(hangarBtn);
     footer.appendChild(receiptBtn);
+    footer.appendChild(marketBtn);
+    footer.appendChild(workshopBtn);
     footer.appendChild(settingsBtn);
 
     townView.appendChild(location);
@@ -935,6 +945,14 @@
       }
       if (action === 'hangar') {
         openOther('openHangar', HANGAR_FAILED);
+        return;
+      }
+      if (action === 'market') {
+        openOther('openMarket', '材料商店还没开门。');
+        return;
+      }
+      if (action === 'workshop') {
+        openOther('openWorkshop', '制造台还没通电。');
         return;
       }
       if (action === 'receipt') {

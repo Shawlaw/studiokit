@@ -1255,6 +1255,127 @@
     }).then((res) => (res.ok ? res.result : { ok: false, reason: res.reason, error: res.error, rows: [] }));
   }
 
+  /** ADR §19.7：原子卖材料：扣库存 → 加信用点 → 写 sale 流水；saleId 幂等、失败零写入。 */
+  function sellItems(input) {
+    const core = coreApi();
+    if (!core) return Promise.resolve(failure('core-unavailable'));
+    const options = isObject(input) ? input : {};
+    const careerId = options.careerId;
+    const saleId = options.saleId;
+    if (!core.isValidCareerId(careerId)) return Promise.resolve(failure('bad-career-id'));
+    if (!core.isToken(saleId)) return Promise.resolve(failure('bad-sale-id'));
+    const items = isObject(options.items) ? options.items : null;
+    const credits = options.credits;
+    if (!items) return Promise.resolve(failure('bad-items'));
+    if (typeof credits !== 'number' || !Number.isFinite(credits) || Math.floor(credits) !== credits || credits <= 0 || credits > core.RULESET.payoutCap) {
+      return Promise.resolve(failure('bad-credits'));
+    }
+    const cleanItems = {};
+    const ids = Object.keys(items);
+    if (!ids.length || ids.length > core.RULESET.itemKindsCap) return Promise.resolve(failure('bad-items'));
+    for (let i = 0; i < ids.length; i += 1) {
+      const itemId = ids[i];
+      const count = items[itemId];
+      if (!core.isToken(itemId)) return Promise.resolve(failure('bad-items'));
+      if (!Number.isFinite(count) || Math.floor(count) !== count || count <= 0 || count > core.RULESET.itemCapPerItem) {
+        return Promise.resolve(failure('bad-items'));
+      }
+      cleanItems[itemId] = count;
+    }
+    const at = typeof options.now === 'string' && options.now ? options.now : nowIso();
+    const contentVersion =
+      typeof options.contentVersion === 'string' && options.contentVersion
+        ? options.contentVersion
+        : typeof core.DEFAULT_CONTENT_VERSION === 'string'
+          ? core.DEFAULT_CONTENT_VERSION
+          : DEFAULT_CONTENT_VERSION;
+    const txId = 'sale:' + saleId;
+    return txRun(['ledgers', 'balances', 'inventory'], 'readwrite', (ctx) => {
+      ctx.bind(ctx.store('ledgers').get(txId), (existing) => {
+        if (existing) {
+          ctx.done({ ok: true, duplicate: true, receipt: existing.receipt || null });
+          return;
+        }
+        ctx.bind(ctx.store('balances').get(careerId), (balance) => {
+          if (!balance) {
+            ctx.fail('no-wallet');
+            return;
+          }
+          readInventoryMap(ctx, careerId, (owned) => {
+            for (let i = 0; i < ids.length; i += 1) {
+              const itemId = ids[i];
+              if ((owned[itemId] || 0) < cleanItems[itemId]) {
+                ctx.fail('insufficient-items');
+                return;
+              }
+            }
+            const nextCredits = core.clampInt(balance.credits, 0, core.RULESET.balanceCap, 0) + credits;
+            if (nextCredits > core.RULESET.balanceCap) {
+              ctx.fail('balance-cap');
+              return;
+            }
+            const receipt = {
+              receiptId: txId,
+              kind: 'sale',
+              careerId,
+              saleId,
+              credits,
+              items: jsonClone(cleanItems),
+              soldAt: at,
+              balanceAfter: nextCredits,
+              rulesetVersion: core.RULESET_VERSION,
+              contentVersion,
+            };
+            const ledgerRow = {
+              txId,
+              schemaVersion: SCHEMA_VERSION,
+              kind: 'sale',
+              careerId,
+              saleId,
+              step: 1,
+              credits,
+              items: jsonClone(cleanItems),
+              at,
+              rulesetVersion: core.RULESET_VERSION,
+              contentVersion,
+              receipt,
+            };
+            const decrementTasks = ids.map((itemId) => (next) => {
+              ctx.bind(ctx.store('inventory').get([careerId, itemId]), (row) => {
+                const prev = row && Number.isFinite(Number(row.count)) ? Math.max(0, Math.floor(Number(row.count))) : 0;
+                const left = prev - cleanItems[itemId];
+                if (left <= 0) {
+                  ctx.bind(ctx.store('inventory').delete([careerId, itemId]), next);
+                  return;
+                }
+                ctx.bind(ctx.store('inventory').put({ careerId, itemId, count: left, updatedAt: at }), next);
+              });
+            });
+            const tasks = [
+              (next) => ctx.bindConstraint(ctx.store('ledgers').add(ledgerRow), 'constraint', next),
+              (next) => {
+                const row = {
+                  careerId,
+                  credits: nextCredits,
+                  revision: core.clampInt(balance.revision, 0, Number.MAX_SAFE_INTEGER, 0) + 1,
+                  createdAt: typeof balance.createdAt === 'string' ? balance.createdAt : at,
+                  updatedAt: at,
+                };
+                ctx.bind(ctx.store('balances').put(row), next);
+              },
+              ...decrementTasks,
+            ];
+            sequence(tasks, () => ctx.done({ ok: true, duplicate: false, receipt }));
+          });
+        });
+      });
+    }).then((res) => {
+      if (res.ok) return res.result;
+      if (res.reason === 'constraint') return failure('duplicate-sale', res.error);
+      return failure(res.reason, res.error);
+    });
+  }
+
   function readQuestState(careerId) {
     const core = coreApi();
     if (!core) return Promise.resolve({ ok: false, reason: 'core-unavailable', quests: [] });
@@ -1566,6 +1687,7 @@
     getClaim,
     settleAndClaim,
     purchase,
+    sellItems,
     readWallet,
     getEquipment,
     writeEquipment,
