@@ -7,7 +7,7 @@
 (() => {
   'use strict';
 
-  const ARCADE_VERSION = '0.13.2';
+  const ARCADE_VERSION = '0.13.3';
   const PROGRESS_KEY = 'studiokit:arcade:progress:v1';
   const PREFS_KEY = 'studiokit:arcade:prefs:v1';
   const RUNS_KEY = 'studiokit:arcade:runs:v1';
@@ -480,6 +480,12 @@
     return localDateKey(d);
   }
 
+  /* 从当前页面路径识别游戏 id：
+     - 兼容 GitHub Pages 的 /games/x.html；
+     - 兼容 Cloudflare Pages 的 pretty URL（/games/x.html 会被 308 到 /games/x，
+       pathname 里没有 .html —— 0.13.3 修复：此前精确比较文件名导致 CF 上
+       currentGame=null、Playtime 不装载、所有游戏时长为 0）；
+     - 兼容尾斜杠、URL 编码与大小写差异。 */
   function detectCurrentGame() {
     let pathname = location.pathname;
     try {
@@ -489,8 +495,14 @@
     }
     const marker = pathname.lastIndexOf('/games/');
     if (marker < 0) return null;
-    const file = pathname.slice(marker + '/games/'.length);
-    return GAMES.find((g) => g.file === file) || null;
+    const raw = pathname.slice(marker + '/games/'.length).replace(/\/+$/, '');
+    const file = raw.replace(/\.html$/i, '').toLowerCase();
+    if (!file) return null;
+    return (
+      GAMES.find((g) => g.file.replace(/\.html$/i, '').toLowerCase() === file) ||
+      GAMES.find((g) => g.id.toLowerCase() === file) ||
+      null
+    );
   }
 
   function sanitizePlayRec(rec) {
