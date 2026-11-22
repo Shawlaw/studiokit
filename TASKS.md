@@ -4,6 +4,9 @@
 
 | ID | 类型 | 任务 | 状态 | 依赖 | 备注 |
 |---|---|---|---|---|---|
+| T117 | agent | Arcade 0.15.0 本地门禁：B00–B02、D15 系列与 G15（不发布） | IN_PROGRESS | T116 | 本地分支 `feat/arcade-life-015` 上执行；B00 基线/存储审计、B01 兼容金样 78/78、B02 接口冻结（含虚拟第 17 款插拔，独立 Review PASS）；D15 系列实现与被测项见仓库外 `qa/evidence/`；G15 独立 Reviewer 复跑后回填结论。**未推送 main、未双端部署、无 `OWNER_AUTHORIZATION: PUBLISH_TO_MAIN`**；真机/PWA 实机 UNVERIFIED。 |
+| T116 | agent | Arcade 0.15.0：被动线索与独立生涯数据层（本地未发布） | DONE | T115 | 本地分支 `feat/arcade-life-015`。新增 `apps/arcade/career/`（bridge/registry/discovery/career-core/career-db/router/entry-router/backup/content/ui）与独立 IDB `studiokit:arcade:career` v1（11 stores，claim 幂等/单事务/多标签/失败零写入/fail-open）；16 款游戏经典局被动产出可关闭微线索，挑战/禅/割草/旧机库零改动，星海 mow 显式排除；无显眼生涯入口、线索不产生货币/材料。测试：registry 90/90、discovery 84/84、legacy 金样 78/78、career_db 38/38、career_backup 34/34、router/entry 37/37、16 页 CDP 适配实测；smoke 113/113（本地）。版本链 0.15.0 / SW `studiokit-arcade-0.15.0-v1`；接口冻结见 `docs/arcade-life/ADR-interfaces.md`，设计见 `DESIGN-0.15.0.md`。**本地未发布**。 |
+
 | T001 | agent | 审计启动包、仓库结构与路径约定 | DONE | — | 结构符合 AGENTS.md；Badge Studio 2.2.0 / Schema v3 / autosave key 不变均已核实 |
 | T002 | agent | 执行校验/构建/脚手架测试并修复问题 | DONE | T001 | validate/build/node --check 全部通过；脚手架在临时副本验证，主工作树未污染 |
 | T003 | review | 独立发布前审查 | DONE | T002 | 独立 Reviewer Agent：APPROVE-WITH-NOTES（0 Blocker / 0 Major / 2 Minor）；两个 Minor 已修复并回归 |

@@ -2065,6 +2065,41 @@
       ],
       "completedAt": "2026-11-22T18:08:40+08:00",
       "evidence": "Owner 明确指令「合回 main 然后发布并清理历史 worktree 和分支」。操作：feature 分支先 merge main（解决 0.13.3 版本/文档/测试冲突，smoke 113/113、arcade_run_all_gates ALL GATES PASSED），main fast-forward 到合并提交 `4c90a4c` 并推送 origin/main；Actions run `45010510889` 四 job 全成功；CI 与本地 `tools/verify_deploy.py` 均 41/41 双端逐文件一致（arcade 0.14.0 / badge 2.2.1 / venue 0.2.0）；双端线上无头 Chrome 实测 GitHub Pages 与 Cloudflare Pages：`Arcade.version=0.14.0`、第 4 按钮「星海割草」可见、进入后 `mode=mow`、四弹种常驻、火力 LV5、三槽满载、能量约 94、`score=0`、`saveSuppressed=true`、0 console error；SW 缓存键 `studiokit-arcade-0.14.0-v1`。随后清理 worktree 与已合入的 feature 分支。真机手感仍 UNVERIFIED。"
+    },
+    {
+      "id": "T116",
+      "title": "Arcade 0.15.0：被动线索与独立生涯数据层（本地未发布）",
+      "kind": "agent",
+      "status": "DONE",
+      "dependsOn": [
+        "T115"
+      ],
+      "ownerAuthorizationRequired": false,
+      "acceptance": [
+        "16 款游戏经典局可被动产出可关闭微线索；无显眼生涯入口；挑战/禅/割草/旧机库零改动",
+        "独立 IndexedDB 生涯数据层（claim 幂等/单事务/多标签/fail-open），不写既有 localStorage 键",
+        "B00-B02 审计与接口冻结通过（含虚拟第17款插拔独立 Review）",
+        "career 测试与既有门禁本地实跑，证据写入仓库外 qa/evidence",
+        "版本链 0.15.0 同步；不推送 main、不发布"
+      ],
+      "completedAt": "2026-11-22T23:55:00+08:00",
+      "evidence": "本地分支 feat/arcade-life-015 提交；测试：registry 90/90、discovery 84/84、legacy 金样 78/78、career_db 38/38、career_backup 34/34、router/entry 37/37、16 页 CDP 适配；smoke 113/113；版本链 0.15.0 / SW studiokit-arcade-0.15.0-v1；设计与接口见 DESIGN-0.15.0.md / docs/arcade-life/ADR-interfaces.md；证据与原始侦察在仓库外 qa/evidence/；未发布（无 PUBLISH_TO_MAIN 授权）。"
+    },
+    {
+      "id": "T117",
+      "title": "Arcade 0.15.0 本地门禁：B00-B02、D15 系列与 G15（不发布）",
+      "kind": "agent",
+      "status": "IN_PROGRESS",
+      "dependsOn": [
+        "T116"
+      ],
+      "ownerAuthorizationRequired": false,
+      "acceptance": [
+        "G15 独立 Reviewer 复跑 16/16 线索、既有经典/挑战/禅/割草/机库回归与 PWA/窄屏证据",
+        "失败项回灌修复；证据写 G15-EVIDENCE",
+        "保持本地分支，不推送 main、不触发双端部署"
+      ],
+      "evidence": "进行中：B00/B01/B02 已完成；D15 系列与独立测试见仓库外 qa/evidence；G15 待独立复评。"
     }
   ]
 }
