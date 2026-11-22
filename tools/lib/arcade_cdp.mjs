@@ -81,6 +81,12 @@ export function startServer({ root = REPO_ROOT, port, host = '127.0.0.1' } = {})
         return;
       }
       if (fs.existsSync(filePath) && fs.statSync(filePath).isDirectory()) filePath = path.join(filePath, 'index.html');
+      /* Cloudflare Pages 的 pretty URL 会把 /x.html 308 到 /x；测试服务器也接受无后缀路径，
+         用于回归「线上扩展名被去掉后游戏识别是否仍然正确」。 */
+      if (!fs.existsSync(filePath) && !path.extname(filePath)) {
+        const htmlCandidate = filePath + '.html';
+        if (fs.existsSync(htmlCandidate)) filePath = htmlCandidate;
+      }
       if (!fs.existsSync(filePath)) {
         res.writeHead(404);
         res.end('not found');

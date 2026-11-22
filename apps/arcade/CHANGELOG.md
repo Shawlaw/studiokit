@@ -1,7 +1,7 @@
 # Arcade Changelog
 
 
-## 0.14.0 — 2026-11-22（功能分支 feat/arcade-star-raid-mow 本地开发，未合并未发布）
+## 0.14.0 — 2026-11-22（本地待发布，基于 0.13.3 合并）
 
 Owner 本轮两条：①星海突击同种弹药 Buff 多吃时应**叠加有效时长**而不是重置；②新增“模拟割草”模式（实现命名「星海割草」）——所有弹药 Buff 常驻、大杀器库满载、手动道具无限，同时敌人/掉落极其密集、Boss 招式更炫，玩家唯一瓶颈是能量；该模式**不参与任何积分与货币获取**。设计与调参见 `DESIGN-0.14.0.md`；挑战 6 关数据与判定零改动。
 
@@ -25,13 +25,56 @@ Owner 本轮两条：①星海突击同种弹药 Buff 多吃时应**叠加有效
 - 割草不写 `scores:v1`、不更新最高分/机库 `runs/best`、不调用 `Progress.recordPlay`/`settleCredits`；真实游玩时长仍计入 `Playtime`（统计，不是积分/货币）。
 
 ### Verification
-- 本地实跑（Windows / Node v25.8.1 / Python 3.14 / 本机 Chrome）：`node tools/arcade_smoke.mjs` **112/112**（新增 4 项：叠加时长/上限/实际拾取、割草常驻无限与密集掉落、Boss 四套弹幕/自动进潮/受击扣能量/无积分、320px 4 按钮与 6 列道具行）；`--scenario=SC-STAR-001` 经典 Boss 闭环 **1/1**；挑战矩阵 78 关 **7/7**。
+- 本地实跑（Windows / Node v25.8.1 / Python 3.14 / 本机 Chrome）：`node tools/arcade_smoke.mjs` **113/113**（新增 4 项：叠加时长/上限/实际拾取、割草常驻无限与密集掉落、Boss 四套弹幕/自动进潮/受击扣能量/无积分、320px 4 按钮与 6 列道具行）；`--scenario=SC-STAR-001` 经典 Boss 闭环 **1/1**；挑战矩阵 78 关 **7/7**。
 - 其余门禁：`arcade_pwa_update_test` **9/9**（临时发版链路改 0.14.0→0.14.1）、`arcade_zen_scores_test` **17/17**、`arcade_calm_games_test` **17/17**、`arcade_interaction_test` **5/5**、`arcade_tower_test` **23/23**、`arcade_immersive_buttons_test` **32/32**、`arcade_review_test` **5/5**、`arcade_design_check` 143 文件、`arcade_stage_coverage` 78 关矩阵。
-- 全量门禁：`py -3 tools/arcade_run_all_gates.py` → **ALL GATES PASSED**（validate/build/design/inline/stage/smoke 112/112、zen 17/17、calm 17/17、review 5/5、gameplay all 104/104、base 22/22）。
+- 全量门禁：`py -3 tools/arcade_run_all_gates.py` → **ALL GATES PASSED**（validate/build/design/inline/stage/smoke 113/113、zen 17/17、calm 17/17、review 5/5、gameplay all 104/104、base 22/22）。
 - 静态：`validate_site.py`（0.14.0 版本链 + 叠加/割草守护标记）、`build_site.py`、`check_inline_scripts.mjs`、`arcade_design_check.py`、`node --check engine.js/sw.js`。
-- **状态**：功能分支本地开发，**未合并 main、未推送、未发布**（无 `PUBLISH_TO_MAIN` 授权）；真机手感（能量节奏、割草密度、Boss 弹幕可读性）仍 **UNVERIFIED**，待 Owner 试玩。
+- **状态**：Owner 本轮明确授权「合回 main 并发布」；真机手感（能量节奏、割草密度、Boss 弹幕可读性）仍 **UNVERIFIED**，待 Owner 试玩。
 
-## 0.13.2 — 2026-11-22（本地修复，待 Owner 授权发布）
+## 0.13.3 — 2026-11-22（已双端发布）
+
+Owner 在 iPhone 主屏 PWA（`studiokit.pages.dev`）复测 0.13.2：星海突击 / 2048 / 俄罗斯方块玩完，
+累计时长与每局时长仍全是 `0`，但积分记录有数据；同一自检页用 Edge 打开正常。
+设备自检页抓到根因并修复（设计与证据见 `DESIGN-0.13.3.md`）；**玩法/存档/挑战零改动**。
+
+### Fixed
+- **Cloudflare Pages 无后缀 URL 导致游戏识别失败（计时全 0 的根因）**：CF Pages 的 pretty URL 会把
+  `GET /apps/arcade/games/x.html` **308** 到 `/apps/arcade/games/x`；`detectCurrentGame()` 旧实现用
+  `g.file === 'x.html'` 精确比较 pathname 里拿到的 `x` → `currentGame` 恒 `null` →
+  `Playtime.install()` 直接返回（不挂监听/不开 tick）→ `canTrack()` 恒 false（时间片从不启动）→
+  `recordRound()` 返回 `duration: 0`（积分记录照写）→ `playtime:v1` 从未写入。
+  GitHub Pages 保留 `.html`，所以 Edge/GH 侧正常。
+  修复：识别时去掉 `.html` 后缀并小写化后比较，同时兼容尾斜杠、URL 编码，并增加按游戏 id 的兜底；
+  `ARCADE_BASE` 仍优先取 `document.currentScript.src`，无后缀 URL 下相对资源与 SW 注册不受影响。
+- **诊断页保留**：`apps/arcade/diag.html`（中心页「游玩统计 → 计时自检」）保留到本版供真机复验；
+  `block-drop.html` 的 `?diag=1` 顶层探针在定位完成后移除。
+
+### Changed
+- 版本链升至 `0.13.3`，SW 缓存键 `studiokit-arcade-0.13.3-v1`；中心页 `data-hall-version`、
+  注册表 `version` 与 `ARCADE_VERSION` 同步。
+
+### Compatibility
+- 无 localStorage key / Schema 变更；`playtime:v1` / `scores:v1` 数据格式不变。
+- 历史上记成 `0ms` 的轮次不会回填（无法补算）；修复后从下一局开始正常累计。
+- GitHub Pages 的 `.html` URL 与 Cloudflare 的无后缀 URL 两种形态现在都能正确识别游戏。
+
+### Verification
+- 线上实测（修复前 → 修复后，同一 CF 无后缀 URL）：`currentGame: null / tracking:false / timer:false`
+  → `currentGame:"block-drop" / tracking:true / timer:true`；点开始游玩 1.6s 后 `totalMs = 1606`。
+- 线上诊断页（CF 无后缀）：iframe 真实一局显示「计时正常 记录到 3508ms」，`currentGame` 已识别。
+- `tools/lib/arcade_cdp.mjs` 测试服务器新增「无后缀 → `x.html`」回退以模拟 CF pretty URL；
+  `arcade_smoke` 108 → **109/109**（新增「Cloudflare pretty URL 仍识别游戏并计时」）。
+- 回归：pwa 9/9、tower 23/23、zen 14/14、calm 17/17、review 5/5、interaction 5/5、
+  immersive 32/32、gameplay all 104/104、base 22/22、挑战矩阵 78 关、
+  `validate_site` / `build_site` / `check_inline_scripts` / `arcade_design_check` 全过。
+- **发布**：提交 `b3a8c7e` 推送 `main`；Actions run `45007754972` 四 job 全绿；CI 与本地
+  `tools/verify_deploy.py` 均 **41/41** 双端逐文件一致（arcade 0.13.3 / badge 2.2.1 / venue 0.2.0）；
+  双端线上无头 Chrome 实测：CF 无后缀 URL `currentGame=block-drop` 且游玩计时正常、GH `.html` 正常、
+  诊断页 iframe 计时正常、0 console error。
+- 真机 iOS 主屏 PWA 复验（更新后「计时自检」应显示「计时正常 ≥2000ms」，累计/积分记录时长不再为 0）
+  待 Owner 确认（UNVERIFIED）。
+
+## 0.13.2 — 2026-11-22（已双端发布）
 
 Owner 两条真机反馈：①已安装 PWA 的「🔄 检查更新」显示的是**已安装版本**，不是线上最新版本；②iPhone 主屏 PWA 玩一天后中心页「累计时长」始终为 `0 分钟`，但积分记录表格有数据。两条都用无头 Chrome 复现并逐条修复（复现命令与设计见 `DESIGN-0.13.2.md`）；**挑战/玩法/存档零改动**，无新增 localStorage key / Schema。
 
@@ -61,7 +104,7 @@ Owner 两条真机反馈：①已安装 PWA 的「🔄 检查更新」显示的�
 - `node tools/arcade_pwa_update_test.mjs` **9/9**（新增 PU-06 真实发版链路、PU-07 读取失败诚实提示；PU-02/PU-03 改为断言最新版本与双版本文案）。
 - 回归：`arcade_smoke` **108/108**（新增 3 项 iOS 「漏发 focus」计时回归：开局前 blur 仍计时、失焦暂停后点继续仍计时、结算轮次时长 ≥900ms 写入积分记录）、`arcade_tower_test` **23/23**、`arcade_zen_scores_test` **14/14**、`arcade_calm_games_test` **17/17**、`arcade_review_test` **5/5**、`arcade_interaction_test` **5/5**、`arcade_immersive_buttons_test` **32/32**、`arcade_gameplay_test --suite=all` **104/104**、`--suite=base --repeat=2` **22/22**（11 场景 ×2 遍）、挑战矩阵 78 关、320/375/390/430 与 standalone 布局探针全过。
 - 静态：`validate_site.py`（新增 0.13.2 版本来源/广播断言 + 游玩计时自愈标记/旧 focus 门槛禁回归断言）、`build_site.py`、`check_inline_scripts.mjs`（19 HTML / 20 段脚本）、`arcade_design_check.py`（143 个设计包文件一致）、`node --check engine.js/sw.js` PASS。
-- **未发布**：本轮无 `OWNER_AUTHORIZATION: PUBLISH_TO_MAIN`，仅本地修改（未提交、未推送）；真机 iOS 主屏幕 PWA 的更新提示时机与游玩时长/积分记录时长待 Owner 复测（UNVERIFIED）。
+- **发布**：提交 `8493cf7`（PWA 更新检测）+ `78858e0`（游玩时长 + 文档）ff 合入 `main` 推送（`a98cb3d..78858e0`）；Actions run `45002523350` 四 job 全绿（Validate and build / Deploy GitHub Pages / Deploy Cloudflare Pages / Verify both deployments）；CI 与本地 `tools/verify_deploy.py` 均 **41/41** 双端逐文件一致（arcade 0.13.2 / badge 2.2.1 / venue 0.2.0）；双端线上无头 Chrome 各 8 项全过（中心页 0.13.2 + 16 卡 + 检查更新按钮、SW 版本握手 0.13.2、`checkForUpdate` 已同步并返回线上 0.13.2 不误报更新、线上 `sw.js` 含升级广播修复、缓存键 `studiokit-arcade-0.13.2-v1`、游戏页可加载、0 console error）；真机 iOS 主屏幕 PWA 的更新提示时机与游玩时长/积分记录时长待 Owner 复测（UNVERIFIED）。
 
 ## 0.13.1 — 2026-11-22（已双端发布）
 

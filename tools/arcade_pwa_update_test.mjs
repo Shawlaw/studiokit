@@ -267,7 +267,7 @@ async function main() {
     record('PU-06 真实发版链路：返回线上最新版本 + SW 主动广播 + 横幅/提示双版本 + 刷新前后均判有更新', true);
 
     /* ---------- PU-07 线上版本读取失败：不得谎报「已是最新」 ----------
-       回到与 SW 完全同步的主站点（0.14.0），只拦截页面读取 sw.js 的请求，
+       回到与 SW 完全同步的主站点（0.13.2），只拦截页面读取 sw.js 的请求，
        模拟「读不到线上版本」：应报 checked=false（按钮提示失败），而不是「已是最新」。 */
     await cdp.navigate(BASE + '/apps/arcade/');
     await cdp.waitFor('!!(window.Arcade && Arcade.Offline && navigator.serviceWorker.controller)', { timeout: 20000 });

@@ -1,6 +1,6 @@
 #!/usr/bin/env node
 /**
- * 街机厅无头浏览器冒烟测试（112 项全链路回归）。
+ * 街机厅无头浏览器冒烟测试（113 项全链路回归）。
  * 零 npm 依赖：通用基础设施见 tools/lib/arcade_cdp.mjs（静态服务器 / Chrome 启动 / CDP / 断言记录器）。
  * 运行：node tools/arcade_smoke.mjs
  * 端口可用环境变量覆盖：ARCADE_SMOKE_PORT（默认 8765）/ ARCADE_CDP_PORT（默认 9333）。
@@ -668,6 +668,7 @@ async function main() {
     await cdp.click('[data-ov-btn]');
     await sleep(220);
     await cdp.evaluate(`__arcadeTest.clearBuffs()`);
+
 
 
     /* ---------- 星海突击 波次与撞机计分分离 ---------- */
@@ -1919,7 +1920,7 @@ async function main() {
     assert(timeAfterBlur - timeAfterResume <= 260, 'window blur time leaked into playtime: ' + JSON.stringify({ timeAfterResume, timeAfterBlur }));
     assert(timeAfterFocus - timeAfterBlur >= 650, 'resume after blur not recorded: ' + JSON.stringify({ timeAfterBlur, timeAfterFocus }));
 
-    /* iOS 主屏 PWA 的 window focus/blur 不可靠（0.13.2 回归）：
+    /* iOS 主屏 PWA 的 window focus/blur 不可靠（0.13.3 回归）：
        切后台/回前台只给 blur + visibilitychange、没有 focus 时，点「开始游戏」也必须计时。 */
     await cdp.evaluate(`Arcade.Playtime.resetAll()`);
     await cdp.navigate(base + '/apps/arcade/games/block-drop.html');
@@ -1959,6 +1960,27 @@ async function main() {
     })()`);
     assert(noFocusRound >= 900, 'settled round duration still zero without focus: ' + noFocusRound);
     record('失焦后无 focus 事件，结算轮次时长写入积分记录', true);
+
+    /* Cloudflare Pages 的 pretty URL（0.13.3）：/games/x.html 会被 308 到 /games/x，
+       pathname 里没有 .html；此前精确比较文件名导致 currentGame=null、所有游戏时长为 0。 */
+    await cdp.evaluate(`Arcade.Playtime.resetAll()`);
+    await cdp.navigate(base + '/apps/arcade/games/block-drop');
+    await sleep(450);
+    const prettyUrl = await cdp.evaluate(`(() => ({
+      path: location.pathname,
+      game: Arcade.Playtime.currentGame ? Arcade.Playtime.currentGame.id : null,
+      tracking: Arcade.Playtime.tracking,
+      timer: !!Arcade.Playtime.timer
+    }))()`);
+    assert(prettyUrl.path.indexOf('.html') === -1, 'pretty URL probe path unexpected: ' + JSON.stringify(prettyUrl));
+    assert(prettyUrl.game === 'block-drop' && prettyUrl.tracking === true && prettyUrl.timer === true,
+      'extensionless game URL not detected: ' + JSON.stringify(prettyUrl));
+    await cdp.click('[data-ov-btn]');
+    await sleep(1300);
+    await cdp.evaluate(`Arcade.Playtime.flush()`);
+    const prettyTime = await cdp.evaluate(`Arcade.Playtime.stats().totalMs`);
+    assert(prettyTime >= 900, 'extensionless game URL playtime is zero: ' + prettyTime);
+    record('Cloudflare pretty URL（无 .html）仍识别游戏并计时', true);
 
     /* 连续游玩超过一个 15s 落盘周期：第一次落盘后必须自动开启下一段时间片。 */
     await cdp.evaluate(`Arcade.Playtime.resetAll()`);
@@ -2894,6 +2916,7 @@ async function main() {
     assert(mowTools320.docOverflow <= 1 && mowTools320.docH <= mowTools320.vh + 2, 'star-raid 320 mow tools overflow: ' + JSON.stringify(mowTools320));
     await cdp.screenshot('star-mow-320.png');
     record('星海突击 320px 星海割草 4 按钮入口 + 6 列无限道具行无溢出', true);
+
 
     /* ---------- 清理测试产生的本地数据 ---------- */
     await cdp.evaluate(`localStorage.clear()`);

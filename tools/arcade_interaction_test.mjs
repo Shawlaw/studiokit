@@ -67,7 +67,7 @@ async function main() {
     await cdp.navigate(BASE + '/apps/arcade/games/gomoku.html?ix=' + Date.now() + '#test');
     await sleep(400);
     const ready = await cdp.evaluate(`({ hooks: !!(window.__arcadeTest && typeof window.__arcadeTest.actionButtons === 'function'), version: Arcade.version })`);
-    assert(ready.hooks, '五子棋缺少 0.14.0 actionButtons 钩子');
+    assert(ready.hooks, '五子棋缺少 0.13.2 actionButtons 钩子');
     assert(ready.version === '0.14.0', 'Arcade version=' + ready.version);
 
     await cdp.click('[data-ov-btn]');

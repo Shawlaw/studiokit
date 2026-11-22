@@ -105,13 +105,13 @@ after = min(180, before + added);      // BUFF_STACK_CAP = 180s
 - 回滚：还原 `star-raid.html` 的 `grantBuff/MOW/startMow` 分支与 `engine.js` 的第 4 按钮支持即可；
   旧档/旧备份不受影响。
 
-## 4. 验收
+## 4. 验收（基于 0.13.3 合并后）
 
 本地实跑（Windows / Node v25.8.1 / Python 3.14 / 本机 Chrome）：
 
 - 静态：`node --check engine.js`、`node tools/check_inline_scripts.mjs`、`python tools/validate_site.py`、
   `python tools/build_site.py`、`python tools/arcade_design_check.py`。
-- `node tools/arcade_smoke.mjs`：**112/112**（新增 4 项：同种弹种叠加/180s 上限/实际拾取；割草常驻无限与密集掉落；Boss 四套弹幕/自动进潮/受击扣能量/无积分无星币；320px 4 按钮入口与 6 列无限道具行）。
+- `node tools/arcade_smoke.mjs`：**113/113**（新增 4 项：同种弹种叠加/180s 上限/实际拾取；割草常驻无限与密集掉落；Boss 四套弹幕/自动进潮/受击扣能量/无积分无星币；320px 4 按钮入口与 6 列无限道具行）。
 - 挑战 6 关零回归：`node tools/arcade_gameplay_test.mjs --suite=challenge --game=star-raid` **7/7**；
   经典 Boss 闭环 `--scenario=SC-STAR-001` **1/1**。
 - 相关门禁：`arcade_pwa_update_test` **9/9**（临时发版链路改 0.14.0→0.14.1）、`arcade_zen_scores_test` **17/17**、
@@ -119,7 +119,7 @@ after = min(180, before + added);      // BUFF_STACK_CAP = 180s
   `arcade_immersive_buttons_test` **32/32**、`arcade_review_test` **5/5**、`arcade_design_check` 143 文件、
   `arcade_stage_coverage` 78 关矩阵、`validate_site`/`build_site`/`check_inline_scripts`/`node --check` 通过。
 - 320/375/390/430px：开始弹层 4 按钮、割草 6 列道具行、机库与整备卡无横向溢出；按钮 ≥44px。
-- 全量门禁：`py -3 tools/arcade_run_all_gates.py` → **ALL GATES PASSED**（smoke 112/112、zen 17/17、calm 17/17、review 5/5、gameplay all 104/104、base 22/22，含 validate/build/design/inline/stage）。
+- 全量门禁：`py -3 tools/arcade_run_all_gates.py` → **ALL GATES PASSED**（smoke 113/113、zen 17/17、calm 17/17、review 5/5、gameplay all 104/104、base 22/22，含 validate/build/design/inline/stage）。
 - 真机手感（能量节奏、割草密度、Boss 弹幕可读性）仍 **UNVERIFIED**，待 Owner 试玩。
 
 ## 5. 独立只读审查（Reviewer）

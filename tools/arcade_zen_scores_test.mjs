@@ -375,7 +375,7 @@ async function readScoresPayload(cdp) {
 const SCENARIOS = [
   {
     id: 'ZS-01',
-    title: '中心页版本 0.14.0 + 积分记录区块 + 空状态',
+    title: '中心页版本 0.13.2 + 积分记录区块 + 空状态',
     async run(cdp) {
       await prepareHub(cdp);
       const api = await requireScores(cdp);

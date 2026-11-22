@@ -201,21 +201,7 @@ Owner 反馈六件事（每关都是白板装备、难度没有差异、机体�
 - [x] 挑战 6 关零改动；无新增 localStorage key / Schema；版本链与 SW `studiokit-arcade-0.13.1-v1`
 - [x] 本机门禁：smoke 105/105、tower 23/23、挑战 7/7 + 6/6、base 11/11、zen/calm/review/pwa/interaction/immersive、320–430 + standalone 布局 43/43、validate/build/inline/design 全过
 - [x] 双端发布：Owner 本轮明确选择「确认发布 0.13.1（PUBLISH_TO_MAIN）」；提交 `01eb5b4` 推送 `main`；Actions run `44996450758` 四 job 全绿（Validate and build / Deploy GitHub Pages / Deploy Cloudflare Pages / Verify both deployments）；CI 与本地 `tools/verify_deploy.py` 均 **41/41** 双端逐文件一致（arcade 0.13.1 / badge 2.2.1 / venue 0.2.0）；双端线上无头 Chrome 实测：中心页 0.13.1、主道具行 5 列（3 主动 + 2 军械槽，空槽「军械」）、390×844 standalone 模拟行底 ≤ 视口、核弹发射后 0.26s 仍在飞行且 Boss 480 血不变、命中后 Boss 354 血 + flash 0.70 + 冲击波 2 + 0 console error；SW 缓存键 `studiokit-arcade-0.13.1-v1`。
-## 0.14.0 星海突击：弹种叠加 + 星海割草无尽演武（功能分支 `feat/arcade-star-raid-mow` 本地开发，未合并未发布）
-
-Owner 本轮两条：①同种弹药 Buff 多吃时叠加有效时长而不是重置；②新增“模拟割草”模式——所有弹药 Buff 常驻、大杀器库满载、手动道具无限，同时敌潮/掉落极为密集、Boss 招式更炫；玩家唯一瓶颈是能量，且不参与任何积分/货币获取。设计见 `apps/arcade/DESIGN-0.14.0.md`。
-
-- [x] 同种弹种拾取改为 `min(180s, 剩余 + 固定时长)`；浮字显示增加量/累计时长，HUD 显示累计剩余；挑战每关同类 powerup 不重复，实际数据零变化
-- [x] 星海割草：开始弹层第 4 按钮（engine 可选 `btn4`，其余游戏零变化）；四弹种常驻、火力 MAX、大杀器 3 槽满载无限次、脉冲/星盾/编队无限（均消耗能量）
-- [x] 密集敌潮/掉落：0.26s 刷怪、85% 双刷、同屏 32、敌人血量 ×3.2；Boss 战 20 架护卫持续补充；12% 能量核心（8 杀保底）、重装 50% 火力核心、2% 军械；拾取上限 90
-- [x] Boss 四套专属弹幕：扇形齐射 / 螺旋星雨 / 交叉扫射 / 环爆三连；血量 ×2.6、横向巡航、入场不清场、弹幕上限 100；警戒环/光晕/相位反馈并尊重 reduced-motion
-- [x] 唯一瓶颈能量：被动 `(1.2 + 3×0.45) × 2.6 ≈ 6.6/s`、击杀 +0.12、核心 +7；受击只扣 22% 能量不掉命；手动道具/编队消耗能量；枯竭沿用惩罚但不死亡
-- [x] 无积分/货币：割草不写 score、不调用 `settleCredits`/`Progress.recordPlay`、不更新最高分/机库 runs/best、不写 `scores:v1`；`serialize()` 在 `mode==='mow'` 返回 null，不写局内档
-- [x] 无新增 localStorage key / Schema；挑战 6 关数据与判定零改动；版本链 0.14.0 / SW `studiokit-arcade-0.14.0-v1`
-- [x] 门禁：smoke **112/112**（新增 4 项）、`SC-STAR-001` 经典 Boss 闭环、挑战矩阵 78 关、320px 4 按钮入口与 6 列道具行、validate/build/inline/design/node --check
-- [ ] 发布：功能分支本地开发，未合并 main、未推送、未发布；真机试玩（能量节奏、割草密度、Boss 弹幕可读性）仍 UNVERIFIED
-
-## 0.13.2 修复批次（本地，待 Owner 授权发布）
+## 0.13.2 修复批次（2026-11-22 已双端发布）
 
 Owner 两条真机反馈：①已安装 PWA 点「检查更新」显示的是已安装版本，不是线上最新版本；②iPhone 主屏 PWA 玩一天后中心页「累计时长」一直为 `0 分钟`，但积分记录表格有数据。都已在无头 Chrome 复现并修复（设计与复现输出见 `apps/arcade/DESIGN-0.13.2.md`）：
 
@@ -226,7 +212,34 @@ Owner 两条真机反馈：①已安装 PWA 点「检查更新」显示的是已
 - [x] **游玩时长停摆**：16 款游戏共用的 `Playtime` 不再要求 window `focus`（iOS 主屏 PWA 回前台常常只给 `visibilitychange`；漏一次 focus 就永久停摆，而 `scores:v1` 仍照写），改为「页面可见 + 弹层关闭」并新增 `syncSegment()` 在可见性/`pageshow`/用户点按按键/15 秒 tick 上自愈；`recordRound()` 结算后续开时间片
 - [x] 无 localStorage key / Schema 变更；挑战/玩法/存档零改动；版本链 0.13.2 / SW `studiokit-arcade-0.13.2-v1`
 - [x] 门禁：pwa **9/9**（新增真实发版链路与读取失败）、smoke **108/108**（新增 3 项 iOS 漏发 focus 计时回归）、tower 23/23、zen 14/14、calm 17/17、review 5/5、interaction 5/5、immersive 32/32、gameplay all 104/104 + base 22/22（11 场景 ×2 遍）、挑战矩阵 78 关、320–430 + standalone 布局、validate/build/inline/design 全过
-- [ ] 发布：需要 Owner 明确 `PUBLISH_TO_MAIN` 授权；真机 iOS 主屏幕 PWA 的更新提示时机与「游玩时长/积分记录时长」待 Owner 复测（UNVERIFIED）
+- [x] 双端发布：Owner 本轮明确授权发布（`PUBLISH_TO_MAIN`）；提交 `8493cf7`（PWA 更新检测）+ `78858e0`（游玩时长 + 文档）ff 合入 `main`；Actions run `45002523350` 四 job 全绿（Validate and build / Deploy GitHub Pages / Deploy Cloudflare Pages / Verify both deployments）；CI 与本地 `tools/verify_deploy.py` 均 **41/41** 双端逐文件一致（arcade 0.13.2 / badge 2.2.1 / venue 0.2.0）；双端线上无头 Chrome 各 8 项全过（中心页 0.13.2 + 检查更新返回线上 0.13.2 且不误报、SW 握手 0.13.2、缓存键 `studiokit-arcade-0.13.2-v1`、游戏页可加载、0 console error）
+- [ ] 真机复测：iOS 主屏幕 PWA 的「检查更新」提示时机与「累计时长/积分记录时长」待 Owner 确认（UNVERIFIED）
+
+## 0.14.0 星海突击：弹种叠加 + 星海割草无尽演武（本地待发布，基于 0.13.3）
+
+Owner 本轮两条：①同种弹药 Buff 多吃时叠加有效时长而不是重置；②新增“模拟割草”模式——所有弹药 Buff 常驻、大杀器库满载、手动道具无限，同时敌潮/掉落极为密集、Boss 招式更炫；玩家唯一瓶颈是能量，且不参与任何积分/货币获取。设计见 `apps/arcade/DESIGN-0.14.0.md`。
+
+- [x] 同种弹种拾取改为 `min(180s, 剩余 + 固定时长)`；浮字显示增加量/累计时长，HUD 显示累计剩余；挑战每关同类 powerup 不重复，实际数据零变化
+- [x] 星海割草：开始弹层第 4 按钮（engine 可选 `btn4`，其余游戏零变化）；四弹种常驻、火力 MAX、大杀器 3 槽满载无限次、脉冲/星盾/编队无限（均消耗能量）
+- [x] 密集敌潮/掉落：0.26s 刷怪、85% 双刷、同屏 32、敌人血量 ×3.2；Boss 战 20 架护卫持续补充；12% 能量核心（8 杀保底）、重装 50% 火力核心、2% 军械；拾取上限 90
+- [x] Boss 四套专属弹幕：扇形齐射 / 螺旋星雨 / 交叉扫射 / 环爆三连；血量 ×2.6、横向巡航、入场不清场、弹幕上限 100；警戒环/光晕/相位反馈并尊重 reduced-motion
+- [x] 唯一瓶颈能量：被动 `(1.2 + 3×0.45) × 2.6 ≈ 6.6/s`、击杀 +0.12、核心 +7；受击只扣 22% 能量不掉命；手动道具/编队消耗能量；枯竭沿用惩罚但不死亡
+- [x] 无积分/货币：割草不写 score、不调用 `settleCredits`/`Progress.recordPlay`、不更新最高分/机库 runs/best、不写 `scores:v1`；`serialize()` 在 `mode==='mow'` 返回 null，不写局内档
+- [x] 无新增 localStorage key / Schema；挑战 6 关数据与判定零改动；版本链 0.14.0 / SW `studiokit-arcade-0.14.0-v1`
+- [x] 门禁：smoke **113/113**（新增 4 项）、`SC-STAR-001` 经典 Boss 闭环、挑战矩阵 78 关、320px 4 按钮入口与 6 列道具行、validate/build/inline/design/node --check
+- [ ] 发布：Owner 本轮明确授权「合回 main 发布」；真机试玩（能量节奏、割草密度、Boss 弹幕可读性）仍 UNVERIFIED
+
+## 0.13.3 修复批次（2026-11-22 已双端发布）
+
+Owner 在 iPhone 主屏 PWA（Cloudflare Pages）复测 0.13.2：星海/2048/俄罗斯方块玩完时长仍全 0、积分记录有数据，Edge 正常。设备自检页定位根因并修复（设计与证据见 `apps/arcade/DESIGN-0.13.3.md`）：
+
+- [x] 根因：CF Pages pretty URL 把 `/games/x.html` 308 到 `/games/x`，`detectCurrentGame()` 精确比较 `.html` 文件名 → `currentGame` 恒 `null` → `Playtime` 不装载、时间片不启动、`recordRound` 返回 0
+- [x] 修复：去 `.html` 后缀 + 小写化比较，兼容尾斜杠/URL 编码，增加按 id 兜底；GH Pages 的 `.html` 行为不变
+- [x] 测试基础设施：静态服务器新增「无后缀 → `x.html`」回退（模拟 CF pretty URL），smoke 108 → **109/109**
+- [x] 移除 `block-drop.html?diag=1` 临时探针；保留 `apps/arcade/diag.html` 供真机复验
+- [x] 版本链 0.13.3 / SW `studiokit-arcade-0.13.3-v1`；无 key/Schema/玩法/挑战改动
+- [x] 双端发布：提交 `b3a8c7e`；Actions run `45007754972` 四 job 全绿；`tools/verify_deploy.py` **41/41** 双端一致；线上实测 CF 无后缀 URL `currentGame=block-drop`、游玩 1.6s 记到 1606ms，诊断页 iframe「计时正常」
+- [ ] 真机复验：iOS 主屏 PWA 更新后「计时自检」应显示计时正常，累计/积分记录时长不再为 0（UNVERIFIED）
 
 ## Now
 

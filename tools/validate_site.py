@@ -17,7 +17,7 @@ REQUIRED = [
     'apps/arcade/DESIGN-0.4.0.md', 'apps/arcade/DESIGN-0.5.0.md',
     'apps/arcade/DESIGN-0.6.0.md', 'apps/arcade/DESIGN-0.8.1.md', 'apps/arcade/DESIGN-0.8.2.md',
     'apps/arcade/DESIGN-0.8.6.md', 'apps/arcade/DESIGN-0.9.0.md', 'apps/arcade/DESIGN-0.10.0.md',
-    'apps/arcade/DESIGN-0.11.0.md', 'apps/arcade/DESIGN-0.11.1.md', 'apps/arcade/DESIGN-0.11.2.md', 'apps/arcade/DESIGN-0.11.3.md', 'apps/arcade/DESIGN-0.11.4.md', 'apps/arcade/DESIGN-0.11.5.md', 'apps/arcade/DESIGN-0.12.0.md', 'apps/arcade/DESIGN-0.12.1.md', 'apps/arcade/DESIGN-0.12.2.md', 'apps/arcade/DESIGN-0.12.3.md', 'apps/arcade/DESIGN-0.12.4.md', 'apps/arcade/DESIGN-0.12.5.md', 'apps/arcade/DESIGN-0.12.6.md', 'apps/arcade/DESIGN-0.12.7.md', 'apps/arcade/DESIGN-0.13.1.md', 'apps/arcade/DESIGN-0.13.2.md', 'apps/arcade/DESIGN-0.14.0.md',
+    'apps/arcade/DESIGN-0.11.0.md', 'apps/arcade/DESIGN-0.11.1.md', 'apps/arcade/DESIGN-0.11.2.md', 'apps/arcade/DESIGN-0.11.3.md', 'apps/arcade/DESIGN-0.11.4.md', 'apps/arcade/DESIGN-0.11.5.md', 'apps/arcade/DESIGN-0.12.0.md', 'apps/arcade/DESIGN-0.12.1.md', 'apps/arcade/DESIGN-0.12.2.md', 'apps/arcade/DESIGN-0.12.3.md', 'apps/arcade/DESIGN-0.12.4.md', 'apps/arcade/DESIGN-0.12.5.md', 'apps/arcade/DESIGN-0.12.6.md', 'apps/arcade/DESIGN-0.12.7.md', 'apps/arcade/DESIGN-0.13.1.md', 'apps/arcade/DESIGN-0.13.2.md', 'apps/arcade/DESIGN-0.13.3.md', 'apps/arcade/DESIGN-0.14.0.md',
     'apps/arcade/engine.js', 'apps/arcade/arcade.css', 'apps/arcade/sw.js',
     'apps/arcade/manifest.webmanifest',
     'apps/arcade/icons/icon-192.png', 'apps/arcade/icons/icon-512.png',
@@ -185,6 +185,10 @@ def validate(root=ROOT):
             if update_marker not in source:
                 ok = fail(f'Arcade PWA update-detection marker missing in engine.js: {update_marker}') and ok
         # 0.13.2：更新检测必须回答「线上最新版本」，不能再拿页面自身的 ARCADE_VERSION 冒充。
+        # 0.13.3：Cloudflare Pages 的 pretty URL 会去掉 .html，游戏识别不能精确比较文件名。
+        for marker in ('function detectCurrentGame', '.html$/i', 'pretty URL', "GAMES.find((g) => g.id.toLowerCase() === file)"):
+            if marker not in source:
+                ok = fail(f'Arcade 0.13.3 extensionless-URL game detection marker missing in engine.js: {marker}') and ok
         for marker in ('function publishedVersion', 'function compareVersions', 'latestVersion:', 'updateReason:', 'function workerVersion', 'compareVersions(newest, pageVersion)'):
             if marker not in source:
                 ok = fail(f'Arcade 0.13.2 update-version marker missing in engine.js: {marker}') and ok
@@ -236,16 +240,16 @@ def validate(root=ROOT):
         for marker in ('dom.ovBtn4', 'o.btn4', 'onBtn4'):
             if marker not in source:
                 ok = fail(f'Arcade 0.14.0 optional fourth overlay button marker missing in engine.js: {marker}') and ok
-        for stale in ('buffs[type] = Math.max(buffs[type], WEAPONS[type].duration)', 'buffs[p.type] = Math.max(buffs[p.type], WEAPONS[p.type].duration)'):
-            if stale in (root / 'apps/arcade/games/star-raid.html').read_text(encoding='utf-8'):
-                ok = fail('Arcade ammo buff must stack duration, not reset to a fixed value: ' + stale) and ok
         star_raid = root / 'apps/arcade/games/star-raid.html'
         star_source = star_raid.read_text(encoding='utf-8')
+        for stale in ('buffs[type] = Math.max(buffs[type], WEAPONS[type].duration)', 'buffs[p.type] = Math.max(buffs[p.type], WEAPONS[p.type].duration)'):
+            if stale in star_source:
+                ok = fail('Arcade ammo buff must stack duration, not reset to a fixed value: ' + stale) and ok
         for marker in ('data-ov-btn4', 'const BUFF_STACK_CAP', 'function grantBuff', 'const MOW =', 'function startMow', 'function quitMow', 'function bossMowFire', 'function stageClearMow', '星海割草', 'buffPermanent'):
             if marker not in star_source:
                 ok = fail(f'Arcade 0.14.0 star-raid marker missing: {marker}') and ok
         # 0.14.0：割草模式不参与积分/货币，且必须有「无结算/无存档」守护。
-        for marker in ('if (mode === \'mow\') return null;', 'if (mode === \'mow\') return quitMow();', 'mowKills += 1'):
+        for marker in ("if (mode === 'mow') return null;", "if (mode === 'mow') return quitMow();", 'mowKills += 1'):
             if marker not in star_source:
                 ok = fail(f'Arcade 0.14.0 mow no-score guard missing: {marker}') and ok
         challenge_dir = root / 'apps/arcade/challenge'
