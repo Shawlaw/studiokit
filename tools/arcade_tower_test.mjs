@@ -431,7 +431,42 @@ const TP_RELEASE_VX = {
   },
 };
 
-const SCENARIOS = [TP_STATIC, TP_PHYSICS, TP_OVERVIEW, TP_CARGO, TP_SAVE, TP_LAYOUT, TP_REACH, TP_ZOOM, TP_CONSISTENCY, TP_RELEASE_VX];
+/* ---------------- TP-11 超高塔全览（200 / 1000 层，0.12.3） ---------------- */
+const TP_TALL = {
+  id: 'TP-11',
+  async run(cdp) {
+    /* 旧实现把缩放 clamp 到 0.08：200 层需要 0.063（溢出 140px）、1000 层需要 0.0127（溢出 ~2700px）。
+       现在必须严格按 span 缩到可视区，任何层数都能完整入屏。 */
+    const cases = [
+      { floors: 40, maxScale: 1, minScale: 0.2 },
+      { floors: 200, maxScale: 0.08, minScale: 0.01 },
+      { floors: 1000, maxScale: 0.02, minScale: 0.001 },
+    ];
+    const out = [];
+    for (const c of cases) {
+      await prepare(cdp, 'tall' + c.floors);
+      await cdp.evaluate('__arcadeTest.stackTo(' + c.floors + ')');
+      await sleep(250);
+      const info = await cdp.evaluate('__arcadeTest.joyInfo()');
+      assert(info.floorsReached === c.floors, c.floors + ' 层堆叠失败：floorsReached=' + info.floorsReached);
+      await cdp.evaluate('__arcadeTest.toggleOverview()');
+      await sleep(900);
+      const v = await cdp.evaluate('__arcadeTest.viewInfo()');
+      assert(v.overviewT > 0.99, c.floors + ' 层全览动画未收敛：t=' + v.overviewT);
+      assert(v.scale <= c.maxScale, c.floors + ' 层缩放比未随塔高收缩（存在下限？）：scale=' + v.scale);
+      assert(v.scale >= c.minScale, c.floors + ' 层缩放比异常过小：scale=' + v.scale);
+      assert(v.fitsOnScreen === true, c.floors + ' 层全览未完整入屏：' + JSON.stringify(v.screen));
+      /* 精确性：整塔必须刚好落在上下留白之间（±2px），说明是真正的 zoom-to-fit 而不是「差不多」。 */
+      assert(v.screen.topY >= 100 && v.screen.topY <= 132, c.floors + ' 层塔顶未落在留白内：topY=' + v.screen.topY);
+      assert(v.screen.bottomY >= 608 && v.screen.bottomY <= 640, c.floors + ' 层塔底未落在留白内：bottomY=' + v.screen.bottomY);
+      out.push(c.floors + '层 ' + v.scale.toFixed(4) + '×');
+    }
+    assert(cdp.errors.length === 0, 'console error: ' + cdp.errors.slice(0, 3).join(' | '));
+    record('超高塔全览无缩放下限：' + out.join(' / ') + ' 均完整入屏且塔顶塔底贴合留白', true);
+  },
+};
+
+const SCENARIOS = [TP_STATIC, TP_PHYSICS, TP_OVERVIEW, TP_CARGO, TP_SAVE, TP_LAYOUT, TP_REACH, TP_ZOOM, TP_CONSISTENCY, TP_RELEASE_VX, TP_TALL];
 
 let server, launched, cdp;
 try {

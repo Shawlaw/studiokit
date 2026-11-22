@@ -5,6 +5,10 @@
 - 仓库：<https://github.com/Shawlaw/studiokit>
 - GitHub Pages：<https://shawlaw.github.io/studiokit/>
 - Cloudflare Pages：<https://studiokit.pages.dev/>
+- 本地待发布（未推送 main）：Arcade `0.12.3`（2026-11-22）
+  - 批次内容：全览去掉缩放下限（`clamp(...,0.08,1)` → `Math.min(1, avail/span)`），200/1000 层也完整入屏；`overviewT` 接近目标吸附消除 ~3% 残留；超高塔 LOD（>60 层或 scale<0.35 用属性色块 + 最小 8px 脊线 + 轮廓，1000 层每帧 ~1000 次 fillRect）；层号屏幕空间抽稀；横幅显示压缩比；`stackTo` 上限 40→1200；无 key/Schema/关卡数据变更
+  - 门禁：`arcade_tower_test` **19/19**（新增 TP-11）、smoke 94/94、zen 14/14、calm 17/17、review 5/5、gameplay base 11/11、tower challenge 6/6、pwa 7/7、interaction 5/5、immersive 16/16、validate/build/inline/node --check 全过；实测 40/200/1000 层 scale=0.2913/0.0624/0.0127、屏幕范围均 116–624、0 溢出、0 console error
+  - 设计见 `apps/arcade/DESIGN-0.12.3.md`；SW 缓存键 `studiokit-arcade-0.12.3-v1`；**未发布，无 Actions run / verify_deploy 证据**
 - 最近发布：Arcade `0.12.2`（2026-11-22，已双端发布）
   - 批次内容：集装箱释放水平速度（真实单摆切向速度 × 吊具阻尼 0.45，上限 240px/s）+ 落点预测改为 `释放点 + vx·t` 并画真实抛物线 + 释放点虚影/横移量提示 + 挑战 releaseWhenAligned 改用预测落点；`serialize/restore` 增可选 `drop.vx`（旧档缺省 0）；无 key/Schema/关卡数据变更，仅改 `pendulum-tower.html`
   - 门禁：`arcade_tower_test` **18/18**（新增 TP-10 释放水平速度：vx 峰值、可解性、横移量、预测误差 ≤3px）、smoke 94/94、zen 14/14、calm 17/17、review 5/5、gameplay base 11/11、tower challenge 6/6、pwa 7/7、interaction 5/5、immersive 16/16、validate/build/inline/node --check 全过；实测 vx 峰值 111–134px/s、预测误差 ≤0.6px、单次横移 40–45px；真机手感 UNVERIFIED

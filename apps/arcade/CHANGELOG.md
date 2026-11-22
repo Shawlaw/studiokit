@@ -1,5 +1,21 @@
 # Arcade Changelog
 
+## 0.12.3 — 2026-11-22
+
+### Fixed
+- **全览有缩放下限导致高塔看不全**：`overviewFit()` 里 `clamp(avail/span, 0.08, 1)` 的下限 0.08 使 200 层（需 0.0624）溢出 144px、1000 层（需 0.0127）溢出 2704px。现改为 `Math.min(1, avail/span)`，任何层数都严格等比缩到可视区；并让 `overviewT` 在接近目标时吸附（旧指数插值残留 ~3% 偏差会让塔顶塔底各溢出十几 px）。
+
+### Added
+- **超高塔 LOD**：`boxes>60 || scale<0.35` 时箱体改为按属性色填充的色块 + 最小 8px 屏幕宽的「塔身脊线」，>60 层再补一圈结构轮廓；1000 层每帧绘制从 ~9000 次降到 ~1000 次 `fillRect`，且极压缩下仍能看出整塔轮廓与属性分布。
+- 层号抽稀步长按屏幕间距自适应（1000 层每 ~32 层标一次，首尾必标）；全览横幅在 scale<0.5 时显示「压缩 0.013×」。
+- `#test` 的 `stackTo` 上限 40 → 1200，供 1000 层门禁；逐层 `syncHud()` 改为循环后同步一次（避免 O(n²)）。
+
+### Changed
+- 版本链升至 `0.12.3`，SW 缓存键 `studiokit-arcade-0.12.3-v1`。无 localStorage key / Schema / 挑战关卡数据变更；只改 `pendulum-tower.html`。
+
+### Verification
+- `arcade_tower_test` **19/19**（新增 TP-11：40/200/1000 层均完整入屏、缩放随层数收缩、塔顶落 100–132 / 塔底落 608–640）；实测 40 层 0.2913×、200 层 0.0624×、1000 层 0.0127×，三者屏幕范围均为 116–624（可视区上下留白内），0 溢出、0 console error；smoke 94/94、zen 14/14、calm 17/17、review 5/5、gameplay base 11/11、tower challenge 6/6、pwa 7/7、interaction 5/5、immersive 16/16、validate/build/inline/node --check 全过。设计见 `DESIGN-0.12.3.md`。
+
 ## 0.12.2 — 2026-11-22（已双端发布）
 
 ### Added

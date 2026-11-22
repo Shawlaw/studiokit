@@ -260,8 +260,12 @@
         const e = towerExtent();
         const span = Math.max(140, e.bottom - e.top);
         const avail = Math.max(140, H - VIEW_MARGIN_Y * 2);
-        const scale = clamp(avail / span, 0.08, 1);
-        return { scale, span, extent: e, centerY: (e.top + e.bottom) / 2 };
+        /* 0.12.3：去掉缩放下限（旧实现 clamp 到 0.08）。
+           200 层需要 0.063（旧值被抬到 0.08 → 溢出 140px），
+           1000 层需要 0.0127（旧值 → 溢出 ~2700px，只看得见塔顶一小段）。
+           现在按 span 严格等比缩到可视区，只保留极小值保护防止 span=0 除零。 */
+        const scale = Math.min(1, avail / span);
+        return { scale: Math.max(1e-6, scale), span, extent: e, centerY: (e.top + e.bottom) / 2 };
       }
       /* 跟随视角：把塔顶固定在屏幕 y≈430（与原实现等价）。 */
       function currentTargetCam() {
@@ -1544,7 +1548,12 @@
       function updateOverview(dt) {
         const goal = overviewActive || overviewReveal || overviewSettled ? 1 : 0;
         if (A.reducedMotion) overviewT = goal;
-        else overviewT += (goal - overviewT) * Math.min(1, 8 * dt);
+        else {
+          overviewT += (goal - overviewT) * Math.min(1, 8 * dt);
+          /* 0.12.3：指数插值永远到不了 1，会在全览后残留 ~3% 的缩放偏差（塔顶/塔底各溢出十几 px）。
+             接近目标时直接吸附，保证「全塔刚好装进可视区」。 */
+          if (Math.abs(goal - overviewT) < 0.002) overviewT = goal;
+        }
         if (overviewReveal) {
           overviewReveal.remaining -= dt;
           if (overviewReveal.remaining <= 0) {
@@ -1811,14 +1820,32 @@
              玩家对着看到的塔顶松手必然判偏，且新箱会「跟着转」出现在没点的位置。
              现在塔身始终轴对齐（所见即所判），倾斜改用底部重心/支撑面指示 + 预警表达；
              真正的旋转只发生在倒塌动画里。 */
-          boxes.forEach((b) => {
+          /* 0.12.3 LOD：层数很多或缩得很小时，箱体只画「可辨识的色块」。
+             原因有两个：1) 1000 层时每个箱子屏幕高度仅 0.5px，集装箱纹路/编号完全不可见却要花
+             7~8 次 path + 1 次 fillText；2) 极小时箱宽 <1px 会视觉消失，故给一条最小可见宽度
+             （屏幕 5px 的「塔身脊线」），保证 1000 层也能看出整塔轮廓与属性分布。 */
+          const dense = boxes.length > 60 || view.scale < 0.35;
+          const minScreenW = dense ? 8 : 0;
+          boxes.forEach((b, bi) => {
             if (b.base) {
-              ctx.fillStyle = '#6b7590';
-              ctx.fillRect(b.x, b.y, b.w, b.h);
-              ctx.fillStyle = '#8b96b3';
-              ctx.fillRect(b.x, b.y, b.w, 6);
+              if (dense) {
+                ctx.fillStyle = '#6b7590';
+                ctx.fillRect(b.x, b.y, Math.max(b.w, minScreenW / view.scale), b.h);
+              } else {
+                ctx.fillStyle = '#6b7590';
+                ctx.fillRect(b.x, b.y, b.w, b.h);
+                ctx.fillStyle = '#8b96b3';
+                ctx.fillRect(b.x, b.y, b.w, 6);
+              }
+              return;
+            }
+            if (dense) {
+              const cargo = b.cargo || CARGO_TYPES[0];
+              const w = Math.max(b.w, minScreenW / view.scale);
+              ctx.fillStyle = cargo.color;
+              ctx.fillRect(b.x + b.w / 2 - w / 2, b.y, w, b.h);
             } else {
-              drawCrate(b.x, b.y, b.w, b.h, { cargo: b.cargo, floor: boxes.indexOf(b) });
+              drawCrate(b.x, b.y, b.w, b.h, { cargo: b.cargo, floor: bi });
             }
           });
           ctx.restore();
@@ -1887,12 +1914,28 @@
         particles.draw(ctx);
         ctx.restore();
 
-        /* 0.12.1：全览层号在屏幕空间绘制（不随缩放变小），几十层时按可读间距抽稀。 */
+        /* 0.12.1：全览层号在屏幕空间绘制（不随缩放变小），按可读间距抽稀。
+           0.12.3：抽稀步长按屏幕间距算（1000 层时 spacing≈0.5px ⇒ 每 ~32 层标一次），
+           首尾层必标，保证再高的塔也能读出层数与属性分布。 */
         if (overviewT > 0.35 && boxes.length > 1) {
           const alpha = clamp((overviewT - 0.35) / 0.65, 0, 1);
           const spacing = BOX_H * view.scale;
-          const step = Math.max(1, Math.ceil(16 / Math.max(1, spacing)));
+          const step = Math.max(1, Math.ceil(16 / Math.max(0.1, spacing)));
           const rows = boxes.filter((b) => !b.base);
+          /* 0.12.3：极高压缩视图（1000 层时塔身仅 ~8px 宽）补一圈结构轮廓，
+             让「一条竖线」读起来仍像一栋塔。 */
+          if (rows.length > 60) {
+            const ext = towerExtent();
+            const topPt = worldToScreen(view, baseCenter(), ext.top);
+            const botPt = worldToScreen(view, baseCenter(), ext.bottom);
+            const halfW = Math.max(6, (BOX_W * view.scale) / 2 + 5);
+            ctx.save();
+            ctx.globalAlpha = alpha * 0.55;
+            ctx.strokeStyle = 'rgba(238,241,255,0.7)';
+            ctx.lineWidth = 1;
+            ctx.strokeRect(topPt.x - halfW, Math.min(topPt.y, botPt.y), halfW * 2, Math.abs(botPt.y - topPt.y));
+            ctx.restore();
+          }
           ctx.save();
           ctx.globalAlpha = alpha;
           rows.forEach((b, i) => {
@@ -2110,9 +2153,11 @@
           ctx.fillStyle = 'rgba(10,16,30,0.72)';
           A.draw.roundRect(ctx, W / 2 - 108, 74, 216, 28, 8);
           ctx.fill();
-          /* 结算拉远时不可再按 3（overviewBtn 已禁用），文案不要承诺无效操作。 */
+          /* 结算拉远时不可再按 3（overviewBtn 已禁用），文案不要承诺无效操作。
+             0.12.3：缩得很小时显示缩放比，让玩家知道这是「全塔压缩视图」。 */
           const canToggle = state === 'playing';
-          A.draw.label(ctx, '🗺 全览 · 共 ' + Math.max(0, boxes.length - 1) + ' 层' + (canToggle ? ' · 再按 3 返回' : ''), W / 2, 89, {
+          const zoomText = view.scale < 0.5 ? ' · 压缩 ' + (view.scale < 0.1 ? view.scale.toFixed(3) : view.scale.toFixed(2)) + '×' : '';
+          A.draw.label(ctx, '🗺 全览 · 共 ' + Math.max(0, boxes.length - 1) + ' 层' + zoomText + (canToggle ? ' · 再按 3 返回' : ''), W / 2, 89, {
             font: 'bold 12px system-ui', color: '#ffe08a',
           });
           /* 地基支撑面与重心投影：用 worldToScreen 换算，缩放后仍贴着地基绘制。 */
@@ -2218,12 +2263,13 @@
             return this.joyInfo();
           },
           stackTo(floors) {
-            const target = clamp(Math.floor(Number(floors) || 0), 0, 40);
+            const target = clamp(Math.floor(Number(floors) || 0), 0, 1200);
             while (floorsReached < target) {
               const top = towerTop();
               boxes.push({ x: top.x, y: top.y - BOX_H, w: BOX_W, h: BOX_H, cargo: CARGO_TYPES[0] });
+              floorsReached += 1;
+              }
               syncHud();
-            }
             computeComOffset();
             updateSwingDifficulty();
             syncJoyTools();

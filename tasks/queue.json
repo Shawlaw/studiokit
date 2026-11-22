@@ -1679,6 +1679,24 @@
       "evidence": "Owner 反馈三点并在浏览器中复现确认。双击放大：17 页 viewport 加 maximum-scale=1/user-scalable=no、html touch-action manipulation 兜底、engine.js installSfxUnlock() 全局拦 dblclick 默认行为（不 stopPropagation，不破坏方块双击暂停）。五子棋重影根因：画布 drawPlaceButton 与 DOM placeButton 各画一份「落子」（字号/位置不同，全屏错位）；修复为画布 drawActionButton 唯一文字源，DOM 两枚透明命中层（data-cancel-preview/data-place-confirm，无文字/边框/底色）。预览出口：新增 cancelPreview()，取消只清 preview；逻辑按钮区 200→280 保证 320px 两半各 ≥44px；hint/开始弹层/画布引导/页脚文案同步。五子棋 selftest 新增第 18 条（预览取消与落子确认互不干扰），第 17 条改校验两枚透明命中层；新增 __arcadeTest.cancelPreview()/actionButtons() 钩子。新增 tools/arcade_interaction_test.mjs（IX-01…IX-05）：17 页 viewport / dblclick 拦截 / 透明命中层 / 四档+全屏布局 / 取消与落子。门禁：interaction 5/5、smoke 94/94、zen 14/14、calm 17/17（gomoku selftest 18 条）、review 5/5、gameplay base 11/11、pwa 7/7、validate/build/inline/node --check 全过；真机双击防护待 Owner 复测 UNVERIFIED；无 localStorage key/Schema 变更；版本链 0.11.5 / SW studiokit-arcade-0.11.5-v1；设计见 DESIGN-0.11.5.md。已并入 0.12.0 待发布。"
     },
     {
+      "id": "T102",
+      "title": "Arcade 0.12.3：全览去掉缩放下限（200/1000 层可看全塔）",
+      "kind": "agent",
+      "status": "DONE",
+      "dependsOn": [
+        "T101"
+      ],
+      "ownerAuthorizationRequired": false,
+      "acceptance": [
+        "全览不再有缩放下限，任意层数都完整入屏",
+        "200 层与 1000 层实测 0 溢出、塔顶塔底贴合留白",
+        "超高塔仍可读（层号/属性/轮廓）且绘制量可控",
+        "全量门禁通过；无 key/Schema/关卡数据变更"
+      ],
+      "completedAt": "2026-11-22T08:50:00+08:00",
+      "evidence": "Owner 反馈 200 层后全览看不到全景、疑有缩放下限。确认 overviewFit() 的 clamp(avail/span, 0.08, 1) 下限 0.08 即根因：200 层需 0.0624（溢出 144px）、1000 层需 0.0127（溢出 2704px）。修复：去掉下限改 Math.min(1, avail/span)（仅 Math.max(1e-6,…) 防除零）；overviewT 接近目标（<0.002）吸附，消除指数插值残留 ~3% 造成的塔顶塔底各十几 px 溢出；超高塔 LOD（boxes>60 || scale<0.35 时按属性色填充 + 最小 8px 屏幕宽脊线，>60 层再补屏幕空间结构轮廓，1000 层每帧绘制 ~9000→~1000 次 fillRect）；层号抽稀步长按屏幕间距自适应（1000 层每 ~32 层一次、首尾必标）；横幅 scale<0.5 显示「压缩 0.013×」；stackTo 上限 40→1200 且逐层 syncHud() 改为循环后一次。实测（420×900，可视留白 116/116）：40 层 scale 0.2913、200 层 0.0624、1000 层 0.0127，三者屏幕 y 范围均 116–624、溢出 0、0 console error。门禁：arcade_tower_test 18→19/19（新增 TP-11：缩放随层数收缩且低于旧下限、塔顶落 100–132/塔底落 608–640）、smoke 94/94、zen 14/14、calm 17/17、review 5/5、gameplay base 11/11、tower challenge 6/6、pwa 7/7、interaction 5/5、immersive 16/16、validate/build/inline/node --check 全过；无 key/Schema/挑战关卡数据变更；仅改 pendulum-tower.html + 测试/文档；版本链 0.12.3 / SW studiokit-arcade-0.12.3-v1；设计见 DESIGN-0.12.3.md。"
+    },
+    {
       "id": "T101",
       "title": "Arcade 0.12.2 发布：main 双端部署与线上验证",
       "kind": "agent",
