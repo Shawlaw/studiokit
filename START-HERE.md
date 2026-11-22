@@ -9,7 +9,7 @@
 | 线上站点 | <https://shawlaw.github.io/studiokit/> · <https://studiokit.pages.dev/> |
 | 仓库 | <https://github.com/Shawlaw/studiokit> |
 | Badge Studio | `2.2.1`｜`available` |
-| 街机厅 Arcade | `0.14.0`｜`available`（16 款竖屏小游戏，13 款带 6 关挑战） |
+| 街机厅 Arcade | `0.15.0`｜`available`（16 款竖屏小游戏，13 款带 6 关挑战；0.15 新增可关闭的被动线索与独立生涯数据层，经典/挑战/禅/割草零改动） |
 | Venue Compare | `0.2.0`｜`available` |
 | Rounded Image | `planned`｜**尚未实现**，等待原始需求 / 规格，不凭空复刻 |
 

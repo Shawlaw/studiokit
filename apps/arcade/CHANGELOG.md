@@ -1,6 +1,34 @@
 # Arcade Changelog
 
 
+## 0.15.0 — 2026-11-22（本地未发布；等待 Owner 发布授权）
+
+新增「被动线索」与独立生涯数据层（分支 `feat/arcade-life-015`，不推送、不发布）。
+
+### Added
+- 16 款游戏在**经典游玩**中被动产出可关闭的微线索：结算安全点出现戏内物件，点开是一封短信用；不点不影响原玩法，忽略后可从信箱找回；设置可关闭/恢复，已发现内容不丢失。
+- `apps/arcade/career/` 运行时：`bridge`（游戏页唯一入口）、`registry`（数据驱动游戏/职业/委托/故事，虚拟第 17 款插拔测试）、`discovery`（发现状态机纯函数）、`career-core`（纯函数经济/领奖计划）、`career-db`（IndexedDB 事务层）、`router`/`entry-router`、`backup`（独立 `careerLife`）、`content/*.json`、`ui/*`（线索 chip/信箱/设置）。普通 `<script>`，无框架、无 CDN、无网络请求（同源 fetch 内容除外）。
+- 独立 IndexedDB `studiokit:arcade:career` v1：11 个 stores（`state/discovery/profiles/runs/claims/ledgers/balances/inventory/equipment/quests/migrations`）；单 `readwrite` 事务领奖、`claims.runId` 唯一 + 重复返回原收据、购买双击幂等、余额不为负、多标签 `ConstraintError` 重读、`onblocked` 超时、IDB 不可用时 fail-open。0.15 游玩路径只写发现状态与证据，不产生货币/材料/生涯身份。
+- 线索内容 schema 与发现状态机（`DORMANT → GLIMPSED → CURIOUS → LOCAL → RESIDENT → EXPLORER`）；每局最多 1 条、同游戏保底 ≤3 局、星海割草不计有效局。
+- ticket/claim/receipt 接口冻结（0.16 使用）；故事条件谓词（`all/any/capability/evidence/chapterFlag/item/credits/commissionCleared`）与 `objective.context` 匹配。
+- 独立生涯备份 `format: studiokit-arcade-career`（导出/导入/迁移/坏档回滚/旧档保留）。
+
+### Changed
+- 16 个游戏页各新增：`<script src="../career/bridge.js">`、`const career = window.ArcadeCareer || null`、真实事件 `observe()`、每局一次 `finish()`；挑战局不产生线索事件，星海割草显式排除。经典/挑战/禅模式、78 关挑战数据、旧星币与机库零改动。
+- `apps/arcade/sw.js`：`VERSION` 升 `0.15.0`，`CORE_PATHS` 追加 career 运行时/内容/UI（离线可读信箱）。
+- 版本链：engine `ARCADE_VERSION`、registry `version`、中心页 `data-hall-version`、`validate_site` 断言、6 个既有测试脚本断言同步；`tools/verify_deploy.py` 的 `PATHS` 追加 career 静态资源。
+
+### Tests
+- 纯 Node：`career_registry_test` **90/90**、`career_discovery_test` **84/84**、`career_legacy_baseline_test` **78/78**。
+- Chrome/CDP：`career_db_test` **38/38**（事务/幂等/多标签/失败零写入）、`career_backup_test`（本版交付）、16 款游戏适配逐组 CDP 实测（事件/信封/结算/线索渲染）。
+- 既有回归由 G15 独立 Reviewer 复跑：smoke / gameplay / tower / zen / calm / review / interaction / immersive / pwa；本次工作树未跑全套前不声称全绿。
+- 真机 iPhone/Android 触控与 PWA 安装/更新时机：**UNVERIFIED**。
+
+### Notes
+- 无 localStorage key 新增/改名，7 个既有键与 Schema 不变；SW 缓存键 `studiokit-arcade-0.15.0-v1`。
+- 设计与回滚见 `DESIGN-0.15.0.md`；接口冻结见 `docs/arcade-life/ADR-interfaces.md`；证据与原始侦察在仓库外（`qa/evidence/`），公开文档不含剧情路线/谜底。
+- 本版未发布：无 `OWNER_AUTHORIZATION: PUBLISH_TO_MAIN`，未推送 `main`、未触发双端部署。
+
 ## 0.14.0 — 2026-11-22（已双端发布）
 
 Owner 本轮两条：①星海突击同种弹药 Buff 多吃时应**叠加有效时长**而不是重置；②新增“模拟割草”模式（实现命名「星海割草」）——所有弹药 Buff 常驻、大杀器库满载、手动道具无限，同时敌人/掉落极其密集、Boss 招式更炫，玩家唯一瓶颈是能量；该模式**不参与任何积分与货币获取**。设计与调参见 `DESIGN-0.14.0.md`；挑战 6 关数据与判定零改动。

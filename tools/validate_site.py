@@ -17,9 +17,16 @@ REQUIRED = [
     'apps/arcade/DESIGN-0.4.0.md', 'apps/arcade/DESIGN-0.5.0.md',
     'apps/arcade/DESIGN-0.6.0.md', 'apps/arcade/DESIGN-0.8.1.md', 'apps/arcade/DESIGN-0.8.2.md',
     'apps/arcade/DESIGN-0.8.6.md', 'apps/arcade/DESIGN-0.9.0.md', 'apps/arcade/DESIGN-0.10.0.md',
-    'apps/arcade/DESIGN-0.11.0.md', 'apps/arcade/DESIGN-0.11.1.md', 'apps/arcade/DESIGN-0.11.2.md', 'apps/arcade/DESIGN-0.11.3.md', 'apps/arcade/DESIGN-0.11.4.md', 'apps/arcade/DESIGN-0.11.5.md', 'apps/arcade/DESIGN-0.12.0.md', 'apps/arcade/DESIGN-0.12.1.md', 'apps/arcade/DESIGN-0.12.2.md', 'apps/arcade/DESIGN-0.12.3.md', 'apps/arcade/DESIGN-0.12.4.md', 'apps/arcade/DESIGN-0.12.5.md', 'apps/arcade/DESIGN-0.12.6.md', 'apps/arcade/DESIGN-0.12.7.md', 'apps/arcade/DESIGN-0.13.1.md', 'apps/arcade/DESIGN-0.13.2.md', 'apps/arcade/DESIGN-0.13.3.md', 'apps/arcade/DESIGN-0.14.0.md',
+    'apps/arcade/DESIGN-0.11.0.md', 'apps/arcade/DESIGN-0.11.1.md', 'apps/arcade/DESIGN-0.11.2.md', 'apps/arcade/DESIGN-0.11.3.md', 'apps/arcade/DESIGN-0.11.4.md', 'apps/arcade/DESIGN-0.11.5.md', 'apps/arcade/DESIGN-0.12.0.md', 'apps/arcade/DESIGN-0.12.1.md', 'apps/arcade/DESIGN-0.12.2.md', 'apps/arcade/DESIGN-0.12.3.md', 'apps/arcade/DESIGN-0.12.4.md', 'apps/arcade/DESIGN-0.12.5.md', 'apps/arcade/DESIGN-0.12.6.md', 'apps/arcade/DESIGN-0.12.7.md', 'apps/arcade/DESIGN-0.13.1.md', 'apps/arcade/DESIGN-0.13.2.md', 'apps/arcade/DESIGN-0.13.3.md', 'apps/arcade/DESIGN-0.14.0.md', 'apps/arcade/DESIGN-0.15.0.md',
     'apps/arcade/engine.js', 'apps/arcade/arcade.css', 'apps/arcade/sw.js',
     'apps/arcade/manifest.webmanifest',
+    'apps/arcade/career/registry.js', 'apps/arcade/career/discovery.js',
+    'apps/arcade/career/career-core.js', 'apps/arcade/career/career-db.js',
+    'apps/arcade/career/bridge.js', 'apps/arcade/career/router.js',
+    'apps/arcade/career/entry-router.js', 'apps/arcade/career/backup.js',
+    'apps/arcade/career/content/registry.json', 'apps/arcade/career/content/clues.json',
+    'apps/arcade/career/ui/clue-surface.js', 'apps/arcade/career/ui/clue-surface.css',
+    'apps/arcade/career/ui/mailbox.js', 'apps/arcade/career/ui/settings.js',
     'apps/arcade/icons/icon-192.png', 'apps/arcade/icons/icon-512.png',
     'apps/arcade/icons/maskable-512.png', 'apps/arcade/icons/apple-touch-icon.png',
     'apps/arcade/games/star-raid.html', 'apps/arcade/games/shadow-leap.html',
@@ -36,6 +43,9 @@ REQUIRED = [
     'tools/arcade_zen_scores_test.mjs', 'tools/arcade_calm_games_test.mjs',
     'tools/arcade_design_check.py', 'tools/arcade_stage_coverage.mjs',
     'tools/arcade_run_all_gates.py',
+    'tools/career_registry_test.mjs', 'tools/career_discovery_test.mjs',
+    'tools/career_db_test.mjs', 'tools/career_backup_test.mjs',
+    'tools/career_legacy_baseline_test.mjs',
 ]
 
 # 0.9 挑战模式：每款游戏一个生成数据文件（tools/arcade_09_data.mjs 生成，入库）。
@@ -179,7 +189,7 @@ def validate(root=ROOT):
     arcade_engine = root / 'apps/arcade/engine.js'
     if arcade_engine.exists():
         source = arcade_engine.read_text(encoding='utf-8')
-        if "const ARCADE_VERSION = '0.14.0'" not in source:
+        if "const ARCADE_VERSION = '0.15.0'" not in source:
             ok = fail('Arcade ARCADE_VERSION drifted; update registry/README/CHANGELOG together') and ok
         for update_marker in ('function checkForUpdate', 'function onUpdate', 'function applyUpdate', "type === 'arcade-sw-update-ready'"):
             if update_marker not in source:
@@ -274,7 +284,7 @@ def validate(root=ROOT):
         arcade_index = root / 'apps/arcade/index.html'
         if arcade_index.exists():
             index_source = arcade_index.read_text(encoding='utf-8')
-            for marker in ('rel="manifest"', 'data-playtime-section', 'data-scores-section', 'data-scores-body', 'data-scores-empty', 'data-offline', 'data-install', 'data-share', 'data-random', 'data-update-check', 'data-update-banner', 'data-update-reload', '无签到', 'data-hall-version>0.14.0', '发现新版本 v${latest}（当前 v${current}）', '已是最新版本（v'):
+            for marker in ('rel="manifest"', 'data-playtime-section', 'data-scores-section', 'data-scores-body', 'data-scores-empty', 'data-offline', 'data-install', 'data-share', 'data-random', 'data-update-check', 'data-update-banner', 'data-update-reload', '无签到', 'data-hall-version>0.15.0', '发现新版本 v${latest}（当前 v${current}）', '已是最新版本（v'):
                 if marker not in index_source:
                     ok = fail(f'Arcade hub 0.13.2 marker missing: {marker}') and ok
             # 0.11.4：iOS 26+ 独立模式顶部系统模糊根因，禁止回归。
@@ -291,6 +301,58 @@ def validate(root=ROOT):
         for arcade_html in sorted((root / 'apps/arcade').rglob('*.html')):
             if 'viewport-fit=cover' in arcade_html.read_text(encoding='utf-8'):
                 ok = fail(f'{arcade_html.relative_to(root)} must not declare viewport-fit=cover (iOS standalone top blur)') and ok
+        # 0.15.0 Arcade Life：16 款游戏的只读微线索适配 + 独立生涯数据层（内容/契约，不含剧透）。
+        career_dir = root / 'apps/arcade/career'
+        if career_dir.is_dir():
+            for game_id in ARCADE_ALL_GAMES:
+                game_file = root / 'apps/arcade/games' / f'{game_id}.html'
+                if not game_file.exists():
+                    ok = fail(f'Arcade game page missing: {game_file.relative_to(root)}') and ok
+                    continue
+                game_source = game_file.read_text(encoding='utf-8')
+                if '<script src="../career/bridge.js"></script>' not in game_source:
+                    ok = fail(f'{game_file.relative_to(root)}: missing career bridge script tag') and ok
+                if 'const career = window.ArcadeCareer || null;' not in game_source:
+                    ok = fail(f'{game_file.relative_to(root)}: missing career handle declaration') and ok
+                if 'career.observe(' not in game_source:
+                    ok = fail(f'{game_file.relative_to(root)}: missing career.observe hook') and ok
+                if 'career.finish(' not in game_source:
+                    ok = fail(f'{game_file.relative_to(root)}: missing career.finish call') and ok
+            clues_file = career_dir / 'content' / 'clues.json'
+            registry_file = career_dir / 'content' / 'registry.json'
+            if clues_file.exists() and registry_file.exists():
+                try:
+                    clue_data = json.loads(clues_file.read_text(encoding='utf-8'))
+                    reg_data = json.loads(registry_file.read_text(encoding='utf-8'))
+                except json.JSONDecodeError as exc:
+                    ok = fail(f'Arcade career content JSON invalid: {exc}') and ok
+                else:
+                    clues = clue_data.get('clues') or []
+                    clue_ids = {c.get('clueId') for c in clues if isinstance(c, dict)}
+                    reg_games = reg_data.get('games') or []
+                    reg_ids = {g.get('gameId') for g in reg_games if isinstance(g, dict)}
+                    if len(clues) != len(ARCADE_ALL_GAMES):
+                        ok = fail(f'Arcade career clues must contain {len(ARCADE_ALL_GAMES)} entries, found {len(clues)}') and ok
+                    if reg_ids != set(ARCADE_ALL_GAMES):
+                        ok = fail('Arcade career registry gameId set must match the 16 arcade games') and ok
+                    for game_id in ARCADE_ALL_GAMES:
+                        if f'CL-{game_id}' not in clue_ids:
+                            ok = fail(f'Arcade career clue missing for {game_id}') and ok
+                    for game in reg_games:
+                        if isinstance(game, dict) and not game.get('watch'):
+                            ok = fail(f'Arcade career registry game {game.get("gameId")} has no watch events') and ok
+            else:
+                ok = fail('Arcade career content (clues/registry JSON) is missing') and ok
+            if 'studiokit:arcade:career' in arcade_engine.read_text(encoding='utf-8'):
+                ok = fail('Career storage must live outside engine.js (isolation)') and ok
+            sw_file = root / 'apps/arcade/sw.js'
+            if sw_file.exists():
+                sw_source = sw_file.read_text(encoding='utf-8')
+                for marker in ("'./career/bridge.js'", "'./career/content/clues.json'", "'./career/ui/mailbox.js'"):
+                    if marker not in sw_source:
+                        ok = fail(f'Arcade sw.js CORE_PATHS missing career resource: {marker}') and ok
+        else:
+            ok = fail('Arcade career runtime directory is missing') and ok
         # 0.8.6：所有经典/禅模式「再来一局」必须回到模式选择，不得直接 startGame/startZenRound。
         # 只在同一个 showOverlay/show 调用的参数范围内判断（遇到 } 即停），避免把后面紧邻的
         # function startGame() 定义误判成结算回调。
@@ -326,7 +388,7 @@ def validate(root=ROOT):
         arcade_sw = root / 'apps/arcade/sw.js'
         if arcade_sw.exists():
             sw_source = arcade_sw.read_text(encoding='utf-8')
-            for marker in ("const VERSION = '0.14.0'", 'arcade-precache', 'skipWaiting', 'clients.claim', "type === 'arcade-sw-version'", "type: 'arcade-sw-update-ready'", 'notifyUpdateReady', 'isUpdateActivation', 'replacedOldVersion'):
+            for marker in ("const VERSION = '0.15.0'", 'arcade-precache', 'skipWaiting', 'clients.claim', "type === 'arcade-sw-version'", "type: 'arcade-sw-update-ready'", 'notifyUpdateReady', 'isUpdateActivation', 'replacedOldVersion'):
                 if marker not in sw_source:
                     ok = fail(f'Arcade service worker marker missing: {marker}') and ok
             # 0.13.2：activate 广播必须用「旧版本缓存是否还在」判断升级接管；
@@ -355,8 +417,8 @@ def validate(root=ROOT):
             try:
                 registry = json.loads(registry_path.read_text(encoding='utf-8'))
                 arcade = next((t for t in registry.get('tools', []) if t.get('id') == 'arcade'), None)
-                if arcade and arcade.get('version') != '0.14.0':
-                    ok = fail('Arcade registry version must match engine 0.14.0') and ok
+                if arcade and arcade.get('version') != '0.15.0':
+                    ok = fail('Arcade registry version must match engine 0.15.0') and ok
             except Exception:
                 pass
 

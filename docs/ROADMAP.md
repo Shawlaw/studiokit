@@ -249,6 +249,16 @@ Owner 两条真机反馈：①已安装 PWA 点「检查更新」显示的是已
 - [x] 双端发布：Owner 本轮明确授权发布（`PUBLISH_TO_MAIN`）；提交 `8493cf7`（PWA 更新检测）+ `78858e0`（游玩时长 + 文档）ff 合入 `main`；Actions run `45002523350` 四 job 全绿（Validate and build / Deploy GitHub Pages / Deploy Cloudflare Pages / Verify both deployments）；CI 与本地 `tools/verify_deploy.py` 均 **41/41** 双端逐文件一致（arcade 0.13.2 / badge 2.2.1 / venue 0.2.0）；双端线上无头 Chrome 各 8 项全过（中心页 0.13.2 + 检查更新返回线上 0.13.2 且不误报、SW 握手 0.13.2、缓存键 `studiokit-arcade-0.13.2-v1`、游戏页可加载、0 console error）
 - [ ] 真机复测：iOS 主屏幕 PWA 的「检查更新」提示时机与「累计时长/积分记录时长」待 Owner 确认（UNVERIFIED）
 
+## 0.15.0 被动线索与独立生涯数据层（2026-11-22 本地未发布）
+
+- [x] 16 款游戏在经典游玩中被动产出可关闭的微线索；无显眼生涯入口；不点不影响原玩法；可在设置关闭/恢复，已发现内容可从信箱找回
+- [x] `apps/arcade/career/` 运行时（bridge/registry/discovery/career-core/career-db/router/entry-router/backup/content/ui）；普通脚本、无框架、无远程资源
+- [x] 独立 IndexedDB `studiokit:arcade:career` v1（11 stores；claim 幂等/单事务/多标签/失败零写入/fail-open）；0.15 游玩只写发现状态与证据
+- [x] 接口冻结：事件信封、线索 schema、发现状态机、注册表多对多与虚拟第 17 款插拔、ticket/claim/receipt、故事谓词、备份/迁移、路由/降级
+- [x] 16 页最小适配（1 行 bridge 标签 + 真实事件 observe + 每局一次 finish）；经典/挑战/禅/割草/旧机库零改动
+- [x] 测试：registry 90/90、discovery 84/84、legacy baseline 78/78、career_db 38/38、backup 与 16 页 CDP 适配实测；PWA/SW 预缓存 career 资源
+- [ ] G15 独立门禁复跑（smoke/gameplay/tower/zen/calm/review/interaction/immersive/pwa）与 Owner 发布授权；真机 UNVERIFIED
+
 ## 0.14.0 星海突击：弹种叠加 + 星海割草无尽演武（2026-11-22 已双端发布）
 
 Owner 本轮两条：①同种弹药 Buff 多吃时叠加有效时长而不是重置；②新增“模拟割草”模式——所有弹药 Buff 常驻、大杀器库满载、手动道具无限，同时敌潮/掉落极为密集、Boss 招式更炫；玩家唯一瓶颈是能量，且不参与任何积分/货币获取。设计见 `apps/arcade/DESIGN-0.14.0.md`。

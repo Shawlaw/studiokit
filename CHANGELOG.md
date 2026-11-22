@@ -4,6 +4,13 @@ StudioKit 门户本身没有独立的 semver；以下按仓库里程碑与工具
 
 > 说明：Arcade `0.11.2`–`0.14.0` 的条目于 2026-11-22 依据 [`apps/arcade/CHANGELOG.md`](apps/arcade/CHANGELOG.md) 补齐（本文件当时落后于工具版本），逐条数值与证据以工具 CHANGELOG 与对应 `DESIGN-*.md` 为准。
 
+## Arcade 0.15.0 — 2026-11-22（本地未发布）
+
+- 新增可关闭的被动微线索与独立生涯数据层（`apps/arcade/career/`，IndexedDB `studiokit:arcade:career` v1，11 stores）；16 款游戏在经典游玩中被动产出线索，无显眼生涯入口、不产生货币/材料。
+- 经典/挑战（78 关）/禅/星海割草/旧星币与机库零改动；挑战不产生线索事件，星海割草显式排除。
+- `sw.js` 升 0.15.0 并预缓存 career 资源；`verify_deploy` 补 career 路径；新测试 `career_*_test.mjs`。
+- 未发布：本地分支提交，无 `OWNER_AUTHORIZATION: PUBLISH_TO_MAIN`。详见 [`apps/arcade/CHANGELOG.md`](apps/arcade/CHANGELOG.md) 与 [`DESIGN-0.15.0.md`](apps/arcade/DESIGN-0.15.0.md)。
+
 ## Site — 2026-11-22（文档体系重排、归档与状态徽章）
 
 ### Changed

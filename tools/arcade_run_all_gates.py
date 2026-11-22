@@ -33,6 +33,17 @@ def main() -> int:
         ('build_site', [sys.executable, '-X', 'utf8', 'tools/build_site.py'], None),
         ('design_regeneration', [sys.executable, '-X', 'utf8', 'tools/arcade_design_check.py'], None),
         ('inline_scripts', ['node', 'tools/check_inline_scripts.mjs'], None),
+        ('career_registry', ['node', 'tools/career_registry_test.mjs'], None),
+        ('career_discovery', ['node', 'tools/career_discovery_test.mjs'], None),
+        ('career_legacy_baseline', ['node', 'tools/career_legacy_baseline_test.mjs'], None),
+        ('career_db', ['node', 'tools/career_db_test.mjs'], {
+            'CAREER_DB_PORT': os.environ.get('CAREER_DB_PORT', '8830'),
+            'CAREER_DB_CDP_PORT': os.environ.get('CAREER_DB_CDP_PORT', '9430'),
+        }),
+        ('career_backup', ['node', 'tools/career_backup_test.mjs'], {
+            'CAREER_BACKUP_PORT': os.environ.get('CAREER_BACKUP_PORT', '8831'),
+            'CAREER_BACKUP_CDP_PORT': os.environ.get('CAREER_BACKUP_CDP_PORT', '9431'),
+        }),
         ('stage_coverage', ['node', 'tools/arcade_stage_coverage.mjs'], None),
         ('smoke', ['node', 'tools/arcade_smoke.mjs'], {
             'ARCADE_SMOKE_PORT': os.environ.get('ARCADE_SMOKE_PORT', '8821'),
