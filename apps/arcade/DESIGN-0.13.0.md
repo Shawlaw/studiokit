@@ -141,7 +141,7 @@ Boss 击破后：火力 +1、生命 +1（≤上限）、能量 +45、脉冲/星�
 
 1. `node tools/check_inline_scripts.mjs`、`node --check apps/arcade/engine.js` / `sw.js`、`python tools/validate_site.py`、`python tools/build_site.py` 全过。
 2. `node tools/arcade_smoke.mjs` **103/103**：新增回归 9 项（主题轮转/陨石、火力 1/3/5 弹道、能量消耗/枯竭/核心恢复、编队充能/双僚机/能量归零返航、核弹清弹/重创 Boss/反馈、整备三选一、机库购买/刷新持久化/备份/清除记录、390 机库面板、320 道具行与整备卡）。
-3. 挑战 6 关零回归：`node tools/arcade_gameplay_test.mjs --suite=challenge --game=star-raid` **7/7**；gameplay base **11/11**。
+3. 挑战 6 关零回归：`node tools/arcade_gameplay_test.mjs --suite=challenge --game=star-raid` **7/7**；gameplay base **11/11**；基于 0.12.7 的 `arcade_tower_test` **23/23** 与 tower challenge **6/6** 同批通过。
 4. 其余门禁：zen 17/17、calm 7/7、review 5/5、pwa 7/7、interaction 5/5、immersive 32/32、stage coverage 78 关矩阵正常。
 5. 320 / 375 / 390 / 430px 下机库面板、道具按钮、编队按钮、整备卡无横向溢出、按钮 ≥44px（320/390 已固化进 smoke）。
 6. 真机手感（能量节奏、核弹、僚机拦截）仍 UNVERIFIED，待 Owner 试玩。

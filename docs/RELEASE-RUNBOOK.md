@@ -5,7 +5,7 @@
 - 仓库：<https://github.com/Shawlaw/studiokit>
 - GitHub Pages：<https://shawlaw.github.io/studiokit/>
 - Cloudflare Pages：<https://studiokit.pages.dev/>
-- 当前版本：Arcade `0.13.0`（**开发中，未发布**；门禁与验收清单见 `apps/arcade/DESIGN-0.13.0.md` §8，结果以实际执行输出为准。线上仍是上一个已发布版本，需 Owner `PUBLISH_TO_MAIN` 授权后才会更新）
+- 当前版本：Arcade `0.13.0`（**开发中，未发布**；基于 `origin/main` `a5951d8`（0.12.7）rebase 后本地门禁全过：smoke **103/103**、tower **23/23**、star-raid 挑战 **7/7**、tower 挑战 **6/6**、gameplay base **11/11**、zen **17/17**、calm **7/7**、review **5/5**、pwa **7/7**、interaction **5/5**、immersive **32/32**、validate/build/inline/design/stage coverage 全过；线上仍是 0.12.7，需 Owner `PUBLISH_TO_MAIN` 授权后才会更新）
 - 最近发布：Arcade `0.12.7`（2026-11-22，已双端发布）
   - 批次内容：层塔难度按人类计时能力重标定——0.12.5 把上限推到 4000 导致封顶层完美窗口只剩 24~28ms（1.4~1.7 帧，低于一次显示刷新，也远低于手机触摸→显示延迟）；现上限 1500、起始 g 560、斜率 4/8（146 层封顶）、振幅 0.80−0.0015f，封顶完美窗口 28→56.5ms、可落 178→335ms；挑战模式零改动
   - 门禁：`arcade_tower_test` 21→**23/23**（TP-13 重写 + 新增 TP-14 真实毫秒窗口）、challenge 6/6、smoke 94/94、zen 14/14、calm 17/17、review 5/5、gameplay base 11/11、pwa 7/7、interaction 5/5、immersive 32/32、validate/build/inline/node --check 全过

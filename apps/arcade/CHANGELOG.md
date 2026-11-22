@@ -36,8 +36,9 @@
 
 - 静态：`node tools/check_inline_scripts.mjs` PASS（19 个 HTML / 20 段脚本）、`node --check apps/arcade/engine.js` / `sw.js` PASS、`python tools/validate_site.py` PASS、`python tools/build_site.py` PASS。
 - `node tools/arcade_smoke.mjs` **103/103**（原 94 项 + 0.13.0 新增 9 项：六星区主题轮转与陨石、火力 1/3/5 弹道、能量被动消耗/枯竭/核心恢复、编队充能/双僚机/能量归零返航、核弹清弹/重创 Boss/反馈、CLEAR 整备三选一 + Boss 火力 +1、机库购买/刷新持久化/备份/清除记录、机库面板 390px、道具行与整备卡 320px）。375px 全游戏页布局、320px 全游戏页布局、PWA/离线、导入导出与版本链断言同步为 0.13.0。
+- 基于 `origin/main` `a5951d8`（Arcade 0.12.7，层塔重标定）rebase 后在干净树上完整复跑：`arcade_tower_test` **23/23**、挑战 `pendulum-tower` **6/6**，0.12.7 的层塔改动与本版共存无回归。
 - 挑战 6 关零回归：`node tools/arcade_gameplay_test.mjs --suite=challenge --game=star-raid` **7/7**（C01/C02–C04/C05–C06 仍 engine-replay 零伤害通关，失败归因、暂停刷新恢复、320/390 面板无溢出均通过）。
-- 其余门禁：gameplay base **11/11**、zen **17/17**、calm **7/7**、review **5/5**、pwa **7/7**、interaction **5/5**、immersive **32/32**、stage coverage 78 关矩阵正常。
+- 其余门禁：gameplay base **11/11**、zen **17/17**、calm **7/7**、review **5/5**、pwa **7/7**、interaction **5/5**、immersive **32/32**、tower **23/23**、stage coverage 78 关矩阵正常。
 - 新 UI 布局：320 / 375 / 390 / 430px 下机库面板、道具行、编队按钮、CLEAR 整备卡无横向溢出、按钮 ≥44px（320/390 已固化为 smoke 回归）。
 - 真机手感（能量节奏、核弹手感、编队拦截反馈）UNVERIFIED；发布：待授权后回填（提交 SHA / Actions run / `verify_deploy.py` 双端文件数）。
 
