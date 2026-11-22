@@ -296,7 +296,7 @@ condition :=
 
 | store | keyPath | 用途 |
 |---|---|---|
-| `state` | `key` | 发现状态机快照、偏好、schema/content 版本；第一条记录 `key: 'discovery'` |
+| `state` | `key` | 发现状态机快照（`key: 'discovery'`）、偏好、schema/content 版本；`key: 'career'` 是当前生涯指针（`{key:'career', careerId, updatedAt}`，由 `ensureCareer` 单事务写入） |
 | `discovery` | `clueId` | 每条线索的 `sourceGame / firstSeenRun / seenAt / openedAt / dismissed` |
 | `profiles` | `careerId` | 生涯身份与设置；只有玩家在世界内签收工作/租机后才创建 |
 | `runs` | `runId` | 委托局 ticket、状态、事件摘要 |
@@ -367,7 +367,7 @@ condition :=
     "items": {},
     "evidence": [],
     "flags": [],
-    "txIds": ["<runId>:1"],
+    "txIds": ["tx:<runId>:1"],
     "claimedAt": "ISO-8601",
     "rulesetVersion": 1,
     "contentVersion": "0.16.0"

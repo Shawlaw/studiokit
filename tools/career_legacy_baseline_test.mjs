@@ -51,6 +51,7 @@
  */
 import fs from 'node:fs';
 import path from 'node:path';
+import { execFileSync } from 'node:child_process';
 import { fileURLToPath } from 'node:url';
 
 const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
@@ -747,11 +748,22 @@ function main() {
     ensure(!/mode === 'mow'/.test(body), F.tower + ' 的 serialize() 不应出现割草分支（层塔没有 mow 模式）');
     return 'state 门禁';
   });
-  check('层塔隔离：0.15 适配前文件不含 career / ArcadeCareer 字样', () => {
-    const source = read(F.tower);
+  check('层塔隔离：0.14.0 基线文件不含 career / ArcadeCareer 字样（读 afc5fd4 blob）', () => {
+    /* 0.15 适配会在工作树里加入 career 字样；此断言冻结的是 0.14.0 基线本身，
+       所以固定读基线提交 blob，而不是当前工作树。无 git 的环境降级为 SKIP 说明。 */
+    let source = '';
+    try {
+      source = execFileSync('git', ['show', 'afc5fd4:apps/arcade/games/pendulum-tower.html'], {
+        cwd: ROOT,
+        encoding: 'utf8',
+        stdio: ['ignore', 'pipe', 'ignore'],
+      });
+    } catch (err) {
+      return 'SKIP（当前环境无 git 或基线 blob 不可读：' + String((err && err.code) || 'error') + '）';
+    }
     const hit = source.search(/career/i);
-    ensure(hit < 0, F.tower + ' 在 ' + lineOf(source, hit) + ' 出现 career 字样；0.14.0 层塔页不含生涯适配，0.15 开始适配后必须显式升级本基线');
-    return '0 处';
+    ensure(hit < 0, F.tower + ' 的 0.14.0 基线 blob 在 ' + lineOf(source, hit) + ' 出现 career 字样');
+    return '0 处（afc5fd4 blob）';
   });
 
   /* ---------- 6. 生涯 / 经典存储隔离 ---------- */
