@@ -10,6 +10,7 @@
   <link rel="stylesheet" href="../arcade.css" />
   <script src="../../../shared/site-shell.js" defer></script>
   <script src="../engine.js"></script>
+  <script src="../career/bridge.js"></script>
   <script src="../challenge/memory-flip.js"></script>
   <style>
     /* 0.9 挑战模式页面局部微调：挑战层覆盖舞台，面板/提示/返回可滚动且不横向溢出 */
@@ -59,6 +60,7 @@
     (() => {
       'use strict';
       const A = window.Arcade;
+      const career = window.ArcadeCareer || null;
       const { clamp, rand, TAU } = A.utils;
 
       const W = 420;
@@ -283,6 +285,7 @@
           btn: '再来一局',
           onBtn: showStart,
         });
+        if (career) career.finish({ mode: 'classic', outcome: won ? 'won' : 'lost', stats: { level, moves, score } });
         pauseUi.sync();
       }
 
@@ -885,6 +888,7 @@
             a.matched = true;
             b.matched = true;
             score += 100 + level * 20;
+            if (career) career.observe('pair.match', { symbol: a.symbol, level, moves });
             flippedIds = [];
             syncHud();
             A.Sfx.play('perfect');

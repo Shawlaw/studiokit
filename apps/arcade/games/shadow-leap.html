@@ -10,6 +10,7 @@
   <link rel="stylesheet" href="../arcade.css" />
   <script src="../../../shared/site-shell.js" defer></script>
   <script src="../engine.js"></script>
+  <script src="../career/bridge.js"></script>
   <script src="../challenge/shadow-leap.js"></script>
   <title>影跃 · 街机厅 · StudioKit</title>
   <style>
@@ -81,6 +82,7 @@
     (() => {
       'use strict';
       const A = window.Arcade;
+      const career = window.ArcadeCareer || null;
       const { clamp, TAU } = A.utils;
 
       const W = 420;
@@ -355,6 +357,7 @@
       let state = 'ready';
       let recordSaved = false;
       let score = 0;
+      let careerMeters = -1;
       let hintTimer = 0;
       let landingHint = '';
       let generatedCount = 0;
@@ -775,6 +778,7 @@
           btn: '再来一局',
           onBtn: showStart,
         });
+        if (career) career.finish({ mode: 'classic', outcome: 'lost', stats: { meters: score } });
         pauseUi.sync(); syncJoyTools();
       }
 
@@ -1727,6 +1731,10 @@
           if (meters > score) {
             score = meters;
             syncHud();
+            if (career && score > careerMeters) {
+              careerMeters = score;
+              career.observe('height.reached', { meters: score });
+            }
           }
         }
 

@@ -10,6 +10,7 @@
   <link rel="stylesheet" href="../arcade.css" />
   <script src="../../../shared/site-shell.js" defer></script>
   <script src="../engine.js"></script>
+  <script src="../career/bridge.js"></script>
   <script src="../challenge/mole-whack.js"></script>
   <title>打地鼠 · 街机厅 · StudioKit</title>
   <style>
@@ -78,6 +79,7 @@
     (() => {
       'use strict';
       const A = window.Arcade;
+      const career = window.ArcadeCareer || null;
       const { clamp, rand, randInt, TAU } = A.utils;
 
       const W = 420;
@@ -249,6 +251,7 @@
           btn: '再来一局',
           onBtn: showStart,
         });
+        if (career) career.finish({ mode: 'classic', outcome: 'lost', stats: { score, combo, hearts } });
         pauseUi.sync();
       }
 
@@ -738,6 +741,7 @@
         }
         if (gained > 0) addFloater('+' + gained + (combo > 1 ? ' · ' + combo + '连' : ''), hx, hy - 18, mole.type === 'gold' ? '#ffd23f' : '#ffffff');
         syncHud();
+        if (career && gained > 0) career.observe('mole.hit', { index, gained, combo });
       }
 
       function updateChallenge(dt) {

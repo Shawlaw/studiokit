@@ -39,6 +39,7 @@
   </style>
   <script src="../../../shared/site-shell.js" defer></script>
   <script src="../engine.js"></script>
+  <script src="../career/bridge.js"></script>
   <script src="../challenge/merge-2048.js"></script>
   <title>2048 合成 · 街机厅 · StudioKit</title>
 </head>
@@ -80,6 +81,7 @@
     (() => {
       'use strict';
       const A = window.Arcade;
+      const career = window.ArcadeCareer || null;
       const { clamp, rand, TAU } = A.utils;
 
       const W = 420;
@@ -330,6 +332,7 @@
           };
         }
         ui.show(options);
+        if (career) career.finish({ mode: 'classic', outcome: stop ? 'quit' : win ? 'won' : 'lost', stats: { score, moves, bestTile: bestTile() } });
         pauseUi.sync();
       }
 
@@ -870,6 +873,7 @@
                 }
                 A.Sfx.play('perfect');
               }
+              if (career) career.observe('tile.merged', { value: a.value, score, moves });
               merged.push(a);
               i++;
             } else {

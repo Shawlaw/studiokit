@@ -10,6 +10,7 @@
   <link rel="stylesheet" href="../arcade.css" />
   <script src="../../../shared/site-shell.js" defer></script>
   <script src="../engine.js"></script>
+  <script src="../career/bridge.js"></script>
   <script src="../challenge/road-rush.js"></script>
   <title>极速车道 · 街机厅 · StudioKit</title>
   <style>
@@ -88,6 +89,7 @@
     (() => {
       'use strict';
       const A = window.Arcade;
+      const career = window.ArcadeCareer || null;
       const { clamp, lerp, rand, randInt, TAU } = A.utils;
 
       const W = 420;
@@ -383,6 +385,7 @@
           onBtn: showStart,
           result: '回看赛道',
         });
+        if (career) career.finish({ mode: 'classic', outcome: wonRun ? 'won' : 'lost', stats: { dist: finalDist, passedCars } });
         pauseUi.sync();
         syncTouchPad();
       }
@@ -1476,6 +1479,7 @@
             passedCars += 1;
             const gap = Math.abs(laneCenterX(c.lanePos, uOf(0)) - player.x);
             if (gap < laneWidthAt(1) * 1.15) bumpCombo();
+            if (career) career.observe('overtake', { passedCars, combo });
           }
           /* 碰撞（玩家段）：用连续 lanePos，变道中的车横跨两条车道。 */
           if (c.z < 0.07 && c.z > -0.07 && player.invul <= 0) {

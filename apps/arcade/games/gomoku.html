@@ -10,6 +10,7 @@
   <link rel="stylesheet" href="../arcade.css" />
   <script src="../../../shared/site-shell.js" defer></script>
   <script src="../engine.js"></script>
+  <script src="../career/bridge.js"></script>
   <title>五子棋 · 静局 · 街机厅 · StudioKit</title>
 </head>
 <body class="arcade-body" data-studiokit-app="arcade" data-studiokit-app-title="街机厅 Arcade" style="--ac-accent:#d9b06a; --card-accent:#d9b06a">
@@ -44,6 +45,7 @@
     (() => {
       'use strict';
       const A = window.Arcade;
+      const career = window.ArcadeCareer || null;
       const { clamp } = A.utils;
 
       /* ----------------------------------------------------------
@@ -537,6 +539,7 @@
           btn: '再来一局',
           onBtn: showStart,
         });
+        if (career) career.finish({ mode: 'classic', outcome: kind === 'win' ? 'won' : kind === 'resign' ? 'quit' : 'lost', stats: { result, moves, score } });
         pauseUi.sync();
         joyTools.sync();
         return true;
@@ -592,6 +595,7 @@
         score = 0;
         A.Sfx.play('land');
         const end = evaluateEnd(board, moves);
+        if (career) career.observe('stone.placed', { moves, turn: turn === BLACK ? 'black' : 'white' });
         if (end.over) {
           finishGame(end.result, end.winInfo);
           return true;

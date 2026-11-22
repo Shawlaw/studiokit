@@ -192,6 +192,7 @@
   </style>
   <script src="../../../shared/site-shell.js" defer></script>
   <script src="../engine.js"></script>
+  <script src="../career/bridge.js"></script>
   <script src="../challenge/block-drop.js"></script>
   <title>俄罗斯方块 · 街机厅 · StudioKit</title>
 </head>
@@ -258,6 +259,7 @@
     (() => {
       'use strict';
       const A = window.Arcade;
+      const career = window.ArcadeCareer || null;
       const { clamp } = A.utils;
 
       /* 0.8.4 棋盘优先画布：420×740 → 340×610。井口 240×480 占满画布高度（79%），
@@ -871,6 +873,7 @@
           onBtn: returnToStart,
           result: '回看井口',
         });
+        if (career && mode === 'classic') career.finish({ mode: 'classic', outcome: won ? 'won' : 'lost', stats: { score, lines, level } });
         pauseUi.sync();
         syncTouchPad();
       }
@@ -1577,6 +1580,7 @@
         lines += n;
         levelUp();
         syncHud();
+        if (career && mode === 'classic') career.observe('lines.cleared', { rows: n, lines, level });
         if (mode === 'zen') syncZenHud();
         clearing = null;
         cur = null;

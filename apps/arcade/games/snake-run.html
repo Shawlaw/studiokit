@@ -10,6 +10,7 @@
   <link rel="stylesheet" href="../arcade.css" />
   <script src="../../../shared/site-shell.js" defer></script>
   <script src="../engine.js"></script>
+  <script src="../career/bridge.js"></script>
   <script src="../challenge/snake-run.js"></script>
   <style>
     /* 0.9 挑战模式页面局部微调：挑战层覆盖舞台，面板/提示/返回可滚动且不横向溢出 */
@@ -103,6 +104,7 @@
     (() => {
       'use strict';
       const A = window.Arcade;
+      const career = window.ArcadeCareer || null;
       const { clamp, rand, randInt, TAU } = A.utils;
 
       /* 0.8.4 棋盘优先画布：420×740 → 360×430，18×18 棋盘从 y=70 撑到 y=376（占画布 71%），
@@ -437,6 +439,7 @@
           btn: '再来一局',
           onBtn: showStart,
         });
+        if (career && mode === 'classic') career.finish({ mode: 'classic', outcome: wonRun ? 'won' : 'lost', stats: { score, foodsEaten, lives } });
         pauseUi.sync();
         syncJoyTools();
       }
@@ -533,12 +536,14 @@
           if (foodsEaten % 5 === 0) spawnGolden();
           if (foodsEaten % 5 === 0) addObstacles(2);
           stepInterval = Math.max(0.12, 0.2 - foodsEaten * 0.0035);
+          if (career) career.observe('fruit.eaten', { foodsEaten, golden: false });
         }
         if (golden && golden.x === nx && golden.y === ny) {
           score += 30;
           foodsEaten += 1;
           ate = true;
           golden = null;
+          if (career) career.observe('fruit.eaten', { foodsEaten, golden: true });
           A.Sfx.play('perfect');
           particles.emit(BOARD_X + nx * CELL + CELL / 2, BOARD_Y + ny * CELL + CELL / 2, {
             count: A.reducedMotion ? 6 : 16,

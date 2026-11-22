@@ -10,6 +10,7 @@
   <link rel="stylesheet" href="../arcade.css" />
   <script src="../../../shared/site-shell.js" defer></script>
   <script src="../engine.js"></script>
+  <script src="../career/bridge.js"></script>
   <title>二十一点 · 静局 · 街机厅 · StudioKit</title>
 </head>
 <body class="arcade-body" data-studiokit-app="arcade" data-studiokit-app-title="街机厅 Arcade" style="--ac-accent:#ffd23f; --card-accent:#e0688a">
@@ -44,6 +45,7 @@
     (() => {
       'use strict';
       const A = window.Arcade;
+      const career = window.ArcadeCareer || null;
       const { clamp } = A.utils;
 
       const W = 420;
@@ -499,6 +501,7 @@
           player: outcome.playerTotal,
           dealer: outcome.dealerTotal,
         });
+        if (career) career.observe('hand.settled', { handNo, result: outcome.result, points: outcome.points });
         phase = 'settled';
         syncHud();
         playResultSound(outcome);
@@ -543,6 +546,7 @@
           btn: '再来一局',
           onBtn: showStart,
         });
+        if (career) career.finish({ mode: 'classic', outcome: early ? 'quit' : score > 0 ? 'won' : 'lost', stats: { score, hands: handNo, wins, pushes, early: !!early } });
         return true;
       }
 

@@ -10,6 +10,7 @@
   <link rel="stylesheet" href="../arcade.css" />
   <script src="../../../shared/site-shell.js" defer></script>
   <script src="../engine.js"></script>
+  <script src="../career/bridge.js"></script>
   <script src="../challenge/pendulum-tower.js"></script>
   <style>
     .challenge-layer { position: absolute; inset: 0; z-index: 6; display: flex; flex-direction: column; gap: 8px; padding: 10px; overflow-y: auto; background: rgba(8, 13, 28, 0.96); border-radius: inherit; }
@@ -67,6 +68,7 @@
     (() => {
       'use strict';
       const A = window.Arcade;
+      const career = window.ArcadeCareer || null;
       const { clamp, lerp, rand, TAU } = A.utils;
 
       const W = 420;
@@ -601,6 +603,7 @@
             onBtn: showStart,
             result: '回看塔身',
           });
+          if (career) career.finish({ mode: 'classic', outcome: 'lost', stats: { score, floors: floorsReached } });
           pauseUi.sync(); syncJoyTools();
         };
         revealThen(showResult);
@@ -1561,6 +1564,7 @@
             };
           }
           score += points;
+          if (career && mode === 'classic') career.observe('tower.floor_stable', { floor: boxes.filter((b) => !b.base).length, perfect });
           /* 下一箱属性入钩，保持确定性可预告。 */
           activeCargo = nextCargo;
           nextCargo = rollCargo();

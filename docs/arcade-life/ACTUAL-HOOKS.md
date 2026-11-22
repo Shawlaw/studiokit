@@ -17,24 +17,26 @@
 
 ## 2. 逐游戏事件锚点（真实提交点）
 
-| gameId | 事件锚点（函数@行） | 可观察 payload | 结算点（唯一 `recordPlay`） | 有效局门禁 |
+| gameId | 事件锚点（函数@行） | 可观察 payload | 结算函数（唯一 `recordPlay`） | 有效局门禁 |
 | --- | --- | --- | --- | --- |
-| memory-flip | `reveal` 配对分支（~885-901） | `symbol`、`level`、`moves`、`matchedPairs` | `finish`（267） | `state==='over'` + `!recordSaved`；经典仅 6 关全通才结算 |
-| merge-2048 | `move` 合并分支（~859-874） | `value`、`score`、`moves`、`bestTile` | `recordFinalPlay`（276） | `recordSaved`；胜利弹层不结算 |
-| blackjack | `finishHand`（488-508） | `handNo`、`result`、`points`、`playerTotal`、`dealerTotal` | `finishGame`（518） | 每局固定 6 手；提前收局也结算 |
-| gomoku | `applyPlayerMove`（581-603） | `r`、`c`、`moves`、`turn` | `recordOnce`（485） | 四种结局均结算 |
-| solitaire | `applyMove`（671-710） | `target`、`index`、`count`、`moves`、`foundationCount` | `recordResult`（1045） | `recordSaved && lastRecord` 守卫；手动结束也结算 |
-| snowbells | `update` 铃铛消费（984-991） | `combo`、`gain`、`bellScore`（经典铃铛无 id） | `gameOver`（341） | `state==='over'` + `!recordSaved` |
-| brick-breaker | `hitBrick` 击碎分支（450-452） | `level`、`maxHp`、`score` | `finish`（289） | `mode==='classic'` + `state==='over'` + `!recordSaved` |
-| gravity-flip | `flip`（953）/ 障碍通过闩锁（1083-1085） | `dist`、`lives`、`elapsed` | `finish`（307） | `mode==='classic'` + `state==='over'` + `!recordSaved` |
-| snake-run | `stepSnake` 果实分支（527-551） | `foodsEaten`、`score`、`golden` | `finish`（425） | `state==='over'` + `!recordSaved` |
-| mole-whack | `hitSlot` 计分分支（710-738） | `index`、`type`、`gained`、`combo` | `finish`（237） | `state==='over'` + `!recordSaved` |
-| block-drop | `applyClear`（1567-1599） | `rows`、`lines`、`level`、`score`、`mode` | `gameOver`（827 zen / 855 classic） | `state==='over'` + `!recordSaved` |
-| star-raid | `killEnemy` classic 分支（3869-3880）；Boss 分支（3789-3849） | `kind`、`gained`、`score`、`level`、`theme.id` | `gameOver`（2842） | `mode!=='mow'` + `state==='over'` + `!recordSaved` |
-| road-rush | 超车闩锁（1474-1478） | `passedCars`、`combo`、`comboBest` | `gameOver`（367） | `state==='over'` + `!recordSaved` |
-| shadow-leap | 高度闩锁（1724-1730，整数米单调不减） | `meters`、`startY`、`topY` | `gameOver`（763） | `state==='over'` + `!recordSaved` |
-| pendulum-tower | `settleDrop` 落稳分支（1534-1570） | `blocks`、`perfect`、`perfectCombo`、`points`、`comOffset`、`cargoId` | `finishRun`（587） | `state==='over'` + `!recordSaved`；倒塌会清空 `boxes` |
-| gold-miner | `cashIn`（1197-1229） | `value`、`money`、`holdingId`、`level` | `gameOver`（1008） | `state==='over'` + `!recordSaved`；挑战分支不进 |
+| memory-flip | `reveal` 配对分支（`reveal`@860，分支 885-901） | `symbol`、`level`、`moves`、`matchedPairs` | `finish()` | `state==='over'` + `!recordSaved`；经典仅 6 关全通才结算 |
+| merge-2048 | `move` 合并分支（`move`@839，分支 859-874） | `value`、`score`、`moves`、`bestTile` | `recordFinalPlay()` | `recordSaved`；胜利弹层不结算 |
+| blackjack | `finishHand()`@488（手结算 488-508） | `handNo`、`result`、`points`、`playerTotal`、`dealerTotal` | `finishGame()` | 每局固定 6 手；提前收局也结算 |
+| gomoku | `applyPlayerMove()`@581（581-603） | `r`、`c`、`moves`、`turn` | `recordOnce()` | 四种结局均结算 |
+| solitaire | `applyMove()`@671（671-710） | `target`、`index`、`count`、`moves`、`foundationCount` | `recordResult()` | `recordSaved && lastRecord` 守卫；手动结束也结算 |
+| snowbells | `update` 铃铛消费（981-990） | `combo`、`gain`、`bellScore`（经典铃铛无 id） | `gameOver()` | `state==='over'` + `!recordSaved` |
+| brick-breaker | `hitBrick()`@443，击碎分支 450-452 | `level`、`maxHp`、`score` | `finish()` | `mode==='classic'` + `state==='over'` + `!recordSaved` |
+| gravity-flip | `flip()`@953 / 障碍通过闩锁 1083-1085 | `dist`、`lives`、`elapsed` | `finish()` | `mode==='classic'` + `state==='over'` + `!recordSaved` |
+| snake-run | `stepSnake()`@499，果实分支 527-551 | `foodsEaten`、`score`、`golden` | `finish()` | `state==='over'` + `!recordSaved` |
+| mole-whack | `hitSlot()`@670，计分分支 710-738 | `index`、`type`、`gained`、`combo` | `finish()` | `state==='over'` + `!recordSaved` |
+| block-drop | `applyClear()`@1567（1567-1599） | `rows`、`lines`、`level`、`score`、`mode` | `gameOver()`（zen/classic 两分支） | `state==='over'` + `!recordSaved` |
+| star-raid | `killEnemy()`@3787；classic 普通敌 3869-3880；Boss 击破 3789-3849 | `kind`、`gained`、`score`、`level`、`theme.id` | `gameOver()` | `mode!=='mow'` + `state==='over'` + `!recordSaved` |
+| road-rush | 超车闩锁 1474-1476 | `passedCars`、`combo`、`comboBest` | `gameOver()` | `state==='over'` + `!recordSaved` |
+| shadow-leap | 高度闩锁 1724-1730（整数米单调不减） | `meters`、`startY`、`topY` | `gameOver()` | `state==='over'` + `!recordSaved` |
+| pendulum-tower | `settleDrop()`@1488，落稳分支 1534-1570 | `blocks`、`perfect`、`perfectCombo`、`points`、`comOffset`、`cargoId` | `finishRun()` | `state==='over'` + `!recordSaved`；倒塌会清空 `boxes` |
+| gold-miner | `cashIn()`@1197（1197-1229） | `value`、`money`、`holdingId`、`level` | `gameOver()` | `state==='over'` + `!recordSaved`；挑战分支不进 |
+
+> 行号是 `afc5fd4` 时的参考值，会随适配漂移；**函数名 + 分支条件**是权威依据。若行号对不上，以函数名和当前源码为准并更新本表。
 
 ## 3. 只读观察的硬规则
 

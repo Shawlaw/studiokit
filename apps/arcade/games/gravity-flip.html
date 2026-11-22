@@ -16,6 +16,7 @@
   </style>
   <script src="../../../shared/site-shell.js" defer></script>
   <script src="../engine.js"></script>
+  <script src="../career/bridge.js"></script>
   <script src="../challenge/gravity-flip.js"></script>
   <title>重力翻转 · 街机厅 · StudioKit</title>
 </head>
@@ -66,6 +67,7 @@
     (() => {
       'use strict';
       const A = window.Arcade;
+      const career = window.ArcadeCareer || null;
       const { clamp, lerp, rand, randInt, TAU } = A.utils;
 
       const W = 420;
@@ -319,6 +321,7 @@
           onBtn: showStart,
           result: '回看关卡',
         });
+        if (career) career.finish({ mode: 'classic', outcome: wonRun ? 'won' : 'lost', stats: { dist: finalDist, lives } });
         pauseUi.sync();
         syncJoyTools();
       }
@@ -963,6 +966,7 @@
           size: [1.5, 3],
           colors: ['#9b7cff', '#ffffff'],
         });
+        if (career) career.observe('gravity.flip', { dist: Math.floor(dist), lives });
       }
 
       function spawnObstacle() {

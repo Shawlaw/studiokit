@@ -10,6 +10,7 @@
   <link rel="stylesheet" href="../arcade.css" />
   <script src="../../../shared/site-shell.js" defer></script>
   <script src="../engine.js"></script>
+  <script src="../career/bridge.js"></script>
   <script src="../challenge/star-raid.js"></script>
   <style>
     /* 0.9 挑战模式：选关容器放进 .stage-box 后需要页面本地定位；面板本体来自 A.Challenge.stageListHtml。 */
@@ -244,6 +245,7 @@
     (() => {
       'use strict';
       const A = window.Arcade;
+      const career = window.ArcadeCareer || null;
       const { clamp, rand, randInt, pick, TAU } = A.utils;
 
       const W = 420;
@@ -2856,6 +2858,7 @@
           btn2: '机库改装',
           onBtn2: showHangar,
         });
+        if (mode === 'classic' && career) career.finish({ mode: 'classic', outcome: wonRun ? 'won' : 'lost', stats: { score, level, lives } });
         pauseUi.sync();
         syncJoyTools();
       }
@@ -3844,6 +3847,7 @@
               h: 0,
             });
           }
+          if (mode === 'classic' && career) career.observe('boss.defeated', { level, theme: run.theme && run.theme.id });
           stageClear(level);
           syncHud();
           return;
@@ -3874,6 +3878,7 @@
             addFloater(e.x + e.w / 2, e.y, '+' + gained, '#ffd23f');
             pickupPity += 1;
             if (mode === 'classic') {
+              if (career) career.observe('enemy.killed', { kind: e.kind, level, theme: run.theme && run.theme.id });
               bumpCombo();
               /* 击杀回能：避免能量枯竭后陷入无补给的死亡螺旋。 */
               addEnergy(0.6);
