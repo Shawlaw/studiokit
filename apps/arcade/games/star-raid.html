@@ -65,8 +65,7 @@
     }
     .ac-challenge-tip[data-ch-tip][hidden] { display: none; }
     body.has-challenge .game-hud { display: none; }
-    body.has-challenge .touch-pad.game-tools.star-formation { grid-template-columns: repeat(2, minmax(0, 1fr)); }
-    body.has-challenge .touch-pad.game-tools.star-items { display: none !important; }
+    body.has-challenge .touch-pad.game-tools.star-tools { grid-template-columns: repeat(2, minmax(0, 1fr)); }
     /* ---------- 0.13.0 星域远征：机库 / 编队 / 大杀器 / 整备卡 ---------- */
     .stage-box > .hangar-panel {
       position: absolute;
@@ -171,21 +170,15 @@
     .refit-summary b { color: #ffd23f; }
     .refit-hint { display: block; font-size: 11px; color: var(--ac-muted); margin: 0 0 8px; }
     .ac-credits { color: #ffd23f; font-weight: 700; }
-    .touch-pad.game-tools.star-formation { grid-template-columns: repeat(3, minmax(0, 1fr)); }
-    .touch-pad.game-tools.star-items { grid-template-columns: repeat(4, minmax(0, 1fr)); margin-top: 6px; }
-    .touch-pad.game-tools.star-items .touch-btn { font-size: 12px; }
-    .touch-pad.game-tools.star-items .touch-btn .item-name { display: block; font-size: 10px; line-height: 1.15; }
+    .touch-pad.game-tools.star-tools { grid-template-columns: repeat(5, minmax(0, 1fr)); }
+    .touch-pad.game-tools.star-tools .touch-btn { font-size: 13px; }
+    .touch-pad.game-tools.star-tools .touch-btn .item-name { display: block; font-size: 9px; line-height: 1.1; }
+    .touch-pad.game-tools.star-tools .touch-btn .item-icon { display: block; font-size: 14px; line-height: 1.1; }
     [data-joy-tool][hidden], [data-item-slot][hidden], [data-squad-tool][hidden] { display: none !important; }
-    [data-item-slots][hidden] { display: none !important; }
-    body.has-star-items:not(.arcade-immersive) .stage-box {
-      height: min(
-        calc(100dvh - var(--studiokit-shellbar-h, 0px) - 260px - env(safe-area-inset-bottom, 0px)),
-        calc(min(520px, 100vw - 24px) * 740 / 420)
-      );
-    }
     @media (max-width: 340px) {
       .hangar-buy { min-width: 64px; font-size: 11px; }
       .hangar-row { grid-template-columns: 22px minmax(0, 1fr) auto; }
+      .touch-pad.game-tools.star-tools .touch-btn { font-size: 12px; padding-left: 2px; padding-right: 2px; }
     }
   </style>
   <title>星海突击 · 街机厅 · StudioKit</title>
@@ -225,7 +218,7 @@
         <div class="hangar-panel" data-hangar-panel hidden role="region" aria-label="机库改装"></div>
       </div>
     </div>
-    <div class="touch-pad game-tools star-formation" data-game-tools aria-label="主动道具（快捷键 1 / 2 / 3）">
+    <div class="touch-pad game-tools star-tools" data-game-tools aria-label="主动道具与大杀器（快捷键 1–6）">
       <button type="button" class="touch-btn" data-joy-tool="pulse" aria-label="电磁脉冲，剩余 1 次（快捷键 1）" title="电磁脉冲（1）：清空敌弹并击坠普通敌机，Boss 扣 100 HP">
         <span aria-hidden="true">💥</span><span>脉冲</span><span data-joy-count aria-hidden="true">1</span>
       </button>
@@ -235,12 +228,10 @@
       <button type="button" class="touch-btn" data-squad-tool="formation" aria-label="僚机编队，剩余 1 次（快捷键 3）" title="僚机编队（3）：消耗 1 次充能召唤两架僚机，持续 8 秒，期间持续消耗能量">
         <span aria-hidden="true">✈</span><span>编队</span><span data-joy-count aria-hidden="true">1</span>
       </button>
-    </div>
-    <div class="touch-pad game-tools star-items" data-item-slots aria-label="大杀器（快捷键 4–7）" hidden>
-      <button type="button" class="touch-btn" data-item-slot="0" hidden></button>
-      <button type="button" class="touch-btn" data-item-slot="1" hidden></button>
-      <button type="button" class="touch-btn" data-item-slot="2" hidden></button>
-      <button type="button" class="touch-btn" data-item-slot="3" hidden></button>
+      <button type="button" class="touch-btn item-slot" data-item-slot="0" hidden></button>
+      <button type="button" class="touch-btn item-slot" data-item-slot="1" hidden></button>
+      <button type="button" class="touch-btn item-slot" data-item-slot="2" hidden></button>
+      <button type="button" class="touch-btn item-slot" data-item-slot="3" hidden></button>
     </div>
     <p class="game-hint">拖动 / WASD 移动 · 自动开火 · 1 脉冲 2 星盾 3 编队 · 4–7 大杀器 · P / Esc 暂停</p>
   </main>
@@ -277,8 +268,8 @@
         joyPulse: document.querySelector('[data-joy-tool="pulse"]'),
         joyShield: document.querySelector('[data-joy-tool="shield"]'),
         joyFormation: document.querySelector('[data-squad-tool="formation"]'),
-        itemSlots: document.querySelector('[data-item-slots]'),
         itemButtons: Array.prototype.slice.call(document.querySelectorAll('[data-item-slot]')),
+        gameTools: document.querySelector('[data-game-tools]'),
         chPanel: document.querySelector('[data-ch-panel]'),
         chHud: document.querySelector('[data-ch-hud]'),
         chTip: document.querySelector('[data-ch-tip]'),
@@ -373,7 +364,7 @@
       const HANGAR_UPGRADES = [
         { id: 'hull', name: '装甲强化', icon: '🛡', max: 3, costs: [120, 240, 400], desc: '初始生命 +1，上限生命 +1' },
         { id: 'power', name: '火力校准', icon: '🔥', max: 5, costs: [80, 160, 260, 380, 540], desc: '全部子弹伤害 +6%' },
-        { id: 'engine', name: '引擎调校', icon: '🚀', max: 5, costs: [60, 130, 220, 340, 480], desc: '移动速度 +6%' },
+        { id: 'engine', name: '机动强化', icon: '🚀', max: 5, costs: [60, 130, 220, 340, 480], desc: '受击无敌 +0.12s/级，拾取吸附 +6%/级（触屏通用）' },
         { id: 'energy', name: '反应堆', icon: '🔋', max: 5, costs: [90, 180, 300, 440, 600], desc: '能量上限 +10' },
         { id: 'bay', name: '弹仓扩容', icon: '📦', max: 1, costs: [220], desc: '大杀器槽位 +1（2 → 3）' },
         { id: 'wing', name: '僚机中队', icon: '✈', max: 3, costs: [150, 300, 500], desc: '编队时长 +2s，编队充能 +1' },
@@ -465,7 +456,15 @@
         return 1 + hangar.upgrades.power * 0.06;
       }
       function moveSpeed() {
-        return 320 * (1 + hangar.upgrades.engine * 0.06);
+        /* 触屏是 1:1 拖拽，速度属性对触屏无效；键盘保留基础速度。
+         * 0.13.1 起「机动强化」(engine) 改为受击无敌与拾取吸附，两种输入都有收益。 */
+        return 320;
+      }
+      function invulSeconds() {
+        return 1.8 + hangar.upgrades.engine * 0.12;
+      }
+      function magnetMultiplier() {
+        return 1 + hangar.upgrades.engine * 0.06;
       }
       function energyCap() {
         return 100 + hangar.upgrades.energy * 10;
@@ -507,6 +506,7 @@
         theme: THEMES[0],
         themeIndex: 0,
         lance: null,
+        nukeShots: [],
         freezeTimer: 0,
         seed: 1,
         bossDamageAcc: 0,
@@ -543,6 +543,7 @@
         run.theme = themeForLevel(1);
         run.themeIndex = 0;
         run.lance = null;
+        run.nukeShots = [];
         run.freezeTimer = 0;
         run.bossDamageAcc = 0;
         run.bossDamageTimer = 0;
@@ -601,6 +602,22 @@
         }
         run.freezeTimer = clamp(Number(data.freezeTimer) || 0, 0, 5);
         if (data.lance && Number(data.lance.t) > 0) run.lance = { t: clamp(Number(data.lance.t), 0, 4), x: player.x, tick: 0 };
+        run.nukeShots = [];
+        if (Array.isArray(data.nukeShots)) {
+          data.nukeShots.slice(0, 3).forEach((shot) => {
+            if (!shot || !isFinite(Number(shot.x)) || !isFinite(Number(shot.y))) return;
+            run.nukeShots.push({
+              x: Number(shot.x) || player.x,
+              y: Number(shot.y) || player.y,
+              vx: Number(shot.vx) || 0,
+              vy: Number(shot.vy) || -420,
+              targetX: Number(shot.targetX) || W / 2,
+              targetY: Number(shot.targetY) || H * 0.42,
+              tracking: !!shot.tracking,
+              life: clamp(Number(shot.life) || 0, 0, 2),
+            });
+          });
+        }
         syncRunTheme();
         run.maxEnergy = Math.max(run.maxEnergy, energyCap());
         run.itemCap = itemCap();
@@ -759,6 +776,36 @@
         return true;
       }
       function useNuke() {
+        /* 核弹不再瞬间结算：发射一枚追踪弹，飞到 Boss（无 Boss 则画面中央）后爆炸。
+         * 追踪弹在 updateNukeShots 里推进；伤害判定在 explodeNuke 内完成。 */
+        const target = boss
+          ? { x: boss.x + boss.w / 2, y: boss.y + boss.h / 2, tracking: true }
+          : { x: W / 2, y: H * 0.42, tracking: false };
+        run.nukeShots.push({
+          x: player.x,
+          y: player.y - 18,
+          vx: 0,
+          vy: -420,
+          targetX: target.x,
+          targetY: target.y,
+          tracking: target.tracking,
+          life: 0,
+        });
+        addFloater(player.x, player.y - 52, '核弹发射！', ITEM_SPECS.nuke.color);
+        addFloater(target.x, target.y - 26, target.tracking ? '目标锁定' : '中央引爆', '#ffd23f');
+        effects.push({ type: 'ring', x: target.x, y: target.y, r: 10, maxR: 46, life: 0.9, maxLife: 0.9, color: '#ffd23f', width: 2 });
+        particles.emit(player.x, player.y + 8, {
+          count: A.reducedMotion ? 6 : 16,
+          speed: [60, 220],
+          life: [0.15, 0.45],
+          size: [2, 5],
+          colors: ['#ff8f5e', '#ffd23f', '#ffffff'],
+          angle: [Math.PI * 0.4, Math.PI * 0.6],
+        });
+        A.Sfx.play('spring');
+        run.warpTint = Math.max(run.warpTint, 0.5);
+      }
+      function explodeNuke(shot) {
         const spec = ITEM_SPECS.nuke;
         shots = [];
         const targets = enemies.slice();
@@ -781,19 +828,56 @@
         flashColor = '#ffffff';
         run.warpTint = 1;
         shake = A.reducedMotion ? 0 : 16;
-        effects.push({ type: 'ring', x: player.x, y: H * 0.42, r: 24, maxR: 720, life: 0.75, maxLife: 0.75, color: '#ffe9b0', width: 12 });
-        effects.push({ type: 'ring', x: player.x, y: H * 0.42, r: 12, maxR: 460, life: 0.5, maxLife: 0.5, color: '#ff8f5e', width: 6 });
-        particles.emit(W / 2, H * 0.4, {
-          count: A.reducedMotion ? 18 : 60,
-          speed: [120, 520],
-          life: [0.3, 1.1],
-          size: [2, 7],
+        const bx = shot ? shot.x : W / 2;
+        const by = shot ? shot.y : H * 0.42;
+        effects.push({ type: 'ring', x: bx, y: by, r: 24, maxR: 760, life: 0.8, maxLife: 0.8, color: '#ffe9b0', width: 12 });
+        effects.push({ type: 'ring', x: bx, y: by, r: 12, maxR: 460, life: 0.55, maxLife: 0.55, color: '#ff8f5e', width: 6 });
+        particles.emit(bx, by, {
+          count: A.reducedMotion ? 18 : 64,
+          speed: [120, 560],
+          life: [0.3, 1.2],
+          size: [2, 8],
           colors: ['#ffffff', '#ffd23f', '#ff8f5e'],
           gravity: 40,
         });
-        addFloater(player.x, player.y - 52, spec.name + '！', spec.color);
+        addFloater(bx, by - 18, spec.name + '爆炸！', spec.color);
         A.Sfx.play('crash');
-        shake = A.reducedMotion ? 0 : 16;
+      }
+      function updateNukeShots(dt) {
+        for (let i = run.nukeShots.length - 1; i >= 0; i -= 1) {
+          const shot = run.nukeShots[i];
+          shot.life += dt;
+          if (shot.tracking && boss) {
+            shot.targetX = boss.x + boss.w / 2;
+            shot.targetY = boss.y + boss.h / 2;
+          }
+          const dx = shot.targetX - shot.x;
+          const dy = shot.targetY - shot.y;
+          const dist = Math.hypot(dx, dy) || 1;
+          const speed = Math.min(980, 460 + shot.life * 1100);
+          const desiredX = (dx / dist) * speed;
+          const desiredY = (dy / dist) * speed;
+          const steer = Math.min(1, dt * 7);
+          shot.vx += (desiredX - shot.vx) * steer;
+          shot.vy += (desiredY - shot.vy) * steer;
+          shot.x += shot.vx * dt;
+          shot.y += shot.vy * dt;
+          if (!A.reducedMotion && Math.random() < 0.85) {
+            particles.emit(shot.x, shot.y + 6, {
+              count: 1,
+              speed: [10, 60],
+              life: [0.12, 0.34],
+              size: [1.5, 3.4],
+              colors: ['#ffd23f', '#ff8f5e', '#ffffff'],
+              angle: [Math.PI * 0.35, Math.PI * 0.65],
+            });
+          }
+          if (dist < 16 || shot.life > 1.8) {
+            run.nukeShots.splice(i, 1);
+            explodeNuke(shot);
+            if (state !== 'playing') break;
+          }
+        }
       }
       function useLance() {
         run.lance = { t: 3.2, x: player.x, tick: 0 };
@@ -1002,6 +1086,8 @@
         hangarOpen = true;
         renderHangarPanel();
         ui.hide();
+        /* 机库不是游玩：overlay 虽然收起，但 Playtime 必须暂停，否则浏览机库的时间会被计成游玩时长。 */
+        if (A.Playtime && A.Playtime.setOverlayVisible) A.Playtime.setOverlayVisible(true);
         setChallengeChrome(false);
         syncHangarCredits();
         syncJoyTools();
@@ -1115,35 +1201,33 @@
       /* ---------- 编队 / 大杀器按钮同步 ---------- */
       function syncItemButtons() {
         if (!dom.itemButtons || !dom.itemButtons.length) return;
-        const hasItems = run.items.some((type) => !!type);
-        let anyVisible = false;
-        dom.itemButtons.forEach((button, index) => {
+        const inChallenge = mode === 'challenge';
+        dom.itemButtons.forEach((button) => {
           const slot = Number(button.getAttribute('data-item-slot'));
           const inRange = slot < run.itemCap;
-          button.hidden = !inRange;
+          button.hidden = !inRange || inChallenge;
           if (!inRange) return;
-          anyVisible = true;
           const type = run.items[slot] || null;
           const spec = type ? ITEM_SPECS[type] : null;
-          button.disabled = mode === 'challenge' || state !== 'playing' || !spec;
+          button.disabled = inChallenge || state !== 'playing' || !spec;
           button.classList.toggle('is-armed', !!spec);
           if (spec) {
-            button.innerHTML = '<span aria-hidden="true">' + spec.icon + '</span><span class="item-name">' + spec.name + '</span>';
+            button.innerHTML =
+              '<span class="item-icon" aria-hidden="true">' + spec.icon + '</span><span class="item-name">' + spec.name + '</span>';
             button.setAttribute('aria-label', spec.name + '（快捷键 ' + (4 + slot) + '）：' + spec.desc);
             button.title = spec.name + '（' + (4 + slot) + '）：' + spec.desc;
             button.style.borderColor = spec.color;
           } else {
-            button.innerHTML = '<span aria-hidden="true">·</span><span class="item-name">空</span>';
-            button.setAttribute('aria-label', '空的大杀器槽位 ' + (slot + 1));
+            button.innerHTML = '<span class="item-icon" aria-hidden="true">▢</span><span class="item-name">军械</span>';
+            button.setAttribute('aria-label', '空的大杀器槽位 ' + (slot + 1) + '（快捷键 ' + (4 + slot) + '）');
             button.title = '空槽位：击落敌机有几率获得稀有军械，或从 Boss 后的整备中领取';
             button.style.borderColor = '';
           }
         });
-        if (dom.itemSlots) {
-          dom.itemSlots.hidden = !anyVisible || !hasItems || mode === 'challenge';
-          dom.itemSlots.style.gridTemplateColumns = 'repeat(' + Math.min(4, Math.max(1, run.itemCap)) + ', minmax(0, 1fr))';
+        if (dom.gameTools) {
+          const cols = inChallenge ? 2 : 3 + run.itemCap;
+          dom.gameTools.style.gridTemplateColumns = 'repeat(' + Math.max(1, Math.min(6, cols)) + ', minmax(0, 1fr))';
         }
-        document.body.classList.toggle('has-star-items', anyVisible && hasItems && mode !== 'challenge');
       }
 
       function pad2(value) {
@@ -2207,6 +2291,7 @@
         run.bossDamageTimer = 0;
         run.freezeTimer = 0;
         run.lance = null;
+        run.nukeShots = [];
         syncRunTheme();
         run.warpTint = 1;
         stageBannerText = 'STAGE ' + cleared + ' CLEAR';
@@ -2542,6 +2627,16 @@
                   refitChosen: run.refitChosen.slice(),
                   seed: run.seed,
                   lance: run.lance ? { t: Math.round(run.lance.t * 10) / 10 } : null,
+                  nukeShots: run.nukeShots.map((shot) => ({
+                    x: Math.round(shot.x),
+                    y: Math.round(shot.y),
+                    vx: Math.round(shot.vx),
+                    vy: Math.round(shot.vy),
+                    targetX: Math.round(shot.targetX),
+                    targetY: Math.round(shot.targetY),
+                    tracking: !!shot.tracking,
+                    life: Math.round(shot.life * 10) / 10,
+                  })),
                   freezeTimer: Math.round(run.freezeTimer * 10) / 10,
                 }
               : null,
@@ -2905,6 +3000,7 @@
         updateEnergy(dt);
         updateFormation(dt);
         updateLance(dt);
+        updateNukeShots(dt);
         updateFreeze(dt);
         updateThemeField(dt);
         if (!boss) {
@@ -3155,7 +3251,7 @@
           p.y += p.vy * dt;
           p.spin += dt * 3;
           /* 靠近玩家时轻微吸附，避免辛苦打出的 Buff 从旁边滑走；稀有军械吸得更紧。 */
-          const magnet = p.type === 'item' ? 150 : 80;
+          const magnet = (p.type === 'item' ? 150 : 80) * magnetMultiplier();
           if (p.y > H * 0.55) p.x += clamp(player.x - p.x, -magnet * dt, magnet * dt);
           const box = { x: p.x - p.r, y: p.y - p.r, w: p.r * 2, h: p.r * 2 };
           const hb = { x: player.x - 20, y: player.y - 20, w: 40, h: 40 };
@@ -3349,7 +3445,7 @@
         }
         if (player.invul > 0 || shieldTimer > 0) return;
         lives -= 1;
-        player.invul = 1.8;
+        player.invul = invulSeconds();
         shake = A.reducedMotion ? 0 : 8;
         flash = Math.max(flash, 0.55);
         flashColor = '#ff5d7a';
@@ -3787,6 +3883,57 @@
         ctx.fillRect(beam.x - 3, 0, 6, H);
       }
 
+      function drawNukeShots() {
+        if (!run.nukeShots.length) return;
+        const pulse = 0.5 + 0.5 * Math.sin(performance.now() / 90);
+        run.nukeShots.forEach((shot) => {
+          /* 目标锁定环：Boss 在动时会跟着走，让玩家看到「追踪」而不是瞬发。 */
+          ctx.save();
+          ctx.globalAlpha = 0.45 + pulse * 0.45;
+          ctx.strokeStyle = '#ffd23f';
+          ctx.lineWidth = 1.5;
+          ctx.beginPath();
+          ctx.arc(shot.targetX, shot.targetY, 16 + pulse * 9, 0, TAU);
+          ctx.stroke();
+          ctx.beginPath();
+          ctx.moveTo(shot.targetX - 26, shot.targetY);
+          ctx.lineTo(shot.targetX - 10, shot.targetY);
+          ctx.moveTo(shot.targetX + 10, shot.targetY);
+          ctx.lineTo(shot.targetX + 26, shot.targetY);
+          ctx.moveTo(shot.targetX, shot.targetY - 26);
+          ctx.lineTo(shot.targetX, shot.targetY - 10);
+          ctx.moveTo(shot.targetX, shot.targetY + 10);
+          ctx.lineTo(shot.targetX, shot.targetY + 26);
+          ctx.stroke();
+          ctx.restore();
+          /* 弹体 + 尾焰，朝速度方向旋转。 */
+          const angle = Math.atan2(shot.vy, shot.vx) + Math.PI / 2;
+          ctx.save();
+          ctx.translate(shot.x, shot.y);
+          ctx.rotate(angle);
+          const flicker = 6 + Math.sin(performance.now() / 35) * 3;
+          ctx.fillStyle = 'rgba(255, 170, 60, 0.85)';
+          ctx.beginPath();
+          ctx.moveTo(-4, 6);
+          ctx.lineTo(4, 6);
+          ctx.lineTo(0, 6 + flicker * 2.2);
+          ctx.closePath();
+          ctx.fill();
+          ctx.fillStyle = '#ffe9b0';
+          ctx.strokeStyle = '#ff8f5e';
+          ctx.lineWidth = 1.5;
+          ctx.beginPath();
+          ctx.ellipse(0, 0, 5, 9, 0, 0, TAU);
+          ctx.fill();
+          ctx.stroke();
+          ctx.fillStyle = '#ff8f5e';
+          ctx.beginPath();
+          ctx.arc(0, -1, 2.4, 0, TAU);
+          ctx.fill();
+          ctx.restore();
+        });
+      }
+
       function drawWingmen() {
         run.wingmen.forEach((wing) => {
           ctx.save();
@@ -3893,6 +4040,7 @@
           ctx.fill();
         });
         drawLance();
+        drawNukeShots();
 
         if (state === 'playing' || state === 'paused') {
           drawWingmen();
@@ -4192,6 +4340,8 @@
                 formationDuration: formationDuration(),
                 damageMul: damageMul(),
                 moveSpeed: moveSpeed(),
+                invulSeconds: invulSeconds(),
+                magnetMultiplier: magnetMultiplier(),
               },
             };
           },
@@ -4247,7 +4397,13 @@
             return useItem(slot);
           },
           itemsInfo() {
-            return { items: run.items.slice(), cap: run.itemCap, lance: !!run.lance, freezeTimer: run.freezeTimer };
+            return {
+              items: run.items.slice(),
+              cap: run.itemCap,
+              lance: !!run.lance,
+              nukes: run.nukeShots.length,
+              freezeTimer: run.freezeTimer,
+            };
           },
           spawnItemPickup(type) {
             if (!ITEM_SPECS[type]) return false;

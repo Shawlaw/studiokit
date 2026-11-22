@@ -1,6 +1,6 @@
 #!/usr/bin/env node
 /**
- * 街机厅无头浏览器冒烟测试（103 项全链路回归）。
+ * 街机厅无头浏览器冒烟测试（105 项全链路回归）。
  * 零 npm 依赖：通用基础设施见 tools/lib/arcade_cdp.mjs（静态服务器 / Chrome 启动 / CDP / 断言记录器）。
  * 运行：node tools/arcade_smoke.mjs
  * 端口可用环境变量覆盖：ARCADE_SMOKE_PORT（默认 8765）/ ARCADE_CDP_PORT（默认 9333）。
@@ -46,8 +46,8 @@ async function main() {
     })()`);
     assert(home.cards >= 2, 'home cards=' + home.cards);
     assert(home.href.indexOf('apps/arcade') !== -1, 'arcade card not clickable: ' + JSON.stringify(home));
-    assert(home.version.indexOf('0.13.0') !== -1, 'arcade version missing on home card');
-    record('门户街机厅卡片可点击且版本 0.13.0', true);
+    assert(home.version.indexOf('0.13.1') !== -1, 'arcade version missing on home card');
+    record('门户街机厅卡片可点击且版本 0.13.1', true);
 
     /* ---------- GitHub Pages 项目子路径：shell 返回链接 ---------- */
     await cdp.navigate(base + '/studiokit/apps/arcade/games/star-raid.html');
@@ -65,10 +65,10 @@ async function main() {
       cards: document.querySelectorAll('.hall-card').length,
       runs: window.Arcade && Arcade.RunSave.count()
     })`);
-    assert(hallInfo.version === '0.13.0', 'version is ' + hallInfo.version);
+    assert(hallInfo.version === '0.13.1', 'version is ' + hallInfo.version);
     assert(hallInfo.games === 16, 'game count is ' + hallInfo.games);
     assert(hallInfo.cards === 16, 'card count is ' + hallInfo.cards);
-    record('中心页 16 款游戏与版本 0.13.0', true);
+    record('中心页 16 款游戏与版本 0.13.1', true);
 
     await cdp.evaluate(`(() => { const i = document.querySelector('[data-search]'); i.value = '雪铃'; i.dispatchEvent(new Event('input', { bubbles: true })); })()`);
     await sleep(120);
@@ -607,13 +607,22 @@ async function main() {
       const before = t.info();
       const used = t.useItemSlot(0);
       const after = t.info();
-      return { before, used, after, effects: t.effectsInfo() };
+      return { before, used, after, flying: t.itemsInfo() };
     })()`);
-    assert(nuke.used === true && nuke.after.items[0] === null && nuke.after.shots === 0, 'star-raid nuke consume/clear: ' + JSON.stringify({ used: nuke.used, items: nuke.after.items, shots: nuke.after.shots }));
-    assert(nuke.after.bossHp < nuke.before.bossHp, 'star-raid nuke boss damage: ' + JSON.stringify({ before: nuke.before.bossHp, after: nuke.after.bossHp }));
-    assert(nuke.effects.flash > 0 || nuke.effects.effects > 0, 'star-raid nuke feedback missing: ' + JSON.stringify(nuke.effects));
+    assert(nuke.used === true && nuke.after.items[0] === null && nuke.flying.nukes === 1, 'star-raid nuke should launch a tracking shell: ' + JSON.stringify({ used: nuke.used, items: nuke.after.items, nukes: nuke.flying.nukes }));
+    assert(nuke.after.bossHp === nuke.before.bossHp, 'star-raid nuke must not damage before impact: ' + JSON.stringify({ before: nuke.before.bossHp, after: nuke.after.bossHp }));
+    let nukeBoom = { items: { nukes: 1 } };
+    for (let i = 0; i < 20; i += 1) {
+      await sleep(120);
+      nukeBoom = await cdp.evaluate(`(() => { const t = __arcadeTest; return { info: t.info(), items: t.itemsInfo(), effects: t.effectsInfo() }; })()`);
+      if (nukeBoom.items.nukes === 0) break;
+    }
+    assert(nukeBoom.items.nukes === 0 && nukeBoom.info.bossHp < nuke.before.bossHp, 'star-raid nuke impact boss damage: ' + JSON.stringify({ nukes: nukeBoom.items.nukes, before: nuke.before.bossHp, after: nukeBoom.info.bossHp }));
+    assert(nukeBoom.info.shots <= 4, 'star-raid nuke should clear enemy shots on impact: ' + JSON.stringify({ shots: nukeBoom.info.shots }));
+    assert(nukeBoom.effects.flash > 0 || nukeBoom.effects.effects > 0, 'star-raid nuke feedback missing: ' + JSON.stringify(nukeBoom.effects));
     await cdp.screenshot('star-nuke.png');
-    record('星海突击 核弹清弹/重创 Boss/白闪冲击波', true);
+    record('星海突击 核弹追踪飞行/命中爆炸/清弹重创 Boss', true);
+
 
     const refit = await cdp.evaluate(`(() => {
       const t = __arcadeTest;
@@ -632,6 +641,24 @@ async function main() {
     await cdp.evaluate(`window.__arcadeTest.continueClear()`);
     await sleep(120);
     record('星海突击 CLEAR 整备三选一 + 击破 Boss 火力 +1', true);
+
+    /* 无 Boss：核弹飞向画面中央引爆 */
+    const nukeNoBoss = await cdp.evaluate(`(() => {
+      const t = __arcadeTest;
+      t.setEnergy(80);
+      t.grantItem('nuke');
+      const used = t.useItemSlot(0);
+      return { used, flying: t.itemsInfo().nukes, boss: t.info().bossActive };
+    })()`);
+    let nukeNoBossAfter = { nukes: 1 };
+    for (let i = 0; i < 18; i += 1) {
+      await sleep(120);
+      nukeNoBossAfter = await cdp.evaluate(`(() => { const t = __arcadeTest; return { nukes: t.itemsInfo().nukes, state: t.info().state }; })()`);
+      if (nukeNoBossAfter.nukes === 0) break;
+    }
+    assert(nukeNoBoss.used === true && nukeNoBoss.flying === 1 && nukeNoBoss.boss === false, 'star-raid no-boss nuke launch: ' + JSON.stringify(nukeNoBoss));
+    assert(nukeNoBossAfter.nukes === 0, 'star-raid no-boss nuke should explode at center: ' + JSON.stringify(nukeNoBossAfter));
+    record('星海突击 无 Boss 时核弹飞向画面中央引爆', true);
 
     /* 机库：购买 → 刷新持久化 → 备份含机库 → 清除记录同步清空 */
     await cdp.evaluate(`(() => { window.__arcadeTest.resetHangar(); window.__arcadeTest.addCredits(500); return true; })()`);
@@ -673,6 +700,40 @@ async function main() {
     const resetMeta = await cdp.evaluate(`Arcade.GameMeta.get('star-raid')`);
     assert(resetMeta === null, 'star-raid resetGame should clear hangar: ' + JSON.stringify(resetMeta));
     record('星海突击 机库购买/刷新持久化/备份含机库/清除记录', true);
+
+    /* 机库浏览不能被计成有效游玩时长（0.13.1 修复：overlay 收起时手动暂停 Playtime） */
+    await cdp.evaluate(`Arcade.RunSave.clear('star-raid')`);
+    await cdp.navigate(base + '/apps/arcade/games/star-raid.html?pt=1#test');
+    await sleep(220);
+    const ptPrompt = await cdp.evaluate(`document.querySelector('[data-ov-title]').textContent`);
+    if (ptPrompt.indexOf('继续') !== -1) {
+      await cdp.click('[data-ov-btn2]');
+      await sleep(120);
+    }
+    await cdp.click('[data-ov-btn]');
+    await sleep(320);
+    const playtimeHangar = await cdp.evaluate(`(() => {
+      const readMs = () => {
+        const stats = Arcade.Playtime.stats();
+        const game = (stats.games || []).find((item) => item.id === 'star-raid');
+        return game ? game.ms : 0;
+      };
+      const opened = __arcadeTest.openHangar();
+      Arcade.Playtime.flush();
+      const before = readMs();
+      return { opened, before };
+    })()`);
+    await sleep(1300);
+    const playtimeHangarAfter = await cdp.evaluate(`(() => {
+      Arcade.Playtime.flush();
+      const stats = Arcade.Playtime.stats();
+      const game = (stats.games || []).find((item) => item.id === 'star-raid');
+      return { ms: game ? game.ms : 0 };
+    })()`);
+    await cdp.evaluate(`window.__arcadeTest.closeHangar()`);
+    assert(playtimeHangar.opened === true, 'star-raid hangar should open: ' + JSON.stringify(playtimeHangar));
+    assert(playtimeHangarAfter.ms - playtimeHangar.before < 120, 'star-raid hangar browsing counted as playtime: ' + JSON.stringify({ before: playtimeHangar.before, after: playtimeHangarAfter.ms }));
+    record('星海突击 机库浏览不计入有效游玩时长', true);
 
     /* ---------- 雪铃：同一铃铛只奖励一次 ---------- */
     await cdp.evaluate(`Arcade.RunSave.clear('snowbells')`);
@@ -2430,7 +2491,7 @@ async function main() {
       version: window.Arcade && Arcade.version,
       title: document.title
     })`);
-    assert(offlineHall.cards === 16 && offlineHall.version === '0.13.0', 'offline hall failed: ' + JSON.stringify(offlineHall));
+    assert(offlineHall.cards === 16 && offlineHall.version === '0.13.1', 'offline hall failed: ' + JSON.stringify(offlineHall));
     const offlineStatus = await cdp.evaluate(`(async () => {
       try {
         await Arcade.Offline.register();
@@ -2452,7 +2513,7 @@ async function main() {
       overlay: !!document.querySelector('[data-overlay]'),
       version: window.Arcade && window.Arcade.version
     })`);
-    assert(offlineGame.hasArcade && offlineGame.overlay && offlineGame.version === '0.13.0', 'offline game failed: ' + JSON.stringify(offlineGame));
+    assert(offlineGame.hasArcade && offlineGame.overlay && offlineGame.version === '0.13.1', 'offline game failed: ' + JSON.stringify(offlineGame));
     await cdp.navigate(base + '/apps/arcade/games/not-preloaded.html');
     const offlineMissing = await cdp.text('body');
     assert(offlineMissing && offlineMissing.includes('还没有预载'), 'offline missing page: ' + String(offlineMissing).slice(0, 120));
@@ -2509,18 +2570,27 @@ async function main() {
     await cdp.evaluate(`(() => { const t = __arcadeTest; t.grantItem('nuke'); t.grantItem('lance'); return true; })()`);
     await sleep(120);
     const itemLayout = await cdp.evaluate(`(() => {
-      const slots = document.querySelector('[data-item-slots]');
+      const tools = document.querySelector('[data-game-tools]');
+      const buttons = [...tools.querySelectorAll('.touch-btn')].filter((b) => !b.hidden);
       const items = [...document.querySelectorAll('[data-item-slot]')].filter((b) => !b.hidden);
       const rect = (el) => el.getBoundingClientRect();
+      /* iPhone PWA standalone 的 CSS 会覆盖 stage 高度预算：这里模拟 standalone，确认合并后的道具行仍在视口内。 */
+      document.documentElement.classList.add('studiokit-shell-standalone');
+      const standalone = { rowBottom: Math.round(rect(tools).bottom), vh: innerHeight };
+      document.documentElement.classList.remove('studiokit-shell-standalone');
       return {
-        slotsVisible: !slots.hidden,
-        items: items.map((b) => ({ w: Math.round(rect(b).width), h: Math.round(rect(b).height), right: Math.round(rect(b).right) })),
+        count: buttons.length,
+        items: items.map((b) => ({ w: Math.round(rect(b).width), h: Math.round(rect(b).height), right: Math.round(rect(b).right), text: b.textContent })),
+        cols: getComputedStyle(tools).gridTemplateColumns.split(' ').length,
+        standalone,
         docOverflow: document.documentElement.scrollWidth - document.documentElement.clientWidth,
         docH: document.documentElement.scrollHeight,
         vh: innerHeight,
       };
     })()`);
-    assert(itemLayout.slotsVisible && itemLayout.items.length === 2 && itemLayout.items.every((b) => b.w >= 44 && b.h >= 44 && b.right <= 321), 'star-raid item row layout: ' + JSON.stringify(itemLayout));
+    assert(itemLayout.count === 5 && itemLayout.cols === 5, 'star-raid tools row should contain 3 tools + 2 item slots: ' + JSON.stringify(itemLayout));
+    assert(itemLayout.items.length === 2 && itemLayout.items.every((b) => b.w >= 44 && b.h >= 44 && b.right <= 321), 'star-raid item row layout: ' + JSON.stringify(itemLayout));
+    assert(itemLayout.standalone.rowBottom <= itemLayout.standalone.vh + 1, 'star-raid standalone PWA tools row below viewport: ' + JSON.stringify(itemLayout.standalone));
     assert(itemLayout.docOverflow <= 1 && itemLayout.docH <= itemLayout.vh + 2, 'star-raid item row overflow: ' + JSON.stringify(itemLayout));
     const refitLayout = await cdp.evaluate(`(() => {
       const t = __arcadeTest;

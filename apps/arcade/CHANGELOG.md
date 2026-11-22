@@ -1,7 +1,30 @@
 # Arcade Changelog
 
 
+## 0.13.1 — 2026-11-22（未发布 · 本地门禁已过）
 
+Owner 在 iPhone PWA 非全屏实测反馈 4 点：游玩时间统计不对、大杀器道具栏看不到、核弹缺发射/追踪/命中爆炸动画、移动速度对触屏无意义。本轮逐条修复，**挑战 6 关数据与判定零改动**，设计与验收见 `DESIGN-0.13.1.md`。
+
+### Fixed
+- **机库浏览被计入有效游玩时长**：机库面板收起 overlay 后 `Playtime` 继续计时；现在打开机库显式 `A.Playtime.setOverlayVisible(true)` 暂停（先把已游玩片段落盘），关闭机库回到开始弹层后仍不计时，开始游戏后恢复。
+- **iPhone 非全屏 PWA 看不到大杀器道具栏**：原第二行在 standalone 的高优先级 stage 高度规则下被挤出视口。现把 4 个军械槽并入主道具行（3 主动 + 最多 3 军械，默认 5 列、`bay` 满级 6 列），空槽位常显「▢ 军械」；删除 `[data-item-slots]` 容器与 `has-star-items` 高度规则。
+- **核弹瞬发无动画**：改为发射追踪弹（速度 460→980 px/s、转向插值、尾焰粒子、目标锁定准星）；Boss 在场时实时追踪 Boss 中心，无 Boss 飞向画面中央 `(W/2, 0.42H)`；命中后才清空敌弹、结算普通敌机 80 / Boss `max(120, min(260, 25% maxHp))` 并播放白闪 + 震屏 + 双层冲击波 + 碎片。追踪弹写入局内档 `run.nukeShots`（≤3），刷新继续飞。
+- **「移动速度」对触屏无收益**：保留 `engine` id 兼容老档，效果改为受击无敌 +0.12s/级（1.8→2.4s）与拾取吸附 +6%/级（×1.30）；键盘基础移速固定 320。机库文案改为「机动强化」，`hangarInfo().caps` 增加 `invulSeconds` / `magnetMultiplier`。
+
+### Changed
+- 版本链升至 `0.13.1`，SW 缓存键 `studiokit-arcade-0.13.1-v1`；中心页 `data-hall-version`、注册表 `version` 与 `ARCADE_VERSION` 同步。
+- 大杀器快捷键提示仍为 4–7；挑战模式隐藏军械槽，道具行回落 2 列。
+
+### Compatibility
+- 无新增 localStorage key / Schema；`run.nukeShots` 为 0.13.1 新增可选字段，旧档缺失按空数组恢复；挑战分支仍 `run: null`。
+- `engine` 改装 id / 等级 / 成本不变，仅效果语义变化（移动速度 → 受击无敌 + 拾取吸附）。
+
+### Verification
+- 静态：`node tools/check_inline_scripts.mjs` PASS（19 HTML / 20 段脚本）、`node --check apps/arcade/engine.js` / `sw.js` PASS、`python tools/validate_site.py` PASS、`python tools/build_site.py` PASS、`python tools/arcade_design_check.py` PASS。
+- `node tools/arcade_smoke.mjs` **105/105**（原 103 + 核弹追踪/无 Boss 中央引爆 + 机库浏览计时 3 项断言；320px 道具行改为 5 列 + standalone 模拟在视口内）。
+- `arcade_tower_test` **23/23**（0.12.7 层塔门禁同批）、star-raid 挑战 **7/7**、tower 挑战 **6/6**、gameplay base **11/11**、zen **17/17**、calm **7/7**、review **5/5**、pwa **7/7**、interaction **5/5**、immersive **32/32**、stage coverage 78 关矩阵正常。
+- 320 / 375 / 390 / 430px 与 iPhone standalone 模拟布局探针 **43/43**：道具行 5 列、按钮 ≥44px、无横向/纵向溢出。
+- iPhone PWA 真机复测（非全屏道具栏可见、核弹动画、游玩时长）待 Owner 确认。
 ## 0.13.0 — 2026-11-22（已双端发布）
 
 星海突击「星域远征」：把 Owner 反馈的六件事——每关都是白板装备、关卡难度没有差异、机体没有大升级与常态 buff、想要稀缺的核弹级大伤害道具、想要油量/能量这类局限、想要临时编队等出击状态——落到一条「战斗 → 关卡 → 远征」的三层循环里。**经典模式全部改动；挑战 6 关的数据与判定零改动。** 设计、数值与回滚见 `DESIGN-0.13.0.md`。

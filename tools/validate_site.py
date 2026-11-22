@@ -17,7 +17,7 @@ REQUIRED = [
     'apps/arcade/DESIGN-0.4.0.md', 'apps/arcade/DESIGN-0.5.0.md',
     'apps/arcade/DESIGN-0.6.0.md', 'apps/arcade/DESIGN-0.8.1.md', 'apps/arcade/DESIGN-0.8.2.md',
     'apps/arcade/DESIGN-0.8.6.md', 'apps/arcade/DESIGN-0.9.0.md', 'apps/arcade/DESIGN-0.10.0.md',
-    'apps/arcade/DESIGN-0.11.0.md', 'apps/arcade/DESIGN-0.11.1.md', 'apps/arcade/DESIGN-0.11.2.md', 'apps/arcade/DESIGN-0.11.3.md', 'apps/arcade/DESIGN-0.11.4.md', 'apps/arcade/DESIGN-0.11.5.md', 'apps/arcade/DESIGN-0.12.0.md', 'apps/arcade/DESIGN-0.12.1.md', 'apps/arcade/DESIGN-0.12.2.md', 'apps/arcade/DESIGN-0.12.3.md', 'apps/arcade/DESIGN-0.12.4.md', 'apps/arcade/DESIGN-0.12.5.md', 'apps/arcade/DESIGN-0.12.6.md', 'apps/arcade/DESIGN-0.12.7.md', 'apps/arcade/DESIGN-0.13.0.md',
+    'apps/arcade/DESIGN-0.11.0.md', 'apps/arcade/DESIGN-0.11.1.md', 'apps/arcade/DESIGN-0.11.2.md', 'apps/arcade/DESIGN-0.11.3.md', 'apps/arcade/DESIGN-0.11.4.md', 'apps/arcade/DESIGN-0.11.5.md', 'apps/arcade/DESIGN-0.12.0.md', 'apps/arcade/DESIGN-0.12.1.md', 'apps/arcade/DESIGN-0.12.2.md', 'apps/arcade/DESIGN-0.12.3.md', 'apps/arcade/DESIGN-0.12.4.md', 'apps/arcade/DESIGN-0.12.5.md', 'apps/arcade/DESIGN-0.12.6.md', 'apps/arcade/DESIGN-0.12.7.md', 'apps/arcade/DESIGN-0.13.1.md',
     'apps/arcade/engine.js', 'apps/arcade/arcade.css', 'apps/arcade/sw.js',
     'apps/arcade/manifest.webmanifest',
     'apps/arcade/icons/icon-192.png', 'apps/arcade/icons/icon-512.png',
@@ -179,7 +179,7 @@ def validate(root=ROOT):
     arcade_engine = root / 'apps/arcade/engine.js'
     if arcade_engine.exists():
         source = arcade_engine.read_text(encoding='utf-8')
-        if "const ARCADE_VERSION = '0.13.0'" not in source:
+        if "const ARCADE_VERSION = '0.13.1'" not in source:
             ok = fail('Arcade ARCADE_VERSION drifted; update registry/README/CHANGELOG together') and ok
         for update_marker in ('function checkForUpdate', 'function onUpdate', 'function applyUpdate', "type === 'arcade-sw-update-ready'"):
             if update_marker not in source:
@@ -205,12 +205,12 @@ def validate(root=ROOT):
         # 0.8.1：积分记录存储 key + A.Scores 共享帮助（新 key，不改既有 Schema）。
         if "const SCORES_KEY = 'studiokit:arcade:scores:v1'" not in source:
             ok = fail('Arcade scores storage key missing/changed: expected studiokit:arcade:scores:v1') and ok
-        # 0.13.0：引擎通用游戏数据（星海突击机库等），独立 key + 备份 gameMeta。
+        # 0.13.1：引擎通用游戏数据（星海突击机库等），独立 key + 备份 gameMeta。
         if "const META_KEY = 'studiokit:arcade:meta:v1'" not in source:
             ok = fail('Arcade game-meta storage key missing/changed: expected studiokit:arcade:meta:v1') and ok
         for marker in ('const GameMeta = {', 'gameMeta: GameMeta.exportData()', 'GameMeta.clearAll()', '\n    GameMeta,'):
             if marker not in source:
-                ok = fail(f'Arcade 0.13.0 GameMeta marker missing in engine.js: {marker}') and ok
+                ok = fail(f'Arcade 0.13.1 GameMeta marker missing in engine.js: {marker}') and ok
         if 'const Scores = {' not in source:
             ok = fail('Arcade A.Scores shared helper is missing from engine.js') and ok
         if '\n    Scores,' not in source:
@@ -239,9 +239,9 @@ def validate(root=ROOT):
         arcade_index = root / 'apps/arcade/index.html'
         if arcade_index.exists():
             index_source = arcade_index.read_text(encoding='utf-8')
-            for marker in ('rel="manifest"', 'data-playtime-section', 'data-scores-section', 'data-scores-body', 'data-scores-empty', 'data-offline', 'data-install', 'data-share', 'data-random', 'data-update-check', 'data-update-banner', 'data-update-reload', '无签到', 'data-hall-version>0.13.0'):
+            for marker in ('rel="manifest"', 'data-playtime-section', 'data-scores-section', 'data-scores-body', 'data-scores-empty', 'data-offline', 'data-install', 'data-share', 'data-random', 'data-update-check', 'data-update-banner', 'data-update-reload', '无签到', 'data-hall-version>0.13.1'):
                 if marker not in index_source:
-                    ok = fail(f'Arcade hub 0.13.0 marker missing: {marker}') and ok
+                    ok = fail(f'Arcade hub 0.13.1 marker missing: {marker}') and ok
             # 0.11.4：iOS 26+ 独立模式顶部系统模糊根因，禁止回归。
             for forbidden in ('viewport-fit=cover', 'apple-mobile-web-app-status-bar-style'):
                 if forbidden in index_source:
@@ -291,7 +291,7 @@ def validate(root=ROOT):
         arcade_sw = root / 'apps/arcade/sw.js'
         if arcade_sw.exists():
             sw_source = arcade_sw.read_text(encoding='utf-8')
-            for marker in ("const VERSION = '0.13.0'", 'arcade-precache', 'skipWaiting', 'clients.claim', "type === 'arcade-sw-version'", "type: 'arcade-sw-update-ready'", 'notifyUpdateReady'):
+            for marker in ("const VERSION = '0.13.1'", 'arcade-precache', 'skipWaiting', 'clients.claim', "type === 'arcade-sw-version'", "type: 'arcade-sw-update-ready'", 'notifyUpdateReady'):
                 if marker not in sw_source:
                     ok = fail(f'Arcade service worker marker missing: {marker}') and ok
             # 0.9：13 个挑战数据文件必须进入 shell 预缓存（相对路径写法，兼容子路径部署）。
@@ -316,8 +316,8 @@ def validate(root=ROOT):
             try:
                 registry = json.loads(registry_path.read_text(encoding='utf-8'))
                 arcade = next((t for t in registry.get('tools', []) if t.get('id') == 'arcade'), None)
-                if arcade and arcade.get('version') != '0.13.0':
-                    ok = fail('Arcade registry version must match engine 0.13.0') and ok
+                if arcade and arcade.get('version') != '0.13.1':
+                    ok = fail('Arcade registry version must match engine 0.13.1') and ok
             except Exception:
                 pass
 

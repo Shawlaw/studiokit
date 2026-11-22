@@ -5,7 +5,7 @@
 - 仓库：<https://github.com/Shawlaw/studiokit>
 - GitHub Pages：<https://shawlaw.github.io/studiokit/>
 - Cloudflare Pages：<https://studiokit.pages.dev/>
-- 当前版本：Arcade `0.13.0`（2026-11-22 已双端发布；基于 `origin/main` `a5951d8`（0.12.7）rebase 后本地门禁全过：smoke **103/103**、tower **23/23**、star-raid 挑战 **7/7**、tower 挑战 **6/6**、gameplay base **11/11**、zen **17/17**、calm **7/7**、review **5/5**、pwa **7/7**、interaction **5/5**、immersive **32/32**、validate/build/inline/design/stage coverage 全过）
+- 当前版本：Arcade `0.13.1`（**开发中，未发布**；本地门禁已过：smoke **105/105**、tower **23/23**、star-raid 挑战 **7/7**、tower 挑战 **6/6**、gameplay base **11/11**、zen **17/17**、calm **7/7**、review **5/5**、pwa **7/7**、interaction **5/5**、immersive **32/32**、320–430 + standalone 布局 **43/43**、validate/build/inline/design 全过；0.13.0 已于 2026-11-22 双端发布；基于 `origin/main` `a5951d8`（0.12.7）rebase 后本地门禁全过：smoke **103/103**、tower **23/23**、star-raid 挑战 **7/7**、tower 挑战 **6/6**、gameplay base **11/11**、zen **17/17**、calm **7/7**、review **5/5**、pwa **7/7**、interaction **5/5**、immersive **32/32**、validate/build/inline/design/stage coverage 全过）
 - 最近发布：Arcade `0.13.0`（2026-11-22，已双端发布）
   - 批次内容：星海突击「星域远征」——机库永久改装 + 星币（引擎通用游戏数据 `studiokit:arcade:meta:v1`，`A.GameMeta`，备份 `gameMeta`）、局内火力 1–5、能量/枯竭、临时编队、核弹/轨道炮/时空锚、6 星区主题与分数补偿、CLEAR 三选一整备、动画反馈；挑战 6 关数据与判定零改动；基于 0.12.7 层塔重标定 rebase 后共存无回归
   - 门禁：smoke **103/103**、tower **23/23**、star-raid 挑战 **7/7**、tower 挑战 **6/6**、gameplay base 11/11、zen 17/17、calm 7/7、review 5/5、pwa 7/7、interaction 5/5、immersive 32/32、validate/build/inline/design/stage coverage 全过
