@@ -1,6 +1,6 @@
 #!/usr/bin/env node
 /**
- * 街机厅无头浏览器冒烟测试（105 项全链路回归）。
+ * 街机厅无头浏览器冒烟测试（108 项全链路回归）。
  * 零 npm 依赖：通用基础设施见 tools/lib/arcade_cdp.mjs（静态服务器 / Chrome 启动 / CDP / 断言记录器）。
  * 运行：node tools/arcade_smoke.mjs
  * 端口可用环境变量覆盖：ARCADE_SMOKE_PORT（默认 8765）/ ARCADE_CDP_PORT（默认 9333）。
@@ -1727,6 +1727,47 @@ async function main() {
     const timeAfterFocus = await cdp.evaluate(`Arcade.Playtime.stats().totalMs`);
     assert(timeAfterBlur - timeAfterResume <= 260, 'window blur time leaked into playtime: ' + JSON.stringify({ timeAfterResume, timeAfterBlur }));
     assert(timeAfterFocus - timeAfterBlur >= 650, 'resume after blur not recorded: ' + JSON.stringify({ timeAfterBlur, timeAfterFocus }));
+
+    /* iOS 主屏 PWA 的 window focus/blur 不可靠（0.13.2 回归）：
+       切后台/回前台只给 blur + visibilitychange、没有 focus 时，点「开始游戏」也必须计时。 */
+    await cdp.evaluate(`Arcade.Playtime.resetAll()`);
+    await cdp.navigate(base + '/apps/arcade/games/block-drop.html');
+    await sleep(400);
+    await cdp.evaluate(`window.dispatchEvent(new Event('blur'))`);
+    await sleep(120);
+    /* iOS 回到前台只有 visibilitychange（document.hidden 已恢复 false），没有 focus 事件。 */
+    await cdp.evaluate(`document.dispatchEvent(new Event('visibilitychange'))`);
+    await sleep(80);
+    await cdp.click('[data-ov-btn]');
+    await sleep(1300);
+    await cdp.evaluate(`Arcade.Playtime.flush()`);
+    const noFocusStart = await cdp.evaluate(`Arcade.Playtime.stats().totalMs`);
+    assert(noFocusStart >= 900, 'playtime stuck after blur without focus: ' + noFocusStart);
+    record('失焦后没有 focus 事件仍能开始计时（iOS PWA 回归）', true);
+
+    /* 游玩中切后台：游戏自动暂停；回前台仍没有 focus 事件时，点「继续」也必须恢复计时。 */
+    await cdp.evaluate(`window.dispatchEvent(new Event('blur'))`);
+    await sleep(350);
+    await cdp.evaluate(`document.dispatchEvent(new Event('visibilitychange'))`);
+    await sleep(450);
+    await cdp.evaluate(`Arcade.Playtime.flush()`);
+    const noFocusPaused = await cdp.evaluate(`Arcade.Playtime.stats().totalMs`);
+    await cdp.click('[data-ov-btn]');
+    await sleep(1300);
+    await cdp.evaluate(`Arcade.Playtime.flush()`);
+    const noFocusResumed = await cdp.evaluate(`Arcade.Playtime.stats().totalMs`);
+    assert(noFocusPaused - noFocusStart <= 300, 'blur paused time leaked: ' + JSON.stringify({ noFocusStart, noFocusPaused }));
+    assert(noFocusResumed - noFocusPaused >= 950, 'resume without focus not recorded: ' + JSON.stringify({ noFocusPaused, noFocusResumed }));
+    record('失焦后没有 focus 事件，点「继续」仍恢复计时', true);
+
+    /* 结算写进积分记录的本轮时长同样不能是 0（「累计时长 0、积分记录有数据」的直接症状）。 */
+    const noFocusRound = await cdp.evaluate(`(() => {
+      Arcade.Progress.recordPlay('block-drop', 9, { lines: 1, level: 1, detail: 'iOS 回归' });
+      const list = Arcade.Scores.list({ gameId: 'block-drop', mode: 'classic' });
+      return list.length ? list[0].durationMs : null;
+    })()`);
+    assert(noFocusRound >= 900, 'settled round duration still zero without focus: ' + noFocusRound);
+    record('失焦后无 focus 事件，结算轮次时长写入积分记录', true);
 
     /* 连续游玩超过一个 15s 落盘周期：第一次落盘后必须自动开启下一段时间片。 */
     await cdp.evaluate(`Arcade.Playtime.resetAll()`);

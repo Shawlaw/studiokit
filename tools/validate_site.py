@@ -17,7 +17,7 @@ REQUIRED = [
     'apps/arcade/DESIGN-0.4.0.md', 'apps/arcade/DESIGN-0.5.0.md',
     'apps/arcade/DESIGN-0.6.0.md', 'apps/arcade/DESIGN-0.8.1.md', 'apps/arcade/DESIGN-0.8.2.md',
     'apps/arcade/DESIGN-0.8.6.md', 'apps/arcade/DESIGN-0.9.0.md', 'apps/arcade/DESIGN-0.10.0.md',
-    'apps/arcade/DESIGN-0.11.0.md', 'apps/arcade/DESIGN-0.11.1.md', 'apps/arcade/DESIGN-0.11.2.md', 'apps/arcade/DESIGN-0.11.3.md', 'apps/arcade/DESIGN-0.11.4.md', 'apps/arcade/DESIGN-0.11.5.md', 'apps/arcade/DESIGN-0.12.0.md', 'apps/arcade/DESIGN-0.12.1.md', 'apps/arcade/DESIGN-0.12.2.md', 'apps/arcade/DESIGN-0.12.3.md', 'apps/arcade/DESIGN-0.12.4.md', 'apps/arcade/DESIGN-0.12.5.md', 'apps/arcade/DESIGN-0.12.6.md', 'apps/arcade/DESIGN-0.12.7.md', 'apps/arcade/DESIGN-0.13.1.md',
+    'apps/arcade/DESIGN-0.11.0.md', 'apps/arcade/DESIGN-0.11.1.md', 'apps/arcade/DESIGN-0.11.2.md', 'apps/arcade/DESIGN-0.11.3.md', 'apps/arcade/DESIGN-0.11.4.md', 'apps/arcade/DESIGN-0.11.5.md', 'apps/arcade/DESIGN-0.12.0.md', 'apps/arcade/DESIGN-0.12.1.md', 'apps/arcade/DESIGN-0.12.2.md', 'apps/arcade/DESIGN-0.12.3.md', 'apps/arcade/DESIGN-0.12.4.md', 'apps/arcade/DESIGN-0.12.5.md', 'apps/arcade/DESIGN-0.12.6.md', 'apps/arcade/DESIGN-0.12.7.md', 'apps/arcade/DESIGN-0.13.1.md', 'apps/arcade/DESIGN-0.13.2.md',
     'apps/arcade/engine.js', 'apps/arcade/arcade.css', 'apps/arcade/sw.js',
     'apps/arcade/manifest.webmanifest',
     'apps/arcade/icons/icon-192.png', 'apps/arcade/icons/icon-512.png',
@@ -202,6 +202,14 @@ def validate(root=ROOT):
         for marker in ('const Playtime =', 'function formatDuration', 'const Share =', 'const Offline =', 'arcade-precache', 'function createToolbelt', 'PLAYTIME_REST_MS'):
             if marker not in source:
                 ok = fail(f'Arcade 0.8.0 marker missing in engine.js: {marker}') and ok
+        # 0.13.2：iOS 主屏 PWA 的 window focus/blur 不可靠；游玩计时必须能自愈，
+        # 不能再把 focus 当成开始/恢复计时的必要条件（漏一次 focus 就永久停摆）。
+        for marker in ('function canTrack', 'function syncSegment', 'markActive', 'resumeIfPlaying'):
+            if marker not in source:
+                ok = fail(f'Arcade 0.13.2 playtime self-heal marker missing in engine.js: {marker}') and ok
+        for stale in ('|| !focused', 'focused = false', 'let focused = true'):
+            if stale in source:
+                ok = fail(f'Arcade playtime must not gate on unreliable window focus: {stale}') and ok
         # 0.9 平台地基：挑战记录 key + A.Challenge 共享帮助（不改既有版本断言）。
         if "const CHALLENGE_KEY = 'studiokit:arcade:challenge:v1'" not in source:
             ok = fail('Arcade challenge storage key missing/changed: expected studiokit:arcade:challenge:v1') and ok

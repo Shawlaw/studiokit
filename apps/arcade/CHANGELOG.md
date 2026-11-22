@@ -1,6 +1,38 @@
 # Arcade Changelog
 
 
+## 0.13.2 — 2026-11-22（本地修复，待 Owner 授权发布）
+
+Owner 两条真机反馈：①已安装 PWA 的「🔄 检查更新」显示的是**已安装版本**，不是线上最新版本；②iPhone 主屏 PWA 玩一天后中心页「累计时长」始终为 `0 分钟`，但积分记录表格有数据。两条都用无头 Chrome 复现并逐条修复（复现命令与设计见 `DESIGN-0.13.2.md`）；**挑战/玩法/存档零改动**，无新增 localStorage key / Schema。
+
+### Fixed
+- **iPhone 主屏 PWA 游玩时长永久停摆（主因）**：16 款游戏共用 `Playtime`，旧实现 `startSegment()` 要求 `focused`，而 `focused` 只在 window `focus` 事件里恢复；iOS 主屏 PWA 的 `focus` 不可靠（回前台常常只有 `visibilitychange`，页面按 iOS 13+ 语义也不会重新加载），漏一次 `focus` 后这一页的计时就永久停摆，但 `scores:v1` 仍照常写入 —— 复现输出：先 `blur` 再无 `focus` 时 `snake-run` 记录 `ms=0`、结算 `durationMs: 0`，之后点按也不恢复。现在计时只认「页面可见 + 弹层关闭」：删除 `focused` 门槛，`blur` 仍立即落盘，真正的暂停由 `createLoop` 自动暂停 + 暂停弹层承担；新增 `syncSegment()` 并在 `visibilitychange` / `focus` / `pageshow` / 用户 `pointerdown` / `keydown` / `touchstart` / 15 秒 tick 上自愈，`recordRound()` 结算后立即续开时间片；20 分钟休息提醒不再被永远等不到的 `focus` 吞掉。
+- **「检查更新」显示已安装版本**：`A.Offline.checkForUpdate()` 旧实现直接 `version: ARCADE_VERSION` 返回，而 `ARCADE_VERSION` 是页面自己的版本 = 已安装版本，整条链路从不读取线上版本。现在 `fetch('./sw.js', { cache: 'no-store' })` 解析 `const VERSION` 作为**线上最新版本**，再与页面版本、已安装 SW 版本逐段数值比较；返回值新增 `latestVersion` / `installedVersion` / `pageVersion` / `updateReason`，`version` 即线上最新版本。
+- **SW 永远不会广播新版本**：`activate` 里用模块级 `firstActivation = true` 判断「是否首次安装」，但每个 SW 实例的该标志都从 `true` 开始、`activate` 只调用一次，`!firstActivation` 恒为 `false` → `arcade-sw-update-ready` 从未发出，页面只能拿到不带版本号的 `updatefound` / `controllerchange` 信号。改为在清理旧缓存**之前**检查前缀相同但名字不同的旧缓存（`isUpdateActivation()`），确认是升级接管才广播当前 `VERSION`。
+- **`updateFound` 依赖瞬时槽位（时序抽奖）**：旧实现看 `registration.waiting || registration.installing`，但 SW 在 `install` 里立即 `skipWaiting()`，`update()` 返回时新 SW 往往已进入 activating/activated、两个槽位都是 `null`。现在按「线上版本 > 页面版本 || 线上版本 > 已安装 SW 版本」判定，**新 SW 已接管但页面尚未刷新时也会提示刷新**。
+- **无版本号信号覆盖已知版本**：`controllerchange` 的 `{ version: null }` 可能把 SW 消息带回来的新版本号冲掉，横幅退化成泛化文案。`emitUpdate()` 改为版本号粘性（已知版本不被 `null` 覆盖）。
+- **读不到线上版本时谎报「已是最新」**：新增 `checked` 语义，读取失败时中心页提示「检查更新失败，请检查网络后重试。」，不再落到「已是最新版本」。
+- **SW 缓存拦截页面读取 sw.js**：页面 `fetch('./sw.js')` 会被 SW 的 `cacheFirst` 用已安装版本的旧脚本回答（复现时 `latestVersion` 因此停在旧版本）。SW 现在对 `sw.js` 请求一律交给网络。
+
+### Changed
+- 中心页更新横幅：`发现新版本 v{最新}（当前 v{当前}），刷新后生效。`；版本相同但 SW 离线缓存落后时显示「检测到更新缓存已就绪（当前 vX），刷新后生效。」；按钮提示同样带出最新/当前两个版本。
+- 版本链升至 `0.13.2`，SW 缓存键 `studiokit-arcade-0.13.2-v1`；中心页 `data-hall-version`、注册表 `version` 与 `ARCADE_VERSION` 同步。
+
+### Compatibility
+- 无 localStorage key / Schema 变更；`progress` / `runs` / `prefs` / `playtime` / `scores` / `challenge` / `meta` 全部不动。
+- 计时口径仍是「只统计有效游玩」：页面可见且开始/暂停/结算弹层关闭才计时；失焦时游戏自动暂停并弹出暂停层、仍不计时。变化只在于恢复计时不再依赖 window `focus` 事件，改由可见性/点按/落盘 tick 自愈。
+- SW 消息协议（`arcade-sw-version` / `arcade-sw-skip-waiting` / `arcade-precache` / `arcade-sw-update-ready`）与缓存键格式 `studiokit-arcade-<VERSION>-v1` 不变：旧页面配新 SW、新页面配旧 SW 都不会报错（新字段只被新页面读取）。
+- 新增同源 `GET ./sw.js`（`no-store`，约 8KB）：只读仓库里已有的脚本，不引入远程依赖、后端或分析。
+- 升级路径：0.13.1 页面（旧引擎）首次打开时仍复用旧的泛化横幅；SW 更新并刷新一次后即运行 0.13.2 逻辑。
+
+### Verification
+- 复现（更新检测，修复前，临时副本站点 + 无头 Chrome）：`checkForUpdate()` → `{"version":"0.13.1","updateFound":true}`、SW 消息 `[]`、横幅「发现新版本，刷新后生效。」；修复后同场景 → `{"version":"0.13.3","installedVersion":"0.13.2"}`、收到 `arcade-sw-update-ready:0.13.3`、横幅「发现新版本 v0.13.3（当前 v0.13.2），刷新后生效。」。
+- 复现（游玩时长，修复前，无头 Chrome；同一页面先 `blur` 再无 `focus`）：正常页面 `totalMs=1205`；新游戏页点开始后 `snake-run ms=0`、结算 `durationMs: 0`、再点按仍为 `1205`。修复后同一脚本：`snake-run ms=1504`、结算 `durationMs: 1504`、点按后继续累计。
+- `node tools/arcade_pwa_update_test.mjs` **9/9**（新增 PU-06 真实发版链路、PU-07 读取失败诚实提示；PU-02/PU-03 改为断言最新版本与双版本文案）。
+- 回归：`arcade_smoke` **108/108**（新增 3 项 iOS 「漏发 focus」计时回归：开局前 blur 仍计时、失焦暂停后点继续仍计时、结算轮次时长 ≥900ms 写入积分记录）、`arcade_tower_test` **23/23**、`arcade_zen_scores_test` **14/14**、`arcade_calm_games_test` **17/17**、`arcade_review_test` **5/5**、`arcade_interaction_test` **5/5**、`arcade_immersive_buttons_test` **32/32**、`arcade_gameplay_test --suite=all` **104/104**、`--suite=base --repeat=2` **22/22**（11 场景 ×2 遍）、挑战矩阵 78 关、320/375/390/430 与 standalone 布局探针全过。
+- 静态：`validate_site.py`（新增 0.13.2 版本来源/广播断言 + 游玩计时自愈标记/旧 focus 门槛禁回归断言）、`build_site.py`、`check_inline_scripts.mjs`（19 HTML / 20 段脚本）、`arcade_design_check.py`（143 个设计包文件一致）、`node --check engine.js/sw.js` PASS。
+- **未发布**：本轮无 `OWNER_AUTHORIZATION: PUBLISH_TO_MAIN`，仅本地修改（未提交、未推送）；真机 iOS 主屏幕 PWA 的更新提示时机与游玩时长/积分记录时长待 Owner 复测（UNVERIFIED）。
+
 ## 0.13.1 — 2026-11-22（已双端发布）
 
 Owner 在 iPhone PWA 非全屏实测反馈 4 点：游玩时间统计不对、大杀器道具栏看不到、核弹缺发射/追踪/命中爆炸动画、移动速度对触屏无意义。本轮逐条修复，**挑战 6 关数据与判定零改动**，设计与验收见 `DESIGN-0.13.1.md`。

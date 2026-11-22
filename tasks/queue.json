@@ -1683,7 +1683,9 @@
       "title": "Arcade 0.12.3 发布：main 双端部署与线上验证",
       "kind": "agent",
       "status": "DONE",
-      "dependsOn": ["T102"],
+      "dependsOn": [
+        "T102"
+      ],
       "ownerAuthorizationRequired": true,
       "ownerAuthorizationNote": "Owner 本轮报告「200 层后全览看不全」并沿用其上一轮明确指令「修复优化完 你自测好了就提交发版」，即 OWNER_AUTHORIZATION: PUBLISH_TO_MAIN。",
       "acceptance": [
@@ -1693,6 +1695,28 @@
       ],
       "completedAt": "2026-11-22T08:55:00+08:00",
       "evidence": "提交 79be219 推送 main；Actions run 44968445299 四 job 全绿；CI 与本地 tools/verify_deploy.py 均 41/41 双端一致（arcade 0.12.3 / badge 2.2.1 / venue 0.2.0）；双端线上无头 Chrome 实测 200 层 scale=0.0624、1000 层 scale=0.0127，屏幕 y 均 116–624（画布 740）、溢出 0、fitsOnScreen=true、0 console error；SW 缓存键 studiokit-arcade-0.12.3-v1；证据文档提交 6520003 触发 Actions 44968745329 四 job 同样全绿。"
+    },
+    {
+      "id": "T110",
+      "title": "Arcade 0.13.2：修复 PWA「检查更新」显示已安装版本（版本来源 + SW 广播）",
+      "kind": "agent",
+      "status": "DONE",
+      "dependsOn": [
+        "T109"
+      ],
+      "ownerAuthorizationRequired": false,
+      "acceptance": [
+        "复现确认 checkForUpdate 返回的是页面 ARCADE_VERSION（已安装版本）而非线上最新版本",
+        "checkForUpdate 解析线上 sw.js VERSION，返回 version/latestVersion/installedVersion/pageVersion/updateReason；读取失败 checked=false 且不谎报「已是最新」",
+        "SW activate 在清理旧缓存前用旧版本缓存证据判断升级接管，并真正广播 arcade-sw-update-ready(新 VERSION)；首次安装不误报",
+        "updateFound 按版本号比较：新 SW 已接管但页面未刷新时仍提示有更新；controllerchange 不覆盖已知版本号",
+        "中心页横幅/按钮提示同时显示最新版本与当前版本；SW 对 sw.js 请求放行给网络（不缓存自己）",
+        "无 localStorage key/Schema/玩法/挑战改动；版本链 0.13.2 / SW studiokit-arcade-0.13.2-v1",
+        "门禁通过：pwa 9/9、smoke 105/105、tower 23/23、zen 14/14、calm 17/17、review 5/5、interaction 5/5、immersive 32/32、gameplay all 104/104、base 22/22（11 场景×2 遍）、挑战矩阵 78 关、validate/build/inline/design",
+        "本地分支提交，未推送未发布（无 PUBLISH_TO_MAIN 授权）；真机 iOS 更新提示时机待 Owner 复测"
+      ],
+      "completedAt": "2026-11-22T15:40:00+08:00",
+      "evidence": "Owner 反馈：已安装 PWA 点「检查更新」显示已安装版本而不是线上最新版本。无头 Chrome 复现（临时副本站点把 sw.js VERSION 从 0.13.1 改为 0.13.2）：修复前 checkForUpdate() → {supported:true,checked:true,updateFound:true,version:'0.13.1'}（已安装版本）、SW 消息 []、controllerchange 1、横幅「发现新版本，刷新后生效。」；根因三处：①engine checkForUpdate 直接 version: ARCADE_VERSION（页面自身版本 = 已安装版本），链路中从不读取线上版本；②sw activate 用模块级 firstActivation 判断首次安装（每个 SW 实例该标志恒从 true 开始、activate 只跑一次，!firstActivation 恒 false），arcade-sw-update-ready 从未广播；③updateFound 看 registration.waiting/installing 瞬时槽位（install 内立即 skipWaiting），且 controllerchange 的 {version:null} 会覆盖已知版本。修复：engine 新增 publishedVersion()（fetch './sw.js' no-store 解析 VERSION）/compareVersions/workerVersion；checkForUpdate 先记录已安装 SW 版本 → registration.update() → 取线上版本与 active/installing 版本的最大值，按「版本 > 页面版本 || 版本 > 已安装 SW 版本」判定 updateFound，返回 latestVersion/installedVersion/pageVersion/updateReason/checked；emitUpdate 版本号粘性，中心页横幅「发现新版本 v{新}（当前 v{当前}），刷新后生效。」+ 按钮提示同步，checked=false 时提示「检查更新失败，请检查网络后重试。」；sw 删除 firstActivation，activate 在清理旧缓存前用 isUpdateActivation()（旧前缀缓存是否还在）判断升级接管后再广播 VERSION，并对 sw.js 请求直接放行给网络（否则页面读到的是 cacheFirst 的旧脚本）。挑战/玩法/存档零改动、无 key/Schema 变更；版本链 0.13.2 / SW studiokit-arcade-0.13.2-v1；registry/DESIGN-0.13.2/validate_site 断言同步。门禁（本地实跑）：arcade_pwa_update_test **9/9**（改写 PU-02/PU-03 + 新增 PU-06 真实发版链路：临时副本发布 0.13.3 → checkForUpdate 返回 0.13.3/installed 0.13.2、SW 广播 0.13.3、controllerchange、横幅含双版本、新 SW 接管后页面未刷新仍判有更新、按钮提示含新版本；PU-07 拦截 sw.js 请求模拟离线 → checked=false + 按钮提示「检查更新失败」）、smoke **105/105**、tower **23/23**、zen **14/14**、calm **17/17**、review **5/5**、interaction **5/5**、immersive **32/32**、gameplay all **104/104**、base **22/22**（11 场景 ×2 遍）、挑战矩阵 78 关、validate/build/inline/design/stage coverage 全过；未推送未发布（无 OWNER_AUTHORIZATION: PUBLISH_TO_MAIN）；真机 iOS 更新提示时机 UNVERIFIED。"
     },
     {
       "id": "T109",
@@ -1794,7 +1818,9 @@
       "title": "Arcade 0.12.4：修复 LOD 误按层数触发（近景集装箱退化成色块）",
       "kind": "agent",
       "status": "DONE",
-      "dependsOn": ["T103"],
+      "dependsOn": [
+        "T103"
+      ],
       "ownerAuthorizationRequired": false,
       "acceptance": [
         "正常 1:1 近景在任意层数都必须保留集装箱完整细节",
@@ -1932,6 +1958,27 @@
       ],
       "completedAt": "2026-11-21T23:55:00+08:00",
       "evidence": "Owner 一轮四条反馈，2 个并行 worker（immersive-buttons / tower-rework）按不重叠写入范围实现，Lead 集成。全屏底部按钮：arcade.css 加 --ac-thumb-lift=36px（横屏 20px），touch-pad padding-bottom 叠加 lift；矿工 has-subhud 画布同步上移；toast bottom 抬升修复 smoke 覆盖道具坞回归。实测四档按钮距底 6→42px、安全区 34→70px、横屏 6→26px；新增 tools/arcade_immersive_buttons_test.mjs 16/16。层塔物理根因：lean 弹簧平衡点恒 0、盒 x 不动、只视觉旋转；新模型每箱偏心×重量×(1+层数×0.06) 累积 comMoment，加权箱心 comOffset 偏移弹簧平衡点，重心超支撑半宽 0.62×BOX_W 且倾斜即塌；配重额外 comMoment×0.75；连续右偏 18px 第 4 层塌、左右交替 ±18px 14 层稳（COM 7.3px<19.84px）。挑战用低增益 comGain=0.0016、箱重统一 1，仍按关卡 chMaxLean 判定，6/6 PASS。全览：第三枚 44px 按钮+快捷键 3，overviewT 0→1 约 0.45s 缩放、层号/属性/重心标尺、全览禁落箱、结算前 0.9s 动画拉远，result:'回看塔身' 3 处保留。皮肤：黄昏工地/塔吊桁架/吊具摇摆/集装箱波纹板角件编号；属性 4 种（标准 1 / 重型 1.65 / 易碎完美+20 / 奖励+25）确定性 LCG，真实影响物理或计分。serialize/restore 新字段缺省兼容旧档，key/Schema 不变。门禁：immersive 16/16、tower 13/13、interaction 5/5、smoke 94/94、zen 14/14、calm 17/17、review 5/5、gameplay base 11/11、tower challenge 6/6、pwa 7/7、validate/build/inline/node --check 全过；真机手感 UNVERIFIED；版本链 0.12.0 / SW studiokit-arcade-0.12.0-v1；设计见 DESIGN-0.12.0.md。"
+    },
+    {
+      "id": "T111",
+      "title": "Arcade 0.13.2 追加：iOS 主屏 PWA 游玩时长永久停摆修复（Playtime 自愈）",
+      "kind": "agent",
+      "status": "DONE",
+      "dependsOn": [
+        "T110"
+      ],
+      "ownerAuthorizationRequired": false,
+      "acceptance": [
+        "复现确认：同一游戏页先 blur 再无 focus 时 Playtime 永久停摆、结算 durationMs=0，而 scores:v1 照常写入",
+        "计时不再依赖 window focus：Playtime 只认「页面可见 + 开始/暂停/结算弹层关闭」；blur 仍立即落盘，暂停由 createLoop 自动暂停 + 暂停弹层承担",
+        "新增 syncSegment() 自愈：visibilitychange / window focus / pageshow / 用户 pointerdown/keydown/touchstart / 15 秒 tick 都按实时状态对齐时间片；recordRound() 结算后续开时间片",
+        "20 分钟休息提醒不再被永远等不到的 focus 吞掉（只按页面可见性延后）",
+        "无 localStorage key / Schema / 玩法 / 挑战数据改动；版本链仍为 0.13.2（未发布批次追加）",
+        "门禁通过：smoke 108/108（新增 3 项 iOS 漏发 focus 回归）、pwa 9/9、zen 14/14、calm 17/17、review 5/5、interaction 5/5、tower 23/23、immersive 32/32、gameplay base 22/22、validate/build/inline/design/node --check",
+        "本地修改未提交/未推送/未发布（无 PUBLISH_TO_MAIN 授权）；真机 iOS 主屏 PWA 的游玩时长与积分记录时长待 Owner 复测"
+      ],
+      "completedAt": "2026-11-22T16:05:00+08:00",
+      "evidence": "Owner 反馈：iPhone 主屏 PWA 玩一天后中心页「累计时长」一直 0 分钟，但积分记录表格有数据。根因：16 款游戏共用 engine.js 的 Playtime；旧 startSegment() 要求 focused，而 focused 只在 window focus 事件里恢复。iOS 主屏 PWA 的 focus 不可靠（回前台常常只有 visibilitychange；iOS 13+ 页面不会重新加载），开局前或游玩中漏一次 focus 后该页计时永久停摆，但 Progress.recordPlay 仍写 scores:v1，于是「时长 0 / 积分有数据」。无头 Chrome 复现（同一页先 blur 再无 focus）：正常页 totalMs=1205；新页点开始后 snake-run ms=0、结算 durationMs=0、再点按仍 1205。修复：删除 focused 门槛，新增 canTrack()（页面可见 + 弹层关闭）与 syncSegment()；blur 仍 flush，暂停由 createLoop 自动暂停 + 暂停弹层承担；visibilitychange/focus/pageshow/pointerdown/keydown/touchstart/15 秒 tick 全部自愈；recordRound() 结算后 syncSegment() 续开；rest 提醒只按可见性延后。修复后同一脚本：snake-run ms=1504、结算 durationMs=1504、点按继续累计；改写真机时序（blur → visibilitychange 无 focus）后 smoke 新增 3 项：开局仍计时 1314ms、失焦暂停零泄漏且点「继续」恢复 1318ms、结算 durationMs=2632。门禁（本地实跑）：smoke **108/108**、pwa **9/9**、zen **14/14**、calm **17/17**、review **5/5**、interaction **5/5**、tower **23/23**、immersive **32/32**、gameplay base **22/22**（11 场景 ×2 遍）、validate_site PASS、build_site PASS、check_inline_scripts PASS（19 HTML/20 段脚本）、arcade_design_check PASS（143 文件）、node --check engine.js/sw.js PASS。无 key/Schema 变更；版本链仍 0.13.2 / SW studiokit-arcade-0.13.2-v1；设计与复现见 apps/arcade/DESIGN-0.13.2.md 第 4 节；未提交未推送未发布；真机 UNVERIFIED。"
     }
   ]
 }

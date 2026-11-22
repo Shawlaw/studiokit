@@ -447,9 +447,15 @@
   }
 
   /* ----------------------------------------------------------
-   * 游玩时长 / 轮次统计（0.5.0）
-   * - 只累计真正处于游玩态的时间：开始/暂停弹层关闭且页面可见；
+   * 游玩时长 / 轮次统计（0.5.0，0.13.2 修复 iOS 永久停摆）
+   * - 只累计真正处于游玩态的时间：开始/暂停/结算弹层关闭且页面可见；
    *   暂停、切后台、停在开始界面都不计时。
+   * - 0.13.2：不再把 window focus 当作计时的必要条件。iOS 主屏 PWA 的
+   *   focus/blur 事件不可靠（回到前台常常只有 visibilitychange，甚至整个页面
+   *   生命周期内只收到一次 blur），旧实现漏掉 focus 就永久停摆；而所有游戏在
+   *   失焦/隐藏时都会自动暂停并打开暂停弹层，所以「弹层关闭 + 页面可见」本身
+   *   已经足以排除后台与失焦时间。计时条件改为可自愈：可见性变化、pageshow、
+   *   用户点按/按键、15 秒落盘 tick 都会按实时状态重新对齐时间片。
    * - 每款游戏记录总时长、完成轮次、最近 30 轮明细与最近 120 天日汇总。
    * - 新增独立 key，既有 progress/runs 的 key 与 Schema 不变。
    * ---------------------------------------------------------- */
@@ -547,7 +553,6 @@
     const currentGame = detectCurrentGame();
     let overlayOpen = true;
     let visible = !document.hidden;
-    let focused = true;
     let segStart = 0;
     let sessionMs = 0;
     let roundMs = 0;
@@ -564,8 +569,10 @@
 
     function remindRest() {
       if (restReminded || restMs < PLAYTIME_REST_MS) return false;
-      /* 切到后台/失焦时不消耗这一次机会：等回到页面可见且聚焦再提示。 */
-      if (!visible || !focused || document.hidden) {
+      /* 页面不可见时不消耗这一次机会：等回到前台再提示。
+         0.13.2 起不再要求 window focus —— iOS 主屏 PWA 可能永远收不到 focus，
+         那会把这条一次性提示一起吞掉。 */
+      if (!visible || document.hidden) {
         restPending = true;
         return false;
       }
@@ -589,9 +596,31 @@
       if (restMs >= PLAYTIME_REST_MS) remindRest();
     }
 
+    /* 「有效游玩态」：页面可见，且开始/暂停/结算弹层已关闭。
+       0.13.2 起不再要求 window focus：iOS 主屏 PWA 的 focus/blur 不可靠，
+       而 16 款游戏在失焦/隐藏时都会自动暂停并打开暂停弹层，弹层本身已经
+       拦住了失焦时间，不需要再叠一个永远等不到的 focus 门槛。 */
+    function canTrack() {
+      return !!currentGame && !overlayOpen && visible;
+    }
+
     function startSegment() {
-      if (!currentGame || overlayOpen || !visible || !focused || segStart) return;
+      if (segStart || !currentGame) return;
+      visible = !document.hidden;
+      if (!canTrack()) return;
       segStart = performance.now();
+    }
+
+    /* 事件可能丢失（尤其 iOS 主屏 PWA）：按当前实时状态对时间片自愈一次。
+       可见且弹层关闭就补开时间片，否则先把已游玩片段落盘。 */
+    function syncSegment() {
+      if (!currentGame) return;
+      visible = !document.hidden;
+      if (!canTrack()) {
+        if (segStart) flushTime();
+        return;
+      }
+      startSegment();
     }
 
     function pruneDays(rec) {
@@ -651,6 +680,9 @@
       data.games[currentGame.id] = rec;
       data.updatedAt = now.toISOString();
       safeSetJSON(PLAYTIME_KEY, data);
+      /* 0.13.2：结算不一定会立刻弹出结果层（例如逐手结算的棋牌），若此刻仍在
+         游玩态就立即续上下一段时间片，避免要等 15 秒 tick 才恢复计时。 */
+      syncSegment();
       /* 0.8.1：把本轮有效游玩时长返回给 Progress.recordPlay，供积分记录使用。 */
       return { duration };
     }
@@ -658,28 +690,38 @@
     function install() {
       if (installed || !currentGame) return;
       installed = true;
+      /* 回到前台 / 重新获得焦点 / 从往返缓存恢复：按实时可见性重新对齐时间片。 */
+      const resumeIfPlaying = () => {
+        syncSegment();
+        if (restPending) remindRest();
+      };
       document.addEventListener('visibilitychange', () => {
         visible = !document.hidden;
         if (!visible) flushTime();
-        else {
-          if (!overlayOpen) startSegment();
-          if (restPending) remindRest();
-        }
+        else resumeIfPlaying();
       });
-      /* createLoop 在窗口失焦时也会自动暂停；计时必须跟随同一语义。 */
-      window.addEventListener('blur', () => {
-        focused = false;
-        flushTime();
-      });
-      window.addEventListener('focus', () => {
-        focused = true;
-        if (!overlayOpen && visible) startSegment();
-        if (restPending) remindRest();
-      });
+      /* 窗口失焦：先把已游玩片段落盘；真正的暂停由 createLoop 的自动暂停 +
+         暂停弹层接管。0.13.2：恢复计时不再只依赖 focus 事件（iOS 主屏 PWA
+         可能永远收不到 focus），下一次点按/按键或 15 秒 tick 会自愈。 */
+      window.addEventListener('blur', flushTime);
+      window.addEventListener('focus', resumeIfPlaying);
+      window.addEventListener('pageshow', resumeIfPlaying);
+      /* 用户操作是「人正看着这一页」的最强证据：任何点按/按键都补一次对齐，
+         修复 iOS 漏发 visibilitychange/focus 后计时永久停摆。 */
+      const markActive = () => {
+        syncSegment();
+      };
+      window.addEventListener('pointerdown', markActive, { capture: true, passive: true });
+      window.addEventListener('keydown', markActive, { capture: true, passive: true });
+      window.addEventListener('touchstart', markActive, { capture: true, passive: true });
       window.addEventListener('pagehide', flushTime);
       window.addEventListener('beforeunload', flushTime);
       tickTimer = setInterval(() => {
-        if (overlayOpen || !visible || !focused) return;
+        if (!currentGame) return;
+        /* 事件可能丢：落盘前先按实时可见性校正，条件满足就补开时间片。 */
+        visible = !document.hidden;
+        if (overlayOpen || !visible) return;
+        syncSegment();
         flushTime();
         /* flushTime 会关闭当前时间片；持续游玩时必须立即开启下一段，否则第一次 15s 落盘后不再计时。 */
         startSegment();
