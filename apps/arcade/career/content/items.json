@@ -67,7 +67,7 @@
       },
       "requires": {
         "alloy": 2,
-        "crystal": 1
+        "starcrystal": 1
       },
       "contentVersion": "0.17.0"
     }

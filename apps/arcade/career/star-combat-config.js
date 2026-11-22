@@ -86,6 +86,29 @@
     wing: Object.freeze({}),
   });
 
+  /* 0.17（D17-15 / ADR §19.5）：生涯制造模块的战斗参数，与 career/crafting.js 的
+   * MODULE_EFFECTS 同源（测试逐项对齐，避免游戏页自己发明数值）。
+   * 与 BUILTIN_MODULE_DELTAS（经典机库六模块，每级线性加成）不同，这三件是
+   * 「每级一次」的乘法 / 布尔效果，只在 resolveCareerConfig 里合并：
+   *   shieldOnce   每趟生涯出击最多抵消一次受击（布尔，不与等级相乘）；
+   *   magnet       拾取半径相对基线 1 的加成（0.15 → ×1.15）；
+   *   armorMul     承伤倍率（0.95 → 承伤 −5%，即装甲略厚）；
+   *   energyCap    能量上限增量（+15）；
+   *   firepowerMul 火力倍率修正（0.97 → ×0.97，略降）。
+   * 这些模块不是旧机库模块（旧机库只有 hull/power/engine/energy/bay/wing），
+   * 因此不存在与 formula:1 旧机库双计的可能。 */
+  const CAREER_MODULE_EFFECTS = Object.freeze({
+    'phase-shield': Object.freeze({ shieldOnce: true }),
+    'cargo-magnet': Object.freeze({ magnet: 0.15, armorMul: 0.95 }),
+    'energy-cell': Object.freeze({ energyCap: 15, firepowerMul: 0.97 }),
+  });
+
+  const CAREER_MODULE_MAX = Object.freeze({
+    'phase-shield': 1,
+    'cargo-magnet': 1,
+    'energy-cell': 1,
+  });
+
   /* 生涯机体安全范围。0.16 的 career-core.RULESET 只有经济上限，没有战斗数值，
    * 因此本模块自己持有战斗安全范围；经济项（价格）与 RULESET 对齐（见下）。 */
   const SAFE_LIMITS = Object.freeze({
@@ -98,6 +121,8 @@
     magnet: Object.freeze({ min: 0.5, max: 3 }),
     energyCap: Object.freeze({ min: 60, max: 260 }),
     speedMul: Object.freeze({ min: 0.5, max: 2 }),
+    /* 0.17 生涯模块承伤倍率；1 = 与经典一致，仅 cargo-magnet 会略低于 1。 */
+    armorMul: Object.freeze({ min: 0.5, max: 1.5 }),
   });
 
   /* career-core.RULESET 的只读镜像：仅用于价格合法性 / 测试防漂移。
@@ -296,7 +321,7 @@
       })
       : [];
     const explicitMax = toFiniteNumber(entry.max);
-    let max = BUILTIN_MODULE_MAX[moduleId] || 0;
+    let max = BUILTIN_MODULE_MAX[moduleId] || CAREER_MODULE_MAX[moduleId] || 0;
     if (explicitMax !== null) max = Math.floor(explicitMax);
     else if (levels.length > 0) max = levels.length;
     if (!(max > 0)) max = 0;
@@ -305,7 +330,7 @@
 
   function moduleMax(moduleId, modules) {
     if (modules && modules[moduleId]) return modules[moduleId].max;
-    return BUILTIN_MODULE_MAX[moduleId] || 0;
+    return BUILTIN_MODULE_MAX[moduleId] || CAREER_MODULE_MAX[moduleId] || 0;
   }
 
   function moduleLevelStats(moduleId, level, modules) {
@@ -384,7 +409,9 @@
     collectLevelInputs(modules).forEach(function (entry) {
       const moduleId = entry.moduleId;
       if (typeof moduleId !== 'string' || !isValidId(moduleId)) return;
-      const known = !!modulesMap[moduleId] || Object.prototype.hasOwnProperty.call(BUILTIN_MODULE_MAX, moduleId);
+      const known = !!modulesMap[moduleId] ||
+        Object.prototype.hasOwnProperty.call(BUILTIN_MODULE_MAX, moduleId) ||
+        Object.prototype.hasOwnProperty.call(CAREER_MODULE_MAX, moduleId);
       if (!known) return;
       const max = moduleMax(moduleId, modulesMap);
       result[moduleId] = clampInt(entry.level, 0, max, 0);
@@ -535,6 +562,29 @@
         });
       });
 
+      /* 0.17：三件生涯制造模块的效果合并（布尔 / 乘法 / 加法分开处理，
+         与经典机库每级线性增量互不重复计算）。 */
+      const careerEffects = {
+        shieldOnce: false,
+        magnet: 0,
+        energyCap: 0,
+        armorMul: 1,
+        firepowerMul: 1,
+      };
+      let hasCareerModule = false;
+      Object.keys(levels).forEach(function (moduleId) {
+        const level = levels[moduleId];
+        if (!(level > 0)) return;
+        const effect = CAREER_MODULE_EFFECTS[moduleId];
+        if (!effect) return;
+        hasCareerModule = true;
+        if (effect.shieldOnce === true) careerEffects.shieldOnce = true;
+        if (typeof effect.magnet === 'number') careerEffects.magnet += effect.magnet * level;
+        if (typeof effect.energyCap === 'number') careerEffects.energyCap += effect.energyCap * level;
+        if (typeof effect.armorMul === 'number') careerEffects.armorMul *= Math.pow(effect.armorMul, level);
+        if (typeof effect.firepowerMul === 'number') careerEffects.firepowerMul *= Math.pow(effect.firepowerMul, level);
+      });
+
       const baseLives = shipStat(stats, 'lives', CLASSIC_BASE.lives);
       const baseLifeCap = shipStat(stats, 'lifeCap', baseLives + CLASSIC_BASE.lifeCapHeadroom);
       const baseItemCap = shipStat(stats, 'itemCap', CLASSIC_BASE.itemCap);
@@ -559,7 +609,7 @@
         maxLives
       );
 
-      return {
+      const config = {
         formula: FORMULA_VERSION,
         shipId: shipId,
         shipName: shipNameOf(shipId, def),
@@ -572,13 +622,13 @@
           CLASSIC_BASE.itemCap
         ),
         firepowerMul: round4(clampNumber(
-          baseFirepower,
+          baseFirepower * careerEffects.firepowerMul,
           SAFE_LIMITS.firepowerMul.min,
           SAFE_LIMITS.firepowerMul.max,
           CLASSIC_BASE.firepower
         )),
         damageMul: round4(clampNumber(
-          baseDamage + aggregate.damage,
+          (baseDamage + aggregate.damage) * careerEffects.firepowerMul,
           SAFE_LIMITS.damageMul.min,
           SAFE_LIMITS.damageMul.max,
           CLASSIC_BASE.firepower
@@ -590,13 +640,13 @@
           CLASSIC_BASE.invul
         )),
         magnet: round4(clampNumber(
-          baseMagnet + aggregate.magnet,
+          baseMagnet + aggregate.magnet + careerEffects.magnet,
           SAFE_LIMITS.magnet.min,
           SAFE_LIMITS.magnet.max,
           CLASSIC_BASE.magnet
         )),
         energyCap: clampInt(
-          baseEnergy + aggregate.energyCap,
+          baseEnergy + aggregate.energyCap + careerEffects.energyCap,
           SAFE_LIMITS.energyCap.min,
           SAFE_LIMITS.energyCap.max,
           CLASSIC_BASE.energyCap
@@ -609,6 +659,18 @@
         )),
         owned: equipment['ship:' + shipId + ':owned'] === true,
       };
+      /* 只在真的装备了三件生涯模块时附加字段：无模块时返回形状与 0.16 完全一致，
+         既有逐字段/键集合断言不受影响（ADR §18.5 向后兼容）。 */
+      if (hasCareerModule) {
+        config.armorMul = round4(clampNumber(
+          careerEffects.armorMul,
+          SAFE_LIMITS.armorMul.min,
+          SAFE_LIMITS.armorMul.max,
+          1
+        ));
+        config.shieldOnce = careerEffects.shieldOnce === true;
+      }
+      return config;
     } catch (err) {
       return fallbackCareerConfig();
     }
@@ -734,6 +796,8 @@
     EXPECTED_PRICES: EXPECTED_PRICES,
     DEFAULT_SHIP_NAMES: DEFAULT_SHIP_NAMES,
     BUILTIN_MODULE_MAX: BUILTIN_MODULE_MAX,
+    CAREER_MODULE_EFFECTS: CAREER_MODULE_EFFECTS,
+    CAREER_MODULE_MAX: CAREER_MODULE_MAX,
     SAFE_LIMITS: SAFE_LIMITS,
     RULESET_MIRROR: RULESET_MIRROR,
     classicHangarStats: classicHangarStats,

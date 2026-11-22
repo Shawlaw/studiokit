@@ -552,6 +552,11 @@
         settled: false,
         settledResult: null,
         lastOutcome: 'lost',
+        /* 0.17（ADR §19.5 / D17-15）生涯模块运行态：只在本页职业 run 内读写，
+           经典/挑战/割草不读这些字段（数值全部来自职业配置，不碰旧机库 formula:1）。 */
+        armorPool: 0,      // 承伤累计池：armorMul<1 时每满 1 点才扣 1 条生命
+        shieldCharges: 0,  // phase-shield：每趟出击最多 1 次受击抵消
+        waveCompletions: 0 // 真实关卡清空次数（与 wave.completed 事件同源）
       };
 
       function careerTicketParam() {
@@ -639,7 +644,11 @@
         resolveCareerBattleStats(runInfo);
         return true;
       }
-      /* 机体参数：只读 loadout + star-combat-config（D16-05）；缺失/异常回退旧翼默认，绝不抛。 */
+      /* 机体参数：只读 loadout + star-combat-config（D16-05）。
+         0.17（D17-15）：装备里的 module:<id>:level 经 resolveCareerConfig 合并出
+         shieldOnce / magnet / armorMul / energyCap / firepowerMul（phase-shield /
+         cargo-magnet / energy-cell）；模块目录来自 career.items.modules 内容，游戏页不写死数值。
+         缺失/异常回退旧翼默认，绝不抛。 */
       function resolveCareerBattleStats(runInfo) {
         const fallback = { ...CAREER_OLD_WING_STATS };
         let loadoutPromise = null;
@@ -655,11 +664,13 @@
             if (!cfg || typeof cfg.resolveCareerConfig !== 'function') {
               return { stats: fallback, source: 'old-wing-default' };
             }
+            const items = career && career.items && typeof career.items === 'object' ? career.items : null;
             let resolved = null;
             try {
               resolved = cfg.resolveCareerConfig({
                 equipment: loadout && loadout.ok && loadout.equipment ? loadout.equipment : {},
-                items: career && career.items ? career.items : null,
+                items: items,
+                modules: items && Array.isArray(items.modules) ? items.modules : null
               });
             } catch (err) {
               resolved = null;
@@ -675,7 +686,9 @@
             applyCareerStats(fallback, 'old-wing-default');
           });
       }
-      /* star-combat-config 已 clamp 过；这里再兜一层默认值，防止畸形对象把 HUD 撑爆。 */
+      /* star-combat-config 已 clamp 过；这里再兜一层默认值，防止畸形对象把 HUD 撑爆。
+         0.17 模块字段（armorMul/shieldOnce/firepowerMul）只在职业配置返回时保留，
+         缺省时与 0.16 完全一致（armorMul=1 / shieldOnce=false / firepowerMul=damageMul）。 */
       function sanitizeCareerStats(raw) {
         if (!raw || typeof raw !== 'object') return null;
         const stats = {
@@ -687,6 +700,9 @@
           magnet: clamp(Number(raw.magnet) || 1, 0.5, 3),
           energyCap: clamp(Math.round(Number(raw.energyCap) || CAREER_OLD_WING_STATS.energyCap), 40, 400),
           speedMul: clamp(Number(raw.speedMul) || 1, 0.5, 2),
+          firepowerMul: clamp(Number(raw.firepowerMul) || Number(raw.damageMul) || 1, 0.5, 3),
+          armorMul: clamp(Number(raw.armorMul) || 1, 0.5, 1.5),
+          shieldOnce: raw.shieldOnce === true,
         };
         stats.lifeCap = Math.max(stats.lifeCap, stats.maxLives);
         return stats;
@@ -701,6 +717,8 @@
           run.maxEnergy = Math.max(run.maxEnergy, energyCap());
           run.energy = Math.min(run.maxEnergy, Math.max(run.energy, run.maxEnergy * 0.4));
           lives = clamp(Math.max(lives, startingLives()), 1, maxLives());
+          /* 机体参数在开局后才异步到达时，补上护盾充能（本趟出击一次）。 */
+          careerBattle.shieldCharges = Math.max(careerBattle.shieldCharges, careerBattle.stats.shieldOnce ? 1 : 0);
           syncHud();
         } else if (state === 'ready' && mode === 'classic' && dom.overlay && !dom.overlay.hidden) {
           /* 仍在开局弹层：刷新用真实机体数值重画一次（不自动开局）。 */
@@ -2243,6 +2261,8 @@
         syncChallengeHud(true);
       }
       function startChallenge(ref) {
+        /* 0.17（ADR §19.3）：职业 run 内挑战不可进入（入口、测试钩子都拒绝）。 */
+        if (isCareerRun()) return false;
         const stage = challengeStageByRef(ref);
         if (!stage) {
           A.showToast('挑战数据不可用');
@@ -2884,6 +2904,15 @@
       }
 
       function stageClear(cleared) {
+        /* 0.17（ADR §19.4 / D17-15）：真实关卡清空提交一次 wave.completed。
+           - 只在职业 run 提交（经典/挑战/割草不新增事件、零行为变化）；
+           - level/theme 取「刚清空这一关」的真实状态（在 level+1 / syncRunTheme 之前捕获）；
+           - 只有 Boss 真实被击破（killEnemy → stageClear）才会到达这里，开局/暂停不发。 */
+        if (isCareerRun()) {
+          const clearedTheme = run.theme && run.theme.id ? run.theme.id : null;
+          careerBattle.waveCompletions += 1;
+          careerObserve('wave.completed', { level: cleared, theme: clearedTheme });
+        }
         boss = null;
         level += 1;
         stageTime = 0;
@@ -3048,6 +3077,10 @@
         syncRunTheme();
         /* 委托 startParams.themeId 只在起始关覆盖主题（T2：第 3 关电磁风暴）。 */
         applyCareerStartTheme();
+        /* 0.17 生涯模块：每趟出击重置护盾充能与承伤池（经典/挑战/割草不读这些字段）。 */
+        careerBattle.armorPool = 0;
+        careerBattle.shieldCharges = careerBattle.stats.shieldOnce ? 1 : 0;
+        careerBattle.waveCompletions = 0;
         syncHud();
         syncJoyTools();
       }
@@ -4352,6 +4385,40 @@
           syncJoyTools();
           return;
         }
+        /* 0.17（ADR §19.5 / D17-15）：职业模块只在生涯 run 生效。
+           - phase-shield：每趟出击最多抵消一次受击（不扣生命、不扣火力）；
+           - cargo-magnet：armorMul 承伤倍率进伤害池，累计满 1 点才扣 1 条生命；
+             armorMul=1 时第一次受击立即扣 1 条，与 0.16/经典逐字一致。 */
+        if (isCareerRun()) {
+          if (careerBattle.shieldCharges > 0) {
+            careerBattle.shieldCharges -= 1;
+            player.invul = Math.max(1.2, invulSeconds());
+            run.combo = 0;
+            run.comboTimer = 0;
+            addRing(player.x, player.y, '#7ce8e0', 150, 0.5, 4);
+            flash = Math.max(flash, 0.4);
+            flashColor = '#7ce8e0';
+            addFloater(player.x, player.y - 46, '相位护盾 · 抵消一次', '#7ce8e0');
+            A.Sfx.play('perfect');
+            syncHud();
+            syncJoyTools();
+            return;
+          }
+          const armorMulValue = clamp(Number(careerBattle.stats.armorMul) || 1, 0.5, 1.5);
+          careerBattle.armorPool += armorMulValue;
+          if (careerBattle.armorPool < 1) {
+            player.invul = Math.max(0.9, invulSeconds());
+            run.combo = 0;
+            run.comboTimer = 0;
+            addRing(player.x, player.y, '#9ecbff', 110, 0.4, 3);
+            addFloater(player.x, player.y - 46, '装甲吸收冲击', '#9ecbff');
+            A.Sfx.play('hit');
+            syncHud();
+            syncJoyTools();
+            return;
+          }
+          careerBattle.armorPool = Math.max(0, careerBattle.armorPool - 1);
+        }
         lives -= 1;
         player.invul = invulSeconds();
         shake = A.reducedMotion ? 0 : 8;
@@ -5609,6 +5676,7 @@
           },
           /* #test：跳过解锁直接进入关卡，供拆段回放/观测使用（不写挑战记录）。 */
           forceStartChallenge(ref) {
+            if (isCareerRun()) return false;
             const stage = challengeStageByRef(ref);
             if (!stage) return false;
             mode = 'challenge';
@@ -5847,6 +5915,10 @@
               stats: { ...careerBattle.stats },
               statsSource: careerBattle.statsSource,
               shipName: careerBattle.shipName,
+              /* 0.17（D17-15）：职业模块运行态只读探针（phase-shield / cargo-magnet）。 */
+              shieldCharges: careerBattle.shieldCharges,
+              armorPool: Math.round(careerBattle.armorPool * 1000) / 1000,
+              waveCompletions: careerBattle.waveCompletions,
               lives,
               maxLives: maxLives(),
               energy: Math.round(run.energy * 10) / 10,

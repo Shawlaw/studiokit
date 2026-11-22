@@ -354,6 +354,165 @@ let CommissionModule = null;
 let careerCore = null;
 let commissionsContent = null;
 
+const FIXTURE_COMMISSIONS = {
+  "contentVersion": "0.17.0",
+  "commissions": [
+    {
+      "commissionId": "pendulum-tower.T1",
+      "gameId": "pendulum-tower",
+      "professionId": "engineering.structural",
+      "title": "试工：四层起步",
+      "summary": "在潮汐吊臂下把四层集装箱稳稳叠起。",
+      "issuer": "旧港施工队",
+      "objective": {
+        "kind": "tower.floor_stable",
+        "atLeast": 4,
+        "context": {}
+      },
+      "objectiveBonus": 0,
+      "startParams": {},
+      "reward": {
+        "credits": 70,
+        "items": {
+          "alloy": 1
+        },
+        "evidence": [
+          "E-C1-site"
+        ],
+        "flags": [
+          "C1.work_done"
+        ]
+      },
+      "repeatSalaryCredits": 25,
+      "unlock": {
+        "all": []
+      },
+      "risk": "low",
+      "durationHint": "约 2–4 分钟"
+    },
+    {
+      "commissionId": "pendulum-tower.T2",
+      "gameId": "pendulum-tower",
+      "professionId": "engineering.structural",
+      "title": "夜班：六层结构",
+      "summary": "夜潮涨起来之前，把六层结构立稳。",
+      "issuer": "旧港施工队",
+      "objective": {
+        "kind": "tower.floor_stable",
+        "atLeast": 6,
+        "context": {}
+      },
+      "objectiveBonus": 10,
+      "startParams": {},
+      "reward": {
+        "credits": 110,
+        "items": {
+          "alloy": 2
+        },
+        "evidence": [
+          "E-C1-site-2"
+        ],
+        "flags": [
+          "C1.foreman"
+        ]
+      },
+      "repeatSalaryCredits": 35,
+      "unlock": {
+        "all": [
+          {
+            "kind": "chapterFlag",
+            "value": "C1.work_done"
+          }
+        ]
+      },
+      "risk": "medium",
+      "durationHint": "约 3–5 分钟"
+    },
+    {
+      "commissionId": "star-raid.T1",
+      "gameId": "star-raid",
+      "professionId": "adventure.pilot",
+      "title": "护航：第一巡逻区",
+      "summary": "跟着旧港的护航线走一趟，把巡防队赶回去。",
+      "issuer": "旧港护航处",
+      "objective": {
+        "kind": "boss.defeated",
+        "atLeast": 1,
+        "context": {
+          "level": 1
+        }
+      },
+      "objectiveBonus": 0,
+      "startParams": {
+        "startLevel": 1
+      },
+      "reward": {
+        "credits": 90,
+        "items": {
+          "alloy": 1
+        },
+        "evidence": [
+          "E-C1-patrol"
+        ],
+        "flags": [
+          "C1.flight_done"
+        ]
+      },
+      "repeatSalaryCredits": 30,
+      "unlock": {
+        "all": []
+      },
+      "risk": "medium",
+      "durationHint": "约 3–5 分钟"
+    },
+    {
+      "commissionId": "star-raid.T2",
+      "gameId": "star-raid",
+      "professionId": "adventure.pilot",
+      "title": "护航：电磁风暴",
+      "summary": "风暴里有一艘母舰在等，把它挡在航道外。",
+      "issuer": "旧港护航处",
+      "objective": {
+        "kind": "boss.defeated",
+        "atLeast": 1,
+        "context": {
+          "level": 3,
+          "theme": "storm"
+        }
+      },
+      "objectiveBonus": 15,
+      "startParams": {
+        "startLevel": 3,
+        "themeId": "storm"
+      },
+      "reward": {
+        "credits": 130,
+        "items": {
+          "alloy": 2,
+          "crystal": 1
+        },
+        "evidence": [
+          "E-C1-patrol-2"
+        ],
+        "flags": [
+          "C1.storm_done"
+        ]
+      },
+      "repeatSalaryCredits": 40,
+      "unlock": {
+        "all": [
+          {
+            "kind": "chapterFlag",
+            "value": "C1.flight_done"
+          }
+        ]
+      },
+      "risk": "high",
+      "durationHint": "约 4–6 分钟"
+    }
+  ]
+};
+
 function assembly() {
   CommissionModule = require(COMMISSION_CORE);
   if (!CommissionModule || typeof CommissionModule.createCommissionCore !== 'function') {
@@ -363,9 +522,11 @@ function assembly() {
   if (!careerCore || typeof careerCore.validateCommission !== 'function') {
     throw new Error('career-core 缺少 validateCommission');
   }
-  commissionsContent = JSON.parse(fs.readFileSync(COMMISSIONS_JSON, 'utf8'));
-  if (!commissionsContent || !Array.isArray(commissionsContent.commissions) || commissionsContent.commissions.length < 4) {
-    throw new Error('commissions.json 内容异常');
+  /* 0.16 生命周期金样：真实内容 0.17 已扩到 96 条，这里固定使用 0.16 四条目，
+     真实 96 条 schema/目标由 commission-schema 与 career_96_missions_test 覆盖。 */
+  commissionsContent = JSON.parse(JSON.stringify(FIXTURE_COMMISSIONS));
+  if (!commissionsContent || !Array.isArray(commissionsContent.commissions) || commissionsContent.commissions.length !== 4) {
+    throw new Error('0.16 合成内容异常');
   }
 }
 
@@ -421,7 +582,7 @@ function bossEvent(core, ticketId, payload, seq) {
  * ------------------------------------------------------------------ */
 
 async function groupA() {
-  await check('A1 configure 真实 commissions.json：4 条、无 errors、usable', async () => {
+  await check('A1 configure 0.16 合成四条目（生命周期夹具）：4 条、无 errors、usable', async () => {
     const { core } = scenario();
     const result = core.configure({ content: commissionsContent });
     eq(result.count, 4, 'count');
@@ -432,7 +593,7 @@ async function groupA() {
     return 'count=4';
   });
 
-  await check('A2 坏条目隔离：4 合法 + 4 类坏条目进 errors，目录保留 4 条不抛', async () => {
+  await check('A2 坏条目隔离：4 合法 + 坏条目进 errors，目录保留 4 条不抛', async () => {
     const valid = commissionsContent.commissions;
     const base = {
       gameId: 'pendulum-tower',
@@ -493,9 +654,9 @@ async function groupA() {
     return 'unsupported-content';
   });
 
-  await check('A5 同 major 补丁版本（0.16.9）可正常使用', async () => {
+  await check('A5 同 major 补丁版本（0.17.9）可正常使用', async () => {
     const patched = clone(commissionsContent);
-    patched.contentVersion = '0.16.9';
+    patched.contentVersion = '0.17.9';
     const { core } = scenario({ content: false });
     const configured = core.configure({ content: patched });
     assert(configured.ok === true, 'ok 应 true：' + JSON.stringify(configured.errors));

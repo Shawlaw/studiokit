@@ -13,6 +13,16 @@
     .challenge-sheet { position: absolute; inset: 8px; z-index: 6; display: flex; flex-direction: column; justify-content: flex-end; gap: 8px; overflow: auto; }
     .challenge-sheet[hidden] { display: none; }
     .challenge-sheet .ac-challenge-panel { width: 100%; max-height: 100%; overflow: auto; }
+    /* 0.17 职业委托：一行戏内目标（title + 目标值），320/375 最多两行，不新增按钮。 */
+    .game-hint.is-career-goal {
+      max-width: min(520px, 100%);
+      color: #e8e2ff;
+      display: -webkit-box;
+      -webkit-line-clamp: 2;
+      -webkit-box-orient: vertical;
+      overflow: hidden;
+      overflow-wrap: anywhere;
+    }
   </style>
   <script src="../../../shared/site-shell.js" defer></script>
   <script src="../engine.js"></script>
@@ -105,6 +115,7 @@
         chGoal: document.querySelector('[data-ch-goal]'),
         chTime: document.querySelector('[data-ch-time]'),
         chCollect: document.querySelector('[data-ch-collect]'),
+        gameHint: document.querySelector('.game-hint'),
       };
       const classicHudSpans = Array.from(document.querySelectorAll('.game-hud > span'));
       const ui = A.createOverlayUi(dom);
@@ -166,6 +177,144 @@
 
       let high = A.Progress.get('gravity-flip').high;
       dom.hudHigh.textContent = String(high);
+
+      /* ===== 0.17 职业委托 run（ADR §19.3 / §19.4 / §19.8）=====
+         - 只有从旧港告示板接单后带 ?career=<ticketId> 进入本页才生效；
+         - 无 ticket / ticket 不匹配 / commission-core 缺失时完全走 0.16 经典路径；
+         - 委托 run 内不读不写旧 RunSave（studiokit:arcade:runs:v1），不写 progress/Scores/
+           挑战/GameMeta，serialize() 返回 null，挑战入口不可进入；
+         - 真实事件只在状态提交点发出：gravity.flip（沿用 0.9 既有事件，每次真实翻转一次）、
+           distance.reached（真实滚动跨过 100m 里程碑时提交当时的累计米数；暂停 / 待机 / 按键刷不发）。 */
+      const CAREER_GAME_ID = 'gravity-flip';
+      const CAREER_DISTANCE_STEP = 100;
+      const HINT_CLASSIC = dom.gameHint ? dom.gameHint.textContent : '';
+      let careerLocked = false;
+      let careerLastDistanceMeters = 0;
+      let careerDistanceEvents = 0;
+      /* #test 专用存活辅助统计（只读测量：真实翻转次数 / 真实步进数 / 真实 y 区间 / 掉命数）。 */
+      const careerPilot = { steps: 0, flips: 0, hits: 0, minY: Infinity, maxY: -Infinity };
+
+      function readCareerTicketParam() {
+        try {
+          const search = String((window.location && window.location.search) || '');
+          const match = /(?:^|[?&])career=([^&]+)/.exec(search);
+          if (!match) return '';
+          const value = decodeURIComponent(match[1].replace(/\+/g, ' '));
+          return /^[A-Za-z0-9._:-]{1,120}$/.test(value) ? value : '';
+        } catch (err) {
+          return '';
+        }
+      }
+
+      /* 本页当前是否有属于本游戏的委托 run（bridge 只在 ticket 校验通过时填充）。 */
+      function readCareerRun() {
+        try {
+          if (!career || typeof career.isCommissionRun !== 'function' || !career.isCommissionRun()) return null;
+          const run = career.commissionRun;
+          if (!run || run.gameId !== CAREER_GAME_ID) return null;
+          return run;
+        } catch (err) {
+          return null;
+        }
+      }
+
+      /* 只读 commissionRun.commission；内容缺失时返回 null，不发明文案。 */
+      function careerGoalParts() {
+        const run = readCareerRun();
+        const commission = run && run.commission ? run.commission : null;
+        if (!commission) return null;
+        const title = typeof commission.title === 'string' ? commission.title : '';
+        const summary = typeof commission.summary === 'string' ? commission.summary : '';
+        if (!title && !summary) return null;
+        const objective = commission.objective && typeof commission.objective === 'object' ? commission.objective : {};
+        const kind = typeof objective.kind === 'string' ? objective.kind : '';
+        const rawAtLeast = Number(objective.atLeast);
+        const atLeast = Number.isFinite(rawAtLeast) && rawAtLeast > 0 ? Math.floor(rawAtLeast) : 0;
+        let minValue = null;
+        const mv = objective.minValue && typeof objective.minValue === 'object' ? objective.minValue : null;
+        if (mv) {
+          const value = Number(mv.value);
+          if (Number.isFinite(value) && value > 0) {
+            minValue = { field: typeof mv.field === 'string' ? mv.field : '', value: Math.floor(value) };
+          }
+        }
+        return { title, summary, kind, atLeast, minValue };
+      }
+
+      function careerGoalText() {
+        const goal = careerGoalParts();
+        if (!goal) return '';
+        const label = goal.title || goal.summary;
+        let target = '';
+        if (goal.minValue) {
+          target = '前进 ' + goal.minValue.value + (goal.minValue.field === 'meters' ? 'm' : '');
+        } else if (goal.atLeast) {
+          target = (goal.kind === 'gravity.flip' ? '翻转 ' : '完成 ') + goal.atLeast + ' 次';
+        }
+        return '委托：' + label + (target ? ' · ' + target : '');
+      }
+
+      function escText(value) {
+        return String(value == null ? '' : value).replace(/[&<>"']/g, (ch) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[ch]));
+      }
+
+      /* 底部说明行在委托 run 内换成一行目标；经典 run 逐字恢复 0.16 文案。 */
+      function syncCareerHint() {
+        if (!dom.gameHint) return;
+        if (careerLocked) {
+          const text = careerGoalText();
+          if (text) {
+            dom.gameHint.setAttribute('data-career-goal', '1');
+            dom.gameHint.classList.add('is-career-goal');
+            dom.gameHint.textContent = text;
+            return;
+          }
+          dom.gameHint.removeAttribute('data-career-goal');
+          dom.gameHint.classList.remove('is-career-goal');
+          dom.gameHint.textContent = HINT_CLASSIC;
+          return;
+        }
+        dom.gameHint.removeAttribute('data-career-goal');
+        dom.gameHint.classList.remove('is-career-goal');
+        dom.gameHint.textContent = HINT_CLASSIC;
+      }
+
+      /* 委托 run 内断开旧 RunSave：serialize() 返回 null，并兜底替换 autosave 的四个出口。 */
+      function lockRunSave() {
+        if (careerLocked) return;
+        careerLocked = true;
+        document.body.classList.add('is-career-run');
+        try {
+          autosave.saveNow = function () { return false; };
+          autosave.tick = function () {};
+          autosave.clear = function () {};
+          autosave.load = function () { return null; };
+        } catch (err) {
+          /* 忽略：serialize() 的 career 门禁仍是最终兜底 */
+        }
+        syncCareerHint();
+      }
+
+      /**
+       * 真实前进后提交累计米数（payload = {meters}，累计里程，与 HUD/结算同一口径）。
+       * 触发点是真实滚动跨过的 100m 里程碑（每跨一个里程碑发一次，payload 取当时的真实
+       * Math.floor(dist)）；暂停 / 待机 / 按键翻转都不会触发。
+       * force=true 仅用于结算前补发真实终值（仍严格递增，不超过真实的 Math.floor(dist)）。
+       */
+      function noteCareerDistance(force) {
+        if (!careerLocked || mode !== 'classic' || state !== 'playing') return false;
+        if (!career || typeof career.observe !== 'function') return false;
+        const meters = Math.floor(dist);
+        if (meters <= careerLastDistanceMeters) return false;
+        if (!force) {
+          const nextMilestone = (Math.floor(careerLastDistanceMeters / CAREER_DISTANCE_STEP) + 1) * CAREER_DISTANCE_STEP;
+          if (meters < nextMilestone) return false;
+        }
+        careerLastDistanceMeters = meters;
+        careerDistanceEvents += 1;
+        career.observe('distance.reached', { meters });
+        return true;
+      }
 
       function difficulty() {
         return clamp(elapsed / 75, 0, 1);
@@ -261,6 +410,11 @@
         player.gravityDir = 1;
         player.invul = 0;
         player.squish = 0;
+        careerPilot.steps = 0;
+        careerPilot.flips = 0;
+        careerPilot.hits = 0;
+        careerPilot.minY = Infinity;
+        careerPilot.maxY = -Infinity;
         particles.clear();
         syncHud();
         syncJoyTools();
@@ -296,32 +450,42 @@
         if (mode === 'challenge') updateChallengeHud();
       }
 
-      function finish(won) {
+      function finish(won, opts) {
         if (mode !== 'classic') return;
         if (state === 'over') return;
-        const wonRun = won === true;
+        const quit = !!(opts && opts.quit);
+        const wonRun = won === true && !quit;
+        /* 0.17 职业委托：结算前补发一次真实终值（累计米数；不伪造跳变）。 */
+        if (careerLocked) noteCareerDistance(true);
         state = 'over';
         autosave.clear();
         A.Sfx.play(wonRun ? 'perfect' : 'over');
         const finalDist = Math.floor(dist);
         let rec = null;
-        if (!recordSaved) {
+        if (careerLocked) {
+          /* 职业 run：不写 progress/Scores/Playtime，也不假装已记录。 */
+          recordSaved = true;
+        } else if (!recordSaved) {
           rec = A.Progress.recordPlay('gravity-flip', finalDist); if (rec) high = rec.high;
           recordSaved = true;
           dom.hudHigh.textContent = String(Math.max(high, finalDist));
         }
         loop.pause();
+        const title = quit ? '本趟收工' : wonRun ? '抵达星门！' : '撞上障碍';
+        const text =
+          `<span class="ac-score">${finalDist}m</span>` +
+          (careerLocked
+            ? '飞行距离 · 本趟结果回旧港核对'
+            : (rec && rec.isNewHigh ? '<span class="ac-newhigh">★ 新纪录</span><br/>' : '') +
+              `飞行距离 · 最高 ${Math.max(high, finalDist)}m`);
         ui.show({
-          title: wonRun ? '抵达星门！' : '撞上障碍',
-          text:
-            `<span class="ac-score">${finalDist}m</span>` +
-            (rec && rec.isNewHigh ? '<span class="ac-newhigh">★ 新纪录</span><br/>' : '') +
-            `飞行距离 · 最高 ${Math.max(high, finalDist)}m`,
+          title: title,
+          text: text,
           btn: '再来一局',
           onBtn: showStart,
           result: '回看关卡',
         });
-        if (career && mode === 'classic') career.finish({ mode: 'classic', outcome: wonRun ? 'won' : 'lost', stats: { dist: finalDist, lives } });
+        if (career && mode === 'classic') career.finish({ mode: 'classic', outcome: quit ? 'quit' : wonRun ? 'won' : 'lost', stats: { dist: finalDist, lives } });
         pauseUi.sync();
         syncJoyTools();
       }
@@ -340,6 +504,17 @@
             btn2: '退出挑战',
             onBtn2: exitChallenge,
           });
+        } else if (careerLocked) {
+          /* 0.17 职业委托：不谎称“局内进度已保存”，只给戏内目标 + 不落本机档说明，
+             并允许达标后直接交差（走与自然结束相同的 finish → bridge 结算路径）。 */
+          showOverlay({
+            title: '已暂停',
+            text: '重力也停住了。<br/>' + (careerGoalText() || '') + '<br/>这一趟不写入本机进度。',
+            btn: '继续',
+            onBtn: resumeGame,
+            btn2: '结束本局',
+            onBtn2: () => finish(false, { quit: true }),
+          });
         } else {
           showOverlay({ title: '已暂停', text: '重力也停住了。<br/>局内进度已保存，可以随时离开。', btn: '继续', onBtn: resumeGame });
         }
@@ -349,15 +524,19 @@
 
       function showStart() {
         const available = challengeAvailable();
+        /* 0.17 委托 run：挑战入口隐藏（挑战会写 challenge 记录，破坏职业隔离）；经典不变。 */
+        const challengeEntry = !careerLocked;
+        const goalText = careerLocked ? careerGoalText() : '';
+        syncCareerHint();
         ui.show({
           title: '重力翻转',
-          text: '点击 / 空格翻转重力。<br/>吃星星加分 · 道具 1/2 主动使用<br/>3000m 抵达星门 · 生命 ×3',
+          text: '点击 / 空格翻转重力。<br/>吃星星加分 · 道具 1/2 主动使用<br/>3000m 抵达星门 · 生命 ×3' + (goalText ? '<br/>' + escText(goalText) : ''),
           btn: '开始游戏',
           onBtn: startGame,
-          btn2: available ? '挑战 6 关' : '挑战数据不可用',
-          onBtn2: available ? () => openChallengePanel() : () => A.showToast('挑战数据不可用'),
+          btn2: challengeEntry ? (available ? '挑战 6 关' : '挑战数据不可用') : undefined,
+          onBtn2: challengeEntry ? (available ? () => openChallengePanel() : () => A.showToast('挑战数据不可用')) : undefined,
         });
-        if (dom.ovBtn2) dom.ovBtn2.disabled = !available;
+        if (dom.ovBtn2) dom.ovBtn2.disabled = challengeEntry ? !available : false;
       }
 
       /* ============================================================
@@ -423,6 +602,8 @@
       }
 
       function openChallengePanel() {
+        /* 0.17 职业委托 run：挑战入口不可进入（挑战会写 challenge:v1，破坏职业隔离）。 */
+        if (careerLocked) return false;
         if (!challengeAvailable()) {
           A.showToast('挑战数据不可用');
           return false;
@@ -491,6 +672,8 @@
       }
 
       function startChallenge(ref) {
+        /* 0.17 职业委托 run：连同 #test 直调入口一起拒绝，不写挑战记录。 */
+        if (careerLocked) return false;
         if (!challengeAvailable()) {
           A.showToast('挑战数据不可用');
           return false;
@@ -1043,7 +1226,10 @@
         elapsed += dt;
         speed = Math.min(430, 170 + elapsed * 3.4);
         parallax = (parallax + speed * dt * 0.25) % W;
+        /* 0.17 职业委托：只有真实滚动让 dist 变大后，才提交累计米数（空转/按键不发）。 */
+        const distBeforeStep = dist;
         dist += speed * dt / 10;
+        if (dist > distBeforeStep) noteCareerDistance(false);
         syncHud();
         if (checkJoyGoal()) {
           input.endFrame();
@@ -1125,8 +1311,65 @@
         input.endFrame();
       }
 
+      /* ============================================================
+       * #test 专用存活/步进辅助（0.17 委托 fixture 用，生产 URL 不存在）
+       * - 只调用真实 flip()（真实翻转提交）与真实 update(1/60)（与 rAF 固定的 step 完全一致）；
+       * - 不改 y/vy/碰撞/计分/事件；pilot 只在中央安全带内翻转：
+       *   经典障碍最高 142px（rand(48, 64+difficulty*78)），上下通道各 322px，
+       *   中央安全带 y∈[206, 538] 与任何障碍都不相交，属于真实可玩的保守打法。
+       * ============================================================ */
+      const PILOT_BAND_DOWN_AT = 470;
+      const PILOT_BAND_UP_AT = 290;
+
+      function pilotFlip() {
+        const before = player.gravityDir;
+        flip();
+        if (player.gravityDir === before) return false;
+        careerPilot.flips += 1;
+        return true;
+      }
+
+      function pilotSteer() {
+        if (state !== 'playing' || mode !== 'classic') return false;
+        const goingDown = player.gravityDir > 0;
+        if (goingDown && player.y >= PILOT_BAND_DOWN_AT) return pilotFlip();
+        if (!goingDown && player.y <= PILOT_BAND_UP_AT) return pilotFlip();
+        return false;
+      }
+
+      /** 固定 1/60 步长驱动同一份经典 update()；停在非游玩态/非经典态，不越界推进。 */
+      function stepClassicFrames(frames, options) {
+        const opts = options && typeof options === 'object' ? options : {};
+        const autoPilot = opts.autoPilot !== false;
+        const total = clamp(Math.floor(Number(frames) || 0), 0, 24000);
+        let executed = 0;
+        for (let i = 0; i < total; i += 1) {
+          if (state !== 'playing' || mode !== 'classic') break;
+          if (autoPilot) pilotSteer();
+          update(1 / 60);
+          executed += 1;
+          careerPilot.steps += 1;
+          if (player.y < careerPilot.minY) careerPilot.minY = player.y;
+          if (player.y > careerPilot.maxY) careerPilot.maxY = player.y;
+          if (3 - lives > careerPilot.hits) careerPilot.hits = 3 - lives;
+        }
+        return {
+          frames: executed,
+          dist: Math.floor(dist),
+          meters: Math.floor(dist),
+          lives: lives,
+          state: state,
+          mode: mode,
+          gravityDir: player.gravityDir,
+          flips: careerPilot.flips,
+          hits: careerPilot.hits,
+        };
+      }
+
       function serialize() {
         if (state !== 'playing' && state !== 'paused') return null;
+        /* 0.17（ADR §19.3）：职业委托 run 一律返回 null，旧 RunSave 零读写。 */
+        if (careerLocked) return null;
         const classicState = {
           player: { y: player.y, vy: player.vy, gravityDir: player.gravityDir, invul: player.invul },
           obstacles: obstacles.map((o) => ({ x: o.x, w: o.w, h: o.h, side: o.side, passed: o.passed })),
@@ -1434,9 +1677,36 @@
             return coins.length;
           },
           setDist(value) {
+            /* 0.17：职业 run 内拒绝直接改里程，避免测试钩子伪造 distance.reached。 */
+            if (careerLocked) return Math.floor(dist);
             dist = Math.max(0, Number(value) || 0);
             syncHud();
             return dist;
+          },
+          /* ---- 0.17 委托驱动钩子（#test 专用；真实 flip + 真实 update，不改状态） ---- */
+          flipNow() {
+            if (state !== 'playing' || mode !== 'classic') return { ok: false, reason: 'not-playing', state: state };
+            const before = player.gravityDir;
+            flip();
+            return {
+              ok: player.gravityDir !== before,
+              gravityDir: player.gravityDir,
+              dist: Math.floor(dist),
+              lives: lives,
+            };
+          },
+          stepFrames(frames, options) {
+            return stepClassicFrames(frames, options);
+          },
+          pilotInfo() {
+            return {
+              steps: careerPilot.steps,
+              flips: careerPilot.flips,
+              hits: careerPilot.hits,
+              minY: Number.isFinite(careerPilot.minY) ? Math.round(careerPilot.minY) : null,
+              maxY: Number.isFinite(careerPilot.maxY) ? Math.round(careerPilot.maxY) : null,
+              band: { upAt: PILOT_BAND_UP_AT, downAt: PILOT_BAND_DOWN_AT, ceiling: CEILING, floor: FLOOR },
+            };
           },
           /* ---- 0.9 挑战模式测试钩子（契约 §5） ---- */
           challengeStages() {
@@ -1590,33 +1860,128 @@
             return { pass, fail, details };
           },
         };
+        /* 0.17（ADR §19.3 / §19.8）：职业只读测试钩子只在 ?careerTest=1 追加；
+           生产 URL 与既有 #test 探针（无 careerTest）完全不变。 */
+        if (/(?:^|[?&])careerTest=1(?:&|$)/.test(String((window.location && window.location.search) || ''))) {
+          window.__arcadeTest.careerInfo = function () {
+            const run = readCareerRun();
+            const goal = careerGoalParts();
+            const goalEls = Array.prototype.slice.call(document.querySelectorAll('[data-career-goal]'));
+            const goalEl = goalEls.length ? goalEls[0] : null;
+            return {
+              isCommission: !!run,
+              locked: careerLocked,
+              commissionId: run ? run.commissionId : null,
+              objective: goal ? [goal.title, goal.summary].filter(Boolean).join(' · ') : null,
+              objectiveKind: goal ? goal.kind : null,
+              atLeast: goal ? goal.atLeast : null,
+              targetValue: goal ? (goal.minValue ? goal.minValue.value : goal.atLeast) : null,
+              field: goal && goal.minValue ? goal.minValue.field : null,
+              goalText: careerGoalText(),
+              state: state,
+              mode: mode,
+              dist: Math.floor(dist),
+              meters: Math.floor(dist),
+              lives: lives,
+              speed: speed,
+              elapsed: elapsed,
+              gravityDir: player.gravityDir,
+              lastDistanceMeters: careerLastDistanceMeters,
+              distanceEvents: careerDistanceEvents,
+              serializeNull: serialize() === null,
+              goalLineVisible: goalEls.some((el) => el.getClientRects().length > 0),
+              goalLineHeight: goalEl ? Math.round(goalEl.getBoundingClientRect().height) : null,
+              challengeVisible: !!(dom.ovBtn2 && !dom.ovBtn2.hidden),
+              challengePanelVisible: !!(dom.chPanel && !dom.chPanel.hidden),
+              pilot: {
+                steps: careerPilot.steps,
+                flips: careerPilot.flips,
+                hits: careerPilot.hits,
+                minY: Number.isFinite(careerPilot.minY) ? Math.round(careerPilot.minY) : null,
+                maxY: Number.isFinite(careerPilot.maxY) ? Math.round(careerPilot.maxY) : null,
+              },
+              runSave: (() => {
+                try {
+                  return A.RunSave && typeof A.RunSave.get === 'function' ? A.RunSave.get(CAREER_GAME_ID) : null;
+                } catch (err) {
+                  return null;
+                }
+              })(),
+              runsRaw: (() => {
+                try {
+                  return localStorage.getItem('studiokit:arcade:runs:v1');
+                } catch (err) {
+                  return null;
+                }
+              })(),
+              plays: A.Progress.get(CAREER_GAME_ID).plays,
+              high: A.Progress.get(CAREER_GAME_ID).high,
+              scoresCount: A.Scores.list({ gameId: CAREER_GAME_ID }).length,
+            };
+          };
+        }
       }
-      const saved = autosave.load();
-      if (saved) {
-        A.showResumePrompt(ui, saved, {
-          name: '重力翻转',
-          onResume: () => {
-            if (restore(saved.data)) {
-              state = 'playing';
-              syncModeUi();
-              syncJoyTools();
-              ui.hide();
-              loop.resume();
-              pauseUi.sync();
-              autosave.saveNow();
-            } else {
+      /* 0.16 行为逐字保留：只有这条路径会读旧 RunSave。 */
+      function prepareStartScreen() {
+        const saved = autosave.load();
+        if (saved) {
+          A.showResumePrompt(ui, saved, {
+            name: '重力翻转',
+            onResume: () => {
+              if (restore(saved.data)) {
+                state = 'playing';
+                syncModeUi();
+                syncJoyTools();
+                ui.hide();
+                loop.resume();
+                pauseUi.sync();
+                autosave.saveNow();
+              } else {
+                autosave.clear();
+                showStart();
+              }
+            },
+            onRestart: () => {
               autosave.clear();
               showStart();
-            }
-          },
-          onRestart: () => {
-            autosave.clear();
-            showStart();
-          },
-        });
-      } else {
-        showStart();
+            },
+          });
+        } else {
+          showStart();
+        }
       }
+
+      /* 0.17 委托入口：URL 带 ?career=<ticketId> 时先等桥确认 ticket，再决定
+         「职业 run 开局」还是「经典开局」；无参数时同步走 0.16 路径（零延迟、零行为变化）。 */
+      function bootStartScreen() {
+        const ticketId = readCareerTicketParam();
+        const ready = career && career.ready;
+        if (!ticketId || !career || !ready || typeof ready.then !== 'function') {
+          prepareStartScreen();
+          return;
+        }
+        let settled = false;
+        let guard = null;
+        const done = () => {
+          if (settled) return;
+          settled = true;
+          try {
+            if (guard) clearTimeout(guard);
+          } catch (err) {
+            /* ignore */
+          }
+          /* 只有桥确认了属于本游戏的 run 才锁死旧 RunSave；否则按 0.16 经典启动（fail-open）。 */
+          if (readCareerRun()) lockRunSave();
+          prepareStartScreen();
+        };
+        try {
+          guard = setTimeout(done, 3500);
+        } catch (err) {
+          guard = null;
+        }
+        Promise.resolve(ready).then(done, done);
+      }
+      bootStartScreen();
       loop.start();
     })();
   </script>

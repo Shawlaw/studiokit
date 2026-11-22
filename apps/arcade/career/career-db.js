@@ -999,7 +999,10 @@
       const items = {};
       (Array.isArray(rows) ? rows : []).forEach((row) => {
         if (!row || row.careerId !== careerId || typeof row.itemId !== 'string') return;
-        items[row.itemId] = Math.max(0, Math.floor(Number(row.count) || 0));
+        /* 0.16 遗留别名：旧库存里的 crystal 统一并按 0.17 的 starcrystal 计。 */
+        const itemId = row.itemId === 'crystal' ? 'starcrystal' : row.itemId;
+        const count = Math.max(0, Math.floor(Number(row.count) || 0));
+        items[itemId] = (items[itemId] || 0) + count;
       });
       cb(items);
     });
@@ -1195,7 +1198,7 @@
       const key = keys[i];
       if (!core.isToken(key) || key === 'careerId' || key === 'updatedAt') return Promise.resolve(failure('bad-equipment'));
       const value = patch[key];
-      if (!(typeof value === 'boolean' || typeof value === 'string' || (isFiniteNumber(value) && value >= 0) || isObject(value))) {
+      if (!(value === null || typeof value === 'boolean' || typeof value === 'string' || (typeof value === 'number' && Number.isFinite(value) && value >= 0) || isObject(value))) {
         return Promise.resolve(failure('bad-equipment'));
       }
       clean[key] = value === null ? null : typeof value === 'object' ? jsonClone(value) : value;
