@@ -1,0 +1,362 @@
+<!doctype html>
+<html lang="zh-CN">
+  <head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no">
+    <meta name="theme-color" content="#0b1020">
+    <title>计时自检 · 街机厅</title>
+    <style>
+      :root { color-scheme: dark; }
+      * { box-sizing: border-box; }
+      body {
+        margin: 0;
+        padding: 16px 14px 40px;
+        background: #0b1020;
+        color: #e8ecff;
+        font: 15px/1.6 system-ui, -apple-system, "Segoe UI", sans-serif;
+        -webkit-text-size-adjust: 100%;
+      }
+      main { max-width: 720px; margin: 0 auto; }
+      h1 { margin: 4px 0 6px; font-size: 22px; }
+      h2 { margin: 0 0 8px; font-size: 16px; color: #ffd23f; }
+      .diag-sub { margin: 0 0 14px; color: #a7b0d0; font-size: 13px; }
+      .diag-card {
+        margin: 0 0 14px;
+        padding: 14px;
+        border: 1px solid #2b3557;
+        border-radius: 14px;
+        background: #151d3a;
+      }
+      .diag-card pre {
+        margin: 0;
+        padding: 10px;
+        border-radius: 10px;
+        background: #0b1020;
+        border: 1px solid #232c4d;
+        color: #d6ddff;
+        font: 12px/1.55 ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+        white-space: pre-wrap;
+        word-break: break-all;
+      }
+      .diag-note { margin: 0 0 10px; color: #a7b0d0; font-size: 13px; }
+      .diag-actions { display: flex; gap: 10px; margin-top: 10px; flex-wrap: wrap; }
+      .diag-actions button {
+        min-height: 44px;
+        padding: 10px 16px;
+        border-radius: 10px;
+        border: 1px solid #3a4670;
+        background: #222c50;
+        color: #e8ecff;
+        font: inherit;
+        font-weight: 600;
+      }
+      .diag-actions button:active { transform: translateY(1px); }
+      .diag-sandbox {
+        margin-top: 10px;
+        height: 300px;
+        overflow: hidden;
+        border-radius: 12px;
+        border: 1px solid #2b3557;
+        background: #05070f;
+        position: relative;
+      }
+      .diag-sandbox iframe {
+        width: 390px;
+        height: 844px;
+        border: 0;
+        transform: scale(0.355);
+        transform-origin: top left;
+        position: absolute;
+        top: 0;
+        left: 0;
+        pointer-events: none;
+      }
+      .diag-badge { display: inline-block; padding: 1px 8px; border-radius: 999px; font-size: 12px; font-weight: 700; }
+      .diag-badge.ok { background: #1c4030; color: #7ef7b2; }
+      .diag-badge.bad { background: #4a1f2b; color: #ff9db1; }
+      .diag-badge.warn { background: #4a3a12; color: #ffd23f; }
+      a { color: #ffd23f; }
+    </style>
+  </head>
+  <body>
+    <main>
+      <h1>计时自检</h1>
+      <p class="diag-sub">本页在当前的 PWA 容器里运行：①报告页面可见性 / 事件 / 性能 / 存储环境；②真实嵌入一局俄罗斯方块跑 3 秒并读回计时结果，跑完自动恢复你的游玩统计。所有数据都只留在本机。</p>
+
+      <section class="diag-card">
+        <h2>运行环境</h2>
+        <pre id="env-out">检测中…</pre>
+      </section>
+
+      <section class="diag-card">
+        <h2>真实游戏计时测试</h2>
+        <p class="diag-note">下方沙箱会启动真实游戏页（俄罗斯方块），程序自动点「开始游戏」，约 3 秒后落盘并读回时长。正常应是「记录到约 3 秒」。</p>
+        <pre id="game-out">等待环境检测…</pre>
+        <div class="diag-actions">
+          <button id="run" type="button">重新检测</button>
+          <button id="copy" type="button">复制报告</button>
+        </div>
+        <div class="diag-sandbox" id="sandbox"></div>
+      </section>
+
+      <section class="diag-card">
+        <h2>事件时间线</h2>
+        <pre id="events-out">（开始记录）</pre>
+      </section>
+
+      <p class="diag-sub">回到 <a href="./">街机厅中心页</a>。检测完成后请截图本页，或点「复制报告」把文本发回。</p>
+    </main>
+
+    <script src="./engine.js"></script>
+    <script>
+      (() => {
+        'use strict';
+
+        const PLAYTIME_KEY = 'studiokit:arcade:playtime:v1';
+        const RUNS_KEY = 'studiokit:arcade:runs:v1';
+        const envOut = document.getElementById('env-out');
+        const gameOut = document.getElementById('game-out');
+        const eventsOut = document.getElementById('events-out');
+        const sandbox = document.getElementById('sandbox');
+        const runBtn = document.getElementById('run');
+        const copyBtn = document.getElementById('copy');
+
+        const events = [];
+        const startedAt = performance.now();
+        function note(type, extra) {
+          if (events.length >= 40) return;
+          events.push({ t: Math.round(performance.now() - startedAt), type, extra: extra || null });
+          eventsOut.textContent = events.map((e) => e.t + 'ms  ' + e.type + (e.extra ? '  ' + e.extra : '')).join('\n') || '（暂无事件）';
+        }
+        window.addEventListener('error', (e) => note('error', e.message));
+        document.addEventListener('visibilitychange', () => note('visibilitychange', 'hidden=' + document.hidden + ' state=' + document.visibilityState));
+        window.addEventListener('pageshow', () => note('pageshow', 'persisted=' + !!(window.performance && performance.navigation && performance.navigation.type === 2)));
+        window.addEventListener('pagehide', () => note('pagehide'));
+        window.addEventListener('blur', () => note('blur'));
+        window.addEventListener('focus', () => note('focus'));
+        if (window.matchMedia) {
+          const mq = window.matchMedia('(display-mode: standalone)');
+          if (mq && typeof mq.addEventListener === 'function') {
+            mq.addEventListener('change', () => note('display-mode-change', 'standalone=' + mq.matches));
+          }
+        }
+        note('load', 'started');
+
+        const report = { engine: null, env: {}, game: {}, timeline: [], generatedAt: new Date().toISOString() };
+
+        function readRaw(key) {
+          try {
+            return localStorage.getItem(key);
+          } catch (err) {
+            return null;
+          }
+        }
+        function writeRaw(key, value) {
+          try {
+            if (value === null) localStorage.removeItem(key);
+            else localStorage.setItem(key, value);
+            return true;
+          } catch (err) {
+            return false;
+          }
+        }
+        function playtimeMsOf(raw, gameId) {
+          if (!raw) return 0;
+          try {
+            const data = JSON.parse(raw);
+            const rec = data && data.games ? data.games[gameId] : null;
+            return rec && typeof rec.ms === 'number' ? rec.ms : 0;
+          } catch (err) {
+            return -1;
+          }
+        }
+
+        async function detectEnv() {
+          note('env-start');
+          const env = {
+            engineVersion: window.Arcade && window.Arcade.version ? window.Arcade.version : 'engine-missing',
+            hidden: document.hidden,
+            visibilityState: document.visibilityState,
+            hasFocus: typeof document.hasFocus === 'function' ? document.hasFocus() : null,
+            standalone: window.matchMedia ? window.matchMedia('(display-mode: standalone)').matches : null,
+            navigatorStandalone: typeof navigator.standalone === 'boolean' ? navigator.standalone : null,
+            userAgent: navigator.userAgent,
+            online: navigator.onLine,
+            devicePixelRatio: window.devicePixelRatio,
+            viewport: { w: window.innerWidth, h: window.innerHeight },
+            visualViewport: window.visualViewport ? { w: Math.round(window.visualViewport.width), h: Math.round(window.visualViewport.height), scale: visualViewport.scale } : null,
+            performanceNow: Math.round(performance.now()),
+            timeOrigin: performance.timeOrigin || null,
+            dateNow: Date.now(),
+          };
+
+          /* performance.now 是否前进（500ms） */
+          const perfStart = performance.now();
+          await new Promise((resolve) => setTimeout(resolve, 500));
+          env.perfDeltaMs = Math.round(performance.now() - perfStart);
+
+          /* setInterval 是否按时触发（600ms 内应约 6 次） */
+          let ticks = 0;
+          const timer = setInterval(() => { ticks += 1; }, 100);
+          await new Promise((resolve) => setTimeout(resolve, 620));
+          clearInterval(timer);
+          env.intervalTicks = ticks;
+
+          /* 存储读写 */
+          const probeKey = 'studiokit:diag:probe:' + Date.now();
+          let storageOk = false;
+          try {
+            localStorage.setItem(probeKey, '1');
+            storageOk = localStorage.getItem(probeKey) === '1';
+            localStorage.removeItem(probeKey);
+          } catch (err) {
+            storageOk = false;
+          }
+          env.storageOk = storageOk;
+          env.playtimeRawLength = (readRaw(PLAYTIME_KEY) || '').length;
+          env.scoresRawLength = (readRaw('studiokit:arcade:scores:v1') || '').length;
+          env.afterCheckHidden = document.hidden;
+          env.afterCheckVisibilityState = document.visibilityState;
+          env.afterCheckHasFocus = typeof document.hasFocus === 'function' ? document.hasFocus() : null;
+
+          report.env = env;
+          envOut.textContent = [
+            '引擎版本       ' + env.engineVersion,
+            '页面隐藏 hidden ' + env.hidden + '  (state=' + env.visibilityState + ', hasFocus=' + env.hasFocus + ')',
+            '800ms 后复查    hidden=' + env.afterCheckHidden + ' (state=' + env.afterCheckVisibilityState + ')',
+            '独立窗口       ' + env.standalone + '  (navigator.standalone=' + env.navigatorStandalone + ')',
+            '性能时钟       ' + env.perfDeltaMs + 'ms / 500ms',
+            '定时器         ' + env.intervalTicks + ' 次 / 600ms（应约 6 次）',
+            '本地存储        ' + (env.storageOk ? '可读写' : '不可用'),
+            '游玩统计键长度  ' + env.playtimeRawLength + '  积分记录键长度 ' + env.scoresRawLength,
+            '视口           ' + env.viewport.w + '×' + env.viewport.h + '  dpr=' + env.devicePixelRatio + (env.visualViewport ? '  visual=' + env.visualViewport.w + '×' + env.visualViewport.h : ''),
+            'UA             ' + env.userAgent,
+          ].join('\n');
+          note('env-done');
+          return env;
+        }
+
+        function waitFrameLoad(frame) {
+          return new Promise((resolve, reject) => {
+            const timer = setTimeout(() => reject(new Error('iframe load timeout')), 15000);
+            frame.addEventListener('load', () => { clearTimeout(timer); resolve(); }, { once: true });
+          });
+        }
+        function sleep(ms) {
+          return new Promise((resolve) => setTimeout(resolve, ms));
+        }
+
+        async function runGameTest() {
+          note('game-start');
+          const snapshot = { playtime: readRaw(PLAYTIME_KEY), runs: readRaw(RUNS_KEY) };
+          const beforeMs = playtimeMsOf(snapshot.playtime, 'block-drop');
+          gameOut.textContent = '正在启动沙箱游戏…';
+
+          sandbox.replaceChildren();
+          const frame = document.createElement('iframe');
+          frame.setAttribute('title', '计时测试沙箱（俄罗斯方块）');
+          frame.setAttribute('src', './games/block-drop.html');
+          sandbox.appendChild(frame);
+
+          const result = { beforeMs, afterFlushMs: 0, recordedMs: 0, ok: false, steps: [] };
+          try {
+            await waitFrameLoad(frame);
+            await sleep(900);
+            const win = frame.contentWindow;
+            const doc = frame.contentDocument;
+            result.frameEngine = win.Arcade && win.Arcade.version ? win.Arcade.version : 'engine-missing';
+            result.frameHidden = doc.hidden;
+            result.frameVisibility = doc.visibilityState;
+            result.frameHasFocus = typeof doc.hasFocus === 'function' ? doc.hasFocus() : null;
+            result.playtimeTracking = !!(win.Arcade && win.Arcade.Playtime && win.Arcade.Playtime.currentGame);
+            result.timerInstalled = !!(win.Arcade && win.Arcade.Playtime && win.Arcade.Playtime.timer);
+            const overlay = doc.querySelector('[data-overlay]');
+            result.overlayBeforeStart = overlay ? !overlay.hidden : null;
+            const startBtn = doc.querySelector('[data-ov-btn]');
+            if (!startBtn) throw new Error('找不到开始按钮');
+            startBtn.click();
+            await sleep(200);
+            result.overlayAfterStart = overlay ? !overlay.hidden : null;
+            const t0 = performance.now();
+            await sleep(3200);
+            result.waitedMs = Math.round(performance.now() - t0);
+            try {
+              win.Arcade.Playtime.flush();
+            } catch (err) {
+              result.flushError = String(err && err.message ? err.message : err);
+            }
+            await sleep(120);
+            const afterRaw = readRaw(PLAYTIME_KEY);
+            const afterMs = playtimeMsOf(afterRaw, 'block-drop');
+            result.afterFlushMs = afterMs;
+            result.recordedMs = afterMs - beforeMs;
+            result.ok = result.recordedMs >= 2000;
+            result.statsTotalMs = (() => {
+              try {
+                const stats = win.Arcade.Playtime.stats();
+                return stats.totalMs;
+              } catch (err) {
+                return null;
+              }
+            })();
+            result.frameConsole = null;
+          } catch (err) {
+            result.error = String(err && err.message ? err.message : err);
+          } finally {
+            sandbox.replaceChildren();
+            writeRaw(PLAYTIME_KEY, snapshot.playtime);
+            writeRaw(RUNS_KEY, snapshot.runs);
+            note('game-done');
+          }
+
+          report.game = result;
+          const badge = result.ok ? '<span class="diag-badge ok">计时正常</span>' : '<span class="diag-badge bad">计时失败</span>';
+          gameOut.innerHTML = [
+            badge + '  记录到 ' + result.recordedMs + 'ms（测试期间约 ' + (result.waitedMs || 0) + 'ms）',
+            '沙箱引擎      ' + (result.frameEngine || '?'),
+            '沙箱 hidden   ' + result.frameHidden + ' (state=' + result.frameVisibility + ')',
+            '沙箱 hasFocus ' + result.frameHasFocus,
+            '开始前弹层可见 ' + result.overlayBeforeStart + ' → 点开始后 ' + result.overlayAfterStart,
+            'Playtime 已装载 ' + result.playtimeTracking + '，tick 定时器 ' + result.timerInstalled,
+            '累计时长(沙箱) ' + (result.statsTotalMs === null ? '?' : result.statsTotalMs) + 'ms',
+            '测试前的方块时长 ' + result.beforeMs + 'ms → 测试后 ' + result.afterFlushMs + 'ms',
+            result.error ? '错误：' + result.error : '',
+          ].filter(Boolean).join('\n');
+          return result;
+        }
+
+        async function runAll() {
+          runBtn.disabled = true;
+          sandbox.replaceChildren();
+          report.timeline = events;
+          try {
+            await detectEnv();
+            await runGameTest();
+          } catch (err) {
+            gameOut.textContent = '检测失败：' + (err && err.message ? err.message : err);
+          } finally {
+            report.envAfter = { hidden: document.hidden, visibilityState: document.visibilityState };
+            report.timeline = events;
+            runBtn.disabled = false;
+          }
+        }
+
+        copyBtn.addEventListener('click', async () => {
+          report.timeline = events;
+          const text = JSON.stringify(report, null, 2);
+          try {
+            await navigator.clipboard.writeText(text);
+            copyBtn.textContent = '已复制';
+            setTimeout(() => { copyBtn.textContent = '复制报告'; }, 1500);
+          } catch (err) {
+            gameOut.textContent = text;
+            copyBtn.textContent = '无法复制，已显示文本';
+          }
+        });
+
+        runBtn.addEventListener('click', runAll);
+        runAll();
+      })();
+    </script>
+  </body>
+</html>
