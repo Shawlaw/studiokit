@@ -40,7 +40,7 @@
       }
       .diag-note { margin: 0 0 10px; color: #a7b0d0; font-size: 13px; }
       .diag-actions { display: flex; gap: 10px; margin-top: 10px; flex-wrap: wrap; }
-      .diag-actions button {
+      .diag-actions button, .diag-actions a.diag-link {
         min-height: 44px;
         padding: 10px 16px;
         border-radius: 10px;
@@ -49,8 +49,11 @@
         color: #e8ecff;
         font: inherit;
         font-weight: 600;
+        text-decoration: none;
+        display: inline-flex;
+        align-items: center;
       }
-      .diag-actions button:active { transform: translateY(1px); }
+      .diag-actions button:active, .diag-actions a.diag-link:active { transform: translateY(1px); }
       .diag-sandbox {
         margin-top: 10px;
         height: 300px;
@@ -74,14 +77,13 @@
       .diag-badge { display: inline-block; padding: 1px 8px; border-radius: 999px; font-size: 12px; font-weight: 700; }
       .diag-badge.ok { background: #1c4030; color: #7ef7b2; }
       .diag-badge.bad { background: #4a1f2b; color: #ff9db1; }
-      .diag-badge.warn { background: #4a3a12; color: #ffd23f; }
       a { color: #ffd23f; }
     </style>
   </head>
   <body>
     <main>
       <h1>计时自检</h1>
-      <p class="diag-sub">本页在当前的 PWA 容器里运行：①报告页面可见性 / 事件 / 性能 / 存储环境；②真实嵌入一局俄罗斯方块跑 3 秒并读回计时结果，跑完自动恢复你的游玩统计。所有数据都只留在本机。</p>
+      <p class="diag-sub">本页在当前的 PWA 容器里运行：①报告页面可见性 / 事件 / 性能 / 存储环境；②真实嵌入一局俄罗斯方块跑 3 秒并读回计时结果；③顶层游戏页探针，用来确认普通游戏页里 Playtime 是否识别到当前游戏。所有数据都只留在本机，测试会恢复你的统计。</p>
 
       <section class="diag-card">
         <h2>运行环境</h2>
@@ -89,7 +91,7 @@
       </section>
 
       <section class="diag-card">
-        <h2>真实游戏计时测试</h2>
+        <h2>真实游戏计时测试（iframe）</h2>
         <p class="diag-note">下方沙箱会启动真实游戏页（俄罗斯方块），程序自动点「开始游戏」，约 3 秒后落盘并读回时长。正常应是「记录到约 3 秒」。</p>
         <pre id="game-out">等待环境检测…</pre>
         <div class="diag-actions">
@@ -97,6 +99,16 @@
           <button id="copy" type="button">复制报告</button>
         </div>
         <div class="diag-sandbox" id="sandbox"></div>
+      </section>
+
+      <section class="diag-card">
+        <h2>顶层游戏页探针（关键）</h2>
+        <p class="diag-note">点下面的按钮会在同一个 PWA 窗口里打开真实游戏页（带 ?diag=1）。页面底部会出现「计时探针」面板：先点「开始游戏」，再点面板里的「刷新探针」，然后把面板内容截图；或者点面板里的「返回自检页」，本页会自动读取探针结果。</p>
+        <div class="diag-actions">
+          <a class="diag-link" href="./games/block-drop.html?diag=1">打开带探针的俄罗斯方块</a>
+          <button id="probe-read" type="button">读取探针结果</button>
+        </div>
+        <pre id="probe-out">尚未采集</pre>
       </section>
 
       <section class="diag-card">
@@ -114,12 +126,15 @@
 
         const PLAYTIME_KEY = 'studiokit:arcade:playtime:v1';
         const RUNS_KEY = 'studiokit:arcade:runs:v1';
+        const PROBE_KEY = 'studiokit:diag:game-probe';
         const envOut = document.getElementById('env-out');
         const gameOut = document.getElementById('game-out');
         const eventsOut = document.getElementById('events-out');
+        const probeOut = document.getElementById('probe-out');
         const sandbox = document.getElementById('sandbox');
         const runBtn = document.getElementById('run');
         const copyBtn = document.getElementById('copy');
+        const probeReadBtn = document.getElementById('probe-read');
 
         const events = [];
         const startedAt = performance.now();
@@ -130,19 +145,13 @@
         }
         window.addEventListener('error', (e) => note('error', e.message));
         document.addEventListener('visibilitychange', () => note('visibilitychange', 'hidden=' + document.hidden + ' state=' + document.visibilityState));
-        window.addEventListener('pageshow', () => note('pageshow', 'persisted=' + !!(window.performance && performance.navigation && performance.navigation.type === 2)));
+        window.addEventListener('pageshow', () => note('pageshow'));
         window.addEventListener('pagehide', () => note('pagehide'));
         window.addEventListener('blur', () => note('blur'));
         window.addEventListener('focus', () => note('focus'));
-        if (window.matchMedia) {
-          const mq = window.matchMedia('(display-mode: standalone)');
-          if (mq && typeof mq.addEventListener === 'function') {
-            mq.addEventListener('change', () => note('display-mode-change', 'standalone=' + mq.matches));
-          }
-        }
-        note('load', 'started');
+        note('load', location.pathname);
 
-        const report = { engine: null, env: {}, game: {}, timeline: [], generatedAt: new Date().toISOString() };
+        const report = { engine: null, env: {}, game: {}, probe: null, timeline: [], generatedAt: new Date().toISOString() };
 
         function readRaw(key) {
           try {
@@ -170,11 +179,22 @@
             return -1;
           }
         }
+        function readProbe() {
+          const raw = readRaw(PROBE_KEY);
+          probeOut.textContent = raw || '尚未采集（先打开上面的探针页并点一次「刷新探针」）';
+          try {
+            return raw ? JSON.parse(raw) : null;
+          } catch (err) {
+            return { parseError: String(err) };
+          }
+        }
 
         async function detectEnv() {
           note('env-start');
           const env = {
             engineVersion: window.Arcade && window.Arcade.version ? window.Arcade.version : 'engine-missing',
+            pageHref: location.href,
+            pagePath: location.pathname,
             hidden: document.hidden,
             visibilityState: document.visibilityState,
             hasFocus: typeof document.hasFocus === 'function' ? document.hasFocus() : null,
@@ -187,22 +207,18 @@
             visualViewport: window.visualViewport ? { w: Math.round(window.visualViewport.width), h: Math.round(window.visualViewport.height), scale: visualViewport.scale } : null,
             performanceNow: Math.round(performance.now()),
             timeOrigin: performance.timeOrigin || null,
-            dateNow: Date.now(),
           };
 
-          /* performance.now 是否前进（500ms） */
           const perfStart = performance.now();
           await new Promise((resolve) => setTimeout(resolve, 500));
           env.perfDeltaMs = Math.round(performance.now() - perfStart);
 
-          /* setInterval 是否按时触发（600ms 内应约 6 次） */
           let ticks = 0;
           const timer = setInterval(() => { ticks += 1; }, 100);
           await new Promise((resolve) => setTimeout(resolve, 620));
           clearInterval(timer);
           env.intervalTicks = ticks;
 
-          /* 存储读写 */
           const probeKey = 'studiokit:diag:probe:' + Date.now();
           let storageOk = false;
           try {
@@ -222,6 +238,7 @@
           report.env = env;
           envOut.textContent = [
             '引擎版本       ' + env.engineVersion,
+            '本页路径       ' + env.pagePath,
             '页面隐藏 hidden ' + env.hidden + '  (state=' + env.visibilityState + ', hasFocus=' + env.hasFocus + ')',
             '800ms 后复查    hidden=' + env.afterCheckHidden + ' (state=' + env.afterCheckVisibilityState + ')',
             '独立窗口       ' + env.standalone + '  (navigator.standalone=' + env.navigatorStandalone + ')',
@@ -229,7 +246,7 @@
             '定时器         ' + env.intervalTicks + ' 次 / 600ms（应约 6 次）',
             '本地存储        ' + (env.storageOk ? '可读写' : '不可用'),
             '游玩统计键长度  ' + env.playtimeRawLength + '  积分记录键长度 ' + env.scoresRawLength,
-            '视口           ' + env.viewport.w + '×' + env.viewport.h + '  dpr=' + env.devicePixelRatio + (env.visualViewport ? '  visual=' + env.visualViewport.w + '×' + env.visualViewport.h : ''),
+            '视口           ' + env.viewport.w + '×' + env.viewport.h + '  dpr=' + env.devicePixelRatio,
             'UA             ' + env.userAgent,
           ].join('\n');
           note('env-done');
@@ -258,24 +275,38 @@
           frame.setAttribute('src', './games/block-drop.html');
           sandbox.appendChild(frame);
 
-          const result = { beforeMs, afterFlushMs: 0, recordedMs: 0, ok: false, steps: [] };
+          const result = { beforeMs, afterFlushMs: 0, recordedMs: 0, ok: false };
           try {
             await waitFrameLoad(frame);
-            await sleep(900);
+            await sleep(1000);
             const win = frame.contentWindow;
             const doc = frame.contentDocument;
             result.frameEngine = win.Arcade && win.Arcade.version ? win.Arcade.version : 'engine-missing';
+            result.frameHref = win.location.href;
+            result.framePath = win.location.pathname;
+            result.frameGamesMarker = win.location.pathname.lastIndexOf('/games/');
+            result.frameTitle = doc.title;
             result.frameHidden = doc.hidden;
             result.frameVisibility = doc.visibilityState;
             result.frameHasFocus = typeof doc.hasFocus === 'function' ? doc.hasFocus() : null;
-            result.playtimeTracking = !!(win.Arcade && win.Arcade.Playtime && win.Arcade.Playtime.currentGame);
+            result.playtimeExists = !!(win.Arcade && win.Arcade.Playtime);
+            result.playtimeKeys = win.Arcade && win.Arcade.Playtime ? Object.keys(win.Arcade.Playtime) : null;
+            result.currentGame = (() => {
+              try {
+                const game = win.Arcade.Playtime.currentGame;
+                return game ? { id: game.id, file: game.file, name: game.name } : null;
+              } catch (err) {
+                return { error: String(err) };
+              }
+            })();
+            result.playtimeTracking = !!(win.Arcade && win.Arcade.Playtime && win.Arcade.Playtime.tracking);
             result.timerInstalled = !!(win.Arcade && win.Arcade.Playtime && win.Arcade.Playtime.timer);
             const overlay = doc.querySelector('[data-overlay]');
             result.overlayBeforeStart = overlay ? !overlay.hidden : null;
             const startBtn = doc.querySelector('[data-ov-btn]');
             if (!startBtn) throw new Error('找不到开始按钮');
             startBtn.click();
-            await sleep(200);
+            await sleep(300);
             result.overlayAfterStart = overlay ? !overlay.hidden : null;
             const t0 = performance.now();
             await sleep(3200);
@@ -291,15 +322,6 @@
             result.afterFlushMs = afterMs;
             result.recordedMs = afterMs - beforeMs;
             result.ok = result.recordedMs >= 2000;
-            result.statsTotalMs = (() => {
-              try {
-                const stats = win.Arcade.Playtime.stats();
-                return stats.totalMs;
-              } catch (err) {
-                return null;
-              }
-            })();
-            result.frameConsole = null;
           } catch (err) {
             result.error = String(err && err.message ? err.message : err);
           } finally {
@@ -314,11 +336,11 @@
           gameOut.innerHTML = [
             badge + '  记录到 ' + result.recordedMs + 'ms（测试期间约 ' + (result.waitedMs || 0) + 'ms）',
             '沙箱引擎      ' + (result.frameEngine || '?'),
-            '沙箱 hidden   ' + result.frameHidden + ' (state=' + result.frameVisibility + ')',
-            '沙箱 hasFocus ' + result.frameHasFocus,
+            '沙箱路径      ' + (result.framePath || '?') + '  (标题=' + (result.frameTitle || '?') + ')',
+            '沙箱 hidden   ' + result.frameHidden + ' (state=' + result.frameVisibility + ')  hasFocus=' + result.frameHasFocus,
+            'Playtime 存在 ' + result.playtimeExists + '，currentGame=' + JSON.stringify(result.currentGame),
+            'tracking=' + result.playtimeTracking + '  timer=' + result.timerInstalled,
             '开始前弹层可见 ' + result.overlayBeforeStart + ' → 点开始后 ' + result.overlayAfterStart,
-            'Playtime 已装载 ' + result.playtimeTracking + '，tick 定时器 ' + result.timerInstalled,
-            '累计时长(沙箱) ' + (result.statsTotalMs === null ? '?' : result.statsTotalMs) + 'ms',
             '测试前的方块时长 ' + result.beforeMs + 'ms → 测试后 ' + result.afterFlushMs + 'ms',
             result.error ? '错误：' + result.error : '',
           ].filter(Boolean).join('\n');
@@ -328,13 +350,13 @@
         async function runAll() {
           runBtn.disabled = true;
           sandbox.replaceChildren();
-          report.timeline = events;
           try {
             await detectEnv();
             await runGameTest();
           } catch (err) {
             gameOut.textContent = '检测失败：' + (err && err.message ? err.message : err);
           } finally {
+            report.probe = readProbe();
             report.envAfter = { hidden: document.hidden, visibilityState: document.visibilityState };
             report.timeline = events;
             runBtn.disabled = false;
@@ -343,6 +365,7 @@
 
         copyBtn.addEventListener('click', async () => {
           report.timeline = events;
+          report.probe = readProbe();
           const text = JSON.stringify(report, null, 2);
           try {
             await navigator.clipboard.writeText(text);
@@ -354,7 +377,16 @@
           }
         });
 
+        probeReadBtn.addEventListener('click', () => {
+          report.probe = readProbe();
+        });
+        window.addEventListener('pageshow', () => { report.probe = readProbe(); });
+        document.addEventListener('visibilitychange', () => {
+          if (!document.hidden) report.probe = readProbe();
+        });
+
         runBtn.addEventListener('click', runAll);
+        readProbe();
         runAll();
       })();
     </script>

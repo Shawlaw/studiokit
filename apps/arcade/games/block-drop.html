@@ -2311,5 +2311,84 @@
       loop.start();
     })();
   </script>
+  <script>
+    /* 临时诊断（0.13.2 计时问题定位）：仅当 URL 含 ?diag=1 时运行，正常游玩不受影响。 */
+    (() => {
+      if (location.search.indexOf('diag=1') === -1) return;
+      const PROBE_KEY = 'studiokit:diag:game-probe';
+      let panel = null;
+      function snapshot(label) {
+        const A = window.Arcade;
+        const playtime = A && A.Playtime ? A.Playtime : null;
+        let currentGame = null;
+        try {
+          const game = playtime && playtime.currentGame;
+          currentGame = game ? { id: game.id, file: game.file, name: game.name } : null;
+        } catch (err) {
+          currentGame = { error: String(err) };
+        }
+        const overlay = document.querySelector('[data-overlay]');
+        const gamesMarker = location.pathname.lastIndexOf('/games/');
+        const data = {
+          label: label,
+          at: new Date().toISOString(),
+          href: location.href,
+          pathname: location.pathname,
+          gamesMarker: gamesMarker,
+          file: gamesMarker < 0 ? null : location.pathname.slice(gamesMarker + '/games/'.length),
+          readyState: document.readyState,
+          engine: A && A.version ? A.version : 'engine-missing',
+          playtimeExists: !!playtime,
+          playtimeKeys: playtime ? Object.keys(playtime) : null,
+          currentGame: currentGame,
+          tracking: playtime ? playtime.tracking : null,
+          timer: playtime ? !!playtime.timer : null,
+          overlayHidden: overlay ? overlay.hidden : null,
+          hidden: document.hidden,
+          visibilityState: document.visibilityState,
+          hasFocus: document.hasFocus(),
+          userAgent: navigator.userAgent,
+        };
+        try {
+          localStorage.setItem(PROBE_KEY, JSON.stringify(data));
+        } catch (err) {
+          data.storageError = String(err);
+        }
+        render(data);
+        return data;
+      }
+      function render(data) {
+        if (!panel) {
+          panel = document.createElement('div');
+          panel.setAttribute('role', 'status');
+          panel.style.cssText = 'position:fixed;left:8px;right:8px;bottom:8px;z-index:2147483647;padding:10px;border-radius:10px;background:rgba(11,16,32,.97);border:1px solid #ffd23f;color:#e8ecff;font:11px/1.5 ui-monospace,Menlo,monospace;white-space:pre-wrap;word-break:break-all;max-height:48vh;overflow:auto';
+          const title = document.createElement('div');
+          title.textContent = '计时探针（?diag=1）';
+          title.style.cssText = 'font-weight:700;color:#ffd23f;margin-bottom:6px';
+          const body = document.createElement('pre');
+          body.id = 'diag-probe-body';
+          body.style.cssText = 'margin:0 0 8px;white-space:pre-wrap;word-break:break-all;font:inherit';
+          const actions = document.createElement('div');
+          actions.style.cssText = 'display:flex;gap:10px;flex-wrap:wrap';
+          const refresh = document.createElement('button');
+          refresh.type = 'button';
+          refresh.textContent = '刷新探针';
+          refresh.style.cssText = 'min-height:36px;padding:6px 12px;border-radius:8px;border:1px solid #3a4670;background:#222c50;color:#e8ecff;font:inherit;font-weight:600';
+          refresh.addEventListener('click', () => snapshot('manual'));
+          const back = document.createElement('a');
+          back.href = '../diag.html';
+          back.textContent = '返回自检页';
+          back.style.cssText = 'min-height:36px;padding:6px 12px;border-radius:8px;border:1px solid #3a4670;background:#222c50;color:#e8ecff;font:inherit;font-weight:600;text-decoration:none;display:inline-flex;align-items:center';
+          actions.append(refresh, back);
+          panel.append(title, body, actions);
+          document.body.appendChild(panel);
+        }
+        const body = panel.querySelector('#diag-probe-body');
+        if (body) body.textContent = JSON.stringify(data, null, 2);
+      }
+      setTimeout(() => snapshot('auto-700ms'), 700);
+      setTimeout(() => snapshot('auto-2600ms'), 2600);
+    })();
+  </script>
 </body>
 </html>
