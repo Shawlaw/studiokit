@@ -1679,6 +1679,38 @@
       "evidence": "Owner 反馈三点并在浏览器中复现确认。双击放大：17 页 viewport 加 maximum-scale=1/user-scalable=no、html touch-action manipulation 兜底、engine.js installSfxUnlock() 全局拦 dblclick 默认行为（不 stopPropagation，不破坏方块双击暂停）。五子棋重影根因：画布 drawPlaceButton 与 DOM placeButton 各画一份「落子」（字号/位置不同，全屏错位）；修复为画布 drawActionButton 唯一文字源，DOM 两枚透明命中层（data-cancel-preview/data-place-confirm，无文字/边框/底色）。预览出口：新增 cancelPreview()，取消只清 preview；逻辑按钮区 200→280 保证 320px 两半各 ≥44px；hint/开始弹层/画布引导/页脚文案同步。五子棋 selftest 新增第 18 条（预览取消与落子确认互不干扰），第 17 条改校验两枚透明命中层；新增 __arcadeTest.cancelPreview()/actionButtons() 钩子。新增 tools/arcade_interaction_test.mjs（IX-01…IX-05）：17 页 viewport / dblclick 拦截 / 透明命中层 / 四档+全屏布局 / 取消与落子。门禁：interaction 5/5、smoke 94/94、zen 14/14、calm 17/17（gomoku selftest 18 条）、review 5/5、gameplay base 11/11、pwa 7/7、validate/build/inline/node --check 全过；真机双击防护待 Owner 复测 UNVERIFIED；无 localStorage key/Schema 变更；版本链 0.11.5 / SW studiokit-arcade-0.11.5-v1；设计见 DESIGN-0.11.5.md。已并入 0.12.0 待发布。"
     },
     {
+      "id": "T103",
+      "title": "Arcade 0.12.3 发布：main 双端部署与线上验证",
+      "kind": "agent",
+      "status": "DONE",
+      "dependsOn": ["T102"],
+      "ownerAuthorizationRequired": true,
+      "ownerAuthorizationNote": "Owner 本轮报告「200 层后全览看不全」并沿用其上一轮明确指令「修复优化完 你自测好了就提交发版」，即 OWNER_AUTHORIZATION: PUBLISH_TO_MAIN。",
+      "acceptance": [
+        "提交推送 main，Actions 四 job 全绿",
+        "verify_deploy.py 双端 41/41 一致",
+        "线上确认 200/1000 层全览完整入屏"
+      ],
+      "completedAt": "2026-11-22T08:55:00+08:00",
+      "evidence": "提交 79be219 推送 main；Actions run 44968445299 四 job 全绿；CI 与本地 tools/verify_deploy.py 均 41/41 双端一致（arcade 0.12.3 / badge 2.2.1 / venue 0.2.0）；双端线上无头 Chrome 实测 200 层 scale=0.0624、1000 层 scale=0.0127，屏幕 y 均 116–624（画布 740）、溢出 0、fitsOnScreen=true、0 console error；SW 缓存键 studiokit-arcade-0.12.3-v1；证据文档提交 6520003 触发 Actions 44968745329 四 job 同样全绿。"
+    },
+    {
+      "id": "T104",
+      "title": "Arcade 0.12.4：修复 LOD 误按层数触发（近景集装箱退化成色块）",
+      "kind": "agent",
+      "status": "DONE",
+      "dependsOn": ["T103"],
+      "ownerAuthorizationRequired": false,
+      "acceptance": [
+        "正常 1:1 近景在任意层数都必须保留集装箱完整细节",
+        "压缩全览才允许简化，且千层仍不卡",
+        "新增门禁守住该回归",
+        "全量门禁通过；无 key/Schema/关卡数据变更"
+      ],
+      "completedAt": "2026-11-22T09:20:00+08:00",
+      "evidence": "Owner 反馈近景集装箱变成纯色块，确认是 0.12.3 回归：LOD 判据 boxes.length>60 || view.scale<0.35 里的「层数」项错误——塔超 60 层后正常 1:1 近景（每箱屏幕 64×40px）也被判 dense，波纹/角件/编号/属性图标全丢。修复 dense 只看缩放（阈值 0.2）、性能改视口裁剪（1000 层近景每帧 23~24/1002）、结构轮廓只在 scale<0.35 绘制、新增 renderLod 探针。门禁 arcade_tower_test 19→20/20（新增 TP-12：3/40/120/1000 层近景 dense 必须 false 且 drawnBoxes≤40、≥120 层必须裁剪、40 层全览保留细节、120/1000 层全览压缩、全览 fitsOnScreen）；实测近景绘制 5/22/24/24（总 5/42/122/1002）；smoke 94/94、zen 14/14、calm 17/17、review 5/5、gameplay base 11/11、tower challenge 6/6、pwa 7/7、interaction 5/5、immersive 16/16、validate/build/inline/node --check 全过；无 key/Schema/关卡数据变更；版本链 0.12.4 / SW studiokit-arcade-0.12.4-v1；设计见 DESIGN-0.12.4.md。教训：LOD 判据必须看屏幕尺寸而非数据规模。"
+    },
+    {
       "id": "T102",
       "title": "Arcade 0.12.3：全览去掉缩放下限（200/1000 层可看全塔）",
       "kind": "agent",
