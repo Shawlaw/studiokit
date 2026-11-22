@@ -4,6 +4,13 @@ StudioKit 门户本身没有独立的 semver；以下按仓库里程碑与工具
 
 > 说明：Arcade `0.11.2`–`0.14.0` 的条目于 2026-11-22 依据 [`apps/arcade/CHANGELOG.md`](apps/arcade/CHANGELOG.md) 补齐（本文件当时落后于工具版本），逐条数值与证据以工具 CHANGELOG 与对应 `DESIGN-*.md` 为准。
 
+## Arcade 0.16.0 — 2026-11-23（本地未发布）
+
+- 旧港告示板委托（层塔施工/星海护航 T1/T2）、免费租机、非战斗代办、飞船机库与职业收据；玩家从 LOCAL 线索信按地址进入，游戏页用真实事件结算。
+- 新增 `commission-core/star-combat-config/rental/alternatives`、`ui/town|hangar|receipt`、`content/commissions|items|chapter-01`；`purchase` 支持材料 `costItems` 原子扣减。
+- 职业 run 不写经典局内档/旧机库/经典积分/星币；0.16 前置修复星海 `GameMeta.set` 读-合并-写与 `classicLike` 门禁。
+- 中心页仍无生涯 CTA；版本链 0.16.0 / SW `studiokit-arcade-0.16.0-v1`。未发布：无 `OWNER_AUTHORIZATION: PUBLISH_TO_MAIN`。详见 [`apps/arcade/CHANGELOG.md`](apps/arcade/CHANGELOG.md) 与 [`DESIGN-0.16.0.md`](apps/arcade/DESIGN-0.16.0.md)。
+
 ## Arcade 0.15.0 — 2026-11-22（本地未发布）
 
 - 新增可关闭的被动微线索与独立生涯数据层（`apps/arcade/career/`，IndexedDB `studiokit:arcade:career` v1，11 stores）；16 款游戏在经典游玩中被动产出线索，无显眼生涯入口、不产生货币/材料。

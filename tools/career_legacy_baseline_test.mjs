@@ -17,7 +17,7 @@
  *     id 全局唯一共 78、三款棋牌无 challenge 文件、不泄漏 referencePlan / acceptance。
  *   4 星海突击经典机库 / 割草隔离（源码契约，不做行为模拟）：机库 `formula: 1` 与
  *     sanitizeHangar 强制锁公式、星币公式 `Math.floor(score / 16)`、
- *     `GameMeta.set('star-raid', { hangar })` 整对象覆盖现状、gameOver 内 mow 早退、
+ *     `GameMeta.set('star-raid')` 在 0.16 起改为读-合并-写（旧字段保留）、gameOver 内 mow 早退、
  *     `serialize()` 在 mow 返回 null、gameOver 内 settleCredits / recordPlay 各 1 个业务调用点。
  *   5 层塔（pendulum-tower）隔离：recordPlay 业务调用恰好 1 处、挑战分流 `mode === 'challenge'`、
  *     `serialize()` 只按 state 门禁（0.16 career 必须自行早退）、文件尚无 career 字样。
@@ -687,16 +687,23 @@ function main() {
     ensure(/return\s+earned\s*;/.test(body), F.starRaid + ' 的 settleCredits() 应 `return earned;`（结算幂等返回值）');
     return 'Math.floor(score / 16)';
   });
-  check('星海机库：GameMeta.set(\'star-raid\') 只写 { hangar }（整对象覆盖现状冻结）', () => {
+  check("星海机库：GameMeta 读-合并-写（0.16 前置修复，旧字段保留）", () => {
     const source = read(F.starRaid);
     const calls = countOf(source, /A\.GameMeta\.set\(\s*'star-raid'/);
-    ensure(calls === 1, F.starRaid + ' 应恰好 1 处 `A.GameMeta.set(\'star-raid\'`，实际 ' + calls + ' 处');
+    ensure(calls === 1, F.starRaid + " 应恰好 1 处 `A.GameMeta.set('star-raid'`，实际 " + calls + " 处");
     ensure(
-      /A\.GameMeta\.set\(\s*'star-raid'\s*,\s*\{\s*hangar\s*:\s*data\s*\}\s*\)/.test(source),
-      F.starRaid + ' 的 GameMeta 写入必须是 `A.GameMeta.set(\'star-raid\', { hangar: data })`；'
-        + '0.14.0 的 GameMeta.set 是整对象覆盖（不是合并），改 payload 形状前必须显式升级本测试',
+      /const current = typeof A\.GameMeta\.get === 'function' \? A\.GameMeta\.get\('star-raid'\) : null;/.test(source),
+      F.starRaid + ' 的 GameMeta 写入必须先读旧记录（读-合并-写）',
     );
-    return '1 处写入，payload={ hangar }';
+    ensure(
+      /const next = \{ \.\.\.base, hangar: data \};/.test(source),
+      F.starRaid + ' 的 GameMeta 写入必须保留旧字段（{ ...base, hangar: data }），禁止整对象覆盖',
+    );
+    ensure(
+      !/A\.GameMeta\.set\(\s*'star-raid'\s*,\s*\{\s*hangar\s*:\s*data\s*\}\s*\)/.test(source),
+      F.starRaid + ' 仍存在 0.14.0 的整对象覆盖写入',
+    );
+    return '1 处读-合并-写';
   });
   check('星海割草：gameOver 首段 `if (mode === \'mow\') return quitMow();` 早退', () => {
     const body = functionBody(F.starRaid, 'gameOver');

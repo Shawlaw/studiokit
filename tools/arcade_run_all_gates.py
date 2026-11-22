@@ -36,6 +36,9 @@ def main() -> int:
         ('career_registry', ['node', 'tools/career_registry_test.mjs'], None),
         ('career_discovery', ['node', 'tools/career_discovery_test.mjs'], None),
         ('career_legacy_baseline', ['node', 'tools/career_legacy_baseline_test.mjs'], None),
+        ('career_rental', ['node', 'tools/career_rental_test.mjs'], None),
+        ('career_alternatives', ['node', 'tools/career_alternatives_test.mjs'], None),
+        ('career_star_combat_config', ['node', 'tools/career_star_combat_config_test.mjs'], None),
         ('career_db', ['node', 'tools/career_db_test.mjs'], {
             'CAREER_DB_PORT': os.environ.get('CAREER_DB_PORT', '8830'),
             'CAREER_DB_CDP_PORT': os.environ.get('CAREER_DB_CDP_PORT', '9430'),
@@ -55,6 +58,18 @@ def main() -> int:
         ('career_pwa_offline', ['node', 'tools/career_pwa_offline_test.mjs'], {
             'CAREER_PWA_PORT': os.environ.get('CAREER_PWA_PORT', '8839'),
             'CAREER_PWA_CDP_PORT': os.environ.get('CAREER_PWA_CDP_PORT', '9439'),
+        }),
+        ('career_run_resume', ['node', 'tools/career_run_resume_test.mjs'], {
+            'CAREER_RESUME_PORT': os.environ.get('CAREER_RESUME_PORT', '8880'),
+            'CAREER_RESUME_CDP': os.environ.get('CAREER_RESUME_CDP', '9480'),
+        }),
+        ('career_first_flight', ['node', 'tools/career_first_flight_test.mjs'], {
+            'CAREER_FF_PORT': os.environ.get('CAREER_FF_PORT', '8881'),
+            'CAREER_FF_CDP': os.environ.get('CAREER_FF_CDP', '9481'),
+        }),
+        ('career_mobile', ['node', 'tools/career_mobile_016_test.mjs'], {
+            'CAREER_MOBILE_PORT': os.environ.get('CAREER_MOBILE_PORT', '8882'),
+            'CAREER_MOBILE_CDP': os.environ.get('CAREER_MOBILE_CDP', '9482'),
         }),
         ('stage_coverage', ['node', 'tools/arcade_stage_coverage.mjs'], None),
         ('smoke', ['node', 'tools/arcade_smoke.mjs'], {

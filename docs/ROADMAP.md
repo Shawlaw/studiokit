@@ -249,6 +249,18 @@ Owner 两条真机反馈：①已安装 PWA 点「检查更新」显示的是已
 - [x] 双端发布：Owner 本轮明确授权发布（`PUBLISH_TO_MAIN`）；提交 `8493cf7`（PWA 更新检测）+ `78858e0`（游玩时长 + 文档）ff 合入 `main`；Actions run `45002523350` 四 job 全绿（Validate and build / Deploy GitHub Pages / Deploy Cloudflare Pages / Verify both deployments）；CI 与本地 `tools/verify_deploy.py` 均 **41/41** 双端逐文件一致（arcade 0.13.2 / badge 2.2.1 / venue 0.2.0）；双端线上无头 Chrome 各 8 项全过（中心页 0.13.2 + 检查更新返回线上 0.13.2 且不误报、SW 握手 0.13.2、缓存键 `studiokit-arcade-0.13.2-v1`、游戏页可加载、0 console error）
 - [ ] 真机复测：iOS 主屏幕 PWA 的「检查更新」提示时机与「累计时长/积分记录时长」待 Owner 确认（UNVERIFIED）
 
+## 0.16.0 首航：告示板委托、免费租机与飞船机库（2026-11-23 本地未发布）
+
+- [x] 旧港告示板（town）：从 LOCAL 信件按地址进入，列出 T1/T2 委托、明码工钱/材料与时长，接单后跳转对应游戏页
+- [x] 委托生命周期：ticket（ticketId=runId）→ `?career=` 激活 → 真实事件缓冲 → 目标判定 → `settleAndClaim` 幂等 → 收据；刷新/暂停可恢复、失败可归因、放弃不发奖
+- [x] 层塔施工 T1/T2（稳定 4/6 层真实物理事件、倒塌不计、职业 run 断开旧局内档）与星海护航 T1/T2（startLevel/theme 真实关卡、Boss 真实事件、跳过星币/旧机库/Progress/Scores）
+- [x] 免费租机（会话 marker、零扣费、不改拥有）与非战斗代办（明码标价、只写 alternative/story 行、不发战斗奖章）
+- [x] 飞船机库：4 艘价格/材料门槛，`purchase.costItems` 同事务扣减 + `writeEquipment` 切换；钱包/流水/原收据 UI
+- [x] 0.16 前置修复：星海 GameMeta 读-合并-写、classicLike、serialize 门禁；旧机库 formula 1/经典/挑战/割草零改动
+- [x] 内容：commissions.json 4 条、items.json 4 船/模块/材料、chapter-01.json 16 起源 + C1 三路径
+- [x] 测试：commission 61+17+8、combat 379、rental 153+22、alternatives 67+13、resume 45、first-flight 192、mobile 318、a11y 75、db 38、backup 34、PWA 离线 17
+- [ ] G16 独立门禁与 Owner 发布授权；真机触控/安全区/PWA 安装态 UNVERIFIED
+
 ## 0.15.0 被动线索与独立生涯数据层（2026-11-22 本地未发布）
 
 - [x] 16 款游戏在经典游玩中被动产出可关闭的微线索；无显眼生涯入口；不点不影响原玩法；可在设置关闭/恢复，已发现内容可从信箱找回

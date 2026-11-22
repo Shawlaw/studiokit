@@ -17,7 +17,7 @@ REQUIRED = [
     'apps/arcade/DESIGN-0.4.0.md', 'apps/arcade/DESIGN-0.5.0.md',
     'apps/arcade/DESIGN-0.6.0.md', 'apps/arcade/DESIGN-0.8.1.md', 'apps/arcade/DESIGN-0.8.2.md',
     'apps/arcade/DESIGN-0.8.6.md', 'apps/arcade/DESIGN-0.9.0.md', 'apps/arcade/DESIGN-0.10.0.md',
-    'apps/arcade/DESIGN-0.11.0.md', 'apps/arcade/DESIGN-0.11.1.md', 'apps/arcade/DESIGN-0.11.2.md', 'apps/arcade/DESIGN-0.11.3.md', 'apps/arcade/DESIGN-0.11.4.md', 'apps/arcade/DESIGN-0.11.5.md', 'apps/arcade/DESIGN-0.12.0.md', 'apps/arcade/DESIGN-0.12.1.md', 'apps/arcade/DESIGN-0.12.2.md', 'apps/arcade/DESIGN-0.12.3.md', 'apps/arcade/DESIGN-0.12.4.md', 'apps/arcade/DESIGN-0.12.5.md', 'apps/arcade/DESIGN-0.12.6.md', 'apps/arcade/DESIGN-0.12.7.md', 'apps/arcade/DESIGN-0.13.1.md', 'apps/arcade/DESIGN-0.13.2.md', 'apps/arcade/DESIGN-0.13.3.md', 'apps/arcade/DESIGN-0.14.0.md', 'apps/arcade/DESIGN-0.15.0.md', 'apps/arcade/DESIGN-0.16.0.md',
+    'apps/arcade/DESIGN-0.11.0.md', 'apps/arcade/DESIGN-0.11.1.md', 'apps/arcade/DESIGN-0.11.2.md', 'apps/arcade/DESIGN-0.11.3.md', 'apps/arcade/DESIGN-0.11.4.md', 'apps/arcade/DESIGN-0.11.5.md', 'apps/arcade/DESIGN-0.12.0.md', 'apps/arcade/DESIGN-0.12.1.md', 'apps/arcade/DESIGN-0.12.2.md', 'apps/arcade/DESIGN-0.12.3.md', 'apps/arcade/DESIGN-0.12.4.md', 'apps/arcade/DESIGN-0.12.5.md', 'apps/arcade/DESIGN-0.12.6.md', 'apps/arcade/DESIGN-0.12.7.md', 'apps/arcade/DESIGN-0.13.1.md', 'apps/arcade/DESIGN-0.13.2.md', 'apps/arcade/DESIGN-0.13.3.md', 'apps/arcade/DESIGN-0.14.0.md', 'apps/arcade/DESIGN-0.16.0.md', 'apps/arcade/DESIGN-0.16.0.md',
     'apps/arcade/engine.js', 'apps/arcade/arcade.css', 'apps/arcade/sw.js',
     'apps/arcade/manifest.webmanifest',
     'apps/arcade/career/registry.js', 'apps/arcade/career/discovery.js',
@@ -55,6 +55,8 @@ REQUIRED = [
     'tools/career_games_reachability_test.mjs', 'tools/career_pwa_offline_test.mjs',
     'tools/career_commission_test.mjs', 'tools/career_star_combat_config_test.mjs',
     'tools/career_rental_test.mjs', 'tools/career_alternatives_test.mjs',
+    'tools/career_run_resume_test.mjs', 'tools/career_first_flight_test.mjs',
+    'tools/career_mobile_016_test.mjs',
     'tools/career_legacy_baseline_test.mjs',
 ]
 
@@ -199,7 +201,7 @@ def validate(root=ROOT):
     arcade_engine = root / 'apps/arcade/engine.js'
     if arcade_engine.exists():
         source = arcade_engine.read_text(encoding='utf-8')
-        if "const ARCADE_VERSION = '0.15.0'" not in source:
+        if "const ARCADE_VERSION = '0.16.0'" not in source:
             ok = fail('Arcade ARCADE_VERSION drifted; update registry/README/CHANGELOG together') and ok
         for update_marker in ('function checkForUpdate', 'function onUpdate', 'function applyUpdate', "type === 'arcade-sw-update-ready'"):
             if update_marker not in source:
@@ -294,7 +296,7 @@ def validate(root=ROOT):
         arcade_index = root / 'apps/arcade/index.html'
         if arcade_index.exists():
             index_source = arcade_index.read_text(encoding='utf-8')
-            for marker in ('rel="manifest"', 'data-playtime-section', 'data-scores-section', 'data-scores-body', 'data-scores-empty', 'data-offline', 'data-install', 'data-share', 'data-random', 'data-update-check', 'data-update-banner', 'data-update-reload', '无签到', 'data-hall-version>0.15.0', '发现新版本 v${latest}（当前 v${current}）', '已是最新版本（v'):
+            for marker in ('rel="manifest"', 'data-playtime-section', 'data-scores-section', 'data-scores-body', 'data-scores-empty', 'data-offline', 'data-install', 'data-share', 'data-random', 'data-update-check', 'data-update-banner', 'data-update-reload', '无签到', 'data-hall-version>0.16.0', '发现新版本 v${latest}（当前 v${current}）', '已是最新版本（v'):
                 if marker not in index_source:
                     ok = fail(f'Arcade hub 0.13.2 marker missing: {marker}') and ok
             # 0.11.4：iOS 26+ 独立模式顶部系统模糊根因，禁止回归。
@@ -311,7 +313,7 @@ def validate(root=ROOT):
         for arcade_html in sorted((root / 'apps/arcade').rglob('*.html')):
             if 'viewport-fit=cover' in arcade_html.read_text(encoding='utf-8'):
                 ok = fail(f'{arcade_html.relative_to(root)} must not declare viewport-fit=cover (iOS standalone top blur)') and ok
-        # 0.15.0 Arcade Life：16 款游戏的只读微线索适配 + 独立生涯数据层（内容/契约，不含剧透）。
+        # 0.16.0 Arcade Life：16 款游戏的只读微线索适配 + 独立生涯数据层（内容/契约，不含剧透）。
         career_dir = root / 'apps/arcade/career'
         if career_dir.is_dir():
             for game_id in ARCADE_ALL_GAMES:
@@ -455,7 +457,7 @@ def validate(root=ROOT):
         arcade_sw = root / 'apps/arcade/sw.js'
         if arcade_sw.exists():
             sw_source = arcade_sw.read_text(encoding='utf-8')
-            for marker in ("const VERSION = '0.15.0'", 'arcade-precache', 'skipWaiting', 'clients.claim', "type === 'arcade-sw-version'", "type: 'arcade-sw-update-ready'", 'notifyUpdateReady', 'isUpdateActivation', 'replacedOldVersion'):
+            for marker in ("const VERSION = '0.16.0'", 'arcade-precache', 'skipWaiting', 'clients.claim', "type === 'arcade-sw-version'", "type: 'arcade-sw-update-ready'", 'notifyUpdateReady', 'isUpdateActivation', 'replacedOldVersion'):
                 if marker not in sw_source:
                     ok = fail(f'Arcade service worker marker missing: {marker}') and ok
             # 0.13.2：activate 广播必须用「旧版本缓存是否还在」判断升级接管；
@@ -484,8 +486,8 @@ def validate(root=ROOT):
             try:
                 registry = json.loads(registry_path.read_text(encoding='utf-8'))
                 arcade = next((t for t in registry.get('tools', []) if t.get('id') == 'arcade'), None)
-                if arcade and arcade.get('version') != '0.15.0':
-                    ok = fail('Arcade registry version must match engine 0.15.0') and ok
+                if arcade and arcade.get('version') != '0.16.0':
+                    ok = fail('Arcade registry version must match engine 0.16.0') and ok
             except Exception:
                 pass
 

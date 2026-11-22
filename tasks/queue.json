@@ -2101,6 +2101,40 @@
       ],
       "evidence": "G15 独立门禁首轮 FAIL（F-15-01 挑战模式共享输入路径泄漏 career 事件；F-15-02 工作树不干净）→ 8193ffa 修复 12 款挑战游戏 mode 守卫并补真实挑战回归 → 第二轮独立复核 PASS（HEAD 5e71004）。复跑：reachability 165/165、smoke 113/113、a11y 75/75、career_db 38/38、career_backup 34/34、career_pwa_offline 17/17、聚合器 ALL GATES PASSED；远端 main 仍 afc5fd4、本分支未推送、无 tag、无发布授权；真机/PWA 实机 UNVERIFIED；摘要见 docs/arcade-life/G15-EVIDENCE.md。",
       "completedAt": "2026-11-23T01:30:00+08:00"
+    },
+    {
+      "id": "T118",
+      "title": "Arcade 0.16.0：旧港告示板委托、免费租机、飞船机库与职业收据（本地未发布）",
+      "kind": "agent",
+      "status": "DONE",
+      "dependsOn": [
+        "T117"
+      ],
+      "ownerAuthorizationRequired": false,
+      "acceptance": [
+        "告示板委托 T1/T2（层塔/星海）真实事件结算",
+        "免费租机/非战斗代办/飞船机库/钱包收据",
+        "职业 run 不写经典局内档/旧机库/经典积分/星币",
+        "测试与版本链 0.16.0，本地未发布"
+      ],
+      "completedAt": "2026-11-23T03:30:00+08:00",
+      "evidence": "本地分支提交；测试见 docs/arcade-life/INTEGRATION-0.16.md 与仓库外 qa/evidence/D16-*；未发布（无 PUBLISH_TO_MAIN 授权）。"
+    },
+    {
+      "id": "T119",
+      "title": "Arcade 0.16.0 本地门禁：D16 系列与 G16（不发布）",
+      "kind": "agent",
+      "status": "IN_PROGRESS",
+      "dependsOn": [
+        "T118"
+      ],
+      "ownerAuthorizationRequired": false,
+      "acceptance": [
+        "G16 独立 Reviewer 复跑 16 起源首航/经济闭环/游戏回归/PWA/移动端",
+        "失败项回灌",
+        "保持本地分支不推送"
+      ],
+      "evidence": "进行中：D16 系列自测全绿；G16 待独立复评。"
     }
   ]
 }

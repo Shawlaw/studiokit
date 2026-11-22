@@ -37,7 +37,7 @@
 | 工具 | 版本 | 状态 | 入口 | 一句话说明 |
 | --- | --- | --- | --- | --- |
 | ◎ **Badge Studio** | `2.2.1` | `available` | [`apps/badge-studio/`](apps/badge-studio/) | 同心圆徽章工作台：弧形文字排版、多方案并排对比、透明 PNG / SVG 导出 |
-| 🕹 **街机厅 Arcade** | `0.15.0` | `available` | [`apps/arcade/`](apps/arcade/) | 16 款竖屏小游戏（13 款带 6 关挑战 + 三款平和棋牌），支持全屏、暂停、本地续玩、分享与离线预载 |
+| 🕹 **街机厅 Arcade** | `0.16.0` | `available` | [`apps/arcade/`](apps/arcade/) | 16 款竖屏小游戏（13 款带 6 关挑战 + 三款平和棋牌），支持全屏、暂停、本地续玩、分享与离线预载 |
 | 🍽 **Venue Compare** | `0.2.0` | `available` | [`apps/restaurant-compare/`](apps/restaurant-compare/) | 餐厅考察对比：地图标注 + 横向对比表 + 外部链接备注，导出可转发的独立 HTML |
 | ▧ **Rounded Image** | — | `planned` | — | 预留给图片圆角工具，原始规格待恢复或重新定义；**当前没有实现** |
 
@@ -237,7 +237,7 @@ Cloudflare 侧项目为 `studiokit`（Production branch `main`），所需 Secre
 | [`docs/archive/`](docs/archive/README.md) | 已完成周期的过程记录（并行契约、独立评审、试玩包）归档；不再更新 |
 | [`docs/badge-studio-upstream-readme.md`](docs/badge-studio-upstream-readme.md) | Badge Studio 上游 v2.2.0 说明原文存档（当前集成版本以 `BASELINE.md` 为准） |
 | [`apps/<tool>/README.md`](apps/) | 各工具的产品文档（功能、数据模型、边界、测试） |
-| [`apps/arcade/DESIGN-*.md`](apps/arcade/) | Arcade 逐版设计与回滚说明（`DESIGN-0.4.0` … `DESIGN-0.15.0`） |
+| [`apps/arcade/DESIGN-*.md`](apps/arcade/) | Arcade 逐版设计与回滚说明（`DESIGN-0.4.0` … `DESIGN-0.16.0`） |
 
 ## 已知边界
 

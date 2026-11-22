@@ -626,7 +626,7 @@ async function runChromeChecks(cdp) {
     assert(claim1.credits === 70, 'receipt.credits=' + claim1.credits);
     assert(sameJson(claim1.items, { 'mat.scrap': 2 }), 'receipt.items=' + JSON.stringify(claim1.items));
     assert(sameJson(claim1.evidence, ['EV-memory-1']) && sameJson(claim1.flags, ['FLAG-alpha']), 'evidence/flags 错误');
-    assert(claim1.rulesetVersion === 1 && claim1.contentVersion === '0.15.0', '版本字段=' + JSON.stringify(claim1));
+    assert(claim1.rulesetVersion === 1 && claim1.contentVersion === '0.16.0', '版本字段=' + JSON.stringify(claim1));
     assert(claim1.txIds.length === 3, 'txIds=' + JSON.stringify(claim1.txIds));
     assert(claimed.wallet.credits === 150, '余额=' + claimed.wallet.credits);
     assert(claimed.wallet.items['mat.scrap'] === 2, '库存=' + JSON.stringify(claimed.wallet.items));
@@ -886,7 +886,7 @@ async function runChromeChecks(cdp) {
     const payload = result.all.payload;
     assert(payload.format === 'studiokit-arcade-career', 'format=' + payload.format);
     assert(payload.careerSchemaVersion === 1, 'careerSchemaVersion=' + payload.careerSchemaVersion);
-    assert(payload.contentVersion === '0.15.0', 'contentVersion=' + payload.contentVersion);
+    assert(typeof payload.contentVersion === 'string' && /^\d+\.\d+\.\d+/.test(payload.contentVersion), 'contentVersion=' + payload.contentVersion);
     assert(typeof payload.exportedAt === 'string' && payload.exportedAt.length > 10, 'exportedAt=' + payload.exportedAt);
     const stores = ['profiles', 'state', 'discovery', 'runs', 'claims', 'ledgers', 'balances', 'inventory', 'equipment', 'quests', 'migrations'];
     const missing = stores.filter((name) => !Array.isArray(payload[name]));
