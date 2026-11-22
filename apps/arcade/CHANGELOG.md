@@ -2,7 +2,7 @@
 
 
 
-## 0.13.0 — 2026-11-22（未发布 · 本地门禁已通过）
+## 0.13.0 — 2026-11-22（已双端发布）
 
 星海突击「星域远征」：把 Owner 反馈的六件事——每关都是白板装备、关卡难度没有差异、机体没有大升级与常态 buff、想要稀缺的核弹级大伤害道具、想要油量/能量这类局限、想要临时编队等出击状态——落到一条「战斗 → 关卡 → 远征」的三层循环里。**经典模式全部改动；挑战 6 关的数据与判定零改动。** 设计、数值与回滚见 `DESIGN-0.13.0.md`。
 
@@ -40,7 +40,8 @@
 - 挑战 6 关零回归：`node tools/arcade_gameplay_test.mjs --suite=challenge --game=star-raid` **7/7**（C01/C02–C04/C05–C06 仍 engine-replay 零伤害通关，失败归因、暂停刷新恢复、320/390 面板无溢出均通过）。
 - 其余门禁：gameplay base **11/11**、zen **17/17**、calm **7/7**、review **5/5**、pwa **7/7**、interaction **5/5**、immersive **32/32**、tower **23/23**、stage coverage 78 关矩阵正常。
 - 新 UI 布局：320 / 375 / 390 / 430px 下机库面板、道具行、编队按钮、CLEAR 整备卡无横向溢出、按钮 ≥44px（320/390 已固化为 smoke 回归）。
-- 真机手感（能量节奏、核弹手感、编队拦截反馈）UNVERIFIED；发布：待授权后回填（提交 SHA / Actions run / `verify_deploy.py` 双端文件数）。
+- 真机手感（能量节奏、核弹手感、编队拦截反馈）UNVERIFIED。
+- 发布：提交 `faf1772` 推送 `main`；Actions run `44990933121` 四 job 全绿（Validate and build / Deploy GitHub Pages / Deploy Cloudflare Pages / Verify both deployments）；CI 与本地 `tools/verify_deploy.py` 均 **41/41** 双端逐文件一致（arcade 0.13.0 / badge 2.2.1 / venue 0.2.0）；双端线上无头 Chrome 实测：中心页 0.13.0 + 16 卡、`A.GameMeta`（key `studiokit:arcade:meta:v1`）、6 星区主题、机库/编队入口、核弹清弹与 Boss 480→360、CLEAR 三选一整备、0 console error；SW 缓存键 `studiokit-arcade-0.13.0-v1`。
 
 ## 0.12.7 — 2026-11-22（已双端发布）
 

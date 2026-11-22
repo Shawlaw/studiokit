@@ -178,7 +178,7 @@
 - [x] 本地门禁：`arcade_smoke.mjs` **94/94**、`arcade_zen_scores_test.mjs` **14/14**、`arcade_gameplay_test.mjs --suite=all --repeat=1` **104/104** 与 base **22/22**、`arcade_calm_games_test.mjs` **17/17**、派生重生成 **143/143**；真机与 AI 手感 UNVERIFIED。
 - [x] 发布证据：提交 `fc37d2b` 推送 `main`；Actions run `44681529684` 的 Validate and build / Deploy GitHub Pages / Deploy Cloudflare Pages / Verify both deployments 四个 job 全部成功；CI 与本地 `tools/verify_deploy.py` 均 **41/41** 文件 SHA-256 双端一致（Arcade `0.10.0` / Badge `2.2.1` / Venue `0.2.0`，manifest `application/manifest+json`）；双端线上无头 Chrome 各 26/26（中心页 0.10.0 + 16 卡 + 三款棋牌注册、三款棋牌 selftest/regression/开始/暂停、0.10.0 挑战数据字段、0 console error）；SW 缓存键 `studiokit-arcade-0.10.0-v1`。（详细记录见 `docs/RELEASE-RUNBOOK.md`）
 
-## 0.13.0 发布批次（开发中，未发布）
+## 0.13.0 发布批次（2026-11-22 已双端发布）
 
 ### Arcade 0.13.0 — 星海突击「星域远征」（机库 / 能量 / 编队 / 大杀器 / 星区主题）
 
@@ -189,12 +189,12 @@ Owner 反馈六件事（每关都是白板装备、难度没有差异、机体�
 - [x] 数据兼容：新增引擎通用游戏数据 `studiokit:arcade:meta:v1`（`A.GameMeta.get/set/clear`，机库在 `games['star-raid'].hangar`，`formula: 1` 锁公式版本）与备份字段 `gameMeta`；`runs:v1` 只追加 `data.run`（挑战分支 `run: null`），既有 6 个 key 与 Schema 不变，旧档缺字段按默认恢复；中心页「清除记录」同步清机库。
 - [x] 门禁（本地已执行）：`check_inline_scripts.mjs` PASS（19 HTML / 20 段脚本）、`node --check engine.js/sw.js` PASS、`validate_site.py` PASS、`build_site.py` PASS、`arcade_smoke.mjs` **103/103**（含 9 项 0.13.0 回归）、挑战 6 关 **7/7**（`--suite=challenge --game=star-raid`）、gameplay base 11/11、tower **23/23** 与 tower challenge **6/6**（0.12.7 基线同批复跑）、zen 17/17、calm 7/7、review 5/5、pwa 7/7、interaction 5/5、immersive 32/32、stage coverage 78 关矩阵正常。
 - [x] 布局验收：320 / 375 / 390 / 430px 下机库面板、道具行、编队按钮、整备卡无横向溢出、按钮 ≥44px；320/390 已固化为 smoke 回归（`star-hangar-390.png` / `star-refit-320.png`）。
-- [ ] 双端发布：需 Owner `PUBLISH_TO_MAIN` 授权；发布后按 `RELEASE-RUNBOOK.md` 回填提交 SHA、Actions run 与 `verify_deploy.py` 双端结果。
+- [x] 双端发布：Owner 本轮明确选择「确认发布（PUBLISH_TO_MAIN）」；提交 `faf1772` 推送 `main`；Actions run `44990933121` 四 job 全绿；CI 与本地 `tools/verify_deploy.py` 均 **41/41** 双端一致（arcade 0.13.0 / badge 2.2.1 / venue 0.2.0）；双端线上无头 Chrome 实测 0.13.0、GameMeta/6 主题/机库/编队/核弹/整备与 0 console error。
 - [ ] 真机试玩：星币经济节奏（一局大约多少星币、六项改装多久满级）、能量枯竭与编队的取舍手感、大杀器稀缺度、6 星区主题差异是否可感知；未试玩前不宣称通过。
 
 ## Now
 
-1. **Arcade 0.13.0 真机试玩与发布授权**：本地门禁与 320–430px 布局已过（见上一节）；剩余真机试玩（星币节奏/能量取舍/核弹稀缺度/主题可感知度）与 Owner 发布授权。
+1. **Arcade 0.13.0 真机试玩**：已双端发布（见上一节）；剩余真机试玩（星币节奏/能量取舍/核弹稀缺度/主题可感知度）。
 2. **Arcade 0.10.0 真机试玩**：重点验证三款棋牌的点按精度（320px 五子棋/接龙）、五子棋 AI 难度是否合适、挑战修复后的手感（砖块拖动发球、层塔对齐提示、矿工最后一钩、影跃累计计时文案）。
 3. **挑战内容密度**：俄罗斯方块 C04 重复、2048 C05 一步可解、影跃参考通关过短等内容问题需要改设计源 + 生成器 + 参考解，另行排期；本轮只修判定/提示/续档/计分。
 4. **Arcade 0.8.0/0.9 设计差量试玩**：按 `docs/arcade/0.8.0-PLAYTEST.md` 与 `docs/arcade/0.9/PLAYTEST.md` 在真机做两轮试玩并裁决 5 项设计差量；真机未验证前不宣称通过。
