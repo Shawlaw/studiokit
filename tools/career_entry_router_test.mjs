@@ -41,7 +41,7 @@ function loc(pathname, search, hash) {
   eq('R-01c 大写 + .HTML', router.detectGameId(loc('/apps/arcade/games/Memory-Flip.HTML')), 'memory-flip');
   eq('R-01d 尾斜杠', router.detectGameId(loc('/apps/arcade/games/snake-run/')), 'snake-run');
   eq('R-01e URL 编码', router.detectGameId(loc('/apps/arcade/games/memory%2Dflip.html')), 'memory-flip');
-  eq('R-01f 本地 file:// 风格', router.detectGameId(loc('/D:/LocalAgentWorkspace/StudioKit/apps/arcade/games/pendulum-tower.html')), 'pendulum-tower');
+  eq('R-01f 本地 file:// 风格', router.detectGameId(loc('/repo/apps/arcade/games/pendulum-tower.html')), 'pendulum-tower');
   eq('R-01g 中心页返回 null', router.detectGameId(loc('/apps/arcade/')), null);
   eq('R-01h 空 games 目录返回 null', router.detectGameId(loc('/apps/arcade/games/')), null);
   eq('R-01i 子目录不猜测', router.detectGameId(loc('/apps/arcade/games/sub/x.html')), null);

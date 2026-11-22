@@ -47,7 +47,7 @@
  *   （`stepSnake` / `hitBrick` / `applyClear` / `killEnemy` / `settleDrop` / `cashIn` / `timeUp → gameOver`
  *   等）；`setBoard`/`setLevel`/`setPosition`/`forceSettle` 只作为确定性地形/局面夹具，
  *   事件本身仍由真实函数路径提交，不直接改 career 状态或伪造 observe 调用。
- * - 参考实现（仓库外，已实测通过）：arcade-life-devkit/work-015-018/qa 下 D15-08/09/10/11 驱动脚本与证据。
+ * - 参考实现（仓库外的本地测试驱动脚本与证据目录，不随仓库分发）：D15-08/09/10/11 的驱动脚本与证据。
  *
  * 端口（显式，避免与 smoke/gameplay/其它 career 门禁冲突）：
  *   CAREER_GAMES_PORT=8833（静态服务器） / CAREER_GAMES_CDP_PORT=9433（headless Chrome）

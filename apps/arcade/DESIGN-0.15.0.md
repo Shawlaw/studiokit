@@ -66,6 +66,6 @@ apps/arcade/career/
 ## 7. 回滚
 
 1. 代码回滚：`git revert` 0.15 批次（B02/0.15 提交），或从 `afc5fd4` 重新拉分支；本版未推送远端。
-2. 版本链回退：engine `ARCADE_VERSION`、sw `VERSION`、registry arcade 版本、index 静态版本串、validate 四处断言、6 个测试脚本断言一并回退；SW 旧缓存由 `activate` 清理。
+2. 版本链回退：engine `ARCADE_VERSION`、sw `VERSION`、registry arcade 版本、index 静态版本串、validate 四处断言、**7 个**测试脚本断言（smoke/zen/calm/interaction/pwa_update/career_pwa_offline/a11y）一并回退；同步移除 `tools/verify_deploy.py` 的 14 个 career `PATHS` 与 `docs/arcade-life/G15-EVIDENCE.md`；SW 旧缓存由 `activate` 清理。
 3. 数据：0.15 不迁移/不删除经典数据；IDB 为新增库，旧页面忽略。需要清除线索时用设置面板独立二次确认；卸载 PWA/清除站点数据会清 IDB。
 4. 若需临时关闭功能而不回滚代码：设置面板关闭“街机里的神秘线索”（不丢已发现内容）；或移除 16 页 bridge 脚本标签（经典立即恢复原状）。

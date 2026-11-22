@@ -17,6 +17,13 @@
 | 320/375/390/430、键盘、读屏、reduced-motion | PASS（a11y 75/75、immersive 32/32、smoke 布局项） |
 | 防剧透（提交信息/公开文档/仓库树/dist） | PASS（无剧情路线/谜底/阈值答案/外部策划包/Prompt） |
 
+### 复核签核
+
+- 首轮独立审计：**FAIL**（F-15-01 挑战事件泄漏、F-15-02 工作树不干净、F-15-03 EOF 空行、F-15-04 证据引用）。
+- 修复：`8193ffa`（挑战守卫 + 真实挑战回归）、`5e71004`（非剧透摘要与证据路径）。
+- 第二轮独立复核：**PASS**（HEAD `5e71004`；工作树干净；`git diff --check` 0；reachability 165/165、smoke 113/113、a11y 75/75、validate/build/inline、4 个纯 Node 契约测试全部 exit 0；独立探针验证挑战内 `eventCount=0` 且退出后经典结算不再兑换线索；远端 `main` 仍为 `afc5fd4`、本分支未推送、无 tag）。
+- 复核遗留 minor：两个测试文件内的内部路径字符串已中性化；本摘要已按签核后状态更新。真机/读屏器/PWA 实机仍 UNVERIFIED（见下）。
+
 ## 首轮审计发现与修复
 
 1. **挑战模式 career 事件泄漏（BLOCKER）**：`bridge` 默认 `sourceMode='classic'`，16 页未接 `setSourceMode`；`memory-flip`/`merge-2048` 的共享输入路径会在挑战局写入 `pair.match`/`tile.merged`，可被随后经典结算兑换成线索。

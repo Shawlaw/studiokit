@@ -19,9 +19,10 @@
 - 版本链：engine `ARCADE_VERSION`、registry `version`、中心页 `data-hall-version`、`validate_site` 断言、6 个既有测试脚本断言同步；`tools/verify_deploy.py` 的 `PATHS` 追加 career 静态资源。
 
 ### Tests
-- 纯 Node：`career_registry_test` **90/90**、`career_discovery_test` **84/84**、`career_legacy_baseline_test` **78/78**。
-- Chrome/CDP：`career_db_test` **38/38**（事务/幂等/多标签/失败零写入）、`career_backup_test`（本版交付）、16 款游戏适配逐组 CDP 实测（事件/信封/结算/线索渲染）。
-- 既有回归由 G15 独立 Reviewer 复跑：smoke / gameplay / tower / zen / calm / review / interaction / immersive / pwa；本次工作树未跑全套前不声称全绿。
+- 纯 Node：`career_registry_test` **90/90**、`career_discovery_test` **84/84**、`career_legacy_baseline_test` **78/78**、`career_entry_router_test` **37/37**。
+- Chrome/CDP：`career_db_test` **38/38**（事务/幂等/多标签/失败零写入）、`career_backup_test` **34/34**、`career_games_reachability_test` **165/165**（16/16 真实可达 + 真实挑战隔离回归）、`career_discovery_accessibility_test` **75/75**、`career_pwa_offline_test` **17/17**。
+- 既有回归：聚合器 `arcade_run_all_gates.py` = `ALL GATES PASSED`（smoke 113/113、zen、calm、review、gameplay all/base）；聚合器外 tower 23/23、immersive 32/32、interaction 5/5、pwa_update 9/9。
+- **G15 独立门禁：首轮 FAIL（挑战共享输入路径泄漏 career 事件）→ 修复后第二轮独立复核 PASS**（HEAD `5e71004`；工作树干净；远端 `main` 未动）。
 - 真机 iPhone/Android 触控与 PWA 安装/更新时机：**UNVERIFIED**。
 
 ### Notes
