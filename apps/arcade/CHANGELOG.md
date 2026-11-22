@@ -1,6 +1,49 @@
 # Arcade Changelog
 
 
+## 0.13.3 — 2026-11-22（已双端发布）
+
+Owner 在 iPhone 主屏 PWA（`studiokit.pages.dev`）复测 0.13.2：星海突击 / 2048 / 俄罗斯方块玩完，
+累计时长与每局时长仍全是 `0`，但积分记录有数据；同一自检页用 Edge 打开正常。
+设备自检页抓到根因并修复（设计与证据见 `DESIGN-0.13.3.md`）；**玩法/存档/挑战零改动**。
+
+### Fixed
+- **Cloudflare Pages 无后缀 URL 导致游戏识别失败（计时全 0 的根因）**：CF Pages 的 pretty URL 会把
+  `GET /apps/arcade/games/x.html` **308** 到 `/apps/arcade/games/x`；`detectCurrentGame()` 旧实现用
+  `g.file === 'x.html'` 精确比较 pathname 里拿到的 `x` → `currentGame` 恒 `null` →
+  `Playtime.install()` 直接返回（不挂监听/不开 tick）→ `canTrack()` 恒 false（时间片从不启动）→
+  `recordRound()` 返回 `duration: 0`（积分记录照写）→ `playtime:v1` 从未写入。
+  GitHub Pages 保留 `.html`，所以 Edge/GH 侧正常。
+  修复：识别时去掉 `.html` 后缀并小写化后比较，同时兼容尾斜杠、URL 编码，并增加按游戏 id 的兜底；
+  `ARCADE_BASE` 仍优先取 `document.currentScript.src`，无后缀 URL 下相对资源与 SW 注册不受影响。
+- **诊断页保留**：`apps/arcade/diag.html`（中心页「游玩统计 → 计时自检」）保留到本版供真机复验；
+  `block-drop.html` 的 `?diag=1` 顶层探针在定位完成后移除。
+
+### Changed
+- 版本链升至 `0.13.3`，SW 缓存键 `studiokit-arcade-0.13.3-v1`；中心页 `data-hall-version`、
+  注册表 `version` 与 `ARCADE_VERSION` 同步。
+
+### Compatibility
+- 无 localStorage key / Schema 变更；`playtime:v1` / `scores:v1` 数据格式不变。
+- 历史上记成 `0ms` 的轮次不会回填（无法补算）；修复后从下一局开始正常累计。
+- GitHub Pages 的 `.html` URL 与 Cloudflare 的无后缀 URL 两种形态现在都能正确识别游戏。
+
+### Verification
+- 线上实测（修复前 → 修复后，同一 CF 无后缀 URL）：`currentGame: null / tracking:false / timer:false`
+  → `currentGame:"block-drop" / tracking:true / timer:true`；点开始游玩 1.6s 后 `totalMs = 1606`。
+- 线上诊断页（CF 无后缀）：iframe 真实一局显示「计时正常 记录到 3508ms」，`currentGame` 已识别。
+- `tools/lib/arcade_cdp.mjs` 测试服务器新增「无后缀 → `x.html`」回退以模拟 CF pretty URL；
+  `arcade_smoke` 108 → **109/109**（新增「Cloudflare pretty URL 仍识别游戏并计时」）。
+- 回归：pwa 9/9、tower 23/23、zen 14/14、calm 17/17、review 5/5、interaction 5/5、
+  immersive 32/32、gameplay all 104/104、base 22/22、挑战矩阵 78 关、
+  `validate_site` / `build_site` / `check_inline_scripts` / `arcade_design_check` 全过。
+- **发布**：提交 `b3a8c7e` 推送 `main`；Actions run `45007754972` 四 job 全绿；CI 与本地
+  `tools/verify_deploy.py` 均 **41/41** 双端逐文件一致（arcade 0.13.3 / badge 2.2.1 / venue 0.2.0）；
+  双端线上无头 Chrome 实测：CF 无后缀 URL `currentGame=block-drop` 且游玩计时正常、GH `.html` 正常、
+  诊断页 iframe 计时正常、0 console error。
+- 真机 iOS 主屏 PWA 复验（更新后「计时自检」应显示「计时正常 ≥2000ms」，累计/积分记录时长不再为 0）
+  待 Owner 确认（UNVERIFIED）。
+
 ## 0.13.2 — 2026-11-22（已双端发布）
 
 Owner 两条真机反馈：①已安装 PWA 的「🔄 检查更新」显示的是**已安装版本**，不是线上最新版本；②iPhone 主屏 PWA 玩一天后中心页「累计时长」始终为 `0 分钟`，但积分记录表格有数据。两条都用无头 Chrome 复现并逐条修复（复现命令与设计见 `DESIGN-0.13.2.md`）；**挑战/玩法/存档零改动**，无新增 localStorage key / Schema。

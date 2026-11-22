@@ -97,6 +97,8 @@ pretty URL；`tools/arcade_smoke.mjs` 新增回归（108 → **109/109**）：
 
 ## 验证
 
+- 已双端发布（2026-11-22）：提交 `b3a8c7e`，Actions run `45007754972` 四 job 全绿；`tools/verify_deploy.py` **41/41** 双端一致（arcade 0.13.3）。
+- 线上实测：CF 无后缀 URL 修复前 `currentGame=null / tracking:false / timer:false`，修复后 `currentGame:"block-drop" / tracking:true / timer:true`，点开始游玩 1.6s 后 `totalMs=1606`；GH Pages `.html` 路径 `currentGame=block-drop` 同样正常；线上诊断页 iframe 显示「计时正常 记录到 3508ms」；0 console error。
 - 线上（CF）确认：`block-drop.html` 308 → `/block-drop`；修复后无后缀 URL 下
   `Playtime.currentGame.id === 'block-drop'` 且游玩 1.3s 后 `totalMs ≥ 900`；
 - 设备：Owner 在 PWA 内打开「计时自检」，应显示「计时正常 记录到 ≥2000ms」；

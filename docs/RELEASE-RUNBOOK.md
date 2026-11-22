@@ -5,7 +5,10 @@
 - 仓库：<https://github.com/Shawlaw/studiokit>
 - GitHub Pages：<https://shawlaw.github.io/studiokit/>
 - Cloudflare Pages：<https://studiokit.pages.dev/>
-- 当前版本：Arcade `0.13.2`（2026-11-22 已双端发布；本版修两块真机反馈：①PWA 更新检测版本来源与 SW 广播（`checkForUpdate()` 返回线上最新版本、读取失败不再谎报「已是最新」）；②iOS 主屏 PWA 游玩时长永久停摆（`Playtime` 不再依赖不可靠的 window `focus`，改为可见性/点按/15 秒 tick 自愈）；无 key/Schema 变更。本地门禁：pwa **9/9**、smoke **108/108**、tower **23/23**、zen **14/14**、calm **17/17**、review **5/5**、interaction **5/5**、immersive **32/32**、gameplay all **104/104** + base **22/22**（11 场景 ×2 遍）、挑战矩阵 78 关、320–430 + standalone 布局、validate/build/inline/design 全过；设计与复现见 `apps/arcade/DESIGN-0.13.2.md`）
+- 当前版本：Arcade `0.13.3`（2026-11-22 已双端发布；本版修复 Cloudflare Pages 无后缀 URL 导致游戏识别失败、所有游戏计时为 0（CF Pages 把 `/games/x.html` 308 到 `/games/x`，`detectCurrentGame()` 旧实现精确比较 `.html` 文件名 → `currentGame` 恒 `null` → `Playtime` 不装载）；改为去后缀 + 小写化比较并兼容尾斜杠/URL 编码与 id 兜底，无 key/Schema 变更。本地门禁：smoke **109/109**、pwa **9/9**、tower 23/23、zen 14/14、calm 17/17、review 5/5、interaction 5/5、immersive 32/32、gameplay all 104/104 + base 22/22、挑战矩阵 78 关、validate/build/inline/design/stage coverage 全过；设计与证据见 `apps/arcade/DESIGN-0.13.3.md`）
+- 最近发布：Arcade `0.13.3`（2026-11-22，已双端发布）
+  - 批次内容：Cloudflare Pages 无后缀 URL 下的游戏识别修复（计时全 0 根因）；测试服务器新增无后缀回退、smoke 108 → 109；无 key/Schema 变更；保留 `apps/arcade/diag.html` 供真机复验
+  - 发布：提交 `b3a8c7e` 推送 `main`；Actions run `45007754972` 四 job 全绿；CI 与本地 `tools/verify_deploy.py` 均 **41/41** 双端逐文件一致（arcade 0.13.3 / badge 2.2.1 / venue 0.2.0）；双端线上无头 Chrome 实测：CF 无后缀 URL `currentGame=block-drop`、游玩 1.6s 记到 1606ms，GH `.html` 正常，诊断页 iframe 显示「计时正常 3508ms」，0 console error；真机 iOS 复验待 Owner（UNVERIFIED）
 - 最近发布：Arcade `0.13.2`（2026-11-22，已双端发布）
   - 批次内容：PWA「检查更新」显示已安装版本修复（版本来源改为线上 `sw.js` 的 VERSION + SW 激活广播修复 + 横幅双版本 + 读取失败诚实提示）+ iOS 主屏 PWA 游玩时长永久停摆修复（Playtime 自愈）；无 key/Schema 变更
   - 发布：提交 `8493cf7`（PWA 更新检测）+ `78858e0`（游玩时长 + 文档）ff 合入 `main`（`a98cb3d..78858e0`）；Actions run `45002523350` 四 job 全绿（Validate and build / Deploy GitHub Pages / Deploy Cloudflare Pages / Verify both deployments）；CI 与本地 `tools/verify_deploy.py` 均 **41/41** 双端逐文件一致（arcade 0.13.2 / badge 2.2.1 / venue 0.2.0）；双端线上无头 Chrome 各 8 项全过（中心页 0.13.2 + 16 卡 + 检查更新按钮、SW 握手 0.13.2、`checkForUpdate` 返回线上 0.13.2 且不误报、线上 `sw.js` 含升级广播修复、缓存键 `studiokit-arcade-0.13.2-v1`、游戏页可加载、0 console error）；真机 iOS 更新提示时机与游玩时长待 Owner 复测（UNVERIFIED）

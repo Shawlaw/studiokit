@@ -26,7 +26,7 @@ Current Venue Compare baseline facts:
 
 Current Arcade baseline facts:
 
-- App version: `0.13.2`（`apps/arcade/engine.js` 的 `ARCADE_VERSION` 与注册表保持一致；**0.13.2 已于 2026-11-22 双端发布**（提交 `8493cf7` + `78858e0`，Actions run `45002523350` 四 job 全绿，`tools/verify_deploy.py` 41/41 双端一致），本版修复 PWA 更新检测版本来源与 iOS 主屏 PWA 游玩时长永久停摆，复现与设计见 `apps/arcade/DESIGN-0.13.2.md`；0.13.1 已于 2026-11-22 双端发布，见 `apps/arcade/DESIGN-0.13.1.md`；0.13.0 同已双端发布）
+- App version: `0.13.3`（`apps/arcade/engine.js` 的 `ARCADE_VERSION` 与注册表保持一致；**0.13.3 已于 2026-11-22 双端发布**（提交 `b3a8c7e`，Actions run `45007754972` 四 job 全绿，`tools/verify_deploy.py` 41/41 双端一致），本版修复 Cloudflare Pages 无后缀 URL（`/games/x.html` 308 → `/games/x`）导致 `detectCurrentGame()` 失败、所有游戏计时为 0 的问题，设计与证据见 `apps/arcade/DESIGN-0.13.3.md`；0.13.2 已于同日双端发布（PWA 更新检测版本来源 + iOS 游玩时长自愈），见 `apps/arcade/DESIGN-0.13.2.md`；0.13.1 / 0.13.0 同已双端发布）
 - Registry entry: `shared/tool-registry.json` → `id: "arcade"`，`href: "./apps/arcade/"`
 - Games: 16（13 款带 6 关挑战 + 3 款平和棋牌：二十一点、五子棋、纸牌接龙；清单唯一来源是 `engine.js` 顶部的 `GAMES` 数组）
 - Run state schema: `v1`（`studiokit:arcade:runs:v1`）

@@ -215,6 +215,18 @@ Owner 两条真机反馈：①已安装 PWA 点「检查更新」显示的是已
 - [x] 双端发布：Owner 本轮明确授权发布（`PUBLISH_TO_MAIN`）；提交 `8493cf7`（PWA 更新检测）+ `78858e0`（游玩时长 + 文档）ff 合入 `main`；Actions run `45002523350` 四 job 全绿（Validate and build / Deploy GitHub Pages / Deploy Cloudflare Pages / Verify both deployments）；CI 与本地 `tools/verify_deploy.py` 均 **41/41** 双端逐文件一致（arcade 0.13.2 / badge 2.2.1 / venue 0.2.0）；双端线上无头 Chrome 各 8 项全过（中心页 0.13.2 + 检查更新返回线上 0.13.2 且不误报、SW 握手 0.13.2、缓存键 `studiokit-arcade-0.13.2-v1`、游戏页可加载、0 console error）
 - [ ] 真机复测：iOS 主屏幕 PWA 的「检查更新」提示时机与「累计时长/积分记录时长」待 Owner 确认（UNVERIFIED）
 
+## 0.13.3 修复批次（2026-11-22 已双端发布）
+
+Owner 在 iPhone 主屏 PWA（Cloudflare Pages）复测 0.13.2：星海/2048/俄罗斯方块玩完时长仍全 0、积分记录有数据，Edge 正常。设备自检页定位根因并修复（设计与证据见 `apps/arcade/DESIGN-0.13.3.md`）：
+
+- [x] 根因：CF Pages pretty URL 把 `/games/x.html` 308 到 `/games/x`，`detectCurrentGame()` 精确比较 `.html` 文件名 → `currentGame` 恒 `null` → `Playtime` 不装载、时间片不启动、`recordRound` 返回 0
+- [x] 修复：去 `.html` 后缀 + 小写化比较，兼容尾斜杠/URL 编码，增加按 id 兜底；GH Pages 的 `.html` 行为不变
+- [x] 测试基础设施：静态服务器新增「无后缀 → `x.html`」回退（模拟 CF pretty URL），smoke 108 → **109/109**
+- [x] 移除 `block-drop.html?diag=1` 临时探针；保留 `apps/arcade/diag.html` 供真机复验
+- [x] 版本链 0.13.3 / SW `studiokit-arcade-0.13.3-v1`；无 key/Schema/玩法/挑战改动
+- [x] 双端发布：提交 `b3a8c7e`；Actions run `45007754972` 四 job 全绿；`tools/verify_deploy.py` **41/41** 双端一致；线上实测 CF 无后缀 URL `currentGame=block-drop`、游玩 1.6s 记到 1606ms，诊断页 iframe「计时正常」
+- [ ] 真机复验：iOS 主屏 PWA 更新后「计时自检」应显示计时正常，累计/积分记录时长不再为 0（UNVERIFIED）
+
 ## Now
 
 1. **Arcade 0.13.0 真机试玩**：已双端发布（见上一节）；剩余真机试玩（星币节奏/能量取舍/核弹稀缺度/主题可感知度）。
