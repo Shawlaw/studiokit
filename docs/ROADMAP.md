@@ -192,7 +192,7 @@ Owner 反馈六件事（每关都是白板装备、难度没有差异、机体�
 - [x] 双端发布：Owner 本轮明确选择「确认发布（PUBLISH_TO_MAIN）」；提交 `faf1772` 推送 `main`；Actions run `44990933121` 四 job 全绿；CI 与本地 `tools/verify_deploy.py` 均 **41/41** 双端一致（arcade 0.13.0 / badge 2.2.1 / venue 0.2.0）；双端线上无头 Chrome 实测 0.13.0、GameMeta/6 主题/机库/编队/核弹/整备与 0 console error。
 - [ ] 真机试玩：星币经济节奏（一局大约多少星币、六项改装多久满级）、能量枯竭与编队的取舍手感、大杀器稀缺度、6 星区主题差异是否可感知；未试玩前不宣称通过。
 
-## 0.13.1 修复批次（开发中，未发布）
+## 0.13.1 修复批次（2026-11-22 已双端发布）
 
 - [x] 大杀器栏并入主道具行：3 主动 + 最多 3 军械（5/6 列），空槽常显「军械」；删除第二行与 `has-star-items` 高度规则，修复 iPhone 非全屏 PWA 看不到道具栏
 - [x] 核弹改为追踪弹：Boss 实时追踪、无 Boss 飞画面中央，命中后才清弹/结算伤害并播放白闪 + 震屏 + 冲击波；`run.nukeShots` 随档保存
@@ -200,7 +200,7 @@ Owner 反馈六件事（每关都是白板装备、难度没有差异、机体�
 - [x] 机库浏览暂停 `Playtime`，不再计入有效游玩时长
 - [x] 挑战 6 关零改动；无新增 localStorage key / Schema；版本链与 SW `studiokit-arcade-0.13.1-v1`
 - [x] 本机门禁：smoke 105/105、tower 23/23、挑战 7/7 + 6/6、base 11/11、zen/calm/review/pwa/interaction/immersive、320–430 + standalone 布局 43/43、validate/build/inline/design 全过
-- [ ] 双端发布：需 Owner `PUBLISH_TO_MAIN` 授权；发布后按 `RELEASE-RUNBOOK.md` 回填提交 SHA、Actions run 与 `verify_deploy.py` 双端结果。
+- [x] 双端发布：Owner 本轮明确选择「确认发布 0.13.1（PUBLISH_TO_MAIN）」；提交 `01eb5b4` 推送 `main`；Actions run `44996450758` 四 job 全绿（Validate and build / Deploy GitHub Pages / Deploy Cloudflare Pages / Verify both deployments）；CI 与本地 `tools/verify_deploy.py` 均 **41/41** 双端逐文件一致（arcade 0.13.1 / badge 2.2.1 / venue 0.2.0）；双端线上无头 Chrome 实测：中心页 0.13.1、主道具行 5 列（3 主动 + 2 军械槽，空槽「军械」）、390×844 standalone 模拟行底 ≤ 视口、核弹发射后 0.26s 仍在飞行且 Boss 480 血不变、命中后 Boss 354 血 + flash 0.70 + 冲击波 2 + 0 console error；SW 缓存键 `studiokit-arcade-0.13.1-v1`。
 ## Now
 
 1. **Arcade 0.13.0 真机试玩**：已双端发布（见上一节）；剩余真机试玩（星币节奏/能量取舍/核弹稀缺度/主题可感知度）。

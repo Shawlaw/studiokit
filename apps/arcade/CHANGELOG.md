@@ -1,7 +1,7 @@
 # Arcade Changelog
 
 
-## 0.13.1 — 2026-11-22（未发布 · 本地门禁已过）
+## 0.13.1 — 2026-11-22（已双端发布）
 
 Owner 在 iPhone PWA 非全屏实测反馈 4 点：游玩时间统计不对、大杀器道具栏看不到、核弹缺发射/追踪/命中爆炸动画、移动速度对触屏无意义。本轮逐条修复，**挑战 6 关数据与判定零改动**，设计与验收见 `DESIGN-0.13.1.md`。
 
@@ -25,6 +25,7 @@ Owner 在 iPhone PWA 非全屏实测反馈 4 点：游玩时间统计不对、�
 - `arcade_tower_test` **23/23**（0.12.7 层塔门禁同批）、star-raid 挑战 **7/7**、tower 挑战 **6/6**、gameplay base **11/11**、zen **17/17**、calm **7/7**、review **5/5**、pwa **7/7**、interaction **5/5**、immersive **32/32**、stage coverage 78 关矩阵正常。
 - 320 / 375 / 390 / 430px 与 iPhone standalone 模拟布局探针 **43/43**：道具行 5 列、按钮 ≥44px、无横向/纵向溢出。
 - iPhone PWA 真机复测（非全屏道具栏可见、核弹动画、游玩时长）待 Owner 确认。
+- 发布：提交 `01eb5b4` 推送 `main`；Actions run `44996450758` 四 job 全绿（Validate and build / Deploy GitHub Pages / Deploy Cloudflare Pages / Verify both deployments）；CI 与本地 `tools/verify_deploy.py` 均 **41/41** 双端逐文件一致（arcade 0.13.1 / badge 2.2.1 / venue 0.2.0）；双端线上无头 Chrome 实测：中心页 0.13.1、主道具行 5 列（3 主动 + 2 军械槽，空槽「军械」）、390×844 standalone 模拟行底 ≤ 视口、核弹发射后 0.26s 仍在飞行且 Boss 480 血不变、命中后 Boss 354 血 + flash 0.70 + 冲击波 2 + 0 console error；SW 缓存键 `studiokit-arcade-0.13.1-v1`。
 ## 0.13.0 — 2026-11-22（已双端发布）
 
 星海突击「星域远征」：把 Owner 反馈的六件事——每关都是白板装备、关卡难度没有差异、机体没有大升级与常态 buff、想要稀缺的核弹级大伤害道具、想要油量/能量这类局限、想要临时编队等出击状态——落到一条「战斗 → 关卡 → 远征」的三层循环里。**经典模式全部改动；挑战 6 关的数据与判定零改动。** 设计、数值与回滚见 `DESIGN-0.13.0.md`。
