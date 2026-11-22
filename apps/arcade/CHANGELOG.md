@@ -1,6 +1,6 @@
 # Arcade Changelog
 
-## 0.12.6 — 2026-11-22
+## 0.12.6 — 2026-11-22（已双端发布）
 
 ### Fixed
 - **PWA 独立窗口底部按钮比全屏更靠下**：`--ac-thumb-lift` 原先只定义在 `body.arcade-immersive` 上，安装为 PWA 后（非全屏）按钮行拿不到拇指抬升；同时画布下方那行与顶栏重复的 `.game-hint` 说明还在占高度。实测按钮距视口底：浏览器/PWA 60px、全屏 42px，画布 590px vs 687px。
