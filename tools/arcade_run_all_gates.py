@@ -38,6 +38,13 @@ def main() -> int:
         ('career_legacy_baseline', ['node', 'tools/career_legacy_baseline_test.mjs'], None),
         ('career_rental', ['node', 'tools/career_rental_test.mjs'], None),
         ('career_alternatives', ['node', 'tools/career_alternatives_test.mjs'], None),
+        ('career_commission', ['node', 'tools/career_commission_test.mjs'], None),
+        ('career_materials', ['node', 'tools/career_materials_test.mjs'], None),
+        ('career_professions', ['node', 'tools/career_professions_test.mjs'], None),
+        ('career_story_evidence', ['node', 'tools/career_story_evidence_test.mjs'], None),
+        ('career_route_planner', ['node', 'tools/career_route_planner_test.mjs'], None),
+        ('career_economy_balance', ['node', 'tools/career_economy_balance_test.mjs'], None),
+        ('career_mission_schema', ['node', 'tools/career_mission_fixture_runner.mjs', '--validate'], None),
         ('career_star_combat_config', ['node', 'tools/career_star_combat_config_test.mjs'], None),
         ('career_db', ['node', 'tools/career_db_test.mjs'], {
             'CAREER_DB_PORT': os.environ.get('CAREER_DB_PORT', '8830'),

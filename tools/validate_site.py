@@ -60,6 +60,7 @@ REQUIRED = [
     'tools/career_materials_test.mjs', 'tools/career_professions_test.mjs',
     'tools/career_story_evidence_test.mjs', 'tools/career_route_planner_test.mjs',
     'tools/career_mission_fixture_runner.mjs',
+    'tools/career_96_missions_test.mjs', 'tools/career_economy_balance_test.mjs',
     'tools/career_rental_test.mjs', 'tools/career_alternatives_test.mjs',
     'tools/career_run_resume_test.mjs', 'tools/career_first_flight_test.mjs',
     'tools/career_mobile_016_test.mjs',
