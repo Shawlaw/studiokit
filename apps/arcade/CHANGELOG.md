@@ -1,7 +1,7 @@
 # Arcade Changelog
 
 
-## 0.14.0 — 2026-11-22（本地待发布，基于 0.13.3 合并）
+## 0.14.0 — 2026-11-22（已双端发布）
 
 Owner 本轮两条：①星海突击同种弹药 Buff 多吃时应**叠加有效时长**而不是重置；②新增“模拟割草”模式（实现命名「星海割草」）——所有弹药 Buff 常驻、大杀器库满载、手动道具无限，同时敌人/掉落极其密集、Boss 招式更炫，玩家唯一瓶颈是能量；该模式**不参与任何积分与货币获取**。设计与调参见 `DESIGN-0.14.0.md`；挑战 6 关数据与判定零改动。
 
@@ -29,7 +29,7 @@ Owner 本轮两条：①星海突击同种弹药 Buff 多吃时应**叠加有效
 - 其余门禁：`arcade_pwa_update_test` **9/9**（临时发版链路改 0.14.0→0.14.1）、`arcade_zen_scores_test` **17/17**、`arcade_calm_games_test` **17/17**、`arcade_interaction_test` **5/5**、`arcade_tower_test` **23/23**、`arcade_immersive_buttons_test` **32/32**、`arcade_review_test` **5/5**、`arcade_design_check` 143 文件、`arcade_stage_coverage` 78 关矩阵。
 - 全量门禁：`py -3 tools/arcade_run_all_gates.py` → **ALL GATES PASSED**（validate/build/design/inline/stage/smoke 113/113、zen 17/17、calm 17/17、review 5/5、gameplay all 104/104、base 22/22）。
 - 静态：`validate_site.py`（0.14.0 版本链 + 叠加/割草守护标记）、`build_site.py`、`check_inline_scripts.mjs`、`arcade_design_check.py`、`node --check engine.js/sw.js`。
-- **状态**：Owner 本轮明确授权「合回 main 并发布」；真机手感（能量节奏、割草密度、Boss 弹幕可读性）仍 **UNVERIFIED**，待 Owner 试玩。
+- **发布**：提交 `4c90a4c` 推送 `main`；Actions run `45010510889` 四 job 全绿；CI 与本地 `tools/verify_deploy.py` 均 **41/41** 双端逐文件一致（arcade 0.14.0 / badge 2.2.1 / venue 0.2.0）；双端线上无头 Chrome 实测版本 0.14.0、星海割草入口可见、进入后常驻/满载/无限与 `score=0` 均正确、无 console error；SW 缓存键 `studiokit-arcade-0.14.0-v1`；真机手感（能量节奏、割草密度、Boss 弹幕可读性）仍 **UNVERIFIED**，待 Owner 试玩。
 
 ## 0.13.3 — 2026-11-22（已双端发布）
 

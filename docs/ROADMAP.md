@@ -215,7 +215,7 @@ Owner 两条真机反馈：①已安装 PWA 点「检查更新」显示的是已
 - [x] 双端发布：Owner 本轮明确授权发布（`PUBLISH_TO_MAIN`）；提交 `8493cf7`（PWA 更新检测）+ `78858e0`（游玩时长 + 文档）ff 合入 `main`；Actions run `45002523350` 四 job 全绿（Validate and build / Deploy GitHub Pages / Deploy Cloudflare Pages / Verify both deployments）；CI 与本地 `tools/verify_deploy.py` 均 **41/41** 双端逐文件一致（arcade 0.13.2 / badge 2.2.1 / venue 0.2.0）；双端线上无头 Chrome 各 8 项全过（中心页 0.13.2 + 检查更新返回线上 0.13.2 且不误报、SW 握手 0.13.2、缓存键 `studiokit-arcade-0.13.2-v1`、游戏页可加载、0 console error）
 - [ ] 真机复测：iOS 主屏幕 PWA 的「检查更新」提示时机与「累计时长/积分记录时长」待 Owner 确认（UNVERIFIED）
 
-## 0.14.0 星海突击：弹种叠加 + 星海割草无尽演武（本地待发布，基于 0.13.3）
+## 0.14.0 星海突击：弹种叠加 + 星海割草无尽演武（2026-11-22 已双端发布）
 
 Owner 本轮两条：①同种弹药 Buff 多吃时叠加有效时长而不是重置；②新增“模拟割草”模式——所有弹药 Buff 常驻、大杀器库满载、手动道具无限，同时敌潮/掉落极为密集、Boss 招式更炫；玩家唯一瓶颈是能量，且不参与任何积分/货币获取。设计见 `apps/arcade/DESIGN-0.14.0.md`。
 
@@ -227,7 +227,8 @@ Owner 本轮两条：①同种弹药 Buff 多吃时叠加有效时长而不是�
 - [x] 无积分/货币：割草不写 score、不调用 `settleCredits`/`Progress.recordPlay`、不更新最高分/机库 runs/best、不写 `scores:v1`；`serialize()` 在 `mode==='mow'` 返回 null，不写局内档
 - [x] 无新增 localStorage key / Schema；挑战 6 关数据与判定零改动；版本链 0.14.0 / SW `studiokit-arcade-0.14.0-v1`
 - [x] 门禁：smoke **113/113**（新增 4 项）、`SC-STAR-001` 经典 Boss 闭环、挑战矩阵 78 关、320px 4 按钮入口与 6 列道具行、validate/build/inline/design/node --check
-- [ ] 发布：Owner 本轮明确授权「合回 main 发布」；真机试玩（能量节奏、割草密度、Boss 弹幕可读性）仍 UNVERIFIED
+- [x] 发布：提交 `4c90a4c` 推送 `main`；Actions run `45010510889` 四 job 全绿；`tools/verify_deploy.py` 41/41 双端一致（arcade 0.14.0 / badge 2.2.1 / venue 0.2.0）；双端线上无头 Chrome 实测 0.14.0 与星海割草入口/常驻状态/无 console error
+- [ ] 真机试玩：能量节奏、割草密度、Boss 弹幕可读性仍 UNVERIFIED
 
 ## 0.13.3 修复批次（2026-11-22 已双端发布）
 

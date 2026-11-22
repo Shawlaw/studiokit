@@ -132,3 +132,14 @@ after = min(180, before + added);      // BUFF_STACK_CAP = 180s
 4. Boss 四套弹幕断言改为读取 `bossPatterns` 已触发集合（必须长度 4），不再用最后一个招式名的字符串长度冒充覆盖。
 5. Boss 测试先记录 spawn 时 `maxHp`，再对 Boss 临时回血并持续输出 9s，避免 DPS 提前击杀导致假红。
 6. 设计文档「受击结束编队」与实现对齐：只有能量归零时才强制结束编队。
+
+## 6. 发布证据（2026-11-22）
+
+- 提交 `4c90a4c` 推送 `main`；GitHub Actions run **45010510889** 四个 job 全成功：
+  Validate and build / Deploy GitHub Pages / Deploy Cloudflare Pages / Verify both deployments。
+- CI 与本地 `tools/verify_deploy.py` 均 **41/41** 双端逐文件一致（arcade 0.14.0 / badge 2.2.1 / venue 0.2.0）。
+- 双端线上无头 Chrome：`https://shawlaw.github.io/studiokit/.../star-raid.html` 与
+  `https://studiokit.pages.dev/apps/arcade/games/star-raid` 均 `Arcade.version=0.14.0`，
+  第 4 按钮「星海割草」可见；进入后 `mode=mow`、四弹种常驻、火力 LV5、三槽满载、能量约 94、
+  `score=0`、`saveSuppressed=true`，0 console error。
+- SW 缓存键 `studiokit-arcade-0.14.0-v1`；真机手感仍 UNVERIFIED，待 Owner 试玩。
