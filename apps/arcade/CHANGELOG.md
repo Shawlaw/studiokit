@@ -1,5 +1,19 @@
 # Arcade Changelog
 
+## 0.12.6 — 2026-11-22
+
+### Fixed
+- **PWA 独立窗口底部按钮比全屏更靠下**：`--ac-thumb-lift` 原先只定义在 `body.arcade-immersive` 上，安装为 PWA 后（非全屏）按钮行拿不到拇指抬升；同时画布下方那行与顶栏重复的 `.game-hint` 说明还在占高度。实测按钮距视口底：浏览器/PWA 60px、全屏 42px，画布 590px vs 687px。
+  现在独立窗口（`html.studiokit-shell-standalone`）也套用同一套 36px 抬升、收起重复的 hint 行、去掉其残留的 14px 页面底部留白，并把省下的 34px 还给画布高度预算。
+- 修复后 PWA 按钮距底与全屏**完全一致**：无安全区 42px、有安全区 70px（4 档视口 × 2 游戏 × 2 安全区全部通过）；独立窗口画布平均增大 34px（390×844：590 → 624）。
+- 横屏短视口沿用既有「允许纵向滚动」策略，逐项指标与 0.12.5 一致（未改动）。
+
+### Changed
+- 版本链升至 `0.12.6`，SW 缓存键 `studiokit-arcade-0.12.6-v1`。无 JS 改动、无 localStorage key / Schema / 挑战关卡数据变更；只改 `arcade.css`（52 行新增，单 hunk）。
+
+### Verification
+- `arcade_immersive_buttons_test` 16 → **32/32**（新增 IB-06：4 档竖屏 × {无安全区, 安全区 34} × 2 游戏，断言独立窗口识别、hint 收起、按钮 ≥44px 完整可点、0 横向/纵向溢出、**PWA 与全屏按钮距底差 ≤2px**）；smoke 94/94、tower 21/21、zen 14/14、calm 17/17、review 5/5、gameplay base 11/11、tower challenge 6/6、pwa 7/7、interaction 5/5、validate/build/inline/node --check 全过。设计见 `DESIGN-0.12.6.md`。
+
 ## 0.12.5 — 2026-11-22（已双端发布）
 
 ### Fixed

@@ -1695,6 +1695,24 @@
       "evidence": "提交 79be219 推送 main；Actions run 44968445299 四 job 全绿；CI 与本地 tools/verify_deploy.py 均 41/41 双端一致（arcade 0.12.3 / badge 2.2.1 / venue 0.2.0）；双端线上无头 Chrome 实测 200 层 scale=0.0624、1000 层 scale=0.0127，屏幕 y 均 116–624（画布 740）、溢出 0、fitsOnScreen=true、0 console error；SW 缓存键 studiokit-arcade-0.12.3-v1；证据文档提交 6520003 触发 Actions 44968745329 四 job 同样全绿。"
     },
     {
+      "id": "T106",
+      "title": "Arcade 0.12.6：PWA 独立窗口底部按钮与全屏同高",
+      "kind": "agent",
+      "status": "DONE",
+      "dependsOn": [
+        "T105"
+      ],
+      "ownerAuthorizationRequired": false,
+      "acceptance": [
+        "PWA 独立窗口的底部按钮位置与全屏一致（差值 ≤2px）",
+        "独立窗口画布高度不减少、且无横向/纵向溢出",
+        "按钮仍 ≥44px 且命中层可点；浏览器模式与沉浸模式零回归",
+        "全量门禁通过；无 JS/key/Schema/关卡数据变更"
+      ],
+      "completedAt": "2026-11-22T10:50:00+08:00",
+      "evidence": "Owner 反馈 PWA 时按钮比全屏更靠下。实测（display-mode:standalone stub + site-shell 注入 html.studiokit-shell-standalone，390x844）：按钮距视口底 浏览器/PWA 60px、全屏 42px，画布 590 vs 687。根因：--ac-thumb-lift 只定义在 body.arcade-immersive 上，独立窗口拿不到拇指抬升；且画布下方 .game-hint（与顶栏重复）占着高度。修复（纯 CSS，52 行单 hunk，arcade.css）：独立窗口同样 --ac-thumb-lift:36px、.touch-pad padding-bottom 叠加抬升、收起 .game-hint、去掉残留 14px .game-page 底部留白、把省下的 34px 还给 .stage-box 高度预算（各 body 变体 214/226/246/188 → -34），全部规则限定 (min-height:561px)，横屏短视口沿用既有允许滚动策略不动。实测：PWA 与全屏按钮距底完全同值（无安全区 42/42、安全区 34 时 70/70），画布 590→624（+34），0 横向/纵向溢出，按钮 ≥44px 且命中可点；横屏 667x375 各项与 0.12.5 逐项一致（gap 0/overflow 41 等）。门禁：arcade_immersive_buttons_test 16→32/32（新增 IB-06：4 档竖屏 × {无安全区, 安全区 34} × {shadow-leap, pendulum-tower} 共 16 组）、smoke 94/94、tower 21/21、zen 14/14、calm 17/17、review 5/5、gameplay base 11/11、tower challenge 6/6、pwa 7/7、interaction 5/5、validate/build/inline/node --check 全过；无 JS/key/Schema/挑战关卡数据变更；版本链 0.12.6 / SW studiokit-arcade-0.12.6-v1；设计见 DESIGN-0.12.6.md；真机观感 UNVERIFIED。"
+    },
+    {
       "id": "T105",
       "title": "Arcade 0.12.5：层塔难度曲线修正（层数越高越快，摆幅不塌）",
       "kind": "agent",

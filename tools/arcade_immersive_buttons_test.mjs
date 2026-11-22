@@ -1,6 +1,6 @@
 #!/usr/bin/env node
 /**
- * Arcade 0.12.5-interaction 门禁：全屏(immersive)/PWA 独立窗口底部道具按钮拇指区抬升。
+ * Arcade 0.12.6-interaction 门禁：全屏(immersive)/PWA 独立窗口底部道具按钮拇指区抬升。
  *
  * 覆盖：
  * - IB-00 CSS 契约：--ac-thumb-lift 变量、stage-wrap / touch-pad / toolbelt / toast 抬升规则存在
@@ -276,6 +276,62 @@ async function main() {
     sharedAssertions(m, label, { minGap: 20, minDelta: 12, baseline: before });
     assert(m.canvas.h > 100, label + ' 横屏画布不可玩 h=' + m.canvas.h);
     record(label + ' 20px 小抬升 + 画布可玩 + 按钮可点无溢出', true);
+
+    /* ---------- IB-06 PWA 独立窗口（非全屏）底部适配（0.12.6） ----------
+       Owner 反馈「PWA 时按钮比全屏更靠下」。原因：--ac-thumb-lift 只定义在 .arcade-immersive 上，
+       独立窗口既没有拇指抬升、又被画布下方 .game-hint 挤占高度（实测按钮距底 60px vs 全屏 42px）。
+       现在独立窗口也套用同一抬升 + 收起 hint，按钮位置必须与全屏一致（±2px）且画布更大。 */
+    const STANDALONE_STUB = `(() => {
+      const real = window.matchMedia.bind(window);
+      window.matchMedia = (q) => q === '(display-mode: standalone)'
+        ? { matches: true, media: q, onchange: null, addListener(){}, removeListener(){},
+            addEventListener(){}, removeEventListener(){}, dispatchEvent(){ return false; } }
+        : real(q);
+    })();`;
+    const stub = await cdp.send('Page.addScriptToEvaluateOnNewDocument', { source: STANDALONE_STUB });
+    for (const insets of [{ top: 0, left: 0, bottom: 0, right: 0 }, SAFE]) {
+      await cdp.send('Emulation.setSafeAreaInsetsOverride', { insets });
+      const safeBottom = insets.bottom;
+      for (const [w, h] of PORTRAIT) {
+        await setViewport(cdp, w, h);
+        for (const page of ['shadow-leap.html', 'pendulum-tower.html']) {
+          const label = `${w}×${h} PWA独立窗口 safe=${safeBottom} ${page}`;
+          await cdp.navigate(`${BASE}/apps/arcade/games/${page}?t=${Date.now()}`);
+          await sleep(360);
+          await cdp.click('[data-ov-btn]');
+          await sleep(200);
+          await cdp.evaluate(`(() => { const o = document.querySelector('[data-overlay]'); if (o) o.hidden = true; })()`);
+          const standalone = await cdp.evaluate(`document.documentElement.classList.contains('studiokit-shell-standalone')`);
+          assert(standalone, label + ' 未识别为独立窗口');
+          const pwa = await cdp.evaluate(geometry());
+          const hint = await cdp.evaluate(`(() => { const el = document.querySelector('.game-hint'); return el ? getComputedStyle(el).display : 'none'; })()`);
+          assert(pwa.immersive === false, label + ' 不应处于沉浸模式');
+          assert(hint === 'none', label + ' PWA 下 hint 行未收起（占用按钮高度）: ' + hint);
+          assert(pwa.sw <= pwa.cw + 1, label + ' 横向溢出 ' + pwa.sw + '>' + pwa.cw);
+          assert(pwa.docH <= pwa.vh + 2, label + ' 纵向溢出 doc=' + pwa.docH + ' vh=' + pwa.vh);
+          assert(pwa.buttons.length >= 2, label + ' 未找到底部按钮');
+          for (const b of pwa.buttons) {
+            assert(b.w >= 44 && b.h >= 44, label + ' 按钮不足 44px: ' + JSON.stringify(b));
+            assert(b.bottom <= pwa.vh + 1, label + ' 按钮超出视口: ' + JSON.stringify(b));
+            assert(b.hittable, label + ' 按钮命中层被遮挡: ' + JSON.stringify(b));
+          }
+          /* 全屏参照：同一页面、同一独立窗口下进入沉浸模式，比较按钮距视口底的距离。 */
+          await immersive(cdp, page);
+          await cdp.evaluate(`(() => { const o = document.querySelector('[data-overlay]'); if (o) o.hidden = true; })()`);
+          await sleep(120);
+          const full = await cdp.evaluate(geometry());
+          assert(full.immersive, label + ' 全屏参照未进入沉浸模式');
+          const pwaGap = Math.max(...pwa.buttons.map((b) => b.gap));
+          const fullGap = Math.max(...full.buttons.map((b) => b.gap));
+          assert(Math.abs(pwaGap - fullGap) <= 2,
+            label + ' PWA 按钮位置与全屏不一致：pwa=' + pwaGap + 'px 全屏=' + fullGap + 'px');
+          assert(pwaGap >= (safeBottom > 0 ? 66 : 38), label + ' PWA 按钮未抬到拇指区 gap=' + pwaGap);
+          record(label + ' 按钮与全屏同高 gap=' + pwaGap + 'px（全屏 ' + fullGap + '）+ 画布 ' + pwa.canvas.h + 'px', true);
+        }
+      }
+    }
+    await cdp.send('Page.removeScriptToEvaluateOnNewDocument', { identifier: stub.identifier }).catch(() => {});
+    await cdp.send('Emulation.setSafeAreaInsetsOverride', { insets: { top: 0, left: 0, bottom: 0, right: 0 } });
   } finally {
     if (cdp) cdp.close();
     if (server) server.close();

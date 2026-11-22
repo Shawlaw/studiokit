@@ -1406,6 +1406,58 @@ body.arcade-immersive .touch-pad {
     max(8px, env(safe-area-inset-left));
 }
 
+/* ---------- 0.12.6 PWA 独立窗口（非全屏）底部适配 ----------
+   实测（390×844，无安全区）：浏览器/PWA 独立窗口下按钮行距视口底 60px、画布 590px；
+   而全屏沉浸模式是 42px、画布 687px —— 独立窗口既没享受到拇指抬升，
+   又被画布下方的 .game-hint 说明行挤占空间，所以观感「按钮位置和全屏不一致、适配不够」。
+   处理：①独立窗口也给同一套拇指抬升；②收起与顶栏重复的 hint 行回收高度；
+   ③把回收的高度还给画布（stage-box 高度预算减去抬升量、加回 hint 高度）。
+   局限：以上仅对竖屏/长视口生效；横屏短视口沿用既有「允许页面滚动」策略，不做改动以免回归。 */
+html.studiokit-shell-standalone body.arcade-body:not(.arcade-immersive) {
+  --ac-thumb-lift: 36px;
+}
+
+@media (min-height: 561px) {
+  html.studiokit-shell-standalone body.arcade-body:not(.arcade-immersive) .touch-pad,
+  html.studiokit-shell-standalone body.arcade-body:not(.arcade-immersive) .touch-pad.game-tools {
+    padding-bottom: calc(max(6px, env(safe-area-inset-bottom)) + var(--ac-thumb-lift));
+  }
+  /* hint 行在独立窗口里与顶栏/按钮自带说明重复，收起后把空间让给画布。 */
+  html.studiokit-shell-standalone body.arcade-body:not(.arcade-immersive) .game-hint {
+    display: none;
+  }
+  /* hint 收起后页面底部的 14px 内边距就是纯留白：去掉它，让按钮行距视口底与全屏一致（42px）。 */
+  html.studiokit-shell-standalone body.arcade-body:not(.arcade-immersive) .game-page {
+    padding-bottom: 0;
+  }
+  /* 独立窗口下 stage-box 高度预算：浏览器预算 - 34px（hint 已收起）+ 抬升量（按钮行增高），
+     相抵后画布仍比浏览器模式大 34px，且不会溢出。 */
+  html.studiokit-shell-standalone body.arcade-body:not(.arcade-immersive).has-game-tools .stage-box {
+    height: min(
+      calc(100dvh - var(--studiokit-shellbar-h, 0px) - 180px - env(safe-area-inset-bottom, 0px)),
+      calc(min(520px, 100vw - 24px) * 740 / 420)
+    );
+  }
+  html.studiokit-shell-standalone body.arcade-body:not(.arcade-immersive).has-joy-row .stage-box {
+    height: min(
+      calc(100dvh - var(--studiokit-shellbar-h, 0px) - 192px - env(safe-area-inset-bottom, 0px)),
+      calc(min(520px, 100vw - 24px) * 740 / 420)
+    );
+  }
+  html.studiokit-shell-standalone body.arcade-body:not(.arcade-immersive).has-joy-row.has-extra-controls .stage-box {
+    height: min(
+      calc(100dvh - var(--studiokit-shellbar-h, 0px) - 212px - env(safe-area-inset-bottom, 0px)),
+      calc(min(520px, 100vw - 24px) * 740 / 420)
+    );
+  }
+  html.studiokit-shell-standalone body.arcade-body:not(.arcade-immersive).has-subhud .stage-box {
+    height: min(
+      calc(100dvh - var(--studiokit-shellbar-h, 0px) - 154px - env(safe-area-inset-bottom, 0px)),
+      calc(min(520px, 100vw - 24px) * 740 / 420)
+    );
+  }
+}
+
 /* ---------- 全屏入口（引擎注入） ---------- */
 
 .ac-fs-inline {
@@ -1663,7 +1715,7 @@ body.has-game-tools .road-pad {
 body.has-game-tools .road-pad .touch-btn { font-size: 14px; }
 body.has-game-tools:not(.arcade-immersive) .stage-box {
   height: min(
-    calc(100dvh - var(--studiokit-shellbar-h, 0px) - 214px - env(safe-area-inset-bottom, 0px)),
+    calc(100dvh - var(--studiokit-shellbar-h, 0px) - 180px - env(safe-area-inset-bottom, 0px)),
     calc(min(520px, 100vw - 24px) * 740 / 420)
   );
 }
@@ -1679,13 +1731,13 @@ body.has-game-tools:not(.arcade-immersive) .stage-box {
 .joy-tools-below .tool-btn { gap: 4px; }
 body.has-joy-row:not(.arcade-immersive) .stage-box {
   height: min(
-    calc(100dvh - var(--studiokit-shellbar-h, 0px) - 226px - env(safe-area-inset-bottom, 0px)),
+    calc(100dvh - var(--studiokit-shellbar-h, 0px) - 192px - env(safe-area-inset-bottom, 0px)),
     calc(min(520px, 100vw - 24px) * 740 / 420)
   );
 }
 body.has-joy-row.has-extra-controls:not(.arcade-immersive) .stage-box {
   height: min(
-    calc(100dvh - var(--studiokit-shellbar-h, 0px) - 246px - env(safe-area-inset-bottom, 0px)),
+    calc(100dvh - var(--studiokit-shellbar-h, 0px) - 212px - env(safe-area-inset-bottom, 0px)),
     calc(min(520px, 100vw - 24px) * 740 / 420)
   );
 }
