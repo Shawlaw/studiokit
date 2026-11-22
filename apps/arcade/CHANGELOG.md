@@ -13,6 +13,7 @@
 
 ### Verification
 - `arcade_immersive_buttons_test` 16 → **32/32**（新增 IB-06：4 档竖屏 × {无安全区, 安全区 34} × 2 游戏，断言独立窗口识别、hint 收起、按钮 ≥44px 完整可点、0 横向/纵向溢出、**PWA 与全屏按钮距底差 ≤2px**）；smoke 94/94、tower 21/21、zen 14/14、calm 17/17、review 5/5、gameplay base 11/11、tower challenge 6/6、pwa 7/7、interaction 5/5、validate/build/inline/node --check 全过。设计见 `DESIGN-0.12.6.md`。
+- 发布：提交 `c1c2186` 推送 `main`；Actions run `44977911963` 四 job 全绿；CI 与本地 `verify_deploy.py` 均 **41/41** 双端一致（arcade 0.12.6）；双端线上实测 PWA 与全屏按钮距底 Δ=0（42/42、70/70）、画布 624/543、0 溢出、0 console error；SW `studiokit-arcade-0.12.6-v1`。
 
 ## 0.12.5 — 2026-11-22（已双端发布）
 
