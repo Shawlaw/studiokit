@@ -947,6 +947,10 @@
       var observed = check && Number.isFinite(Number(check.observed)) ? Math.floor(Number(check.observed)) : 0;
       var objective = check && isObject(check.objective) ? check.objective : null;
       if (!objective) return title + '没能交差。';
+      if (objective.minValue && check && check.reason === 'value-not-met') {
+        var reached = Number.isFinite(Number(check.reached)) ? Number(check.reached) : 0;
+        return title + '：这趟只做到 ' + reached + ' / ' + objective.minValue.value + '，' + issuer + '不收。';
+      }
       return title + '：这趟只做到 ' + observed + ' / ' + objective.atLeast + '，' + issuer + '不收。';
     }
 
@@ -1497,6 +1501,7 @@
           outcome: outcome,
           reason: reason,
           observed: check && Number.isFinite(Number(check.observed)) ? Math.floor(Number(check.observed)) : 0,
+          reached: check && Number.isFinite(Number(check.reached)) ? Number(check.reached) : null,
           objective: check && isObject(check.objective) ? check.objective : null,
           stats: stats,
           settledAt: nowIso(),
@@ -1509,6 +1514,7 @@
           careerId: run.careerId,
           commissionId: commission.commissionId,
           observed: failurePatch.observed,
+          reached: failurePatch.reached,
           objective: failurePatch.objective,
           message: failureMessage(commission, check),
           runUpdated: !!(patchedFail && patchedFail.ok),

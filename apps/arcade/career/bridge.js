@@ -143,6 +143,7 @@
     careerDir: '',
     contentBase: '',
     registryInstance: null,
+    registryContent: null,
     registryFailed: false,
     cluesEnabled: false,
     clues: [],
@@ -837,6 +838,7 @@
         }
         internal.registryInstance = instance;
         internal.registryFailed = false;
+        internal.registryContent = registryResult.data;
       } catch (err) {
         internal.registryFailed = true;
         addReason('registry-throw');
@@ -916,6 +918,7 @@
       items: internal.itemsContent || null,
       commissions: internal.commissionContent || null,
       chapter: internal.chapterContent || null,
+      registry: internal.registryContent || null,
     };
     ['materials', 'crafting', 'professions', 'storyEvidence', 'routePlanner'].forEach(function (name) {
       var mod = readGlobal(name);
@@ -1168,6 +1171,26 @@
         internal.finished = true;
         internal.finishedResult = normalized;
         renderCommissionReceipt(normalized);
+        /* 0.17：把收据里的剧情证据登记为只读 evidence token（失败不影响结算结果）。 */
+        if (normalized.ok && normalized.receipt && typeof normalized.receipt === 'object') {
+          var db = api.db || readGlobal('db');
+          return ensureLazyModule('storyEvidence')
+            .then(function (evidenceModule) {
+              if (!evidenceModule || typeof evidenceModule.recordFromReceipt !== 'function' || !db) return normalized;
+              return Promise.resolve(evidenceModule.recordFromReceipt({
+                careerId: run.careerId,
+                receipt: normalized.receipt,
+                db: db,
+                now: nowIso(),
+              })).then(function () {
+                return normalized;
+              });
+            })
+            .catch(function (err) {
+              warnOnce('story-evidence', err);
+              return normalized;
+            });
+        }
         return normalized;
       })
       .catch(function (err) {
@@ -2567,9 +2590,21 @@
   function openCareerUi(name, extra) {
     if (isSilentTestOnly()) return uiUnavailable('test-silent');
     warmLazyModules();
-    /* town/hangar/receipt 都需要 commission-core 与委托目录在 ctx 里可用；机库还需要租机模块。 */
-    var preload = Promise.all([ensureLazyModule('commission'), ensureLazyModule('alternatives'), loadCareerContent()]).then(function () {
+    /* town/hangar/receipt 都需要 commission-core 与委托目录在 ctx 里可用；机库还需要租机模块，
+       商店需要材料模块，制造台需要制造模块。 */
+    var extraModules = [];
+    if (name === 'market') extraModules.push('materials');
+    if (name === 'workshop') {
+      extraModules.push('crafting');
+      extraModules.push('materials');
+    }
+    var preloadList = [ensureLazyModule('commission'), ensureLazyModule('alternatives'), loadCareerContent()];
+    extraModules.forEach(function (moduleName) {
+      preloadList.push(ensureLazyModule(moduleName));
+    });
+    var preload = Promise.all(preloadList).then(function () {
       configureCommissionContent();
+      configureCareerModules();
       return configureRentalModule();
     });
     return preload.then(function () {

@@ -25,6 +25,9 @@ REQUIRED = [
     'apps/arcade/career/bridge.js', 'apps/arcade/career/router.js',
     'apps/arcade/career/entry-router.js', 'apps/arcade/career/backup.js',
     'apps/arcade/career/commission-core.js', 'apps/arcade/career/star-combat-config.js',
+    'apps/arcade/career/commission-schema.js', 'apps/arcade/career/materials.js',
+    'apps/arcade/career/crafting.js', 'apps/arcade/career/professions.js',
+    'apps/arcade/career/story-evidence.js', 'apps/arcade/career/route-planner.js',
     'apps/arcade/career/rental.js', 'apps/arcade/career/alternatives.js',
     'apps/arcade/career/content/registry.json', 'apps/arcade/career/content/clues.json',
     'apps/arcade/career/content/commissions.json', 'apps/arcade/career/content/items.json',
@@ -54,6 +57,9 @@ REQUIRED = [
     'tools/career_entry_router_test.mjs', 'tools/career_discovery_accessibility_test.mjs',
     'tools/career_games_reachability_test.mjs', 'tools/career_pwa_offline_test.mjs',
     'tools/career_commission_test.mjs', 'tools/career_star_combat_config_test.mjs',
+    'tools/career_materials_test.mjs', 'tools/career_professions_test.mjs',
+    'tools/career_story_evidence_test.mjs', 'tools/career_route_planner_test.mjs',
+    'tools/career_mission_fixture_runner.mjs',
     'tools/career_rental_test.mjs', 'tools/career_alternatives_test.mjs',
     'tools/career_run_resume_test.mjs', 'tools/career_first_flight_test.mjs',
     'tools/career_mobile_016_test.mjs',
@@ -437,15 +443,17 @@ def validate(root=ROOT):
                     if not isinstance(buy, int) or not isinstance(sell, int) or sell > buy * 0.6:
                         ok = fail(f'Arcade 0.17 material {material.get("itemId")}: sell price must be <= buy*0.6') and ok
             bridge_source = (career_root / 'bridge.js').read_text(encoding='utf-8')
-            for marker in ('TICKET_KEY', "commission-core.js", "lazy: true", 'getCommissionLoadout', 'openTown', 'openHangar', 'openReceipt'):
+            for marker in ('TICKET_KEY', "commission-core.js", "lazy: true", 'getCommissionLoadout', 'openTown', 'openHangar', 'openReceipt', 'openMarket', 'openWorkshop', "materials.js", "crafting.js", "storyEvidence"):
                 if marker not in bridge_source:
                     ok = fail(f'Arcade 0.16 bridge marker missing: {marker}') and ok
             sw_file = root / 'apps/arcade/sw.js'
             if sw_file.exists():
                 sw_source = sw_file.read_text(encoding='utf-8')
                 for resource in ('commission-core.js', 'star-combat-config.js', 'rental.js', 'alternatives.js',
+                                 'commission-schema.js', 'materials.js', 'crafting.js', 'professions.js',
+                                 'story-evidence.js', 'route-planner.js',
                                  'content/commissions.json', 'content/items.json', 'content/chapter-01.json',
-                                 'ui/town.js', 'ui/hangar.js', 'ui/receipt.js'):
+                                 'ui/town.js', 'ui/hangar.js', 'ui/receipt.js', 'ui/market.js', 'ui/workshop.js'):
                     if f"'./career/{resource}'" not in sw_source:
                         ok = fail(f'Arcade 0.16 sw.js CORE_PATHS missing career resource: {resource}') and ok
             for page_name, marker in (('pendulum-tower.html', 'careerGoal'), ('star-raid.html', 'career-mission-line')):

@@ -719,7 +719,9 @@
       /* initial：先画「暂未开放」占位，不立刻报「暂不可用」，等 listAvailable 结果再决定。 */
       setNotice(boardReady || initial ? '' : BOARD_UNAVAILABLE);
       while (list.firstChild) list.removeChild(list.firstChild);
-      const rows = commissionRowsOf(liveContext);
+      const allRows = commissionRowsOf(liveContext);
+      /* 0.17：96 份委托只挂出当前可接的（已解锁）；后续阶在完成任务后自然出现。 */
+      const rows = boardReady ? allRows.filter((row) => !!unlockedSet[row.commissionId]) : [];
       rows.forEach((row) => list.appendChild(renderRow(row, unlockedSet, boardReady)));
       const hasRows = rows.length > 0;
       list.hidden = !hasRows;

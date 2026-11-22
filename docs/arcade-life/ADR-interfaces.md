@@ -738,7 +738,7 @@ writeEquipment({careerId, patch, now}) -> Promise<{ok, equipment?} | {ok:false, 
 | merge-2048 | `tile.created`（value；合并/生成时提交）；`tile.merged`（已有） |
 | blackjack | `hand.settled`（已有；用其计数） |
 | gomoku | `move.legal`（moves）；`session.finish`（result, moves） |
-| solitaire | `stock.face_up`（count）；`foundation.move`（count） |
+| solitaire | `stock.face_up`（count）；`foundation.move`（count）；`move.legal`（moves；0.17 高阶调度补充） |
 | snowbells | `bell.rung`（已有）；`bell.unique`（bellId, count）；`height.reached`（height） |
 | brick-breaker | `brick.destroyed`（已有）；`stage.clear`（level） |
 | gravity-flip | `gravity.flip`（已有）；`distance.reached`（meters） |

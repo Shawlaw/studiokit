@@ -8,6 +8,25 @@
   <meta name="theme-color" content="#0d1016" />
   <link rel="stylesheet" href="../../../shared/site.css" />
   <link rel="stylesheet" href="../arcade.css" />
+  <style>
+    /* 0.17 职业委托（ADR §19.3）：戏内目标行，只 title + 目标；320/375 也在两行内。
+       仅职业 run 出现（.is-career-run / 弹层里的 [data-career-goal]），经典页面零改动。 */
+    .career-mission-line {
+      display: inline-block;
+      margin: 2px auto 0;
+      padding: 3px 9px;
+      max-width: 100%;
+      border: 1px solid rgba(217, 176, 106, 0.55);
+      border-radius: 10px;
+      background: rgba(217, 176, 106, 0.12);
+      color: #f6e7c6;
+      font-size: 12px;
+      line-height: 1.45;
+      overflow-wrap: anywhere;
+    }
+    .overlay-panel .career-mission-line { color: #f6e7c6; }
+    .game-hint .career-mission-line { font-size: 11px; padding: 2px 8px; }
+  </style>
   <script src="../../../shared/site-shell.js" defer></script>
   <script src="../engine.js"></script>
   <script src="../career/bridge.js"></script>
@@ -119,6 +138,248 @@
         mute: document.querySelector('[data-mute]'),
       };
       const ui = A.createOverlayUi(dom);
+
+      /* ===== 0.17 职业委托（ADR §19.2 / §19.3 / §19.4 / §19.8）=====
+         - 只有玩家从旧港告示板接单后带 ?career=<ticketId> 进入本页、且 bridge 确认
+           ticket 属于本页 gameId 时才进入职业 run；
+         - 职业 run 内不读不写 studiokit:arcade:runs:v1，不写 Progress / Scores / 挑战 /
+           GameMeta，结算只走 career.finish 的独立职业收据；本页自 0.14 起就没有挑战
+           入口，职业 run 也不会新增任何入口；
+         - 无 ticket / ticket 不匹配 / bridge 缺失时本段全部 no-op，页面与 0.16 行为一致。 */
+      const CAREER_GAME_ID = 'gomoku';
+      let careerLocked = false;      // 已确认进入职业 run：本页生命周期内经典记录全禁用
+      let careerSettled = null;      // {pending:true} → {ok, reason, credits, duplicate}
+      let careerGoalSource = null;   // 接单时缓存的委托内容（结算后仍可显示戏内目标）
+      let careerGoalDone = false;    // 已结算：开局弹层不再展示旧目标
+      let careerPostSettled = false; // 结算后在本页再开的新局（不再发任何事件/写任何记录）
+      let careerMoveEvents = 0;      // 本页真实提交的 move.legal 次数（测试只读）
+      let careerFinishEvents = 0;    // 本页真实提交的 session.finish 次数（测试只读）
+      let careerLastMove = null;
+      let careerLastFinish = null;
+      const hintEl = document.querySelector('.game-hint');
+      const hintOriginal = hintEl ? hintEl.innerHTML : '';
+
+      function careerEsc(value) {
+        return String(value == null ? '' : value)
+          .replace(/&/g, '&amp;')
+          .replace(/</g, '&lt;')
+          .replace(/>/g, '&gt;')
+          .replace(/"/g, '&quot;');
+      }
+
+      function careerTicketParam() {
+        try {
+          const search = String((window.location && window.location.search) || '');
+          const match = /(?:^|[?&])career=([^&]+)/.exec(search);
+          if (!match) return '';
+          const value = decodeURIComponent(match[1].replace(/\+/g, ' '));
+          return /^[A-Za-z0-9._:-]{1,120}$/.test(value) ? value : '';
+        } catch (err) {
+          return '';
+        }
+      }
+
+      /* 本页当前是否有属于本游戏的职业 run（bridge 只在 ticket 校验通过时填充）。 */
+      function readCareerRun() {
+        try {
+          if (!career || typeof career.isCommissionRun !== 'function' || !career.isCommissionRun()) return null;
+          const run = career.commissionRun;
+          if (!run || run.gameId !== CAREER_GAME_ID) return null;
+          return run;
+        } catch (err) {
+          return null;
+        }
+      }
+
+      /* 戏内目标只来自真实委托内容（commissionRun.commission）；内容缺失时返回 null，不发明文案。 */
+      function goalPartsOf(commission) {
+        if (!commission || typeof commission !== 'object') return null;
+        const title = typeof commission.title === 'string' ? commission.title : '';
+        const summary = typeof commission.summary === 'string' ? commission.summary : '';
+        if (!title && !summary) return null;
+        const objective = commission.objective && typeof commission.objective === 'object' ? commission.objective : {};
+        const raw = Number(objective.atLeast);
+        const atLeast = Number.isFinite(raw) && raw > 0 ? Math.floor(raw) : 0;
+        const kind = typeof objective.kind === 'string' ? objective.kind : '';
+        return { title, summary, atLeast, kind };
+      }
+
+      function careerGoalParts() {
+        const run = readCareerRun();
+        const commission = (run && run.commission) || careerGoalSource;
+        return goalPartsOf(commission);
+      }
+
+      function careerGoalUnit(kind) {
+        if (kind === 'move.legal') return '手';
+        if (kind === 'session.finish') return '局';
+        return '';
+      }
+
+      function careerGoalText(goal) {
+        const source = goal || careerGoalParts();
+        if (!source) return '';
+        const unit = careerGoalUnit(source.kind);
+        const target = source.atLeast ? '（目标 ' + source.atLeast + (unit ? ' ' + unit : '') + '）' : '';
+        return '委托：' + (source.title || source.summary) + target;
+      }
+
+      function careerGoalLine() {
+        const goal = careerGoalParts();
+        if (!goal) return '';
+        return '<span class="career-mission-line" data-career-goal="1">' + careerEsc(careerGoalText(goal)) + '</span>';
+      }
+
+      /* 底部说明行：职业 run 换成一行戏内目标；经典文案逐字保留在 hintOriginal。 */
+      function syncCareerHint() {
+        if (!hintEl) return;
+        if (!careerLocked) {
+          if (hintOriginal && hintEl.innerHTML !== hintOriginal) hintEl.innerHTML = hintOriginal;
+          return;
+        }
+        const line = careerGoalLine();
+        hintEl.innerHTML = line || careerEsc('委托进行中');
+      }
+
+      /* 职业 run 内断开旧 RunSave：serialize() 返回 null，并兜底替换 autosave 的四个出口。 */
+      function lockRunSave() {
+        if (careerLocked) return;
+        careerLocked = true;
+        try {
+          autosave.saveNow = function () { return false; };
+          autosave.tick = function () {};
+          autosave.clear = function () {};
+          autosave.load = function () { return null; };
+        } catch (err) {
+          /* 忽略：serialize() 的 career 门禁仍是最终兜底 */
+        }
+        syncCareerHint();
+      }
+
+      function activateCareerRun(runInfo) {
+        if (!runInfo || runInfo.gameId !== CAREER_GAME_ID) return false;
+        careerGoalSource = runInfo.commission && typeof runInfo.commission === 'object' ? runInfo.commission : null;
+        careerGoalDone = false;
+        lockRunSave();
+        try {
+          document.body.classList.add('is-career-run');
+        } catch (err) {
+          /* ignore */
+        }
+        return true;
+      }
+
+      /* 观察事件：职业 run 只进本 run 的委托缓冲（bridge 负责路由），经典路径保持 0.16 原样。 */
+      function careerObserve(kind, payload) {
+        if (!career || typeof career.observe !== 'function') return false;
+        if (careerSettled || careerPostSettled) return false;
+        return career.observe(kind, payload);
+      }
+
+      /* 真实落子提交点（applyPlayerMove 内调用）：
+         - 经典：只发既有 stone.placed，参数与 0.16 逐字相同；
+         - 职业 run：只发本 run 的 move.legal；悔棋 / 重复点击 / 非法落子都不会走到这里。
+           payload 的 col/row 就是这一手的列/行（ADR §19.4 只声明 moves；commission-core 的
+           payload 清洗器要求字段名 ≥2 字符，单字母 x/y 会被丢弃，因此用 col/row 承载坐标）。 */
+      function noteLegalMove(r, c) {
+        if (careerLocked) {
+          if (careerSettled || careerPostSettled) return false;
+          careerMoveEvents += 1;
+          careerLastMove = { moves: moves, col: c, row: r };
+          return careerObserve('move.legal', { moves: moves, col: c, row: r });
+        }
+        if (career) career.observe('stone.placed', { moves, turn: turn === BLACK ? 'black' : 'white' });
+        return false;
+      }
+
+      function summarizeCareerResult(result) {
+        if (!result || typeof result !== 'object') return { ok: false, reason: 'empty' };
+        if (result.ok === true) {
+          const receipt = result.receipt && typeof result.receipt === 'object' ? result.receipt : null;
+          return {
+            ok: true,
+            duplicate: result.duplicate === true,
+            credits: receipt && Number.isFinite(Number(receipt.credits)) ? Number(receipt.credits) : Number(result.credits) || 0,
+            receiptId: receipt && (receipt.receiptId || receipt.txId) ? String(receipt.receiptId || receipt.txId) : null,
+          };
+        }
+        return {
+          ok: false,
+          reason: typeof result.reason === 'string' ? result.reason : 'failed',
+          observed: Number.isFinite(Number(result.observed)) ? Number(result.observed) : null,
+        };
+      }
+
+      /* 结算文案只用戏内措辞；技术原因只留在测试探针（careerInfo），不写给玩家。 */
+      function careerSettleText() {
+        const settled = careerSettled;
+        if (careerPostSettled) return '委托已经结算；这局不写入最高分与积分记录。';
+        if (!settled || settled.pending === true) return '这一局正在结算，收据会记入旧港档案。';
+        if (settled.ok) {
+          return (
+            '委托结算完成：报酬 ' + settled.credits +
+            (settled.duplicate ? '（此前已结算）' : '') +
+            '，收据已记入旧港档案。'
+          );
+        }
+        if (settled.reason === 'objective-not-met' || settled.reason === 'value-not-met') {
+          return '目标还差一点，这次没有报酬；可回旧港重新接单。';
+        }
+        return '结算没有完成，可回旧港核对档案记录。';
+      }
+
+      /* 结算：职业 run 走 bridge/commission-core 的独立收据；本页不自行发钱/写库。 */
+      function careerFinish(kind) {
+        if (!career || typeof career.finish !== 'function') return;
+        if (careerSettled || careerPostSettled) return;
+        careerSettled = { pending: true };
+        const outcome = kind === 'win' ? 'won' : kind === 'resign' ? 'quit' : 'lost';
+        const stats = { result: result, moves: moves, score: score };
+        let promise = null;
+        try {
+          promise = career.finish({ mode: 'classic', outcome: outcome, stats: stats });
+        } catch (err) {
+          careerSettled = { ok: false, reason: 'finish-threw' };
+          careerGoalDone = true;
+          if (state === 'over') showCareerResult(kind);
+          return;
+        }
+        Promise.resolve(promise)
+          .then((settled) => {
+            careerSettled = summarizeCareerResult(settled);
+            careerGoalDone = true;
+            if (state === 'over') showCareerResult(kind);
+          })
+          .catch(() => {
+            careerSettled = { ok: false, reason: 'finish-error' };
+            careerGoalDone = true;
+            if (state === 'over') showCareerResult(kind);
+          });
+      }
+
+      /* 职业 run 的结算弹层：如实写出“不写最高分/积分记录”，并只展示戏内目标与收据结果。 */
+      function showCareerResult(kind) {
+        const head = '<span class="ac-score">' + careerEsc(String(score)) + '</span>';
+        const tail = '这局不写入最高分与积分记录。';
+        let detail = '已认输 · 共 ' + moves + ' 手 · ' + tail;
+        if (kind === 'win') detail = '黑棋连成五子 · 共 ' + moves + ' 手 · ' + tail;
+        else if (kind === 'lose') detail = '白棋连成五子 · 共 ' + moves + ' 手 · ' + tail;
+        else if (kind === 'draw') detail = '棋盘下满，和棋 · 共 ' + moves + ' 手 · ' + tail;
+        const goal = careerGoalDone ? '' : careerGoalLine();
+        let title = '和棋';
+        if (kind === 'win') title = '你连成五子';
+        else if (kind === 'lose') title = 'AI 连成五子';
+        else if (kind === 'resign') title = '已认输';
+        ui.show({
+          result: '回看棋盘',
+          title,
+          text: head + detail + (goal ? '<br/>' + goal : '') + '<br/>' + careerSettleText(),
+          btn: '再来一局',
+          onBtn: showStart,
+        });
+        pauseUi.sync();
+        joyTools.sync();
+      }
 
       /* ----------------------------------------------------------
        * 局内状态
@@ -448,6 +709,8 @@
       }
 
       function startGame() {
+        /* 职业 run：委托结算后再开的新局不再发事件/写记录（这一页的委托已经交付）。 */
+        if (careerLocked && careerGoalDone) careerPostSettled = true;
         autosave.clear();
         resetGame();
         state = 'playing';
@@ -471,12 +734,20 @@
         resetGame();
         state = 'ready';
         syncAll();
+        /* 0.17 职业 run：开局弹层追加一行戏内目标（只 title + 目标）；经典文案逐字不变。
+           职业 run 用同一套操作说明的紧凑版（省略“启发式推荐”免责句），
+           以免 320×568 下目标行把「开始游戏」主按钮挤出弹层可视区；
+           提示道具本身仍标注“启发式推荐”（selftest 第 16 项继续校验）。 */
+        const classicText = '你执黑先行，与本地启发式对手对弈。<br/>点空格预览，再点同一点或「落子」确认；点「取消」退出预览。<br/>提示为启发式推荐，不代表最优解。<br/>五子连珠即胜 · 没有倒计时，慢慢想。';
+        const careerText = '你执黑先行，与本地启发式对手对弈。<br/>点空格预览，再点同一点或「落子」确认；点「取消」退出预览。<br/>五子连珠即胜 · 没有倒计时，慢慢想。';
+        const careerGoal = careerLocked && !careerGoalDone ? careerGoalLine() : '';
         ui.show({
           title: '五子棋 · 静局',
-          text: '你执黑先行，与本地启发式对手对弈。<br/>点空格预览，再点同一点或「落子」确认；点「取消」退出预览。<br/>提示为启发式推荐，不代表最优解。<br/>五子连珠即胜 · 没有倒计时，慢慢想。',
+          text: (careerLocked ? careerText : classicText) + (careerGoal ? '<br/>' + careerGoal : ''),
           btn: '开始游戏',
           onBtn: startGame,
         });
+        syncCareerHint();
         pauseUi.sync();
         joyTools.sync();
       }
@@ -484,6 +755,12 @@
       function recordOnce() {
         if (recordSaved) return;
         recordSaved = true;
+        /* 0.17 职业 run：不调 A.Progress.recordPlay（即不写 progress/scores/Playtime 轮次），
+           最高分显示保持只读；结算只走 career.finish 的独立职业收据。 */
+        if (careerLocked) {
+          lastRecord = null;
+          return;
+        }
         const rec = A.Progress.recordPlay('gomoku', score);
         if (rec) {
           high = rec.high;
@@ -518,6 +795,21 @@
         hintTimer = 0;
         aiDelay = 0;
         autosave.clear();
+        if (careerLocked) {
+          /* 0.17 职业 run：唯一真实结束点提交一次 session.finish（自然五连 / 和棋 / 投子），
+             随后走 bridge 的独立职业收据；不 recordPlay、不写 runs/progress/scores/挑战/meta。
+             打开暂停弹层不会走到这里，因此不会误发 session.finish；结算后再开的新局不再发事件。 */
+          if (!careerSettled && !careerPostSettled) {
+            careerFinishEvents += 1;
+            careerLastFinish = { result: kind, moves: moves };
+            careerObserve('session.finish', { result: kind, moves: moves });
+          }
+          loop.pause();
+          syncAll();
+          showCareerResult(kind);
+          careerFinish(kind);
+          return true;
+        }
         recordOnce();
         loop.pause();
         syncAll();
@@ -551,14 +843,27 @@
         state = 'paused';
         joyTools.sync();
         autosave.saveNow();
-        ui.show({
-          title: '已暂停',
-          text: '棋盘先放在这里，等你回来。<br/>局内进度已保存在本机。',
-          btn: '继续',
-          onBtn: resumeGame,
-          btn2: '认输并记录',
-          onBtn2: resignAndRecord,
-        });
+        if (careerLocked) {
+          /* 0.17 职业 run：暂停只保留棋盘与戏内目标，不写局内档、不发 session.finish。 */
+          const careerGoal = careerGoalDone ? '' : careerGoalLine();
+          ui.show({
+            title: '已暂停',
+            text: '棋盘先放在这里。<br/>' + (careerGoal ? careerGoal + '<br/>' : '') + '本局不计入最高分与积分记录；进度只在这一局里。',
+            btn: '继续',
+            onBtn: resumeGame,
+            btn2: '认输结束本局',
+            onBtn2: resignAndRecord,
+          });
+        } else {
+          ui.show({
+            title: '已暂停',
+            text: '棋盘先放在这里，等你回来。<br/>局内进度已保存在本机。',
+            btn: '继续',
+            onBtn: resumeGame,
+            btn2: '认输并记录',
+            onBtn2: resignAndRecord,
+          });
+        }
         pauseUi.sync();
       }
 
@@ -595,7 +900,7 @@
         score = 0;
         A.Sfx.play('land');
         const end = evaluateEnd(board, moves);
-        if (career) career.observe('stone.placed', { moves, turn: turn === BLACK ? 'black' : 'white' });
+        noteLegalMove(r, c);
         if (end.over) {
           finishGame(end.result, end.winInfo);
           return true;
@@ -818,6 +1123,8 @@
        * 局内存档（棋盘 / 回合 / 步数 / 分数 / 工具次数 / AI 种子状态 / 最后落点 / 预览 / 悔棋栈）
        * ---------------------------------------------------------- */
       function serialize() {
+        /* 0.17 职业 run：绝不写 studiokit:arcade:runs:v1（经典/无 ticket 时行为不变）。 */
+        if (careerLocked) return null;
         if (state !== 'playing' && state !== 'paused') return null;
         return {
           v: SAVE_VERSION,
@@ -1854,7 +2161,115 @@
           regression() {
             return runRegression();
           },
+          /* 0.17 职业委托：真实落子 / 悔棋的测试驱动（仅 #test，不新增生产入口）。
+             moveNow 走 applyPlayerMove（与「落子」确认按钮同一条提交路径），
+             autoMove 先按真实 AI 路径补上对手应手、再用本局确定性策略真实落子，
+             undoNow 走真实 applyUndo；结束路径用既有 playToEnd / 暂停弹层，不另造结算入口。 */
+          moveNow(r, c) {
+            const rr = Math.floor(Number(r));
+            const cc = Math.floor(Number(c));
+            if (!inBoard(rr, cc)) return false;
+            if (state !== 'playing') {
+              if (state === 'paused') resumeGame();
+              else if (state === 'ready' || state === 'over') startGame();
+            }
+            if (state !== 'playing') return false;
+            if (turn !== BLACK) performAIMove();
+            if (state !== 'playing' || turn !== BLACK) return false;
+            return applyPlayerMove(rr, cc);
+          },
+          autoMove() {
+            if (state !== 'playing') {
+              if (state === 'paused') resumeGame();
+              else if (state === 'ready' || state === 'over') startGame();
+            }
+            if (state !== 'playing') return null;
+            if (turn !== BLACK) performAIMove();
+            if (state !== 'playing' || turn !== BLACK) return null;
+            const mv = pickAutoMove();
+            if (!mv) return null;
+            return applyPlayerMove(mv.r, mv.c) ? { r: mv.r, c: mv.c } : null;
+          },
+          undoNow() {
+            /* 真实悔棋：先把真实 AI 应手补上（悔棋一次撤回自己一步 + AI 一步），再走 applyUndo。 */
+            if (state === 'paused') resumeGame();
+            if (state !== 'playing') return false;
+            if (turn !== BLACK) performAIMove();
+            if (state !== 'playing') return false;
+            return applyUndo();
+          },
         };
+        /* 0.17 职业委托只读钩子：只在 ?careerTest=1 追加；生产 URL 与既有 #test 探针不变。 */
+        if (/(?:^|[?&])careerTest=1(?:&|$)/.test(String((window.location && window.location.search) || ''))) {
+          window.__arcadeTest.careerInfo = function careerInfo() {
+            const run = readCareerRun();
+            const goal = careerGoalParts();
+            const goalEls = Array.prototype.slice.call(document.querySelectorAll('[data-career-goal]'));
+            const visibleGoalEl = goalEls.filter((el) => el.getClientRects().length > 0)[0] || null;
+            const hintGoalEl = hintEl ? hintEl.querySelector('[data-career-goal]') : null;
+            const panelGoalEl = dom.overlay.querySelector('[data-career-goal]');
+            const progress = A.Progress.get('gomoku');
+            let runSave = null;
+            try {
+              runSave = A.RunSave.get('gomoku');
+            } catch (err) {
+              runSave = null;
+            }
+            let bridgeInfo = null;
+            try {
+              bridgeInfo = window.__arcadeCareerTest && typeof window.__arcadeCareerTest.info === 'function' ? window.__arcadeCareerTest.info() : null;
+            } catch (err) {
+              bridgeInfo = null;
+            }
+            return {
+              isCommission: !!run,
+              locked: careerLocked,
+              chrome: document.body.classList.contains('is-career-run'),
+              settled: careerSettled
+                ? {
+                  pending: careerSettled.pending === true,
+                  ok: careerSettled.ok === true,
+                  reason: careerSettled.reason || null,
+                  credits: Number(careerSettled.credits) || 0,
+                  duplicate: careerSettled.duplicate === true,
+                }
+                : null,
+              commissionId: run ? run.commissionId : careerGoalSource ? careerGoalSource.commissionId || null : null,
+              objectiveKind: goal ? goal.kind : null,
+              atLeast: goal ? goal.atLeast : null,
+              objectiveText: goal ? careerGoalText(goal) : null,
+              moveEvents: careerMoveEvents,
+              finishEvents: careerFinishEvents,
+              lastMove: careerLastMove ? { moves: careerLastMove.moves, col: careerLastMove.col, row: careerLastMove.row } : null,
+              lastFinish: careerLastFinish ? { result: careerLastFinish.result, moves: careerLastFinish.moves } : null,
+              state,
+              turn: turn === BLACK ? 'black' : 'white',
+              moves,
+              score,
+              result,
+              tools: { undo: tools.undo, hint: tools.hint },
+              serializeNull: serialize() === null,
+              runSavePresent: !!runSave,
+              goalLineVisible: !!visibleGoalEl,
+              goalLineText: visibleGoalEl ? String(visibleGoalEl.textContent || '') : goalEls.length ? String(goalEls[0].textContent || '') : null,
+              goalLineHeight: visibleGoalEl ? Math.round(visibleGoalEl.getBoundingClientRect().height) : 0,
+              goalInHint: !!hintGoalEl && hintGoalEl.getClientRects().length > 0,
+              goalInPanel: !!panelGoalEl && panelGoalEl.getClientRects().length > 0,
+              /* 本页自 0.14 起没有挑战模式入口（无 challenge 脚本、无 mode 选择）；
+                 职业 run 更不会新增任何入口，因此恒为 false。 */
+              challengeVisible: false,
+              hintText: hintEl ? String(hintEl.textContent || '') : '',
+              overlay: !dom.overlay.hidden,
+              overlayTitle: dom.ovTitle.textContent,
+              overlayBtn: dom.ovBtn ? dom.ovBtn.textContent : null,
+              overlayBtn2: dom.ovBtn2 && !dom.ovBtn2.hidden ? dom.ovBtn2.textContent : null,
+              plays: progress.plays,
+              high: progress.high,
+              bridgeRunTicketId: bridgeInfo && bridgeInfo.commissionRun ? bridgeInfo.commissionRun.ticketId || null : null,
+              lastCommissionResult: bridgeInfo && bridgeInfo.commissionLastResult ? bridgeInfo.commissionLastResult : null,
+            };
+          };
+        }
       }
 
       /* ----------------------------------------------------------
@@ -1862,31 +2277,72 @@
        * ---------------------------------------------------------- */
       resetGame();
       state = 'ready';
-      const saved = autosave.load();
-      if (saved && saved.data && typeof saved.data === 'object') {
-        A.showResumePrompt(ui, saved, {
-          name: '五子棋 · 静局',
-          onResume: () => {
-            if (restore(saved.data)) {
-              state = 'playing';
-              ui.hide();
-              loop.resume();
-              input.endFrame();
-              syncAll();
-              autosave.saveNow();
-            } else {
+
+      /* 开局弹层（0.16 行为逐字保留）：只有经典路径会读旧 RunSave。 */
+      function prepareStartScreen() {
+        if (careerLocked) {
+          showStart();
+          return;
+        }
+        const saved = autosave.load();
+        if (saved && saved.data && typeof saved.data === 'object') {
+          A.showResumePrompt(ui, saved, {
+            name: '五子棋 · 静局',
+            onResume: () => {
+              if (restore(saved.data)) {
+                state = 'playing';
+                ui.hide();
+                loop.resume();
+                input.endFrame();
+                syncAll();
+                autosave.saveNow();
+              } else {
+                autosave.clear();
+                showStart();
+              }
+            },
+            onRestart: () => {
               autosave.clear();
               showStart();
-            }
-          },
-          onRestart: () => {
-            autosave.clear();
-            showStart();
-          },
-        });
-      } else {
-        showStart();
+            },
+          });
+        } else {
+          showStart();
+        }
       }
+
+      /* 0.17 职业入口：URL 带 ?career=<ticketId> 时先等 bridge 确认 ticket，再决定
+         「职业开局弹层」还是经典开局；无参数时同步走 0.16 路径（零延迟、零行为变化）。 */
+      function bootStartScreen() {
+        const ticketId = careerTicketParam();
+        const ready = career && career.ready;
+        if (!ticketId || !career || !ready || typeof ready.then !== 'function') {
+          prepareStartScreen();
+          return;
+        }
+        let settled = false;
+        let guard = null;
+        const finishBoot = () => {
+          if (settled) return;
+          settled = true;
+          try {
+            if (guard) clearTimeout(guard);
+          } catch (err) {
+            /* ignore */
+          }
+          /* 只有 bridge 确认了属于本游戏的 run 才锁死经典记录；否则按经典开局（fail-open）。 */
+          const runInfo = readCareerRun();
+          if (runInfo) activateCareerRun(runInfo);
+          prepareStartScreen();
+        };
+        try {
+          guard = setTimeout(finishBoot, 3500);
+        } catch (err) {
+          guard = null;
+        }
+        Promise.resolve(ready).then(finishBoot, finishBoot);
+      }
+      bootStartScreen();
       loop.start();
     })();
   </script>

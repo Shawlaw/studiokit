@@ -175,7 +175,7 @@
       "professionId": "research.archivist",
       "tier": 6,
       "title": "余波工单",
-      "summary": "补全E-7的最终信息",
+      "summary": "补全旧调度记录的最终信息",
       "issuer": "旧港职业中心",
       "objective": {
         "kind": "pair.match",
@@ -1468,7 +1468,7 @@
       "professionId": "research.gravity",
       "tier": 1,
       "title": "反向实验",
-      "summary": "完成5次有效重力翻转并存活至结算",
+      "summary": "完成5次有效重力翻转并存活至收工",
       "issuer": "旧港职业中心",
       "objective": {
         "kind": "gravity.flip",
