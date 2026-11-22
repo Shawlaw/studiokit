@@ -44,6 +44,18 @@ def main() -> int:
             'CAREER_BACKUP_PORT': os.environ.get('CAREER_BACKUP_PORT', '8831'),
             'CAREER_BACKUP_CDP_PORT': os.environ.get('CAREER_BACKUP_CDP_PORT', '9431'),
         }),
+        ('career_a11y', ['node', 'tools/career_discovery_accessibility_test.mjs'], {
+            'CAREER_A11Y_PORT': os.environ.get('CAREER_A11Y_PORT', '8832'),
+            'CAREER_A11Y_CDP_PORT': os.environ.get('CAREER_A11Y_CDP_PORT', '9432'),
+        }),
+        ('career_games_reachability', ['node', 'tools/career_games_reachability_test.mjs'], {
+            'CAREER_GAMES_PORT': os.environ.get('CAREER_GAMES_PORT', '8833'),
+            'CAREER_GAMES_CDP_PORT': os.environ.get('CAREER_GAMES_CDP_PORT', '9433'),
+        }),
+        ('career_pwa_offline', ['node', 'tools/career_pwa_offline_test.mjs'], {
+            'CAREER_PWA_PORT': os.environ.get('CAREER_PWA_PORT', '8839'),
+            'CAREER_PWA_CDP_PORT': os.environ.get('CAREER_PWA_CDP_PORT', '9439'),
+        }),
         ('stage_coverage', ['node', 'tools/arcade_stage_coverage.mjs'], None),
         ('smoke', ['node', 'tools/arcade_smoke.mjs'], {
             'ARCADE_SMOKE_PORT': os.environ.get('ARCADE_SMOKE_PORT', '8821'),

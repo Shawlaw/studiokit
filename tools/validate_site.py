@@ -45,7 +45,8 @@ REQUIRED = [
     'tools/arcade_run_all_gates.py',
     'tools/career_registry_test.mjs', 'tools/career_discovery_test.mjs',
     'tools/career_db_test.mjs', 'tools/career_backup_test.mjs',
-    'tools/career_entry_router_test.mjs',
+    'tools/career_entry_router_test.mjs', 'tools/career_discovery_accessibility_test.mjs',
+    'tools/career_games_reachability_test.mjs', 'tools/career_pwa_offline_test.mjs',
     'tools/career_legacy_baseline_test.mjs',
 ]
 
