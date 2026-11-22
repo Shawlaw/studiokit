@@ -33,8 +33,8 @@
   var VERSION = '0.15.0';
   var CAREER_DB_NAME = 'studiokit:arcade:career';
   var STATE_KEY = 'discovery';
-  var VALID_MODES = ['classic', 'challenge', 'zen'];
-  var VALID_SOURCE_MODES = ['classic', 'challenge', 'zen', 'mow'];
+  var VALID_MODES = ['classic', 'challenge', 'zen', 'commission'];
+  var VALID_SOURCE_MODES = ['classic', 'challenge', 'zen', 'mow', 'commission'];
   var VALID_OUTCOMES = ['won', 'lost', 'quit', 'abandoned'];
   var EVENT_BUFFER_LIMIT = 200;
   var PAYLOAD_BYTE_LIMIT = 2048;
@@ -50,6 +50,9 @@
   var OVERLAY_POLL_MS = 100;
   /* 同一结算出口被重复调用的防抖窗口（期间无新的 observe 事件才忽略）。 */
   var FINISH_DEBOUNCE_MS = 800;
+  /* 0.16 职业委托 ticket：仅当前标签页 sessionStorage，不是 localStorage 存档。 */
+  var TICKET_KEY = 'studiokit:arcade:career:ticket.v1';
+  var TICKET_PARAM = 'career';
 
   /* 游戏页不得自填的事件信封/金额字段：静默丢弃，不算错误。 */
   var RESERVED_PAYLOAD_KEYS = {
@@ -85,9 +88,17 @@
        （既有 smoke 会把 404 记为 console error）。首次发现线索/打开信箱/偏好面板时自动加载。 */
     { file: 'backup.js', global: 'backup', required: false, lazy: true },
     { file: 'entry-router.js', global: 'entryRouter', required: false },
+    /* 0.16 运行时按需装载：普通游戏页（尤其 #test）不请求未使用模块，避免 404 噪声。 */
+    { file: 'commission-core.js', global: 'commission', required: false, lazy: true },
+    { file: 'star-combat-config.js', global: 'combatConfig', required: false, lazy: true },
+    { file: 'rental.js', global: 'rental', required: false, lazy: true },
+    { file: 'alternatives.js', global: 'alternatives', required: false, lazy: true },
     { file: 'ui/clue-surface.js', global: 'ui.clueSurface', required: false },
     { file: 'ui/mailbox.js', global: 'ui.mailbox', required: false },
     { file: 'ui/settings.js', global: 'ui.settings', required: false },
+    { file: 'ui/town.js', global: 'ui.town', required: false, lazy: true },
+    { file: 'ui/hangar.js', global: 'ui.hangar', required: false, lazy: true },
+    { file: 'ui/receipt.js', global: 'ui.receipt', required: false, lazy: true },
   ];
 
   var OVERLAY_ANCHOR_SELECTORS = [
@@ -159,6 +170,17 @@
     testMode: false,
     hashTest: false,
     testApi: null,
+    /* 0.16 职业委托 */
+    commissionContent: null,
+    itemsContent: null,
+    chapterContent: null,
+    contentRequested: false,
+    contentPromise: null,
+    commissionRun: null,
+    commissionEvents: [],
+    commissionSeq: 0,
+    commissionLastResult: null,
+    commissionActivated: false,
   };
 
   /* ---------------------------------------------------------------- 基础工具 */
@@ -539,6 +561,13 @@
 
   var LAZY_MODULES = {
     backup: { file: 'backup.js', global: 'backup' },
+    commission: { file: 'commission-core.js', global: 'commission' },
+    combatConfig: { file: 'star-combat-config.js', global: 'combatConfig' },
+    rental: { file: 'rental.js', global: 'rental' },
+    alternatives: { file: 'alternatives.js', global: 'alternatives' },
+    town: { file: 'ui/town.js', global: 'ui.town' },
+    hangar: { file: 'ui/hangar.js', global: 'ui.hangar' },
+    receipt: { file: 'ui/receipt.js', global: 'ui.receipt' },
   };
 
   function loadDependency(dep) {
@@ -736,6 +765,8 @@
       if (result.ok && mod) {
         internal.loadedScripts[def.file] = { file: def.file, ok: true, required: false, detail: 'lazy-loaded' };
         if (def.global === 'backup') api.backup = mod;
+        else if (def.global === 'commission') api.commission = mod;
+        else if (def.global.indexOf('ui.') === 0) syncUiRefs();
         return mod;
       }
       internal.loadedScripts[def.file] = { file: def.file, ok: false, required: false, detail: 'deferred-unavailable' };
@@ -751,6 +782,9 @@
     try {
       var pending = ensureLazyModule('backup');
       if (pending && typeof pending.catch === 'function') pending.catch(function () {});
+      /* 0.16：玩家已进入生涯后，预取告示板内容（失败静默）。 */
+      var contentWarm = loadCareerContent();
+      if (contentWarm && typeof contentWarm.catch === 'function') contentWarm.catch(function () {});
     } catch (err) {
       warnOnce('lazy-warm', err);
     }
@@ -815,6 +849,245 @@
         }
       });
     });
+  }
+
+  /* ---------------------------------------------------------------- 0.16 职业委托内容/ticket */
+
+  /** 可选内容：不存在/坏档都不影响经典与 0.15 线索（fail-open）。 */
+  function loadCareerContent() {
+    if (internal.contentRequested) return internal.contentPromise || Promise.resolve();
+    internal.contentRequested = true;
+    function one(name, key, pick) {
+      return fetchJson(contentUrlSafe(name))
+        .then(function (result) {
+          if (result.ok && result.data) {
+            var value = pick(result.data);
+            if (value) internal[key] = result.data;
+          }
+        })
+        .catch(function () {});
+    }
+    var all = Promise.all([
+      one('commissions.json', 'commissionContent', function (data) {
+        return Array.isArray(data.commissions) ? data.commissions : null;
+      }),
+      one('items.json', 'itemsContent', function (data) {
+        return Array.isArray(data.ships) || Array.isArray(data.modules) ? data : null;
+      }),
+      one('chapter-01.json', 'chapterContent', function (data) {
+        return data && typeof data === 'object' ? data : null;
+      }),
+    ]).then(function () {});
+    internal.contentPromise = all;
+    return all;
+  }
+
+  function commissionModule() {
+    return readGlobal('commission') || null;
+  }
+
+  function readStorage(storageName) {
+    try {
+      var storage = WINDOW[storageName];
+      return storage || null;
+    } catch (err) {
+      return null;
+    }
+  }
+
+  function readStoredTicket() {
+    var storage = readStorage('sessionStorage');
+    if (!storage) return null;
+    try {
+      var raw = storage.getItem(TICKET_KEY);
+      if (!raw) return null;
+      var parsed = JSON.parse(raw);
+      return isObject(parsed) ? parsed : null;
+    } catch (err) {
+      return null;
+    }
+  }
+
+  function clearStoredTicket() {
+    var storage = readStorage('sessionStorage');
+    if (!storage) return;
+    try {
+      storage.removeItem(TICKET_KEY);
+    } catch (err) {
+      /* ignore */
+    }
+  }
+
+  function readTicketParam() {
+    try {
+      var search = (WINDOW.location && WINDOW.location.search) || '';
+      if (!search) return '';
+      if (search.charAt(0) === '?') search = search.slice(1);
+      var pairs = search.split('&');
+      for (var i = 0; i < pairs.length; i += 1) {
+        var pair = pairs[i];
+        if (!pair) continue;
+        var eq = pair.indexOf('=');
+        var key = eq < 0 ? pair : pair.slice(0, eq);
+        var value = eq < 0 ? '' : pair.slice(eq + 1);
+        try {
+          key = decodeURIComponent(key);
+          value = decodeURIComponent(value);
+        } catch (err) {
+          /* keep raw */
+        }
+        if (key === TICKET_PARAM && value) return value;
+      }
+    } catch (err) {
+      return '';
+    }
+    return '';
+  }
+
+  /** 根据 URL ticket + DB run 激活职业 mode；失败静默回到经典。 */
+  function activateCommissionRun() {
+    if (internal.commissionActivated) return Promise.resolve();
+    internal.commissionActivated = true;
+    var ticketId = readTicketParam();
+    if (!ticketId) return Promise.resolve();
+    if (!internal.dbUsable) {
+      addReason('commission-db-unavailable');
+      return Promise.resolve();
+    }
+    /* commission-core 按需装载；内容目录用于 validate 时读取委托与 startParams。 */
+    return loadCareerContent()
+      .then(function () {
+        return ensureLazyModule('commission');
+      })
+      .then(function () {
+        var mod = commissionModule();
+        if (!mod || typeof mod.validateTicket !== 'function') {
+          addReason('commission-module-missing');
+          warnOnce('commission-module', 'commission-core.js unavailable; classic fallback');
+          return null;
+        }
+        var stored = readStoredTicket();
+        return Promise.resolve(mod.validateTicket({ ticketId: ticketId, ticket: stored, gameId: api.gameId })).then(function (result) {
+          if (!result || !result.ok || !result.commission || !result.run) {
+            addReason('commission-ticket-rejected:' + ((result && result.reason) || 'unknown'));
+            return null;
+          }
+          internal.commissionRun = {
+            ticketId: ticketId,
+            careerId: result.run.careerId,
+            commissionId: result.commission.commissionId,
+            gameId: result.commission.gameId,
+            startParams: isObject(result.commission.startParams) ? clone(result.commission.startParams) : {},
+            commission: clone(result.commission),
+            status: 'active',
+          };
+          internal.sourceMode = 'commission';
+          api.commissionRun = clone(internal.commissionRun);
+          try {
+            if (typeof mod.markActive === 'function') mod.markActive(ticketId);
+          } catch (err) {
+            warnOnce('commission-active', err);
+          }
+          /* 星海职业战斗需要机体配置模块（缺失时游戏回退默认旧翼）。 */
+          if (result.commission.gameId === 'star-raid') {
+            return ensureLazyModule('combatConfig').then(function () {
+              return true;
+            });
+          }
+          return true;
+        });
+      })
+      .catch(function (err) {
+        addReason('commission-activate-error');
+        warnOnce('commission-activate', err);
+      });
+  }
+
+  /** 职业 run 的观察事件：不进发现缓冲、不渲染微线索。 */
+  function observeCommission(kind, payload) {
+    var mod = commissionModule();
+    if (!mod || typeof mod.recordEvent !== 'function' || !internal.commissionRun) return false;
+    var clean = sanitizeFlat(payload, { maxBytes: PAYLOAD_BYTE_LIMIT, maxKeys: PAYLOAD_MAX_KEYS, filterReserved: true });
+    if (!clean.ok) return false;
+    internal.commissionSeq += 1;
+    var event = { kind: kind, payload: clean.value, seq: internal.commissionSeq, sourceMode: 'commission', at: nowIso() };
+    var accepted = false;
+    try {
+      accepted = mod.recordEvent(internal.commissionRun.ticketId, event);
+    } catch (err) {
+      warnOnce('commission-observe', err);
+      return false;
+    }
+    return accepted !== false;
+  }
+
+  function commissionFailure(reason, extra) {
+    var out = { ok: false, reason: reason || 'commission-failed' };
+    if (isObject(extra)) {
+      Object.keys(extra).forEach(function (key) {
+        out[key] = extra[key];
+      });
+    }
+    internal.commissionLastResult = clone(out);
+    return out;
+  }
+
+  /** 职业结算：目标判定 → settleAndClaim → 收据；幂等由 DB 保证。 */
+  function settleCommissionRun(modeName, outcome, stats) {
+    var mod = commissionModule();
+    if (!mod || typeof mod.settle !== 'function') return Promise.resolve(commissionFailure('commission-module-missing'));
+    var run = internal.commissionRun;
+    if (!run) return Promise.resolve(null);
+    internal.sourceMode = 'commission';
+    return Promise.resolve(mod.settle({
+      ticketId: run.ticketId,
+      outcome: outcome,
+      stats: stats || {},
+    }))
+      .then(function (result) {
+        if (!result || typeof result !== 'object') {
+          return commissionFailure('commission-settle-empty');
+        }
+        var normalized = result;
+        internal.commissionLastResult = clone(normalized);
+        internal.lastFinish = {
+          input: { mode: modeName, outcome: outcome, stats: stats || {} },
+          result: normalized,
+          reason: normalized.ok ? 'commission' : normalized.reason || 'commission-failed',
+          at: nowIso(),
+          runId: normalized.runId || (normalized.receipt && normalized.receipt.receiptId) || run.ticketId,
+        };
+        /* 结算（成功或可归因失败）都消费 ticket；后续同页再结算回到经典发现。 */
+        internal.commissionRun = null;
+        internal.commissionEvents = [];
+        internal.commissionSeq = 0;
+        api.commissionRun = null;
+        clearStoredTicket();
+        internal.finished = true;
+        internal.finishedResult = normalized;
+        renderCommissionReceipt(normalized);
+        return normalized;
+      })
+      .catch(function (err) {
+        warnOnce('commission-settle', err);
+        return commissionFailure('commission-settle-error');
+      });
+  }
+
+  function renderCommissionReceipt(result) {
+    var receiptUi = readUi('receipt');
+    if (!receiptUi || typeof receiptUi.show !== 'function') return;
+    try {
+      receiptUi.show({
+        api: api,
+        result: clone(result),
+        careerId: internal.commissionRun ? internal.commissionRun.careerId : null,
+        announce: announceToUser,
+        reducedMotion: reducedMotionPreferred(),
+      });
+    } catch (err) {
+      warnOnce('commission-receipt-ui', err);
+    }
   }
 
   function pickMethod(target, names) {
@@ -1465,6 +1738,8 @@
       /* 仅 #test 探针：完全静默（不缓冲、不写库、不发奖励）。 */
       if (isSilentTestOnly()) return false;
       if (typeof kind !== 'string' || !kind || kind.length > 80) return false;
+      /* 0.16 职业委托：只进本 run 的委托缓冲，不进发现判定、不渲染微线索。 */
+      if (internal.commissionRun) return observeCommission(kind, payload);
       var hint = normalizeSourceMode(typeof modeHint === 'string' ? modeHint : isObject(modeHint) ? modeHint.mode || modeHint.sourceMode : null);
       if (hint) internal.sourceMode = hint;
       /* mow（星海割草）与未知模式不进入任何发现判定。 */
@@ -1696,6 +1971,12 @@
     if (!mode) {
       internal.lastFinish.reason = 'invalid-mode';
       return Promise.resolve(null);
+    }
+
+    /* 0.16 职业委托：只结算委托（目标/收据/幂等），不进入发现与线索。 */
+    if (internal.commissionRun) {
+      var commissionStats = cleanStats.ok ? cleanStats.value : {};
+      return settleCommissionRun(mode, outcome, commissionStats);
     }
 
     /* 防抖：同一结算出口重复调用（<800ms 且没有新的观察事件）只计 1 局。 */
@@ -2063,6 +2344,14 @@
       backup: readGlobal('backup') || null,
       reducedMotion: reducedMotionPreferred(),
       api: api,
+      commission: commissionModule() || null,
+      commissionRun: internal.commissionRun ? clone(internal.commissionRun) : null,
+      commissions: internal.commissionContent ? clone(internal.commissionContent) : null,
+      items: internal.itemsContent ? clone(internal.itemsContent) : null,
+      chapter: internal.chapterContent ? clone(internal.chapterContent) : null,
+      openTown: openTown,
+      openHangar: openHangar,
+      openReceipt: openReceipt,
     };
     if (isObject(extra)) {
       Object.keys(extra).forEach(function (key) {
@@ -2124,6 +2413,105 @@
         return { ok: true };
       },
       uiUnavailable('ui-unavailable')
+    );
+  }
+
+  /** 0.16：港口告示板/飞船商店/钱包收据入口；UI 缺失时结构化失败，不做替代渲染。 */
+  function openCareerUi(name, extra) {
+    if (isSilentTestOnly()) return uiUnavailable('test-silent');
+    warmLazyModules();
+    var uiModule = readUi(name);
+    if (!uiModule) {
+      return ensureLazyModule(name).then(function (loaded) {
+        if (!loaded) return uiUnavailable('ui-unavailable');
+        return openCareerUi(name, extra);
+      });
+    }
+    return safe(
+      'open-career-ui:' + name,
+      function () {
+        var target = typeof uiModule.open === 'function' ? uiModule.open : typeof uiModule.show === 'function' ? uiModule.show : null;
+        if (!target) return uiUnavailable('ui-unavailable');
+        var context = uiContext({
+          commission: commissionModule() || null,
+          commissionRun: internal.commissionRun ? clone(internal.commissionRun) : null,
+          commissions: internal.commissionContent ? clone(internal.commissionContent) : null,
+          items: internal.itemsContent ? clone(internal.itemsContent) : null,
+          chapter: internal.chapterContent ? clone(internal.chapterContent) : null,
+          openTown: openTown,
+          openHangar: openHangar,
+          openReceipt: openReceipt,
+          openSettings: openSettings,
+        });
+        if (isObject(extra)) {
+          Object.keys(extra).forEach(function (key) {
+            context[key] = extra[key];
+          });
+        }
+        try {
+          var returned = target.call(uiModule, context);
+          if (returned && typeof returned.then === 'function') {
+            Promise.resolve(returned).catch(function (err) {
+              warnOnce('open-career-ui', err);
+            });
+          }
+        } catch (err) {
+          warnOnce('open-career-ui', err);
+          return uiUnavailable('ui-error');
+        }
+        return { ok: true };
+      },
+      uiUnavailable('ui-unavailable')
+    );
+  }
+
+  function openTown() {
+    return openCareerUi('town');
+  }
+
+  function openHangar() {
+    return openCareerUi('hangar');
+  }
+
+  function openReceipt() {
+    return openCareerUi('receipt');
+  }
+
+  /** 0.16：职业 run 的只读装备/钱包快照，供星海生涯战斗读取（不写库、不改旧机库）。 */
+  function getCommissionLoadout() {
+    return safeAsync(
+      'commission-loadout',
+      function () {
+        var dbModule = readGlobal('db');
+        var run = internal.commissionRun;
+        if (!dbModule || !run) return Promise.resolve({ ok: false, reason: 'no-commission-run' });
+        var tasks = [];
+        tasks.push(
+          typeof dbModule.getEquipment === 'function'
+            ? Promise.resolve(dbModule.getEquipment(run.careerId)).catch(function () {
+                return { ok: false };
+              })
+            : Promise.resolve({ ok: false, reason: 'no-get-equipment' })
+        );
+        tasks.push(
+          typeof dbModule.readWallet === 'function'
+            ? Promise.resolve(dbModule.readWallet(run.careerId)).catch(function () {
+                return { ok: false };
+              })
+            : Promise.resolve({ ok: false, reason: 'no-read-wallet' })
+        );
+        return Promise.all(tasks).then(function (list) {
+          var equipment = list[0] && list[0].ok && isObject(list[0].equipment) ? list[0].equipment : {};
+          var wallet = list[1] && list[1].ok ? list[1] : { ok: false };
+          return {
+            ok: true,
+            careerId: run.careerId,
+            equipment: clone(equipment),
+            wallet: { credits: wallet.credits || 0, items: clone(wallet.items || {}), equipment: clone(wallet.equipment || {}) },
+          };
+        });
+      },
+      Promise.resolve({ ok: false, reason: 'exception' })
     );
   }
 
@@ -2225,7 +2613,15 @@
             clueSurface: !!readUi('clueSurface'),
             mailbox: !!readUi('mailbox'),
             settings: !!readUi('settings'),
+            town: !!readUi('town'),
+            hangar: !!readUi('hangar'),
+            receipt: !!readUi('receipt'),
           },
+          commissionRun: internal.commissionRun ? clone(internal.commissionRun) : null,
+          commissionContent: internal.commissionContent ? internal.commissionContent.commissions.length : 0,
+          commissionEvents: internal.commissionSeq,
+          commissionLastResult: internal.commissionLastResult ? clone(internal.commissionLastResult) : null,
+          commissionModuleLoaded: !!commissionModule(),
           backupLoaded: !!readGlobal('backup'),
           dbLoaded: internal.dbLoaded,
           dbUsable: internal.dbUsable,
@@ -2393,6 +2789,25 @@
       setSourceMode: setSourceMode,
       originIntro: originIntro,
       renderDebug: renderDebug,
+      /* 0.16 职业委托测试钩子（仅 ?careerTest=1）。 */
+      commissionRun: function () {
+        return internal.commissionRun ? clone(internal.commissionRun) : null;
+      },
+      commissionState: function () {
+        var mod = commissionModule();
+        if (!mod || typeof mod.getState !== 'function') return null;
+        try {
+          return clone(mod.getState());
+        } catch (err) {
+          return null;
+        }
+      },
+      settleNow: function (outcome) {
+        return finish({ mode: 'classic', outcome: outcome || 'lost', stats: {} });
+      },
+      openTown: openTown,
+      openHangar: openHangar,
+      openReceipt: openReceipt,
     };
     try {
       WINDOW.__arcadeCareerTest = internal.testApi;
@@ -2427,9 +2842,10 @@
     internal.careerDir = resolveCareerDir();
     return loadDependencies()
       .then(function () {
-        /* 依赖装载完成后补齐 UI / backup 引用（模块在执行时才挂到 window 上）。 */
+        /* 依赖装载完成后补齐 UI / backup / commission 引用（模块在执行时才挂到 window 上）。 */
         syncUiRefs();
         api.backup = readGlobal('backup') || null;
+        api.commission = commissionModule();
         internal.base = resolveBase();
         return loadCareerStyles();
       })
@@ -2451,6 +2867,9 @@
         if (registryReady && gameId && !internal.registryInstance.getGame(gameId)) {
           addReason('game-not-registered');
         }
+        return activateCommissionRun();
+      })
+      .then(function () {
         finalizeReady();
       })
       .catch(function (err) {
@@ -2478,6 +2897,16 @@
     api.setHintsEnabled = setHintsEnabled;
     api.saveState = saveState;
     api.originIntro = originIntro;
+    /* 0.16 职业委托（向后兼容扩展）：无 ticket 时 commissionRun=null，行为与 0.15 相同。 */
+    api.commission = null;
+    api.commissionRun = null;
+    api.isCommissionRun = function () {
+      return !!internal.commissionRun;
+    };
+    api.openTown = openTown;
+    api.openHangar = openHangar;
+    api.openReceipt = openReceipt;
+    api.getCommissionLoadout = getCommissionLoadout;
     api.ui = previousUi || (isObject(api.ui) ? api.ui : {});
     /* backup.js（D15-14）异步装载：模块会自行挂到 ArcadeCareer.backup；缺失时为 null。 */
     api.backup = readGlobal('backup') || null;

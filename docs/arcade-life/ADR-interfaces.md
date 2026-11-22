@@ -534,3 +534,138 @@ window.ArcadeCareerUI = {
 - 文案：全部戏内语言；禁止“生涯模式 / 解锁 / 奖励 / 签到 / 概率”等按钮式或营销式措辞；不得在 UI 中解释系统规则。
 - 样式：所有 career UI 样式集中在 `ui/clue-surface.css`（bridge 装载一次），禁止 `url(/...)` 与外部字体。
 - 0.15 不创建钱包/`careerId`；`followLetter()` 只推进到 LOCAL 并展示折光港地址/告示快照。
+
+## 18. 0.16 First Flight 增补契约（冻结）
+
+本节只增补 0.16 需要的运行时接口；0.15 已冻结的部分不变。原则：**职业委托是显式玩家动作**，只在玩家从告示板接单后产生；经典/挑战/禅/割草/旧机库仍零经济、零线索事件变化。
+
+### 18.1 运行时新增文件
+
+| 文件 | 职责 | 装载 |
+|---|---|---|
+| `career/commission-core.js` | 委托目录、ticket、真实事件摘要、目标判定、奖励计划、结算/恢复（纯 UMD，Node 可 require） | 可选依赖 |
+| `career/star-combat-config.js` | 生涯机体参数（经典读旧 hangar；生涯读 equipment） | 可选依赖 |
+| `career/rental.js` | 免费租机、限制与失败不扣费 | 可选依赖 |
+| `career/alternatives.js` | 委托代办/非战斗路径 | 可选依赖 |
+| `career/ui/town.js` | 港口告示板/最小城市面板 | 可选 UI |
+| `career/ui/hangar.js` | 飞船商店、拥有/切换、租用入口 | 可选 UI |
+| `career/ui/receipt.js` | 钱包与交易收据 | 可选 UI |
+| `career/content/commissions.json` | 0.16 的 4 条 T1/T2 委托（0.17 扩到 96） | 内容 |
+| `career/content/items.json` | 飞船/模块/材料价格与参数 | 内容 |
+| `career/content/chapter-01.json` | C0/C1 戏内信件与路径（16 起源差异） | 内容 |
+
+所有新增模块必须：普通 `<script>`（非 module）、UMD（浏览器挂 `window.ArcadeCareer*`，Node `module.exports`）、无网络、无 localStorage、无 DOM 依赖（UI 模块除外）、`contentVersion` 与运行时版本一致。
+
+### 18.2 委托目录 schema（`content/commissions.json`）
+
+```json
+{
+  "contentVersion": "0.16.0",
+  "commissions": [{
+    "commissionId": "<gameId>.<T1|T2|...>",
+    "gameId": "<16 款之一>",
+    "professionId": "<registry 职业 ID>",
+    "title": "戏内短标题（≤24 字）",
+    "summary": "戏内一句话目标（≤60 字，无系统术语）",
+    "issuer": "戏内发布者",
+    "objective": { "kind": "<registry watch kind>", "atLeast": 4, "context": { "level": 1 } },
+    "objectiveBonus": 0,
+    "startParams": { "startLevel": 1, "themeId": "storm" },
+    "reward": { "credits": 70, "items": { "alloy": 1 }, "evidence": ["E-C1-site"], "flags": ["C1.work_done"] },
+    "repeatSalaryCredits": 25,
+    "unlock": { "all": [{ "kind": "chapterFlag", "value": "C0.arrived" }] },
+    "risk": "low|medium|high",
+    "durationHint": "戏内时长提示"
+  }]
+}
+```
+
+判定规则（复用 `career-core.validateCommission` / `rewardPlan`，`commission-core` 只负责编排与事件采集）：
+- 事件摘要 `career-core.summarizeEvents(events)`：`kind → count`，payload 标量汇总为 `facets`；
+- `objective.atLeast` 是**同一 run 内该 kind 的事件次数**；层塔用 `tower.floor_stable` 次数（每稳定一层一次，倒塌不产生），星海用 `boss.defeated` 次数；
+- `objective.context` 对事件 payload 字段做逐字段相等匹配（如 `{level:3,theme:'storm'}`），也可用 `stats` 字段回退；
+- `mode` 必须为 `'commission'`；`gameId` 必须与委托一致；`mow/zen/challenge` 事件不计入（bridge 只采经典事件）；
+- 首次达标发 `reward`；同一委托重复达标只发 `repeatSalaryCredits`；奖励上限由 `career-core.RULESET` 兜底；
+- `outcome` 只影响收据文本，不替代事件判定；判定失败也返回可归因文本（不伪造成功）。
+
+### 18.3 ticket 与导航
+
+- 接单：`commission.start({commissionId})` → DB `createRun`（`mode:'commission'`，`status:'issued'`）→ 生成 ticket：
+```js
+{ ticketId, nonce, careerId, commissionId, gameId, startParams, issuedAt, rulesetVersion, contentVersion, seed, attempt }
+```
+- ticket 存 `sessionStorage['studiokit:arcade:career:ticket.v1']`（仅当前标签页；**不是** localStorage）；同时 run 行含 ticket 的 `ticketId/nonce`。
+- 导航：`../games/<gameId>.html?career=<ticketId>`（相对路径；CF 无后缀同样生效）。启动前先 `ensureCareer`（首次接单创建生涯）。
+- 游戏页 bridge 启动时：URL `career` 参数与 sessionStorage ticket 的 `ticketId/gameId` 匹配且 DB run 存在 → 进入 commission 模式；否则忽略并保持经典（fail-open，不产生任何经济记录）。
+- 结算：`commission.settle({ticketId, events, outcome, stats})` → 目标判定 → `db.settleAndClaim` → 收据；成功/失败都清除 sessionStorage ticket；同一 run 重复结算返回原收据（幂等）。
+- 恢复：刷新/暂停后同 ticket 可重开；run 状态 `issued → active → settled/abandoned`；`pagehide` 只做尽力更新，不阻塞；结算幂等保证不重复发钱。`abandon` 不发奖、不倒扣。
+- 旧 RunSave（`studiokit:arcade:runs:v1`）不被职业 run 读写；星海/层塔职业 run 的 `serialize()` 必须返回 null。
+
+### 18.4 bridge 增补 API（0.16）
+
+```js
+ArcadeCareer.commissionRun // null | { ticketId, careerId, commissionId, gameId, startParams, commission, status }
+ArcadeCareer.commission    // commission-core 模块（listAvailable/start/settle/abandon/recordEvent/…）
+ArcadeCareer.isCommissionRun() // boolean
+ArcadeCareer.openTown()    // 打开告示板；UI 缺失返回 {ok:false, reason:'ui-unavailable'}
+ArcadeCareer.openHangar()  // 飞船商店
+ArcadeCareer.openReceipt() // 钱包/收据
+```
+
+- commission 模式下 `observe(kind,payload)` 只进入本 run 的 `commissionEvents`（不进入发现缓冲、不渲染微线索、不写 discovery）；返回是否被接受。
+- commission 模式下 `finish({mode,outcome,stats})` 只结算委托，返回 `{ok, receipt|failure, duplicate?}`；不写 discovery、不发线索；结算后同一页再结算走经典发现逻辑。
+- 无 ticket / ticket 不匹配 / commission-core 缺失 / DB 不可用：完全回到 0.15 行为，`commissionRun=null`。
+
+### 18.5 DB 增补 API（§7.3 的可加项）
+
+```js
+getEquipment(careerId) -> Promise<{ok, equipment?} | {ok:false, reason}>
+writeEquipment({careerId, patch, now}) -> Promise<{ok, equipment?} | {ok:false, reason}>
+```
+
+- 单事务读-合并-写；`patch` 只允许扁平 token 键（`isToken`），值为 boolean/string/非负有限数/普通对象；不可写 `careerId/updatedAt`；不存在的生涯返回 `no-wallet`。
+- equipment 扁平键约定：`ship:<shipId>:owned = true`、`equippedShip = '<shipId>'`、`module:<moduleId>:level = <n>`；旧 hangar（`studiokit:arcade:meta:v1` 的 `formula:1`）永不被职业读写。
+- 购买飞船走 `purchase({cost, grants:{equipment:{'ship:<id>:owned': true}}})`；切换/租用走 `writeEquipment`（零成本，不入账本，不发奖）。
+
+### 18.6 items.json schema
+
+```json
+{ "contentVersion": "0.16.0",
+  "ships": [{ "shipId": "old-wing", "name": "旧翼", "price": 260, "rental": true,
+    "stats": { "lives": 3, "energy": 100, "firepower": 1, "speed": 1, "magnet": 1 },
+    "description": "戏内一句话" }],
+  "modules": [{ "moduleId": "hull", "name": "装甲", "levels": [{ "level": 1, "cost": 80, "stats": {} }] }],
+  "materials": [{ "itemId": "alloy", "name": "合金" }] }
+```
+价格不得由游戏页提交；`purchase` 的 `cost` 只来自内容 + 玩家动作。旧机库 0.14 的 `formula:1` 与星币公式不动。
+
+### 18.7 UI 契约
+
+- 所有面板：`render(ctx)` / `open(ctx)` / `close()`；`ctx = { api, commission, careerId, profile, wallet, commissions, items, gameId, ui, announce, openTown, openHangar, openReceipt, openSettings, reducedMotion }`。
+- 入口：只在玩家已把线索推进到 `LOCAL`（信件给出地址）后，由信件面板提供“按地址投递/去港口”动作打开 town；中心页/游戏页首屏**不得**出现生涯 CTA 或车辆/商店按钮。
+- 告示板列出可接委托（标题/一句话目标/戏内报酬/接单按钮）；接单后跳转对应游戏页；可关闭、Esc、焦点返回、320–430 不溢出、按钮 ≥44px。
+- 机库：免费租用机置顶；购买/切换需明确点击；余额不足/材料不足给出可归因文本；不自动扣款。
+- 收据：每次余额/材料变动必须有唯一 `txId`；同 run 重复打开显示原收据；失败显示原因，不伪造成功。
+- 所有 UI 文案为戏内语言；禁止“生涯模式/职业系统/奖励/签到/概率”等按钮式或营销式措辞。
+
+### 18.8 游戏页生涯模式契约（0.16 仅层塔、星海）
+
+- 层塔：接单后进入经典玩法；目标按真实 `tower.floor_stable`（`aggregate:'max'`,`field:'floor'`）判定；倒塌不产生稳定层；不写挑战记录；`serialize()` 在职业 run 返回 null。
+- 星海：`startParams.startLevel/themeId` 决定起始关与主题；职业 run 内 `classicLike` 为真（掉落/能量按经典公式，但星币不结算、旧机库不读写、挑战/割草/HUD 状态不污染）；Boss/关卡主题用真实游戏状态事件；`settleCredits()`、`recordPlay()`、`serialize()` 在职业 run 内跳过；结算走独立职业收据。
+- 两页都必须在首屏可理解目标（戏内一句话 + 进度），不强制跳转、不打断局内；无 ticket 时行为与 0.15 完全一致。
+
+### 18.9 前置修复（0.16 必做，B00-C 登记）
+
+- 星海 `A.GameMeta.set` 路径改为读-合并-写（禁止整对象覆盖旧机库）；HUD/机库内部仍用同一 `formula:1` 读取。
+- 星海 `mode === 'classic'` 硬编码改为 `classicLike`（`classic || careerCommission`）；`mow/zen/challenge` 仍排除。
+- 层塔 `serialize()` 补 `mode === 'classic'` 门禁（职业 run 返回 null）。
+- 任何前置修复都不得改变 0.14 经典/挑战/割草的数值或记录。
+
+### 18.10 测试接口增补
+
+`?careerTest=1` 额外暴露：`commissionRun()`、`commissionState()`、`events()`（commission 缓冲）、`settleNow(outcome)`、`townUI()`、`hangarUI()`、`receiptUI()`；仅测试 URL 存在，生产 URL 不可命中。
+
+### 18.11 明确不做（0.16）
+
+- 不新增顶层游戏模式入口；不改中心页卡片结构；不做每日/签到/概率/推送。
+- 不做真实时间等待、不做云存档/账号；不做 96 委托与六章结局（0.17/0.18）。

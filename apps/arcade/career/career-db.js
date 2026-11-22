@@ -1123,6 +1123,106 @@
     }).then((res) => (res.ok ? res.result : emptyWallet(res.reason, res.error)));
   }
 
+  /** ADR §18.5：读取生涯装备（扁平键；旧挂机库不在本表）。 */
+  function getEquipment(careerId) {
+    const core = coreApi();
+    if (!core) return Promise.resolve(failure('core-unavailable'));
+    if (!core.isValidCareerId(careerId)) return Promise.resolve(failure('bad-career-id'));
+    return txRun(['equipment', 'balances'], 'readonly', (ctx) => {
+      ctx.bind(ctx.store('balances').get(careerId), (balance) => {
+        if (!balance) {
+          ctx.fail('no-wallet');
+          return;
+        }
+        ctx.bind(ctx.store('equipment').get(careerId), (row) => {
+          const equipment = isObject(row) ? jsonClone(row) : { careerId };
+          delete equipment.careerId;
+          delete equipment.updatedAt;
+          ctx.done({ ok: true, careerId, equipment });
+        });
+      });
+    }).then((res) => (res.ok ? res.result : failure(res.reason, res.error)));
+  }
+
+  /**
+   * ADR §18.5：单事务读-合并-写扁平装备键（飞船拥有/切换、模块等级）。
+   * patch 只接受 token 键；不可写 careerId/updatedAt；零成本，不入账本。
+   */
+  function writeEquipment(input) {
+    const core = coreApi();
+    if (!core) return Promise.resolve(failure('core-unavailable'));
+    const options = isObject(input) ? input : {};
+    const careerId = options.careerId;
+    const patch = isObject(options.patch) ? options.patch : null;
+    if (!core.isValidCareerId(careerId)) return Promise.resolve(failure('bad-career-id'));
+    if (!patch) return Promise.resolve(failure('bad-equipment'));
+    const keys = Object.keys(patch);
+    if (keys.length > 32) return Promise.resolve(failure('bad-equipment'));
+    const clean = {};
+    for (let i = 0; i < keys.length; i += 1) {
+      const key = keys[i];
+      if (!core.isToken(key) || key === 'careerId' || key === 'updatedAt') return Promise.resolve(failure('bad-equipment'));
+      const value = patch[key];
+      if (!(typeof value === 'boolean' || typeof value === 'string' || (isFiniteNumber(value) && value >= 0) || isObject(value))) {
+        return Promise.resolve(failure('bad-equipment'));
+      }
+      clean[key] = value === null ? null : typeof value === 'object' ? jsonClone(value) : value;
+    }
+    const at = typeof options.now === 'string' && options.now ? options.now : nowIso();
+    return txRun(['equipment', 'balances'], 'readwrite', (ctx) => {
+      ctx.bind(ctx.store('balances').get(careerId), (balance) => {
+        if (!balance) {
+          ctx.fail('no-wallet');
+          return;
+        }
+        ctx.bind(ctx.store('equipment').get(careerId), (existing) => {
+          const row = existing && isObject(existing) ? jsonClone(existing) : { careerId };
+          row.careerId = careerId;
+          keys.forEach((key) => {
+            row[key] = jsonClone(clean[key]);
+          });
+          row.updatedAt = at;
+          ctx.bind(ctx.store('equipment').put(row), () => {
+            const equipment = jsonClone(row);
+            delete equipment.careerId;
+            delete equipment.updatedAt;
+            ctx.done({ ok: true, careerId, equipment });
+          });
+        });
+      });
+    }).then((res) => (res.ok ? res.result : failure(res.reason, res.error)));
+  }
+
+  /** ADR §18.5：最近流水（钱包/收据 UI 只读展示；按 careerId 过滤，最多 limit 条）。 */
+  function readLedger(careerId, limit) {
+    const core = coreApi();
+    if (!core) return Promise.resolve({ ok: false, reason: 'core-unavailable', rows: [] });
+    if (!core.isValidCareerId(careerId)) return Promise.resolve({ ok: false, reason: 'bad-career-id', rows: [] });
+    const max = core.clampInt(limit, 1, 100, 30);
+    return txRun(['ledgers'], 'readonly', (ctx) => {
+      ctx.bind(ctx.store('ledgers').getAll(), (rows) => {
+        const list = (Array.isArray(rows) ? rows : [])
+          .filter((row) => row && row.careerId === careerId)
+          .sort((a, b) => String(b.at || b.clearedAt || '').localeCompare(String(a.at || a.clearedAt || '')))
+          .slice(0, max)
+          .map((row) => {
+            const out = {
+              txId: row.txId,
+              kind: row.kind,
+              runId: row.runId || null,
+              credits: Number(row.credits) || 0,
+              items: isObject(row.items) ? row.items : {},
+              cost: Number(row.cost) || 0,
+              at: row.at || row.clearedAt || null,
+            };
+            if (isObject(row.receipt)) out.receipt = row.receipt;
+            return out;
+          });
+        ctx.done({ ok: true, careerId, rows: list });
+      });
+    }).then((res) => (res.ok ? res.result : { ok: false, reason: res.reason, error: res.error, rows: [] }));
+  }
+
   function readQuestState(careerId) {
     const core = coreApi();
     if (!core) return Promise.resolve({ ok: false, reason: 'core-unavailable', quests: [] });
@@ -1435,6 +1535,9 @@
     settleAndClaim,
     purchase,
     readWallet,
+    getEquipment,
+    writeEquipment,
+    readLedger,
     readQuestState,
     putQuests,
     resetCareer,
