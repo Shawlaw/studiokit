@@ -3878,7 +3878,7 @@
             addFloater(e.x + e.w / 2, e.y, '+' + gained, '#ffd23f');
             pickupPity += 1;
             if (mode === 'classic') {
-              if (career) career.observe('enemy.killed', { kind: e.kind, level, theme: run.theme && run.theme.id });
+              if (mode === 'classic' && career) career.observe('enemy.killed', { kind: e.kind, level, theme: run.theme && run.theme.id });
               bumpCombo();
               /* 击杀回能：避免能量枯竭后陷入无补给的死亡螺旋。 */
               addEnergy(0.6);

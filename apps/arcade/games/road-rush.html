@@ -385,7 +385,7 @@
           onBtn: showStart,
           result: '回看赛道',
         });
-        if (career) career.finish({ mode: 'classic', outcome: wonRun ? 'won' : 'lost', stats: { dist: finalDist, passedCars } });
+        if (career && mode === 'classic') career.finish({ mode: 'classic', outcome: wonRun ? 'won' : 'lost', stats: { dist: finalDist, passedCars } });
         pauseUi.sync();
         syncTouchPad();
       }
@@ -1479,7 +1479,7 @@
             passedCars += 1;
             const gap = Math.abs(laneCenterX(c.lanePos, uOf(0)) - player.x);
             if (gap < laneWidthAt(1) * 1.15) bumpCombo();
-            if (career) career.observe('overtake', { passedCars, combo });
+            if (career && mode === 'classic') career.observe('overtake', { passedCars, combo });
           }
           /* 碰撞（玩家段）：用连续 lanePos，变道中的车横跨两条车道。 */
           if (c.z < 0.07 && c.z > -0.07 && player.invul <= 0) {

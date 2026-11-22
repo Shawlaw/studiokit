@@ -778,7 +778,7 @@
           btn: '再来一局',
           onBtn: showStart,
         });
-        if (career) career.finish({ mode: 'classic', outcome: 'lost', stats: { meters: score } });
+        if (career && mode === 'classic') career.finish({ mode: 'classic', outcome: 'lost', stats: { meters: score } });
         pauseUi.sync(); syncJoyTools();
       }
 
@@ -1731,7 +1731,7 @@
           if (meters > score) {
             score = meters;
             syncHud();
-            if (career && score > careerMeters) {
+            if (career && mode === 'classic' && score > careerMeters) {
               careerMeters = score;
               career.observe('height.reached', { meters: score });
             }

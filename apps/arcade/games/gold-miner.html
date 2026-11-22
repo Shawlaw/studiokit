@@ -1022,7 +1022,7 @@
           btn: '再来一局',
           onBtn: showStart,
         });
-        if (career) career.finish({ mode: 'classic', outcome: 'lost', stats: { money: total, target } });
+        if (career && mode === 'classic') career.finish({ mode: 'classic', outcome: 'lost', stats: { money: total, target } });
         pauseUi.sync();
         syncCashout();
       }

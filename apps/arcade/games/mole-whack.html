@@ -251,7 +251,7 @@
           btn: '再来一局',
           onBtn: showStart,
         });
-        if (career) career.finish({ mode: 'classic', outcome: 'lost', stats: { score, combo, hearts } });
+        if (career && mode === 'classic') career.finish({ mode: 'classic', outcome: 'lost', stats: { score, combo, hearts } });
         pauseUi.sync();
       }
 
@@ -741,7 +741,7 @@
         }
         if (gained > 0) addFloater('+' + gained + (combo > 1 ? ' · ' + combo + '连' : ''), hx, hy - 18, mole.type === 'gold' ? '#ffd23f' : '#ffffff');
         syncHud();
-        if (career && gained > 0) career.observe('mole.hit', { index, gained, combo });
+        if (career && gained > 0 && mode === 'classic') career.observe('mole.hit', { index, gained, combo });
       }
 
       function updateChallenge(dt) {

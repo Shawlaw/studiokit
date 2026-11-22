@@ -321,7 +321,7 @@
           onBtn: showStart,
           result: '回看关卡',
         });
-        if (career) career.finish({ mode: 'classic', outcome: wonRun ? 'won' : 'lost', stats: { dist: finalDist, lives } });
+        if (career && mode === 'classic') career.finish({ mode: 'classic', outcome: wonRun ? 'won' : 'lost', stats: { dist: finalDist, lives } });
         pauseUi.sync();
         syncJoyTools();
       }
@@ -966,7 +966,7 @@
           size: [1.5, 3],
           colors: ['#9b7cff', '#ffffff'],
         });
-        if (career) career.observe('gravity.flip', { dist: Math.floor(dist), lives });
+        if (career && mode === 'classic') career.observe('gravity.flip', { dist: Math.floor(dist), lives });
       }
 
       function spawnObstacle() {

@@ -332,7 +332,7 @@
           };
         }
         ui.show(options);
-        if (career) career.finish({ mode: 'classic', outcome: stop ? 'quit' : win ? 'won' : 'lost', stats: { score, moves, bestTile: bestTile() } });
+        if (career && mode === 'classic') career.finish({ mode: 'classic', outcome: stop ? 'quit' : win ? 'won' : 'lost', stats: { score, moves, bestTile: bestTile() } });
         pauseUi.sync();
       }
 
@@ -873,7 +873,7 @@
                 }
                 A.Sfx.play('perfect');
               }
-              if (career) career.observe('tile.merged', { value: a.value, score, moves });
+              if (career && mode === 'classic') career.observe('tile.merged', { value: a.value, score, moves });
               merged.push(a);
               i++;
             } else {

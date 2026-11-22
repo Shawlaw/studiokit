@@ -285,7 +285,7 @@
           btn: '再来一局',
           onBtn: showStart,
         });
-        if (career) career.finish({ mode: 'classic', outcome: won ? 'won' : 'lost', stats: { level, moves, score } });
+        if (career && mode === 'classic') career.finish({ mode: 'classic', outcome: won ? 'won' : 'lost', stats: { level, moves, score } });
         pauseUi.sync();
       }
 
@@ -888,7 +888,7 @@
             a.matched = true;
             b.matched = true;
             score += 100 + level * 20;
-            if (career) career.observe('pair.match', { symbol: a.symbol, level, moves });
+            if (career && mode === 'classic') career.observe('pair.match', { symbol: a.symbol, level, moves });
             flippedIds = [];
             syncHud();
             A.Sfx.play('perfect');

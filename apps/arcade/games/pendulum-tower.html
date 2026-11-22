@@ -603,7 +603,7 @@
             onBtn: showStart,
             result: '回看塔身',
           });
-          if (career) career.finish({ mode: 'classic', outcome: 'lost', stats: { score, floors: floorsReached } });
+          if (career && mode === 'classic') career.finish({ mode: 'classic', outcome: 'lost', stats: { score, floors: floorsReached } });
           pauseUi.sync(); syncJoyTools();
         };
         revealThen(showResult);

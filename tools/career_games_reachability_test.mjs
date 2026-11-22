@@ -1278,6 +1278,89 @@ async function runModeIsolationChecks() {
       return '0 errors';
     });
   }
+
+  /* ---------- F-15-01 回归：挑战内真实输入不得写入 career 事件，也不得在退出后兑换经典线索 ---------- */
+  await check('memory-flip 挑战内真实配对不写入 career 事件（G15 F-15-01）', async () => {
+    const info = await openCareerGame('memory-flip', { reset: true });
+    assert(info.available === true, 'bridge 不可用：' + detail(info));
+    const ref = await cdp.evaluate('window.__arcadeTest.challengeStages()[0].id');
+    await cdp.evaluate(`window.__arcadeTest.startChallenge(${JSON.stringify(ref)})`);
+    await cdp.waitFor('window.__arcadeTest.challengeInfo().mode === "challenge"', { timeout: 10000 });
+    const pair = await cdp.evaluate(`(() => {
+      const list = window.__arcadeTest.info().cardList;
+      for (let i = 0; i < list.length; i += 1) {
+        for (let j = i + 1; j < list.length; j += 1) {
+          if (list[i].symbol === list[j].symbol && !list[i].matched && !list[j].matched) return [list[i].id, list[j].id];
+        }
+      }
+      return null;
+    })()`);
+    assert(pair && pair.length === 2, '未找到可配对牌：' + detail(pair));
+    await cdp.evaluate('window.__arcadeTest.skipPreviewNow()');
+    await sleep(150);
+    await cdp.evaluate(`window.__arcadeTest.revealById(${pair[0]})`);
+    await sleep(150);
+    await cdp.evaluate(`window.__arcadeTest.revealById(${pair[1]})`);
+    await sleep(400);
+    const counts = await cdp.evaluate(`(() => {
+      const t = window.__arcadeCareerTest;
+      return { info: t.info(), events: t.events(), envelopes: t.envelopes(), ch: window.__arcadeTest.challengeInfo() };
+    })()`);
+    assert(counts.ch.mode === 'challenge', '挑战局未处于 challenge 模式：' + detail(counts.ch));
+    assert(counts.info.eventCount === 0 && counts.events.length === 0 && counts.envelopes.length === 0,
+      '挑战内真实配对泄漏 career 事件：' + detail({ eventCount: counts.info.eventCount, events: counts.events, envelopes: counts.envelopes }));
+    return { mode: counts.ch.mode, eventCount: 0 };
+  });
+
+  await check('memory-flip 挑战退出后经典结算不得兑换线索（G15 F-15-01 端到端）', async () => {
+    const after = await cdp.evaluate(`(() => {
+      const t = window.__arcadeCareerTest;
+      return { state: t.state(), events: t.events() };
+    })()`);
+    assert(after.events.length === 0, '挑战退出前缓冲非空：' + detail(after.events));
+    await cdp.evaluate('window.__arcadeTest.exitChallenge()');
+    await sleep(300);
+    const result = await cdp.evaluate(`(async () => {
+      const r = await window.ArcadeCareer.finish({ mode: 'classic', outcome: 'lost', stats: {} });
+      return { result: r ? { clueId: r.clueId, reason: r.reason } : null, state: window.__arcadeCareerTest.state() };
+    })()`);
+    assert(result.result === null, '挑战缓冲被经典 finish 兑换成线索：' + detail(result.result));
+    assert(Object.keys(result.state.clues || {}).length === 0, '挑战后仍产生了线索：' + detail(result.state.clues));
+    return { clue: null, clues: 0 };
+  });
+
+  await check('merge-2048 挑战内真实 moveNow 不写入 career 事件（G15 F-15-01）', async () => {
+    const info = await openCareerGame('merge-2048', { reset: true });
+    assert(info.available === true, 'bridge 不可用：' + detail(info));
+    const ref = await cdp.evaluate('window.__arcadeTest.challengeStages()[0].id');
+    await cdp.evaluate(`window.__arcadeTest.startChallenge(${JSON.stringify(ref)})`);
+    await cdp.waitFor('window.__arcadeTest.challengeInfo().mode === "challenge"', { timeout: 10000 });
+    const counts = await cdp.evaluate(`(() => {
+      const dirs = ['left', 'right', 'up', 'down'];
+      for (let i = 0; i < dirs.length; i += 1) {
+        try { window.__arcadeTest.moveNow(dirs[i]); } catch (err) { return { error: String(err && err.message ? err.message : err) }; }
+      }
+      const t = window.__arcadeCareerTest;
+      return { info: t.info(), events: t.events(), envelopes: t.envelopes(), ch: window.__arcadeTest.challengeInfo() };
+    })()`);
+    assert(!counts.error, 'moveNow 抛异常：' + detail(counts.error));
+    assert(counts.ch.mode === 'challenge', '挑战局未处于 challenge 模式：' + detail(counts.ch));
+    assert(counts.info.eventCount === 0 && counts.events.length === 0 && counts.envelopes.length === 0,
+      '挑战内真实 moveNow 泄漏 career 事件：' + detail({ eventCount: counts.info.eventCount, events: counts.events }));
+    return { mode: counts.ch.mode, eventCount: 0 };
+  });
+
+  await check('merge-2048 挑战退出后经典结算不得兑换线索（G15 F-15-01 端到端）', async () => {
+    await cdp.evaluate('window.__arcadeTest.exitChallenge()');
+    await sleep(300);
+    const result = await cdp.evaluate(`(async () => {
+      const r = await window.ArcadeCareer.finish({ mode: 'classic', outcome: 'lost', stats: {} });
+      return { result: r ? { clueId: r.clueId, reason: r.reason } : null, state: window.__arcadeCareerTest.state() };
+    })()`);
+    assert(result.result === null, '挑战缓冲被经典 finish 兑换成线索：' + detail(result.result));
+    assert(Object.keys(result.state.clues || {}).length === 0, '挑战后仍产生了线索：' + detail(result.state.clues));
+    return { clue: null, clues: 0 };
+  });
 }
 
 /* ------------------------------------------------------------------ *

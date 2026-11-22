@@ -534,4 +534,3 @@ window.ArcadeCareerUI = {
 - 文案：全部戏内语言；禁止“生涯模式 / 解锁 / 奖励 / 签到 / 概率”等按钮式或营销式措辞；不得在 UI 中解释系统规则。
 - 样式：所有 career UI 样式集中在 `ui/clue-surface.css`（bridge 装载一次），禁止 `url(/...)` 与外部字体。
 - 0.15 不创建钱包/`careerId`；`followLetter()` 只推进到 LOCAL 并展示折光港地址/告示快照。
-
