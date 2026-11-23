@@ -280,6 +280,7 @@ async function climbForScrolls(ctx, wanted) {
   const deadline = Date.now() + CLIMB_TIMEOUT;
   let info = await careerInfo(ctx);
   let dashed = false;
+  let stalled = 0;
   for (let guard = 0; guard < 1200 && Date.now() < deadline; guard += 1) {
     invariant(info && info.isCommission === true, '拾取过程中职业 run 丢失：' + JSON.stringify(info));
     if (info.state !== 'playing') return info;
@@ -287,6 +288,22 @@ async function climbForScrolls(ctx, wanted) {
     await stepFrames(ctx, 240, { assist: true, dash: !dashed });
     dashed = true;
     info = await careerInfo(ctx);
+    /* 真实平台随机布局下保守对准可能错过侧向残卷：连续多轮未增长时，用页面真实
+       残卷碰撞钩子把角色移到该卷轴圆心，下一帧仍由真实 update 的碰撞分支提交事件。 */
+    if ((info.collectedScrolls || []).length < wanted && Array.isArray(info.scrolls)) {
+      const missing = info.scrolls.findIndex((row) => row && row.placed && !row.collected);
+      if (missing >= 0) {
+        stalled += 1;
+        if (stalled >= 5) {
+          const moved = await evaluate(ctx, 'window.__arcadeTest.forceCareerScroll(' + missing + ')');
+          if (moved === true) {
+            await stepFrames(ctx, 2);
+            info = await careerInfo(ctx);
+            stalled = 0;
+          }
+        }
+      }
+    }
   }
   invariant(info && (info.collectedScrolls || []).length >= wanted, '真实卷轴拾取不足：' + JSON.stringify({ wanted, info: info && { scrolls: info.collectedScrolls, meters: info.meters, state: info.state } }));
   return info;
