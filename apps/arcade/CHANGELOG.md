@@ -29,7 +29,7 @@
 - fixture runner `--validate`：内容 96/96、16/16 fixture 形状 PASS；schema 负例矩阵。
 - 纯 Node：materials 32/32、professions 213/213、story-evidence 90/90、route-planner 214/214、economy-balance 47/47、commission 61/61、combat 379/379、legacy 78/78、registry 90/90、discovery 84/84、entry 37/37。
 - Chrome：reachability 165/165、a11y 75/75、db 38/38、backup 34/34、PWA 离线 17/17、smoke 113/113、review 5/5、zen 14/14、calm 17/17、tower 23/23、interaction 5/5、immersive 32/32、pwa_update 9/9。
-- 0.16 first-flight/resume/mobile 的 0.17 内容更新在 G17 前完成；真机 UNVERIFIED。
+- 0.16 first-flight 金样归档为 `career_first_flight_test_016.mjs`（0.17 经济重标后旧断言不再适用），0.17 由 96 委托回归替代；G17 首轮发现的 `crystal` 无限卖钱已修复并新增 `career_crystal_alias_test` 8/8；真机 UNVERIFIED。
 
 ### Notes
 - 版本链 0.17.0 / SW `studiokit-arcade-0.17.0-v1`；接口 ADR §19；设计与回滚 `DESIGN-0.17.0.md`；平衡 `BALANCE-017.md`；集成 `INTEGRATION-0.17.md`。

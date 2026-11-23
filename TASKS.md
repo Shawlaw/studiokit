@@ -4,7 +4,7 @@
 
 | ID | 类型 | 任务 | 状态 | 依赖 | 备注 |
 |---|---|---|---|---|---|
-| T121 | agent | Arcade 0.17.0 本地门禁：D17 系列与 G17（不发布） | IN_PROGRESS | T120 | 96 委托（T1–T3 公开/T4–T6 旗标）与 16 游戏职业隔离、五材商店/制造/职业/证据/路线已实现；96/96 tiers、3792 checks、纯 Node 全绿；待 0.16 first-flight/resume/mobile 按 0.17 内容更新、聚合门禁复跑与 G17 独立复核。**未推送 main、无发布授权**；真机 UNVERIFIED。 |
+| T121 | agent | Arcade 0.17.0 本地门禁：D17 系列与 G17（不发布） | DONE | T120 | **G17 独立门禁 PASS**（HEAD `159babb`，两轮：首轮 FAIL→修复 crystal 别名/脏树/a11y 后 PASS）：96/96 tiers、3792 checks、经济五材/三模块、16 源无 CTA、78 关零回归、mobile 318、PWA 17、a11y 75；工作树干净、远端 main `afc5fd4`、无 push/tag/部署、无发布授权。首航归档说明见 `INTEGRATION-0.17.md`；摘要 `G17-EVIDENCE.md`。 |
 | T120 | agent | Arcade 0.17.0：活世界 96 委托、五材商店、制造台与职业成长（本地未发布） | DONE | T119 | 新增 commission-schema/materials/crafting/professions/story-evidence/route-planner、ui/market|workshop、96 委托/items/chapter 内容；16 游戏职业目标/事件/隔离；db.sellItems 原子卖料、crystal→starcrystal；修复层塔职业写档/影跃经典事件/雪铃去重/DB writeEquipment/review 55 金样。测试：96 tiers 3792 checks、materials 32、professions 213、story 90、route 214、balance 47、commission 61、combat 379、legacy 78/90/84/37；smoke 113、reachability 165、a11y 75、db 38、backup 34、PWA 17。版本链 0.17.0。 |
 
 | T119 | agent | Arcade 0.16.0 本地门禁：D16 系列与 G16（不发布） | DONE | T118 | **G16 独立门禁 PASS**（HEAD `b494ee1`）：16 起源首航 192/192（GAPS 0）、经济闭环/租机/代办/失败路线、恢复幂等 45/45、移动端 318/318、a11y 75/75、db 38/38、backup 34/34、PWA 17/17、reachability 165/165、smoke 113/113、review 5/5、zen/calm/tower/interaction/immersive/pwa_update 全绿；工作树干净、远端 main `afc5fd4`、无 tag/推送/部署、无 `OWNER_AUTHORIZATION: PUBLISH_TO_MAIN`；摘要 `docs/arcade-life/G16-EVIDENCE.md`。 |

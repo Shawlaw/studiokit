@@ -33,9 +33,11 @@
 | fixture/schema | 内容 96/96、16/16 fixture 形状 PASS；schema 负例矩阵 21/21 |
 | 纯 Node | materials 32/32、professions 213/213、story 90/90、route 214/214、balance 47/47、commission 61/61、combat 379/379、legacy 78/78、registry 90/90、discovery 84/84、entry 37/37 |
 | Chrome 回归 | smoke 113/113、reachability 165/165、a11y 75/75、db 38/38、backup 34/34、PWA 离线 17/17、review 5/5、zen 14/14、calm 17/17、tower 23/23、interaction 5/5、immersive 32/32、pwa_update 9/9 |
-| 待办 | 0.16 first-flight/resume/mobile 的 0.17 内容更新；G17 独立复跑；真机 UNVERIFIED |
+| 独立门禁 | G17 Reviewer 两轮 | **PASS**（HEAD `159babb`；首轮 FAIL→修复 crystal 别名/脏树/a11y 后 PASS；96/96 tiers、经济/模块/16 源/78 关/移动/PWA 全绿；摘要见 `G17-EVIDENCE.md`） |
 
 > 0.17 期间修复：层塔职业 `finishRun` 写经典记录；影跃经典 `height.reached` 被 20m career 门禁误伤；雪铃复踩去重；DB `writeEquipment` 引用未定义 `isFiniteNumber`；棱镜 `crystal` 与 `starcrystal` 不一致；review 金样 46→55。
+
+> 0.16 旧首航金样 `career_first_flight_test.mjs` 因 0.17 有意重标经济（T1 90、T2 材料、3 份 T1 才能买旧翼）归档为 `career_first_flight_test_016.mjs`，不再纳入 0.17 门禁；0.17 首航/经济闭环由 `career_96_missions_test`（96 tiers + 8 委托抽样）与 `career_run_resume_test` 覆盖。G17 首轮发现的 `crystal` 无限卖钱已修复并新增 `career_crystal_alias_test`（8/8）。
 
 ## 5. 已知风险 / UNVERIFIED
 
