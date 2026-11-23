@@ -733,6 +733,17 @@
       return entry;
     }
 
+    /** 0.18：把已落库的 ticket/run 重新登记到本实例缓冲（跨页恢复终局 run）。 */
+    function adoptRun(ticket, run) {
+      try {
+        if (!isObject(ticket) || !isStableId(ticket.ticketId)) return false;
+        rememberRun(ticket, isObject(run) ? run : null);
+        return true;
+      } catch (err) {
+        return false;
+      }
+    }
+
     function forgetTicket(ticketId) {
       var entry = entryOf(ticketId);
       if (entry) {
@@ -1674,6 +1685,7 @@
       start: start,
       validateTicket: validateTicket,
       markActive: markActive,
+      adoptRun: adoptRun,
       recordEvent: recordEvent,
       getState: getState,
       settle: settle,

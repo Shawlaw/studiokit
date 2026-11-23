@@ -99,6 +99,8 @@
     { file: 'professions.js', global: 'professions', required: false, lazy: true },
     { file: 'story-evidence.js', global: 'storyEvidence', required: false, lazy: true },
     { file: 'route-planner.js', global: 'routePlanner', required: false, lazy: true },
+    { file: 'campaign-core.js', global: 'campaign', required: false, lazy: true },
+    { file: 'ending-reducer.js', global: 'ending', required: false, lazy: true },
     { file: 'ui/clue-surface.js', global: 'ui.clueSurface', required: false },
     { file: 'ui/mailbox.js', global: 'ui.mailbox', required: false },
     { file: 'ui/settings.js', global: 'ui.settings', required: false },
@@ -107,6 +109,7 @@
     { file: 'ui/receipt.js', global: 'ui.receipt', required: false, lazy: true },
     { file: 'ui/market.js', global: 'ui.market', required: false, lazy: true },
     { file: 'ui/workshop.js', global: 'ui.workshop', required: false, lazy: true },
+    { file: 'ui/world-state.js', global: 'ui.worldState', required: false, lazy: true },
   ];
 
   var OVERLAY_ANCHOR_SELECTORS = [
@@ -192,6 +195,7 @@
     commissionActivated: false,
     commissionConfigured: false,
     commissionLastCareerId: null,
+    endingEvents: [],
   };
 
   /* ---------------------------------------------------------------- 基础工具 */
@@ -581,11 +585,14 @@
     professions: { file: 'professions.js', global: 'professions' },
     storyEvidence: { file: 'story-evidence.js', global: 'storyEvidence' },
     routePlanner: { file: 'route-planner.js', global: 'routePlanner' },
+    campaign: { file: 'campaign-core.js', global: 'campaign' },
+    ending: { file: 'ending-reducer.js', global: 'ending' },
     town: { file: 'ui/town.js', global: 'ui.town' },
     hangar: { file: 'ui/hangar.js', global: 'ui.hangar' },
     receipt: { file: 'ui/receipt.js', global: 'ui.receipt' },
     market: { file: 'ui/market.js', global: 'ui.market' },
     workshop: { file: 'ui/workshop.js', global: 'ui.workshop' },
+    worldState: { file: 'ui/world-state.js', global: 'ui.worldState' },
   };
 
   function loadDependency(dep) {
@@ -788,7 +795,8 @@
           configureCommissionContent();
         } else if (def.global === 'rental' || def.global === 'alternatives' || def.global === 'combatConfig'
           || def.global === 'materials' || def.global === 'crafting' || def.global === 'professions'
-          || def.global === 'storyEvidence' || def.global === 'routePlanner') {
+          || def.global === 'storyEvidence' || def.global === 'routePlanner'
+          || def.global === 'campaign' || def.global === 'ending') {
           api[def.global] = mod;
           configureCareerModules();
         } else if (def.global.indexOf('ui.') === 0) syncUiRefs();
@@ -903,7 +911,38 @@
       one('chapter-01.json', 'chapterContent', function (data) {
         return data && typeof data === 'object' ? data : null;
       }),
+      one('campaign.json', 'campaignContent', function (data) {
+        return data && Array.isArray(data.chapters) ? data : null;
+      }),
+      one('chapter-00.json', 'c00', function (data) { return data && data.chapterId ? data : null; }),
+      one('chapter-02.json', 'c02', function (data) { return data && data.chapterId ? data : null; }),
+      one('chapter-03.json', 'c03', function (data) { return data && data.chapterId ? data : null; }),
+      one('chapter-04.json', 'c04', function (data) { return data && data.chapterId ? data : null; }),
+      one('chapter-05.json', 'c05', function (data) { return data && data.chapterId ? data : null; }),
+      one('side-stories.json', 'sideStoriesContent', function (data) {
+        return data && Array.isArray(data.families) ? data : null;
+      }),
+      one('npc.json', 'npcContent', function (data) {
+        return data && Array.isArray(data.characters) ? data : null;
+      }),
+      one('ending-combat.json', 'endingCombatContent', function (data) {
+        return data && data.approach ? data : null;
+      }),
+      one('ending-research.json', 'endingResearchContent', function (data) {
+        return data && data.approach ? data : null;
+      }),
+      one('ending-rescue.json', 'endingRescueContent', function (data) {
+        return data && data.approach ? data : null;
+      }),
     ]).then(function () {
+      internal.chapterFiles = {
+        C0: internal.c00 || null,
+        C1: internal.chapterContent || null,
+        C2: internal.c02 || null,
+        C3: internal.c03 || null,
+        C4: internal.c04 || null,
+        C5: internal.c05 || null,
+      };
       if (internal.itemsContent) api.items = clone(internal.itemsContent);
       if (commissionModule()) configureCommissionContent();
       configureCareerModules();
@@ -912,15 +951,21 @@
     return all;
   }
 
-  /** 把 0.17 内容交给材料/制造/职业/证据/路线模块（缺模块或接口时静默）。 */
   function configureCareerModules() {
     var payload = {
       items: internal.itemsContent || null,
       commissions: internal.commissionContent || null,
       chapter: internal.chapterContent || null,
       registry: internal.registryContent || null,
+      campaign: internal.campaignContent || null,
+      chapters: internal.chapterFiles || null,
+      sideStories: internal.sideStoriesContent || null,
+      npc: internal.npcContent || null,
+      endings: [internal.endingCombatContent, internal.endingResearchContent, internal.endingRescueContent].filter(Boolean),
+      evidence: internal.registryContent || null,
+      db: api.db || null,
     };
-    ['materials', 'crafting', 'professions', 'storyEvidence', 'routePlanner'].forEach(function (name) {
+    ['materials', 'crafting', 'professions', 'storyEvidence', 'routePlanner', 'campaign', 'ending'].forEach(function (name) {
       var mod = readGlobal(name);
       if (!mod || typeof mod.configure !== 'function') return;
       try {
@@ -1091,6 +1136,29 @@
           } catch (err) {
             warnOnce('commission-active', err);
           }
+          /* 0.18 终局：新页面重新装载 ending 实例并接管 ticket，否则事件缓冲不共享。 */
+          if (typeof result.commission.commissionId === 'string' && result.commission.commissionId.indexOf('ending.') === 0) {
+            return Promise.all([ensureLazyModule('ending'), loadCareerContent()])
+              .then(function () {
+                configureCareerModules();
+                var endingModule = readGlobal('ending');
+                if (endingModule && typeof endingModule.attach === 'function') {
+                  endingModule.attach({
+                    ticketId: ticketId,
+                    ticket: stored,
+                    run: result.run,
+                    commissionId: result.commission.commissionId,
+                    gameId: result.commission.gameId,
+                    careerId: result.run.careerId,
+                  });
+                }
+                var mainModule = commissionModule();
+                if (mainModule && typeof mainModule.adoptRun === 'function') {
+                  mainModule.adoptRun(stored || { ticketId: ticketId, runId: ticketId, commissionId: result.commission.commissionId, gameId: result.commission.gameId, careerId: result.run.careerId, mode: 'commission' }, result.run);
+                }
+                return true;
+              });
+          }
           /* 星海职业战斗需要机体配置模块（缺失时游戏回退默认旧翼）。 */
           if (result.commission.gameId === 'star-raid') {
             return ensureLazyModule('combatConfig').then(function () {
@@ -1109,12 +1177,30 @@
   /** 职业 run 的观察事件：不进发现缓冲、不渲染微线索。 */
   function observeCommission(kind, payload) {
     var mod = commissionModule();
-    if (!mod || typeof mod.recordEvent !== 'function' || !internal.commissionRun) return false;
+    if (!internal.commissionRun) return false;
     var clean = sanitizeFlat(payload, { maxBytes: PAYLOAD_BYTE_LIMIT, maxKeys: PAYLOAD_MAX_KEYS, filterReserved: true });
     if (!clean.ok) return false;
     internal.commissionSeq += 1;
     var event = { kind: kind, payload: clean.value, seq: internal.commissionSeq, sourceMode: 'commission', at: nowIso() };
     var accepted = false;
+    /* 0.18 终局 run：事件同时写入 ending 实例，并在结算前可重放（两实例缓冲不共享）。 */
+    if (typeof internal.commissionRun.commissionId === 'string' && internal.commissionRun.commissionId.indexOf('ending.') === 0) {
+      internal.endingEvents.push(event);
+      var endingModule = readGlobal('ending');
+      if (endingModule && typeof endingModule.recordEvent === 'function') {
+        try {
+          accepted = endingModule.recordEvent(internal.commissionRun.ticketId, event);
+        } catch (err) {
+          warnOnce('ending-observe', err);
+        }
+      }
+      /* 同时记入主实例缓冲，供 info().commissionEvents 与通用 UI 统计。 */
+      if (mod && typeof mod.recordEvent === 'function') {
+        try { mod.recordEvent(internal.commissionRun.ticketId, event); } catch (err) { /* ignore */ }
+      }
+      return accepted !== false;
+    }
+    if (!mod || typeof mod.recordEvent !== 'function') return false;
     try {
       accepted = mod.recordEvent(internal.commissionRun.ticketId, event);
     } catch (err) {
@@ -1143,6 +1229,47 @@
     if (!run) return Promise.resolve(null);
     internal.commissionLastCareerId = run.careerId;
     internal.sourceMode = 'commission';
+    /* 0.18 终局 run 使用 ending-reducer 的独立 commission 实例，不能交给 96 告示板实例结算。 */
+    if (typeof run.commissionId === 'string' && run.commissionId.indexOf('ending.') === 0) {
+      return ensureLazyModule('ending')
+        .then(function (endingModule) {
+          if (!endingModule || typeof endingModule.settleEnding !== 'function') {
+            return commissionFailure('ending-module-missing');
+          }
+          /* 重放本页真实事件到 ending 实例（去重由记录入口按 seq 容忍）。 */
+          if (typeof endingModule.recordEvent === 'function') {
+            internal.endingEvents.forEach(function (event) {
+              try { endingModule.recordEvent(run.ticketId, event); } catch (err) { /* ignore */ }
+            });
+          }
+          return endingModule.settleEnding({ ticketId: run.ticketId });
+        })
+        .then(function (result) {
+          var normalized = result && typeof result === 'object' ? result : commissionFailure('ending-settle-empty');
+          internal.commissionLastResult = clone(normalized);
+          internal.lastFinish = {
+            input: { mode: modeName, outcome: outcome, stats: stats || {} },
+            result: normalized,
+            reason: normalized.ok ? 'ending' : normalized.reason || 'ending-failed',
+            at: nowIso(),
+            runId: normalized.runId || run.ticketId,
+          };
+          internal.commissionEvents = [];
+          internal.commissionSeq = 0;
+          internal.endingEvents = [];
+          api.commissionRun = null;
+          clearStoredTicket();
+          clearRentalMarker();
+          internal.finished = true;
+          internal.finishedResult = normalized;
+          renderCommissionReceipt(normalized);
+          return normalized;
+        })
+        .catch(function (err) {
+          warnOnce('ending-settle', err);
+          return commissionFailure('ending-settle-error');
+        });
+    }
     return Promise.resolve(mod.settle({
       ticketId: run.ticketId,
       outcome: outcome,
@@ -2496,6 +2623,13 @@
       professions: readGlobal('professions') || null,
       storyEvidence: readGlobal('storyEvidence') || null,
       routePlanner: readGlobal('routePlanner') || null,
+      campaign: readGlobal('campaign') || null,
+      ending: readGlobal('ending') || null,
+      npc: internal.npcContent ? clone(internal.npcContent) : null,
+      sideStories: internal.sideStoriesContent ? clone(internal.sideStoriesContent) : null,
+      chapters: internal.chapterFiles ? clone(internal.chapterFiles) : null,
+      openCampaign: openCampaign,
+      startEnding: startEnding,
       openMarket: openMarket,
       openWorkshop: openWorkshop,
       commissionRun: internal.commissionRun ? clone(internal.commissionRun) : null,
@@ -2515,7 +2649,7 @@
   }
 
   function openMailbox() {
-    return safe(
+    return Promise.resolve(safe(
       'open-mailbox',
       function () {
         if (isSilentTestOnly()) return uiUnavailable('test-silent');
@@ -2538,7 +2672,18 @@
         return { ok: true };
       },
       uiUnavailable('ui-unavailable')
-    );
+    )).then(function (result) {
+      /* 信箱是 C0 的真实入口：确保章节模块/内容就绪后再补旗标。 */
+      return Promise.all([ensureLazyModule('campaign'), loadCareerContent()])
+        .then(function () {
+          configureCareerModules();
+          return syncCampaignFlags(true);
+        })
+        .catch(function () {})
+        .then(function () {
+          return result;
+        });
+    });
   }
 
   /** 线索提示偏好入口：信箱角落的「线索提示」调用（settings 面板由 D15-07 实现）。 */
@@ -2587,6 +2732,61 @@
   }
 
   /** 0.16：港口告示板/飞船商店/钱包收据入口；UI 缺失时结构化失败，不做替代渲染。 */
+  /** 章节/信箱打开前的只读剧情快照：真实 quests/wallet/equipment（失败不阻塞 UI）。 */
+  function loadStorySnapshot() {
+    var db = api.db || readGlobal('db');
+    var careerId = internal.commissionLastCareerId || null;
+    if (!db || !careerId) {
+      return Promise.resolve({ careerId: careerId, quests: [], claims: [], profile: null, wallet: null, equipment: null });
+    }
+    var safeCall = function (fn) {
+      try {
+        return Promise.resolve(fn()).catch(function () { return null; });
+      } catch (err) {
+        return Promise.resolve(null);
+      }
+    };
+    return Promise.all([
+      safeCall(function () { return db.readQuestState(careerId); }),
+      safeCall(function () { return db.readWallet(careerId); }),
+      safeCall(function () { return db.getEquipment(careerId); }),
+    ]).then(function (values) {
+      var questState = values[0];
+      var wallet = values[1];
+      var equipment = values[2];
+      return {
+        careerId: careerId,
+        quests: questState && Array.isArray(questState.quests) ? questState.quests : [],
+        claims: [],
+        profile: null,
+        wallet: wallet && wallet.ok ? { credits: wallet.credits, items: wallet.items || {} } : null,
+        equipment: equipment && equipment.ok ? equipment.equipment || {} : null,
+      };
+    });
+  }
+
+  /** 打开信箱/告示板后同步 C0/C1 章节旗标（幂等；缺模块/DB 时静默）。 */
+  function syncCampaignFlags(mailboxOpened) {
+    var mod = readGlobal('campaign');
+    var db = api.db || readGlobal('db');
+    if (!mod || typeof mod.syncFlags !== 'function' || !db || typeof db.ensureCareer !== 'function') return null;
+    try {
+      return Promise.resolve(db.ensureCareer({}))
+        .then(function (career) {
+          if (!career || !career.careerId) return null;
+          internal.commissionLastCareerId = career.careerId;
+          return mod.syncFlags({ careerId: career.careerId, db: db, mailboxOpened: mailboxOpened === true });
+        })
+        .catch(function (err) {
+          warnOnce('campaign-sync', err);
+          return null;
+        });
+    } catch (err) {
+      warnOnce('campaign-sync', err);
+      return null;
+    }
+  }
+
   function openCareerUi(name, extra) {
     if (isSilentTestOnly()) return uiUnavailable('test-silent');
     warmLazyModules();
@@ -2598,6 +2798,11 @@
       extraModules.push('crafting');
       extraModules.push('materials');
     }
+    if (name === 'worldState') {
+      extraModules.push('campaign');
+      extraModules.push('ending');
+    }
+    if (name === 'mailbox' || name === 'town') extraModules.push('campaign');
     var preloadList = [ensureLazyModule('commission'), ensureLazyModule('alternatives'), loadCareerContent()];
     extraModules.forEach(function (moduleName) {
       preloadList.push(ensureLazyModule(moduleName));
@@ -2606,8 +2811,11 @@
       configureCommissionContent();
       configureCareerModules();
       return configureRentalModule();
+    }).then(function () {
+      if (name !== 'worldState' && name !== 'mailbox' && name !== 'town') return null;
+      return loadStorySnapshot();
     });
-    return preload.then(function () {
+    return preload.then(function (storySnapshot) {
       var uiModule = readUi(name);
       if (!uiModule) {
         return ensureLazyModule(name).then(function (loaded) {
@@ -2628,7 +2836,17 @@
             crafting: readGlobal('crafting') || null,
             professions: readGlobal('professions') || null,
             storyEvidence: readGlobal('storyEvidence') || null,
+            campaignState: storySnapshot || null,
+            quests: storySnapshot ? storySnapshot.quests : null,
+            claims: storySnapshot ? storySnapshot.claims : null,
+            profile: storySnapshot ? storySnapshot.profile : null,
+            wallet: storySnapshot ? storySnapshot.wallet : null,
+            careerId: storySnapshot ? storySnapshot.careerId : null,
             routePlanner: readGlobal('routePlanner') || null,
+            campaign: readGlobal('campaign') || null,
+            ending: readGlobal('ending') || null,
+            openCampaign: openCampaign,
+            startEnding: startEnding,
             openMarket: openMarket,
             openWorkshop: openWorkshop,
             commissionRun: internal.commissionRun ? clone(internal.commissionRun) : null,
@@ -2660,6 +2878,10 @@
         },
         uiUnavailable('ui-unavailable')
       );
+    }).then(function (result) {
+      if (name === 'mailbox') syncCampaignFlags(true);
+      else if (name === 'town') syncCampaignFlags(false);
+      return result;
     });
   }
 
@@ -2681,6 +2903,28 @@
 
   function openWorkshop() {
     return openCareerUi('workshop');
+  }
+
+  function openCampaign() {
+    return openCareerUi('worldState');
+  }
+
+  function startEnding(approach) {
+    var endingModule = readGlobal('ending');
+    if (!endingModule || typeof endingModule.startEnding !== 'function') {
+      return Promise.resolve({ ok: false, reason: 'ending-module-missing' });
+    }
+    return Promise.resolve(endingModule.startEnding({ approach: approach, careerId: internal.commissionLastCareerId || null }))
+      .then(function (result) {
+        if (result && result.ok && result.url) {
+          try {
+            if (WINDOW && WINDOW.location && typeof WINDOW.location.assign === 'function') WINDOW.location.assign(result.url);
+          } catch (err) {
+            warnOnce('ending-navigate', err);
+          }
+        }
+        return result;
+      });
   }
 
   /** 0.16：职业 run 的只读装备/钱包快照，供星海生涯战斗读取（不写库、不改旧机库）。 */
@@ -3118,6 +3362,10 @@
     api.openReceipt = openReceipt;
     api.openMarket = openMarket;
     api.openWorkshop = openWorkshop;
+    api.openCampaign = openCampaign;
+    api.startEnding = startEnding;
+    api.campaign = null;
+    api.ending = null;
     api.materials = null;
     api.crafting = null;
     api.professions = null;

@@ -1,0 +1,70 @@
+{
+  "contentVersion": "0.18.0",
+  "characters": [
+    {
+      "characterId": "E-7",
+      "name": "E-7",
+      "role": "失踪的港口调度员",
+      "replies": [
+        {
+          "chapterId": "C1",
+          "text": "信号不是坐标，是门牌号。别把它当成求救。"
+        },
+        {
+          "chapterId": "C2",
+          "text": "七号货柜里装的是中继密钥；我只能把它藏进日常货运里。"
+        },
+        {
+          "chapterId": "C3",
+          "text": "旧系统不认新船，只认旧的呼号。我没有叛逃，我只是关不掉它。"
+        },
+        {
+          "chapterId": "C4",
+          "text": "如果灯又灭了，让城市先自己站稳，再谈星塔。"
+        },
+        {
+          "chapterId": "C5",
+          "text": "无论你选哪条路，别把港口变成第二个旧系统。"
+        }
+      ]
+    },
+    {
+      "characterId": "阿砾",
+      "name": "阿砾",
+      "role": "老机库管理员",
+      "replies": [
+        {
+          "chapterId": "C0",
+          "text": "租机不要钱，别把它撞坏就行。"
+        },
+        {
+          "chapterId": "C1",
+          "text": "标准舰够用。真正的差距在你怎么用它。"
+        },
+        {
+          "chapterId": "C4",
+          "text": "旧星币是旧账，别和新的工钱混在一起。"
+        }
+      ]
+    },
+    {
+      "characterId": "黎序",
+      "name": "黎序",
+      "role": "晶格研究员",
+      "replies": [
+        {
+          "chapterId": "C2",
+          "text": "样本里有一段没写完的许可信号。"
+        },
+        {
+          "chapterId": "C3",
+          "text": "月影的时间差不是误差，是旧系统在等一个回答。"
+        },
+        {
+          "chapterId": "C5",
+          "text": "重写信号比摧毁它慢，但港口会记得更久。"
+        }
+      ]
+    }
+  ]
+}

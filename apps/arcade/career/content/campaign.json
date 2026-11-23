@@ -1,0 +1,342 @@
+{
+  "contentVersion": "0.18.0",
+  "world": "折光港",
+  "chapters": [
+    {
+      "chapterId": "C0",
+      "title": "不起眼的印记",
+      "entry": {
+        "allFlags": []
+      },
+      "routes": [
+        {
+          "routeId": "read_letter",
+          "label": "顺着地址投递",
+          "requires": {},
+          "rewardFlags": [
+            "C0.port_seen"
+          ],
+          "hint": "线索信的背面有一行旧港地址。"
+        }
+      ],
+      "mustKnow": [
+        "P-07 曾经存在",
+        "折光港仍在使用"
+      ],
+      "handoff": "C1",
+      "fallback": "信箱可随时找回这封信。"
+    },
+    {
+      "chapterId": "C1",
+      "title": "旧港的第一封信",
+      "entry": {
+        "allFlags": [
+          "C0.port_seen"
+        ]
+      },
+      "routes": [
+        {
+          "routeId": "work_ship",
+          "label": "接一张工单",
+          "requires": {
+            "anyFlags": [
+              "C1.work_done",
+              "C1.flight_done"
+            ]
+          },
+          "rewardFlags": [
+            "C1.signal_fragment"
+          ],
+          "hint": "告示板上的工钱够不够，是接下来最实际的问题。"
+        },
+        {
+          "routeId": "rental",
+          "label": "免费租机出航",
+          "requires": {
+            "anyFlags": [
+              "C1.flight_done"
+            ]
+          },
+          "rewardFlags": [
+            "C1.signal_fragment"
+          ],
+          "hint": "机库管理员阿砾说，标准舰可以免费借。"
+        },
+        {
+          "routeId": "noncombat",
+          "label": "委托港务处代办",
+          "requires": {
+            "anyFlags": [
+              "C1.signal",
+              "C1.records"
+            ]
+          },
+          "rewardFlags": [
+            "C1.signal_fragment"
+          ],
+          "hint": "港务处的代办能买回信号；完成代办后再看这张单子。"
+        }
+      ],
+      "mustKnow": [
+        "信号与 P-07 吻合"
+      ],
+      "handoff": "C2",
+      "fallback": "不买飞船也能租；不战斗也能委托代办。"
+    },
+    {
+      "chapterId": "C2",
+      "title": "谁留下了七号货柜",
+      "entry": {
+        "allFlags": [
+          "C1.signal_fragment"
+        ]
+      },
+      "routes": [
+        {
+          "routeId": "research",
+          "label": "交给晶格研究员",
+          "requires": {
+            "anyCommissions": [
+              "merge-2048.T2",
+              "merge-2048.T3",
+              "memory-flip.T2",
+              "memory-flip.T3"
+            ]
+          },
+          "rewardFlags": [
+            "C2.research_complete"
+          ],
+          "hint": "晨光研究院愿意看晶格模型。"
+        },
+        {
+          "routeId": "mining",
+          "label": "带回矿脉样本",
+          "requires": {
+            "anyCommissions": [
+              "gold-miner.T2",
+              "gold-miner.T3"
+            ]
+          },
+          "rewardFlags": [
+            "C2.research_complete"
+          ],
+          "hint": "矿井里最近有奇怪的晶脉。"
+        },
+        {
+          "routeId": "market",
+          "label": "买一份认证样本",
+          "requires": {
+            "anyCommissions": [
+              "blackjack.T2",
+              "gomoku.T2",
+              "solitaire.T2"
+            ]
+          },
+          "rewardFlags": [
+            "C2.research_complete"
+          ],
+          "hint": "港务处的贸易窗口能买到研究院认证的样本。"
+        }
+      ],
+      "mustKnow": [
+        "P-07 是中继密钥",
+        "E-7 曾试图关闭旧警报"
+      ],
+      "handoff": "C3",
+      "fallback": "研究、开采、贸易三条线都能解译，不锁死游戏。"
+    },
+    {
+      "chapterId": "C3",
+      "title": "月影里的时间差",
+      "entry": {
+        "allFlags": [
+          "C2.research_complete"
+        ]
+      },
+      "routes": [
+        {
+          "routeId": "explore",
+          "label": "去月影遗迹",
+          "requires": {
+            "anyCommissions": [
+              "shadow-leap.T2",
+              "shadow-leap.T3",
+              "gravity-flip.T2",
+              "gravity-flip.T3"
+            ]
+          },
+          "rewardFlags": [
+            "C3.truth_found"
+          ],
+          "hint": "旧观测站的坐标在月影一侧。"
+        },
+        {
+          "routeId": "ecology",
+          "label": "听雪谷的第七段旋律",
+          "requires": {
+            "anyCommissions": [
+              "snowbells.T2",
+              "snowbells.T3",
+              "snake-run.T2",
+              "snake-run.T3"
+            ]
+          },
+          "rewardFlags": [
+            "C3.truth_found"
+          ],
+          "hint": "雪铃谷的老人们记得七段旋律。"
+        },
+        {
+          "routeId": "archive",
+          "label": "查旧档案",
+          "requires": {
+            "anyCommissions": [
+              "memory-flip.T3",
+              "solitaire.T2",
+              "solitaire.T3"
+            ]
+          },
+          "rewardFlags": [
+            "C3.truth_found"
+          ],
+          "hint": "档案室的翻牌与航线记录都能拼出旧时间线。"
+        }
+      ],
+      "mustKnow": [
+        "E-7 是救援者",
+        "旧自动防御误判了现代货运"
+      ],
+      "handoff": "C4",
+      "fallback": "探索、生态、档案三条替代线任选。"
+    },
+    {
+      "chapterId": "C4",
+      "title": "停摆的城市",
+      "entry": {
+        "allFlags": [
+          "C3.truth_found"
+        ]
+      },
+      "routes": [
+        {
+          "routeId": "build",
+          "label": "修建应急能源塔",
+          "requires": {
+            "anyCommissions": [
+              "pendulum-tower.T3",
+              "brick-breaker.T3",
+              "mole-whack.T2"
+            ]
+          },
+          "rewardFlags": [
+            "C4.city_power_restored"
+          ],
+          "hint": "港口需要一座稳定的临时能源塔。"
+        },
+        {
+          "routeId": "logistics",
+          "label": "组织物流",
+          "requires": {
+            "anyCommissions": [
+              "road-rush.T2",
+              "road-rush.T3",
+              "block-drop.T2",
+              "block-drop.T3"
+            ]
+          },
+          "rewardFlags": [
+            "C4.city_power_restored"
+          ],
+          "hint": "电池与仓储必须同时到位。"
+        },
+        {
+          "routeId": "maintenance",
+          "label": "维护与协调",
+          "requires": {
+            "anyCommissions": [
+              "mole-whack.T2",
+              "gomoku.T2",
+              "blackjack.T2"
+            ]
+          },
+          "rewardFlags": [
+            "C4.city_power_restored"
+          ],
+          "hint": "检修、疏散布局、风险预测都算贡献。"
+        }
+      ],
+      "mustKnow": [
+        "城市恢复供电",
+        "星塔的旧协议暴露"
+      ],
+      "handoff": "C5",
+      "fallback": "建造、物流、维护/协调任一路可完成。"
+    },
+    {
+      "chapterId": "C5",
+      "title": "星塔的回响",
+      "entry": {
+        "allFlags": [
+          "C4.city_power_restored"
+        ]
+      },
+      "routes": [],
+      "mustKnow": [
+        "冲突可以解除",
+        "不同做法留下不同的港口日常"
+      ],
+      "handoff": "EPILOGUE",
+      "fallback": "三条终局路线任选，完成后仍可自由游玩。"
+    }
+  ],
+  "endings": [
+    {
+      "approach": "combat",
+      "title": "武力解除",
+      "summary": "在母舰防线直面旧防御核心，让星塔停下。",
+      "entry": {
+        "allFlags": [
+          "C4.city_power_restored"
+        ]
+      },
+      "flags": [
+        "C5.star_tower_resolved",
+        "ending.combat"
+      ]
+    },
+    {
+      "approach": "research",
+      "title": "理性重启",
+      "summary": "用晶格模型重写许可信号，让旧系统重新认识现代货运。",
+      "entry": {
+        "allFlags": [
+          "C4.city_power_restored"
+        ]
+      },
+      "flags": [
+        "C5.star_tower_resolved",
+        "ending.research"
+      ]
+    },
+    {
+      "approach": "rescue",
+      "title": "运输救援",
+      "summary": "在星塔关闭窗口前把补给与人工送进旧港，让城市自己走出来。",
+      "entry": {
+        "allFlags": [
+          "C4.city_power_restored"
+        ]
+      },
+      "flags": [
+        "C5.star_tower_resolved",
+        "ending.rescue"
+      ]
+    }
+  ],
+  "epilogue": {
+    "base": "折光港的灯一盏盏亮回来。告示板重新挂满工单，星塔不再拒收现代货运。",
+    "combat": "旧防御核心沉默后，港口的夜比以前安静；巡防队把星塔列入了禁区。",
+    "research": "许可信号重写成功，星塔重新学会辨认货船；研究院把这一天记成“第二次开港”。",
+    "rescue": "补给车队穿过关闭窗口，港口自己走了出来；调度员的名字重新出现在值班表上。"
+  }
+}

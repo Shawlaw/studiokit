@@ -1,0 +1,71 @@
+{
+  "contentVersion": "0.18.0",
+  "policy": "所有权重可选；只在玩家真实触发来源事件后出现，不弹窗、不阻塞。",
+  "families": [
+    {
+      "familyId": "container_mark",
+      "title": "同一道刻痕",
+      "text": "施工箱与敌机残片上有同一道旧刻痕；它不指向唯一答案，只说明港口里有人一直在偷偷修东西。",
+      "clueIds": [
+        "CL-pendulum-tower",
+        "CL-star-raid"
+      ],
+      "links": [
+        "XL01",
+        "XL02"
+      ]
+    },
+    {
+      "familyId": "lattice_echo",
+      "title": "晶格的回声",
+      "text": "矿脉里的读数与晶格模型互为回声；研究员说，这更像一段没写完的留言。",
+      "clueIds": [
+        "CL-merge-2048",
+        "CL-gold-miner"
+      ],
+      "links": [
+        "XL03",
+        "XL04"
+      ]
+    },
+    {
+      "familyId": "old_route",
+      "title": "旧航线",
+      "text": "月影的旧航线与今天的货运航线重叠；有人早就在为关闭星塔做准备。",
+      "clueIds": [
+        "CL-gravity-flip",
+        "CL-shadow-leap"
+      ],
+      "links": [
+        "XL05",
+        "XL06"
+      ]
+    },
+    {
+      "familyId": "quiet_warden",
+      "title": "沉默的守门人",
+      "text": "雪谷与档案馆都提到同一个守门人；他留下的不是命令，而是等待。",
+      "clueIds": [
+        "CL-snowbells",
+        "CL-memory-flip"
+      ],
+      "links": [
+        "XL07",
+        "XL08"
+      ]
+    },
+    {
+      "familyId": "harbor_light",
+      "title": "港口的灯",
+      "text": "物流司机与维修工都见过同一盏忽明忽暗的灯；它亮起时，星塔会短暂地安静。",
+      "clueIds": [
+        "CL-road-rush",
+        "CL-mole-whack"
+      ],
+      "links": [
+        "XL09",
+        "XL10"
+      ]
+    }
+  ]
+}

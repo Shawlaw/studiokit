@@ -2170,6 +2170,39 @@
         "保持本地分支不推送"
       ],
       "evidence": "进行中：实现与自测完成；待 legacy 测试更新与 G17。"
+    },
+    {
+      "id": "T122",
+      "title": "Arcade 0.18.0：星塔回响六章、三终局与后日常（本地未发布）",
+      "kind": "agent",
+      "status": "IN_PROGRESS",
+      "dependsOn": [
+        "T121"
+      ],
+      "ownerAuthorizationRequired": false,
+      "acceptance": [
+        "六章C0-C5与三终局",
+        "章节面板/后日常",
+        "48路径图与E2E",
+        "本地未发布"
+      ],
+      "evidence": "campaign-core 53/53、ending 34/34、graph 48/48、world 109/109；E2E 待最终复跑；证据 qa/evidence/D18-*。"
+    },
+    {
+      "id": "T123",
+      "title": "Arcade 0.18.0 本地门禁：D18 系列与 G18（不发布）",
+      "kind": "agent",
+      "status": "IN_PROGRESS",
+      "dependsOn": [
+        "T122"
+      ],
+      "ownerAuthorizationRequired": false,
+      "acceptance": [
+        "六章三路线E2E、终局/恢复",
+        "版本链0.18.0/文档/聚合门禁/G18",
+        "不推送"
+      ],
+      "evidence": "进行中。"
     }
   ]
 }

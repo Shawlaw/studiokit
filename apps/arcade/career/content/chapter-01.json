@@ -242,23 +242,48 @@
       {
         "pathId": "work",
         "label": "跟施工队按钟点干活",
-        "requires": ["C1.signal"],
-        "steps": ["接一份港区施工委托", "领取工钱", "在机库登记一艘船", "完成一次护航"],
-        "flags": ["C1.work_done"]
+        "requires": [
+          "C1.signal"
+        ],
+        "steps": [
+          "接一份港区施工委托",
+          "领取工钱",
+          "在机库登记一艘船",
+          "完成一次护航"
+        ],
+        "flags": [
+          "C1.work_done"
+        ]
       },
       {
         "pathId": "rental",
         "label": "借码头租用机飞一趟",
-        "requires": ["C1.signal"],
-        "steps": ["接护航委托", "使用码头租用机", "完成一次护航"],
-        "flags": ["C1.flight_done"]
+        "requires": [
+          "C1.signal"
+        ],
+        "steps": [
+          "接护航委托",
+          "使用码头租用机",
+          "完成一次护航"
+        ],
+        "flags": [
+          "C1.flight_done"
+        ]
       },
       {
         "pathId": "procurement",
         "label": "请代办窗跑一趟",
-        "requires": ["C1.signal"],
-        "steps": ["先接一份不用出港的活，把代办费凑够", "在告示板找代办", "支付明码标价的代办费"],
-        "flags": ["C1.signal"]
+        "requires": [
+          "C1.signal"
+        ],
+        "steps": [
+          "先接一份不用出港的活，把代办费凑够",
+          "在告示板找代办",
+          "支付明码标价的代办费"
+        ],
+        "flags": [
+          "C1.signal"
+        ]
       }
     ],
     "signals": [
@@ -266,7 +291,10 @@
         "flag": "C1.signal",
         "source": "first_commission_or_alternative",
         "note": "第一笔工钱、第一份航报或第一份代办回报落地时，港务处会在你的档里记下这一笔。",
-        "from": ["C1.work_done", "C1.flight_done"],
+        "from": [
+          "C1.work_done",
+          "C1.flight_done"
+        ],
         "mapsTo": "C1.signal_fragment"
       }
     ]
@@ -279,5 +307,6 @@
       "rental": "先借码头的租用机飞一趟，再把航报交回护航处。",
       "procurement": "先接一份不出港的活凑足代办费，再挑一个代办，付清纸角那笔钱。"
     }
-  }
+  },
+  "body": "第一张工单让信用点第一次变成自己的；信号与 P-07 的旧编号吻合。"
 }

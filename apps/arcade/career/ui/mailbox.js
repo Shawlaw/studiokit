@@ -43,6 +43,8 @@
   /* 0.16（D16-01）：去港口告示板的最小入口文案与降级提示（戏内语言）。 */
   const TOWN_LABEL = '按地址投递 · 去港口';
   const TOWN_ARIA = '按地址投递，去港口告示板';
+  const CAMPAIGN_LABEL = '旧港来信 · 章节';
+  const CAMPAIGN_ARIA = '打开旧港来信章节面板';
   const TOWN_FAILED_TEXT = '港口那边没应声，过一会儿再试。';
   const STAGE_RANK = { DORMANT: 0, GLIMPSED: 1, CURIOUS: 2, LOCAL: 3, RESIDENT: 4, EXPLORER: 5 };
 
@@ -149,6 +151,13 @@
     if (!context) return null;
     if (typeof context.openTown === 'function') return context.openTown;
     if (isObject(context.api) && typeof context.api.openTown === 'function') return context.api.openTown;
+    return null;
+  }
+
+  function campaignOpenerOf(context) {
+    if (!context) return null;
+    if (typeof context.openCampaign === 'function') return context.openCampaign;
+    if (isObject(context.api) && typeof context.api.openCampaign === 'function') return context.api.openCampaign;
     return null;
   }
 
@@ -271,6 +280,12 @@
     townBtn.hidden = true;
     const portActions = make('div', 'ac-career-letter__actions ac-career-mailbox__port');
     portActions.appendChild(townBtn);
+    const campaignBtn = make('button', 'ac-career-btn ac-career-btn--ghost', CAMPAIGN_LABEL);
+    campaignBtn.type = 'button';
+    campaignBtn.setAttribute('aria-label', CAMPAIGN_ARIA);
+    campaignBtn.setAttribute('data-action', 'open-campaign');
+    campaignBtn.hidden = true;
+    portActions.appendChild(campaignBtn);
     letterDelivered.hidden = true;
     letter.appendChild(letterTitle);
     letter.appendChild(letterAmbient);
@@ -361,6 +376,7 @@
 
     function updateTownEntry() {
       townBtn.hidden = !townAllowedNow();
+      campaignBtn.hidden = !(townAllowedNow() && !!campaignOpenerOf(context));
     }
 
     function openTownFromLetter() {
@@ -393,6 +409,22 @@
     }
 
     townBtn.addEventListener('click', openTownFromLetter, false);
+
+    function openCampaignFromLetter() {
+      const opener = campaignOpenerOf(context);
+      if (typeof opener !== 'function') {
+        setStatus(TOWN_FAILED_TEXT, 'polite');
+        return;
+      }
+      try { close(); } catch (err) { /* ignore */ }
+      try {
+        const result = opener();
+        if (result && typeof result.then === 'function') result.catch(() => {});
+      } catch (err) {
+        setStatus(TOWN_FAILED_TEXT, 'polite');
+      }
+    }
+    campaignBtn.addEventListener('click', openCampaignFromLetter, false);
 
     const itemNodes = Object.create(null);
     let selectedId = '';

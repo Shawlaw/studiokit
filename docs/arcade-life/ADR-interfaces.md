@@ -795,3 +795,58 @@ export async function cleanup(ctx) {}
 
 - 告示板新增「商店」「制造台」入口（数据来自 `materials/crafting`）；材料/模块价格只读内容；按钮 ≥44px；320–430 无溢出；关闭/Esc/焦点返回。
 - 所有面板仍只从信件/告示板打开；中心页无 CTA；不新增顶层入口。
+
+## 20. 0.18 星塔回响增补契约（冻结）
+
+0.18 在 0.17 活世界上补完 **C0–C5 六章、三终局与后日常**。仍无顶层生涯 CTA：故事只从 LOCAL 线索信的旧港入口进入，章节面板在信箱/告示板内，不弹窗、不打断经典。
+
+### 20.1 故事内容与状态
+
+| 文件 | 作用 |
+|---|---|
+| `career/content/campaign.json` | 六章入口/路线/旗标、三终局、后日常文本（运行时） |
+| `career/content/chapter-00..05.json` | 每章戏内叙述与必须知道的事实 |
+| `career/content/ending-{combat,research,rescue}.json` | 三终局的真实游戏目标/起始参数/旗标/后日谈 |
+| `career/content/side-stories.json` | 5 个线索家族的可选解释（不提供唯一必需资源） |
+| `career/content/npc.json` | E-7/阿砾/黎序 的章节回信 |
+| `career/campaign-core.js` | 章节/路线/终局状态的纯推导与同步 |
+| `career/ending-reducer.js` | 三终局的一次性汇合、C5 旗标/结局记录/幂等 |
+| `career/ui/world-state.js` | 章节面板、终局选择、港口状态微变化（不碰经典画布） |
+
+旗标：C0 `C0.port_seen`；C1 `C1.signal_fragment`；C2 `C2.research_complete`；C3 `C3.truth_found`；C4 `C4.city_power_restored`；C5 `C5.star_tower_resolved` + `ending.{combat|research|rescue}`。C2–C4 由 `story-evidence` 多路径产生；campaign-core 只补齐 C0/C1 与展示状态，不改写已授予旗标。
+
+### 20.2 campaign-core.js（UMD 纯函数）
+
+- `configure({campaign, chapters, npc, sideStories, commissions, evidence})` → `{ok, chapterCount, endingCount, errors}`；绝不抛。
+- `state({quests, claims, profile, wallet})` → `{chapters:[{chapterId,state:'locked'|'available'|'active'|'complete',routes:[{routeId,available,complete,hint}],mustKnow,handoff}], currentChapter, endings:[{approach,available}], endingChosen, epilogue}`。
+- `routeRequirementsMet(route, ctx)`：支持 `allFlags/anyFlags/anyCommissions/anyChaosFlags/evidenceAll/evidenceAny` 的 AND/OR 组合；禁止单一 gameId 作为唯一前置（validate 检查）。
+- `syncFlags({careerId, db})`：只补 C0/C1（C0 由信箱打开，C1 由第一份有效工单/飞行/代办旗标），幂等；C2–C4 不重复写；DB 失败返回结构化错误，不谎报。
+- `endingOptions()` / `epilogueFor(approach)`：三终局在 C4 完成后可选；后日常文本按 approach 差异。
+- `validate()`：六章 C0–C5 有入口/出口/必须事实；每章 ≥2 条替代路线（C5 为三终局；C0 序章允许 1 条入口）；三终局均可从任一起源到达；side-stories 不提供唯一必需资源；npc 至少每章一条回信。
+- 静态边界：无 DOM/IDB/网络；`syncFlags` 只经注入 db。
+
+### 20.3 ending-reducer.js（三终局汇合）
+
+- 复用 `commission-core` 工厂，用三份 ending 内容建独立实例；ending 行在 `configureEndings` 时转换为 commission 行（`reward.flags=ending flags`，`unlock` 需 `C4.city_power_restored`）。
+- `startEnding({approach})` → 复用 commission.start（ticket/DB 幂等）；只允许 C4 后、未被其他终局占用；`commissions.open` 行不出现于 96 告示板。
+- `settleEnding` → commission.settle 成功后，一次性写 `C5.star_tower_resolved` + `ending.<approach>` quest 行与 profile/quest 标记；同一生涯只能有一个主线首次通关（`C5` 唯一），重复返回原收据/duplicate，零新增奖励。
+- `endingOf(quests,claims)` 只读推导；`epilogue` 来自 campaign；三终局经济等价（ending 工钱 0，首次旗标只发一次；后续自由职业/挑战不受限）。
+- 失败/放弃：可重试，不消耗 C5；不得把失败标记为通关。
+
+### 20.4 故事 UI 与入口
+
+- 信箱在 C0 之后显示「旧港来信」章节入口；告示板显示当前章节/下一章与终局选择（C4 后）。无顶层 CTA、无强制弹窗、可跳过阅读；章节面板可重复打开。
+- `ui/world-state.js`：`open(ctx)/close()/render(ctx)`；章节卡片（标题/状态/一条戏内提示）、可选支线、终局三选一、后日谈；只改生涯浮层内的灯光/广播文本，绝不修改经典游戏画布、局内档或难度。
+- 320–430 无溢出、按钮 ≥44px、Esc 只关最上层、焦点返回、reduced-motion；无 careerId 时只读。
+- 职业 run 中若打开章节面板不改变 run/事件；章节面板不写入经典键。
+
+### 20.5 测试
+
+- `tools/career_graph_reachability_test.mjs`：16 起源 × 3 终局 = 48 条主线路径可达；每章替代路径可达；无不可回收道具/唯一职业死锁；不硬编码 16/96。
+- `tools/career_campaign_e2e_test.mjs`：真实 Chrome 跑通至少三条不同可玩路线（C0→C5），验证分支/结局旗标保留、重复结算幂等、导入/恢复后不复制剧情奖励、经典 5 键不变。
+- Graph/E2E 不得 mock 关键游戏事件；T4–T6 与三终局使用受控故事旗标 fixture 时必须在证据中标注。
+
+### 20.6 版本与发布
+
+- 0.18.0 版本链与 SW `studiokit-arcade-0.18.0-v1`；SW/verify_deploy 含 campaign/chapter/ending/npc/side/campaign-core/ending-reducer/world-state。
+- 仍只本地分支；任何发布需 Owner `OWNER_AUTHORIZATION: PUBLISH_TO_MAIN`；G18 需独立审核并记录真机/读屏器 UNVERIFIED。
