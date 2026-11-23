@@ -34,7 +34,7 @@
 - 市场「卖出全部」使用会话前缀 ID，刷新后可再卖；制造卡显示累计报价，DB 购买事务拒绝降级/重复扣款。
 - 章节 C2/C4 的 `anyCommissions` 移入 `requires`，运行时实际生效；溢出汇总保留 theme/level 上下文分组，storm/blockade 不再互相覆盖。
 
-复测：campaign E2E 701/701、world 109/109、a11y 75、PWA 17、smoke 113、commission 64/64、db 38、backup 34、ending 34、graph 48/48；96 全部 16 游戏分批/单游戏 PASS；p1-6、p2-1、p2-2、p2-3、p2-4b、p2-5、workshop、blackjack 慢启动探针 PASS。完整聚合门禁仍以新 HEAD 实跑为准，本条不预写 PASS。
+复测：campaign E2E 701/701、world 109/109、a11y 75、PWA 17、smoke 113、commission 64/64、db 38、backup 34、ending 34、graph 48/48；96 全部 16 游戏分批/单游戏 PASS；p1-6、p2-1、p2-2、p2-3、p2-4b、p2-5、workshop、blackjack 慢启动探针 PASS。完整聚合门禁在 `8fc73f1` 实跑 **ALL GATES PASSED（exit 0）**；第二次整轮唯一一次 CH-SB-002 波动已在 `8fc73f1` 前以 shadow 卷轴重试消除，第三次整轮通过。
 
 
 **G18 PASS**（第二轮独立复审，B1–B5 全部关闭；门禁与独立复测全绿）。随后全分支复审提出的 P1/P2 已在 `6481322` 修复并逐项复测；G18 PASS ≠ 发布授权。
