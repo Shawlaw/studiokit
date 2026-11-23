@@ -4,9 +4,27 @@
 - 契约：ADR §20；设计/回滚：`apps/arcade/DESIGN-0.18.0.md`；集成：`INTEGRATION-0.18.md`。
 - 完整原始证据在仓库外：`qa/evidence/G18-AUDIT.md`（首轮 FAIL，B1–B5）、`G18-AUDIT-2.md`（第二轮 PASS + W11）、`G18b-runall.log`、`G18b-recheck.log`、`g18-real-paths/mjs` 等；不含剧透内容。
 
-## 结论
+## 全分支复审（cd9e555）后的 P1/P2 修复（HEAD 6481322）
+
+独立全分支审查提出 6 项 P1、10 项 P2；已在本分支修复并逐项复测（证据仓库外）：
+
+- C0：真实线索 chip → `openClue` 打开信箱后补 `C0.port_seen`，失败不写；中心页回流入口仍可用。
+- 五材：`applyInventoryCosts` 不再只遍历 crystal/starcrystal，卖出/扣料五种材料全部生效；新增 12/12 回归（含混合库存/不足/幂等）。
+- 长局：commission-core 缓冲满后按 kind 汇总 count/最大值/最后上下文，结算并入摘要；2048 长局 1024 不再丢；E5b/E5c 覆盖。
+- 慢启动：16 游戏 career ticket 等待窗 3.5s→10s，经典兜底后 late ticket 不再切模式；真实 3.9s 延迟验证。
+- 慢加载：不再为切回职业清经典 `runs:v1`；真实星海旧档 + 2.2s ending-reducer 延迟逐字节不变。
+- 终局：career 级 `ending-reservation`（migrations 唯一键）原子抢锁，跨标签仅一个赢家；失败/放弃释放。
+- 首通：`commission-first` 原子预留 + quest 检查，跨标签不同票据首通奖只发一次，另一票为重复薪资。
+- 其他：替换导入后当前页立即采用恢复状态；备份行上限 20000；双页发现快照合并；市场操作 ID 加会话前缀；记忆翻牌 T3/T5 与五子棋 session.finish 改为真实配对/落子门槛；制造按逐级累计成本；武力终局加载已装备机体；锁定章节不泄漏正文/事实；章节面板可回信箱/告示板；清理尾部空行与绝对路径。
+
+复测：campaign E2E 701/701、world 109/109、a11y 75、PWA 17、smoke 113、mobile 318、backup 34、db 38、commission 63、ending 34、graph 48/48；p1-1/p1-4/p1-5/p1-6/p2-1/p2-3/p2-4/p2-5/p2-8 独立探针全 PASS。完整聚合门禁在本机两次卡在 PWA P16（单独运行 17/17 通过），未把该次写成全量 PASS；96 单跑见下。
+
 
 **G18 PASS**（第二轮独立复审，B1–B5 全部关闭；门禁与独立复测全绿）。W11 已由主控修复并独立复测（告示板终局按钮真实导航到对应终局 run）。G18 PASS ≠ 发布授权。
+
+## 结论
+
+**G18 PASS**（第二轮独立复审，B1–B5 全部关闭；门禁与独立复测全绿）。随后全分支复审提出的 P1/P2 已在 `6481322` 修复并逐项复测；G18 PASS ≠ 发布授权。
 
 ## 首轮阻塞与本轮关闭
 

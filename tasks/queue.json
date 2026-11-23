@@ -2203,6 +2203,22 @@
         "不推送"
       ],
       "evidence": "G18 独立复审 PASS；聚合门禁 ALL GATES PASSED；HEAD a84d15f + W11 fix 118f1cc；未发布"
+    },
+    {
+      "id": "T124",
+      "title": "全分支复审 P1/P2 修复与复测（本地未发布）",
+      "kind": "agent",
+      "status": "IN_PROGRESS",
+      "dependsOn": [
+        "T123"
+      ],
+      "ownerAuthorizationRequired": false,
+      "acceptance": [
+        "6 P1 + 10 P2 修复",
+        "逐项复测",
+        "不推送"
+      ],
+      "evidence": "6481322；探针/E2E/world/a11y/PWA/smoke/mobile；聚合门禁 PWA P16 环境卡住已记录"
     }
   ]
 }

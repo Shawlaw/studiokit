@@ -4,6 +4,7 @@
 
 | ID | 类型 | 任务 | 状态 | 依赖 | 备注 |
 |---|---|---|---|---|---|
+| T124 | agent | 全分支复审（cd9e555）P1/P2 修复与复测（本地未发布） | DONE | T123 | 6 项 P1 + 10 项 P2 已在 `6481322` 修复；逐项独立探针、campaign E2E 701/701、world 109/109、a11y 75、PWA 17、smoke 113、mobile 318；96 16/16 游戏按批/单游戏全 PASS；完整聚合门禁两次卡在 PWA P16（单跑 17/17），未写成全量 PASS。 |
 | T123 | agent | Arcade 0.18.0 本地门禁：D18 系列与 G18（不发布） | DONE | T122 | **G18 独立复审 PASS**（HEAD `a84d15f`；W11 在 `118f1cc` 修复并复测）：B1–B5 全关；聚合门禁 ALL GATES PASSED；campaign E2E 701/701、world 109/109、graph 48/48、96 96/96/3792；版本链 0.18.0；未推送/未发布，摘要 `docs/arcade-life/G18-EVIDENCE.md`。 |
 | T122 | agent | Arcade 0.18.0：星塔回响六章、三终局与后日常（本地未发布） | DONE | T121 | 六章/三终局/后日常、campaign-core/ending-reducer/world-state、C0 信箱与终局跨页缓冲、告示板章节卡；campaign 53/53、ending 34/34、graph 48/48、world 109/109、E2E 701/701；G18 PASS。 |
 

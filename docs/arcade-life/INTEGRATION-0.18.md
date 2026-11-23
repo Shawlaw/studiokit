@@ -29,6 +29,7 @@
 | 0.17 回归 | 96/96 tiers、resume 45/45、mobile 318、PWA 17、a11y 75、smoke 113、review 5/5、gameplay 104/104（G18 复跑） |
 | 聚合门禁 | `py -3 tools/arcade_run_all_gates.py` ALL GATES PASSED（96 单次跑完、campaign/world/E2E/回归全绿） |
 | G18 | 独立复审 PASS（HEAD `a84d15f` 后补 W11；证据仓库外 `G18-AUDIT-2.md`） |
+| 全分支复审修复 | 6 项 P1 + 10 项 P2 已在 `6481322` 修复；逐项独立探针 + campaign E2E 701/701、world 109/109、a11y 75、PWA 17、smoke 113、mobile 318；完整聚合门禁两次卡在 PWA P16（单跑 17/17），未写成全量 PASS |
 | 待跑 | 真机/读屏器/PWA 安装态 UNVERIFIED；在线双端 verify_deploy 未授权未运行 |
 
 ## 4. 已知问题（试玩与残留风险）
