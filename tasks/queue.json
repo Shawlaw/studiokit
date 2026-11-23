@@ -2175,7 +2175,7 @@
       "id": "T122",
       "title": "Arcade 0.18.0：星塔回响六章、三终局与后日常（本地未发布）",
       "kind": "agent",
-      "status": "IN_PROGRESS",
+      "status": "DONE",
       "dependsOn": [
         "T121"
       ],
@@ -2186,13 +2186,13 @@
         "48路径图与E2E",
         "本地未发布"
       ],
-      "evidence": "campaign-core 53/53、ending 34/34、graph 48/48、world 109/109；E2E 待最终复跑；证据 qa/evidence/D18-*。"
+      "evidence": "六章/三终局/后日常；campaign 53/53、ending 34/34、graph 48/48、world 109/109、E2E 701/701；G18 PASS"
     },
     {
       "id": "T123",
       "title": "Arcade 0.18.0 本地门禁：D18 系列与 G18（不发布）",
       "kind": "agent",
-      "status": "IN_PROGRESS",
+      "status": "DONE",
       "dependsOn": [
         "T122"
       ],
@@ -2202,7 +2202,7 @@
         "版本链0.18.0/文档/聚合门禁/G18",
         "不推送"
       ],
-      "evidence": "进行中。"
+      "evidence": "G18 独立复审 PASS；聚合门禁 ALL GATES PASSED；HEAD a84d15f + W11 fix 118f1cc；未发布"
     }
   ]
 }

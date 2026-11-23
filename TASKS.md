@@ -4,8 +4,8 @@
 
 | ID | 类型 | 任务 | 状态 | 依赖 | 备注 |
 |---|---|---|---|---|---|
-| T123 | agent | Arcade 0.18.0 本地门禁：D18 系列与 G18（不发布） | IN_PROGRESS | T122 | 六章/三终局核心与内容、world-state UI、48 路径图测试已落地；E2E 701/701 基线通过但真实 bridge 终局路径刚修复（attach 跨页缓冲/双缓冲），E2E 需按最终接口复跑；待 0.16→0.18 版本链/文档/聚合门禁/G18。**未推送 main、无发布授权**。 |
-| T122 | agent | Arcade 0.18.0：星塔回响六章、三终局与后日常（本地未发布） | IN_PROGRESS | T121 | 新增 campaign-core/ending-reducer/ui/world-state、campaign/chapter/ending/npc/side 内容；C0–C5 状态机、终局一次性汇合、章节面板/终局选择；graph 48/48 路径、campaign-core 53/53、ending 34/34、world 109/109；bridge 修复 C0 信箱同步与终局事件跨页缓冲；E2E 待最终复跑。 |
+| T123 | agent | Arcade 0.18.0 本地门禁：D18 系列与 G18（不发布） | DONE | T122 | **G18 独立复审 PASS**（HEAD `a84d15f`；W11 在 `118f1cc` 修复并复测）：B1–B5 全关；聚合门禁 ALL GATES PASSED；campaign E2E 701/701、world 109/109、graph 48/48、96 96/96/3792；版本链 0.18.0；未推送/未发布，摘要 `docs/arcade-life/G18-EVIDENCE.md`。 |
+| T122 | agent | Arcade 0.18.0：星塔回响六章、三终局与后日常（本地未发布） | DONE | T121 | 六章/三终局/后日常、campaign-core/ending-reducer/world-state、C0 信箱与终局跨页缓冲、告示板章节卡；campaign 53/53、ending 34/34、graph 48/48、world 109/109、E2E 701/701；G18 PASS。 |
 
 | T121 | agent | Arcade 0.17.0 本地门禁：D17 系列与 G17（不发布） | DONE | T120 | **G17 独立门禁 PASS**（HEAD `159babb`，两轮：首轮 FAIL→修复 crystal 别名/脏树/a11y 后 PASS）：96/96 tiers、3792 checks、经济五材/三模块、16 源无 CTA、78 关零回归、mobile 318、PWA 17、a11y 75；工作树干净、远端 main `afc5fd4`、无 push/tag/部署、无发布授权；摘要 `G17-EVIDENCE.md`。 |
 | T120 | agent | Arcade 0.17.0：活世界 96 委托、五材商店、制造台与职业成长（本地未发布） | DONE | T119 | 新增 commission-schema/materials/crafting/professions/story-evidence/route-planner、ui/market|workshop、96 委托/items/chapter 内容；16 游戏职业目标/事件/隔离；db.sellItems 原子卖料、crystal→starcrystal；修复层塔职业写档/影跃经典事件/雪铃去重/DB writeEquipment/review 55 金样。测试：96 tiers 3792 checks、materials 32、professions 213、story 90、route 214、balance 47、commission 61、combat 379、legacy 78/90/84/37；smoke 113、reachability 165、a11y 75、db 38、backup 34、PWA 17。版本链 0.17.0。 |
