@@ -44,6 +44,10 @@ def main() -> int:
         ('career_story_evidence', ['node', 'tools/career_story_evidence_test.mjs'], None),
         ('career_route_planner', ['node', 'tools/career_route_planner_test.mjs'], None),
         ('career_economy_balance', ['node', 'tools/career_economy_balance_test.mjs'], None),
+        ('career_crystal_alias', ['node', 'tools/career_crystal_alias_test.mjs'], {
+            'CAREER_CRYSTAL_PORT': os.environ.get('CAREER_CRYSTAL_PORT', '8991'),
+            'CAREER_CRYSTAL_CDP': os.environ.get('CAREER_CRYSTAL_CDP', '9591'),
+        }),
         ('career_mission_schema', ['node', 'tools/career_mission_fixture_runner.mjs', '--validate'], None),
         ('career_star_combat_config', ['node', 'tools/career_star_combat_config_test.mjs'], None),
         ('career_db', ['node', 'tools/career_db_test.mjs'], {

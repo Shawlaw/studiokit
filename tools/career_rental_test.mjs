@@ -364,11 +364,11 @@ function contentItems(overrides) {
 
   const env2 = newRental();
   const patchContent = contentItems({
-    contentVersion: '0.16.9',
+    contentVersion: '0.17.9',
     ships: [{ shipId: 'old-wing', name: '旧翼', price: 260, rental: true, stats: {} }],
   });
   const configured2 = env2.rental.configure({ items: patchContent });
-  check('T-07c 0.16.x 补丁版本兼容', configured2.ok === true && configured2.usable === true);
+  check('T-07c 0.17.x 补丁版本兼容', configured2.ok === true && configured2.usable === true);
 }
 
 /* ---------------------------------------------------------------- T-08 可租条目校验 */

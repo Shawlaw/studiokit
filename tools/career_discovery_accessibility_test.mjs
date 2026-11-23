@@ -674,6 +674,8 @@ async function runCareerSession() {
     assertNear(chip.canvas.height, canvasBefore.height, 0.6, 'canvas.height');
     return 'canvas 前后一致 ' + formatRect(chip.canvas);
   });
+  /* 宿主 Chrome 可能默认 reduce；默认媒体基线显式仿真 no-preference，保证门禁可复现。 */
+  await cdp.send('Emulation.setEmulatedMedia', { features: [{ name: 'prefers-reduced-motion', value: 'no-preference' }] });
   await check('B11 默认媒体下 chip 有一次性淡入动画（对照基线）', async () => {
     const chip = await measureChip();
     assert(chip.animationName !== 'none', '默认媒体下 chip 应有淡入动画，实际 animation-name=' + chip.animationName);
@@ -824,6 +826,7 @@ async function runCareerSession() {
   await closeAllPanels();
 
   /* ---------- reduced motion（真实 CDP 媒体仿真） ---------- */
+  await cdp.send('Emulation.setEmulatedMedia', { features: [{ name: 'prefers-reduced-motion', value: 'no-preference' }] });
   await check('B27 对照：默认媒体下 chip 动画存在', async () => {
     const chip = await measureChip();
     assert(chip && chip.animationName !== 'none', '默认媒体 chip animation-name 期望非 none，实际 ' + detail(chip && chip.animationName));
@@ -874,6 +877,7 @@ async function runCareerSession() {
   });
   await cdp.send('Emulation.setEmulatedMedia', { features: [] });
   await closeAllPanels();
+  await cdp.send('Emulation.setEmulatedMedia', { features: [{ name: 'prefers-reduced-motion', value: 'no-preference' }] });
   await check('B31 恢复媒体后动画回归（媒体仿真可逆）', async () => {
     const chip = await measureChip();
     assert(chip && chip.animationName !== 'none', '恢复媒体后 chip animation-name 期望非 none，实际 ' + detail(chip && chip.animationName));

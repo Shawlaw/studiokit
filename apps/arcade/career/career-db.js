@@ -98,6 +98,20 @@
     return !!value && typeof value === 'object' && !Array.isArray(value);
   }
 
+  /* 0.16 遗留材料别名：库存/成本/流水统一按 starcrystal 记账，读取时归并。 */
+  function canonicalItemId(itemId) {
+    return itemId === 'crystal' ? 'starcrystal' : itemId;
+  }
+
+  function canonicalItemMap(items) {
+    const out = {};
+    Object.keys(items || {}).forEach((itemId) => {
+      const key = canonicalItemId(itemId);
+      out[key] = (out[key] || 0) + Math.max(0, Math.floor(Number(items[itemId]) || 0));
+    });
+    return out;
+  }
+
   function nowIso() {
     return new Date().toISOString();
   }
@@ -726,7 +740,8 @@
   }
 
   function incrementInventory(ctx, core, careerId, items, at, done) {
-    const ids = Object.keys(items || {});
+    const clean = canonicalItemMap(items);
+    const ids = Object.keys(clean);
     const store = ctx.store('inventory');
     const tasks = ids.map((itemId) => (next) => {
       ctx.bind(store.get([careerId, itemId]), (existing) => {
@@ -735,7 +750,7 @@
         const row = {
           careerId,
           itemId,
-          count: Math.min(prev + Math.max(0, Math.floor(Number(items[itemId]) || 0)), cap),
+          count: Math.min(prev + clean[itemId], cap),
           updatedAt: at,
         };
         ctx.bind(store.put(row), next);
@@ -744,32 +759,54 @@
     sequence(tasks, done);
   }
 
-  /** 0.16：材料成本原子扣减（不足时在事务内 fail，绝不写半成品）。 */
+  /** 0.16/0.17：材料成本原子扣减（0.16 crystal 归并到 starcrystal；不足时在事务内 fail）。 */
   function applyInventoryCosts(ctx, core, careerId, costItems, at, done) {
-    const ids = Object.keys(costItems || {});
+    const need = canonicalItemMap(costItems);
+    const ids = Object.keys(need);
     if (!ids.length) {
       done();
       return;
     }
     const store = ctx.store('inventory');
-    const tasks = ids.map((itemId) => (next) => {
-      ctx.bind(store.get([careerId, itemId]), (existing) => {
-        const prev = existing && Number.isFinite(Number(existing.count)) ? Math.max(0, Math.floor(Number(existing.count))) : 0;
-        const need = Math.max(0, Math.floor(Number(costItems[itemId]) || 0));
-        if (prev < need) {
+    ctx.bind(store.getAll(), (rows) => {
+      const owned = {};
+      const rawByCanonical = {};
+      (Array.isArray(rows) ? rows : []).forEach((row) => {
+        if (!row || row.careerId !== careerId || typeof row.itemId !== 'string') return;
+        const key = canonicalItemId(row.itemId);
+        const count = Math.max(0, Math.floor(Number(row.count) || 0));
+        owned[key] = (owned[key] || 0) + count;
+        if (!rawByCanonical[key]) rawByCanonical[key] = {};
+        rawByCanonical[key][row.itemId] = (rawByCanonical[key][row.itemId] || 0) + count;
+      });
+      for (let i = 0; i < ids.length; i += 1) {
+        if ((owned[ids[i]] || 0) < need[ids[i]]) {
           ctx.fail('insufficient-items');
           return;
         }
-        const left = prev - need;
-        if (left === 0) {
-          ctx.bind(store.delete([careerId, itemId]), next);
-          return;
-        }
-        const row = { careerId, itemId, count: left, updatedAt: at };
-        ctx.bind(store.put(row), next);
+      }
+      const tasks = [];
+      ids.forEach((itemId) => {
+        let left = need[itemId];
+        /* 优先消耗 0.16 遗留 crystal 行，再消耗 starcrystal 行。 */
+        ['crystal', 'starcrystal'].forEach((rawId) => {
+          if (left <= 0) return;
+          const rawCount = rawByCanonical[itemId] && rawByCanonical[itemId][rawId] ? rawByCanonical[itemId][rawId] : 0;
+          if (!rawCount) return;
+          const take = Math.min(left, rawCount);
+          left -= take;
+          const remaining = rawCount - take;
+          tasks.push((next) => {
+            if (remaining === 0) {
+              ctx.bind(store.delete([careerId, rawId]), next);
+              return;
+            }
+            ctx.bind(store.put({ careerId, itemId: rawId, count: remaining, updatedAt: at }), next);
+          });
+        });
       });
+      sequence(tasks, done);
     });
-    sequence(tasks, done);
   }
 
   function mergeEquipment(ctx, careerId, grants, at, done) {
@@ -1285,6 +1322,8 @@
       }
       cleanItems[itemId] = count;
     }
+    const canonicalItems = canonicalItemMap(cleanItems);
+    const canonicalIds = Object.keys(canonicalItems);
     const at = typeof options.now === 'string' && options.now ? options.now : nowIso();
     const contentVersion =
       typeof options.contentVersion === 'string' && options.contentVersion
@@ -1305,9 +1344,9 @@
             return;
           }
           readInventoryMap(ctx, careerId, (owned) => {
-            for (let i = 0; i < ids.length; i += 1) {
-              const itemId = ids[i];
-              if ((owned[itemId] || 0) < cleanItems[itemId]) {
+            for (let i = 0; i < canonicalIds.length; i += 1) {
+              const itemId = canonicalIds[i];
+              if ((owned[itemId] || 0) < canonicalItems[itemId]) {
                 ctx.fail('insufficient-items');
                 return;
               }
@@ -1323,7 +1362,7 @@
               careerId,
               saleId,
               credits,
-              items: jsonClone(cleanItems),
+              items: jsonClone(canonicalItems),
               soldAt: at,
               balanceAfter: nextCredits,
               rulesetVersion: core.RULESET_VERSION,
@@ -1337,23 +1376,12 @@
               saleId,
               step: 1,
               credits,
-              items: jsonClone(cleanItems),
+              items: jsonClone(canonicalItems),
               at,
               rulesetVersion: core.RULESET_VERSION,
               contentVersion,
               receipt,
             };
-            const decrementTasks = ids.map((itemId) => (next) => {
-              ctx.bind(ctx.store('inventory').get([careerId, itemId]), (row) => {
-                const prev = row && Number.isFinite(Number(row.count)) ? Math.max(0, Math.floor(Number(row.count))) : 0;
-                const left = prev - cleanItems[itemId];
-                if (left <= 0) {
-                  ctx.bind(ctx.store('inventory').delete([careerId, itemId]), next);
-                  return;
-                }
-                ctx.bind(ctx.store('inventory').put({ careerId, itemId, count: left, updatedAt: at }), next);
-              });
-            });
             const tasks = [
               (next) => ctx.bindConstraint(ctx.store('ledgers').add(ledgerRow), 'constraint', next),
               (next) => {
@@ -1366,7 +1394,7 @@
                 };
                 ctx.bind(ctx.store('balances').put(row), next);
               },
-              ...decrementTasks,
+              (next) => applyInventoryCosts(ctx, core, careerId, canonicalItems, at, next),
             ];
             sequence(tasks, () => ctx.done({ ok: true, duplicate: false, receipt }));
           });
