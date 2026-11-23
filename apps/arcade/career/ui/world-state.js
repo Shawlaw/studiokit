@@ -1210,6 +1210,7 @@
   function sideStoriesOf(context) {
     const bundle = sideStoriesContentOf(context);
     if (!bundle) return [];
+    const hasDiscoveryData = isObject(context) && (isObject(context.state) || isArray(context.discoveredClues) || isArray(context.clueIds));
     const discovered = discoveredIdsOf(context);
     const explicit = new Set();
     if (isArray(bundle.available)) {
@@ -1228,7 +1229,7 @@
       const marked = family.available === true || family.unlocked === true || explicit.has(familyId);
       const links = isArray(family.links) ? family.links.map(idText).filter(Boolean) : [];
       const hit = links.some((link) => discovered.has(link));
-      /* 没有任何触发数据（离线渲染/合成测试）时按可选阅读展示；有触发数据则只展示已触发的家族。 */
+      /* 没有任何发现数据时按可选阅读展示；有发现数据则只展示已触发的家族。 */
       if (!marked && !hit && discovered.size > 0) return;
       out.push({ familyId: familyId, title: title || '未命名的支线', text: text });
     });

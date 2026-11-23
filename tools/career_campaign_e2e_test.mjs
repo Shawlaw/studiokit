@@ -77,7 +77,7 @@ function parsePortEnv(name, fallback) {
 const SERVER_PORT = parsePortEnv('C18_E2E_PORT', 8996);
 const CDP_PORT = parsePortEnv('C18_E2E_CDP', 9596);
 const BASE_URL = 'http://127.0.0.1:' + SERVER_PORT;
-const QA_DIR = process.env.C18_QA_DIR || 'D:\\LocalAgentWorkspace\\arcade-life-devkit\\work-015-018\\qa';
+const QA_DIR = process.env.C18_QA_DIR || path.join(REPO_ROOT, 'test-artifacts', 'qa');
 const ARTIFACTS_DIR = path.join(QA_DIR, 'artifacts-d18-14');
 const ONLY = String(process.env.C18_E2E_ONLY || '').trim().toUpperCase();
 const STEP_TIMEOUT_MS = Number(process.env.C18_E2E_STEP_TIMEOUT || 180000);

@@ -38,7 +38,7 @@ import { CDP, REPO_ROOT, createRecorder, envPort, launchChrome, openPage, sleep,
 
 const SERVER_PORT = envPort('CAREER_RESUME_PORT', 8880);
 const CDP_PORT = envPort('CAREER_RESUME_CDP', 9480);
-const QA_DIR = process.env.CAREER_QA_DIR || 'D:\\LocalAgentWorkspace\\arcade-life-devkit\\work-015-018\\qa';
+const QA_DIR = process.env.CAREER_QA_DIR || path.join(REPO_ROOT, 'test-artifacts', 'qa');
 const EVIDENCE_DIR = path.join(QA_DIR, 'evidence');
 const ARTIFACTS_DIR = path.join(QA_DIR, 'artifacts-d16-11');
 const DB_NAME = 'studiokit:arcade:career';

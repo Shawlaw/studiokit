@@ -2816,7 +2816,10 @@
       extraModules.push('campaign');
       extraModules.push('ending');
     }
-    if (name === 'mailbox' || name === 'town') extraModules.push('campaign');
+    if (name === 'mailbox' || name === 'town') {
+      extraModules.push('campaign');
+      extraModules.push('ending');
+    }
     var preloadList = [ensureLazyModule('commission'), ensureLazyModule('alternatives'), loadCareerContent()];
     extraModules.forEach(function (moduleName) {
       preloadList.push(ensureLazyModule(moduleName));
@@ -2924,11 +2927,16 @@
   }
 
   function startEnding(approach) {
-    var endingModule = readGlobal('ending');
-    if (!endingModule || typeof endingModule.startEnding !== 'function') {
-      return Promise.resolve({ ok: false, reason: 'ending-module-missing' });
-    }
-    return Promise.resolve(endingModule.startEnding({ approach: approach, careerId: internal.commissionLastCareerId || null }))
+    /* 任何入口（告示板/章节面板）都必须能在未预载时懒加载终局模块。 */
+    return Promise.all([ensureLazyModule('ending'), loadCareerContent()])
+      .then(function () {
+        configureCareerModules();
+        var endingModule = readGlobal('ending');
+        if (!endingModule || typeof endingModule.startEnding !== 'function') {
+          return { ok: false, reason: 'ending-module-missing' };
+        }
+        return endingModule.startEnding({ approach: approach, careerId: internal.commissionLastCareerId || null });
+      })
       .then(function (result) {
         if (result && result.ok && result.url) {
           try {
@@ -2938,6 +2946,10 @@
           }
         }
         return result;
+      })
+      .catch(function (err) {
+        warnOnce('ending-start', err);
+        return { ok: false, reason: 'ending-error' };
       });
   }
 

@@ -2,7 +2,7 @@
 
 - 分支：`feat/arcade-life-015`（本地，未推送、未发布）
 - 基线：0.17.0（G17 PASS）；目标：0.18.0
-- 契约/设计：ADR §20、`apps/arcade/DESIGN-0.18.0.md`、`PLAYTEST-018.md`
+- 契约/设计：ADR §20、`apps/arcade/DESIGN-0.18.0.md`
 - 证据：仓库外 `qa/evidence/D18-*.md`；G18 摘要 `G18-EVIDENCE.md`
 
 ## 1. 交付
@@ -27,9 +27,11 @@
 | world-state | 109/109（六章/终局/后日谈/降级/320–430/焦点/媒体） |
 | campaign E2E | **701/701**：3 条路线 C0→C5、三终局真实结算、备份恢复 24/24、经典 5 键逐字节 |
 | 0.17 回归 | 96/96 tiers、resume 45/45、mobile 318、PWA 17、a11y 75、smoke 113、review 5/5、gameplay 104/104（G18 复跑） |
-| 待跑 | 0.18 全聚合门禁与 G18 独立复核；真机/读屏器/PWA 安装态 UNVERIFIED |
+| 聚合门禁 | `py -3 tools/arcade_run_all_gates.py` ALL GATES PASSED（96 单次跑完、campaign/world/E2E/回归全绿） |
+| G18 | 独立复审 PASS（HEAD `a84d15f` 后补 W11；证据仓库外 `G18-AUDIT-2.md`） |
+| 待跑 | 真机/读屏器/PWA 安装态 UNVERIFIED；在线双端 verify_deploy 未授权未运行 |
 
-## 4. 已知问题（PLAYTEST-018）
+## 4. 已知问题（试玩与残留风险）
 
 - I4：章节完成无全局即时反馈（面板/收据侧可见）；I3：展示路线与产证仍有内容差异（E2E 用受控种子）。
 - I1：首次进入仍依赖新线索 chip；C0 后已有中心页小字回流入口。
