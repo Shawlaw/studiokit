@@ -564,6 +564,19 @@
     const statusLine = make('p', 'ac-career-status');
     statusLine.hidden = true;
 
+    /* 0.18 章节/终局只读卡：告示板也能看到当前章节与 C4 后三终局。 */
+    const campaignSection = make('section', 'ac-career-town__campaign');
+    campaignSection.setAttribute('data-town-campaign', 'true');
+    campaignSection.hidden = true;
+    const campaignHeading = make('h3', 'ac-career-town__subtitle', '旧港来信');
+    const campaignCurrent = make('p', 'ac-career-town__campaign-current');
+    const campaignList = make('ul', 'ac-career-town__list ac-career-town__campaign-list');
+    const campaignEndings = make('div', 'ac-career-town__campaign-endings');
+    campaignSection.appendChild(campaignHeading);
+    campaignSection.appendChild(campaignCurrent);
+    campaignSection.appendChild(campaignList);
+    campaignSection.appendChild(campaignEndings);
+
     const footer = make('div', 'ac-career-town__footer');
     const hangarBtn = make('button', 'ac-career-btn ac-career-btn--ghost', HANGAR_LABEL);
     hangarBtn.type = 'button';
@@ -594,6 +607,7 @@
     townView.appendChild(altHeading);
     townView.appendChild(altList);
     townView.appendChild(altEmpty);
+    townView.appendChild(campaignSection);
     townView.appendChild(statusLine);
     townView.appendChild(footer);
 
@@ -966,6 +980,60 @@
       }
     }
 
+    function renderCampaign() {
+      const context2 = liveContext || {};
+      const module = context2.campaign;
+      if (!module || typeof module.state !== 'function' || !context2.careerId) {
+        campaignSection.hidden = true;
+        return;
+      }
+      let model = null;
+      try {
+        model = module.state({
+          quests: Array.isArray(context2.quests) ? context2.quests : [],
+          claims: Array.isArray(context2.claims) ? context2.claims : [],
+          profile: context2.profile || null,
+          wallet: context2.wallet || null,
+        });
+      } catch (err) {
+        campaignSection.hidden = true;
+        return;
+      }
+      const chapters = model && Array.isArray(model.chapters) ? model.chapters : [];
+      const currentId = model && model.currentChapter ? model.currentChapter.chapterId || model.currentChapter : '';
+      if (!chapters.length) {
+        campaignSection.hidden = true;
+        return;
+      }
+      campaignSection.hidden = false;
+      const current = chapters.filter((chapter) => chapter.chapterId === currentId)[0] || chapters.filter((chapter) => chapter.state === 'active')[0] || chapters[chapters.length - 1];
+      campaignCurrent.textContent = current
+        ? '当前：' + (current.chapterId || '') + ' · ' + (current.title || '') + '（' + (current.state || 'locked') + '）'
+        : '';
+      campaignCurrent.setAttribute('data-town-current', current ? current.chapterId || '' : '');
+      campaignList.textContent = '';
+      chapters.forEach((chapter) => {
+        const item = make('li', 'ac-career-town__campaign-item');
+        item.setAttribute('data-town-chapter', chapter.chapterId || '');
+        item.setAttribute('data-state', chapter.state || 'locked');
+        item.textContent = (chapter.chapterId || '') + ' · ' + (chapter.title || '') + ' · ' + (chapter.state || 'locked');
+        campaignList.appendChild(item);
+      });
+      campaignEndings.textContent = '';
+      const endings = model && Array.isArray(model.endings) ? model.endings : [];
+      endings.forEach((ending) => {
+        if (!ending || !ending.available) return;
+        const button = make('button', 'ac-career-btn ac-career-btn--primary', '终局 · ' + (ending.title || ending.approach));
+        button.type = 'button';
+        button.setAttribute('data-town-ending', ending.approach);
+        button.addEventListener('click', function () {
+          if (typeof context2.startEnding !== 'function') return;
+          try { context2.startEnding(ending.approach); } catch (err) { /* ignore */ }
+        }, false);
+        campaignEndings.appendChild(button);
+      });
+    }
+
     function refresh(next) {
       if (!isCurrent()) return sheet;
       const context2 = isObject(next) ? next : {};
@@ -976,6 +1044,7 @@
       setStatus('');
       /* 保留上一次的行与提示，直到新结果到达再整体替换，避免异步模块出现空列表/告示闪烁。 */
       renderWallet();
+      renderCampaign();
       loadUnlocks();
       return sheet;
     }
@@ -996,6 +1065,7 @@
     function start() {
       applyUnlocked(null, true);
       renderWallet();
+      renderCampaign();
       loadUnlocks();
     }
 

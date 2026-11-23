@@ -590,6 +590,7 @@
           title: cleanText(entry.title),
           routes: normalizeRoutes(entry.routes),
           mustKnow: arrayOfText(entry.mustKnow),
+          body: cleanText(entry.body),
           handoff: cleanText(entry.handoff),
         });
       });
@@ -914,7 +915,7 @@
       hint: pickHint(state, routes, contentRoutes, contentChapter, builtin),
       routes: routes,
       mustKnow: mustKnow,
-      body: cleanText(contentChapter && contentChapter.body),
+      body: cleanText(snapshotChapter && snapshotChapter.body) || cleanText(contentChapter && contentChapter.body),
       handoff: cleanText(snapshotChapter && snapshotChapter.handoff) || cleanText(contentChapter && contentChapter.handoff),
     };
   }
@@ -999,6 +1000,7 @@
       const chapterId = idText(entry.chapterId);
       if (chapterId) contentMap[chapterId] = entry;
     });
+    const chapterFiles = isObject(context.chapters) ? context.chapters : null;
     const snapshotChapters = snapshot && snapshot.hasChapters ? snapshot.chapters : [];
     const snapshotMap = Object.create(null);
     snapshotChapters.forEach((entry) => {
@@ -1023,7 +1025,16 @@
     });
     if (!ids.length) return null;
 
-    const chapters = ids.map((chapterId) => buildChapter(chapterId, snapshotMap[chapterId], contentMap[chapterId], flags, completed));
+    const chapters = ids.map((chapterId) => {
+      const fileChapter = chapterFiles && isObject(chapterFiles[chapterId]) ? chapterFiles[chapterId] : null;
+      const mergedChapter = contentMap[chapterId]
+        ? Object.assign({}, contentMap[chapterId], {
+            body: cleanText(contentMap[chapterId].body) || cleanText(fileChapter && fileChapter.body),
+            mustKnow: arrayOfText(contentMap[chapterId].mustKnow).length ? contentMap[chapterId].mustKnow : (fileChapter && fileChapter.mustKnow),
+          })
+        : fileChapter;
+      return buildChapter(chapterId, snapshotMap[chapterId], mergedChapter, flags, completed);
+    });
     const model = { chapters: chapters, endings: [], endingChosen: endingChosen, endingVisible: false, epilogue: null, currentChapter: '' };
     model.endings = buildEndings(model, context, snapshot, content, flags, endingChosen);
     model.endingVisible = isChapterComplete(chapters, 'C4') || flags.has('C4.city_power_restored');
@@ -1148,7 +1159,7 @@
       }
     }
     if (isObject(c.state)) collect(c.state.clues);
-    collect(c.clues);
+    /* c.clues 是线索目录（含未发现），不能当作已发现集合。 */
     collect(c.discoveredClues);
     collect(c.clueIds);
     return out;

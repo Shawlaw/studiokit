@@ -588,11 +588,11 @@ async function main() {
   record('SURFACE 港口灯光是装饰（aria-hidden），广播文本承载语义', await page.evaluate(`!!document.querySelector('[data-career-panel="world-state"] .ac-career-world__lights[aria-hidden="true"]')`));
   record('SURFACE NPC 回信（E-7/阿砾）可跳过阅读', surface.replyCount >= 2 && !!surface.skip && surface.skip.text === '跳过回信' && surface.skip.h >= 44, JSON.stringify({ count: surface.replyCount, skip: surface.skip }));
   record(
-    'SURFACE 桥接路径无 careerId → 只读（data-readonly + 说明）',
-    surface.readonly === 'true' && surface.readonlyNote === true,
-    JSON.stringify({ readonly: surface.readonly, note: surface.readonlyNote })
+    'SURFACE 桥接路径已解析真实生涯 → 可交互（C0 回流入口）',
+    surface.readonly === 'false',
+    JSON.stringify({ readonly: surface.readonly })
   );
-  record('SURFACE 桥接路径有真实线索触发数据 → 未触发的支线不出现（内容 policy）', surface.sideCount === null && surface.sideTitles.length === 0, JSON.stringify({ sideCount: surface.sideCount }));
+  record('SURFACE 已触发支线按真实线索出现（不展示未命中家族）', Number(surface.sideCount) >= 1 && surface.sideTitles.length === Number(surface.sideCount), JSON.stringify({ sideCount: surface.sideCount, titles: surface.sideTitles.length }));
   clearErrors('ENTRY/SURFACE');
 
   await shot('world-entry-390.png');

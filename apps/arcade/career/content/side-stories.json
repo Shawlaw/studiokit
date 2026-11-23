@@ -11,8 +11,8 @@
         "CL-star-raid"
       ],
       "links": [
-        "XL01",
-        "XL02"
+        "CL-pendulum-tower",
+        "CL-star-raid"
       ]
     },
     {
@@ -24,8 +24,8 @@
         "CL-gold-miner"
       ],
       "links": [
-        "XL03",
-        "XL04"
+        "CL-merge-2048",
+        "CL-gold-miner"
       ]
     },
     {
@@ -37,8 +37,8 @@
         "CL-shadow-leap"
       ],
       "links": [
-        "XL05",
-        "XL06"
+        "CL-gravity-flip",
+        "CL-shadow-leap"
       ]
     },
     {
@@ -50,8 +50,8 @@
         "CL-memory-flip"
       ],
       "links": [
-        "XL07",
-        "XL08"
+        "CL-snowbells",
+        "CL-memory-flip"
       ]
     },
     {
@@ -63,8 +63,8 @@
         "CL-mole-whack"
       ],
       "links": [
-        "XL09",
-        "XL10"
+        "CL-road-rush",
+        "CL-mole-whack"
       ]
     }
   ]

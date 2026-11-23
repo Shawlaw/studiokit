@@ -285,7 +285,9 @@ node tools/arcade_stage_solver.mjs --stages=docs/arcade/stages-0.8.json  # 影�
 | 0.13.3 | [`DESIGN-0.13.3.md`](DESIGN-0.13.3.md) | Cloudflare Pages 无后缀 URL 导致游戏识别失败、计时全 0 |
 | 0.14.0 | [`DESIGN-0.14.0.md`](DESIGN-0.14.0.md) | 星海突击弹种叠加时长 + 「星海割草」无尽演武 |
 | 0.15.0 | [`DESIGN-0.15.0.md`](DESIGN-0.15.0.md) | 被动线索 + 独立生涯数据层（本地未发布） |
-| 0.18.0 | [`DESIGN-0.18.0.md`](DESIGN-0.18.0.md) | 告示板委托 + 免费租机 + 飞船机库 + 收据（本地未发布） |
+| 0.16.0 | [`DESIGN-0.16.0.md`](DESIGN-0.16.0.md) | 旧港告示板、免费租机、飞船机库、收据（本地未发布） |
+| 0.17.0 | [`DESIGN-0.17.0.md`](DESIGN-0.17.0.md) | 活世界 96 委托、五材商店、制造台、职业成长（本地未发布） |
+| 0.18.0 | [`DESIGN-0.18.0.md`](DESIGN-0.18.0.md) | 星塔回响六章、三条终局与后日常（本地未发布） |
 
 ### 回滚要点
 

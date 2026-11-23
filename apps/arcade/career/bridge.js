@@ -2736,33 +2736,47 @@
   function loadStorySnapshot() {
     var db = api.db || readGlobal('db');
     var careerId = internal.commissionLastCareerId || null;
-    if (!db || !careerId) {
+    if (!db) {
       return Promise.resolve({ careerId: careerId, quests: [], claims: [], profile: null, wallet: null, equipment: null });
     }
-    var safeCall = function (fn) {
-      try {
-        return Promise.resolve(fn()).catch(function () { return null; });
-      } catch (err) {
-        return Promise.resolve(null);
-      }
-    };
-    return Promise.all([
-      safeCall(function () { return db.readQuestState(careerId); }),
-      safeCall(function () { return db.readWallet(careerId); }),
-      safeCall(function () { return db.getEquipment(careerId); }),
-    ]).then(function (values) {
-      var questState = values[0];
-      var wallet = values[1];
-      var equipment = values[2];
-      return {
-        careerId: careerId,
-        quests: questState && Array.isArray(questState.quests) ? questState.quests : [],
-        claims: [],
-        profile: null,
-        wallet: wallet && wallet.ok ? { credits: wallet.credits, items: wallet.items || {} } : null,
-        equipment: equipment && equipment.ok ? equipment.equipment || {} : null,
+    function read(careerIdValue) {
+      var safeCall = function (fn) {
+        try {
+          return Promise.resolve(fn()).catch(function () { return null; });
+        } catch (err) {
+          return Promise.resolve(null);
+        }
       };
-    });
+      return Promise.all([
+        careerIdValue ? safeCall(function () { return db.readQuestState(careerIdValue); }) : Promise.resolve(null),
+        careerIdValue ? safeCall(function () { return db.readWallet(careerIdValue); }) : Promise.resolve(null),
+        careerIdValue ? safeCall(function () { return db.getEquipment(careerIdValue); }) : Promise.resolve(null),
+      ]).then(function (values) {
+        var questState = values[0];
+        var wallet = values[1];
+        var equipment = values[2];
+        return {
+          careerId: careerIdValue,
+          quests: questState && Array.isArray(questState.quests) ? questState.quests : [],
+          claims: [],
+          profile: null,
+          wallet: wallet && wallet.ok ? { credits: wallet.credits, items: wallet.items || {} } : null,
+          equipment: equipment && equipment.ok ? equipment.equipment || {} : null,
+        };
+      });
+    }
+    if (careerId) return read(careerId);
+    /* ?story=1 等直接打开章节时没有 run 指针：解析已存在的生涯（不新建空内容）。 */
+    if (typeof db.ensureCareer !== 'function') return read(null);
+    return Promise.resolve(db.ensureCareer({}))
+      .then(function (career) {
+        if (career && career.careerId) {
+          internal.commissionLastCareerId = career.careerId;
+          return read(career.careerId);
+        }
+        return read(null);
+      })
+      .catch(function () { return read(null); });
   }
 
   /** 打开信箱/告示板后同步 C0/C1 章节旗标（幂等；缺模块/DB 时静默）。 */

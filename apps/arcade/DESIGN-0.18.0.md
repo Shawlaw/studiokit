@@ -1,7 +1,7 @@
 # Arcade Life 0.18.0 设计、叙事图与回滚（星塔回响，本地未发布）
 
 - 分支：`feat/arcade-life-015`；基线 0.17.0（G17 PASS）；目标 0.18.0
-- 契约：[ADR-interfaces.md](../../docs/arcade-life/ADR-interfaces.md) §20；试玩：[PLAYTEST-018.md](../../docs/arcade-life/PLAYTEST-018.md)；集成：`INTEGRATION-0.18.md`
+- 契约：[ADR-interfaces.md](../../docs/arcade-life/ADR-interfaces.md) §20；集成：`INTEGRATION-0.18.md`
 - 证据：仓库外 `qa/evidence/D18-*.md`；G18 摘要 `docs/arcade-life/G18-EVIDENCE.md`（G18 后落盘）
 
 ## 1. 目标
@@ -43,7 +43,7 @@
 ## 7. 风险
 
 - 刷新清空本页事件缓冲（既有架构）；终局跨页已用 attach 补齐，未结算进度仍需重打。
-- 章节完成反馈仅有面板/收据侧更新，尚无全局 toast（PLAYTEST I4 收口建议）。
+- 章节完成反馈仅有面板/收据侧更新，尚无全局 toast（review I4 收口建议）。
 - 路线产证与展示仍有内容层差异（I3），E2E 用受控种子覆盖；真实人类节奏未标定。
 - 中心页回流入口仅 C0 后出现，首次入口仍依赖新线索 chip。
 
