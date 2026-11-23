@@ -91,6 +91,43 @@ try {
   })()`);
   check('C07 costItems 可从旧 crystal 行扣料并原子发放 alloy', purchase.r.ok === true && purchase.w.items.starcrystal === undefined && purchase.w.items.alloy === 1 && purchase.w.credits === 319, JSON.stringify(purchase.w));
   check('C08 旧库存用尽后 costItems 不足 → insufficient-items 零写入', purchase.r2.ok === false && purchase.r2.reason === 'insufficient-items' && purchase.w2.items.alloy === 1, JSON.stringify(purchase.r2));
+  /* 0.18 审查 P1：五材通用卖出/扣料，不能只遍历 crystal/starcrystal。 */
+  const five = await page.evaluate(`(async () => {
+    const db = window.__arcadeCareerTest.db();
+    const careerId = ${JSON.stringify(seed.careerId)};
+    const idb = indexedDB.open(${JSON.stringify(DB_NAME)});
+    const opened = await new Promise((resolve, reject) => { idb.onsuccess = () => resolve(idb.result); idb.onerror = () => reject(idb.error); });
+    const ids = ['building', 'alloy', 'electronics', 'starcrystal', 'biomass'];
+    await new Promise((resolve, reject) => {
+      const tx = opened.transaction('inventory', 'readwrite');
+      ids.forEach((itemId) => tx.objectStore('inventory').put({ careerId, itemId, count: 1, updatedAt: new Date().toISOString() }));
+      tx.oncomplete = resolve; tx.onerror = () => reject(tx.error);
+    });
+    const sells = [];
+    for (let i = 0; i < ids.length; i += 1) {
+      const r = await db.sellItems({ careerId, saleId: 'five-sell-' + i, items: { [ids[i]]: 1 }, credits: 1 });
+      const w = await db.readWallet(careerId);
+      sells.push({ id: ids[i], r, items: w.items, credits: w.credits });
+    }
+    await new Promise((resolve, reject) => {
+      const tx = opened.transaction('inventory', 'readwrite');
+      ids.forEach((itemId) => tx.objectStore('inventory').put({ careerId, itemId, count: 1, updatedAt: new Date().toISOString() }));
+      tx.oncomplete = resolve; tx.onerror = () => reject(tx.error);
+    });
+    const cost = { building: 1, alloy: 1, electronics: 1, starcrystal: 1, biomass: 1 };
+    const buy = await db.purchase({ careerId, purchaseId: 'five-cost-1', cost: 1, costItems: cost, grants: { items: { alloy: 1 } } });
+    const bought = await db.readWallet(careerId);
+    const empty = await db.sellItems({ careerId, saleId: 'five-sell-empty', items: { building: 1 }, credits: 1 });
+    const after = await db.readWallet(careerId);
+    const insufficient = await db.purchase({ careerId, purchaseId: 'five-cost-2', cost: 1, costItems: { building: 1, biomass: 1 }, grants: { items: { alloy: 1 } } });
+    const last = await db.readWallet(careerId);
+    opened.close();
+    return { sells, buy, bought, empty, after, insufficient, last };
+  })()`);
+  check('C09 五种材料逐一卖出均扣库并加钱', five.sells.length === 5 && five.sells.every((entry) => entry.r.ok === true && entry.items[entry.id] === undefined), JSON.stringify(five.sells.map((entry) => [entry.id, entry.r.ok, entry.items])));
+  check('C10 五材 costItems 一次事务全部扣到零并发放 alloy', five.buy.ok === true && ['building', 'electronics', 'starcrystal', 'biomass'].every((id) => !five.bought.items[id]) && five.bought.items.alloy === 1, JSON.stringify(five.bought));
+  check('C11 扣空后再次卖/买 → insufficient-items 且零写入', five.empty.ok === false && five.empty.reason === 'insufficient-items' && five.insufficient.ok === false && five.insufficient.reason === 'insufficient-items' && five.last.credits === five.after.credits, JSON.stringify({ empty: five.empty, buy: five.insufficient }));
+  check('C12 多次五材交易后流水/余额一致', five.sells[five.sells.length - 1].credits === five.after.credits + 1 && five.bought.credits === five.after.credits, JSON.stringify({ sells: five.sells[five.sells.length - 1].credits, after: five.after.credits, bought: five.bought.credits }));
   await page.evaluate(`(async () => { await window.__arcadeCareerTest.db().deleteDatabase(); })()`).catch(() => {});
 } finally {
   try { await stopChrome(launched); } catch {}

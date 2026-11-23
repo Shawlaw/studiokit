@@ -72,8 +72,8 @@
       "summary": "完成一盘档案翻牌",
       "issuer": "旧港职业中心",
       "objective": {
-        "kind": "session.finish",
-        "atLeast": 1
+        "kind": "pair.match",
+        "atLeast": 6
       },
       "objectiveBonus": 0,
       "startParams": {},
@@ -141,8 +141,8 @@
       "summary": "在较高难度档案内完成全部配对",
       "issuer": "旧港职业中心",
       "objective": {
-        "kind": "session.finish",
-        "atLeast": 1
+        "kind": "pair.match",
+        "atLeast": 8
       },
       "objectiveBonus": 0,
       "startParams": {},
@@ -676,7 +676,11 @@
       "issuer": "旧港职业中心",
       "objective": {
         "kind": "session.finish",
-        "atLeast": 1
+        "atLeast": 1,
+        "minValue": {
+          "field": "moves",
+          "value": 1
+        }
       },
       "objectiveBonus": 0,
       "startParams": {},
@@ -742,7 +746,11 @@
       "issuer": "旧港职业中心",
       "objective": {
         "kind": "session.finish",
-        "atLeast": 1
+        "atLeast": 1,
+        "minValue": {
+          "field": "moves",
+          "value": 1
+        }
       },
       "objectiveBonus": 0,
       "startParams": {},
@@ -777,7 +785,11 @@
       "issuer": "旧港职业中心",
       "objective": {
         "kind": "session.finish",
-        "atLeast": 1
+        "atLeast": 1,
+        "minValue": {
+          "field": "moves",
+          "value": 1
+        }
       },
       "objectiveBonus": 0,
       "startParams": {},
@@ -814,7 +826,11 @@
       "issuer": "旧港职业中心",
       "objective": {
         "kind": "session.finish",
-        "atLeast": 1
+        "atLeast": 1,
+        "minValue": {
+          "field": "moves",
+          "value": 1
+        }
       },
       "objectiveBonus": 0,
       "startParams": {},

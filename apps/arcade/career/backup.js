@@ -104,7 +104,7 @@
     exportedAt: 1,
   });
 
-  const MAX_ROWS_PER_STORE = 5000;
+  const MAX_ROWS_PER_STORE = 20000;
   const MAX_TEXT_BYTES = 2 * 1024 * 1024;
   const MAX_ISSUES = 20;
   const MAX_CREDITS = 1000000;

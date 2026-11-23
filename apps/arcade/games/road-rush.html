@@ -2974,10 +2974,11 @@
           /* 只有桥确认了属于本游戏的 run 才锁死经典记录；否则按 0.16 经典启动（fail-open）。 */
           const runInfo = readCareerRun();
           if (runInfo) activateCareerRun(runInfo);
+          else { try { window.__arcadeMode = 'classic'; } catch (err) { /* ignore */ } }
           prepareStartScreen();
         };
         try {
-          guard = setTimeout(finishBoot, 3500);
+          guard = setTimeout(finishBoot, 10000);
         } catch (err) {
           guard = null;
         }
@@ -2990,7 +2991,7 @@
             const late = readCareerRun();
             if (!late) return;
             try {
-              A.RunSave.clear(CAREER_GAME_ID);
+              /* 保留经典局内档：职业 run 只用自己的内存/IDB，不删除玩家经典存档。 */
             } catch (err) {
               /* ignore */
             }

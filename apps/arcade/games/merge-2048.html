@@ -1699,10 +1699,11 @@
           }
           /* 只有桥确认了属于本游戏的 run 才锁死旧 RunSave；否则按 0.16 经典启动（fail-open）。 */
           if (readCareerRun()) lockRunSave();
+          else { try { window.__arcadeMode = 'classic'; } catch (err) { /* ignore */ } }
           prepareStartScreen();
         };
         try {
-          guard = setTimeout(done, 3500);
+          guard = setTimeout(done, 10000);
         } catch (err) {
           guard = null;
         }

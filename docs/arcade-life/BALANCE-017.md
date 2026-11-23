@@ -259,7 +259,7 @@ wall-clock 用「T1 最低重复薪资 75 × 2.5 分钟中位局 ÷ 画像成功
 ## 10. 复现与门禁
 
 ```powershell
-cd D:\LocalAgentWorkspace\StudioKit
+cd <repo-root>
 node --check tools/career_economy_balance_test.mjs
 node tools/career_economy_balance_test.mjs          # 期望 47/47，exit 0
 py -3 tools/validate_site.py                        # 期望 PASS

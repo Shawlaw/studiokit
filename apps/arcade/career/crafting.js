@@ -559,7 +559,18 @@
         contentVersion: catalog.contentVersion,
       };
     }
-    const missing = missingOf(levelEntry, wallet);
+    /* 逐级成本：从当前等级升到目标等级必须补齐中间每一级的信用点/材料。 */
+    const costItems = {};
+    let totalCost = 0;
+    for (let step = current + 1; step <= level; step += 1) {
+      const stepEntry = findLevel(def, step);
+      if (!stepEntry) return planFailure('bad-level', moduleId, { level: level });
+      totalCost += Math.max(0, Math.floor(Number(stepEntry.cost) || 0));
+      Object.keys(stepEntry.costItems || {}).forEach(function (itemId) {
+        costItems[itemId] = (costItems[itemId] || 0) + Math.max(0, Math.floor(Number(stepEntry.costItems[itemId]) || 0));
+      });
+    }
+    const missing = missingOf({ cost: totalCost, costItems: costItems }, wallet);
     const affordable =
       wallet.available &&
       missing.credits === 0 &&
@@ -572,8 +583,8 @@
       maxLevel: def.maxLevel,
       owned: false,
       noop: false,
-      cost: levelEntry.cost,
-      costItems: clone(levelEntry.costItems),
+      cost: totalCost,
+      costItems: clone(costItems),
       grants: grantsOf(moduleId, level),
       effect: def.effect,
       effectStats: stats,

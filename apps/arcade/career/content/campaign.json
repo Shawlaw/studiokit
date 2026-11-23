@@ -120,7 +120,13 @@
           "rewardFlags": [
             "C2.research_complete"
           ],
-          "hint": "矿井里最近有奇怪的晶脉。"
+          "hint": "矿脉样本和现场读数都算数：矿工 T2/T3 或雪铃/贪吃蛇 T3 都能带回证据。",
+          "anyCommissions": [
+            "gold-miner.T2",
+            "gold-miner.T3",
+            "snake-run.T3",
+            "snowbells.T3"
+          ]
         },
         {
           "routeId": "market",
@@ -231,7 +237,13 @@
           "rewardFlags": [
             "C4.city_power_restored"
           ],
-          "hint": "港口需要一座稳定的临时能源塔。"
+          "hint": "施工需要现场记录：地鼠/方块/贪吃蛇 T3 的电网读数能支撑恢复。",
+          "anyCommissions": [
+            "mole-whack.T3",
+            "block-drop.T3",
+            "snake-run.T3",
+            "pendulum-tower.T3"
+          ]
         },
         {
           "routeId": "logistics",

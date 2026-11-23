@@ -1025,8 +1025,15 @@
       return { ok: true, run: null };
     }
 
-    async function readClaim(db, ticketId) {
-      if (!db || !isFunction(db.getClaim)) return null;
+    async function releaseEndingReservation(db, markerId) {
+    try {
+      if (db && typeof db.releaseEnding === 'function') await db.releaseEnding(markerId);
+    } catch (err) {
+      /* 预留释放失败不伪装成成功；下次同生涯 start/settle 会再次尝试。 */
+    }
+  }
+
+  async function readClaim(db, ticketId) {      if (!db || !isFunction(db.getClaim)) return null;
       try {
         var row = await db.getClaim(ticketId);
         return isObject(row) ? row : null;
@@ -1424,6 +1431,58 @@
         };
       }
 
+      /* 跨标签唯一：先抢 career 级 reservation，只有赢家能继续 settle / 写 C5。
+         失败或放弃会释放 reservation，可重试；同票重复取回原收据。 */
+      var reservationId = 'ending-reservation:' + careerId;
+      var reserve = null;
+      try {
+        if (typeof db.reserveEnding === 'function') {
+          reserve = await db.reserveEnding({ careerId: careerId, markerId: reservationId, ticketId: ticketId, approach: approach });
+        } else {
+          /* 兼容测试/旧注入 DB：无原子预留能力时保留单页语义。 */
+          reserve = { ok: true };
+        }
+      } catch (err) {
+        reserve = { ok: false, reason: REASONS.exception, error: errorText(err) };
+      }
+      if (!reserve || reserve.ok !== true) {
+        if (reserve && reserve.duplicate === true) {
+          var winner = reserve.existing || null;
+          if (winner && winner.ticketId === ticketId) {
+            var winnerClaim = await readClaim(db, ticketId);
+            if (winnerClaim) {
+              delete state.tickets[careerId];
+              delete state.ticketApproach[ticketId];
+              return {
+                ok: true,
+                duplicate: true,
+                wrote: false,
+                settled: true,
+                approach: approach,
+                careerId: careerId,
+                ticketId: ticketId,
+                receipt: winnerClaim,
+                credits: 0,
+                flagsWritten: [],
+                resolvedApproach: approach,
+              };
+            }
+          }
+          return failure(REASONS.alreadyResolved, {
+            ticketId: ticketId,
+            careerId: careerId,
+            approach: approach,
+            resolvedApproach: winner ? winner.approach || null : null,
+            source: 'reservation',
+            settled: false,
+            wrote: false,
+            duplicate: true,
+            receipt: null,
+          });
+        }
+        return failure((reserve && reserve.reason) || REASONS.exception, { ticketId: ticketId, careerId: careerId, approach: approach });
+      }
+
       var settled = null;
       try {
         var settleInput = { ticketId: ticketId };
@@ -1434,6 +1493,7 @@
         settled = null;
       }
       if (!settled || settled.ok !== true) {
+        await releaseEndingReservation(db, reservationId);
         return mapSettleFailure(settled, { approach: approach, careerId: careerId });
       }
       var receipt = isObject(settled.receipt) ? clone(settled.receipt) : null;
@@ -1656,7 +1716,10 @@
           detail: (abandoned && abandoned.reason) || null,
         });
       }
-      if (careerId) delete state.tickets[careerId];
+      if (careerId) {
+        delete state.tickets[careerId];
+        await releaseEndingReservation(db, 'ending-reservation:' + careerId);
+      }
       delete state.ticketApproach[ticketId];
       return {
         ok: true,

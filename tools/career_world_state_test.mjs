@@ -581,7 +581,7 @@ async function main() {
       surface.chapters[2].badge === '尚未开放',
     JSON.stringify(surface.chapters.map((c) => [c.id, c.state, c.badge]))
   );
-  record('SURFACE 每章卡片都有一条戏内提示', surface.hints.length === 6 && surface.hints.every((hint) => hint && hint.length >= 4), JSON.stringify(surface.hints));
+  record('SURFACE 已开放章节有戏内提示，锁定章节不提前泄漏提示', surface.hints.length === 6 && surface.hints.filter((hint) => hint && hint.length >= 4).length >= 2 && surface.hints.every((hint) => !hint || hint.length >= 4), JSON.stringify(surface.hints));
   record('SURFACE 章节标题来自真实 campaign 内容/兜底', surface.chapters.map((c) => c.title).join('|').indexOf('不起眼的印记') >= 0 && surface.chapters[5].title.indexOf('星塔的回响') >= 0, JSON.stringify(surface.chapters.map((c) => c.title)));
   record('SURFACE C4 前不出现终局按钮/终局区块', surface.endingVisible === false && surface.endings.length === 0 && surface.epilogue === null, JSON.stringify({ endingVisible: surface.endingVisible, endings: surface.endings.length }));
   record('SURFACE 港口世界状态（灯光/广播）随 C0 出现', surface.port && surface.port.state === 'C0' && surface.port.litCount >= 2 && /旧港广播/.test(surface.port.broadcast) && surface.port.lightCount === 5, JSON.stringify(surface.port));

@@ -1387,14 +1387,29 @@
         if (!isFunction(core.isKind) || !core.isKind(event.kind)) return false;
         var entry = entryOf(ticketId);
         if (!entry || entry.mode !== MODE) return false;
-        if (entry.buffer.length >= BUFFER_LIMIT) {
-          entry.dropped += 1;
-          return false;
-        }
         var seq = Number(event.seq);
+        var payload = sanitizePayload(event.payload);
+        if (entry.buffer.length >= BUFFER_LIMIT) {
+          /* 0.18：缓冲满后不再丢弃真实事件，按 kind 汇总计数/数值最大值/最后上下文，
+             结算时以合成事件并入摘要；内存只随 kind×字段数增长。 */
+          entry.dropped += 1;
+          if (!isObject(entry.overflow)) entry.overflow = { counts: {}, maxima: {}, last: {} };
+          var kind = event.kind;
+          entry.overflow.counts[kind] = (entry.overflow.counts[kind] || 0) + 1;
+          entry.overflow.last[kind] = payload;
+          if (!isObject(entry.overflow.maxima[kind])) entry.overflow.maxima[kind] = {};
+          Object.keys(payload).forEach(function (field) {
+            var value = payload[field];
+            if (typeof value !== 'number' || !Number.isFinite(value)) return;
+            var prev = entry.overflow.maxima[kind][field];
+            if (!Number.isFinite(prev) || value > prev) entry.overflow.maxima[kind][field] = value;
+          });
+          state.lastEventAt = nowIso();
+          return true;
+        }
         entry.buffer.push({
           kind: event.kind,
-          payload: sanitizePayload(event.payload),
+          payload: payload,
           seq: Number.isFinite(seq) ? Math.floor(seq) : entry.buffer.length + 1,
           sourceMode: MODE,
           at: typeof event.at === 'string' && event.at ? event.at : nowIso(),
@@ -1496,8 +1511,27 @@
       var stats = isObject(opts.stats) ? clone(opts.stats) : {};
       var outcome = typeof opts.outcome === 'string' && opts.outcome ? opts.outcome : 'lost';
       var entry = entryOf(ticketId);
-      /* 只汇总本页真实事件；缓冲为空就按空摘要判定，绝不伪造事件。 */
+      /* 只汇总本页真实事件；缓冲为空就按空摘要判定，绝不伪造事件。
+         缓冲溢出的事件以合成事件（count + 最大值 + 最后上下文）并入，长局达标不被丢弃。 */
       var events = entry ? clone(entry.buffer) || [] : [];
+      if (entry && isObject(entry.overflow)) {
+        var overflowCounts = entry.overflow.counts || {};
+        Object.keys(overflowCounts).forEach(function (kind) {
+          var count = Number(overflowCounts[kind]);
+          if (!Number.isFinite(count) || count <= 0) return;
+          var payload = Object.assign({}, (entry.overflow.last && entry.overflow.last[kind]) || {});
+          var maxima = (entry.overflow.maxima && entry.overflow.maxima[kind]) || {};
+          Object.keys(maxima).forEach(function (field) { payload[field] = maxima[field]; });
+          events.push({
+            kind: kind,
+            payload: payload,
+            count: Math.floor(count),
+            seq: 0,
+            sourceMode: MODE,
+            at: nowIso(),
+          });
+        });
+      }
 
       var check = null;
       try {
@@ -1533,9 +1567,19 @@
       }
 
       var repeat = false;
+      var firstClearMarker = null;
       try {
-        var questState = await db.readQuestState(run.careerId);
-        repeat = isQuestCleared(questState, commission.commissionId);
+        if (typeof db.reserveCommissionFirstClear === 'function') {
+          var firstClear = await db.reserveCommissionFirstClear({ careerId: run.careerId, commissionId: commission.commissionId });
+          if (firstClear && firstClear.duplicate === true) repeat = true;
+          else if (firstClear && firstClear.ok === true) firstClearMarker = firstClear.markerId || null;
+          else if (firstClear && firstClear.ok === false && firstClear.reason !== 'already-cleared') {
+            return recordResult(failure(firstClear.reason || REASONS.planFailed, { runId: ticketId }));
+          }
+        } else {
+          var questState = await db.readQuestState(run.careerId);
+          repeat = isQuestCleared(questState, commission.commissionId);
+        }
       } catch (err) {
         repeat = false;
       }
@@ -1544,9 +1588,11 @@
       try {
         plan = core.rewardPlan(commission, events, { mode: MODE, repeat: repeat, gameId: gameId, stats: stats });
       } catch (err) {
+        if (firstClearMarker) { try { await db.releaseCommissionFirstClear(firstClearMarker); } catch (e) { /* ignore */ } }
         return recordResult(failure(REASONS.planFailed, { error: errorText(err) }));
       }
       if (!plan || !plan.ok) {
+        if (firstClearMarker) { try { await db.releaseCommissionFirstClear(firstClearMarker); } catch (e) { /* ignore */ } }
         return recordResult(failure((plan && plan.reason) || REASONS.planFailed, {
           runId: ticketId,
           observed: check.observed,
@@ -1578,9 +1624,11 @@
           contentVersion: CONTENT_VERSION,
         });
       } catch (err) {
+        if (firstClearMarker) { try { await db.releaseCommissionFirstClear(firstClearMarker); } catch (e) { /* ignore */ } }
         return recordResult(failure(REASONS.claimFailed, { error: errorText(err), retryable: true }));
       }
       if (!claim || !claim.ok) {
+        if (firstClearMarker) { try { await db.releaseCommissionFirstClear(firstClearMarker); } catch (e) { /* ignore */ } }
         var claimReason = (claim && claim.reason) || REASONS.claimFailed;
         return recordResult(failure(claimReason, { retryable: true, message: '交差手续没办成，稍后再试一次。' }));
       }

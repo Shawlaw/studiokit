@@ -789,6 +789,8 @@ await check('C06 制造幂等零成本 / 拒绝不足 / applyPlan 与 purchasePl
   assert(ownedApply.ok === false && ownedApply.reason === 'already-owned', 'owned apply should reject');
   assert(crafting.plan({ moduleId: 'nope', level: 1, wallet }).reason === 'unknown-module', 'unknown module');
   assert(crafting.plan({ moduleId: 'hull', level: 9, wallet }).reason === 'bad-level', 'bad level');
+  const cumulative = crafting.plan({ moduleId: 'hull', level: 3, wallet: { credits: 1000, items: { alloy: 6 } } });
+  assert(cumulative.ok === true && cumulative.cost === 590 && cumulative.costItems.alloy === 6, 'hull L3 cumulative cost=' + JSON.stringify({ cost: cumulative.cost, items: cumulative.costItems }));
   return '制造不重复扣费、材料原子不足拒绝、purchasePlan 对账；purchaseId=' + applied.purchaseId;
 });
 

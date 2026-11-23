@@ -2333,10 +2333,11 @@
           /* 只有 bridge 确认了属于本游戏的 run 才锁死经典记录；否则按经典开局（fail-open）。 */
           const runInfo = readCareerRun();
           if (runInfo) activateCareerRun(runInfo);
+          else { try { window.__arcadeMode = 'classic'; } catch (err) { /* ignore */ } }
           prepareStartScreen();
         };
         try {
-          guard = setTimeout(finishBoot, 3500);
+          guard = setTimeout(finishBoot, 10000);
         } catch (err) {
           guard = null;
         }

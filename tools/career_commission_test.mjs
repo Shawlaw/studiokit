@@ -1080,7 +1080,7 @@ async function groupE() {
     return 'sanitized';
   });
 
-  await check('E5 缓冲上限 400：第 401 条拒绝并计入 dropped', async () => {
+  await check('E5 缓冲上限 400：超出后汇总吸收不丢弃，dropped 计数', async () => {
     const { core } = scenario();
     const ticketId = await startTicket(core, 'pendulum-tower.T1');
     let accepted = 0;
@@ -1088,10 +1088,41 @@ async function groupE() {
       const ok = core.recordEvent(ticketId, { kind: 'tower.floor_stable', payload: { floor: index }, seq: index, sourceMode: 'commission', at: NOW });
       if (ok) accepted += 1;
     }
-    eq(accepted, 400, '接受条数');
+    eq(accepted, 401, '接受条数（401 条被汇总吸收）');
     eq(core.getState().bufferCount, 400, 'bufferCount');
     eq(core.getState().dropped, 1, 'dropped');
-    return '400/400 + dropped 1';
+    return '400 条缓冲 + 1 条 overflow 汇总';
+  });
+
+  await check('E5b overflow 汇总参与结算判定（401 条不丢）', async () => {
+    const custom = JSON.parse(JSON.stringify(commissionsContent));
+    const t1 = custom.commissions.find((item) => item.commissionId === 'pendulum-tower.T1');
+    t1.objective = { kind: 'tower.floor_stable', atLeast: 401 };
+    const { core } = scenario({ content: false });
+    const configured = core.configure({ content: custom });
+    assert(configured.ok === true, 'configure');
+    const ticketId = await startTicket(core, 'pendulum-tower.T1');
+    for (let index = 1; index <= 401; index += 1) {
+      core.recordEvent(ticketId, { kind: 'tower.floor_stable', payload: { floor: index }, seq: index, sourceMode: 'commission', at: NOW });
+    }
+    const settled = await core.settle({ ticketId, outcome: 'won', stats: {} });
+    eq(settled.ok, true, 'settle（401 条含 1 条 overflow 汇总）');
+    return 'observed>=401';
+  });
+
+  await check('E5c overflow 最大值参与 minValue（长局 1024 不被丢弃）', async () => {
+    const custom = JSON.parse(JSON.stringify(commissionsContent));
+    const t1 = custom.commissions.find((item) => item.commissionId === 'pendulum-tower.T1');
+    t1.objective = { kind: 'tile.created', atLeast: 1, minValue: { field: 'value', value: 1024 } };
+    const { core } = scenario({ content: false });
+    assert(core.configure({ content: custom }).ok === true, 'configure');
+    const ticketId = await startTicket(core, 'pendulum-tower.T1');
+    for (let index = 1; index <= 450; index += 1) {
+      core.recordEvent(ticketId, { kind: 'tile.created', payload: { value: index < 450 ? 2 * (index % 256) : 1024 }, seq: index, sourceMode: 'commission', at: NOW });
+    }
+    const settled = await core.settle({ ticketId, outcome: 'won', stats: {} });
+    eq(settled.ok, true, 'settle（overflow 最大值 1024）');
+    return 'minValue=1024';
   });
 
   await check('E6 事件缓冲按 run 隔离，且不跨实例共享', async () => {

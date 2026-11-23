@@ -788,8 +788,11 @@
       const tasks = [];
       ids.forEach((itemId) => {
         let left = need[itemId];
-        /* 优先消耗 0.16 遗留 crystal 行，再消耗 starcrystal 行。 */
-        ['crystal', 'starcrystal'].forEach((rawId) => {
+        const rawKeys = Object.keys(rawByCanonical[itemId] || {});
+        /* 优先消耗 0.16 遗留 crystal 行，再消耗 starcrystal，最后其它原始行（五材通用）。 */
+        const ordered = ['crystal', 'starcrystal'].filter((rawId) => rawKeys.indexOf(rawId) >= 0)
+          .concat(rawKeys.filter((rawId) => rawId !== 'crystal' && rawId !== 'starcrystal'));
+        ordered.forEach((rawId) => {
           if (left <= 0) return;
           const rawCount = rawByCanonical[itemId] && rawByCanonical[itemId][rawId] ? rawByCanonical[itemId][rawId] : 0;
           if (!rawCount) return;
@@ -1423,8 +1426,122 @@
     }).then((res) => (res.ok ? res.result : { ok: false, reason: res.reason, error: res.error, quests: [] }));
   }
 
-  function putQuests(careerId, quests) {
+  /**
+   * 0.18 终局唯一性预留：migrations 以 marker id 唯一，跨标签只有一个事务能 add 成功。
+   * 成功者才继续 settle；失败者零收据/零流水/零旗标。
+   */
+  function reserveEnding(input) {
     const core = coreApi();
+    if (!core) return Promise.resolve(failure('core-unavailable'));
+    const options = isObject(input) ? input : {};
+    const careerId = options.careerId;
+    const markerId = options.markerId;
+    const ticketId = options.ticketId;
+    const approach = options.approach;
+    if (!core.isValidCareerId(careerId)) return Promise.resolve(failure('bad-career-id'));
+    if (!core.isToken(markerId) || !core.isToken(ticketId)) return Promise.resolve(failure('bad-ending-marker'));
+    const at = nowIso();
+    return txRun(['migrations'], 'readwrite', (ctx) => {
+      const store = ctx.store('migrations');
+      ctx.bind(store.get(markerId), (existing) => {
+        if (existing) {
+          ctx.done({ ok: false, duplicate: true, existing: jsonClone(existing) });
+          return;
+        }
+        const row = {
+          id: markerId,
+          kind: 'ending-reservation',
+          careerId,
+          ticketId,
+          approach: typeof approach === 'string' ? approach : '',
+          appliedAt: at,
+          fromVersion: 0,
+          toVersion: 0,
+        };
+        ctx.bindConstraint(store.add(row), 'constraint', (next) => ctx.done({ ok: true, row }, next));
+      });
+    }).then((res) => {
+      if (res.ok) return res.result;
+      if (res.reason === 'constraint') return { ok: false, duplicate: true, existing: null };
+      return failure(res.reason, res.error);
+    });
+  }
+
+  function releaseEnding(markerId) {
+    const core = coreApi();
+    if (!core) return Promise.resolve(failure('core-unavailable'));
+    if (!core.isToken(markerId)) return Promise.resolve(failure('bad-ending-marker'));
+    return txRun(['migrations'], 'readwrite', (ctx) => {
+      const store = ctx.store('migrations');
+      ctx.bind(store.get(markerId), (existing) => {
+        if (!existing || existing.kind !== 'ending-reservation') {
+          ctx.done({ ok: true, released: false });
+          return;
+        }
+        ctx.bind(store.delete(markerId), () => ctx.done({ ok: true, released: true }));
+      });
+    }).then((res) => (res.ok ? res.result : failure(res.reason, res.error)));
+  }
+
+  /** 同一生涯同一委托只能有一个首通：quests 已清或 marker 已存在 → repeat；否则原子占位。 */
+  function reserveCommissionFirstClear(input) {
+    const core = coreApi();
+    if (!core) return Promise.resolve(failure('core-unavailable'));
+    const options = isObject(input) ? input : {};
+    const careerId = options.careerId;
+    const commissionId = options.commissionId;
+    if (!core.isValidCareerId(careerId)) return Promise.resolve(failure('bad-career-id'));
+    if (!core.isToken(commissionId)) return Promise.resolve(failure('bad-commission-id'));
+    const markerId = 'commission-first:' + careerId + ':' + commissionId;
+    return txRun(['migrations', 'quests'], 'readwrite', (ctx) => {
+      const quests = ctx.store('quests');
+      ctx.bind(quests.get([careerId, commissionId]), (questRow) => {
+        if (questRow && questRow.status === 'cleared') {
+          ctx.done({ ok: false, duplicate: true, reason: 'already-cleared' });
+          return;
+        }
+        const migrations = ctx.store('migrations');
+        ctx.bind(migrations.get(markerId), (existing) => {
+          if (existing) {
+            ctx.done({ ok: false, duplicate: true, reason: 'already-reserved' });
+            return;
+          }
+          const row = {
+            id: markerId,
+            kind: 'commission-first',
+            careerId,
+            commissionId,
+            appliedAt: nowIso(),
+            fromVersion: 0,
+            toVersion: 0,
+          };
+          ctx.bindConstraint(migrations.add(row), 'constraint', () => ctx.done({ ok: true, markerId }, null));
+        });
+      });
+    }).then((res) => {
+      if (res.ok) return res.result;
+      if (res.reason === 'constraint') return { ok: false, duplicate: true, reason: 'already-reserved' };
+      return failure(res.reason, res.error);
+    });
+  }
+
+  function releaseCommissionFirstClear(markerId) {
+    const core = coreApi();
+    if (!core) return Promise.resolve(failure('core-unavailable'));
+    if (!core.isToken(markerId)) return Promise.resolve(failure('bad-marker'));
+    return txRun(['migrations'], 'readwrite', (ctx) => {
+      const store = ctx.store('migrations');
+      ctx.bind(store.get(markerId), (existing) => {
+        if (!existing || existing.kind !== 'commission-first') {
+          ctx.done({ ok: true, released: false });
+          return;
+        }
+        ctx.bind(store.delete(markerId), () => ctx.done({ ok: true, released: true }));
+      });
+    }).then((res) => (res.ok ? res.result : failure(res.reason, res.error)));
+  }
+
+  function putQuests(careerId, quests) {    const core = coreApi();
     if (!core) return Promise.resolve(failure('core-unavailable'));
     if (!core.isValidCareerId(careerId)) return Promise.resolve(failure('bad-career-id'));
     let list = quests;
@@ -1719,6 +1836,10 @@
     settleAndClaim,
     purchase,
     sellItems,
+    reserveEnding,
+    releaseEnding,
+    reserveCommissionFirstClear,
+    releaseCommissionFirstClear,
     readWallet,
     getEquipment,
     writeEquipment,

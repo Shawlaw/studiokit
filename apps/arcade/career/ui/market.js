@@ -318,6 +318,16 @@
 
   let panel = null;
   let opSeq = 0;
+  /* 每次页面会话独立的操作前缀：刷新后 opSeq 归零也不会撞上旧 purchaseId/saleId。 */
+  const OP_SESSION_TAG = (function () {
+    try {
+      const bytes = new Uint8Array(8);
+      (rootWindow().crypto || window.crypto).getRandomValues(bytes);
+      return Array.prototype.map.call(bytes, (b) => b.toString(16).padStart(2, '0')).join('');
+    } catch (err) {
+      return String(Date.now().toString(16)) + Math.floor(Math.random() * 1e6).toString(16);
+    }
+  })();
 
   function rootWindow() {
     try {
@@ -1485,7 +1495,7 @@
         }
         const request = {
           careerId: state.careerId,
-          purchaseId: 'market-buy:' + state.careerId + ':' + material.itemId + ':' + seq,
+          purchaseId: 'market-buy:' + state.careerId + ':' + material.itemId + ':' + OP_SESSION_TAG + ':' + seq,
           cost: plan.cost,
           grants: plan.grants,
           now: nowIso(),
@@ -1584,7 +1594,7 @@
         }
         const request = {
           careerId: state.careerId,
-          saleId: 'market-sell:' + state.careerId + ':' + material.itemId + ':' + seq,
+          saleId: 'market-sell:' + state.careerId + ':' + material.itemId + ':' + OP_SESSION_TAG + ':' + seq,
           items: plan.items,
           credits: plan.credits,
           now: nowIso(),

@@ -1345,6 +1345,8 @@
       badge.setAttribute('data-state-label', chapter.state);
       rowHead.appendChild(badge);
       item.appendChild(rowHead);
+      /* 锁定章节只展示标题/状态，不提前泄漏正文、事实与路线细节。 */
+      if (chapter.state === 'locked') return item;
       if (chapter.body) item.appendChild(make('p', 'ac-career-world__chapter-body', chapter.body));
       if (chapter.mustKnow && chapter.mustKnow.length) {
         const facts = make('ul', 'ac-career-world__facts');
@@ -1607,6 +1609,22 @@
       back.setAttribute('data-action', 'close-world');
       back.addEventListener('click', function () { close(); }, false);
       footer.appendChild(back);
+      const openMailbox = typeof liveContext?.openMailbox === 'function' ? liveContext.openMailbox : null;
+      if (openMailbox) {
+        const mail = make('button', 'ac-career-btn ac-career-btn--ghost', '回信箱');
+        mail.type = 'button';
+        mail.setAttribute('data-action', 'open-mailbox-from-world');
+        mail.addEventListener('click', function () { close(); try { openMailbox(); } catch (err) { /* ignore */ } }, false);
+        footer.appendChild(mail);
+      }
+      const openTown = typeof liveContext?.openTown === 'function' ? liveContext.openTown : null;
+      if (openTown) {
+        const town = make('button', 'ac-career-btn ac-career-btn--ghost', '去告示板');
+        town.type = 'button';
+        town.setAttribute('data-action', 'open-town-from-world');
+        town.addEventListener('click', function () { close(); try { openTown(); } catch (err) { /* ignore */ } }, false);
+        footer.appendChild(town);
+      }
       return footer;
     }
 

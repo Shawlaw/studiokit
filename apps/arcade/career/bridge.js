@@ -789,7 +789,7 @@
       var mod = readGlobal(def.global) || null;
       if (result.ok && mod) {
         internal.loadedScripts[def.file] = { file: def.file, ok: true, required: false, detail: 'lazy-loaded' };
-        if (def.global === 'backup') api.backup = mod;
+        if (def.global === 'backup') api.backup = backupFacade(mod);
         else if (def.global === 'commission') {
           api.commission = mod;
           configureCommissionContent();
@@ -1109,6 +1109,15 @@
             addReason('commission-ticket-rejected:' + ((result && result.reason) || 'unknown'));
             return null;
           }
+          /* 游戏页已按经典开局（慢启动超时）后，late ticket 不再切换模式，避免一局两套结算。 */
+          try {
+            if (WINDOW && WINDOW.__arcadeMode === 'classic') {
+              addReason('classic-mode-committed');
+              return null;
+            }
+          } catch (err) {
+            /* ignore */
+          }
           internal.commissionRun = {
             ticketId: ticketId,
             careerId: result.run.careerId,
@@ -1138,7 +1147,9 @@
           }
           /* 0.18 终局：新页面重新装载 ending 实例并接管 ticket，否则事件缓冲不共享。 */
           if (typeof result.commission.commissionId === 'string' && result.commission.commissionId.indexOf('ending.') === 0) {
-            return Promise.all([ensureLazyModule('ending'), loadCareerContent()])
+            var endingLoads = [ensureLazyModule('ending'), loadCareerContent()];
+            if (result.commission.gameId === 'star-raid') endingLoads.push(ensureLazyModule('combatConfig'));
+            return Promise.all(endingLoads)
               .then(function () {
                 configureCareerModules();
                 var endingModule = readGlobal('ending');
@@ -1701,7 +1712,24 @@
   }
 
   function writeDbState(state, discoveryRecords) {
-    return dbWrite(state, discoveryRecords);
+    /* 多标签/多游戏页并发：写入前把 DB 里已存在的线索并入本次状态，避免旧快照覆盖另一页刚发现的线索。
+       清空操作（incoming clues 为空）仍然按写入替换。 */
+    return Promise.resolve()
+      .then(function () {
+        var dbModule = readGlobal('db');
+        var getter = dbModule && pickMethod(dbModule, ['getDiscoveryState', 'getState']);
+        if (!getter || !isObject(state) || !isObject(state.clues) || !Object.keys(state.clues).length) return state;
+        return callMaybeAsync(getter, dbModule, []).then(function (raw) {
+          var existing = unwrapRecord(raw);
+          if (!isObject(existing) || !isObject(existing.clues)) return state;
+          var merged = Object.assign({}, state);
+          merged.clues = Object.assign({}, existing.clues, state.clues);
+          return merged;
+        }).catch(function () { return state; });
+      })
+      .then(function (mergedState) {
+        return dbWrite(mergedState, discoveryRecords);
+      });
   }
 
   function unwrapRecord(raw) {
@@ -2422,7 +2450,7 @@
               settings.apply({
                 hintsEnabled: wanted,
                 state: clone(next),
-                backup: readGlobal('backup') || null,
+                backup: backupFacade(),
                 reducedMotion: reducedMotionPreferred(),
                 api: api,
               });
@@ -2612,7 +2640,7 @@
       setHintsEnabled: setHintsEnabled,
       resetDiscovery: uiResetDiscovery,
       announce: announceToUser,
-      backup: readGlobal('backup') || null,
+      backup: backupFacade(),
       reducedMotion: reducedMotionPreferred(),
       api: api,
       commission: commissionModule() || null,
@@ -2637,6 +2665,7 @@
       items: internal.itemsContent ? clone(internal.itemsContent) : null,
       chapter: internal.chapterContent ? clone(internal.chapterContent) : null,
       openTown: openTown,
+      openMailbox: openMailbox,
       openHangar: openHangar,
       openReceipt: openReceipt,
     };
@@ -2799,6 +2828,33 @@
       warnOnce('campaign-sync', err);
       return null;
     }
+  }
+
+  /** 备份模块门面：导入成功后立即把 DB 恢复结果同步回当前页内存，避免旧快照覆盖恢复数据。 */
+  function backupFacade(source) {
+    var mod = source || readGlobal('backup');
+    if (!mod) return null;
+    if (mod.__bridgeFacade === true) return mod;
+    var api = {};
+    Object.keys(mod).forEach(function (key) { api[key] = mod[key]; });
+    api.importCareerLife = function (text, opts) {
+      return Promise.resolve(mod.importCareerLife(text, opts)).then(function (result) {
+        if (!result || result.ok === false) return result;
+        return Promise.resolve(loadDiscoveryStateFromDb()).then(function () { return result; });
+      });
+    };
+    api.__bridgeFacade = true;
+    return api;
+  }
+
+  /** 真实读信入口（openClue/openMailbox）统一补 C0：先确保章节模块/内容就绪，失败静默。 */
+  function syncCampaignAtMailbox() {
+    return Promise.all([ensureLazyModule('campaign'), loadCareerContent()])
+      .then(function () {
+        configureCareerModules();
+        return syncCampaignFlags(true);
+      })
+      .catch(function () { return null; });
   }
 
   function openCareerUi(name, extra) {
@@ -2993,7 +3049,7 @@
   }
 
   function openClue(clueId) {
-    return safe(
+    return Promise.resolve(safe(
       'open-clue',
       function () {
         if (typeof clueId !== 'string' || !clueId) return uiUnavailable('invalid-clue-id');
@@ -3030,7 +3086,11 @@
         return { ok: true, clueId: clueId };
       },
       uiUnavailable('ui-unavailable')
-    );
+    )).then(function (result) {
+      /* 线索 chip 打开信箱是玩家的真实读信入口：成功打开后才补一次 C0（syncFlags 幂等）。 */
+      if (result && result.ok === true) syncCampaignAtMailbox();
+      return result;
+    });
   }
 
   /**
@@ -3329,7 +3389,7 @@
       .then(function () {
         /* 依赖装载完成后补齐 UI / backup / commission 引用（模块在执行时才挂到 window 上）。 */
         syncUiRefs();
-        api.backup = readGlobal('backup') || null;
+        api.backup = backupFacade();
         api.commission = commissionModule();
         internal.base = resolveBase();
         return loadCareerStyles();
@@ -3408,7 +3468,7 @@
     api.getCommissionLoadout = getCommissionLoadout;
     api.ui = previousUi || (isObject(api.ui) ? api.ui : {});
     /* backup.js（D15-14）异步装载：模块会自行挂到 ArcadeCareer.backup；缺失时为 null。 */
-    api.backup = readGlobal('backup') || null;
+    api.backup = backupFacade();
     /* 追加（相对冻结接口的向后兼容扩展，见证据 DEVIATIONS）：
        - setSourceMode(mode)：让割草/挑战页显式声明当前局模式，使 observe 模式门禁可判定；
        - openSettings()：UI 未加载时返回结构化 {ok:false, reason:'ui-unavailable'}；
