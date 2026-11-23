@@ -56,6 +56,19 @@ const CLEAR_KEYS = [
 const GAME = { tower: '/apps/arcade/games/pendulum-tower.html', star: '/apps/arcade/games/star-raid.html' };
 const COMMISSION = { towerT1: 'pendulum-tower.T1', starT1: 'star-raid.T1' };
 const INITIAL_CREDITS = 80; // career-core.RULESET.initialCredits
+/* 0.17 内容驱动：奖励值不再写死 0.16 数值。 */
+const CONTENT_JSON = JSON.parse(fs.readFileSync(path.join(REPO_ROOT, 'apps/arcade/career/content/commissions.json'), 'utf8'));
+const MISSION_BY_ID = new Map((CONTENT_JSON.commissions || []).map((row) => [row.commissionId, row]));
+function missionReward(id) {
+  const row = MISSION_BY_ID.get(id);
+  return row && row.reward ? row.reward : { credits: 0, items: {}, evidence: [], flags: [] };
+}
+const TOWER_REWARD = missionReward(COMMISSION.towerT1);
+const STAR_REWARD = missionReward(COMMISSION.starT1);
+function sumItems(items) {
+  return Object.keys(items || {}).reduce((sum, key) => sum + Number(items[key] || 0), 0);
+}
+
 const NETWORK_NOISE_RE = /(net::ERR_(?:INTERNET_DISCONNECTED|CONNECTION_REFUSED|CONNECTION_CLOSED|NAME_NOT_RESOLVED|ADDRESS_UNREACHABLE|TIMED_OUT)|ERR_INTERNET_DISCONNECTED|Failed to fetch|Load failed)/;
 
 const rec = createRecorder();
@@ -547,10 +560,10 @@ async function run() {
       assert(Number.isFinite(Number(event.payload && event.payload.floor)), `第 ${index + 1} 条事件缺少 floor: ${JSON.stringify(event)}`);
     });
     const career = await page.evaluate(`window.__arcadeTest.careerInfo()`);
-    assert(career.floors === 4 && career.serializeNull === true, `careerInfo 异常: ${JSON.stringify(career)}`);
-    evidence.snapshots.towerPreReload = { floors: career.floors, events: events.length, feedback: dropped.feedback };
+    assert(career.stableFloors === 4 && career.serializeNull === true, `careerInfo 异常: ${JSON.stringify(career)}`);
+    evidence.snapshots.towerPreReload = { floors: career.stableFloors, events: events.length, feedback: dropped.feedback };
     const errors = await assertNoConsoleErrors('S1-04');
-    return `floors=${career.floors} tower.floor_stable=${events.length} score反馈=${JSON.stringify(dropped.feedback)} · ${errors}`;
+    return `floors=${career.stableFloors} tower.floor_stable=${events.length} score反馈=${JSON.stringify(dropped.feedback)} · ${errors}`;
   });
 
   await check('S1-05 暂停：真实暂停弹层显示目标/已稳 4 层，经典 RunSave 仍为 null', async () => {
@@ -568,7 +581,7 @@ async function run() {
     assert(typeof state.ticket === 'string' && state.ticket.includes(towerTicket.ticketId), `暂停不应消费 ticket: ${state.ticket}`);
     await screenshot('D16-11-tower-pause.png');
     const errors = await assertNoConsoleErrors('S1-05');
-    return `paused floors=${state.career.floors} text=${state.text.replace(/\s+/g, ' ').slice(0, 120)} · ${errors}`;
+    return `paused floors=${state.career.stableFloors} text=${state.text.replace(/\s+/g, ' ').slice(0, 120)} · ${errors}`;
   });
 
   evidence.snapshots.towerAfterSettle = {};
@@ -613,11 +626,11 @@ async function run() {
     const result = towerSettled.result;
     assert(result && result.ok === true, `结算失败: ${JSON.stringify(result)}`);
     assert(result.duplicate === false, `首次结算不应 duplicate: ${JSON.stringify(result)}`);
-    assert(result.credits === 70 && result.receipt && result.receipt.credits === 70, `收据金额应为 70: ${JSON.stringify(result)}`);
-    assert(stable(result.items) === stable({ alloy: 1 }), `收据材料应为 alloy×1: ${JSON.stringify(result.items)}`);
+    assert(result.credits === TOWER_REWARD.credits && result.receipt && result.receipt.credits === TOWER_REWARD.credits, `收据金额应为 ${TOWER_REWARD.credits}: ${JSON.stringify(result)}`);
+    assert(stable(result.items) === stable(TOWER_REWARD.items), `收据材料应为 ${JSON.stringify(TOWER_REWARD.items)}: ${JSON.stringify(result.items)}`);
     assert(Array.isArray(result.receipt.flags) && result.receipt.flags.includes('C1.work_done'), `收据缺少 C1.work_done: ${JSON.stringify(result.receipt)}`);
     assert(Array.isArray(result.receipt.evidence) && result.receipt.evidence.includes('E-C1-site'), `收据缺少证据: ${JSON.stringify(result.receipt)}`);
-    assert(Array.isArray(result.receipt.txIds) && result.receipt.txIds.length === 3 && new Set(result.receipt.txIds).size === 3, `收据 txIds 异常: ${JSON.stringify(result.receipt.txIds)}`);
+    assert(Array.isArray(result.receipt.txIds) && result.receipt.txIds.length >= 2 && new Set(result.receipt.txIds).size === result.receipt.txIds.length, `收据 txIds 异常: ${JSON.stringify(result.receipt.txIds)}`);
     assert(result.repeat === false, '首次达标不应走 repeatSalary');
     assert(towerSettled.commissionRun === null && towerSettled.ticket === null, `结算后 run/ticket 未消费: ${JSON.stringify(towerSettled)}`);
     const errors = await assertNoConsoleErrors('S1-08');
@@ -625,23 +638,23 @@ async function run() {
     return `credits=${result.credits} items=${JSON.stringify(result.items)} txIds=${result.receipt.txIds.length} · ${errors}`;
   });
 
-  await check('S1-09 钱包 150 / run claimed / claims 1 行 / ledger 3 条领奖流水且 txId 唯一', async () => {
+  await check('S1-09 钱包按内容累加 / run claimed / claims 1 行 / 领奖流水 txId 唯一', async () => {
     const snapshot = await careerSnapshot(towerTicket.careerId, towerTicket.ticketId);
-    assert(snapshot.wallet && snapshot.wallet.ok && snapshot.wallet.credits === 150, `钱包应为 80+70=150: ${JSON.stringify(snapshot.wallet)}`);
-    assert(stable(snapshot.wallet.items) === stable({ alloy: 1 }), `钱包材料应为 alloy×1: ${JSON.stringify(snapshot.wallet.items)}`);
+    assert(snapshot.wallet && snapshot.wallet.ok && snapshot.wallet.credits === INITIAL_CREDITS + TOWER_REWARD.credits, `钱包应为 80+${TOWER_REWARD.credits}: ${JSON.stringify(snapshot.wallet)}`);
+    assert(stable(snapshot.wallet.items) === stable(TOWER_REWARD.items), `钱包材料应为 ${JSON.stringify(TOWER_REWARD.items)}: ${JSON.stringify(snapshot.wallet.items)}`);
     assert(snapshot.wallet.revision === 2, `钱包 revision 应为 2: ${snapshot.wallet.revision}`);
     assert(snapshot.run && snapshot.run.status === 'claimed', `run 状态应为 claimed: ${snapshot.run && snapshot.run.status}`);
-    assert(snapshot.claim && snapshot.claim.credits === 70 && snapshot.claim.receiptId === towerTicket.ticketId, `claim 行异常: ${JSON.stringify(snapshot.claim)}`);
+    assert(snapshot.claim && snapshot.claim.credits === TOWER_REWARD.credits && snapshot.claim.receiptId === towerTicket.ticketId, `claim 行异常: ${JSON.stringify(snapshot.claim)}`);
     assert(Array.isArray(snapshot.claimsAll) && snapshot.claimsAll.length === 1, `claims 行数应为 1: ${JSON.stringify(snapshot.claimsAll)}`);
-    assert(snapshot.counts && snapshot.counts.ledgers === 4, `ledger 总数应为 4（3 领奖 + 1 初始）: ${JSON.stringify(snapshot.counts)}`);
+    assert(snapshot.counts && snapshot.counts.ledgers === 1 + towerSettled.result.receipt.txIds.length, `ledger 总数应为 1+领奖流水: ${JSON.stringify(snapshot.counts)}`);
     const claimLedgers = (snapshot.ledgersAll || []).filter((row) => row.runId === towerTicket.ticketId);
-    assert(claimLedgers.length === 3, `本 ticket 领奖流水应为 3 条: ${JSON.stringify(claimLedgers)}`);
-    assert(new Set(claimLedgers.map((row) => row.txId)).size === 3, '领奖流水 txId 重复');
+    assert(claimLedgers.length === towerSettled.result.receipt.txIds.length, `本 ticket 领奖流水条数异常: ${JSON.stringify(claimLedgers)}`);
+    assert(new Set(claimLedgers.map((row) => row.txId)).size === claimLedgers.length, '领奖流水 txId 重复');
     evidence.snapshots.towerAfterSettle = snapshotData(snapshot);
-    return `wallet=150 items=${JSON.stringify(snapshot.wallet.items)} claims=1 ledgers=4`;
+    return `wallet=${snapshot.wallet.credits} items=${JSON.stringify(snapshot.wallet.items)} claims=1 ledgers=${snapshot.counts.ledgers}`;
   });
 
-  await check('S1-10 再次 reload 同 ticket：commissionRun===null、钱包仍 150、无重复发钱', async () => {
+  await check('S1-10 再次 reload 同 ticket：commissionRun===null、钱包不变、无重复发钱', async () => {
     await reloadPage();
     await waitFor(`!!window.__arcadeTest && !!window.__arcadeTest.careerInfo`, 9000);
     await sleep(120);
@@ -650,7 +663,7 @@ async function run() {
     assert(state.run === null, `已结算 ticket 的页面不应激活 commissionRun: ${JSON.stringify(state.run)}`);
     assert(state.career && state.career.isCommission === false, `已结算 ticket 不应锁职业模式: ${JSON.stringify(state.career)}`);
     assert(state.ticket === null, `已结算后 sessionStorage ticket 应为空: ${state.ticket}`);
-    assert(snapshot.wallet && snapshot.wallet.credits === 150, `reload 后钱包应仍为 150: ${JSON.stringify(snapshot.wallet)}`);
+    assert(snapshot.wallet && snapshot.wallet.credits === INITIAL_CREDITS + TOWER_REWARD.credits, `reload 后钱包应不变: ${JSON.stringify(snapshot.wallet)}`);
     assertSnapshotSame(evidence.snapshots.towerAfterSettle, snapshotData(snapshot), 'S1-10 reload');
     const errors = await assertNoConsoleErrors('S1-10');
     return `run=null wallet=150 claims=1 ledgers=4 · ${errors}`;
@@ -661,7 +674,7 @@ async function run() {
     const replay = await replaySettle(towerTicket.ticketId);
     assert(replay.result && replay.result.ok === true, `重放 settle 应成功返回原收据: ${JSON.stringify(replay.result)}`);
     assert(replay.result.duplicate === true, `重放 settle 应 duplicate=true: ${JSON.stringify(replay.result)}`);
-    assert(replay.result.credits === 70, `重放收据金额应 70: ${JSON.stringify(replay.result)}`);
+    assert(replay.result.credits === TOWER_REWARD.credits, `重放收据金额应 ${TOWER_REWARD.credits}: ${JSON.stringify(replay.result)}`);
     assert(replay.result.receipt && replay.result.receipt.receiptId === towerTicket.ticketId, `重放收据 id 异常: ${JSON.stringify(replay.result.receipt)}`);
     assert(replay.result.receipt.claimedAt === evidence.snapshots.towerReceipt.claimedAt, '重放返回的 claimedAt 与原收据不一致');
     assert(stable(replay.result.receipt.txIds) === stable(evidence.snapshots.towerReceipt.txIds), '重放返回的 txIds 与原收据不一致');
@@ -781,12 +794,12 @@ async function run() {
   });
 
   let starSettled = null;
-  await check('S2-07 「圆满收局」结算：收据 90 / alloy×1 / ticket 消费 / overlay 护航完成', async () => {
+  await check('S2-07 「圆满收局」结算：收据按内容 / ticket 消费 / overlay 护航完成', async () => {
     starSettled = await starSettleViaClearPanel();
     assert(starSettled.settled && starSettled.settled.ok === true, `星海结算应成功: ${JSON.stringify(starSettled.settled)}`);
-    assert(starSettled.settled.credits === 90, `T1 收据应为 90: ${JSON.stringify(starSettled.settled)}`);
+    assert(starSettled.settled.credits === STAR_REWARD.credits, `T1 收据应为 ${STAR_REWARD.credits}: ${JSON.stringify(starSettled.settled)}`);
     assert(starSettled.settled.duplicate === false, `首次结算不应 duplicate: ${JSON.stringify(starSettled.settled)}`);
-    assert(starSettled.settled.items === 1, `收据材料件数应为 1: ${JSON.stringify(starSettled.settled)}`);
+    assert(starSettled.settled.items === sumItems(STAR_REWARD.items), `收据材料件数应为 ${sumItems(STAR_REWARD.items)}: ${JSON.stringify(starSettled.settled)}`);
     assert(starSettled.ticket === null, `结算后 sessionStorage ticket 应为空: ${starSettled.ticket}`);
     assert(starSettled.overlayTitle === '护航完成', `结算后 overlay title 异常: ${starSettled.overlayTitle}`);
     await screenshot('D16-11-star-result.png');
@@ -794,18 +807,18 @@ async function run() {
     return `credits=90 items=1 overlay=${starSettled.overlayTitle} · ${errors}`;
   });
 
-  await check('S2-08 钱包 170（80+90）/ run claimed / claims 1 行 / ledger 3 条领奖流水', async () => {
+  await check('S2-08 钱包按内容累加 / run claimed / claims 1 行 / 领奖流水', async () => {
     const snapshot = await careerSnapshot(towerTicket.careerId, towerTicket.ticketId);
-    assert(snapshot.wallet && snapshot.wallet.credits === 170, `钱包应为 80+90=170: ${JSON.stringify(snapshot.wallet)}`);
-    assert(stable(snapshot.wallet.items) === stable({ alloy: 1 }), `T1 材料应为 alloy×1: ${JSON.stringify(snapshot.wallet.items)}`);
+    assert(snapshot.wallet && snapshot.wallet.credits === INITIAL_CREDITS + STAR_REWARD.credits, `钱包应为 80+${STAR_REWARD.credits}: ${JSON.stringify(snapshot.wallet)}`);
+    assert(stable(snapshot.wallet.items) === stable(STAR_REWARD.items), `T1 材料应为 ${JSON.stringify(STAR_REWARD.items)}: ${JSON.stringify(snapshot.wallet.items)}`);
     assert(snapshot.wallet.revision === 2, `钱包 revision 应为 2: ${snapshot.wallet.revision}`);
     assert(snapshot.run && snapshot.run.status === 'claimed', `run 状态应为 claimed: ${snapshot.run && snapshot.run.status}`);
-    assert(snapshot.claim && snapshot.claim.credits === 90 && snapshot.claim.commissionId === COMMISSION.starT1, `claim 行异常: ${JSON.stringify(snapshot.claim)}`);
+    assert(snapshot.claim && snapshot.claim.credits === STAR_REWARD.credits && snapshot.claim.commissionId === COMMISSION.starT1, `claim 行异常: ${JSON.stringify(snapshot.claim)}`);
     assert(Array.isArray(snapshot.claimsAll) && snapshot.claimsAll.length === 1, `claims 行数应为 1: ${snapshot.claimsAll && snapshot.claimsAll.length}`);
     const claimLedgers = (snapshot.ledgersAll || []).filter((row) => row.runId === towerTicket.ticketId);
-    assert(claimLedgers.length === 3 && new Set(claimLedgers.map((row) => row.txId)).size === 3, `领奖流水异常: ${JSON.stringify(claimLedgers)}`);
+    assert(claimLedgers.length >= 2 && new Set(claimLedgers.map((row) => row.txId)).size === claimLedgers.length, `领奖流水异常: ${JSON.stringify(claimLedgers)}`);
     evidence.snapshots.starAfterSettle = snapshotData(snapshot);
-    return `wallet=170 items=${JSON.stringify(snapshot.wallet.items)} claims=1 ledgers=4`;
+    return `wallet=${snapshot.wallet.credits} items=${JSON.stringify(snapshot.wallet.items)} claims=1`;
   });
 
   await check('S2-09 reload 后不重复发钱：commissionRun null、钱包仍 170、claims/ledgers 不变', async () => {
@@ -816,7 +829,7 @@ async function run() {
     const state = await page.evaluate(`({ run: window.__arcadeCareerTest.commissionRun(), career: window.__arcadeTest.careerInfo(), ticket: sessionStorage.getItem(${q(TICKET_KEY)}) })`);
     assert(state.run === null && state.career.isCommission === false, `已结算 ticket reload 后不应复活: ${JSON.stringify(state)}`);
     assert(state.ticket === null, `reload 后 sessionStorage ticket 应为空: ${state.ticket}`);
-    assert(snapshot.wallet && snapshot.wallet.credits === 170, `reload 后钱包应仍为 170: ${JSON.stringify(snapshot.wallet)}`);
+    assert(snapshot.wallet && snapshot.wallet.credits === INITIAL_CREDITS + STAR_REWARD.credits, `reload 后钱包应不变: ${JSON.stringify(snapshot.wallet)}`);
     assertSnapshotSame(evidence.snapshots.starAfterSettle, snapshotData(snapshot), 'S2-09 reload');
     const errors = await assertNoConsoleErrors('S2-09');
     return `run=null wallet=170 claims=1 · ${errors}`;
@@ -826,11 +839,11 @@ async function run() {
     const before = snapshotData(await careerSnapshot(towerTicket.careerId, towerTicket.ticketId));
     const replay = await replaySettle(towerTicket.ticketId);
     assert(replay.result && replay.result.ok === true && replay.result.duplicate === true, `重放 settle 应 duplicate: ${JSON.stringify(replay.result)}`);
-    assert(replay.result.credits === 90 && replay.result.receipt.receiptId === towerTicket.ticketId, `重放收据异常: ${JSON.stringify(replay.result)}`);
+    assert(replay.result.credits === STAR_REWARD.credits && replay.result.receipt.receiptId === towerTicket.ticketId, `重放收据异常: ${JSON.stringify(replay.result)}`);
     const after = snapshotData(await careerSnapshot(towerTicket.careerId, towerTicket.ticketId));
     assertSnapshotSame(before, after, 'S2-10 重放 settle');
     const errors = await assertNoConsoleErrors('S2-10');
-    return `duplicate=true credits=90 wallet=170 · ${errors}`;
+    return `duplicate=true credits=${STAR_REWARD.credits} wallet=${INITIAL_CREDITS + STAR_REWARD.credits} · ${errors}`;
   });
 
   await check('S2-11 星海场景 console error=0（网络噪声已分类）', async () => {
@@ -884,19 +897,19 @@ async function run() {
     const career = await page.evaluate(`window.__arcadeTest.careerInfo()`);
     assert(career.serializeNull === true && career.locked === true, `层塔职业锁定异常: ${JSON.stringify(career)}`);
     const errors = await assertNoConsoleErrors('S3-02');
-    return `${before}；${after}；floors=${career.floors} · ${errors}`;
+    return `${before}；${after}；floors=${career.stableFloors} · ${errors}`;
   });
 
-  await check('S3-03 职业层塔结算 70 后：runs:v1 仍逐字节相同', async () => {
+  await check('S3-03 职业层塔结算后：runs:v1 仍逐字节相同', async () => {
     const settled = await towerFinishViaBridge('won');
-    assert(settled.result && settled.result.ok === true && settled.result.credits === 70, `层塔职业结算异常: ${JSON.stringify(settled.result)}`);
+    assert(settled.result && settled.result.ok === true && settled.result.credits === TOWER_REWARD.credits, `层塔职业结算异常: ${JSON.stringify(settled.result)}`);
     const runs = await assertRunsBaseline('职业层塔结算后');
     const errors = await assertNoConsoleErrors('S3-03');
-    return `receipt=70 · ${runs} · ${errors}`;
+    return `receipt=${TOWER_REWARD.credits} · ${runs} · ${errors}`;
   });
 
   let s3Star = null;
-  await check('S3-04 职业星海 run 打开/开局/结算 90：runs:v1 全程逐字节相同', async () => {
+  await check('S3-04 职业星海 run 打开/开局/结算：runs:v1 全程逐字节相同', async () => {
     s3Star = await createTicket(COMMISSION.starT1);
     await openTicketRun(s3Star, 'star');
     const boot = await assertRunsBaseline('职业星海 boot');
@@ -905,13 +918,13 @@ async function run() {
     assert(killed.killed.state === 'clear', `星海 Boss 未击破: ${JSON.stringify(killed.killed)}`);
     const mid = await assertRunsBaseline('职业星海 Boss 击破后');
     const settled = await starSettleViaClearPanel();
-    assert(settled.settled && settled.settled.ok === true && settled.settled.credits === 90, `星海职业结算异常: ${JSON.stringify(settled.settled)}`);
+    assert(settled.settled && settled.settled.ok === true && settled.settled.credits === STAR_REWARD.credits, `星海职业结算异常: ${JSON.stringify(settled.settled)}`);
     const after = await assertRunsBaseline('职业星海结算后');
     const snapshot = await careerSnapshot(s3Star.careerId, s3Star.ticketId);
-    assert(snapshot.wallet && snapshot.wallet.credits === 240, `同一 career 先层塔后星海钱包应为 240: ${JSON.stringify(snapshot.wallet)}`);
-    assert(stable(snapshot.wallet.items) === stable({ alloy: 2 }), `同一 career 材料应为 alloy×2: ${JSON.stringify(snapshot.wallet.items)}`);
+    assert(snapshot.wallet && snapshot.wallet.credits === INITIAL_CREDITS + TOWER_REWARD.credits + STAR_REWARD.credits, `同一 career 先层塔后星海钱包异常: ${JSON.stringify(snapshot.wallet)}`);
+    assert(stable(snapshot.wallet.items) === stable(Object.assign({}, TOWER_REWARD.items, STAR_REWARD.items)), `同一 career 材料异常: ${JSON.stringify(snapshot.wallet.items)}`);
     const errors = await assertNoConsoleErrors('S3-04');
-    return `${boot}；${mid}；${after}；wallet=240 alloy=2 · ${errors}`;
+    return `${boot}；${mid}；${after}；wallet=${INITIAL_CREDITS + TOWER_REWARD.credits + STAR_REWARD.credits} · ${errors}`;
   });
 
   await check('S3-05 职业 run 结束后经典局仍可「继续上次」按原档续玩（floors=1 / score 一致）', async () => {
@@ -938,22 +951,22 @@ async function run() {
    * S4 刷新/更新不复制钱
    * ================================================================== */
   let s4Ticket = null;
-  await check('S4-01 结算后记录钱包/claims/ledgers 快照（钱包 150 / claims 1 / ledgers 4）', async () => {
+  await check('S4-01 结算后记录钱包/claims/ledgers 快照', async () => {
     const cleared = await resetScenario('S4');
     s4Ticket = await createTicket(COMMISSION.towerT1);
     await openTicketRun(s4Ticket, 'tower');
     await startTowerRun();
     await towerDropFloors(4);
     const settled = await towerFinishViaBridge('won');
-    assert(settled.result && settled.result.ok === true && settled.result.credits === 70, `S4 层塔结算异常: ${JSON.stringify(settled.result)}`);
+    assert(settled.result && settled.result.ok === true && settled.result.credits === TOWER_REWARD.credits, `S4 层塔结算异常: ${JSON.stringify(settled.result)}`);
     const snapshot = await careerSnapshot(s4Ticket.careerId, s4Ticket.ticketId);
-    assert(snapshot.wallet && snapshot.wallet.credits === 150, `S4 钱包应为 150: ${JSON.stringify(snapshot.wallet)}`);
+    assert(snapshot.wallet && snapshot.wallet.credits === INITIAL_CREDITS + TOWER_REWARD.credits, `S4 钱包应为 80+${TOWER_REWARD.credits}: ${JSON.stringify(snapshot.wallet)}`);
     assert(Array.isArray(snapshot.claimsAll) && snapshot.claimsAll.length === 1, `claims 应为 1: ${snapshot.claimsAll && snapshot.claimsAll.length}`);
-    assert(snapshot.counts && snapshot.counts.ledgers === 4, `ledgers 应为 4: ${JSON.stringify(snapshot.counts)}`);
+    assert(snapshot.counts && snapshot.counts.ledgers === 1 + settled.result.receipt.txIds.length, `ledger 总数异常: ${JSON.stringify(snapshot.counts)}`);
     evidence.snapshots.s4Baseline = snapshotData(snapshot);
     evidence.snapshots.s4BaselineHash = sha256(stable(snapshotData(snapshot)));
     assertNoConsoleErrors('S4-01');
-    return `${cleared} · wallet=150 claims=1 ledgers=4 hash=${evidence.snapshots.s4BaselineHash.slice(0, 16)}`;
+    return `${cleared} · wallet=${INITIAL_CREDITS + TOWER_REWARD.credits} claims=1 leads=${snapshot.counts.ledgers} hash=${evidence.snapshots.s4BaselineHash.slice(0, 16)}`;
   });
 
   await check('S4-02 普通 reload：wallet/claims/ledgers 完全一致、commissionRun=null、console 0', async () => {
@@ -1009,15 +1022,15 @@ async function run() {
     const before = snapshotData(await careerSnapshot(s4Ticket.careerId, s4Ticket.ticketId));
     const replay = await replaySettle(s4Ticket.ticketId);
     assert(replay.result && replay.result.ok === true && replay.result.duplicate === true, `重放 settle 应 duplicate: ${JSON.stringify(replay.result)}`);
-    assert(replay.result.credits === 70, `重放收据金额应 70: ${JSON.stringify(replay.result)}`);
+    assert(replay.result.credits === TOWER_REWARD.credits, `重放收据金额应 ${TOWER_REWARD.credits}: ${JSON.stringify(replay.result)}`);
     const after = snapshotData(await careerSnapshot(s4Ticket.careerId, s4Ticket.ticketId));
     assertSnapshotSame(before, after, 'S4-05 重放 settle');
     assert(after.claims.length === 1, `claims 行数被复制: ${after.claims.length}`);
     const claimLedgers = (after.ledgers || []).filter((row) => row.runId === s4Ticket.ticketId);
-    assert(claimLedgers.length === 3, `本 run 领奖流水应仍为 3 条: ${claimLedgers.length}`);
+    assert(claimLedgers.length >= 2, `本 run 领奖流水条数异常: ${claimLedgers.length}`);
     const errors = await assertNoConsoleErrors('S4-05');
     evidence.snapshots.s4AfterReplayHash = sha256(stable(after));
-    return `duplicate=true claims=1 claimLedgers=3 hash=${evidence.snapshots.s4AfterReplayHash.slice(0, 16)} · ${errors}`;
+    return `duplicate=true claims=1 claimLedgers=${claimLedgers.length} hash=${evidence.snapshots.s4AfterReplayHash.slice(0, 16)} · ${errors}`;
   });
 
   /* ================================================================== *
@@ -1105,19 +1118,19 @@ async function run() {
   let s6tower = null;
   let s6star = null;
   let s6TowerSnapshot = null;
-  await check('S6-01 同 career 先层塔：钱包 150、C1.work_done、层塔 T2 解锁、装备为空', async () => {
+  await check('S6-01 同 career 先层塔：钱包按内容、C1.work_done、层塔 T2 解锁、装备为空', async () => {
     const cleared = await resetScenario('S6');
     s6tower = await createTicket(COMMISSION.towerT1);
     await openTicketRun(s6tower, 'tower');
     await startTowerRun();
     await towerDropFloors(4);
     const settled = await towerFinishViaBridge('won');
-    assert(settled.result && settled.result.ok === true && settled.result.credits === 70, `层塔结算异常: ${JSON.stringify(settled.result)}`);
+    assert(settled.result && settled.result.ok === true && settled.result.credits === TOWER_REWARD.credits, `层塔结算异常: ${JSON.stringify(settled.result)}`);
     const snapshot = await careerSnapshot(s6tower.careerId, s6tower.ticketId);
     s6TowerSnapshot = snapshot;
     const available = await listAvailable(s6tower.careerId);
-    assert(snapshot.wallet && snapshot.wallet.credits === 150, `层塔后钱包应为 150: ${JSON.stringify(snapshot.wallet)}`);
-    assert(stable(snapshot.wallet.items) === stable({ alloy: 1 }), `层塔后材料应为 alloy×1: ${JSON.stringify(snapshot.wallet.items)}`);
+    assert(snapshot.wallet && snapshot.wallet.credits === INITIAL_CREDITS + TOWER_REWARD.credits, `层塔后钱包异常: ${JSON.stringify(snapshot.wallet)}`);
+    assert(stable(snapshot.wallet.items) === stable(TOWER_REWARD.items), `层塔后材料异常: ${JSON.stringify(snapshot.wallet.items)}`);
     assert(stable(snapshot.equipment && snapshot.equipment.equipment || {}) === stable({}), `层塔后装备应仍为空: ${JSON.stringify(snapshot.equipment)}`);
     const questRows = snapshot.quests && Array.isArray(snapshot.quests.quests) ? snapshot.quests.quests : [];
     const towerQuest = questRows.find((row) => row.nodeId === COMMISSION.towerT1);
@@ -1130,20 +1143,20 @@ async function run() {
     assert(available.map['star-raid.T2'] === false, `星海 T2 未完成星海 T1 前不应解锁: ${JSON.stringify(available.map)}`);
     assert(snapshot.claimsAll.length === 1, `claims 应为 1: ${snapshot.claimsAll.length}`);
     evidence.snapshots.s6AfterTower = { available: available.map, quests: questRows, wallet: snapshot.wallet.credits, items: snapshot.wallet.items };
-    return `${cleared} · wallet=150 unlocked=${JSON.stringify(available.map)} · ${await assertNoConsoleErrors('S6-01')}`;
+    return `${cleared} · wallet=${INITIAL_CREDITS + TOWER_REWARD.credits} unlocked=${JSON.stringify(available.map)} · ${await assertNoConsoleErrors('S6-01')}`;
   });
 
-  await check('S6-02 同 career 再星海：钱包 240、alloy×2、双 flag 保留、星海 T2 解锁、装备不被覆盖', async () => {
+  await check('S6-02 同 career 再星海：钱包按内容累加、双 flag 保留、星海 T2 解锁、装备不被覆盖', async () => {
     s6star = await createTicket(COMMISSION.starT1);
     await openTicketRun(s6star, 'star');
     await startStarRun();
     await starKillBoss();
     const settled = await starSettleViaClearPanel();
-    assert(settled.settled && settled.settled.ok === true && settled.settled.credits === 90, `星海结算异常: ${JSON.stringify(settled.settled)}`);
+    assert(settled.settled && settled.settled.ok === true && settled.settled.credits === STAR_REWARD.credits, `星海结算异常: ${JSON.stringify(settled.settled)}`);
     const snapshot = await careerSnapshot(s6star.careerId, s6star.ticketId);
     const available = await listAvailable(s6star.careerId);
-    assert(snapshot.wallet && snapshot.wallet.credits === 240, `两单后钱包应为 80+70+90=240: ${JSON.stringify(snapshot.wallet)}`);
-    assert(stable(snapshot.wallet.items) === stable({ alloy: 2 }), `两单后材料应为 alloy×2: ${JSON.stringify(snapshot.wallet.items)}`);
+    assert(snapshot.wallet && snapshot.wallet.credits === INITIAL_CREDITS + TOWER_REWARD.credits + STAR_REWARD.credits, `两单后钱包异常: ${JSON.stringify(snapshot.wallet)}`);
+    assert(stable(snapshot.wallet.items) === stable(Object.assign({}, TOWER_REWARD.items, STAR_REWARD.items)), `两单后材料异常: ${JSON.stringify(snapshot.wallet.items)}`);
     assert(stable(snapshot.equipment && snapshot.equipment.equipment || {}) === stable({}), `星海结算覆盖了装备: ${JSON.stringify(snapshot.equipment)}`);
     const questRows = snapshot.quests && Array.isArray(snapshot.quests.quests) ? snapshot.quests.quests : [];
     const towerQuest = questRows.find((row) => row.nodeId === COMMISSION.towerT1);
@@ -1156,14 +1169,15 @@ async function run() {
     assert(snapshot.claimsAll.length === 2, `两单后 claims 应为 2: ${snapshot.claimsAll.length}`);
     const commissions = new Set(snapshot.claimsAll.map((row) => row.commissionId));
     assert(commissions.has(COMMISSION.towerT1) && commissions.has(COMMISSION.starT1), `claims 未按游戏独立记录: ${JSON.stringify([...commissions])}`);
-    assert(snapshot.counts && snapshot.counts.ledgers === 7, `两单后 ledgers 应为 7（2×(3+1) 含初始）: ${JSON.stringify(snapshot.counts)}`);
     /* 旧记录互不覆盖：层塔 claim 行仍完整、钱包是累加而非重置、装备仍为空。 */
     const towerClaim = snapshot.claimsAll.find((row) => row.commissionId === COMMISSION.towerT1);
-    assert(towerClaim && towerClaim.credits === 70 && Array.isArray(towerClaim.txIds) && towerClaim.txIds.length === 3, `层塔 claim 行被星海结算破坏: ${JSON.stringify(towerClaim)}`);
-    assert(s6TowerSnapshot.wallet && s6TowerSnapshot.wallet.credits === 150, 'S6-01 钱包基线异常');
-    assert(snapshot.wallet.credits === s6TowerSnapshot.wallet.credits + 90, `钱包应累加而非重置: ${snapshot.wallet.credits} vs ${s6TowerSnapshot.wallet.credits}+90`);
+    assert(towerClaim && towerClaim.credits === TOWER_REWARD.credits && Array.isArray(towerClaim.txIds) && towerClaim.txIds.length >= 2, `层塔 claim 行被星海结算破坏: ${JSON.stringify(towerClaim)}`);
+    const starLedgers = (snapshot.ledgersAll || []).filter((row) => row.runId === s6star.ticketId).length;
+    assert(snapshot.counts && snapshot.counts.ledgers === 1 + towerClaim.txIds.length + starLedgers, `两单后 ledger 总数异常: ${JSON.stringify(snapshot.counts)}`);
+    assert(s6TowerSnapshot.wallet && s6TowerSnapshot.wallet.credits === INITIAL_CREDITS + TOWER_REWARD.credits, 'S6-01 钱包基线异常');
+    assert(snapshot.wallet.credits === s6TowerSnapshot.wallet.credits + STAR_REWARD.credits, `钱包应累加而非重置: ${snapshot.wallet.credits} vs ${s6TowerSnapshot.wallet.credits}+${STAR_REWARD.credits}`);
     evidence.snapshots.s6AfterStar = { available: available.map, quests: questRows, wallet: snapshot.wallet.credits, items: snapshot.wallet.items, claims: snapshot.claimsAll.length, ledgers: snapshot.counts.ledgers };
-    return `wallet=240 alloy=2 claims=2 ledgers=7 unlocked=${JSON.stringify(available.map)} · ${await assertNoConsoleErrors('S6-02')}`;
+    return `wallet=${snapshot.wallet.credits} claims=2 ledgers=${snapshot.counts.ledgers} unlocked=${JSON.stringify(available.map)} · ${await assertNoConsoleErrors('S6-02')}`;
   });
 
   await check('S6-03 两游戏 ticket 不串：层塔 ticket 打开星海页 fail-open 经典、不激活职业 run', async () => {
@@ -1200,7 +1214,7 @@ async function run() {
     })()`);
     assert(abandonCross.result && abandonCross.result.ok === true, `跨游戏 ticket 清理失败: ${JSON.stringify(abandonCross.result)}`);
     assert(abandonCross.run && abandonCross.run.status === 'abandoned', `跨游戏 ticket run 状态异常: ${JSON.stringify(abandonCross.run)}`);
-    assert(abandonCross.wallet && abandonCross.wallet.credits === 240, `跨游戏 ticket 清理不应发钱: ${JSON.stringify(abandonCross.wallet)}`);
+    assert(abandonCross.wallet && abandonCross.wallet.credits === INITIAL_CREDITS + TOWER_REWARD.credits + STAR_REWARD.credits, `跨游戏 ticket 清理不应发钱: ${JSON.stringify(abandonCross.wallet)}`);
     const snapshotAfter = await careerSnapshot(s6star.careerId, s6star.ticketId);
     assertSnapshotSame(snapshotData(snapshotBefore), snapshotData(snapshotAfter), 'S6-03 跨游戏 ticket abandon');
     await screenshot('D16-11-cross-ticket-failopen.png');

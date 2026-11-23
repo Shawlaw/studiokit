@@ -663,8 +663,8 @@ async function dropOneTowerFloor(cdp, index) {
     await sleep(25);
   }
   ensure(released, 'could not align a real release for floor ' + (index + 1) + ' (last forecast ' + P(forecast) + ')');
-  await cdp.waitFor('window.__arcadeTest.careerInfo().floors >= ' + (index + 1), { timeout: 14000 });
-  return cdp.evaluate('window.__arcadeTest.careerInfo().floors');
+  await cdp.waitFor('window.__arcadeTest.careerInfo().stableFloors >= ' + (index + 1), { timeout: 14000 });
+  return cdp.evaluate('window.__arcadeTest.careerInfo().stableFloors');
 }
 
 async function collapseTower(cdp) {
@@ -921,7 +921,7 @@ async function scenarioEconomyChain(cdp, content) {
   await flushConsole(cdp, 'chain-tower-T1-activate');
 
   const flightT1 = await flyTower(cdp, 4, 'chain-T1');
-  expectTrue('C05 tower T1: 4 real floor settles recorded as commission events (no discovery pollution)', flightT1.drops.length === 4 && flightT1.drops[0] === 1 && flightT1.drops[3] === 4 && flightT1.events === 4 && flightT1.after.floors === 4, P(flightT1));
+  expectTrue('C05 tower T1: 4 real floor settles recorded as commission events (no discovery pollution)', flightT1.drops.length === 4 && flightT1.drops[0] === 1 && flightT1.drops[3] === 4 && flightT1.events === 4 && flightT1.after.stableFloors === 4, P(flightT1));
   const settleT1 = await waitSettle(cdp, acceptT1.ticketId, 'chain-T1');
   expectTrue('C06 T1 settlement: 70 credits + alloy 1 + C1.work_done (bridge authoritative)', settleT1.ok === true && settleT1.credits === 70 && settleT1.items && settleT1.items.alloy === 1 && Array.isArray(settleT1.flags) && settleT1.flags.indexOf('C1.work_done') >= 0 && settleT1.repeat === false && settleT1.duplicate === false, P(settleT1));
   const cardT1 = await waitReceiptCard(cdp, 'chain-T1');
@@ -945,7 +945,7 @@ async function scenarioEconomyChain(cdp, content) {
   const runT2 = await activateTicket(cdp, 'pendulum-tower', acceptT2.ticketId, 'chain-T2');
   expectTrue('C11 T2 ticket activated', runT2.commissionId === 'pendulum-tower.T2' && runT2.startParams && P(runT2.startParams) === '{}', P(runT2.startParams));
   const flightT2 = await flyTower(cdp, 6, 'chain-T2');
-  expectTrue('C12 tower T2: 6 real floor settles recorded', flightT2.events === 6 && flightT2.after.floors === 6, P({ events: flightT2.events, floors: flightT2.after.floors }));
+  expectTrue('C12 tower T2: 6 real floor settles recorded', flightT2.events === 6 && flightT2.after.stableFloors === 6, P({ events: flightT2.events, floors: flightT2.after.stableFloors }));
   const settleT2 = await waitSettle(cdp, acceptT2.ticketId, 'chain-T2');
   expectTrue('C13 T2 settlement includes objectiveBonus (110+bridge bonus, alloy 2)', settleT2.ok === true && settleT2.credits === 120 && settleT2.items && settleT2.items.alloy === 2 && settleT2.repeat === false, 'expected credits 110 + objectiveBonus 10 = 120 · actual ' + P({ credits: settleT2.credits, items: settleT2.items, reason: settleT2.reason }));
   econ = await economy(cdp, careerId, 'chain-after-T2');
@@ -1201,7 +1201,7 @@ async function scenarioFailureAndAlternative(cdp) {
   const runOk = await activateTicket(cdp, 'pendulum-tower', acceptOk.ticketId, 'failure-retry');
   ensure(runOk.commissionId === 'pendulum-tower.T1', 'retry activation failed');
   const flightOk = await flyTower(cdp, 4, 'failure-retry');
-  expectTrue('F07 retry run records 4 real floor settles', flightOk.events === 4 && flightOk.after.floors === 4, P({ events: flightOk.events, floors: flightOk.after.floors }));
+  expectTrue('F07 retry run records 4 real floor settles', flightOk.events === 4 && flightOk.after.stableFloors === 4, P({ events: flightOk.events, floors: flightOk.after.stableFloors }));
   const okSettle = await waitSettle(cdp, acceptOk.ticketId, 'failure-retry');
   expectTrue('F08 retry T1 succeeds with full first-time salary (70 + alloy 1)', okSettle.ok === true && okSettle.credits === 70 && okSettle.items && okSettle.items.alloy === 1 && okSettle.repeat === false, P(okSettle));
   econ = await economy(cdp, careerId, 'failure-after-success');

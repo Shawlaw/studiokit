@@ -62,7 +62,7 @@ REQUIRED = [
     'tools/career_mission_fixture_runner.mjs',
     'tools/career_96_missions_test.mjs', 'tools/career_economy_balance_test.mjs',
     'tools/career_rental_test.mjs', 'tools/career_alternatives_test.mjs',
-    'tools/career_run_resume_test.mjs', 'tools/career_first_flight_test.mjs',
+    'tools/career_run_resume_test.mjs', 'tools/career_first_flight_test_016.mjs',
     'tools/career_mobile_016_test.mjs',
     'tools/career_legacy_baseline_test.mjs',
 ]

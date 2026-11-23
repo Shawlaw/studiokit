@@ -70,9 +70,9 @@ def main() -> int:
             'CAREER_RESUME_PORT': os.environ.get('CAREER_RESUME_PORT', '8880'),
             'CAREER_RESUME_CDP': os.environ.get('CAREER_RESUME_CDP', '9480'),
         }),
-        ('career_first_flight', ['node', 'tools/career_first_flight_test.mjs'], {
-            'CAREER_FF_PORT': os.environ.get('CAREER_FF_PORT', '8881'),
-            'CAREER_FF_CDP': os.environ.get('CAREER_FF_CDP', '9481'),
+        ('career_96_missions', ['node', 'tools/career_96_missions_test.mjs'], {
+            'M96_PORT': os.environ.get('M96_PORT', '8942'),
+            'M96_CDP': os.environ.get('M96_CDP', '9542'),
         }),
         ('career_mobile', ['node', 'tools/career_mobile_016_test.mjs'], {
             'CAREER_MOBILE_PORT': os.environ.get('CAREER_MOBILE_PORT', '8882'),

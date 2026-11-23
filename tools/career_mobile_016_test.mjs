@@ -982,7 +982,7 @@ async function phaseTouch(page) {
   /* 触控接单：告示板第一条委托 → 跳转职业 run 页面 */
   await openPanel(page, 'town', { waitMs: 1000 });
   const beforeUrl = await page.evaluate('location.href');
-  const start = await touchClick(page, '[data-career-panel="town"] .ac-career-town__list > li:nth-child(1) [data-town-action="start"]');
+  const start = await touchClick(page, '[data-career-panel="town"] [data-town-action="start"][data-commission-id="pendulum-tower.T1"]');
   const navigated = await waitForNavigation(page, beforeUrl, 12000);
   await waitBridge(page);
   await sleep(500);
