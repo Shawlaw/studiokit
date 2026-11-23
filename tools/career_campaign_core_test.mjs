@@ -290,7 +290,7 @@ function makeReceipt(commissionId) {
     txIds: [],
     claimedAt: NOW,
     rulesetVersion: 1,
-    contentVersion: '0.17.0',
+    contentVersion: '0.18.0',
   };
 }
 

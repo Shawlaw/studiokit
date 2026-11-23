@@ -276,7 +276,7 @@ function createFakeDb(options) {
       txIds,
       claimedAt: options.now || NOW,
       rulesetVersion: 1,
-      contentVersion: options.contentVersion || '0.17.0',
+      contentVersion: options.contentVersion || '0.18.0',
     };
     balance.credits += credits;
     balance.revision += 1;
@@ -355,7 +355,7 @@ let careerCore = null;
 let commissionsContent = null;
 
 const FIXTURE_COMMISSIONS = {
-  "contentVersion": "0.17.0",
+  "contentVersion": "0.18.0",
   "commissions": [
     {
       "commissionId": "pendulum-tower.T1",
@@ -587,7 +587,7 @@ async function groupA() {
     const result = core.configure({ content: commissionsContent });
     eq(result.count, 4, 'count');
     eq(result.errors, [], 'errors');
-    eq(result.contentVersion, '0.17.0', 'contentVersion');
+    eq(result.contentVersion, '0.18.0', 'contentVersion');
     assert(result.ok === true, 'ok 应为 true');
     assert(result.usable === true, 'usable 应为 true');
     return 'count=4';
@@ -604,7 +604,7 @@ async function groupA() {
       unlock: { all: [] },
     };
     const broken = {
-      contentVersion: '0.17.0',
+      contentVersion: '0.18.0',
       commissions: valid.concat([
         Object.assign({}, base, { commissionId: 'bad.T1' }),
         Object.assign({}, base, { commissionId: 'pendulum-tower.T1', objective: { kind: 'tower.floor_stable', atLeast: 1 } }),
@@ -654,9 +654,9 @@ async function groupA() {
     return 'unsupported-content';
   });
 
-  await check('A5 同 major 补丁版本（0.17.9）可正常使用', async () => {
+  await check('A5 同 major 补丁版本（0.18.9）可正常使用', async () => {
     const patched = clone(commissionsContent);
-    patched.contentVersion = '0.17.9';
+    patched.contentVersion = '0.18.9';
     const { core } = scenario({ content: false });
     const configured = core.configure({ content: patched });
     assert(configured.ok === true, 'ok 应 true：' + JSON.stringify(configured.errors));
@@ -789,7 +789,7 @@ async function groupC() {
     eq(ticket.careerId, result.careerId, 'careerId');
     eq(ticket.commissionId, 'pendulum-tower.T1', 'commissionId');
     eq(ticket.gameId, 'pendulum-tower', 'gameId');
-    eq(ticket.contentVersion, '0.17.0', 'contentVersion');
+    eq(ticket.contentVersion, '0.18.0', 'contentVersion');
     eq(ticket.issuedAt, NOW, 'issuedAt');
     eq(ticket.mode, 'commission', 'mode');
     eq(result.url, '../games/pendulum-tower.html?career=' + encodeURIComponent(ticket.ticketId), 'url');
@@ -959,12 +959,12 @@ async function groupD() {
     const { core, db } = scenario();
     const started = await core.start({ commissionId: 'pendulum-tower.T1' });
     const row = db.state.runs[started.ticketId];
-    row.contentVersion = '0.15.0';
-    eq((await core.validateTicket({ ticketId: started.ticketId, ticket: { contentVersion: '0.15.0' }, gameId: 'pendulum-tower' })).reason, 'unsupported-content', '0.15');
-    row.contentVersion = '0.17.9';
-    eq((await core.validateTicket({ ticketId: started.ticketId, ticket: { contentVersion: '0.17.9' }, gameId: 'pendulum-tower' })).ok, true, '0.17.9');
+    row.contentVersion = '0.19.0';
+    eq((await core.validateTicket({ ticketId: started.ticketId, ticket: { contentVersion: '0.19.0' }, gameId: 'pendulum-tower' })).reason, 'unsupported-content', '0.19');
+    row.contentVersion = '0.18.9';
+    eq((await core.validateTicket({ ticketId: started.ticketId, ticket: { contentVersion: '0.18.9' }, gameId: 'pendulum-tower' })).ok, true, '0.18.9');
     row.contentVersion = '0.18.0';
-    eq((await core.validateTicket({ ticketId: started.ticketId, ticket: { contentVersion: '0.18.0' }, gameId: 'pendulum-tower' })).reason, 'unsupported-content', '0.18');
+    eq((await core.validateTicket({ ticketId: started.ticketId, ticket: { contentVersion: '0.18.0' }, gameId: 'pendulum-tower' })).ok, true, '0.18.0');
     return 'version gate';
   });
 
@@ -1349,7 +1349,7 @@ async function groupG() {
     assert(receipt && typeof receipt === 'object' && !Array.isArray(receipt), 'receipt 缺失');
     eq(Object.keys(receipt), ['commissionId'], 'receipt 键');
     eq(receipt.commissionId, 'pendulum-tower.T1', 'receipt.commissionId');
-    eq(call.payload.contentVersion, '0.17.0', 'contentVersion');
+    eq(call.payload.contentVersion, '0.18.0', 'contentVersion');
     eq(call.payload.nonce, db.state.runs[ticketId].nonce, 'nonce 来自 run');
     return 'receipt={commissionId}';
   });
@@ -1435,7 +1435,7 @@ async function groupI() {
     towerEvents(1, ticketId, one.core);
     eq(one.core.getState(ticketId).bufferCount, 1, 'one');
     eq(two.core.getState(ticketId).bufferCount, 0, 'two');
-    two.core.configure({ content: { contentVersion: '0.17.0', commissions: [] } });
+    two.core.configure({ content: { contentVersion: '0.18.0', commissions: [] } });
     eq(two.core.getCommissions().length, 0, 'two 内容');
     eq(one.core.getCommissions().length, 4, 'one 内容不受影响');
     return 'isolated';
@@ -1455,7 +1455,7 @@ async function groupI() {
     const hits = forbidden.filter((item) => item.pattern.test(source)).map((item) => item.label);
     eq(hits, [], '禁止项');
     assert(source.indexOf('studiokit:arcade:career:ticket.v1') >= 0, '缺少 ticket 键');
-    assert(source.indexOf("'0.17.0'") >= 0, '缺少 contentVersion 0.17.0');
+    assert(source.indexOf("'0.18.0'") >= 0, '缺少 contentVersion 0.18.0');
     return 'clean';
   });
 

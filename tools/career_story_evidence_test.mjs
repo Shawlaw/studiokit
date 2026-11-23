@@ -152,7 +152,7 @@ function makeReceipt(commissionId, overrides) {
     txIds: [],
     claimedAt: NOW,
     rulesetVersion: 1,
-    contentVersion: '0.17.0',
+    contentVersion: '0.18.0',
   };
   if (overrides && typeof overrides === 'object') Object.assign(base, overrides);
   return base;
@@ -216,7 +216,7 @@ function createFakeDb(options) {
         txIds: Array.isArray(receipt.txIds) ? receipt.txIds.slice() : [],
         claimedAt: receipt.claimedAt || NOW,
         rulesetVersion: 1,
-        contentVersion: '0.17.0',
+        contentVersion: '0.18.0',
       };
       state.claims.set(runId, copy(claim));
       if (typeof receipt.commissionId === 'string' && receipt.commissionId) {
@@ -311,8 +311,8 @@ async function groupA() {
   console.log('\n# A. 装配与 configure');
 
   await check('A01 UMD 面：单例 API、createStoryEvidence、版本', async () => {
-    eq(MODULE.VERSION, '0.17.0', 'VERSION');
-    eq(MODULE.MODULE_VERSION, '0.17.0', 'MODULE_VERSION');
+    eq(MODULE.VERSION, '0.18.0', 'VERSION');
+    eq(MODULE.MODULE_VERSION, '0.18.0', 'MODULE_VERSION');
     eq(MODULE.__storyEvidenceMounted, true, 'mounted');
     for (const name of [
       'configure',
@@ -364,7 +364,7 @@ async function groupA() {
     const byArray = freshStory();
     const byArrayCfg = byArray.se.configure({ commissions: COMMISSIONS, items: ITEMS });
     const raw = MODULE.createStoryEvidence({});
-    const rawCfg = raw.configure({ contentVersion: '0.17.0', commissions: COMMISSIONS });
+    const rawCfg = raw.configure({ contentVersion: '0.18.0', commissions: COMMISSIONS });
     const nested = MODULE.createStoryEvidence({});
     const nestedCfg = nested.configure({ content: { commissions: COMMISSIONS, items: ITEMS } });
     eq([byArrayCfg.ok, rawCfg.ok, nestedCfg.ok], [true, true, true], 'ok');
@@ -1158,7 +1158,7 @@ async function groupE() {
     const { se, ctx } = await runPath(PATH_TRADE);
     const registry = REGISTRY.createRegistry({
       schemaVersion: 1,
-      contentVersion: '0.17.0',
+      contentVersion: '0.18.0',
       games: REGISTRY_CONTENT.games,
       professions: REGISTRY_CONTENT.professions,
       commissions: [],

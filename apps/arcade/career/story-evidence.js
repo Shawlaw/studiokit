@@ -44,9 +44,9 @@
    * 常量与形状（与 content/commissions.json、commission-schema 对齐）
    * ------------------------------------------------------------------ */
 
-  var VERSION = '0.17.0';
-  var MODULE_VERSION = '0.17.0';
-  var CONTENT_VERSION = '0.17.0';
+  var VERSION = '0.18.0';
+  var MODULE_VERSION = '0.18.0';
+  var CONTENT_VERSION = '0.18.0';
   var SCHEMA_VERSION = 1;
 
   /* ADR §19.2：reward.evidence 只放稳定 token；与 commission-schema.js 的 EVIDENCE_RE 一致。 */

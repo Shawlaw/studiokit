@@ -51,9 +51,9 @@
    * 常量
    * ------------------------------------------------------------------ */
 
-  var VERSION = '0.17.0';
-  var MODULE_VERSION = '0.17.0';
-  var CONTENT_VERSION = '0.17.0';
+  var VERSION = '0.18.0';
+  var MODULE_VERSION = '0.18.0';
+  var CONTENT_VERSION = '0.18.0';
   var SCHEMA_VERSION = 1;
 
   var OFFER_KIND = 'alternative';

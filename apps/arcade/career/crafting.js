@@ -45,8 +45,8 @@
 })(typeof window !== 'undefined' ? window : globalThis, function (root, isNode) {
   'use strict';
 
-  const VERSION = '0.17.0';
-  const CONTENT_VERSION_FALLBACK = '0.17.0';
+  const VERSION = '0.18.0';
+  const CONTENT_VERSION_FALLBACK = '0.18.0';
 
   /* career-core.RULESET 的只读镜像：仅用于价目合法性与测试防漂移。 */
   const RULESET_MIRROR = Object.freeze({

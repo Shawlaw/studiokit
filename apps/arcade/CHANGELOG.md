@@ -1,6 +1,22 @@
 # Arcade Changelog
 
 
+## 0.18.0 — 2026-11-23（本地未发布；等待 Owner 发布授权）
+
+星塔回响：六章 C0–C5、三条并列终局与后日常（分支 `feat/arcade-life-015`，不推送、不发布）。
+
+### Added
+- 六章内容 `campaign.json` / `chapter-00..05` / `npc.json` / `side-stories.json`；三终局 `ending-{combat,research,rescue}.json`。
+- `campaign-core.js`（章节/路线/状态/C0-C1 同步）、`ending-reducer.js`（C5 一次性汇合/幂等/失败可重试）、`ui/world-state.js`（章节/终局/后日谈/港口灯光）。
+- 中心页 C0 后小字「旧港来信」回流入口（`?story=1`）；信箱「旧港来信 · 章节」按钮。
+
+### Changed / Fixed
+- 修复 C0 信箱旗标、终局跨页事件缓冲（`adoptRun` + `attach`）、mustKnow/正文/NPC 回信渲染、C1 代办路线。
+- 版本链 0.18.0 / SW `studiokit-arcade-0.18.0-v1`。
+
+### Tests
+- campaign-core 53/53、ending 34/34、graph 48/48、world 109/109、campaign E2E 701/701；0.17 回归保持。
+
 ## 0.17.0 — 2026-11-23（本地未发布；等待 Owner 发布授权）
 
 活世界：96 委托、五材商店、制造台、职业成长、剧情证据与单职业路线（分支 `feat/arcade-life-015`，不推送、不发布）。

@@ -813,7 +813,7 @@ function syntheticBundle() {
     });
   }
 
-  return { commissions, registry, commissionsContent: { contentVersion: '0.17.0', commissions } };
+  return { commissions, registry, commissionsContent: { contentVersion: '0.18.0', commissions } };
 }
 
 {

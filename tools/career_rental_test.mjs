@@ -220,7 +220,7 @@ function configured(extra) {
 
 function contentItems(overrides) {
   const base = {
-    contentVersion: '0.17.0',
+    contentVersion: '0.18.0',
     ships: [],
     modules: [],
     materials: [],
@@ -237,8 +237,8 @@ function contentItems(overrides) {
   check('T-01d clear 是函数', typeof rentalModule.clear === 'function');
   check('T-01e prepareCommission 是函数', typeof rentalModule.prepareCommission === 'function');
   check('T-01f create 工厂可独立建实例', typeof rentalModule.create === 'function' && typeof rentalModule.create().rent === 'function');
-  check('T-01g MODULE_VERSION 为 0.17.0', rentalModule.MODULE_VERSION === '0.17.0');
-  check('T-01h CONTENT_VERSION 为 0.17.0', rentalModule.CONTENT_VERSION === '0.17.0');
+  check('T-01g MODULE_VERSION 为 0.18.0', rentalModule.MODULE_VERSION === '0.18.0');
+  check('T-01h CONTENT_VERSION 为 0.18.0', rentalModule.CONTENT_VERSION === '0.18.0');
   eq('T-01i marker 键为 ADR 约定的会话键', KEY, 'studiokit:arcade:career:rental.v1');
   check('T-01j 默认 TTL 为 6 小时（仅提示）', TTL_MS === SIX_HOURS && rentalModule.DEFAULT_TTL_MS === TTL_MS);
   check('T-01k REASONS 为冻结集合', !!rentalModule.REASONS && typeof rentalModule.REASONS === 'object');
@@ -280,7 +280,7 @@ function contentItems(overrides) {
   const env = newRental();
   const configuredResult = env.rental.configure({ items: realItems });
   check('T-03a configure 真实 items 返回 ok', configuredResult.ok === true, JSON.stringify(configuredResult.errors));
-  check('T-03b contentVersion 读回 0.17.0', configuredResult.contentVersion === '0.17.0');
+  check('T-03b contentVersion 读回 0.18.0', configuredResult.contentVersion === '0.18.0');
   check('T-03c 飞船总数 4', configuredResult.shipCount === 4);
   check('T-03d 可租数量 1', configuredResult.rentalCount === 1);
   eq('T-03e 可租白名单只有 old-wing', configuredResult.rentals, [{ shipId: 'old-wing', name: '旧翼', price: 260 }]);
@@ -364,7 +364,7 @@ function contentItems(overrides) {
 
   const env2 = newRental();
   const patchContent = contentItems({
-    contentVersion: '0.17.9',
+    contentVersion: '0.18.9',
     ships: [{ shipId: 'old-wing', name: '旧翼', price: 260, rental: true, stats: {} }],
   });
   const configured2 = env2.rental.configure({ items: patchContent });

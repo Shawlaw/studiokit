@@ -275,7 +275,7 @@ function createFakeDb(options) {
       balanceAfter: plan.plan.balanceAfter,
       purchasedAt: NOW,
       rulesetVersion: 1,
-      contentVersion: '0.17.0',
+      contentVersion: '0.18.0',
     };
     store.ledger.push({
       txId,
@@ -421,9 +421,9 @@ await check('A01 Node 导出：UMD module.exports 带完整 API', () => {
   names.forEach((name) => assert(typeof alternatives[name] === 'function', '缺少方法 ' + name));
   eq(alternatives.OFFER_KIND, 'alternative');
   eq(alternatives.STORY_KIND, 'story');
-  eq(alternatives.VERSION, '0.17.0');
-  eq(alternatives.CONTENT_VERSION, '0.17.0');
-  eq(alternatives.MODULE_VERSION, '0.17.0');
+  eq(alternatives.VERSION, '0.18.0');
+  eq(alternatives.CONTENT_VERSION, '0.18.0');
+  eq(alternatives.MODULE_VERSION, '0.18.0');
   return '9 methods';
 });
 
@@ -431,14 +431,14 @@ await check('A02 浏览器挂载：ArcadeCareerAlternatives + 镜像 ArcadeCaree
   const api = browserWindow.ArcadeCareerAlternatives;
   assert(api && typeof api === 'object', '未挂载 ArcadeCareerAlternatives');
   assert(browserWindow.ArcadeCareer && browserWindow.ArcadeCareer.alternatives === api, '未镜像到 ArcadeCareer.alternatives');
-  eq(api.VERSION, '0.17.0');
+  eq(api.VERSION, '0.18.0');
   return 'mirrored';
 });
 
 await check('A03 默认单例：内置 2 条 offer，无内容错误', () => {
   const state = alternatives.getState();
   eq(state.count, 2);
-  eq(state.contentVersion, '0.17.0');
+  eq(state.contentVersion, '0.18.0');
   eq(state.source, 'default');
   eq(state.errors, []);
   return state.offerIds.join(',');
@@ -518,7 +518,7 @@ await check('A10 工厂隔离：configure 只影响本实例', () => {
 });
 
 function equalConfigure(alt, offers) {
-  const result = alt.configure({ content: { contentVersion: '0.17.0', offers } });
+  const result = alt.configure({ content: { contentVersion: '0.18.0', offers } });
   assert(result.ok === true, 'configure 失败: ' + JSON.stringify(result));
   return result;
 }
@@ -530,7 +530,7 @@ function equalConfigure(alt, offers) {
 await check('B01 configure 接受合法内容（对象形态），非法内容只进 errors 不抛', () => {
   const alt = makeAlt({ db: createFakeDb({ careerId: 'b01', credits: 100 }).db });
   const bad = {
-    contentVersion: '0.17.0',
+    contentVersion: '0.18.0',
     offers: [
       null,
       {},
@@ -599,7 +599,7 @@ await check('B02 configure 接受数组形态内容', () => {
 
 await check('B03 空 offers 列表：configure 报错、目录为空、buy 拒绝', async () => {
   const alt = makeAlt({ db: createFakeDb({ careerId: 'b03', credits: 100 }).db });
-  const result = alt.configure({ content: { contentVersion: '0.17.0', offers: [] } });
+  const result = alt.configure({ content: { contentVersion: '0.18.0', offers: [] } });
   eq(result.ok, false);
   includes(result.errors, 'offers-empty');
   eq(result.count, 0);
@@ -628,7 +628,7 @@ await check('B05 循环引用内容不抛：结构化拒绝', () => {
   const alt = makeAlt({ db: createFakeDb({ careerId: 'b05', credits: 100 }).db });
   const cyclic = offerFixture('cyclic.offer');
   cyclic.self = cyclic;
-  const result = alt.configure({ content: { contentVersion: '0.17.0', offers: [cyclic] } });
+  const result = alt.configure({ content: { contentVersion: '0.18.0', offers: [cyclic] } });
   eq(result.ok, false);
   assert(Array.isArray(result.errors) && result.errors.length > 0, '缺少结构化 errors');
   return result.errors[0];

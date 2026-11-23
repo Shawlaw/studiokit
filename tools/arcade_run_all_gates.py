@@ -82,6 +82,17 @@ def main() -> int:
             'CAREER_MOBILE_PORT': os.environ.get('CAREER_MOBILE_PORT', '8882'),
             'CAREER_MOBILE_CDP': os.environ.get('CAREER_MOBILE_CDP', '9482'),
         }),
+        ('career_campaign_core', ['node', 'tools/career_campaign_core_test.mjs'], None),
+        ('career_ending_reducer', ['node', 'tools/career_ending_reducer_test.mjs'], None),
+        ('career_graph_reachability', ['node', 'tools/career_graph_reachability_test.mjs'], None),
+        ('career_world_state', ['node', 'tools/career_world_state_test.mjs'], {
+            'WORLD18_PORT': os.environ.get('WORLD18_PORT', '8994'),
+            'WORLD18_CDP': os.environ.get('WORLD18_CDP', '9594'),
+        }),
+        ('career_campaign_e2e', ['node', 'tools/career_campaign_e2e_test.mjs'], {
+            'C18_E2E_PORT': os.environ.get('C18_E2E_PORT', '8996'),
+            'C18_E2E_CDP': os.environ.get('C18_E2E_CDP', '9596'),
+        }),
         ('stage_coverage', ['node', 'tools/arcade_stage_coverage.mjs'], None),
         ('smoke', ['node', 'tools/arcade_smoke.mjs'], {
             'ARCADE_SMOKE_PORT': os.environ.get('ARCADE_SMOKE_PORT', '8821'),

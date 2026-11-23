@@ -55,7 +55,7 @@
 (function (root) {
   'use strict';
 
-  const VERSION = '0.17.0';
+  const VERSION = '0.18.0';
   const OVERLAY_CLASS = 'ac-career-overlay';
   const SHEET_CLASS = 'ac-career-sheet';
   const TITLE_ID = 'ac-career-market-title';

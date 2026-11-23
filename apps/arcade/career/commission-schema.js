@@ -32,7 +32,7 @@
 
   var SCHEMA_VERSION = 1;
   /** 0.17 内容版本（ADR §19.2 / §12 版本链）。 */
-  var CONTENT_VERSION = '0.17.0';
+  var CONTENT_VERSION = '0.18.0';
   /** 每游戏阶数（ADR §19.2：T1–T6）。 */
   var TIERS = Object.freeze([1, 2, 3, 4, 5, 6]);
   /** T4–T6 额外章节旗标（ADR §19.2 tier 解锁链）。 */

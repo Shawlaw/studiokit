@@ -23,7 +23,7 @@
 
   const SCHEMA_VERSION = 1;
   const RULESET_VERSION = 1;
-  const DEFAULT_CONTENT_VERSION = '0.17.0';
+  const DEFAULT_CONTENT_VERSION = '0.18.0';
 
   /* ID / token 形状：URL 与 IndexedDB 双端安全，不含冒号（txId 需要能解析 runId）。 */
   const ID_RE = /^[A-Za-z0-9][A-Za-z0-9._-]{0,119}$/;

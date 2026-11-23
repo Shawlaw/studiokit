@@ -408,7 +408,7 @@ function createFakeDb(options) {
       txIds,
       claimedAt: at,
       rulesetVersion: 1,
-      contentVersion: options.contentVersion || '0.17.0',
+      contentVersion: options.contentVersion || '0.18.0',
     };
     balance.credits += credits;
     balance.revision += 1;
@@ -508,7 +508,7 @@ function createFakeCommission(options) {
         if (!Array.isArray(rows)) return { ok: false, errors: ['rows-not-array'], usable: false };
         state.rows = clone(rows);
         state.configured = true;
-        return { ok: true, contentVersion: '0.17.0', count: state.rows.length, errors: [], warnings: [], usable: true };
+        return { ok: true, contentVersion: '0.18.0', count: state.rows.length, errors: [], warnings: [], usable: true };
       },
       getCommissions() {
         return clone(state.rows);
@@ -1167,7 +1167,7 @@ async function groupSettle() {
       ticketId: 'commission-guard-1',
       nonce: 'c'.repeat(32),
       status: 'issued',
-      contentVersion: '0.17.0',
+      contentVersion: '0.18.0',
     });
     const result = await reducer.settleEnding({ ticketId: 'commission-guard-1' });
     eq(result.ok, false, 'ok=false');
@@ -1206,7 +1206,7 @@ async function groupSettle() {
       ticketId: 'commission-guard-2',
       nonce: 'd'.repeat(32),
       status: 'issued',
-      contentVersion: '0.17.0',
+      contentVersion: '0.18.0',
     });
     const result = await reducer.settleEnding({ ticketId: 'commission-guard-2' });
     eq(result.ok, false, 'ok=false');

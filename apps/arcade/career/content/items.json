@@ -1,5 +1,5 @@
 {
-  "contentVersion": "0.17.0",
+  "contentVersion": "0.18.0",
   "ships": [
     {
       "shipId": "old-wing",
@@ -14,7 +14,7 @@
         "speed": 0,
         "magnet": 0
       },
-      "contentVersion": "0.17.0"
+      "contentVersion": "0.18.0"
     },
     {
       "shipId": "cloud-lark",
@@ -32,7 +32,7 @@
       "requires": {
         "alloy": 1
       },
-      "contentVersion": "0.17.0"
+      "contentVersion": "0.18.0"
     },
     {
       "shipId": "shield-whale",
@@ -50,7 +50,7 @@
       "requires": {
         "alloy": 2
       },
-      "contentVersion": "0.17.0"
+      "contentVersion": "0.18.0"
     },
     {
       "shipId": "prism",
@@ -69,7 +69,7 @@
         "alloy": 2,
         "starcrystal": 1
       },
-      "contentVersion": "0.17.0"
+      "contentVersion": "0.18.0"
     }
   ],
   "modules": [

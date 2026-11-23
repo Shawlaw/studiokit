@@ -379,10 +379,10 @@ const SCENARIOS = [
     async run(cdp) {
       await prepareHub(cdp);
       const api = await requireScores(cdp);
-      assert(api.version === '0.17.0', 'A.version=' + JSON.stringify(api.version) + '，期望 0.17.0');
+      assert(api.version === '0.18.0', 'A.version=' + JSON.stringify(api.version) + '，期望 0.18.0');
       const dom = await hubSnapshot(cdp);
       assert(dom.section, '中心页缺少 [data-scores-section] 积分记录区块');
-      assert(dom.versionText.trim() === '0.17.0', '[data-hall-version]=' + JSON.stringify(dom.versionText) + '，期望 0.17.0');
+      assert(dom.versionText.trim() === '0.18.0', '[data-hall-version]=' + JSON.stringify(dom.versionText) + '，期望 0.18.0');
       assert(dom.table, '缺少 .hall-scores-table 积分表格');
       const headers = dom.headers.map((item) => item.text).join('/');
       assert(headers === '时间/游戏/模式/得分/详情', '表头=' + JSON.stringify(headers) + '，期望 时间/游戏/模式/得分/详情');

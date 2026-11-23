@@ -26,7 +26,7 @@
     <header class="hall-head">
       <div>
         <h1>🕹 街机厅 Arcade</h1>
-        <p class="hall-sub">16 款竖屏小游戏 · 13 款 6 关挑战 + 3 款平和棋牌 · 自动收集积分记录 · 无签到与每日奖励 · 随时圆满收工 · v<span data-hall-version>0.17.0</span></p>
+        <p class="hall-sub">16 款竖屏小游戏 · 13 款 6 关挑战 + 3 款平和棋牌 · 自动收集积分记录 · 无签到与每日奖励 · 随时圆满收工 · v<span data-hall-version>0.18.0</span></p>
       </div>
       <div class="hall-stats">
         <span>累计时长 <strong data-stat-time>0 分钟</strong></span>
@@ -152,6 +152,7 @@
       <button type="button" class="ac-btn-ghost" data-import-btn>导入备份</button>
       <input type="file" accept=".json,application/json" data-import-file hidden />
       <button type="button" class="ac-btn-ghost ac-danger" data-reset-all>清除全部记录</button>
+      <p class="hall-manage-note" data-story-entry hidden><a href="games/pendulum-tower.html?story=1">旧港来信</a></p>
     </section>
 
     <footer class="hall-foot">
@@ -1145,6 +1146,34 @@
           refreshOfflineStatus();
         }
       });
+
+      /* 回流入口：只有真实打开过旧港信件（C0.port_seen）的玩家才显示一行小字入口。 */
+      (async () => {
+        const entry = document.querySelector('[data-story-entry]');
+        if (!entry || typeof indexedDB === 'undefined' || typeof indexedDB.databases !== 'function') return;
+        try {
+          /* 只在生涯 DB 已存在时读取，绝不为只玩经典的玩家新建空 DB（会破坏 DB schema）。 */
+          const databases = await indexedDB.databases();
+          if (!databases.some((item) => item && item.name === 'studiokit:arcade:career')) return;
+          const db = await new Promise((resolve, reject) => {
+            const request = indexedDB.open('studiokit:arcade:career');
+            request.onsuccess = () => resolve(request.result);
+            request.onerror = () => reject(request.error);
+          });
+          if (!db.objectStoreNames.contains('quests')) { db.close(); return; }
+          const quests = await new Promise((resolve, reject) => {
+            const tx = db.transaction('quests', 'readonly');
+            const request = tx.objectStore('quests').getAll();
+            request.onsuccess = () => resolve(request.result || []);
+            request.onerror = () => reject(request.error);
+          });
+          db.close();
+          const seen = quests.some((row) => row && typeof row.nodeId === 'string' && row.nodeId === 'story:C0.port_seen');
+          if (seen) entry.hidden = false;
+        } catch (err) {
+          /* 生涯数据库不可用时保持静默，不影响经典中心页。 */
+        }
+      })();
 
       render();
     })();

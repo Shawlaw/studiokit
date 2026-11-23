@@ -4,6 +4,14 @@ StudioKit 门户本身没有独立的 semver；以下按仓库里程碑与工具
 
 > 说明：Arcade `0.11.2`–`0.14.0` 的条目于 2026-11-22 依据 [`apps/arcade/CHANGELOG.md`](apps/arcade/CHANGELOG.md) 补齐（本文件当时落后于工具版本），逐条数值与证据以工具 CHANGELOG 与对应 `DESIGN-*.md` 为准。
 
+## Arcade 0.18.0 — 2026-11-23（本地未发布）
+
+- 星塔回响：C0–C5 六章、三条并列终局（武力/研究/救援）与后日常；章节只从信箱/告示板进入，中心页无生涯 CTA。
+- 新增 `campaign-core/ending-reducer/ui/world-state` 与 campaign/chapter/ending/npc/side-stories 内容；终局 C5 唯一、幂等、失败可重试。
+- 修复 C0 信箱旗标、终局跨页事件缓冲（adopt/attach）、mustKnow/正文/NPC 渲染、C1 代办路线；中心页 C0 后小字回流入口。
+- 测试：campaign-core 53/53、ending 34/34、graph 48/48、world 109/109、campaign E2E 701/701；0.17 回归保持。
+- 未发布：无 `OWNER_AUTHORIZATION: PUBLISH_TO_MAIN`；详见 [`apps/arcade/CHANGELOG.md`](apps/arcade/CHANGELOG.md)、[`DESIGN-0.18.0.md`](apps/arcade/DESIGN-0.18.0.md)、[`INTEGRATION-0.18.md`](docs/arcade-life/INTEGRATION-0.18.md)。
+
 ## Arcade 0.17.0 — 2026-11-23（本地未发布）
 
 - 活世界：16×6 共 96 份职业委托（T1–T3 公开、T4–T6 剧情旗标解锁）、五材商店、模块制造台、16 职业成长、剧情证据与单职业路线；玩家仍只从 LOCAL 线索信进入。

@@ -913,7 +913,7 @@ await check('M-29 RULESET 镜像与 career-core.RULESET 防漂移', () => {
 await check('M-30 status / isConfigured / reset', () => {
   configureReal();
   const st = materials.status();
-  eq(st.moduleVersion, '0.17.0', 'moduleVersion');
+  eq(st.moduleVersion, '0.18.0', 'moduleVersion');
   eq(st.schemaVersion, 1, 'schemaVersion');
   eq(st.configured, true, 'configured');
   eq(st.materialCount, 5, 'materialCount');

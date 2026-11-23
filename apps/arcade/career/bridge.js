@@ -30,7 +30,7 @@
   var DOC = typeof document !== 'undefined' ? document : null;
   if (!WINDOW || typeof WINDOW !== 'object') return;
 
-  var VERSION = '0.17.0';
+  var VERSION = '0.18.0';
   var CAREER_DB_NAME = 'studiokit:arcade:career';
   var STATE_KEY = 'discovery';
   var VALID_MODES = ['classic', 'challenge', 'zen', 'commission'];
@@ -3274,6 +3274,14 @@
       api.gameId = api.gameId || null;
       api.reason = api.available ? null : internal.reason || 'unavailable';
       resolveReady({ available: !!api.available, reason: api.available ? undefined : api.reason });
+      /* 中心页「旧港来信」回流入口：?story=1 时自动打开章节面板（仅真实 C0 后才有内容）。 */
+      try {
+        if (WINDOW && WINDOW.location && /(?:^|[?&])story=1(?:&|$)/.test(WINDOW.location.search || '')) {
+          Promise.resolve().then(function () { return openCampaign(); }).catch(function () {});
+        }
+      } catch (err) {
+        warnOnce('auto-story', err);
+      }
     } catch (err) {
       warnOnce('ready', err);
     }

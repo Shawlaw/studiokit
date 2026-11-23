@@ -82,7 +82,7 @@
   const COMMISSION_MODE = 'commission';
   const BLOCKED_RUN_STATUS = Object.freeze(['abandoned', 'failed', 'cancelled', 'expired', 'claimed', 'draft']);
   const CLAIM_STORES = Object.freeze(['claims', 'runs', 'ledgers', 'balances', 'inventory', 'equipment', 'quests']);
-  const DEFAULT_CONTENT_VERSION = '0.17.0';
+  const DEFAULT_CONTENT_VERSION = '0.18.0';
 
   /* ------------------------------------------------------------------ *
    * 基础工具（纯 JS，无 IDB）

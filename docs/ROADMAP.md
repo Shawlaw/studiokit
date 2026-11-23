@@ -249,6 +249,16 @@ Owner 两条真机反馈：①已安装 PWA 点「检查更新」显示的是已
 - [x] 双端发布：Owner 本轮明确授权发布（`PUBLISH_TO_MAIN`）；提交 `8493cf7`（PWA 更新检测）+ `78858e0`（游玩时长 + 文档）ff 合入 `main`；Actions run `45002523350` 四 job 全绿（Validate and build / Deploy GitHub Pages / Deploy Cloudflare Pages / Verify both deployments）；CI 与本地 `tools/verify_deploy.py` 均 **41/41** 双端逐文件一致（arcade 0.13.2 / badge 2.2.1 / venue 0.2.0）；双端线上无头 Chrome 各 8 项全过（中心页 0.13.2 + 检查更新返回线上 0.13.2 且不误报、SW 握手 0.13.2、缓存键 `studiokit-arcade-0.13.2-v1`、游戏页可加载、0 console error）
 - [ ] 真机复测：iOS 主屏幕 PWA 的「检查更新」提示时机与「累计时长/积分记录时长」待 Owner 确认（UNVERIFIED）
 
+## 0.18.0 星塔回响：六章、三终局与后日常（2026-11-23 本地未发布）
+
+- [x] C0–C5 六章（`campaign.json` + `chapter-00..05`）：信箱/告示板进入，无顶层生涯 CTA
+- [x] 三终局（武力/研究/救援）：独立 commission 实例、C4 后三选一、C5 唯一、幂等、失败可重试；后日常按方式差异
+- [x] 章节/终局 UI（`ui/world-state.js`）：六章状态/路线、mustKnow/正文、NPC 回信/支线、后日谈、港口灯光；320–430/焦点/reduced-motion
+- [x] 16×3=48 主线路径图证明；campaign E2E 701/701（3 条真实路线 C0→C5 + 三终局 + 备份恢复 24/24）
+- [x] 修复：C0 信箱旗标、终局跨页事件缓冲（adopt/attach）、mustKnow 渲染、C1 代办路线、中心页 C0 后小字回流入口
+- [x] 版本链 0.18.0；`campaign-core` 53/53、`ending-reducer` 34/34、world-state 109/109
+- [ ] G18 独立门禁与 Owner 发布授权；真机/读屏器/PWA 安装态 UNVERIFIED
+
 ## 0.17.0 活世界：96 委托、五材商店、制造台与职业成长（2026-11-23 本地未发布）
 
 - [x] 96 委托内容（16×T1–T6）：T1–T3 公开；T4–T6 由 C3/C4/C5 旗标解锁，受控 fixture 证明
@@ -258,7 +268,7 @@ Owner 两条真机反馈：①已安装 PWA 点「检查更新」显示的是已
 - [x] 16 职业学徒/熟练/专家（0–2/3–5/≥6 已清委托），只影响可选订单/展示
 - [x] 剧情证据去重（E/MAP/BP/DEC）与 C2–C4 多路径；单职业路线规划 16×16 可执行
 - [x] 96 委托回归：16 游戏 × 6 阶 96/96 tier、3792 checks；平衡测试 47/47
-- [x] 版本链 0.17.0；职业隔离补齐层塔 `finishRun` 缺口、阴影/雪铃经典事件恢复
+- [x] 版本链 0.18.0；职业隔离补齐层塔 `finishRun` 缺口、阴影/雪铃经典事件恢复
 - [ ] 0.16 first-flight/resume/mobile 按 0.17 内容更新；G17 独立门禁与 Owner 发布授权；真机/PWA 安装态 UNVERIFIED
 
 ## 0.16.0 首航：告示板委托、免费租机与飞船机库（2026-11-23 本地未发布）

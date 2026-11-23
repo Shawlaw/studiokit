@@ -299,7 +299,7 @@ let realPlanner;
   checkEq('B07 免费租用机是旧翼', config.rentalShipId, 'old-wing');
   checkEq('B08 注入证据模块被识别', config.hasEvidence, true);
   checkEq('B09 注入代办内容被识别', config.offerCount, 2);
-  checkEq('B10 contentVersion 来自内容', config.contentVersion, '0.17.0');
+  checkEq('B10 contentVersion 来自内容', config.contentVersion, '0.18.0');
   check('B11 真实内容 configure 无警告', config.warnings.length === 0, JSON.stringify(config.warnings));
 
   const status = realPlanner.status();
@@ -835,7 +835,7 @@ function buildFutureBundle() {
     { professionId: 'commerce.trader', displayName: '贸易商', domain: 'commerce', capabilities: [] },
     { professionId: 'commerce.broker', displayName: '中间商', domain: 'commerce', capabilities: [] }
   );
-  const commissionsContent = { contentVersion: '0.17.0', commissions };
+  const commissionsContent = { contentVersion: '0.18.0', commissions };
   const evidence = storyEvidence.createStoryEvidence({});
   const evidenceConfig = evidence.configure({ commissions: commissionsContent, chapter, items: ITEMS });
   const planner = routePlanner.create();

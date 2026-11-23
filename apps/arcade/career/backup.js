@@ -50,7 +50,7 @@
 
   const FORMAT = 'studiokit-arcade-career';
   const SCHEMA_VERSION = 1;
-  const DEFAULT_CONTENT_VERSION = '0.17.0';
+  const DEFAULT_CONTENT_VERSION = '0.18.0';
   const DEFAULT_RULESET_VERSION = 1;
 
   /* ADR §10 冻结的 11 个 store（顺序即导出 JSON 的字段顺序）。 */
