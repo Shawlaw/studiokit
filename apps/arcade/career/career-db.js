@@ -78,7 +78,7 @@
   const STATE_KEY_CAREER = 'career';
   const BLOCKED_TIMEOUT_MS = 3000;
   const TX_TIMEOUT_MS = 15000;
-  const MAX_IMPORT_ROWS = 5000;
+  const MAX_IMPORT_ROWS = 20000;
   const COMMISSION_MODE = 'commission';
   const BLOCKED_RUN_STATUS = Object.freeze(['abandoned', 'failed', 'cancelled', 'expired', 'claimed', 'draft']);
   const CLAIM_STORES = Object.freeze(['claims', 'runs', 'ledgers', 'balances', 'inventory', 'equipment', 'quests']);
@@ -401,6 +401,40 @@
     return txRun(['state'], 'readwrite', (ctx) => {
       const row = { key: STATE_KEY_DISCOVERY, schemaVersion: SCHEMA_VERSION, updatedAt: at, value };
       ctx.bind(ctx.store('state').put(row), () => ctx.done({ ok: true }));
+    }).then((res) => (res.ok ? res.result : failure(res.reason, res.error)));
+  }
+
+  /** 同事务读-合并-写发现状态：多标签并发时不会用旧快照覆盖另一页刚发现的线索。 */
+  function mergeDiscoveryState(state, discoveryRecords) {
+    const core = coreApi();
+    if (!core) return Promise.resolve(failure('core-unavailable'));
+    if (!isObject(state)) return Promise.resolve(failure('bad-state'));
+    const value = jsonClone(state) || {};
+    const records = Array.isArray(discoveryRecords)
+      ? discoveryRecords
+      : isObject(discoveryRecords)
+        ? [discoveryRecords]
+        : [];
+    const at = nowIso();
+    return txRun(['state', 'discovery'], 'readwrite', (ctx) => {
+      const stateStore = ctx.store('state');
+      ctx.bind(stateStore.get(STATE_KEY_DISCOVERY), (existingRow) => {
+        const existing = existingRow && isObject(existingRow.value) ? existingRow.value : null;
+        if (existing && isObject(existing.clues)) {
+          value.clues = Object.assign({}, existing.clues, value.clues || {});
+        }
+        const row = { key: STATE_KEY_DISCOVERY, schemaVersion: SCHEMA_VERSION, updatedAt: at, value };
+        ctx.bind(stateStore.put(row), () => {
+          const store = ctx.store('discovery');
+          const tasks = records.map((record) => (next) => {
+            if (!isObject(record) || typeof record.clueId !== 'string' || !core.isToken(record.clueId)) { next(); return; }
+            const copy = jsonClone(record) || {};
+            copy.updatedAt = typeof copy.updatedAt === 'string' ? copy.updatedAt : at;
+            ctx.bind(store.put(copy), next);
+          });
+          sequence(tasks, () => ctx.done({ ok: true }));
+        });
+      });
     }).then((res) => (res.ok ? res.result : failure(res.reason, res.error)));
   }
 
@@ -1134,6 +1168,23 @@
               receipt,
             };
             const tasks = [
+              (next) => ctx.bind(ctx.store('equipment').get(careerId), (equipmentRow) => {
+                const patch = isObject(plan.equipment) ? plan.equipment : {};
+                const current = isObject(equipmentRow) ? equipmentRow : {};
+                const keys = Object.keys(patch);
+                for (let i = 0; i < keys.length; i += 1) {
+                  const match = /^module:([A-Za-z0-9_-]+):level$/.exec(keys[i]);
+                  if (!match) continue;
+                  const target = Number(patch[keys[i]]);
+                  const existing = Number(current[keys[i]]);
+                  const owned = Number.isFinite(existing) ? existing : 0;
+                  if (Number.isFinite(target) && target <= owned) {
+                    ctx.fail('already-owned');
+                    return;
+                  }
+                }
+                next();
+              }),
               (next) => ctx.bindConstraint(ctx.store('ledgers').add(ledgerRow), 'constraint', next),
               (next) => {
                 const row = {
@@ -1441,11 +1492,37 @@
     if (!core.isValidCareerId(careerId)) return Promise.resolve(failure('bad-career-id'));
     if (!core.isToken(markerId) || !core.isToken(ticketId)) return Promise.resolve(failure('bad-ending-marker'));
     const at = nowIso();
-    return txRun(['migrations'], 'readwrite', (ctx) => {
+    return txRun(['migrations', 'runs'], 'readwrite', (ctx) => {
       const store = ctx.store('migrations');
+      const runs = ctx.store('runs');
       ctx.bind(store.get(markerId), (existing) => {
         if (existing) {
-          ctx.done({ ok: false, duplicate: true, existing: jsonClone(existing) });
+          if (existing.ticketId === ticketId) {
+            /* 同票据刷新/重试：继续使用自己的预留，凭活跃 claim 幂等取回收据。 */
+            ctx.done({ ok: true, resumed: true, row: jsonClone(existing) });
+            return;
+          }
+          /* 其它票据：持有者 run 仍活跃才拒绝；已结束/丢失则回收残留预留。 */
+          ctx.bind(runs.get(existing.ticketId), (ownerRun) => {
+            var reclaimable = !ownerRun || ['failed', 'abandoned', 'cancelled', 'expired'].indexOf(ownerRun.status) >= 0;
+            if (!reclaimable) {
+              ctx.done({ ok: false, duplicate: true, existing: jsonClone(existing) });
+              return;
+            }
+            ctx.bind(store.delete(markerId), () => {
+              const row = {
+                id: markerId,
+                kind: 'ending-reservation',
+                careerId,
+                ticketId,
+                approach: typeof approach === 'string' ? approach : '',
+                appliedAt: at,
+                fromVersion: 0,
+                toVersion: 0,
+              };
+              ctx.bindConstraint(store.add(row), 'constraint', () => ctx.done({ ok: true, row }, null));
+            });
+          });
           return;
         }
         const row = {
@@ -1458,7 +1535,7 @@
           fromVersion: 0,
           toVersion: 0,
         };
-        ctx.bindConstraint(store.add(row), 'constraint', (next) => ctx.done({ ok: true, row }, next));
+        ctx.bindConstraint(store.add(row), 'constraint', () => ctx.done({ ok: true, row }, null));
       });
     }).then((res) => {
       if (res.ok) return res.result;
@@ -1467,7 +1544,7 @@
     });
   }
 
-  function releaseEnding(markerId) {
+  function releaseEnding(markerId, ticketId) {
     const core = coreApi();
     if (!core) return Promise.resolve(failure('core-unavailable'));
     if (!core.isToken(markerId)) return Promise.resolve(failure('bad-ending-marker'));
@@ -1478,22 +1555,29 @@
           ctx.done({ ok: true, released: false });
           return;
         }
+        /* 只有预留持有者本人能释放；放弃其它票据不得解除赢家预留。 */
+        if (typeof ticketId === 'string' && ticketId && existing.ticketId !== ticketId) {
+          ctx.done({ ok: true, released: false, reason: 'not-owner' });
+          return;
+        }
         ctx.bind(store.delete(markerId), () => ctx.done({ ok: true, released: true }));
       });
     }).then((res) => (res.ok ? res.result : failure(res.reason, res.error)));
   }
 
-  /** 同一生涯同一委托只能有一个首通：quests 已清或 marker 已存在 → repeat；否则原子占位。 */
+  /** 同一生涯同一委托只能有一个首通：quests 已清 → repeat；同票据中断可恢复；他人活跃占位 → repeat。 */
   function reserveCommissionFirstClear(input) {
     const core = coreApi();
     if (!core) return Promise.resolve(failure('core-unavailable'));
     const options = isObject(input) ? input : {};
     const careerId = options.careerId;
     const commissionId = options.commissionId;
+    const ticketId = options.ticketId;
     if (!core.isValidCareerId(careerId)) return Promise.resolve(failure('bad-career-id'));
     if (!core.isToken(commissionId)) return Promise.resolve(failure('bad-commission-id'));
+    if (!core.isToken(ticketId)) return Promise.resolve(failure('bad-ticket'));
     const markerId = 'commission-first:' + careerId + ':' + commissionId;
-    return txRun(['migrations', 'quests'], 'readwrite', (ctx) => {
+    return txRun(['migrations', 'quests', 'runs'], 'readwrite', (ctx) => {
       const quests = ctx.store('quests');
       ctx.bind(quests.get([careerId, commissionId]), (questRow) => {
         if (questRow && questRow.status === 'cleared') {
@@ -1501,21 +1585,37 @@
           return;
         }
         const migrations = ctx.store('migrations');
-        ctx.bind(migrations.get(markerId), (existing) => {
-          if (existing) {
-            ctx.done({ ok: false, duplicate: true, reason: 'already-reserved' });
-            return;
-          }
+        const runs = ctx.store('runs');
+        const addMarker = (done) => {
           const row = {
             id: markerId,
             kind: 'commission-first',
             careerId,
             commissionId,
+            ticketId,
             appliedAt: nowIso(),
             fromVersion: 0,
             toVersion: 0,
           };
-          ctx.bindConstraint(migrations.add(row), 'constraint', () => ctx.done({ ok: true, markerId }, null));
+          ctx.bindConstraint(migrations.add(row), 'constraint', () => done({ ok: true, markerId }));
+        };
+        ctx.bind(migrations.get(markerId), (existing) => {
+          if (existing) {
+            if (existing.ticketId === ticketId) {
+              ctx.done({ ok: true, resumed: true, markerId });
+              return;
+            }
+            ctx.bind(runs.get(existing.ticketId), (ownerRun) => {
+              var reclaimable = !ownerRun || ['failed', 'abandoned', 'cancelled', 'expired'].indexOf(ownerRun.status) >= 0;
+              if (!reclaimable) {
+                ctx.done({ ok: false, duplicate: true, reason: 'already-reserved' });
+                return;
+              }
+              ctx.bind(migrations.delete(markerId), () => addMarker((value) => ctx.done(value)));
+            });
+            return;
+          }
+          addMarker((value) => ctx.done(value));
         });
       });
     }).then((res) => {
@@ -1525,7 +1625,7 @@
     });
   }
 
-  function releaseCommissionFirstClear(markerId) {
+  function releaseCommissionFirstClear(markerId, ticketId) {
     const core = coreApi();
     if (!core) return Promise.resolve(failure('core-unavailable'));
     if (!core.isToken(markerId)) return Promise.resolve(failure('bad-marker'));
@@ -1534,6 +1634,10 @@
       ctx.bind(store.get(markerId), (existing) => {
         if (!existing || existing.kind !== 'commission-first') {
           ctx.done({ ok: true, released: false });
+          return;
+        }
+        if (typeof ticketId === 'string' && ticketId && existing.ticketId !== ticketId) {
+          ctx.done({ ok: true, released: false, reason: 'not-owner' });
           return;
         }
         ctx.bind(store.delete(markerId), () => ctx.done({ ok: true, released: true }));
@@ -1821,6 +1925,7 @@
     },
     getDiscoveryState,
     saveDiscoveryState,
+    mergeDiscoveryState,
     listDiscovery,
     putDiscovery,
     /* 兼容适配层（非 ADR 必需）：供 D15-04 bridge.js 探测名使用，语义同 discovery 读写。 */

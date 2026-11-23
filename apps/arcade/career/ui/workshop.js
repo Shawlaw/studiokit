@@ -673,10 +673,11 @@
     return groups;
   }
 
-  function costText(state, recipe) {
-    const parts = [recipe.cost + ' ' + WALLET_CREDITS];
-    Object.keys(recipe.costItems || {}).forEach(function (itemId) {
-      parts.push(materialName(state, itemId) + ' ' + recipe.costItems[itemId]);
+  function costText(state, recipe, plan) {
+    const quote = isObject(plan) && plan.ok === true && plan.owned !== true ? plan : recipe;
+    const parts = [quote.cost + ' ' + WALLET_CREDITS];
+    Object.keys(quote.costItems || {}).forEach(function (itemId) {
+      parts.push(materialName(state, itemId) + ' ' + quote.costItems[itemId]);
     });
     return parts.join(' · ');
   }
@@ -985,7 +986,7 @@
 
     const main = make(doc, 'div', 'ac-career-workshop__row-main');
     main.appendChild(make(doc, 'span', 'ac-career-workshop__level', '第 ' + recipe.level + ' 层'));
-    main.appendChild(make(doc, 'span', 'ac-career-workshop__cost', costText(state, recipe)));
+    main.appendChild(make(doc, 'span', 'ac-career-workshop__cost', costText(state, recipe, plan)));
     row.appendChild(main);
 
     const short = owned ? '' : shortfallText(p, recipe, plan);

@@ -22,9 +22,26 @@
 
 **G18 PASS**（第二轮独立复审，B1–B5 全部关闭；门禁与独立复测全绿）。W11 已由主控修复并独立复测（告示板终局按钮真实导航到对应终局 run）。G18 PASS ≠ 发布授权。
 
-## 结论
+## 复审 b71a264 后的再次修复（本地，未发布）
+
+第二次复审确认 6 项 P1 中 4 项已修，仍报 2 项 P1 与 7 项 P2；本轮已处理：
+
+- 终局预留改为带 owner 的 `ending-reservation`：同票据刷新可恢复；其它票据放弃只释放自己的预留；持有者 run 仅 failed/abandoned 才允许回收；真实三终局场景验证 winner 唯一收据/C5、loser `already-resolved`、重复结算读原收据。
+- 慢启动共享模式：bridge `bootTimedOut` 后 late ticket 拒绝激活，4 款棋牌/落物页补 `__arcadeMode='classic'`；延迟 4.8s 的真实服务器验证只经典、无职业 run/收据。
+- 首通预留带 ticket：同票据中断恢复领 90 + 首通旗标；不同活跃票据仍只发 75。
+- 发现写入改为 DB 同事务读-合-写；空 clues 普通保存不再覆盖，显式清空仍走 resetDiscovery。
+- 备份 DB 导入上限 5000→20000；真实 5001 行导出/回导通过；替换导入同步本页 cached careerId，章节面板读取新生涯 C0。
+- 市场「卖出全部」使用会话前缀 ID，刷新后可再卖；制造卡显示累计报价，DB 购买事务拒绝降级/重复扣款。
+- 章节 C2/C4 的 `anyCommissions` 移入 `requires`，运行时实际生效；溢出汇总保留 theme/level 上下文分组，storm/blockade 不再互相覆盖。
+
+复测：campaign E2E 701/701、world 109/109、a11y 75、PWA 17、smoke 113、commission 64/64、db 38、backup 34、ending 34、graph 48/48；96 全部 16 游戏分批/单游戏 PASS；p1-6、p2-1、p2-2、p2-3、p2-4b、p2-5、workshop、blackjack 慢启动探针 PASS。完整聚合门禁仍以新 HEAD 实跑为准，本条不预写 PASS。
+
 
 **G18 PASS**（第二轮独立复审，B1–B5 全部关闭；门禁与独立复测全绿）。随后全分支复审提出的 P1/P2 已在 `6481322` 修复并逐项复测；G18 PASS ≠ 发布授权。
+
+## 结论
+
+**G18 PASS**（第二轮独立复审，B1–B5 全部关闭；门禁与独立复测全绿）。随后两轮全分支复审提出的 P1/P2 已在本分支修复并复测；G18 PASS ≠ 发布授权。
 
 ## 首轮阻塞与本轮关闭
 

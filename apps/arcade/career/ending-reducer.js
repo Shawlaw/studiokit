@@ -1025,9 +1025,9 @@
       return { ok: true, run: null };
     }
 
-    async function releaseEndingReservation(db, markerId) {
+    async function releaseEndingReservation(db, markerId, ticketId) {
     try {
-      if (db && typeof db.releaseEnding === 'function') await db.releaseEnding(markerId);
+      if (db && typeof db.releaseEnding === 'function') await db.releaseEnding(markerId, ticketId);
     } catch (err) {
       /* 预留释放失败不伪装成成功；下次同生涯 start/settle 会再次尝试。 */
     }
@@ -1493,7 +1493,7 @@
         settled = null;
       }
       if (!settled || settled.ok !== true) {
-        await releaseEndingReservation(db, reservationId);
+        await releaseEndingReservation(db, reservationId, ticketId);
         return mapSettleFailure(settled, { approach: approach, careerId: careerId });
       }
       var receipt = isObject(settled.receipt) ? clone(settled.receipt) : null;
@@ -1718,7 +1718,7 @@
       }
       if (careerId) {
         delete state.tickets[careerId];
-        await releaseEndingReservation(db, 'ending-reservation:' + careerId);
+        await releaseEndingReservation(db, 'ending-reservation:' + careerId, ticketId);
       }
       delete state.ticketApproach[ticketId];
       return {

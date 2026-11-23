@@ -1821,6 +1821,7 @@
           /* 只有桥确认了属于本游戏的 run 才锁死旧 RunSave；否则按 0.16 经典启动（fail-open）。 */
           const run = readCareerRun();
           if (run) activateCareerRun(run);
+          else { try { window.__arcadeMode = 'classic'; } catch (err) { /* ignore */ } }
           prepareStartScreen();
         };
         try {

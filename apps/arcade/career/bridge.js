@@ -1111,8 +1111,8 @@
           }
           /* 游戏页已按经典开局（慢启动超时）后，late ticket 不再切换模式，避免一局两套结算。 */
           try {
-            if (WINDOW && WINDOW.__arcadeMode === 'classic') {
-              addReason('classic-mode-committed');
+            if (internal.bootTimedOut || (WINDOW && WINDOW.__arcadeMode === 'classic')) {
+              addReason(internal.bootTimedOut ? 'boot-timeout-classic-committed' : 'classic-mode-committed');
               return null;
             }
           } catch (err) {
@@ -1712,24 +1712,29 @@
   }
 
   function writeDbState(state, discoveryRecords) {
-    /* 多标签/多游戏页并发：写入前把 DB 里已存在的线索并入本次状态，避免旧快照覆盖另一页刚发现的线索。
-       清空操作（incoming clues 为空）仍然按写入替换。 */
-    return Promise.resolve()
-      .then(function () {
-        var dbModule = readGlobal('db');
-        var getter = dbModule && pickMethod(dbModule, ['getDiscoveryState', 'getState']);
-        if (!getter || !isObject(state) || !isObject(state.clues) || !Object.keys(state.clues).length) return state;
-        return callMaybeAsync(getter, dbModule, []).then(function (raw) {
-          var existing = unwrapRecord(raw);
-          if (!isObject(existing) || !isObject(existing.clues)) return state;
-          var merged = Object.assign({}, state);
-          merged.clues = Object.assign({}, existing.clues, state.clues);
-          return merged;
-        }).catch(function () { return state; });
-      })
-      .then(function (mergedState) {
-        return dbWrite(mergedState, discoveryRecords);
+    /* 多标签/多游戏页并发：优先走 DB 同事务读-合并-写，避免两页都先读旧状态再依次覆盖。
+       无 merge 能力的旧 DB/测试注入仍退回普通写入（空 clues 的显式重置也走普通写入）。 */
+    var dbModule = readGlobal('db');
+    var hasClues = isObject(state) && isObject(state.clues) && Object.keys(state.clues).length > 0;
+    /* 普通保存一律同事务合并；显式清空走 db.resetDiscovery，不能靠空 clues 区分。 */
+    if (dbModule && typeof dbModule.mergeDiscoveryState === 'function') {
+      return Promise.resolve(dbModule.mergeDiscoveryState(state, discoveryRecords)).catch(function () {
+        return { ok: false, error: 'merge-discovery-failed' };
       });
+    }
+    return Promise.resolve().then(function () {
+      var getter = dbModule && pickMethod(dbModule, ['getDiscoveryState', 'getState']);
+      if (!getter || !hasClues) return state;
+      return callMaybeAsync(getter, dbModule, []).then(function (raw) {
+        var existing = unwrapRecord(raw);
+        if (!isObject(existing) || !isObject(existing.clues)) return state;
+        var merged = Object.assign({}, state);
+        merged.clues = Object.assign({}, existing.clues, state.clues);
+        return merged;
+      }).catch(function () { return state; });
+    }).then(function (mergedState) {
+      return dbWrite(mergedState, discoveryRecords);
+    });
   }
 
   function unwrapRecord(raw) {
@@ -2840,7 +2845,20 @@
     api.importCareerLife = function (text, opts) {
       return Promise.resolve(mod.importCareerLife(text, opts)).then(function (result) {
         if (!result || result.ok === false) return result;
-        return Promise.resolve(loadDiscoveryStateFromDb()).then(function () { return result; });
+        /* 替换导入可能换生涯：同步当前页缓存的 careerId，章节/任务面板不能继续读旧生涯。 */
+        var db = readGlobal('db');
+        var ensure = db && pickMethod(db, ['ensureCareer']);
+        var syncCareer = ensure
+          ? Promise.resolve(callMaybeAsync(ensure, db, [{}])).then(function (raw) {
+              var career = unwrapRecord(raw);
+              if (career && typeof career.careerId === 'string' && career.careerId) {
+                internal.commissionLastCareerId = career.careerId;
+              }
+            }).catch(function () {})
+          : Promise.resolve();
+        return syncCareer
+          .then(function () { return loadDiscoveryStateFromDb(); })
+          .then(function () { return result; });
       });
     };
     api.__bridgeFacade = true;
@@ -3487,6 +3505,7 @@
   /* ready 兜底：即使 boot 卡住也必须在有限时间内 resolve（fail-open）。 */
   internal.readyGuard = setTimeout(function () {
     if (internal.bootDone) return;
+    internal.bootTimedOut = true;
     addReason('boot-timeout');
     api.available = false;
     resolveReady({ available: false, reason: internal.reason || 'boot-timeout' });

@@ -1702,7 +1702,7 @@
       const seq = opSeq;
       const request = {
         careerId: state.careerId,
-        saleId: 'market-sell:' + state.careerId + ':' + material.itemId + ':' + seq,
+        saleId: 'market-sell:' + state.careerId + ':' + OP_SESSION_TAG + ':' + seq,
         items: plan.items,
         credits: plan.credits,
         now: nowIso(),

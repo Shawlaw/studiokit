@@ -2347,6 +2347,7 @@
             /* ignore */
           }
           if (readCareerRun()) lockCareerRun();
+          else { try { window.__arcadeMode = 'classic'; } catch (err) { /* ignore */ } }
           prepareStartScreen();
         };
         try {

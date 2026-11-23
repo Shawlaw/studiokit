@@ -1110,6 +1110,25 @@ async function groupE() {
     return 'observed>=401';
   });
 
+  await check('E5d overflow 上下文分组：storm 与 blockade 不互相覆盖', async () => {
+    const custom = JSON.parse(JSON.stringify(commissionsContent));
+    const t1 = custom.commissions.find((item) => item.commissionId === 'pendulum-tower.T1');
+    t1.objective = { kind: 'boss.defeated', atLeast: 1, context: { theme: 'storm' } };
+    t1.gameId = 'star-raid';
+    const { core } = scenario({ content: false });
+    assert(core.configure({ content: custom }).ok === true, 'configure');
+    const ticketId = await startTicket(core, 'pendulum-tower.T1');
+    for (let i = 0; i < 401; i += 1) {
+      core.recordEvent(ticketId, { kind: 'wave.completed', payload: { wave: i }, seq: i + 1, sourceMode: 'commission', at: NOW });
+    }
+    core.recordEvent(ticketId, { kind: 'boss.defeated', payload: { theme: 'storm', level: 1 }, seq: 500, sourceMode: 'commission', at: NOW });
+    core.recordEvent(ticketId, { kind: 'boss.defeated', payload: { theme: 'blockade', level: 1 }, seq: 501, sourceMode: 'commission', at: NOW });
+    const settled = await core.settle({ ticketId, outcome: 'won', stats: {} });
+    if (!settled || settled.ok !== true) console.log('E5D DEBUG', JSON.stringify(settled));
+    eq(settled.ok, true, 'settle（storm 上下文保留）');
+    return 'context groups';
+  });
+
   await check('E5c overflow 最大值参与 minValue（长局 1024 不被丢弃）', async () => {
     const custom = JSON.parse(JSON.stringify(commissionsContent));
     const t1 = custom.commissions.find((item) => item.commissionId === 'pendulum-tower.T1');
