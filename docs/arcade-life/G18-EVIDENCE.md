@@ -71,9 +71,22 @@
 
 **G18 PASS**（第二轮独立复审，B1–B5 全部关闭；门禁与独立复测全绿）。随后三轮全分支复审提出的 P1/P2 已在本分支修复并复测；G18 PASS ≠ 发布授权。
 
-## 结论
+## 第五轮复审（50af2f1）后的修复（HEAD `8267038`，已过完整门禁）
+
+第五轮复审的 1 个 P1 已在上轮关闭，本轮修复 2 个 P2，并补齐 Chrome 隔离：
+
+- P2 替换导入代次倒退：`career-db.importAll` 在同一个 readwrite 事务内先读本地代次、清空/写入后写 `local+1`；忽略档案携带的 `discovery-generation`；导出默认排除该内部元数据。`getDiscoverySnapshot` 在同一只读事务返回状态与代次，页面写入要求代次完全相等；旧页冲突时重新载入最新状态并返回未保存，不再提交旧快照。覆盖无代次、更低代次、更高代次三份档案。
+- P2 preserved 空导入写库：bridge 在 `preserved:true` 或 `mode:'none'` 时直接返回，发生在 `ensureCareer`、代次推进和重载之前；空库与已有生涯均验证零写入，原标签随后仍可写入一次真实提示设置。
+- Chrome 隔离：`launchChrome` 支持 `--remote-debugging-port=0` 从独立 profile 的 `DevToolsActivePort` 读取实际端口并核对 `/json/version`；固定端口先做占用检测，被占用时无副作用失败，绝不连接/清理占用者；`stopChrome` 只处理本次子进程句柄。新增 `career_chrome_isolation_test` 哨兵用例。
+
+验证：`career_review5_import_test`（8/8）与 `career_chrome_isolation_test`（5/5）已加入门禁。`8267038` 实跑 `py -3 tools/arcade_run_all_gates.py` **ALL GATES PASSED（exit 0）**，日志 `REVIEW5-GATE.log`（4469 行，无 RETRY）；campaign 700/700、96 96/96、gameplay 104/104、PWA 17/17。
+
 
 **G18 PASS**（第二轮独立复审，B1–B5 全部关闭；门禁与独立复测全绿）。随后四轮全分支复审提出的 P1/P2 已在本分支修复并复测；G18 PASS ≠ 发布授权。
+
+## 结论
+
+**G18 PASS**（第二轮独立复审，B1–B5 全部关闭；门禁与独立复测全绿）。随后五轮全分支复审提出的 P1/P2 已在本分支修复并复测；G18 PASS ≠ 发布授权。
 
 ## 首轮阻塞与本轮关闭
 

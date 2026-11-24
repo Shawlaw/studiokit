@@ -7,6 +7,7 @@
 | T124 | agent | 全分支复审（cd9e555）P1/P2 修复与复测（本地未发布） | DONE | T123 | 6 项 P1 + 10 项 P2 已在 `6481322` 修复；逐项独立探针、campaign E2E 701/701、world 109/109、a11y 75、PWA 17、smoke 113、mobile 318；96 16/16 游戏按批/单游戏全 PASS；8fc73f1 完整聚合门禁 ALL GATES PASSED（exit 0）。 |
 | T125 | agent | 第三轮复审（400db62）2 P1 + 5 P2 修复与门禁（本地未发布） | DONE | T124 | 回归先于修复：`219bd67` 在 400db62 失败；产品修复 `009bc77`；新增 review3 regression/workshop/route-evidence 门禁；`py -3 tools/arcade_run_all_gates.py` 在 009bc77 **ALL GATES PASSED**（日志 REVIEW3-GATE4.log）。 |
 | T126 | agent | 第四轮复审（9ce51ec）1 P1 + 4 P2 修复与门禁（本地未发布） | DONE | T125 | 附录同路线探针在 `9ce51ec` 实跑 exit 1，修复 `575096f`；新增 review4 same-route 门禁；发现代次/旧档首通/20001 行导出/C2-C4 回退补齐；`py -3 tools/arcade_run_all_gates.py` 在 `ab79c79` **ALL GATES PASSED**（日志 REVIEW4-GATE6.log）。 |
+| T127 | agent | 第五轮复审（50af2f1）2 P2 与 Chrome 隔离修复（本地未发布） | DONE | T126 | 导入代次同事务递增/忽略档案代次、preserved 空导入零写入；launcher 动态端口与占用检测；新增 review5 import（8/8）与 chrome isolation（5/5）；`8267038` 完整聚合 **ALL GATES PASSED**（日志 REVIEW5-GATE.log）。 |
 | T123 | agent | Arcade 0.18.0 本地门禁：D18 系列与 G18（不发布） | DONE | T122 | **G18 独立复审 PASS**（HEAD `a84d15f`；W11 在 `118f1cc` 修复并复测）：B1–B5 全关；聚合门禁 ALL GATES PASSED；campaign E2E 701/701、world 109/109、graph 48/48、96 96/96/3792；版本链 0.18.0；未推送/未发布，摘要 `docs/arcade-life/G18-EVIDENCE.md`。 |
 | T122 | agent | Arcade 0.18.0：星塔回响六章、三终局与后日常（本地未发布） | DONE | T121 | 六章/三终局/后日常、campaign-core/ending-reducer/world-state、C0 信箱与终局跨页缓冲、告示板章节卡；campaign 53/53、ending 34/34、graph 48/48、world 109/109、E2E 701/701；G18 PASS。 |
 
