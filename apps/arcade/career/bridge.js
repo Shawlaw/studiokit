@@ -3321,6 +3321,9 @@
           internal.discoveryState = discovery && typeof discovery.initialState === 'function' ? discovery.initialState() : fallbackInitialState();
           internal.stateLoadedFromDb = false;
           return resetDb().then(function (resetResult) {
+            if (resetResult && resetResult.ok && Number.isFinite(Number(resetResult.generation))) {
+              internal.discoveryGeneration = Math.floor(Number(resetResult.generation));
+            }
             return {
               ok: !!(resetResult && resetResult.ok),
               method: (resetResult && resetResult.method) || null,
