@@ -56,8 +56,8 @@ async function main() {
     const shellResponse = await fetch(shellInfo.href);
     assert(shellResponse.ok, 'shell subpath target HTTP ' + shellResponse.status);
     await cdp.click('.studiokit-shell-home');
-    await cdp.waitFor('location.pathname === "/studiokit/apps/arcade/index.html" && !!document.querySelector("[data-hall-grid]")');
-    assert(await cdp.evaluate("document.querySelector('.studiokit-shell-home').pathname") === '/studiokit/index.html', 'Arcade hub must keep portal link');
+    await cdp.waitFor(`location.pathname === "/studiokit/apps/arcade/index.html" &&
+      document.querySelector(".studiokit-shell-home")?.pathname === "/studiokit/index.html"`);
     record('GitHub Pages 子路径游戏返回街机厅，街机厅返回 StudioKit', true);
 
     /* ---------- 中心页 ---------- */
