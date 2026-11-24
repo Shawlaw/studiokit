@@ -39,9 +39,26 @@
 
 **G18 PASS**（第二轮独立复审，B1–B5 全部关闭；门禁与独立复测全绿）。随后全分支复审提出的 P1/P2 已在 `6481322` 修复并逐项复测；G18 PASS ≠ 发布授权。
 
-## 结论
+## 第三轮复审（400db62）后的修复（HEAD `009bc77`，已过完整门禁）
+
+第三轮复审提出 2 个 P1、5 个 P2；回归用例先在 `219bd67`（基线 `400db62`）落地并失败，随后在 `009bc77` 修复：
+
+- 终局：新增 `career-db.settleEndingAndClaim`，在同一个 IndexedDB readwrite 事务内完成 claim 唯一性、C5/终局 quest 行、收据/流水、balance/inventory、run=claimed；别的路线已提交时 `already-resolved` 且零写入；`updateRun` 拒绝 claimed → failed/abandoned，失败/放弃不再能覆盖赢家。
+- 中断恢复：`repairEndingRecords` 从正常入口补齐历史“已领奖缺 C5”记录（复用原收据、不新增流水），清理无收据旧预留；同票据重交读原收据。
+- 首通：普通委托一次事务内读 quest 选择首通/重复计划，`firstClearReceiptId` 持久化；旧 `commission-first` 占位不再消耗首通；测试 B=90、A=75、旗标/证据引用完整。
+- 制造：请求携带 `expectedLevel`，事务比对当前装备等级；旧面板报价返回 `price-changed` 零写入，面板刷新新价；重放购买 ID duplicate 零扣款。
+- 发现：`mergeDiscoveryState` 按动作合并最新状态；SET_HINTS 才改提示，RUN_ENDED 用基线 delta 累加计数，跨标签清空/导入不复活旧线索。
+- 备份：统一导出/导入 32 MiB 字节预算与 20000 行上限；2000 条 2.1 MiB 真实 run 导出可回导。
+- 路线：C2 要求 `E-snowbells.T3 + E-snake-run.T3`，C4 要求 `E-mole-whack.T3 + E-block-drop.T3 + BP-merge-2048.T3`；chapter 配置证据白名单自动纳入委托奖励 token，world-state 按 evidenceAll 判定。
+
+验证：新增 `career_review3_regression_test`、`career_review3_workshop_test`、`career_route_evidence_test` 已加入 `arcade_run_all_gates.py`。在 `009bc77` 实跑完整聚合门禁 **ALL GATES PASSED（exit 0）**，日志 `REVIEW3-GATE4.log`；campaign E2E 700/700、96 全绿、PWA 17/17、96 三终局/历史修复/首通/制造/发现/备份/路线均通过。
+
 
 **G18 PASS**（第二轮独立复审，B1–B5 全部关闭；门禁与独立复测全绿）。随后两轮全分支复审提出的 P1/P2 已在本分支修复并复测；G18 PASS ≠ 发布授权。
+
+## 结论
+
+**G18 PASS**（第二轮独立复审，B1–B5 全部关闭；门禁与独立复测全绿）。随后三轮全分支复审提出的 P1/P2 已在本分支修复并复测；G18 PASS ≠ 发布授权。
 
 ## 首轮阻塞与本轮关闭
 
