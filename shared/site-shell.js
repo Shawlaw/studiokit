@@ -27,6 +27,15 @@
   }
   home.href = scriptUrl ? new URL('../index.html', scriptUrl).href : fallbackHome();
   home.textContent = 'StudioKit';
+  const gameTopbar = body.dataset.studiokitApp === 'arcade' ? body.querySelector('.game-page > .game-topbar') : null;
+  const gameBack = gameTopbar?.querySelector('.ac-back[href]');
+  if (gameBack) {
+    home.href = gameBack.href;
+    home.textContent = '‹ 街机厅';
+    home.setAttribute('aria-label', '返回街机厅');
+    bar.setAttribute('aria-label', '街机厅游戏导航');
+    body.classList.add('has-arcade-game-shell');
+  }
 
   const separator = document.createElement('span');
   separator.className = 'studiokit-shell-separator';
@@ -35,7 +44,8 @@
 
   const current = document.createElement('span');
   current.className = 'studiokit-shell-current';
-  current.textContent = body.dataset.studiokitAppTitle || body.dataset.studiokitApp;
+  current.textContent = (gameBack && gameTopbar.querySelector('.game-title')?.textContent.trim())
+    || body.dataset.studiokitAppTitle || body.dataset.studiokitApp;
   current.setAttribute('aria-current', 'page');
 
   const actions = document.createElement('span');

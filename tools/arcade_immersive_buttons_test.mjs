@@ -10,7 +10,7 @@
  *   画布外道具行不压画布（b.top ≥ canvasBottom-1）
  * - IB-02 黄金矿工：画布内道具坞按 2×lift 抬升，矿物不被临时提升的道具坞覆盖
  *   （悬浮道具坞属于既有设计，断言改为「最低物品 y+r ≤ 道具坞顶部逻辑 y-2」）
- * - IB-03 俄罗斯方块：画布内道具坞不遮井口（沿用既有 wellBottom 断言 + 拇指区按钮行抬高）
+ * - IB-03 俄罗斯方块：道具在画布外、主控抬高且命中区域独立
  * - IB-04 独立窗口安全区（insets top=47 / bottom=34）：抬升量叠加在安全区之上，顶部刘海不被压
  * - IB-05 横屏 667×375：短视口采用 20px 小抬升，画布仍可玩、按钮可见可点、无溢出
  *
@@ -47,27 +47,23 @@ function geometry() {
     }; };
     const canvas = document.querySelector('.game-canvas');
     const canvasRect = canvas ? rect(canvas) : null;
-    const buttons = [...document.querySelectorAll('[data-joy-tool], .touch-pad .tool-btn, .touch-pad .snake-dir, [data-toolbelt] .tool-btn')]
+    const buttons = [...document.querySelectorAll('[data-joy-tool], .touch-pad .tool-btn, .touch-pad .snake-dir, [data-toolbelt] .tool-btn, .block-pad .block-btn')]
       .filter((b) => b.getBoundingClientRect().height > 0 && getComputedStyle(b).display !== 'none')
       .map((b) => {
         const r = rect(b);
         const hit = document.elementFromPoint((r.left + r.right) / 2, (r.top + r.bottom) / 2);
         return {
-          id: b.dataset.joyTool || b.dataset.tool || b.getAttribute('aria-label') || b.textContent.trim().slice(0, 8),
+          id: b.hasAttribute('data-block-pause') ? 'pause' : b.dataset.joyTool || b.dataset.tool || b.dataset.touch || b.getAttribute('aria-label') || b.textContent.trim().slice(0, 8),
           ...r, gap: vh - r.bottom,
           hittable: !!hit && (hit === b || b.contains(hit))
         };
       });
-    const well = (() => {
-      if (!canvasRect || !location.pathname.includes('block-drop')) return null;
-      return Math.round(canvasRect.top + canvasRect.h * 526 / 610);
-    })();
     return {
       immersive: document.body.classList.contains('arcade-immersive'),
       vh, vw: innerWidth,
       sw: document.documentElement.scrollWidth, cw: document.documentElement.clientWidth,
       docH: document.documentElement.scrollHeight,
-      canvas: canvasRect, wellBottom: well, buttons,
+      canvas: canvasRect, buttons,
       lift: parseFloat(getComputedStyle(document.body).getPropertyValue('--ac-thumb-lift')) || 0,
       stagePadBottom: (() => { const s = document.querySelector('.stage-wrap'); return s ? parseFloat(getComputedStyle(s).paddingBottom) : null; })(),
       topbarPadTop: (() => { const t = document.querySelector('.game-topbar'); return t ? parseFloat(getComputedStyle(t).paddingTop) : null; })()
@@ -120,6 +116,18 @@ function sharedAssertions(m, label, { minGap, minDelta, baseline }) {
       }
     }
   }
+}
+
+function assertBlockZones(metrics, minGap, label) {
+  const tools = metrics.buttons.filter((button) => ['swap', 'slow'].includes(button.id));
+  const pad = metrics.buttons.filter((button) => ['left', 'right', 'rotate', 'soft', 'hard'].includes(button.id));
+  const pause = metrics.buttons.find((button) => button.id === 'pause');
+  assert(tools.length === 2 && tools.every((button) => button.bottom <= metrics.canvas.top + 1),
+    label + ' 道具覆盖画布: ' + JSON.stringify({ canvas: metrics.canvas, tools }));
+  assert(pad.length === 5 && pause && [...pad, pause].every((button) => button.hittable && button.w >= 44 &&
+    button.h >= 44 && button.gap >= minGap && button.top >= metrics.canvas.bottom),
+    label + ' 主控位置或命中区域错误: ' + JSON.stringify({ canvas: metrics.canvas, pad }));
+  assert(pause.left > pad[1].right && pause.right < pad[2].left, label + ' 暂停键应与两组主控分开');
 }
 
 async function main() {
@@ -222,10 +230,8 @@ async function main() {
       await cdp.evaluate(`(() => { const o = document.querySelector('[data-overlay]'); if (o) o.hidden = true; const f = document.querySelector('.ac-fs-inline'); if (f) f.hidden = true; })()`);
       const m = await cdp.evaluate(geometry());
       sharedAssertions(m, label, { minGap: 38, minDelta: 0, baseline: null });
-      const dock = m.buttons.filter((b) => ['swap', 'slow'].includes(b.id));
-      assert(dock.length === 2 && dock.every((b) => b.top >= m.wellBottom - 1),
-        label + ' 道具坞压住井口: ' + JSON.stringify({ wellBottom: m.wellBottom, dock }));
-      record(label + ' 井口不被压 + 拇指区按钮抬高', true);
+      assertBlockZones(m, 71, label);
+      record(label + ' 道具在画布之外，主控抬高至 72px', true);
     }
 
     /* ---------- IB-04 独立窗口安全区：抬升叠加在安全区之上 ---------- */
@@ -294,6 +300,24 @@ async function main() {
       const safeBottom = insets.bottom;
       for (const [w, h] of PORTRAIT) {
         await setViewport(cdp, w, h);
+        if (safeBottom === 0 || w === 390) {
+          const label = `${w}×${h} PWA 方块 safe=${safeBottom}`;
+          await cdp.navigate(`${BASE}/apps/arcade/games/block-drop.html#test`);
+          await cdp.click('[data-ov-btn]');
+          const pwa = await cdp.evaluate(geometry());
+          assert(!pwa.immersive && pwa.sw <= pwa.cw + 1 && pwa.docH <= pwa.vh + 2, label + ' PWA 视口溢出');
+          assertBlockZones(pwa, 71 + safeBottom, label);
+          record(label + ' 独立窗口：道具和主控分区且无覆盖', true);
+
+          await cdp.navigate(`${BASE}/apps/arcade/games/snake-run.html#test`);
+          await cdp.click('[data-ov-btn]');
+          const snake = await cdp.evaluate(geometry());
+          assert(Math.abs(snake.canvas.w / snake.canvas.h - 360 / 430) <= 0.02, label + ' 贪吃蛇棋盘比例错误');
+          assert(!snake.immersive && snake.docH <= snake.vh + 2 && snake.buttons.length === 6 &&
+            snake.buttons.every((button) => button.hittable && button.bottom <= snake.vh && button.top >= snake.canvas.bottom),
+          'PWA 贪吃蛇方向键或道具位置错误: ' + JSON.stringify(snake));
+          record(`${w}×${h} PWA 贪吃蛇 safe=${safeBottom} 棋盘比例与按键命中`, true);
+        }
         for (const page of ['shadow-leap.html', 'pendulum-tower.html']) {
           const label = `${w}×${h} PWA独立窗口 safe=${safeBottom} ${page}`;
           await cdp.navigate(`${BASE}/apps/arcade/games/${page}?t=${Date.now()}`);

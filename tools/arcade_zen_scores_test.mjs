@@ -156,13 +156,13 @@ async function gameLayoutSnapshot(cdp) {
       hasZenBarClass: document.body.classList.contains('has-zen-bar'),
       zenBarNodes: document.querySelectorAll('.zen-bar, [data-zen-bar]').length,
       canvas: rect(document.querySelector('.game-canvas')),
+      thumbPause: rect(document.querySelector('[data-block-pause]')),
       stage: rect(document.querySelector('.stage-box')),
       joyToolCount: document.querySelectorAll('[data-joy-tool]').length,
       rowButtonCount: rowButtons.length,
       visibleRowButtons: rowButtons.filter(visible).map((button) => Object.assign({
         freeze: button.hasAttribute('data-zen-freeze'),
         tool: button.hasAttribute('data-joy-tool'),
-        pause: button.hasAttribute('data-block-pause'),
         text: button.textContent.replace(/\\s+/g, ' ').trim(),
         name: (button.querySelector('.tool-name') || {}).textContent || '',
         pressed: button.getAttribute('aria-pressed'),
@@ -507,14 +507,13 @@ const SCENARIOS = [
       const zen = await gameLayoutSnapshot(cdp);
       assert(zen.hasZenBarClass === true, '禅模式缺少 body.has-zen-bar（CSS 钩子应保留）');
       assert(zen.zenBarNodes === 0, '禅模式仍存在 .zen-bar/[data-zen-bar]：' + zen.zenBarNodes + ' 个（0.8.2 应删除该行）');
-      assert(zen.rowButtonCount === 4, '禅模式道具坞按钮总数=' + zen.rowButtonCount + '，期望 4（2 工具 + 冻结 + 暂停）');
-      assert(zen.visibleRowButtons.length === 4, '禅模式道具坞可见按钮=' + JSON.stringify(zen.visibleRowButtons) + '，期望 4');
+      assert(zen.rowButtonCount === 3, '禅模式道具行应有两件道具与冻结按钮: ' + zen.rowButtonCount);
+      assert(zen.visibleRowButtons.length === 3, '禅模式道具行可见按钮=' + JSON.stringify(zen.visibleRowButtons) + '，期望 3');
       const visibleTools = zen.visibleRowButtons.filter((button) => button.tool);
       const visibleFreezes = zen.visibleRowButtons.filter((button) => button.freeze);
-      const visiblePauses = zen.visibleRowButtons.filter((button) => button.pause);
       assert(visibleTools.length === 2, '禅模式可见 [data-joy-tool] 按钮数=' + visibleTools.length + '，期望 2');
       assert(visibleFreezes.length === 1, '禅模式可见冻结按钮数=' + visibleFreezes.length + '，期望 1');
-      assert(visiblePauses.length === 1, '禅模式可见拇指区暂停按钮数=' + visiblePauses.length + '，期望 1');
+      assert(zen.thumbPause?.h >= 44 && zen.thumbPause.w >= 44 && zen.thumbPause.top >= zen.canvas.bottom, '禅模式暂停键应留在画布下方拇指区');
       const tooSmall = zen.visibleRowButtons.filter((button) => button.w < 44 || button.h < 44);
       assert(tooSmall.length === 0, '禅模式道具行按钮小于 44px：' + JSON.stringify(tooSmall));
       assert(zen.freezeVisible === true && zen.freezeHidden === false, '禅模式 [data-zen-freeze] 未显示：' + JSON.stringify({ visible: zen.freezeVisible, hidden: zen.freezeHidden }));
@@ -580,7 +579,7 @@ const SCENARIOS = [
       await cdp.click('[data-ov-btn]');
       await cdp.waitFor('window.__arcadeTest.zenInfo().state === "playing"', { timeout: 8000 });
 
-      /* 6) 四档 320/375/390/430：禅模式画布比经典高 ≥40px，且 docH<=vh+1、无横向溢出。 */
+      /* 6) 四档窄屏：道具完全在画布外，禅模式增加按钮也不改变棋盘尺寸。 */
       const widthCases = [[320, 568], [375, 667], [390, 844], [430, 932]];
       const layoutRows = [];
       for (const [width, height] of widthCases) {
@@ -595,12 +594,11 @@ const SCENARIOS = [
         assert(zenLayout.hasZenBarClass === true, width + 'px 禅模式缺少 body.has-zen-bar');
         assert(zenLayout.canvas && zenLayout.canvas.h > 0, width + 'px 禅模式画布高度读取失败：' + JSON.stringify(zenLayout.canvas));
         const deltaH = zenLayout.canvas.h - classicLayout.canvas.h;
-        /* 0.8.4：道具坞移入画布底部空区后，经典与禅模式都回收了 44px 行高；宽视口下画布会被
-           420:740 宽度上限截住，禅模式的额外余量无法再转成固定高度差，故改为两条不变量：
-           经典画布须比 0.8.3 基线高 ≥44px（行高确实还给了画布），禅模式不得低于经典。 */
-        const BASELINE_083 = { 320: 286, 375: 381, 390: 558, 430: 646 };
-        assert(classicLayout.canvas.h >= BASELINE_083[width] + 44, width + 'px 经典画布 ' + classicLayout.canvas.h + 'px 未比 0.8.3 基线 ' + BASELINE_083[width] + 'px 高出 44px');
-        assert(deltaH >= 0, width + 'px 禅模式画布 ' + zenLayout.canvas.h + 'px 反而低于经典 ' + classicLayout.canvas.h + 'px');
+        assert(classicLayout.canvas.h >= 290 && Math.abs(deltaH) <= 1, width + 'px 方块画布尺寸变化: ' + JSON.stringify({ classic: classicLayout.canvas, zen: zenLayout.canvas }));
+        for (const layout of [classicLayout, zenLayout]) {
+          assert(layout.visibleRowButtons.every((button) => button.bottom <= layout.canvas.top + 1),
+            width + 'px 道具行覆盖画布: ' + JSON.stringify(layout.visibleRowButtons));
+        }
         assert(zenLayout.docH <= zenLayout.vh + 1, width + 'px 禅模式纵向溢出：docH=' + zenLayout.docH + ' > vh=' + zenLayout.vh);
         assert(zenLayout.scrollW <= zenLayout.clientW + 1, width + 'px 禅模式横向溢出：scrollWidth=' + zenLayout.scrollW + ' > clientWidth=' + zenLayout.clientW);
         layoutRows.push({ width, classicH: classicLayout.canvas.h, zenH: zenLayout.canvas.h, deltaH, docH: zenLayout.docH, vh: zenLayout.vh });
@@ -608,7 +606,7 @@ const SCENARIOS = [
       await setViewport(cdp);
       return {
         classic: { joyTools: classic.joyToolCount, hint: classic.hintVisible },
-        zen: { rowButtons: zen.visibleRowButtons.length, pause: zen.visibleRowButtons.filter((b) => b.pause).length, minButtonH: Math.min.apply(null, zen.visibleRowButtons.map((button) => button.h)), freezeName: zen.freezeName, hintHidden: zen.hintVisible === false },
+        zen: { rowButtons: zen.visibleRowButtons.length, pause: zen.thumbPause.h, minButtonH: Math.min.apply(null, zen.visibleRowButtons.map((button) => button.h)), freezeName: zen.freezeName, hintHidden: zen.hintVisible === false },
         wideHud: wide.zenText.slice(0, 28),
         freezeToggle: { frozen: frozenInfo.zenFrozen, resumed: resumedInfo.zenFrozen, ariaPressed: frozen.freezePressed + '→' + resumedFreeze.freezePressed },
         pauseBtn2: paused.btn2,

@@ -31,136 +31,167 @@
       <a class="hall-head-link" href="#hall-records">游玩记录 ↓</a>
     </header>
 
+    <div class="hall-mode-controls" data-hall-modes hidden>
+      <div class="hall-mode-switch" role="group" aria-label="街机厅首页视图">
+        <button type="button" class="ac-btn-ghost" data-hall-view="classic" aria-pressed="true">经典街机</button>
+        <button type="button" class="ac-btn-ghost" data-hall-view="career" aria-pressed="false">生涯</button>
+      </div>
+      <label>
+        <span>默认打开</span>
+        <select class="hall-sort" data-default-view>
+          <option value="classic">经典街机</option>
+          <option value="career">生涯</option>
+        </select>
+      </label>
+    </div>
+
     <div class="hall-update-banner" data-update-banner hidden role="status" aria-live="polite">
       <span data-update-text>发现新版本，刷新后生效。</span>
       <button type="button" class="ac-btn hall-update-btn" data-update-reload>立即刷新</button>
       <button type="button" class="ac-btn-ghost hall-update-btn" data-update-dismiss>稍后</button>
     </div>
 
-    <section class="hall-resume" data-resume-section hidden aria-labelledby="hall-resume-title">
-      <h2 id="hall-resume-title">继续上次</h2>
-      <div class="hall-resume-list" id="hall-resume-list" data-resume-list></div>
-      <button type="button" class="hall-resume-more" data-resume-more aria-expanded="false" aria-controls="hall-resume-list" hidden></button>
+    <section class="hall-career" data-career-view hidden aria-labelledby="hall-career-title">
+      <h2 id="hall-career-title">折光港</h2>
+      <div class="hall-career-links">
+        <a class="hall-career-main" href="./games/pendulum-tower.html?careerPanel=town">
+          <strong>告示板</strong><span>接取委托，查看港口事务</span>
+        </a>
+        <a href="./games/pendulum-tower.html?careerPanel=mailbox">
+          <strong>信箱</strong><span>查看已收到的线索和来信</span>
+        </a>
+        <a href="./games/pendulum-tower.html?careerPanel=chapters" data-career-chapters hidden>
+          <strong>章节</strong><span>继续星塔回响</span>
+        </a>
+      </div>
     </section>
 
-    <section class="hall-library" aria-labelledby="hall-library-title">
-      <div class="hall-library-head">
-        <h2 id="hall-library-title">游戏目录</h2>
-        <button type="button" class="ac-btn-ghost hall-action" data-random>🎲 惊喜一下</button>
-      </div>
-      <div class="hall-controls">
-        <label class="hall-search">
-          <span class="hall-search-icon" aria-hidden="true">🔍</span>
-          <input type="search" data-search placeholder="搜索游戏" autocomplete="off" aria-label="搜索游戏" />
-        </label>
-        <select class="hall-sort" data-sort aria-label="游戏排序">
-          <option value="recommend">推荐排序</option>
-          <option value="difficulty">难度排序</option>
-          <option value="recent">最近游玩</option>
-          <option value="high">最高分</option>
-          <option value="name">名称排序</option>
-        </select>
-      </div>
-      <div class="hall-filterbar">
-        <details class="hall-filter-details">
-          <summary>筛选<span data-filter-label hidden></span></summary>
-          <div class="hall-filter" data-filters role="group" aria-label="按类型筛选"></div>
-          <label class="hall-toggle">
-            <input type="checkbox" data-only-progress />
-            只看玩过
+    <div data-classic-view>
+      <section class="hall-resume" data-resume-section hidden aria-labelledby="hall-resume-title">
+        <h2 id="hall-resume-title">继续上次</h2>
+        <div class="hall-resume-list" id="hall-resume-list" data-resume-list></div>
+        <button type="button" class="hall-resume-more" data-resume-more aria-expanded="false" aria-controls="hall-resume-list" hidden></button>
+      </section>
+
+      <section class="hall-library" aria-labelledby="hall-library-title">
+        <div class="hall-library-head">
+          <h2 id="hall-library-title">游戏目录</h2>
+          <button type="button" class="ac-btn-ghost hall-action" data-random>🎲 惊喜一下</button>
+        </div>
+        <div class="hall-controls">
+          <label class="hall-search">
+            <span class="hall-search-icon" aria-hidden="true">🔍</span>
+            <input type="search" data-search placeholder="搜索游戏" autocomplete="off" aria-label="搜索游戏" />
           </label>
-        </details>
-        <p class="hall-result" data-result-count role="status"></p>
-        <button type="button" class="hall-filter-clear" data-clear-filters hidden>清除筛选</button>
-      </div>
-      <div class="hall-grid" data-hall-grid></div>
-    </section>
+          <select class="hall-sort" data-sort aria-label="游戏排序">
+            <option value="recommend">推荐排序</option>
+            <option value="difficulty">难度排序</option>
+            <option value="recent">最近游玩</option>
+            <option value="high">最高分</option>
+            <option value="name">名称排序</option>
+          </select>
+        </div>
+        <div class="hall-filterbar">
+          <details class="hall-filter-details">
+            <summary>筛选<span data-filter-label hidden></span></summary>
+            <div class="hall-filter" data-filters role="group" aria-label="按类型筛选"></div>
+            <label class="hall-toggle">
+              <input type="checkbox" data-only-progress />
+              只看玩过
+            </label>
+          </details>
+          <p class="hall-result" data-result-count role="status"></p>
+          <button type="button" class="hall-filter-clear" data-clear-filters hidden>清除筛选</button>
+        </div>
+        <div class="hall-grid" data-hall-grid></div>
+      </section>
 
-    <section class="hall-records" id="hall-records" aria-labelledby="hall-records-title">
-      <h2 id="hall-records-title">游玩记录</h2>
+      <section class="hall-records" id="hall-records" aria-labelledby="hall-records-title">
+        <h2 id="hall-records-title">游玩记录</h2>
 
-      <details class="hall-fold" data-playtime-section>
-        <summary>游玩统计 <span data-stat-time>0 分钟</span></summary>
-        <div class="hall-playtime">
-          <div class="hall-section-head">
-            <div>
-              <p>只统计实际游玩时间：暂停、切到后台、停在开始界面都不计入。</p>
+        <details class="hall-fold" data-playtime-section>
+          <summary>游玩统计 <span data-stat-time>0 分钟</span></summary>
+          <div class="hall-playtime">
+            <div class="hall-section-head">
+              <div>
+                <p>只统计实际游玩时间：暂停、切到后台、停在开始界面都不计入。</p>
+              </div>
+              <span class="hall-section-note">本机记录 · <a href="./diag.html" style="color:inherit;text-decoration:underline">计时自检</a></span>
             </div>
-            <span class="hall-section-note">本机记录 · <a href="./diag.html" style="color:inherit;text-decoration:underline">计时自检</a></span>
+            <div class="hall-pt-summary">
+              <div class="hall-pt-cell"><span>累计时长</span><strong data-pt-total>0 分钟</strong></div>
+              <div class="hall-pt-cell"><span>今日</span><strong data-pt-today>0 分钟</strong></div>
+              <div class="hall-pt-cell"><span>近 7 天</span><strong data-pt-week>0 分钟</strong></div>
+              <div class="hall-pt-cell"><span>完成轮次</span><strong data-pt-rounds>0</strong></div>
+            </div>
+            <div class="hall-pt-daily" data-pt-daily role="img" aria-label="近 7 天每日游玩时长"></div>
+            <div class="hall-pt-games" data-pt-games></div>
+            <p class="hall-pt-empty" data-pt-empty hidden>还没有游玩记录。任意开一局，回来这里就能看到累计时长、每款游戏和每一轮的明细。</p>
           </div>
-          <div class="hall-pt-summary">
-            <div class="hall-pt-cell"><span>累计时长</span><strong data-pt-total>0 分钟</strong></div>
-            <div class="hall-pt-cell"><span>今日</span><strong data-pt-today>0 分钟</strong></div>
-            <div class="hall-pt-cell"><span>近 7 天</span><strong data-pt-week>0 分钟</strong></div>
-            <div class="hall-pt-cell"><span>完成轮次</span><strong data-pt-rounds>0</strong></div>
-          </div>
-          <div class="hall-pt-daily" data-pt-daily role="img" aria-label="近 7 天每日游玩时长"></div>
-          <div class="hall-pt-games" data-pt-games></div>
-          <p class="hall-pt-empty" data-pt-empty hidden>还没有游玩记录。任意开一局，回来这里就能看到累计时长、每款游戏和每一轮的明细。</p>
-        </div>
-      </details>
+        </details>
 
-      <details class="hall-fold" data-scores-section>
-        <summary>积分记录 <span data-scores-count>共 0 条</span></summary>
-        <div class="hall-scores">
-          <div class="hall-section-head">
-            <p>每局经典或禅模式结束后自动收集分数，只保存在本机。</p>
+        <details class="hall-fold" data-scores-section>
+          <summary>积分记录 <span data-scores-count>共 0 条</span></summary>
+          <div class="hall-scores">
+            <div class="hall-section-head">
+              <p>每局经典或禅模式结束后自动收集分数，只保存在本机。</p>
+            </div>
+            <div class="hall-scores-toolbar">
+              <label class="hall-scores-filter">
+                <span>游戏</span>
+                <select data-scores-game>
+                  <option value="">全部游戏</option>
+                </select>
+              </label>
+              <label class="hall-scores-filter">
+                <span>模式</span>
+                <select data-scores-mode>
+                  <option value="all">全部</option>
+                  <option value="classic">经典</option>
+                  <option value="zen">禅模式</option>
+                </select>
+              </label>
+              <button type="button" class="ac-btn-ghost ac-danger hall-scores-clear" data-scores-clear>清除积分记录</button>
+            </div>
+            <div class="hall-scores-wrap" data-scores-wrap>
+              <table class="hall-scores-table">
+                <caption>最新在前，最多展示最近 50 条；挑战模式有独立的通关记录，不计入积分表。</caption>
+                <thead>
+                  <tr>
+                    <th scope="col">时间</th>
+                    <th scope="col">游戏</th>
+                    <th scope="col">模式</th>
+                    <th scope="col">得分</th>
+                    <th scope="col">详情</th>
+                  </tr>
+                </thead>
+                <tbody data-scores-body></tbody>
+              </table>
+            </div>
+            <p class="hall-scores-empty" data-scores-empty hidden>还没有积分记录。任意经典或禅模式结束一局，这里会自动收集分数、模式与详情。</p>
+            <p class="hall-scores-more" data-scores-more hidden>仅显示最近 50 条；导出备份可保留全部积分记录。</p>
           </div>
-          <div class="hall-scores-toolbar">
-            <label class="hall-scores-filter">
-              <span>游戏</span>
-              <select data-scores-game>
-                <option value="">全部游戏</option>
-              </select>
-            </label>
-            <label class="hall-scores-filter">
-              <span>模式</span>
-              <select data-scores-mode>
-                <option value="all">全部</option>
-                <option value="classic">经典</option>
-                <option value="zen">禅模式</option>
-              </select>
-            </label>
-            <button type="button" class="ac-btn-ghost ac-danger hall-scores-clear" data-scores-clear>清除积分记录</button>
-          </div>
-          <div class="hall-scores-wrap" data-scores-wrap>
-            <table class="hall-scores-table">
-              <caption>最新在前，最多展示最近 50 条；挑战模式有独立的通关记录，不计入积分表。</caption>
-              <thead>
-                <tr>
-                  <th scope="col">时间</th>
-                  <th scope="col">游戏</th>
-                  <th scope="col">模式</th>
-                  <th scope="col">得分</th>
-                  <th scope="col">详情</th>
-                </tr>
-              </thead>
-              <tbody data-scores-body></tbody>
-            </table>
-          </div>
-          <p class="hall-scores-empty" data-scores-empty hidden>还没有积分记录。任意经典或禅模式结束一局，这里会自动收集分数、模式与详情。</p>
-          <p class="hall-scores-more" data-scores-more hidden>仅显示最近 50 条；导出备份可保留全部积分记录。</p>
-        </div>
-      </details>
+        </details>
 
-      <details class="hall-fold">
-        <summary>进度管理</summary>
-        <div class="hall-manage">
-          <p class="hall-manage-note" data-manage-note role="status">游玩记录和局内进度只保存在此浏览器内。</p>
-          <button type="button" class="ac-btn-ghost hall-action" data-export>导出备份（JSON）</button>
-          <button type="button" class="ac-btn-ghost hall-action" data-import-btn>导入备份</button>
-          <input type="file" accept=".json,application/json" data-import-file hidden />
-          <button type="button" class="ac-btn-ghost ac-danger hall-action" data-reset-all>清除全部记录</button>
-          <div class="hall-manage-game">
-            <select class="hall-sort" data-manage-game aria-label="选择要清除记录的游戏">
-              <option value="">选择游戏</option>
-            </select>
-            <button type="button" class="ac-btn-ghost ac-danger hall-action" data-reset-game disabled>清除该游戏记录</button>
+        <details class="hall-fold">
+          <summary>进度管理</summary>
+          <div class="hall-manage">
+            <p class="hall-manage-note" data-manage-note role="status">游玩记录和局内进度只保存在此浏览器内。</p>
+            <button type="button" class="ac-btn-ghost hall-action" data-export>导出备份（JSON）</button>
+            <button type="button" class="ac-btn-ghost hall-action" data-import-btn>导入备份</button>
+            <input type="file" accept=".json,application/json" data-import-file hidden />
+            <button type="button" class="ac-btn-ghost ac-danger hall-action" data-reset-all>清除全部记录</button>
+            <div class="hall-manage-game">
+              <select class="hall-sort" data-manage-game aria-label="选择要清除记录的游戏">
+                <option value="">选择游戏</option>
+              </select>
+              <button type="button" class="ac-btn-ghost ac-danger hall-action" data-reset-game disabled>清除该游戏记录</button>
+            </div>
           </div>
-        </div>
-      </details>
-      <p class="hall-story-entry" data-story-entry hidden><a href="games/pendulum-tower.html?story=1">旧港来信</a></p>
-    </section>
+        </details>
+        <p class="hall-story-entry" data-story-entry hidden><a href="games/pendulum-tower.html?story=1">旧港来信</a></p>
+      </section>
+    </div>
 
     <details class="hall-fold hall-app">
       <summary>安装、离线与分享</summary>
@@ -1074,41 +1105,104 @@
       });
       refreshOfflineStatus();
 
-      window.addEventListener('pageshow', () => render());
+      window.addEventListener('pageshow', () => {
+        render();
+        refreshHallViews();
+      });
       document.addEventListener('visibilitychange', () => {
         if (!document.hidden) {
           render();
           refreshOfflineStatus();
+          refreshHallViews();
         }
       });
 
-      /* 回流入口：只有真实打开过旧港信件（C0.port_seen）的玩家才显示一行小字入口。 */
-      (async () => {
-        const entry = document.querySelector('[data-story-entry]');
-        if (!entry || typeof indexedDB === 'undefined' || typeof indexedDB.databases !== 'function') return;
-        try {
-          /* 只在生涯 DB 已存在时读取，绝不为只玩经典的玩家新建空 DB（会破坏 DB schema）。 */
-          const databases = await indexedDB.databases();
-          if (!databases.some((item) => item && item.name === 'studiokit:arcade:career')) return;
-          const db = await new Promise((resolve, reject) => {
-            const request = indexedDB.open('studiokit:arcade:career');
-            request.onsuccess = () => resolve(request.result);
-            request.onerror = () => reject(request.error);
-          });
-          if (!db.objectStoreNames.contains('quests')) { db.close(); return; }
-          const quests = await new Promise((resolve, reject) => {
-            const tx = db.transaction('quests', 'readonly');
-            const request = tx.objectStore('quests').getAll();
-            request.onsuccess = () => resolve(request.result || []);
-            request.onerror = () => reject(request.error);
-          });
-          db.close();
-          const seen = quests.some((row) => row && typeof row.nodeId === 'string' && row.nodeId === 'story:C0.port_seen');
-          if (seen) entry.hidden = false;
-        } catch (err) {
-          /* 生涯数据库不可用时保持静默，不影响经典中心页。 */
+      const hallModes = document.querySelector('[data-hall-modes]');
+      const hallModeButtons = hallModes.querySelectorAll('[data-hall-view]');
+      const defaultView = document.querySelector('[data-default-view]');
+      const classicView = document.querySelector('[data-classic-view]');
+      const careerView = document.querySelector('[data-career-view]');
+      const careerChapters = document.querySelector('[data-career-chapters]');
+      const recordsLink = document.querySelector('.hall-head-link');
+      const storyEntry = document.querySelector('[data-story-entry]');
+      let currentHallView;
+      let hallReadGeneration = 0;
+
+      function showHallView(view) {
+        currentHallView = view;
+        const career = view === 'career';
+        classicView.hidden = career;
+        recordsLink.hidden = career;
+        careerView.hidden = !career;
+        for (const button of hallModeButtons) {
+          button.setAttribute('aria-pressed', String(button.dataset.hallView === view));
         }
-      })();
+      }
+
+      async function readHallCareer() {
+        if (typeof indexedDB === 'undefined') return null;
+        const name = 'studiokit:arcade:career';
+        if (typeof indexedDB.databases === 'function') {
+          const databases = await indexedDB.databases();
+          if (!databases.some((db) => db?.name === name)) return null;
+        }
+        const db = await new Promise((resolve, reject) => {
+          const request = indexedDB.open(name);
+          // 旧浏览器无 databases() 时也不为经典玩家创建数据库。
+          request.onupgradeneeded = () => request.transaction.abort();
+          request.onsuccess = () => resolve(request.result);
+          request.onerror = () => reject(request.error);
+        });
+        try {
+          return await new Promise((resolve, reject) => {
+            const transaction = db.transaction(['state', 'profiles', 'quests'], 'readonly');
+            const quests = transaction.objectStore('quests');
+            const result = { active: false, chapters: false };
+            transaction.oncomplete = () => resolve(result);
+            transaction.onabort = () => reject(transaction.error);
+            const pointer = transaction.objectStore('state').get('career');
+            pointer.onsuccess = () => {
+              const id = pointer.result?.value?.careerId;
+              if (typeof id !== 'string' || !id) {
+                const legacy = quests.getAll();
+                legacy.onsuccess = () => {
+                  result.chapters = legacy.result.some((row) => row?.nodeId === 'story:C0.port_seen');
+                };
+                return;
+              }
+              const profile = transaction.objectStore('profiles').get(id);
+              profile.onsuccess = () => { result.active = Boolean(profile.result); };
+              const chapter = quests.get([id, 'story:C0.port_seen']);
+              chapter.onsuccess = () => { result.chapters = Boolean(chapter.result); };
+            };
+          });
+        } finally {
+          db.close();
+        }
+      }
+
+      async function refreshHallViews() {
+        const generation = ++hallReadGeneration;
+        const career = await readHallCareer().catch(() => null);
+        if (generation !== hallReadGeneration) return;
+        hallModes.hidden = !career?.active;
+        careerChapters.hidden = !career?.chapters;
+        storyEntry.hidden = !career?.chapters;
+        const preferred = A.Prefs.load().hallDefaultView === 'career' ? 'career' : 'classic';
+        defaultView.value = preferred;
+        if (!career?.active) {
+          showHallView('classic');
+        } else if (!currentHallView) {
+          showHallView(location.hash === '#hall-records' ? 'classic' : preferred);
+        }
+      }
+
+      for (const button of hallModeButtons) {
+        button.addEventListener('click', () => showHallView(button.dataset.hallView));
+      }
+      defaultView.addEventListener('change', () => {
+        A.Prefs.save({ ...A.Prefs.load(), hallDefaultView: defaultView.value });
+      });
 
       render();
     })();

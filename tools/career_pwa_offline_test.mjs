@@ -4,7 +4,7 @@
  *
  * 用真实 Chrome + Service Worker 覆盖：
  * - P01/P02 中心页注册 SW 并等待 ready；线上 sw.js 的 VERSION / CACHE_PREFIX 推导缓存键
- *   `studiokit-arcade-0.18.0-v2`，`caches.keys()` 含该键，SW 版本握手一致
+ *   `studiokit-arcade-0.18.0-v3`，`caches.keys()` 含该键，SW 版本握手一致
  * - P03 sw.js `CORE_PATHS` 全量在核心缓存中，且 career 运行时/内容/UI 14 项逐个存在
  *   （按 registration.scope 相对 URL 断言）
  * - P04 中心页基线：16 张游戏卡 + 版本 0.18.0（career 不破坏中心页）
@@ -34,7 +34,7 @@ const ARTIFACTS = path.join(REPO_ROOT, 'test-artifacts');
 const DB_NAME = 'studiokit:arcade:career';
 const SW_VERSION = '0.18.0';
 const CACHE_PREFIX = 'studiokit-arcade-';
-const CACHE_KEY = `${CACHE_PREFIX}${SW_VERSION}-v2`;
+const CACHE_KEY = `${CACHE_PREFIX}${SW_VERSION}-v3`;
 const OLD_CACHE_KEY = 'studiokit-arcade-0.14.0-v1';
 /* 任务卡点名的 career 运行时 / 内容 / UI 资源（sw.js CORE_PATHS 中的 14 项）。 */
 const CAREER_CORE_PATHS = [

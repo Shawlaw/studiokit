@@ -150,6 +150,7 @@
     discoveryGeneration: 0,
     registryFailed: false,
     cluesEnabled: false,
+    hubPanel: false,
     clues: [],
     clueBundle: null,
     dbLoaded: false,
@@ -2839,6 +2840,7 @@
         if (!target) return uiUnavailable('ui-unavailable');
         try {
           var returned = target.call(mailbox, uiContext());
+          addHubReturnLink(returned);
           if (returned && typeof returned.then === 'function') {
             Promise.resolve(returned).catch(function (err) {
               warnOnce('open-mailbox', err);
@@ -3138,6 +3140,7 @@
           }
           try {
             var returned = target.call(uiModule, context);
+            addHubReturnLink(returned);
             if (returned && typeof returned.then === 'function') {
               Promise.resolve(returned).catch(function (err) {
                 warnOnce('open-career-ui', err);
@@ -3561,6 +3564,37 @@
 
   /* ---------------------------------------------------------------- boot */
 
+  function addHubReturnLink(opened) {
+    if (!internal.hubPanel || !opened) return;
+    var sheet = opened.panel || opened;
+    if (typeof sheet.querySelector !== 'function') return;
+    var head = sheet.querySelector('.ac-career-sheet__head');
+    var back = sheet.ownerDocument.querySelector('.game-topbar .ac-back[href]');
+    if (!head || !back || head.querySelector('.ac-career-hub-back')) return;
+    var link = sheet.ownerDocument.createElement('a');
+    link.className = 'ac-career-hub-back';
+    link.href = back.href;
+    link.textContent = '‹ 街机厅';
+    link.setAttribute('aria-label', '返回街机厅');
+    head.insertBefore(link, head.querySelector('.ac-career-close'));
+  }
+
+  function openHubCareerPanel(panel) {
+    var db = api.db || readGlobal('db');
+    if (!api.available || !db || typeof db.getState !== 'function' || typeof db.getProfile !== 'function') return;
+    return Promise.resolve(db.getState('career')).then(function (pointer) {
+      if (!pointer || !pointer.careerId) return null;
+      return db.getProfile(pointer.careerId);
+    }).then(function (profile) {
+      if (!profile) return null;
+      internal.hubPanel = true;
+      internal.commissionLastCareerId = profile.careerId;
+      if (panel === 'town') return openTown();
+      if (panel === 'mailbox') return openCareerUi('mailbox');
+      return openCampaign();
+    });
+  }
+
   function finalizeReady() {
     try {
       api.gameId = api.gameId || null;
@@ -3568,7 +3602,11 @@
       resolveReady({ available: !!api.available, reason: api.available ? undefined : api.reason });
       /* 中心页「旧港来信」回流入口：?story=1 时自动打开章节面板（仅真实 C0 后才有内容）。 */
       try {
-        if (WINDOW && WINDOW.location && /(?:^|[?&])story=1(?:&|$)/.test(WINDOW.location.search || '')) {
+        var search = WINDOW && WINDOW.location ? WINDOW.location.search || '' : '';
+        var panel = /(?:^|[?&])careerPanel=(town|mailbox|chapters)(?:&|$)/.exec(search);
+        if (panel) {
+          Promise.resolve().then(function () { return openHubCareerPanel(panel[1]); }).catch(function (err) { warnOnce('hub-career-panel', err); });
+        } else if (/(?:^|[?&])story=1(?:&|$)/.test(search)) {
           Promise.resolve().then(function () { return openCampaign(); }).catch(function () {});
         }
       } catch (err) {

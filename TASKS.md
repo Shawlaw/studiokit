@@ -13,6 +13,7 @@
 | T130 | agent | 收口复测（2f3bcf2）残余修复与门禁（本地未发布） | DONE | T129 | 固定端口改动态别名、快照代次 JSON 可复制、发现行 openedAt 合并、回信箱 C0 有效线索门禁；closeout 5/5、import 12/12、isolation 8/8；`8b41986` 完整聚合 **ALL GATES PASSED**（日志 VERIFY-GATE.log）。 |
 | T131 | agent | 收口复验（6c208e1）三条边界修复与门禁（本地未发布） | DONE | T130 | 失效端口别名拒绝连接、重复阅读 openedAt 同源、C0 写事务重核代次/线索；closeout 6/6、import 12/12、isolation 9/9；`f87e690` 完整聚合 **ALL GATES PASSED**（日志 FINAL-GATE.log）。 |
 | T132 | agent | Arcade 中心页改版：首屏续玩、紧凑目录与排序记忆 | DONE | T123 | 390px 空档首款游戏顶部 1323→267px，卡片高 146→80px；16 款一键续玩及贪吃蛇断网直续实测；静态校验与构建、四档窄屏和桌面布局、冒烟 116/116、积分 14/14、PWA 更新 9/9、离线 17/17；本地 0.18.0，未发布。 |
+| T133 | agent | Arcade 触控、游戏页返回和生涯首页切换 | DONE | T132 | 贪吃蛇四向键和即时滑动，方块画布外道具与下方暂停，游戏页返回街机厅，已开启生涯可切换并设置首页默认视图。静态校验与构建通过，冒烟 117/117、触控布局 42/42、禅模式与积分 14/14、PWA 更新 9/9、离线 17/17、生涯收口 6/6。三面板断网往返通过。本地 0.18.0，缓存修订 v3。 |
 | T123 | agent | Arcade 0.18.0 本地门禁：D18 系列与 G18（不发布） | DONE | T122 | **G18 独立复审 PASS**（HEAD `a84d15f`；W11 在 `118f1cc` 修复并复测）：B1–B5 全关；聚合门禁 ALL GATES PASSED；campaign E2E 701/701、world 109/109、graph 48/48、96 96/96/3792；版本链 0.18.0；未推送/未发布，摘要 `docs/arcade-life/G18-EVIDENCE.md`。 |
 | T122 | agent | Arcade 0.18.0：星塔回响六章、三终局与后日常（本地未发布） | DONE | T121 | 六章/三终局/后日常、campaign-core/ending-reducer/world-state、C0 信箱与终局跨页缓冲、告示板章节卡；campaign 53/53、ending 34/34、graph 48/48、world 109/109、E2E 701/701；G18 PASS。 |
 

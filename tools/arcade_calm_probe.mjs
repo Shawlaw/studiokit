@@ -48,7 +48,7 @@ async function layout(cdp, width, height, label) {
       vh: innerHeight,
       canvas: rect(document.querySelector('.game-canvas')),
       pause: rect(document.querySelector('[data-pause]')),
-      back: rect(document.querySelector('.ac-back')),
+      back: rect(document.querySelector('.studiokit-shell-home')),
       joy: [...document.querySelectorAll('[data-joy-tool]')].map((b) => ({ id: b.dataset.joyTool, ...rect(b) })),
       toolbelt: [...document.querySelectorAll('[data-toolbelt] .tool-btn')].map((b) => rect(b)),
       canvasBottom: (() => { const c = document.querySelector('.game-canvas'); return c ? Math.round(c.getBoundingClientRect().bottom) : null; })(),

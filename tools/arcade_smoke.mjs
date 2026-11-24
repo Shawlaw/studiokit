@@ -52,10 +52,13 @@ async function main() {
     /* ---------- GitHub Pages 项目子路径：shell 返回链接 ---------- */
     await cdp.navigate(base + '/studiokit/apps/arcade/games/star-raid.html');
     const shellInfo = await cdp.evaluate(`(() => { const a = document.querySelector('.studiokit-shell-home'); return { href: a ? a.href : null, text: a ? a.textContent : null }; })()`);
-    assert(shellInfo.href === base + '/studiokit/index.html', 'shell subpath href wrong: ' + JSON.stringify(shellInfo));
+    assert(shellInfo.href === base + '/studiokit/apps/arcade/index.html', 'shell subpath href wrong: ' + JSON.stringify(shellInfo));
     const shellResponse = await fetch(shellInfo.href);
     assert(shellResponse.ok, 'shell subpath target HTTP ' + shellResponse.status);
-    record('GitHub Pages /studiokit/ 子路径 shell 返回链接', true);
+    await cdp.click('.studiokit-shell-home');
+    await cdp.waitFor('location.pathname === "/studiokit/apps/arcade/index.html" && !!document.querySelector("[data-hall-grid]")');
+    assert(await cdp.evaluate("document.querySelector('.studiokit-shell-home').pathname") === '/studiokit/index.html', 'Arcade hub must keep portal link');
+    record('GitHub Pages 子路径游戏返回街机厅，街机厅返回 StudioKit', true);
 
     /* ---------- 中心页 ---------- */
     await cdp.navigate(base + '/apps/arcade/');
@@ -2213,12 +2216,12 @@ async function main() {
         canvas: (() => { const c = document.querySelector('.game-canvas'); if (!c) return null; const r = c.getBoundingClientRect(); return { w: Math.round(r.width), h: Math.round(r.height) }; })(),
         pause: (() => { const b = document.querySelector('[data-pause]'); if (!b) return null; const r = b.getBoundingClientRect(); return { w: Math.round(r.width), h: Math.round(r.height) }; })(),
         title: (() => { const t = document.querySelector('.game-title'); if (!t) return null; return { cw: t.clientWidth, sw: t.scrollWidth }; })(),
-        back: (() => { const b = document.querySelector('.ac-back'); if (!b) return null; const r = b.getBoundingClientRect(); return { w: Math.round(r.width), h: Math.round(r.height) }; })(),
+        back: (() => { const b = document.querySelector('.studiokit-shell-home'); if (!b) return null; const r = b.getBoundingClientRect(); return { w: Math.round(r.width), h: Math.round(r.height) }; })(),
         secondary: (() => { const b = document.querySelector('[data-ov-btn2]'); if (!b) return null; const r = b.getBoundingClientRect(); return { hidden: b.hidden, display: getComputedStyle(b).display, w: Math.round(r.width), h: Math.round(r.height) }; })(),
         toolbelt: (() => { const t = document.querySelector('[data-toolbelt]'); if (!t) return null; const r = t.getBoundingClientRect(); return { w: Math.round(r.width), h: Math.round(r.height), btns: [...t.querySelectorAll('.tool-btn')].map((b) => { const br = b.getBoundingClientRect(); return { w: Math.round(br.width), h: Math.round(br.height) }; }) }; })(),
         joyTools: [...document.querySelectorAll('[data-joy-tool]')].map((b) => { const r = b.getBoundingClientRect(); return { id: b.dataset.joyTool, w: Math.round(r.width), h: Math.round(r.height), top: Math.round(r.top), right: Math.round(r.right), bottom: Math.round(r.bottom) }; }),
         canvasBottom: (() => { const c = document.querySelector('.game-canvas'); return c ? Math.round(c.getBoundingClientRect().bottom) : null; })(),
-        wellBottom: (() => { const c = document.querySelector('.game-canvas'); if (!c) return null; const b = c.getBoundingClientRect(); return Math.round(b.top + b.height * 526 / 610); })(),
+        canvasTop: (() => { const c = document.querySelector('.game-canvas'); return c ? Math.round(c.getBoundingClientRect().top) : null; })(),
         docH: document.documentElement.scrollHeight,
         vh: innerHeight,
         hasGameTools: document.body.classList.contains('has-game-tools'),
@@ -2237,9 +2240,9 @@ async function main() {
         }
         if (!pagePath.includes('gold-miner')) {
           assert(overflow.joyTools.length === 2 && overflow.joyTools.every((b) => b.h >= 44 && b.w >= 44 && b.right <= overflow.cw + 1 && b.bottom <= overflow.docH + 1), pagePath + ' joy tools ' + JSON.stringify(overflow.joyTools));
-          /* 0.8.4：方块道具坞嵌在画布底部空区（井口 y=600/740 以下），只要求不遮井口；其余游戏仍须在画布外。 */
-          const joyAnchor = pagePath.includes('block-drop') ? overflow.wellBottom : overflow.canvasBottom;
-          assert(joyAnchor !== null && overflow.joyTools.every((b) => b.top >= joyAnchor - 1), pagePath + ' joy tools overlap canvas: ' + JSON.stringify({ anchor: joyAnchor, canvasBottom: overflow.canvasBottom, wellBottom: overflow.wellBottom, tools: overflow.joyTools }));
+          const separated = overflow.joyTools.every((button) => pagePath.includes('block-drop')
+            ? button.bottom <= overflow.canvasTop + 1 : button.top >= overflow.canvasBottom - 1);
+          assert(separated, pagePath + ' joy tools overlap canvas: ' + JSON.stringify(overflow));
         }
         if (overflow.hasGameTools || overflow.hasJoyRow) assert(overflow.docH <= overflow.vh + 1, pagePath + ' 375px controls vertical overflow ' + overflow.docH + '>' + overflow.vh);
       }
@@ -2260,6 +2263,7 @@ async function main() {
         labels: btns.map((b) => (b.querySelector('.block-btn-label') || {}).textContent || ''),
         sizes: btns.map(rect),
         groups,
+        pause: rect(pad.querySelector('[data-block-pause]')),
         hintDisplay: getComputedStyle(document.querySelector('.block-hint')).display,
         touchHint: getComputedStyle(document.querySelector('.hint-touch')).display,
         keyboardHint: getComputedStyle(document.querySelector('.hint-keyboard')).display,
@@ -2275,9 +2279,12 @@ async function main() {
     assert(padLayout.display === 'flex', 'touch pad display=' + padLayout.display);
     assert(padLayout.order.join(',') === 'left,right,rotate,soft,hard', 'touch pad order=' + padLayout.order.join(','));
     assert(padLayout.labels.join(',') === '左移,右移,旋转,加速,落底', 'touch pad labels=' + JSON.stringify(padLayout.labels));
-    assert(padLayout.sizes.every((b) => b.h >= 56 && b.w >= 52), 'touch targets too small: ' + JSON.stringify(padLayout.sizes));
+    assert(padLayout.sizes.every((b) => b.h >= 56 && b.w >= 44), 'touch targets too small: ' + JSON.stringify(padLayout.sizes));
     assert(padLayout.softBg !== padLayout.hardBg && padLayout.softColor !== padLayout.hardColor, 'soft/hard styles not distinct: ' + JSON.stringify({ softBg: padLayout.softBg, hardBg: padLayout.hardBg, softColor: padLayout.softColor, hardColor: padLayout.hardColor }));
     assert(padLayout.groups.length === 2 && padLayout.groups[0].right + 8 <= padLayout.groups[1].x, 'touch groups not separated: ' + JSON.stringify(padLayout.groups));
+    assert(padLayout.pause.w >= 44 && padLayout.pause.h >= 44 &&
+      padLayout.pause.x > padLayout.groups[0].right && padLayout.pause.right < padLayout.groups[1].x,
+    'pause target must sit between the controls: ' + JSON.stringify(padLayout));
     assert(padLayout.sizes[4].right <= padLayout.vw && padLayout.sizes[4].bottom <= padLayout.vh, 'pad clipped: ' + JSON.stringify(padLayout));
     assert(padLayout.hintDisplay === 'none', 'touch hint should be hidden on touch (0.8.4): ' + JSON.stringify(padLayout));
     assert(padLayout.docH <= padLayout.vh + 1, 'block-drop vertical overflow: ' + padLayout.docH + '>' + padLayout.vh);
@@ -2333,7 +2340,7 @@ async function main() {
     record('俄罗斯方块 375px 双手按钮面板 + 画布触摸区不再误触', true);
     await cdp.screenshot('touch-block-drop.png');
 
-    /* ---------- 0.8.6 贪吃蛇：双拇指相对转向 + 棋盘优先画布 + 放缓提速 ---------- */
+    /* ---------- 贪吃蛇：固定方向、即时滑动、方向队列 ---------- */
     for (const [width, height, minCanvas, minBoard] of [[320, 568, 240, 185], [375, 667, 290, 245], [390, 844, 290, 285], [430, 932, 290, 315]]) {
       await cdp.send('Emulation.setDeviceMetricsOverride', { width, height, deviceScaleFactor: 1, mobile: true });
       await cdp.evaluate(`Arcade.RunSave.clear('snake-run')`);
@@ -2342,12 +2349,12 @@ async function main() {
       const snakeLayout = await cdp.evaluate(`(() => {
         const c = document.querySelector('.game-canvas').getBoundingClientRect();
         const pad = document.querySelector('[data-dpad]');
-        const btns = [...pad.querySelectorAll('[data-turn]')].map((b) => { const r = b.getBoundingClientRect(); return { turn: b.dataset.turn, label: b.textContent.trim(), left: Math.round(r.left), right: Math.round(r.right), w: Math.round(r.width), h: Math.round(r.height) }; });
+        const btns = [...pad.querySelectorAll('[data-dir]')].map((b) => { const r = b.getBoundingClientRect(); return { dir: b.dataset.dir, label: b.textContent.trim(), left: Math.round(r.left), right: Math.round(r.right), w: Math.round(r.width), h: Math.round(r.height) }; });
         return {
           canvas: { w: Math.round(c.width), h: Math.round(c.height) },
           boardPx: Math.round(c.width * 306 / 360),
           btns,
-          oldAbsoluteButtons: pad.querySelectorAll('[data-dir]').length,
+          oldRelativeButtons: pad.querySelectorAll('[data-turn]').length,
           padDisplay: getComputedStyle(pad).display,
           sw: document.documentElement.scrollWidth,
           cw: document.documentElement.clientWidth,
@@ -2359,10 +2366,8 @@ async function main() {
       assert(snakeLayout.sw <= snakeLayout.cw + 1, '贪吃蛇 ' + width + 'px 横向溢出: ' + JSON.stringify(snakeLayout));
       assert(snakeLayout.canvas.h > minCanvas, '贪吃蛇 ' + width + 'px 画布过小: ' + JSON.stringify(snakeLayout));
       assert(snakeLayout.boardPx >= minBoard, '贪吃蛇 ' + width + 'px 棋盘没有放大: ' + JSON.stringify(snakeLayout));
-      assert(snakeLayout.padDisplay === 'grid', '贪吃蛇双按钮面板未显示: ' + JSON.stringify(snakeLayout));
-      assert(snakeLayout.oldAbsoluteButtons === 0, '贪吃蛇仍保留绝对方向按钮: ' + JSON.stringify(snakeLayout));
-      assert(snakeLayout.btns.length === 2 && snakeLayout.btns[0].turn === 'left' && snakeLayout.btns[1].turn === 'right', '贪吃蛇不是左右两枚转向键: ' + JSON.stringify(snakeLayout.btns));
-      assert(snakeLayout.btns.every((b) => b.w >= 120 && b.h >= 58) && snakeLayout.btns[0].right < snakeLayout.btns[1].left, '贪吃蛇双拇指按钮尺寸/分区不合格: ' + JSON.stringify(snakeLayout.btns));
+      assert(snakeLayout.padDisplay === 'grid' && snakeLayout.oldRelativeButtons === 0, '贪吃蛇固定方向面板未显示');
+      assert(snakeLayout.btns.map((b) => b.dir).join(',') === 'U,L,D,R' && snakeLayout.btns.every((b) => b.w >= 44 && b.h >= 44), '贪吃蛇方向键与触控尺寸: ' + JSON.stringify(snakeLayout.btns));
       assert(snakeLayout.hudInTopbar, '贪吃蛇挑战 HUD 没有移出画布');
       assert(snakeLayout.docH <= snakeLayout.vh + 1, '贪吃蛇 ' + width + 'px 纵向溢出: ' + JSON.stringify(snakeLayout));
     }
@@ -2374,9 +2379,17 @@ async function main() {
     await cdp.waitFor('document.readyState === "complete" && window.__arcadeTest', { timeout: 8000 });
     await cdp.click('[data-ov-btn]');
     const snakeDpadReady = await cdp.evaluate(`__arcadeTest.info()`);
-    assert(snakeDpadReady.dpadDisabled.length === 2 && snakeDpadReady.dpadDisabled.every((d) => d === false), '贪吃蛇开局后转向键仍禁用: ' + JSON.stringify(snakeDpadReady));
-    await cdp.buttonPointer('[data-turn="right"]', 'pointerdown', 11);
-    await cdp.buttonPointer('[data-turn="right"]', 'pointerdown', 11);
+    assert(snakeDpadReady.dpadDisabled.length === 4 && snakeDpadReady.dpadDisabled.every((d) => d === false), '贪吃蛇开局后转向键仍禁用: ' + JSON.stringify(snakeDpadReady));
+    await cdp.pointer(140, 200, 'pointerdown');
+    await cdp.pointer(142, 204, 'pointermove');
+    assert((await cdp.evaluate('__arcadeTest.info().nextDir.x')) === 1, '贪吃蛇短划被识别为转向');
+    await cdp.pointer(140, 270, 'pointermove');
+    assert((await cdp.evaluate('__arcadeTest.info().nextDir.y')) === 1, '贪吃蛇滑动须在抬手前生效');
+    await cdp.pointer(70, 270, 'pointerup');
+    assert(!(await cdp.evaluate('__arcadeTest.info().queuedTurn')), '一次滑动重复提交转向');
+    await cdp.buttonPointer('[data-dir="U"]', 'pointerdown', 11);
+    assert(!(await cdp.evaluate('__arcadeTest.info().queuedTurn')), '贪吃蛇接收了相反方向');
+    await cdp.buttonPointer('[data-dir="L"]', 'pointerdown', 11);
     const snakeQueuedTurns = await cdp.evaluate(`__arcadeTest.info()`);
     assert(snakeQueuedTurns.dir.x === 1 && snakeQueuedTurns.nextDir.y === 1 && snakeQueuedTurns.queuedTurn && snakeQueuedTurns.queuedTurn.x === -1, '贪吃蛇连点没有按待执行方向排队: ' + JSON.stringify(snakeQueuedTurns));
     await cdp.waitFor('__arcadeTest.info().dir.y === 1', { timeout: 1200 });
@@ -2384,18 +2397,18 @@ async function main() {
     assert(snakeFirstTurn.nextDir.x === -1 && !snakeFirstTurn.queuedTurn, '贪吃蛇第一格没有只消费一次转向: ' + JSON.stringify(snakeFirstTurn));
     await cdp.waitFor('__arcadeTest.info().dir.x === -1', { timeout: 1200 });
     const snakeSecondTurn = await cdp.evaluate(`__arcadeTest.info()`);
-    assert(snakeSecondTurn.dir.x === -1 && snakeSecondTurn.dir.y === 0, '贪吃蛇第二次右转没有相对蛇头生效: ' + JSON.stringify(snakeSecondTurn));
-    await cdp.buttonPointer('[data-turn="left"]', 'pointerdown', 12);
+    assert(snakeSecondTurn.dir.x === -1 && snakeSecondTurn.dir.y === 0, '贪吃蛇向左指令没有生效: ' + JSON.stringify(snakeSecondTurn));
+    await cdp.buttonPointer('[data-dir="D"]', 'pointerdown', 12);
     await cdp.waitFor('__arcadeTest.info().dir.y === 1', { timeout: 1200 });
     const snakeLeftTurn = await cdp.evaluate(`__arcadeTest.info()`);
-    assert(snakeLeftTurn.dir.x === 0 && snakeLeftTurn.dir.y === 1, '贪吃蛇左转没有相对蛇头生效: ' + JSON.stringify(snakeLeftTurn));
+    assert(snakeLeftTurn.dir.x === 0 && snakeLeftTurn.dir.y === 1, '贪吃蛇向下指令没有生效: ' + JSON.stringify(snakeLeftTurn));
     const snakeSpeed = await cdp.evaluate(`(() => {
       const t = __arcadeTest;
       for (let i = 0; i < 20; i++) t.eatNext();
       return t.info();
     })()`);
     assert(snakeSpeed.foodsEaten >= 20 && snakeSpeed.stepInterval >= 0.12 && snakeSpeed.stepInterval < 0.16 && snakeSpeed.state === 'over', '贪吃蛇 20 果实后仍然提速过快或未收局: ' + JSON.stringify(snakeSpeed));
-    /* 从结算重新选择挑战模式：触屏相对转向必须进入既有挑战队列，同样按格消费。 */
+    /* 从结算重新选择挑战模式：触屏方向必须进入既有挑战队列，同样按格消费。 */
     await cdp.click('[data-ov-btn]');
     await cdp.click('[data-ov-btn2]');
     await cdp.waitFor('document.querySelector("[data-ch-layer]") && !document.querySelector("[data-ch-layer]").hidden', { timeout: 5000 });
@@ -2403,18 +2416,19 @@ async function main() {
     await cdp.waitFor('__arcadeTest.info().state === "playing"', { timeout: 5000 });
     const challengeTurnBase = await cdp.evaluate(`__arcadeTest.info()`);
     assert(challengeTurnBase.challengeQueue.length === 0, '挑战开局方向队列非空: ' + JSON.stringify(challengeTurnBase));
-    await cdp.buttonPointer('[data-turn="right"]', 'pointerdown', 13);
-    await cdp.buttonPointer('[data-turn="right"]', 'pointerdown', 13);
-    const challengeTurns = await cdp.evaluate(`__arcadeTest.info()`);
-    const expectedChallengeTurns = challengeTurns.challengeQueue;
     const firstExpected = { x: -challengeTurnBase.dir.y, y: challengeTurnBase.dir.x };
     const secondExpected = { x: -firstExpected.y, y: firstExpected.x };
-    assert(expectedChallengeTurns.length === 2 && expectedChallengeTurns[0].x === firstExpected.x && expectedChallengeTurns[0].y === firstExpected.y && expectedChallengeTurns[1].x === secondExpected.x && expectedChallengeTurns[1].y === secondExpected.y, '挑战触屏相对转向队列错误: ' + JSON.stringify({ before: challengeTurnBase, after: challengeTurns, firstExpected, secondExpected }));
+    const directionKey = ({x, y}) => x === 1 ? 'R' : x === -1 ? 'L' : y === 1 ? 'D' : 'U';
+    await cdp.buttonPointer('[data-dir="' + directionKey(firstExpected) + '"]', 'pointerdown', 13);
+    await cdp.buttonPointer('[data-dir="' + directionKey(secondExpected) + '"]', 'pointerdown', 13);
+    const challengeTurns = await cdp.evaluate(`__arcadeTest.info()`);
+    const expectedChallengeTurns = challengeTurns.challengeQueue;
+    assert(expectedChallengeTurns.length === 2 && expectedChallengeTurns[0].x === firstExpected.x && expectedChallengeTurns[0].y === firstExpected.y && expectedChallengeTurns[1].x === secondExpected.x && expectedChallengeTurns[1].y === secondExpected.y, '挑战触屏方向队列错误: ' + JSON.stringify({ before: challengeTurnBase, after: challengeTurns, firstExpected, secondExpected }));
     await cdp.waitFor('__arcadeTest.info().challengeQueue.length === 1', { timeout: 1200 });
     if (cdp.errors.length) throw new Error('snake turn-pad console errors: ' + cdp.errors.join(' | '));
-    record('贪吃蛇 棋盘优先画布 + 双拇指左右转向 + 两级连点缓冲 + 提速放缓', true);
+    record('贪吃蛇 四方向键、滑动抬手前转向、防掉头与逐格缓冲', true);
 
-    /* ---------- 俄罗斯方块拇指区暂停键 + 双击画面暂停（0.8.4 地铁单手） ---------- */
+    /* ---------- 俄罗斯方块拇指区暂停键 + 双击画面暂停 ---------- */
     for (const [width, height] of [[320, 568], [375, 667], [390, 844], [430, 932]]) {
       await cdp.send('Emulation.setDeviceMetricsOverride', { width, height, deviceScaleFactor: 1, mobile: true });
       await cdp.evaluate(`Arcade.RunSave.clear('block-drop')`);
@@ -2427,12 +2441,9 @@ async function main() {
         if (!b) return null;
         const r = b.getBoundingClientRect();
         const c = document.querySelector('.game-canvas').getBoundingClientRect();
-        const well = { left: c.left + c.width * 8 / 340, right: c.left + c.width * 248 / 340, top: c.top + c.height * 46 / 610, bottom: c.top + c.height * 526 / 610 };
-        const overlap = !(r.bottom <= well.top + 1 || r.top >= well.bottom || r.right <= well.left || r.left >= well.right);
-        return { display: getComputedStyle(b).display, w: Math.round(r.width), h: Math.round(r.height), left: Math.round(r.left), right: Math.round(r.right), top: Math.round(r.top), bottom: Math.round(r.bottom), inStage: !!b.closest('.stage-box'), coversWell: overlap, cw: document.documentElement.clientWidth };
+        return { display: getComputedStyle(b).display, w: Math.round(r.width), h: Math.round(r.height), right: Math.round(r.right), belowCanvas: r.top >= c.bottom, cw: document.documentElement.clientWidth };
       })()`);
-      assert(fab && fab.display === 'flex' && fab.w >= 44 && fab.h >= 44 && fab.inStage, width + 'px 拇指区暂停键 ' + JSON.stringify(fab));
-      assert(fab.coversWell === false && fab.right <= fab.cw + 1, width + 'px 拇指区暂停键位置 ' + JSON.stringify(fab));
+      assert(fab && fab.display === 'flex' && fab.w >= 44 && fab.h >= 44 && fab.belowCanvas && fab.right <= fab.cw + 1, width + 'px 拇指区暂停键 ' + JSON.stringify(fab));
       await cdp.click('[data-block-pause]');
       await sleep(200);
       const fabPaused = await cdp.evaluate(`({ state: window.__arcadeTest.info().state, hidden: document.querySelector('[data-overlay]').hidden, title: document.querySelector('[data-ov-title]').textContent })`);
@@ -2463,13 +2474,13 @@ async function main() {
         canvas: (() => { const c = document.querySelector('.game-canvas'); if (!c) return null; const r = c.getBoundingClientRect(); return { w: Math.round(r.width), h: Math.round(r.height) }; })(),
         pause: (() => { const b = document.querySelector('[data-pause]'); if (!b) return null; const r = b.getBoundingClientRect(); return { w: Math.round(r.width), h: Math.round(r.height) }; })(),
         title: (() => { const t = document.querySelector('.game-title'); if (!t) return null; return { cw: t.clientWidth, sw: t.scrollWidth }; })(),
-        back: (() => { const b = document.querySelector('.ac-back'); if (!b) return null; const r = b.getBoundingClientRect(); return { w: Math.round(r.width), h: Math.round(r.height) }; })(),
+        back: (() => { const b = document.querySelector('.studiokit-shell-home'); if (!b) return null; const r = b.getBoundingClientRect(); return { w: Math.round(r.width), h: Math.round(r.height) }; })(),
         secondary: (() => { const b = document.querySelector('[data-ov-btn2]'); if (!b) return null; const r = b.getBoundingClientRect(); return { hidden: b.hidden, display: getComputedStyle(b).display, w: Math.round(r.width), h: Math.round(r.height) }; })(),
         toolbelt: (() => { const t = document.querySelector('[data-toolbelt]'); if (!t) return null; const r = t.getBoundingClientRect(); return { w: Math.round(r.width), h: Math.round(r.height), btns: [...t.querySelectorAll('.tool-btn')].map((b) => { const br = b.getBoundingClientRect(); return { w: Math.round(br.width), h: Math.round(br.height) }; }) }; })(),
         blockPad: (() => { const p = document.querySelector('.block-pad'); if (!p || getComputedStyle(p).display === 'none') return null; const r = p.getBoundingClientRect(); return { right: Math.round(r.right), bottom: Math.round(r.bottom), docH: document.documentElement.scrollHeight, vh: innerHeight, btns: [...p.querySelectorAll('[data-touch]')].map((b) => { const br = b.getBoundingClientRect(); return { w: Math.round(br.width), h: Math.round(br.height) }; }) }; })(),
         joyTools: [...document.querySelectorAll('[data-joy-tool]')].map((b) => { const r = b.getBoundingClientRect(); return { id: b.dataset.joyTool, w: Math.round(r.width), h: Math.round(r.height), top: Math.round(r.top), right: Math.round(r.right), bottom: Math.round(r.bottom) }; }),
         canvasBottom: (() => { const c = document.querySelector('.game-canvas'); return c ? Math.round(c.getBoundingClientRect().bottom) : null; })(),
-        wellBottom: (() => { const c = document.querySelector('.game-canvas'); if (!c) return null; const b = c.getBoundingClientRect(); return Math.round(b.top + b.height * 526 / 610); })(),
+        canvasTop: (() => { const c = document.querySelector('.game-canvas'); return c ? Math.round(c.getBoundingClientRect().top) : null; })(),
         docH: document.documentElement.scrollHeight,
         vh: innerHeight,
         hasGameTools: document.body.classList.contains('has-game-tools'),
@@ -2504,14 +2515,15 @@ async function main() {
           assert(small.toolbelt.btns.length === 4 && small.toolbelt.btns.every((b) => b.h >= 44 && b.w >= 44), pagePath + ' 320px toolbelt buttons ' + JSON.stringify(small.toolbelt.btns));
         }
         if (small.blockPad) {
-          assert(small.blockPad.btns.length === 5 && small.blockPad.btns.every((b) => b.h >= 56 && b.w >= 52), pagePath + ' 320px block pad buttons ' + JSON.stringify(small.blockPad.btns));
+          assert(small.blockPad.btns.length === 5 && small.blockPad.btns.every((b) => b.h >= 56 && b.w >= 44), pagePath + ' 320px block pad buttons ' + JSON.stringify(small.blockPad.btns));
           assert(small.blockPad.right <= small.cw + 1 && small.blockPad.bottom <= small.blockPad.vh + 1, pagePath + ' 320px block pad clipped ' + JSON.stringify(small.blockPad));
           assert(small.blockPad.docH <= small.blockPad.vh + 1, pagePath + ' 320px block pad page overflow ' + JSON.stringify(small.blockPad));
         }
         if (!pagePath.includes('gold-miner')) {
           assert(small.joyTools.length === 2 && small.joyTools.every((b) => b.h >= 44 && b.w >= 44 && b.right <= small.cw + 1 && b.bottom <= small.docH + 1), pagePath + ' 320px joy tools ' + JSON.stringify(small.joyTools));
-          const smallAnchor = pagePath.includes('block-drop') ? small.wellBottom : small.canvasBottom;
-          assert(smallAnchor !== null && small.joyTools.every((b) => b.top >= smallAnchor - 1), pagePath + ' 320px joy tools overlap canvas: ' + JSON.stringify({ anchor: smallAnchor, canvasBottom: small.canvasBottom, wellBottom: small.wellBottom, tools: small.joyTools }));
+          const separated = small.joyTools.every((button) => pagePath.includes('block-drop')
+            ? button.bottom <= small.canvasTop + 1 : button.top >= small.canvasBottom - 1);
+          assert(separated, pagePath + ' joy tools overlap canvas: ' + JSON.stringify(small));
         }
         if (small.hasGameTools || small.hasJoyRow) assert(small.docH <= small.vh + 1, pagePath + ' 320px controls vertical overflow ' + small.docH + '>' + small.vh);
       }
@@ -2561,7 +2573,7 @@ async function main() {
           blockPad: (() => { const p = document.querySelector('.block-pad'); if (!p || getComputedStyle(p).display === 'none') return null; const r = p.getBoundingClientRect(); return { right: Math.round(r.right), bottom: Math.round(r.bottom), docH: document.documentElement.scrollHeight, vh: innerHeight, btns: [...p.querySelectorAll('[data-touch]')].map((b) => { const br = b.getBoundingClientRect(); return { w: Math.round(br.width), h: Math.round(br.height) }; }) }; })(),
           joyTools: [...document.querySelectorAll('[data-joy-tool]')].map((b) => { const r = b.getBoundingClientRect(); return { w: Math.round(r.width), h: Math.round(r.height), top: Math.round(r.top), right: Math.round(r.right), bottom: Math.round(r.bottom) }; }),
           canvasBottom: (() => { const c = document.querySelector('.game-canvas'); return c ? Math.round(c.getBoundingClientRect().bottom) : null; })(),
-        wellBottom: (() => { const c = document.querySelector('.game-canvas'); if (!c) return null; const b = c.getBoundingClientRect(); return Math.round(b.top + b.height * 526 / 610); })(),
+        canvasTop: (() => { const c = document.querySelector('.game-canvas'); return c ? Math.round(c.getBoundingClientRect().top) : null; })(),
           docH: document.documentElement.scrollHeight,
           vh: innerHeight,
           hasGameTools: document.body.classList.contains('has-game-tools'),
@@ -2570,14 +2582,15 @@ async function main() {
         assert(metrics.sw <= metrics.cw + 1, pagePath + ' ' + width + 'px overflow ' + metrics.sw + '>' + metrics.cw);
         if (metrics.pause) assert(metrics.pause.w >= 44 && metrics.pause.h >= 44, pagePath + ' ' + width + 'px pause target');
         if (metrics.blockPad) {
-          assert(metrics.blockPad.btns.length === 5 && metrics.blockPad.btns.every((b) => b.h >= 56 && b.w >= 52), pagePath + ' ' + width + 'px block pad buttons ' + JSON.stringify(metrics.blockPad.btns));
+          assert(metrics.blockPad.btns.length === 5 && metrics.blockPad.btns.every((b) => b.h >= 56 && b.w >= 44), pagePath + ' ' + width + 'px block pad buttons ' + JSON.stringify(metrics.blockPad.btns));
           assert(metrics.blockPad.right <= metrics.cw + 1 && metrics.blockPad.bottom <= metrics.blockPad.vh + 1, pagePath + ' ' + width + 'px block pad clipped ' + JSON.stringify(metrics.blockPad));
           assert(metrics.blockPad.docH <= metrics.blockPad.vh + 1, pagePath + ' ' + width + 'px block pad page overflow ' + JSON.stringify(metrics.blockPad));
         }
         if (metrics.pause && !pagePath.includes('gold-miner')) {
           assert(metrics.joyTools.length === 2 && metrics.joyTools.every((b) => b.h >= 44 && b.w >= 44 && b.right <= metrics.cw + 1 && b.bottom <= metrics.docH + 1), pagePath + ' ' + width + 'px joy tools ' + JSON.stringify(metrics.joyTools));
-          const metricsAnchor = pagePath.includes('block-drop') ? metrics.wellBottom : metrics.canvasBottom;
-          assert(metricsAnchor !== null && metrics.joyTools.every((b) => b.top >= metricsAnchor - 1), pagePath + ' ' + width + 'px joy tools overlap canvas: ' + JSON.stringify({ anchor: metricsAnchor, canvasBottom: metrics.canvasBottom, wellBottom: metrics.wellBottom, tools: metrics.joyTools }));
+          const separated = metrics.joyTools.every((button) => pagePath.includes('block-drop')
+            ? button.bottom <= metrics.canvasTop + 1 : button.top >= metrics.canvasBottom - 1);
+          assert(separated, pagePath + ' joy tools overlap canvas: ' + JSON.stringify(metrics));
         }
         if (metrics.hasGameTools || metrics.hasJoyRow) assert(metrics.docH <= metrics.vh + 1, pagePath + ' ' + width + 'px controls vertical overflow ' + metrics.docH + '>' + metrics.vh);
       }
@@ -2614,8 +2627,7 @@ async function main() {
       safeAreaApplied = true;
       await cdp.send('Emulation.setDeviceMetricsOverride', { width: 390, height: 844, deviceScaleFactor: 1, mobile: true });
 
-      /* 普通浏览器标签页：部分 Android 浏览器会报告非零 safe-area-inset-top，但顶部
-         已被浏览器 UI 占住；shellbar 必须保持 38px，不能因此多出一条空白。 */
+      /* Android 普通标签页顶部已被浏览器 UI 占住。游戏导航给返回键留出 44px，不额外叠加顶部安全区。 */
       await cdp.navigate(base + '/apps/arcade/games/star-raid.html');
       const safeBrowser = await cdp.evaluate(`(() => {
         const bar = document.querySelector('.studiokit-shellbar');
@@ -2635,9 +2647,9 @@ async function main() {
       assert(safeBrowser.paddingTop === 0 && Math.abs(safeBrowser.shellH - 38) <= 1, 'browser-mode shellbar grew with top safe-area: ' + JSON.stringify(safeBrowser));
       assert(Math.abs(safeBrowser.textAbove - safeBrowser.textBelow) <= 2, 'browser-mode shellbar text not centered: ' + JSON.stringify(safeBrowser));
       assert(safeBrowser.docH <= safeBrowser.viewH + 2, 'safe-area page overflow ' + JSON.stringify(safeBrowser));
-      record('390×844 浏览器模式安全区：shellbar 保持 38px 且文字居中（Android 空白回归防护）', true);
+      record('390×844 浏览器模式安全区：游戏返回键 44px，导航无顶部空白', true);
 
-      /* 独立窗口/安装到桌面：页面铺到状态栏下面，顶部安全区要加在 38px 导航行之外。 */
+      /* 独立窗口的状态栏安全区加在游戏导航行之外。 */
       standaloneStub = await cdp.send('Page.addScriptToEvaluateOnNewDocument', {
         source: `(() => {
           const real = window.matchMedia.bind(window);
@@ -2663,7 +2675,7 @@ async function main() {
         };
       })()`);
       assert(safe.standaloneClass && parseFloat(safe.paddingTop) >= 47, 'standalone shell safe-area padding ' + JSON.stringify(safe));
-      assert(safe.shellH >= 47 + 37 && safe.barVar === safe.shellH + 'px', 'standalone shell must add safe-area above the 38px row ' + JSON.stringify(safe));
+      assert(safe.shellH >= 47 + 37 && safe.barVar === safe.shellH + 'px', 'standalone shell must add safe-area above the navigation row ' + JSON.stringify(safe));
       assert(Math.abs(safe.textAbove - 47 - safe.textBelow) <= 2, 'standalone shell text not centered in nav row ' + JSON.stringify(safe));
       assert(safe.docH <= safe.viewH + 2, 'safe-area page overflow ' + JSON.stringify(safe));
 
@@ -3001,6 +3013,57 @@ async function main() {
     await cdp.screenshot('star-mow-320.png');
     record('星海突击 320px 星海割草 4 按钮入口 + 6 列无限道具行无溢出', true);
 
+    /* ---------- 有生涯身份后才显示首页视图切换 ---------- */
+    await cdp.navigate(base + '/apps/arcade/games/pendulum-tower.html?careerPanel=town');
+    await cdp.waitFor('window.ArcadeCareer?.available && ArcadeCareer.db');
+    assert(!(await cdp.evaluate('ArcadeCareer.db.getState("career")')), 'career panel deep link created a profile');
+    assert(!(await cdp.evaluate('document.querySelector("[data-career-panel=town]")')), 'career panel deep link opened without a profile');
+    const profile = await cdp.evaluate('ArcadeCareer.db.ensureCareer({originGameId: "pendulum-tower"})');
+    assert(profile.ok && profile.careerId, 'could not set up career hall fixture');
+    await cdp.evaluate('Arcade.Prefs.save({...Arcade.Prefs.load(), hallDefaultView: "classic", hallSort: "name"})');
+    await cdp.navigate(base + '/apps/arcade/');
+    await cdp.waitFor('!document.querySelector("[data-hall-modes]").hidden');
+    assert(await cdp.evaluate('document.querySelector("[data-career-view]").hidden && document.querySelector("[data-career-chapters]").hidden'), 'career content should be gated behind view and chapter unlock');
+    await cdp.click('[data-hall-view="career"]');
+    assert(await cdp.evaluate('document.querySelector("[data-classic-view]").hidden'), 'career switch did not change the directory layout');
+    await cdp.click('[href$="careerPanel=town"]');
+    await cdp.waitFor('!!document.querySelector("[data-career-panel=town] .ac-career-hub-back")', { timeout: 12000 });
+    await cdp.click('[data-career-panel=town] .ac-career-hub-back');
+    await cdp.waitFor('!document.querySelector("[data-hall-modes]")?.hidden && !document.querySelector("[data-classic-view]")?.hidden');
+
+    await cdp.navigate(base + '/apps/arcade/games/pendulum-tower.html');
+    await cdp.waitFor('window.ArcadeCareer?.available && ArcadeCareer.db');
+    const chapter = await cdp.evaluate(`ArcadeCareer.db.putQuests(${JSON.stringify(profile.careerId)}, [{nodeId:"story:C0.port_seen", kind:"story", status:"cleared"}])`);
+    assert(chapter.ok, 'chapter fixture failed');
+    await cdp.navigate(base + '/apps/arcade/');
+    await cdp.waitFor('!document.querySelector("[data-hall-modes]").hidden');
+    await cdp.click('[data-hall-view="career"]');
+    assert(await cdp.evaluate('!document.querySelector("[data-career-chapters]").hidden'), 'chapter entry missing after C0');
+    await cdp.evaluate(`(() => {
+      const option = document.querySelector('[data-default-view]');
+      option.value = 'career';
+      option.dispatchEvent(new Event('change'));
+    })()`);
+    await cdp.navigate(base + '/apps/arcade/');
+    await cdp.waitFor('document.querySelector("[data-career-view]")?.hidden === false');
+    await cdp.click('[href$="careerPanel=chapters"]');
+    await cdp.waitFor('!!document.querySelector("[data-career-panel=world-state] .ac-career-hub-back")', { timeout: 12000 });
+    await cdp.click('[data-career-panel=world-state] .ac-career-hub-back');
+    await cdp.waitFor('document.querySelector("[data-career-view]")?.hidden === false');
+    await cdp.click('[href$="careerPanel=mailbox"]');
+    await cdp.waitFor('!!document.querySelector("[data-career-panel=mailbox] .ac-career-hub-back")', { timeout: 12000 });
+    await cdp.click('[data-career-panel=mailbox] .ac-career-hub-back');
+    await cdp.waitFor('document.querySelector("[data-career-view]")?.hidden === false');
+    await cdp.click('[data-hall-view="classic"]');
+    await cdp.evaluate(`(() => {
+      const option = document.querySelector('[data-default-view]');
+      option.value = 'classic';
+      option.dispatchEvent(new Event('change'));
+    })()`);
+    await cdp.navigate(base + '/apps/arcade/');
+    await cdp.waitFor('!document.querySelector("[data-hall-modes]").hidden && !document.querySelector("[data-classic-view]").hidden');
+    assert(await cdp.evaluate('document.querySelector("[data-sort]").value') === 'name', 'career view switch overwrote classic order');
+    record('街机厅生涯视图解锁、告示板/信箱/章节返回、恢复经典默认和排序', true);
 
     /* ---------- 清理测试产生的本地数据 ---------- */
     await cdp.evaluate(`localStorage.clear()`);

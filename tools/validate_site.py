@@ -500,12 +500,9 @@ def validate(root=ROOT):
         snake_page = root / 'apps/arcade/games/snake-run.html'
         if snake_page.exists():
             snake_source = snake_page.read_text(encoding='utf-8')
-            for marker in ('data-turn="left"', 'data-turn="right"', 'function handleTurnInput', 'function rotateTurn'):
+            for marker in ('data-dir="U"', 'data-dir="L"', 'data-dir="D"', 'data-dir="R"', 'function queueSteer', "addEventListener('pointermove', readSwipe)"):
                 if marker not in snake_source:
-                    ok = fail(f'Arcade snake relative-turn marker missing: {marker}') and ok
-            for obsolete in ('data-dir="up"', 'data-dir="down"', 'data-dir="left"', 'data-dir="right"'):
-                if obsolete in snake_source:
-                    ok = fail(f'Arcade snake absolute direction button must be removed: {obsolete}') and ok
+                    ok = fail(f'Arcade snake steering marker missing: {marker}') and ok
         arcade_sw = root / 'apps/arcade/sw.js'
         if arcade_sw.exists():
             sw_source = arcade_sw.read_text(encoding='utf-8')

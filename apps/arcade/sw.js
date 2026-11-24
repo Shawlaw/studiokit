@@ -11,10 +11,10 @@
  */
 const VERSION = '0.18.0';
 const CACHE_PREFIX = 'studiokit-arcade-';
-/* v2 更新同一开发版本的中心页样式与续玩引擎。
+/* v3 更新同一开发版本的游戏触控、导航与生涯首页。
    全部读写都用 CACHE_NAME 常量，没有第二处硬编码的旧缓存名；
    激活时按 CACHE_PREFIX 前缀清理非当前版本缓存。 */
-const CACHE_NAME = `${CACHE_PREFIX}${VERSION}-v2`;
+const CACHE_NAME = `${CACHE_PREFIX}${VERSION}-v3`;
 const BASE = new URL('./', self.location.href);
 const SCOPE_PATH = BASE.pathname;
 const SHARED_PATH = new URL('../../shared/', BASE).pathname;

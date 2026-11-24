@@ -36,150 +36,60 @@
       pointer-events: none;
     }
     .ch-tip-float[hidden] { display: none; }
-    /* 0.8.2 禅模式控件压缩：冻结按钮并入道具行，不再占用独立按钮行，把高度还给画布（仅本页生效）。 */
     .game-hud [hidden] { display: none !important; }
     .zen-hud { color: #8ff3f3; white-space: nowrap; }
-    .zen-hud strong { color: var(--ac-ink); }
-    /* 冻结按钮沿用道具行 .tool-btn 样式；冻结时用青色高亮，按钮仍保持 ≥44px。 */
-    .joy-tools-below [data-zen-freeze].is-frozen {
+    body.has-zen-bar .block-hint { display: none; }
+    .block-tool-tray [data-zen-freeze].is-frozen {
       border-color: #41d9d9;
       color: #b8ffff;
-      background: linear-gradient(180deg, rgba(65, 217, 217, 0.32), rgba(65, 217, 217, 0.12));
+      background: rgba(65, 217, 217, 0.16);
     }
-    .joy-tools-below [data-zen-freeze][hidden] { display: none; }
-    /* 禅模式的 HUD 与画布内标签已提示操作，隐藏重复 hint；道具行压缩但按钮仍 ≥44px。 */
-    body.has-zen-bar .block-hint { display: none; }
-    body.has-joy-row .joy-tools-below { gap: 6px; margin-top: 2px; padding: 0; align-items: center; }
-    body.has-joy-row .joy-tools-below .tool-btn { min-height: 44px; height: 44px; padding: 0 4px; }
-    /* 禅模式再压缩页内间隙与底部留白（经典模式不受影响），把空間全部让给画布。 */
-    body.has-zen-bar .game-page { gap: 6px; padding-bottom: max(6px, env(safe-area-inset-bottom)); }
-    /* 禅模式省掉独立按钮行与 hint 后，把空间还给画布：四档手机与桌面实测画布比经典模式高 ≥44px。 */
-    @media (min-height: 561px) {
-      body.has-zen-bar.has-joy-row.has-extra-controls:not(.arcade-immersive) .stage-box {
-        height: min(
-          calc(100dvh - var(--studiokit-shellbar-h, 0px) - 190px - env(safe-area-inset-bottom, 0px)),
-          calc(min(520px, 100vw - 24px) * 610 / 340)
-        );
-      }
+    .block-tool-tray [hidden] { display: none; }
+
+    /* 道具在画布上方。拇指区的暂停键位于两组操作键之间。 */
+    .has-block-layout:not(.arcade-immersive) .game-page {
+      height: calc(100dvh - var(--studiokit-shellbar-h, 0px));
+      min-height: 0;
     }
-    @media (min-height: 561px) and (max-width: 360px) {
-      body.has-zen-bar.has-joy-row.has-extra-controls:not(.arcade-immersive) .stage-box {
-        height: min(
-          calc(100dvh - var(--studiokit-shellbar-h, 0px) - 182px - env(safe-area-inset-bottom, 0px)),
-          calc(min(520px, 100vw - 16px) * 610 / 340)
-        );
-      }
-    }
-    /* 0.8.4 棋盘优先画布：420×740 → 340×610。井口 240×480 从 y=46 撑到 526（画布高度 79%），
-       右侧信息栏压到 76px，底部留 84px 道具坞带；画布外不再有任何控制行。 */
-    .stage-box { aspect-ratio: 340 / 600; }
-    /* 道具坞：嵌在画布底部 80px 带内（等价于旧画布 y=520..600 的空区）。 */
-    .stage-box .joy-tools-below.block-tool-dock {
-      position: absolute;
-      left: 8px;
-      right: 8px;
-      bottom: 6px;
-      z-index: 2;
-      width: auto;
-      margin: 0;
-      padding: 0;
-      gap: 6px;
-      align-items: stretch;
-    }
-    /* 与共享 .touch-pad 的显示条件保持一致：桌面（精确指针 + 宽屏）隐藏道具坞，只用快捷键 1/2/Z 与顶部按钮。 */
-    @media (hover: none), (max-width: 620px) {
-      .stage-box .joy-tools-below.block-tool-dock { display: grid; }
-    }
-    .stage-box .joy-tools-below.block-tool-dock .tool-btn {
-      min-width: 0;
-      min-height: 44px;
-      height: 44px;
-      flex-direction: column;
-      justify-content: center;
-      padding: 2px 2px 3px;
-      gap: 1px;
-      border-radius: 12px;
-      border-color: rgba(124, 92, 255, 0.42);
-      background: rgba(13, 20, 46, 0.86);
-      box-shadow: 0 2px 10px rgba(0, 0, 0, 0.35);
-      -webkit-backdrop-filter: blur(6px);
-      backdrop-filter: blur(6px);
-      overflow: hidden;
-    }
-    .stage-box .joy-tools-below.block-tool-dock .tool-btn .tool-glyph {
-      flex: 0 0 auto;
-      font-size: 14px;
-      line-height: 1.1;
-    }
-    .stage-box .joy-tools-below.block-tool-dock .tool-btn .tool-name {
-      display: block;
+    .has-block-layout .game-topbar { flex: 0 0 auto; }
+    .has-block-layout .stage-wrap { align-items: center; }
+    #block-stage {
+      height: min(100%, calc(min(520px, 100vw - max(12px, env(safe-area-inset-left)) - max(12px, env(safe-area-inset-right))) * 610 / 340));
+      aspect-ratio: 340 / 610;
       max-width: 100%;
-      font-size: 10px;
-      line-height: 1.1;
-      overflow: hidden;
-      text-overflow: ellipsis;
     }
-    .stage-box .joy-tools-below.block-tool-dock .tool-btn .tool-count {
-      position: absolute;
-      top: 1px;
-      right: 2px;
-      min-width: 14px;
-      padding: 0 3px;
-      font-size: 9px;
-      line-height: 1.4;
-      box-shadow: 0 0 0 2px rgba(13, 20, 46, 0.92);
-    }
-    /* 拇指区暂停键是道具坞最后一格：地铁单手可及，和顶部按钮/双击画面共用同一暂停路径。 */
-    .stage-box .joy-tools-below.block-tool-dock .tool-btn[data-block-pause] {
-      border-color: rgba(255, 210, 63, 0.42);
-      background: rgba(30, 25, 12, 0.86);
-    }
-    .stage-box .joy-tools-below.block-tool-dock .tool-btn[data-block-pause] .tool-name {
-      color: var(--ac-accent);
-    }
-    /* 画布高度：桌面保留 hint（扣 192/144px）；触屏隐藏重复 hint，把 27px 还给画布（扣 148/136px）。
-       宽度上限按新比例 340:600 计算。 */
-    body.has-block-dock.has-joy-row:not(.arcade-immersive) .stage-box {
-      height: min(
-        calc(100dvh - var(--studiokit-shellbar-h, 0px) - 192px - env(safe-area-inset-bottom, 0px)),
-        calc(min(520px, 100vw - 24px) * 610 / 340)
-      );
-    }
-    body.has-zen-bar.has-block-dock.has-joy-row.has-extra-controls:not(.arcade-immersive) .stage-box {
-      height: min(
-        calc(100dvh - var(--studiokit-shellbar-h, 0px) - 146px - env(safe-area-inset-bottom, 0px)),
-        calc(min(520px, 100vw - 24px) * 610 / 340)
-      );
-    }
+    #block-tools { display: none; }
+    #block-tools .tool-btn { min-width: 0; min-height: 44px; justify-content: center; }
     @media (hover: none), (max-width: 620px) {
-      /* 触屏：按键自带「左移/右移/旋转/加速/落底」文字，重复的整行提示会让棋盘再少 27px。 */
+      #block-tools {
+        display: grid;
+        width: min(420px, 100%);
+        gap: 6px;
+        margin: 2px auto 0;
+        padding: 0 max(8px, env(safe-area-inset-right)) 0 max(8px, env(safe-area-inset-left));
+      }
       .block-hint { display: none; }
-      body.has-block-dock.has-joy-row:not(.arcade-immersive) .stage-box {
-        height: min(
-          calc(100dvh - var(--studiokit-shellbar-h, 0px) - 152px - env(safe-area-inset-bottom, 0px)),
-          calc(min(520px, 100vw - 24px) * 610 / 340)
-        );
-      }
-      body.has-zen-bar.has-block-dock.has-joy-row.has-extra-controls:not(.arcade-immersive) .stage-box {
-        height: min(
-          calc(100dvh - var(--studiokit-shellbar-h, 0px) - 140px - env(safe-area-inset-bottom, 0px)),
-          calc(min(520px, 100vw - 24px) * 610 / 340)
-        );
-      }
     }
-    @media (max-width: 360px) {
-      body.has-block-dock.has-joy-row:not(.arcade-immersive) .stage-box {
-        height: min(
-          calc(100dvh - var(--studiokit-shellbar-h, 0px) - 146px - env(safe-area-inset-bottom, 0px)),
-          calc(min(520px, 100vw - 16px) * 610 / 340)
-        );
-      }
-      body.has-zen-bar.has-block-dock.has-joy-row.has-extra-controls:not(.arcade-immersive) .stage-box {
-        height: min(
-          calc(100dvh - var(--studiokit-shellbar-h, 0px) - 134px - env(safe-area-inset-bottom, 0px)),
-          calc(min(520px, 100vw - 16px) * 610 / 340)
-        );
-      }
+    #block-touch-pad {
+      flex: 0 0 auto;
+      margin-top: 8px;
+      padding-bottom: max(var(--block-pad-lift, 8px), env(safe-area-inset-bottom));
+    }
+    #block-touch-pad [data-block-pause] {
+      flex: 0 0 44px;
+      min-width: 44px;
+      border-color: #62568a;
+      background: var(--ac-bg);
+      color: var(--ac-muted);
+    }
+    #block-touch-pad [data-block-pause]:active { color: var(--ac-ink); border-color: var(--ac-accent); }
+    body.arcade-immersive.has-block-layout,
+    html.studiokit-shell-standalone .has-block-layout { --block-pad-lift: calc(72px + env(safe-area-inset-bottom)); }
+    @media (max-height: 560px) {
+      body.arcade-immersive.has-block-layout,
+      html.studiokit-shell-standalone .has-block-layout { --block-pad-lift: calc(30px + env(safe-area-inset-bottom)); }
+      .has-block-layout:not(.arcade-immersive) .game-page { height: auto; }
+      .has-block-layout:not(.arcade-immersive) #block-stage { height: max(220px, calc(100dvh - 200px)); }
     }
     /* 0.8.1 可发现性修复：窄屏开始弹层压缩文案/间距，保证「开始游戏 / 挑战 6 关 / 🧘 禅模式」三个入口首屏完整可见。 */
     @media (max-width: 460px) {
@@ -188,6 +98,10 @@
       .overlay-panel p { margin-bottom: 10px; font-size: 12px; line-height: 1.5; }
       .overlay-panel .ac-btn { min-height: 44px; padding: 9px 14px; font-size: 14px; }
       .overlay-panel .ac-btn-secondary { margin-top: 6px; }
+    }
+    @media (max-width: 360px) {
+      #block-stage .overlay-panel { padding-block: 8px; }
+      #block-stage .overlay-panel p { margin-bottom: 7px; line-height: 1.3; }
     }
     /* 0.17 职业委托：一行戏内目标（title + 目标行数），320/375 最多两行，不新增按钮。 */
     .career-goal {
@@ -210,7 +124,7 @@
   <script src="../challenge/block-drop.js"></script>
   <title>俄罗斯方块 · 街机厅 · StudioKit</title>
 </head>
-<body class="arcade-body has-extra-controls" data-studiokit-app="arcade" data-studiokit-app-title="街机厅 Arcade" style="--ac-accent:#7c5cff; --card-accent:#7c5cff">
+<body class="arcade-body has-extra-controls has-block-layout" data-studiokit-app="arcade" data-studiokit-app-title="街机厅 Arcade" style="--ac-accent:#7c5cff; --card-accent:#7c5cff">
   <noscript><p class="ac-noscript">此游戏需要启用 JavaScript 才能运行。</p></noscript>
   <main class="game-page">
     <header class="game-topbar">
@@ -226,7 +140,7 @@
       <button type="button" class="ac-icon-btn" data-mute aria-label="切换音效">🔊</button>
     </header>
     <div class="stage-wrap">
-      <div class="stage-box">
+      <div class="stage-box" id="block-stage">
         <canvas class="game-canvas" aria-label="俄罗斯方块游戏画面"></canvas>
         <div class="overlay" data-overlay hidden>
           <div class="overlay-panel">
@@ -243,7 +157,7 @@
         </div>
       </div>
     </div>
-    <div class="touch-pad block-pad" data-touch-pad aria-label="俄罗斯方块触屏操作面板">
+    <div class="touch-pad block-pad" id="block-touch-pad" data-touch-pad aria-label="俄罗斯方块触屏操作面板">
       <div class="block-pad-group block-pad-move" role="group" aria-label="左右移动">
         <button type="button" class="touch-btn block-btn" data-touch="left" aria-label="左移，按住连续移动">
           <span class="block-btn-glyph" aria-hidden="true">←</span><span class="block-btn-label">左移</span>
@@ -252,6 +166,9 @@
           <span class="block-btn-glyph" aria-hidden="true">→</span><span class="block-btn-label">右移</span>
         </button>
       </div>
+      <button type="button" class="touch-btn block-btn" data-block-pause aria-label="暂停游戏" title="暂停游戏（P / Esc）">
+        <span class="block-btn-glyph" aria-hidden="true">⏸</span><span class="block-btn-label">暂停</span>
+      </button>
       <div class="block-pad-group block-pad-action" role="group" aria-label="旋转与下落">
         <button type="button" class="touch-btn block-btn" data-touch="rotate" aria-label="顺时针旋转">
           <span class="block-btn-glyph" aria-hidden="true">↻</span><span class="block-btn-label">旋转</span>
@@ -276,8 +193,7 @@
       const career = window.ArcadeCareer || null;
       const { clamp } = A.utils;
 
-      /* 0.8.4 棋盘优先画布：420×740 → 340×610。井口 240×480 占满画布高度（79%），
-         右侧信息栏压到 76px，底部留 84px 道具坞带，把画布空间还给棋盘。 */
+      /* 井口为 240×480，保留 340×610 逻辑坐标以兼容各模式。 */
       const W = 340;
       const H = 610;
       const COLS = 10;
@@ -780,12 +696,12 @@
         joyTools.element.appendChild(button);
         zenFreezeBtn = button;
       }
-      /* 道具坞列数：经典/挑战 = 换块 + 慢落 + 暂停（3 列）；禅模式再追加冻结（4 列）。 */
+      /* 经典和挑战各两件道具，禅模式再追加冻结。 */
       function syncDockColumns() {
         if (!joyTools || !joyTools.element) return;
         joyTools.element.style.gridTemplateColumns = zenUiActive()
-          ? 'repeat(4, minmax(0, 1fr))'
-          : 'repeat(3, minmax(0, 1fr))';
+          ? 'repeat(3, minmax(0, 1fr))'
+          : 'repeat(2, minmax(0, 1fr))';
       }
       function syncZenBar() {
         const active = zenUiActive();
@@ -889,28 +805,9 @@
       /* 0.8.2：冻结按钮复用道具行容器，经典模式隐藏；不设置 data-joy-tool（数量仍为 2）。 */
       setupZenFreezeButton();
 
-      /* 0.8.4：道具坞移进画布底部空区（井口下方无绘制内容），画布回收整行高度。
-         视口 ≤560px 高（横屏手机/矮窗口）时画布内空区不足，仍留在画布外避免压住井口。 */
-      const dockOutsideQuery = window.matchMedia('(max-height: 560px)');
-      function placeJoyDock() {
-        const el = joyTools.element;
-        if (!el) return;
-        const outside = dockOutsideQuery.matches;
-        document.body.classList.toggle('has-block-dock', !outside);
-        el.classList.toggle('block-tool-dock', !outside);
-        if (outside) {
-          const hint = document.querySelector('.block-hint');
-          if (hint && hint.parentNode) hint.parentNode.insertBefore(el, hint);
-        } else if (el.parentNode !== stageBox) {
-          stageBox.appendChild(el);
-        }
-      }
-      placeJoyDock();
-      if (typeof dockOutsideQuery.addEventListener === 'function') {
-        dockOutsideQuery.addEventListener('change', placeJoyDock);
-      } else if (typeof dockOutsideQuery.addListener === 'function') {
-        dockOutsideQuery.addListener(placeJoyDock);
-      }
+      joyTools.element.id = 'block-tools';
+      joyTools.element.classList.add('block-tool-tray');
+      stageBox.parentElement.before(joyTools.element);
 
       /* ---------- 流程 ---------- */
       function reset() {
@@ -2178,31 +2075,7 @@
         isPaused: () => state === 'paused',
       });
 
-      /* 0.8.4 拇指区暂停键：放在道具坞最后一格（底部拇指区），与顶部按钮、P/Esc、双击画面
-         共用同一 pauseByUser()（含存档与「继续」弹层）。 */
-      function setupDockPauseButton() {
-        if (!joyTools || !joyTools.element) return;
-        const button = document.createElement('button');
-        button.type = 'button';
-        button.className = 'tool-btn';
-        button.setAttribute('data-block-pause', '');
-        button.setAttribute('aria-label', '暂停游戏');
-        button.title = '暂停游戏（P）';
-        const glyph = document.createElement('span');
-        glyph.className = 'tool-glyph';
-        glyph.setAttribute('aria-hidden', 'true');
-        glyph.textContent = '⏸';
-        const name = document.createElement('span');
-        name.className = 'tool-name';
-        name.textContent = '暂停';
-        button.append(glyph, name);
-        button.addEventListener('click', () => {
-          if (state === 'playing') pauseByUser();
-        });
-        joyTools.element.appendChild(button);
-        syncDockColumns();
-      }
-      setupDockPauseButton();
+      document.querySelector('[data-block-pause]').addEventListener('click', pauseByUser);
 
       function syncMute() {
         dom.mute.textContent = A.Sfx.muted ? '🔇' : '🔊';

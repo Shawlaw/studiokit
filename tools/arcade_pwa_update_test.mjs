@@ -8,7 +8,7 @@
  * - PU-02 版本一致时 checkForUpdate() 返回「已是最新」且版本号 = 线上版本（不是已安装版本）
  * - PU-03 模拟新版本 SW 通知：横幅显示「新版本 + 当前版本」，可「稍后」关闭
  * - PU-04 独立窗口 + 顶部安全区：深色不透明 shellbar 贴顶，游戏顶栏独立合成层
- * - PU-05 普通标签页模式不受影响：shellbar 保持浅色 38px
+ * - PU-05 普通标签页无安全区空白，游戏返回键 ≥44px
  * - PU-06 真实发布新版本的完整链路（临时副本服务器，改 sw.js VERSION 模拟发版）：
  *   检查更新返回最新版本 0.18.1（不是已安装的 0.18.0）→ 新 SW 主动广播
  *   arcade-sw-update-ready(0.18.1) → 横幅文案含两个版本 → 新 SW 接管后页面未刷新时
@@ -192,7 +192,7 @@ async function main() {
     await cdp.screenshot('pwa-gomoku-standalone-top.png');
     record('PU-04 独立窗口游戏顶栏：不透明 + 独立合成层 + 舞台隔离', true);
 
-    /* ---------- PU-05 普通标签页不受影响 ---------- */
+    /* ---------- PU-05 普通标签页无需顶部安全区 ---------- */
     if (stub) {
       await cdp.send('Page.removeScriptToEvaluateOnNewDocument', { identifier: stub.identifier });
       stub = null;
@@ -202,11 +202,17 @@ async function main() {
     const browserBar = await cdp.evaluate(`(() => {
       const bar = document.querySelector('.studiokit-shellbar');
       const cs = getComputedStyle(bar);
-      return { standalone: document.documentElement.classList.contains('studiokit-shell-standalone'), bg: cs.backgroundColor, padTop: parseFloat(cs.paddingTop), h: Math.round(bar.getBoundingClientRect().height) };
+      const back = bar.querySelector('.studiokit-shell-home');
+      const rect = back.getBoundingClientRect();
+      const hit = document.elementFromPoint(rect.left + rect.width / 2, rect.bottom - 2);
+      return { standalone: document.documentElement.classList.contains('studiokit-shell-standalone'), padTop: parseFloat(cs.paddingTop), h: Math.round(bar.getBoundingClientRect().height), backH: rect.height, hittable: back.contains(hit) };
     })()`);
     assert(!browserBar.standalone, '浏览器模式泄漏 standalone: ' + JSON.stringify(browserBar));
-    assert(browserBar.padTop === 0 && Math.abs(browserBar.h - 38) <= 1, '普通标签页 shellbar 应保持 38px: ' + JSON.stringify(browserBar));
-    record('PU-05 普通标签页 shellbar 浅色 38px 不受影响', true);
+    assert(browserBar.padTop === 0 && browserBar.backH >= 44 && browserBar.h === 38 && browserBar.hittable, '游戏导航应提供可点的 44px 返回目标且保留 38px 导航高度: ' + JSON.stringify(browserBar));
+    await cdp.navigate(BASE + '/apps/arcade/');
+    const hallBarHeight = await cdp.evaluate(`document.querySelector('.studiokit-shellbar').getBoundingClientRect().height`);
+    assert(Math.abs(hallBarHeight - 38) <= 1, '中心页 shellbar 应保持 38px: ' + hallBarHeight);
+    record('PU-05 普通标签页游戏返回目标 44px，中心页导航 38px', true);
 
     /* ---------- PU-06 真实发布新版本的完整链路（临时副本，改 sw.js VERSION） ---------- */
     tempRoot = makeTempSite();

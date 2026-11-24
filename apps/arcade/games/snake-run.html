@@ -38,33 +38,33 @@
       text-align: left;
       overflow-wrap: anywhere;
     }
-    /* 0.8.6 双拇指相对转向：左右两个宽按钮，不再提供绝对方向的上/下/掉头按钮。 */
-    .touch-pad.snake-pad { grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 12px; }
-    .snake-pad .snake-dir { display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 3px; min-height: 64px; font-size: 22px; padding: 4px 8px; touch-action: manipulation; user-select: none; -webkit-user-select: none; }
-    .snake-dir-glyph { font-size: 26px; line-height: 1; }
-    .snake-dir-label { font-size: 12px; line-height: 1; font-weight: 700; letter-spacing: .5px; color: var(--ac-muted); }
-    .snake-pad .snake-dir:active .snake-dir-label { color: var(--ac-ink); }
+    .touch-pad.snake-pad { width: min(324px, 100%); grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 4px 8px; }
+    #snake-directions { padding-bottom: 0; }
+    .snake-pad .snake-dir { min-height: 44px; padding: 0; }
+    .snake-pad [data-dir="U"] { grid-column: 2; }
+    .snake-pad [data-dir="L"] { grid-area: 2 / 1; }
+    .snake-pad [data-dir="D"] { grid-area: 2 / 2; }
+    .snake-pad [data-dir="R"] { grid-area: 2 / 3; }
     @media (hover: none), (max-width: 620px) { .snake-hint { display: none; } }
-    /* 共享 .stage-box 的 aspect-ratio:420/740 会让新逻辑画布被纵向拉长、格子变长方形；
-       本页按 360×430 覆盖，保证 scaleX===scaleY、棋盘不变形。 */
-    .stage-box { aspect-ratio: 360 / 430; }
-    /* 全屏模式同样按 360:430 取高度，否则共享的 740/420 规则会把画布纵向拉伸。 */
-    body.arcade-immersive .stage-box {
+    /* 浏览器与 PWA 共用 360×430，方向键紧跟棋盘。 */
+    body.has-snake-pad:not(.arcade-immersive) .game-page { gap: 6px; }
+    body.has-snake-pad:not(.arcade-immersive) .stage-wrap { flex: 0 0 auto; }
+    #snake-stage {
+      aspect-ratio: 360 / 430;
+      height: min(
+        calc(100dvh - var(--studiokit-shellbar-h, 0px) - 261px - env(safe-area-inset-bottom, 0px)),
+        calc(min(520px, 100vw - 24px) * 430 / 360)
+      );
+    }
+    body.arcade-immersive #snake-stage {
       height: min(
         100%,
         calc((100vw - env(safe-area-inset-left, 0px) - env(safe-area-inset-right, 0px)) * 430 / 360)
       );
     }
-    /* 页面样式在 arcade.css 之后加载，高优先级选择器覆盖共享的 740/420 高度规则。 */
-    body.has-game-tools.has-snake-pad:not(.arcade-immersive) .stage-box {
-      height: min(
-        calc(100dvh - var(--studiokit-shellbar-h, 0px) - 249px - env(safe-area-inset-bottom, 0px)),
-        calc(min(520px, 100vw - 24px) * 430 / 360)
-      );
-    }
     /* 横屏矮视口：与共享 120px 规则一致，允许纵向滚动去找按钮，但别把棋盘压成一条。 */
     @media (orientation: landscape) and (max-height: 560px) {
-      body.has-game-tools.has-snake-pad:not(.arcade-immersive) .stage-box {
+      body.has-snake-pad:not(.arcade-immersive) #snake-stage {
         height: min(
           calc(100dvh - var(--studiokit-shellbar-h, 0px) - 120px),
           calc(min(520px, 100vw - 24px) * 430 / 360)
@@ -89,7 +89,7 @@
       <button type="button" class="ac-icon-btn" data-mute aria-label="切换音效">🔊</button>
     </header>
     <div class="stage-wrap">
-      <div class="stage-box">
+      <div class="stage-box" id="snake-stage">
         <canvas class="game-canvas" aria-label="贪吃蛇游戏画面"></canvas>
         <div class="overlay" data-overlay hidden>
           <div class="overlay-panel">
@@ -105,9 +105,11 @@
         </div>
       </div>
     </div>
-    <div class="touch-pad snake-pad" data-dpad aria-label="贪吃蛇双拇指转向面板：按蛇头当前方向左转或右转">
-      <button type="button" class="touch-btn snake-dir" data-turn="left" aria-label="按蛇头当前方向向左转 90 度"><span class="snake-dir-glyph" aria-hidden="true">↺</span><span class="snake-dir-label" aria-hidden="true">左转</span></button>
-      <button type="button" class="touch-btn snake-dir" data-turn="right" aria-label="按蛇头当前方向向右转 90 度"><span class="snake-dir-glyph" aria-hidden="true">↻</span><span class="snake-dir-label" aria-hidden="true">右转</span></button>
+    <div class="touch-pad snake-pad" id="snake-directions" data-dpad role="group" aria-label="贪吃蛇方向键">
+      <button type="button" class="touch-btn snake-dir" data-dir="U" aria-label="向上">↑</button>
+      <button type="button" class="touch-btn snake-dir" data-dir="L" aria-label="向左">←</button>
+      <button type="button" class="touch-btn snake-dir" data-dir="D" aria-label="向下">↓</button>
+      <button type="button" class="touch-btn snake-dir" data-dir="R" aria-label="向右">→</button>
     </div>
     <div class="touch-pad game-tools" data-game-tools aria-label="主动道具（快捷键 1 / 2）">
       <button type="button" class="touch-btn" data-joy-tool="slow" aria-label="慢速泡泡 6 秒，剩余 2 次（快捷键 1）" title="慢速泡泡（1）：6 秒内每格间隔增加 0.06 秒">
@@ -117,7 +119,7 @@
         <span aria-hidden="true">✂</span><span>轻身</span><span data-joy-count aria-hidden="true">1</span>
       </button>
     </div>
-    <p class="game-hint snake-hint">方向键 / WASD / 滑动转向 · 触屏按蛇头方向左右转 · 道具 1/2 · 吃满 20 个果实丰收收局 · P / Esc 暂停</p>
+    <p class="game-hint snake-hint">方向键 / WASD / 在棋盘上滑动 · 道具 1/2 · 吃满 20 个果实丰收收局 · P / Esc 暂停</p>
   </main>
   <script>
     (() => {
@@ -151,7 +153,7 @@
         hudScore: document.querySelector('[data-hud-score]'),
         hudHigh: document.querySelector('[data-hud-high]'),
         hudClassic: document.querySelectorAll('[data-hud-classic]'),
-        dpadButtons: document.querySelectorAll('[data-turn]'),
+        dpadButtons: document.querySelectorAll('[data-dpad] [data-dir]'),
         pause: document.querySelector('[data-pause]'),
         mute: document.querySelector('[data-mute]'),
         joySlow: document.querySelector('[data-joy-tool="slow"]'),
@@ -409,12 +411,11 @@
       let chDirQueue = [];
       let chGoalHintTimer = 0;
       let chHudSecond = -1;
-      let chSwipeStart = null;
 
       let snake = [];
       let dir = { x: 1, y: 0 };
       let nextDir = { x: 1, y: 0 };
-      /* 触屏相对转向的第二个待执行方向；每格最多消费一步，快速连点也不会直接掉头。 */
+      /* 第二个待执行方向。每移动一格最多消费一次转向。 */
       let queuedTurn = null;
       let food = null;
       let golden = null;
@@ -429,7 +430,7 @@
       let invul = 0;
       let state = 'ready';
       let recordSaved = false;
-      let swipeStart = null;
+      let steeringGesture = null;
       let keyWasDown = {};
       const JOY_GOAL_FOODS = 20;
       const SLOW_SECONDS = 6;
@@ -483,43 +484,69 @@
         return stepInterval + (slowTimer > 0 ? SLOW_INTERVAL : 0);
       }
 
-      /* 0.8.6 相对转向：左键永远逆时针 90°，右键永远顺时针 90°。
-         键盘/滑动仍是绝对方向；触屏连点基于待执行方向计算，但每格只转一次。 */
-      function rotateTurn(base, turn) {
-        return turn === 'left' ? { x: base.y, y: -base.x } : { x: -base.y, y: base.x };
-      }
-
       function syncDpad() {
+        if (state !== 'playing') steeringGesture = null;
         dom.dpadButtons.forEach((button) => {
           button.disabled = state !== 'playing';
         });
       }
 
-      function handleTurnInput(turn) {
-        if (state !== 'playing' || (turn !== 'left' && turn !== 'right')) return false;
+      function queueSteer(want) {
+        if (state !== 'playing') return false;
         if (mode === 'challenge') {
-          const last = chDirQueue.length ? chDirQueue[chDirQueue.length - 1] : dir;
-          return queueChallengeDir(rotateTurn(last, turn));
+          const last = chDirQueue[chDirQueue.length - 1] || dir;
+          return want.x * last.x + want.y * last.y === 0 && queueChallengeDir(want);
         }
         if (queuedTurn) return false;
-        const base = nextDir || dir;
-        const want = rotateTurn(base, turn);
+        if (want.x * nextDir.x + want.y * nextDir.y !== 0) return false;
         if (nextDir.x === dir.x && nextDir.y === dir.y) nextDir = want;
         else queuedTurn = want;
         return true;
       }
 
-      function bindDpad() {
-        const pad = document.querySelector('[data-dpad]');
-        if (!pad) return;
+      function bindSteering() {
         dom.dpadButtons.forEach((button) => {
-          button.addEventListener('pointerdown', (e) => {
-            e.preventDefault();
-            handleTurnInput(button.dataset.turn);
+          button.addEventListener('pointerdown', (event) => {
+            if (event.button !== 0) return;
+            event.preventDefault();
+            queueSteer(DIRS[button.dataset.dir]);
+          });
+          button.addEventListener('click', (event) => {
+            if (event.detail === 0) queueSteer(DIRS[button.dataset.dir]);
           });
           button.addEventListener('contextmenu', (e) => e.preventDefault());
         });
+        canvas.addEventListener('pointerdown', (event) => {
+          if (state !== 'playing' || steeringGesture || event.button !== 0) return;
+          steeringGesture = { id: event.pointerId, x: event.clientX, y: event.clientY, steered: false };
+        });
+        function readSwipe(event) {
+          const gesture = steeringGesture;
+          if (!gesture || gesture.id !== event.pointerId || gesture.steered) return;
+          const dx = event.clientX - gesture.x;
+          const dy = event.clientY - gesture.y;
+          const major = Math.max(Math.abs(dx), Math.abs(dy));
+          const minor = Math.min(Math.abs(dx), Math.abs(dy));
+          if (major < 12 || major < 1.2 * minor) return;
+          gesture.steered = true;
+          queueSteer(Math.abs(dx) > Math.abs(dy) ? DIRS[dx > 0 ? 'R' : 'L'] : DIRS[dy > 0 ? 'D' : 'U']);
+        }
+        function endSwipe(event) {
+          if (steeringGesture?.id === event.pointerId) steeringGesture = null;
+        }
+        canvas.addEventListener('pointermove', readSwipe);
+        canvas.addEventListener('pointerup', (event) => { readSwipe(event); endSwipe(event); });
+        canvas.addEventListener('pointercancel', endSwipe);
+        canvas.addEventListener('lostpointercapture', endSwipe);
         syncDpad();
+      }
+
+      function readSteeringKeys() {
+        Object.entries(DIR_KEYS).forEach(([key, direction]) => {
+          const down = input.isDown(key);
+          if (down && !keyWasDown[key]) queueSteer(direction);
+          keyWasDown[key] = down;
+        });
       }
 
       function syncJoyTools() {
@@ -622,7 +649,7 @@
         slowTimer = 0;
         shortRun = true;
         recordSaved = false;
-        swipeStart = null;
+        steeringGesture = null;
         resetSnake();
         food = null;
         spawnFood();
@@ -729,7 +756,7 @@
         ui.show({
           title: '贪吃蛇',
           text:
-            '吃果实变长，别撞墙、别咬到自己。<br/>触屏按蛇头方向左右转 / 方向键 / 滑动 · 道具 1/2<br/>吃满 20 个果实丰收收局 · 生命 ×3' +
+            '吃果实变长，别撞墙、别咬到自己。<br/>在棋盘上滑动，或按固定方向键转向 · 道具 1/2<br/>吃满 20 个果实丰收收局 · 生命 ×3' +
             (careerGoal ? '<br/>' + careerGoal : '') +
             careerNotice,
           btn: '开始游戏',
@@ -829,14 +856,6 @@
         if (shortRun && foodsEaten >= JOY_GOAL_FOODS) finish(true);
       }
 
-      function handleSwipe(dx, dy) {
-        if (Math.abs(dx) < 20 && Math.abs(dy) < 20) return;
-        const want = Math.abs(dx) > Math.abs(dy) ? { x: dx > 0 ? 1 : -1, y: 0 } : { x: 0, y: dy > 0 ? 1 : -1 };
-        if (want.x === -dir.x && want.y === -dir.y) return;
-        queuedTurn = null;
-        nextDir = want;
-      }
-
       function normalizeDir(value) {
         if (!value || !isFinite(value.x) || !isFinite(value.y)) return null;
         if (Math.abs(value.x) >= Math.abs(value.y)) return { x: value.x >= 0 ? 1 : -1, y: 0 };
@@ -872,23 +891,7 @@
           if (goldenTimer <= 0) golden = null;
         }
 
-        const keys = { left: ['ArrowLeft', 'a'], right: ['ArrowRight', 'd'], up: ['ArrowUp', 'w'], down: ['ArrowDown', 's'] };
-        Object.keys(keys).forEach((key) => {
-          const down = input.isDown(...keys[key]);
-          if (down && !keyWasDown[key]) {
-            const want = { left: { x: -1, y: 0 }, right: { x: 1, y: 0 }, up: { x: 0, y: -1 }, down: { x: 0, y: 1 } }[key];
-            if (!(want.x === -dir.x && want.y === -dir.y)) {
-              queuedTurn = null;
-              nextDir = want;
-            }
-          }
-          keyWasDown[key] = down;
-        });
-        if (input.pointer.wentDown) swipeStart = { x: input.pointer.x, y: input.pointer.y };
-        if (input.pointer.wentUp && swipeStart) {
-          handleSwipe(input.pointer.x - swipeStart.x, input.pointer.y - swipeStart.y);
-          swipeStart = null;
-        }
+        readSteeringKeys();
 
         if (stun <= 0) {
           const interval = effectiveStepInterval();
@@ -1083,7 +1086,7 @@
         chLastResult = null;
         chGoalHintTimer = 3;
         chHudSecond = -1;
-        chSwipeStart = null;
+        steeringGesture = null;
         lives = 1;
         score = 0;
         foodsEaten = 0;
@@ -1266,20 +1269,7 @@
         const hadSlow = slowTimer > 0;
         slowTimer = Math.max(0, slowTimer - dt);
         if (hadSlow && slowTimer <= 0) syncJoyTools();
-        Object.keys(DIR_KEYS).forEach((key) => {
-          const down = input.isDown(key);
-          if (down && !keyWasDown[key]) queueChallengeDir(DIR_KEYS[key]);
-          keyWasDown[key] = down;
-        });
-        if (input.pointer.wentDown) chSwipeStart = { x: input.pointer.x, y: input.pointer.y };
-        if (input.pointer.wentUp && chSwipeStart) {
-          const dx = input.pointer.x - chSwipeStart.x;
-          const dy = input.pointer.y - chSwipeStart.y;
-          if (Math.abs(dx) >= 20 || Math.abs(dy) >= 20) {
-            queueChallengeDir(Math.abs(dx) > Math.abs(dy) ? { x: dx > 0 ? 1 : -1, y: 0 } : { x: 0, y: dy > 0 ? 1 : -1 });
-          }
-          chSwipeStart = null;
-        }
+        readSteeringKeys();
         const interval = effectiveStepInterval();
         stepTimer += dt;
         let guard = 0;
@@ -1548,7 +1538,7 @@
       reset();
       state = 'ready';
       bindJoyTools();
-      bindDpad();
+      bindSteering();
       syncChallengePanel();
       if (location.hash === '#test') {
         window.__arcadeTest = {
@@ -1565,7 +1555,7 @@
               tools: { slow: tools.slow, trim: tools.trim },
               golden: !!golden,
               food: food ? { x: food.x, y: food.y } : null,
-              /* 0.8.6 相对转向验收：暴露当前与两级待执行方向，验证连点按格消费且不直接掉头。 */
+              /* 暴露当前与两级待执行方向，验证连点按格消费且不直接掉头。 */
               dir: { x: dir.x, y: dir.y },
               nextDir: { x: nextDir.x, y: nextDir.y },
               queuedTurn: queuedTurn ? { x: queuedTurn.x, y: queuedTurn.y } : null,

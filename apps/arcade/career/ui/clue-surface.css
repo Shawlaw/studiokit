@@ -215,6 +215,15 @@
   padding: 12px 8px 8px 16px;
   border-bottom: 1px solid var(--ac-career-line);
 }
+.ac-career-sheet__head .ac-career-hub-back {
+  display: inline-flex;
+  align-items: center;
+  min-height: 44px;
+  color: inherit;
+  white-space: nowrap;
+  font-size: 12px;
+  text-underline-offset: 3px;
+}
 
 .ac-career-sheet__title {
   flex: 1 1 auto;
