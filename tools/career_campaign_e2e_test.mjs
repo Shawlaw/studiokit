@@ -284,6 +284,10 @@ const EXPR = {
       Object.keys(exported.payload).forEach(function (store) {
         if (Array.isArray(exported.payload[store])) counts[store] = exported.payload[store].length;
       });
+      /* discovery-generation 是本地防旧标签回写的内部代次元数据，不是用户存档内容。 */
+      if (Array.isArray(exported.payload.state)) {
+        counts.state = exported.payload.state.filter(function (row) { return !row || row.key !== 'discovery-generation'; }).length;
+      }
     }
     return {
       ok: true,
