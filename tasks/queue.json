@@ -2253,6 +2253,21 @@
         "生涯解锁后首页可切换，能设置下次默认经典，三面板可返回"
       ],
       "evidence": "静态校验与构建通过，冒烟 117/117、触控布局 42/42、禅模式与积分 14/14、PWA 更新 9/9、离线 17/17、生涯收口 6/6。四档方块暂停触控、贪吃蛇抬手前转向与生涯三面板断网往返通过。本地 0.18.0，缓存修订 v3。"
+    },
+    {
+      "id": "T134",
+      "title": "Arcade 0.18.1 合入 main 并双端发布",
+      "kind": "agent",
+      "status": "IN_PROGRESS",
+      "dependsOn": ["T132", "T133"],
+      "ownerAuthorizationRequired": true,
+      "ownerAuthorizationNote": "OWNER_AUTHORIZATION: PUBLISH_TO_MAIN。Owner 当前任务明确要求「切回main分支，然后把迭代挪过去，然后发版吧」，按既有双端发布约定执行。",
+      "acceptance": [
+        "将两笔首页与触控迭代移入最新 main",
+        "0.18.1 版本一致，构建与回归验证通过",
+        "GitHub Pages 与 Cloudflare Pages 部署均成功并逐文件核验"
+      ],
+      "evidence": "基于已双端发布的 cfd8119（0.18.0），两笔迭代移入本地 main：fadd6de、ee13f26。"
     }
   ]
 }

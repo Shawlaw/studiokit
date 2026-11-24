@@ -249,7 +249,7 @@ Owner 两条真机反馈：①已安装 PWA 点「检查更新」显示的是已
 - [x] 双端发布：Owner 本轮明确授权发布（`PUBLISH_TO_MAIN`）；提交 `8493cf7`（PWA 更新检测）+ `78858e0`（游玩时长 + 文档）ff 合入 `main`；Actions run `45002523350` 四 job 全绿（Validate and build / Deploy GitHub Pages / Deploy Cloudflare Pages / Verify both deployments）；CI 与本地 `tools/verify_deploy.py` 均 **41/41** 双端逐文件一致（arcade 0.13.2 / badge 2.2.1 / venue 0.2.0）；双端线上无头 Chrome 各 8 项全过（中心页 0.13.2 + 检查更新返回线上 0.13.2 且不误报、SW 握手 0.13.2、缓存键 `studiokit-arcade-0.13.2-v1`、游戏页可加载、0 console error）
 - [ ] 真机复测：iOS 主屏幕 PWA 的「检查更新」提示时机与「累计时长/积分记录时长」待 Owner 确认（UNVERIFIED）
 
-## 0.18.0 星塔回响：六章、三终局与后日常（2026-11-23 本地未发布）
+## 0.18.0 星塔回响：六章、三终局与后日常（2026-11-24 已双端发布）
 
 - [x] C0–C5 六章（`campaign.json` + `chapter-00..05`）：信箱/告示板进入，无顶层生涯 CTA
 - [x] 三终局（武力/研究/救援）：独立 commission 实例、C4 后三选一、C5 唯一、幂等、失败可重试；后日常按方式差异

@@ -5,8 +5,9 @@
 - 仓库：<https://github.com/Shawlaw/studiokit>
 - GitHub Pages：<https://shawlaw.github.io/studiokit/>
 - Cloudflare Pages：<https://studiokit.pages.dev/>
-- 当前版本：Arcade `0.18.0`（本地未发布；线上已发布为 `0.14.0`）（2026-11-22 已双端发布；区块内容：同种弹种叠加有效时长（上限 180s）+「星海割草」无尽演武（四弹种常驻、大杀器满载无限、密集敌潮/掉落、Boss 四套专属弹幕、能量唯一瓶颈、受击只扣能量、不记分/不给星币/不写局内档）；挑战 6 关数据与判定零改动，无 key/Schema 变更。发布：提交 `4c90a4c` 推送 `main`；Actions run `45010510889` 四 job 全绿；CI 与本地 `tools/verify_deploy.py` 均 **41/41** 双端逐文件一致（arcade 0.14.0 / badge 2.2.1 / venue 0.2.0）；双端线上无头 Chrome 实测 0.14.0、星海割草入口/常驻状态/无 console error；SW `studiokit-arcade-0.14.0-v1`；设计与回滚见 `apps/arcade/DESIGN-0.14.0.md`；真机手感 UNVERIFIED。）
-- 最近发布：Arcade `0.14.0`（`0.15.0` 尚未发布，等待 Owner 授权）（2026-11-22，已双端发布）
+- 本次发布版本为 Arcade `0.18.1`。包含首页续玩与排序记忆、触控与游戏返回、生涯首页切换。
+- Arcade `0.18.0` 已于 2026-11-24 双端发布，包含星塔回响与生涯 96 份委托。提交 `cfd8119` 的四个部署任务全部成功。见 [Actions 发布记录](https://github.com/Shawlaw/studiokit/actions/runs/45411473922)。
+- 更早发布的 Arcade `0.13.3`（2026-11-22）
   - 批次内容：Cloudflare Pages 无后缀 URL 下的游戏识别修复（计时全 0 根因）；测试服务器新增无后缀回退、smoke 108 → 109；无 key/Schema 变更；保留 `apps/arcade/diag.html` 供真机复验
   - 发布：提交 `b3a8c7e` 推送 `main`；Actions run `45007754972` 四 job 全绿；CI 与本地 `tools/verify_deploy.py` 均 **41/41** 双端逐文件一致（arcade 0.13.3 / badge 2.2.1 / venue 0.2.0）；双端线上无头 Chrome 实测：CF 无后缀 URL `currentGame=block-drop`、游玩 1.6s 记到 1606ms，GH `.html` 正常，诊断页 iframe 显示「计时正常 3508ms」，0 console error；真机 iOS 复验待 Owner（UNVERIFIED）
 - 最近发布：Arcade `0.13.2`（2026-11-22，已双端发布）
@@ -206,15 +207,15 @@ OWNER_AUTHORIZATION: PUBLISH_TO_MAIN
      --retries 15 --delay 8
    ```
 
-   预期：两个 URL 的 41 个关键文件哈希一致（含 16 款游戏页与 `arcade.css`），Arcade 版本为 `0.9.0`，Badge 为 `2.2.1`，Venue 为 `0.2.0`，manifest 为 `application/manifest+json`。
+   预期：两个 URL 的 41 个关键文件哈希一致（含 16 款游戏页与 `arcade.css`），Arcade 版本与本次提交的注册表一致，Badge 为 `2.2.1`，Venue 为 `0.2.0`，manifest 为 `application/manifest+json`。
 4. 打开两个门户，确认工具卡片加载、源码链接、Badge Studio 与街机厅入口可点击。
-5. 打开 Arcade 中心页，确认线上版本 `0.9.0` / 16 款（13 挑战 + 3 棋牌），并检查：
+5. 打开 Arcade 中心页，确认本次发布的版本和 16 款游戏（13 挑战 + 3 棋牌），并检查：
    - 每款游戏都有 2 个主动道具按钮（黄金矿工保留 4 个），按钮在画布外/内均不遮挡核心操作；三款新棋牌无倒计时、无下注、无签到/每日奖励。
    - 三款新棋牌可开始/暂停/续玩，五子棋先预览再确认、纸牌接龙无限翻回牌库；320/375 宽度下无横向溢出。
    - 中心页「惊喜一下」可随机打开一款，返回后再点不会立刻重复；页脚显示「快乐约定」。
    - `游玩统计`、`分享`、`安装到桌面`、`预载全部游戏` 的既有行为无回归；预载总数 27 项（11 外壳 + 16 游戏）；SW 缓存键为 `studiokit-arcade-0.9.0-v1`。
    - 经典/禅模式结算点「再来一局」回到开始弹层并可重新选模式；挑战关仍可直接重试或返回选关。
-   - 贪吃蛇触屏仅有左右两枚相对转向按钮，左右分区且 ≥44px；连点按格执行，不出现单格掉头。
+   - 贪吃蛇可用固定四向键与即时滑动，触控目标至少 44px，方向缓冲逐格执行。
    - 自然收尾：2048 达成、砖块第 3 关、重力 3000m、贪吃蛇 20 果实、方块 40 行、星海 Boss CLEAR、赛车 5000m 至少抽测 3 项。
    - 暂停后继续、刷新续玩与旧档（缺新字段）恢复至少抽测 3 款；道具次数与计时不丢失、不翻倍。
 6. 打开 Badge Studio，确认共享导航、预览和导出正常。

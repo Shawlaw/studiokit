@@ -848,11 +848,12 @@ export async function cleanup(ctx) {}
 
 ### 20.6 版本与发布
 
-- 0.18.0 版本链与 SW `studiokit-arcade-0.18.0-v3`。SW/verify_deploy 含 campaign/chapter/ending/npc/side/campaign-core/ending-reducer/world-state。
+- 0.18.0 版本链与 SW `studiokit-arcade-0.18.0-v1`。SW/verify_deploy 含 campaign/chapter/ending/npc/side/campaign-core/ending-reducer/world-state。
+- 任何发布需 Owner `OWNER_AUTHORIZATION: PUBLISH_TO_MAIN`。G18 需独立审核并记录真机／读屏器验证情况。
 
-### 20.7 已开启生涯后的首页（本地改版）
+### 20.7 已开启生涯后的首页（0.18.1）
 
 - 在经典街机首次发现和开启生涯之前，首页维持原入口。首页只读已存在数据库的 `state['career']` 和对应 `profiles`，确认生涯身份后显示视图切换。
 - 首次默认经典。可在首页临时切换到生涯，或用「默认打开」保存 `prefs:v1.hallDefaultView`。切换视图不关闭生涯或重置任何进度。
 - 生涯视图复用游戏页的告示板、信箱与已解锁章节。宿主页只向已存在的生涯提供这些快捷入口。首页不加载 bridge，章节仍以 C0 旗标为前提。
-- 仍只本地分支；任何发布需 Owner `OWNER_AUTHORIZATION: PUBLISH_TO_MAIN`；G18 需独立审核并记录真机/读屏器 UNVERIFIED。
+- 应用版本为 0.18.1，离线缓存键为 `studiokit-arcade-0.18.1-v3`，生涯内容版本沿用 0.18.0。

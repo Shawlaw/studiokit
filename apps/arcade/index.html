@@ -54,13 +54,13 @@
     <section class="hall-career" data-career-view hidden aria-labelledby="hall-career-title">
       <h2 id="hall-career-title">折光港</h2>
       <div class="hall-career-links">
-        <a class="hall-career-main" href="./games/pendulum-tower.html?careerPanel=town">
+        <a class="hall-career-main" data-career-panel-link="town">
           <strong>告示板</strong><span>接取委托，查看港口事务</span>
         </a>
-        <a href="./games/pendulum-tower.html?careerPanel=mailbox">
+        <a data-career-panel-link="mailbox">
           <strong>信箱</strong><span>查看已收到的线索和来信</span>
         </a>
-        <a href="./games/pendulum-tower.html?careerPanel=chapters" data-career-chapters hidden>
+        <a data-career-panel-link="chapters" data-career-chapters hidden>
           <strong>章节</strong><span>继续星塔回响</span>
         </a>
       </div>
@@ -209,7 +209,7 @@
 
     <footer class="hall-foot">
       <p>离开游戏时会自动保存可续玩的进度。</p>
-      <span>v<span data-hall-version>0.18.0</span></span>
+      <span>v<span data-hall-version>0.18.1</span></span>
     </footer>
 
     <dialog class="ac-dialog" data-install-dialog aria-labelledby="install-title">
@@ -1122,6 +1122,7 @@
       const defaultView = document.querySelector('[data-default-view]');
       const classicView = document.querySelector('[data-classic-view]');
       const careerView = document.querySelector('[data-career-view]');
+      const careerLinks = careerView.querySelectorAll('[data-career-panel-link]');
       const careerChapters = document.querySelector('[data-career-chapters]');
       const recordsLink = document.querySelector('.hall-head-link');
       const storyEntry = document.querySelector('[data-story-entry]');
@@ -1188,6 +1189,13 @@
         hallModes.hidden = !career?.active;
         careerChapters.hidden = !career?.chapters;
         storyEntry.hidden = !career?.chapters;
+        for (const link of careerLinks) {
+          if (career?.active && !link.hidden) {
+            link.href = './games/pendulum-tower.html?careerPanel=' + link.dataset.careerPanelLink;
+          } else {
+            link.removeAttribute('href');
+          }
+        }
         const preferred = A.Prefs.load().hallDefaultView === 'career' ? 'career' : 'classic';
         defaultView.value = preferred;
         if (!career?.active) {
