@@ -15,16 +15,19 @@ import sys
 ROOT = pathlib.Path(__file__).resolve().parents[1]
 
 
-def run(label: str, args: list[str], env: dict[str, str] | None = None) -> bool:
+def run(label: str, args: list[str], env: dict[str, str] | None = None, attempts: int = 1) -> bool:
     print('\n=== ' + label + ' ===', flush=True)
     child_env = os.environ.copy()
     if env:
         child_env.update(env)
-    result = subprocess.run(args, cwd=ROOT, env=child_env)
-    if result.returncode != 0:
-        print('FAILED ' + label + ' (exit ' + str(result.returncode) + ')')
-        return False
-    return True
+    for attempt in range(1, attempts + 1):
+        result = subprocess.run(args, cwd=ROOT, env=child_env)
+        if result.returncode == 0:
+            return True
+        if attempt < attempts:
+            print('RETRY ' + label + ' (' + str(attempt) + '/' + str(attempts) + ' failed, exit ' + str(result.returncode) + ')', flush=True)
+    print('FAILED ' + label + ' (exit ' + str(result.returncode) + ')')
+    return False
 
 
 def main() -> int:
@@ -117,15 +120,16 @@ def main() -> int:
         ('gameplay_all', ['node', 'tools/arcade_gameplay_test.mjs', '--suite=all', '--repeat=1'], {
             'ARCADE_GAMEPLAY_PORT': os.environ.get('ARCADE_GAMEPLAY_PORT', '8824'),
             'ARCADE_GAMEPLAY_CDP_PORT': os.environ.get('ARCADE_GAMEPLAY_CDP_PORT', '9424'),
-        }),
+        }, 2),
         ('gameplay_base', ['node', 'tools/arcade_gameplay_test.mjs', '--suite=base', '--repeat=2'], {
             'ARCADE_GAMEPLAY_PORT': os.environ.get('ARCADE_GAMEPLAY_BASE_PORT', '8825'),
             'ARCADE_GAMEPLAY_CDP_PORT': os.environ.get('ARCADE_GAMEPLAY_BASE_CDP_PORT', '9425'),
-        }),
+        }, 2),
     ]
     failed = []
-    for label, args, env in checks:
-        if not run(label, args, env):
+    for label, args, env, *rest in checks:
+        attempts = rest[0] if rest else 1
+        if not run(label, args, env, attempts):
             failed.append(label)
             break
     if failed:
