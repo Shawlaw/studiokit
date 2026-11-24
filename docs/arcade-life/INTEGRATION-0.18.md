@@ -29,7 +29,7 @@
 | 0.17 回归 | 96/96 tiers、resume 45/45、mobile 318、PWA 17、a11y 75、smoke 113、review 5/5、gameplay 104/104（G18 复跑） |
 | 聚合门禁 | `py -3 tools/arcade_run_all_gates.py` ALL GATES PASSED（96 单次跑完、campaign/world/E2E/回归全绿） |
 | G18 | 独立复审 PASS（HEAD `a84d15f` 后补 W11；证据仓库外 `G18-AUDIT-2.md`） |
-| 全分支复审修复 | 第一/二轮见前；第三轮 2 P1 + 5 P2 在 `009bc77` 修复：终局/首通单事务、历史半提交入口修复、制造基准价、动作式发现、32MiB 备份、C2/C4 evidenceAll；新增 3 个回归门禁，`009bc77` 完整聚合 **ALL GATES PASSED** |
+| 全分支复审修复 | 第一/二/三轮见前；第四轮 1 P1 + 4 P2 在 `ab79c79` 修复：终局按规范收据幂等、发现代次防旧标签回写、旧档补发首通、导出共享 20000 行/32MiB、C2/C4 回退证据与真实标题；新增同路线回归，`ab79c79` 完整聚合 **ALL GATES PASSED** |
 | 待跑 | 真机/读屏器/PWA 安装态 UNVERIFIED；在线双端 verify_deploy 未授权未运行 |
 
 ## 4. 已知问题（试玩与残留风险）
