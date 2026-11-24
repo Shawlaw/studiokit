@@ -52,6 +52,8 @@ try {
   {
     const a = await page();
     const b = await page();
+    const c = await page();
+    const d = await page();
     await load(a);
     const career = await a.evaluate(`(async () => { const c = await ArcadeCareer.db.ensureCareer({}); return c.careerId; })()`);
     await a.evaluate(`(async () => { const db = ArcadeCareer.db; await db.resetDiscovery(); await db.resetDiscovery(); })()`);
@@ -63,9 +65,15 @@ try {
     check('替换导入前置：本地代次为 2，导出档不含内部代次行', genBefore === 2 && exported && exported.ok !== false && typeof text === 'string' && JSON.parse(text).state.every((row) => row.key !== 'discovery-generation'), { genBefore, keys: exported && exported.payload ? Object.keys(exported.payload) : null });
 
     await load(b);
+    await load(c);
+    await load(d);
     const bGen = await b.evaluate(`(async () => { const snap = await ArcadeCareer.db.getDiscoverySnapshot(); return snap.generation; })()`);
     await b.evaluate(`(async () => { const C = ArcadeCareer; C.observe('pair.match', { symbol: 'A', level: 1, moves: 1 }); return C.finish({ mode: 'classic', outcome: 'won', stats: { level: 1, moves: 1, score: 10 } }); })()`);
     await sleep(250);
+    const staleSnapshot = await d.evaluate(`ArcadeCareer.state()`);
+    await c.evaluate(`ArcadeCareer.openSettings()`);
+    await c.waitFor(`!!document.querySelector('[data-career-panel="settings"] #ac-career-settings-hints')`, { timeout: 5000 });
+    const panelBefore = await c.evaluate(`(() => { const btn = document.querySelector('[data-career-panel="settings"] #ac-career-settings-hints'); return { checked: btn && btn.getAttribute('aria-checked') }; })()`);
     const beforeImport = await a.evaluate(`(async () => { const s = await ArcadeCareer.db.getDiscoveryState(); return { clues: Object.keys((s && s.clues) || {}).length }; })()`);
     const imported = await a.evaluate(`(async () => ArcadeCareer.backup.importCareerLife(${JSON.stringify(text)}, { mode: 'replace' }))()`);
     const afterImport = await a.evaluate(`(async () => { const snap = await ArcadeCareer.db.getDiscoverySnapshot(); const s = snap.state; return { generation: snap.generation, clues: Object.keys((s && s.clues) || {}).length }; })()`);
@@ -75,6 +83,19 @@ try {
     await sleep(250);
     const post = await a.evaluate(`(async () => { const snap = await ArcadeCareer.db.getDiscoverySnapshot(); const rows = await new Promise((res) => { const o = indexedDB.open('studiokit:arcade:career'); o.onsuccess = () => { const db = o.result; const tx = db.transaction('discovery'); const all = tx.objectStore('discovery').getAll(); all.onsuccess = () => { res(all.result.length); db.close(); }; }; }); return { generation: snap.generation, clues: Object.keys((snap.state && snap.state.clues) || {}).length, discoveryRows: rows }; })()`);
     check('旧代次标签结算被拒绝：state.clues 与独立 discovery 表仍为空，代次不回退', staleWrite === null || (staleWrite && staleWrite.persisted !== true) ? post.clues === 0 && post.discoveryRows === 0 && post.generation === 3 : false, { staleWrite, post });
+
+    const staleSave = await d.evaluate(`(async () => { const r = await ArcadeCareer.saveState(${JSON.stringify(staleSnapshot)}); const s = await ArcadeCareer.db.getDiscoveryState(); return { r, clues: Object.keys((s && s.clues) || {}).length }; })()`);
+    check('公开 saveState 不能绕过代次：旧快照返回明确冲突，两张表无旧线索', staleSave && staleSave.r && staleSave.r.ok === false && (staleSave.r.error === 'stale-generation' || staleSave.r.reason === 'stale-generation') && staleSave.clues === 0, staleSave);
+    const freshSave = await d.evaluate(`(async () => { const current = ArcadeCareer.state(); const r = await ArcadeCareer.saveState(current); const s = await ArcadeCareer.db.getDiscoveryState(); return { r, clues: Object.keys((s && s.clues) || {}).length, generation: (await ArcadeCareer.db.getDiscoverySnapshot()).generation }; })()`);
+    check('冲突重载后的新快照可正常保存', freshSave && freshSave.r && freshSave.r.ok === true && freshSave.clues === 0 && freshSave.generation === 3, freshSave);
+
+    /* 设置面板：第一次冲突必须恢复为真实偏好并提示失败；第二次可真正关闭。 */
+    const panelPath = `(() => { const panel = document.querySelector('[data-career-panel="settings"]'); const btn = panel && panel.querySelector('#ac-career-settings-hints'); const status = panel && panel.querySelector('.ac-career-status'); const live = panel && panel.querySelector('[role="status"]'); return { checked: btn && btn.getAttribute('aria-checked'), stateText: btn && btn.textContent, status: status && !status.hidden ? status.textContent : null, live: live ? live.textContent : null }; })()`;
+    const first = await c.evaluate(`(async () => { document.querySelector('[data-career-panel="settings"] #ac-career-settings-hints').click(); await new Promise((r) => setTimeout(r, 500)); const db = await ArcadeCareer.db.getDiscoveryState(); const panel = document.querySelector('[data-career-panel="settings"]'); const btn = panel.querySelector('#ac-career-settings-hints'); const status = panel.querySelector('.ac-career-status'); const live = Array.from(document.querySelectorAll('[role="status"]')).map((n) => n.textContent).filter(Boolean).join('|'); return { checked: btn.getAttribute('aria-checked'), text: btn.textContent, status: status && !status.hidden ? status.textContent : null, live: live || null, hints: db && db.hintsEnabled, memory: ArcadeCareer.state().hintsEnabled }; })()`);
+    const firstOk = panelBefore.checked === 'true' && first.checked === 'true' && first.hints === true && first.memory === true && first.status && first.status.indexOf('没能') >= 0 && first.live && first.live.indexOf('没能') >= 0;
+    check('旧标签设置开关冲突：aria-checked/状态/内存/DB 一致保持开启并提示重试', firstOk, { panelBefore, first, panelPath });
+    const second = await c.evaluate(`(async () => { document.querySelector('[data-career-panel="settings"] #ac-career-settings-hints').click(); await new Promise((r) => setTimeout(r, 300)); const db = await ArcadeCareer.db.getDiscoveryState(); const panel = document.querySelector('[data-career-panel="settings"]'); const btn = panel.querySelector('#ac-career-settings-hints'); const status = panel.querySelector('.ac-career-status'); return { checked: btn.getAttribute('aria-checked'), text: btn.textContent, status: status && !status.hidden ? status.textContent : null, hints: db && db.hintsEnabled, memory: ArcadeCareer.state().hintsEnabled }; })()`);
+    check('紧接一次重试可真正关闭并持久化', second && second.checked === 'false' && second.hints === false && second.memory === false && second.status && second.status.indexOf('收起来') >= 0, second);
 
     /* 档案携带更低/更高代次都只按本地值推进，绝不能把本地代次改小或跳大。 */
     const variants = await a.evaluate(`(async () => {

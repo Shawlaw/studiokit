@@ -2473,7 +2473,7 @@
           internal.discoveryState = normalized;
           if (isSilentTestOnly()) return { ok: false, error: 'test-silent' };
           if (!internal.dbUsable) return { ok: false, error: 'db-unavailable' };
-          return writeDbState(normalized, null).then(function (writeResult) {
+          return writeDbState(normalized, null, { type: 'SAVE_STATE' }).then(function (writeResult) {
             if (isStaleGenerationResult(writeResult)) {
               return reloadAfterStaleGeneration().then(function () { return { ok: false, error: 'stale-generation' }; });
             }
@@ -2485,7 +2485,7 @@
     );
   }
 
-  function setHintsEnabled(enabled) {
+  function setHintsEnabledDetailed(enabled) {
     return safeAsync(
       'set-hints',
       function () {
@@ -2519,19 +2519,32 @@
               warnOnce('settings-apply', err);
             }
           }
-          if (isSilentTestOnly() || !internal.dbUsable) return wanted;
+          if (isSilentTestOnly() || !internal.dbUsable) return { ok: true, hintsEnabled: wanted, state: stateSnapshot() };
           return writeDbState(next, null, { type: 'SET_HINTS' }).then(function (writeResult) {
             if (isStaleGenerationResult(writeResult)) {
-              /* 旧页代次落后：放弃旧快照，重新载入最新状态，返回未保存。 */
-              return reloadAfterStaleGeneration().then(function () { return false; });
+              /* 旧页代次落后：放弃旧快照，重新载入最新状态；返回结构化冲突供面板恢复。 */
+              return reloadAfterStaleGeneration().then(function () {
+                var latest = currentStateSnapshot();
+                return { ok: false, error: 'stale-generation', hintsEnabled: !!latest.hintsEnabled, state: clone(latest) };
+              });
             }
-            if (!writeResult || !writeResult.ok) warnOnce('db-write', (writeResult && writeResult.error) || 'write-failed');
-            return wanted;
+            if (!writeResult || !writeResult.ok) {
+              warnOnce('db-write', (writeResult && writeResult.error) || 'write-failed');
+              return { ok: false, error: (writeResult && (writeResult.error || writeResult.reason)) || 'write-failed', hintsEnabled: wanted, state: clone(next) };
+            }
+            return { ok: true, hintsEnabled: wanted, state: clone(next) };
           });
         });
       },
-      false
+      { ok: false, error: 'exception' }
     );
+  }
+
+  /** 公开 API 保持 ADR 的布尔返回；面板使用详细结果以区分“关闭成功”和“未保存”。 */
+  function setHintsEnabled(enabled) {
+    return Promise.resolve(setHintsEnabledDetailed(enabled)).then(function (result) {
+      return !!(result && result.ok && result.hintsEnabled);
+    });
   }
 
   /* UI 未加载/静默时的统一结构化返回（lead 冻结：openMailbox/openClue/openSettings）。 */
@@ -2703,7 +2716,7 @@
       originIntro: originIntro,
       openClue: markClueOpened,
       followLetter: followLetter,
-      setHintsEnabled: setHintsEnabled,
+      setHintsEnabled: setHintsEnabledDetailed,
       resetDiscovery: uiResetDiscovery,
       announce: announceToUser,
       backup: backupFacade(),

@@ -325,7 +325,7 @@
 
     function applyToggleResult(result, next, previous) {
       if (result && isObject(result) && result.ok === false) {
-        hintsEnabled = previous;
+        hintsEnabled = result.state && typeof result.state.hintsEnabled === 'boolean' ? result.state.hintsEnabled : previous;
         applySwitch();
         setStatus(STATUS_SAVE_FAILED);
         announce(STATUS_SAVE_FAILED);

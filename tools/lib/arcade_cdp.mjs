@@ -186,11 +186,54 @@ function readDevToolsActivePort(profile, timeoutMs = 10000) {
   });
 }
 
+function verifyBrowserCdp(version, timeoutMs = 4000) {
+  const url = version && version.webSocketDebuggerUrl;
+  if (typeof url !== 'string' || !url) return Promise.reject(new Error('CDP /json/version 缺少 webSocketDebuggerUrl'));
+  if (typeof version.Browser !== 'string' || !/^Chrome\//.test(version.Browser)) {
+    return Promise.reject(new Error('CDP /json/version 不是 Chrome: ' + version.Browser));
+  }
+  return new Promise((resolve, reject) => {
+    let settled = false;
+    let ws = null;
+    const timer = setTimeout(() => finish(new Error('CDP Browser.getVersion 超时')), timeoutMs);
+    function finish(err, value) {
+      if (settled) return;
+      settled = true;
+      clearTimeout(timer);
+      try { if (ws) ws.close(); } catch (closeErr) { /* ignore */ }
+      if (err) reject(err); else resolve(value);
+    }
+    try {
+      ws = new WebSocket(url);
+    } catch (err) {
+      finish(err);
+      return;
+    }
+    ws.addEventListener('open', () => {
+      try { ws.send(JSON.stringify({ id: 1, method: 'Browser.getVersion' })); } catch (err) { finish(err); }
+    });
+    ws.addEventListener('message', (event) => {
+      try {
+        const msg = JSON.parse(String(event.data));
+        if (msg && msg.id === 1) {
+          const product = msg.result && msg.result.product;
+          if (typeof product === 'string' && /^Chrome\//.test(product)) finish(null, product);
+          else finish(new Error('CDP WebSocket 不是 Chrome: ' + String(product)));
+        }
+      } catch (err) {
+        finish(err);
+      }
+    });
+    ws.addEventListener('error', () => finish(new Error('CDP WebSocket 连接失败')));
+  });
+}
+
 /**
  * 启动本机 Chrome 并等待 DevTools 端口就绪。
  * 每次调用使用独立 mkdtemp profile；port 省略或传 0 时由 Chrome 选择动态端口，
  * 从该 profile 的 DevToolsActivePort 读取实际端口，绝不连接端口上已有的其它服务。
- * 固定端口在启动前先检测占用；冲突时无副作用退出，不触碰占用者。
+ * 固定端口在启动前先检测占用，并在就绪后通过 Chrome 身份 + Browser.getVersion
+ * （CDP WebSocket）确认归属；冲突/替身时无副作用退出，不触碰占用者。
  * @param {{port?: number, chromePath?: string, profilePrefix?: string, windowSize?: string, headless?: boolean, extraArgs?: string[]}} options
  * @returns {Promise<{chrome: import('node:child_process').ChildProcess, profile: string, port: number, dynamicPort: boolean}>}
  */
@@ -226,11 +269,21 @@ export async function launchChrome({
   const exited = new Promise((resolve, reject) => {
     chrome.once('exit', (code, signal) => reject(new Error('Chrome 提前退出（code=' + code + ', signal=' + signal + '）')));
   });
+  const spawnFailed = new Promise((resolve, reject) => {
+    chrome.once('error', (err) => reject(new Error('Chrome 启动失败（' + chromePath + '）：' + err.message)));
+  });
   exited.catch(() => {
     /* 启动成功后不再需要；避免 unhandled rejection */
   });
+  spawnFailed.catch(() => {
+    /* 与 ready 竞速，失败时由外层 catch 处理 */
+  });
   try {
-    const actual = dynamicPort ? await readDevToolsActivePort(profile) : { port, wsPath: '' };
+    const actual = await Promise.race([
+      dynamicPort ? readDevToolsActivePort(profile) : Promise.resolve({ port, wsPath: '' }),
+      spawnFailed,
+      exited,
+    ]);
     const endpoint = `http://127.0.0.1:${actual.port}`;
     const versionReady = waitForJson(`${endpoint}/json/version`).then((version) => {
       if (!version || typeof version.webSocketDebuggerUrl !== 'string') throw new Error('CDP /json/version 缺少 webSocketDebuggerUrl');
@@ -239,11 +292,11 @@ export async function launchChrome({
         throw new Error('CDP /json/version 与 DevToolsActivePort 不匹配');
       }
       return version;
-    });
+    }).then((version) => verifyBrowserCdp(version).then((product) => ({ version, cdpProduct: product })));
     versionReady.catch(() => {});
-    await Promise.race([versionReady, exited]);
+    const ready = await Promise.race([versionReady, exited, spawnFailed]);
     if (chrome.exitCode !== null) throw new Error('Chrome 启动后已退出');
-    return { chrome, profile, port: actual.port, dynamicPort };
+    return { chrome, profile, port: actual.port, dynamicPort, cdpProduct: ready && ready.cdpProduct };
   } catch (err) {
     try {
       if (chrome.exitCode === null) chrome.kill();

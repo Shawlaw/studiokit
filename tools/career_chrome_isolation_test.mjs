@@ -4,6 +4,9 @@
  * 正常启动使用动态端口与独立临时 profile，只关闭本次子进程。
  */
 import http from 'node:http';
+import fs from 'node:fs';
+import os from 'node:os';
+import path from 'node:path';
 import { launchChrome, openPage, stopChrome } from './lib/arcade_cdp.mjs';
 
 let total = 0;
@@ -48,13 +51,26 @@ try {
   const launched = await launchChrome({ port: 0, profilePrefix: 'arcade-isolation-good-' });
   const alive = launched.chrome && launched.chrome.exitCode === null && launched.chrome.pid > 0;
   const version = await fetch('http://127.0.0.1:' + launched.port + '/json/version').then((res) => res.json());
-  check('动态端口启动：pid/profile/实际端口可用且与 DevToolsActivePort 一致', alive && launched.dynamicPort && launched.port > 0 && typeof version.webSocketDebuggerUrl === 'string' && version.webSocketDebuggerUrl.includes(':' + launched.port), { pid: launched.chrome.pid, port: launched.port, profile: launched.profile, browser: version.Browser });
+  check('动态端口启动：pid/profile/实际端口可用且与 DevToolsActivePort 一致', alive && launched.dynamicPort && launched.port > 0 && typeof version.webSocketDebuggerUrl === 'string' && version.webSocketDebuggerUrl.includes(':' + launched.port), { pid: launched.chrome.pid, port: launched.port, profile: launched.profile, browser: version.Browser, cdpProduct: launched.cdpProduct });
   const p = await openPage({ port: launched.port });
   await p.navigate('about:blank');
   check('独立 profile 页面可连接', p.ws && p.ws.readyState === 1, { readyState: p.ws && p.ws.readyState });
   try { p.ws.close(); } catch (err) { /* ignore */ }
   await stopChrome(launched);
   check('只关闭本轮子进程后，哨兵仍保持响应', (launched.chrome.exitCode !== null || launched.chrome.killed === true || launched.chrome.signalCode !== null) && (await fetch('http://127.0.0.1:' + sentinelPort + '/json/version')).ok, { childExit: launched.chrome.exitCode, killed: launched.chrome.killed, signal: launched.chrome.signalCode, sentinelPort });
+
+  const badPrefix = 'arcade-isolation-invalid-';
+  const tempDir = os.tmpdir();
+  const beforeDirs = fs.readdirSync(tempDir).filter((name) => name.startsWith(badPrefix));
+  let invalidError = null;
+  try {
+    await launchChrome({ port: 0, profilePrefix: badPrefix, chromePath: path.join(tempDir, 'definitely-missing-chrome', 'chrome.exe') });
+  } catch (err) {
+    invalidError = String(err && err.message);
+  }
+  await new Promise((resolve) => setTimeout(resolve, 400));
+  const afterDirs = fs.readdirSync(tempDir).filter((name) => name.startsWith(badPrefix));
+  check('无效 Chrome 路径：明确失败、无未捕获进程事件、临时 profile 被清理', !!invalidError && /Chrome 启动失败/.test(invalidError) && afterDirs.length === beforeDirs.length, { invalidError, before: beforeDirs.length, after: afterDirs.length });
 } finally {
   await new Promise((resolve) => sentinel.close(resolve));
 }
