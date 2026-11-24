@@ -1711,14 +1711,14 @@
       });
   }
 
-  function writeDbState(state, discoveryRecords) {
+  function writeDbState(state, discoveryRecords, action) {
     /* 多标签/多游戏页并发：优先走 DB 同事务读-合并-写，避免两页都先读旧状态再依次覆盖。
        无 merge 能力的旧 DB/测试注入仍退回普通写入（空 clues 的显式重置也走普通写入）。 */
     var dbModule = readGlobal('db');
     var hasClues = isObject(state) && isObject(state.clues) && Object.keys(state.clues).length > 0;
     /* 普通保存一律同事务合并；显式清空走 db.resetDiscovery，不能靠空 clues 区分。 */
     if (dbModule && typeof dbModule.mergeDiscoveryState === 'function') {
-      return Promise.resolve(dbModule.mergeDiscoveryState(state, discoveryRecords)).catch(function () {
+      return Promise.resolve(dbModule.mergeDiscoveryState(state, discoveryRecords, { action: action || null })).catch(function () {
         return { ok: false, error: 'merge-discovery-failed' };
       });
     }
@@ -2396,7 +2396,7 @@
         warnOnce('persist-unavailable', 'db unavailable; clue result kept in memory only');
         return afterPersist(false);
       }
-      return writeDbState(nextState, clue ? clue.discovery || null : null).then(function (writeResult) {
+      return writeDbState(nextState, clue ? clue.discovery || null : null, { type: 'RUN_ENDED', run: runSummary, baseRuns: baseState.runs || {} }).then(function (writeResult) {
         var persisted = !!(writeResult && writeResult.ok);
         if (!persisted) {
           addReason('db-write-failed');
@@ -2464,7 +2464,7 @@
             }
           }
           if (isSilentTestOnly() || !internal.dbUsable) return wanted;
-          return writeDbState(next, null).then(function (writeResult) {
+          return writeDbState(next, null, { type: 'SET_HINTS' }).then(function (writeResult) {
             if (!writeResult || !writeResult.ok) warnOnce('db-write', (writeResult && writeResult.error) || 'write-failed');
             return wanted;
           });
@@ -2503,7 +2503,7 @@
             if (reduced && reduced.state) {
               internal.discoveryState = reduced.state;
               if (internal.dbUsable) {
-                writeDbState(reduced.state, null).then(function (writeResult) {
+                writeDbState(reduced.state, null, { type: 'CLUE_OPENED' }).then(function (writeResult) {
                   if (!writeResult || !writeResult.ok) warnOnce('db-write', (writeResult && writeResult.error) || 'write-failed');
                 });
               }
@@ -2539,7 +2539,7 @@
         if (!internal.dbUsable || isSilentTestOnly()) {
           return Promise.resolve({ ok: true, persisted: false, portSeenAt: next.portSeenAt, stage: next.stage });
         }
-        return writeDbState(next, null).then(function (writeResult) {
+        return writeDbState(next, null, { type: 'LETTER_FOLLOWED' }).then(function (writeResult) {
           var persisted = !!(writeResult && writeResult.ok);
           if (!persisted) warnOnce('db-write', (writeResult && writeResult.error) || 'write-failed');
           return { ok: persisted, persisted: persisted, portSeenAt: next.portSeenAt, stage: next.stage };
@@ -2781,11 +2781,19 @@
           return Promise.resolve(null);
         }
       };
-      return Promise.all([
-        careerIdValue ? safeCall(function () { return db.readQuestState(careerIdValue); }) : Promise.resolve(null),
-        careerIdValue ? safeCall(function () { return db.readWallet(careerIdValue); }) : Promise.resolve(null),
-        careerIdValue ? safeCall(function () { return db.getEquipment(careerIdValue); }) : Promise.resolve(null),
-      ]).then(function (values) {
+      return Promise.resolve()
+        .then(function () {
+          if (!careerIdValue || typeof db.repairEndingRecords !== 'function') return null;
+          return safeCall(function () { return db.repairEndingRecords({ careerId: careerIdValue }); });
+        })
+        .then(function () {
+          return Promise.all([
+            careerIdValue ? safeCall(function () { return db.readQuestState(careerIdValue); }) : Promise.resolve(null),
+            careerIdValue ? safeCall(function () { return db.readWallet(careerIdValue); }) : Promise.resolve(null),
+            careerIdValue ? safeCall(function () { return db.getEquipment(careerIdValue); }) : Promise.resolve(null),
+          ]);
+        })
+        .then(function (values) {
         var questState = values[0];
         var wallet = values[1];
         var equipment = values[2];

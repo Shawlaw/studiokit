@@ -981,16 +981,18 @@ await check('E01 失败局四种形态均不进入发奖（0 信用点）', () =
   return cases + ' 个失败形态全部 ok:false（无 credits 字段）';
 });
 
-await check('E02 settle 顺序：先目标判定，再判重（首清）与写库；失败零写', () => {
+await check('E02 settle 顺序：先目标判定，再准备首/重复计划并交给领奖事务；失败零写', () => {
   const failIdx = SOURCE.commissionCore.indexOf('if (!check || !check.ok)');
-  const repeatIdx = SOURCE.commissionCore.indexOf('var repeat = false;');
+  const planIdx = SOURCE.commissionCore.indexOf('plan = core.rewardPlan(commission, events, { mode: MODE, repeat: false');
+  const repeatPlanIdx = SOURCE.commissionCore.indexOf('repeatPlan = core.rewardPlan(commission, events, { mode: MODE, repeat: true');
   const claimIdx = SOURCE.commissionCore.indexOf('db.settleAndClaim');
   assert(failIdx > 0, 'missing target check block');
-  assert(repeatIdx > failIdx, 'repeat check must come after target check');
-  assert(claimIdx > repeatIdx, 'settleAndClaim must come after target/repeat');
-  assert(SOURCE.commissionCore.indexOf('repeat = isQuestCleared(questState, commission.commissionId)') > 0, 'repeat must require cleared quest');
+  assert(planIdx > failIdx, 'first/repeat plans must come after target check');
+  assert(repeatPlanIdx > planIdx, 'repeat plan expected');
+  assert(claimIdx > repeatPlanIdx, 'settleAndClaim must come after plans');
+  assert(SOURCE.commissionCore.indexOf('deferCommit === true') > 0, 'ending defer seam expected');
   assert(SOURCE.commissionCore.indexOf('return recordResult(failure(reason') > failIdx, 'failure return expected');
-  return '目标失败 → 直接返回（无 rewardPlan/settle）；repeat 由 isQuestCleared 决定；发奖只在目标通过后';
+  return '目标失败 → 直接返回；首通/重复计划同事件计算，由 DB 领奖事务选择';
 });
 
 await check('E03 重复薪资固定：1× 与 5× 事件同额（不按事件数计费）', () => {

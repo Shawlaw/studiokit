@@ -105,7 +105,7 @@
   });
 
   const MAX_ROWS_PER_STORE = 20000;
-  const MAX_TEXT_BYTES = 2 * 1024 * 1024;
+  const MAX_TEXT_BYTES = 32 * 1024 * 1024;
   const MAX_ISSUES = 20;
   const MAX_CREDITS = 1000000;
   const MAX_ITEM_COUNT = 999;
@@ -1034,8 +1034,12 @@
           return failure('serialize-failed', errorText(err));
         }
         if (typeof text !== 'string' || !text) return failure('serialize-failed', 'empty JSON text');
+        const bytes = utf8Bytes(text);
+        if (bytes > MAX_TEXT_BYTES) {
+          return failure('too-large', 'backup text exceeds ' + MAX_TEXT_BYTES + ' bytes', { bytes, maxBytes: MAX_TEXT_BYTES });
+        }
         const filename = formatFilename(options.filenameNow !== undefined ? options.filenameNow : now);
-        return { ok: true, filename, text, payload };
+        return { ok: true, filename, text, payload, bytes };
       })
       .catch((err) => failure('export-failed', errorText(err)));
   }

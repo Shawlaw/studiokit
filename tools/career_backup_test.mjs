@@ -529,21 +529,23 @@ async function runNodeChecks() {
     return 'rejected whole archive';
   });
 
-  await check('A13 parseAndValidate：总量上限（每表 20000 行 / 文本 2MB）', async () => {
+  await check('A13 parseAndValidate：总量上限（每表 20000 行 / 文本 32MB）', async () => {
     const tooMany = backup.parseAndValidate(payloadText((payload) => {
       payload.profiles = Array.from({ length: 20001 }, (_, i) => ({ careerId: 'career-' + i }));
     }));
     assert(!tooMany.ok && tooMany.error === 'too-many-rows', '超行数：' + detail(tooMany));
     assert(tooMany.path === 'profiles', 'path=' + tooMany.path);
-    const huge = '{"format":"' + FORMAT + '","careerSchemaVersion":1,"pad":"' + 'x'.repeat(2 * 1024 * 1024) + '"}';
+    const huge = '{"format":"' + FORMAT + '","careerSchemaVersion":1,"pad":"' + 'x'.repeat(32 * 1024 * 1024 + 1) + '"}';
     const tooLarge = backup.parseAndValidate(huge);
     assert(!tooLarge.ok && tooLarge.error === 'too-large', '超文本大小：' + detail(tooLarge));
-    assert(tooLarge.bytes > 2 * 1024 * 1024, 'bytes=' + tooLarge.bytes);
+    assert(tooLarge.bytes > 32 * 1024 * 1024, 'bytes=' + tooLarge.bytes);
     const okRows = backup.parseAndValidate(payloadText((payload) => {
       payload.migrations = Array.from({ length: 20000 }, (_, i) => ({ id: 'm-' + i }));
     }));
     assert(okRows.ok === true, '5000 行边界被误拒：' + detail(okRows));
-    return 'too-many-rows + too-large + 20000 行边界通过';
+    const bigOk = backup.parseAndValidate(payloadText((payload) => { payload.pad = 'x'.repeat(2 * 1024 * 1024 + 100); }));
+    assert(bigOk.ok === true, '2.1MB 合法档被误拒：' + detail(bigOk));
+    return 'too-many-rows + too-large(32MB) + 2.1MB/20000 行边界通过';
   });
 
   await check('A14 migrateSnapshot：v1 no-op / 高版本拒绝 / 低版本无迁移 / 非法输入', async () => {

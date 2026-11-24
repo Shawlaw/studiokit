@@ -103,6 +103,7 @@
     'unknown-module': '制造台没有这一样图纸。',
     'bad-level': '这一层还没排上。',
     'already-owned': '已经有一件。',
+    'price-changed': '报价变了，按新价再确认一次。',
     'purchase-failed': '制造台那边卡住了。',
     'purchase-rejected': '制造台把单子退回来了。',
     'purchase-threw': '制造台那边卡住了。',
@@ -1285,6 +1286,8 @@
       } else if (reason === 'insufficient-items') {
         const materials = materialShortText(p, recipe, plan);
         message = TEXT_SHORT_MATERIALS + (materials ? materials + '。' : '还差的材料凑不齐。');
+      } else if (reason === 'price-changed') {
+        message = '报价变了，按新价再确认一次。';
       } else {
         message = TEXT_CRAFT_FAIL + (describeReason(reason) || '制造台把单子退回来了。');
       }

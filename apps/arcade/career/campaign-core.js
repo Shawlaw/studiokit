@@ -1054,6 +1054,14 @@
         state.sideStories = normalizeSideStories(options.sideStories, errors, warnings);
         state.commissions = normalizeCommissions(options.commissions, errors, warnings);
         state.evidence = normalizeEvidence(options.evidence);
+        /* 证据白名单的第二来源：委托奖励里真实产出的 E-/BP-/MAP-/DEC- token。
+           内容路线可以直接引用这些 token，避免要求调用方再维护一份平行白名单。 */
+        state.commissions.forEach(function (commission) {
+          (commission.rewardEvidence || []).forEach(function (token) {
+            state.evidence.add(token);
+          });
+        });
+        state.evidenceConfigured = state.evidence.size > 0;
         if (state.chapters.length > MAX_CHAPTERS) {
           errors.push(errorItem('chapter-count-invalid', '章节数超过上限。', { chapterCount: state.chapters.length }));
         }

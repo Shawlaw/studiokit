@@ -38,10 +38,11 @@ try {
       for (let i = 0; i < 4; i += 1) ArcadeCareer.commission.recordEvent(t.ticketId, { kind: 'tower.floor_stable', payload: { floor: i + 1 }, seq: i + 1, sourceMode: 'commission' });
       const settled = await ArcadeCareer.commission.settle({ ticketId: t.ticketId, outcome: 'won', stats: {} });
       const lateFail = await db.updateRun(t.ticketId, { status: 'failed', reason: 'late-failure' });
+      const lateAbandon = await ArcadeCareer.commission.abandon(t.ticketId);
       const run = await db.getRun(t.ticketId);
-      return { settled, lateFail, run };
+      return { settled, lateFail, lateAbandon, run };
     })()`);
-    check('P1.1 claimed run 拒绝迟到 failed 写回', result.settled.ok === true && result.lateFail.ok === false && result.run.status === 'claimed', { lateFail: result.lateFail, runStatus: result.run && result.run.status });
+    check('P1.1 claimed run 拒绝迟到 failed/abandoned 写回', result.settled.ok === true && result.lateFail.ok === false && result.lateAbandon.ok === false && result.run.status === 'claimed', { lateFail: result.lateFail, lateAbandon: result.lateAbandon, runStatus: result.run && result.run.status });
   }
 
   /* 2) 遗留 reservation 不能卡死新票据：正常修复入口清掉无收据占位。 */
@@ -57,6 +58,72 @@ try {
       return { reserve, repair, second };
     })()`);
     check('P1.2 遗留无收据 reservation 可由正常修复入口清理', result.reserve.ok === true && result.repair.ok === true && result.second.ok === true, result);
+  }
+
+  /* 2b) 新标签从正常入口打开告示板时也会清理无收据预留。 */
+  {
+    const page = await pageOf();
+    const result = await page.evaluate(`(async () => {
+      const db = window.__arcadeCareerTest.db();
+      const c = await db.ensureCareer({});
+      const marker = 'ending-reservation:' + c.careerId;
+      await db.reserveEnding({ careerId: c.careerId, markerId: marker, ticketId: 'commission-stale-owner-2', approach: 'combat' });
+      await ArcadeCareer.openTown();
+      const idb = indexedDB.open('studiokit:arcade:career');
+      const opened = await new Promise((res, rej) => { idb.onsuccess = () => res(idb.result); idb.onerror = () => rej(idb.error); });
+      const rows = await new Promise((res, rej) => { const tx = opened.transaction('migrations'); const all = tx.objectStore('migrations').getAll(); all.onsuccess = () => res(all.result); all.onerror = () => rej(all.error); });
+      opened.close();
+      return { markerRows: rows.filter((row) => row && row.id === marker).length };
+    })()`);
+    check('P1.2 正常打开告示板会清理无收据到期预留', result.markerRows === 0, result);
+  }
+
+  /* 2c) 两条终局同一生涯同时提交：只允许一个收据，败者零写入。 */
+  {
+    const page = await pageOf();
+    await resetTo(page);
+    const result = await page.evaluate(`(async () => {
+      const db = window.__arcadeCareerTest.db();
+      const c = await db.ensureCareer({});
+      const idb = indexedDB.open('studiokit:arcade:career');
+      const opened = await new Promise((res, rej) => { idb.onsuccess = () => res(idb.result); idb.onerror = () => rej(idb.error); });
+      await new Promise((res, rej) => {
+        const tx = opened.transaction('runs', 'readwrite');
+        const s = tx.objectStore('runs');
+        s.put({ runId: 'commission-end-a', careerId: c.careerId, commissionId: 'ending.combat', gameId: 'star-raid', nonce: 'nonce-end-a', status: 'active', mode: 'commission', createdAt: new Date().toISOString(), updatedAt: new Date().toISOString() });
+        s.put({ runId: 'commission-end-b', careerId: c.careerId, commissionId: 'ending.rescue', gameId: 'road-rush', nonce: 'nonce-end-b', status: 'active', mode: 'commission', createdAt: new Date().toISOString(), updatedAt: new Date().toISOString() });
+        tx.oncomplete = res; tx.onerror = () => rej(tx.error);
+      });
+      opened.close();
+      const a = await db.settleEndingAndClaim({ runId: 'commission-end-a', careerId: c.careerId, nonce: 'nonce-end-a', approach: 'combat', plan: { credits: 0, items: {}, evidence: [], flags: ['C5.star_tower_resolved', 'ending.combat'] }, receipt: { commissionId: 'ending.combat' } });
+      const b = await db.settleEndingAndClaim({ runId: 'commission-end-b', careerId: c.careerId, nonce: 'nonce-end-b', approach: 'rescue', plan: { credits: 0, items: {}, evidence: [], flags: ['C5.star_tower_resolved', 'ending.rescue'] }, receipt: { commissionId: 'ending.rescue' } });
+      const claims = await new Promise((resolve) => { const idb2 = indexedDB.open('studiokit:arcade:career'); idb2.onsuccess = () => { const o = idb2.result; const tx = o.transaction('claims'); const all = tx.objectStore('claims').getAll(); all.onsuccess = () => { resolve(all.result); o.close(); }; }; });
+      const quests = await db.readQuestState(c.careerId);
+      return { a, b, claims: claims.map((row) => row.runId), c5: quests.quests.filter((row) => row.nodeId === 'story:C5.star_tower_resolved').length };
+    })()`);
+    check('P1.1/P1.2 两终局同一事务唯一：仅一张收据、败者零写入、唯一 C5', result.a && result.a.ok === true && result.b && result.b.ok === false && result.b.reason === 'already-resolved' && result.claims.length === 1 && result.claims[0] === 'commission-end-a' && result.c5 === 1, result);
+  }
+
+  /* 2d) 已领奖但缺 C5/终局行的历史半提交：正常入口补齐且复用原收据。 */
+  {
+    const page = await pageOf();
+    await resetTo(page);
+    const result = await page.evaluate(`(async () => {
+      const db = window.__arcadeCareerTest.db();
+      const c = await db.ensureCareer({});
+      const idb = indexedDB.open('studiokit:arcade:career');
+      const opened = await new Promise((res, rej) => { idb.onsuccess = () => res(idb.result); idb.onerror = () => rej(idb.error); });
+      await new Promise((res, rej) => { const tx = opened.transaction('runs', 'readwrite'); tx.objectStore('runs').put({ runId: 'commission-legacy-ending', careerId: c.careerId, commissionId: 'ending.combat', gameId: 'star-raid', nonce: 'legacy-nonce', status: 'claimed', mode: 'commission', claimedAt: new Date().toISOString(), createdAt: new Date().toISOString(), updatedAt: new Date().toISOString() }); tx.oncomplete = res; tx.onerror = () => rej(tx.error); });
+      await new Promise((res, rej) => { const tx = opened.transaction('claims', 'readwrite'); tx.objectStore('claims').put({ runId: 'commission-legacy-ending', schemaVersion: 1, receiptId: 'commission-legacy-ending', careerId: c.careerId, commissionId: 'ending.combat', credits: 0, items: {}, evidence: [], flags: ['C5.star_tower_resolved', 'ending.combat'], txIds: ['tx:commission-legacy-ending:1'], claimedAt: new Date().toISOString(), rulesetVersion: 1, contentVersion: '0.18.0' }); tx.oncomplete = res; tx.onerror = () => rej(tx.error); });
+      opened.close();
+      await ArcadeCareer.openTown();
+      const quests = await db.readQuestState(c.careerId);
+      const c5 = quests.quests.filter((row) => row.nodeId === 'story:C5.star_tower_resolved')[0] || null;
+      const marker = quests.quests.filter((row) => row.nodeId === 'ending.combat')[0] || null;
+      const claims = await new Promise((resolve) => { const idb2 = indexedDB.open('studiokit:arcade:career'); idb2.onsuccess = () => { const o = idb2.result; const tx = o.transaction('claims'); const all = tx.objectStore('claims').getAll(); all.onsuccess = () => { resolve(all.result); o.close(); }; }; });
+      return { c5, marker, claims: claims.length };
+    })()`);
+    check('P1.2 已领奖缺 C5 的历史半提交由正常入口补齐，保留原收据', result.c5 && result.c5.receiptId === 'commission-legacy-ending' && result.marker && result.marker.receiptId === 'commission-legacy-ending' && result.claims === 1, result);
   }
 
   /* 3) 首通按第一笔成功提交：B 先提交 90，A 后提交 75；旧 marker 不消耗首通。 */
@@ -90,7 +157,26 @@ try {
     const settled = await b.evaluate(`(async () => { const C = window.ArcadeCareer; C.observe('pair.match', { symbol: 'A', level: 1, moves: 1 }); C.observe('pair.match', { symbol: 'B', level: 2, moves: 2 }); return C.finish({ mode: 'classic', outcome: 'won', stats: { level: 1, moves: 2, score: 20 } }); })()`);
     await sleep(200);
     const afterB = await b.evaluate(`(async () => ((await window.__arcadeCareerTest.db().getDiscoveryState()) || {}).hintsEnabled)()`);
-    check('P2.5 关闭提示后另一页结算不会把 hintsEnabled 写回 true', before === true && off === false && afterA === false && settled && afterB === false, { before, off, afterA, afterB });
+    check('P2.5 关闭提示后另一页结算不会把 hintsEnabled 写回 true', off === false && afterA === false && settled && afterB === false, { before, off, afterA, afterB });
+  }
+
+  /* 4b) 同游戏两标签各完成一局：DB 计数按动作 +2，不被 max 合并吞掉。 */
+  {
+    const a = await pageOf();
+    const b = await pageOf();
+    await resetTo(a);
+    await a.navigate(`${BASE}/apps/arcade/games/memory-flip.html?careerTest=1#test`);
+    await ready(a);
+    await b.navigate(`${BASE}/apps/arcade/games/memory-flip.html?careerTest=1#test`);
+    await ready(b);
+    const beforeState = await a.evaluate(`(async () => (await window.__arcadeCareerTest.db().getDiscoveryState()))()`);
+    const beforeCount = beforeState && beforeState.runs && beforeState.runs['memory-flip'] ? Number(beforeState.runs['memory-flip'].eligibleRuns) || 0 : 0;
+    const one = await a.evaluate(`(async () => { const C = window.ArcadeCareer; C.observe('pair.match', { symbol: 'A', level: 1, moves: 1 }); C.observe('pair.match', { symbol: 'B', level: 2, moves: 2 }); return C.finish({ mode: 'classic', outcome: 'won', stats: { level: 1, moves: 2, score: 20 } }); })()`);
+    const two = await b.evaluate(`(async () => { const C = window.ArcadeCareer; C.observe('pair.match', { symbol: 'C', level: 1, moves: 1 }); C.observe('pair.match', { symbol: 'D', level: 2, moves: 2 }); return C.finish({ mode: 'classic', outcome: 'won', stats: { level: 1, moves: 2, score: 20 } }); })()`);
+    await sleep(200);
+    const state = await a.evaluate(`(async () => (await window.__arcadeCareerTest.db().getDiscoveryState()))()`);
+    const count = state && state.runs && state.runs['memory-flip'] ? state.runs['memory-flip'].eligibleRuns : null;
+    check('P2.5 同游戏两标签各结算一局，eligibleRuns 相对基线 +2', count === beforeCount + 2, { one, two, beforeCount, count, runs: state && state.runs });
   }
 
   /* 5) 2000 条真实委托 run 的历史导出必须能被同一工具导入（超过 2 MiB）。 */

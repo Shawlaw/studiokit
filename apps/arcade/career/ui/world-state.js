@@ -769,7 +769,7 @@
     return out;
   }
 
-  function requiresMet(requires, flags, completed) {
+  function requiresMet(requires, flags, completed, evidence) {
     if (!isObject(requires)) return true;
     const all = [];
     if (isArray(requires.allFlags)) all.push.apply(all, requires.allFlags);
@@ -795,6 +795,19 @@
       });
       if (!hit) return false;
     }
+    const evidenceSet = evidence && typeof evidence.has === 'function' ? evidence : new Set();
+    if (isArray(requires.evidenceAll)) {
+      for (let e = 0; e < requires.evidenceAll.length; e += 1) {
+        if (!evidenceSet.has(idText(requires.evidenceAll[e]))) return false;
+      }
+    }
+    if (isArray(requires.evidenceAny) && requires.evidenceAny.length) {
+      let hit = false;
+      requires.evidenceAny.forEach((token) => {
+        if (evidenceSet.has(idText(token))) hit = true;
+      });
+      if (!hit) return false;
+    }
     return true;
   }
 
@@ -806,7 +819,7 @@
     return true;
   }
 
-  function contentRoutesOf(contentChapter, flags, completed) {
+  function contentRoutesOf(contentChapter, flags, completed, evidence) {
     const routes = isObject(contentChapter) && isArray(contentChapter.routes) ? contentChapter.routes : [];
     const out = [];
     routes.forEach((route) => {
@@ -815,7 +828,7 @@
         routeId: idText(route.routeId),
         label: cleanText(route.label),
         hint: cleanText(route.hint),
-        available: requiresMet(route.requires, flags, completed),
+        available: requiresMet(route.requires, flags, completed, evidence),
         complete: rewardFlagsMet(route.rewardFlags, flags),
       });
     });
@@ -883,7 +896,38 @@
     return out;
   }
 
-  function buildChapter(chapterId, snapshotChapter, contentChapter, flags, completed) {
+  function evidenceOf(context) {
+    const out = new Set();
+    const c = isObject(context) ? context : {};
+    const add = (list) => {
+      if (!isArray(list)) return;
+      list.forEach((token) => {
+        const id = idText(token);
+        if (id) out.add(id);
+      });
+    };
+    const rowsOf = (value) => {
+      if (isArray(value)) return value;
+      if (isObject(value)) return Object.keys(value).map((key) => value[key]);
+      return [];
+    };
+    rowsOf(c.quests).forEach((row) => {
+      if (isObject(row)) {
+        add(row.evidence);
+        add(row.receipt && row.receipt.evidence);
+      }
+    });
+    rowsOf(c.claims).forEach((row) => {
+      if (isObject(row)) add(row.evidence);
+    });
+    const snapshot = campaignSnapshotOf(c);
+    if (isObject(c.campaignState) && isArray(c.campaignState.claims)) {
+      c.campaignState.claims.forEach((row) => { if (isObject(row)) add(row.evidence); });
+    }
+    return out;
+  }
+
+  function buildChapter(chapterId, snapshotChapter, contentChapter, flags, completed, evidence) {
     const builtin = CHAPTER_FALLBACK[chapterId] || {};
     const contentRoutes = contentChapter ? contentRoutesOf(contentChapter, flags, completed) : [];
     const snapshotRoutes = snapshotChapter ? snapshotChapter.routes : [];
@@ -988,6 +1032,7 @@
     const snapshot = campaignSnapshotOf(context);
     const flags = flagsOf(context);
     const completed = completedCommissionIdsOf(context);
+    const evidence = evidenceOf(context);
     let endingChosen = (snapshot && snapshot.endingChosen) || endingApproachFromFlags(flags);
     if (endingChosen && !endingApproachFromFlags(flags)) flags.add('ending.' + endingChosen);
     if (endingChosen) flags.add('C5.star_tower_resolved');
@@ -1033,7 +1078,7 @@
             mustKnow: arrayOfText(contentMap[chapterId].mustKnow).length ? contentMap[chapterId].mustKnow : (fileChapter && fileChapter.mustKnow),
           })
         : fileChapter;
-      return buildChapter(chapterId, snapshotMap[chapterId], mergedChapter, flags, completed);
+      return buildChapter(chapterId, snapshotMap[chapterId], mergedChapter, flags, completed, evidence);
     });
     const model = { chapters: chapters, endings: [], endingChosen: endingChosen, endingVisible: false, epilogue: null, currentChapter: '' };
     model.endings = buildEndings(model, context, snapshot, content, flags, endingChosen);

@@ -83,6 +83,7 @@
   const BLOCKED_RUN_STATUS = Object.freeze(['abandoned', 'failed', 'cancelled', 'expired', 'claimed', 'draft']);
   const CLAIM_STORES = Object.freeze(['claims', 'runs', 'ledgers', 'balances', 'inventory', 'equipment', 'quests']);
   const DEFAULT_CONTENT_VERSION = '0.18.0';
+  const ENDING_C5_FLAG = 'C5.star_tower_resolved';
 
   /* ------------------------------------------------------------------ *
    * 基础工具（纯 JS，无 IDB）
@@ -405,10 +406,12 @@
   }
 
   /** 同事务读-合并-写发现状态：多标签并发时不会用旧快照覆盖另一页刚发现的线索。 */
-  function mergeDiscoveryState(state, discoveryRecords) {
+  function mergeDiscoveryState(state, discoveryRecords, options) {
     const core = coreApi();
     if (!core) return Promise.resolve(failure('core-unavailable'));
     if (!isObject(state)) return Promise.resolve(failure('bad-state'));
+    const action = isObject(options) ? options.action : null;
+    const actionType = action && typeof action.type === 'string' ? action.type : '';
     const value = jsonClone(state) || {};
     const records = Array.isArray(discoveryRecords)
       ? discoveryRecords
@@ -423,6 +426,36 @@
         if (existing && isObject(existing.clues)) {
           value.clues = Object.assign({}, existing.clues, value.clues || {});
         }
+        if (existing) {
+          /* 设置只由 SET_HINTS 动作更新；普通结算不得用旧快照重新打开提示。 */
+          if (actionType !== 'SET_HINTS') value.hintsEnabled = existing.hintsEnabled !== false;
+          if (isObject(existing.runs) && isObject(value.runs)) {
+            const mergedRuns = Object.assign({}, value.runs);
+            Object.keys(existing.runs).forEach((gameId) => {
+              const left = existing.runs[gameId] || {};
+              const right = mergedRuns[gameId] || {};
+              if (actionType === 'RUN_ENDED' && action.run && action.run.gameId === gameId) {
+                const baseCount = action.baseRuns && action.baseRuns[gameId] ? Number(action.baseRuns[gameId].eligibleRuns) || 0 : 0;
+                const incomingCount = Number(right.eligibleRuns) || 0;
+                const delta = Math.max(0, incomingCount - baseCount);
+                mergedRuns[gameId] = Object.assign({}, left, right, {
+                  eligibleRuns: (Number(left.eligibleRuns) || 0) + delta,
+                  lastRunAt: right.lastRunAt || left.lastRunAt,
+                  lastRunId: right.lastRunId || left.lastRunId,
+                });
+                return;
+              }
+              const leftEligible = Number(left.eligibleRuns) || 0;
+              const rightEligible = Number(right.eligibleRuns) || 0;
+              mergedRuns[gameId] = Object.assign({}, left, right, {
+                eligibleRuns: Math.max(leftEligible, rightEligible),
+                lastRunAt: String(left.lastRunAt || '') > String(right.lastRunAt || '') ? left.lastRunAt : right.lastRunAt,
+                lastRunId: String(left.lastRunAt || '') > String(right.lastRunAt || '') ? left.lastRunId : right.lastRunId,
+              });
+            });
+            value.runs = mergedRuns;
+          }
+        }
         const row = { key: STATE_KEY_DISCOVERY, schemaVersion: SCHEMA_VERSION, updatedAt: at, value };
         ctx.bind(stateStore.put(row), () => {
           const store = ctx.store('discovery');
@@ -432,7 +465,7 @@
             copy.updatedAt = typeof copy.updatedAt === 'string' ? copy.updatedAt : at;
             ctx.bind(store.put(copy), next);
           });
-          sequence(tasks, () => ctx.done({ ok: true }));
+          sequence(tasks, () => ctx.done({ ok: true, value }));
         });
       });
     }).then((res) => (res.ok ? res.result : failure(res.reason, res.error)));
@@ -672,7 +705,7 @@
     }).then((res) => (res.ok ? res.result : null));
   }
 
-  function updateRun(runId, patch) {
+  function updateRun(runId, patch, expectedStatus) {
     const core = coreApi();
     if (!core) return Promise.resolve(failure('core-unavailable'));
     if (!core.isValidRunId(runId)) return Promise.resolve(failure('bad-run-id'));
@@ -682,6 +715,22 @@
       ctx.bind(ctx.store('runs').get(runId), (existing) => {
         if (!existing) {
           ctx.fail('missing-run');
+          return;
+        }
+        const current = typeof existing.status === 'string' ? existing.status : '';
+        if (typeof expectedStatus === 'string' && expectedStatus && current !== expectedStatus) {
+          ctx.fail('run-state');
+          return;
+        }
+        const target = typeof patch.status === 'string' ? patch.status : null;
+        /* claimed 是终态：迟到失败/放弃不得覆盖已领奖记录。 */
+        if (current === 'claimed' && target && target !== 'claimed') {
+          ctx.fail('run-state');
+          return;
+        }
+        /* failed/abandoned 不可被迟到的 active 重新拉起；重试必须签新票。 */
+        if ((current === 'failed' || current === 'abandoned') && target === 'active') {
+          ctx.fail('run-state');
           return;
         }
         const merged = jsonClone(existing) || {};
@@ -865,22 +914,47 @@
     });
   }
 
-  function writeCommissionQuest(ctx, core, careerId, commissionId, plan, at, done) {
+  function writeCommissionQuest(ctx, core, careerId, commissionId, plan, at, done, meta) {
     if (!core.isToken(commissionId)) {
       done();
       return;
     }
-    const row = {
-      careerId,
-      nodeId: commissionId,
-      kind: 'commission',
-      status: 'cleared',
-      clearedAt: at,
-      evidence: plan.evidence.slice(),
-      flags: plan.flags.slice(),
-      updatedAt: at,
-      schemaVersion: SCHEMA_VERSION,
+    const info = isObject(meta) ? meta : {};
+    const existing = isObject(info.existing) ? info.existing : null;
+    const mergeList = (base, add) => {
+      const out = [];
+      const seen = {};
+      base.concat(add).forEach((value) => {
+        if (typeof value !== 'string' || !value || seen[value]) return;
+        seen[value] = true;
+        out.push(value);
+      });
+      return out.sort();
     };
+    const row = existing
+      ? jsonClone(existing) || {}
+      : {
+          careerId,
+          nodeId: commissionId,
+          kind: 'commission',
+          status: 'cleared',
+          clearedAt: at,
+          evidence: [],
+          flags: [],
+          schemaVersion: SCHEMA_VERSION,
+        };
+    row.status = 'cleared';
+    row.evidence = mergeList(Array.isArray(row.evidence) ? row.evidence : [], plan.evidence || []);
+    row.flags = mergeList(Array.isArray(row.flags) ? row.flags : [], plan.flags || []);
+    if (!row.clearedAt) row.clearedAt = at;
+    if (info.isFirst === true) {
+      row.firstClearReceiptId = info.firstClearReceiptId;
+      row.firstClearedAt = row.clearedAt;
+    } else if (!row.firstClearReceiptId && info.firstClearReceiptId) {
+      row.firstClearReceiptId = info.firstClearReceiptId;
+    }
+    row.updatedAt = at;
+    row.schemaVersion = SCHEMA_VERSION;
     ctx.bind(ctx.store('quests').put(row), done);
   }
 
@@ -921,6 +995,12 @@
     const planCheck = core.validateClaimPlan(options.plan);
     if (!planCheck.ok) return Promise.resolve(failure(planCheck.reason || 'bad-plan'));
     const plan = core.normalizePlan(options.plan);
+    let repeatPlan = null;
+    if (options.repeatPlan !== undefined) {
+      const repeatCheck = core.validateClaimPlan(options.repeatPlan);
+      if (!repeatCheck.ok) return Promise.resolve(failure(repeatCheck.reason || 'bad-repeat-plan'));
+      repeatPlan = core.normalizePlan(options.repeatPlan);
+    }
     const at = typeof options.now === 'string' && options.now ? options.now : nowIso();
     const contentVersion =
       typeof options.contentVersion === 'string' && options.contentVersion
@@ -974,66 +1054,79 @@
             return;
           }
           const commissionId = runCommissionId || providedCommissionId;
-          let receipt;
-          try {
-            receipt = core.buildReceipt({ runId, careerId, commissionId, plan, now: at, contentVersion });
-          } catch (err) {
-            ctx.fail('core-error', errorText(err));
-            return;
-          }
-          if (!receipt) {
-            ctx.fail('bad-receipt');
-            return;
-          }
-          if (providedReceipt) {
-            const mismatch = receiptMismatch(providedReceipt, receipt);
-            if (mismatch) {
-              ctx.fail(mismatch);
+          /* 首通归属由同一领奖事务内读到的 quest 行决定；旧预留 marker 不消耗首通。 */
+          ctx.bind(commissionId ? ctx.store('quests').get([careerId, commissionId]) : null, (questRow) => {
+            const wasCleared = !!(questRow && questRow.status === 'cleared');
+            const historicalFirstRef = questRow && typeof questRow.firstClearReceiptId === 'string' && questRow.firstClearReceiptId;
+            const canUseRepeat = !!repeatPlan;
+            const isFirst = !wasCleared && !historicalFirstRef;
+            const selected = isFirst || !canUseRepeat ? plan : repeatPlan;
+            const firstClearReceiptId = isFirst ? runId : historicalFirstRef || null;
+            let receipt;
+            try {
+              receipt = core.buildReceipt({ runId, careerId, commissionId, plan: selected, now: at, contentVersion });
+            } catch (err) {
+              ctx.fail('core-error', errorText(err));
               return;
             }
-          }
-          const steps = core.claimTxSteps(runId, plan);
-          const tasks = [
-            (next) => writeLedgerSteps(ctx, core, steps, { runId, careerId, now: at, contentVersion }, next),
-            (next) => {
-              ctx.bind(ctx.store('balances').get(careerId), (balance) => {
-                if (!balance) {
-                  ctx.fail('no-wallet');
-                  return;
-                }
-                const prev = core.clampInt(balance.credits, 0, core.RULESET.balanceCap, 0);
-                const nextCredits = prev + plan.credits;
-                if (nextCredits > core.RULESET.balanceCap) {
-                  ctx.fail('balance-cap');
-                  return;
-                }
-                const row = {
-                  careerId,
-                  credits: nextCredits,
-                  revision: core.clampInt(balance.revision, 0, Number.MAX_SAFE_INTEGER, 0) + 1,
-                  createdAt: typeof balance.createdAt === 'string' ? balance.createdAt : at,
-                  updatedAt: at,
-                };
-                ctx.bind(ctx.store('balances').put(row), () => next(row));
-              });
-            },
-            (next) => incrementInventory(ctx, core, careerId, plan.items, at, next),
-            (next) => mergeEquipment(ctx, careerId, plan.equipment || {}, at, next),
-            (next) => writeCommissionQuest(ctx, core, careerId, commissionId, plan, at, next),
-            (next) => {
-              const row = Object.assign({ runId, schemaVersion: SCHEMA_VERSION }, receipt);
-              ctx.bindConstraint(ctx.store('claims').add(row), 'constraint', next);
-            },
-            (next) => {
-              const updated = jsonClone(run) || {};
-              updated.status = 'claimed';
-              updated.claimedAt = at;
-              updated.receiptId = runId;
-              updated.updatedAt = at;
-              ctx.bind(ctx.store('runs').put(updated), next);
-            },
-          ];
-          sequence(tasks, () => ctx.done({ ok: true, duplicate: false, receipt }));
+            if (!receipt) {
+              ctx.fail('bad-receipt');
+              return;
+            }
+            if (providedReceipt) {
+              const mismatch = receiptMismatch(providedReceipt, receipt);
+              if (mismatch) {
+                ctx.fail(mismatch);
+                return;
+              }
+            }
+            const steps = core.claimTxSteps(runId, selected);
+            const tasks = [
+              (next) => writeLedgerSteps(ctx, core, steps, { runId, careerId, now: at, contentVersion }, next),
+              (next) => {
+                ctx.bind(ctx.store('balances').get(careerId), (balance) => {
+                  if (!balance) {
+                    ctx.fail('no-wallet');
+                    return;
+                  }
+                  const prev = core.clampInt(balance.credits, 0, core.RULESET.balanceCap, 0);
+                  const nextCredits = prev + selected.credits;
+                  if (nextCredits > core.RULESET.balanceCap) {
+                    ctx.fail('balance-cap');
+                    return;
+                  }
+                  const row = {
+                    careerId,
+                    credits: nextCredits,
+                    revision: core.clampInt(balance.revision, 0, Number.MAX_SAFE_INTEGER, 0) + 1,
+                    createdAt: typeof balance.createdAt === 'string' ? balance.createdAt : at,
+                    updatedAt: at,
+                  };
+                  ctx.bind(ctx.store('balances').put(row), () => next(row));
+                });
+              },
+              (next) => incrementInventory(ctx, core, careerId, selected.items, at, next),
+              (next) => mergeEquipment(ctx, careerId, selected.equipment || {}, at, next),
+              (next) => writeCommissionQuest(ctx, core, careerId, commissionId, selected, at, next, {
+                existing: questRow || null,
+                isFirst: isFirst && canUseRepeat,
+                firstClearReceiptId: firstClearReceiptId,
+              }),
+              (next) => {
+                const row = Object.assign({ runId, schemaVersion: SCHEMA_VERSION }, receipt);
+                ctx.bindConstraint(ctx.store('claims').add(row), 'constraint', next);
+              },
+              (next) => {
+                const updated = jsonClone(run) || {};
+                updated.status = 'claimed';
+                updated.claimedAt = at;
+                updated.receiptId = runId;
+                updated.updatedAt = at;
+                ctx.bind(ctx.store('runs').put(updated), next);
+              },
+            ];
+            sequence(tasks, () => ctx.done({ ok: true, duplicate: false, receipt, repeat: !isFirst && canUseRepeat, firstClear: isFirst && canUseRepeat }));
+          });
         });
       });
     }).then((res) => {
@@ -1043,6 +1136,322 @@
       }
       return failure(res.reason, res.error);
     });
+  }
+
+  /* ------------------------------------------------------------------ *
+   * 终局单事务：唯一 C5 + 终局标记 + 收据 + 流水 + run 状态
+   * ------------------------------------------------------------------ */
+
+  const ENDING_C5_NODE = 'story:C5.star_tower_resolved';
+  const ENDING_APPROACHES = Object.freeze(['combat', 'research', 'rescue']);
+
+  function endingMarkerNode(approach) {
+    return 'ending.' + approach;
+  }
+
+  function mergeTokenList(base, add) {
+    const out = [];
+    const seen = {};
+    (Array.isArray(base) ? base : []).concat(Array.isArray(add) ? add : []).forEach((value) => {
+      if (typeof value !== 'string' || !value || seen[value]) return;
+      seen[value] = true;
+      out.push(value);
+    });
+    return out.sort();
+  }
+
+  function writeEndingQuestRows(ctx, core, careerId, approach, receipt, at, done) {
+    const receiptId = receipt.receiptId || receipt.runId;
+    const markerId = endingMarkerNode(approach);
+    const questStore = ctx.store('quests');
+    ctx.bind(questStore.get([careerId, markerId]), (previousMarker) => {
+      ctx.bind(questStore.get([careerId, ENDING_C5_NODE]), (previousFlag) => {
+        const flags = mergeTokenList([ENDING_C5_FLAG, markerId], previousMarker && previousMarker.flags);
+        const evidence = mergeTokenList(receipt.evidence, previousMarker && previousMarker.evidence);
+        const flagRow = {
+          careerId,
+          nodeId: ENDING_C5_NODE,
+          kind: 'story-flag',
+          status: 'cleared',
+          flag: ENDING_C5_FLAG,
+          flags: [ENDING_C5_FLAG],
+          chapter: 'C5',
+          approach,
+          sourceReceipt: receiptId,
+          receiptId,
+          clearedAt: (previousFlag && previousFlag.clearedAt) || at,
+          updatedAt: at,
+          schemaVersion: SCHEMA_VERSION,
+        };
+        const markerRow = {
+          careerId,
+          nodeId: markerId,
+          kind: 'ending',
+          status: 'cleared',
+          approach,
+          commissionId: markerId,
+          chapter: 'C5',
+          flags,
+          evidence,
+          receiptId,
+          sourceReceipt: receiptId,
+          resolved: true,
+          clearedAt: (previousMarker && previousMarker.clearedAt) || at,
+          updatedAt: at,
+          schemaVersion: SCHEMA_VERSION,
+        };
+        const tasks = [
+          (next) => ctx.bind(questStore.put(flagRow), next),
+          (next) => ctx.bind(questStore.put(markerRow), next),
+        ];
+        sequence(tasks, done);
+      });
+    });
+  }
+
+  function readEndingRows(ctx, careerId, done) {
+    const store = ctx.store('quests');
+    const rows = {};
+    const want = [ENDING_C5_NODE].concat(ENDING_APPROACHES.map(endingMarkerNode));
+    const tasks = want.map((nodeId) => (next) => {
+      ctx.bind(store.get([careerId, nodeId]), (row) => { rows[nodeId] = row || null; next(); });
+    });
+    sequence(tasks, () => done(rows));
+  }
+
+  function resolvedEndingFromRows(rows) {
+    const c5 = rows && rows[ENDING_C5_NODE];
+    if (c5 && (c5.status === 'cleared' || c5.flags && c5.flags.indexOf(ENDING_C5_FLAG) >= 0)) {
+      const approach = ENDING_APPROACHES.indexOf(c5.approach) >= 0 ? c5.approach : null;
+      return { approach, receiptId: c5.receiptId || c5.sourceReceipt || null, source: 'c5' };
+    }
+    for (let i = 0; i < ENDING_APPROACHES.length; i += 1) {
+      const approach = ENDING_APPROACHES[i];
+      const row = rows && rows[endingMarkerNode(approach)];
+      if (row && (row.resolved === true || row.status === 'cleared')) {
+        return { approach, receiptId: row.receiptId || row.sourceReceipt || null, source: 'marker' };
+      }
+    }
+    return null;
+  }
+
+  /**
+   * 终局领奖：唯一性、收据、流水、balance/inventory/equipment、C5 与终局行在同一事务。
+   * 别的路线已完成 → already-resolved 且零写入；同票据已有收据 → duplicate + 补写规范行。
+   */
+  function settleEndingAndClaim(input) {
+    const core = coreApi();
+    if (!core) return Promise.resolve(failure('core-unavailable'));
+    const options = isObject(input) ? input : {};
+    const runId = options.runId;
+    const careerId = options.careerId;
+    const approach = options.approach;
+    const nonce = options.nonce;
+    if (!core.isValidRunId(runId)) return Promise.resolve(failure('bad-run-id'));
+    if (!core.isValidCareerId(careerId)) return Promise.resolve(failure('bad-career-id'));
+    if (ENDING_APPROACHES.indexOf(approach) < 0) return Promise.resolve(failure('bad-approach'));
+    if (typeof nonce !== 'string' || !nonce) return Promise.resolve(failure('bad-nonce'));
+    const planCheck = core.validateClaimPlan(options.plan);
+    if (!planCheck.ok) return Promise.resolve(failure(planCheck.reason || 'bad-plan'));
+    const plan = core.normalizePlan(options.plan);
+    const at = typeof options.now === 'string' && options.now ? options.now : nowIso();
+    const contentVersion = typeof options.contentVersion === 'string' && options.contentVersion ? options.contentVersion : DEFAULT_CONTENT_VERSION;
+    return txRun(CLAIM_STORES, 'readwrite', (ctx) => {
+      ctx.bind(ctx.store('claims').get(runId), (existingClaim) => {
+        readEndingRows(ctx, careerId, (rows) => {
+          const fixClaim = (claim, done) => {
+            const receipt = receiptOf(claim);
+            const resolved = resolvedEndingFromRows(rows);
+            const resolvedApproach = resolved && resolved.approach ? resolved.approach : approach;
+            if (resolved && resolved.approach && resolved.approach !== approach) {
+              done({ ok: false, reason: 'already-resolved', settled: false, wrote: false, resolvedApproach: resolved.approach, receipt: null, flagWritten: false });
+              return;
+            }
+            writeEndingQuestRows(ctx, core, careerId, approach, receipt, at, () => {
+              ctx.bind(ctx.store('runs').get(runId), (run) => {
+                if (!run) { done({ ok: true, duplicate: true, receipt, wrote: false }); return; }
+                if (run.status === 'claimed') { done({ ok: true, duplicate: true, receipt, wrote: false }); return; }
+                const updated = jsonClone(run) || {};
+                updated.status = 'claimed';
+                updated.claimedAt = receipt.claimedAt || at;
+                updated.receiptId = runId;
+                updated.updatedAt = at;
+                ctx.bind(ctx.store('runs').put(updated), () => done({ ok: true, duplicate: true, receipt, wrote: false }));
+              });
+            });
+          };
+          if (existingClaim) {
+            if (existingClaim.careerId && existingClaim.careerId !== careerId) {
+              ctx.fail('career-mismatch');
+              return;
+            }
+            fixClaim(existingClaim, (value) => ctx.done(value));
+            return;
+          }
+          ctx.bind(ctx.store('runs').get(runId), (run) => {
+            if (!run) { ctx.fail('missing-run'); return; }
+            if (run.careerId !== careerId) { ctx.fail('career-mismatch'); return; }
+            if (run.nonce !== nonce) { ctx.fail('nonce-mismatch'); return; }
+            if (run.commissionId !== endingMarkerNode(approach)) { ctx.fail('receipt-mismatch'); return; }
+            const status = typeof run.status === 'string' ? run.status : '';
+            if (status && BLOCKED_RUN_STATUS.indexOf(status) >= 0) { ctx.fail('run-state'); return; }
+            const resolved = resolvedEndingFromRows(rows);
+            if (resolved && resolved.approach && resolved.approach !== approach) {
+              ctx.done({ ok: false, reason: 'already-resolved', settled: false, wrote: false, resolvedApproach: resolved.approach, receipt: null, flagWritten: false });
+              return;
+            }
+            let receipt;
+            try {
+              receipt = core.buildReceipt({ runId, careerId, commissionId: endingMarkerNode(approach), plan, now: at, contentVersion });
+            } catch (err) {
+              ctx.fail('core-error', errorText(err));
+              return;
+            }
+            if (!receipt) { ctx.fail('bad-receipt'); return; }
+            const providedReceipt = isObject(options.receipt) ? options.receipt : null;
+            if (providedReceipt) {
+              const mismatch = receiptMismatch(providedReceipt, receipt, core);
+              if (mismatch) { ctx.fail(mismatch); return; }
+            }
+            const steps = core.claimTxSteps(runId, plan);
+            const tasks = [
+              (next) => writeLedgerSteps(ctx, core, steps, { runId, careerId, now: at, contentVersion }, next),
+              (next) => {
+                ctx.bind(ctx.store('balances').get(careerId), (balance) => {
+                  if (!balance) { ctx.fail('no-wallet'); return; }
+                  const prev = core.clampInt(balance.credits, 0, core.RULESET.balanceCap, 0);
+                  const nextCredits = prev + plan.credits;
+                  if (nextCredits > core.RULESET.balanceCap) { ctx.fail('balance-cap'); return; }
+                  const row = {
+                    careerId,
+                    credits: nextCredits,
+                    revision: core.clampInt(balance.revision, 0, Number.MAX_SAFE_INTEGER, 0) + 1,
+                    createdAt: typeof balance.createdAt === 'string' ? balance.createdAt : at,
+                    updatedAt: at,
+                  };
+                  ctx.bind(ctx.store('balances').put(row), () => next());
+                });
+              },
+              (next) => incrementInventory(ctx, core, careerId, plan.items, at, next),
+              (next) => mergeEquipment(ctx, careerId, plan.equipment || {}, at, next),
+              (next) => writeEndingQuestRows(ctx, core, careerId, approach, receipt, at, next),
+              (next) => {
+                const row = Object.assign({ runId, schemaVersion: SCHEMA_VERSION }, receipt);
+                ctx.bindConstraint(ctx.store('claims').add(row), 'constraint', next);
+              },
+              (next) => {
+                const updated = jsonClone(run) || {};
+                updated.status = 'claimed';
+                updated.claimedAt = at;
+                updated.receiptId = runId;
+                updated.updatedAt = at;
+                ctx.bind(ctx.store('runs').put(updated), next);
+              },
+            ];
+            sequence(tasks, () => ctx.done({ ok: true, duplicate: false, receipt, wrote: true, settled: true, approach, flagsWritten: [ENDING_C5_FLAG, endingMarkerNode(approach)] }));
+          });
+        });
+      });
+    }).then((res) => {
+      if (res.ok) return res.result;
+      if (res.reason === 'constraint') {
+        return readClaimReceipt(runId).then((row) => (row ? { ok: true, duplicate: true, receipt: receiptOf(row), wrote: false } : failure('constraint', res.error)));
+      }
+      return failure(res.reason, res.error);
+    });
+  }
+
+  /**
+   * 幂等修复历史半提交/旧预留：从正常入口调用。
+   * - 有一个合法终局收据：补齐规范 C5 与对应终局行，run 恢复 claimed，复用原收据 ID/时间。
+   * - 多个收据：以规范 C5/标记链接的收据为准，否则按 claimedAt/receiptId 确定性选择。
+   * - 只有旧 ending-reservation 占位：删除占位，让新票据可重新开始。
+   * - 不新增 claim/ledger/余额/库存。
+   */
+  function repairEndingRecords(input) {
+    const core = coreApi();
+    if (!core) return Promise.resolve(failure('core-unavailable'));
+    const options = isObject(input) ? input : {};
+    const careerId = options.careerId;
+    if (!core.isValidCareerId(careerId)) return Promise.resolve(failure('bad-career-id'));
+    return txRun(['claims', 'runs', 'quests', 'migrations'], 'readwrite', (ctx) => {
+      const claimsStore = ctx.store('claims');
+      const questsStore = ctx.store('quests');
+      const migrationsStore = ctx.store('migrations');
+      const readAll = (store, done) => { ctx.bind(store.getAll(), (rows) => done(Array.isArray(rows) ? rows : [])); };
+      readAll(claimsStore, (claimRows) => {
+        readAll(questsStore, (questRows) => {
+          readAll(migrationsStore, (migrationRows) => {
+            const endingClaims = claimRows
+              .filter((row) => row && row.careerId === careerId && typeof row.commissionId === 'string' && row.commissionId.indexOf('ending.') === 0)
+              .sort((a, b) => {
+                const left = String(a.claimedAt || '');
+                const right = String(b.claimedAt || '');
+                if (left !== right) return left < right ? -1 : 1;
+                return String(a.receiptId || a.runId || '') < String(b.receiptId || b.runId || '') ? -1 : 1;
+              });
+            const c5 = questRows.filter((row) => row && row.careerId === careerId && row.nodeId === ENDING_C5_NODE)[0] || null;
+            const markers = {};
+            ENDING_APPROACHES.forEach((approach) => {
+              markers[approach] = questRows.filter((row) => row && row.careerId === careerId && row.nodeId === endingMarkerNode(approach))[0] || null;
+            });
+            let canonical = null;
+            const c5ReceiptId = c5 && (c5.receiptId || c5.sourceReceipt);
+            if (c5ReceiptId) canonical = endingClaims.filter((row) => (row.receiptId || row.runId) === c5ReceiptId)[0] || null;
+            if (!canonical) {
+              for (let i = 0; i < ENDING_APPROACHES.length && !canonical; i += 1) {
+                const marker = markers[ENDING_APPROACHES[i]];
+                const receiptId = marker && (marker.receiptId || marker.sourceReceipt);
+                if (receiptId) canonical = endingClaims.filter((row) => (row.receiptId || row.runId) === receiptId)[0] || null;
+              }
+            }
+            if (!canonical && c5 && ENDING_APPROACHES.indexOf(c5.approach) >= 0) {
+              canonical = endingClaims.filter((row) => row.commissionId === endingMarkerNode(c5.approach))[0] || null;
+            }
+            if (!canonical && endingClaims.length) canonical = endingClaims[0];
+            const staleReservations = migrationRows.filter((row) => row && row.kind === 'ending-reservation' && row.careerId === careerId);
+            if (!canonical) {
+              const tasks = staleReservations.map((row) => (next) => ctx.bind(migrationsStore.delete(row.id), next));
+              sequence(tasks, () => ctx.done({ ok: true, repaired: false, clearedReservations: staleReservations.length, canonicalReceiptId: null }));
+              return;
+            }
+            const approach = typeof canonical.commissionId === 'string' ? canonical.commissionId.slice('ending.'.length) : '';
+            if (ENDING_APPROACHES.indexOf(approach) < 0) {
+              ctx.done({ ok: true, repaired: false, clearedReservations: staleReservations.length, canonicalReceiptId: canonical.receiptId || canonical.runId });
+              return;
+            }
+            const receipt = receiptOf(canonical);
+            const receiptId = receipt.receiptId || canonical.runId;
+            const at = typeof canonical.claimedAt === 'string' && canonical.claimedAt ? canonical.claimedAt : nowIso();
+            writeEndingQuestRows(ctx, core, careerId, approach, receipt, at, () => {
+              const tasks = [];
+              tasks.push((next) => {
+                ctx.bind(ctx.store('runs').get(receipt.runId || canonical.runId), (run) => {
+                  if (!run || run.status === 'claimed') { next(); return; }
+                  const updated = jsonClone(run) || {};
+                  updated.status = 'claimed';
+                  updated.claimedAt = at;
+                  updated.receiptId = receipt.runId || canonical.runId;
+                  updated.updatedAt = nowIso();
+                  ctx.bind(ctx.store('runs').put(updated), next);
+                });
+              });
+              staleReservations.forEach((row) => tasks.push((next) => ctx.bind(migrationsStore.delete(row.id), next)));
+              sequence(tasks, () => ctx.done({
+                ok: true,
+                repaired: true,
+                canonicalReceiptId: receiptId,
+                approach,
+                c5Present: !!c5,
+                markerPresent: !!markers[approach],
+                clearedReservations: staleReservations.length,
+                claims: endingClaims.length,
+              }));
+            });
+          });
+        });
+      });
+    }).then((res) => (res.ok ? res.result : failure(res.reason, res.error)));
   }
 
   /* ------------------------------------------------------------------ *
@@ -1172,6 +1581,7 @@
                 const patch = isObject(plan.equipment) ? plan.equipment : {};
                 const current = isObject(equipmentRow) ? equipmentRow : {};
                 const keys = Object.keys(patch);
+                const expectedLevel = options.expectedLevel;
                 for (let i = 0; i < keys.length; i += 1) {
                   const match = /^module:([A-Za-z0-9_-]+):level$/.exec(keys[i]);
                   if (!match) continue;
@@ -1180,6 +1590,10 @@
                   const owned = Number.isFinite(existing) ? existing : 0;
                   if (Number.isFinite(target) && target <= owned) {
                     ctx.fail('already-owned');
+                    return;
+                  }
+                  if (Number.isFinite(expectedLevel) && Math.floor(expectedLevel) >= 0 && Math.floor(expectedLevel) !== owned) {
+                    ctx.fail('price-changed');
                     return;
                   }
                 }
@@ -1939,6 +2353,8 @@
     updateRun,
     getClaim,
     settleAndClaim,
+    settleEndingAndClaim,
+    repairEndingRecords,
     purchase,
     sellItems,
     reserveEnding,

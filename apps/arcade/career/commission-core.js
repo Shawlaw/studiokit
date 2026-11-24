@@ -1002,10 +1002,10 @@
       }
     }
 
-    async function safeUpdateRun(db, ticketId, patch) {
+    async function safeUpdateRun(db, ticketId, patch, expectedStatus) {
       if (!db || !isFunction(db.updateRun)) return null;
       try {
-        return await db.updateRun(ticketId, patch);
+        return await db.updateRun(ticketId, patch, expectedStatus);
       } catch (err) {
         return null;
       }
@@ -1364,7 +1364,7 @@
         if (activeEntry) activeEntry.run = clone(run);
         return true;
       }
-      var patched = await safeUpdateRun(db, ticketId, { status: 'active', startedAt: nowIso() });
+      var patched = await safeUpdateRun(db, ticketId, { status: 'active', startedAt: nowIso() }, run.status);
       if (patched && patched.ok && patched.run) {
         var entry = entryOf(ticketId);
         if (entry) entry.run = clone(patched.run);
@@ -1594,7 +1594,26 @@
           settledAt: nowIso(),
           gameId: gameId,
         };
-        var patchedFail = await safeUpdateRun(db, ticketId, failurePatch);
+        var patchedFail = await safeUpdateRun(db, ticketId, failurePatch, run.status);
+        if (!patchedFail || patchedFail.ok !== true) {
+          /* 迟到失败遇到 claimed：以已提交收据为准，不把失败写回，也不释放任何终局。 */
+          var racedClaim = await readClaim(db, ticketId);
+          if (racedClaim) {
+            forgetTicket(ticketId);
+            return recordResult({
+              ok: true,
+              duplicate: true,
+              receipt: racedClaim,
+              credits: racedClaim.credits,
+              items: racedClaim.items,
+              runId: ticketId,
+              careerId: run.careerId,
+              commissionId: commission.commissionId,
+              repeat: true,
+              stateRaced: true,
+            });
+          }
+        }
         forgetTicket(ticketId);
         return recordResult(failure(reason, {
           runId: ticketId,
@@ -1608,40 +1627,56 @@
         }));
       }
 
-      var repeat = false;
-      var firstClearMarker = null;
-      try {
-        if (typeof db.reserveCommissionFirstClear === 'function') {
-          var firstClear = await db.reserveCommissionFirstClear({ careerId: run.careerId, commissionId: commission.commissionId, ticketId: ticketId });
-          if (firstClear && firstClear.duplicate === true) repeat = true;
-          else if (firstClear && firstClear.ok === true) firstClearMarker = firstClear.markerId || null;
-          else if (firstClear && firstClear.ok === false && firstClear.reason !== 'already-cleared') {
-            return recordResult(failure(firstClear.reason || REASONS.planFailed, { runId: ticketId }));
-          }
-        } else {
-          var questState = await db.readQuestState(run.careerId);
-          repeat = isQuestCleared(questState, commission.commissionId);
-        }
-      } catch (err) {
-        repeat = false;
-      }
-
       var plan = null;
+      var repeatPlan = null;
       try {
-        plan = core.rewardPlan(commission, events, { mode: MODE, repeat: repeat, gameId: gameId, stats: stats });
+        plan = core.rewardPlan(commission, events, { mode: MODE, repeat: false, gameId: gameId, stats: stats });
+        repeatPlan = core.rewardPlan(commission, events, { mode: MODE, repeat: true, gameId: gameId, stats: stats });
       } catch (err) {
-        if (firstClearMarker) { try { await db.releaseCommissionFirstClear(firstClearMarker, ticketId); } catch (e) { /* ignore */ } }
         return recordResult(failure(REASONS.planFailed, { error: errorText(err) }));
       }
       if (!plan || !plan.ok) {
-        if (firstClearMarker) { try { await db.releaseCommissionFirstClear(firstClearMarker, ticketId); } catch (e) { /* ignore */ } }
         return recordResult(failure((plan && plan.reason) || REASONS.planFailed, {
           runId: ticketId,
           observed: check.observed,
           objective: check.objective,
         }));
       }
+      if (!repeatPlan || !repeatPlan.ok) {
+        return recordResult(failure((repeatPlan && repeatPlan.reason) || REASONS.planFailed, {
+          runId: ticketId,
+          observed: check.observed,
+          objective: check.objective,
+        }));
+      }
+      if (opts.deferCommit === true) {
+        return recordResult({
+          ok: true,
+          deferred: true,
+          runId: ticketId,
+          careerId: run.careerId,
+          commissionId: commission.commissionId,
+          gameId: gameId,
+          plan: {
+            credits: plan.credits,
+            items: plan.items,
+            evidence: plan.evidence,
+            flags: plan.flags,
+          },
+          outcome: outcome,
+          stats: stats,
+        });
+      }
 
+      var priorRepeat = null;
+      try {
+        if (db && typeof db.readQuestState === 'function') {
+          var priorQuestState = await db.readQuestState(run.careerId);
+          priorRepeat = isQuestCleared(priorQuestState, commission.commissionId);
+        }
+      } catch (err) {
+        priorRepeat = null;
+      }
       var claim = null;
       try {
         claim = await db.settleAndClaim({
@@ -1653,6 +1688,12 @@
             items: plan.items,
             evidence: plan.evidence,
             flags: plan.flags,
+          },
+          repeatPlan: {
+            credits: repeatPlan.credits,
+            items: repeatPlan.items,
+            evidence: repeatPlan.evidence,
+            flags: repeatPlan.flags,
           },
           /* 只声明身份字段；金额/物品/流水由 DB 依 plan + core.buildReceipt 自行生成。
              注意：不要传 receiptId——career-db.receiptMismatch 拿 expected.runId 比对，
@@ -1666,11 +1707,9 @@
           contentVersion: CONTENT_VERSION,
         });
       } catch (err) {
-        if (firstClearMarker) { try { await db.releaseCommissionFirstClear(firstClearMarker, ticketId); } catch (e) { /* ignore */ } }
         return recordResult(failure(REASONS.claimFailed, { error: errorText(err), retryable: true }));
       }
       if (!claim || !claim.ok) {
-        if (firstClearMarker) { try { await db.releaseCommissionFirstClear(firstClearMarker, ticketId); } catch (e) { /* ignore */ } }
         var claimReason = (claim && claim.reason) || REASONS.claimFailed;
         return recordResult(failure(claimReason, { retryable: true, message: '交差手续没办成，稍后再试一次。' }));
       }
@@ -1688,7 +1727,8 @@
         runId: ticketId,
         careerId: run.careerId,
         commissionId: commission.commissionId,
-        repeat: repeat === true,
+        repeat: typeof claim.repeat === 'boolean' ? claim.repeat : priorRepeat === true,
+        firstClear: claim.firstClear === true,
       });
     }
 
@@ -1710,8 +1750,12 @@
       if (isSettledStatus(status)) return failure(REASONS.settled, { ticketId: ticketId, status: status });
       if (status === 'abandoned') return { ok: true, duplicate: true, ticketId: ticketId, status: status };
       if (isFailedStatus(status)) return { ok: true, duplicate: true, ticketId: ticketId, status: status };
-      var patched = await safeUpdateRun(db, ticketId, { status: 'abandoned', abandonedAt: nowIso() });
+      var patched = await safeUpdateRun(db, ticketId, { status: 'abandoned', abandonedAt: nowIso() }, status);
       if (!patched || !patched.ok) {
+        if (patched && patched.reason === 'run-state') {
+          var racedClaim = await readClaim(db, ticketId);
+          if (racedClaim) return failure(REASONS.settled, { ticketId: ticketId, status: 'claimed', receipt: racedClaim, duplicate: true });
+        }
         return failure((patched && patched.reason) || REASONS.updateFailed, { ticketId: ticketId });
       }
       forgetTicket(ticketId);

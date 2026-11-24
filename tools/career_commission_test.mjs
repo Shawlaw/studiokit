@@ -251,7 +251,11 @@ function createFakeDb(options) {
     }
     const balance = state.balances[options.careerId];
     if (!balance) return failure('no-wallet');
-    const plan = options.plan || {};
+    const previousQuest = state.quests.filter(
+      (row) => row && row.careerId === options.careerId && row.nodeId === run.commissionId
+    )[0] || null;
+    const wasCleared = !!(previousQuest && previousQuest.status === 'cleared');
+    const plan = wasCleared && options.repeatPlan ? options.repeatPlan : (options.plan || {});
     const credits = Math.max(0, Math.floor(Number(plan.credits) || 0));
     const items = {};
     Object.keys(plan.items || {}).forEach((itemId) => {
@@ -287,14 +291,16 @@ function createFakeDb(options) {
     state.quests = state.quests.filter(
       (row) => !(row.careerId === options.careerId && row.nodeId === run.commissionId)
     );
+    const mergeTokens = (left, right) => Array.from(new Set([].concat(left || [], right || []).filter((v) => typeof v === 'string' && v))).sort();
     state.quests.push({
       careerId: options.careerId,
       nodeId: run.commissionId,
       kind: 'commission',
       status: 'cleared',
-      evidence: evidence.slice(),
-      flags: flags.slice(),
-      clearedAt: options.now || NOW,
+      evidence: mergeTokens(previousQuest && previousQuest.evidence, evidence),
+      flags: mergeTokens(previousQuest && previousQuest.flags, flags),
+      firstClearReceiptId: wasCleared ? previousQuest.firstClearReceiptId || null : options.runId,
+      clearedAt: previousQuest && previousQuest.clearedAt ? previousQuest.clearedAt : (options.now || NOW),
       updatedAt: options.now || NOW,
     });
     state.claims[options.runId] = clone(receipt);
@@ -304,7 +310,7 @@ function createFakeDb(options) {
       receiptId: options.runId,
       updatedAt: options.now || NOW,
     });
-    return { ok: true, duplicate: false, receipt: clone(receipt) };
+    return { ok: true, duplicate: false, receipt: clone(receipt), repeat: wasCleared, firstClear: !wasCleared };
   }
 
   const db = {

@@ -1433,6 +1433,113 @@
 
       /* 跨标签唯一：先抢 career 级 reservation，只有赢家能继续 settle / 写 C5。
          失败或放弃会释放 reservation，可重试；同票重复取回原收据。 */
+      /* 新路径：唯一性 + 收据 + 流水 + C5 + 终局行在同一 DB 事务。 */
+      if (typeof db.settleEndingAndClaim === 'function') {
+        var preview = null;
+        try {
+          var previewInput = { ticketId: ticketId, deferCommit: true };
+          if (typeof request.outcome === 'string' && request.outcome) previewInput.outcome = request.outcome;
+          if (isObject(request.stats)) previewInput.stats = request.stats;
+          preview = await Promise.resolve(instance.settle(previewInput));
+        } catch (err) {
+          preview = null;
+        }
+        if (!preview || preview.ok !== true || !isObject(preview.plan)) {
+          return mapSettleFailure(preview, { approach: approach, careerId: careerId });
+        }
+        var committed = null;
+        try {
+          committed = await db.settleEndingAndClaim({
+            runId: ticketId,
+            careerId: careerId,
+            nonce: run.nonce,
+            approach: approach,
+            plan: preview.plan,
+            receipt: { commissionId: run.commissionId },
+            now: nowIso(),
+            contentVersion: preview.contentVersion || CONTENT_VERSION,
+          });
+        } catch (err) {
+          committed = { ok: false, reason: REASONS.claimFailed, error: errorText(err), retryable: true };
+        }
+        if (!committed || committed.ok !== true) {
+          if (committed && committed.reason === 'already-resolved') {
+            return failure(REASONS.alreadyResolved, {
+              ticketId: ticketId,
+              careerId: careerId,
+              approach: approach,
+              resolvedApproach: committed.resolvedApproach || null,
+              source: 'transaction',
+              settled: false,
+              wrote: false,
+              receipt: null,
+              flagWritten: false,
+            });
+          }
+          return failure((committed && committed.reason) || REASONS.claimFailed, {
+            ticketId: ticketId,
+            careerId: careerId,
+            approach: approach,
+            settled: false,
+            wrote: false,
+            retryable: true,
+            detail: (committed && committed.error) || null,
+          });
+        }
+        var committedReceipt = isObject(committed.receipt) ? clone(committed.receipt) : null;
+        if (!committedReceipt) {
+          return failure(REASONS.receiptUnavailable, { ticketId: ticketId, careerId: careerId, approach: approach, settled: true, retryable: true, flagWritten: false });
+        }
+        if (nonNegInt(committedReceipt.credits, 0) > 0) {
+          return failure(REASONS.economyViolation, {
+            ticketId: ticketId,
+            careerId: careerId,
+            approach: approach,
+            settled: true,
+            retryable: false,
+            flagWritten: false,
+            credits: nonNegInt(committedReceipt.credits, 0),
+            receipt: committedReceipt,
+          });
+        }
+        if (!isArray(committedReceipt.flags) || committedReceipt.flags.indexOf(ENDING_FLAG) < 0) {
+          return failure(REASONS.receiptMissingFlag, {
+            ticketId: ticketId,
+            careerId: careerId,
+            approach: approach,
+            settled: true,
+            retryable: true,
+            flagWritten: false,
+            receipt: committedReceipt,
+          });
+        }
+        delete state.tickets[careerId];
+        delete state.ticketApproach[ticketId];
+        var txOutcome = {
+          ok: true,
+          duplicate: committed.duplicate === true,
+          wrote: committed.wrote === true,
+          settled: true,
+          approach: approach,
+          careerId: careerId,
+          ticketId: ticketId,
+          receipt: committedReceipt,
+          credits: 0,
+          flagsWritten: committed.duplicate === true ? [] : [ENDING_FLAG, ENDING_PREFIX + approach],
+          resolvedApproach: approach,
+          questRows: committed.duplicate === true ? 0 : 2,
+          writtenAt: committedReceipt.claimedAt || nowIso(),
+        };
+        state.lastSettle = clone({
+          ticketId: ticketId,
+          careerId: careerId,
+          approach: approach,
+          duplicate: txOutcome.duplicate,
+          at: txOutcome.writtenAt,
+        });
+        return txOutcome;
+      }
+
       var reservationId = 'ending-reservation:' + careerId;
       var reserve = null;
       try {

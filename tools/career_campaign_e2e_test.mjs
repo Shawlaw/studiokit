@@ -1738,7 +1738,7 @@ const ROUTES = [
         expect: {
           label: 'R1.C4-route',
           chapters: { C0: 'complete', C1: 'complete', C2: 'complete', C3: 'complete', C4: 'active', C5: 'locked' },
-          route: { chapterId: 'C4', routeId: 'build', met: true, available: true },
+          route: { chapterId: 'C4', routeId: 'build', met: false, available: false },
           panelPortState: 'C3',
           endingsAllAvailable: false,
         },
@@ -1751,7 +1751,7 @@ const ROUTES = [
         expect: {
           label: 'R1.C4',
           chapters: { C0: 'complete', C1: 'complete', C2: 'complete', C3: 'complete', C4: 'complete', C5: 'available' },
-          route: { chapterId: 'C4', routeId: 'build', met: true, available: false },
+          route: { chapterId: 'C4', routeId: 'build', met: false, available: false },
           mustKnow: { chapterId: 'C4' },
           panelPortState: 'C4',
           endingsAllAvailable: true,
@@ -1861,8 +1861,8 @@ const ROUTES = [
         expect: {
           label: 'R3.C2-mining-route',
           chapters: { C0: 'complete', C1: 'complete', C2: 'active', C3: 'locked', C4: 'locked', C5: 'locked' },
-          route: { chapterId: 'C2', routeId: 'mining', met: true, available: true },
-          routesAny: { chapterId: 'C2', minMet: 1 },
+          route: { chapterId: 'C2', routeId: 'mining', met: false, available: false },
+          routesAny: { chapterId: 'C2', minMet: 0 },
           panelPortState: 'C1',
           endingsAllAvailable: false,
         },

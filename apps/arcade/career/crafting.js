@@ -671,6 +671,7 @@
       purchaseId: purchaseId,
       cost: cost,
       grants: { equipment: equipment },
+      expectedLevel: isInteger(value.currentLevel) ? value.currentLevel : 0,
     };
     if (Object.keys(costItems).length) request.costItems = costItems;
     const now = cleanText(options.now);
