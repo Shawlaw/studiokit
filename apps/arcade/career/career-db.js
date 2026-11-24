@@ -590,7 +590,7 @@
               tasks.push((next) => {
                 ctx.bind(store.get(action.clueId), (recordRow) => {
                   const mergedRecord = Object.assign({ clueId: action.clueId }, isObject(recordRow) ? recordRow : {}, {
-                    openedAt: (action.at && String(action.at)) || at,
+                    openedAt: (isObject(recordRow) && recordRow.openedAt) || (action.at && String(action.at)) || at,
                     updatedAt: at,
                   });
                   ctx.bind(store.put(mergedRecord), next);
@@ -2270,6 +2270,52 @@
     }).then((res) => (res.ok ? res.result : failure(res.reason, res.error)));
   }
 
+  /**
+   * 章节旗标写事务守卫：同一事务内重核发现代次与“当前仍有线索”，
+   * 防止回信箱检查通过后被替换导入，旧请求仍把 C0 写进新档。
+   */
+  function putQuestsGuarded(careerId, quests, guard) {
+    const core = coreApi();
+    if (!core) return Promise.resolve(failure('core-unavailable'));
+    if (!core.isValidCareerId(careerId)) return Promise.resolve(failure('bad-career-id'));
+    let list = quests;
+    if (isObject(quests)) list = Object.keys(quests).map((key) => quests[key]);
+    if (!Array.isArray(list)) return Promise.resolve(failure('bad-quests'));
+    const at = nowIso();
+    const records = [];
+    for (let i = 0; i < list.length; i += 1) {
+      const raw = list[i];
+      if (!isObject(raw) || !core.isToken(raw.nodeId)) return Promise.resolve(failure('bad-quest'));
+      const row = jsonClone(raw) || {};
+      row.careerId = careerId;
+      row.nodeId = raw.nodeId;
+      row.schemaVersion = SCHEMA_VERSION;
+      row.updatedAt = at;
+      records.push(row);
+    }
+    const expectedGeneration = guard && Number.isFinite(Number(guard.generation)) ? Math.floor(Number(guard.generation)) : null;
+    const requireClue = !!(guard && guard.requireClue === true);
+    return txRun(['state', 'discovery', 'quests'], 'readwrite', (ctx) => {
+      readDiscoveryGeneration(ctx, (currentGeneration) => {
+        if (expectedGeneration !== null && expectedGeneration !== currentGeneration) {
+          ctx.done({ ok: false, reason: 'stale-generation', generation: currentGeneration });
+          return;
+        }
+        ctx.bind(ctx.store('state').get(STATE_KEY_DISCOVERY), (stateRow) => {
+          const stateValue = stateRow && isObject(stateRow.value) ? stateRow.value : null;
+          const hasClue = !!(stateValue && isObject(stateValue.clues) && Object.keys(stateValue.clues).length > 0);
+          if (requireClue && !hasClue) {
+            ctx.done({ ok: false, reason: 'no-clue', generation: currentGeneration });
+            return;
+          }
+          const store = ctx.store('quests');
+          const tasks = records.map((record) => (next) => ctx.bind(store.put(record), next));
+          sequence(tasks, () => ctx.done({ ok: true, count: records.length, generation: currentGeneration }));
+        });
+      });
+    }).then((res) => (res.ok ? res.result : failure(res.reason, res.error)));
+  }
+
   /* ------------------------------------------------------------------ *
    * 重置 / 备份
    * ------------------------------------------------------------------ */
@@ -2576,6 +2622,7 @@
     readLedger,
     readQuestState,
     putQuests,
+    putQuestsGuarded,
     resetCareer,
     resetDiscovery,
     exportAll,

@@ -1998,7 +1998,11 @@
         }
         var write;
         try {
-          write = await db.putQuests(careerId, rows);
+          if (options.guard && isFunction(db.putQuestsGuarded)) {
+            write = await db.putQuestsGuarded(careerId, rows, options.guard);
+          } else {
+            write = await db.putQuests(careerId, rows);
+          }
         } catch (err) {
           return failure(REASONS.dbWriteFailed, {
             careerId: careerId,

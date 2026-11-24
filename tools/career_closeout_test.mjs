@@ -45,8 +45,9 @@ try {
   await sleep(300);
   const merged = await snap(a);
   const rowAfterDuplicate = await a.evaluate(`(async () => { const rows = await ArcadeCareer.db.listDiscovery(); const row = rows.filter((r) => r.clueId === 'CL-memory-flip')[0] || null; return { openedAt: row && row.openedAt, count: rows.length }; })()`);
+  const reread = await a.evaluate(`(async () => { const r = await ArcadeCareer.openClue('CL-memory-flip'); const s = await ArcadeCareer.db.getDiscoveryState(); const rows = await ArcadeCareer.db.listDiscovery(); const row = rows.filter((x) => x.clueId === 'CL-memory-flip')[0] || null; return { r, stateOpened: s.clues['CL-memory-flip'].openedAt, rowOpened: row && row.openedAt }; })()`);
   const bView = await b.evaluate(`(() => { const s = ArcadeCareer.state(); return { opened: s.clues && s.clues['CL-memory-flip'] ? s.clues['CL-memory-flip'].openedAt : null, stage: s.stage, hints: s.hintsEnabled }; })()`);
-  check('同代次读信 + 另一标签改设置 + 重复发现同一线索：openedAt/阶段不被擦掉，两张表 openedAt 相等', opened && opened.ok === true && toggled.r === false && merged.clues.length === 2 && merged.opened && merged.rows === 2 && merged.stage !== 'GLIMPSED' && merged.hints === false && rowAfterDuplicate.count === 2 && rowAfterDuplicate.openedAt === merged.opened && bView.opened === merged.opened && bView.stage === merged.stage && bView.hints === false, { opened, toggled, merged, rowAfterDuplicate, bView });
+  check('同代次读信 + 另一标签改设置 + 重复发现/阅读：两张表 openedAt 始终相等', opened && opened.ok === true && toggled.r === false && merged.clues.length === 2 && merged.opened && merged.rows === 2 && merged.stage !== 'GLIMPSED' && merged.hints === false && rowAfterDuplicate.count === 2 && rowAfterDuplicate.openedAt === merged.opened && reread.r && reread.r.ok === true && reread.stateOpened === merged.opened && reread.rowOpened === merged.opened && bView.opened === merged.opened && bView.stage === merged.stage && bView.hints === false, { opened, toggled, merged, rowAfterDuplicate, reread, bView });
 
   /* saveState 原样旧对象：清除后连续两次都必须拒绝，新状态可保存。 */
   await b.evaluate(`window.__oldState = ArcadeCareer.state()`);
@@ -103,6 +104,8 @@ try {
   const oldMailbox = await b.evaluate(`(async () => ArcadeCareer.openMailbox())()`);
   await sleep(700);
   const c0AfterOld = await b.evaluate(`(async () => { const db = ArcadeCareer.db; const c = await db.ensureCareer({}); const q = await db.readQuestState(c.careerId); return { hasC0: q.quests.some((row) => row.nodeId === 'story:C0.port_seen'), result: null }; })()`);
+  const guardStale = await b.evaluate(`(async () => { const db = ArcadeCareer.db; const c = await db.ensureCareer({}); const snap = await db.getDiscoverySnapshot(); const r = await db.putQuestsGuarded(c.careerId, [{ nodeId: 'story:C0.port_seen', kind: 'story-flag', status: 'cleared', flags: ['C0.port_seen'] }], { generation: 0, requireClue: true }); const q = await db.readQuestState(c.careerId); return { r, currentGeneration: snap.generation, hasC0: q.quests.some((row) => row.nodeId === 'story:C0.port_seen') }; })()`);
+  check('C0 写事务守卫：旧代次/无线索的章节旗标写入零写入', guardStale && guardStale.r && guardStale.r.ok === false && guardStale.r.reason === 'stale-generation' && guardStale.hasC0 === false && guardStale.currentGeneration > 0, guardStale);
   await a.evaluate('ArcadeCareer.setHintsEnabled(true)');
   await sleep(150);
   await a.evaluate(`(async () => { const C = ArcadeCareer; C.observe('pair.match', { symbol: 'A', level: 1, moves: 1 }); C.observe('pair.match', { symbol: 'B', level: 2, moves: 2 }); return C.finish({ mode: 'classic', outcome: 'won', stats: { level: 1, moves: 2, score: 20 } }); })()`);

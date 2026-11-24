@@ -549,13 +549,12 @@ export async function openPage({
 } = {}) {
   if (!Number.isInteger(port)) throw new Error('openPage 需要整数 port');
   const owned = ownedBrowsers.get(port);
-  const actualPort = owned && owned.actualPort ? owned.actualPort : port;
-  if (owned) {
-    if (!owned.child || owned.child.exitCode !== null) throw new Error('openPage: 本轮 Chrome 已退出，拒绝连接 ' + port);
-    const version = await fetch(`http://127.0.0.1:${actualPort}/json/version`).then((r) => r.json());
-    if (!owned.wsPath || version.webSocketDebuggerUrl !== owned.wsPath) {
-      throw new Error('openPage: CDP 端口归属已变化，拒绝向非本轮 Chrome 新建 target');
-    }
+  if (!owned) throw new Error('openPage: CDP 端口未登记或已失效，拒绝在发请求前连接: ' + port);
+  const actualPort = owned.actualPort || port;
+  if (!owned.child || owned.child.exitCode !== null) throw new Error('openPage: 本轮 Chrome 已退出，拒绝连接 ' + port);
+  const version = await fetch(`http://127.0.0.1:${actualPort}/json/version`).then((r) => r.json());
+  if (!owned.wsPath || version.webSocketDebuggerUrl !== owned.wsPath) {
+    throw new Error('openPage: CDP 端口归属已变化，拒绝向非本轮 Chrome 新建 target');
   }
   const target = await fetch(`http://127.0.0.1:${actualPort}/json/new?${encodeURIComponent(url)}`, { method: 'PUT' }).then((r) => r.json());
   const cdp = new CDP(target.webSocketDebuggerUrl, { artifactsDir });

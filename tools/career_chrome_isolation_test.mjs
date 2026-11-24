@@ -96,8 +96,12 @@ try {
   const secondTargets = await fetch('http://127.0.0.1:' + second.port + '/json/list').then((r) => r.json());
   check('两个固定端口请求各自使用本轮动态实例：第一实例没有新 target，页签落在第二实例', firstTargetsBefore.length === firstTargetsAfter.length && secondTargets.length > 0 && secondTargets.some((t) => t.type === 'page' && t.id !== firstTargetsBefore[0]?.id), { fixedPort, firstPort: first.port, secondPort: second.port, before: firstTargetsBefore.length, after: firstTargetsAfter.length, second: secondTargets.length });
   try { fixedPage.ws.close(); } catch (err) { /* ignore */ }
-  await stopChrome(first);
   await stopChrome(second);
+  let staleAliasError = null;
+  try { await openPage({ port: fixedPort }); } catch (err) { staleAliasError = String(err && err.message); }
+  const firstTargetsAfterStop = await fetch('http://127.0.0.1:' + first.port + '/json/list').then((r) => r.json()).catch(() => []);
+  check('停止后旧固定端口别名在发请求前被拒，不落到仍存活实例', !!staleAliasError && /未登记|失效/.test(staleAliasError) && firstTargetsAfterStop.length === firstTargetsBefore.length, { staleAliasError, before: firstTargetsBefore.length, after: firstTargetsAfterStop.length });
+  await stopChrome(first);
 } finally {
   await new Promise((resolve) => sentinel.close(resolve));
 }

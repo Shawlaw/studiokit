@@ -2996,7 +2996,12 @@
             .then(function (career) {
               if (!career || !career.careerId) return null;
               internal.commissionLastCareerId = career.careerId;
-              return mod.syncFlags({ careerId: career.careerId, db: db, mailboxOpened: mailboxOpened === true });
+              return mod.syncFlags({
+                careerId: career.careerId,
+                db: db,
+                mailboxOpened: mailboxOpened === true,
+                guard: mailboxOpened === true ? { generation: internal.discoveryGeneration, requireClue: true } : null,
+              });
             });
         })
         .catch(function (err) {
