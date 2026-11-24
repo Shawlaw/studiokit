@@ -84,9 +84,23 @@
 
 **G18 PASS**（第二轮独立复审，B1–B5 全部关闭；门禁与独立复测全绿）。随后四轮全分支复审提出的 P1/P2 已在本分支修复并复测；G18 PASS ≠ 发布授权。
 
-## 结论
+## 第六轮复审（ea15623）后的修复（HEAD `aca3cd4`，已过完整门禁）
+
+第六轮复审的导入问题已关闭；本轮修复 2 个产品 P2 与 Chrome 隔离缺口：
+
+- Chrome 固定端口归属：预检后仍在窗口期被占用时，`launchChrome` 会通过 `/json/version` 的 Chrome 身份 + CDP WebSocket `Browser.getVersion` 确认端口属于本次 Chrome；哨兵/替身直接失败，不连接、不返回成功。
+- 启动失败清理：恢复子进程 `error` 监听并与 `exit`、就绪过程一起竞速；无效 Chrome 路径立即拒绝，异常/退出都会删除本轮临时 profile，不再出现 unhandled error。
+- `saveState` 代次校验：公开快照写入也携带 `SAVE_STATE` 动作元数据，与动作类型独立；旧标签保存旧快照返回 `{ok:false,error:'stale-generation'}`，两张发现表不被写回，重载后的新快照可保存。
+- 设置开关冲突：`setHintsEnabledDetailed` 返回结构化结果；写入被拒时面板恢复真实 `aria-checked`/文案并播报失败，只有真正落库后才显示「关」。紧接一次重试可关闭并持久化。
+
+验证：`career_review5_import_test` 扩展到 **12/12**，`career_chrome_isolation_test` 扩展到 **6/6**（含无效路径与 profile 清理）。`aca3cd4` 实跑 `py -3 tools/arcade_run_all_gates.py` **ALL GATES PASSED（exit 0）**，日志 `REVIEW6-GATE.log`（4474 行，无 RETRY）。
+
 
 **G18 PASS**（第二轮独立复审，B1–B5 全部关闭；门禁与独立复测全绿）。随后五轮全分支复审提出的 P1/P2 已在本分支修复并复测；G18 PASS ≠ 发布授权。
+
+## 结论
+
+**G18 PASS**（第二轮独立复审，B1–B5 全部关闭；门禁与独立复测全绿）。随后六轮全分支复审提出的 P1/P2 已在本分支修复并复测；G18 PASS ≠ 发布授权。
 
 ## 首轮阻塞与本轮关闭
 
