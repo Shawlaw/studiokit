@@ -5,7 +5,9 @@
 - 仓库：<https://github.com/Shawlaw/studiokit>
 - GitHub Pages：<https://shawlaw.github.io/studiokit/>
 - Cloudflare Pages：<https://studiokit.pages.dev/>
-- 本次发布版本为 Arcade `0.18.1`。包含首页续玩与排序记忆、触控与游戏返回、生涯首页切换。
+- Arcade `0.18.1` 已于 2026-11-24 双端发布，提交 `5c16586`。包含首页续玩与排序记忆、触控与游戏返回、生涯首页切换。
+  - 四项部署任务成功。两端各 87/87 项文件哈希与本地发布产物一致。见 [Actions 发布记录](https://github.com/Shawlaw/studiokit/actions/runs/45427632073)。
+  - 冒烟 117/117。双端 Chromium 确认页面与 SW 都是 0.18.1，俄罗斯方块可在拇指区暂停，从顶栏返回街机厅后直接续玩。用正式产物复验从 0.18.0 手动检查更新、刷新与保留旧存档。部署切换期间，GitHub Pages 的旧页检测到 0.18.1，首次刷新确认超时。
 - Arcade `0.18.0` 已于 2026-11-24 双端发布，包含星塔回响与生涯 96 份委托。提交 `cfd8119` 的四个部署任务全部成功。见 [Actions 发布记录](https://github.com/Shawlaw/studiokit/actions/runs/45411473922)。
 - 更早发布的 Arcade `0.13.3`（2026-11-22）
   - 批次内容：Cloudflare Pages 无后缀 URL 下的游戏识别修复（计时全 0 根因）；测试服务器新增无后缀回退、smoke 108 → 109；无 key/Schema 变更；保留 `apps/arcade/diag.html` 供真机复验
