@@ -1,6 +1,6 @@
 #!/usr/bin/env node
 /**
- * 街机厅无头浏览器冒烟测试（113 项全链路回归）。
+ * 街机厅无头浏览器冒烟测试。
  * 零 npm 依赖：通用基础设施见 tools/lib/arcade_cdp.mjs（静态服务器 / Chrome 启动 / CDP / 断言记录器）。
  * 运行：node tools/arcade_smoke.mjs
  * 端口可用环境变量覆盖：ARCADE_SMOKE_PORT（默认 8765）/ ARCADE_CDP_PORT（默认 9333）。
@@ -85,6 +85,62 @@ async function main() {
     record('中心页类型筛选「反应」', true);
     await cdp.evaluate(`(() => { const chip = [...document.querySelectorAll('.hall-chip')].find((c) => c.dataset.category === '全部'); chip && chip.click(); })()`);
     await cdp.screenshot('hall.png');
+
+    await cdp.evaluate(`(() => {
+      Arcade.Prefs.save({ muted: true, immersive: true });
+      const select = document.querySelector('[data-sort]');
+      select.value = 'name';
+      select.dispatchEvent(new Event('change', { bubbles: true }));
+    })()`);
+    await cdp.navigate(base + '/apps/arcade/');
+    const persistedSort = await cdp.evaluate(`(() => {
+      const select = document.querySelector('[data-sort]');
+      const search = document.querySelector('[data-search]');
+      search.value = '雪铃';
+      search.dispatchEvent(new Event('input'));
+      document.querySelector('[data-clear-filters]').click();
+      const order = [...document.querySelectorAll('.hall-card')].map((card) => card.dataset.gameId);
+      const expected = [...Arcade.GAMES].sort((a, b) => a.name.localeCompare(b.name, 'zh-CN')).map((game) => game.id);
+      return { sort: select.value, sorted: order.join(',') === expected.join(','), prefs: Arcade.Prefs.load() };
+    })()`);
+    assert(persistedSort.sort === 'name' && persistedSort.sorted && persistedSort.prefs.hallSort === 'name' &&
+      persistedSort.prefs.muted && persistedSort.prefs.immersive, 'sort preference or clear filters: ' + JSON.stringify(persistedSort));
+    await cdp.evaluate(`Arcade.Prefs.save({ muted: false, immersive: false, hallSort: 'invalid' })`);
+    await cdp.navigate(base + '/apps/arcade/');
+    assert(await cdp.evaluate(`document.querySelector('[data-sort]').value`) === 'recommend', 'invalid sort did not fall back');
+    await cdp.evaluate(`localStorage.removeItem('studiokit:arcade:prefs:v1')`);
+    record('中心页记忆排序，清除筛选保留排序，兼容旧偏好与无效值', true);
+
+    for (const [width, height, columns] of [[320, 568, 2], [375, 667, 2], [390, 844, 2], [430, 932, 2], [1280, 800, 4]]) {
+      await cdp.send('Emulation.setDeviceMetricsOverride', { width, height, deviceScaleFactor: 1, mobile: width < 620 });
+      const layout = await cdp.evaluate(`(() => {
+        const grid = document.querySelector('[data-hall-grid]');
+        const card = grid.firstElementChild;
+        const records = document.querySelector('#hall-records');
+        return {
+          resumeHidden: document.querySelector('[data-resume-section]').hidden,
+          recordsAfterGrid: Boolean(grid.compareDocumentPosition(records) & Node.DOCUMENT_POSITION_FOLLOWING),
+          openRecords: records.querySelectorAll('details[open]').length,
+          firstCardBottom: card.getBoundingClientRect().bottom,
+          cardWidth: card.getBoundingClientRect().width,
+          cardHeight: card.getBoundingClientRect().height,
+          columns: getComputedStyle(grid).gridTemplateColumns.split(' ').length,
+          overflow: document.documentElement.scrollWidth - document.documentElement.clientWidth,
+        };
+      })()`);
+      assert(layout.resumeHidden && layout.recordsAfterGrid && !layout.openRecords &&
+        layout.firstCardBottom <= height && layout.cardWidth >= 44 && layout.cardHeight >= 44 &&
+        layout.columns === columns && layout.overflow <= 1, width + 'px hall layout: ' + JSON.stringify(layout));
+    }
+    await cdp.send('Emulation.setDeviceMetricsOverride', { width: 420, height: 900, deviceScaleFactor: 1, mobile: true });
+    await cdp.click('.hall-card[data-game-id="block-drop"]');
+    await cdp.waitFor(`location.pathname.endsWith('/block-drop.html') && (() => {
+      const classic = document.querySelector('[data-ov-btn]');
+      const zen = document.querySelector('[data-ov-btn3]');
+      return classic && !classic.hidden && zen && !zen.hidden;
+    })()`);
+    await cdp.navigate(base + '/apps/arcade/');
+    record('中心页首屏目录 320/375/390/430px 与桌面，首次开玩直达现有模式选择', true);
 
     /* ---------- 共享输入层：多指归属 / 取消 / 失焦 ---------- */
     const inputTest = await cdp.evaluate(`(() => {
@@ -1814,10 +1870,10 @@ async function main() {
       runs: Arcade.RunSave.count()
     }))()`);
     assert(resumeInfo.runs === 16, 'run count is ' + resumeInfo.runs);
-    assert(resumeInfo.visible === 6, 'resume visible cards is ' + resumeInfo.visible);
-    assert(resumeInfo.more.indexOf('16') !== -1, 'resume expand button missing: ' + resumeInfo.more);
+    assert(resumeInfo.visible === 1, 'resume visible cards is ' + resumeInfo.visible);
+    assert(resumeInfo.more.indexOf('15') !== -1, 'resume expand button missing: ' + resumeInfo.more);
     await cdp.screenshot('hall-resume.png');
-    await cdp.evaluate(`(() => { const b = document.querySelector('[data-resume-more] button'); if (b) b.click(); })()`);
+    await cdp.click('[data-resume-more]');
     await sleep(120);
     const expanded = await cdp.evaluate(`document.querySelectorAll('.hall-resume-card').length`);
     assert(expanded === 16, 'resume expanded cards is ' + expanded);
@@ -1829,7 +1885,25 @@ async function main() {
     })()`);
     assert(exportCheck.ok && exportCheck.runs >= 16 && exportCheck.runCount >= 16, 'export/import runs failed: ' + JSON.stringify(exportCheck));
     record('中心页续玩区 16 条折叠/展开 + 导出/导入含局内进度', true);
-    await cdp.screenshot('hall-resume.png');
+
+    const newest = await cdp.evaluate(`(() => {
+      const sort = document.querySelector('[data-sort]');
+      sort.value = 'recent';
+      sort.dispatchEvent(new Event('change'));
+      const link = document.querySelector('.hall-resume-card.is-latest');
+      const latestSaved = Object.entries(Arcade.RunSave.all()).sort((a, b) => Date.parse(b[1].savedAt) - Date.parse(a[1].savedAt))[0][0];
+      const firstGame = document.querySelector('.hall-card').dataset.gameId;
+      return { link: link.href, latestSaved, firstGame };
+    })()`);
+    assert(newest.firstGame === newest.latestSaved && newest.link.endsWith('#resume'), 'recent order: ' + JSON.stringify(newest));
+    await cdp.click('.hall-resume-card.is-latest');
+    const gamePath = new URL(newest.link).pathname;
+    await cdp.waitFor(`location.pathname === ${JSON.stringify(gamePath)} && !location.hash && document.querySelector('[data-overlay]')?.hidden`);
+    await cdp.navigate(base + '/apps/arcade/');
+    await cdp.click(`.hall-card[data-game-id="${newest.latestSaved}"]`);
+    await cdp.waitFor(`location.pathname === ${JSON.stringify(gamePath)} && document.querySelector('[data-ov-title]')?.textContent === '继续上次？'`);
+    assert(await cdp.text('[data-ov-btn2]') === '重新开始', 'catalog entry must offer restart with an existing save');
+    record('中心页一键续玩，目录保留重开选项，最近游玩计入局内进度', true);
 
     /* ---------- 存储写失败不得谎报导入成功 ---------- */
     const quotaResult = await cdp.evaluate(`(() => {
@@ -2022,6 +2096,7 @@ async function main() {
 
     /* ---------- 中心页统计汇总、分游戏轮次展开、导出导入兼容 ---------- */
     await cdp.navigate(base + '/apps/arcade/');
+    await cdp.click('[data-playtime-section] > summary');
     const statsUi = await cdp.evaluate(`(() => ({
       total: document.querySelector('[data-pt-total]').textContent,
       today: document.querySelector('[data-pt-today]').textContent,
@@ -2461,14 +2536,16 @@ async function main() {
     await cdp.screenshot('gold-320.png');
     record('320px 矿工物品不被道具条遮挡', true);
     await cdp.navigate(base + '/apps/arcade/');
+    await cdp.click('.hall-fold:has([data-reset-game]) > summary');
     const hallSmall = await cdp.evaluate(`({
       searchFont: getComputedStyle(document.querySelector('[data-search]')).fontSize,
-      clearSize: (() => { const b = document.querySelector('.hall-card-clear'); const r = b.getBoundingClientRect(); return { w: Math.round(r.width), h: Math.round(r.height) }; })()
+      clearSize: (() => { const b = document.querySelector('[data-reset-game]'); const r = b.getBoundingClientRect(); return { w: Math.round(r.width), h: Math.round(r.height) }; })()
     })`);
     assert(parseFloat(hallSmall.searchFont) >= 16, 'hall search font ' + hallSmall.searchFont);
     assert(hallSmall.clearSize.w >= 44 && hallSmall.clearSize.h >= 44, 'hall clear target ' + JSON.stringify(hallSmall.clearSize));
     record('中心页 320px 搜索 16px + 清除按钮 44px', true);
     await cdp.screenshot('narrow-hall-320.png');
+    await cdp.click('[data-playtime-section] > summary');
     await cdp.evaluate(`document.querySelector('[data-playtime-section]').scrollIntoView({ block: 'start' })`);
     await sleep(150);
     await cdp.screenshot('stats-hub-320.png');

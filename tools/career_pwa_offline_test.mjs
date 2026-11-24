@@ -4,7 +4,7 @@
  *
  * 用真实 Chrome + Service Worker 覆盖：
  * - P01/P02 中心页注册 SW 并等待 ready；线上 sw.js 的 VERSION / CACHE_PREFIX 推导缓存键
- *   `studiokit-arcade-0.18.0-v1`，`caches.keys()` 含该键，SW 版本握手一致
+ *   `studiokit-arcade-0.18.0-v2`，`caches.keys()` 含该键，SW 版本握手一致
  * - P03 sw.js `CORE_PATHS` 全量在核心缓存中，且 career 运行时/内容/UI 14 项逐个存在
  *   （按 registration.scope 相对 URL 断言）
  * - P04 中心页基线：16 张游戏卡 + 版本 0.18.0（career 不破坏中心页）
@@ -34,8 +34,7 @@ const ARTIFACTS = path.join(REPO_ROOT, 'test-artifacts');
 const DB_NAME = 'studiokit:arcade:career';
 const SW_VERSION = '0.18.0';
 const CACHE_PREFIX = 'studiokit-arcade-';
-/* 与 sw.js 的 `CACHE_NAME = \`${CACHE_PREFIX}${VERSION}-v1\`` 同构的期望值。 */
-const CACHE_KEY = `${CACHE_PREFIX}${SW_VERSION}-v1`;
+const CACHE_KEY = `${CACHE_PREFIX}${SW_VERSION}-v2`;
 const OLD_CACHE_KEY = 'studiokit-arcade-0.14.0-v1';
 /* 任务卡点名的 career 运行时 / 内容 / UI 资源（sw.js CORE_PATHS 中的 14 项）。 */
 const CAREER_CORE_PATHS = [
@@ -215,7 +214,8 @@ const SW_STATE_SRC = String.raw`(async () => {
 
 const CACHE_PROBE_SRC = String.raw`(async () => {
   const keys = await caches.keys();
-  const key = keys.indexOf('studiokit-arcade-0.18.0-v1') >= 0 ? 'studiokit-arcade-0.18.0-v1' : null;
+  const expectedKey = ${JSON.stringify(CACHE_KEY)};
+  const key = keys.includes(expectedKey) ? expectedKey : null;
   const reg = await navigator.serviceWorker.getRegistration();
   const scope = reg ? reg.scope : null;
   if (!key) return { keys, key: null, scope, urls: [] };
@@ -577,7 +577,7 @@ async function main() {
       return { scope: state.scope, controllerScript: state.controllerScript, startDelete: startDeleteStatus };
     });
 
-    await check('P02 sw.js VERSION=0.18.0 且缓存键 studiokit-arcade-0.18.0-v1 存在 + SW 版本握手', async () => {
+    await check(`P02 sw.js VERSION=${SW_VERSION} 且缓存键 ${CACHE_KEY} 存在 + SW 版本握手`, async () => {
       const fetched = await cdp.evaluate(`fetch('${BASE}/apps/arcade/sw.js', { cache: 'no-store', credentials: 'same-origin' }).then((res) => res.ok ? res.text() : 'http-' + res.status).catch((err) => 'fetch-error:' + err.message)`);
       assert(typeof fetched === 'string' && fetched.indexOf('const VERSION') !== -1, '读取线上 sw.js 失败: ' + detail(fetched));
       swSource = fetched;

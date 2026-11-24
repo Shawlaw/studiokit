@@ -2842,8 +2842,24 @@
     return { sync };
   }
 
+  // 中心页的续玩链接只在这次进入游戏时直达存档，刷新或直访仍走原来的开局流程。
+  let resumeRequested = false;
+  if (location.hash === '#resume' && detectCurrentGame()) {
+    try {
+      history.replaceState(history.state, '', location.pathname + location.search);
+      resumeRequested = true;
+    } catch (err) {
+      /* 无法消耗一次性入口时，保留原有续玩确认。 */
+    }
+  }
+
   function showResumePrompt(ui, saved, opts) {
     const o = opts || {};
+    if (resumeRequested && typeof o.onResume === 'function') {
+      resumeRequested = false;
+      o.onResume();
+      return;
+    }
     const summary = saved && saved.summary ? '<br/>' + escapeHtml(saved.summary) : '';
     ui.show({
       title: '继续上次？',

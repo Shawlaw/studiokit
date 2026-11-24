@@ -259,6 +259,7 @@ async function main() {
       '新 SW 接管后页面未刷新时仍应提示 0.18.1 可用: ' + JSON.stringify(stalePage));
 
     // 按钮路径的提示文案必须带新版本号与当前版本。
+    await cdp.click('.hall-app > summary');
     await cdp.click('[data-update-check]');
     await cdp.waitFor(`(() => { const t = document.querySelector('.ac-toast'); return !!t && t.textContent.indexOf('0.18.1') !== -1; })()`, { timeout: 15000 });
     const toast = await cdp.evaluate(`document.querySelector('.ac-toast').textContent`);
@@ -284,6 +285,7 @@ async function main() {
     assert(failed.checked === false, '线上版本读取失败时 checked 应为 false: ' + JSON.stringify(failed));
     assert(failed.updateFound === false, '读取失败时不应凭空报有更新: ' + JSON.stringify(failed));
     await cdp.evaluate(`(() => { document.querySelectorAll('.ac-toast').forEach((n) => n.remove()); return true; })()`);
+    await cdp.click('.hall-app > summary');
     await cdp.click('[data-update-check]');
     await cdp.waitFor(`(() => { const t = document.querySelector('.ac-toast'); return !!t && t.textContent.indexOf('检查更新失败') !== -1; })()`, { timeout: 15000 });
     await cdp.evaluate(`(() => { window.fetch = window.__realFetch; return true; })()`);

@@ -234,6 +234,7 @@ async function hubSnapshot(cdp) {
       return el.getClientRects().length > 0;
     };
     const section = document.querySelector('[data-scores-section]');
+    if (section) section.open = true;
     const table = document.querySelector('.hall-scores-table');
     const wrap = document.querySelector('[data-scores-wrap]');
     const empty = document.querySelector('[data-scores-empty]');
@@ -1137,6 +1138,7 @@ const SCENARIOS = [
       for (const [width, height] of widths) {
         await setViewport(cdp, width, height);
         await cdp.navigate(BASE + HALL_PATH);
+        await cdp.click('[data-scores-section] > summary');
         const metrics = await cdp.evaluate(`(() => {
           const wrap = document.querySelector('[data-scores-wrap]');
           const table = document.querySelector('.hall-scores-table');

@@ -848,5 +848,5 @@ export async function cleanup(ctx) {}
 
 ### 20.6 版本与发布
 
-- 0.18.0 版本链与 SW `studiokit-arcade-0.18.0-v1`；SW/verify_deploy 含 campaign/chapter/ending/npc/side/campaign-core/ending-reducer/world-state。
+- 0.18.0 版本链与 SW `studiokit-arcade-0.18.0-v2`（中心页改版从 v1 更新离线样式与引擎缓存）。SW/verify_deploy 含 campaign/chapter/ending/npc/side/campaign-core/ending-reducer/world-state。
 - 仍只本地分支；任何发布需 Owner `OWNER_AUTHORIZATION: PUBLISH_TO_MAIN`；G18 需独立审核并记录真机/读屏器 UNVERIFIED。

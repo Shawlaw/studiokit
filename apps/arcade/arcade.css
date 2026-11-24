@@ -556,37 +556,42 @@ body.has-subhud .stage-box {
     max(40px, env(safe-area-inset-bottom)) max(18px, env(safe-area-inset-left));
 }
 
-.hall-head { display: flex; flex-wrap: wrap; align-items: flex-end; gap: 12px; margin-bottom: 18px; }
-.hall-head h1 { margin: 0; font-size: 26px; letter-spacing: 1px; }
-.hall-head .hall-sub { color: var(--ac-muted); font-size: 13px; margin: 4px 0 0; }
-.hall-stats {
-  margin-left: auto;
+.hall-head, .hall-library-head {
   display: flex;
-  flex-wrap: wrap;
-  justify-content: flex-end;
-  gap: 6px 14px;
-  color: var(--ac-muted);
-  font-size: 13px;
-  font-variant-numeric: tabular-nums;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
 }
-.hall-stats strong { color: var(--ac-accent); font-size: 16px; }
+.hall-head { margin-bottom: 18px; }
+.hall-head h1 { margin: 0; font-size: clamp(20px, 5.4vw, 28px); }
+.hall-sub { color: var(--ac-muted); font-size: 13px; margin: 3px 0 0; }
+.hall-head-link {
+  display: inline-flex;
+  align-items: center;
+  padding: 0 4px;
+  min-height: 44px;
+  color: var(--ac-accent);
+  font-size: 13px;
+  white-space: nowrap;
+  text-underline-offset: 3px;
+}
+.hall-library-head { margin-bottom: 10px; }
+.hall-library-head h2, .hall-records h2 { margin: 0; font-size: 18px; }
 
 /* ---------- 搜索 / 筛选 / 排序 ---------- */
 
 .hall-controls {
   display: flex;
-  flex-wrap: wrap;
-  gap: 10px;
-  align-items: center;
-  margin: 0 0 12px;
+  gap: 8px;
 }
 .hall-search {
-  flex: 1 1 230px;
+  flex: 1;
   display: flex;
   align-items: center;
   gap: 8px;
   min-width: 0;
-  padding: 8px 12px;
+  min-height: 44px;
+  padding: 0 10px;
   background: var(--ac-panel);
   border: 1px solid var(--ac-line);
   border-radius: 12px;
@@ -606,9 +611,31 @@ body.has-subhud .stage-box {
 .hall-search input::placeholder { color: var(--ac-muted); }
 .hall-search:focus-within { border-color: var(--ac-accent); }
 
+.hall-filterbar {
+  display: grid;
+  grid-template-columns: 1fr max-content max-content;
+  grid-template-rows: 44px auto;
+  align-items: start;
+  column-gap: 6px;
+  margin-bottom: 4px;
+}
+.hall-filter-details { grid-area: 1 / 1 / 3 / 4; }
+.hall-filter-details > summary { width: fit-content; }
+.hall-filter-details > summary,
+.hall-filter-clear,
+.hall-resume-more {
+  font: inherit;
+  font-size: 13px;
+  color: var(--ac-muted);
+  cursor: pointer;
+  min-height: 44px;
+  padding: 0 4px;
+}
+.hall-filter-details > summary { line-height: 44px; }
 .hall-filter { display: flex; flex-wrap: wrap; gap: 6px; }
 .hall-chip {
   appearance: none;
+  min-height: 36px;
   padding: 5px 11px;
   border: 1px solid var(--ac-line);
   border-radius: 999px;
@@ -634,11 +661,14 @@ body.has-subhud .stage-box {
   font-size: 13px;
   cursor: pointer;
   user-select: none;
+  width: fit-content;
+  min-height: 44px;
 }
 .hall-toggle input { accent-color: var(--ac-accent); width: 15px; height: 15px; margin: 0; }
 
 .hall-sort {
   padding: 7px 10px;
+  min-height: 44px;
   border: 1px solid var(--ac-line);
   border-radius: 10px;
   background: var(--ac-panel);
@@ -647,10 +677,13 @@ body.has-subhud .stage-box {
   font-size: 13px;
   cursor: pointer;
 }
-.hall-sort:focus-visible, .hall-chip:focus-visible, .hall-toggle input:focus-visible { outline: 2px solid var(--ac-accent); outline-offset: 2px; }
+.hall-page :is(a, button, select, summary, input[type="checkbox"]):focus-visible {
+  outline: 2px solid var(--ac-accent);
+  outline-offset: 2px;
+}
 
-.hall-result { margin: 0 0 12px; color: var(--ac-muted); font-size: 12px; font-variant-numeric: tabular-nums; }
-.hall-result strong { color: var(--ac-ink); }
+.hall-result { grid-area: 1 / 2; justify-self: center; align-self: center; margin: 0; color: var(--ac-muted); font-size: 12px; }
+.hall-filter-clear { grid-area: 1 / 3; background: none; border: 0; text-decoration: underline; text-underline-offset: 3px; }
 .hall-empty {
   grid-column: 1 / -1;
   padding: 34px 16px;
@@ -666,150 +699,143 @@ body.has-subhud .stage-box {
 
 .hall-resume {
   margin: 0 0 18px;
-  padding: 14px;
-  background: linear-gradient(180deg, rgba(255, 210, 63, 0.08), transparent), var(--ac-panel);
-  border: 1px solid rgba(255, 210, 63, 0.32);
-  border-radius: 16px;
 }
 .hall-resume[hidden] { display: none; }
-.hall-resume h2 { margin: 0 0 10px; font-size: 15px; color: var(--ac-accent); }
-.hall-resume-list { display: grid; grid-template-columns: repeat(auto-fill, minmax(230px, 1fr)); gap: 10px; }
+.hall-resume h2 { margin: 0 0 8px; font-size: 15px; color: var(--ac-accent); }
+.hall-resume-list { display: grid; grid-template-columns: repeat(auto-fit, minmax(min(100%, 240px), 1fr)); gap: 8px; }
 .hall-resume-card {
   display: flex;
   align-items: center;
   gap: 10px;
   min-width: 0;
+  min-height: 56px;
   padding: 10px 12px;
   color: var(--ac-ink);
   text-decoration: none;
-  background: rgba(11, 16, 32, 0.45);
+  background: var(--ac-panel);
   border: 1px solid var(--ac-line);
   border-radius: 12px;
-  transition: border-color 0.15s ease, transform 0.15s ease;
 }
-.hall-resume-card:hover { border-color: var(--ac-accent); transform: translateY(-1px); }
+.hall-resume-card.is-latest {
+  grid-column: 1 / -1;
+  min-height: 66px;
+  background: linear-gradient(100deg, rgba(255, 210, 63, 0.1), transparent), var(--ac-panel);
+  border-color: rgba(255, 210, 63, 0.42);
+}
+.hall-resume-card:hover { border-color: var(--ac-accent); }
 .hall-resume-icon { font-size: 22px; line-height: 1; }
 .hall-resume-body { min-width: 0; flex: 1; }
-.hall-resume-name { display: block; font-size: 14px; font-weight: 700; }
-.hall-resume-meta { display: block; color: var(--ac-muted); font-size: 11px; margin-top: 2px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-.hall-resume-go { color: var(--ac-accent); font-size: 12px; white-space: nowrap; }
-.hall-resume-more { margin-top: 10px; }
+.hall-resume-name { display: block; font-size: 15px; font-weight: 700; }
+.hall-resume-meta { display: block; color: var(--ac-muted); font-size: 12px; margin-top: 2px; overflow-wrap: anywhere; }
+.hall-resume-go { color: var(--ac-accent); font-size: 13px; white-space: nowrap; }
+.hall-resume-card.is-latest .hall-resume-go {
+  border-radius: 8px;
+  padding: 8px 13px;
+  background: var(--ac-accent);
+  color: #0b1020;
+  font-weight: 700;
+}
+.hall-resume-more { background: none; border: 0; text-align: left; text-decoration: underline; text-underline-offset: 3px; }
 
 .hall-grid {
   display: grid;
-  grid-template-columns: repeat(auto-fill, minmax(220px, 1fr));
-  gap: 14px;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 8px;
 }
 
 .hall-card {
-  display: flex;
-  flex-direction: column;
-  gap: 8px;
-  padding: 16px 52px 16px 16px;
+  display: grid;
+  grid-template-columns: 28px minmax(0, 1fr);
+  grid-template-rows: auto auto auto;
+  align-content: center;
+  gap: 2px 8px;
+  min-height: 80px;
+  padding: 8px;
   background: var(--ac-panel);
   border: 1px solid var(--ac-line);
-  border-radius: 16px;
+  border-radius: 12px;
   color: var(--ac-ink);
-  position: relative;
-  overflow: hidden;
-  transition: transform 0.15s ease, border-color 0.15s ease;
+  text-decoration: none;
+  line-height: 1.3;
 }
-.hall-card-link {
-  position: absolute;
-  inset: 0;
-  z-index: 1;
-  border-radius: inherit;
+.hall-card:hover { border-color: var(--card-accent); }
+.hall-card .hall-icon {
+  display: grid;
+  place-items: center;
+  grid-row: 1 / -1;
+  align-self: center;
+  height: 32px;
+  border-bottom: 2px solid var(--card-accent);
+  border-radius: 7px;
+  background: #0b1020;
+  font-size: 19px;
 }
-.hall-card-clear {
-  position: absolute;
-  top: 8px;
-  right: 8px;
-  z-index: 2;
-  width: 44px;
-  height: 44px;
-  padding: 0;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  background: transparent;
-  border: 1px solid var(--ac-line);
-  border-radius: 10px;
+.hall-game-name { font-size: 14px; overflow-wrap: anywhere; }
+.hall-meta {
   color: var(--ac-muted);
-  font-size: 12px;
-  line-height: 1;
-  cursor: pointer;
-}
-.hall-card-clear:hover { color: var(--ac-danger); border-color: var(--ac-danger); }
-.hall-card:hover { transform: translateY(-2px); border-color: var(--card-accent, var(--ac-accent)); }
-.hall-card::before {
-  content: "";
-  position: absolute;
-  inset: 0 0 auto 0;
-  height: 3px;
-  background: var(--card-accent, var(--ac-accent));
-}
-.hall-card .hall-card-top { display: flex; align-items: center; gap: 10px; }
-.hall-card .hall-icon { font-size: 26px; line-height: 1; }
-.hall-card h2 { margin: 0; font-size: 17px; }
-.hall-card .hall-tagline { color: var(--ac-muted); font-size: 12px; }
-.hall-card .hall-titlebox { min-width: 0; }
-.hall-badges {
-  display: flex;
-  flex-wrap: wrap;
-  align-items: center;
-  gap: 6px 10px;
   font-size: 11px;
-  color: var(--ac-muted);
-}
-.hall-difficulty { display: inline-flex; align-items: center; gap: 5px; }
-.hall-dots { display: inline-flex; gap: 2px; }
-.hall-dot { width: 6px; height: 6px; border-radius: 50%; background: var(--ac-line); }
-.hall-dot.is-on { background: var(--card-accent, var(--ac-accent)); }
-.hall-session { white-space: nowrap; }
-.hall-save-badge {
-  display: inline-flex;
-  align-items: center;
-  gap: 3px;
-  padding: 1px 7px;
-  border-radius: 999px;
-  color: var(--ac-accent);
-  border: 1px solid rgba(255, 210, 63, 0.4);
-  background: rgba(255, 210, 63, 0.1);
-  font-size: 10px;
+  font-variant-numeric: tabular-nums;
+  overflow: hidden;
+  text-overflow: ellipsis;
   white-space: nowrap;
 }
-.hall-card .hall-meta {
-  margin-top: auto;
-  display: flex;
-  justify-content: space-between;
-  align-items: baseline;
-  font-size: 12px;
-  color: var(--ac-muted);
-  font-variant-numeric: tabular-nums;
-}
-.hall-card .hall-high strong { color: var(--ac-ink); font-size: 15px; }
-.hall-tags { display: flex; gap: 6px; flex-wrap: wrap; }
-.hall-tag {
-  font-size: 11px;
-  color: var(--ac-muted);
-  border: 1px solid var(--ac-line);
-  border-radius: 999px;
-  padding: 1px 8px;
-}
+.hall-game-action { color: #b6c6ff; font-size: 12px; font-weight: 700; }
+.hall-card.is-resumable .hall-game-action { color: var(--ac-accent); }
 
-.hall-manage {
-  margin-top: 26px;
-  padding: 16px;
+@media (min-width: 620px) {
+  .hall-grid { grid-template-columns: repeat(3, minmax(0, 1fr)); }
+  .hall-card {
+    grid-template-columns: 34px minmax(0, 1fr) auto;
+    grid-template-rows: auto auto;
+    align-items: center;
+    min-height: 68px;
+    padding: 10px;
+  }
+  .hall-game-action { grid-column: 3; grid-row: 1 / -1; white-space: nowrap; }
+  .hall-meta { grid-column: 2; }
+}
+@media (min-width: 900px) { .hall-grid { grid-template-columns: repeat(4, minmax(0, 1fr)); } }
+
+.hall-records { margin-top: 22px; scroll-margin-top: 60px; }
+.hall-records h2 { margin-bottom: 8px; }
+.hall-fold {
+  margin-bottom: 8px;
   background: var(--ac-panel);
   border: 1px solid var(--ac-line);
-  border-radius: 16px;
+  border-radius: 12px;
+}
+.hall-fold > summary {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  min-height: 46px;
+  padding: 8px 12px;
+  border-radius: inherit;
+  font-size: 14px;
+  font-weight: 700;
+  cursor: pointer;
+  list-style: none;
+}
+.hall-fold > summary::-webkit-details-marker { display: none; }
+.hall-fold > summary > span { margin-left: auto; color: var(--ac-muted); font-size: 12px; font-weight: 400; }
+.hall-fold > summary::after { content: ""; width: 6px; height: 6px; border: solid var(--ac-muted); border-width: 0 1px 1px 0; transform: rotate(45deg); margin: -3px 3px 0 auto; }
+.hall-fold > summary:has(> span)::after { margin-left: 0; }
+.hall-fold[open] > summary::after { transform: rotate(225deg); margin-top: 3px; }
+.hall-fold[open] > summary { border-bottom: 1px solid var(--ac-line); border-end-start-radius: 0; border-end-end-radius: 0; }
+.hall-story-entry { margin: 12px 0; font-size: 12px; }
+.hall-story-entry a { color: var(--ac-muted); }
+.hall-app { margin-top: 16px; }
+
+.hall-manage {
   display: flex;
   flex-wrap: wrap;
-  gap: 10px;
+  gap: 8px;
+  padding: 12px;
   align-items: center;
 }
-.hall-manage h2 { width: 100%; margin: 0 0 2px; font-size: 15px; }
-.hall-manage .hall-manage-note { width: 100%; margin: 0; color: var(--ac-muted); font-size: 12px; }
+.hall-manage-note { width: 100%; margin: 0; color: var(--ac-muted); font-size: 12px; }
+.hall-manage-game { display: flex; flex: 1 1 100%; flex-wrap: wrap; gap: 8px; margin-top: 4px; }
+.hall-manage-game button:disabled { opacity: 0.55; cursor: default; }
 .ac-btn-ghost {
   appearance: none;
   background: transparent;
@@ -823,7 +849,8 @@ body.has-subhud .stage-box {
 .ac-btn-ghost:hover { color: var(--ac-ink); border-color: var(--ac-accent); }
 .ac-btn-ghost.ac-danger:hover { border-color: var(--ac-danger); color: var(--ac-danger); }
 
-.hall-foot { margin-top: 22px; color: var(--ac-muted); font-size: 12px; line-height: 1.8; }
+.hall-foot { display: flex; align-items: baseline; justify-content: space-between; gap: 8px; margin-top: 14px; color: var(--ac-muted); font-size: 12px; }
+.hall-foot p { margin: 0; }
 
 /* ---------- 分享 / 安装 / 离线预载（0.5.0） ---------- */
 
@@ -832,13 +859,9 @@ body.has-subhud .stage-box {
   flex-wrap: wrap;
   align-items: center;
   gap: 8px;
-  margin: 0 0 16px;
-  padding: 10px 12px;
-  background: linear-gradient(180deg, rgba(79, 195, 247, 0.07), transparent), var(--ac-panel);
-  border: 1px solid var(--ac-line);
-  border-radius: 14px;
+  padding: 12px;
 }
-.hall-action { min-height: 38px; }
+.hall-action { min-height: 44px; }
 .hall-action:disabled { opacity: 0.55; cursor: default; }
 .hall-utility-status {
   flex: 1 1 260px;
@@ -863,6 +886,7 @@ body.has-subhud .stage-box {
   align-items: center;
   gap: 8px;
   padding: 10px 12px;
+  margin-bottom: 16px;
   border: 1px solid rgba(255, 210, 63, 0.45);
   border-radius: 10px;
   background: rgba(255, 210, 63, 0.09);
@@ -883,13 +907,7 @@ body.has-subhud .stage-box {
 
 /* ---------- 游玩统计（0.5.0） ---------- */
 
-.hall-playtime {
-  margin: 0 0 18px;
-  padding: 16px;
-  background: linear-gradient(180deg, rgba(79, 195, 247, 0.06), transparent), var(--ac-panel);
-  border: 1px solid var(--ac-line);
-  border-radius: 16px;
-}
+.hall-playtime { padding: 14px 12px; }
 .hall-section-head {
   display: flex;
   flex-wrap: wrap;
@@ -898,7 +916,6 @@ body.has-subhud .stage-box {
   gap: 8px;
   margin-bottom: 12px;
 }
-.hall-section-head h2 { margin: 0; font-size: 15px; color: var(--ac-accent); }
 .hall-section-head p { margin: 3px 0 0; color: var(--ac-muted); font-size: 11px; }
 .hall-section-note {
   padding: 1px 8px;
@@ -1035,13 +1052,7 @@ body.has-subhud .stage-box {
 
 /* ---------- 积分记录（0.8.1） ---------- */
 
-.hall-scores {
-  margin: 0 0 18px;
-  padding: 16px;
-  background: linear-gradient(180deg, rgba(255, 210, 63, 0.06), transparent), var(--ac-panel);
-  border: 1px solid var(--ac-line);
-  border-radius: 16px;
-}
+.hall-scores { padding: 14px 12px; }
 .hall-scores-toolbar {
   display: flex;
   flex-wrap: wrap;
@@ -1149,7 +1160,6 @@ body.has-subhud .stage-box {
 .hall-scores-more[hidden] { display: none; }
 
 @media (max-width: 620px) {
-  .hall-scores { padding: 14px 12px; }
   .hall-scores-filter select { min-height: 44px; }
   .hall-scores-clear { min-height: 44px; }
   .hall-scores-table { min-width: 520px; }
@@ -1187,17 +1197,15 @@ body.has-subhud .stage-box {
 
 @media (max-width: 620px) {
   .hall-page { padding: 18px max(12px, env(safe-area-inset-right)) max(32px, env(safe-area-inset-bottom)) max(12px, env(safe-area-inset-left)); }
-  .hall-stats { margin-left: 0; width: 100%; justify-content: flex-start; }
   .game-title { font-size: 15px; }
   .game-hud { gap: 6px; font-size: 12px; }
-  .hall-search { flex-basis: 100%; }
   .hall-resume-list { grid-template-columns: 1fr; }
   .hall-pt-summary { grid-template-columns: repeat(2, minmax(0, 1fr)); }
   .hall-pt-rounds li { grid-template-columns: minmax(72px, 1fr) 48px auto; }
   .hall-pt-round-high { grid-column: 2 / 4; justify-self: end; }
   .hall-pt-dayval { display: none; }
   .hall-utility-status { flex-basis: 100%; }
-  .hall-action { flex: 1 1 auto; min-height: 44px; }
+  .hall-utility .hall-action { flex: 1 1 auto; }
   .hall-pt-toggle { min-height: 44px; }
 }
 
@@ -1278,7 +1286,6 @@ body.has-subhud .stage-box {
 }
 
 @media (prefers-reduced-motion: reduce) {
-  .hall-card { transition: none; }
   .ac-btn, .ac-icon-btn { transition: none; }
   .hall-offline-bar { transition: none; }
   .stage-box.is-hard-drop {
