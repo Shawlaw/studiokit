@@ -1712,6 +1712,14 @@
       });
   }
 
+  function isStaleGenerationResult(result) {
+    return !!result && (result.reason === 'stale-generation' || result.error === 'stale-generation');
+  }
+
+  function reloadAfterStaleGeneration() {
+    return loadDiscoveryStateFromDb().then(function () { return true; }).catch(function () { return false; });
+  }
+
   function writeDbState(state, discoveryRecords, action) {
     var actionWithGeneration = action && isObject(action) ? Object.assign({}, action) : null;
     if (actionWithGeneration) actionWithGeneration.generation = internal.discoveryGeneration || 0;
@@ -1854,6 +1862,26 @@
     if (!internal.dbUsable) {
       internal.discoveryState = discovery.normalizeState(null);
       return Promise.resolve();
+    }
+    var dbModule = readGlobal('db');
+    if (dbModule && typeof dbModule.getDiscoverySnapshot === 'function') {
+      return Promise.resolve()
+        .then(function () { return dbModule.getDiscoverySnapshot(); })
+        .then(function (snapshot) {
+          if (!snapshot || snapshot.ok !== true) return readDbStateRecord().then(function (record) {
+            internal.discoveryState = discovery.normalizeState(record || null);
+            internal.stateLoadedFromDb = !!record;
+          });
+          internal.discoveryState = discovery.normalizeState(snapshot.state || null);
+          internal.stateLoadedFromDb = !!snapshot.state;
+          if (Number.isFinite(Number(snapshot.generation))) internal.discoveryGeneration = Math.floor(Number(snapshot.generation));
+        })
+        .catch(function () {
+          return readDbStateRecord().then(function (record) {
+            internal.discoveryState = discovery.normalizeState(record || null);
+            internal.stateLoadedFromDb = !!record;
+          });
+        });
     }
     return Promise.all([
       readDbStateRecord(),
@@ -2423,6 +2451,9 @@
         if (!persisted) {
           addReason('db-write-failed');
           warnOnce('db-write', (writeResult && writeResult.error) || 'write-failed');
+          if (isStaleGenerationResult(writeResult)) {
+            return reloadAfterStaleGeneration().then(function () { return afterPersist(false); });
+          }
         }
         return afterPersist(persisted);
       });
@@ -2443,6 +2474,9 @@
           if (isSilentTestOnly()) return { ok: false, error: 'test-silent' };
           if (!internal.dbUsable) return { ok: false, error: 'db-unavailable' };
           return writeDbState(normalized, null).then(function (writeResult) {
+            if (isStaleGenerationResult(writeResult)) {
+              return reloadAfterStaleGeneration().then(function () { return { ok: false, error: 'stale-generation' }; });
+            }
             return writeResult && writeResult.ok ? { ok: true } : { ok: false, error: (writeResult && writeResult.error) || 'write-failed' };
           });
         });
@@ -2487,6 +2521,10 @@
           }
           if (isSilentTestOnly() || !internal.dbUsable) return wanted;
           return writeDbState(next, null, { type: 'SET_HINTS' }).then(function (writeResult) {
+            if (isStaleGenerationResult(writeResult)) {
+              /* 旧页代次落后：放弃旧快照，重新载入最新状态，返回未保存。 */
+              return reloadAfterStaleGeneration().then(function () { return false; });
+            }
             if (!writeResult || !writeResult.ok) warnOnce('db-write', (writeResult && writeResult.error) || 'write-failed');
             return wanted;
           });
@@ -2876,6 +2914,9 @@
     api.importCareerLife = function (text, opts) {
       return Promise.resolve(mod.importCareerLife(text, opts)).then(function (result) {
         if (!result || result.ok === false) return result;
+        /* 兼容性空导入（旧经典档/无生涯）preserved:true 或 mode:none 必须零写入：
+           不能在 ensureCareer/推进代次/重载之前产生任何写。 */
+        if (result.preserved === true || result.mode === 'none') return result;
         /* 替换导入可能换生涯：同步当前页缓存的 careerId，章节/任务面板不能继续读旧生涯。 */
         var db = readGlobal('db');
         var ensure = db && pickMethod(db, ['ensureCareer']);
@@ -2888,11 +2929,6 @@
             }).catch(function () {})
           : Promise.resolve();
         return syncCareer
-          .then(function () {
-            var dbBump = readGlobal('db');
-            if (!dbBump || typeof dbBump.bumpDiscoveryGeneration !== 'function') return null;
-            return Promise.resolve(dbBump.bumpDiscoveryGeneration()).catch(function () { return null; });
-          })
           .then(function () { return loadDiscoveryStateFromDb(); })
           .then(function () { return result; });
       });

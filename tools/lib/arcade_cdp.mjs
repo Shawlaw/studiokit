@@ -22,6 +22,7 @@ import http from 'node:http';
 import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
+import net from 'node:net';
 import { spawn } from 'node:child_process';
 import { fileURLToPath } from 'node:url';
 
@@ -141,21 +142,71 @@ function removeProfile(profile) {
   }
 }
 
+function isPortFree(port) {
+  return new Promise((resolve) => {
+    const socket = net.connect({ host: '127.0.0.1', port });
+    let settled = false;
+    const finish = (free) => {
+      if (settled) return;
+      settled = true;
+      try { socket.destroy(); } catch (err) { /* ignore */ }
+      resolve(free);
+    };
+    socket.once('connect', () => finish(false));
+    socket.once('error', () => finish(true));
+    setTimeout(() => finish(true), 800).unref();
+  });
+}
+
+function readDevToolsActivePort(profile, timeoutMs = 10000) {
+  const file = path.join(profile, 'DevToolsActivePort');
+  const start = Date.now();
+  return new Promise((resolve, reject) => {
+    const tick = () => {
+      try {
+        if (fs.existsSync(file)) {
+          const lines = fs.readFileSync(file, 'utf8').split(/\r?\n/);
+          const port = Number(lines[0]);
+          const wsPath = (lines[1] || '').trim();
+          if (Number.isInteger(port) && port > 0 && wsPath) {
+            resolve({ port, wsPath });
+            return;
+          }
+        }
+      } catch (err) {
+        /* 文件可能正在写入，下一轮再读 */
+      }
+      if (Date.now() - start >= timeoutMs) {
+        reject(new Error('Chrome DevToolsActivePort 未就绪'));
+        return;
+      }
+      setTimeout(tick, 80).unref();
+    };
+    tick();
+  });
+}
+
 /**
  * 启动本机 Chrome 并等待 DevTools 端口就绪。
- * 每次调用使用独立 mkdtemp profile，多个 runner 可并发运行（端口不能相同）。
- * @param {{port: number, chromePath?: string, profilePrefix?: string, windowSize?: string, headless?: boolean, extraArgs?: string[]}} options
- * @returns {Promise<{chrome: import('node:child_process').ChildProcess, profile: string, port: number}>}
+ * 每次调用使用独立 mkdtemp profile；port 省略或传 0 时由 Chrome 选择动态端口，
+ * 从该 profile 的 DevToolsActivePort 读取实际端口，绝不连接端口上已有的其它服务。
+ * 固定端口在启动前先检测占用；冲突时无副作用退出，不触碰占用者。
+ * @param {{port?: number, chromePath?: string, profilePrefix?: string, windowSize?: string, headless?: boolean, extraArgs?: string[]}} options
+ * @returns {Promise<{chrome: import('node:child_process').ChildProcess, profile: string, port: number, dynamicPort: boolean}>}
  */
 export async function launchChrome({
-  port,
+  port = 0,
   chromePath = DEFAULT_CHROME,
   profilePrefix = 'studiokit-arcade-',
   windowSize = '420,900',
   headless = true,
   extraArgs = [],
 } = {}) {
-  if (!Number.isInteger(port)) throw new Error('launchChrome 需要整数 port');
+  if (!Number.isInteger(port) || port < 0) throw new Error('launchChrome 需要非负整数 port');
+  const dynamicPort = port === 0;
+  if (!dynamicPort && !(await isPortFree(port))) {
+    throw new Error('launchChrome: CDP 端口已被占用，拒绝启动（未触碰占用进程）: ' + port);
+  }
   const profile = fs.mkdtempSync(path.join(os.tmpdir(), profilePrefix));
   const args = [
     ...(headless ? ['--headless=new'] : []),
@@ -163,7 +214,7 @@ export async function launchChrome({
     '--no-sandbox',
     '--disable-dev-shm-usage',
     '--remote-allow-origins=*',
-    `--remote-debugging-port=${port}`,
+    `--remote-debugging-port=${dynamicPort ? 0 : port}`,
     `--user-data-dir=${profile}`,
     `--window-size=${windowSize}`,
     '--hide-scrollbars',
@@ -172,39 +223,52 @@ export async function launchChrome({
     'about:blank',
   ];
   const chrome = spawn(chromePath, args, { stdio: 'ignore' });
-  const endpoint = `http://127.0.0.1:${port}`;
-  const versionReady = waitForJson(`${endpoint}/json/version`);
-  versionReady.catch(() => {
-    /* 与 spawn 失败竞速时可能后到，避免 unhandled rejection */
+  const exited = new Promise((resolve, reject) => {
+    chrome.once('exit', (code, signal) => reject(new Error('Chrome 提前退出（code=' + code + ', signal=' + signal + '）')));
   });
-  const spawnFailed = new Promise((resolve, reject) => {
-    chrome.once('error', (err) => reject(new Error(`Chrome 启动失败（${chromePath}）：${err.message}`)));
+  exited.catch(() => {
+    /* 启动成功后不再需要；避免 unhandled rejection */
   });
   try {
-    await Promise.race([versionReady, spawnFailed]);
+    const actual = dynamicPort ? await readDevToolsActivePort(profile) : { port, wsPath: '' };
+    const endpoint = `http://127.0.0.1:${actual.port}`;
+    const versionReady = waitForJson(`${endpoint}/json/version`).then((version) => {
+      if (!version || typeof version.webSocketDebuggerUrl !== 'string') throw new Error('CDP /json/version 缺少 webSocketDebuggerUrl');
+      const expectedPath = actual.wsPath ? actual.wsPath.replace(/^\/+/, '') : '';
+      if (expectedPath && !version.webSocketDebuggerUrl.includes('/' + expectedPath)) {
+        throw new Error('CDP /json/version 与 DevToolsActivePort 不匹配');
+      }
+      return version;
+    });
+    versionReady.catch(() => {});
+    await Promise.race([versionReady, exited]);
+    if (chrome.exitCode !== null) throw new Error('Chrome 启动后已退出');
+    return { chrome, profile, port: actual.port, dynamicPort };
   } catch (err) {
     try {
-      chrome.kill();
+      if (chrome.exitCode === null) chrome.kill();
     } catch (killErr) {
       /* ignore */
     }
     removeProfile(profile);
     throw err;
   }
-  return { chrome, profile, port };
 }
 
 /**
- * 关闭 Chrome 并清理临时 profile。
+ * 关闭本次启动的 Chrome 子进程并清理其临时 profile；只操作传入的子进程句柄。
  * @param {{chrome?: import('node:child_process').ChildProcess, profile?: string}} launched
  */
 export async function stopChrome({ chrome, profile } = {}) {
-  try {
-    if (chrome) chrome.kill();
-  } catch (err) {
-    /* ignore */
+  if (chrome && chrome.exitCode === null) {
+    try { chrome.kill(); } catch (err) { /* ignore */ }
+    await new Promise((resolve) => {
+      let done = false;
+      const finish = () => { if (!done) { done = true; resolve(); } };
+      chrome.once('exit', finish);
+      setTimeout(finish, 3000);
+    });
   }
-  await sleep(300);
   removeProfile(profile);
 }
 

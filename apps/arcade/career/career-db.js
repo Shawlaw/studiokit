@@ -428,6 +428,16 @@
     }).then((res) => (res.ok ? res.result : failure(res.reason, res.error)));
   }
 
+  function getDiscoverySnapshot() {
+    return txRun(['state'], 'readonly', (ctx) => {
+      readDiscoveryGeneration(ctx, (generation) => {
+        ctx.bind(ctx.store('state').get(STATE_KEY_DISCOVERY), (row) => {
+          ctx.done({ ok: true, state: row && isObject(row.value) ? row.value : null, generation });
+        });
+      });
+    }).then((res) => (res.ok ? res.result : failure(res.reason, res.error)));
+  }
+
   function saveDiscoveryState(state) {
     const value = state === undefined ? null : state;
     const at = nowIso();
@@ -455,7 +465,7 @@
       const stateStore = ctx.store('state');
       readDiscoveryGeneration(ctx, (currentGeneration) => {
         const requestedGeneration = action && Number.isFinite(Number(action.generation)) ? Math.floor(Number(action.generation)) : null;
-        if (requestedGeneration !== null && requestedGeneration < currentGeneration) {
+        if (requestedGeneration !== null && requestedGeneration !== currentGeneration) {
           ctx.done({ ok: false, reason: 'stale-generation', generation: currentGeneration });
           return;
         }
@@ -2268,6 +2278,10 @@
         STORES.forEach((name) => {
           payload[name] = data[name] || [];
         });
+        /* 发现代次是本机防旧标签回写的内部元数据，不随旧港档案迁移。 */
+        if (Array.isArray(payload.state)) {
+          payload.state = payload.state.filter((row) => !row || row.key !== STATE_KEY_DISCOVERY_GENERATION);
+        }
         ctx.done(payload);
       });
     }).then((res) => (res.ok ? { ok: true, payload: res.result } : failure(res.reason, res.error)));
@@ -2319,17 +2333,28 @@
     const validated = validateSnapshot(snapshot);
     if (!validated.ok) return Promise.resolve(failure(validated.reason, validated.error));
     return txRun(STORES, 'readwrite', (ctx) => {
-      const tasks = [];
-      if (mode === 'replace') {
-        STORES.forEach((name) => tasks.push((next) => ctx.bind(ctx.store(name).clear(), next)));
-      }
-      STORES.forEach((name) => {
-        const store = ctx.store(name);
-        validated.entries[name].forEach((record) => {
-          tasks.push((next) => ctx.bindConstraint(store.put(record), 'write-failed', next));
+      const stateStore = ctx.store('state');
+      readDiscoveryGeneration(ctx, (currentGeneration) => {
+        const nextGeneration = currentGeneration + 1;
+        const entries = {};
+        STORES.forEach((name) => {
+          entries[name] = (validated.entries[name] || []).filter((record) => {
+            return !(name === 'state' && record && record.key === STATE_KEY_DISCOVERY_GENERATION);
+          });
         });
+        const tasks = [];
+        if (mode === 'replace') {
+          STORES.forEach((name) => tasks.push((next) => ctx.bind(ctx.store(name).clear(), next)));
+        }
+        STORES.forEach((name) => {
+          const store = ctx.store(name);
+          entries[name].forEach((record) => {
+            tasks.push((next) => ctx.bindConstraint(store.put(record), 'write-failed', next));
+          });
+        });
+        tasks.push((next) => writeDiscoveryGeneration(ctx, nextGeneration, next));
+        sequence(tasks, () => ctx.done({ ok: true, mode, counts: validated.counts, generation: nextGeneration }));
       });
-      sequence(tasks, () => ctx.done({ ok: true, mode, counts: validated.counts }));
     }).then((res) => (res.ok ? res.result : failure(res.reason, res.error)));
   }
 
@@ -2438,6 +2463,7 @@
     mergeDiscoveryState,
     getDiscoveryGeneration,
     bumpDiscoveryGeneration,
+    getDiscoverySnapshot,
     listDiscovery,
     putDiscovery,
     /* 兼容适配层（非 ADR 必需）：供 D15-04 bridge.js 探测名使用，语义同 discovery 读写。 */

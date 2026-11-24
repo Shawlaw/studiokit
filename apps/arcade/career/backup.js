@@ -1117,6 +1117,7 @@
           mode,
           preserved: false,
           counts: imported.counts || parsed.stats.counts,
+          generation: Number.isFinite(Number(imported.generation)) ? Number(imported.generation) : null,
           warnings: parsed.warnings,
         };
       })
