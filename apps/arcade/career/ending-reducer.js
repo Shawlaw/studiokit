@@ -1414,21 +1414,37 @@
       }
       if (before.resolved && before.approach === approach && before.source === SOURCE_ENDING) {
         var existingClaim = await readClaim(db, ticketId);
-        delete state.tickets[careerId];
-        delete state.ticketApproach[ticketId];
-        return {
-          ok: true,
-          duplicate: true,
-          wrote: false,
-          settled: true,
-          approach: approach,
-          careerId: careerId,
+        if (existingClaim) {
+          delete state.tickets[careerId];
+          delete state.ticketApproach[ticketId];
+          return {
+            ok: true,
+            duplicate: true,
+            wrote: false,
+            settled: true,
+            approach: approach,
+            careerId: careerId,
+            ticketId: ticketId,
+            receipt: existingClaim,
+            credits: 0,
+            flagsWritten: [],
+            resolvedApproach: approach,
+          };
+        }
+        /* 同路线但另一张票：不能返回 ok:true + 空收据；以事务唯一性/原收据为准。 */
+        return failure(REASONS.alreadyResolved, {
           ticketId: ticketId,
-          receipt: existingClaim,
-          credits: 0,
-          flagsWritten: [],
+          careerId: careerId,
+          approach: approach,
           resolvedApproach: approach,
-        };
+          source: before.source,
+          settled: false,
+          wrote: false,
+          duplicate: false,
+          receipt: null,
+          flagWritten: false,
+          message: '这条路已经由另一张票走完了；请用原票据重交或查看终局记录。',
+        });
       }
 
       /* 跨标签唯一：先抢 career 级 reservation，只有赢家能继续 settle / 写 C5。

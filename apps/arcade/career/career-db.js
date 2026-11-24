@@ -76,6 +76,7 @@
   const FORMAT = 'studiokit-arcade-career';
   const STATE_KEY_DISCOVERY = 'discovery';
   const STATE_KEY_CAREER = 'career';
+  const STATE_KEY_DISCOVERY_GENERATION = 'discovery-generation';
   const BLOCKED_TIMEOUT_MS = 3000;
   const TX_TIMEOUT_MS = 15000;
   const MAX_IMPORT_ROWS = 20000;
@@ -396,6 +397,37 @@
     }).then((res) => (res.ok ? res.result : null));
   }
 
+  function readDiscoveryGeneration(ctx, done) {
+    ctx.bind(ctx.store('state').get(STATE_KEY_DISCOVERY_GENERATION), (row) => {
+      const value = row && Number.isFinite(Number(row.value)) && Number(row.value) >= 0 ? Math.floor(Number(row.value)) : 0;
+      done(value);
+    });
+  }
+
+  function writeDiscoveryGeneration(ctx, value, done) {
+    ctx.bind(ctx.store('state').put({
+      key: STATE_KEY_DISCOVERY_GENERATION,
+      schemaVersion: SCHEMA_VERSION,
+      value: Math.max(0, Math.floor(Number(value) || 0)),
+      updatedAt: nowIso(),
+    }), done);
+  }
+
+  function getDiscoveryGeneration() {
+    return txRun(['state'], 'readonly', (ctx) => {
+      readDiscoveryGeneration(ctx, (value) => ctx.done({ ok: true, generation: value }));
+    }).then((res) => (res.ok ? res.result : failure(res.reason, res.error)));
+  }
+
+  function bumpDiscoveryGeneration() {
+    return txRun(['state'], 'readwrite', (ctx) => {
+      readDiscoveryGeneration(ctx, (value) => {
+        const next = value + 1;
+        writeDiscoveryGeneration(ctx, next, () => ctx.done({ ok: true, generation: next }));
+      });
+    }).then((res) => (res.ok ? res.result : failure(res.reason, res.error)));
+  }
+
   function saveDiscoveryState(state) {
     const value = state === undefined ? null : state;
     const at = nowIso();
@@ -421,6 +453,12 @@
     const at = nowIso();
     return txRun(['state', 'discovery'], 'readwrite', (ctx) => {
       const stateStore = ctx.store('state');
+      readDiscoveryGeneration(ctx, (currentGeneration) => {
+        const requestedGeneration = action && Number.isFinite(Number(action.generation)) ? Math.floor(Number(action.generation)) : null;
+        if (requestedGeneration !== null && requestedGeneration < currentGeneration) {
+          ctx.done({ ok: false, reason: 'stale-generation', generation: currentGeneration });
+          return;
+        }
       ctx.bind(stateStore.get(STATE_KEY_DISCOVERY), (existingRow) => {
         const existing = existingRow && isObject(existingRow.value) ? existingRow.value : null;
         if (existing && isObject(existing.clues)) {
@@ -465,8 +503,9 @@
             copy.updatedAt = typeof copy.updatedAt === 'string' ? copy.updatedAt : at;
             ctx.bind(store.put(copy), next);
           });
-          sequence(tasks, () => ctx.done({ ok: true, value }));
+          sequence(tasks, () => ctx.done({ ok: true, value, generation: currentGeneration }));
         });
+      });
       });
     }).then((res) => (res.ok ? res.result : failure(res.reason, res.error)));
   }
@@ -982,6 +1021,51 @@
    * @param {{runId:string, careerId:string, nonce:string, receipt?:object, plan:object, now?:string, contentVersion?:string}} input
    * @returns {Promise<{ok:boolean, duplicate?:boolean, receipt?:object, reason?:string, error?:string}>}
    */
+  /**
+   * 旧档补发首通检测（只读）：旧 commission-first 占位 + 已有收据全是重复薪资、
+   * quest 无首通旗标/证据/引用。返回 true 时下一张成功票按首通计划发一次。
+   */
+  function hasPendingFirstClear(input) {
+    const core = coreApi();
+    if (!core) return Promise.resolve(failure('core-unavailable'));
+    const options = isObject(input) ? input : {};
+    const careerId = options.careerId;
+    const commissionId = options.commissionId;
+    const repeatCredits = Number(options.repeatCredits);
+    const firstCredits = Number(options.firstCredits);
+    if (!core.isValidCareerId(careerId) || !core.isToken(commissionId)) return Promise.resolve(failure('bad-input'));
+    if (!Number.isFinite(repeatCredits) || !Number.isFinite(firstCredits) || firstCredits === repeatCredits) {
+      return Promise.resolve({ ok: true, pending: false });
+    }
+    const markerId = 'commission-first:' + careerId + ':' + commissionId;
+    return txRun(['migrations', 'claims', 'quests'], 'readonly', (ctx) => {
+      ctx.bind(ctx.store('migrations').get(markerId), (markerRow) => {
+        if (!markerRow || markerRow.kind !== 'commission-first') {
+          ctx.done({ ok: true, pending: false });
+          return;
+        }
+        ctx.bind(ctx.store('quests').get([careerId, commissionId]), (questRow) => {
+          const flags = questRow && Array.isArray(questRow.flags) ? questRow.flags : [];
+          const evidence = questRow && Array.isArray(questRow.evidence) ? questRow.evidence : [];
+          if (!questRow || questRow.status !== 'cleared' || questRow.firstClearReceiptId || flags.length || evidence.length) {
+            ctx.done({ ok: true, pending: false });
+            return;
+          }
+          ctx.bind(ctx.store('claims').getAll(), (rows) => {
+            const related = (Array.isArray(rows) ? rows : []).filter((row) => row && row.careerId === careerId && row.commissionId === commissionId);
+            const allRepeat = related.length > 0 && related.every((row) => {
+              const credits = Number(row.credits);
+              const rowFlags = Array.isArray(row.flags) ? row.flags : [];
+              const rowEvidence = Array.isArray(row.evidence) ? row.evidence : [];
+              return credits === repeatCredits && rowFlags.length === 0 && rowEvidence.length === 0;
+            });
+            ctx.done({ ok: true, pending: allRepeat, claims: related.length });
+          });
+        });
+      });
+    }).then((res) => (res.ok ? res.result : failure(res.reason, res.error)));
+  }
+
   function settleAndClaim(input) {
     const core = coreApi();
     if (!core) return Promise.resolve(failure('core-unavailable'));
@@ -1059,7 +1143,8 @@
             const wasCleared = !!(questRow && questRow.status === 'cleared');
             const historicalFirstRef = questRow && typeof questRow.firstClearReceiptId === 'string' && questRow.firstClearReceiptId;
             const canUseRepeat = !!repeatPlan;
-            const isFirst = !wasCleared && !historicalFirstRef;
+            const retroFirstClear = options.retroFirstClear === true && wasCleared && !historicalFirstRef;
+            const isFirst = retroFirstClear || (!wasCleared && !historicalFirstRef);
             const selected = isFirst || !canUseRepeat ? plan : repeatPlan;
             const firstClearReceiptId = isFirst ? runId : historicalFirstRef || null;
             let receipt;
@@ -1259,6 +1344,12 @@
     return txRun(CLAIM_STORES, 'readwrite', (ctx) => {
       ctx.bind(ctx.store('claims').get(runId), (existingClaim) => {
         readEndingRows(ctx, careerId, (rows) => {
+          const canonicalResolved = resolvedEndingFromRows(rows);
+          const canonicalReceiptId = canonicalResolved && canonicalResolved.receiptId ? canonicalResolved.receiptId : null;
+          if (canonicalReceiptId && canonicalReceiptId !== runId) {
+            ctx.done({ ok: false, reason: 'already-resolved', settled: false, wrote: false, resolvedApproach: canonicalResolved.approach || null, receipt: null, flagWritten: false });
+            return;
+          }
           const fixClaim = (claim, done) => {
             const receipt = receiptOf(claim);
             const resolved = resolvedEndingFromRows(rows);
@@ -1296,8 +1387,9 @@
             const status = typeof run.status === 'string' ? run.status : '';
             if (status && BLOCKED_RUN_STATUS.indexOf(status) >= 0) { ctx.fail('run-state'); return; }
             const resolved = resolvedEndingFromRows(rows);
-            if (resolved && resolved.approach && resolved.approach !== approach) {
-              ctx.done({ ok: false, reason: 'already-resolved', settled: false, wrote: false, resolvedApproach: resolved.approach, receipt: null, flagWritten: false });
+            /* 每个生涯只认一张规范终局收据；已有任何终局（同路线不同票也算）都拒绝新写入。 */
+            if (resolved) {
+              ctx.done({ ok: false, reason: 'already-resolved', settled: false, wrote: false, resolvedApproach: resolved.approach || approach, receipt: null, flagWritten: false });
               return;
             }
             let receipt;
@@ -2135,11 +2227,15 @@
   /** 清除发现状态（state 的 'discovery' 记录 + 整个 discovery store），不动生涯资产。 */
   function resetDiscovery() {
     return txRun(['state', 'discovery'], 'readwrite', (ctx) => {
-      const tasks = [
-        (next) => ctx.bind(ctx.store('discovery').clear(), next),
-        (next) => ctx.bind(ctx.store('state').delete(STATE_KEY_DISCOVERY), next),
-      ];
-      sequence(tasks, () => ctx.done({ ok: true }));
+      readDiscoveryGeneration(ctx, (current) => {
+        const next = current + 1;
+        const tasks = [
+          (nextTask) => ctx.bind(ctx.store('discovery').clear(), nextTask),
+          (nextTask) => ctx.bind(ctx.store('state').delete(STATE_KEY_DISCOVERY), nextTask),
+          (nextTask) => writeDiscoveryGeneration(ctx, next, nextTask),
+        ];
+        sequence(tasks, () => ctx.done({ ok: true, generation: next }));
+      });
     }).then((res) => (res.ok ? res.result : failure(res.reason, res.error)));
   }
 
@@ -2340,6 +2436,8 @@
     getDiscoveryState,
     saveDiscoveryState,
     mergeDiscoveryState,
+    getDiscoveryGeneration,
+    bumpDiscoveryGeneration,
     listDiscovery,
     putDiscovery,
     /* 兼容适配层（非 ADR 必需）：供 D15-04 bridge.js 探测名使用，语义同 discovery 读写。 */
@@ -2353,6 +2451,7 @@
     updateRun,
     getClaim,
     settleAndClaim,
+    hasPendingFirstClear,
     settleEndingAndClaim,
     repairEndingRecords,
     purchase,

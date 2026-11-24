@@ -515,9 +515,22 @@
       announce(EXPORT_FAILED);
     }
 
+    function exportFailureText(result) {
+      const reason = isObject(result) ? cleanText(result.reason || result.error) : '';
+      const path = isObject(result) && cleanText(result.path) ? cleanText(result.path) : '';
+      if (reason === 'too-many-rows') return EXPORT_FAILED + ' 单表行数超过上限' + (path ? '（' + path + '）' : '') + '。';
+      if (reason === 'too-large') {
+        const bytes = isObject(result) && Number(result.bytes) ? Number(result.bytes) : 0;
+        return EXPORT_FAILED + ' 文件超过 32 MiB' + (bytes ? '（' + bytes + ' 字节）' : '') + '。';
+      }
+      return EXPORT_FAILED;
+    }
+
     function handleExportResult(result) {
       if (!result || (isObject(result) && result.ok === false)) {
-        failExport();
+        const text = exportFailureText(result);
+        setArchiveStatus(text);
+        announce(text);
         return;
       }
       const text = typeof result === 'string' ? result : typeof result.text === 'string' ? result.text : '';

@@ -362,6 +362,24 @@
    * @param {{contentVersion?:string, rulesetVersion?:number, exportedAt?:string|Date|number, now?:string|Date|number}} [meta]
    * @returns {object}
    */
+  /** 导出与导入共享的单表行数上限检查。 */
+  function rowLimitFailure(payload) {
+    if (!isObject(payload)) return null;
+    for (let i = 0; i < STORES.length; i += 1) {
+      const name = STORES[i];
+      const rows = payload[name];
+      if (!Array.isArray(rows)) continue;
+      if (rows.length > MAX_ROWS_PER_STORE) {
+        return failure('too-many-rows', name + ' rows=' + rows.length + ' > ' + MAX_ROWS_PER_STORE, {
+          path: name,
+          rows: rows.length,
+          maxRows: MAX_ROWS_PER_STORE,
+        });
+      }
+    }
+    return null;
+  }
+
   function buildExportPayload(snapshot, meta) {
     const snap = isObject(snapshot) ? snapshot : {};
     const options = isObject(meta) ? meta : {};
@@ -1034,6 +1052,8 @@
           return failure('serialize-failed', errorText(err));
         }
         if (typeof text !== 'string' || !text) return failure('serialize-failed', 'empty JSON text');
+        const rowError = rowLimitFailure(payload);
+        if (rowError) return rowError;
         const bytes = utf8Bytes(text);
         if (bytes > MAX_TEXT_BYTES) {
           return failure('too-large', 'backup text exceeds ' + MAX_TEXT_BYTES + ' bytes', { bytes, maxBytes: MAX_TEXT_BYTES });

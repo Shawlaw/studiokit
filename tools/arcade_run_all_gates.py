@@ -94,6 +94,7 @@ def main() -> int:
             'C18_E2E_CDP': os.environ.get('C18_E2E_CDP', '9596'),
         }),
         ('career_review3_regression', ['node', 'tools/career_review3_regression_test.mjs'], None),
+        ('career_review4_same_route', ['node', 'tools/career_review4_same_route_test.mjs'], None),
         ('career_review3_workshop', ['node', 'tools/career_review3_workshop_test.mjs'], None),
         ('career_route_evidence', ['node', 'tools/career_route_evidence_test.mjs'], None),
         ('stage_coverage', ['node', 'tools/arcade_stage_coverage.mjs'], None),

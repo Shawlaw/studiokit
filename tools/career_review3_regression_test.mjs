@@ -143,6 +143,40 @@ try {
     check('P2.3 首通按提交顺序 B=90、A=75，旗标/证据/首通引用持久', bSettled && bSettled.receipt && bSettled.receipt.credits === 90 && aSettled && aSettled.receipt && aSettled.receipt.credits === 75 && final.q && (final.q.flags || []).indexOf('C1.work_done') >= 0 && (final.q.evidence || []).indexOf('E-C1-site') >= 0 && typeof final.q.firstClearReceiptId === 'string', { b: bSettled && bSettled.receipt, a: aSettled && aSettled.receipt, q: final.q });
   }
 
+  /* 3b) 旧档只有重复薪资与旧占位：下一张成功票补发首通 90，之后回到 75。 */
+  {
+    const page = await pageOf();
+    const career = await resetTo(page);
+    const legacy = await page.evaluate(`(async () => {
+      const db = window.__arcadeCareerTest.db();
+      const idb = indexedDB.open('studiokit:arcade:career');
+      const opened = await new Promise((res, rej) => { idb.onsuccess = () => res(idb.result); idb.onerror = () => rej(idb.error); });
+      const at = new Date().toISOString();
+      await new Promise((res, rej) => {
+        const tx = opened.transaction(['balances', 'claims', 'ledgers', 'quests', 'migrations'], 'readwrite');
+        tx.objectStore('balances').put({ careerId: ${JSON.stringify(career)}, credits: 230, revision: 3, createdAt: at, updatedAt: at });
+        ['legacy-a', 'legacy-b'].forEach((runId, i) => {
+          tx.objectStore('claims').put({ runId, schemaVersion: 1, receiptId: runId, careerId: ${JSON.stringify(career)}, commissionId: 'pendulum-tower.T1', credits: 75, items: {}, evidence: [], flags: [], txIds: ['tx:' + runId + ':1'], claimedAt: at, rulesetVersion: 1, contentVersion: '0.18.0' });
+          tx.objectStore('ledgers').put({ txId: 'tx:' + runId + ':1', schemaVersion: 1, runId, careerId: ${JSON.stringify(career)}, step: 1, kind: 'credit', credits: 75, items: {}, evidence: [], flags: [], at, rulesetVersion: 1, contentVersion: '0.18.0' });
+        });
+        tx.objectStore('quests').put({ careerId: ${JSON.stringify(career)}, nodeId: 'pendulum-tower.T1', kind: 'commission', status: 'cleared', clearedAt: at, evidence: [], flags: [], updatedAt: at, schemaVersion: 1 });
+        tx.objectStore('migrations').put({ id: 'commission-first:${career}:pendulum-tower.T1', kind: 'commission-first', careerId: ${JSON.stringify(career)}, commissionId: 'pendulum-tower.T1', appliedAt: at });
+        tx.oncomplete = res; tx.onerror = () => rej(tx.error);
+      });
+      opened.close();
+      await ArcadeCareer.openTown();
+      const t = await ArcadeCareer.commission.start({ commissionId: 'pendulum-tower.T1' });
+      for (let i = 0; i < 4; i += 1) ArcadeCareer.commission.recordEvent(t.ticketId, { kind: 'tower.floor_stable', payload: { floor: i + 1 }, seq: i + 1, sourceMode: 'commission' });
+      const settled = await ArcadeCareer.commission.settle({ ticketId: t.ticketId, outcome: 'won', stats: {} });
+      const t2 = await ArcadeCareer.commission.start({ commissionId: 'pendulum-tower.T1' });
+      for (let i = 0; i < 4; i += 1) ArcadeCareer.commission.recordEvent(t2.ticketId, { kind: 'tower.floor_stable', payload: { floor: i + 1 }, seq: i + 1, sourceMode: 'commission' });
+      const again = await ArcadeCareer.commission.settle({ ticketId: t2.ticketId, outcome: 'won', stats: {} });
+      const quests = await db.readQuestState(${JSON.stringify(career)});
+      return { settled, again, q: quests.quests.filter((row) => row.nodeId === 'pendulum-tower.T1')[0] || null };
+    })()`);
+    check('P2.3 旧档缺首通：下一票补发 90 + 旗标/证据，再下一票 75', legacy.settled && legacy.settled.receipt && legacy.settled.receipt.credits === 90 && legacy.again && legacy.again.receipt && legacy.again.receipt.credits === 75 && legacy.q && (legacy.q.flags || []).indexOf('C1.work_done') >= 0 && (legacy.q.evidence || []).indexOf('E-C1-site') >= 0 && typeof legacy.q.firstClearReceiptId === 'string', { first: legacy.settled && legacy.settled.receipt, again: legacy.again && legacy.again.receipt, q: legacy.q });
+  }
+
   /* 4) 另一页结算不能用旧快照重新打开已关闭提示。 */
   {
     const a = await pageOf();
@@ -177,6 +211,30 @@ try {
     const state = await a.evaluate(`(async () => (await window.__arcadeCareerTest.db().getDiscoveryState()))()`);
     const count = state && state.runs && state.runs['memory-flip'] ? state.runs['memory-flip'].eligibleRuns : null;
     check('P2.5 同游戏两标签各结算一局，eligibleRuns 相对基线 +2', count === beforeCount + 2, { one, two, beforeCount, count, runs: state && state.runs });
+  }
+
+  /* 4c) 清除线索后旧标签结算不得把旧线索写回。 */
+  {
+    const a = await pageOf();
+    const b = await pageOf();
+    await resetTo(a);
+    await a.navigate(`${BASE}/apps/arcade/games/memory-flip.html?careerTest=1#test`);
+    await ready(a);
+    await b.navigate(`${BASE}/apps/arcade/games/memory-flip.html?careerTest=1#test`);
+    await ready(b);
+    await b.evaluate(`(async () => { const C = window.ArcadeCareer; C.observe('pair.match', { symbol: 'A', level: 1, moves: 1 }); return C.finish({ mode: 'classic', outcome: 'won', stats: { level: 1, moves: 1, score: 10 } }); })()`);
+    await sleep(300);
+    await a.evaluate(`ArcadeCareer.openSettings()`);
+    await a.waitFor(`!!document.querySelector('[data-career-panel="settings"]')`, { timeout: 5000 });
+    await a.evaluate(`(() => { const b = Array.from(document.querySelectorAll('[data-career-panel="settings"] button')).find((n) => (n.innerText || '').indexOf('清除本机线索记录') >= 0); if (b) b.click(); })()`);
+    await a.waitFor(`!!document.querySelector('[data-career-panel="settings"] .ac-career-confirm:not([hidden])')`, { timeout: 5000 });
+    await a.evaluate(`(() => { const b = Array.from(document.querySelectorAll('[data-career-panel="settings"] button')).find((n) => (n.innerText || '').trim() === '确认清除'); if (b) b.click(); })()`);
+    await sleep(400);
+    const afterClear = await a.evaluate(`(async () => { const s = await window.__arcadeCareerTest.db().getDiscoveryState(); const rows = await window.__arcadeCareerTest.db().listDiscovery ? await window.__arcadeCareerTest.db().listDiscovery() : []; return { clues: s ? Object.keys(s.clues || {}).length : 0, rows: Array.isArray(rows) ? rows.length : 0 }; })()`);
+    await b.evaluate(`(async () => { const C = window.ArcadeCareer; C.observe('pair.match', { symbol: 'B', level: 2, moves: 2 }); return C.finish({ mode: 'classic', outcome: 'won', stats: { level: 1, moves: 2, score: 20 } }); })()`);
+    await sleep(400);
+    const afterOld = await a.evaluate(`(async () => { const s = await window.__arcadeCareerTest.db().getDiscoveryState(); return { clues: s ? Object.keys(s.clues || {}).length : 0 }; })()`);
+    check('P2.5 清除后旧标签结算不会把旧线索写回 state.clues', afterClear.clues === 0 && afterOld.clues === 0, { afterClear, afterOld });
   }
 
   /* 5) 2000 条真实委托 run 的历史导出必须能被同一工具导入（超过 2 MiB）。 */
@@ -219,6 +277,42 @@ try {
       return { bytes: exp && exp.text ? exp.text.length : 0, exported: exp && exp.ok !== false, importOk: imp && imp.ok, reason: imp && (imp.reason || imp.error), counts: imp && imp.counts };
     })()`);
     check('P2.6 2000 条真实 run 导出（>2 MiB）可回导', result.exported === true && result.bytes > 2 * 1024 * 1024 && result.importOk === true && result.counts && result.counts.runs === 2000, result);
+  }
+
+  /* 5b) 20000 行可导出/回导；20001 行必须导出侧拒绝且给出原因。 */
+  {
+    const page = await pageOf();
+    const result = await page.evaluate(`(async () => {
+      const db = window.__arcadeCareerTest.db();
+      const c = await db.ensureCareer({});
+      const idb = indexedDB.open('studiokit:arcade:career');
+      const opened = await new Promise((res, rej) => { idb.onsuccess = () => res(idb.result); idb.onerror = () => rej(idb.error); });
+      const at = new Date().toISOString();
+      async function add(start, end) {
+        await new Promise((res, rej) => {
+          const tx = opened.transaction('runs', 'readwrite');
+          const store = tx.objectStore('runs');
+          for (let i = start; i < end; i += 1) {
+            store.put({ runId: 'commission-bulk-' + i, schemaVersion: 1, careerId: c.careerId, gameId: 'pendulum-tower', commissionId: 'pendulum-tower.T1', mode: 'commission', nonce: 'bulk-' + i, status: 'failed', createdAt: at, updatedAt: at, summary: 'bulk run ' + i });
+          }
+          tx.oncomplete = res; tx.onerror = () => rej(tx.error);
+        });
+      }
+      const existing = await new Promise((resolve, reject) => { const tx = opened.transaction('runs'); const all = tx.objectStore('runs').count(); all.onsuccess = () => resolve(all.result); all.onerror = () => reject(all.error); });
+      await add(3000, 3000 + (20000 - existing));
+      opened.close();
+      await ArcadeCareer.openSettings();
+      for (let i = 0; i < 40 && !ArcadeCareer.backup; i += 1) await new Promise((r) => setTimeout(r, 100));
+      const exp20k = await ArcadeCareer.backup.exportCareerLife();
+      const imp20k = await ArcadeCareer.backup.importCareerLife(exp20k.text, { mode: 'replace' });
+      const idb2 = indexedDB.open('studiokit:arcade:career');
+      const opened2 = await new Promise((res, rej) => { idb2.onsuccess = () => res(idb2.result); idb2.onerror = () => rej(idb2.error); });
+      await new Promise((res, rej) => { const tx = opened2.transaction('runs', 'readwrite'); tx.objectStore('runs').put({ runId: 'commission-bulk-over', schemaVersion: 1, careerId: c.careerId, gameId: 'pendulum-tower', commissionId: 'pendulum-tower.T1', mode: 'commission', nonce: 'bulk-over', status: 'failed', createdAt: at, updatedAt: at }); tx.oncomplete = res; tx.onerror = () => rej(tx.error); });
+      opened2.close();
+      const expOver = await ArcadeCareer.backup.exportCareerLife();
+      return { rows20k: exp20k && exp20k.payload && exp20k.payload.runs ? exp20k.payload.runs.length : 0, export20k: exp20k && exp20k.ok !== false, bytes20k: exp20k && exp20k.text ? exp20k.text.length : 0, import20k: imp20k && imp20k.ok, expOver };
+    })()`);
+    check('P2.6 20000 行可导出并回导；20001 行导出侧 too-many-rows 且带原因', result.export20k === true && result.rows20k === 20000 && result.import20k === true && result.expOver && result.expOver.ok === false && (result.expOver.reason === 'too-many-rows' || result.expOver.error === 'too-many-rows') && result.expOver.path === 'runs' && result.expOver.maxRows === 20000, result);
   }
 
   /* 6) C2/C4 路线必须要求可真实产出的 E/BP 证据组合。 */

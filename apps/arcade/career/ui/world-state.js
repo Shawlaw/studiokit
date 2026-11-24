@@ -929,7 +929,7 @@
 
   function buildChapter(chapterId, snapshotChapter, contentChapter, flags, completed, evidence) {
     const builtin = CHAPTER_FALLBACK[chapterId] || {};
-    const contentRoutes = contentChapter ? contentRoutesOf(contentChapter, flags, completed) : [];
+    const contentRoutes = contentChapter ? contentRoutesOf(contentChapter, flags, completed, evidence) : [];
     const snapshotRoutes = snapshotChapter ? snapshotChapter.routes : [];
     const routes = snapshotRoutes.length ? snapshotRoutes : contentRoutes;
     let state = snapshotChapter ? snapshotChapter.state : '';

@@ -1677,12 +1677,27 @@
       } catch (err) {
         priorRepeat = null;
       }
+      var retroFirstClear = false;
+      try {
+        if (typeof db.hasPendingFirstClear === 'function') {
+          var pendingFirst = await db.hasPendingFirstClear({
+            careerId: run.careerId,
+            commissionId: commission.commissionId,
+            repeatCredits: repeatPlan.credits,
+            firstCredits: plan.credits,
+          });
+          retroFirstClear = !!(pendingFirst && pendingFirst.ok === true && pendingFirst.pending === true);
+        }
+      } catch (err) {
+        retroFirstClear = false;
+      }
       var claim = null;
       try {
         claim = await db.settleAndClaim({
           runId: ticketId,
           careerId: run.careerId,
           nonce: run.nonce,
+          retroFirstClear: retroFirstClear,
           plan: {
             credits: plan.credits,
             items: plan.items,

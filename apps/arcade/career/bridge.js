@@ -147,6 +147,7 @@
     contentBase: '',
     registryInstance: null,
     registryContent: null,
+    discoveryGeneration: 0,
     registryFailed: false,
     cluesEnabled: false,
     clues: [],
@@ -1712,13 +1713,15 @@
   }
 
   function writeDbState(state, discoveryRecords, action) {
+    var actionWithGeneration = action && isObject(action) ? Object.assign({}, action) : null;
+    if (actionWithGeneration) actionWithGeneration.generation = internal.discoveryGeneration || 0;
     /* 多标签/多游戏页并发：优先走 DB 同事务读-合并-写，避免两页都先读旧状态再依次覆盖。
        无 merge 能力的旧 DB/测试注入仍退回普通写入（空 clues 的显式重置也走普通写入）。 */
     var dbModule = readGlobal('db');
     var hasClues = isObject(state) && isObject(state.clues) && Object.keys(state.clues).length > 0;
     /* 普通保存一律同事务合并；显式清空走 db.resetDiscovery，不能靠空 clues 区分。 */
     if (dbModule && typeof dbModule.mergeDiscoveryState === 'function') {
-      return Promise.resolve(dbModule.mergeDiscoveryState(state, discoveryRecords, { action: action || null })).catch(function () {
+      return Promise.resolve(dbModule.mergeDiscoveryState(state, discoveryRecords, { action: actionWithGeneration })).catch(function () {
         return { ok: false, error: 'merge-discovery-failed' };
       });
     }
@@ -1791,7 +1794,8 @@
         if (reset) {
           return callMaybeAsync(reset, dbModule, []).then(function (raw) {
             var normalized = normalizeWriteResult(raw);
-            return normalized.ok ? { ok: true, method: reset.name } : { ok: false, method: reset.name, error: normalized.error };
+            var gen = raw && Number.isFinite(Number(raw.generation)) ? Math.floor(Number(raw.generation)) : null;
+            return normalized.ok ? { ok: true, method: reset.name, generation: gen } : { ok: false, method: reset.name, error: normalized.error };
           });
         }
         var dbName = dbModule.DB_NAME || dbModule.dbName || dbModule.databaseName || CAREER_DB_NAME;
@@ -1851,10 +1855,28 @@
       internal.discoveryState = discovery.normalizeState(null);
       return Promise.resolve();
     }
-    return readDbStateRecord().then(function (record) {
+    return Promise.all([
+      readDbStateRecord(),
+      typeof dbGetDiscoveryGeneration === 'function' ? dbGetDiscoveryGeneration() : Promise.resolve({ ok: false }),
+    ]).then(function (values) {
+      var record = values[0];
+      var genResult = values[1];
       internal.discoveryState = discovery.normalizeState(record || null);
       internal.stateLoadedFromDb = !!record;
+      if (genResult && genResult.ok && Number.isFinite(Number(genResult.generation))) {
+        internal.discoveryGeneration = Math.floor(Number(genResult.generation));
+      }
     });
+  }
+
+  function dbGetDiscoveryGeneration() {
+    var db = readGlobal('db');
+    if (!db || typeof db.getDiscoveryGeneration !== 'function') return null;
+    try {
+      return Promise.resolve(db.getDiscoveryGeneration()).catch(function () { return { ok: false }; });
+    } catch (err) {
+      return Promise.resolve({ ok: false });
+    }
   }
 
   /* ---------------------------------------------------------------- 状态 / 内容快照 */
@@ -2622,6 +2644,7 @@
         if (!internal.dbUsable) return { ok: false, error: 'db-unavailable', state: stateSnapshot() };
         return resetDb().then(function (result) {
           var ok = !!(result && result.ok);
+          if (ok && Number.isFinite(Number(result.generation))) internal.discoveryGeneration = Math.floor(Number(result.generation));
           return {
             ok: ok,
             error: ok ? null : (result && (result.error || result.method)) || 'reset-failed',
@@ -2865,6 +2888,11 @@
             }).catch(function () {})
           : Promise.resolve();
         return syncCareer
+          .then(function () {
+            var dbBump = readGlobal('db');
+            if (!dbBump || typeof dbBump.bumpDiscoveryGeneration !== 'function') return null;
+            return Promise.resolve(dbBump.bumpDiscoveryGeneration()).catch(function () { return null; });
+          })
           .then(function () { return loadDiscoveryStateFromDb(); })
           .then(function () { return result; });
       });

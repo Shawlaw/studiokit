@@ -48,5 +48,8 @@ check('C4 两份 E 单独不足，补 BP 并满足 C3 后授予 C4.city_power_re
   all: unlocked('C4.city_power_restored', ['E-mole-whack.T3', 'E-block-drop.T3', 'BP-merge-2048.T3'], ['C3.truth_found']),
 });
 check('C2/C4 路线标题与提示不再提矿工/旧塔无证据项', !/gold-miner|矿工/.test(JSON.stringify(c2)) && !/pendulum-tower\.T3/.test(JSON.stringify(c4)), { c2Hint: c2 && c2.hint, c4Hint: c4 && c4.hint });
+check('C2/C4 提示复用告示板真实委托名（冰桥观察/生态样本/检修记录/信标电路）', /冰桥观察/.test(c2.hint) && /生态样本/.test(c2.hint) && /检修记录/.test(c4.hint) && /信标电路/.test(c4.hint), { c2Hint: c2.hint, c4Hint: c4.hint });
+const worldSource = fs.readFileSync(path.join(ROOT, 'apps/arcade/career/ui/world-state.js'), 'utf8');
+check('world-state 主/回退构建都把 evidence 传给 contentRoutesOf', /buildChapter\([^)]*evidence\)/.test(worldSource) && /contentRoutesOf\(contentChapter, flags, completed, evidence\)/.test(worldSource), { hasSignature: /buildChapter\([^)]*evidence\)/.test(worldSource), hasPass: /contentRoutesOf\(contentChapter, flags, completed, evidence\)/.test(worldSource) });
 
 if (failures) { console.log(failures + ' failed'); process.exitCode = 1; } else console.log('ROUTE EVIDENCE PASS');
