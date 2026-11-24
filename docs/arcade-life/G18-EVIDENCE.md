@@ -98,9 +98,22 @@
 
 **G18 PASS**（第二轮独立复审，B1–B5 全部关闭；门禁与独立复测全绿）。随后五轮全分支复审提出的 P1/P2 已在本分支修复并复测；G18 PASS ≠ 发布授权。
 
-## 结论
+## 第七轮收口（ae88f29）后的修复（HEAD `9851aac`，已过完整门禁）
+
+按收口清单一次性修复三类共享逻辑：
+
+- Chrome 归属贯穿启动与连接：固定端口在首次 CDP 握手前要求 Chrome 身份 + `Browser.getVersion`；`openPage` 通过本轮归属注册表核对 browser WebSocket 路径后才新建 target。启动错误/提前退出/超时会 abort 未完成的端口轮询、HTTP 与 WebSocket 握手；无效路径/提前退出均清理本轮 profile。
+- 发现动作按事务内当前状态归约：`SET_HINTS` 只改偏好；`CLUE_OPENED/LETTER_FOLLOWED` 要求当前 DB 仍有线索；`SAVE_STATE` 合并线索（保留 openedAt/dismissed）与阶段单调前进；RUN_ENDED 保持 delta 计数。同代次 A 读信 + B 改设置不再擦掉已读时间/阶段，两枚线索并集与 discovery 行一致。
+- 保存/清除/信箱按确认结果更新：`saveState` 对快照采集代次做弱引用校验，旧对象重载后仍被拒；设置普通写入失败恢复 DB/内存/UI 一致并提示，重试可完成；清除失败保留线索，重试可清空；旧信箱/旧线索不推进 C0，当前有效线索仍可幂等推进。
+
+验证：新增 `career_closeout_test` **5/5**，`career_review5_import_test` **12/12**，`career_chrome_isolation_test` **7/7**。`9851aac` 实跑 `py -3 tools/arcade_run_all_gates.py` **ALL GATES PASSED（exit 0）**，日志 `CLOSEOUT-GATE.log`（4482 行，无 RETRY）。
+
 
 **G18 PASS**（第二轮独立复审，B1–B5 全部关闭；门禁与独立复测全绿）。随后六轮全分支复审提出的 P1/P2 已在本分支修复并复测；G18 PASS ≠ 发布授权。
+
+## 结论
+
+**G18 PASS**（第二轮独立复审，B1–B5 全部关闭；门禁与独立复测全绿）。随后七轮全分支复审/收口提出的 P1/P2 已在本分支修复并复测；G18 PASS ≠ 发布授权。
 
 ## 首轮阻塞与本轮关闭
 
