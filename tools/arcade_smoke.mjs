@@ -1059,8 +1059,13 @@ async function main() {
       sigAnnounced.info.signalingCars >= 1 && sigCar && (sigCar.changeState === 'signal' || sigCar.changeState === 'moving'),
       '转向灯没有预告阶段: ' + JSON.stringify(sigAnnounced)
     );
-    await sleep(900);
-    const sigDone = await cdp.evaluate(`__arcadeTest.carsSnapshot()`);
+    let sigDone = [];
+    for (let i = 0; i < 40; i += 1) {
+      sigDone = await cdp.evaluate(`__arcadeTest.carsSnapshot()`);
+      const car = sigDone.filter((c) => c.targetLane === 1)[0];
+      if (car && car.lane === 1 && car.lanePos === 1 && car.changeState === 'none') break;
+      await sleep(100);
+    }
     const sigDoneCar = sigDone.filter((c) => c.targetLane === 1)[0];
     assert(
       sigDoneCar && sigDoneCar.lane === 1 && sigDoneCar.lanePos === 1 && sigDoneCar.changeState === 'none',
