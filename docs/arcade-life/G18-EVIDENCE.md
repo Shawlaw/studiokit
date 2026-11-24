@@ -111,9 +111,23 @@
 
 **G18 PASS**（第二轮独立复审，B1–B5 全部关闭；门禁与独立复测全绿）。随后六轮全分支复审提出的 P1/P2 已在本分支修复并复测；G18 PASS ≠ 发布授权。
 
-## 结论
+## 收口复测（2f3bcf2）后的修复（HEAD `8b41986`，已过完整门禁）
+
+按复测报告补齐三项残余：
+
+- Chrome 固定端口不再直接复用：请求的固定端口只作调用方兼容别名，实际进程始终使用独立临时 profile 的动态端口；`openPage` 通过归属表解析实际端口并核对 browser WebSocket，两个同轮实例请求同一固定端口时页签只落在本轮实例。固定端口预检占用仍无副作用失败；错误/退出/超时取消未完成握手。
+- 快照代次可复制：公开 `state()` 在快照内携带可枚举 `__snapshotGeneration`，`saveState` 先校验对象弱身份或 JSON 复制后的内联代次；同一旧快照及其 JSON 复制版在重载后继续被拒，失去代次的快照返回明确 `missing-snapshot-generation`。
+- 两张发现表同源：RUN_ENDED/重复发现写独立 discovery 行时与现有行合并，已读 `openedAt` 不再被空值覆盖；`OPENED/HINTS` 同代次交错后 state 与 discovery 的 `openedAt` 相等。
+- 信箱 C0 边界：`syncCampaignFlags(mailboxOpened:true)` 在当前 DB 仍至少有一条线索时才推进 C0；旧标签 chip、章节「回信箱」与投递都不能在恢复空档后写 `story:C0.port_seen`，当前有效读信仍幂等推进。
+
+验证：`career_closeout_test` **5/5**（含 JSON 复制快照、重复发现 openedAt、旧信箱 C0）、`career_chrome_isolation_test` **8/8**（含两个固定端口请求）、`career_review5_import_test` **12/12**。`8b41986` 实跑 `py -3 tools/arcade_run_all_gates.py` **ALL GATES PASSED（exit 0）**，日志 `VERIFY-GATE.log`（4487 行，无 RETRY）。
+
 
 **G18 PASS**（第二轮独立复审，B1–B5 全部关闭；门禁与独立复测全绿）。随后七轮全分支复审/收口提出的 P1/P2 已在本分支修复并复测；G18 PASS ≠ 发布授权。
+
+## 结论
+
+**G18 PASS**（第二轮独立复审，B1–B5 全部关闭；门禁与独立复测全绿）。随后七轮全分支复审/收口/复测提出的 P1/P2 已在本分支修复并复测；G18 PASS ≠ 发布授权。
 
 ## 首轮阻塞与本轮关闭
 

@@ -29,7 +29,7 @@
 | 0.17 回归 | 96/96 tiers、resume 45/45、mobile 318、PWA 17、a11y 75、smoke 113、review 5/5、gameplay 104/104（G18 复跑） |
 | 聚合门禁 | `py -3 tools/arcade_run_all_gates.py` ALL GATES PASSED（96 单次跑完、campaign/world/E2E/回归全绿） |
 | G18 | 独立复审 PASS（HEAD `a84d15f` 后补 W11；证据仓库外 `G18-AUDIT-2.md`） |
-| 全分支复审修复 | 第一至六轮见前；第七轮收口在 `9851aac` 修复：Chrome 归属贯穿连接/取消、发现动作事务内归约、saveState 快照代次、设置/清除失败恢复、旧信箱 C0 边界；closeout 5/5、import 12/12、isolation 7/7；`9851aac` 完整聚合 **ALL GATES PASSED** |
+| 全分支复审修复 | 第一至七轮见前；收口复测在 `8b41986` 修复：固定端口改动态别名、快照代次可复制、发现行 openedAt 合并、回信箱 C0 需有效线索；closeout 5/5、import 12/12、isolation 8/8；`8b41986` 完整聚合 **ALL GATES PASSED** |
 | 待跑 | 真机/读屏器/PWA 安装态 UNVERIFIED；在线双端 verify_deploy 未授权未运行 |
 
 ## 4. 已知问题（试玩与残留风险）
