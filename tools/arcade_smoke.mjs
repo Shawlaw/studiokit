@@ -46,8 +46,8 @@ async function main() {
     })()`);
     assert(home.cards >= 2, 'home cards=' + home.cards);
     assert(home.href.indexOf('apps/arcade') !== -1, 'arcade card not clickable: ' + JSON.stringify(home));
-    assert(home.version.indexOf('0.14.0') !== -1, 'arcade version missing on home card');
-    record('门户街机厅卡片可点击且版本 0.14.0', true);
+    assert(home.version.indexOf('0.18.0') !== -1, 'arcade version missing on home card');
+    record('门户街机厅卡片可点击且版本 0.18.0', true);
 
     /* ---------- GitHub Pages 项目子路径：shell 返回链接 ---------- */
     await cdp.navigate(base + '/studiokit/apps/arcade/games/star-raid.html');
@@ -65,10 +65,10 @@ async function main() {
       cards: document.querySelectorAll('.hall-card').length,
       runs: window.Arcade && Arcade.RunSave.count()
     })`);
-    assert(hallInfo.version === '0.14.0', 'version is ' + hallInfo.version);
+    assert(hallInfo.version === '0.18.0', 'version is ' + hallInfo.version);
     assert(hallInfo.games === 16, 'game count is ' + hallInfo.games);
     assert(hallInfo.cards === 16, 'card count is ' + hallInfo.cards);
-    record('中心页 16 款游戏与版本 0.14.0', true);
+    record('中心页 16 款游戏与版本 0.18.0', true);
 
     await cdp.evaluate(`(() => { const i = document.querySelector('[data-search]'); i.value = '雪铃'; i.dispatchEvent(new Event('input', { bubbles: true })); })()`);
     await sleep(120);
@@ -797,11 +797,12 @@ async function main() {
       t.spawnBossNow();
       t.spawnShotAtPlayer();
       const before = t.info();
-      const used = t.useItemSlot(0);
+      const slot = t.itemsInfo().items.indexOf('nuke');
+      const used = t.useItemSlot(slot);
       const after = t.info();
-      return { before, used, after, flying: t.itemsInfo() };
+      return { before, slot, used, after, flying: t.itemsInfo() };
     })()`);
-    assert(nuke.used === true && nuke.after.items[0] === null && nuke.flying.nukes === 1, 'star-raid nuke should launch a tracking shell: ' + JSON.stringify({ used: nuke.used, items: nuke.after.items, nukes: nuke.flying.nukes }));
+    assert(nuke.used === true && nuke.slot >= 0 && nuke.after.items[nuke.slot] === null && nuke.flying.nukes === 1, 'star-raid nuke should launch a tracking shell: ' + JSON.stringify({ slot: nuke.slot, used: nuke.used, items: nuke.after.items, nukes: nuke.flying.nukes }));
     assert(nuke.after.bossHp === nuke.before.bossHp, 'star-raid nuke must not damage before impact: ' + JSON.stringify({ before: nuke.before.bossHp, after: nuke.after.bossHp }));
     let nukeBoom = { items: { nukes: 1 } };
     for (let i = 0; i < 20; i += 1) {
@@ -839,8 +840,9 @@ async function main() {
       const t = __arcadeTest;
       t.setEnergy(80);
       t.grantItem('nuke');
-      const used = t.useItemSlot(0);
-      return { used, flying: t.itemsInfo().nukes, boss: t.info().bossActive };
+      const slot = t.itemsInfo().items.indexOf('nuke');
+      const used = t.useItemSlot(slot);
+      return { used, slot, flying: t.itemsInfo().nukes, boss: t.info().bossActive };
     })()`);
     let nukeNoBossAfter = { nukes: 1 };
     for (let i = 0; i < 18; i += 1) {
@@ -1057,8 +1059,13 @@ async function main() {
       sigAnnounced.info.signalingCars >= 1 && sigCar && (sigCar.changeState === 'signal' || sigCar.changeState === 'moving'),
       '转向灯没有预告阶段: ' + JSON.stringify(sigAnnounced)
     );
-    await sleep(900);
-    const sigDone = await cdp.evaluate(`__arcadeTest.carsSnapshot()`);
+    let sigDone = [];
+    for (let i = 0; i < 40; i += 1) {
+      sigDone = await cdp.evaluate(`__arcadeTest.carsSnapshot()`);
+      const car = sigDone.filter((c) => c.targetLane === 1)[0];
+      if (car && car.lane === 1 && car.lanePos === 1 && car.changeState === 'none') break;
+      await sleep(100);
+    }
     const sigDoneCar = sigDone.filter((c) => c.targetLane === 1)[0];
     assert(
       sigDoneCar && sigDoneCar.lane === 1 && sigDoneCar.lanePos === 1 && sigDoneCar.changeState === 'none',
@@ -2745,7 +2752,7 @@ async function main() {
       version: window.Arcade && Arcade.version,
       title: document.title
     })`);
-    assert(offlineHall.cards === 16 && offlineHall.version === '0.14.0', 'offline hall failed: ' + JSON.stringify(offlineHall));
+    assert(offlineHall.cards === 16 && offlineHall.version === '0.18.0', 'offline hall failed: ' + JSON.stringify(offlineHall));
     const offlineStatus = await cdp.evaluate(`(async () => {
       try {
         await Arcade.Offline.register();
@@ -2767,7 +2774,7 @@ async function main() {
       overlay: !!document.querySelector('[data-overlay]'),
       version: window.Arcade && window.Arcade.version
     })`);
-    assert(offlineGame.hasArcade && offlineGame.overlay && offlineGame.version === '0.14.0', 'offline game failed: ' + JSON.stringify(offlineGame));
+    assert(offlineGame.hasArcade && offlineGame.overlay && offlineGame.version === '0.18.0', 'offline game failed: ' + JSON.stringify(offlineGame));
     await cdp.navigate(base + '/apps/arcade/games/not-preloaded.html');
     const offlineMissing = await cdp.text('body');
     assert(offlineMissing && offlineMissing.includes('还没有预载'), 'offline missing page: ' + String(offlineMissing).slice(0, 120));

@@ -249,6 +249,50 @@ Owner 两条真机反馈：①已安装 PWA 点「检查更新」显示的是已
 - [x] 双端发布：Owner 本轮明确授权发布（`PUBLISH_TO_MAIN`）；提交 `8493cf7`（PWA 更新检测）+ `78858e0`（游玩时长 + 文档）ff 合入 `main`；Actions run `45002523350` 四 job 全绿（Validate and build / Deploy GitHub Pages / Deploy Cloudflare Pages / Verify both deployments）；CI 与本地 `tools/verify_deploy.py` 均 **41/41** 双端逐文件一致（arcade 0.13.2 / badge 2.2.1 / venue 0.2.0）；双端线上无头 Chrome 各 8 项全过（中心页 0.13.2 + 检查更新返回线上 0.13.2 且不误报、SW 握手 0.13.2、缓存键 `studiokit-arcade-0.13.2-v1`、游戏页可加载、0 console error）
 - [ ] 真机复测：iOS 主屏幕 PWA 的「检查更新」提示时机与「累计时长/积分记录时长」待 Owner 确认（UNVERIFIED）
 
+## 0.18.0 星塔回响：六章、三终局与后日常（2026-11-23 本地未发布）
+
+- [x] C0–C5 六章（`campaign.json` + `chapter-00..05`）：信箱/告示板进入，无顶层生涯 CTA
+- [x] 三终局（武力/研究/救援）：独立 commission 实例、C4 后三选一、C5 唯一、幂等、失败可重试；后日常按方式差异
+- [x] 章节/终局 UI（`ui/world-state.js`）：六章状态/路线、mustKnow/正文、NPC 回信/支线、后日谈、港口灯光；320–430/焦点/reduced-motion
+- [x] 16×3=48 主线路径图证明；campaign E2E 701/701（3 条真实路线 C0→C5 + 三终局 + 备份恢复 24/24）
+- [x] 修复：C0 信箱旗标、终局跨页事件缓冲（adopt/attach）、mustKnow 渲染、C1 代办路线、中心页 C0 后小字回流入口
+- [x] 版本链 0.18.0；`campaign-core` 53/53、`ending-reducer` 34/34、world-state 109/109
+- [ ] G18 独立门禁与 Owner 发布授权；真机/读屏器/PWA 安装态 UNVERIFIED
+
+## 0.17.0 活世界：96 委托、五材商店、制造台与职业成长（2026-11-23 本地未发布）
+
+- [x] 96 委托内容（16×T1–T6）：T1–T3 公开；T4–T6 由 C3/C4/C5 旗标解锁，受控 fixture 证明
+- [x] 16 游戏职业 run 真实目标/事件/隔离：新增 session.finish、tile.created、move.legal、stock.face_up、foundation.move、bell.unique、stage.clear、distance.reached、combo.reached、wave.completed、scroll.collected 等真实提交点；挑战/禅/割草不可进
+- [x] 五材（建材/合金/电子元件/星晶/生物材料）+ 固定价差商店；`db.sellItems` 原子卖料、purchase 材料成本
+- [x] 制造台：3 件生涯模块（相位护盾/货舱磁吸/能量电池）与 15 层配方；`MODULE_EFFECTS` 只生涯生效
+- [x] 16 职业学徒/熟练/专家（0–2/3–5/≥6 已清委托），只影响可选订单/展示
+- [x] 剧情证据去重（E/MAP/BP/DEC）与 C2–C4 多路径；单职业路线规划 16×16 可执行
+- [x] 96 委托回归：16 游戏 × 6 阶 96/96 tier、3792 checks；平衡测试 47/47
+- [x] 版本链 0.18.0；职业隔离补齐层塔 `finishRun` 缺口、阴影/雪铃经典事件恢复
+- [ ] 0.16 first-flight/resume/mobile 按 0.17 内容更新；G17 独立门禁与 Owner 发布授权；真机/PWA 安装态 UNVERIFIED
+
+## 0.16.0 首航：告示板委托、免费租机与飞船机库（2026-11-23 本地未发布）
+
+- [x] 旧港告示板（town）：从 LOCAL 信件按地址进入，列出 T1/T2 委托、明码工钱/材料与时长，接单后跳转对应游戏页
+- [x] 委托生命周期：ticket（ticketId=runId）→ `?career=` 激活 → 真实事件缓冲 → 目标判定 → `settleAndClaim` 幂等 → 收据；刷新/暂停可恢复、失败可归因、放弃不发奖
+- [x] 层塔施工 T1/T2（稳定 4/6 层真实物理事件、倒塌不计、职业 run 断开旧局内档）与星海护航 T1/T2（startLevel/theme 真实关卡、Boss 真实事件、跳过星币/旧机库/Progress/Scores）
+- [x] 免费租机（会话 marker、零扣费、不改拥有）与非战斗代办（明码标价、只写 alternative/story 行、不发战斗奖章）
+- [x] 飞船机库：4 艘价格/材料门槛，`purchase.costItems` 同事务扣减 + `writeEquipment` 切换；钱包/流水/原收据 UI
+- [x] 0.16 前置修复：星海 GameMeta 读-合并-写、classicLike、serialize 门禁；旧机库 formula 1/经典/挑战/割草零改动
+- [x] 内容：commissions.json 4 条、items.json 4 船/模块/材料、chapter-01.json 16 起源 + C1 三路径
+- [x] 测试：commission 61+17+8、combat 379、rental 153+22、alternatives 67+13、resume 45、first-flight 192、mobile 318、a11y 75、db 38、backup 34、PWA 离线 17
+- [ ] G16 独立门禁与 Owner 发布授权；真机触控/安全区/PWA 安装态 UNVERIFIED
+
+## 0.15.0 被动线索与独立生涯数据层（2026-11-22 本地未发布）
+
+- [x] 16 款游戏在经典游玩中被动产出可关闭的微线索；无显眼生涯入口；不点不影响原玩法；可在设置关闭/恢复，已发现内容可从信箱找回
+- [x] `apps/arcade/career/` 运行时（bridge/registry/discovery/career-core/career-db/router/entry-router/backup/content/ui）；普通脚本、无框架、无远程资源
+- [x] 独立 IndexedDB `studiokit:arcade:career` v1（11 stores；claim 幂等/单事务/多标签/失败零写入/fail-open）；0.15 游玩只写发现状态与证据
+- [x] 接口冻结：事件信封、线索 schema、发现状态机、注册表多对多与虚拟第 17 款插拔、ticket/claim/receipt、故事谓词、备份/迁移、路由/降级
+- [x] 16 页最小适配（1 行 bridge 标签 + 真实事件 observe + 每局一次 finish）；经典/挑战/禅/割草/旧机库零改动
+- [x] 测试：registry 90/90、discovery 84/84、legacy baseline 78/78、career_db 38/38、backup 与 16 页 CDP 适配实测；PWA/SW 预缓存 career 资源
+- [ ] G15 独立门禁复跑（smoke/gameplay/tower/zen/calm/review/interaction/immersive/pwa）与 Owner 发布授权；真机 UNVERIFIED
+
 ## 0.14.0 星海突击：弹种叠加 + 星海割草无尽演武（2026-11-22 已双端发布）
 
 Owner 本轮两条：①同种弹药 Buff 多吃时叠加有效时长而不是重置；②新增“模拟割草”模式——所有弹药 Buff 常驻、大杀器库满载、手动道具无限，同时敌潮/掉落极为密集、Boss 招式更炫；玩家唯一瓶颈是能量，且不参与任何积分/货币获取。设计见 `apps/arcade/DESIGN-0.14.0.md`。

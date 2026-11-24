@@ -1,0 +1,234 @@
+{
+  "contentVersion": "0.18.0",
+  "ships": [
+    {
+      "shipId": "old-wing",
+      "name": "旧翼",
+      "price": 260,
+      "rental": true,
+      "description": "港务处退役的旧式护航机，操控笨重但耐撞。",
+      "stats": {
+        "lives": 3,
+        "energy": 100,
+        "firepower": 0,
+        "speed": 0,
+        "magnet": 0
+      },
+      "contentVersion": "0.18.0"
+    },
+    {
+      "shipId": "cloud-lark",
+      "name": "云雀",
+      "price": 480,
+      "rental": false,
+      "description": "轻巧的联络机，转向和拾取都更灵便。",
+      "stats": {
+        "lives": 3,
+        "energy": 95,
+        "firepower": 0.06,
+        "speed": 0.12,
+        "magnet": 0.06
+      },
+      "requires": {
+        "alloy": 1
+      },
+      "contentVersion": "0.18.0"
+    },
+    {
+      "shipId": "shield-whale",
+      "name": "盾鲸",
+      "price": 520,
+      "rental": false,
+      "description": "拆掉货舱加装的厚壳护航机，能多扛一次。",
+      "stats": {
+        "lives": 4,
+        "energy": 110,
+        "firepower": 0,
+        "speed": 0,
+        "magnet": 0.03
+      },
+      "requires": {
+        "alloy": 2
+      },
+      "contentVersion": "0.18.0"
+    },
+    {
+      "shipId": "prism",
+      "name": "棱镜",
+      "price": 540,
+      "rental": false,
+      "description": "旧港实验室流出的原型机，火力与吸附都更极端。",
+      "stats": {
+        "lives": 3,
+        "energy": 90,
+        "firepower": 0.12,
+        "speed": 0.06,
+        "magnet": 0.12
+      },
+      "requires": {
+        "alloy": 2,
+        "starcrystal": 1
+      },
+      "contentVersion": "0.18.0"
+    }
+  ],
+  "modules": [
+    {
+      "moduleId": "hull",
+      "name": "船体加固",
+      "levels": [
+        {
+          "level": 1,
+          "cost": 90,
+          "alloy": 1
+        },
+        {
+          "level": 2,
+          "cost": 180,
+          "alloy": 2
+        },
+        {
+          "level": 3,
+          "cost": 320,
+          "alloy": 3
+        }
+      ]
+    },
+    {
+      "moduleId": "power",
+      "name": "火力校准",
+      "levels": [
+        {
+          "level": 1,
+          "cost": 80,
+          "alloy": 1
+        },
+        {
+          "level": 2,
+          "cost": 160,
+          "alloy": 2
+        },
+        {
+          "level": 3,
+          "cost": 300,
+          "alloy": 3
+        }
+      ]
+    },
+    {
+      "moduleId": "engine",
+      "name": "机动强化",
+      "levels": [
+        {
+          "level": 1,
+          "cost": 70,
+          "alloy": 1
+        },
+        {
+          "level": 2,
+          "cost": 150,
+          "alloy": 2
+        },
+        {
+          "level": 3,
+          "cost": 280,
+          "alloy": 2
+        }
+      ]
+    },
+    {
+      "moduleId": "energy",
+      "name": "反应堆",
+      "levels": [
+        {
+          "level": 1,
+          "cost": 90,
+          "alloy": 1
+        },
+        {
+          "level": 2,
+          "cost": 190,
+          "alloy": 2
+        },
+        {
+          "level": 3,
+          "cost": 330,
+          "alloy": 3
+        }
+      ]
+    },
+    {
+      "moduleId": "phase-shield",
+      "name": "相位护盾",
+      "levels": [
+        {
+          "level": 1,
+          "cost": 150,
+          "alloy": 2,
+          "starcrystal": 1
+        }
+      ],
+      "effect": "每次生涯出击最多触发一次短护盾"
+    },
+    {
+      "moduleId": "cargo-magnet",
+      "name": "货舱磁吸",
+      "levels": [
+        {
+          "level": 1,
+          "cost": 130,
+          "electronics": 2
+        }
+      ],
+      "effect": "提升拾取半径，略微降低装甲"
+    },
+    {
+      "moduleId": "energy-cell",
+      "name": "能量电池",
+      "levels": [
+        {
+          "level": 1,
+          "cost": 160,
+          "electronics": 2,
+          "starcrystal": 1
+        }
+      ],
+      "effect": "提高能量上限，其他能力略降"
+    }
+  ],
+  "materials": [
+    {
+      "itemId": "building",
+      "name": "建材",
+      "buyPrice": 45,
+      "sellPrice": 22
+    },
+    {
+      "itemId": "alloy",
+      "name": "合金",
+      "buyPrice": 80,
+      "sellPrice": 38
+    },
+    {
+      "itemId": "electronics",
+      "name": "电子元件",
+      "buyPrice": 65,
+      "sellPrice": 30
+    },
+    {
+      "itemId": "starcrystal",
+      "name": "星晶",
+      "buyPrice": 100,
+      "sellPrice": 48
+    },
+    {
+      "itemId": "biomass",
+      "name": "生物材料",
+      "buyPrice": 55,
+      "sellPrice": 25
+    }
+  ],
+  "materialAliases": {
+    "crystal": "starcrystal"
+  }
+}

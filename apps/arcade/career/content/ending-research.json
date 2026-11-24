@@ -1,0 +1,23 @@
+{
+  "contentVersion": "0.18.0",
+  "approach": "research",
+  "commissionId": "ending.research",
+  "gameId": "merge-2048",
+  "title": "星塔回响·理性重启",
+  "summary": "把晶格模型推到许可信号的频率上。",
+  "objective": {
+    "kind": "tile.created",
+    "atLeast": 1,
+    "minValue": {
+      "field": "value",
+      "value": 512
+    }
+  },
+  "startParams": {},
+  "flags": [
+    "C5.star_tower_resolved",
+    "ending.research"
+  ],
+  "repeatSalaryCredits": 0,
+  "epilogueText": "许可信号重写成功，星塔把货船认成了朋友。"
+}

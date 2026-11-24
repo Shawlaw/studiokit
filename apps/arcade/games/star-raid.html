@@ -10,6 +10,7 @@
   <link rel="stylesheet" href="../arcade.css" />
   <script src="../../../shared/site-shell.js" defer></script>
   <script src="../engine.js"></script>
+  <script src="../career/bridge.js"></script>
   <script src="../challenge/star-raid.js"></script>
   <style>
     /* 0.9 挑战模式：选关容器放进 .stage-box 后需要页面本地定位；面板本体来自 A.Challenge.stageListHtml。 */
@@ -184,6 +185,26 @@
       .hangar-row { grid-template-columns: 22px minmax(0, 1fr) auto; }
       .touch-pad.game-tools.star-tools .touch-btn { font-size: 12px; padding-left: 2px; padding-right: 2px; }
     }
+    /* ---------- 0.16 职业委托：戏内护航目标行 / 职业 run 内隐藏旧机库入口 ----------
+       只在 ?career=<ticketId> 且桥确认职业 run 后由 body.is-career-run 生效；
+       无 ticket 的经典/挑战/割草页面不会出现这些样式命中，布局与 0.15 逐像素一致。 */
+    .career-mission-line {
+      display: block;
+      max-width: 100%;
+      margin: 0 0 8px;
+      padding: 5px 9px;
+      border: 1px solid rgba(124, 232, 224, 0.45);
+      border-radius: 10px;
+      background: rgba(124, 232, 224, 0.1);
+      color: #cfeaf5;
+      font-size: 12px;
+      line-height: 1.5;
+      text-align: left;
+      overflow-wrap: anywhere;
+    }
+    .career-mission-line b { color: #7ce8e0; }
+    body.is-career-run .career-hide { display: none !important; }
+    body.is-career-run .hangar-panel { display: none !important; }
   </style>
   <title>星海突击 · 街机厅 · StudioKit</title>
 </head>
@@ -197,8 +218,8 @@
         <span class="mow-hide">分数 <strong data-hud-score>0</strong></span>
         <span>关卡 <strong data-hud-stage>1</strong></span>
         <span>火力 <strong data-hud-power>LV1</strong></span>
-        <span class="mow-hide">星币 <strong data-hud-credits>0</strong></span>
-        <span class="mow-hide">最高 <strong data-hud-high>0</strong></span>
+        <span class="mow-hide career-hide">星币 <strong data-hud-credits>0</strong></span>
+        <span class="mow-hide career-hide">最高 <strong data-hud-high>0</strong></span>
         <span data-hud-buff hidden>弹种 <strong data-hud-weapon>普通</strong></span>
       </div>
       <button type="button" class="ac-icon-btn" data-pause aria-label="暂停游戏" title="暂停游戏（P / Esc）">⏸</button>
@@ -244,6 +265,7 @@
     (() => {
       'use strict';
       const A = window.Arcade;
+      const career = window.ArcadeCareer || null;
       const { clamp, rand, randInt, pick, TAU } = A.utils;
 
       const W = 420;
@@ -468,19 +490,343 @@
           return null;
         },
         write(data) {
-          if (A.GameMeta && typeof A.GameMeta.set === 'function') return A.GameMeta.set('star-raid', { hangar: data }) === true;
-          return false;
+          if (!A.GameMeta || typeof A.GameMeta.set !== 'function') return false;
+          /* 0.16 前置修复（B00-C）：读-合并-写。只替换 games['star-raid'].hangar，
+             同一游戏记录里的其他字段必须原样保留；禁止整对象覆盖丢字段。
+             读取仍兼容 formula:1（sanitizeHangar 锁定公式版本，语义不变）。 */
+          const current = typeof A.GameMeta.get === 'function' ? A.GameMeta.get('star-raid') : null;
+          const base = current && typeof current === 'object' && !Array.isArray(current) ? current : {};
+          const next = { ...base, hangar: data };
+          return A.GameMeta.set('star-raid', next) === true;
         },
       };
       function loadHangar() {
         return sanitizeHangar(hangarStore.read());
       }
       function saveHangar() {
+        /* 职业 run 内旧机库（formula:1）绝不写入：星币只在经典/挑战结算路径产生。 */
+        if (isCareerRun()) return false;
         const ok = hangarStore.write(hangar);
         if (!ok && A.showToast) A.showToast('机库存档不可用（浏览器存储被禁用或已满）');
         return ok;
       }
-      let hangar = loadHangar();
+      /* 0.16：带 ?career=<ticketId> 时不读旧机库（职业 run 永不读写 formula:1）；
+         无 ticket 时保持 0.15 的同步读取，经典行为不变。 */
+      let hangar = careerTicketParam() ? emptyHangar() : loadHangar();
+
+      /* ==============================================================
+       * 0.16 职业委托（First Flight）：星海护航 T1/T2（ADR §18.3/18.4/18.8/18.9）
+       * - 只有玩家从旧港告示板接单后带 ?career=<ticketId> 进入本页才生效；
+       * - 无 ticket / ticket 不匹配 / commission-core 缺失 → 完全走 0.15 经典路径，
+       *   不装载新模块、不加 DOM、不改任何数值；
+       * - 职业 run 内 mode 仍为 'classic'（classicLike 公式），但经典星币结算、旧机库
+       *   读写、Progress/Scores/最高分与局内档全部跳过；结算只走 career.finish 的职业收据。
+       * ============================================================== */
+      const CAREER_GAME_ID = 'star-raid';
+      /* 旧翼默认 = 经典无改装数值：star-combat-config 缺失/异常时的安全回退（不得抛）。 */
+      const CAREER_OLD_WING_STATS = Object.freeze({
+        maxLives: 3,
+        lifeCap: 5,
+        itemCap: 2,
+        damageMul: 1,
+        invul: 1.8,
+        magnet: 1,
+        energyCap: 100,
+        speedMul: 1,
+      });
+      let careerLocked = false;       // 已确认职业 run：本页生命周期内经典经济/旧档全禁用
+      let careerStartPending = false; // 正在等桥确认 ticket（这段时间不决定开局弹层）
+      const careerBattle = {
+        ticketId: null,
+        commissionId: null,
+        title: '',
+        summary: '',
+        targetAtLeast: 1,
+        startLevel: 1,
+        themeId: null,
+        bossKills: 0,
+        stats: { ...CAREER_OLD_WING_STATS },
+        shipName: '旧翼',
+        statsSource: 'old-wing-default',
+        applied: false,
+        settled: false,
+        settledResult: null,
+        lastOutcome: 'lost',
+        /* 0.17（ADR §19.5 / D17-15）生涯模块运行态：只在本页职业 run 内读写，
+           经典/挑战/割草不读这些字段（数值全部来自职业配置，不碰旧机库 formula:1）。 */
+        armorPool: 0,      // 承伤累计池：armorMul<1 时每满 1 点才扣 1 条生命
+        shieldCharges: 0,  // phase-shield：每趟出击最多 1 次受击抵消
+        waveCompletions: 0 // 真实关卡清空次数（与 wave.completed 事件同源）
+      };
+
+      function careerTicketParam() {
+        try {
+          const search = String((window.location && window.location.search) || '');
+          const match = /(?:^|[?&])career=([^&]+)/.exec(search);
+          if (!match) return '';
+          const value = decodeURIComponent(match[1].replace(/\+/g, ' '));
+          return /^[A-Za-z0-9._:-]{1,120}$/.test(value) ? value : '';
+        } catch (err) {
+          return '';
+        }
+      }
+      function isCareerRun() {
+        return careerLocked === true;
+      }
+      /* ADR §18.9：classicLike = classic 或职业 run；mow/zen/challenge 仍排除。 */
+      function classicLike() {
+        return mode === 'classic' || isCareerRun();
+      }
+      /* 割草 0.14 一直沿用经典火力/能量公式；本组合只用于既有的「经典或割草」分支，
+         保证割草数值零变化（ADR §18.9：不得改变经典/挑战/割草数值）。 */
+      function classicFormula() {
+        return classicLike() || isMow();
+      }
+      /* 本页当前是否有属于本游戏的职业 run（bridge 只在 ticket 校验通过时填充）。 */
+      function readCareerRun() {
+        try {
+          if (!career || typeof career.isCommissionRun !== 'function' || !career.isCommissionRun()) return null;
+          const runInfo = career.commissionRun;
+          if (!runInfo || runInfo.gameId !== CAREER_GAME_ID) return null;
+          return runInfo;
+        } catch (err) {
+          return null;
+        }
+      }
+      function careerGoalParts() {
+        const title = typeof careerBattle.title === 'string' ? careerBattle.title : '';
+        const summary = typeof careerBattle.summary === 'string' ? careerBattle.summary : '';
+        if (!title && !summary) return null;
+        return { title, summary, atLeast: careerBattle.targetAtLeast };
+      }
+      /* 一行戏内目标：放进既有开局/暂停/结算弹层的文案位置（不新增按钮、不遮挡按钮）。 */
+      function careerGoalLine() {
+        const goal = careerGoalParts();
+        if (!goal) return '';
+        /* 0.16.0 窄屏：只显示委托标题（summary 在告示板可读），保证 320/375 也不超过两行。 */
+        const text = goal.title || goal.summary;
+        return '<span class="career-mission-line" data-career-goal="1">护航目标：' + A.escapeHtml(text) + '</span>';
+      }
+      /* 委托 run 内断开旧 RunSave：serialize() 返回 null，并兜底替换 autosave 的四个出口。 */
+      function lockRunSave() {
+        if (careerLocked) return;
+        careerLocked = true;
+        try {
+          autosave.saveNow = function () { return false; };
+          autosave.tick = function () {};
+          autosave.clear = function () {};
+          autosave.load = function () { return null; };
+        } catch (err) {
+          /* 忽略：serialize() 的 career 门禁仍是最终兜底 */
+        }
+      }
+      function applyCareerChrome(active) {
+        const on = active === true;
+        document.body.classList.toggle('is-career-run', on);
+        syncGameHint();
+      }
+      /* 确认 ticket 后锁定职业 run 参数（startParams 只决定起始关/主题，不改玩法数值）。 */
+      function activateCareerRun(runInfo) {
+        if (!runInfo || runInfo.gameId !== CAREER_GAME_ID) return false;
+        lockRunSave();
+        careerBattle.ticketId = typeof runInfo.ticketId === 'string' ? runInfo.ticketId : null;
+        careerBattle.commissionId = typeof runInfo.commissionId === 'string' ? runInfo.commissionId : null;
+        const commission = runInfo.commission && typeof runInfo.commission === 'object' ? runInfo.commission : {};
+        careerBattle.title = typeof commission.title === 'string' ? commission.title : '';
+        careerBattle.summary = typeof commission.summary === 'string' ? commission.summary : '';
+        const objective = commission.objective && typeof commission.objective === 'object' ? commission.objective : {};
+        const atLeast = Math.floor(Number(objective.atLeast));
+        careerBattle.targetAtLeast = Number.isFinite(atLeast) && atLeast > 0 ? atLeast : 1;
+        const params = runInfo.startParams && typeof runInfo.startParams === 'object' ? runInfo.startParams : {};
+        careerBattle.startLevel = clamp(Math.floor(Number(params.startLevel) || 1), 1, 999);
+        careerBattle.themeId = typeof params.themeId === 'string' && params.themeId ? params.themeId : null;
+        applyCareerChrome(true);
+        resolveCareerBattleStats(runInfo);
+        return true;
+      }
+      /* 机体参数：只读 loadout + star-combat-config（D16-05）。
+         0.17（D17-15）：装备里的 module:<id>:level 经 resolveCareerConfig 合并出
+         shieldOnce / magnet / armorMul / energyCap / firepowerMul（phase-shield /
+         cargo-magnet / energy-cell）；模块目录来自 career.items.modules 内容，游戏页不写死数值。
+         缺失/异常回退旧翼默认，绝不抛。 */
+      function resolveCareerBattleStats(runInfo) {
+        const fallback = { ...CAREER_OLD_WING_STATS };
+        let loadoutPromise = null;
+        try {
+          loadoutPromise = career && typeof career.getCommissionLoadout === 'function' ? career.getCommissionLoadout() : null;
+        } catch (err) {
+          loadoutPromise = null;
+        }
+        Promise.resolve(loadoutPromise)
+          .then((loadout) => {
+            if (!isCareerRun() || careerBattle.ticketId !== runInfo.ticketId) return null;
+            const cfg = window.ArcadeCareerCombatConfig || (career && career.combatConfig) || null;
+            if (!cfg || typeof cfg.resolveCareerConfig !== 'function') {
+              return { stats: fallback, source: 'old-wing-default' };
+            }
+            const items = career && career.items && typeof career.items === 'object' ? career.items : null;
+            let resolved = null;
+            try {
+              resolved = cfg.resolveCareerConfig({
+                equipment: loadout && loadout.ok && loadout.equipment ? loadout.equipment : {},
+                shipId: loadout && loadout.rentalShipId ? loadout.rentalShipId : undefined,
+                items: items,
+                modules: items && Array.isArray(items.modules) ? items.modules : null
+              });
+            } catch (err) {
+              resolved = null;
+            }
+            const stats = sanitizeCareerStats(resolved);
+            return { stats: stats || fallback, source: stats ? 'star-combat-config' : 'old-wing-default', shipName: resolved && resolved.shipName };
+          })
+          .then((result) => {
+            if (!result) return;
+            applyCareerStats(result.stats, result.source, result.shipName);
+          })
+          .catch(() => {
+            applyCareerStats(fallback, 'old-wing-default');
+          });
+      }
+      /* star-combat-config 已 clamp 过；这里再兜一层默认值，防止畸形对象把 HUD 撑爆。
+         0.17 模块字段（armorMul/shieldOnce/firepowerMul）只在职业配置返回时保留，
+         缺省时与 0.16 完全一致（armorMul=1 / shieldOnce=false / firepowerMul=damageMul）。 */
+      function sanitizeCareerStats(raw) {
+        if (!raw || typeof raw !== 'object') return null;
+        const stats = {
+          maxLives: clamp(Math.round(Number(raw.maxLives) || CAREER_OLD_WING_STATS.maxLives), 1, 9),
+          lifeCap: clamp(Math.round(Number(raw.lifeCap) || CAREER_OLD_WING_STATS.lifeCap), 1, 12),
+          itemCap: clamp(Math.round(Number(raw.itemCap) || CAREER_OLD_WING_STATS.itemCap), 1, 4),
+          damageMul: clamp(Number(raw.damageMul) || 1, 0.5, 3),
+          invul: clamp(Number(raw.invul) || CAREER_OLD_WING_STATS.invul, 0, 6),
+          magnet: clamp(Number(raw.magnet) || 1, 0.5, 3),
+          energyCap: clamp(Math.round(Number(raw.energyCap) || CAREER_OLD_WING_STATS.energyCap), 40, 400),
+          speedMul: clamp(Number(raw.speedMul) || 1, 0.5, 2),
+          firepowerMul: clamp(Number(raw.firepowerMul) || Number(raw.damageMul) || 1, 0.5, 3),
+          armorMul: clamp(Number(raw.armorMul) || 1, 0.5, 1.5),
+          shieldOnce: raw.shieldOnce === true,
+        };
+        stats.lifeCap = Math.max(stats.lifeCap, stats.maxLives);
+        return stats;
+      }
+      function applyCareerStats(stats, source, shipName) {
+        const wasApplied = careerBattle.applied;
+        careerBattle.stats = { ...CAREER_OLD_WING_STATS, ...(stats || {}) };
+        careerBattle.statsSource = source || 'old-wing-default';
+        if (typeof shipName === 'string' && shipName) careerBattle.shipName = shipName;
+        careerBattle.applied = true;
+        if (!wasApplied && (state === 'playing' || state === 'paused' || state === 'clear')) {
+          run.maxEnergy = Math.max(run.maxEnergy, energyCap());
+          run.energy = Math.min(run.maxEnergy, Math.max(run.energy, run.maxEnergy * 0.4));
+          lives = clamp(Math.max(lives, startingLives()), 1, maxLives());
+          /* 机体参数在开局后才异步到达时，补上护盾充能（本趟出击一次）。 */
+          careerBattle.shieldCharges = Math.max(careerBattle.shieldCharges, careerBattle.stats.shieldOnce ? 1 : 0);
+          syncHud();
+        } else if (state === 'ready' && mode === 'classic' && dom.overlay && !dom.overlay.hidden) {
+          /* 仍在开局弹层：刷新用真实机体数值重画一次（不自动开局）。 */
+          showStart();
+        }
+      }
+      function careerStartTheme() {
+        if (!isCareerRun() || !careerBattle.themeId) return null;
+        return THEMES.find((theme) => theme.id === careerBattle.themeId) || null;
+      }
+      function applyCareerStartTheme() {
+        const picked = careerStartTheme();
+        if (!picked) return;
+        run.theme = picked;
+        run.themeIndex = Math.max(0, THEMES.indexOf(picked));
+      }
+      /* 观察事件：职业 run 只进本 run 的委托缓冲（bridge 负责路由），经典路径保持 0.15 原样。 */
+      function careerObserve(kind, payload) {
+        if (!career || typeof career.observe !== 'function') return false;
+        if (isCareerRun()) {
+          if (careerBattle.settled) return false;
+          return career.observe(kind, payload);
+        }
+        if (mode !== 'classic') return false;
+        return career.observe(kind, payload);
+      }
+      /* 结算：职业 run 走 bridge/commission-core 独立收据；经典路径保持 0.15 原样调用。 */
+      function careerFinish(outcome) {
+        if (!career || typeof career.finish !== 'function') return;
+        const wonRun = outcome === 'won';
+        if (!isCareerRun()) {
+          if (mode !== 'classic') return;
+          career.finish({ mode: 'classic', outcome: wonRun ? 'won' : 'lost', stats: { score, level, lives } });
+          return;
+        }
+        if (careerBattle.settled) return;
+        careerBattle.settled = true;
+        careerBattle.lastOutcome = wonRun ? 'won' : 'lost';
+        const stats = {
+          score: Math.max(0, Math.floor(score)),
+          level: Math.max(1, Math.floor(level)),
+          lives: Math.max(0, Math.floor(lives)),
+          theme: run.theme ? run.theme.id : null,
+          bosses: Math.max(0, Math.floor(careerBattle.bossKills)),
+        };
+        let promise = null;
+        try {
+          promise = career.finish({ mode: 'classic', outcome: wonRun ? 'won' : 'lost', stats });
+        } catch (err) {
+          careerBattle.settledResult = { ok: false, reason: 'finish-threw' };
+          return;
+        }
+        Promise.resolve(promise)
+          .then((result) => {
+            careerBattle.settledResult = summarizeCareerResult(result);
+            if (state === 'over') showCareerResult(careerBattle.lastOutcome === 'won');
+          })
+          .catch(() => {
+            careerBattle.settledResult = { ok: false, reason: 'finish-error' };
+            if (state === 'over') showCareerResult(careerBattle.lastOutcome === 'won');
+          });
+      }
+      function summarizeCareerResult(result) {
+        if (!result || typeof result !== 'object') return { ok: false, reason: 'empty' };
+        if (result.ok === true) {
+          const receipt = result.receipt && typeof result.receipt === 'object' ? result.receipt : null;
+          const items = receipt && receipt.items && typeof receipt.items === 'object' ? Object.keys(receipt.items).length : 0;
+          return {
+            ok: true,
+            duplicate: result.duplicate === true,
+            credits: receipt && Number.isFinite(Number(receipt.credits)) ? Number(receipt.credits) : Number(result.credits) || 0,
+            items,
+            txId: receipt && (receipt.txId || receipt.receiptId) ? String(receipt.txId || receipt.receiptId) : null,
+          };
+        }
+        return { ok: false, reason: typeof result.reason === 'string' ? result.reason : 'failed' };
+      }
+      /* 结算结果只用戏内措辞（技术原因只留在测试探针，不写给玩家）。 */
+      function careerResultText(wonRun) {
+        const settled = careerBattle.settledResult;
+        let line = '这趟护航正在结算……';
+        if (settled) {
+          if (settled.ok) {
+            line = '护航结算完成：报酬 ' + settled.credits + (settled.items ? ' · 材料 ' + settled.items + ' 件' : '') +
+              (settled.duplicate ? '（此前已结算）' : '') + '<br/>收据已记入旧港航行日志。';
+          } else {
+            line = '护航目标未达成，这次没有报酬；可回旧港核对港务记录。';
+          }
+        }
+        const goal = careerGoalLine();
+        return (
+          `<span class="ac-score">${score}</span>` +
+          `击坠得分 · 停在 第 ${level} 关 · 击破 ${careerBattle.bossKills} 艘母舰<br/>` +
+          (wonRun ? '护航完成。<br/>' : '机体损毁。<br/>') +
+          (goal ? goal + '<br/>' : '') +
+          line
+        );
+      }
+      function showCareerResult(wonRun) {
+        ui.show({
+          result: '回看战场',
+          title: wonRun ? '护航完成' : '机体损毁',
+          text: careerResultText(wonRun),
+          btn: '返回开始',
+          onBtn: showStart,
+        });
+      }
 
       function upgradeCost(id) {
         const spec = HANGAR_UPGRADES.find((item) => item.id === id);
@@ -489,29 +835,39 @@
         return lv >= spec.max ? Infinity : spec.costs[lv];
       }
       function maxLives() {
+        /* 职业 run 用 star-combat-config 的 lifeCap；经典/挑战/割草仍是 5 + hull。 */
+        if (isCareerRun()) return clamp(Math.round(Number(careerBattle.stats.lifeCap) || CAREER_OLD_WING_STATS.lifeCap), 1, 12);
         return 5 + hangar.upgrades.hull;
       }
       function startingLives() {
+        if (isCareerRun()) return clamp(Math.round(Number(careerBattle.stats.maxLives) || CAREER_OLD_WING_STATS.maxLives), 1, maxLives());
         return clamp(3 + hangar.upgrades.hull, 1, maxLives());
       }
       function damageMul() {
+        if (isCareerRun()) return clamp(Number(careerBattle.stats.damageMul) || 1, 0.5, 3);
         return 1 + hangar.upgrades.power * 0.06;
       }
       function moveSpeed() {
         /* 触屏是 1:1 拖拽，速度属性对触屏无效；键盘保留基础速度。
          * 0.13.1 起「机动强化」(engine) 改为受击无敌与拾取吸附，两种输入都有收益。 */
+        if (isCareerRun()) return 320 * clamp(Number(careerBattle.stats.speedMul) || 1, 0.5, 2);
         return 320;
       }
       function invulSeconds() {
+        if (isCareerRun()) return clamp(Number(careerBattle.stats.invul) || CAREER_OLD_WING_STATS.invul, 0, 6);
         return 1.8 + hangar.upgrades.engine * 0.12;
       }
       function magnetMultiplier() {
+        if (isCareerRun()) return clamp(Number(careerBattle.stats.magnet) || 1, 0.5, 3);
         return 1 + hangar.upgrades.engine * 0.06;
       }
       function energyCap() {
+        if (isCareerRun()) return clamp(Math.round(Number(careerBattle.stats.energyCap) || CAREER_OLD_WING_STATS.energyCap), 40, 400);
         return 100 + hangar.upgrades.energy * 10;
       }
       function itemCap() {
+        /* 页面最多 4 个道具槽 DOM；职业配置更宽时按 4 收口（star-combat max 5）。 */
+        if (isCareerRun()) return clamp(Math.round(Number(careerBattle.stats.itemCap) || CAREER_OLD_WING_STATS.itemCap), 1, 4);
         return 2 + hangar.upgrades.bay;
       }
       function formationBaseCharges() {
@@ -562,14 +918,26 @@
         }
         return true;
       }
-      function setMowChrome(active) {
-        const on = !!active;
-        document.body.classList.toggle('is-mow', on);
-        if (dom.gameHint) {
-          dom.gameHint.textContent = on
-            ? '星海割草 · 弹种常驻 · 大杀器/道具无限（消耗能量）· 受击只扣能量 · P / Esc 暂停'
-            : '拖动 / WASD 移动 · 自动开火 · 1 脉冲 2 星盾 3 编队 · 4–7 大杀器 · P / Esc 暂停';
+      const HINT_CLASSIC = '拖动 / WASD 移动 · 自动开火 · 1 脉冲 2 星盾 3 编队 · 4–7 大杀器 · P / Esc 暂停';
+      const HINT_MOW = '星海割草 · 弹种常驻 · 大杀器/道具无限（消耗能量）· 受击只扣能量 · P / Esc 暂停';
+      /* 底部说明行按当前局类型同步：经典/割草的文案与 0.14 完全一致，职业 run 换成一行戏内护航目标。 */
+      function syncGameHint() {
+        if (!dom.gameHint) return;
+        if (isMow()) {
+          dom.gameHint.textContent = HINT_MOW;
+          return;
         }
+        if (isCareerRun()) {
+          const goal = careerGoalParts();
+          const label = goal ? [goal.title, goal.summary].filter(Boolean).join(' · ') : '旧港护航';
+          dom.gameHint.textContent = '护航目标：' + label + ' · P / Esc 暂停';
+          return;
+        }
+        dom.gameHint.textContent = HINT_CLASSIC;
+      }
+      function setMowChrome(active) {
+        document.body.classList.toggle('is-mow', !!active);
+        syncGameHint();
       }
 
       function themeForLevel(lv) {
@@ -1183,6 +1551,8 @@
         if (dom.hudCredits) dom.hudCredits.textContent = String(hangar.credits);
       }
       function showHangar() {
+        /* 职业 run 内隐藏/禁用旧机库入口：旧 formula:1 与职业装备是两套来源。 */
+        if (isCareerRun()) return false;
         hangar = loadHangar();
         mode = 'hangar';
         state = 'ready';
@@ -1755,6 +2125,8 @@
         syncJoyTools();
       }
       function showChallengePanel() {
+        /* 0.16：职业 run 内不开挑战/割草入口（不写挑战记录，也不让委托局串味）。 */
+        if (isCareerRun()) return false;
         if (!challengeAvailable()) {
           A.showToast('挑战数据不可用');
           return false;
@@ -1890,6 +2262,8 @@
         syncChallengeHud(true);
       }
       function startChallenge(ref) {
+        /* 0.17（ADR §19.3）：职业 run 内挑战不可进入（入口、测试钩子都拒绝）。 */
+        if (isCareerRun()) return false;
         const stage = challengeStageByRef(ref);
         if (!stage) {
           A.showToast('挑战数据不可用');
@@ -2531,6 +2905,15 @@
       }
 
       function stageClear(cleared) {
+        /* 0.17（ADR §19.4 / D17-15）：真实关卡清空提交一次 wave.completed。
+           - 只在职业 run 提交（经典/挑战/割草不新增事件、零行为变化）；
+           - level/theme 取「刚清空这一关」的真实状态（在 level+1 / syncRunTheme 之前捕获）；
+           - 只有 Boss 真实被击破（killEnemy → stageClear）才会到达这里，开局/暂停不发。 */
+        if (isCareerRun()) {
+          const clearedTheme = run.theme && run.theme.id ? run.theme.id : null;
+          careerBattle.waveCompletions += 1;
+          careerObserve('wave.completed', { level: cleared, theme: clearedTheme });
+        }
         boss = null;
         level += 1;
         stageTime = 0;
@@ -2674,7 +3057,8 @@
           buffs[type] = 0;
         });
         lastBuff = 'normal';
-        level = 1;
+        /* 职业 run 从委托 startParams.startLevel 起关（T1=1 / T2=3）；经典/挑战/割草仍是第 1 关。 */
+        level = isCareerRun() ? clamp(Math.floor(Number(careerBattle.startLevel) || 1), 1, 999) : 1;
         stageTime = 0;
         pendingClearStage = 0;
         boss = null;
@@ -2692,6 +3076,12 @@
         player.prevX = player.x;
         particles.clear();
         syncRunTheme();
+        /* 委托 startParams.themeId 只在起始关覆盖主题（T2：第 3 关电磁风暴）。 */
+        applyCareerStartTheme();
+        /* 0.17 生涯模块：每趟出击重置护盾充能与承伤池（经典/挑战/割草不读这些字段）。 */
+        careerBattle.armorPool = 0;
+        careerBattle.shieldCharges = careerBattle.stats.shieldOnce ? 1 : 0;
+        careerBattle.waveCompletions = 0;
         syncHud();
         syncJoyTools();
       }
@@ -2723,7 +3113,7 @@
         setChallengeChrome(false);
         reset();
         state = 'playing';
-        stageBannerText = 'STAGE 1 · ' + run.theme.name;
+        stageBannerText = 'STAGE ' + level + ' · ' + run.theme.name;
         stageBanner = 2.2;
         run.warpTint = 1;
         ui.hide();
@@ -2748,6 +3138,8 @@
         run.items = ['nuke', 'lance', 'freeze'];
       }
       function startMow() {
+        /* 0.16：职业 run 内不开割草演武（无结算、会打断委托）。 */
+        if (isCareerRun()) return false;
         autosave.clear();
         hideChallengePanel();
         if (dom.hangarPanel) dom.hangarPanel.hidden = true;
@@ -2834,28 +3226,38 @@
         if (mode === 'mow') return quitMow();
         if (state === 'over') return;
         const wonRun = won === true;
+        const careerActive = isCareerRun();
         state = 'over';
         pendingClearStage = 0;
         A.Sfx.play(wonRun ? 'perfect' : 'over');
         autosave.clear();
-        const earned = settleCredits(wonRun);
-        const rec = recordSaved ? null : A.Progress.recordPlay('star-raid', score); if (rec) high = rec.high;
+        /* 0.16 职业 run（ADR §18.8）：不结算经典星币、不写旧机库、不调 Progress/Scores/最高分；
+           结算只走 career.finish → bridge/commission-core 的独立职业收据。 */
+        const earned = careerActive ? 0 : settleCredits(wonRun);
+        const rec = careerActive || recordSaved ? null : A.Progress.recordPlay('star-raid', score);
+        if (rec) high = rec.high;
         recordSaved = true;
         dom.hudHigh.textContent = String(Math.max(high, score));
         loop.pause();
-        ui.show({
-          result: '回看战场',
-          title: wonRun ? '星海凯旋！' : '机体损毁',
-          text:
-            `<span class="ac-score">${score}</span>` +
-            (rec && rec.isNewHigh ? '<span class="ac-newhigh">★ 新纪录</span><br/>' : '') +
-            `击坠得分 · 最高 ${Math.max(high, score)} · 第 ${level} 关<br/>` +
-            `<span class="ac-credits">+${earned} 星币</span>（机库共 ${hangar.credits}）`,
-          btn: '再来一局',
-          onBtn: showStart,
-          btn2: '机库改装',
-          onBtn2: showHangar,
-        });
+        if (careerActive) {
+          showCareerResult(wonRun);
+          careerFinish(wonRun ? 'won' : 'lost');
+        } else {
+          ui.show({
+            result: '回看战场',
+            title: wonRun ? '星海凯旋！' : '机体损毁',
+            text:
+              `<span class="ac-score">${score}</span>` +
+              (rec && rec.isNewHigh ? '<span class="ac-newhigh">★ 新纪录</span><br/>' : '') +
+              `击坠得分 · 最高 ${Math.max(high, score)} · 第 ${level} 关<br/>` +
+              `<span class="ac-credits">+${earned} 星币</span>（机库共 ${hangar.credits}）`,
+            btn: '再来一局',
+            onBtn: showStart,
+            btn2: '机库改装',
+            onBtn2: showHangar,
+          });
+          if (mode === 'classic' && career) career.finish({ mode: 'classic', outcome: wonRun ? 'won' : 'lost', stats: { score, level, lives } });
+        }
         pauseUi.sync();
         syncJoyTools();
       }
@@ -2890,10 +3292,11 @@
         } else {
           ui.show({
             title: '已暂停',
-            text:
-              '休息一下，敌人不会等太久。<br/>局内进度已保存，可以随时离开。<br/>' +
-              '火力 LV' + run.power + ' · 生命 ' + lives + '/' + maxLives() +
-              ' · 能量 ' + Math.round(run.energy) + '/' + run.maxEnergy,
+            text: isCareerRun()
+              ? '护航途中。<br/>' + careerGoalLine() + '<br/>本趟护航不写经典进度；刷新后需从本区开头重来。'
+              : '休息一下，敌人不会等太久。<br/>局内进度已保存，可以随时离开。<br/>' +
+                '火力 LV' + run.power + ' · 生命 ' + lives + '/' + maxLives() +
+                ' · 能量 ' + Math.round(run.energy) + '/' + run.maxEnergy,
             btn: '继续',
             onBtn: resumeGame,
           });
@@ -2903,7 +3306,8 @@
       }
 
       function showStart() {
-        hangar = loadHangar();
+        /* 职业 run 不读旧机库（旧 formula:1 与职业装备互不相干）；经典路径保持原样。 */
+        if (!isCareerRun()) hangar = loadHangar();
         initRunState();
         mode = 'classic';
         state = 'ready';
@@ -2918,24 +3322,46 @@
         syncHud();
         syncItemButtons();
         const hasChallenge = challengeAvailable();
-        ui.show({
-          title: '星海突击',
-          text:
-            '纵版弹幕射击：击落敌机，躲开弹幕。<br/>' +
-            '吃下 <b>散射 / 激光 / 追踪 / 速射</b>，同种可叠加时长；能量见底会火力下降，记得捡能量核心<br/>' +
-            'Boss 后三选一整备继续下一星区 · 编队 3 · 大杀器 4–7<br/>' +
-            '机库星币 <b>' + hangar.credits + '</b> · 已远征 ' + hangar.runs + ' 次<br/>' +
-            '<b>星海割草</b>：模拟割草演武，弹种常驻 / 大杀器满载无限 / 敌潮密集；<b>不记分、不给星币</b>',
-          btn: '开始游戏',
-          onBtn: startGame,
-          btn2: hasChallenge ? '挑战 6 关' : '挑战数据不可用',
-          onBtn2: hasChallenge ? showChallengePanel : () => A.showToast('挑战数据不可用'),
-          btn3: '机库改装',
-          onBtn3: showHangar,
-          btn4: '星海割草（模拟割草）',
-          onBtn4: startMow,
-        });
-        syncHangarCredits();
+        if (isCareerRun()) {
+          const startLevel = clamp(Math.floor(Number(careerBattle.startLevel) || 1), 1, 999);
+          const startTheme = careerStartTheme() || themeForLevel(startLevel);
+          const stats = careerBattle.stats;
+          const settled = careerBattle.settled;
+          ui.show({
+            title: '星海突击',
+            text:
+              careerGoalLine() +
+              '<br/>起始星区：第 ' + startLevel + ' 关 · ' + A.escapeHtml(startTheme.name) +
+              ' · ' + A.escapeHtml(careerBattle.shipName || '旧翼') +
+              '（生命 ' + Math.round(stats.maxLives) + ' · 能量 ' + Math.round(stats.energyCap) + '）' +
+              '<br/>击破本区母舰后回旧港结算报酬；本趟不结算经典星币，也不写经典纪录' +
+              (settled ? '<br/><span class="refit-hint">这趟护航已经结算，可以在这里继续练手。</span>' : ''),
+            btn: settled ? '继续练手' : '开始游戏',
+            onBtn: startGame,
+            btn2: '',
+            btn3: '',
+            btn4: '',
+          });
+        } else {
+          ui.show({
+            title: '星海突击',
+            text:
+              '纵版弹幕射击：击落敌机，躲开弹幕。<br/>' +
+              '吃下 <b>散射 / 激光 / 追踪 / 速射</b>，同种可叠加时长；能量见底会火力下降，记得捡能量核心<br/>' +
+              'Boss 后三选一整备继续下一星区 · 编队 3 · 大杀器 4–7<br/>' +
+              '机库星币 <b>' + hangar.credits + '</b> · 已远征 ' + hangar.runs + ' 次<br/>' +
+              '<b>星海割草</b>：模拟割草演武，弹种常驻 / 大杀器满载无限 / 敌潮密集；<b>不记分、不给星币</b>',
+            btn: '开始游戏',
+            onBtn: startGame,
+            btn2: hasChallenge ? '挑战 6 关' : '挑战数据不可用',
+            onBtn2: hasChallenge ? showChallengePanel : () => A.showToast('挑战数据不可用'),
+            btn3: '机库改装',
+            onBtn3: showHangar,
+            btn4: '星海割草（模拟割草）',
+            onBtn4: startMow,
+          });
+        }
+        if (!isCareerRun()) syncHangarCredits();
         syncItemButtons();
       }
 
@@ -2950,8 +3376,11 @@
 
       /* ---------- 局内存档 ---------- */
       function serialize() {
+        /* ADR §18.3/§18.8：职业 run 不读写旧 RunSave（studiokit:arcade:runs:v1），刷新只能重开本趟护航。 */
+        if (isCareerRun()) return null;
         /* 星海割草是无结算演武：不写局内档，避免刷新恢复提示/进度串味。 */
         if (mode === 'mow') return null;
+        /* 挑战局内档（mode:'challenge'）与经典局内档（mode:'classic'）保持 0.14/0.15 原门禁；本页无 zen 模式。 */
         if (state !== 'playing' && state !== 'paused' && state !== 'clear') return null;
         return {
           mode,
@@ -3011,7 +3440,7 @@
           clearStage: pendingClearStage,
           /* 0.13.0 星域远征局内状态；挑战分支不写，旧档缺字段时 restore 用默认值。 */
           run:
-            mode === 'classic'
+            classicLike()
               ? {
                   power: run.power,
                   energy: Math.round(run.energy * 10) / 10,
@@ -3416,21 +3845,22 @@
       }
 
       function fire() {
-        const classicLike = mode === 'classic' || isMow();
-        const depleted = classicLike && run.depleted;
+        /* ADR §18.9：职业 run 与经典共用火力公式（割草 0.14 也沿用经典公式，此处合并保持数值不变）。 */
+        const formulaMode = classicFormula();
+        const depleted = formulaMode && run.depleted;
         let interval = buffs.rapid > 0 ? 0.075 : 0.13;
-        if (classicLike) {
+        if (formulaMode) {
           if (run.power >= 5) interval *= 0.94;
           if (run.power >= 3) interval *= 0.98;
           if (depleted) interval *= 1.8;
         }
         player.cool = interval;
         if (mode === 'challenge') chFiredVolleys += 1;
-        const mul = (classicLike ? damageMul() : 1) * (depleted ? 0.7 : 1);
+        const mul = (formulaMode ? damageMul() : 1) * (depleted ? 0.7 : 1);
         /* 普通弹始终存在；每种已激活 Buff 在每一轮里追加自己的弹型，形成叠加。 */
         bullets.push({ x: player.x - 10, y: player.y - 14, vx: 0, vy: -640, r: 3, dmg: 1 * mul });
         bullets.push({ x: player.x + 10, y: player.y - 14, vx: 0, vy: -640, r: 3, dmg: 1 * mul });
-        if (classicLike) {
+        if (formulaMode) {
           /* 0.13.0 火力等级：每级追加弹道，视觉与伤害同步成长。 */
           if (run.power >= 2) bullets.push({ x: player.x, y: player.y - 16, vx: 0, vy: -680, r: 3.4, dmg: 1 * mul });
           if (run.power >= 3) {
@@ -3490,9 +3920,9 @@
       }
 
       function updatePlayer(dt) {
-        const classicLike = mode === 'classic' || isMow();
-        const depletedSlow = classicLike && run.depleted ? 0.92 : 1;
-        const speed = (classicLike ? moveSpeed() : 320) * depletedSlow;
+        const formulaMode = classicFormula();
+        const depletedSlow = formulaMode && run.depleted ? 0.92 : 1;
+        const speed = (formulaMode ? moveSpeed() : 320) * depletedSlow;
         if (input.isDown('ArrowLeft', 'a')) player.x -= speed * dt;
         if (input.isDown('ArrowRight', 'd')) player.x += speed * dt;
         if (input.isDown('ArrowUp', 'w')) player.y -= speed * dt;
@@ -3517,7 +3947,7 @@
         player.prevX = player.x;
         player.invul = Math.max(0, player.invul - dt);
         /* 推进器拖尾：纯反馈，不参与判定。 */
-        if ((mode === 'classic' || isMow()) && !A.reducedMotion && Math.random() < 0.5) {
+        if (classicFormula() && !A.reducedMotion && Math.random() < 0.5) {
           particles.emit(player.x + rand(-4, 4), player.y + 12, {
             count: 1,
             speed: [8, 30],
@@ -3788,8 +4218,8 @@
         enemies.splice(idx, 1);
         if (e.kind === 'boss') {
           if (!isMow()) {
-            const themeScore = mode === 'classic' && run.theme ? run.theme.scoreMul || 1 : 1;
-            const gained = Math.round(e.score * (mode === 'classic' ? comboMul() : 1) * themeScore);
+            const themeScore = classicLike() && run.theme ? run.theme.scoreMul || 1 : 1;
+            const gained = Math.round(e.score * (classicLike() ? comboMul() : 1) * themeScore);
             score += gained;
             addFloater(e.x + e.w / 2, e.y + e.h / 2, '+' + gained, '#ffd23f');
           }
@@ -3844,6 +4274,10 @@
               h: 0,
             });
           }
+          /* boss.defeated 用真实游戏状态：level 是刚击破的关卡号、theme 是 run.theme.id，
+             供 T1/T2 的 objective.context（level/theme）判定，不读分数文本。 */
+          if (isCareerRun()) careerBattle.bossKills += 1;
+          careerObserve('boss.defeated', { level, theme: run.theme && run.theme.id });
           stageClear(level);
           syncHud();
           return;
@@ -3867,13 +4301,14 @@
             }
             pickupPity = 0;
           } else {
-            const themeScore = mode === 'classic' && run.theme ? run.theme.scoreMul || 1 : 1;
-            const gained = Math.round(e.score * (mode === 'classic' ? comboMul() : 1) * themeScore);
+            const themeScore = classicLike() && run.theme ? run.theme.scoreMul || 1 : 1;
+            const gained = Math.round(e.score * (classicLike() ? comboMul() : 1) * themeScore);
             score += gained;
             syncHud();
             addFloater(e.x + e.w / 2, e.y, '+' + gained, '#ffd23f');
             pickupPity += 1;
-            if (mode === 'classic') {
+            if (classicLike()) {
+              careerObserve('enemy.killed', { kind: e.kind, level, theme: run.theme && run.theme.id });
               bumpCombo();
               /* 击杀回能：避免能量枯竭后陷入无补给的死亡螺旋。 */
               addEnergy(0.6);
@@ -3951,6 +4386,40 @@
           syncJoyTools();
           return;
         }
+        /* 0.17（ADR §19.5 / D17-15）：职业模块只在生涯 run 生效。
+           - phase-shield：每趟出击最多抵消一次受击（不扣生命、不扣火力）；
+           - cargo-magnet：armorMul 承伤倍率进伤害池，累计满 1 点才扣 1 条生命；
+             armorMul=1 时第一次受击立即扣 1 条，与 0.16/经典逐字一致。 */
+        if (isCareerRun()) {
+          if (careerBattle.shieldCharges > 0) {
+            careerBattle.shieldCharges -= 1;
+            player.invul = Math.max(1.2, invulSeconds());
+            run.combo = 0;
+            run.comboTimer = 0;
+            addRing(player.x, player.y, '#7ce8e0', 150, 0.5, 4);
+            flash = Math.max(flash, 0.4);
+            flashColor = '#7ce8e0';
+            addFloater(player.x, player.y - 46, '相位护盾 · 抵消一次', '#7ce8e0');
+            A.Sfx.play('perfect');
+            syncHud();
+            syncJoyTools();
+            return;
+          }
+          const armorMulValue = clamp(Number(careerBattle.stats.armorMul) || 1, 0.5, 1.5);
+          careerBattle.armorPool += armorMulValue;
+          if (careerBattle.armorPool < 1) {
+            player.invul = Math.max(0.9, invulSeconds());
+            run.combo = 0;
+            run.comboTimer = 0;
+            addRing(player.x, player.y, '#9ecbff', 110, 0.4, 3);
+            addFloater(player.x, player.y - 46, '装甲吸收冲击', '#9ecbff');
+            A.Sfx.play('hit');
+            syncHud();
+            syncJoyTools();
+            return;
+          }
+          careerBattle.armorPool = Math.max(0, careerBattle.armorPool - 1);
+        }
         lives -= 1;
         player.invul = invulSeconds();
         shake = A.reducedMotion ? 0 : 8;
@@ -3979,7 +4448,7 @@
 
       function collide() {
         /* 僚机拦截敌弹：先于玩家判定，命中后僚机掉 1 点耐久。 */
-        if ((mode === 'classic' || isMow()) && run.wingmen.length) {
+        if (classicFormula() && run.wingmen.length) {
           for (let i = shots.length - 1; i >= 0; i -= 1) {
             const s = shots[i];
             let absorbed = false;
@@ -5208,6 +5677,7 @@
           },
           /* #test：跳过解锁直接进入关卡，供拆段回放/观测使用（不写挑战记录）。 */
           forceStartChallenge(ref) {
+            if (isCareerRun()) return false;
             const stage = challengeStageByRef(ref);
             if (!stage) return false;
             mode = 'challenge';
@@ -5416,43 +5886,163 @@
             return { pass, fail, details };
           },
         };
+        /* 0.16（ADR §18.10）：职业委托只读钩子只在 ?careerTest=1 追加；生产 URL 与既有 #test 探针不变。 */
+        if (/(?:^|[?&])careerTest=1(?:&|$)/.test(String((window.location && window.location.search) || ''))) {
+          window.__arcadeTest.careerInfo = function () {
+            const goal = careerGoalParts();
+            return {
+              isCommission: isCareerRun(),
+              startPending: careerStartPending,
+              ticketId: careerBattle.ticketId,
+              commissionId: careerBattle.commissionId,
+              startLevel: careerBattle.startLevel,
+              themeId: careerBattle.themeId,
+              level,
+              theme: run.theme ? run.theme.id : null,
+              classicLike: classicLike(),
+              mode,
+              state,
+              bossKills: careerBattle.bossKills,
+              targetAtLeast: careerBattle.targetAtLeast,
+              objective: goal ? [goal.title, goal.summary].filter(Boolean).join(' · ') : null,
+              goalLineVisible: !!document.querySelector('[data-career-goal]'),
+              missionLines: Array.prototype.slice.call(document.querySelectorAll('.career-mission-line')).map((node) => {
+                const rect = node.getBoundingClientRect();
+                return { width: Math.round(rect.width), left: Math.round(rect.left), right: Math.round(rect.right) };
+              }),
+              serializeNull: serialize() === null,
+              settled: careerBattle.settled,
+              settledResult: careerBattle.settledResult ? { ...careerBattle.settledResult } : null,
+              stats: { ...careerBattle.stats },
+              statsSource: careerBattle.statsSource,
+              shipName: careerBattle.shipName,
+              /* 0.17（D17-15）：职业模块运行态只读探针（phase-shield / cargo-magnet）。 */
+              shieldCharges: careerBattle.shieldCharges,
+              armorPool: Math.round(careerBattle.armorPool * 1000) / 1000,
+              waveCompletions: careerBattle.waveCompletions,
+              lives,
+              maxLives: maxLives(),
+              energy: Math.round(run.energy * 10) / 10,
+              maxEnergy: run.maxEnergy,
+              itemCap: run.itemCap,
+              creditsBonus: run.creditsBonus,
+              hangarCredits: hangar.credits,
+              runSave: A.RunSave ? A.RunSave.get('star-raid') : null,
+              metaRaw: (() => {
+                try {
+                  return window.localStorage.getItem('studiokit:arcade:meta:v1');
+                } catch (err) {
+                  return null;
+                }
+              })(),
+              careerChrome: document.body.classList.contains('is-career-run'),
+              hangarEntryVisible: !!(dom.ovBtn3 && !dom.ovBtn3.hidden),
+              challengeEntryVisible: !!(dom.ovBtn2 && !dom.ovBtn2.hidden),
+              mowEntryVisible: !!(dom.ovBtn4 && !dom.ovBtn4.hidden),
+              hudCreditsHidden: !!dom.hudCredits && getComputedStyle(dom.hudCredits.parentElement || dom.hudCredits).display === 'none',
+            };
+          };
+        }
       }
-      const saved = autosave.load();
-      if (saved) {
-        A.showResumePrompt(ui, saved, {
-          name: '星海突击',
-          onResume: () => {
-            if (restore(saved.data)) {
-              if (pendingClearStage > 0) {
-                /* 刷新前正停在 CLEAR 弹层：恢复后继续让玩家选择下一关或收局。 */
-                state = 'clear';
-                loop.pause();
+      /* 开局弹层（0.15 行为逐字保留）：只有这条经典路径会读旧机库与旧 RunSave。 */
+      function prepareStartScreen() {
+        if (isCareerRun()) {
+          /* 职业 run：不读旧机库、不读旧局内档，直接给带戏内护航目标的经典开始弹层。 */
+          showStart();
+          return;
+        }
+        hangar = loadHangar();
+        const saved = autosave.load();
+        if (saved) {
+          A.showResumePrompt(ui, saved, {
+            name: '星海突击',
+            onResume: () => {
+              if (restore(saved.data)) {
+                if (pendingClearStage > 0) {
+                  /* 刷新前正停在 CLEAR 弹层：恢复后继续让玩家选择下一关或收局。 */
+                  state = 'clear';
+                  loop.pause();
+                  syncJoyTools();
+                  ui.hide();
+                  showClearPanel(pendingClearStage);
+                  pauseUi.sync();
+                  autosave.saveNow();
+                  return;
+                }
+                state = 'playing';
                 syncJoyTools();
                 ui.hide();
-                showClearPanel(pendingClearStage);
+                loop.resume();
                 pauseUi.sync();
                 autosave.saveNow();
-                return;
+              } else {
+                autosave.clear();
+                showStart();
               }
-              state = 'playing';
-              syncJoyTools();
-              ui.hide();
-              loop.resume();
-              pauseUi.sync();
-              autosave.saveNow();
-            } else {
+            },
+            onRestart: () => {
               autosave.clear();
               showStart();
-            }
-          },
-          onRestart: () => {
-            autosave.clear();
-            showStart();
-          },
-        });
-      } else {
-        showStart();
+            },
+          });
+        } else {
+          showStart();
+        }
       }
+
+      /* 0.16 职业入口：URL 带 ?career=<ticketId> 时先等桥确认 ticket，再决定「职业开局弹层」
+         还是经典开局；无参数时同步走 0.15 路径（零延迟、零行为变化）。 */
+      function bootStartScreen() {
+        const ticketId = careerTicketParam();
+        const ready = career && career.ready;
+        if (!ticketId || !career || !ready || typeof ready.then !== 'function') {
+          prepareStartScreen();
+          return;
+        }
+        careerStartPending = true;
+        let settled = false;
+        let guard = null;
+        const finish = () => {
+          if (settled) return;
+          settled = true;
+          careerStartPending = false;
+          try {
+            if (guard) clearTimeout(guard);
+          } catch (err) {
+            /* ignore */
+          }
+          /* 只有桥确认了属于本游戏的 run 才锁定职业 run；否则按 0.15 经典启动（fail-open）。 */
+          const runInfo = readCareerRun();
+          if (runInfo) activateCareerRun(runInfo);
+          else { try { window.__arcadeMode = 'classic'; } catch (err) { /* ignore */ } }
+          prepareStartScreen();
+        };
+        try {
+          guard = setTimeout(finish, 10000);
+        } catch (err) {
+          guard = null;
+        }
+        Promise.resolve(ready).then(finish, finish);
+        /* 极端慢启动兜底：若 3.5s 计时器已按经典开局、桥随后才确认职业 run，
+           立刻切回职业开局（清掉这段时间可能写下的经典局内档，不产生任何经典经济）。 */
+        try {
+          setTimeout(() => {
+            if (isCareerRun()) return;
+            const late = readCareerRun();
+            if (!late) return;
+            try {
+              /* 保留经典局内档：职业 run 只用自己的内存/IDB，不删除玩家经典存档。 */
+            } catch (err) {
+              /* ignore */
+            }
+            activateCareerRun(late);
+            showStart();
+          }, 1500);
+        } catch (err) {
+          /* ignore */
+        }
+      }
+      bootStartScreen();
       loop.start();
     })();
   </script>

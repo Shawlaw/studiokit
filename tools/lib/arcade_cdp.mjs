@@ -22,6 +22,7 @@ import http from 'node:http';
 import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
+import net from 'node:net';
 import { spawn } from 'node:child_process';
 import { fileURLToPath } from 'node:url';
 
@@ -117,13 +118,15 @@ export function startServer({ root = REPO_ROOT, port, host = '127.0.0.1' } = {})
  * @param {string} url
  * @param {number} [timeout]
  */
-export async function waitForJson(url, timeout = 15000) {
+export async function waitForJson(url, timeout = 15000, signal = null) {
   const end = Date.now() + timeout;
   while (Date.now() < end) {
+    if (signal && signal.aborted) throw new Error('aborted');
     try {
-      const res = await fetch(url);
+      const res = await fetch(url, signal ? { signal } : undefined);
       if (res.ok) return await res.json();
     } catch (err) {
+      if (signal && signal.aborted) throw new Error('aborted');
       /* 端口尚未就绪，继续重试 */
     }
     await sleep(120);
@@ -141,21 +144,121 @@ function removeProfile(profile) {
   }
 }
 
+function isPortFree(port) {
+  return new Promise((resolve) => {
+    const socket = net.connect({ host: '127.0.0.1', port });
+    let settled = false;
+    const finish = (free) => {
+      if (settled) return;
+      settled = true;
+      try { socket.destroy(); } catch (err) { /* ignore */ }
+      resolve(free);
+    };
+    socket.once('connect', () => finish(false));
+    socket.once('error', () => finish(true));
+    setTimeout(() => finish(true), 800).unref();
+  });
+}
+
+function readDevToolsActivePort(profile, timeoutMs = 10000, signal = null) {
+  const file = path.join(profile, 'DevToolsActivePort');
+  const start = Date.now();
+  return new Promise((resolve, reject) => {
+    const tick = () => {
+      if (signal && signal.aborted) { reject(new Error('aborted')); return; }
+      try {
+        if (fs.existsSync(file)) {
+          const lines = fs.readFileSync(file, 'utf8').split(/\r?\n/);
+          const port = Number(lines[0]);
+          const wsPath = (lines[1] || '').trim();
+          if (Number.isInteger(port) && port > 0 && wsPath) {
+            resolve({ port, wsPath });
+            return;
+          }
+        }
+      } catch (err) {
+        /* 文件可能正在写入，下一轮再读 */
+      }
+      if (Date.now() - start >= timeoutMs) {
+        reject(new Error('Chrome DevToolsActivePort 未就绪'));
+        return;
+      }
+      setTimeout(tick, 80).unref();
+    };
+    tick();
+  });
+}
+
+function verifyBrowserCdp(version, timeoutMs = 4000, signal = null) {
+  const url = version && version.webSocketDebuggerUrl;
+  if (signal && signal.aborted) return Promise.reject(new Error('aborted'));
+  if (typeof url !== 'string' || !url) return Promise.reject(new Error('CDP /json/version 缺少 webSocketDebuggerUrl'));
+  if (typeof version.Browser !== 'string' || !/^Chrome\//.test(version.Browser)) {
+    return Promise.reject(new Error('CDP /json/version 不是 Chrome: ' + version.Browser));
+  }
+  return new Promise((resolve, reject) => {
+    let settled = false;
+    let ws = null;
+    const timer = setTimeout(() => finish(new Error('CDP Browser.getVersion 超时')), timeoutMs);
+    const onAbort = () => finish(new Error('aborted'));
+    if (signal) signal.addEventListener('abort', onAbort, { once: true });
+    function finish(err, value) {
+      if (settled) return;
+      settled = true;
+      clearTimeout(timer);
+      if (signal) signal.removeEventListener('abort', onAbort);
+      try { if (ws) ws.close(); } catch (closeErr) { /* ignore */ }
+      if (err) reject(err); else resolve(value);
+    }
+    try {
+      ws = new WebSocket(url);
+    } catch (err) {
+      finish(err);
+      return;
+    }
+    ws.addEventListener('open', () => {
+      try { ws.send(JSON.stringify({ id: 1, method: 'Browser.getVersion' })); } catch (err) { finish(err); }
+    });
+    ws.addEventListener('message', (event) => {
+      try {
+        const msg = JSON.parse(String(event.data));
+        if (msg && msg.id === 1) {
+          const product = msg.result && msg.result.product;
+          if (typeof product === 'string' && /^Chrome\//.test(product)) finish(null, product);
+          else finish(new Error('CDP WebSocket 不是 Chrome: ' + String(product)));
+        }
+      } catch (err) {
+        finish(err);
+      }
+    });
+    ws.addEventListener('error', () => finish(new Error('CDP WebSocket 连接失败')));
+  });
+}
+
+const ownedBrowsers = new Map();
+
 /**
  * 启动本机 Chrome 并等待 DevTools 端口就绪。
- * 每次调用使用独立 mkdtemp profile，多个 runner 可并发运行（端口不能相同）。
- * @param {{port: number, chromePath?: string, profilePrefix?: string, windowSize?: string, headless?: boolean, extraArgs?: string[]}} options
- * @returns {Promise<{chrome: import('node:child_process').ChildProcess, profile: string, port: number}>}
+ * 每次调用使用独立 mkdtemp profile；port 省略或传 0 时由 Chrome 选择动态端口，
+ * 从该 profile 的 DevToolsActivePort 读取实际端口，绝不连接端口上已有的其它服务。
+ * 固定端口在启动前先检测占用，并在就绪后通过 Chrome 身份 + Browser.getVersion
+ * （CDP WebSocket）确认归属；冲突/替身时无副作用退出，不触碰占用者。
+ * @param {{port?: number, chromePath?: string, profilePrefix?: string, windowSize?: string, headless?: boolean, extraArgs?: string[]}} options
+ * @returns {Promise<{chrome: import('node:child_process').ChildProcess, profile: string, port: number, dynamicPort: boolean}>}
  */
 export async function launchChrome({
-  port,
+  port = 0,
   chromePath = DEFAULT_CHROME,
   profilePrefix = 'studiokit-arcade-',
   windowSize = '420,900',
   headless = true,
   extraArgs = [],
 } = {}) {
-  if (!Number.isInteger(port)) throw new Error('launchChrome 需要整数 port');
+  if (!Number.isInteger(port) || port < 0) throw new Error('launchChrome 需要非负整数 port');
+  const requestedPort = port;
+  if (requestedPort > 0 && !(await isPortFree(requestedPort))) {
+    throw new Error('launchChrome: CDP 端口已被占用，拒绝启动（未触碰占用进程）: ' + requestedPort);
+  }
   const profile = fs.mkdtempSync(path.join(os.tmpdir(), profilePrefix));
   const args = [
     ...(headless ? ['--headless=new'] : []),
@@ -163,7 +266,8 @@ export async function launchChrome({
     '--no-sandbox',
     '--disable-dev-shm-usage',
     '--remote-allow-origins=*',
-    `--remote-debugging-port=${port}`,
+    /* 始终动态端口：固定端口请求仅作调用方兼容别名，实际端口由本轮 profile 的 DevToolsActivePort 证明。 */
+    '--remote-debugging-port=0',
     `--user-data-dir=${profile}`,
     `--window-size=${windowSize}`,
     '--hide-scrollbars',
@@ -172,39 +276,74 @@ export async function launchChrome({
     'about:blank',
   ];
   const chrome = spawn(chromePath, args, { stdio: 'ignore' });
-  const endpoint = `http://127.0.0.1:${port}`;
-  const versionReady = waitForJson(`${endpoint}/json/version`);
-  versionReady.catch(() => {
-    /* 与 spawn 失败竞速时可能后到，避免 unhandled rejection */
+  const exited = new Promise((resolve, reject) => {
+    chrome.once('exit', (code, signal) => reject(new Error('Chrome 提前退出（code=' + code + ', signal=' + signal + '）')));
   });
   const spawnFailed = new Promise((resolve, reject) => {
-    chrome.once('error', (err) => reject(new Error(`Chrome 启动失败（${chromePath}）：${err.message}`)));
+    chrome.once('error', (err) => reject(new Error('Chrome 启动失败（' + chromePath + '）：' + err.message)));
   });
+  exited.catch(() => {
+    /* 启动成功后不再需要；避免 unhandled rejection */
+  });
+  spawnFailed.catch(() => {
+    /* 与 ready 竞速，失败时由外层 catch 处理 */
+  });
+  const abort = new AbortController();
   try {
-    await Promise.race([versionReady, spawnFailed]);
+    const actual = await Promise.race([
+      readDevToolsActivePort(profile, 10000, abort.signal),
+      spawnFailed,
+      exited,
+    ]);
+    const endpoint = `http://127.0.0.1:${actual.port}`;
+    const versionReady = waitForJson(`${endpoint}/json/version`, 15000, abort.signal).then((version) => {
+      if (!version || typeof version.webSocketDebuggerUrl !== 'string') throw new Error('CDP /json/version 缺少 webSocketDebuggerUrl');
+      const expectedPath = actual.wsPath ? actual.wsPath.replace(/^\/+/, '') : '';
+      if (expectedPath && !version.webSocketDebuggerUrl.includes('/' + expectedPath)) {
+        throw new Error('CDP /json/version 与 DevToolsActivePort 不匹配');
+      }
+      return version;
+    }).then((version) => verifyBrowserCdp(version, 4000, abort.signal).then((product) => ({ version, cdpProduct: product })));
+    versionReady.catch(() => {});
+    const ready = await Promise.race([versionReady, exited, spawnFailed]);
+    if (chrome.exitCode !== null) throw new Error('Chrome 启动后已退出');
+    const entry = {
+      child: chrome,
+      wsPath: ready && ready.version ? ready.version.webSocketDebuggerUrl : null,
+      actualPort: actual.port,
+    };
+    ownedBrowsers.set(actual.port, entry);
+    if (requestedPort > 0 && requestedPort !== actual.port) ownedBrowsers.set(requestedPort, entry);
+    return { chrome, profile, port: actual.port, requestedPort, dynamicPort: true, cdpProduct: ready && ready.cdpProduct, browserWsPath: ready && ready.version ? ready.version.webSocketDebuggerUrl : null };
   } catch (err) {
+    abort.abort();
     try {
-      chrome.kill();
+      if (chrome.exitCode === null) chrome.kill();
     } catch (killErr) {
       /* ignore */
     }
     removeProfile(profile);
     throw err;
   }
-  return { chrome, profile, port };
 }
 
 /**
- * 关闭 Chrome 并清理临时 profile。
+ * 关闭本次启动的 Chrome 子进程并清理其临时 profile；只操作传入的子进程句柄。
  * @param {{chrome?: import('node:child_process').ChildProcess, profile?: string}} launched
  */
 export async function stopChrome({ chrome, profile } = {}) {
-  try {
-    if (chrome) chrome.kill();
-  } catch (err) {
-    /* ignore */
+  for (const [port, entry] of ownedBrowsers) {
+    if (entry.child === chrome) ownedBrowsers.delete(port);
   }
-  await sleep(300);
+  if (chrome && chrome.exitCode === null) {
+    try { chrome.kill(); } catch (err) { /* ignore */ }
+    await new Promise((resolve) => {
+      let done = false;
+      const finish = () => { if (!done) { done = true; resolve(); } };
+      chrome.once('exit', finish);
+      setTimeout(finish, 3000);
+    });
+  }
   removeProfile(profile);
 }
 
@@ -409,7 +548,15 @@ export async function openPage({
   url = 'about:blank',
 } = {}) {
   if (!Number.isInteger(port)) throw new Error('openPage 需要整数 port');
-  const target = await fetch(`http://127.0.0.1:${port}/json/new?${encodeURIComponent(url)}`, { method: 'PUT' }).then((r) => r.json());
+  const owned = ownedBrowsers.get(port);
+  if (!owned) throw new Error('openPage: CDP 端口未登记或已失效，拒绝在发请求前连接: ' + port);
+  const actualPort = owned.actualPort || port;
+  if (!owned.child || owned.child.exitCode !== null) throw new Error('openPage: 本轮 Chrome 已退出，拒绝连接 ' + port);
+  const version = await fetch(`http://127.0.0.1:${actualPort}/json/version`).then((r) => r.json());
+  if (!owned.wsPath || version.webSocketDebuggerUrl !== owned.wsPath) {
+    throw new Error('openPage: CDP 端口归属已变化，拒绝向非本轮 Chrome 新建 target');
+  }
+  const target = await fetch(`http://127.0.0.1:${actualPort}/json/new?${encodeURIComponent(url)}`, { method: 'PUT' }).then((r) => r.json());
   const cdp = new CDP(target.webSocketDebuggerUrl, { artifactsDir });
   await cdp.ready();
   await cdp.send('Page.enable');

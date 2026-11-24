@@ -1,0 +1,25 @@
+{
+  "contentVersion": "0.18.0",
+  "approach": "combat",
+  "commissionId": "ending.combat",
+  "gameId": "star-raid",
+  "title": "星塔回响·武力解除",
+  "summary": "穿过母舰防线，让旧防御核心停下。",
+  "objective": {
+    "kind": "boss.defeated",
+    "atLeast": 1,
+    "context": {
+      "theme": "mothership"
+    }
+  },
+  "startParams": {
+    "startLevel": 6,
+    "themeId": "mothership"
+  },
+  "flags": [
+    "C5.star_tower_resolved",
+    "ending.combat"
+  ],
+  "repeatSalaryCredits": 0,
+  "epilogueText": "夜安静下来，巡防队把星塔列入了禁区。"
+}

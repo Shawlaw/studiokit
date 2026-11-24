@@ -17,9 +17,34 @@ REQUIRED = [
     'apps/arcade/DESIGN-0.4.0.md', 'apps/arcade/DESIGN-0.5.0.md',
     'apps/arcade/DESIGN-0.6.0.md', 'apps/arcade/DESIGN-0.8.1.md', 'apps/arcade/DESIGN-0.8.2.md',
     'apps/arcade/DESIGN-0.8.6.md', 'apps/arcade/DESIGN-0.9.0.md', 'apps/arcade/DESIGN-0.10.0.md',
-    'apps/arcade/DESIGN-0.11.0.md', 'apps/arcade/DESIGN-0.11.1.md', 'apps/arcade/DESIGN-0.11.2.md', 'apps/arcade/DESIGN-0.11.3.md', 'apps/arcade/DESIGN-0.11.4.md', 'apps/arcade/DESIGN-0.11.5.md', 'apps/arcade/DESIGN-0.12.0.md', 'apps/arcade/DESIGN-0.12.1.md', 'apps/arcade/DESIGN-0.12.2.md', 'apps/arcade/DESIGN-0.12.3.md', 'apps/arcade/DESIGN-0.12.4.md', 'apps/arcade/DESIGN-0.12.5.md', 'apps/arcade/DESIGN-0.12.6.md', 'apps/arcade/DESIGN-0.12.7.md', 'apps/arcade/DESIGN-0.13.1.md', 'apps/arcade/DESIGN-0.13.2.md', 'apps/arcade/DESIGN-0.13.3.md', 'apps/arcade/DESIGN-0.14.0.md',
+    'apps/arcade/DESIGN-0.11.0.md', 'apps/arcade/DESIGN-0.11.1.md', 'apps/arcade/DESIGN-0.11.2.md', 'apps/arcade/DESIGN-0.11.3.md', 'apps/arcade/DESIGN-0.11.4.md', 'apps/arcade/DESIGN-0.11.5.md', 'apps/arcade/DESIGN-0.12.0.md', 'apps/arcade/DESIGN-0.12.1.md', 'apps/arcade/DESIGN-0.12.2.md', 'apps/arcade/DESIGN-0.12.3.md', 'apps/arcade/DESIGN-0.12.4.md', 'apps/arcade/DESIGN-0.12.5.md', 'apps/arcade/DESIGN-0.12.6.md', 'apps/arcade/DESIGN-0.12.7.md', 'apps/arcade/DESIGN-0.13.1.md', 'apps/arcade/DESIGN-0.13.2.md', 'apps/arcade/DESIGN-0.13.3.md', 'apps/arcade/DESIGN-0.14.0.md', 'apps/arcade/DESIGN-0.15.0.md', 'apps/arcade/DESIGN-0.16.0.md', 'apps/arcade/DESIGN-0.17.0.md', 'apps/arcade/DESIGN-0.18.0.md',
+    'apps/arcade/career/ui/market.js', 'apps/arcade/career/ui/workshop.js',
     'apps/arcade/engine.js', 'apps/arcade/arcade.css', 'apps/arcade/sw.js',
     'apps/arcade/manifest.webmanifest',
+    'apps/arcade/career/registry.js', 'apps/arcade/career/discovery.js',
+    'apps/arcade/career/career-core.js', 'apps/arcade/career/career-db.js',
+    'apps/arcade/career/bridge.js', 'apps/arcade/career/router.js',
+    'apps/arcade/career/entry-router.js', 'apps/arcade/career/backup.js',
+    'apps/arcade/career/commission-core.js', 'apps/arcade/career/star-combat-config.js',
+    'apps/arcade/career/commission-schema.js', 'apps/arcade/career/materials.js',
+    'apps/arcade/career/crafting.js', 'apps/arcade/career/professions.js',
+    'apps/arcade/career/story-evidence.js', 'apps/arcade/career/route-planner.js',
+    'apps/arcade/career/campaign-core.js', 'apps/arcade/career/ending-reducer.js',
+    'apps/arcade/career/ui/world-state.js',
+    'apps/arcade/career/content/campaign.json', 'apps/arcade/career/content/side-stories.json',
+    'apps/arcade/career/content/npc.json', 'apps/arcade/career/content/ending-combat.json',
+    'apps/arcade/career/content/ending-research.json', 'apps/arcade/career/content/ending-rescue.json',
+    'apps/arcade/career/content/chapter-00.json', 'apps/arcade/career/content/chapter-02.json',
+    'apps/arcade/career/content/chapter-03.json', 'apps/arcade/career/content/chapter-04.json',
+    'apps/arcade/career/content/chapter-05.json',
+    'apps/arcade/career/rental.js', 'apps/arcade/career/alternatives.js',
+    'apps/arcade/career/content/registry.json', 'apps/arcade/career/content/clues.json',
+    'apps/arcade/career/content/commissions.json', 'apps/arcade/career/content/items.json',
+    'apps/arcade/career/content/chapter-01.json',
+    'apps/arcade/career/ui/clue-surface.js', 'apps/arcade/career/ui/clue-surface.css',
+    'apps/arcade/career/ui/mailbox.js', 'apps/arcade/career/ui/settings.js',
+    'apps/arcade/career/ui/town.js', 'apps/arcade/career/ui/hangar.js',
+    'apps/arcade/career/ui/receipt.js',
     'apps/arcade/icons/icon-192.png', 'apps/arcade/icons/icon-512.png',
     'apps/arcade/icons/maskable-512.png', 'apps/arcade/icons/apple-touch-icon.png',
     'apps/arcade/games/star-raid.html', 'apps/arcade/games/shadow-leap.html',
@@ -36,6 +61,23 @@ REQUIRED = [
     'tools/arcade_zen_scores_test.mjs', 'tools/arcade_calm_games_test.mjs',
     'tools/arcade_design_check.py', 'tools/arcade_stage_coverage.mjs',
     'tools/arcade_run_all_gates.py',
+    'tools/career_registry_test.mjs', 'tools/career_discovery_test.mjs',
+    'tools/career_db_test.mjs', 'tools/career_backup_test.mjs',
+    'tools/career_entry_router_test.mjs', 'tools/career_discovery_accessibility_test.mjs',
+    'tools/career_games_reachability_test.mjs', 'tools/career_pwa_offline_test.mjs',
+    'tools/career_commission_test.mjs', 'tools/career_star_combat_config_test.mjs',
+    'tools/career_materials_test.mjs', 'tools/career_professions_test.mjs',
+    'tools/career_story_evidence_test.mjs', 'tools/career_route_planner_test.mjs',
+    'tools/career_mission_fixture_runner.mjs',
+    'tools/career_96_missions_test.mjs', 'tools/career_economy_balance_test.mjs',
+    'tools/career_campaign_core_test.mjs', 'tools/career_ending_reducer_test.mjs',
+    'tools/career_world_state_test.mjs', 'tools/career_graph_reachability_test.mjs',
+    'tools/career_campaign_e2e_test.mjs',
+    'tools/career_crystal_alias_test.mjs',
+    'tools/career_rental_test.mjs', 'tools/career_alternatives_test.mjs',
+    'tools/career_run_resume_test.mjs', 'tools/career_first_flight_test_016.mjs',
+    'tools/career_mobile_016_test.mjs',
+    'tools/career_legacy_baseline_test.mjs',
 ]
 
 # 0.9 挑战模式：每款游戏一个生成数据文件（tools/arcade_09_data.mjs 生成，入库）。
@@ -179,7 +221,7 @@ def validate(root=ROOT):
     arcade_engine = root / 'apps/arcade/engine.js'
     if arcade_engine.exists():
         source = arcade_engine.read_text(encoding='utf-8')
-        if "const ARCADE_VERSION = '0.14.0'" not in source:
+        if "const ARCADE_VERSION = '0.18.0'" not in source:
             ok = fail('Arcade ARCADE_VERSION drifted; update registry/README/CHANGELOG together') and ok
         for update_marker in ('function checkForUpdate', 'function onUpdate', 'function applyUpdate', "type === 'arcade-sw-update-ready'"):
             if update_marker not in source:
@@ -274,7 +316,7 @@ def validate(root=ROOT):
         arcade_index = root / 'apps/arcade/index.html'
         if arcade_index.exists():
             index_source = arcade_index.read_text(encoding='utf-8')
-            for marker in ('rel="manifest"', 'data-playtime-section', 'data-scores-section', 'data-scores-body', 'data-scores-empty', 'data-offline', 'data-install', 'data-share', 'data-random', 'data-update-check', 'data-update-banner', 'data-update-reload', '无签到', 'data-hall-version>0.14.0', '发现新版本 v${latest}（当前 v${current}）', '已是最新版本（v'):
+            for marker in ('rel="manifest"', 'data-playtime-section', 'data-scores-section', 'data-scores-body', 'data-scores-empty', 'data-offline', 'data-install', 'data-share', 'data-random', 'data-update-check', 'data-update-banner', 'data-update-reload', '无签到', 'data-hall-version>0.18.0', '发现新版本 v${latest}（当前 v${current}）', '已是最新版本（v'):
                 if marker not in index_source:
                     ok = fail(f'Arcade hub 0.13.2 marker missing: {marker}') and ok
             # 0.11.4：iOS 26+ 独立模式顶部系统模糊根因，禁止回归。
@@ -291,6 +333,147 @@ def validate(root=ROOT):
         for arcade_html in sorted((root / 'apps/arcade').rglob('*.html')):
             if 'viewport-fit=cover' in arcade_html.read_text(encoding='utf-8'):
                 ok = fail(f'{arcade_html.relative_to(root)} must not declare viewport-fit=cover (iOS standalone top blur)') and ok
+        # 0.17.0 Arcade Life：16 款游戏的只读微线索适配 + 独立生涯数据层（内容/契约，不含剧透）。
+        career_dir = root / 'apps/arcade/career'
+        if career_dir.is_dir():
+            for game_id in ARCADE_ALL_GAMES:
+                game_file = root / 'apps/arcade/games' / f'{game_id}.html'
+                if not game_file.exists():
+                    ok = fail(f'Arcade game page missing: {game_file.relative_to(root)}') and ok
+                    continue
+                game_source = game_file.read_text(encoding='utf-8')
+                if '<script src="../career/bridge.js"></script>' not in game_source:
+                    ok = fail(f'{game_file.relative_to(root)}: missing career bridge script tag') and ok
+                if 'const career = window.ArcadeCareer || null;' not in game_source:
+                    ok = fail(f'{game_file.relative_to(root)}: missing career handle declaration') and ok
+                if 'career.observe(' not in game_source:
+                    ok = fail(f'{game_file.relative_to(root)}: missing career.observe hook') and ok
+                if 'career.finish(' not in game_source:
+                    ok = fail(f'{game_file.relative_to(root)}: missing career.finish call') and ok
+            clues_file = career_dir / 'content' / 'clues.json'
+            registry_file = career_dir / 'content' / 'registry.json'
+            if clues_file.exists() and registry_file.exists():
+                try:
+                    clue_data = json.loads(clues_file.read_text(encoding='utf-8'))
+                    reg_data = json.loads(registry_file.read_text(encoding='utf-8'))
+                except json.JSONDecodeError as exc:
+                    ok = fail(f'Arcade career content JSON invalid: {exc}') and ok
+                else:
+                    clues = clue_data.get('clues') or []
+                    clue_ids = {c.get('clueId') for c in clues if isinstance(c, dict)}
+                    reg_games = reg_data.get('games') or []
+                    reg_ids = {g.get('gameId') for g in reg_games if isinstance(g, dict)}
+                    if len(clues) != len(ARCADE_ALL_GAMES):
+                        ok = fail(f'Arcade career clues must contain {len(ARCADE_ALL_GAMES)} entries, found {len(clues)}') and ok
+                    if reg_ids != set(ARCADE_ALL_GAMES):
+                        ok = fail('Arcade career registry gameId set must match the 16 arcade games') and ok
+                    for game_id in ARCADE_ALL_GAMES:
+                        if f'CL-{game_id}' not in clue_ids:
+                            ok = fail(f'Arcade career clue missing for {game_id}') and ok
+                    for game in reg_games:
+                        if isinstance(game, dict) and not game.get('watch'):
+                            ok = fail(f'Arcade career registry game {game.get("gameId")} has no watch events') and ok
+            else:
+                ok = fail('Arcade career content (clues/registry JSON) is missing') and ok
+            if 'studiokit:arcade:career' in arcade_engine.read_text(encoding='utf-8'):
+                ok = fail('Career storage must live outside engine.js (isolation)') and ok
+            sw_file = root / 'apps/arcade/sw.js'
+            if sw_file.exists():
+                sw_source = sw_file.read_text(encoding='utf-8')
+                for marker in ("'./career/bridge.js'", "'./career/content/clues.json'", "'./career/ui/mailbox.js'"):
+                    if marker not in sw_source:
+                        ok = fail(f'Arcade sw.js CORE_PATHS missing career resource: {marker}') and ok
+        else:
+            ok = fail('Arcade career runtime directory is missing') and ok
+        # 0.16 First Flight：告示板/委托/机库/收据/职业入口的静态契约（内容与接口，不含剧透）。
+        career_root = root / 'apps/arcade/career'
+        if career_root.is_dir():
+            try:
+                commissions = json.loads((career_root / 'content/commissions.json').read_text(encoding='utf-8'))
+                chapter1 = json.loads((career_root / 'content/chapter-01.json').read_text(encoding='utf-8'))
+                items = json.loads((career_root / 'content/items.json').read_text(encoding='utf-8'))
+                registry_data = json.loads((career_root / 'content/registry.json').read_text(encoding='utf-8'))
+            except (json.JSONDecodeError, OSError) as exc:
+                ok = fail(f'Arcade 0.16 career content JSON invalid: {exc}') and ok
+            else:
+                commission_list = commissions.get('commissions') or []
+                if len(commission_list) != 96:
+                    ok = fail(f'Arcade 0.17 commissions must be 96 (16 games x 6 tiers), found {len(commission_list)}') and ok
+                commission_ids = set()
+                per_game_tiers = {}
+                kind_re = re.compile(r'^[a-z0-9][a-z0-9._-]{0,79}$')
+                for commission in commission_list:
+                    if not isinstance(commission, dict):
+                        continue
+                    commission_id = commission.get('commissionId')
+                    commission_ids.add(commission_id)
+                    game_id = commission.get('gameId')
+                    tier = commission.get('tier')
+                    if game_id not in ARCADE_ALL_GAMES:
+                        ok = fail(f'Arcade 0.17 commission {commission_id}: unknown gameId') and ok
+                    if not isinstance(tier, int) or tier < 1 or tier > 6:
+                        ok = fail(f'Arcade 0.17 commission {commission_id}: tier must be 1..6') and ok
+                    elif not str(commission_id).startswith(f'{game_id}.T{tier}'):
+                        ok = fail(f'Arcade 0.17 commission {commission_id}: id/tier mismatch') and ok
+                    per_game_tiers.setdefault(game_id, set()).add(tier)
+                    objective = commission.get('objective') or {}
+                    if not kind_re.match(str(objective.get('kind') or '')):
+                        ok = fail(f'Arcade 0.17 commission {commission_id}: invalid objective kind') and ok
+                    if not isinstance(objective.get('atLeast'), int) or objective.get('atLeast') < 1:
+                        ok = fail(f'Arcade 0.17 commission {commission_id}: atLeast must be >=1') and ok
+                    min_value = objective.get('minValue')
+                    if min_value is not None:
+                        if not isinstance(min_value, dict) or not kind_re.match(str(min_value.get('field') or '')) or not isinstance(min_value.get('value'), (int, float)):
+                            ok = fail(f'Arcade 0.17 commission {commission_id}: invalid minValue') and ok
+                    if not isinstance(commission.get('unlock'), dict):
+                        ok = fail(f'Arcade 0.17 commission {commission_id}: missing unlock') and ok
+                    salary = commission.get('repeatSalaryCredits')
+                    if not isinstance(salary, int) or salary < 0 or salary > 400:
+                        ok = fail(f'Arcade 0.17 commission {commission_id}: bad repeatSalaryCredits') and ok
+                    if isinstance(tier, int) and tier >= 4 and not commission.get('chapterGate'):
+                        ok = fail(f'Arcade 0.17 commission {commission_id}: T4-T6 must declare chapterGate') and ok
+                for game_id in ARCADE_ALL_GAMES:
+                    if per_game_tiers.get(game_id) != {1, 2, 3, 4, 5, 6}:
+                        ok = fail(f'Arcade 0.17 game {game_id}: must define T1-T6') and ok
+                origins = chapter1.get('origins') or []
+                if len(origins) != len(ARCADE_ALL_GAMES):
+                    ok = fail(f'Arcade 0.16 chapter-01 origins must be {len(ARCADE_ALL_GAMES)}, found {len(origins)}') and ok
+                if {o.get('gameId') for o in origins if isinstance(o, dict)} != set(ARCADE_ALL_GAMES):
+                    ok = fail('Arcade 0.16 chapter-01 origins must cover all 16 games') and ok
+                ships = items.get('ships') or []
+                if len(ships) != 4:
+                    ok = fail(f'Arcade 0.16 items.json must define 4 ships, found {len(ships)}') and ok
+                prices = {s.get('price') for s in ships if isinstance(s, dict)}
+                if prices != {260, 480, 520, 540}:
+                    ok = fail(f'Arcade 0.16 ship prices changed: {sorted(prices)}') and ok
+                materials = items.get('materials') or []
+                if len(materials) != 5:
+                    ok = fail(f'Arcade 0.17 items.json must define 5 materials, found {len(materials)}') and ok
+                for material in materials:
+                    if not isinstance(material, dict) or not material.get('itemId'):
+                        continue
+                    buy = material.get('buyPrice')
+                    sell = material.get('sellPrice')
+                    if not isinstance(buy, int) or not isinstance(sell, int) or sell > buy * 0.6:
+                        ok = fail(f'Arcade 0.17 material {material.get("itemId")}: sell price must be <= buy*0.6') and ok
+            bridge_source = (career_root / 'bridge.js').read_text(encoding='utf-8')
+            for marker in ('TICKET_KEY', "commission-core.js", "lazy: true", 'getCommissionLoadout', 'openTown', 'openHangar', 'openReceipt', 'openMarket', 'openWorkshop', "materials.js", "crafting.js", "storyEvidence"):
+                if marker not in bridge_source:
+                    ok = fail(f'Arcade 0.16 bridge marker missing: {marker}') and ok
+            sw_file = root / 'apps/arcade/sw.js'
+            if sw_file.exists():
+                sw_source = sw_file.read_text(encoding='utf-8')
+                for resource in ('commission-core.js', 'star-combat-config.js', 'rental.js', 'alternatives.js',
+                                 'commission-schema.js', 'materials.js', 'crafting.js', 'professions.js',
+                                 'story-evidence.js', 'route-planner.js',
+                                 'content/commissions.json', 'content/items.json', 'content/chapter-01.json',
+                                 'ui/town.js', 'ui/hangar.js', 'ui/receipt.js', 'ui/market.js', 'ui/workshop.js'):
+                    if f"'./career/{resource}'" not in sw_source:
+                        ok = fail(f'Arcade 0.16 sw.js CORE_PATHS missing career resource: {resource}') and ok
+            for page_name, marker in (('pendulum-tower.html', 'careerGoal'), ('star-raid.html', 'career-mission-line')):
+                page_file = root / 'apps/arcade/games' / page_name
+                if page_file.exists() and marker not in page_file.read_text(encoding='utf-8'):
+                    ok = fail(f'Arcade 0.16 {page_name} career marker missing: {marker}') and ok
         # 0.8.6：所有经典/禅模式「再来一局」必须回到模式选择，不得直接 startGame/startZenRound。
         # 只在同一个 showOverlay/show 调用的参数范围内判断（遇到 } 即停），避免把后面紧邻的
         # function startGame() 定义误判成结算回调。
@@ -326,7 +509,7 @@ def validate(root=ROOT):
         arcade_sw = root / 'apps/arcade/sw.js'
         if arcade_sw.exists():
             sw_source = arcade_sw.read_text(encoding='utf-8')
-            for marker in ("const VERSION = '0.14.0'", 'arcade-precache', 'skipWaiting', 'clients.claim', "type === 'arcade-sw-version'", "type: 'arcade-sw-update-ready'", 'notifyUpdateReady', 'isUpdateActivation', 'replacedOldVersion'):
+            for marker in ("const VERSION = '0.18.0'", 'arcade-precache', 'skipWaiting', 'clients.claim', "type === 'arcade-sw-version'", "type: 'arcade-sw-update-ready'", 'notifyUpdateReady', 'isUpdateActivation', 'replacedOldVersion'):
                 if marker not in sw_source:
                     ok = fail(f'Arcade service worker marker missing: {marker}') and ok
             # 0.13.2：activate 广播必须用「旧版本缓存是否还在」判断升级接管；
@@ -355,8 +538,8 @@ def validate(root=ROOT):
             try:
                 registry = json.loads(registry_path.read_text(encoding='utf-8'))
                 arcade = next((t for t in registry.get('tools', []) if t.get('id') == 'arcade'), None)
-                if arcade and arcade.get('version') != '0.14.0':
-                    ok = fail('Arcade registry version must match engine 0.14.0') and ok
+                if arcade and arcade.get('version') != '0.18.0':
+                    ok = fail('Arcade registry version must match engine 0.18.0') and ok
             except Exception:
                 pass
 

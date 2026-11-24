@@ -1,6 +1,118 @@
 # Arcade Changelog
 
 
+## 0.18.0 — 2026-11-23（本地未发布；等待 Owner 发布授权）
+
+星塔回响：六章 C0–C5、三条并列终局与后日常（分支 `feat/arcade-life-015`，不推送、不发布）。
+
+### Added
+- 六章内容 `campaign.json` / `chapter-00..05` / `npc.json` / `side-stories.json`；三终局 `ending-{combat,research,rescue}.json`。
+- `campaign-core.js`（章节/路线/状态/C0-C1 同步）、`ending-reducer.js`（C5 一次性汇合/幂等/失败可重试）、`ui/world-state.js`（章节/终局/后日谈/港口灯光）。
+- 中心页 C0 后小字「旧港来信」回流入口（`?story=1`）；信箱「旧港来信 · 章节」按钮。
+
+### Changed / Fixed
+- 全分支复审修复：真实线索 chip 补 `C0.port_seen`；五材卖出/扣料不再只遍历晶体；长局事件缓冲按 kind 汇总 count/最大值/上下文；慢启动（3.5s→10s）与 late ticket 模式竞态；不再为职业切换清经典星海档；终局/首通跨标签原子唯一；替换导入后当前页立即采用恢复状态；双页发现快照合并；市场操作 ID 会话前缀；记忆翻牌 T3/T5 与五子棋 session.finish 要求真实配对/落子；制造逐级累计成本；武力终局加载已装备机体；锁定章节不泄漏正文/事实；章节面板可回信箱/告示板。
+- 版本链 0.18.0 / SW `studiokit-arcade-0.18.0-v1`。
+
+### Tests
+- campaign-core 53/53、ending 34/34、graph 48/48、world 109/109、campaign E2E 701/701；0.17 回归保持。
+
+## 0.17.0 — 2026-11-23（本地未发布；等待 Owner 发布授权）
+
+活世界：96 委托、五材商店、制造台、职业成长、剧情证据与单职业路线（分支 `feat/arcade-life-015`，不推送、不发布）。
+
+### Added
+- **96 份职业委托**（16 游戏 × T1–T6）：T1–T3 告示板公开；T4–T6 实现但由 `C3.truth_found` / `C4.city_power_restored` / `C5.star_tower_resolved` 旗标解锁，受控 fixture 证明。
+- **16 款游戏职业 run**：目标行（≤2 行）、真实目标事件、真实结算、职业专属收工出口；挑战/禅/割草不可进入。
+- **五类材料**：建材/合金/电子元件/星晶/生物材料；固定买卖价差，`crystal` 0.16 别名统一到 `starcrystal`。
+- **材料商店**（`ui/market.js`）：买/卖、余额/材料不足归因、请求中禁用、payout 拆单；卖料走 `db.sellItems` 单事务。
+- **制造台**（`ui/workshop.js` + `crafting.js`）：3 件生涯模块（相位护盾/货舱磁吸/能量电池）、15 层配方；材料+信用点原子扣减；模块只生涯生效。
+- **16 职业等级**（学徒/熟练/专家）：按已清委托/claims 去重，只影响可选订单/展示。
+- **剧情证据**（`story-evidence.js`）：`E/MAP/BP/DEC-*` 白名单、去重、不可消耗/重放；C2–C4 多路径。
+- **单职业路线**（`route-planner.js`）：16×16 组合可执行或可解释 blocker；免费租机/市场/代办替代。
+- **内容**：`commissions.json`（96）、`items.json`（五材/4 船/7 模块）、`chapter-01.json`（16 起源）。
+
+### Changed / Fixed
+- `career-core` 目标支持 `minValue` 数值阈值与 `value-not-met`；`commission-core` 失败返回 `reached`。
+- 新增真实事件：`session.finish`、`tile.created`、`move.legal`、`stock.face_up`、`foundation.move`、`bell.unique`、`stage.clear`、`distance.reached`、`combo.reached`、`wave.completed`、`scroll.collected` 等。
+- 职业隔离补全：层塔 `finishRun` 不再写经典记录；影跃经典 `height.reached` 恢复逐米、雪铃经典事件保持；`serialize()`/autosave/挑战/GameMeta 门禁逐页验证。
+- `bridge.js` 懒装载 materials/crafting/professions/storyEvidence/routePlanner，公开 `openMarket/openWorkshop`；结算后登记证据。
+- `career-db`：`sellItems` 原子卖料、`writeEquipment` 修复 `isFiniteNumber` 未定义、材料别名读取合并。
+- `review` 金样 55 处回看标记；SW `CORE_PATHS`/`verify_deploy.PATHS` 同步 0.17。
+
+### Tests
+- **96 委托回归**：`career_96_missions_test` **96/96 tiers、3792/3792 checks**（真实 Chrome/IndexedDB，16 游戏各 6 阶 success/failure/suspend/claim/幂等）。
+- fixture runner `--validate`：内容 96/96、16/16 fixture 形状 PASS；schema 负例矩阵。
+- 纯 Node：materials 32/32、professions 213/213、story-evidence 90/90、route-planner 214/214、economy-balance 47/47、commission 61/61、combat 379/379、legacy 78/78、registry 90/90、discovery 84/84、entry 37/37。
+- Chrome：reachability 165/165、a11y 75/75、db 38/38、backup 34/34、PWA 离线 17/17、smoke 113/113、review 5/5、zen 14/14、calm 17/17、tower 23/23、interaction 5/5、immersive 32/32、pwa_update 9/9。
+- 0.16 first-flight 金样归档为 `career_first_flight_test_016.mjs`（0.17 经济重标后旧断言不再适用），0.17 由 96 委托回归替代；G17 首轮发现的 `crystal` 无限卖钱已修复并新增 `career_crystal_alias_test` 8/8；真机 UNVERIFIED。
+
+### Notes
+- 版本链 0.17.0 / SW `studiokit-arcade-0.17.0-v1`；接口 ADR §19；设计与回滚 `DESIGN-0.17.0.md`；平衡 `BALANCE-017.md`；集成 `INTEGRATION-0.17.md`。
+- 未发布：无 `OWNER_AUTHORIZATION: PUBLISH_TO_MAIN`；远端 `main` 仍 `afc5fd4`。
+
+## 0.16.0 — 2026-11-23（本地未发布；等待 Owner 发布授权）
+
+首航：旧港告示板委托、免费租机、飞船机库与职业收据（分支 `feat/arcade-life-015`，不推送、不发布）。
+
+### Added
+- 旧港告示板（`ui/town.js`）：仅从 LOCAL 线索信按地址进入；列出层塔施工 T1/T2、星海护航 T1/T2（戏内标题/一句话目标/工钱材料/时长），接单后带 ticket 跳转对应游戏页；另有「港务处代办」（明码标价，非战斗路径）与机库/钱包入口。
+- 委托运行时（`commission-core.js`）：ticket（`ticketId === runId`，sessionStorage）→ 游戏页 `?career=` 激活 → 真实事件缓冲 → 目标判定（`career-core.validateCommission`）→ 首发奖励/repeatSalary → `settleAndClaim` 单事务；重复结算返回原收据、失败零写入、刷新可恢复、放弃不发奖。
+- 层塔施工 T1/T2：职业 run 内开局弹层显示戏内目标，挑战入口隐藏，旧局内档 `runs:v1` 全程不读不写；稳定层仍由真实物理提交点产生。
+- 星海护航 T1/T2：`startParams.startLevel/themeId` 决定起始关/主题，职业 run `classicLike` 但跳过星币入账、旧机库读写、Progress/Scores/RunSave；Boss 事件带真实 level/theme。
+- 免费租机（`rental.js`）：会话 marker、零扣费、不改变拥有/装备；失败不丢装备。
+- 非战斗代办（`alternatives.js`）：明码标价、只扣信用点/材料与写 `alternative/story` 行，不发钱、不给战斗奖章。
+- 飞船机库（`ui/hangar.js`）：旧翼 260 / 云雀 480（合金 1）/ 盾鲸 520（合金 2）/ 棱镜 540（合金 2+棱晶 1）；`purchase.costItems` 同事务扣材料与信用点，切换走 `writeEquipment`；余额/材料不足可归因、purchaseId 幂等。
+- 钱包/收据（`ui/receipt.js`）：家当、原收据、最近流水；结算后收据卡懒加载显示；同 run/txId 不重复展示。
+- 内容：`commissions.json`（4 条 T1/T2）、`items.json`（4 船/模块/材料）、`chapter-01.json`（16 起源 C0 信 + C1 三路径）。
+
+### Changed / Fixed
+- 0.16 前置修复：星海 `GameMeta.set` 改为读-合并-写（旧字段保留，`formula:1` 不变）；`classicLike` 统一经典/职业玩法分支；`serialize()` 在职业 run/mow 返回 null。
+- `bridge.js`：新增 commission 模式、`openTown/openHangar/openReceipt`、`getCommissionLoadout`、`api.items`；新模块全部按需装载（普通页与 `#test` 零额外请求、零 404）。
+- `career-core.purchasePlan` 增加 `costItems`（材料成本同事务校验/扣减），`career-db.purchase` 原子扣减；新增 `getEquipment/writeEquipment/readLedger`。
+- `sw.js` CORE_PATHS 预缓存 0.16 career 资源；`verify_deploy.PATHS` 同步；中心页仍无生涯 CTA。
+- `arcade_smoke` 核弹用例改为按实际槽位取核弹（修复随机整备后偶发失败，非产品回归）。
+
+### Tests
+- 纯 Node：commission **61/61**（另真实 IDB 17/17、真实 bridge E2E 8/8）、star-combat-config **379/379**、rental **153/153**、alternatives **67/67**、legacy 金样 **78/78**、registry **90/90**、discovery **84/84**、router/entry **37/37**。
+- Chrome/CDP：resume **45/45**、first-flight **192/192**、mobile **318/318**、a11y **75/75**、career_db **38/38**、backup **34/34**、PWA 离线 **17/17**。
+- 既有回归：smoke、zen、calm、review、tower、interaction、immersive、pwa_update、gameplay all/base（G16 独立复跑）。
+- 真机 iPhone/Android 触控、安全区、VoiceOver/TalkBack、PWA 安装/更新时机：**UNVERIFIED**。
+
+### Notes
+- 复用 0.15 IDB v1（11 stores），无新 store、无 localStorage 新增/改名；sessionStorage 仅 ticket/rental 两个命名空间键。
+- 版本链 0.16.0 / SW `studiokit-arcade-0.16.0-v1`；接口见 ADR §18，设计/回滚见 `DESIGN-0.16.0.md`；证据在仓库外 `qa/evidence/`。
+- 未发布：无 `OWNER_AUTHORIZATION: PUBLISH_TO_MAIN`。
+
+## 0.15.0 — 2026-11-22（本地未发布；等待 Owner 发布授权）
+
+新增「被动线索」与独立生涯数据层（分支 `feat/arcade-life-015`，不推送、不发布）。
+
+### Added
+- 16 款游戏在**经典游玩**中被动产出可关闭的微线索：结算安全点出现戏内物件，点开是一封短信用；不点不影响原玩法，忽略后可从信箱找回；设置可关闭/恢复，已发现内容不丢失。
+- `apps/arcade/career/` 运行时：`bridge`（游戏页唯一入口）、`registry`（数据驱动游戏/职业/委托/故事，虚拟第 17 款插拔测试）、`discovery`（发现状态机纯函数）、`career-core`（纯函数经济/领奖计划）、`career-db`（IndexedDB 事务层）、`router`/`entry-router`、`backup`（独立 `careerLife`）、`content/*.json`、`ui/*`（线索 chip/信箱/设置）。普通 `<script>`，无框架、无 CDN、无网络请求（同源 fetch 内容除外）。
+- 独立 IndexedDB `studiokit:arcade:career` v1：11 个 stores（`state/discovery/profiles/runs/claims/ledgers/balances/inventory/equipment/quests/migrations`）；单 `readwrite` 事务领奖、`claims.runId` 唯一 + 重复返回原收据、购买双击幂等、余额不为负、多标签 `ConstraintError` 重读、`onblocked` 超时、IDB 不可用时 fail-open。0.15 游玩路径只写发现状态与证据，不产生货币/材料/生涯身份。
+- 线索内容 schema 与发现状态机（`DORMANT → GLIMPSED → CURIOUS → LOCAL → RESIDENT → EXPLORER`）；每局最多 1 条、同游戏保底 ≤3 局、星海割草不计有效局。
+- ticket/claim/receipt 接口冻结（0.16 使用）；故事条件谓词（`all/any/capability/evidence/chapterFlag/item/credits/commissionCleared`）与 `objective.context` 匹配。
+- 独立生涯备份 `format: studiokit-arcade-career`（导出/导入/迁移/坏档回滚/旧档保留）。
+
+### Changed
+- 16 个游戏页各新增：`<script src="../career/bridge.js">`、`const career = window.ArcadeCareer || null`、真实事件 `observe()`、每局一次 `finish()`；挑战局不产生线索事件，星海割草显式排除。经典/挑战/禅模式、78 关挑战数据、旧星币与机库零改动。
+- `apps/arcade/sw.js`：`VERSION` 升 `0.15.0`，`CORE_PATHS` 追加 career 运行时/内容/UI（离线可读信箱）。
+- 版本链：engine `ARCADE_VERSION`、registry `version`、中心页 `data-hall-version`、`validate_site` 断言、6 个既有测试脚本断言同步；`tools/verify_deploy.py` 的 `PATHS` 追加 career 静态资源。
+
+### Tests
+- 纯 Node：`career_registry_test` **90/90**、`career_discovery_test` **84/84**、`career_legacy_baseline_test` **78/78**、`career_entry_router_test` **37/37**。
+- Chrome/CDP：`career_db_test` **38/38**（事务/幂等/多标签/失败零写入）、`career_backup_test` **34/34**、`career_games_reachability_test` **165/165**（16/16 真实可达 + 真实挑战隔离回归）、`career_discovery_accessibility_test` **75/75**、`career_pwa_offline_test` **17/17**。
+- 既有回归：聚合器 `arcade_run_all_gates.py` = `ALL GATES PASSED`（smoke 113/113、zen、calm、review、gameplay all/base）；聚合器外 tower 23/23、immersive 32/32、interaction 5/5、pwa_update 9/9。
+- **G15 独立门禁：首轮 FAIL（挑战共享输入路径泄漏 career 事件）→ 修复后第二轮独立复核 PASS**（HEAD `5e71004`；工作树干净；远端 `main` 未动）。
+- 真机 iPhone/Android 触控与 PWA 安装/更新时机：**UNVERIFIED**。
+
+### Notes
+- 无 localStorage key 新增/改名，7 个既有键与 Schema 不变；SW 缓存键 `studiokit-arcade-0.15.0-v1`。
+- 设计与回滚见 `DESIGN-0.15.0.md`；接口冻结见 `docs/arcade-life/ADR-interfaces.md`；证据与原始侦察在仓库外（`qa/evidence/`），公开文档不含剧情路线/谜底。
+- 本版未发布：无 `OWNER_AUTHORIZATION: PUBLISH_TO_MAIN`，未推送 `main`、未触发双端部署。
+
 ## 0.14.0 — 2026-11-22（已双端发布）
 
 Owner 本轮两条：①星海突击同种弹药 Buff 多吃时应**叠加有效时长**而不是重置；②新增“模拟割草”模式（实现命名「星海割草」）——所有弹药 Buff 常驻、大杀器库满载、手动道具无限，同时敌人/掉落极其密集、Boss 招式更炫，玩家唯一瓶颈是能量；该模式**不参与任何积分与货币获取**。设计与调参见 `DESIGN-0.14.0.md`；挑战 6 关数据与判定零改动。

@@ -10,6 +10,7 @@
   <link rel="stylesheet" href="../arcade.css" />
   <script src="../../../shared/site-shell.js" defer></script>
   <script src="../engine.js"></script>
+  <script src="../career/bridge.js"></script>
   <script src="../challenge/mole-whack.js"></script>
   <title>打地鼠 · 街机厅 · StudioKit</title>
   <style>
@@ -37,6 +38,29 @@
       width: auto;
       z-index: 4;
       pointer-events: none;
+    }
+    /* 0.17 职业委托：一行戏内目标（title + 目标值），320/375 最多两行，不新增按钮。 */
+    .career-goal {
+      display: inline-block;
+      max-width: 100%;
+      margin-top: 6px;
+      padding: 3px 8px;
+      border: 1px solid rgba(255, 210, 63, 0.5);
+      border-radius: 10px;
+      background: rgba(255, 210, 63, 0.12);
+      color: #ffe9b0;
+      font-size: 12px;
+      line-height: 1.55;
+      overflow-wrap: anywhere;
+    }
+    .game-hint.is-career-goal {
+      max-width: min(520px, 100%);
+      color: #ffe0a6;
+      display: -webkit-box;
+      -webkit-line-clamp: 2;
+      -webkit-box-orient: vertical;
+      overflow: hidden;
+      overflow-wrap: anywhere;
     }
   </style>
 </head>
@@ -78,6 +102,7 @@
     (() => {
       'use strict';
       const A = window.Arcade;
+      const career = window.ArcadeCareer || null;
       const { clamp, rand, randInt, TAU } = A.utils;
 
       const W = 420;
@@ -113,6 +138,7 @@
         hudHigh: document.querySelector('[data-hud-high]'),
         pause: document.querySelector('[data-pause]'),
         mute: document.querySelector('[data-mute]'),
+        gameHint: document.querySelector('.game-hint'),
       };
       const ui = A.createOverlayUi(dom);
       const particles = A.createParticles();
@@ -168,6 +194,172 @@
       let high = A.Progress.get('mole-whack').high;
       dom.hudHigh.textContent = String(high);
 
+      /* ===== 0.17 职业委托 run（ADR §19.2 / §19.3 / §19.4 / §19.8）=====
+         - 只有从旧港告示板接单后带 ?career=<ticketId> 进入本页、且 bridge 确认属于本页
+           gameId 时才进入职业 run；无 ticket / ticket 不匹配 / 内容缺失时完全走 0.16 经典路径；
+         - 职业 run 内不读不写 studiokit:arcade:runs:v1，不写 Progress/Scores/挑战/GameMeta，
+           serialize() 返回 null；挑战入口隐藏；经典 45 秒局与道具/连击/炸弹规则逐字不变；
+         - 真实事件：mole.hit（既有，只有真实正确击中才 +1；炸弹/空挥不计）、
+           combo.reached（0.17 新增，真实连击变化后发 {combo}，minValue 取最大）。 */
+      const CAREER_GAME_ID = 'mole-whack';
+      const HINT_CLASSIC = dom.gameHint ? dom.gameHint.textContent : '';
+      let careerLocked = false;        // 已确认进入职业 run：本页生命周期内经典记录全禁用
+      let careerGoalSource = null;     // 接单时缓存的委托内容（结算后仍可显示戏内目标）
+      let careerGoalDone = false;      // 已结算：开始/暂停弹层不再展示旧目标
+      let careerFinishCalled = false;  // 职业结算只提交一次，之后同页新局不再重复提交
+      let careerSettledResult = null;  // 职业结算结果（只读，供玩家与测试查看）
+      let careerHits = 0;              // 本局真实正确击中（mole/gold）次数
+      let careerMaxCombo = 0;          // 本局真实最高连击
+
+      /* 页面 URL 的 ticket 只接受稳定 id 形状；解析失败一律按经典路径处理。 */
+      function careerTicketParam() {
+        try {
+          const search = String((window.location && window.location.search) || '');
+          const match = /(?:^|[?&])career=([^&]+)/.exec(search);
+          if (!match) return '';
+          const value = decodeURIComponent(match[1].replace(/\+/g, ' '));
+          return /^[A-Za-z0-9._:-]{1,120}$/.test(value) ? value : '';
+        } catch (err) {
+          return '';
+        }
+      }
+
+      /* 本页当前是否有属于本游戏的职业 run（bridge 只在 ticket 校验通过时填充）。 */
+      function readCareerRun() {
+        try {
+          if (!career || typeof career.isCommissionRun !== 'function' || !career.isCommissionRun()) return null;
+          const run = career.commissionRun;
+          if (!run || run.gameId !== CAREER_GAME_ID) return null;
+          return run;
+        } catch (err) {
+          return null;
+        }
+      }
+
+      /* 戏内目标只来自真实委托内容（commissionRun.commission）；内容缺失时返回 null，不发明文案。 */
+      function careerGoalParts() {
+        const run = readCareerRun();
+        const commission = (run && run.commission) || careerGoalSource;
+        if (!commission || typeof commission !== 'object') return null;
+        const title = typeof commission.title === 'string' ? commission.title : '';
+        const summary = typeof commission.summary === 'string' ? commission.summary : '';
+        if (!title && !summary) return null;
+        const objective = commission.objective && typeof commission.objective === 'object' ? commission.objective : {};
+        const kind = typeof objective.kind === 'string' ? objective.kind : '';
+        const rawAtLeast = Number(objective.atLeast);
+        const atLeast = Number.isFinite(rawAtLeast) && rawAtLeast > 0 ? Math.floor(rawAtLeast) : 0;
+        const rawMinValue = objective.minValue && typeof objective.minValue === 'object' ? Number(objective.minValue.value) : NaN;
+        const minValue = Number.isFinite(rawMinValue) && rawMinValue > 0 ? Math.floor(rawMinValue) : 0;
+        /* combo.reached 的 atLeast 只是「至少一条事件」，戏内目标值取 minValue.combo（5 / 8）。 */
+        const targetValue = kind === 'combo.reached' && minValue ? minValue : atLeast;
+        return { title, summary, kind, atLeast, minValue, targetValue };
+      }
+
+      function careerGoalUnit(kind) {
+        if (kind === 'combo.reached') return ' 连击';
+        if (kind === 'mole.hit') return ' 次';
+        return '';
+      }
+
+      /* 一行戏内目标：title + 目标值（不用系统术语；320/375 也不超过两行）。 */
+      function careerGoalText() {
+        const goal = careerGoalParts();
+        if (!goal || !goal.targetValue) return '';
+        return '委托：' + (goal.title || goal.summary) + ' · 目标 ' + goal.targetValue + careerGoalUnit(goal.kind);
+      }
+
+      function careerGoalLine() {
+        const text = careerGoalText();
+        if (!text) return '';
+        return '<span class="career-goal" data-career-goal="1">' + chEsc(text) + '</span>';
+      }
+
+      /* 底部说明行在职业 run 内换成一行目标；经典 run 逐字恢复 0.16 文案。 */
+      function syncCareerHint() {
+        if (!dom.gameHint) return;
+        const text = careerLocked && !careerGoalDone ? careerGoalText() : '';
+        if (text) {
+          dom.gameHint.setAttribute('data-career-goal', '1');
+          dom.gameHint.classList.add('is-career-goal');
+          dom.gameHint.textContent = text;
+          return;
+        }
+        dom.gameHint.removeAttribute('data-career-goal');
+        dom.gameHint.classList.remove('is-career-goal');
+        dom.gameHint.textContent = HINT_CLASSIC;
+      }
+
+      /* 职业 run 内断开旧 RunSave：serialize() 返回 null，并兜底替换 autosave 的四个出口。 */
+      function lockRunSave() {
+        if (careerLocked) return;
+        careerLocked = true;
+        try {
+          autosave.saveNow = function () { return false; };
+          autosave.tick = function () {};
+          autosave.clear = function () {};
+          autosave.load = function () { return null; };
+        } catch (err) {
+          /* 忽略：serialize() 的 career 门禁仍是最终兜底 */
+        }
+        syncCareerHint();
+      }
+
+      function activateCareerRun(run) {
+        if (!run || run.gameId !== CAREER_GAME_ID) return false;
+        lockRunSave();
+        careerGoalSource = run.commission && typeof run.commission === 'object' ? run.commission : null;
+        careerGoalDone = false;
+        try {
+          document.body.classList.toggle('is-career-run', true);
+        } catch (err) {
+          /* ignore */
+        }
+        syncCareerHint();
+        return true;
+      }
+
+      /* 0.17 §19.4：mole.hit 沿用 0.15 的真实提交点；职业结算后本页不再写发现/委托缓冲。 */
+      function emitMoleHit(index, gained) {
+        if (!career || typeof career.observe !== 'function') return false;
+        if (mode !== 'classic' || careerFinishCalled) return false;
+        return career.observe('mole.hit', { index: index, gained: gained, combo: combo });
+      }
+
+      /* 0.17 §19.4：combo.reached 是新增事件，只在职业 run 内提交；经典局不新增任何 observe。 */
+      function emitComboReached() {
+        if (!careerLocked || careerFinishCalled) return false;
+        if (mode !== 'classic' || !career || typeof career.observe !== 'function') return false;
+        if (!(combo > 0)) return false;
+        return career.observe('combo.reached', { combo: combo });
+      }
+
+      /* 结算：职业 run 走 bridge/commission-core 的独立收据；经典路径保持 0.16 原样单次 finish。 */
+      function emitCareerFinish(outcome, stats) {
+        if (!career || typeof career.finish !== 'function') return;
+        if (!careerLocked) {
+          career.finish({ mode: 'classic', outcome: outcome, stats: stats });
+          return;
+        }
+        if (careerFinishCalled) return;
+        careerFinishCalled = true;
+        careerGoalDone = true;
+        syncCareerHint();
+        let promise = null;
+        try {
+          promise = career.finish({ mode: 'classic', outcome: outcome, stats: stats });
+        } catch (err) {
+          careerSettledResult = { ok: false, reason: 'finish-threw' };
+          return;
+        }
+        Promise.resolve(promise)
+          .then((result) => {
+            careerSettledResult = result && typeof result === 'object' ? result : { ok: false, reason: 'finish-empty' };
+          })
+          .catch(() => {
+            careerSettledResult = { ok: false, reason: 'finish-error' };
+          });
+      }
+
       function difficulty() {
         return clamp(elapsed / ROUND_TIME, 0, 1);
       }
@@ -189,6 +381,8 @@
         shieldTimer = 0;
         floaters = [];
         recordSaved = false;
+        careerHits = 0;
+        careerMaxCombo = 0;
         particles.clear();
         syncHud();
       }
@@ -224,7 +418,7 @@
         joyTools.sync();
       }
 
-      function finish() {
+      function finish(early) {
         if (state === 'over') return;
         state = 'over';
         goldRushSpawns = 0;
@@ -234,21 +428,52 @@
         A.Sfx.play('over');
         let rec = null;
         if (!recordSaved) {
-          rec = A.Progress.recordPlay('mole-whack', score); if (rec) high = rec.high;
           recordSaved = true;
-          dom.hudHigh.textContent = String(Math.max(high, score));
+          /* 0.17 职业 run：不写 progress/Scores/Playtime 轮次，也不假装成绩已记录。 */
+          if (!careerLocked) {
+            rec = A.Progress.recordPlay('mole-whack', score);
+            if (rec) high = rec.high;
+            dom.hudHigh.textContent = String(Math.max(high, score));
+          }
         }
         loop.pause();
-        ui.show({
-          result: '回看鼹鼠洞',
-          title: hearts <= 0 ? '被炸弹炸晕了' : '时间到',
-          text:
+        /* 职业 run：结算文案只用戏内措辞，不出现“新纪录/45 秒得分最高”。 */
+        const careerGoal = careerLocked && !careerGoalDone ? careerGoalLine() : '';
+        let text;
+        let title;
+        if (careerLocked) {
+          title = early ? '本趟已收工' : '本趟结束';
+          text =
+            `<span class="ac-score">${score}</span>` +
+            `本趟有效击中 ${careerHits} · 最高连击 ${careerMaxCombo}` +
+            (careerGoal ? '<br/>' + careerGoal : '') +
+            '<br/>这一趟不写入本机成绩，委托结果回旧港核对。';
+        } else {
+          title = hearts <= 0 ? '被炸弹炸晕了' : '时间到';
+          text =
             `<span class="ac-score">${score}</span>` +
             (rec && rec.isNewHigh ? '<span class="ac-newhigh">★ 新纪录</span><br/>' : '') +
-            `45 秒得分 · 最高 ${Math.max(high, score)}`,
+            `45 秒得分 · 最高 ${Math.max(high, score)}`;
+        }
+        ui.show({
+          result: '回看鼹鼠洞',
+          title: title,
+          text: text,
           btn: '再来一局',
           onBtn: showStart,
         });
+        if (careerLocked) {
+          emitCareerFinish(early ? 'quit' : 'lost', {
+            score: score,
+            combo: careerMaxCombo,
+            hits: careerHits,
+            hearts: hearts,
+            timeLeft: Math.round(timeLeft * 10) / 10,
+            early: !!early,
+          });
+        } else if (career && mode === 'classic') {
+          career.finish({ mode: 'classic', outcome: 'lost', stats: { score, combo, hearts } });
+        }
         pauseUi.sync();
       }
 
@@ -310,6 +535,8 @@
         });
       }
       function showChallengePanel() {
+        /* 0.17 §19.3：职业 run 内挑战入口不可进入（连数据按钮都不存在）。 */
+        if (careerLocked) return false;
         if (!challengeAvailable || !A.Challenge) {
           ui.show({ title: '挑战数据不可用', text: '挑战关卡数据加载失败，经典模式不受影响。', btn: '返回', onBtn: showStart });
           return false;
@@ -361,6 +588,7 @@
         chDom.tip.textContent = '目标：' + (chStage.goalStatement || '') + ' · ' + (chStage.decision || '点击有效目标，忽略炸弹与假目标');
       }
       function startChallenge(ref) {
+        if (careerLocked) return false;
         if (!challengeAvailable || !A.Challenge) return false;
         const stage = A.Challenge.stage(GAME_ID, ref);
         if (!stage) return false;
@@ -605,13 +833,30 @@
           btn: '继续',
           onBtn: resumeGame,
         };
-        if (mode === 'challenge' && chStage) {
+        if (careerLocked) {
+          /* 0.17 职业 run：不谎称“进度已保存”，只给戏内目标与真实提前收工出口。 */
+          const goalLine = careerGoalDone ? '' : careerGoalLine();
+          opts.text =
+            '本趟有效击中 ' + careerHits + ' · 最高连击 ' + careerMaxCombo + '。<br/>' +
+            (goalLine ? goalLine + '<br/>' : '') +
+            '这一趟不写入本机进度，可以继续，也可以提前收工。';
+          opts.btn2 = '结束本局';
+          opts.onBtn2 = settleEarly;
+        } else if (mode === 'challenge' && chStage) {
           opts.text = '挑战暂停：' + fmtChallengeLabel(chStage) + ' ' + chEsc(chStage.title || '') + '。<br/>本关进度已保存。';
           opts.btn2 = '退出挑战';
           opts.onBtn2 = exitToChallengeSelect;
         }
         ui.show(opts);
         pauseUi.sync();
+      }
+
+      /* 职业 run 的真实提前收工出口：暂停弹层第二按钮 → 走与自然结束相同的 finish() 结算路径。 */
+      function settleEarly() {
+        if (state !== 'paused') return false;
+        if (!careerLocked) return false;
+        finish(true);
+        return state === 'over';
       }
 
       function showStart() {
@@ -622,15 +867,24 @@
         if (chDom.hud) chDom.hud.hidden = true;
         if (chDom.tip) chDom.tip.hidden = true;
         if (gameHudEl) gameHudEl.hidden = false;
+        syncCareerHint();
+        /* 0.17 委托 run：追加一行戏内目标；结算后不再展示旧目标，只说明不写本机成绩；挑战入口隐藏。 */
+        const goalLine = careerLocked && !careerGoalDone ? careerGoalLine() : '';
+        const careerNotice = careerLocked && careerGoalDone ? '<br/>委托已结算；之后的对局不写入本机成绩。' : '';
+        const challengeEntry = !careerLocked;
         ui.show({
           title: '打地鼠',
-          text: '45 秒内敲中更多地鼠。<br/>连击有倍率 · 金鼠 +50<br/>炸弹会扣心并倒扣 3 秒',
+          text:
+            '45 秒内敲中更多地鼠。<br/>连击有倍率 · 金鼠 +50<br/>炸弹会扣心并倒扣 3 秒' +
+            (goalLine ? '<br/>' + goalLine : '') +
+            careerNotice,
           btn: '开始游戏',
           onBtn: startGame,
-          btn2: challengeAvailable ? '挑战 6 关' : '挑战数据不可用',
-          onBtn2: challengeAvailable ? showChallengePanel : null,
+          btn2: challengeEntry ? (challengeAvailable ? '挑战 6 关' : '挑战数据不可用') : '',
+          onBtn2: challengeEntry && challengeAvailable ? showChallengePanel : null,
         });
         if (dom.ovBtn2) dom.ovBtn2.disabled = !challengeAvailable;
+        pauseUi.sync();
       }
 
       function spawnMole() {
@@ -738,6 +992,14 @@
         }
         if (gained > 0) addFloater('+' + gained + (combo > 1 ? ' · ' + combo + '连' : ''), hx, hy - 18, mole.type === 'gold' ? '#ffd23f' : '#ffffff');
         syncHud();
+        /* 0.17 §19.4：只有真实正确击中（mole / gold）才提交 mole.hit 与 combo.reached；
+           炸弹（gained=0）、空挥、已击中的鼠都不计入，也不伪造连击跳变。 */
+        if (gained > 0) {
+          careerHits += 1;
+          if (combo > careerMaxCombo) careerMaxCombo = combo;
+          emitMoleHit(index, gained);
+          emitComboReached();
+        }
       }
 
       function updateChallenge(dt) {
@@ -835,6 +1097,8 @@
       }
 
       function serialize() {
+        /* 0.17 职业 run：不得写 studiokit:arcade:runs:v1（旧 RunSave 的最终门禁）。 */
+        if (careerLocked) return null;
         if (state !== 'playing' && state !== 'paused') return null;
         if (mode === 'challenge') {
           if (!chStage) return null;
@@ -1438,32 +1702,137 @@
             return chTap(Number(index));
           },
         };
+        /* 0.17（ADR §19.3 / §19.8）：职业只读测试钩子只在 ?careerTest=1 追加；
+           生产 URL 与既有 #test 探针（无 careerTest）完全不变。 */
+        if (/(?:^|[?&])careerTest=1(?:&|$)/.test(String((window.location && window.location.search) || ''))) {
+          window.__arcadeTest.careerInfo = function careerInfo() {
+            const run = readCareerRun();
+            const goal = careerGoalParts();
+            const goalEls = Array.prototype.slice.call(document.querySelectorAll('[data-career-goal]'));
+            const progress = A.Progress.get(CAREER_GAME_ID);
+            const rawOf = (key) => {
+              try {
+                return localStorage.getItem(key);
+              } catch (err) {
+                return null;
+              }
+            };
+            let runSave = null;
+            try {
+              runSave = A.RunSave && typeof A.RunSave.get === 'function' ? A.RunSave.get(CAREER_GAME_ID) : null;
+            } catch (err) {
+              runSave = null;
+            }
+            const btn2 = document.querySelector('[data-ov-btn2]');
+            const layer = document.querySelector('[data-ch-layer]');
+            const challengeBtnVisible = !!btn2 && btn2.hidden !== true && btn2.disabled !== true && btn2.getClientRects().length > 0;
+            return {
+              isCommission: !!run,
+              locked: careerLocked,
+              commissionId: run ? run.commissionId : null,
+              goalTitle: goal ? goal.title : null,
+              goalText: careerGoalText(),
+              targetKind: goal ? goal.kind : null,
+              targetAtLeast: goal ? goal.atLeast : null,
+              minValue: goal ? goal.minValue : null,
+              targetValue: goal ? goal.targetValue : null,
+              state: state,
+              mode: mode,
+              score: score,
+              combo: combo,
+              hearts: hearts,
+              timeLeft: Math.round(timeLeft * 100) / 100,
+              elapsedSec: Math.round(elapsed * 100) / 100,
+              hits: careerHits,
+              maxCombo: careerMaxCombo,
+              goalLineVisible: goalEls.some((el) => el.getClientRects().length > 0),
+              hint: dom.gameHint ? dom.gameHint.textContent : null,
+              hintIsCareerGoal: dom.gameHint ? dom.gameHint.hasAttribute('data-career-goal') : false,
+              overlayBtn2: btn2 ? { text: btn2.textContent, hidden: btn2.hidden } : null,
+              challengeAvailable: challengeAvailable,
+              challengeEntry: careerLocked ? false : !!(challengeAvailable && (challengeBtnVisible || (!!layer && layer.hidden !== true))),
+              challengeLayerHidden: !layer || layer.hidden === true,
+              serializeNull: serialize() === null,
+              settled: careerFinishCalled,
+              settledResult: careerSettledResult ? JSON.parse(JSON.stringify(careerSettledResult)) : null,
+              runSave: runSave,
+              runsRaw: rawOf('studiokit:arcade:runs:v1'),
+              progressRaw: rawOf('studiokit:arcade:progress:v1'),
+              scoresRaw: rawOf('studiokit:arcade:scores:v1'),
+              challengeRaw: rawOf('studiokit:arcade:challenge:v1'),
+              metaRaw: rawOf('studiokit:arcade:meta:v1'),
+              plays: progress.plays,
+              high: progress.high,
+              scoresCount: A.Scores.list({ gameId: CAREER_GAME_ID }).length,
+            };
+          };
+        }
       }
-      const saved = autosave.load();
-      if (saved) {
-        A.showResumePrompt(ui, saved, {
-          name: '打地鼠',
-          onResume: () => {
-            if (restore(saved.data)) {
-              state = 'playing';
-              ui.hide();
-              loop.resume();
-              pauseUi.sync();
-              joyTools.sync();
-              autosave.saveNow();
-            } else {
+      /* 0.16 行为逐字保留：只有这条路径会读旧 RunSave（职业 run 内已被 lockRunSave 换成 no-op）。 */
+      function prepareStartScreen() {
+        const saved = autosave.load();
+        if (saved) {
+          A.showResumePrompt(ui, saved, {
+            name: '打地鼠',
+            onResume: () => {
+              if (restore(saved.data)) {
+                state = 'playing';
+                ui.hide();
+                loop.resume();
+                pauseUi.sync();
+                joyTools.sync();
+                autosave.saveNow();
+              } else {
+                autosave.clear();
+                showStart();
+              }
+            },
+            onRestart: () => {
               autosave.clear();
               showStart();
-            }
-          },
-          onRestart: () => {
-            autosave.clear();
-            showStart();
-          },
-        });
-      } else {
-        showStart();
+            },
+          });
+          pauseUi.sync();
+          joyTools.sync();
+        } else {
+          showStart();
+        }
       }
+
+      /* 0.17 委托入口：URL 带 ?career=<ticketId> 时先等桥确认 ticket，再决定
+         「职业 run 开局」还是「经典开局」；无参数时同步走 0.16 路径（零延迟、零行为变化）。 */
+      function bootStartScreen() {
+        const ticketId = careerTicketParam();
+        const ready = career && career.ready;
+        if (!ticketId || !career || !ready || typeof ready.then !== 'function') {
+          prepareStartScreen();
+          return;
+        }
+        let settled = false;
+        let guard = null;
+        const done = () => {
+          if (settled) return;
+          settled = true;
+          try {
+            if (guard) clearTimeout(guard);
+          } catch (err) {
+            /* ignore */
+          }
+          /* 只有桥确认了属于本游戏的 run 才锁死旧 RunSave；否则按 0.16 经典启动（fail-open）。 */
+          const run = readCareerRun();
+          if (run) activateCareerRun(run);
+          else { try { window.__arcadeMode = 'classic'; } catch (err) { /* ignore */ } }
+          prepareStartScreen();
+        };
+        try {
+          guard = setTimeout(done, 10000);
+        } catch (err) {
+          guard = null;
+        }
+        Promise.resolve(ready).then(done, done);
+      }
+
+      bootStartScreen();
       loop.start();
     })();
   </script>

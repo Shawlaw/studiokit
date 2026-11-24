@@ -36,9 +36,33 @@
       pointer-events: none;
     }
     .ch-tip-float[hidden] { display: none; }
+    /* 0.17 职业委托：一行戏内目标（title + 目标值），320/375 最多两行，不新增按钮。 */
+    .career-goal {
+      display: inline-block;
+      max-width: 100%;
+      margin-top: 6px;
+      padding: 3px 8px;
+      border: 1px solid rgba(242, 179, 61, 0.55);
+      border-radius: 10px;
+      background: rgba(242, 179, 61, 0.12);
+      color: #ffe0a6;
+      font-size: 12px;
+      line-height: 1.55;
+      overflow-wrap: anywhere;
+    }
+    .game-hint.is-career-goal {
+      max-width: min(520px, 100%);
+      color: #ffd9a0;
+      display: -webkit-box;
+      -webkit-line-clamp: 2;
+      -webkit-box-orient: vertical;
+      overflow: hidden;
+      overflow-wrap: anywhere;
+    }
   </style>
   <script src="../../../shared/site-shell.js" defer></script>
   <script src="../engine.js"></script>
+  <script src="../career/bridge.js"></script>
   <script src="../challenge/merge-2048.js"></script>
   <title>2048 合成 · 街机厅 · StudioKit</title>
 </head>
@@ -80,6 +104,7 @@
     (() => {
       'use strict';
       const A = window.Arcade;
+      const career = window.ArcadeCareer || null;
       const { clamp, rand, TAU } = A.utils;
 
       const W = 420;
@@ -113,6 +138,7 @@
         pause: document.querySelector('[data-pause]'),
         undo: document.querySelector('[data-undo]'),
         mute: document.querySelector('[data-mute]'),
+        gameHint: document.querySelector('.game-hint'),
       };
       const ui = A.createOverlayUi(dom);
 
@@ -184,6 +210,111 @@
       let high = A.Progress.get('merge-2048').high;
       dom.hudHigh.textContent = String(high);
 
+      /* ===== 0.17 职业委托 run（ADR §19.3 / §19.4 / §19.8）=====
+         - 只有从旧港告示板接单后带 ?career=<ticketId> 进入本页才生效；
+         - 无 ticket / ticket 不匹配 / commission-core 缺失时完全走 0.16 经典路径；
+         - 委托 run 内不读不写旧 RunSave（studiokit:arcade:runs:v1），不写 progress/Scores/
+           挑战/GameMeta，serialize() 返回 null，挑战入口不可进入；
+         - 真实事件只在状态提交点发出：tile.created（生成/合并后的格子值，撤销不重放）、
+           tile.merged（沿用 0.9 的既有事件），不按 DOM/最高分反推。 */
+      const CAREER_GAME_ID = 'merge-2048';
+      const HINT_CLASSIC = dom.gameHint ? dom.gameHint.textContent : '';
+      let careerLocked = false;
+
+      function readCareerTicketParam() {
+        try {
+          const search = String((window.location && window.location.search) || '');
+          const match = /(?:^|[?&])career=([^&]+)/.exec(search);
+          if (!match) return '';
+          const value = decodeURIComponent(match[1].replace(/\+/g, ' '));
+          return /^[A-Za-z0-9._:-]{1,120}$/.test(value) ? value : '';
+        } catch (err) {
+          return '';
+        }
+      }
+
+      /* 本页当前是否有属于本游戏的委托 run（bridge 只在 ticket 校验通过时填充）。 */
+      function readCareerRun() {
+        try {
+          if (!career || typeof career.isCommissionRun !== 'function' || !career.isCommissionRun()) return null;
+          const run = career.commissionRun;
+          if (!run || run.gameId !== CAREER_GAME_ID) return null;
+          return run;
+        } catch (err) {
+          return null;
+        }
+      }
+
+      /* 只读 commissionRun.commission；内容缺失时返回 null，不发明文案。 */
+      function careerGoalParts() {
+        const run = readCareerRun();
+        const commission = run && run.commission ? run.commission : null;
+        if (!commission) return null;
+        const title = typeof commission.title === 'string' ? commission.title : '';
+        const summary = typeof commission.summary === 'string' ? commission.summary : '';
+        if (!title && !summary) return null;
+        const objective = commission.objective && typeof commission.objective === 'object' ? commission.objective : {};
+        const rawAtLeast = Number(objective.atLeast);
+        const atLeast = Number.isFinite(rawAtLeast) && rawAtLeast > 0 ? Math.floor(rawAtLeast) : 0;
+        let minValue = null;
+        const mv = objective.minValue && typeof objective.minValue === 'object' ? objective.minValue : null;
+        if (mv) {
+          const value = Number(mv.value);
+          if (Number.isFinite(value) && value > 0) {
+            minValue = { field: typeof mv.field === 'string' ? mv.field : '', value: Math.floor(value) };
+          }
+        }
+        return { title, summary, atLeast, minValue };
+      }
+
+      function careerGoalText() {
+        const goal = careerGoalParts();
+        if (!goal) return '';
+        const target = goal.minValue ? goal.minValue.value : goal.atLeast;
+        return '委托：' + (goal.title || goal.summary) + (target ? ' · 目标 ' + target : '');
+      }
+
+      function escHtml(value) {
+        return String(value == null ? '' : value).replace(/[&<>"']/g, (ch) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[ch]));
+      }
+
+      /* 一行戏内目标（放进既有弹层文案 / 底部说明行，不新增按钮、不遮挡既有按钮）。 */
+      function careerGoalLine() {
+        const text = careerGoalText();
+        if (!text) return '';
+        return '<span class="career-goal" data-career-goal="1">' + escHtml(text) + '</span>';
+      }
+
+      /* 底部说明行在委托 run 内换成一行目标；经典 run 逐字恢复 0.16 文案。 */
+      function syncCareerHint() {
+        if (!dom.gameHint) return;
+        if (careerLocked) {
+          const text = careerGoalText();
+          dom.gameHint.setAttribute('data-career-goal', '1');
+          dom.gameHint.classList.add('is-career-goal');
+          dom.gameHint.textContent = text || HINT_CLASSIC;
+          return;
+        }
+        dom.gameHint.removeAttribute('data-career-goal');
+        dom.gameHint.classList.remove('is-career-goal');
+        dom.gameHint.textContent = HINT_CLASSIC;
+      }
+
+      /* 委托 run 内断开旧 RunSave：serialize() 返回 null，并兜底替换 autosave 的四个出口。 */
+      function lockRunSave() {
+        if (careerLocked) return;
+        careerLocked = true;
+        try {
+          autosave.saveNow = function () { return false; };
+          autosave.tick = function () {};
+          autosave.clear = function () {};
+          autosave.load = function () { return null; };
+        } catch (err) {
+          /* 忽略：serialize() 的 career 门禁仍是最终兜底 */
+        }
+        syncCareerHint();
+      }
+
       function emptyBoard() {
         return Array.from({ length: N }, () => new Array(N).fill(null));
       }
@@ -216,6 +347,9 @@
           pop: 1,
         };
         board[r][c] = tile;
+        /* 0.17（ADR §19.4）：真实生成新格子后提交 tile.created（撤销不重放此事件）。
+           只在游玩态提交：开局铺盘/存档恢复/测试盘面不算一次“生成”。 */
+        if (state === 'playing' && career && mode === 'classic') career.observe('tile.created', { value: tile.value });
         return tile;
       }
 
@@ -273,6 +407,11 @@
       /* 最终结束才写一次记录：胜利弹层不记录，继续挑战后棋盘满 / 用户主动收工才落库。 */
       function recordFinalPlay() {
         if (recordSaved) return null;
+        /* 0.17 职业委托 run：不写 progress/Scores/Playtime 轮次，也不假装已记录。 */
+        if (careerLocked) {
+          recordSaved = true;
+          return null;
+        }
         const rec = A.Progress.recordPlay('merge-2048', score);
         if (rec) high = rec.high;
         recordSaved = true;
@@ -307,12 +446,14 @@
         if (!winPopup) rec = recordFinalPlay();
         loop.pause();
         const title = winPopup ? '2048 达成！' : stop ? '本局结束' : '棋盘满了';
+        /* 0.17 委托 run：不声称“成绩已记录”，只说结果回旧港核对（不伪造结算）。 */
+        const recordLine = careerLocked ? '本趟结果回旧港核对' : '本局成绩已记录一次';
         const text = winPopup
           ? `<span class="ac-score">${score}</span>` +
             `${moves} 步 · 最大方块 ${bestTile()} · 可以继续挑战更高数字`
           : `<span class="ac-score">${score}</span>` +
             (rec && rec.isNewHigh ? '<span class="ac-newhigh">★ 新纪录</span><br/>' : '') +
-            `${moves} 步 · 最大方块 ${bestTile()} · 本局成绩已记录一次`;
+            `${moves} 步 · 最大方块 ${bestTile()} · ${recordLine}`;
         const options = {
           result: '回看棋盘',
           title: title,
@@ -330,6 +471,7 @@
           };
         }
         ui.show(options);
+        if (career && mode === 'classic') career.finish({ mode: 'classic', outcome: stop ? 'quit' : win ? 'won' : 'lost', stats: { score, moves, bestTile: bestTile() } });
         pauseUi.sync();
       }
 
@@ -339,13 +481,16 @@
         state = 'paused';
         joyTools.sync();
         autosave.saveNow();
-        const paused = { title: '已暂停', text: '数字先停一停。<br/>局内进度已保存。', btn: '继续', onBtn: resumeGame };
+        /* 0.17 委托 run：不谎称“局内进度已保存”，只给戏内目标 + 不落本机档说明。 */
+        const paused = careerLocked
+          ? { title: '已暂停', text: '数字先停一停。<br/>' + (careerGoalLine() || '') + '<br/>这一趟不写入本机进度。', btn: '继续', onBtn: resumeGame }
+          : { title: '已暂停', text: '数字先停一停。<br/>局内进度已保存。', btn: '继续', onBtn: resumeGame };
         if (mode === 'challenge') {
           paused.btn2 = '退出挑战';
           paused.onBtn2 = exitChallenge;
         } else if (won && !recordSaved) {
           /* 首次 2048 胜利后继续挑战：允许用户主动收工，本局成绩此时才记录一次。 */
-          paused.btn2 = '结束本局并记录';
+          paused.btn2 = careerLocked ? '结束本局' : '结束本局并记录';
           paused.onBtn2 = () => finish(false, { stop: true });
         }
         ui.show(paused);
@@ -354,13 +499,17 @@
 
       function showStart() {
         const dataReady = challengeDataReady();
+        /* 0.17 委托 run：追加一行戏内目标；挑战入口隐藏（职业 run 不写挑战记录）。 */
+        const goalLine = careerGoalLine();
+        const challengeEntry = !careerLocked;
+        syncCareerHint();
         ui.show({
           title: '2048 合成',
-          text: '滑动 / 方向键移动所有方块。<br/>同数相撞合并，目标 2048<br/>一步可撤销 · 达成后仍可继续挑战',
+          text: '滑动 / 方向键移动所有方块。<br/>同数相撞合并，目标 2048<br/>一步可撤销 · 达成后仍可继续挑战' + (goalLine ? '<br/>' + goalLine : ''),
           btn: '开始游戏',
           onBtn: startGame,
-          btn2: dataReady ? '挑战 6 关' : undefined,
-          onBtn2: dataReady ? openChallengePanel : undefined,
+          btn2: challengeEntry && dataReady ? '挑战 6 关' : undefined,
+          onBtn2: challengeEntry && dataReady ? openChallengePanel : undefined,
         });
         syncChallengeHud();
       }
@@ -457,6 +606,8 @@
         });
       }
       function openChallengePanel() {
+        /* 0.17 委托 run：挑战入口不可进入（挑战会写 challenge 记录，破坏职业隔离）。 */
+        if (careerLocked) return false;
         if (!dom.chLayer || !dom.chPanel) return false;
         ui.hide();
         mode = 'classic';
@@ -490,6 +641,7 @@
         syncChallengeHud();
       }
       function startChallenge(ref) {
+        if (careerLocked) return false;
         if (!A.Challenge || typeof A.Challenge.stage !== 'function') return false;
         const stage = A.Challenge.stage(CHALLENGE_GAME_ID, ref);
         if (!stage || !stage.content) return false;
@@ -654,6 +806,8 @@
 
       function serialize() {
         if (state !== 'playing' && state !== 'paused') return null;
+        /* 0.17（ADR §19.3）：职业委托 run 一律返回 null，旧 RunSave 零读写。 */
+        if (careerLocked) return null;
         return {
           board: board.map((row) => row.map((t) => (t ? t.value : 0))),
           score,
@@ -870,6 +1024,9 @@
                 }
                 A.Sfx.play('perfect');
               }
+              if (career && mode === 'classic') career.observe('tile.merged', { value: a.value, score, moves });
+              /* 合并后的新值也算一次真实生成；同一格同一步只发一次，撤销不回滚/不重放。 */
+              if (career && mode === 'classic') career.observe('tile.created', { value: a.value });
               merged.push(a);
               i++;
             } else {
@@ -1447,32 +1604,112 @@
             return { pass: pass, fail: fail, details: details };
           },
         };
+        /* 0.17（ADR §19.3 / §19.8）：职业只读测试钩子只在 ?careerTest=1 追加；
+           生产 URL 与既有 #test 探针（无 careerTest）完全不变。 */
+        if (/(?:^|[?&])careerTest=1(?:&|$)/.test(String((window.location && window.location.search) || ''))) {
+          window.__arcadeTest.careerInfo = function () {
+            const run = readCareerRun();
+            const goal = careerGoalParts();
+            const goalEls = Array.prototype.slice.call(document.querySelectorAll('[data-career-goal]'));
+            return {
+              isCommission: !!run,
+              locked: careerLocked,
+              commissionId: run ? run.commissionId : null,
+              objective: goal ? [goal.title, goal.summary].filter(Boolean).join(' · ') : null,
+              targetValue: goal ? (goal.minValue ? goal.minValue.value : goal.atLeast) : null,
+              field: goal && goal.minValue ? goal.minValue.field : null,
+              state: state,
+              mode: mode,
+              score: score,
+              moves: moves,
+              bestTile: bestTile(),
+              undo: undoStack.length,
+              serializeNull: serialize() === null,
+              goalLineVisible: goalEls.some((el) => el.getClientRects().length > 0),
+              challengeVisible: !!(dom.ovBtn2 && !dom.ovBtn2.hidden),
+              challengeLayerVisible: !!(dom.chLayer && !dom.chLayer.hidden),
+              runSave: (() => {
+                try {
+                  return A.RunSave && typeof A.RunSave.get === 'function' ? A.RunSave.get(CAREER_GAME_ID) : null;
+                } catch (err) {
+                  return null;
+                }
+              })(),
+              runsRaw: (() => {
+                try {
+                  return localStorage.getItem('studiokit:arcade:runs:v1');
+                } catch (err) {
+                  return null;
+                }
+              })(),
+              plays: A.Progress.get(CAREER_GAME_ID).plays,
+              high: A.Progress.get(CAREER_GAME_ID).high,
+              scoresCount: A.Scores.list({ gameId: CAREER_GAME_ID }).length,
+            };
+          };
+        }
       }
-      const saved = autosave.load();
-      if (saved) {
-        A.showResumePrompt(ui, saved, {
-          name: '2048 合成',
-          onResume: () => {
-            if (restore(saved.data)) {
-              state = 'playing';
-              ui.hide();
-              loop.resume();
-              pauseUi.sync();
-              joyTools.sync();
-              autosave.saveNow();
-            } else {
+      /* 0.16 行为逐字保留：只有这条路径会读旧 RunSave。 */
+      function prepareStartScreen() {
+        const saved = autosave.load();
+        if (saved) {
+          A.showResumePrompt(ui, saved, {
+            name: '2048 合成',
+            onResume: () => {
+              if (restore(saved.data)) {
+                state = 'playing';
+                ui.hide();
+                loop.resume();
+                pauseUi.sync();
+                joyTools.sync();
+                autosave.saveNow();
+              } else {
+                autosave.clear();
+                showStart();
+              }
+            },
+            onRestart: () => {
               autosave.clear();
               showStart();
-            }
-          },
-          onRestart: () => {
-            autosave.clear();
-            showStart();
-          },
-        });
-      } else {
-        showStart();
+            },
+          });
+        } else {
+          showStart();
+        }
       }
+
+      /* 0.17 委托入口：URL 带 ?career=<ticketId> 时先等桥确认 ticket，再决定
+         「职业 run 开局」还是「经典开局」；无参数时同步走 0.16 路径（零延迟、零行为变化）。 */
+      function bootStartScreen() {
+        const ticketId = readCareerTicketParam();
+        const ready = career && career.ready;
+        if (!ticketId || !career || !ready || typeof ready.then !== 'function') {
+          prepareStartScreen();
+          return;
+        }
+        let settled = false;
+        let guard = null;
+        const done = () => {
+          if (settled) return;
+          settled = true;
+          try {
+            if (guard) clearTimeout(guard);
+          } catch (err) {
+            /* ignore */
+          }
+          /* 只有桥确认了属于本游戏的 run 才锁死旧 RunSave；否则按 0.16 经典启动（fail-open）。 */
+          if (readCareerRun()) lockRunSave();
+          else { try { window.__arcadeMode = 'classic'; } catch (err) { /* ignore */ } }
+          prepareStartScreen();
+        };
+        try {
+          guard = setTimeout(done, 10000);
+        } catch (err) {
+          guard = null;
+        }
+        Promise.resolve(ready).then(done, done);
+      }
+      bootStartScreen();
       loop.start();
     })();
   </script>

@@ -12,9 +12,20 @@
     .challenge-sheet { position: absolute; inset: 8px; z-index: 6; display: flex; flex-direction: column; justify-content: flex-end; gap: 8px; overflow: auto; }
     .challenge-sheet[hidden] { display: none; }
     .challenge-sheet .ac-challenge-panel { width: 100%; max-height: 100%; overflow: auto; }
+    /* 0.17 职业委托：目标行沿用底部说明行，320/375 最多两行、不新增按钮。 */
+    .game-hint.is-career-goal {
+      max-width: min(520px, 100%);
+      color: #ffe0a6;
+      display: -webkit-box;
+      -webkit-line-clamp: 2;
+      -webkit-box-orient: vertical;
+      overflow: hidden;
+      overflow-wrap: anywhere;
+    }
   </style>
   <script src="../../../shared/site-shell.js" defer></script>
   <script src="../engine.js"></script>
+  <script src="../career/bridge.js"></script>
   <script src="../challenge/brick-breaker.js"></script>
   <title>砖块计划 · 街机厅 · StudioKit</title>
 </head>
@@ -57,6 +68,7 @@
     (() => {
       'use strict';
       const A = window.Arcade;
+      const career = window.ArcadeCareer || null;
       const { clamp, lerp, rand, randInt, TAU } = A.utils;
 
       const W = 420;
@@ -94,9 +106,12 @@
         chGoal: document.querySelector('[data-ch-goal]'),
         chTime: document.querySelector('[data-ch-time]'),
         chRemain: document.querySelector('[data-ch-remain]'),
+        gameHint: document.querySelector('.game-hint'),
       };
       const classicHudSpans = Array.from(document.querySelectorAll('.game-hud > span'));
       const ui = A.createOverlayUi(dom);
+      /* 经典底部说明行原文：职业 run 结束后逐字恢复，保证经典零回归。 */
+      const HINT_CLASSIC = dom.gameHint ? dom.gameHint.textContent : '';
 
       const particles = A.createParticles();
 
@@ -170,6 +185,247 @@
         assisted: false,
         replayMode: false,
       };
+
+      /* ===== 0.17 职业委托 run（ADR §19.2 / §19.3 / §19.4 / §19.8）=====
+         - 只有从旧港告示板接单后带 ?career=<ticketId> 进入本页、且 bridge 确认属于本页
+           gameId 时才进入职业 run；无 ticket / ticket 无效 / bridge 缺失时完全走 0.16 经典路径。
+         - 职业 run 内不读不写 studiokit:arcade:runs:v1（serialize()=null + autosave 四出口 no-op），
+           不 recordPlay / Scores / 挑战 / GameMeta；挑战入口隐藏且不可进入。
+         - 真实事件（ADR §19.4）：
+           brick.destroyed：只有真实砖块 HP 归零、alive=true→false 提交后发一次；
+             重开（reset/startGame）只是重新生成砖块，不补发、不计入。
+           stage.clear：只有真实一层砖块全部清空、update() 进入 levelclear 时按关卡发一次 {level}；
+             测试钩子 clearLevelNow() 属于经典快捷收局，不伪造本事件。 */
+      const CAREER_GAME_ID = 'brick-breaker';
+      let careerLocked = false;        // 已确认进入职业 run：本页生命周期内经典记录全禁用
+      let careerGoalSource = null;     // 接单时缓存的委托内容（结算后仍可显示戏内目标）
+      let careerGoalDone = false;      // 已结算：开始/暂停/结算弹层不再展示旧目标
+      let careerFinishCalled = false;  // 职业结算只提交一次，之后同页新局不再重复提交
+      let careerSettledResult = null;  // 职业结算结果（只读，供玩家与测试查看）
+      let careerBrickCount = 0;        // 真实 brick.destroyed 提交次数（与委托缓冲一致）
+      let careerStageClearCount = 0;   // 真实 stage.clear 提交次数
+      const careerStageCleared = Object.create(null); // level → true（同一 run 同一层只发一次）
+      /* #test + ?careerTest=1 专用确定性辅助开关；生产 URL 永远为 false。 */
+      let testAutoPaddle = false;
+
+      function careerTicketParam() {
+        try {
+          const search = String((window.location && window.location.search) || '');
+          const match = /(?:^|[?&])career=([^&]+)/.exec(search);
+          if (!match) return '';
+          const value = decodeURIComponent(match[1].replace(/\+/g, ' '));
+          return /^[A-Za-z0-9._:-]{1,120}$/.test(value) ? value : '';
+        } catch (err) {
+          return '';
+        }
+      }
+
+      /* 本页当前是否有属于本游戏的职业 run（bridge 只在 ticket 校验通过时填充）。 */
+      function readCareerRun() {
+        try {
+          if (!career || typeof career.isCommissionRun !== 'function' || !career.isCommissionRun()) return null;
+          const run = career.commissionRun;
+          if (!run || run.gameId !== CAREER_GAME_ID) return null;
+          return run;
+        } catch (err) {
+          return null;
+        }
+      }
+
+      /* 戏内目标只来自真实委托内容（commissionRun.commission）；内容缺失时返回 null，不发明文案。 */
+      function careerGoalParts() {
+        const run = readCareerRun();
+        const commission = (run && run.commission) || careerGoalSource;
+        if (!commission || typeof commission !== 'object') return null;
+        const title = typeof commission.title === 'string' ? commission.title : '';
+        const summary = typeof commission.summary === 'string' ? commission.summary : '';
+        if (!title && !summary) return null;
+        const objective = commission.objective && typeof commission.objective === 'object' ? commission.objective : {};
+        const kind = typeof objective.kind === 'string' ? objective.kind : '';
+        const rawAtLeast = Number(objective.atLeast);
+        const atLeast = Number.isFinite(rawAtLeast) && rawAtLeast > 0 ? Math.floor(rawAtLeast) : 0;
+        return { title, summary, kind, atLeast };
+      }
+
+      /* 一行戏内目标：title + 目标（砖块数/层数）。320/375 最多两行。 */
+      function careerGoalText() {
+        const goal = careerGoalParts();
+        if (!goal) return '';
+        let target = '';
+        if (goal.atLeast > 0) target = ' · 目标 ' + goal.atLeast + (goal.kind === 'stage.clear' ? ' 层' : ' 块');
+        return '委托：' + (goal.title || goal.summary) + target;
+      }
+
+      function escCareerHtml(value) {
+        return String(value == null ? '' : value).replace(/[&<>"']/g, (ch) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[ch]));
+      }
+
+      function careerGoalLine() {
+        const text = careerGoalText();
+        if (!text) return '';
+        return '<span class="career-goal" data-career-goal="1">' + escCareerHtml(text) + '</span>';
+      }
+
+      /* 底部说明行在职业 run 内换成一行目标；结算后逐字恢复经典文案。 */
+      function syncCareerHint() {
+        if (!dom.gameHint) return;
+        const text = careerLocked && !careerGoalDone ? careerGoalText() : '';
+        if (text) {
+          dom.gameHint.setAttribute('data-career-goal', '1');
+          dom.gameHint.classList.add('is-career-goal');
+          dom.gameHint.textContent = text;
+          return;
+        }
+        dom.gameHint.removeAttribute('data-career-goal');
+        dom.gameHint.classList.remove('is-career-goal');
+        dom.gameHint.textContent = HINT_CLASSIC;
+      }
+
+      /* 职业 run 内断开旧 RunSave：serialize() 返回 null，并兜底替换 autosave 的四个出口。 */
+      function lockRunSave() {
+        if (careerLocked) return;
+        careerLocked = true;
+        try {
+          autosave.saveNow = function () { return false; };
+          autosave.tick = function () {};
+          autosave.clear = function () {};
+          autosave.load = function () { return null; };
+        } catch (err) {
+          /* 忽略：serialize() 的职业门禁仍是最终兜底 */
+        }
+        syncCareerHint();
+      }
+
+      function activateCareerRun(run) {
+        if (!run || run.gameId !== CAREER_GAME_ID) return false;
+        lockRunSave();
+        careerGoalSource = run.commission && typeof run.commission === 'object' ? run.commission : null;
+        careerGoalDone = false;
+        try {
+          document.body.classList.toggle('is-career-run', true);
+        } catch (err) {
+          /* ignore */
+        }
+        return true;
+      }
+
+      /* 只有职业 run 且尚未结算时才允许提交职业事件；经典/重开后一律不进入委托缓冲。 */
+      function careerObserve(kind, payload) {
+        if (!careerLocked || careerFinishCalled) return false;
+        if (!career || typeof career.observe !== 'function') return false;
+        try {
+          if (typeof career.isCommissionRun === 'function' && !career.isCommissionRun()) return false;
+          return career.observe(kind, payload);
+        } catch (err) {
+          return false;
+        }
+      }
+
+      /* 真实砖块 HP 归零销毁点（hitBrick 内 alive=true→false 之后）调用；经典路径仍走 0.16 原样 observe。 */
+      function noteCareerBrickDestroyed(payload) {
+        if (!career || typeof career.observe !== 'function') return false;
+        if (!careerLocked) {
+          /* 0.16 经典路径：行为与改动前逐字一致。 */
+          return career.observe('brick.destroyed', payload);
+        }
+        if (careerFinishCalled) return false;
+        const accepted = careerObserve('brick.destroyed', payload);
+        if (accepted !== false) careerBrickCount += 1;
+        return accepted;
+      }
+
+      /* 真实一层清空点（update() 检测到所有砖块 alive=false）调用；同一 run 同一层只发一次。 */
+      function noteCareerStageClear(levelValue) {
+        if (!careerLocked || careerFinishCalled) return false;
+        const lv = Math.max(1, Math.floor(Number(levelValue) || 1));
+        if (careerStageCleared[lv]) return false;
+        const accepted = careerObserve('stage.clear', { level: lv });
+        if (accepted === false) return false;
+        careerStageCleared[lv] = true;
+        careerStageClearCount += 1;
+        return true;
+      }
+
+      function summarizeCareerResult(result) {
+        if (!result || typeof result !== 'object') return { ok: false, reason: 'empty' };
+        if (result.ok === true) {
+          const receipt = result.receipt && typeof result.receipt === 'object' ? result.receipt : null;
+          return {
+            ok: true,
+            duplicate: result.duplicate === true,
+            repeat: result.repeat === true,
+            credits: receipt && Number.isFinite(Number(receipt.credits)) ? Number(receipt.credits) : Number(result.credits) || 0,
+            evidence: receipt && Array.isArray(receipt.evidence) ? receipt.evidence.slice() : [],
+            receiptId: receipt && (receipt.receiptId || receipt.txId) ? String(receipt.receiptId || receipt.txId) : null,
+          };
+        }
+        return {
+          ok: false,
+          reason: typeof result.reason === 'string' ? result.reason : 'failed',
+          observed: Number.isFinite(Number(result.observed)) ? Number(result.observed) : null,
+        };
+      }
+
+      /* 结算：职业 run 走 bridge/commission-core 独立收据；本页不发钱、不写库、只提交一次。 */
+      function careerFinish(outcome) {
+        if (!careerLocked || careerFinishCalled) return;
+        careerFinishCalled = true;
+        careerGoalDone = true;
+        syncCareerHint();
+        if (!career || typeof career.finish !== 'function') {
+          careerSettledResult = { ok: false, reason: 'bridge-unavailable' };
+          return;
+        }
+        const stats = { score: score, level: level, bricks: careerBrickCount, stageClears: careerStageClearCount };
+        let promise = null;
+        try {
+          promise = career.finish({ mode: 'classic', outcome: outcome || 'lost', stats: stats });
+        } catch (err) {
+          careerSettledResult = { ok: false, reason: 'finish-threw' };
+          return;
+        }
+        Promise.resolve(promise)
+          .then((result) => {
+            careerSettledResult = summarizeCareerResult(result);
+          })
+          .catch(() => {
+            careerSettledResult = { ok: false, reason: 'finish-error' };
+          });
+      }
+
+      /* 结算/暂停文案只用戏内措辞；技术原因只留在测试探针（careerInfo）里。 */
+      function careerRunSummaryText(early) {
+        const goal = careerGoalDone ? '' : careerGoalLine();
+        return (
+          `<span class="ac-score">${score}</span>` +
+          `第 ${level} 关 · 已击碎 ${careerBrickCount} 块` +
+          (careerStageClearCount > 0 ? ' · 清层 ' + careerStageClearCount + ' 层' : '') +
+          (goal ? '<br/>' + goal : '') +
+          '<br/>这一趟不写入本机成绩，委托结果回旧港核对。' +
+          (early ? '<br/>提前收手也可以回旧港交差。' : '')
+        );
+      }
+
+      /* 职业专属出口：暂停弹层「结束本局」，不必打光三条命；走同一 career.finish 路径。 */
+      function endCareerRunEarly() {
+        if (!careerLocked || state === 'over') return false;
+        state = 'over';
+        smashHits = 0;
+        joyTools.sync();
+        autosave.clear();
+        loop.pause();
+        A.Sfx.play('over');
+        ui.show({
+          title: '本局已结束',
+          text: careerRunSummaryText(true),
+          btn: '再来一局',
+          onBtn: showStart,
+          result: '回看砖场',
+        });
+        careerFinish('quit');
+        pauseUi.sync();
+        return true;
+      }
 
       let high = A.Progress.get('brick-breaker').high;
       dom.hudHigh.textContent = String(high);
@@ -286,21 +542,38 @@
         A.Sfx.play(win ? 'perfect' : 'over');
         let rec = null;
         if (!recordSaved) {
-          rec = A.Progress.recordPlay('brick-breaker', score); if (rec) high = rec.high;
-          recordSaved = true;
-          dom.hudHigh.textContent = String(Math.max(high, score));
+          if (careerLocked) {
+            /* 0.17 隔离：职业 run 不写 progress/Scores/Playtime 轮次，也不谎称成绩已记录。 */
+            recordSaved = true;
+          } else {
+            rec = A.Progress.recordPlay('brick-breaker', score); if (rec) high = rec.high;
+            recordSaved = true;
+            dom.hudHigh.textContent = String(Math.max(high, score));
+          }
         }
         loop.pause();
-        ui.show({
-          title: win ? '全部通关！' : '挡板失守',
-          text:
-            `<span class="ac-score">${score}</span>` +
-            (rec && rec.isNewHigh ? '<span class="ac-newhigh">★ 新纪录</span><br/>' : '') +
-            `第 ${level} 关 · 最高 ${Math.max(high, score)}`,
-          btn: '再来一局',
-          onBtn: showStart,
-          result: '回看砖场',
-        });
+        if (careerLocked) {
+          ui.show({
+            title: win ? '全部通关！' : '挡板失守',
+            text: careerRunSummaryText(false),
+            btn: '再来一局',
+            onBtn: showStart,
+            result: '回看砖场',
+          });
+          careerFinish(win ? 'won' : 'lost');
+        } else {
+          ui.show({
+            title: win ? '全部通关！' : '挡板失守',
+            text:
+              `<span class="ac-score">${score}</span>` +
+              (rec && rec.isNewHigh ? '<span class="ac-newhigh">★ 新纪录</span><br/>' : '') +
+              `第 ${level} 关 · 最高 ${Math.max(high, score)}`,
+            btn: '再来一局',
+            onBtn: showStart,
+            result: '回看砖场',
+          });
+          if (career && mode === 'classic') career.finish({ mode: 'classic', outcome: win ? 'won' : 'lost', stats: { score, level } });
+        }
         pauseUi.sync();
       }
 
@@ -319,6 +592,17 @@
             btn2: '退出挑战',
             onBtn2: exitChallenge,
           });
+        } else if (careerLocked) {
+          showOverlay({
+            title: '已暂停',
+            text:
+              '球停在半空。这一趟不写入本机进度，可以继续，也可以提前收手。' +
+              (careerGoalDone ? '' : '<br/>' + careerGoalLine()),
+            btn: '继续',
+            onBtn: resumeGame,
+            btn2: '结束本局',
+            onBtn2: endCareerRunEarly,
+          });
         } else {
           showOverlay({ title: '已暂停', text: '球停在半空。<br/>局内进度已保存，可以随时离开。', btn: '继续', onBtn: resumeGame });
         }
@@ -326,6 +610,22 @@
       }
 
       function showStart() {
+        if (careerLocked) {
+          /* 0.17 职业 run：追加一行戏内目标，不渲染挑战入口（结算后只说明不写本机成绩）。 */
+          const goalLine = careerGoalDone ? '' : careerGoalLine();
+          const notice = careerGoalDone ? '<br/>委托已结算；之后的对局不写入本机成绩。' : '';
+          ui.show({
+            title: '砖块计划',
+            text:
+              '挡板反弹球，打碎所有砖块。<br/>接住 <b>加宽 / 减速 / 加命</b> 道具<br/>关卡越高球越快、挡板越窄' +
+              (goalLine ? '<br/>' + goalLine : '') +
+              notice,
+            btn: '开始游戏',
+            onBtn: startGame,
+          });
+          syncCareerHint();
+          return;
+        }
         const available = challengeAvailable();
         ui.show({
           title: '砖块计划',
@@ -441,6 +741,8 @@
       }
 
       function hitBrick(brick) {
+        /* 已销毁砖块不可再次命中/重复计功（测试重复调用与边缘路径的守卫）。 */
+        if (!brick || !brick.alive) return;
         const smashed = smashHits > 0;
         if (smashed) {
           brick.hp = 1;
@@ -450,6 +752,7 @@
         if (brick.hp <= 0) {
           brick.alive = false;
           score += 10 * brick.maxHp + level * 4;
+          if (career && mode === 'classic') noteCareerBrickDestroyed({ level, maxHp: brick.maxHp });
           syncHud();
           particles.emit(brick.x + brick.w / 2, brick.y + brick.h / 2, {
             count: A.reducedMotion ? 4 : 10,
@@ -595,6 +898,12 @@
         if (input.pointer.down) paddle.x = input.pointer.x - paddle.w / 2;
         paddle.x = clamp(paddle.x, FIELD.x + 6, FIELD.x + FIELD.w - paddle.w - 6);
 
+        /* #test + ?careerTest=1 专用挡板辅助：真实挡板居中跟随真实球（只改 paddle.x）。
+           发球/物理/碰撞/事件仍由真实 launch()/moveBall()/hitBrick() 产生；生产 URL 永远关闭。 */
+        if (testAutoPaddle && launched) {
+          paddle.x = clamp(ball.x - paddle.w / 2, FIELD.x + 6, FIELD.x + FIELD.w - paddle.w - 6);
+        }
+
         if (!launched) {
           ball.x = paddle.x + paddle.w / 2;
           ball.y = paddle.y - BALL_R - 1;
@@ -626,11 +935,15 @@
           pickups = [];
           joyTools.sync();
           A.Sfx.play('perfect');
+          /* 0.17：真实一层清空（所有砖块已 alive=false）提交一次 stage.clear。 */
+          noteCareerStageClear(level);
         }
         input.endFrame();
       }
 
       function serialize() {
+        /* 0.17（ADR §19.3）：职业委托 run 一律返回 null，旧 RunSave 零读写。 */
+        if (careerLocked) return null;
         if (state !== 'playing' && state !== 'paused') return null;
         const classicState = {
           bricks: bricks.map((b) => ({ x: b.x, y: b.y, w: b.w, h: b.h, hp: b.hp, maxHp: b.maxHp, alive: b.alive, color: b.color, dark: b.dark })),
@@ -869,6 +1182,8 @@
       }
 
       function openChallengePanel() {
+        /* 0.17（ADR §19.3）：职业 run 内挑战入口不可进入（不弹 Toast，避免暴露测试/系统入口）。 */
+        if (careerLocked) return false;
         if (!challengeAvailable()) {
           A.showToast('挑战数据不可用');
           return false;
@@ -963,6 +1278,8 @@
       }
 
       function startChallenge(ref) {
+        /* 0.17（ADR §19.3）：职业 run 内即使通过测试钩子也不可进入挑战。 */
+        if (careerLocked) return false;
         if (!challengeAvailable()) {
           A.showToast('挑战数据不可用');
           return false;
@@ -1956,33 +2273,246 @@
             return challengeReplayClear(ref);
           },
         };
+        /* 0.17（ADR §19.3 / §19.8）：职业只读/驱动钩子只在 ?careerTest=1 追加；
+           生产 URL 与既有 #test 探针（无 careerTest）完全不变。 */
+        if (/(?:^|[?&])careerTest=1(?:&|$)/.test(String((window.location && window.location.search) || ''))) {
+          const careerTestApi = window.__arcadeTest;
+          const rawOf = (key) => {
+            try {
+              return localStorage.getItem(key);
+            } catch (err) {
+              return null;
+            }
+          };
+
+          careerTestApi.careerInfo = function careerInfo() {
+            const run = readCareerRun();
+            const goal = careerGoalParts();
+            const goalEls = Array.prototype.slice.call(document.querySelectorAll('[data-career-goal]'));
+            const progress = A.Progress.get('brick-breaker');
+            let runSave = null;
+            try {
+              runSave = A.RunSave && typeof A.RunSave.get === 'function' ? A.RunSave.get('brick-breaker') : null;
+            } catch (err) {
+              runSave = null;
+            }
+            let scoresCount = 0;
+            try {
+              scoresCount = A.Scores.list({ gameId: 'brick-breaker' }).length;
+            } catch (err) {
+              scoresCount = 0;
+            }
+            const challengeBtn = dom.ovBtn2;
+            return {
+              isCommission: !!run,
+              locked: careerLocked,
+              commissionId: run ? run.commissionId : null,
+              goalTitle: goal ? goal.title : null,
+              goalText: careerGoalText(),
+              objectiveKind: goal ? goal.kind : null,
+              target: goal ? goal.atLeast : null,
+              state: state,
+              mode: mode,
+              level: level,
+              score: score,
+              lives: lives,
+              launched: launched,
+              aliveBricks: bricks.filter((b) => b.alive).length,
+              bricksDestroyed: careerBrickCount,
+              stageClears: careerStageClearCount,
+              stageClearLevels: Object.keys(careerStageCleared).map(Number),
+              serializeNull: serialize() === null,
+              goalLineVisible: goalEls.some((el) => el.getClientRects().length > 0),
+              hint: dom.gameHint ? dom.gameHint.textContent : null,
+              hintIsCareerGoal: dom.gameHint ? dom.gameHint.hasAttribute('data-career-goal') : false,
+              challengeEntry: !!challengeBtn && !challengeBtn.hidden && challengeBtn.getClientRects().length > 0 && !challengeBtn.disabled && challengeBtn.textContent.indexOf('挑战') !== -1,
+              challengePanelHidden: !(dom.chPanel && !dom.chPanel.hidden),
+              pauseBtn2: challengeBtn ? { text: challengeBtn.textContent, hidden: challengeBtn.hidden, disabled: challengeBtn.disabled } : null,
+              settled: careerFinishCalled,
+              settledResult: careerSettledResult ? JSON.parse(JSON.stringify(careerSettledResult)) : null,
+              runSave: runSave,
+              runsRaw: rawOf('studiokit:arcade:runs:v1'),
+              progressRaw: rawOf('studiokit:arcade:progress:v1'),
+              scoresRaw: rawOf('studiokit:arcade:scores:v1'),
+              challengeRaw: rawOf('studiokit:arcade:challenge:v1'),
+              metaRaw: rawOf('studiokit:arcade:meta:v1'),
+              plays: progress.plays,
+              high: progress.high,
+              scoresCount: scoresCount,
+            };
+          };
+
+          /* 测试挡板辅助：只改真实 paddle.x，让真实球被真实挡板接住；不改 y/vy/分数/事件。 */
+          careerTestApi.setAutoPaddle = function setAutoPaddle(enabled) {
+            testAutoPaddle = enabled !== false;
+            return { ok: true, enabled: testAutoPaddle };
+          };
+
+          /* 真实 launch() 出口（供确定性测试兜底；正常证据走真实 pointerdown/up 手势）。 */
+          careerTestApi.launchBall = function launchBall() {
+            if (mode !== 'classic' || state !== 'playing' || launched) return false;
+            launch();
+            return true;
+          };
+
+          /* 真实 HP 归零路径：逐个调用 hitBrick() 摧毁前 N 个存活砖块（不伪造事件）。 */
+          careerTestApi.destroyBricks = function destroyBricks(count) {
+            const want = Math.max(0, Math.floor(Number(count) || 0));
+            let destroyed = 0;
+            for (let guard = 0; guard < 512 && destroyed < want; guard += 1) {
+              let index = -1;
+              for (let i = 0; i < bricks.length; i += 1) {
+                if (bricks[i].alive) {
+                  index = i;
+                  break;
+                }
+              }
+              if (index < 0) break;
+              const before = careerBrickCount;
+              hitBrick(bricks[index]);
+              if (careerBrickCount > before) destroyed += 1;
+            }
+            return { ok: true, destroyed: destroyed, bricksDestroyed: careerBrickCount, alive: bricks.filter((b) => b.alive).length };
+          };
+
+          /* 真实 startGame() 重开：证明重开只重铺砖块，不补发 brick.destroyed。 */
+          careerTestApi.restartRun = function restartRun() {
+            if (mode !== 'classic') return { ok: false, reason: 'not-classic' };
+            const before = { bricks: careerBrickCount, stageClears: careerStageClearCount };
+            startGame();
+            return { ok: true, before: before, after: { bricks: careerBrickCount, stageClears: careerStageClearCount }, state: state, level: level };
+          };
+
+          /* 固定步长推进真实 update()：用于逐帧模拟真实发球/碰撞/清层，不直接改分数或事件。 */
+          careerTestApi.advance = function advance(seconds) {
+            const frames = clamp(Math.floor((Number(seconds) || 0) * 60), 1, 7200);
+            let ran = 0;
+            for (; ran < frames; ran += 1) {
+              if (mode !== 'classic') break;
+              if (state !== 'playing' && state !== 'levelclear') break;
+              update(1 / 60);
+            }
+            return {
+              ok: true,
+              frames: ran,
+              state: state,
+              level: level,
+              launched: launched,
+              bricksDestroyed: careerBrickCount,
+              stageClears: careerStageClearCount,
+              alive: bricks.filter((b) => b.alive).length,
+            };
+          };
+
+          /* 只读自检：事件计数与真实委托缓冲一致 / 死砖不可重复计 / 职业隔离与挑战入口状态。 */
+          careerTestApi.careerSelfCheck = function careerSelfCheck() {
+            const details = [];
+            let pass = 0;
+            let fail = 0;
+            const check = (ok, text) => {
+              if (ok) {
+                pass += 1;
+                details.push('PASS ' + text);
+              } else {
+                fail += 1;
+                details.push('FAIL ' + text);
+              }
+            };
+            const run = readCareerRun();
+            const careerState = window.__arcadeCareerTest && typeof window.__arcadeCareerTest.commissionState === 'function' ? window.__arcadeCareerTest.commissionState() : null;
+            const events = careerState && Array.isArray(careerState.events) ? careerState.events : [];
+            const brickEvents = events.filter((e) => e && e.kind === 'brick.destroyed').length;
+            const stageEvents = events.filter((e) => e && e.kind === 'stage.clear').length;
+            check(!!run, '职业 run 属于 brick-breaker');
+            check(careerLocked === true, '职业隔离已锁定');
+            check(serialize() === null, '职业 run serialize() 返回 null');
+            check(brickEvents === careerBrickCount, 'brick.destroyed 缓冲次数与页面计数一致（' + brickEvents + '/' + careerBrickCount + '）');
+            check(stageEvents === careerStageClearCount, 'stage.clear 缓冲次数与页面计数一致（' + stageEvents + '/' + careerStageClearCount + '）');
+            check(stageEvents === Object.keys(careerStageCleared).length, '同一层 stage.clear 只提交一次');
+            check(events.filter((e) => e && e.kind === 'stage.clear').every((e) => Number.isFinite(Number(e.payload && e.payload.level))), 'stage.clear payload 含数值 level');
+            check(events.filter((e) => e && e.kind === 'brick.destroyed').every((e) => Number.isFinite(Number(e.payload && e.payload.level))), 'brick.destroyed payload 含数值 level');
+            const deadIndex = bricks.findIndex((b) => !b.alive);
+            if (deadIndex >= 0) {
+              const before = careerBrickCount;
+              const refused = window.__arcadeTest.hitBrickNow(deadIndex);
+              check(refused === false && careerBrickCount === before, '已销毁砖块不可重复计功');
+            }
+            if (careerLocked) {
+              check(startChallenge('brick-breaker-C01') === false, '职业 run 内挑战入口不可进入');
+            }
+            check((dom.gameHint && dom.gameHint.hasAttribute('data-career-goal')) === (careerLocked && !careerGoalDone), '目标行只在职业 run 未结算时显示');
+            return { pass: pass, fail: fail, details: details };
+          };
+        }
       }
-      const saved = autosave.load();
-      if (saved) {
-        A.showResumePrompt(ui, saved, {
-          name: '砖块计划',
-          onResume: () => {
-            if (restore(saved.data)) {
-              state = 'playing';
-              syncModeUi();
-              ui.hide();
-              loop.resume();
-              pauseUi.sync();
-              joyTools.sync();
-              autosave.saveNow();
-            } else {
+      /* 0.16 行为逐字保留：只有这条路径会读旧 RunSave。 */
+      function prepareStartScreen() {
+        const saved = autosave.load();
+        if (saved) {
+          A.showResumePrompt(ui, saved, {
+            name: '砖块计划',
+            onResume: () => {
+              if (restore(saved.data)) {
+                state = 'playing';
+                syncModeUi();
+                ui.hide();
+                loop.resume();
+                pauseUi.sync();
+                joyTools.sync();
+                autosave.saveNow();
+              } else {
+                autosave.clear();
+                showStart();
+              }
+            },
+            onRestart: () => {
               autosave.clear();
               showStart();
-            }
-          },
-          onRestart: () => {
-            autosave.clear();
-            showStart();
-          },
-        });
-      } else {
-        showStart();
+            },
+          });
+        } else {
+          showStart();
+        }
       }
+
+      /* 0.17 委托入口：URL 带 ?career=<ticketId> 时先等桥确认 ticket，再决定
+         「职业 run 开局」还是「经典开局」；无参数时同步走 0.16 路径（零行为变化）。 */
+      function bootStartScreen() {
+        const ticketId = careerTicketParam();
+        const ready = career && career.ready;
+        if (!ticketId || !career || !ready || typeof ready.then !== 'function') {
+          prepareStartScreen();
+          return;
+        }
+        let settled = false;
+        let guard = null;
+        const done = () => {
+          if (settled) return;
+          settled = true;
+          try {
+            if (guard) clearTimeout(guard);
+          } catch (err) {
+            /* ignore */
+          }
+          /* 只有桥确认了属于本游戏的 run 才锁死旧 RunSave；否则按 0.16 经典启动（fail-open）。 */
+          const run = readCareerRun();
+          if (run) activateCareerRun(run);
+          else { try { window.__arcadeMode = 'classic'; } catch (err) { /* ignore */ } }
+          prepareStartScreen();
+        };
+        try {
+          guard = setTimeout(done, 10000);
+        } catch (err) {
+          guard = null;
+        }
+        Promise.resolve(ready).then(done, done);
+      }
+
+      reset();
+      state = 'ready';
+      joyTools.sync();
+      syncModeUi();
+      bootStartScreen();
       loop.start();
     })();
   </script>

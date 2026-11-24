@@ -59,6 +59,7 @@ GitHub Pages 项目站点会部署在 `/<repository>/` 子路径下。所有站�
   - `studiokit:arcade:scores:v1`（0.8.1 积分记录，Schema v1）
   - `studiokit:arcade:challenge:v1`（0.8.0 挑战记录，Schema v1）
   - `studiokit:arcade:meta:v1`（0.13.0 通用游戏数据，Schema v1；目前仅星海突击机库存于 `games['star-raid'].hangar`）
+  - IndexedDB `studiokit:arcade:career`（0.15.0 生涯数据层，schema 1；11 stores：`state/discovery/profiles/runs/claims/ledgers/balances/inventory/equipment/quests/migrations`；经典 localStorage 键不变，生涯只写独立 IDB）
 - Venue Compare 使用 IndexedDB 数据库 `studiokit:restaurant-compare`（version 1，store `projects`，记录 key `current`，项目 Schema v3）；旧 `restaurant-compare-editor` 只读兼容，旧 Schema v2 项目保存时升级为 v3。
 - 每个工具的配置 Schema 与应用版本独立演进；Arcade 0.4.0 的道具状态是既有局内档 Schema v1 内的追加字段，不是新 key。0.5.0 的游玩统计使用新 key，不改变 progress/runs/prefs。
 - 离线缓存不是用户数据源：清空站点缓存只影响离线可玩性，不清除 localStorage；清空 localStorage 也不影响已预载的静态资源。

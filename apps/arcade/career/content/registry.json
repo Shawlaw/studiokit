@@ -1,0 +1,194 @@
+{
+  "schemaVersion": 1,
+  "contentVersion": "0.18.0",
+  "note": "首季运行时注册表：游戏清单/职业多对多/委托与故事节点由后续版本追加。禁止把规模写死进代码；此处数组长度只是本季内容量。",
+  "games": [
+    {
+      "gameId": "memory-flip",
+      "displayName": "记忆翻牌",
+      "adapterVersion": 1,
+      "discoverable": true,
+      "clueRef": "CL-memory-flip",
+      "professions": ["research.archivist"],
+      "capabilities": [],
+      "watch": [{ "kind": "pair.match", "payload": { "symbol": "string", "level": "number", "moves": "number" }, "modes": ["classic"] }]
+    },
+    {
+      "gameId": "merge-2048",
+      "displayName": "2048 合成",
+      "adapterVersion": 1,
+      "discoverable": true,
+      "clueRef": "CL-merge-2048",
+      "professions": ["research.lattice"],
+      "capabilities": [],
+      "watch": [{ "kind": "tile.merged", "payload": { "value": "number", "score": "number", "moves": "number" }, "modes": ["classic"] }]
+    },
+    {
+      "gameId": "blackjack",
+      "displayName": "二十一点",
+      "adapterVersion": 1,
+      "discoverable": true,
+      "clueRef": "CL-blackjack",
+      "professions": ["intel.risk"],
+      "capabilities": [],
+      "watch": [{ "kind": "hand.settled", "payload": { "handNo": "number", "result": "string", "points": "number" }, "modes": ["classic"] }]
+    },
+    {
+      "gameId": "gomoku",
+      "displayName": "五子棋",
+      "adapterVersion": 1,
+      "discoverable": true,
+      "clueRef": "CL-gomoku",
+      "professions": ["intel.tactics"],
+      "capabilities": [],
+      "watch": [{ "kind": "stone.placed", "payload": { "moves": "number", "turn": "string" }, "modes": ["classic"] }]
+    },
+    {
+      "gameId": "solitaire",
+      "displayName": "纸牌接龙",
+      "adapterVersion": 1,
+      "discoverable": true,
+      "clueRef": "CL-solitaire",
+      "professions": ["engineering.dispatcher"],
+      "capabilities": [],
+      "watch": [{ "kind": "card.moved", "payload": { "target": "string", "moves": "number", "foundationCount": "number" }, "modes": ["classic"] }]
+    },
+    {
+      "gameId": "snowbells",
+      "displayName": "雪铃",
+      "adapterVersion": 1,
+      "discoverable": true,
+      "clueRef": "CL-snowbells",
+      "professions": ["nature.snowscout"],
+      "capabilities": [],
+      "watch": [{ "kind": "bell.rung", "payload": { "combo": "number", "gain": "number" }, "modes": ["classic"] }]
+    },
+    {
+      "gameId": "brick-breaker",
+      "displayName": "砖块计划",
+      "adapterVersion": 1,
+      "discoverable": true,
+      "clueRef": "CL-brick-breaker",
+      "professions": ["engineering.demolition"],
+      "capabilities": [],
+      "watch": [{ "kind": "brick.destroyed", "payload": { "level": "number", "maxHp": "number" }, "modes": ["classic"] }]
+    },
+    {
+      "gameId": "gravity-flip",
+      "displayName": "重力翻转",
+      "adapterVersion": 1,
+      "discoverable": true,
+      "clueRef": "CL-gravity-flip",
+      "professions": ["research.gravity"],
+      "capabilities": [],
+      "watch": [{ "kind": "gravity.flip", "payload": { "dist": "number", "lives": "number" }, "modes": ["classic"] }]
+    },
+    {
+      "gameId": "snake-run",
+      "displayName": "贪吃蛇",
+      "adapterVersion": 1,
+      "discoverable": true,
+      "clueRef": "CL-snake-run",
+      "professions": ["nature.ecologist"],
+      "capabilities": [],
+      "watch": [{ "kind": "fruit.eaten", "payload": { "foodsEaten": "number", "golden": "boolean" }, "modes": ["classic"] }]
+    },
+    {
+      "gameId": "mole-whack",
+      "displayName": "打地鼠",
+      "adapterVersion": 1,
+      "discoverable": true,
+      "clueRef": "CL-mole-whack",
+      "professions": ["engineering.maintenance"],
+      "capabilities": [],
+      "watch": [{ "kind": "mole.hit", "payload": { "index": "number", "gained": "number", "combo": "number" }, "modes": ["classic"] }]
+    },
+    {
+      "gameId": "block-drop",
+      "displayName": "俄罗斯方块",
+      "adapterVersion": 1,
+      "discoverable": true,
+      "clueRef": "CL-block-drop",
+      "professions": ["engineering.warehouse"],
+      "capabilities": [],
+      "watch": [{ "kind": "lines.cleared", "payload": { "rows": "number", "lines": "number", "level": "number" }, "modes": ["classic"] }]
+    },
+    {
+      "gameId": "star-raid",
+      "displayName": "星海突击",
+      "adapterVersion": 1,
+      "discoverable": true,
+      "clueRef": "CL-star-raid",
+      "professions": ["adventure.pilot"],
+      "capabilities": [],
+      "watch": [
+        { "kind": "enemy.killed", "payload": { "kind": "string", "level": "number", "theme": "string" }, "modes": ["classic"] },
+        { "kind": "boss.defeated", "payload": { "level": "number", "theme": "string" }, "modes": ["classic"] }
+      ]
+    },
+    {
+      "gameId": "road-rush",
+      "displayName": "极速车道",
+      "adapterVersion": 1,
+      "discoverable": true,
+      "clueRef": "CL-road-rush",
+      "professions": ["engineering.driver"],
+      "capabilities": [],
+      "watch": [{ "kind": "overtake", "payload": { "passedCars": "number", "combo": "number" }, "modes": ["classic"] }]
+    },
+    {
+      "gameId": "shadow-leap",
+      "displayName": "影跃",
+      "adapterVersion": 1,
+      "discoverable": true,
+      "clueRef": "CL-shadow-leap",
+      "professions": ["adventure.relicseeker"],
+      "capabilities": [],
+      "watch": [{ "kind": "height.reached", "payload": { "meters": "number" }, "modes": ["classic"] }]
+    },
+    {
+      "gameId": "pendulum-tower",
+      "displayName": "层塔",
+      "adapterVersion": 1,
+      "discoverable": true,
+      "clueRef": "CL-pendulum-tower",
+      "professions": ["engineering.structural"],
+      "capabilities": [],
+      "watch": [{ "kind": "tower.floor_stable", "payload": { "floor": "number", "perfect": "boolean" }, "modes": ["classic"] }]
+    },
+    {
+      "gameId": "gold-miner",
+      "displayName": "黄金矿工",
+      "adapterVersion": 1,
+      "discoverable": true,
+      "clueRef": "CL-gold-miner",
+      "professions": ["nature.miner"],
+      "capabilities": [],
+      "watch": [{ "kind": "mineral.returned", "payload": { "value": "number", "level": "number" }, "modes": ["classic"] }]
+    }
+  ],
+  "professions": [
+    { "professionId": "research.archivist", "displayName": "档案分析员", "domain": "research", "capabilities": [] },
+    { "professionId": "research.lattice", "displayName": "晶格研究员", "domain": "research", "capabilities": [] },
+    { "professionId": "research.gravity", "displayName": "重力实验员", "domain": "research", "capabilities": [] },
+    { "professionId": "intel.risk", "displayName": "风险分析师", "domain": "intel", "capabilities": [] },
+    { "professionId": "intel.tactics", "displayName": "战术规划师", "domain": "intel", "capabilities": [] },
+    { "professionId": "engineering.dispatcher", "displayName": "航线调度员", "domain": "engineering", "capabilities": [] },
+    { "professionId": "engineering.demolition", "displayName": "拆除工程师", "domain": "engineering", "capabilities": [] },
+    { "professionId": "engineering.maintenance", "displayName": "设施维护员", "domain": "engineering", "capabilities": [] },
+    { "professionId": "engineering.warehouse", "displayName": "仓储工程师", "domain": "engineering", "capabilities": [] },
+    { "professionId": "engineering.driver", "displayName": "物流司机", "domain": "engineering", "capabilities": [] },
+    { "professionId": "engineering.structural", "displayName": "建筑工程师", "domain": "engineering", "capabilities": [] },
+    { "professionId": "nature.snowscout", "displayName": "雪谷探索员", "domain": "nature", "capabilities": [] },
+    { "professionId": "nature.ecologist", "displayName": "生态采集员", "domain": "nature", "capabilities": [] },
+    { "professionId": "nature.miner", "displayName": "采矿员", "domain": "nature", "capabilities": [] },
+    { "professionId": "adventure.pilot", "displayName": "星际飞行员", "domain": "adventure", "capabilities": [] },
+    { "professionId": "adventure.relicseeker", "displayName": "遗迹探险家", "domain": "adventure", "capabilities": [] }
+  ],
+  "commissions": [],
+  "story": {
+    "schemaVersion": 1,
+    "nodes": [],
+    "edges": []
+  }
+}

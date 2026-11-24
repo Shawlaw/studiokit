@@ -1,0 +1,724 @@
+/*!
+ * StudioKit Arcade Life — career UI 样式（0.15 / D15-05、D15-06、D15-07）
+ *
+ * bridge.js 只装载本文档一次；clue-surface.js / mailbox.js / settings.js 的样式全部集中在这里
+ * （docs/arcade-life/ADR-interfaces.md §17「样式：所有 career UI 样式集中在 ui/clue-surface.css」）。
+ *
+ * 约束：
+ * - 禁止根绝对路径引用、外部字体与 CDN；只继承页面已有字体；
+ * - 颜色不单独承载语义：状态一律同时有文字或形状（开/关、已投递、确认文案、当前项箭头）；
+ * - prefers-reduced-motion / is-reduced-motion 下无动画、无过渡、不闪烁；
+ * - 320/375/390/430 宽不横向溢出；面板内所有按钮与热区 ≥44px。
+ */
+
+/* ---------- career UI 局部变量（缺 arcade.css 时也有安全回退） ---------- */
+
+.ac-career-clue,
+.ac-career-overlay {
+  --ac-career-bg: var(--ac-bg, #0b1020);
+  --ac-career-panel: var(--ac-panel, #151d3a);
+  --ac-career-line: var(--ac-line, #2a3560);
+  --ac-career-ink: var(--ac-ink, #eef1ff);
+  --ac-career-muted: var(--ac-muted, #93a0c8);
+  --ac-career-accent: var(--ac-accent, #ffd23f);
+  --ac-career-danger: var(--ac-danger, #ff5d5d);
+}
+
+.ac-career-sheet,
+.ac-career-sheet * {
+  box-sizing: border-box;
+}
+
+/* 作者样式里的 display 会压过 UA 的 [hidden]，显式兜底，避免隐藏视图漏出来。 */
+.ac-career-overlay [hidden] {
+  display: none !important;
+}
+
+/* 只给读屏的文本（aria-live 播报区、文件输入）。 */
+.ac-career-sr-only {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  margin: -1px;
+  padding: 0;
+  overflow: hidden;
+  clip: rect(0 0 0 0);
+  clip-path: inset(50%);
+  white-space: nowrap;
+  border: 0;
+}
+
+/* ---------- 结算处微线索 chip ---------- */
+
+/* 外层是可聚焦热区（≥44×44px）；视觉药丸由 __pill 画，热区可以比药丸大。 */
+.ac-career-clue {
+  position: relative;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-width: 44px;
+  min-height: 44px;
+  margin: 0;
+  padding: 0;
+  border: 0;
+  border-radius: 999px;
+  background: none;
+  color: var(--ac-career-muted);
+  font: inherit;
+  font-size: 12px;
+  line-height: 1.35;
+  text-align: left;
+  cursor: pointer;
+  vertical-align: middle;
+  -webkit-tap-highlight-color: transparent;
+  touch-action: manipulation;
+  user-select: none;
+  /* 结算弹层回看态会给祖先加 pointer-events:none；chip 自己重新接收指针。 */
+  pointer-events: auto;
+  /* 只做一次性淡入：无位移、无循环、不闪烁 */
+  animation: ac-career-clue-in 160ms ease-out 1 both;
+}
+
+.ac-career-clue--floating {
+  position: fixed;
+  left: max(8px, env(safe-area-inset-left, 0px));
+  bottom: calc(8px + env(safe-area-inset-bottom, 0px));
+  /* 低于提示 toast(60)、对话框与面板；只求可点，不抢视觉焦点 */
+  z-index: 6;
+}
+
+/* bridge 传入结算弹层 host 时：贴在 host 右下角，不参与 flex 布局，避免挤偏结算面板。 */
+.ac-career-clue--host {
+  position: absolute;
+  right: max(8px, env(safe-area-inset-right, 0px));
+  bottom: calc(8px + env(safe-area-inset-bottom, 0px));
+  z-index: 5;
+}
+
+.ac-career-clue__pill {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  max-width: min(58vw, 250px);
+  padding: 5px 10px;
+  border: 1px solid var(--ac-career-line);
+  border-radius: 999px;
+  background: rgba(21, 29, 58, 0.9);
+  color: var(--ac-career-muted);
+  font-size: 12px;
+  line-height: 1.35;
+  box-shadow: none;
+}
+
+.ac-career-clue__glyph {
+  flex: 0 0 auto;
+  font-size: 11px;
+  line-height: 1;
+  opacity: 0.75;
+}
+
+.ac-career-clue__label {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.ac-career-clue:hover .ac-career-clue__pill,
+.ac-career-clue:focus-visible .ac-career-clue__pill {
+  border-color: var(--ac-career-muted);
+  color: var(--ac-career-ink);
+}
+
+.ac-career-clue:active .ac-career-clue__pill {
+  background: rgba(21, 29, 58, 0.99);
+}
+
+.ac-career-clue:focus-visible .ac-career-clue__pill {
+  outline: 2px solid var(--ac-career-ink);
+  outline-offset: 2px;
+}
+
+@keyframes ac-career-clue-in {
+  from {
+    opacity: 0;
+  }
+  to {
+    opacity: 1;
+  }
+}
+
+/* ---------- 浮层与面板（信箱 / 设置共用） ---------- */
+
+.ac-career-overlay {
+  position: fixed;
+  inset: 0;
+  z-index: 70;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 12px max(10px, env(safe-area-inset-right, 0px)) calc(12px + env(safe-area-inset-bottom, 0px)) max(10px, env(safe-area-inset-left, 0px));
+  background: rgba(4, 7, 16, 0.72);
+  overflow-y: auto;
+  overscroll-behavior: contain;
+  animation: ac-career-fade-in 140ms ease-out 1 both;
+}
+
+.ac-career-sheet {
+  display: flex;
+  flex-direction: column;
+  width: 100%;
+  max-width: 420px;
+  max-height: min(86vh, 640px);
+  max-height: min(86dvh, 640px);
+  min-height: 0;
+  overflow: hidden;
+  border: 1px solid var(--ac-career-line);
+  border-radius: 14px;
+  background: var(--ac-career-panel);
+  color: var(--ac-career-ink);
+  font-size: 13px;
+  line-height: 1.7;
+  box-shadow: 0 18px 48px rgba(0, 0, 0, 0.5);
+  animation: ac-career-sheet-in 160ms ease-out 1 both;
+}
+
+.ac-career-sheet--small {
+  max-width: 380px;
+}
+
+@keyframes ac-career-fade-in {
+  from {
+    opacity: 0;
+  }
+  to {
+    opacity: 1;
+  }
+}
+
+@keyframes ac-career-sheet-in {
+  from {
+    opacity: 0;
+    transform: translateY(6px);
+  }
+  to {
+    opacity: 1;
+    transform: none;
+  }
+}
+
+.ac-career-sheet__head {
+  display: flex;
+  flex: 0 0 auto;
+  align-items: center;
+  gap: 8px;
+  padding: 12px 8px 8px 16px;
+  border-bottom: 1px solid var(--ac-career-line);
+}
+
+.ac-career-sheet__title {
+  flex: 1 1 auto;
+  min-width: 0;
+  margin: 0;
+  overflow-wrap: anywhere;
+  color: var(--ac-career-ink);
+  font-size: 15px;
+  font-weight: 600;
+  letter-spacing: 0.04em;
+}
+
+.ac-career-sheet__body {
+  flex: 1 1 auto;
+  min-height: 0;
+  padding: 12px 16px max(16px, calc(12px + env(safe-area-inset-bottom, 0px)));
+  overflow-y: auto;
+  overscroll-behavior: contain;
+  -webkit-overflow-scrolling: touch;
+}
+
+/* ---------- 按钮 ---------- */
+
+.ac-career-icon-btn {
+  display: inline-flex;
+  flex: 0 0 auto;
+  align-items: center;
+  justify-content: center;
+  min-width: 44px;
+  min-height: 44px;
+  padding: 0;
+  border: 1px solid transparent;
+  border-radius: 10px;
+  background: transparent;
+  color: var(--ac-career-muted);
+  font: inherit;
+  font-size: 20px;
+  line-height: 1;
+  cursor: pointer;
+}
+
+.ac-career-icon-btn:hover {
+  border-color: var(--ac-career-line);
+  color: var(--ac-career-ink);
+}
+
+.ac-career-icon-btn:focus-visible {
+  outline: 2px solid var(--ac-career-ink);
+  outline-offset: 2px;
+}
+
+.ac-career-btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+  max-width: 100%;
+  min-height: 44px;
+  padding: 8px 14px;
+  border: 1px solid var(--ac-career-line);
+  border-radius: 10px;
+  background: var(--ac-career-panel);
+  color: var(--ac-career-ink);
+  font: inherit;
+  font-size: 13px;
+  line-height: 1.3;
+  text-align: center;
+  overflow-wrap: anywhere;
+  cursor: pointer;
+}
+
+.ac-career-btn:hover {
+  border-color: var(--ac-career-muted);
+}
+
+.ac-career-btn:focus-visible {
+  outline: 2px solid var(--ac-career-ink);
+  outline-offset: 2px;
+}
+
+.ac-career-btn:disabled {
+  opacity: 0.6;
+  cursor: default;
+}
+
+/* 主按钮用当前游戏的强调色（arcade.css 的 --ac-accent），文字保持高对比深色。 */
+.ac-career-btn--primary {
+  border-color: var(--ac-career-accent);
+  background: var(--ac-career-accent);
+  color: #12172a;
+  font-weight: 600;
+}
+
+.ac-career-btn--primary:hover {
+  border-color: var(--ac-career-accent);
+  filter: brightness(1.06);
+}
+
+.ac-career-btn--ghost {
+  background: transparent;
+  color: var(--ac-career-muted);
+}
+
+.ac-career-btn--ghost:hover {
+  color: var(--ac-career-ink);
+}
+
+/* 危险动作同时有文字（确认清除）与描边，不靠颜色单独表意。 */
+.ac-career-btn--danger {
+  border-color: var(--ac-career-danger);
+  background: transparent;
+  color: var(--ac-career-danger);
+}
+
+.ac-career-btn--danger:hover {
+  background: rgba(255, 93, 93, 0.12);
+}
+
+/* ---------- 旧港信箱 ---------- */
+
+.ac-career-mailbox {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  min-width: 0;
+}
+
+.ac-career-mailbox__origin {
+  margin: 0 0 12px;
+  padding: 0 0 10px;
+  border-bottom: 1px dashed var(--ac-career-line);
+  color: var(--ac-career-muted);
+  font-size: 12px;
+  line-height: 1.6;
+  overflow-wrap: anywhere;
+}
+
+.ac-career-mailbox__list {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.ac-career-mailbox__row {
+  margin: 0;
+  min-width: 0;
+}
+
+.ac-career-mailbox__item {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  gap: 2px 8px;
+  width: 100%;
+  min-height: 44px;
+  padding: 8px 10px;
+  border: 1px solid var(--ac-career-line);
+  border-radius: 10px;
+  background: rgba(11, 16, 32, 0.5);
+  color: var(--ac-career-ink);
+  font: inherit;
+  font-size: 13px;
+  line-height: 1.5;
+  text-align: left;
+  cursor: pointer;
+}
+
+.ac-career-mailbox__item:hover {
+  border-color: var(--ac-career-muted);
+}
+
+.ac-career-mailbox__item:focus-visible {
+  outline: 2px solid var(--ac-career-ink);
+  outline-offset: 2px;
+}
+
+/* 当前选中的信：箭头形状 + 更亮的标题，不只换底色。 */
+.ac-career-mailbox__item[aria-current='true'] {
+  border-color: var(--ac-career-muted);
+  background: rgba(11, 16, 32, 0.85);
+}
+
+.ac-career-mailbox__item[aria-current='true'] .ac-career-mailbox__item-title::before {
+  content: '▸ ';
+  color: var(--ac-career-muted);
+}
+
+.ac-career-mailbox__item-title {
+  font-weight: 600;
+  overflow-wrap: anywhere;
+}
+
+.ac-career-mailbox__item-label {
+  color: var(--ac-career-muted);
+  font-size: 12px;
+  overflow-wrap: anywhere;
+}
+
+.ac-career-mailbox__flag {
+  margin-left: auto;
+  padding: 1px 6px;
+  border: 1px solid var(--ac-career-line);
+  border-radius: 999px;
+  color: var(--ac-career-muted);
+  font-size: 11px;
+  line-height: 1.5;
+  white-space: nowrap;
+}
+
+.ac-career-mailbox__empty {
+  margin: 4px 0;
+  color: var(--ac-career-muted);
+  font-size: 12px;
+  line-height: 1.7;
+  overflow-wrap: anywhere;
+}
+
+.ac-career-letter {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  min-width: 0;
+  padding: 12px;
+  border: 1px solid var(--ac-career-line);
+  border-radius: 12px;
+  background: rgba(11, 16, 32, 0.55);
+}
+
+.ac-career-letter__title {
+  margin: 0;
+  font-size: 15px;
+  font-weight: 600;
+  line-height: 1.5;
+  overflow-wrap: anywhere;
+}
+
+.ac-career-letter__ambient {
+  margin: 0;
+  color: var(--ac-career-muted);
+  font-size: 12px;
+  line-height: 1.7;
+  overflow-wrap: anywhere;
+}
+
+.ac-career-letter__sender {
+  margin: 0;
+  color: var(--ac-career-muted);
+  font-size: 12px;
+  line-height: 1.6;
+  overflow-wrap: anywhere;
+}
+
+.ac-career-letter__sender::before {
+  content: '— ';
+}
+
+.ac-career-letter__body {
+  margin: 0;
+  font-size: 13px;
+  line-height: 1.8;
+  overflow-wrap: anywhere;
+}
+
+.ac-career-letter__body p {
+  margin: 0 0 6px;
+}
+
+.ac-career-letter__address {
+  margin: 0;
+  padding-top: 8px;
+  border-top: 1px dashed var(--ac-career-line);
+  color: var(--ac-career-muted);
+  font-size: 12px;
+  line-height: 1.6;
+  overflow-wrap: anywhere;
+}
+
+.ac-career-letter__delivered {
+  margin: 0;
+  color: var(--ac-career-muted);
+  font-size: 12px;
+  line-height: 1.6;
+  overflow-wrap: anywhere;
+}
+
+.ac-career-letter__actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
+.ac-career-letter__actions .ac-career-btn {
+  flex: 1 1 140px;
+}
+
+/* ---------- 线索偏好设置 ---------- */
+
+.ac-career-setting {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  min-width: 0;
+  padding: 12px 0;
+  border-bottom: 1px solid var(--ac-career-line);
+}
+
+.ac-career-setting:first-child {
+  padding-top: 0;
+}
+
+.ac-career-setting:last-child {
+  padding-bottom: 0;
+  border-bottom: 0;
+}
+
+.ac-career-setting__title {
+  margin: 0;
+  color: var(--ac-career-ink);
+  font-size: 13px;
+  font-weight: 600;
+  letter-spacing: 0.04em;
+}
+
+.ac-career-switch {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  width: 100%;
+  min-height: 44px;
+  padding: 6px 4px;
+  border: 1px solid transparent;
+  border-radius: 10px;
+  background: transparent;
+  color: var(--ac-career-ink);
+  font: inherit;
+  font-size: 13px;
+  line-height: 1.5;
+  text-align: left;
+  cursor: pointer;
+}
+
+.ac-career-switch:hover {
+  border-color: var(--ac-career-line);
+}
+
+.ac-career-switch:focus-visible {
+  outline: 2px solid var(--ac-career-ink);
+  outline-offset: 2px;
+}
+
+.ac-career-switch__track {
+  position: relative;
+  flex: 0 0 auto;
+  width: 40px;
+  height: 24px;
+  border: 1px solid var(--ac-career-line);
+  border-radius: 999px;
+  background: rgba(11, 16, 32, 0.8);
+}
+
+.ac-career-switch__knob {
+  position: absolute;
+  top: 2px;
+  left: 2px;
+  width: 18px;
+  height: 18px;
+  border-radius: 50%;
+  background: var(--ac-career-muted);
+  transition: transform 140ms ease, background-color 140ms ease;
+}
+
+.ac-career-switch[aria-checked='true'] .ac-career-switch__track {
+  border-color: var(--ac-career-muted);
+}
+
+.ac-career-switch[aria-checked='true'] .ac-career-switch__knob {
+  transform: translateX(16px);
+  background: var(--ac-career-ink);
+}
+
+.ac-career-switch__label {
+  flex: 1 1 auto;
+  min-width: 0;
+  overflow-wrap: anywhere;
+}
+
+.ac-career-switch__state {
+  flex: 0 0 auto;
+  min-width: 1.5em;
+  color: var(--ac-career-muted);
+  font-size: 12px;
+  text-align: right;
+}
+
+.ac-career-switch__desc {
+  margin: 0;
+  color: var(--ac-career-muted);
+  font-size: 12px;
+  line-height: 1.7;
+  overflow-wrap: anywhere;
+}
+
+/* 二次确认块：清除 / 导入共用 */
+.ac-career-confirm {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  min-width: 0;
+  padding: 12px;
+  border: 1px solid var(--ac-career-danger);
+  border-radius: 10px;
+  background: rgba(255, 93, 93, 0.06);
+}
+
+.ac-career-confirm__text {
+  margin: 0;
+  color: var(--ac-career-ink);
+  font-size: 12px;
+  line-height: 1.7;
+  overflow-wrap: anywhere;
+}
+
+.ac-career-confirm__actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  min-width: 0;
+}
+
+.ac-career-confirm__actions .ac-career-btn {
+  flex: 1 1 120px;
+}
+
+/* 隐藏的文件输入：视觉不可见但可被程序点击，且不进入 Tab 顺序。 */
+.ac-career-file-input {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  margin: -1px;
+  padding: 0;
+  overflow: hidden;
+  border: 0;
+  opacity: 0;
+  pointer-events: none;
+}
+
+/* 面板内的状态行（可见文案；读屏播报由 announce() 负责）。 */
+.ac-career-status {
+  margin: 0;
+  color: var(--ac-career-muted);
+  font-size: 12px;
+  line-height: 1.7;
+  overflow-wrap: anywhere;
+}
+
+/* ---------- 窄屏（320/375/390/430） ---------- */
+
+@media (max-width: 430px) {
+  .ac-career-sheet {
+    max-width: 100%;
+  }
+}
+
+@media (max-width: 375px) {
+  .ac-career-sheet__head {
+    padding: 10px 6px 6px 12px;
+  }
+
+  .ac-career-sheet__body {
+    padding: 10px 12px max(14px, calc(10px + env(safe-area-inset-bottom, 0px)));
+  }
+
+  .ac-career-letter {
+    padding: 10px;
+  }
+
+  .ac-career-confirm {
+    padding: 10px;
+  }
+
+  .ac-career-clue__pill {
+    max-width: 64vw;
+  }
+}
+
+/* ---------- 动效开关（系统偏好 + bridge 传入的 reducedMotion） ---------- */
+
+@media (prefers-reduced-motion: reduce) {
+  .ac-career-clue,
+  .ac-career-overlay,
+  .ac-career-sheet {
+    animation: none;
+  }
+
+  .ac-career-switch__knob {
+    transition: none;
+  }
+}
+
+.ac-career-overlay.is-reduced-motion,
+.ac-career-overlay.is-reduced-motion * {
+  animation: none !important;
+  transition: none !important;
+}
