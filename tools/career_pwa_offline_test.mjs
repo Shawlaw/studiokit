@@ -674,7 +674,7 @@ async function main() {
     loadingFailures.length = 0;
     /* 页面 target 的 offline 只管页面自身的请求；SW 内部 fetch 要连上 SW target 才能一起断网
        （否则 networkFirst 会「在线」成功，离线回退缓存就失去证据意义）。 */
-    swSession = await attachServiceWorkerSession(CDP_PORT, ARCADE_BASE + 'sw.js');
+    swSession = await attachServiceWorkerSession(launched ? launched.port : CDP_PORT, ARCADE_BASE + 'sw.js');
     await cdp.send('Network.emulateNetworkConditions', { offline: true, latency: 0, downloadThroughput: 0, uploadThroughput: 0 });
     let swOfflineApplied = false;
     if (swSession) {

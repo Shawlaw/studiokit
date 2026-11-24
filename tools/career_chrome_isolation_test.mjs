@@ -7,6 +7,7 @@ import http from 'node:http';
 import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
+import net from 'node:net';
 import { launchChrome, openPage, stopChrome } from './lib/arcade_cdp.mjs';
 
 let total = 0;
@@ -83,6 +84,20 @@ try {
   await new Promise((resolve) => setTimeout(resolve, 400));
   const exitDirsAfter = fs.readdirSync(tempDir).filter((name) => name.startsWith(exitPrefix)).length;
   check('Chrome 子进程提前退出：可捕获失败、临时 profile 清理、不继续握手', !!exitError && /提前退出|启动失败/.test(exitError) && exitDirsAfter === exitDirsBefore, { exitError, before: exitDirsBefore, after: exitDirsAfter });
+
+  /* 两个同轮实例请求同一固定端口：第二个不得使用固定端口上的任何外部实例，openPage 的 target 只能落在本轮实例。 */
+  const fixedPort = await new Promise((resolve) => { const s = net.createServer(); s.listen(0, '127.0.0.1', () => { const p = s.address().port; s.close(() => resolve(p)); }); });
+  const first = await launchChrome({ port: fixedPort, profilePrefix: 'arcade-fixed-first-' });
+  const second = await launchChrome({ port: fixedPort, profilePrefix: 'arcade-fixed-second-' });
+  const firstTargetsBefore = await fetch('http://127.0.0.1:' + first.port + '/json/list').then((r) => r.json());
+  const fixedPage = await openPage({ port: fixedPort });
+  await fixedPage.navigate('about:blank');
+  const firstTargetsAfter = await fetch('http://127.0.0.1:' + first.port + '/json/list').then((r) => r.json());
+  const secondTargets = await fetch('http://127.0.0.1:' + second.port + '/json/list').then((r) => r.json());
+  check('两个固定端口请求各自使用本轮动态实例：第一实例没有新 target，页签落在第二实例', firstTargetsBefore.length === firstTargetsAfter.length && secondTargets.length > 0 && secondTargets.some((t) => t.type === 'page' && t.id !== firstTargetsBefore[0]?.id), { fixedPort, firstPort: first.port, secondPort: second.port, before: firstTargetsBefore.length, after: firstTargetsAfter.length, second: secondTargets.length });
+  try { fixedPage.ws.close(); } catch (err) { /* ignore */ }
+  await stopChrome(first);
+  await stopChrome(second);
 } finally {
   await new Promise((resolve) => sentinel.close(resolve));
 }

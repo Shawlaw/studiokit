@@ -466,7 +466,7 @@
       }
       if (!isObject(add)) return;
       const merged = Object.assign({}, left, add);
-      merged.openedAt = add.openedAt || left.openedAt || null;
+      merged.openedAt = left.openedAt || add.openedAt || null;
       merged.dismissed = left.dismissed === true || add.dismissed === true;
       merged.seenAt = left.seenAt && add.seenAt
         ? (String(left.seenAt) < String(add.seenAt) ? left.seenAt : add.seenAt)
@@ -573,8 +573,18 @@
             const tasks = records.map((record) => (next) => {
               if (!isObject(record) || typeof record.clueId !== 'string' || !core.isToken(record.clueId)) { next(); return; }
               const copy = jsonClone(record) || {};
-              copy.updatedAt = typeof copy.updatedAt === 'string' ? copy.updatedAt : at;
-              ctx.bind(store.put(copy), next);
+              ctx.bind(store.get(copy.clueId), (existingRecord) => {
+                const prior = isObject(existingRecord) ? existingRecord : null;
+                const mergedRecord = Object.assign({}, prior || {}, copy);
+                mergedRecord.clueId = copy.clueId;
+                mergedRecord.openedAt = (prior && prior.openedAt) || copy.openedAt || null;
+                mergedRecord.dismissed = (prior && prior.dismissed === true) || copy.dismissed === true;
+                mergedRecord.seenAt = prior && prior.seenAt && copy.seenAt
+                  ? (String(prior.seenAt) < String(copy.seenAt) ? prior.seenAt : copy.seenAt)
+                  : ((prior && prior.seenAt) || copy.seenAt || null);
+                mergedRecord.updatedAt = typeof copy.updatedAt === 'string' ? copy.updatedAt : at;
+                ctx.bind(store.put(mergedRecord), next);
+              });
             });
             if (actionType === 'CLUE_OPENED' && action && typeof action.clueId === 'string') {
               tasks.push((next) => {

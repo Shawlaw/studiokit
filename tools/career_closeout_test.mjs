@@ -28,9 +28,10 @@ try {
   async function snap(p) {
     return p.evaluate(`(async () => { const s = await ArcadeCareer.db.getDiscoveryState(); const rows = await ArcadeCareer.db.listDiscovery(); return { clues: Object.keys((s && s.clues) || {}), opened: s && s.clues && s.clues['CL-memory-flip'] ? s.clues['CL-memory-flip'].openedAt : null, stage: s && s.stage, hints: s && s.hintsEnabled, rows: rows.length }; })()`);
   }
-  const a = await page(), b = await page();
+  const a = await page(), b = await page(), c = await page();
   await load(a, 'memory-flip');
   await load(b, 'merge-2048');
+  await load(c, 'memory-flip');
   await a.evaluate('(async () => { const c = await ArcadeCareer.db.ensureCareer({}); return c.careerId; })()');
   await a.evaluate('ArcadeCareer.setHintsEnabled(true)');
   await sleep(150);
@@ -40,18 +41,24 @@ try {
   await sleep(250);
   const opened = await a.evaluate(`(async () => ArcadeCareer.openClue('CL-memory-flip'))()`);
   const toggled = await b.evaluate(`(async () => { const r = await ArcadeCareer.setHintsEnabled(false); return { r }; })()`);
+  await c.evaluate(`(async () => { const C = ArcadeCareer; C.observe('pair.match', { symbol: 'D', level: 1, moves: 1 }); C.observe('pair.match', { symbol: 'E', level: 2, moves: 2 }); return C.finish({ mode: 'classic', outcome: 'won', stats: { level: 1, moves: 2, score: 20 } }); })()`);
+  await sleep(300);
   const merged = await snap(a);
+  const rowAfterDuplicate = await a.evaluate(`(async () => { const rows = await ArcadeCareer.db.listDiscovery(); const row = rows.filter((r) => r.clueId === 'CL-memory-flip')[0] || null; return { openedAt: row && row.openedAt, count: rows.length }; })()`);
   const bView = await b.evaluate(`(() => { const s = ArcadeCareer.state(); return { opened: s.clues && s.clues['CL-memory-flip'] ? s.clues['CL-memory-flip'].openedAt : null, stage: s.stage, hints: s.hintsEnabled }; })()`);
-  check('同代次读信 + 另一标签改设置：openedAt/阶段不被擦掉，两枚线索并集与 discovery 表一致', opened && opened.ok === true && toggled.r === false && merged.clues.length === 2 && merged.opened && merged.rows === 2 && merged.stage !== 'GLIMPSED' && merged.hints === false && bView.opened === merged.opened && bView.stage === merged.stage && bView.hints === false, { opened, toggled, merged, bView });
+  check('同代次读信 + 另一标签改设置 + 重复发现同一线索：openedAt/阶段不被擦掉，两张表 openedAt 相等', opened && opened.ok === true && toggled.r === false && merged.clues.length === 2 && merged.opened && merged.rows === 2 && merged.stage !== 'GLIMPSED' && merged.hints === false && rowAfterDuplicate.count === 2 && rowAfterDuplicate.openedAt === merged.opened && bView.opened === merged.opened && bView.stage === merged.stage && bView.hints === false, { opened, toggled, merged, rowAfterDuplicate, bView });
 
   /* saveState 原样旧对象：清除后连续两次都必须拒绝，新状态可保存。 */
   await b.evaluate(`window.__oldState = ArcadeCareer.state()`);
+  await b.evaluate(`window.__oldCopy = JSON.parse(JSON.stringify(window.__oldState))`);
   await a.evaluate(`(async () => ArcadeCareer.db.resetDiscovery())()`);
   const stale1 = await b.evaluate(`(async () => { const r = await ArcadeCareer.saveState(window.__oldState); return { r, clues: Object.keys((ArcadeCareer.state().clues) || {}).length }; })()`);
   const stale2 = await b.evaluate(`(async () => { const r = await ArcadeCareer.saveState(window.__oldState); return { r, clues: Object.keys((ArcadeCareer.state().clues) || {}).length }; })()`);
+  const staleCopy1 = await b.evaluate(`(async () => { const r = await ArcadeCareer.saveState(window.__oldCopy); return { r, clues: Object.keys((ArcadeCareer.state().clues) || {}).length }; })()`);
+  const staleCopy2 = await b.evaluate(`(async () => { const r = await ArcadeCareer.saveState(window.__oldCopy); return { r, clues: Object.keys((ArcadeCareer.state().clues) || {}).length }; })()`);
   const fresh = await b.evaluate(`(async () => { const r = await ArcadeCareer.saveState(ArcadeCareer.state()); return { r }; })()`);
   const afterSave = await snap(a);
-  check('公开 saveState 同一旧对象连续两次拒绝，重读后的新快照可保存', stale1.r.ok === false && stale1.r.error === 'stale-generation' && stale2.r.ok === false && stale2.r.error === 'stale-generation' && fresh.r.ok === true && afterSave.clues.length === 0, { stale1, stale2, fresh, afterSave });
+  check('公开 saveState 旧对象与 JSON 复制版均持续拒绝，重读后的新快照可保存', stale1.r.ok === false && stale1.r.error === 'stale-generation' && stale2.r.ok === false && stale2.r.error === 'stale-generation' && staleCopy1.r.ok === false && staleCopy1.r.error === 'stale-generation' && staleCopy2.r.ok === false && staleCopy2.r.error === 'stale-generation' && fresh.r.ok === true && afterSave.clues.length === 0, { stale1, stale2, staleCopy1, staleCopy2, fresh, afterSave });
 
   /* 普通设置写入失败：UI/内存/DB 都保持开启；恢复后重试可关闭。 */
   await a.evaluate('ArcadeCareer.setHintsEnabled(true)');
@@ -93,6 +100,7 @@ try {
   await b.evaluate(`(async () => { const db = ArcadeCareer.db; const c = await db.ensureCareer({}); const raw = indexedDB.open('studiokit:arcade:career'); const opened = await new Promise((res, rej) => { raw.onsuccess = () => res(raw.result); raw.onerror = () => rej(raw.error); }); await new Promise((res, rej) => { const tx = opened.transaction('quests', 'readwrite'); tx.objectStore('quests').delete([c.careerId, 'story:C0.port_seen']); tx.oncomplete = res; tx.onerror = () => rej(tx.error); }); opened.close(); })()`);
   const c0BeforeOld = await b.evaluate(`(async () => { const db = ArcadeCareer.db; const c = await db.ensureCareer({}); const q = await db.readQuestState(c.careerId); return { hasC0: q.quests.some((row) => row.nodeId === 'story:C0.port_seen') }; })()`);
   const oldMail = await b.evaluate(`(async () => ArcadeCareer.openClue('CL-merge-2048'))()`);
+  const oldMailbox = await b.evaluate(`(async () => ArcadeCareer.openMailbox())()`);
   await sleep(700);
   const c0AfterOld = await b.evaluate(`(async () => { const db = ArcadeCareer.db; const c = await db.ensureCareer({}); const q = await db.readQuestState(c.careerId); return { hasC0: q.quests.some((row) => row.nodeId === 'story:C0.port_seen'), result: null }; })()`);
   await a.evaluate('ArcadeCareer.setHintsEnabled(true)');
@@ -102,7 +110,7 @@ try {
   const validMail = await a.evaluate(`(async () => ArcadeCareer.openClue('CL-memory-flip'))()`);
   await sleep(900);
   const c0AfterValid = await a.evaluate(`(async () => { const db = ArcadeCareer.db; const c = await db.ensureCareer({}); const q = await db.readQuestState(c.careerId); return q.quests.some((row) => row.nodeId === 'story:C0.port_seen'); })()`);
-  check('旧标签信箱不推进 C0；当前有效线索打开后 C0 幂等写入', oldMail && oldMail.ok === false && c0BeforeOld.hasC0 === false && c0AfterOld.hasC0 === false && validMail && validMail.ok === true && c0AfterValid === true, { oldMail, c0BeforeOld, c0AfterOld, validMail, c0AfterValid });
+  check('旧标签信箱/回信箱不推进 C0；当前有效线索打开后 C0 幂等写入', oldMail && oldMail.ok === false && oldMailbox && oldMailbox.ok === true && c0BeforeOld.hasC0 === false && c0AfterOld.hasC0 === false && validMail && validMail.ok === true && c0AfterValid === true, { oldMail, oldMailbox, c0BeforeOld, c0AfterOld, validMail, c0AfterValid });
 
   if (failed) { console.log(failed + ' failed / ' + total + ' checks'); process.exitCode = 1; }
   else console.log('CLOSEOUT PASS (' + total + '/' + total + ')');

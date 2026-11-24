@@ -255,9 +255,9 @@ export async function launchChrome({
   extraArgs = [],
 } = {}) {
   if (!Number.isInteger(port) || port < 0) throw new Error('launchChrome 需要非负整数 port');
-  const dynamicPort = port === 0;
-  if (!dynamicPort && !(await isPortFree(port))) {
-    throw new Error('launchChrome: CDP 端口已被占用，拒绝启动（未触碰占用进程）: ' + port);
+  const requestedPort = port;
+  if (requestedPort > 0 && !(await isPortFree(requestedPort))) {
+    throw new Error('launchChrome: CDP 端口已被占用，拒绝启动（未触碰占用进程）: ' + requestedPort);
   }
   const profile = fs.mkdtempSync(path.join(os.tmpdir(), profilePrefix));
   const args = [
@@ -266,7 +266,8 @@ export async function launchChrome({
     '--no-sandbox',
     '--disable-dev-shm-usage',
     '--remote-allow-origins=*',
-    `--remote-debugging-port=${dynamicPort ? 0 : port}`,
+    /* 始终动态端口：固定端口请求仅作调用方兼容别名，实际端口由本轮 profile 的 DevToolsActivePort 证明。 */
+    '--remote-debugging-port=0',
     `--user-data-dir=${profile}`,
     `--window-size=${windowSize}`,
     '--hide-scrollbars',
@@ -290,7 +291,7 @@ export async function launchChrome({
   const abort = new AbortController();
   try {
     const actual = await Promise.race([
-      dynamicPort ? readDevToolsActivePort(profile, 10000, abort.signal) : Promise.resolve({ port, wsPath: '' }),
+      readDevToolsActivePort(profile, 10000, abort.signal),
       spawnFailed,
       exited,
     ]);
@@ -306,11 +307,14 @@ export async function launchChrome({
     versionReady.catch(() => {});
     const ready = await Promise.race([versionReady, exited, spawnFailed]);
     if (chrome.exitCode !== null) throw new Error('Chrome 启动后已退出');
-    ownedBrowsers.set(actual.port, {
+    const entry = {
       child: chrome,
       wsPath: ready && ready.version ? ready.version.webSocketDebuggerUrl : null,
-    });
-    return { chrome, profile, port: actual.port, dynamicPort, cdpProduct: ready && ready.cdpProduct, browserWsPath: ready && ready.version ? ready.version.webSocketDebuggerUrl : null };
+      actualPort: actual.port,
+    };
+    ownedBrowsers.set(actual.port, entry);
+    if (requestedPort > 0 && requestedPort !== actual.port) ownedBrowsers.set(requestedPort, entry);
+    return { chrome, profile, port: actual.port, requestedPort, dynamicPort: true, cdpProduct: ready && ready.cdpProduct, browserWsPath: ready && ready.version ? ready.version.webSocketDebuggerUrl : null };
   } catch (err) {
     abort.abort();
     try {
@@ -545,14 +549,15 @@ export async function openPage({
 } = {}) {
   if (!Number.isInteger(port)) throw new Error('openPage 需要整数 port');
   const owned = ownedBrowsers.get(port);
+  const actualPort = owned && owned.actualPort ? owned.actualPort : port;
   if (owned) {
     if (!owned.child || owned.child.exitCode !== null) throw new Error('openPage: 本轮 Chrome 已退出，拒绝连接 ' + port);
-    const version = await fetch(`http://127.0.0.1:${port}/json/version`).then((r) => r.json());
+    const version = await fetch(`http://127.0.0.1:${actualPort}/json/version`).then((r) => r.json());
     if (!owned.wsPath || version.webSocketDebuggerUrl !== owned.wsPath) {
       throw new Error('openPage: CDP 端口归属已变化，拒绝向非本轮 Chrome 新建 target');
     }
   }
-  const target = await fetch(`http://127.0.0.1:${port}/json/new?${encodeURIComponent(url)}`, { method: 'PUT' }).then((r) => r.json());
+  const target = await fetch(`http://127.0.0.1:${actualPort}/json/new?${encodeURIComponent(url)}`, { method: 'PUT' }).then((r) => r.json());
   const cdp = new CDP(target.webSocketDebuggerUrl, { artifactsDir });
   await cdp.ready();
   await cdp.send('Page.enable');

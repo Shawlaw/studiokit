@@ -1928,7 +1928,14 @@
   var snapshotGenerations = typeof WeakMap === 'function' ? new WeakMap() : null;
 
   function rememberSnapshot(value) {
-    if (snapshotGenerations && value && typeof value === 'object') snapshotGenerations.set(value, internal.discoveryGeneration);
+    if (snapshotGenerations && value && typeof value === 'object') {
+      snapshotGenerations.set(value, internal.discoveryGeneration);
+      try {
+        value.__snapshotGeneration = internal.discoveryGeneration;
+      } catch (err) {
+        /* 只读对象：WeakMap 仍可保证对象身份路径 */
+      }
+    }
     return value;
   }
 
@@ -2481,11 +2488,17 @@
         return waitReady(READY_TIMEOUT_MS).then(function () {
           if (!isObject(nextState)) return { ok: false, error: 'invalid-state' };
           var capturedGeneration = snapshotGenerations ? snapshotGenerations.get(nextState) : undefined;
-          if (capturedGeneration !== undefined && capturedGeneration !== internal.discoveryGeneration) {
+          var inlineGeneration = Number.isFinite(Number(nextState.__snapshotGeneration)) ? Number(nextState.__snapshotGeneration) : undefined;
+          var snapshotGeneration = capturedGeneration !== undefined ? capturedGeneration : inlineGeneration;
+          if (snapshotGeneration !== undefined && snapshotGeneration !== internal.discoveryGeneration) {
             return reloadAfterStaleGeneration().then(function () { return { ok: false, error: 'stale-generation' }; });
+          }
+          if (snapshotGeneration === undefined) {
+            return reloadAfterStaleGeneration().then(function () { return { ok: false, error: 'missing-snapshot-generation' }; });
           }
           var discovery = readGlobal('discovery');
           var normalized = discovery && typeof discovery.normalizeState === 'function' ? discovery.normalizeState(nextState) : clone(nextState);
+          if (normalized && typeof normalized === 'object') delete normalized.__snapshotGeneration;
           if (isSilentTestOnly()) return { ok: false, error: 'test-silent' };
           if (!internal.dbUsable) return { ok: false, error: 'db-unavailable' };
           return writeDbState(normalized, null, { type: 'SAVE_STATE' }).then(function (writeResult) {
@@ -2953,17 +2966,38 @@
       .catch(function () { return read(null); });
   }
 
+  /** 当前 DB 是否仍有至少一条发现线索；C0 只允许在真实有效读信后推进。 */
+  function hasCurrentDiscoveryClue() {
+    var db = api.db || readGlobal('db');
+    if (db && typeof db.getDiscoverySnapshot === 'function') {
+      try {
+        return Promise.resolve(db.getDiscoverySnapshot()).then(function (snapshot) {
+          return !!(snapshot && snapshot.ok === true && snapshot.state && isObject(snapshot.state.clues) && Object.keys(snapshot.state.clues).length > 0);
+        }).catch(function () { return false; });
+      } catch (err) {
+        return Promise.resolve(false);
+      }
+    }
+    var state = currentStateSnapshot();
+    return Promise.resolve(!!(state && isObject(state.clues) && Object.keys(state.clues).length > 0));
+  }
+
   /** 打开信箱/告示板后同步 C0/C1 章节旗标（幂等；缺模块/DB 时静默）。 */
   function syncCampaignFlags(mailboxOpened) {
     var mod = readGlobal('campaign');
     var db = api.db || readGlobal('db');
     if (!mod || typeof mod.syncFlags !== 'function' || !db || typeof db.ensureCareer !== 'function') return null;
+    var gate = mailboxOpened === true ? hasCurrentDiscoveryClue() : Promise.resolve(true);
     try {
-      return Promise.resolve(db.ensureCareer({}))
-        .then(function (career) {
-          if (!career || !career.careerId) return null;
-          internal.commissionLastCareerId = career.careerId;
-          return mod.syncFlags({ careerId: career.careerId, db: db, mailboxOpened: mailboxOpened === true });
+      return Promise.resolve(gate)
+        .then(function (allowed) {
+          if (!allowed) return null;
+          return Promise.resolve(db.ensureCareer({}))
+            .then(function (career) {
+              if (!career || !career.careerId) return null;
+              internal.commissionLastCareerId = career.careerId;
+              return mod.syncFlags({ careerId: career.careerId, db: db, mailboxOpened: mailboxOpened === true });
+            });
         })
         .catch(function (err) {
           warnOnce('campaign-sync', err);
