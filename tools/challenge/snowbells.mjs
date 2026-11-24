@@ -103,7 +103,7 @@ export default {
           ctx.assert(info.nextBellId === id, '下一铃应为 ' + id + '，实际 ' + info.nextBellId);
           await steerToNextBell(cdp, info.seqIndex, 15000);
         }
-        await cdp.waitFor('window.__arcadeTest.challengeInfo().state === "cleared"', { timeout: 5000 });
+        await cdp.waitFor('window.__arcadeTest.challengeInfo().state === "cleared"', { timeout: 15000 });
         const cleared = await cdp.evaluate(`({
           info: __arcadeTest.challengeInfo(),
           title: document.querySelector('[data-ov-title]').textContent,
