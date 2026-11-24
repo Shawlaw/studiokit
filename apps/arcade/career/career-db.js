@@ -447,7 +447,72 @@
     }).then((res) => (res.ok ? res.result : failure(res.reason, res.error)));
   }
 
-  /** 同事务读-合并-写发现状态：多标签并发时不会用旧快照覆盖另一页刚发现的线索。 */
+  const DISCOVERY_STAGE_ORDER = Object.freeze(['DORMANT', 'GLIMPSED', 'CURIOUS', 'LOCAL', 'RESIDENT', 'EXPLORER']);
+
+  function discoveryStageRank(stage) {
+    const index = DISCOVERY_STAGE_ORDER.indexOf(stage);
+    return index < 0 ? 0 : index;
+  }
+
+  function mergeDiscoveryClueMaps(existingClues, incomingClues) {
+    const out = Object.assign({}, isObject(existingClues) ? existingClues : {});
+    const right = isObject(incomingClues) ? incomingClues : {};
+    Object.keys(right).forEach((clueId) => {
+      const left = out[clueId];
+      const add = right[clueId];
+      if (!isObject(left)) {
+        if (isObject(add)) out[clueId] = jsonClone(add);
+        return;
+      }
+      if (!isObject(add)) return;
+      const merged = Object.assign({}, left, add);
+      merged.openedAt = add.openedAt || left.openedAt || null;
+      merged.dismissed = left.dismissed === true || add.dismissed === true;
+      merged.seenAt = left.seenAt && add.seenAt
+        ? (String(left.seenAt) < String(add.seenAt) ? left.seenAt : add.seenAt)
+        : (left.seenAt || add.seenAt || null);
+      merged.updatedAt = String(left.updatedAt || '') > String(add.updatedAt || '') ? left.updatedAt : add.updatedAt;
+      out[clueId] = merged;
+    });
+    return out;
+  }
+
+  function mergeDiscoveryRunsMaps(existingRuns, incomingRuns, actionType, action) {
+    const left = isObject(existingRuns) ? existingRuns : {};
+    const right = isObject(incomingRuns) ? incomingRuns : {};
+    const merged = Object.assign({}, right);
+    Object.keys(left).forEach((gameId) => {
+      const current = left[gameId] || {};
+      const incoming = merged[gameId] || {};
+      if (actionType === 'RUN_ENDED' && action.run && action.run.gameId === gameId) {
+        const baseCount = action.baseRuns && action.baseRuns[gameId] ? Number(action.baseRuns[gameId].eligibleRuns) || 0 : 0;
+        const incomingCount = Number(incoming.eligibleRuns) || 0;
+        const delta = Math.max(0, incomingCount - baseCount);
+        merged[gameId] = Object.assign({}, current, incoming, {
+          eligibleRuns: (Number(current.eligibleRuns) || 0) + delta,
+          lastRunAt: incoming.lastRunAt || current.lastRunAt,
+          lastRunId: incoming.lastRunId || current.lastRunId,
+        });
+        return;
+      }
+      const leftEligible = Number(current.eligibleRuns) || 0;
+      const rightEligible = Number(incoming.eligibleRuns) || 0;
+      merged[gameId] = Object.assign({}, current, incoming, {
+        eligibleRuns: Math.max(leftEligible, rightEligible),
+        lastRunAt: String(current.lastRunAt || '') > String(incoming.lastRunAt || '') ? current.lastRunAt : incoming.lastRunAt,
+        lastRunId: String(current.lastRunAt || '') > String(incoming.lastRunAt || '') ? current.lastRunId : incoming.lastRunId,
+      });
+    });
+    return merged;
+  }
+
+  /**
+   * 同事务读-合并-写发现状态：按动作在当前 DB 状态上归约。
+   * - SET_HINTS 只改偏好，不拿旧快照重写线索/阶段；
+   * - CLUE_OPENED / LETTER_FOLLOWED 要求当前 DB 仍有线索，否则零写入；
+   * - RUN_ENDED 用基线 delta 累计计数，线索保留并集；
+   * - SAVE_STATE 合并线索（保留 openedAt/dismissed）与阶段单调前进，不能擦掉另一页的已读记录。
+   */
   function mergeDiscoveryState(state, discoveryRecords, options) {
     const core = coreApi();
     if (!core) return Promise.resolve(failure('core-unavailable'));
@@ -469,53 +534,62 @@
           ctx.done({ ok: false, reason: 'stale-generation', generation: currentGeneration });
           return;
         }
-      ctx.bind(stateStore.get(STATE_KEY_DISCOVERY), (existingRow) => {
-        const existing = existingRow && isObject(existingRow.value) ? existingRow.value : null;
-        if (existing && isObject(existing.clues)) {
-          value.clues = Object.assign({}, existing.clues, value.clues || {});
-        }
-        if (existing) {
-          /* 设置只由 SET_HINTS 动作更新；普通结算不得用旧快照重新打开提示。 */
-          if (actionType !== 'SET_HINTS') value.hintsEnabled = existing.hintsEnabled !== false;
-          if (isObject(existing.runs) && isObject(value.runs)) {
-            const mergedRuns = Object.assign({}, value.runs);
-            Object.keys(existing.runs).forEach((gameId) => {
-              const left = existing.runs[gameId] || {};
-              const right = mergedRuns[gameId] || {};
-              if (actionType === 'RUN_ENDED' && action.run && action.run.gameId === gameId) {
-                const baseCount = action.baseRuns && action.baseRuns[gameId] ? Number(action.baseRuns[gameId].eligibleRuns) || 0 : 0;
-                const incomingCount = Number(right.eligibleRuns) || 0;
-                const delta = Math.max(0, incomingCount - baseCount);
-                mergedRuns[gameId] = Object.assign({}, left, right, {
-                  eligibleRuns: (Number(left.eligibleRuns) || 0) + delta,
-                  lastRunAt: right.lastRunAt || left.lastRunAt,
-                  lastRunId: right.lastRunId || left.lastRunId,
-                });
-                return;
-              }
-              const leftEligible = Number(left.eligibleRuns) || 0;
-              const rightEligible = Number(right.eligibleRuns) || 0;
-              mergedRuns[gameId] = Object.assign({}, left, right, {
-                eligibleRuns: Math.max(leftEligible, rightEligible),
-                lastRunAt: String(left.lastRunAt || '') > String(right.lastRunAt || '') ? left.lastRunAt : right.lastRunAt,
-                lastRunId: String(left.lastRunAt || '') > String(right.lastRunAt || '') ? left.lastRunId : right.lastRunId,
-              });
-            });
-            value.runs = mergedRuns;
+        ctx.bind(stateStore.get(STATE_KEY_DISCOVERY), (existingRow) => {
+          const existing = existingRow && isObject(existingRow.value) ? existingRow.value : null;
+          const existingClues = existing && isObject(existing.clues) ? existing.clues : null;
+          if (actionType === 'CLUE_OPENED') {
+            const clueId = action && typeof action.clueId === 'string' ? action.clueId : '';
+            if (!existingClues || !clueId || !existingClues[clueId]) {
+              ctx.done({ ok: false, reason: 'not-discovered', generation: currentGeneration, state: existing || null });
+              return;
+            }
           }
-        }
-        const row = { key: STATE_KEY_DISCOVERY, schemaVersion: SCHEMA_VERSION, updatedAt: at, value };
-        ctx.bind(stateStore.put(row), () => {
-          const store = ctx.store('discovery');
-          const tasks = records.map((record) => (next) => {
-            if (!isObject(record) || typeof record.clueId !== 'string' || !core.isToken(record.clueId)) { next(); return; }
-            const copy = jsonClone(record) || {};
-            copy.updatedAt = typeof copy.updatedAt === 'string' ? copy.updatedAt : at;
-            ctx.bind(store.put(copy), next);
+          if (actionType === 'LETTER_FOLLOWED' && (!existingClues || Object.keys(existingClues).length === 0)) {
+            ctx.done({ ok: false, reason: 'not-discovered', generation: currentGeneration, state: existing || null });
+            return;
+          }
+          let merged;
+          if (!existing) {
+            merged = jsonClone(value) || {};
+          } else if (actionType === 'SET_HINTS') {
+            merged = jsonClone(existing) || {};
+            merged.hintsEnabled = value.hintsEnabled !== false;
+          } else {
+            merged = jsonClone(existing) || {};
+            merged.hintsEnabled = existing.hintsEnabled !== false;
+            merged.clues = mergeDiscoveryClueMaps(existing.clues, value.clues);
+            merged.stage = discoveryStageRank(value.stage) > discoveryStageRank(existing.stage) ? value.stage : existing.stage;
+            merged.runs = mergeDiscoveryRunsMaps(existing.runs, value.runs, actionType, action);
+            merged.firstSourceGame = existing.firstSourceGame || value.firstSourceGame || null;
+            merged.firstClueId = existing.firstClueId || value.firstClueId || null;
+            merged.portSeenAt = existing.portSeenAt || value.portSeenAt || null;
+            merged.careerSignedAt = existing.careerSignedAt || value.careerSignedAt || null;
+            merged.explorerAt = existing.explorerAt || value.explorerAt || null;
+          }
+          merged.updatedAt = at;
+          const row = { key: STATE_KEY_DISCOVERY, schemaVersion: SCHEMA_VERSION, updatedAt: at, value: merged };
+          ctx.bind(stateStore.put(row), () => {
+            const store = ctx.store('discovery');
+            const tasks = records.map((record) => (next) => {
+              if (!isObject(record) || typeof record.clueId !== 'string' || !core.isToken(record.clueId)) { next(); return; }
+              const copy = jsonClone(record) || {};
+              copy.updatedAt = typeof copy.updatedAt === 'string' ? copy.updatedAt : at;
+              ctx.bind(store.put(copy), next);
+            });
+            if (actionType === 'CLUE_OPENED' && action && typeof action.clueId === 'string') {
+              tasks.push((next) => {
+                ctx.bind(store.get(action.clueId), (recordRow) => {
+                  const mergedRecord = Object.assign({ clueId: action.clueId }, isObject(recordRow) ? recordRow : {}, {
+                    openedAt: (action.at && String(action.at)) || at,
+                    updatedAt: at,
+                  });
+                  ctx.bind(store.put(mergedRecord), next);
+                });
+              });
+            }
+            sequence(tasks, () => ctx.done({ ok: true, value: merged, generation: currentGeneration }));
           });
-          sequence(tasks, () => ctx.done({ ok: true, value, generation: currentGeneration }));
         });
-      });
       });
     }).then((res) => (res.ok ? res.result : failure(res.reason, res.error)));
   }

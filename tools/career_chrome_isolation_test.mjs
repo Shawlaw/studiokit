@@ -71,6 +71,18 @@ try {
   await new Promise((resolve) => setTimeout(resolve, 400));
   const afterDirs = fs.readdirSync(tempDir).filter((name) => name.startsWith(badPrefix));
   check('无效 Chrome 路径：明确失败、无未捕获进程事件、临时 profile 被清理', !!invalidError && /Chrome 启动失败/.test(invalidError) && afterDirs.length === beforeDirs.length, { invalidError, before: beforeDirs.length, after: afterDirs.length });
+
+  const exitPrefix = 'arcade-isolation-exit-';
+  const exitDirsBefore = fs.readdirSync(tempDir).filter((name) => name.startsWith(exitPrefix)).length;
+  let exitError = null;
+  try {
+    await launchChrome({ port: 0, profilePrefix: exitPrefix, chromePath: process.env.ComSpec || 'cmd.exe' });
+  } catch (err) {
+    exitError = String(err && err.message);
+  }
+  await new Promise((resolve) => setTimeout(resolve, 400));
+  const exitDirsAfter = fs.readdirSync(tempDir).filter((name) => name.startsWith(exitPrefix)).length;
+  check('Chrome 子进程提前退出：可捕获失败、临时 profile 清理、不继续握手', !!exitError && /提前退出|启动失败/.test(exitError) && exitDirsAfter === exitDirsBefore, { exitError, before: exitDirsBefore, after: exitDirsAfter });
 } finally {
   await new Promise((resolve) => sentinel.close(resolve));
 }

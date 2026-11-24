@@ -118,13 +118,15 @@ export function startServer({ root = REPO_ROOT, port, host = '127.0.0.1' } = {})
  * @param {string} url
  * @param {number} [timeout]
  */
-export async function waitForJson(url, timeout = 15000) {
+export async function waitForJson(url, timeout = 15000, signal = null) {
   const end = Date.now() + timeout;
   while (Date.now() < end) {
+    if (signal && signal.aborted) throw new Error('aborted');
     try {
-      const res = await fetch(url);
+      const res = await fetch(url, signal ? { signal } : undefined);
       if (res.ok) return await res.json();
     } catch (err) {
+      if (signal && signal.aborted) throw new Error('aborted');
       /* 端口尚未就绪，继续重试 */
     }
     await sleep(120);
@@ -158,11 +160,12 @@ function isPortFree(port) {
   });
 }
 
-function readDevToolsActivePort(profile, timeoutMs = 10000) {
+function readDevToolsActivePort(profile, timeoutMs = 10000, signal = null) {
   const file = path.join(profile, 'DevToolsActivePort');
   const start = Date.now();
   return new Promise((resolve, reject) => {
     const tick = () => {
+      if (signal && signal.aborted) { reject(new Error('aborted')); return; }
       try {
         if (fs.existsSync(file)) {
           const lines = fs.readFileSync(file, 'utf8').split(/\r?\n/);
@@ -186,8 +189,9 @@ function readDevToolsActivePort(profile, timeoutMs = 10000) {
   });
 }
 
-function verifyBrowserCdp(version, timeoutMs = 4000) {
+function verifyBrowserCdp(version, timeoutMs = 4000, signal = null) {
   const url = version && version.webSocketDebuggerUrl;
+  if (signal && signal.aborted) return Promise.reject(new Error('aborted'));
   if (typeof url !== 'string' || !url) return Promise.reject(new Error('CDP /json/version 缺少 webSocketDebuggerUrl'));
   if (typeof version.Browser !== 'string' || !/^Chrome\//.test(version.Browser)) {
     return Promise.reject(new Error('CDP /json/version 不是 Chrome: ' + version.Browser));
@@ -196,10 +200,13 @@ function verifyBrowserCdp(version, timeoutMs = 4000) {
     let settled = false;
     let ws = null;
     const timer = setTimeout(() => finish(new Error('CDP Browser.getVersion 超时')), timeoutMs);
+    const onAbort = () => finish(new Error('aborted'));
+    if (signal) signal.addEventListener('abort', onAbort, { once: true });
     function finish(err, value) {
       if (settled) return;
       settled = true;
       clearTimeout(timer);
+      if (signal) signal.removeEventListener('abort', onAbort);
       try { if (ws) ws.close(); } catch (closeErr) { /* ignore */ }
       if (err) reject(err); else resolve(value);
     }
@@ -227,6 +234,8 @@ function verifyBrowserCdp(version, timeoutMs = 4000) {
     ws.addEventListener('error', () => finish(new Error('CDP WebSocket 连接失败')));
   });
 }
+
+const ownedBrowsers = new Map();
 
 /**
  * 启动本机 Chrome 并等待 DevTools 端口就绪。
@@ -278,26 +287,32 @@ export async function launchChrome({
   spawnFailed.catch(() => {
     /* 与 ready 竞速，失败时由外层 catch 处理 */
   });
+  const abort = new AbortController();
   try {
     const actual = await Promise.race([
-      dynamicPort ? readDevToolsActivePort(profile) : Promise.resolve({ port, wsPath: '' }),
+      dynamicPort ? readDevToolsActivePort(profile, 10000, abort.signal) : Promise.resolve({ port, wsPath: '' }),
       spawnFailed,
       exited,
     ]);
     const endpoint = `http://127.0.0.1:${actual.port}`;
-    const versionReady = waitForJson(`${endpoint}/json/version`).then((version) => {
+    const versionReady = waitForJson(`${endpoint}/json/version`, 15000, abort.signal).then((version) => {
       if (!version || typeof version.webSocketDebuggerUrl !== 'string') throw new Error('CDP /json/version 缺少 webSocketDebuggerUrl');
       const expectedPath = actual.wsPath ? actual.wsPath.replace(/^\/+/, '') : '';
       if (expectedPath && !version.webSocketDebuggerUrl.includes('/' + expectedPath)) {
         throw new Error('CDP /json/version 与 DevToolsActivePort 不匹配');
       }
       return version;
-    }).then((version) => verifyBrowserCdp(version).then((product) => ({ version, cdpProduct: product })));
+    }).then((version) => verifyBrowserCdp(version, 4000, abort.signal).then((product) => ({ version, cdpProduct: product })));
     versionReady.catch(() => {});
     const ready = await Promise.race([versionReady, exited, spawnFailed]);
     if (chrome.exitCode !== null) throw new Error('Chrome 启动后已退出');
-    return { chrome, profile, port: actual.port, dynamicPort, cdpProduct: ready && ready.cdpProduct };
+    ownedBrowsers.set(actual.port, {
+      child: chrome,
+      wsPath: ready && ready.version ? ready.version.webSocketDebuggerUrl : null,
+    });
+    return { chrome, profile, port: actual.port, dynamicPort, cdpProduct: ready && ready.cdpProduct, browserWsPath: ready && ready.version ? ready.version.webSocketDebuggerUrl : null };
   } catch (err) {
+    abort.abort();
     try {
       if (chrome.exitCode === null) chrome.kill();
     } catch (killErr) {
@@ -313,6 +328,9 @@ export async function launchChrome({
  * @param {{chrome?: import('node:child_process').ChildProcess, profile?: string}} launched
  */
 export async function stopChrome({ chrome, profile } = {}) {
+  for (const [port, entry] of ownedBrowsers) {
+    if (entry.child === chrome) ownedBrowsers.delete(port);
+  }
   if (chrome && chrome.exitCode === null) {
     try { chrome.kill(); } catch (err) { /* ignore */ }
     await new Promise((resolve) => {
@@ -526,6 +544,14 @@ export async function openPage({
   url = 'about:blank',
 } = {}) {
   if (!Number.isInteger(port)) throw new Error('openPage 需要整数 port');
+  const owned = ownedBrowsers.get(port);
+  if (owned) {
+    if (!owned.child || owned.child.exitCode !== null) throw new Error('openPage: 本轮 Chrome 已退出，拒绝连接 ' + port);
+    const version = await fetch(`http://127.0.0.1:${port}/json/version`).then((r) => r.json());
+    if (!owned.wsPath || version.webSocketDebuggerUrl !== owned.wsPath) {
+      throw new Error('openPage: CDP 端口归属已变化，拒绝向非本轮 Chrome 新建 target');
+    }
+  }
   const target = await fetch(`http://127.0.0.1:${port}/json/new?${encodeURIComponent(url)}`, { method: 'PUT' }).then((r) => r.json());
   const cdp = new CDP(target.webSocketDebuggerUrl, { artifactsDir });
   await cdp.ready();

@@ -1925,6 +1925,13 @@
     };
   }
 
+  var snapshotGenerations = typeof WeakMap === 'function' ? new WeakMap() : null;
+
+  function rememberSnapshot(value) {
+    if (snapshotGenerations && value && typeof value === 'object') snapshotGenerations.set(value, internal.discoveryGeneration);
+    return value;
+  }
+
   function currentStateSnapshot() {
     var discovery = readGlobal('discovery');
     var raw = internal.discoveryState;
@@ -1940,9 +1947,9 @@
     return safe(
       'state',
       function () {
-        return clone(currentStateSnapshot()) || clone(fallbackInitialState());
+        return rememberSnapshot(clone(currentStateSnapshot()) || clone(fallbackInitialState()));
       },
-      clone(fallbackInitialState())
+      rememberSnapshot(clone(fallbackInitialState()))
     );
   }
 
@@ -2454,6 +2461,11 @@
           if (isStaleGenerationResult(writeResult)) {
             return reloadAfterStaleGeneration().then(function () { return afterPersist(false); });
           }
+        } else if (isObject(writeResult.value)) {
+          /* 页面采用事务合并后的结果（保留其它标签的已读时间/线索并集）。 */
+          var normalizedApplied = discovery.normalizeState(writeResult.value);
+          internal.discoveryState = normalizedApplied;
+          nextState = normalizedApplied;
         }
         return afterPersist(persisted);
       });
@@ -2468,16 +2480,25 @@
       function () {
         return waitReady(READY_TIMEOUT_MS).then(function () {
           if (!isObject(nextState)) return { ok: false, error: 'invalid-state' };
+          var capturedGeneration = snapshotGenerations ? snapshotGenerations.get(nextState) : undefined;
+          if (capturedGeneration !== undefined && capturedGeneration !== internal.discoveryGeneration) {
+            return reloadAfterStaleGeneration().then(function () { return { ok: false, error: 'stale-generation' }; });
+          }
           var discovery = readGlobal('discovery');
           var normalized = discovery && typeof discovery.normalizeState === 'function' ? discovery.normalizeState(nextState) : clone(nextState);
-          internal.discoveryState = normalized;
           if (isSilentTestOnly()) return { ok: false, error: 'test-silent' };
           if (!internal.dbUsable) return { ok: false, error: 'db-unavailable' };
           return writeDbState(normalized, null, { type: 'SAVE_STATE' }).then(function (writeResult) {
             if (isStaleGenerationResult(writeResult)) {
               return reloadAfterStaleGeneration().then(function () { return { ok: false, error: 'stale-generation' }; });
             }
-            return writeResult && writeResult.ok ? { ok: true } : { ok: false, error: (writeResult && writeResult.error) || 'write-failed' };
+            if (!writeResult || !writeResult.ok) {
+              return reloadAfterStaleGeneration().then(function () {
+                return { ok: false, error: (writeResult && (writeResult.error || writeResult.reason)) || 'write-failed' };
+              });
+            }
+            if (isObject(writeResult.value)) internal.discoveryState = discovery && typeof discovery.normalizeState === 'function' ? discovery.normalizeState(writeResult.value) : writeResult.value;
+            return { ok: true };
           });
         });
       },
@@ -2504,35 +2525,43 @@
             }
           }
           next.hintsEnabled = wanted;
-          internal.discoveryState = next;
-          var settings = readUi('settings');
-          if (settings && typeof settings.apply === 'function') {
-            try {
-              settings.apply({
-                hintsEnabled: wanted,
-                state: clone(next),
-                backup: backupFacade(),
-                reducedMotion: reducedMotionPreferred(),
-                api: api,
-              });
-            } catch (err) {
-              warnOnce('settings-apply', err);
+          var applyHintsState = function (state) {
+            var latest = isObject(state) ? state : next;
+            internal.discoveryState = latest;
+            var settings = readUi('settings');
+            if (settings && typeof settings.apply === 'function') {
+              try {
+                settings.apply({
+                  hintsEnabled: latest.hintsEnabled !== false,
+                  state: clone(latest),
+                  backup: backupFacade(),
+                  reducedMotion: reducedMotionPreferred(),
+                  api: api,
+                });
+              } catch (err) {
+                warnOnce('settings-apply', err);
+              }
             }
+            return latest;
+          };
+          if (isSilentTestOnly() || !internal.dbUsable) {
+            var local = applyHintsState(next);
+            return { ok: true, hintsEnabled: local.hintsEnabled !== false, state: clone(local) };
           }
-          if (isSilentTestOnly() || !internal.dbUsable) return { ok: true, hintsEnabled: wanted, state: stateSnapshot() };
           return writeDbState(next, null, { type: 'SET_HINTS' }).then(function (writeResult) {
-            if (isStaleGenerationResult(writeResult)) {
-              /* 旧页代次落后：放弃旧快照，重新载入最新状态；返回结构化冲突供面板恢复。 */
+            if (!writeResult || writeResult.ok !== true || isStaleGenerationResult(writeResult)) {
+              /* 代次冲突或普通写入失败：恢复 DB 最后已保存内容，不允许 UI/内存停在拟写入值。 */
+              var error = isStaleGenerationResult(writeResult)
+                ? 'stale-generation'
+                : (writeResult && (writeResult.error || writeResult.reason)) || 'write-failed';
+              if (!isStaleGenerationResult(writeResult)) warnOnce('db-write', error);
               return reloadAfterStaleGeneration().then(function () {
-                var latest = currentStateSnapshot();
-                return { ok: false, error: 'stale-generation', hintsEnabled: !!latest.hintsEnabled, state: clone(latest) };
+                var latest = applyHintsState(currentStateSnapshot());
+                return { ok: false, error: error, hintsEnabled: latest.hintsEnabled !== false, state: clone(latest) };
               });
             }
-            if (!writeResult || !writeResult.ok) {
-              warnOnce('db-write', (writeResult && writeResult.error) || 'write-failed');
-              return { ok: false, error: (writeResult && (writeResult.error || writeResult.reason)) || 'write-failed', hintsEnabled: wanted, state: clone(next) };
-            }
-            return { ok: true, hintsEnabled: wanted, state: clone(next) };
+            var applied = applyHintsState(isObject(writeResult.value) ? writeResult.value : next);
+            return { ok: true, hintsEnabled: applied.hintsEnabled !== false, state: clone(applied) };
           });
         });
       },
@@ -2562,33 +2591,40 @@
 
   /** 记录已读（CLUE_OPENED）——供信箱内部调用；不再打开 UI，避免递归。 */
   function markClueOpened(clueId) {
-    return safe(
-      'mark-clue-opened',
-      function () {
-        var id = typeof clueId === 'string' ? clueId : isObject(clueId) && typeof clueId.clueId === 'string' ? clueId.clueId : '';
-        if (!id) return { ok: false, reason: 'invalid-clue-id' };
-        var state = currentStateSnapshot();
-        if (!isObject(state.clues) || !state.clues[id]) return { ok: false, reason: 'not-discovered' };
-        var discovery = readGlobal('discovery');
-        if (discovery && typeof discovery.reduce === 'function') {
-          try {
-            var reduced = discovery.reduce(state, { type: 'CLUE_OPENED', clueId: id, at: nowIso() });
-            if (reduced && reduced.state) {
-              internal.discoveryState = reduced.state;
-              if (internal.dbUsable) {
-                writeDbState(reduced.state, null, { type: 'CLUE_OPENED' }).then(function (writeResult) {
-                  if (!writeResult || !writeResult.ok) warnOnce('db-write', (writeResult && writeResult.error) || 'write-failed');
-                });
-              }
-            }
-          } catch (err) {
-            warnOnce('open-clue-reduce', err);
-          }
-        }
-        return { ok: true, clueId: id };
-      },
-      { ok: false, reason: 'exception' }
-    );
+    var id = typeof clueId === 'string' ? clueId : isObject(clueId) && typeof clueId.clueId === 'string' ? clueId.clueId : '';
+    if (!id) return Promise.resolve({ ok: false, reason: 'invalid-clue-id' });
+    var state = currentStateSnapshot();
+    if (!isObject(state.clues) || !state.clues[id]) return Promise.resolve({ ok: false, reason: 'not-discovered' });
+    var discovery = readGlobal('discovery');
+    var next = state;
+    if (discovery && typeof discovery.reduce === 'function') {
+      try {
+        var reduced = discovery.reduce(state, { type: 'CLUE_OPENED', clueId: id, at: nowIso() });
+        if (reduced && reduced.state) next = reduced.state;
+      } catch (err) {
+        warnOnce('open-clue-reduce', err);
+        return Promise.resolve({ ok: false, reason: 'reduce-failed' });
+      }
+    }
+    next.clues[id].openedAt = next.clues[id].openedAt || nowIso();
+    if (!internal.dbUsable || isSilentTestOnly()) {
+      internal.discoveryState = next;
+      return Promise.resolve({ ok: true, clueId: id, state: clone(next) });
+    }
+    return Promise.resolve(writeDbState(next, null, { type: 'CLUE_OPENED', clueId: id, at: nowIso() })).then(function (writeResult) {
+      if (!writeResult || writeResult.ok !== true) {
+        var error = isStaleGenerationResult(writeResult) ? 'stale-generation' : (writeResult && (writeResult.error || writeResult.reason)) || 'write-failed';
+        return reloadAfterStaleGeneration().then(function () { return { ok: false, reason: error }; });
+      }
+      if (isObject(writeResult.value)) {
+        internal.discoveryState = discovery && typeof discovery.normalizeState === 'function' ? discovery.normalizeState(writeResult.value) : writeResult.value;
+      } else {
+        internal.discoveryState = next;
+      }
+      return { ok: true, clueId: id, state: clone(internal.discoveryState) };
+    }).catch(function () {
+      return { ok: false, reason: 'write-failed' };
+    });
   }
 
   /** 投递信件（LETTER_FOLLOWED）：标记 LOCAL 并持久化；返回 {ok}，信箱据此显示告示。 */
@@ -2608,14 +2644,25 @@
           }
         }
         next.portSeenAt = next.portSeenAt || nowIso();
-        internal.discoveryState = next;
         if (!internal.dbUsable || isSilentTestOnly()) {
+          internal.discoveryState = next;
           return Promise.resolve({ ok: true, persisted: false, portSeenAt: next.portSeenAt, stage: next.stage });
         }
         return writeDbState(next, null, { type: 'LETTER_FOLLOWED' }).then(function (writeResult) {
           var persisted = !!(writeResult && writeResult.ok);
-          if (!persisted) warnOnce('db-write', (writeResult && writeResult.error) || 'write-failed');
-          return { ok: persisted, persisted: persisted, portSeenAt: next.portSeenAt, stage: next.stage };
+          if (!persisted) {
+            var error = isStaleGenerationResult(writeResult) ? 'stale-generation' : (writeResult && (writeResult.error || writeResult.reason)) || 'write-failed';
+            warnOnce('db-write', error);
+            return reloadAfterStaleGeneration().then(function () {
+              return { ok: false, persisted: false, error: error, portSeenAt: (internal.discoveryState && internal.discoveryState.portSeenAt) || null, stage: internal.discoveryState && internal.discoveryState.stage };
+            });
+          }
+          if (isObject(writeResult.value)) {
+            internal.discoveryState = discovery && typeof discovery.normalizeState === 'function' ? discovery.normalizeState(writeResult.value) : writeResult.value;
+          } else {
+            internal.discoveryState = next;
+          }
+          return { ok: true, persisted: true, portSeenAt: internal.discoveryState.portSeenAt, stage: internal.discoveryState.stage };
         });
       },
       { ok: false, reason: 'exception' }
@@ -2677,28 +2724,39 @@
       'reset-discovery-ui',
       function () {
         if (isSilentTestOnly()) return { ok: false, error: 'test-silent' };
-        var discovery = readGlobal('discovery');
-        internal.events = [];
-        internal.seq = 0;
-        internal.finished = false;
-        internal.finishedResult = null;
-        internal.rendered = {};
-        internal.discoveryState = discovery && typeof discovery.initialState === 'function' ? discovery.initialState() : fallbackInitialState();
-        var surface = readUi('clueSurface');
-        if (surface && typeof surface.clear === 'function') {
-          try {
-            surface.clear();
-          } catch (err) {
-            warnOnce('clue-clear', err);
-          }
-        }
         if (!internal.dbUsable) return { ok: false, error: 'db-unavailable', state: stateSnapshot() };
         return resetDb().then(function (result) {
           var ok = !!(result && result.ok);
-          if (ok && Number.isFinite(Number(result.generation))) internal.discoveryGeneration = Math.floor(Number(result.generation));
+          if (!ok) {
+            /* 清除失败：保留/恢复最后已保存线索，绝不先清空当页内存。 */
+            return reloadAfterStaleGeneration().then(function () {
+              return {
+                ok: false,
+                error: (result && (result.error || result.method)) || 'reset-failed',
+                method: (result && result.method) || null,
+                state: stateSnapshot(),
+              };
+            });
+          }
+          var discovery = readGlobal('discovery');
+          internal.events = [];
+          internal.seq = 0;
+          internal.finished = false;
+          internal.finishedResult = null;
+          internal.rendered = {};
+          internal.discoveryState = discovery && typeof discovery.initialState === 'function' ? discovery.initialState() : fallbackInitialState();
+          if (Number.isFinite(Number(result.generation))) internal.discoveryGeneration = Math.floor(Number(result.generation));
+          var surface = readUi('clueSurface');
+          if (surface && typeof surface.clear === 'function') {
+            try {
+              surface.clear();
+            } catch (err) {
+              warnOnce('clue-clear', err);
+            }
+          }
           return {
-            ok: ok,
-            error: ok ? null : (result && (result.error || result.method)) || 'reset-failed',
+            ok: true,
+            error: null,
             method: (result && result.method) || null,
             state: stateSnapshot(),
           };
@@ -3163,30 +3221,33 @@
         var state = currentStateSnapshot();
         if (!isObject(state.clues) || !state.clues[clueId]) return uiUnavailable('not-discovered');
         var marked = markClueOpened(clueId);
-        var mailbox = readUi('mailbox');
-        var surface = readUi('clueSurface');
-        var targetHost = null;
-        if (mailbox && (typeof mailbox.openClue === 'function' || typeof mailbox.open === 'function')) targetHost = mailbox;
-        else if (surface && typeof surface.openClue === 'function') targetHost = surface;
-        if (!targetHost) {
-          /* 线索内容仍标记已读，只是没有可打开的 UI。 */
-          return marked && marked.ok === true ? uiUnavailable('ui-unavailable') : marked;
-        }
-        var context = uiContext({ clue: clone(clue), clueId: clueId });
-        try {
-          var returned = null;
-          if (typeof targetHost.openClue === 'function') returned = targetHost.openClue(clueId, context);
-          else returned = targetHost.open(context);
-          if (returned && typeof returned.then === 'function') {
-            Promise.resolve(returned).catch(function (err) {
-              warnOnce('open-clue-ui', err);
-            });
+        return Promise.resolve(marked).then(function (markResult) {
+          if (!markResult || markResult.ok !== true) return markResult || uiUnavailable('not-discovered');
+          var mailbox = readUi('mailbox');
+          var surface = readUi('clueSurface');
+          var targetHost = null;
+          if (mailbox && (typeof mailbox.openClue === 'function' || typeof mailbox.open === 'function')) targetHost = mailbox;
+          else if (surface && typeof surface.openClue === 'function') targetHost = surface;
+          if (!targetHost) {
+            /* 线索内容仍标记已读，只是没有可打开的 UI。 */
+            return uiUnavailable('ui-unavailable');
           }
-        } catch (err) {
-          warnOnce('open-clue-ui', err);
-          return uiUnavailable('ui-error');
-        }
-        return { ok: true, clueId: clueId };
+          var context = uiContext({ clue: clone(clue), clueId: clueId });
+          try {
+            var returned = null;
+            if (typeof targetHost.openClue === 'function') returned = targetHost.openClue(clueId, context);
+            else returned = targetHost.open(context);
+            if (returned && typeof returned.then === 'function') {
+              Promise.resolve(returned).catch(function (err) {
+                warnOnce('open-clue-ui', err);
+              });
+            }
+          } catch (err) {
+            warnOnce('open-clue-ui', err);
+            return uiUnavailable('ui-error');
+          }
+          return { ok: true, clueId: clueId };
+        });
       },
       uiUnavailable('ui-unavailable')
     )).then(function (result) {

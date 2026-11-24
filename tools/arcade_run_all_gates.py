@@ -99,6 +99,7 @@ def main() -> int:
         ('career_review3_regression', ['node', 'tools/career_review3_regression_test.mjs'], None),
         ('career_review4_same_route', ['node', 'tools/career_review4_same_route_test.mjs'], None),
         ('career_review5_import', ['node', 'tools/career_review5_import_test.mjs'], None),
+        ('career_closeout', ['node', 'tools/career_closeout_test.mjs'], None),
         ('career_chrome_isolation', ['node', 'tools/career_chrome_isolation_test.mjs'], None),
         ('career_review3_workshop', ['node', 'tools/career_review3_workshop_test.mjs'], None),
         ('career_route_evidence', ['node', 'tools/career_route_evidence_test.mjs'], None),
