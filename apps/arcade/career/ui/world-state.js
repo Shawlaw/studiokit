@@ -11,8 +11,8 @@
  * ctx（bridge 构造；字段缺失一律按空处理，绝不抛）：
  *   - campaign：campaign-core（ADR §20.2）实例；也接受 campaign.json 形状的内容对象；
  *   - campaignState / campaign.state：只读的章节/终局/后日谈快照（ADR §20.2 state() 输出）；
- *   - ending：ending-reducer（ADR §20.3）实例，终局按钮只调用 ending.startEnding({approach})；
- *   - startEnding：bridge 兜底（没有 ending 模块时由 bridge 自己处理终局与导航）；
+ *   - ending：ending-reducer（ADR §20.3）实例，终局按钮调用 ending.startEnding({approach, careerId})；
+ *   - startEnding：bridge 兜底（模块缺失/失败/无 url 时改走它，自带 careerId 并导航）；
  *   - commission：commission-core 实例（只读；本面板不接单、不发奖）；
  *   - npc / sideStories：npc.json / side-stories.json 内容；
  *   - state / clues / careerId / reducedMotion / announce：0.15–0.17 既有上下文。
@@ -1256,25 +1256,35 @@
     return null;
   }
 
-  function endingStarterOf(context) {
-    const module = endingModuleOf(context);
-    if (module && typeof module.startEnding === 'function') {
-      return {
-        kind: 'module',
-        start: function (approach) {
-          return module.startEnding({ approach: approach });
-        },
-      };
-    }
+  function bridgeStarterOf(context) {
     if (isObject(context) && typeof context.startEnding === 'function') {
       return {
         kind: 'bridge',
         start: function (approach) {
+          /* bridge.startEnding 自带 internal careerId，并在成功后自己导航。 */
           return context.startEnding(approach);
         },
       };
     }
     return null;
+  }
+
+  function endingStarterOf(context) {
+    const module = endingModuleOf(context);
+    const careerId = careerIdOf(context);
+    const bridge = bridgeStarterOf(context);
+    if (module && typeof module.startEnding === 'function') {
+      return {
+        kind: 'module',
+        careerId: careerId,
+        bridge: bridge,
+        start: function (approach) {
+          /* 必须把当前生涯 id 交给模块；否则零种子全链路里 pointer 可能还没落到 ending-reducer。 */
+          return module.startEnding({ approach: approach, careerId: careerId });
+        },
+      };
+    }
+    return bridge;
   }
 
   /* ---------------------------------------------------------------- 内容读取（npc / 支线 / 线索） */
@@ -1673,34 +1683,47 @@
       if (endingPending) return;
       endingPending = true;
       if (button) button.disabled = true;
-      const finishing = function (result) {
+      const invoke = function (candidate, onResult) {
+        let returned = null;
+        try {
+          returned = candidate.start(approach);
+        } catch (err) {
+          onResult({ ok: false, reason: 'exception' });
+          return;
+        }
+        if (returned && typeof returned.then === 'function') {
+          returned.then(onResult, function () {
+            onResult({ ok: false, reason: 'exception' });
+          });
+          return;
+        }
+        onResult(returned);
+      };
+      /* 模块路径：带 careerId 调用；失败或无安全 url 时改走 bridge（它自带 pointer 并导航）。 */
+      invoke(starter, function (result) {
+        const ok = isObject(result) && result.ok === true;
+        const url = ok ? safeNavUrl(result.url) : '';
+        if (ok && url) {
+          endingPending = false;
+          if (button && button.isConnected) button.disabled = false;
+          settleEnding(approach, result, true);
+          return;
+        }
+        if (starter.bridge) {
+          invoke(starter.bridge, function (fallbackResult) {
+            endingPending = false;
+            if (button && button.isConnected) button.disabled = false;
+            settleEnding(approach, fallbackResult, false);
+          });
+          return;
+        }
         endingPending = false;
         if (button && button.isConnected) button.disabled = false;
         settleEnding(approach, result, starter.kind === 'module');
-      };
-      let returned = null;
-      try {
-        returned = starter.start(approach);
-      } catch (err) {
-        finishing({ ok: false, reason: 'exception' });
-        return;
-      }
-      if (returned && typeof returned.then === 'function') {
-        returned.then(finishing, function () {
-          finishing({ ok: false, reason: 'exception' });
-        });
-        return;
-      }
-      finishing(returned);
+      });
     }
 
     function settleEnding(approach, result, navigateHere) {
-      const failed = isObject(result) && result.ok === false;
-      if (failed) {
-        setStatus(STATUS_FAILED);
-        announce(STATUS_FAILED);
-        return;
-      }
       const url = isObject(result) ? safeNavUrl(result.url) : '';
       if (navigateHere && url) {
         setStatus(STATUS_NAVIGATING);
@@ -1714,15 +1737,15 @@
         }
         return;
       }
-      if (isObject(result) && result.ok === true && !url) {
-        setStatus(STATUS_NO_URL);
-        announce(STATUS_NO_URL);
-        return;
-      }
       /* bridge 兜底：bridge.startEnding 已经处理导航；这里不复述 url。 */
-      if (isObject(result) && result.ok === true) {
+      if (isObject(result) && result.ok === true && !navigateHere) {
         setStatus(STATUS_NAVIGATING);
         announce(STATUS_NAVIGATING);
+        return;
+      }
+      if (isObject(result) && result.ok === true && navigateHere && !url) {
+        setStatus(STATUS_NO_URL);
+        announce(STATUS_NO_URL);
         return;
       }
       setStatus(STATUS_FAILED);
