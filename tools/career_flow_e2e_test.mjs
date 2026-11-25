@@ -74,14 +74,19 @@ const VIEWPORTS = [
   { width: 430, height: 932, label: '430×932' },
 ];
 
-/** DESIGN-0.20.0 §4 首选零种子路线（替代路线仍允许，但必须真实推进）。 */
+/**
+ * 与当前 campaign.recommend / ADR §20.9 一致的首选零种子路线
+ * （DESIGN-0.20.0 §4 的可执行细化；替代路线仍允许，但必须逐单真实推进）。
+ */
 const PREFERRED_ROUTE = [
-  { commissionId: 'star-raid.T1', chapter: null, expectFlag: 'C1.signal_fragment', kind: 'milestone' },
-  { commissionId: 'pendulum-tower.T1', chapter: null, expectFlag: 'C2.research_complete', kind: 'milestone' },
-  { commissionId: 'shadow-leap.T1', chapter: null, expectFlag: null, kind: 'step' },
-  { commissionId: 'shadow-leap.T2', chapter: null, expectFlag: 'C3.truth_found', kind: 'milestone' },
-  { commissionId: 'star-raid.T2', chapter: null, expectFlag: null, kind: 'step' },
-  { commissionId: 'pendulum-tower.T2', chapter: null, expectFlag: 'C4.city_power_restored', kind: 'milestone' },
+  { commissionId: 'pendulum-tower.T1', expectFlag: 'C1.signal_fragment', kind: 'milestone' },
+  { commissionId: 'memory-flip.T1', expectFlag: null, kind: 'step' },
+  { commissionId: 'memory-flip.T2', expectFlag: 'C2.research_complete', kind: 'milestone' },
+  { commissionId: 'shadow-leap.T1', expectFlag: null, kind: 'step' },
+  { commissionId: 'shadow-leap.T2', expectFlag: 'C3.truth_found', kind: 'milestone' },
+  { commissionId: 'pendulum-tower.T2', expectFlag: null, kind: 'step' },
+  { commissionId: 'gomoku.T1', expectFlag: null, kind: 'step' },
+  { commissionId: 'gomoku.T2', expectFlag: 'C4.city_power_restored', kind: 'milestone' },
 ];
 const CHAPTER_FLAGS = Object.freeze({
   C0: 'C0.port_seen',
@@ -228,15 +233,23 @@ function staticContentChecks() {
   gate('S01 首选路线每一单都在 commissions.json 中', missingIds.length === 0, J(missingIds));
 
   const firstCommission = byId.get(PREFERRED_ROUTE[0].commissionId);
+  /* C1 路线 anyFlags 可取 C1.work_done 或 C1.flight_done；首单只要真实产出其中之一
+     且有证据即可，不硬编码具体委托 id 或旗标名。 */
+  const firstFlags = new Set((firstCommission && firstCommission.reward.flags) || []);
+  const c1FlagHits = Array.from(firstFlags).filter((flag) => /^C1\./.test(flag));
   gate(
     'S02 首单真实产出 C1 旗标与 E 证据（非硬编码假旗标）',
-    !!(firstCommission && (firstCommission.reward.flags || []).includes('C1.flight_done') && (firstCommission.reward.evidence || []).length >= 1),
+    !!(firstCommission && c1FlagHits.length >= 1 && (firstCommission.reward.evidence || []).length >= 1),
     J(firstCommission && firstCommission.reward)
   );
   const c1Route = (campaign.chapters || []).find((chapter) => chapter.chapterId === 'C1');
   gate(
     'S03 C1 章节路线可由首单真实旗标满足',
-    !!c1Route && c1Route.routes.some((route) => evalRequirement(route.requires, { flags: new Set(['C0.port_seen', 'C1.flight_done']), evidence: new Set(), cleared: new Set(['star-raid.T1']) })),
+    !!c1Route && c1Route.routes.some((route) => evalRequirement(route.requires, {
+      flags: new Set(['C0.port_seen'].concat(c1FlagHits)),
+      evidence: new Set(),
+      cleared: new Set([PREFERRED_ROUTE[0].commissionId]),
+    })),
     J(c1Route && c1Route.routes)
   );
 
@@ -482,7 +495,8 @@ async function readOnlyState(cdp) {
     if (db) {
       let pointer = null;
       try { pointer = await db.getState('career'); } catch (err) { return { ok: false, reason: 'getState-threw' }; }
-      const careerId = pointer && pointer.value ? pointer.value.careerId : null;
+      /* getState 返回扁平 {careerId,key}（也可能旧形状 {value:{careerId}}）。 */
+      const careerId = pointer ? (pointer.careerId || (pointer.value && pointer.value.careerId) || null) : null;
       if (!careerId) return { ok: false, reason: 'no-career' };
       const [quests, profile, exported] = await Promise.all([
         safe(db.readQuestState(careerId)),
@@ -602,6 +616,14 @@ function completingChapter(projection, campaign, commission) {
     gameByToken[token] = commission.gameId;
   });
   cleared.add(commission.commissionId);
+  /* C1 旗标由 campaign.syncFlags 按章节 routes 真实判定，不走 story-evidence 的
+     C2–C4 推导；先用 campaign.json 的 C1 routes + 本单奖励投影补 C1。 */
+  if (!flags.has(CHAPTER_FLAGS.C1)) {
+    const c1 = (campaign.chapters || []).find((chapter) => chapter.chapterId === 'C1');
+    if (c1 && (c1.routes || []).some((route) => evalRequirement(route.requires, { flags, evidence, cleared }))) {
+      flags.add(CHAPTER_FLAGS.C1);
+    }
+  }
   const after = deriveChapterFlags(flags, evidence, gameByToken);
   return Array.from(after).find((flag) =>
     Object.values(CHAPTER_FLAGS).includes(flag) && !projection.flags.has(flag)) || null;
@@ -873,6 +895,26 @@ async function driveCommission(cdp, commissionId, label) {
       await pauseAndEnd(cdp, label);
       return cdp.evaluate('window.__arcadeTest.careerInfo()');
     },
+    /* 五子棋：T1 move.legal≥8 用真实自动落子；T2 session.finish 用真实整局落子到五连。 */
+    'gomoku.T1': async () => {
+      await startOverlay(cdp, label);
+      for (let moves = 0; moves < 8; moves += 1) {
+        await cdp.evaluate('window.__arcadeTest.autoMove()');
+      }
+      const info = await cdp.evaluate('window.__arcadeTest.careerInfo()');
+      gate('DRIVE ' + label + ' 真实合法落子达到 8 手', Number(info.moveEvents) >= 8, J({ moveEvents: info.moveEvents }));
+      await nativeFinish(cdp, 'won', { result: 'win', moves: info.moves, score: info.score });
+      return info;
+    },
+    'gomoku.T2': async () => {
+      await startOverlay(cdp, label);
+      const ended = await cdp.evaluate('window.__arcadeTest.playToEnd(12345)');
+      ensure(ended && ended.ok === true, label + ' 真实整局未自然结束: ' + J(ended));
+      const info = await cdp.evaluate('window.__arcadeTest.careerInfo()');
+      gate('DRIVE ' + label + ' 真实整局提交 session.finish', Number(info.finishEvents) >= 1, J({ finishEvents: info.finishEvents }));
+      await nativeFinish(cdp, 'won', { result: 'win', moves: info.moves, score: info.score });
+      return info;
+    },
   };
   const driver = drivers[commissionId];
   requireFeature('DRIVE 推荐单 ' + commissionId + ' 有真实钩子驱动', typeof driver === 'function',
@@ -1015,6 +1057,7 @@ function readBoardRecommendation(cdp) {
       commissionId: node.getAttribute('data-town-recommend-id'),
       kind: node.getAttribute('data-town-recommend-kind'),
       reason: node.getAttribute('data-town-recommend-reason') || '',
+      goal: node.getAttribute('data-town-goal') || '',
       text: (node.textContent || '').replace(/\\s+/g, ' ').trim().slice(0, 400),
       boardText: (panel.textContent || '').replace(/\\s+/g, ' ').trim().slice(0, 900),
       current: (panel.querySelector('[data-town-current]') || {}).textContent || '',
@@ -1073,9 +1116,9 @@ async function acceptRecommended(cdp, commissionId, label) {
 }
 
 /** 收据反馈 + 页内下一步；返回是否打开了 town（供下一单继续）。 */
-async function phaseReceipt(cdp, label, expectedChapterFlag, ticketId, campaign) {
+async function phaseReceipt(cdp, label, expectedChapterFlag, ticketId, campaign, takenCard = null) {
   step('receipt:' + label);
-  const card = await waitReceipt(cdp, ticketId);
+  const card = takenCard || await waitReceipt(cdp, ticketId);
   requireFeature('RECEIPT ' + label + ' 结算后显示收据卡片', !!card, 'no [data-career-card="receipt"]');
   const snapshot = await readOnlyState(cdp);
   gate('RECEIPT ' + label + ' 收据/claim 来自真实结算而非内存假数据', !!(snapshot && snapshot.ok === true && snapshot.claims.some((claim) => claim.receiptId === ticketId)), J({ cardState: card.state, ticketId, claims: (snapshot.claims || []).map((claim) => claim.receiptId) }));
@@ -1120,8 +1163,16 @@ async function phaseReceipt(cdp, label, expectedChapterFlag, ticketId, campaign)
 }
 
 async function verifyOrderProgress(cdp, label, commissionId, ticketId, expectedFlag, kind, campaign, commissions) {
-  const snapshot = await readOnlyState(cdp);
-  requireFeature('STATE ' + label + ' 结算后可只读职业档案', snapshot && snapshot.ok === true, J(snapshot && { ok: snapshot.ok, reason: snapshot.reason }));
+  /* 收据出现后职业档案写入仍可能滞后一拍：轮询只读快照直到 careerId/claim 到位。 */
+  let snapshot = null;
+  const deadline = Date.now() + 15000;
+  while (Date.now() < deadline) {
+    snapshot = await readOnlyState(cdp);
+    if (snapshot && snapshot.ok === true && snapshot.claims.some((row) => row.receiptId === ticketId)) break;
+    await sleep(150);
+  }
+  requireFeature('STATE ' + label + ' 结算后可只读职业档案', snapshot && snapshot.ok === true,
+    J(snapshot && { ok: snapshot.ok, reason: snapshot.reason, dbSource: snapshot.dbSource, claimCount: (snapshot.claims || []).length }));
   const claim = snapshot.claims.find((row) => row.receiptId === ticketId);
   gate('STATE ' + label + ' claim 真实现金/材料/旗标入账', !!claim && claim.credits >= 0, J(claim));
   const projection = projectFromSnapshot(snapshot, campaign);
@@ -1156,9 +1207,14 @@ async function runFullFlow(cdp, campaign, commissions) {
   await cdp.waitFor(`!!document.querySelector('[data-town-recommend-id]')`, { timeout: 15000 });
   let recommendation = await readBoardRecommendation(cdp);
   requireFeature('BOARD 告示板首屏提供真实可执行推荐单', recommendation.ok === true && !!recommendation.commissionId, J(recommendation));
+  /* 目标必须真正在卡片里出现且只出现一次：data-town-goal 提供稳定目标文本，
+     「这一单要做」标签在整段文本中不得重复（防文案回归造成目标重复渲染）。 */
+  const goalLabel = '这一单要做';
+  const labelOccurrences = recommendation.text.split(goalLabel).length - 1;
   gate('BOARD 推荐单一行给出游戏名/世界目标/数量/原因/主动作',
-    !!recommendation.text && recommendation.text.length >= 20 && !!recommendation.buttonOk !== false,
-    J({ text: recommendation.text, reason: recommendation.reason }));
+    !!recommendation.text && recommendation.text.length >= 20 && !!recommendation.goal &&
+      recommendation.text.indexOf(goalLabel) >= 0 && labelOccurrences === 1,
+    J({ text: recommendation.text, goal: recommendation.goal, reason: recommendation.reason, labelOccurrences }));
   QA.recommended.push(recommendation.commissionId);
 
   const sequence = [];
@@ -1199,9 +1255,13 @@ async function runFullFlow(cdp, campaign, commissions) {
     const run = await acceptRecommended(cdp, recommendation.commissionId, 'order-' + (index + 1));
     if (recommendation.commissionId === 'ending.research') break;
     await driveCommission(cdp, recommendation.commissionId, 'order-' + (index + 1));
+    /* 塔倒塌/射击收局后 finish 是异步落库：先等真实收据出现，再核验只读档案，
+       避免 claim/quests 尚未写入导致 no-career；收据卡片复用于 phaseReceipt，不重复等待。 */
+    const card = await waitReceipt(cdp, run.ticketId);
+    requireFeature('RECEIPT order-' + (index + 1) + ' 结算后显示收据卡片', !!card, 'no [data-career-card="receipt"]');
     const after = await verifyOrderProgress(cdp, 'order-' + (index + 1), recommendation.commissionId, run.ticketId,
       completes, expectedKind, campaign, commissions);
-    await phaseReceipt(cdp, 'order-' + (index + 1), completes, run.ticketId, campaign);
+    await phaseReceipt(cdp, 'order-' + (index + 1), completes, run.ticketId, campaign, card);
     sequence.push(recommendation.commissionId);
     previousChapter = after.view.currentChapter || previousChapter;
 
