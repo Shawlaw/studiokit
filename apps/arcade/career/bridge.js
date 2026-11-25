@@ -2832,6 +2832,9 @@
       state: stateSnapshot(),
       clues: cluesSnapshot(),
       originIntro: originIntro,
+      /* 0.20 首封信身份/正文：mailbox/town 用稳定字段，不必在 UI 侧翻 chapters map。 */
+      chapterZero: internal.chapterFiles && internal.chapterFiles.C0 ? clone(internal.chapterFiles.C0) : null,
+      originLetter: originLetter,
       openClue: markClueOpened,
       followLetter: followLetter,
       setHintsEnabled: setHintsEnabledDetailed,
@@ -3350,6 +3353,52 @@
   }
 
   /**
+   * 0.20 首封信身份与来源正文（叙事复审/告示板、信箱 Agent 的稳定只读字段）。
+   *
+   * 只从既有内容读取、不创建生涯、不改 IDB/localStorage/Schema：
+   * - 依据 currentStateSnapshot().firstSourceGame 在 chapter-01.json 的 origins 找同 gameId 条目；
+   * - 返回 { sourceGame, professionId, opening, c0Letter:{from,body,address}, firstStep }；
+   * - 找不到首源游戏 / 内容未装载 / 条目缺 c0Letter.body 时返回 null（lead 冻结，不编造正文）。
+   *
+   * 注意 c0Letter.body 直接取 origins[i].c0Letter.body，保证玩家可读到首封来信正文；
+   * originIntro() 仍是旧的 clues.json 派生短文案入口，两者互不覆盖。
+   */
+  function originLetter() {
+    return safe(
+      'origin-letter',
+      function () {
+        var state = currentStateSnapshot();
+        if (!isObject(state)) return null;
+        var sourceGame = typeof state.firstSourceGame === 'string' ? state.firstSourceGame : '';
+        if (!sourceGame) return null;
+        var chapter = internal.chapterContent;
+        if (!isObject(chapter) || !Array.isArray(chapter.origins)) return null;
+        var origin = null;
+        for (var i = 0; i < chapter.origins.length; i += 1) {
+          var candidate = chapter.origins[i];
+          if (isObject(candidate) && candidate.gameId === sourceGame) {
+            origin = candidate;
+            break;
+          }
+        }
+        if (!origin || !isObject(origin.c0Letter) || typeof origin.c0Letter.body !== 'string' || !origin.c0Letter.body) return null;
+        return {
+          sourceGame: sourceGame,
+          professionId: typeof origin.professionId === 'string' ? origin.professionId : null,
+          opening: typeof origin.opening === 'string' ? origin.opening : null,
+          c0Letter: {
+            from: typeof origin.c0Letter.from === 'string' ? origin.c0Letter.from : null,
+            body: origin.c0Letter.body,
+            address: typeof origin.c0Letter.address === 'string' ? origin.c0Letter.address : null,
+          },
+          firstStep: typeof origin.firstStep === 'string' ? origin.firstStep : null,
+        };
+      },
+      null
+    );
+  }
+
+  /**
    * 首源短文案入口：只从 clues.json 派生（entry-router），地址取首条线索 letter.address。
    * 无首条线索（或内容缺失）返回 null（lead 冻结）。
    */
@@ -3770,6 +3819,8 @@
     api.setHintsEnabled = setHintsEnabled;
     api.saveState = saveState;
     api.originIntro = originIntro;
+    /* 0.20 首封信身份/正文只读入口（与 ctx.originLetter 同函数）。 */
+    api.originLetter = originLetter;
     /* 0.16 职业委托（向后兼容扩展）：无 ticket 时 commissionRun=null，行为与 0.15 相同。 */
     api.commission = null;
     /* 0.20 只读 continuation 查询：与 ctx.careerContinuations 同函数；不建 run、不自动导航。 */
