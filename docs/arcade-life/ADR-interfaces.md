@@ -857,3 +857,11 @@ export async function cleanup(ctx) {}
 - 首次默认经典。可在首页临时切换到生涯，或用「默认打开」保存 `prefs:v1.hallDefaultView`。切换视图不关闭生涯或重置任何进度。
 - 生涯视图复用游戏页的告示板、信箱与已解锁章节。宿主页只向已存在的生涯提供这些快捷入口。首页不加载 bridge，章节仍以 C0 旗标为前提。
 - 应用版本为 0.18.1，离线缓存键为 `studiokit-arcade-0.18.1-v3`，生涯内容版本沿用 0.18.0。
+
+### 20.8 错过来信后的回访入口（后续增补，向后兼容）
+
+- 首页仅在经典视图目录上方显示次级入口。它扩展既有只读事务，读取同一 `state` store 中 `key='discovery'` 行的 `value.clues` / `value.stage` / `value.portSeenAt`（即现有 `getDiscoverySnapshot` 的数据形状），不读取也不写入新对象库。至少一条真实已发现线索（`sourceGame` 有效）尚未打开时显示「旧港有一封来信」；没有未读、但至少一条已读且严格仍处于 `GLIMPSED`/`CURIOUS` 且 `portSeenAt` 为空时显示「继续旧港来信」。无真实线索、阶段已越过 `CURIOUS`、已经投递、IDB 不可用或读档异常时隐藏。读取不得打开数据库建新库、`onupgradeneeded` 必须中止、不得装载 bridge 或触发剧情。
+- 两类回访共用相对链接 `games/pendulum-tower.html?careerLetter=1`。在游戏页侧，`?careerLetter=1` 是显式点击后才生效的回访入口，不改变既有 `careerPanel` / `story` 查询路由；不切换首页视图、不自动投递、不自动开局、不创建生涯身份或续玩存档。
+- 游戏页 bridge 在 `?careerLetter=1` 下，待 ready 后以已加载的最新发现状态校验：优先选择未读线索；若无未读且严格未投递（阶段仍为 `GLIMPSED`/`CURIOUS` 且 `portSeenAt` 为空），则选择已发现且内容配置中真实存在的首条线索。随后调用现有 `openClue()`（未读时记录 `CLUE_OPENED`），打开原信件信箱，并沿用既有读信路径的 C0 同步与返回街机厅链接。无合格线索、阶段已越过 `CURIOUS` 或已经投递时静默。既有 `?careerPanel=*` 仍需生涯身份、`?story=1` 仍需 C0 旗标，均不受影响。
+- 首次发现仍只来自真实有效结算的 `RUN_ENDED`；`finish` 返回的“本次新发现”语义不变，也不重复写 `discovery`。在后续 classic/challenge/zen 有效结算中，若成功事务后的最新状态保留同一游戏的未读线索且 `hintsEnabled !== false`，bridge 可重显该未读线索的 chip；跨标签已读以事务合并后状态为准，已读线索不重显。已读但未投递的线索只在玩家显式点击首页回访入口、由 `?careerLetter=1` 打开原信件，不在新的结算中重现。URL 回访、信箱浏览与线索 chip 均不改变玩法、掉率、数值或经典存储。
+- 入口复用现有信箱/线索校验和现有返回街机厅路径。保留 chip ≥44px 热区、键盘激活、焦点安全及 `prefers-reduced-motion`；不新增 storage key、store、schema 或远程依赖。

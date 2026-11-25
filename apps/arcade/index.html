@@ -73,6 +73,10 @@
         <button type="button" class="hall-resume-more" data-resume-more aria-expanded="false" aria-controls="hall-resume-list" hidden></button>
       </section>
 
+      <p class="hall-letter-entry" data-letter-entry hidden>
+        <a data-letter-label>旧港有一封来信</a>
+      </p>
+
       <section class="hall-library" aria-labelledby="hall-library-title">
         <div class="hall-library-head">
           <h2 id="hall-library-title">游戏目录</h2>
@@ -1126,6 +1130,7 @@
       const careerChapters = document.querySelector('[data-career-chapters]');
       const recordsLink = document.querySelector('.hall-head-link');
       const storyEntry = document.querySelector('[data-story-entry]');
+      const letterEntry = document.querySelector('[data-letter-entry]');
       let currentHallView;
       let hallReadGeneration = 0;
 
@@ -1158,9 +1163,20 @@
           return await new Promise((resolve, reject) => {
             const transaction = db.transaction(['state', 'profiles', 'quests'], 'readonly');
             const quests = transaction.objectStore('quests');
-            const result = { active: false, chapters: false };
+            const result = { active: false, chapters: false, unreadLetter: false };
             transaction.oncomplete = () => resolve(result);
             transaction.onabort = () => reject(transaction.error);
+            const discoveryPointer = transaction.objectStore('state').get('discovery');
+            discoveryPointer.onsuccess = () => {
+              const value = discoveryPointer.result?.value;
+              const clues = value?.clues;
+              if (!clues || typeof clues !== 'object') return;
+              const rows = Object.values(clues).filter((row) => row && typeof row === 'object' && !!row.sourceGame);
+              result.unreadLetter = rows.some((row) => !row.openedAt);
+              const stage = value.stage;
+              const pendingDelivery = !value.portSeenAt && (stage === 'GLIMPSED' || stage === 'CURIOUS');
+              result.followUpLetter = !result.unreadLetter && pendingDelivery && rows.some((row) => !!row.openedAt);
+            };
             const pointer = transaction.objectStore('state').get('career');
             pointer.onsuccess = () => {
               const id = pointer.result?.value?.careerId;
@@ -1189,6 +1205,14 @@
         hallModes.hidden = !career?.active;
         careerChapters.hidden = !career?.chapters;
         storyEntry.hidden = !career?.chapters;
+        letterEntry.hidden = !(career?.unreadLetter || career?.followUpLetter);
+        const letterLink = letterEntry.querySelector('[data-letter-label]');
+        letterLink.textContent = career?.unreadLetter ? '旧港有一封来信' : '继续旧港来信';
+        if (career?.unreadLetter || career?.followUpLetter) {
+          letterLink.href = 'games/pendulum-tower.html?careerLetter=1';
+        } else {
+          letterLink.removeAttribute('href');
+        }
         for (const link of careerLinks) {
           if (career?.active && !link.hidden) {
             link.href = './games/pendulum-tower.html?careerPanel=' + link.dataset.careerPanelLink;

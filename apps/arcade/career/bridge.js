@@ -2420,7 +2420,6 @@
       }
       var nextState = reduced && reduced.state ? reduced.state : baseState;
       var clue = reduced && reduced.clue ? reduced.clue : null;
-      var alreadyDiscovered = !!(clue && baseState.clues && baseState.clues[clue.clueId]);
       internal.discoveryState = nextState;
 
       function finalizeResult(persisted) {
@@ -2442,16 +2441,33 @@
 
       function afterPersist(persisted) {
         var result = finalizeResult(persisted);
-        if (!clue) return result;
         if (!persisted) {
           /* DB 写失败/不可用：返回 clue 结果但绝不渲染（fail-open）。 */
           return result;
         }
-        if (alreadyDiscovered) return result;
         if (nextState.hintsEnabled === false) return result;
+        /* Replay a persisted unread clue for this game using the merged state. */
+        var records = isObject(nextState.clues) ? nextState.clues : {};
+        var latestRecord;
+        var replayClue = null;
+        if (clue && isObject(clue.clue) && clue.clue.clueId) {
+          latestRecord = records[clue.clue.clueId];
+          if (isObject(latestRecord) && !latestRecord.openedAt) replayClue = clue.clue;
+        }
+        if (!replayClue) {
+          for (var i = 0; i < internal.clues.length; i += 1) {
+            var candidate = internal.clues[i];
+            if (!candidate || candidate.gameId !== api.gameId) continue;
+            latestRecord = records[candidate.clueId];
+            if (!isObject(latestRecord) || latestRecord.openedAt) continue;
+            replayClue = candidate;
+            break;
+          }
+        }
+        if (!replayClue) return result;
         /* 玩家已进入生涯：预热 backup.js（D15-14），失败静默。 */
         warmLazyModules();
-        return renderClue(clue.clue, nextState).then(function () {
+        return renderClue(replayClue, nextState).then(function () {
           return result;
         });
       }
@@ -3279,6 +3295,7 @@
             var returned = null;
             if (typeof targetHost.openClue === 'function') returned = targetHost.openClue(clueId, context);
             else returned = targetHost.open(context);
+            addHubReturnLink(returned);
             if (returned && typeof returned.then === 'function') {
               Promise.resolve(returned).catch(function (err) {
                 warnOnce('open-clue-ui', err);
@@ -3579,6 +3596,38 @@
     head.insertBefore(link, head.querySelector('.ac-career-close'));
   }
 
+  function openLetterFromHub() {
+    if (isSilentTestOnly() || !api.available) return Promise.resolve(null);
+    return waitReady(READY_TIMEOUT_MS).then(function () {
+      var state = currentStateSnapshot();
+      var records = isObject(state.clues) ? state.clues : {};
+      var ids = Object.keys(records).filter(function (id) {
+        return isObject(records[id]) && !!records[id].sourceGame && !!findClue(id);
+      });
+      if (!ids.length) return null;
+      var unread = ids.filter(function (id) { return !records[id].openedAt; });
+      var stage = state.stage;
+      var pendingDelivery = !state.portSeenAt && (stage === 'GLIMPSED' || stage === 'CURIOUS');
+      var clueId = null;
+      if (unread.length) {
+        clueId = typeof state.lastClueId === 'string' && unread.indexOf(state.lastClueId) >= 0
+          ? state.lastClueId
+          : (typeof state.firstClueId === 'string' && unread.indexOf(state.firstClueId) >= 0 ? state.firstClueId : unread[unread.length - 1]);
+      } else if (pendingDelivery) {
+        clueId = typeof state.firstClueId === 'string' && ids.indexOf(state.firstClueId) >= 0 ? state.firstClueId : ids[0];
+      }
+      if (!clueId) return null;
+      internal.hubPanel = true;
+      return openClue(clueId).then(function (result) {
+        if (!result || result.ok !== true) internal.hubPanel = false;
+        return result;
+      }).catch(function () {
+        internal.hubPanel = false;
+        return null;
+      });
+    }).catch(function () { return null; });
+  }
+
   function openHubCareerPanel(panel) {
     var db = api.db || readGlobal('db');
     if (!api.available || !db || typeof db.getState !== 'function' || typeof db.getProfile !== 'function') return;
@@ -3606,6 +3655,8 @@
         var panel = /(?:^|[?&])careerPanel=(town|mailbox|chapters)(?:&|$)/.exec(search);
         if (panel) {
           Promise.resolve().then(function () { return openHubCareerPanel(panel[1]); }).catch(function (err) { warnOnce('hub-career-panel', err); });
+        } else if (/(?:^|[?&])careerLetter=1(?:&|$)/.test(search)) {
+          Promise.resolve().then(function () { return openLetterFromHub(); }).catch(function (err) { warnOnce('hub-career-letter', err); });
         } else if (/(?:^|[?&])story=1(?:&|$)/.test(search)) {
           Promise.resolve().then(function () { return openCampaign(); }).catch(function () {});
         }

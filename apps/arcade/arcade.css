@@ -879,6 +879,8 @@ body.has-subhud .stage-box {
 .hall-fold[open] > summary { border-bottom: 1px solid var(--ac-line); border-end-start-radius: 0; border-end-end-radius: 0; }
 .hall-story-entry { margin: 12px 0; font-size: 12px; }
 .hall-story-entry a { color: var(--ac-muted); }
+.hall-letter-entry { margin: 0 0 12px; font-size: 12px; }
+.hall-letter-entry a { display: inline-flex; align-items: center; min-height: 44px; max-width: 100%; color: var(--ac-muted); }
 .hall-app { margin-top: 16px; }
 
 .hall-manage {

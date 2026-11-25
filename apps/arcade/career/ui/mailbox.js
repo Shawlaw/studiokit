@@ -46,6 +46,7 @@
   const CAMPAIGN_LABEL = '旧港来信 · 章节';
   const CAMPAIGN_ARIA = '打开旧港来信章节面板';
   const TOWN_FAILED_TEXT = '港口那边没应声，过一会儿再试。';
+  const FIRST_READ_LABEL = '送去折光港';
   const STAGE_RANK = { DORMANT: 0, GLIMPSED: 1, CURIOUS: 2, LOCAL: 3, RESIDENT: 4, EXPLORER: 5 };
 
   /* 本页会话内的投递记录：关闭面板后再打开仍能看到「已投递」。 */
@@ -375,6 +376,11 @@
     }
 
     function updateTownEntry() {
+      if (isFirstReadFlow()) {
+        townBtn.hidden = true;
+        campaignBtn.hidden = true;
+        return;
+      }
       townBtn.hidden = !townAllowedNow();
       campaignBtn.hidden = !(townAllowedNow() && !!campaignOpenerOf(context));
     }
@@ -428,6 +434,21 @@
 
     const itemNodes = Object.create(null);
     let selectedId = '';
+    let firstReadPending = false;
+
+    function isFirstReadFlow() {
+      const state = isObject(context.state) ? context.state : null;
+      const firstReadId = cleanText(state && state.firstClueId) || ids[0];
+      if (!firstReadId || selectedId !== firstReadId || followedClues[selectedId]) return false;
+      const stage = cleanText(state && state.stage).toUpperCase();
+      const rank = STAGE_RANK[stage] === undefined ? 0 : STAGE_RANK[stage];
+      if (rank !== STAGE_RANK.GLIMPSED && rank !== STAGE_RANK.CURIOUS) return false;
+      return typeof context.followLetter === 'function' && !!townOpenerOf(context);
+    }
+
+    function overlayIsCurrent() {
+      return !!panel && panel.overlay === overlay && (typeof overlay.isConnected !== 'boolean' || overlay.isConnected);
+    }
 
     function setField(node, text) {
       const value = cleanText(text);
@@ -448,11 +469,20 @@
       setField(letterAddress, letterContent.address);
       const delivered = !!followedClues[selectedId];
       letterDelivered.hidden = !delivered;
-      followBtn.textContent = delivered ? FOLLOW_AGAIN : cleanText(letterContent.actionLabel) || FOLLOW_FALLBACK;
-      followBtn.setAttribute('aria-label', delivered ? '再看折光港告示' : followBtn.textContent);
+      if (isFirstReadFlow()) {
+        followBtn.textContent = FIRST_READ_LABEL;
+        followBtn.setAttribute('aria-label', FIRST_READ_LABEL);
+        followBtn.classList.add('ac-career-btn--primary');
+      } else {
+        followBtn.textContent = delivered ? FOLLOW_AGAIN : cleanText(letterContent.actionLabel) || FOLLOW_FALLBACK;
+        followBtn.setAttribute('aria-label', delivered ? '再看折光港告示' : followBtn.textContent);
+        followBtn.classList.remove('ac-career-btn--primary');
+      }
+      updateTownEntry();
     }
 
     function selectClue(clueId, userInitiated) {
+      if (firstReadPending) return;
       const id = cleanText(clueId);
       if (!id || !itemNodes[id]) return;
       selectedId = id;
@@ -519,8 +549,10 @@
       announce('信已经按地址送出，折光港的告示留在信箱里。');
     }
 
-    function settleFollow(result, clueId) {
-      const failed = !!result && isObject(result) && result.ok === false;
+    function settleFollow(result, clueId, openTownAfter) {
+      const failed = openTownAfter
+        ? !(isObject(result) && result.ok === true && result.persisted !== false)
+        : !!result && isObject(result) && result.ok === false;
       if (failed) {
         setStatus(SEND_FAILED_TEXT);
         announce(SEND_FAILED_TEXT);
@@ -534,11 +566,14 @@
       updateTownEntry();
       noticeTitle.setAttribute('data-clue-id', clueId);
       showNotice();
+      if (openTownAfter && overlayIsCurrent()) openTownFromLetter();
     }
 
     function follow() {
       const clueId = selectedId;
       if (!clueId) return;
+      const sendToTown = isFirstReadFlow();
+      if (firstReadPending) return;
       if (followedClues[clueId]) {
         noticeTitle.setAttribute('data-clue-id', clueId);
         showNotice();
@@ -549,6 +584,7 @@
         announce(SEND_FAILED_TEXT);
         return;
       }
+      if (sendToTown) firstReadPending = true;
       let result = null;
       try {
         result = context.followLetter();
@@ -557,12 +593,19 @@
       }
       if (result && typeof result.then === 'function') {
         result.then(
-          (value) => settleFollow(value, clueId),
-          () => settleFollow({ ok: false }, clueId)
+          (value) => {
+            if (overlayIsCurrent()) settleFollow(value, clueId, sendToTown);
+            if (sendToTown) firstReadPending = false;
+          },
+          () => {
+            if (overlayIsCurrent()) settleFollow({ ok: false }, clueId, sendToTown);
+            if (sendToTown) firstReadPending = false;
+          }
         );
         return;
       }
-      settleFollow(result, clueId);
+      settleFollow(result, clueId, sendToTown);
+      if (sendToTown) firstReadPending = false;
     }
 
     followBtn.addEventListener('click', follow, false);

@@ -549,85 +549,92 @@ async function phaseEntry(page) {
   const opened = await openPanel(page, 'mailbox', { waitMs: 500 });
   record('ENTRY 信箱可从 bridge 打开', opened.ok, JSON.stringify(opened.result));
 
-  const letter = await page.evaluate(`(() => {
+  const sendSelector = '[data-career-panel="mailbox"] [aria-label="送去折光港"]';
+  const firstRead = await page.evaluate(`(() => {
     const panel = document.querySelector('[data-career-panel="mailbox"]');
     if (!panel) return null;
     const items = Array.from(panel.querySelectorAll('[data-clue-id]')).map((n) => n.getAttribute('data-clue-id'));
-    const townBtn = panel.querySelector('[data-action="open-town"]');
-    if (!townBtn) return { items, town: null };
-    const r = townBtn.getBoundingClientRect();
-    const actions = townBtn.closest('.ac-career-letter__actions');
+    const sendButtons = Array.from(panel.querySelectorAll('[aria-label="送去折光港"]'));
+    const sendBtn = sendButtons[0] || null;
+    const legacyTown = panel.querySelector('[data-action="open-town"]');
+    const r = sendBtn ? sendBtn.getBoundingClientRect() : null;
+    const style = sendBtn ? getComputedStyle(sendBtn) : null;
     return {
       items,
-      town: {
-        hidden: townBtn.hidden,
-        text: (townBtn.textContent || '').trim(),
-        aria: townBtn.getAttribute('aria-label'),
-        rect: [r.left, r.top, r.right, r.bottom].map((v) => Math.round(v)),
-        w: Math.round(r.width),
-        h: Math.round(r.height),
-        actionsClass: actions ? actions.className : null,
-      },
+      sendCount: sendButtons.length,
+      legacyHidden: !!legacyTown && legacyTown.hidden === true,
+      send: sendBtn ? {
+        hidden: sendBtn.hidden,
+        disabled: sendBtn.disabled,
+        text: (sendBtn.textContent || '').trim(),
+        aria: sendBtn.getAttribute('aria-label'),
+        primary: sendBtn.classList.contains('ac-career-btn--primary'),
+        visible: !sendBtn.hidden && !sendBtn.disabled && sendBtn.getClientRects().length > 0 && !!style && style.display !== 'none' && style.visibility !== 'hidden',
+        rect: r ? [r.left, r.top, r.right, r.bottom].map((v) => Math.round(v)) : null,
+        w: r ? Math.round(r.width) : 0,
+        h: r ? Math.round(r.height) : 0,
+      } : null,
     };
   })()`);
   record(
-    'ENTRY 信箱有信且「按地址投递 · 去港口」可见可点（≥44）',
-    !!(letter && letter.items.length && letter.town && letter.town.hidden === false && letter.town.w >= 44 && letter.town.h >= 44),
-    det(['letter=' + JSON.stringify(letter && letter.items), 'town=' + JSON.stringify(letter && letter.town)])
+    'ENTRY 首读只有「送去折光港」一个主按钮且可见可点（≥44），旧去港口入口隐藏',
+    !!(firstRead && firstRead.items.length && firstRead.sendCount === 1 && firstRead.legacyHidden && firstRead.send &&
+      firstRead.send.hidden === false && firstRead.send.disabled === false && firstRead.send.visible && firstRead.send.primary &&
+      firstRead.send.aria === '送去折光港' && firstRead.send.text === '送去折光港' &&
+      firstRead.send.w >= 44 && firstRead.send.h >= 44),
+    det(['letter=' + JSON.stringify(firstRead && firstRead.items), 'send=' + JSON.stringify(firstRead && firstRead.send), 'legacyHidden=' + !!(firstRead && firstRead.legacyHidden)])
   );
-  const townIndex = await page.evaluate(`(() => {
+  const sendIndex = await page.evaluate(`(() => {
     const panel = document.querySelector('[data-career-panel="mailbox"]');
-    const btn = panel && panel.querySelector('[data-action="open-town"]');
-    const address = panel && panel.querySelector('.ac-career-letter__address');
-    const port = panel && panel.querySelector('.ac-career-mailbox__port');
-    if (!btn || !address || !port) return null;
-    const addr = address.getBoundingClientRect();
-    const portRect = port.getBoundingClientRect();
-    return { afterAddress: portRect.top >= addr.bottom - 1, portTop: Math.round(portRect.top), addressBottom: Math.round(addr.bottom) };
+    const btn = panel && panel.querySelector('[aria-label="送去折光港"]');
+    const address = panel && panel.querySelector('[data-view="mailbox"] .ac-career-letter__address');
+    if (!btn || !address) return null;
+    const btnRect = btn.getBoundingClientRect();
+    const addrRect = address.getBoundingClientRect();
+    return {
+      afterAddress: btnRect.top >= addrRect.bottom - 1,
+      inLegacyPort: !!btn.closest('.ac-career-mailbox__port'),
+      btnTop: Math.round(btnRect.top),
+      addressBottom: Math.round(addrRect.bottom),
+    };
   })()`);
-  record('ENTRY 去港口按钮位于信件地址区块之后', !!(townIndex && townIndex.afterAddress), JSON.stringify(townIndex));
+  record(
+    'ENTRY 首读主按钮位于信件地址区块之后且不在旧去港口入口内',
+    !!(sendIndex && sendIndex.afterAddress && !sendIndex.inLegacyPort),
+    JSON.stringify(sendIndex)
+  );
 
-  /* 真实投递（启用 LOCAL）：点击信件动作区里的投递按钮（不是去港口按钮） */
-  await mouseClick(page, '[data-career-panel="mailbox"] .ac-career-letter__actions:not(.ac-career-mailbox__port) .ac-career-btn');
-  await sleep(700);
-  const afterFollow = await page.evaluate(`(() => {
-    const panel = document.querySelector('[data-career-panel="mailbox"]');
-    if (!panel) return { open: false };
-    const notice = panel.querySelector('[data-view="notice"]');
-    const townBtn = panel.querySelector('[data-action="open-town"]');
-    const back = panel.querySelector('[data-view="notice"] .ac-career-letter__actions .ac-career-btn:not([data-action])');
+  await touchClick(page, sendSelector);
+  await sleep(1000);
+  const afterSend = await page.evaluate(`(() => {
     const state = window.ArcadeCareer.state();
     return {
-      open: true,
-      noticeVisible: !!notice && !notice.hidden,
-      townVisible: !!townBtn && !townBtn.hidden,
-      townInsideNotice: !!townBtn && !!townBtn.closest('[data-view="notice"]'),
-      backText: back ? (back.textContent || '').trim() : null,
+      town: !!document.querySelector('[data-career-panel="town"]'),
+      mailbox: !!document.querySelector('[data-career-panel="mailbox"]'),
+      stage: state && state.stage,
+      panels: Array.from(document.querySelectorAll('[data-career-panel]')).map((node) => node.getAttribute('data-career-panel')),
+    };
+  })()`);
+  record(
+    'ENTRY 触控首读主按钮一次完成投递：LOCAL 已生效、告示板打开、信箱收起',
+    !!(afterSend && afterSend.stage === 'LOCAL' && afterSend.town && !afterSend.mailbox &&
+      afterSend.panels.length === 1 && afterSend.panels[0] === 'town'),
+    JSON.stringify(afterSend)
+  );
+
+  await esc(page);
+  const afterSendTownEsc = await page.evaluate(`(() => {
+    const state = window.ArcadeCareer.state();
+    return {
+      panels: Array.from(document.querySelectorAll('[data-career-panel]')).map((node) => node.getAttribute('data-career-panel')),
       stage: state && state.stage,
     };
   })()`);
   record(
-    'ENTRY 投递后显示折光港告示，入口仍在且进入告示动作区',
-    !!(afterFollow.open && afterFollow.noticeVisible && afterFollow.townVisible && afterFollow.townInsideNotice && afterFollow.stage === 'LOCAL'),
-    JSON.stringify({ noticeVisible: afterFollow.noticeVisible, townVisible: afterFollow.townVisible, townInsideNotice: afterFollow.townInsideNotice, stage: afterFollow.stage, backText: afterFollow.backText })
+    'ENTRY 首读告示板 Esc 后无残留面板且 LOCAL 状态保持',
+    !!afterSendTownEsc && afterSendTownEsc.panels.length === 0 && afterSendTownEsc.stage === 'LOCAL',
+    JSON.stringify(afterSendTownEsc)
   );
-
-  /* 回到游戏：返回按钮可退出，不困在面板 */
-  if (afterFollow.backText) {
-    await mouseClick(page, '[data-career-panel="mailbox"] [data-view="notice"] .ac-career-letter__actions .ac-career-btn:not([data-action])');
-    await sleep(400);
-    const afterBack = await page.evaluate(`(() => ({
-      panels: Array.from(document.querySelectorAll('[data-career-panel]')).map((node) => node.getAttribute('data-career-panel')),
-      focus: document.activeElement && document.activeElement.id,
-    }))()`);
-    record(
-      'ENTRY 告示「回到游戏」可退出信箱（不困在面板）',
-      JSON.stringify(afterBack.panels) === '[]',
-      det(['backText=' + afterFollow.backText, 'afterBack=' + JSON.stringify(afterBack)])
-    );
-  } else {
-    record('ENTRY 告示「回到游戏」可退出信箱（不困在面板）', false, 'back button missing');
-  }
 
   /* 重新打开信箱 → 去港口 → 告示板 */
   await page.evaluate(`(() => { const b = document.getElementById('d1613-trigger'); if (b) b.focus(); return true; })()`);

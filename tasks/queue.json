@@ -2330,6 +2330,20 @@
         "Actions 四项任务成功，GitHub Pages 与 Cloudflare Pages 逐文件核验一致"
       ],
       "evidence": "发布提交 f8d7e7b（含合并 1b286bc、修复 64cb754 与 71214d1）。Actions https://github.com/Shawlaw/studiokit/actions/runs/45554384478 四项成功；verify_deploy.py 双端各 87/87 文件一致，arcade 0.19.0 / badge 2.2.1 / venue 0.2.0。合并树全量门禁 + 最终树重跑：离线 18/18、compact_touch 两轮 18/18、world_state 109/109、closeout 6/6、冒烟 117/117、PWA 更新 9/9。线上运行时检查：两站点中心页 0.19.0、16 卡、记忆翻牌开局按钮首屏可见、零 console error。真机手感 UNVERIFIED。"
+    },
+    {
+      "id": "T139",
+      "title": "Arcade 生涯首航入口与首次投递",
+      "kind": "agent",
+      "status": "DONE",
+      "dependsOn": ["T138"],
+      "ownerAuthorizationRequired": false,
+      "acceptance": [
+        "已有线索可从首页找回，读过未投递可以续读，同一游戏有效结算可重显未读线索",
+        "在首次读信时一次触控完成真实投递并进入告示板，保留投递失败和已投递后的回访行为",
+        "空档首页入口守卫、现有生涯可访问性与移动端回归通过"
+      ],
+      "evidence": "本地 feat/arcade-career-flow，基线 f78912a。内置浏览器从全新档真实完成二十一点对局并复验漏读回访、已读未投续读与一次点击进港。390×664 的首页来信链接和送信按钮热区均为 44px。最终候选静态校验和构建通过，生涯可访问性 75/75、移动端 318/318。发现状态纯逻辑 84/84。通用冒烟在最后两处输入保护前为 117/117。真机试玩待验证。"
     }
   ]
 }
