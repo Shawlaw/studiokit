@@ -465,6 +465,47 @@ check('首航 intro 显示章节 role 身份一行，缺失时隐藏', () => {
   assert.ok(!combinedText(sheet2).includes('自由职业者'), '不写死玩家状态');
   return 'role line shown/hidden by data';
 });
+check('身份句优先 chapterZero.role / chapters.C0.role，C1 当前章也能显示', () => {
+  const ROLE = '你是刚到折光港、靠接零工维生的自由职业者。';
+  const { town } = loadTown();
+  const ctx = basicCtx();
+  ctx.chapterZero = { chapterId: 'C0', role: ROLE };
+  ctx.campaign.state = () => ({
+    ok: true,
+    currentChapter: 'C1',
+    chapters: [
+      { chapterId: 'C0', title: '不起眼的印记', state: 'complete' },
+      { chapterId: 'C1', title: '旧港的第一封信', state: 'active', role: '不应使用的当前章角色', routes: [] },
+    ],
+    endings: [],
+  });
+  const sheet = town.render(ctx);
+  const roleLine = byAttr(sheet, 'data-town-role', 'true')[0];
+  assert.equal(roleLine.hidden, false);
+  assert.equal(roleLine.textContent, ROLE);
+  const ctx2 = basicCtx();
+  ctx2.chapters = { C0: { role: ROLE } };
+  ctx2.campaign.state = () => ({ ok: true, currentChapter: 'C1', chapters: [{ chapterId: 'C1', state: 'active', routes: [] }], endings: [] });
+  const roleLine2 = byAttr(town.render(ctx2), 'data-town-role', 'true')[0];
+  assert.equal(roleLine2.textContent, ROLE);
+  return 'C0 role first';
+});
+check('originIntro 缺失时 intro 仍显示身份与当前目标', () => {
+  const ROLE = '你是刚到折光港、靠接零工维生的自由职业者。';
+  const { town } = loadTown();
+  const ctx = basicCtx();
+  delete ctx.originIntro;
+  ctx.chapterZero = { role: ROLE };
+  const sheet = town.render(ctx);
+  const intro = byAttr(sheet, 'data-town-intro', 'true')[0];
+  assert.equal(intro.hidden, false, 'intro 不应因缺 originIntro 而整体隐藏');
+  const roleLine = byAttr(intro, 'data-town-role', 'true')[0];
+  assert.equal(roleLine.hidden, false);
+  assert.equal(roleLine.textContent, ROLE);
+  assert.ok(combinedText(intro).includes('眼下：'), '当前目标仍在');
+  assert.ok(byAttr(intro, 'data-town-rental', 'true')[0].textContent.includes('租机'), '免费租机提示仍在');
+  return 'intro visible without originIntro';
+});
 check('C0/C1 首航弱化商店/制造台入口但保留可发现性', () => {
   const { town } = loadTown();
   const sheet = town.render(basicCtx());

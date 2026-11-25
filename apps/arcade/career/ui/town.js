@@ -1195,19 +1195,21 @@
       return '';
     }
 
-    /** 首航身份只显示一行：从当前章/章节内容的 role 字段读取，缺失则隐藏，不写死玩家状态。 */
+    /**
+     * 首航身份只显示一行。优先 C0 章节内容（到港后 currentChapter 已是 C1，
+     * 角色句仍在 chapter-00 的 role 字段）；再按其它真实字段回退，缺字段则隐藏。
+     */
     function roleTextOf() {
-      const view = currentChapterView();
       const candidates = [];
+      const zero = isObject(liveContext && liveContext.chapterZero) ? liveContext.chapterZero : null;
+      if (zero) candidates.push(zero.role);
+      const chapters = isObject(liveContext && liveContext.chapters) ? liveContext.chapters : null;
+      if (chapters && isObject(chapters.C0)) candidates.push(chapters.C0.role);
+      const view = currentChapterView();
       if (view && view.current) candidates.push(view.current.role);
       if (view && view.model) candidates.push(view.model.role);
       const chapter = isObject(liveContext && liveContext.chapter) ? liveContext.chapter : null;
       if (chapter) candidates.push(chapter.role);
-      const chapters = isObject(liveContext && liveContext.chapters) ? liveContext.chapters : null;
-      if (chapters) {
-        const first = chapters.chapters && Array.isArray(chapters.chapters) ? chapters.chapters[0] : null;
-        if (isObject(first)) candidates.push(first.role);
-      }
       for (let i = 0; i < candidates.length; i += 1) {
         const text = cleanText(candidates[i]);
         if (text) return text;
@@ -1220,10 +1222,20 @@
       introRole.textContent = role;
       introRole.hidden = !role;
       const intro = originIntroOf(liveContext);
+      const goalText = currentGoalText();
+      const rentalText = rentalHintOf();
+      /* 身份/目标/租机提示不依赖 originIntro：无来信上下文时仍显示已能确定的部分。 */
       if (!intro) {
-        introSection.hidden = true;
+        introGreeting.textContent = '';
+        introGreeting.hidden = true;
+        introAddress.textContent = '';
+        introAddress.hidden = true;
+        introGoal.textContent = '眼下：' + (goalText || INTRO_GOAL);
+        introRental.textContent = rentalText;
+        introSection.hidden = !(role || goalText || rentalText);
         return;
       }
+      introGreeting.hidden = false;
       const source = gameNameOf(intro.sourceGame, liveContext) || intro.sourceGame;
       const sourceNote = intro.address
         ? '这封信从' + (source || '旧港') + '来，收在' + intro.address + '。'
@@ -1233,8 +1245,8 @@
       introGreeting.textContent = intro.greeting || sourceNote;
       introAddress.textContent = intro.greeting ? sourceNote : '';
       introAddress.hidden = !introAddress.textContent;
-      introGoal.textContent = '眼下：' + (currentGoalText() || INTRO_GOAL);
-      introRental.textContent = rentalHintOf();
+      introGoal.textContent = '眼下：' + (goalText || INTRO_GOAL);
+      introRental.textContent = rentalText;
       introSection.hidden = false;
     }
 
