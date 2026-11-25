@@ -845,6 +845,20 @@ async function phaseDiscovery(cdp, campaign) {
   return campaign;
 }
 
+/**
+ * 首页链接是真实的整页导航：clickVisible 返回时 CDP 上下文仍可能是旧首页文档，
+ * 单独的 location.search 断言不足以证明已进入游戏页。必须同时等到 pathname 含
+ * /games/ 与 search 含 careerLetter=1，再 waitBridge，否则会在旧文档上超时。
+ */
+async function waitForRevisitUrl(cdp, label) {
+  step('revisit-url:' + label);
+  const expression = 'location.pathname.indexOf("/games/") >= 0 && location.search.indexOf("careerLetter=1") >= 0';
+  await cdp.waitFor(expression, { timeout: 20000 });
+  const url = await cdp.evaluate('({ path: location.pathname, search: location.search })');
+  gate('HOME ' + label + ' 真实导航到游戏页且带回访参数', url.path.indexOf('/games/') >= 0 && url.search.indexOf('careerLetter=1') >= 0, J(url));
+  return url;
+}
+
 async function phaseHomepageRevisit(cdp) {
   step('phase:homepage-revisit');
   /* 故意不点 chip，直接离开：验证「错过 chip 后不会永久失联」。 */
@@ -859,7 +873,7 @@ async function phaseHomepageRevisit(cdp) {
 
   /* 真实点击回访链接（不是直接改 URL）。 */
   await clickVisible(cdp, '[data-letter-entry] [data-letter-label]', '首页来信入口');
-  await cdp.waitFor('location.search.indexOf("careerLetter=1") >= 0', { timeout: 15000 });
+  await waitForRevisitUrl(cdp, '未读来信回访');
   await waitBridge(cdp, 'careerLetter-revisit');
   await waitPanel(cdp, 'mailbox', 15000);
   const mailbox1 = await panelSnapshot(cdp, 'mailbox');
@@ -876,6 +890,7 @@ async function phaseHomepageRevisit(cdp) {
   const entry2 = await cdp.evaluate(`(() => { const link = document.querySelector('[data-letter-entry] [data-letter-label]'); return { text: link ? (link.textContent || '').trim() : null, href: link ? link.getAttribute('href') : null }; })()`);
   gate('HOME 读过未投递显示「继续旧港来信」', entry2.text === '继续旧港来信' && entry2.href === 'games/pendulum-tower.html?careerLetter=1', J(entry2));
   await clickVisible(cdp, '[data-letter-entry] [data-letter-label]', '首页续读入口');
+  await waitForRevisitUrl(cdp, '已读未投递续读');
   await waitBridge(cdp, 'careerLetter-undelivered');
   await waitPanel(cdp, 'mailbox', 15000);
 }
@@ -947,7 +962,8 @@ async function acceptRecommended(cdp, commissionId, label) {
   const selector = `[data-town-action="start"][data-commission-id=${J(commissionId)}]`;
   await cdp.waitFor('!!document.querySelector(' + J(selector) + ')', { timeout: 15000 });
   await clickVisible(cdp, selector, label + ' 接单按钮');
-  await cdp.waitFor('location.search.indexOf("career=") >= 0', { timeout: 20000 });
+  /* 整页导航：先等 pathname 进入游戏页，再等 ticket 参数，避免在旧文档上 waitBridge 超时。 */
+  await cdp.waitFor('location.pathname.indexOf("/games/") >= 0 && location.search.indexOf("career=") >= 0', { timeout: 20000 });
   await waitBridge(cdp, label + '-game');
   await cdp.waitFor(`(() => { const t = window.__arcadeCareerTest; return !!(t && t.commissionRun && t.commissionRun()); })()`, { timeout: 15000 });
   const run = await cdp.evaluate('window.__arcadeCareerTest.commissionRun()');
@@ -1119,7 +1135,8 @@ async function runFullFlow(cdp, campaign, commissions) {
   gate('C5 终局按钮 ≥44px 且为玩家可见戏内文案', world.endings.every((ending) => ending.h >= 44 && ending.text.length > 2), J(world.endings));
   await viewportChecks(cdp, '章节面板', ['[data-career-panel="world-state"] [data-approach="' + ENDING_APPROACH + '"]']);
   await clickVisible(cdp, '[data-career-panel="world-state"] [data-approach="' + ENDING_APPROACH + '"]', '终局入口');
-  await cdp.waitFor('location.search.indexOf("career=") >= 0', { timeout: 20000 });
+  /* 终局入口同样触发整页导航：先确认游戏页 pathname，再 waitBridge。 */
+  await cdp.waitFor('location.pathname.indexOf("/games/") >= 0 && location.search.indexOf("career=") >= 0', { timeout: 20000 });
   await waitBridge(cdp, 'ending-game');
   const endingRun = await cdp.evaluate('window.__arcadeCareerTest.commissionRun()');
   gate('C5 终局入口生成独立 ticket（玩家点击而非写旗标）', !!(endingRun && /^ending\./.test(endingRun.commissionId || '')), J(endingRun));
