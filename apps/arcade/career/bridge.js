@@ -985,6 +985,36 @@
     return readGlobal('commission') || null;
   }
 
+  /**
+   * 0.20 生涯连续性只读查询（告示板 UI 在打开面板时用，Discover live run 不建数据）。
+   *
+   * API 形状（与 commission-core.continuations 一致，UI 既可 ctx.commission.continuations()
+   * 也可 ctx.careerContinuations()）：
+   *   ({ careerId? }) -> Promise<{
+   *     ok: true, careerId: string|null,
+   *     runs: [{ runId, ticketId, commissionId, gameId,
+   *              status:'issued'|'active', issuedAt, startedAt }]
+   *   }>
+   *   失败（读失败 / 无生涯指针 / module 未装载）：
+   *     {ok:false, reason, careerId, runs:[]}
+   *   UI 必须先看 ok：ok:false 表示「可能读失败」，不可当作「没有可继续的 run」。
+   *
+   * 只读、不 ensureCareer、不写 sessionStorage；继续必须玩家显式点击「接单」，
+   * 由 commission.start({commissionId, careerId}) 复用 live run 并恢复 ticket，UI 只用返回的 url 导航。
+   */
+  function careerContinuations(input) {
+    var mod = commissionModule();
+    if (!mod || typeof mod.continuations !== 'function') {
+      return Promise.resolve({ ok: false, reason: 'commission-module-missing', careerId: null, runs: [] });
+    }
+    /* 不吞掉 core 的 ok:false：读失败必须让 UI 看到，不能被当成空列表。 */
+    try {
+      return Promise.resolve(mod.continuations(input));
+    } catch (err) {
+      return Promise.resolve({ ok: false, reason: 'exception', careerId: null, runs: [] });
+    }
+  }
+
   /** 把 commissions.json 交给 commission-core（只配置一次；缺失/失败保持 fail-open）。 */
   function configureCommissionContent() {
     var mod = commissionModule();
@@ -3061,6 +3091,9 @@
       reducedMotion: reducedMotionPreferred(),
       api: api,
       commission: commissionModule() || null,
+      /* 0.20 只读 continuation 查询：告示板可直接 ctx.careerContinuations({careerId})，
+         也可经 ctx.commission.continuations；两者是同一只读方法，无新 ctx 字段依赖。 */
+      careerContinuations: careerContinuations,
       alternatives: readGlobal('alternatives') || null,
       rental: readGlobal('rental') || null,
       materials: readGlobal('materials') || null,
@@ -3989,6 +4022,8 @@
     api.originIntro = originIntro;
     /* 0.16 职业委托（向后兼容扩展）：无 ticket 时 commissionRun=null，行为与 0.15 相同。 */
     api.commission = null;
+    /* 0.20 只读 continuation 查询：与 ctx.careerContinuations 同函数；不建 run、不自动导航。 */
+    api.careerContinuations = careerContinuations;
     api.commissionRun = null;
     api.items = null;
     api.alternatives = null;

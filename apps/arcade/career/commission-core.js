@@ -1059,6 +1059,97 @@
       return CONTENT_VERSION;
     }
 
+    /* ---------------- 公开方法：continuations（只读生涯连续性查询） ---------------- */
+
+    /**
+     * 关闭标签页后 sessionStorage ticket 丢失时的只读发现入口（0.20 生涯首航 V2）。
+     *
+     * API 形状（对告示板/主 Agent 冻结，bridge 在 ctx.commission 与 ctx.careerContinuations 上暴露）：
+     *   commission.continuations({ careerId? }) -> Promise<{
+     *     ok: true, careerId: string|null,
+     *     runs: [{
+     *       runId, ticketId, commissionId, gameId,
+     *       status: 'issued'|'active',
+     *       issuedAt, startedAt: string|null
+     *     }]
+     *   }>
+     *   失败：{ ok:false, reason, careerId:null, runs:[] }
+     *
+     * - 只读：不 ensureCareer、不 createRun、不写 sessionStorage；仅按 status 集合
+     *   ['issued','active'] 过滤 DB runs（失败/放弃/结算都不算），不创建任何数据。
+     * - careerId 缺省时读 state store 的生涯指针；指针也不存在时返回 {ok:true, careerId:null, runs:[]}。
+     * - 排序稳定：active 优先，再按 issuedAt 升序，再按 runId 字典序；多 live run 时 UI 可稳定选择。
+     * - 明确继续由玩家动作触发：UI 用本 run 的 commissionId 调 commission.start（已支持
+     *   DB live run 复用并恢复 ticket），只用返回的 url 导航；本方法永不自动接管或建票。
+     * - C5 终局 run 的 commissionId 形如 'ending.<approach>'，UI 可按需过滤，不在这里改语义。
+     */
+    async function continuationsSafe(input) {
+      var opts = isObject(input) ? input : {};
+      var core = resolveCore();
+      var db = resolveDb();
+      if (!core) return failure(REASONS.coreUnavailable, { careerId: null, runs: [] });
+      if (!db) return failure(REASONS.dbUnavailable, { careerId: null, runs: [] });
+      var careerId = isRunIdSafe(opts.careerId) ? opts.careerId : null;
+      if (!careerId && isFunction(db.getState)) {
+        try {
+          var pointer = await db.getState('career');
+          var pointerId = pointer && isObject(pointer.value) ? pointer.value.careerId : pointer && pointer.careerId;
+          if (isRunIdSafe(pointerId)) careerId = pointerId;
+        } catch (err) {
+          careerId = null;
+        }
+      }
+      if (!careerId) return { ok: true, careerId: null, runs: [] };
+      if (!isFunction(db.listRuns)) return failure(REASONS.dbUnavailable, { careerId: careerId, runs: [] });
+      var listed = null;
+      try {
+        listed = await db.listRuns({ careerId: careerId, statuses: LIVE_STATUS.slice(), mode: MODE });
+      } catch (err) {
+        return failure(REASONS.exception, { careerId: careerId, runs: [] });
+      }
+      /* 兼容两种 listRuns 返回形状：新形状 {ok,runs} 能区分「读失败」与「没有 run」；
+         旧形状 Array 兼容注入的测试 DB。读失败必须 ok:false，不能伪装成空列表。 */
+      var rows = null;
+      if (isObject(listed) && Object.prototype.hasOwnProperty.call(listed, 'ok')) {
+        if (listed.ok !== true) return failure(listed.reason || REASONS.dbUnavailable, { careerId: careerId, runs: [] });
+        rows = Array.isArray(listed.runs) ? listed.runs : [];
+      } else if (Array.isArray(listed)) {
+        rows = listed;
+      } else {
+        return failure(REASONS.dbUnavailable, { careerId: careerId, runs: [] });
+      }
+      var runs = [];
+      for (var i = 0; i < rows.length; i += 1) {
+        var row = rows[i];
+        if (!isObject(row) || row.careerId !== careerId || row.mode !== MODE) continue;
+        if (LIVE_STATUS.indexOf(row.status) < 0) continue;
+        var runId = typeof row.runId === 'string' ? row.runId : typeof row.ticketId === 'string' ? row.ticketId : '';
+        if (!isRunId(runId)) continue;
+        runs.push({
+          runId: runId,
+          ticketId: typeof row.ticketId === 'string' && row.ticketId ? row.ticketId : runId,
+          commissionId: typeof row.commissionId === 'string' ? row.commissionId : null,
+          gameId: typeof row.gameId === 'string' ? row.gameId : null,
+          status: row.status === 'active' ? 'active' : 'issued',
+          issuedAt: typeof row.issuedAt === 'string' ? row.issuedAt : typeof row.createdAt === 'string' ? row.createdAt : null,
+          startedAt: typeof row.startedAt === 'string' ? row.startedAt : null,
+        });
+      }
+      runs.sort(function (a, b) {
+        if (a.status !== b.status) return a.status === 'active' ? -1 : 1;
+        var left = a.issuedAt || '';
+        var right = b.issuedAt || '';
+        if (left !== right) return left < right ? -1 : 1;
+        if (a.runId === b.runId) return 0;
+        return a.runId < b.runId ? -1 : 1;
+      });
+      return { ok: true, careerId: careerId, runs: runs };
+    }
+
+    function continuations(input) {
+      return guardAsync('continuations', continuationsSafe(input), { ok: false, reason: REASONS.exception, careerId: null, runs: [] });
+    }
+
     /* ---------------- 公开方法：getWallet（只读诊断 / 告示板钱包行） ---------------- */
 
     /**
@@ -1154,6 +1245,45 @@
 
     /* ---------------- 公开方法：start ---------------- */
 
+    /**
+     * start 幂等命中 DB live run 时组装复用结果（不修改 DB；只恢复本标签页 sessionStorage ticket）。
+     *
+     * 原票语义保持：nonce / rulesetVersion / contentVersion / startParams / seed / attempt
+     * 全部来自 run 行（签票时写入的权威快照），不因当前内容版本变化而重写：
+     *   - 旧内容签名的新票不得被当前内容覆盖，否则游戏页 validateTicket 的版本/nonce 会拒收；
+     *   - startParams 只在 run 行完全没有时回退到当前 commission（旧档兼容），有则原样保留。
+     */
+    function reuseResult(run, commission, careerId, via) {
+      var ticket = ticketFromRun(run, commission);
+      if (!ticket) return null;
+      if (!isObject(run.startParams) || Object.keys(run.startParams).length === 0) {
+        ticket.startParams = clone(commission.startParams) || {};
+      } else {
+        ticket.startParams = clone(run.startParams);
+      }
+      if (typeof run.rulesetVersion === 'number') ticket.rulesetVersion = run.rulesetVersion;
+      if (typeof run.contentVersion === 'string' && run.contentVersion) ticket.contentVersion = run.contentVersion;
+      if (typeof run.seed === 'string') ticket.seed = run.seed;
+      if (Number.isFinite(Number(run.attempt))) ticket.attempt = toPositiveInt(run.attempt, 1);
+      if (!ticket.careerId) ticket.careerId = careerId || run.careerId || null;
+      /* DB 是 nonce 权威；旧/缺 nonce 的 run 不可伪造票，避免桥接层 validateTicket 拒收。 */
+      if (!NONCE_RE.test(ticket.nonce || '')) return null;
+      writeStoredTicket(storedTicketOf(ticket));
+      rememberRun(ticket, run);
+      return {
+        ok: true,
+        reused: true,
+        via: via,
+        ticket: ticket,
+        ticketId: ticket.ticketId,
+        runId: ticket.runId,
+        careerId: ticket.careerId,
+        commissionId: commission.commissionId,
+        gameId: ticket.gameId,
+        url: ticketUrl(ticket),
+      };
+    }
+
     async function startSafe(input) {
       var opts = isObject(input) ? input : {};
       var core = resolveCore();
@@ -1174,7 +1304,7 @@
         return failure(REASONS.locked, { commissionId: commissionId, careerId: career.careerId, message: '港口的告示还没换成这一张。' });
       }
 
-      /* 幂等：同 career + 同委托已有未结算 run → 返回原 ticket（不重复建 run）。 */
+      /* 幂等路径一：本标签页 sessionStorage ticket 仍在（原行为，先命中先返回）。 */
       var stored = readStoredTicket();
       if (
         stored &&
@@ -1185,20 +1315,38 @@
       ) {
         var existingRun = await safeGetRun(db, stored.ticketId);
         if (existingRun && existingRun.commissionId === commissionId && isLiveStatus(existingRun.status)) {
-          var reusedTicket = ticketFromRun(existingRun, commission) || stored;
-          reusedTicket.startParams = clone(commission.startParams) || reusedTicket.startParams || {};
-          writeStoredTicket(storedTicketOf(reusedTicket));
-          rememberRun(reusedTicket, existingRun);
-          return {
-            ok: true,
-            reused: true,
-            ticket: reusedTicket,
-            ticketId: reusedTicket.ticketId,
-            runId: reusedTicket.runId,
-            careerId: reusedTicket.careerId,
-            commissionId: commissionId,
-            url: ticketUrl(reusedTicket),
-          };
+          var reused = reuseResult(existingRun, commission, career.careerId, 'stored-ticket');
+          if (reused) return reused;
+        }
+      }
+
+      /* 幂等路径二（0.20）：关闭标签页后 ticket 丢失，但 DB 仍有同 career+同委托 live run。
+         只读查到原 run 后复用其 ticketId/nonce；玩家必须显式再次点击「接单」，这里不会自动导航。 */
+      if (isFunction(db.listRuns)) {
+        var listedCandidates = null;
+        try {
+          listedCandidates = await db.listRuns({ careerId: career.careerId, statuses: LIVE_STATUS.slice(), mode: MODE, commissionId: commissionId });
+        } catch (err) {
+          listedCandidates = null;
+        }
+        /* 新形状 {ok,runs} 与旧 Array 形状都兼容；读失败不在这里伪造成「没有 run」而重建票，
+           交给下面的 createRun 同事务去重兜底（DB 可用时返回 duplicate 原票）。 */
+        var candidates = isObject(listedCandidates) && Object.prototype.hasOwnProperty.call(listedCandidates, 'ok')
+          ? (listedCandidates.ok === true && Array.isArray(listedCandidates.runs) ? listedCandidates.runs : [])
+          : (Array.isArray(listedCandidates) ? listedCandidates : []);
+        var liveRun = null;
+        for (var c = 0; c < candidates.length; c += 1) {
+          var candidate = candidates[c];
+          if (!isObject(candidate) || candidate.mode !== MODE || candidate.commissionId !== commissionId) continue;
+          if (!isLiveStatus(candidate.status)) continue;
+          var full = await safeGetRun(db, typeof candidate.ticketId === 'string' ? candidate.ticketId : candidate.runId);
+          if (full && full.commissionId === commissionId && isLiveStatus(full.status)) {
+            if (!liveRun || (full.status === 'active' && liveRun.status !== 'active')) liveRun = full;
+          }
+        }
+        if (liveRun) {
+          var recovered = reuseResult(liveRun, commission, career.careerId, 'db-live-run');
+          if (recovered) return recovered;
         }
       }
 
@@ -1251,6 +1399,11 @@
       if (!created || !created.ok) {
         var createReason = created && created.reason === 'conflict' ? REASONS.runConflict : REASONS.runCreateFailed;
         return failure(createReason, { error: (created && (created.error || created.reason)) || null });
+      }
+      /* 多标签并发兜底：DB 在同一事务发现既有 live run 时返回 duplicate（不插入新行），复用原票。 */
+      if (created.duplicate === true && created.run) {
+        var raced = reuseResult(created.run, commission, career.careerId, 'create-run-duplicate');
+        if (raced) return raced;
       }
       writeStoredTicket(storedTicketOf(ticket));
       rememberRun(ticket, created.run || null);
@@ -1831,6 +1984,7 @@
       getContentVersion: getContentVersion,
       getWallet: getWallet,
       listAvailable: listAvailable,
+      continuations: continuations,
       start: start,
       validateTicket: validateTicket,
       markActive: markActive,

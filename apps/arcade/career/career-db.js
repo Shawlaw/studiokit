@@ -808,6 +808,48 @@
     return record;
   }
 
+  /* 只有这两个状态算“还活着”：结算/领奖/失败/放弃/取消/过期都不是可继续的 run。 */
+  const RUN_LIVE_STATUS = Object.freeze(['issued', 'active']);
+
+  /**
+   * 只读列出 runs（生涯连续性查询；不创建生涯、不建 run、不写任何 store）。
+   * 入参是硬过滤条件：careerId 必须是合法生涯 id，statuses/mode/commissionId 都是精确匹配；
+   * 不传 statuses 时只返回 live 状态（保护调用方不会误把结算/失败 run 当成可继续）。
+   *
+   * 返回带 ok 的结构，使「读取失败」不会被 UI 误读为「没有 run」：
+   *   成功 { ok:true, runs:[...] }；失败 { ok:false, reason, runs:[] }。
+   * rulesetVersion/contentVersion/nonce/startParams 等字段原样来自 run 行，不做重写。
+   */
+  function listRuns(input) {
+    const core = coreApi();
+    if (!core) return Promise.resolve({ ok: false, reason: 'core-unavailable', error: null, runs: [] });
+    const options = isObject(input) ? input : {};
+    const careerId = core.isValidCareerId(options.careerId) ? options.careerId : null;
+    if (careerId === null && options.careerId !== undefined) {
+      return Promise.resolve({ ok: false, reason: 'bad-career-id', error: null, runs: [] });
+    }
+    const statuses = Array.isArray(options.statuses)
+      ? options.statuses.filter((value) => typeof value === 'string')
+      : RUN_LIVE_STATUS.slice();
+    const mode = typeof options.mode === 'string' && options.mode ? options.mode : null;
+    const commissionId = typeof options.commissionId === 'string' && options.commissionId ? options.commissionId : null;
+    return txRun(['runs'], 'readonly', (ctx) => {
+      ctx.bind(ctx.store('runs').getAll(), (rows) => {
+        const matched = (Array.isArray(rows) ? rows : []).filter((row) => {
+          if (!isObject(row)) return false;
+          if (careerId !== null && row.careerId !== careerId) return false;
+          if (statuses.indexOf(row.status) < 0) return false;
+          if (mode !== null && row.mode !== mode) return false;
+          if (commissionId !== null && row.commissionId !== commissionId) return false;
+          return true;
+        });
+        ctx.done(matched);
+      });
+    }).then((res) => (res.ok && Array.isArray(res.result)
+      ? { ok: true, runs: res.result }
+      : { ok: false, reason: res.reason || 'read-failed', error: res.error || null, runs: [] }));
+  }
+
   function createRun(run) {
     const core = coreApi();
     if (!core) return Promise.resolve(failure('core-unavailable'));
@@ -815,7 +857,8 @@
     const at = nowIso();
     const record = sanitizeRun(run, at);
     return txRun(['runs'], 'readwrite', (ctx) => {
-      ctx.bind(ctx.store('runs').get(record.runId), (existing) => {
+      const store = ctx.store('runs');
+      ctx.bind(store.get(record.runId), (existing) => {
         if (existing) {
           const same = existing.careerId === record.careerId && existing.nonce === record.nonce && existing.gameId === record.gameId;
           if (same) {
@@ -825,7 +868,23 @@
           ctx.fail('conflict');
           return;
         }
-        ctx.bindConstraint(ctx.store('runs').add(record), 'write-failed', () => ctx.done({ ok: true, duplicate: false, run: record }));
+        /* 同生涯+同委托已有 live run 时复用原票（同一 readwrite 事务内判定+写入，多标签并发不会重复建票）。
+           mode 必须一致，避免误并 C5 终局/经典/其它来源的 run；失败/放弃不在 live 集合，不会被复活。 */
+        if (!record.careerId || !record.commissionId || !record.mode) {
+          ctx.bindConstraint(store.add(record), 'write-failed', () => ctx.done({ ok: true, duplicate: false, run: record }));
+          return;
+        }
+        ctx.bind(store.getAll(), (rows) => {
+          const live = (Array.isArray(rows) ? rows : []).find((row) =>
+            isObject(row) && row.careerId === record.careerId && row.commissionId === record.commissionId &&
+            row.mode === record.mode && RUN_LIVE_STATUS.indexOf(row.status) >= 0
+          );
+          if (live) {
+            ctx.done({ ok: true, duplicate: true, reused: true, run: live });
+            return;
+          }
+          ctx.bindConstraint(store.add(record), 'write-failed', () => ctx.done({ ok: true, duplicate: false, run: record }));
+        });
       });
     }).then((res) => (res.ok ? res.result : failure(res.reason, res.error)));
   }
@@ -2603,6 +2662,7 @@
     putProfile,
     ensureCareer,
     createRun,
+    listRuns,
     getRun,
     updateRun,
     getClaim,
