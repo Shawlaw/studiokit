@@ -322,6 +322,10 @@
     '  color: var(--ac-career-muted, #93a0c8);',
     '  font-size: 11.5px;',
     '}',
+    '.ac-career-town__intro-line--role {',
+    '  color: var(--ac-career-ink, #eef1ff);',
+    '  font-weight: 600;',
+    '}',
     '.ac-career-town__free {',
     '  min-width: 0;',
     '  border: 1px solid var(--ac-career-line, #2a3560);',
@@ -868,11 +872,15 @@
     const introSection = make('section', 'ac-career-town__intro');
     introSection.setAttribute('data-town-intro', 'true');
     introSection.hidden = true;
+    const introRole = make('p', 'ac-career-town__intro-line ac-career-town__intro-line--role');
+    introRole.setAttribute('data-town-role', 'true');
+    introRole.hidden = true;
     const introGreeting = make('p', 'ac-career-town__intro-line');
     const introAddress = make('p', 'ac-career-town__intro-line ac-career-town__intro-line--meta');
     const introGoal = make('p', 'ac-career-town__intro-line');
     const introRental = make('p', 'ac-career-town__intro-line ac-career-town__intro-line--meta');
     introRental.setAttribute('data-town-rental', 'true');
+    introSection.appendChild(introRole);
     introSection.appendChild(introGreeting);
     introSection.appendChild(introAddress);
     introSection.appendChild(introGoal);
@@ -1187,7 +1195,30 @@
       return '';
     }
 
+    /** 首航身份只显示一行：从当前章/章节内容的 role 字段读取，缺失则隐藏，不写死玩家状态。 */
+    function roleTextOf() {
+      const view = currentChapterView();
+      const candidates = [];
+      if (view && view.current) candidates.push(view.current.role);
+      if (view && view.model) candidates.push(view.model.role);
+      const chapter = isObject(liveContext && liveContext.chapter) ? liveContext.chapter : null;
+      if (chapter) candidates.push(chapter.role);
+      const chapters = isObject(liveContext && liveContext.chapters) ? liveContext.chapters : null;
+      if (chapters) {
+        const first = chapters.chapters && Array.isArray(chapters.chapters) ? chapters.chapters[0] : null;
+        if (isObject(first)) candidates.push(first.role);
+      }
+      for (let i = 0; i < candidates.length; i += 1) {
+        const text = cleanText(candidates[i]);
+        if (text) return text;
+      }
+      return '';
+    }
+
     function renderOrigin() {
+      const role = roleTextOf();
+      introRole.textContent = role;
+      introRole.hidden = !role;
       const intro = originIntroOf(liveContext);
       if (!intro) {
         introSection.hidden = true;
