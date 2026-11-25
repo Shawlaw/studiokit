@@ -135,6 +135,7 @@ function noInternalTokens(text) {
   receipt.close();
 }
 
+/* 中间单（step）：只有线索/下一步，绝不冒充章节完成；下一步必须显式可读。 */
 {
   uiContext.document = createDocument();
   const card = receipt.show({
@@ -145,20 +146,22 @@ function noInternalTokens(text) {
       replies: [],
       chapter: null,
       chapterCount: 0,
-      nextStep: '',
+      nextStep: '去告示板看看「谁留下了七号货柜」有什么新活儿。',
       unavailable: '',
     },
-    openCampaign() { throw new Error('no chapter progress should not open campaign'); },
+    /* 无章节完成但存在剧情反馈与下一步：页内主动作读回信；无 openCampaign 时回退到回告示板。 */
     api: { openTown() {} },
   });
   const text = card.textContent;
   assert(text.includes('工地记录'), 'intermediate commission still reports story gain');
-  assert(!byText(card, '读回信'), 'no read-letter action without story progress');
+  assert(text.includes('下一步：去告示板看看'), 'step receipt has an explicit next step');
+  assert(!text.includes('新完成的段落'), 'step receipt never claims chapter completion');
   assert(byText(card, '回告示板'), 'town action stays available');
   assert(noInternalTokens(text), 'intermediate text has no internal tokens');
   receipt.close();
 }
 
+/* 里程碑（milestone）：章节完成 + 下一步两者都展示。 */
 {
   uiContext.document = createDocument();
   const feedback = storyFeedback('new');
@@ -166,7 +169,8 @@ function noInternalTokens(text) {
   feedback.chapterCount = 2;
   const card = receipt.show({ result: settledResult(), storyFeedback: feedback, openCampaign() {} });
   const text = card.textContent;
-  assert(text.includes('旧港的第一封信、谁留下了七号货柜'), 'multi-jump shows all completed titles');
+  assert(text.includes('新完成的段落：旧港的第一封信、谁留下了七号货柜'), 'milestone shows completed chapter(s)');
+  assert(text.includes('下一步：去告示板看看'), 'milestone also shows next step');
   assert(noInternalTokens(text), 'multi-jump never leaks chapter tokens');
   receipt.close();
 }
@@ -218,6 +222,8 @@ assert(bridgeSource.includes('var newTokens = Array.isArray(storyRecord.newToken
 assert(bridgeSource.includes('var wanted = newFlags.length') === false, 'old flag-based discovered fallback removed');
 assert(bridgeSource.includes("if (newFlags.indexOf(chapter.completionFlag) < 0) return; /* 旧章不算本次 */"), 'old chapters never labeled as new');
 assert(bridgeSource.includes('feedback.chapterCount = completed.length;'), 'multi-jump reports all new chapters');
+assert(bridgeSource.includes('feedback.nextStep = nextStepOfCurrent(validState);'), 'bridge gives next step without new chapter flags');
+assert(bridgeSource.includes("return '去告示板看看下一张单。';"), 'bridge has a next-step fallback when snapshot is unavailable');
 assert(!/storyFeedback[^\n]*newFlags/.test(bridgeSource), 'bridge never exposes newFlags to UI');
 
 console.log(`career receipt feedback: ${checks}/${checks} checks passed`);

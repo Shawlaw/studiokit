@@ -1554,23 +1554,36 @@
   /**
    * 只把本次真实新完成的章节写进收据；旧章节一律不冒充本次所得。
    * 一次连跳时列出全部新完成章节（玩家语言标题），并用最后一章的交接作为下一步。
+   * 成功结算即使没有新章节旗标（中间单），也读真实 campaign.state 给出下一步，
+   * 但不设置 feedback.chapter、不冒充任何章节完成。
    */
   function attachCampaignProgress(feedback, snapshot) {
     if (!feedback || (feedback.status !== 'recorded' && feedback.status !== 'new')) return feedback;
     var newFlags = Array.isArray(feedback.__newChapterFlags) ? feedback.__newChapterFlags : [];
-    if (!newFlags.length) return feedback; /* 中间单：只报线索/NPC 回应，不冒充本章完成 */
     var campaign = readGlobal('campaign');
-    if (!campaign || typeof campaign.state !== 'function' || !snapshot) return feedback;
-    var state;
-    try { state = campaign.state(snapshot); } catch (err) { return feedback; }
-    if (!state || state.ok !== true || !Array.isArray(state.chapters)) return feedback;
+    var state = null;
+    if (campaign && typeof campaign.state === 'function' && snapshot) {
+      try { state = campaign.state(snapshot); } catch (err) { state = null; }
+    }
+    var validState = state && state.ok === true && Array.isArray(state.chapters) ? state : null;
+
+    if (!newFlags.length) {
+      /* 中间单：只报线索/NPC 回应 + 当前进行章的下一步；绝不设置 chapter。 */
+      feedback.nextStep = nextStepOfCurrent(validState);
+      return feedback;
+    }
+    if (!validState) return feedback;
     var completed = [];
-    state.chapters.forEach(function (chapter) {
+    validState.chapters.forEach(function (chapter) {
       if (!chapter || chapter.state !== 'complete') return;
       if (newFlags.indexOf(chapter.completionFlag) < 0) return; /* 旧章不算本次 */
       completed.push(chapter);
     });
-    if (!completed.length) return feedback;
+    if (!completed.length) {
+      /* 旗标存在但快照里没有匹配的完成章：仍给下一步，不设 chapter。 */
+      feedback.nextStep = nextStepOfCurrent(validState);
+      return feedback;
+    }
     var titles = completed.map(function (chapter) { return cleanStoryText(chapterTitleOf(chapter), 80); }).filter(Boolean);
     var latest = completed[completed.length - 1];
     feedback.chapter = {
@@ -1578,8 +1591,20 @@
       title: titles.join('、'),
     };
     feedback.chapterCount = completed.length;
-    feedback.nextStep = nextStepOf(latest, state);
+    feedback.nextStep = nextStepOf(latest, validState);
     return feedback;
+  }
+
+  /** 当前进行章（campaign.state.currentChapter）的 handoff → 玩家语言下一步；快照不可用给兜底。 */
+  function nextStepOfCurrent(state) {
+    if (!state || !Array.isArray(state.chapters)) return '去告示板看看下一张单。';
+    var currentId = state.currentChapter;
+    for (var i = 0; i < state.chapters.length; i += 1) {
+      var chapter = state.chapters[i];
+      if (!chapter || chapter.chapterId !== currentId || chapter.state === 'complete') continue;
+      return nextStepOf(chapter, state) || '去告示板看看下一张单。';
+    }
+    return '去告示板看看下一张单。';
   }
 
   function chapterTitleOf(chapter) {
