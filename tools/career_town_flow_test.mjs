@@ -417,6 +417,31 @@ check('无 live run 时推荐卡显示 campaign.recommend 的游戏名/目标/�
   assert.ok(!win.navigated);
   return 'campaign recommendation shown';
 });
+check('首航 intro 显示章节 role 身份一行，缺失时隐藏', () => {
+  const ROLE = '你是刚到折光港、靠接零工维生的自由职业者';
+  const { town } = loadTown();
+  const ctx = basicCtx();
+  ctx.campaign.state = () => ({
+    ok: true,
+    currentChapter: 'C0',
+    chapters: [{ chapterId: 'C0', title: '不起眼的印记', state: 'active', role: ROLE, routes: [{ hint: '先接阿砾指定的那单。' }] }],
+    endings: [],
+  });
+  const sheet = town.render(ctx);
+  const roleLine = byAttr(sheet, 'data-town-role', 'true')[0];
+  assert.ok(roleLine, '应有 role 行');
+  assert.equal(roleLine.hidden, false);
+  assert.equal(roleLine.textContent, ROLE);
+  const text = combinedText(sheet);
+  assert.ok(text.indexOf(ROLE) < text.indexOf('眼下：'), '身份在目标之前');
+  assert.ok(text.indexOf(ROLE) < text.indexOf('租机'), '身份在免费租机提示之前');
+  const ctx2 = basicCtx();
+  const sheet2 = town.render(ctx2);
+  const roleLine2 = byAttr(sheet2, 'data-town-role', 'true')[0];
+  assert.equal(roleLine2.hidden, true, '缺 role 字段时隐藏');
+  assert.ok(!combinedText(sheet2).includes('自由职业者'), '不写死玩家状态');
+  return 'role line shown/hidden by data';
+});
 check('C0/C1 首航弱化商店/制造台入口但保留可发现性', () => {
   const { town } = loadTown();
   const sheet = town.render(basicCtx());
