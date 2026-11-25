@@ -53,4 +53,7 @@
 
 - 授权：Owner 在独立复审 APPROVE 后明确要求发布；覆盖 GitHub Pages 与 Cloudflare Pages 双端。
 - 部署前状态：本地 0.20.0 逐项串行门禁全绿，独立复审 APPROVE；真机 / 真人首航 UNVERIFIED。
-- 发布提交 / Actions run / 双端逐文件校验：待部署完成后补记，不提前声称发布成功。
+- 发布提交：`df91715cfb3bac6fbb36a907e40a3eb27e5506d9`（main）。
+- Actions：[45719028590](https://github.com/Shawlaw/studiokit/actions/runs/45719028590)，Validate and build / Deploy GitHub Pages / Deploy Cloudflare Pages / Verify both deployments 四项全部成功。
+- 双端校验：`verify_deploy.py` PASS，GitHub Pages 与 Cloudflare Pages 各 **88/88** 文件一致，arcade **0.20.0** / badge 2.2.1 / venue 0.2.0；两站中心页 HTML 逐字节一致，包含生涯视图与「旧港有一封来信」入口。
+- 发布后状态：远端 `main` 为 `df91715`，两个正式域名均为 0.20.0；真机 / 真人首航仍 UNVERIFIED。

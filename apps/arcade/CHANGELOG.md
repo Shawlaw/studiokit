@@ -1,6 +1,8 @@
 # Arcade Changelog
 
-## 0.20.0 — 2026-11-26
+## 0.20.0 — 2026-11-26（已双端发布）
+
+发布提交 `df91715`，[Actions 45719028590](https://github.com/Shawlaw/studiokit/actions/runs/45719028590) 四项成功；两个正式域名各 88/88 文件与本地产物一致，版本 arcade 0.20.0。线上 HTML 均包含生涯视图与「旧港有一封来信」入口。真机 / 真人首航 UNVERIFIED。
 
 生涯首航与剧情流畅度 V2。设计与回滚见 [`DESIGN-0.20.0.md`](DESIGN-0.20.0.md)，集成与门禁结果见 [`docs/arcade-life/INTEGRATION-0.20.md`](../../docs/arcade-life/INTEGRATION-0.20.md)。
 
