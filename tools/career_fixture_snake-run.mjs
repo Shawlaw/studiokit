@@ -205,11 +205,21 @@ function headAdvanced(base, head, dir, minSteps = 1) {
   return false;
 }
 
+/** 方向向量 → 固定四向键的 data-dir（屏幕坐标 x 向右、y 向下）。 */
+function dirKey(dir) {
+  if (!dir) return '';
+  if (dir.x > 0) return 'R';
+  if (dir.x < 0) return 'L';
+  if (dir.y > 0) return 'D';
+  if (dir.y < 0) return 'U';
+  return '';
+}
+
 /**
  * 真实移动 + 真实转向证明：
  * 1) 不注入食物，等真实 update→stepSnake 让蛇头沿当前方向前进（真实计时步进）；
- * 2) 用真实触屏「左转」按钮 pointerdown，等真实步进后 dir 变成逆时针 90° 且蛇头沿新方向前进；
- *    再用真实「右转」按钮走一遍顺时针。
+ * 2) 用真实触屏方向键 pointerdown（相对当前方向换算成固定四向键），等真实步进后 dir 变成
+ *    逆时针 90° 且蛇头沿新方向前进；再按顺时针走一遍。
  * 期间不改变任何分数/果实数，只读校验。
  */
 async function proveRealMovementAndTurning(ctx) {
@@ -230,11 +240,15 @@ async function proveRealMovementAndTurning(ctx) {
     const before = await board(ctx);
     invariant(before && before.state === 'playing', '转向证明前应处于游玩态：' + JSON.stringify(before));
     const expected = rotated(before.dir, turn);
+    /* 0.18.1 起贪吃蛇是固定四向键（[data-dir]），不再是相对蛇头的左右转按钮（[data-turn]）：
+       把「相对转向后的目标方向」换算成对应的绝对方向键再按，证明的仍是一次真实的触屏转向。 */
+    const key = dirKey(expected);
+    invariant(key, '无法换算目标方向键：' + JSON.stringify(expected));
     const dispatched = await ctx.cdp.evaluate(
-      "(function(){ var b = document.querySelector('[data-turn=\"" + turn + "\"]'); if (!b || b.disabled) return false; " +
+      "(function(){ var b = document.querySelector('[data-dpad] [data-dir=\"" + key + "\"]'); if (!b || b.disabled) return false; " +
         "b.dispatchEvent(new PointerEvent('pointerdown', { pointerId: 11, pointerType: 'touch', isPrimary: true, bubbles: true, cancelable: true })); return true; })()"
     );
-    invariant(dispatched === true, '真实触屏转向按钮不可用：' + turn);
+    invariant(dispatched === true, '真实触屏方向键不可用：' + key);
     /* 转向输入可能正好跨过一格：待执行方向或已生效方向都算“真实转向被接受”。 */
     const queued = await waitBoard(
       ctx,
