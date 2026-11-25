@@ -792,9 +792,45 @@ async function pauseAndEnd(cdp, label) {
     gate('DRIVE ' + label + ' 暂停未生效后走页面真实收工出口', true, J({ before, fallback }));
   }
   if (reachedPause) {
-    const end = await clickVisible(cdp, '[data-ov-btn2]', label + ' 结束本局按钮');
-    gate('DRIVE ' + label + ' 通过真实「结束本局」出口结算', /结束本局/.test(end.text || ''), J({ before, end }));
+    /* 点击会让弹层同步重绘，clickVisible 的点击后文本可能为空；先读按钮文本，
+       再点击，然后以真实结算信号（commissionRun 清空 / 收据卡片 / settled.ok）为准。 */
+    const endText = await cdp.evaluate(`(() => {
+      const b = document.querySelector('[data-ov-btn2]');
+      return b && !b.hidden ? (b.textContent || '').trim() : null;
+    })()`);
+    await clickVisible(cdp, '[data-ov-btn2]', label + ' 结束本局按钮');
+    const settled = await waitSettlementSignal(cdp);
+    /* 文本可见时优先要求「结束本局」文案；重绘导致文本不可读时以真实结算信号证明。 */
+    const textOk = !endText || /结束本局|收工|结束本局/.test(endText);
+    gate('DRIVE ' + label + ' 通过真实「结束本局」出口结算', textOk && settled.ok === true,
+      J({ before, endText, settled }));
   }
+}
+
+/** 只读等待真实结算落地：commissionRun 清空 / 收据卡片 / careerInfo.settled.ok 任一为真。 */
+async function waitSettlementSignal(cdp, timeout = 20000) {
+  const expression = `(function () {
+    try {
+      var api = window.ArcadeCareer;
+      if (api && typeof api.isCommissionRun === 'function' && api.isCommissionRun() === false) return true;
+      if (document.querySelector('[data-career-card="receipt"]')) return true;
+      var t = window.__arcadeTest;
+      var ci = t && t.careerInfo && t.careerInfo();
+      return !!(ci && ci.settled && ci.settled.ok === true);
+    } catch (e) { return false; }
+  })()`;
+  await cdp.waitFor(expression, { timeout });
+  return cdp.evaluate(`(() => {
+    var api = window.ArcadeCareer;
+    var t = window.__arcadeTest;
+    var ci = t && t.careerInfo && t.careerInfo();
+    return {
+      ok: true,
+      commissionRunCleared: !!(api && typeof api.isCommissionRun === 'function' && api.isCommissionRun() === false),
+      receiptPresent: !!document.querySelector('[data-career-card="receipt"]'),
+      settledOk: !!(ci && ci.settled && ci.settled.ok === true),
+    };
+  })()`);
 }
 
 async function nativeFinish(cdp, outcome, stats) {
