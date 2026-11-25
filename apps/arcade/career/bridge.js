@@ -41,6 +41,9 @@
   var PAYLOAD_MAX_KEYS = 16;
   var STATS_MAX_KEYS = 24;
   var TEXT_FIELD_LIMIT = 120;
+  var STORY_TEXT_LIMIT = 160;
+  /* 结算剧情反馈的同步等待上限：超时也要把收据交到玩家手里（不静默吞错，显示未记）。 */
+  var STORY_PIPELINE_TIMEOUT_MS = 8000;
   var READY_TIMEOUT_MS = 3000;
   var BOOT_GUARD_MS = 4500;
   var LOAD_TIMEOUT_MS = 4000;
@@ -1275,8 +1278,17 @@
           clearRentalMarker();
           internal.finished = true;
           internal.finishedResult = normalized;
-          renderCommissionReceipt(normalized);
-          return normalized;
+          /* 终局也走同一条剧情反馈管线：等真实记录结果，再展示收据（不静默吞错）。 */
+          return withStoryTimeout(storyFeedbackPipeline(normalized, run))
+            .then(function (feedback) {
+              renderCommissionReceipt(normalized, feedback);
+              return normalized;
+            })
+            .catch(function (err) {
+              warnOnce('story-evidence', err);
+              renderCommissionReceipt(normalized, storyFeedbackFailure(normalized));
+              return normalized;
+            });
         })
         .catch(function (err) {
           warnOnce('ending-settle', err);
@@ -1310,28 +1322,17 @@
         clearRentalMarker();
         internal.finished = true;
         internal.finishedResult = normalized;
-        renderCommissionReceipt(normalized);
         /* 0.17：把收据里的剧情证据登记为只读 evidence token（失败不影响结算结果）。 */
-        if (normalized.ok && normalized.receipt && typeof normalized.receipt === 'object') {
-          var db = api.db || readGlobal('db');
-          return ensureLazyModule('storyEvidence')
-            .then(function (evidenceModule) {
-              if (!evidenceModule || typeof evidenceModule.recordFromReceipt !== 'function' || !db) return normalized;
-              return Promise.resolve(evidenceModule.recordFromReceipt({
-                careerId: run.careerId,
-                receipt: normalized.receipt,
-                db: db,
-                now: nowIso(),
-              })).then(function () {
-                return normalized;
-              });
-            })
-            .catch(function (err) {
-              warnOnce('story-evidence', err);
-              return normalized;
-            });
-        }
-        return normalized;
+        return withStoryTimeout(storyFeedbackPipeline(normalized, run))
+          .then(function (storyFeedback) {
+            renderCommissionReceipt(normalized, storyFeedback);
+            return normalized;
+          })
+          .catch(function (err) {
+            warnOnce('story-evidence', err);
+            renderCommissionReceipt(normalized, storyFeedbackFailure(normalized));
+            return normalized;
+          });
       })
       .catch(function (err) {
         warnOnce('commission-settle', err);
@@ -1339,7 +1340,268 @@
       });
   }
 
-  function renderCommissionReceipt(result) {
+  /** 剧情反馈同步等待上限：模块/DB 卡住不能挡住结算收据；超时按「工钱已结、剧情未记」如实展示。 */
+  function withStoryTimeout(promise) {
+    return new Promise(function (resolve, reject) {
+      var settled = false;
+      var timer = setTimeout(function () {
+        if (settled) return;
+        settled = true;
+        warnOnce('story-feedback-timeout');
+        resolve(storyFeedbackFailure({ ok: true }));
+      }, STORY_PIPELINE_TIMEOUT_MS);
+      Promise.resolve(promise).then(function (value) {
+        if (settled) return;
+        settled = true;
+        clearTimeout(timer);
+        resolve(value);
+      }, function (err) {
+        if (settled) return;
+        settled = true;
+        clearTimeout(timer);
+        reject(err);
+      });
+    });
+  }
+
+  /**
+   * 结算后先等 recordFromReceipt 的真实结果，再补 C1 旗标与章节快照，最后渲染收据。
+   * 任何一步失败都不影响已结清的工钱，但必须如实显示剧情未记（不伪造成功）。
+   */
+  function storyFeedbackPipeline(result, run) {
+    var db = api.db || readGlobal('db');
+    return Promise.all([ensureLazyModule('campaign'), ensureLazyModule('storyEvidence'), loadCareerContent()])
+      .catch(function () { return null; })
+      .then(function () {
+        configureCareerModules();
+        if (!result || result.ok !== true || !result.receipt || typeof result.receipt !== 'object') {
+          /* 结算本身失败也要做幂等 C1 同步，让下一单不必等玩家打开面板。 */
+          return Promise.resolve(syncCampaignFlags(false)).catch(function () { return null; })
+            .then(function () { return null; });
+        }
+        var evidenceModule = readGlobal('storyEvidence');
+        if (!db || !evidenceModule || typeof evidenceModule.recordFromReceipt !== 'function') {
+          return storyFeedbackFailure(result);
+        }
+        return Promise.resolve(evidenceModule.recordFromReceipt({
+          careerId: run.careerId,
+          receipt: result.receipt,
+          db: db,
+          now: nowIso(),
+        })).then(function (storyRecord) {
+          return storyFeedbackFor(result, storyRecord);
+        }).catch(function (err) {
+          warnOnce('story-evidence', err);
+          return storyFeedbackFailure(result);
+        });
+      })
+      .then(function (feedback) {
+        if (!feedback || (feedback.status !== 'recorded' && feedback.status !== 'new')) return feedback;
+        /* C1 同步 + 快照都放在 recordFromReceipt 之后，快照必须看见真实剧情结果。 */
+        return Promise.resolve(syncCampaignFlags(false))
+          .then(function () { return loadStorySnapshot(); })
+          .then(function (snapshot) { return attachCampaignProgress(feedback, snapshot); })
+          .catch(function (err) {
+            warnOnce('story-campaign-progress', err);
+            return feedback;
+          });
+      });
+  }
+
+  function cleanStoryText(value, limit) {
+    if (typeof value !== 'string') return '';
+    return clipText(value.replace(/\s+/g, ' ').trim(), limit || STORY_TEXT_LIMIT);
+  }
+
+  /** 工钱已结、剧情未记：失败路径必须明确告诉玩家，绝不静默吞错。 */
+  function storyFeedbackFailure(result) {
+    return {
+      status: 'unavailable',
+      discovered: [],
+      replies: [],
+      chapter: null,
+      nextStep: '',
+      unavailable: result && result.ok === false
+        ? '这趟活儿没结成；工钱还没进账，剧情也没记。'
+        : '工钱已结，剧情这会儿没能记进账。',
+    };
+  }
+
+  /**
+   * 从真实记录结果推导玩家语言的剧情所得。
+   * - discovered 只取本次新获得的有效证据（newTokens），重复领取为空；
+   * - newFlags 只作内部推导使用，不进入玩家可见文案；
+   * - NPC 回信按本次涉及章级旗标匹配，最多两条，名字统一为玩家称呼。
+   */
+  function storyFeedbackFor(result, storyRecord) {
+    var feedback = storyFeedbackFailure(result);
+    if (!result || result.ok !== true || !storyRecord || storyRecord.ok !== true) return feedback;
+    feedback.status = storyRecord.duplicate === true ? 'recorded' : 'new';
+    feedback.unavailable = '';
+    var newTokens = Array.isArray(storyRecord.newTokens) ? storyRecord.newTokens.slice() : [];
+    var discovered = [];
+    for (var t = 0; t < newTokens.length && discovered.length < 2; t += 1) {
+      var label = evidenceLabelOf(newTokens[t]);
+      if (label && discovered.indexOf(label) < 0) discovered.push(label);
+    }
+    feedback.discovered = discovered;
+    var newFlags = Array.isArray(storyRecord.newFlags) ? storyRecord.newFlags.slice() : [];
+    var replies = [];
+    var npcContent = internal.npcContent;
+    if (npcContent && Array.isArray(npcContent.characters)) {
+      var matched = 0;
+      for (var f = 0; f < newFlags.length && replies.length < 2; f += 1) {
+        var chapterId = chapterOfFlag(newFlags[f]);
+        if (!chapterId || chapterId === 'C0') continue; /* C0 由读信推进，不是工单结算所得 */
+        matched += 1;
+        for (var c = 0; c < npcContent.characters.length && replies.length < 2; c += 1) {
+          var character = npcContent.characters[c];
+          if (!character || !Array.isArray(character.replies)) continue;
+          for (var r = 0; r < character.replies.length && replies.length < 2; r += 1) {
+            var reply = character.replies[r];
+            if (!reply || reply.chapterId !== chapterId) continue;
+            var text = cleanStoryText(reply.text);
+            var name = cleanStoryText(npcNameOf(character), 40);
+            if (!text || !name) continue;
+            replies.push({ name: name, text: text });
+          }
+        }
+      }
+      /* 中间单没有章级旗标时，按本次收据旗标给一条所在章的回信（只说路线进展，不冒充本章完成）。 */
+      if (!matched && replies.length === 0 && newTokens.length) {
+        var receiptFlags = Array.isArray(result.receipt.flags) ? result.receipt.flags.slice() : [];
+        for (var rf = 0; rf < receiptFlags.length && replies.length < 1; rf += 1) {
+          var receiptChapter = chapterOfFlag(receiptFlags[rf]);
+          if (!receiptChapter || receiptChapter === 'C0') continue;
+          for (var nc = 0; nc < npcContent.characters.length && replies.length < 1; nc += 1) {
+            var npc = npcContent.characters[nc];
+            if (!npc || !Array.isArray(npc.replies)) continue;
+            for (var nr = 0; nr < npc.replies.length && replies.length < 1; nr += 1) {
+              var nrp = npc.replies[nr];
+              if (!nrp || nrp.chapterId !== receiptChapter) continue;
+              var nrText = cleanStoryText(nrp.text);
+              var nrName = cleanStoryText(npcNameOf(npc), 40);
+              if (nrText && nrName) replies.push({ name: nrName, text: nrText });
+            }
+          }
+        }
+      }
+    }
+    feedback.replies = replies;
+    /* 仅内部使用：告诉章节快照本次真实新增了哪些章级旗标，不进入玩家可见文案。 */
+    feedback.__newChapterFlags = newFlags.filter(function (flag) { return !!chapterOfFlag(flag); });
+    return feedback;
+  }
+
+  /** 章级旗标 → C0..C5；非章级旗标、未知旗标返回 null。 */
+  function chapterOfFlag(flag) {
+    var match = /^C([0-5])\./.exec(typeof flag === 'string' ? flag : '');
+    return match ? 'C' + match[1] : null;
+  }
+
+  /** 证据 token → 玩家语言物件名（不泄漏 E/BP/MAP token，也不显示长凭据号）。 */
+  function evidenceLabelOf(token) {
+    var text = typeof token === 'string' ? token : '';
+    if (!text) return '';
+    var classMatch = /^(E|BP|MAP|DEC)-/.exec(text);
+    if (!classMatch) return '';
+    var kind = classMatch[1];
+    var label = kind === 'BP' ? '现场记录' : kind === 'MAP' ? '路线图' : kind === 'DEC' ? '决议文书' : '航报';
+    if (text.indexOf('patrol') >= 0 || text.indexOf('flight') >= 0) return '异常航报';
+    if (text.indexOf('site') >= 0) return '工地记录';
+    if (text.indexOf('scroll') >= 0) return '失落的卷轴拓片';
+    return label;
+  }
+
+  /** NPC 显示名统一玩家语言：内部代号改成戏内称呼。 */
+  function npcNameOf(character) {
+    if (!character) return '';
+    var name = typeof character.name === 'string' ? character.name : '';
+    if (name === 'E-7') return '旧港口的来信';
+    return name;
+  }
+
+  /**
+   * 只把本次真实新完成的章节写进收据；旧章节一律不冒充本次所得。
+   * 一次连跳时列出全部新完成章节（玩家语言标题），并用最后一章的交接作为下一步。
+   */
+  function attachCampaignProgress(feedback, snapshot) {
+    if (!feedback || (feedback.status !== 'recorded' && feedback.status !== 'new')) return feedback;
+    var newFlags = Array.isArray(feedback.__newChapterFlags) ? feedback.__newChapterFlags : [];
+    if (!newFlags.length) return feedback; /* 中间单：只报线索/NPC 回应，不冒充本章完成 */
+    var campaign = readGlobal('campaign');
+    if (!campaign || typeof campaign.state !== 'function' || !snapshot) return feedback;
+    var state;
+    try { state = campaign.state(snapshot); } catch (err) { return feedback; }
+    if (!state || state.ok !== true || !Array.isArray(state.chapters)) return feedback;
+    var completed = [];
+    state.chapters.forEach(function (chapter) {
+      if (!chapter || chapter.state !== 'complete') return;
+      if (newFlags.indexOf(chapter.completionFlag) < 0) return; /* 旧章不算本次 */
+      completed.push(chapter);
+    });
+    if (!completed.length) return feedback;
+    var titles = completed.map(function (chapter) { return cleanStoryText(chapterTitleOf(chapter), 80); }).filter(Boolean);
+    var latest = completed[completed.length - 1];
+    feedback.chapter = {
+      id: latest.chapterId,
+      title: titles.join('、'),
+    };
+    feedback.chapterCount = completed.length;
+    feedback.nextStep = nextStepOf(latest, state);
+    return feedback;
+  }
+
+  function chapterTitleOf(chapter) {
+    if (chapter && chapter.title) return chapter.title;
+    var chapterId = chapter && chapter.chapterId ? chapter.chapterId : '';
+    var file = (internal.chapterFiles || {})[chapterId];
+    if (file && file.title) return file.title;
+    var campaignContent = internal.campaignContent;
+    if (campaignContent && Array.isArray(campaignContent.chapters)) {
+      for (var i = 0; i < campaignContent.chapters.length; i += 1) {
+        var candidate = campaignContent.chapters[i];
+        if (candidate && candidate.chapterId === chapterId && candidate.title) return candidate.title;
+      }
+    }
+    return chapterId;
+  }
+
+  /** 章节交接 → 玩家语言的下一步（不显示 C1/C2 这类内部记号）。 */
+  function nextStepOf(chapter, state) {
+    if (!chapter) return '';
+    if (chapter.chapterId === 'C5' || state.endingChosen) {
+      return '港口已经安静下来，接下来可以自由接单。';
+    }
+    var handoff = chapter.handoff;
+    var chapters = Array.isArray(state.chapters) ? state.chapters : [];
+    for (var i = 0; i < chapters.length; i += 1) {
+      if (chapters[i] && chapters[i].chapterId === handoff) {
+        return '去告示板看看「' + cleanStoryText(chapterTitleOf(chapters[i]), 60) + '」有什么新活儿。';
+      }
+    }
+    return '去告示板或信箱看看下一封信。';
+  }
+
+  function storyFeedbackForUi(feedback) {
+    if (!feedback) return null;
+    var out = clone(feedback);
+    delete out.__newChapterFlags; /* 内部旗标只用于章节比对，不进入 UI/日志 */
+    return out;
+  }
+
+  function renderCommissionReceipt(result, feedback) {
+    var payload = {
+      api: api,
+      result: clone(result),
+      careerId: internal.commissionLastCareerId || null,
+      announce: announceToUser,
+      reducedMotion: reducedMotionPreferred(),
+      storyFeedback: storyFeedbackForUi(feedback),
+      openTown: openTown,
+      openCampaign: openCampaign,
+      openMailbox: openMailbox,
+    };
     var receiptUi = readUi('receipt');
     if (!receiptUi || typeof receiptUi.show !== 'function') {
       /* receipt.js 是 lazy 依赖：玩家本局没开过钱包时也要在结算后加载并展示收据。 */
@@ -1347,13 +1609,7 @@
         .then(function (loaded) {
           if (!loaded || typeof loaded.show !== 'function') return;
           try {
-            loaded.show({
-              api: api,
-              result: clone(result),
-              careerId: internal.commissionLastCareerId || null,
-              announce: announceToUser,
-              reducedMotion: reducedMotionPreferred(),
-            });
+            loaded.show(payload);
           } catch (err) {
             warnOnce('commission-receipt-ui', err);
           }
@@ -1362,13 +1618,7 @@
       return;
     }
     try {
-      receiptUi.show({
-        api: api,
-        result: clone(result),
-        careerId: internal.commissionLastCareerId || null,
-        announce: announceToUser,
-        reducedMotion: reducedMotionPreferred(),
-      });
+      receiptUi.show(payload);
     } catch (err) {
       warnOnce('commission-receipt-ui', err);
     }
