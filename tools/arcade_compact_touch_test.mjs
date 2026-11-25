@@ -705,14 +705,20 @@ async function main() {
     await sleep(220);
     const memCancelled = await memInfo();
     assert(memCancelled.joy.flippedIds.length === 1, '记忆翻牌：滑出牌面后抬起应取消: ' + memCancelled.joy.flippedIds.length);
-    /* 点在两张牌之间的间隙：命中离指尖最近的牌心 */
+    /* 点在两张牌之间的间隙、且明显偏向第 2 张：命中离指尖最近的牌心。
+       不能取间隙正中心——那里到两张牌心的距离相等，命中哪张由亚像素舍入决定；
+       断言也不能只数 flippedIds：若这一翻恰好配对成功，游戏会把 flippedIds 清空。 */
     const r0 = mem0.info.cardRects[0];
     const r1 = mem0.info.cardRects[1];
-    const gapX = cvF.left + (((r0.x + r0.w + r1.x) / 2) / 420) * cvF.w;
+    const gapLogicalX = r0.x + r0.w + (r1.x - (r0.x + r0.w)) * 0.7;
+    const gapX = cvF.left + (gapLogicalX / 420) * cvF.w;
     await realTap(cdp, gapX, card0.y);
     await sleep(220);
     const memGap = await memInfo();
-    assert(memGap.joy.flippedIds.length === 2, '记忆翻牌：点在牌间间隙应命中最近的牌: ' + memGap.joy.flippedIds.length);
+    const gapHitSecond = memGap.joy.flippedIds.indexOf(1) !== -1 ||
+      (Array.isArray(memGap.info.cardList) && memGap.info.cardList[1] && memGap.info.cardList[1].matched === true);
+    assert(gapHitSecond, '记忆翻牌：点在牌间间隙应命中最近的第 2 张牌（翻出或配对成功）: ' +
+      JSON.stringify({ flipped: memGap.joy.flippedIds, second: memGap.info.cardList && memGap.info.cardList[1] }));
     record('CT-18 记忆翻牌：按下不翻、原位抬起翻开、滑出取消、牌间间隙命中最近牌心', true);
 
     assert(cdp.errors.length === 0, 'console error: ' + cdp.errors.slice(0, 3).join(' | '));
