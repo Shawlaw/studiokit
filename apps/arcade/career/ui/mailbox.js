@@ -16,8 +16,8 @@
  * - 只列 state.clues 中已发现的 clueId（按发现顺序），未发现的线索永不出现；
  * - 所有内容文本用 textContent 赋值，不拼 HTML 字符串；无网络请求、无声音；
  * - 投递只调用 ctx.followLetter()，成功后在同一个面板展示「折光港告示」。
- * - 0.16（D16-01）最小入口：LOCAL/地址区块在 ctx.openTown 存在时增加
- *   「按地址投递 · 去港口」按钮，只调用 ctx.openTown()，不改动既有投递逻辑。
+ * - 首次来源未投递且有 ctx.openTown 时只显示一个主动作「送去折光港」：先投递，
+ *   严格成功后自动复用既有去港口动作；无 openTown、LOCAL/回看保留旧投递/告示路径。
  */
 (function (root) {
   'use strict';
@@ -47,10 +47,13 @@
   const CAMPAIGN_ARIA = '打开旧港来信章节面板';
   const TOWN_FAILED_TEXT = '港口那边没应声，过一会儿再试。';
   const FIRST_READ_LABEL = '送去折光港';
+  const SEND_TO_PORT_DATA_ACTION = 'send-to-port';
   const STAGE_RANK = { DORMANT: 0, GLIMPSED: 1, CURIOUS: 2, LOCAL: 3, RESIDENT: 4, EXPLORER: 5 };
 
   /* 本页会话内的投递记录：关闭面板后再打开仍能看到「已投递」。 */
   const followedClues = Object.create(null);
+  /* 首封投递进行中的门闩：跨关闭/重开也只发一次 followLetter。 */
+  const pendingFirstFlight = Object.create(null);
   /* 去港口失败时重开信箱的可见提示（一次性）。 */
   let pendingTownStatus = '';
   let panel = null;
@@ -376,13 +379,10 @@
     }
 
     function updateTownEntry() {
-      if (isFirstReadFlow()) {
-        townBtn.hidden = true;
-        campaignBtn.hidden = true;
-        return;
-      }
-      townBtn.hidden = !townAllowedNow();
-      campaignBtn.hidden = !(townAllowedNow() && !!campaignOpenerOf(context));
+      /* 首读只保留一个主动作，隐藏「按地址投递 · 去港口」与章节入口以免双按钮。 */
+      const firstFlight = isFirstFlightClue(selectedId);
+      townBtn.hidden = firstFlight || !townAllowedNow();
+      campaignBtn.hidden = firstFlight || !(townAllowedNow() && !!campaignOpenerOf(context));
     }
 
     function openTownFromLetter() {
@@ -434,16 +434,24 @@
 
     const itemNodes = Object.create(null);
     let selectedId = '';
-    let firstReadPending = false;
 
-    function isFirstReadFlow() {
+    /**
+     * 首封来信的身份与阶段判定（不看门闩）：已发现、未投递、阶段未越过 CURIOUS、
+     * 正在看第一封线索、有 followLetter 与 openTown。
+     * - 多条线索：只认 state.firstClueId（缺失才用按 seenAt 排序的 ids[0]），
+     *   回看其他线索不进入首读流程；
+     * - LOCAL/已投递/回看：一律返回 false，保留既有「再看告示 / 去港口」与章节入口。
+     */
+    function isFirstFlightClue(clueId) {
+      if (!clueId || followedClues[clueId]) return false;
+      if (typeof context.followLetter !== 'function' || !townOpenerOf(context)) return false;
       const state = isObject(context.state) ? context.state : null;
-      const firstReadId = cleanText(state && state.firstClueId) || ids[0];
-      if (!firstReadId || selectedId !== firstReadId || followedClues[selectedId]) return false;
-      const stage = cleanText(state && state.stage).toUpperCase();
+      if (!state) return false;
+      const stage = cleanText(state.stage).toUpperCase();
       const rank = STAGE_RANK[stage] === undefined ? 0 : STAGE_RANK[stage];
-      if (rank !== STAGE_RANK.GLIMPSED && rank !== STAGE_RANK.CURIOUS) return false;
-      return typeof context.followLetter === 'function' && !!townOpenerOf(context);
+      if (rank >= STAGE_RANK.LOCAL) return false;
+      const firstId = cleanText(state.firstClueId) || ids[0];
+      return firstId ? firstId === clueId : false;
     }
 
     function overlayIsCurrent() {
@@ -468,21 +476,31 @@
       setField(letterBody, letterContent.body);
       setField(letterAddress, letterContent.address);
       const delivered = !!followedClues[selectedId];
+      const firstFlight = isFirstFlightClue(selectedId);
       letterDelivered.hidden = !delivered;
-      if (isFirstReadFlow()) {
+      if (firstFlight) {
         followBtn.textContent = FIRST_READ_LABEL;
         followBtn.setAttribute('aria-label', FIRST_READ_LABEL);
+        followBtn.setAttribute('data-action', SEND_TO_PORT_DATA_ACTION);
         followBtn.classList.add('ac-career-btn--primary');
       } else {
         followBtn.textContent = delivered ? FOLLOW_AGAIN : cleanText(letterContent.actionLabel) || FOLLOW_FALLBACK;
         followBtn.setAttribute('aria-label', delivered ? '再看折光港告示' : followBtn.textContent);
+        followBtn.removeAttribute('data-action');
         followBtn.classList.remove('ac-career-btn--primary');
+      }
+      /* 跨关闭/重开保持投递中的门闩状态，按钮不可再点，读屏可见忙碌状态。 */
+      if (firstFlight && pendingFirstFlight[selectedId]) {
+        followBtn.disabled = true;
+        followBtn.setAttribute('aria-busy', 'true');
+      } else {
+        followBtn.disabled = false;
+        followBtn.removeAttribute('aria-busy');
       }
       updateTownEntry();
     }
 
     function selectClue(clueId, userInitiated) {
-      if (firstReadPending) return;
       const id = cleanText(clueId);
       if (!id || !itemNodes[id]) return;
       selectedId = id;
@@ -549,10 +567,11 @@
       announce('信已经按地址送出，折光港的告示留在信箱里。');
     }
 
-    function settleFollow(result, clueId, openTownAfter) {
+    function settleFollow(result, clueId, openTownAfter, activePanel) {
       const failed = openTownAfter
         ? !(isObject(result) && result.ok === true && result.persisted !== false)
         : !!result && isObject(result) && result.ok === false;
+      if (panel !== activePanel) return;
       if (failed) {
         setStatus(SEND_FAILED_TEXT);
         announce(SEND_FAILED_TEXT);
@@ -572,8 +591,10 @@
     function follow() {
       const clueId = selectedId;
       if (!clueId) return;
-      const sendToTown = isFirstReadFlow();
-      if (firstReadPending) return;
+      /* 首封投递门闩：进行中时任何重复点击/重开都不再发第二次 followLetter。 */
+      if (pendingFirstFlight[clueId]) return;
+      const sendToTown = isFirstFlightClue(clueId);
+      const activePanel = panel;
       if (followedClues[clueId]) {
         noticeTitle.setAttribute('data-clue-id', clueId);
         showNotice();
@@ -584,28 +605,29 @@
         announce(SEND_FAILED_TEXT);
         return;
       }
-      if (sendToTown) firstReadPending = true;
+      if (sendToTown) {
+        pendingFirstFlight[clueId] = true;
+        followBtn.disabled = true;
+        followBtn.setAttribute('aria-busy', 'true');
+      }
       let result = null;
       try {
         result = context.followLetter();
       } catch (err) {
         result = { ok: false };
       }
+      const settle = (value) => {
+        if (sendToTown) {
+          delete pendingFirstFlight[clueId];
+          if (panel === activePanel && selectedId === clueId) refreshSelection();
+        }
+        settleFollow(value, clueId, sendToTown, activePanel);
+      };
       if (result && typeof result.then === 'function') {
-        result.then(
-          (value) => {
-            if (overlayIsCurrent()) settleFollow(value, clueId, sendToTown);
-            if (sendToTown) firstReadPending = false;
-          },
-          () => {
-            if (overlayIsCurrent()) settleFollow({ ok: false }, clueId, sendToTown);
-            if (sendToTown) firstReadPending = false;
-          }
-        );
+        result.then(settle, () => settle({ ok: false }));
         return;
       }
-      settleFollow(result, clueId, sendToTown);
-      if (sendToTown) firstReadPending = false;
+      settle(result);
     }
 
     followBtn.addEventListener('click', follow, false);
