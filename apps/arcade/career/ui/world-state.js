@@ -49,6 +49,20 @@
   const CHAPTERS_HEADING_OTHER = '港里的信';
   const SIDE_HEADING = '可选支线';
   const REPLIES_HEADING = '港里的回信';
+  const RECENT_HEADING = '刚刚记下的';
+  const EARLIER_HEADING = '更早的信';
+  const EXPAND_LABEL = '展开回顾';
+  const COLLAPSE_LABEL = '收起回顾';
+  const CONTACTS_HEADING = '可以问的人';
+  const NEXT_HEADING = '下一步';
+  const NEXT_FALLBACK = {
+    C0: '去街角的告示板，挑一张今天能做成的水上零工。',
+    C1: '再带回一份与航报不同来源的现场记录，让研究院把那截信号比对完。',
+    C2: '去月影一侧的旧观测站查值班表，看看当年那位调度员遭遇了什么。',
+    C3: '城市要撑不住了，先去旧机库问问还能顶用的料，让街灯亮起来。',
+    C4: '星塔的选择摆在你面前：让它停、改写它认得的信号，或赶在窗口关上前把人接回来。',
+    C5: '事情了结，告示板又挂满了工单。想接什么活，随你。',
+  };
   const ENDINGS_HEADING = '星塔的回响';
   const EPILOGUE_HEADING = '后日谈';
   const ENDINGS_NOTE = '三条路都能让星塔停下；港口会记住你选择的方式。';
@@ -64,6 +78,8 @@
   const STATUS_NAVIGATING = '已经登记，正在去星塔。';
   const ANNOUNCE_REPLIES_HIDDEN = '回信已经收起。';
   const ANNOUNCE_REPLIES_SHOWN = '回信重新摊开。';
+  const ANNOUNCE_CHAPTERS_EXPANDED = '更早的信已经展开。';
+  const ANNOUNCE_CHAPTERS_COLLAPSED = '更早的信已经收起。';
 
   const STAGE_RANK = { DORMANT: 0, GLIMPSED: 1, CURIOUS: 2, LOCAL: 3, RESIDENT: 4, EXPLORER: 5 };
   const CHAPTER_ORDER = ['C0', 'C1', 'C2', 'C3', 'C4', 'C5'];
@@ -186,7 +202,36 @@
     '  letter-spacing: 0.04em;',
     '  overflow-wrap: anywhere;',
     '}',
+    '.ac-career-world__subheading {',
+    '  margin: 4px 0 0;',
+    '  color: var(--ac-career-ink, #eef1ff);',
+    '  font-size: 12px;',
+    '  font-weight: 600;',
+    '  overflow-wrap: anywhere;',
+    '}',
+    '.ac-career-world__stage-text {',
+    '  margin: 0;',
+    '  color: var(--ac-career-ink, #eef1ff);',
+    '  font-size: 12px;',
+    '  line-height: 1.7;',
+    '  overflow-wrap: anywhere;',
+    '}',
+    '.ac-career-world__contacts,',
+    '.ac-career-world__clues {',
+    '  min-width: 0;',
+    '  margin: 0;',
+    '  padding-left: 18px;',
+    '}',
+    '.ac-career-world__contact,',
+    '.ac-career-world__clue {',
+    '  color: var(--ac-career-muted, #93a0c8);',
+    '  font-size: 12px;',
+    '  line-height: 1.7;',
+    '  overflow-wrap: anywhere;',
+    '}',
     '.ac-career-world__chapters,',
+    '.ac-career-world__recent-list,',
+    '.ac-career-world__earlier-list,',
     '.ac-career-world__side-list,',
     '.ac-career-world__replies {',
     '  display: flex;',
@@ -242,9 +287,49 @@
     '  border-color: rgba(126, 226, 168, 0.5);',
     '  color: #8ee6b0;',
     '}',
+    '.ac-career-world__earlier-head {',
+    '  display: flex;',
+    '  align-items: center;',
+    '  justify-content: space-between;',
+    '  gap: 8px;',
+    '  min-width: 0;',
+    '}',
+    '.ac-career-world__earlier-toggle {',
+    '  flex: 0 0 auto;',
+    '  min-height: 44px;',
+    '  padding: 8px 12px;',
+    '}',
     '.ac-career-world__hint {',
     '  margin: 0;',
     '  color: var(--ac-career-muted, #93a0c8);',
+    '  font-size: 12px;',
+    '  line-height: 1.7;',
+    '  overflow-wrap: anywhere;',
+    '}',
+    '.ac-career-world__facts {',
+    '  display: flex;',
+    '  flex-direction: column;',
+    '  gap: 2px;',
+    '  min-width: 0;',
+    '  margin: 0;',
+    '  padding-left: 18px;',
+    '}',
+    '.ac-career-world__fact {',
+    '  color: var(--ac-career-muted, #93a0c8);',
+    '  font-size: 12px;',
+    '  line-height: 1.7;',
+    '  overflow-wrap: anywhere;',
+    '}',
+    '.ac-career-world__chapter-body {',
+    '  margin: 0;',
+    '  color: var(--ac-career-ink, #eef1ff);',
+    '  font-size: 12px;',
+    '  line-height: 1.7;',
+    '  overflow-wrap: anywhere;',
+    '}',
+    '.ac-career-world__next {',
+    '  margin: 0;',
+    '  color: #8ee6b0;',
     '  font-size: 12px;',
     '  line-height: 1.7;',
     '  overflow-wrap: anywhere;',
@@ -414,6 +499,24 @@
         const text = cleanText(item.text) || cleanText(item.label) || cleanText(item.title);
         if (text) out.push(text);
       }
+    });
+    return out;
+  }
+
+  function beatsOf(value) {
+    const raw = isObject(value) ? value : {};
+    return {
+      start: cleanText(raw.start),
+      progress: cleanText(raw.progress),
+      complete: cleanText(raw.complete),
+    };
+  }
+
+  function textList(value) {
+    const out = [];
+    (Array.isArray(value) ? value : []).forEach((item) => {
+      const text = cleanText(typeof item === 'string' || typeof item === 'number' ? item : item && (item.text || item.label || item.title || item.name));
+      if (text && out.indexOf(text) < 0) out.push(text);
     });
     return out;
   }
@@ -949,14 +1052,18 @@
       cleanText(builtin.title) ||
       '第 ' + chapterId + ' 章';
     const mustKnow =
-      snapshotChapter && snapshotChapter.mustKnow.length
-        ? snapshotChapter.mustKnow
-        : arrayOfText(contentChapter && contentChapter.mustKnow);
+      arrayOfText(contentChapter && contentChapter.mustKnow).length
+        ? arrayOfText(contentChapter && contentChapter.mustKnow)
+        : (snapshotChapter && snapshotChapter.mustKnow) || [];
     return {
       chapterId: chapterId,
       state: state,
       title: title,
       hint: pickHint(state, routes, contentRoutes, contentChapter, builtin),
+      beats: beatsOf(contentChapter && contentChapter.beats),
+      contacts: textList(contentChapter && contentChapter.contacts),
+      clues: textList(contentChapter && contentChapter.clues),
+      next: cleanText(contentChapter && contentChapter.next) || cleanText(NEXT_FALLBACK[chapterId]),
       routes: routes,
       mustKnow: mustKnow,
       body: cleanText(snapshotChapter && snapshotChapter.body) || cleanText(contentChapter && contentChapter.body),
@@ -1073,7 +1180,12 @@
     const chapters = ids.map((chapterId) => {
       const fileChapter = chapterFiles && isObject(chapterFiles[chapterId]) ? chapterFiles[chapterId] : null;
       const mergedChapter = contentMap[chapterId]
-        ? Object.assign({}, contentMap[chapterId], {
+        ? Object.assign({}, fileChapter || {}, contentMap[chapterId], {
+            /* beats/contacts/clues 只存在于章节文件，campaign-core 的章视图可能没有；取文件优先。 */
+            beats: beatsOf((fileChapter && fileChapter.beats) || (contentMap[chapterId] && contentMap[chapterId].beats)),
+            contacts: textList((fileChapter && fileChapter.contacts) || (contentMap[chapterId] && contentMap[chapterId].contacts)),
+            clues: textList((fileChapter && fileChapter.clues) || (contentMap[chapterId] && contentMap[chapterId].clues)),
+            next: cleanText(fileChapter && fileChapter.next) || cleanText(contentMap[chapterId] && contentMap[chapterId].next),
             body: cleanText(contentMap[chapterId].body) || cleanText(fileChapter && fileChapter.body),
             mustKnow: arrayOfText(contentMap[chapterId].mustKnow).length ? contentMap[chapterId].mustKnow : (fileChapter && fileChapter.mustKnow),
           })
@@ -1212,9 +1324,7 @@
 
   function repliesOf(model, context) {
     const npc = npcContentOf(context);
-    if (!npc) return [];
-    const reach = (model && model.currentChapter) || 'C0';
-    const reachIndex = CHAPTER_ORDER.indexOf(reach);
+    if (!npc || !model || !isArray(model.chapters)) return [];
     const out = [];
     npc.characters.forEach((character) => {
       if (!isObject(character)) return;
@@ -1226,20 +1336,10 @@
         const chapterId = idText(reply.chapterId);
         const text = cleanText(reply.text);
         if (!chapterId || !text) return;
-        if (chapterId === reach) {
-          chosen = { chapterId: chapterId, text: text };
-        }
+        /* 只显示已达到且对应章已完成的回信；进行中章的答案不提前泄漏。 */
+        if (!isChapterComplete(model.chapters, chapterId)) return;
+        if (!chosen || CHAPTER_ORDER.indexOf(chapterId) > CHAPTER_ORDER.indexOf(chosen.chapterId)) chosen = { chapterId: chapterId, text: text };
       });
-      if (!chosen) {
-        replies.forEach((reply) => {
-          if (!isObject(reply)) return;
-          const chapterId = idText(reply.chapterId);
-          const text = cleanText(reply.text);
-          const index = CHAPTER_ORDER.indexOf(chapterId);
-          if (index < 0 || !text || index > reachIndex) return;
-          if (!chosen || CHAPTER_ORDER.indexOf(chosen.chapterId) < index) chosen = { chapterId: chapterId, text: text };
-        });
-      }
       if (!chosen) return;
       out.push({
         characterId: characterId,
@@ -1291,6 +1391,7 @@
     let liveReduced = reducedMotionOf(context);
     let repliesHidden = false;
     let endingPending = false;
+    let earlierHidden = true;
     const previousFocus = doc.activeElement && typeof doc.activeElement.focus === 'function' ? doc.activeElement : null;
 
     function make(tag, className, text) {
@@ -1384,16 +1485,38 @@
       item.setAttribute('data-chapter-id', chapter.chapterId);
       item.setAttribute('data-state', chapter.state);
       const rowHead = make('div', 'ac-career-world__chapter-head');
-      const title = make('h4', 'ac-career-world__chapter-title', chapter.chapterId + ' · ' + chapter.title);
+      const title = make('h4', 'ac-career-world__chapter-title', chapter.title);
       rowHead.appendChild(title);
       const badge = make('span', 'ac-career-world__badge', STATE_LABEL[chapter.state] || STATE_LABEL.locked);
-      badge.setAttribute('data-state-label', chapter.state);
+      badge.setAttribute('data-state-label', chapter.state === 'active' ? 'current' : chapter.state === 'complete' ? 'recent' : chapter.state);
       rowHead.appendChild(badge);
       item.appendChild(rowHead);
-      /* 锁定章节只展示标题/状态，不提前泄漏正文、事实与路线细节。 */
+      /* 锁定章只显示标题与状态；进行中只给待查疑问，不给答案。 */
       if (chapter.state === 'locked') return item;
-      if (chapter.body) item.appendChild(make('p', 'ac-career-world__chapter-body', chapter.body));
-      if (chapter.mustKnow && chapter.mustKnow.length) {
+      const isCurrent = chapter.state === 'active' || chapter.state === 'available';
+      const playerText = chapter.beats[
+        chapter.state === 'complete' ? 'complete' : chapter.state === 'active' ? 'progress' : 'start'
+      ];
+      if (playerText) item.appendChild(make('p', 'ac-career-world__stage-text', playerText));
+      if (isCurrent) {
+        const contacts = textList(chapter.contacts);
+        if (contacts.length) {
+          const list = make('ul', 'ac-career-world__contacts');
+          list.setAttribute('data-contact-count', String(contacts.length));
+          list.appendChild(make('li', 'ac-career-world__contact', CONTACTS_HEADING + '：' + contacts.join('、')));
+          item.appendChild(list);
+        }
+        const clues = textList(chapter.clues);
+        if (clues.length) {
+          const list = make('ul', 'ac-career-world__clues');
+          list.setAttribute('data-clue-count', String(clues.length));
+          clues.forEach((clue) => list.appendChild(make('li', 'ac-career-world__clue', clue)));
+          item.appendChild(list);
+        }
+        if (chapter.next) item.appendChild(make('p', 'ac-career-world__next', NEXT_HEADING + '：' + chapter.next));
+      }
+      if (chapter.state === 'complete' && chapter.body) item.appendChild(make('p', 'ac-career-world__chapter-body', chapter.body));
+      if (chapter.state === 'complete' && chapter.mustKnow && chapter.mustKnow.length) {
         const facts = make('ul', 'ac-career-world__facts');
         facts.setAttribute('data-fact-count', String(chapter.mustKnow.length));
         chapter.mustKnow.forEach((fact) => {
@@ -1401,8 +1524,56 @@
         });
         item.appendChild(facts);
       }
-      if (chapter.hint) item.appendChild(make('p', 'ac-career-world__hint', chapter.hint));
+      if (chapter.hint && chapter.state !== 'locked') item.appendChild(make('p', 'ac-career-world__hint', chapter.hint));
       return item;
+    }
+
+    function chaptersSectionOf(model) {
+      const section = make('section', 'ac-career-world__section ac-career-world__chapters-section');
+      section.appendChild(make('h3', 'ac-career-world__heading', model.chapters.length === 6 ? CHAPTERS_HEADING : CHAPTERS_HEADING_OTHER));
+      /* 当前章可为 active 或 available；当前章 + 最近完成章在前，更早的折叠回看。 */
+      const current =
+        model.chapters.filter((chapter) => chapter.state === 'active').slice(-1)[0] ||
+        model.chapters.filter((chapter) => chapter.state === 'available').slice(-1)[0] ||
+        null;
+      const recentComplete = model.chapters.filter((chapter) => chapter.state === 'complete').slice(-1)[0] || null;
+      const recentIds = [];
+      model.chapters.forEach((chapter) => {
+        if (chapter === recentComplete || chapter === current) recentIds.push(chapter.chapterId);
+      });
+      if (!recentIds.length && model.chapters[0]) recentIds.push(model.chapters[0].chapterId);
+      const recentList = make('ul', 'ac-career-world__chapters ac-career-world__recent-list');
+      recentList.setAttribute('data-chapter-count', String(recentIds.length));
+      recentIds.forEach((chapterId) => {
+        const chapter = chapterOf(model, chapterId);
+        if (chapter) recentList.appendChild(chapterRowOf(chapter));
+      });
+      section.appendChild(make('h4', 'ac-career-world__subheading', RECENT_HEADING));
+      section.appendChild(recentList);
+
+      const earlier = model.chapters.filter((chapter) => recentIds.indexOf(chapter.chapterId) < 0);
+      if (!earlier.length) return section;
+      const head = make('div', 'ac-career-world__earlier-head');
+      head.appendChild(make('h4', 'ac-career-world__subheading', EARLIER_HEADING));
+      const toggle = make('button', 'ac-career-btn ac-career-btn--ghost ac-career-world__earlier-toggle', earlierHidden ? EXPAND_LABEL : COLLAPSE_LABEL);
+      toggle.type = 'button';
+      toggle.setAttribute('data-action', 'toggle-earlier-chapters');
+      toggle.setAttribute('aria-expanded', earlierHidden ? 'false' : 'true');
+      toggle.addEventListener('click', function () {
+        earlierHidden = !earlierHidden;
+        toggle.textContent = earlierHidden ? EXPAND_LABEL : COLLAPSE_LABEL;
+        toggle.setAttribute('aria-expanded', earlierHidden ? 'false' : 'true');
+        earlierList.hidden = earlierHidden;
+        announce(earlierHidden ? ANNOUNCE_CHAPTERS_COLLAPSED : ANNOUNCE_CHAPTERS_EXPANDED);
+      }, false);
+      head.appendChild(toggle);
+      section.appendChild(head);
+      const earlierList = make('ul', 'ac-career-world__chapters ac-career-world__earlier-list');
+      earlierList.setAttribute('data-chapter-count', String(earlier.length));
+      earlierList.hidden = earlierHidden;
+      earlier.forEach((chapter) => earlierList.appendChild(chapterRowOf(chapter)));
+      section.appendChild(earlierList);
+      return section;
     }
 
     function sideSectionOf(context2) {
@@ -1613,15 +1784,7 @@
         view.appendChild(footerOf());
         return;
       }
-      if (model.chapters.length === 6) {
-        view.appendChild(make('h3', 'ac-career-world__heading', CHAPTERS_HEADING));
-      } else {
-        view.appendChild(make('h3', 'ac-career-world__heading', CHAPTERS_HEADING_OTHER));
-      }
-      const chapterList = make('ul', 'ac-career-world__chapters');
-      chapterList.setAttribute('data-chapter-count', String(model.chapters.length));
-      model.chapters.forEach((chapter) => chapterList.appendChild(chapterRowOf(chapter)));
-      view.appendChild(chapterList);
+      view.appendChild(chaptersSectionOf(model));
 
       const side = sideSectionOf(liveContext);
       if (side) view.appendChild(side);
