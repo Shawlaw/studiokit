@@ -14,7 +14,9 @@
  *  5. 失败可见且不打开告示板；再次点击可重试（不残留 disabled/aria-busy）。
  *  6. 异步竞态：投递中重复点击、关闭再重开都不发第二次 followLetter；
  *     旧面板的异步结果不会污染新面板；await resolve 后才打开告示板。
- *  7. 44px 主类 / aria-label / data-action / 焦点 / Esc / reduced-motion 标记。
+ *  7. 首封未投递信显示可选身份句（ctx.chapter.role 优先，回退 ctx.chapters.C0.role），
+ *     缺省/非字符串/回看/已投递/切换线索时隐藏，位置在 sender/body 之前，不新增弹窗。
+ *  8. 44px 主类 / aria-label / data-action / 焦点 / Esc / reduced-motion 标记。
  *
  * 运行：node tools/career_mailbox_flow_test.mjs
  * 退出码：0 = 全 PASS；1 = 有 FAIL；2 = 用法错误 / 产品文件缺失。
@@ -232,6 +234,8 @@ function makeCtx(overrides) {
     reducedMotion: !!(overrides && overrides.reducedMotion),
     _events: events,
   };
+  if (overrides && overrides.chapter !== undefined) ctx.chapter = overrides.chapter;
+  if (overrides && overrides.chapters !== undefined) ctx.chapters = overrides.chapters;
   if (overrides && overrides.noOpenTown) delete ctx.openTown;
   if (overrides && overrides.noFollowLetter) delete ctx.followLetter;
   if (overrides && overrides.clueId) ctx.clueId = overrides.clueId;
@@ -266,6 +270,9 @@ function campaignBtn(doc) {
 function statusOf(doc) {
   return panelOf(doc).querySelector('.ac-career-status');
 }
+function roleLine(doc) {
+  return panelOf(doc).querySelector('.ac-career-letter__role');
+}
 function visible(node) {
   if (!node || node.hidden || node.disabled) return false;
   if (node.closest && node.closest('[hidden]')) return false;
@@ -288,6 +295,76 @@ for (const stage of ['GLIMPSED', 'CURIOUS']) {
   check('首读(' + stage + ')章节入口隐藏', !!campaignBtn(doc) && campaignBtn(doc).hidden === true);
   check('首读(' + stage + ')不带重复按地址投递按钮', allButtons(doc).filter((b) => visible(b) && /按地址投递/.test(b.textContent)).length === 0);
   check('首读(' + stage + ')严格成功前不调用 openTown', ctx._events.filter((e) => e[0] === 'openTown').length === 0);
+}
+
+/* ------------------------------------------------------------------ *
+ * 场景 1b：身份句（chapter.role / chapters.C0.role，feature detection）
+ * ------------------------------------------------------------------ */
+
+{
+  const { doc, api } = fresh();
+  const ctx = makeCtx();
+  api.open(ctx);
+  check('身份句缺省隐藏（无 chapter/chapters）', !!roleLine(doc) && roleLine(doc).hidden === true);
+}
+
+{
+  const { doc, api } = fresh();
+  const ctx = makeCtx({ chapter: { chapterId: 'C1', role: '刚到折光港、靠接零工维生的自由职业者' } });
+  api.open(ctx);
+  const line = roleLine(doc);
+  check('chapter.role 在首封未投递信显示', !!line && !line.hidden && line.textContent === '刚到折光港、靠接零工维生的自由职业者', line && line.textContent);
+  const children = panelOf(doc).querySelector('.ac-career-letter').children;
+  const roleIndex = children.indexOf(line);
+  const senderIndex = children.indexOf(panelOf(doc).querySelector('.ac-career-letter__sender'));
+  const bodyIndex = children.indexOf(panelOf(doc).querySelector('.ac-career-letter__body'));
+  check('身份句位于 sender/body 之前', roleIndex >= 0 && senderIndex > roleIndex && bodyIndex > roleIndex, { roleIndex, senderIndex, bodyIndex });
+}
+
+{
+  const { doc, api } = fresh();
+  const ctx = makeCtx({ chapters: { C0: { chapterId: 'C0', role: '旧港来信的收件人' }, C1: { role: '不该被用的一章' } } });
+  api.open(ctx);
+  const line = roleLine(doc);
+  check('chapters.C0.role 回退显示（bridge 当前只有 chapter=chapter-01）', !!line && !line.hidden && line.textContent === '旧港来信的收件人', line && line.textContent);
+}
+
+{
+  const { doc, api } = fresh();
+  const ctx = makeCtx({
+    chapter: { role: 'chapter 优先' },
+    chapters: { C0: { role: 'C0 回退' } },
+  });
+  api.open(ctx);
+  const line = roleLine(doc);
+  check('chapter.role 优先于 chapters.C0.role', !!line && !line.hidden && line.textContent === 'chapter 优先', line && line.textContent);
+}
+
+{
+  const { doc, api } = fresh();
+  const ctx = makeCtx({ chapter: { role: 42 }, chapters: { C0: { role: null } } });
+  api.open(ctx);
+  check('非字符串/空 role 安全隐藏', !!roleLine(doc) && roleLine(doc).hidden === true);
+}
+
+{
+  const { doc, api } = fresh();
+  const ctx = makeCtx({ chapter: { role: '身份句' }, stage: 'LOCAL' });
+  api.open(ctx);
+  check('LOCAL 回看隐藏身份句', !!roleLine(doc) && roleLine(doc).hidden === true);
+}
+{
+  const { doc, api } = fresh();
+  const ctx = makeCtx({ chapter: { role: '身份句' }, followedClueIds: ['c-first'] });
+  api.open(ctx);
+  check('已投递回看隐藏身份句', !!roleLine(doc) && roleLine(doc).hidden === true);
+}
+{
+  const { doc, api } = fresh();
+  const ctx = makeCtx({ chapter: { role: '身份句' }, stage: 'CURIOUS', firstClueId: 'c-later', clueId: 'c-later' });
+  api.open(ctx);
+  panelOf(doc).querySelector('[data-clue-id="c-first"]').dispatch('click', {});
+  check('切到非首封线索后隐藏身份句', !!roleLine(doc) && roleLine(doc).hidden === true);
 }
 
 {

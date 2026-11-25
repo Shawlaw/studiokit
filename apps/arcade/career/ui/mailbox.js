@@ -166,6 +166,21 @@
   }
 
   /**
+   * 身份句（戏内语言，可选内容字段）。bridge 当前 uiContext 传 chapter=chapter-01
+   * （不含 C0 角色），chapters.C0 为 C0 章节映射；两者都不含时返回空串并隐藏。
+   * 只接受字符串字段，不拼 HTML、不读存储、不发请求。
+   */
+  function roleOf(context) {
+    if (!context) return '';
+    const chapter = isObject(context.chapter) ? context.chapter : null;
+    const chapters = isObject(context.chapters) ? context.chapters : null;
+    const c0 = chapters && isObject(chapters.C0) ? chapters.C0 : null;
+    const fromChapter = chapter && typeof chapter.role === 'string' ? cleanText(chapter.role) : '';
+    const fromC0 = c0 && typeof c0.role === 'string' ? cleanText(c0.role) : '';
+    return fromChapter || fromC0;
+  }
+
+  /**
    * 去港口入口的显示条件（lead 冻结）：
    * - ctx.openTown 存在；
    * - 且 state.stage 已到 LOCAL 或更后，或 state.firstClueId 存在（地址已到手）。
@@ -268,6 +283,9 @@
     const letter = make('article', 'ac-career-letter');
     const letterTitle = make('h3', 'ac-career-letter__title');
     const letterAmbient = make('p', 'ac-career-letter__ambient');
+    /* 首封读信的身份句（内容驱动，缺省隐藏）；放在落款与正文之前。 */
+    const letterRole = make('p', 'ac-career-letter__role');
+    letterRole.hidden = true;
     const letterSender = make('p', 'ac-career-letter__sender');
     const letterBody = make('p', 'ac-career-letter__body');
     const letterAddress = make('p', 'ac-career-letter__address');
@@ -293,6 +311,7 @@
     letterDelivered.hidden = true;
     letter.appendChild(letterTitle);
     letter.appendChild(letterAmbient);
+    letter.appendChild(letterRole);
     letter.appendChild(letterSender);
     letter.appendChild(letterBody);
     letter.appendChild(letterAddress);
@@ -472,11 +491,13 @@
       const letterContent = letterOf(clue);
       setField(letterTitle, clue ? titleOf(clue) : '');
       setField(letterAmbient, clue ? clue.ambientText : '');
+      /* 身份句只在首封未投递信出现；缺省内容/回看/已投递保持隐藏。 */
+      const firstFlight = isFirstFlightClue(selectedId);
+      setField(letterRole, firstFlight ? roleOf(context) : '');
       setField(letterSender, letterContent.sender);
       setField(letterBody, letterContent.body);
       setField(letterAddress, letterContent.address);
       const delivered = !!followedClues[selectedId];
-      const firstFlight = isFirstFlightClue(selectedId);
       letterDelivered.hidden = !delivered;
       if (firstFlight) {
         followBtn.textContent = FIRST_READ_LABEL;
