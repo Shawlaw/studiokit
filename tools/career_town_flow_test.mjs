@@ -152,7 +152,14 @@ class El {
   }
 
   getClientRects() {
-    return this.hidden ? [] : [{}];
+    if (this.hidden) return [];
+    for (let cur = this; cur; cur = cur.parentNode) {
+      if (cur.hidden === true) return [];
+      if (cur.tagName === 'DETAILS' && cur.open !== true) return [];
+      const style = String(cur.getAttribute && cur.getAttribute('style') || '');
+      if (/display\s*:\s*none/.test(style)) return [];
+    }
+    return [{}];
   }
 
   get isConnected() {
@@ -452,6 +459,46 @@ check('推荐 id 不在真实 unlocked 集合时不被采纳', () => {
   return 'locked suggestion rejected';
 });
 
+check('K-town: Tab/Shift+Tab 仅遍历可见焦点，闭合 details 内的按钮被排除', () => {
+  const { doc, town } = loadTown();
+  const ctx = basicCtx();
+  const opened = town.open(ctx);
+  assert.equal(opened.ok, true);
+  const sheet = opened.panel;
+  const focusables = Array.from(sheet.querySelectorAll('button, [href], input, select, textarea, [tabindex]:not([tabindex="-1"])'))
+    .filter((node) => !node.disabled && !node.hidden && node.getClientRects().length > 0);
+  const workshop = focusables.filter((node) => node.getAttribute('data-town-action') === 'workshop');
+  assert.equal(workshop.length, 0, '闭合 details 的制造台不可聚焦');
+  const market = focusables.filter((node) => node.getAttribute('data-town-action') === 'market');
+  assert.equal(market.length, 0, '闭合 details 的材料商店不可聚焦');
+  const more = byAttr(sheet, 'data-town-more', 'true')[0];
+  more.open = true;
+  const openedFocusables = Array.from(sheet.querySelectorAll('button, [href], input, select, textarea, [tabindex]:not([tabindex="-1"])'))
+    .filter((node) => !node.disabled && !node.hidden && node.getClientRects().length > 0);
+  assert.ok(openedFocusables.some((node) => node.getAttribute('data-town-action') === 'workshop'), '展开后可聚焦制造台');
+  more.open = false;
+  town.close();
+  return 'closed details excluded, open details included';
+});
+check('稳定推荐接单选择器：唯一、绑定 commissionId、点击走 commission.start', () => {
+  const { win, town } = loadTown();
+  const ctx = basicCtx();
+  const sheet = town.render(ctx);
+  const starts = byAttr(sheet, 'data-town-recommend-start', 'true');
+  assert.equal(starts.length, 1, '只有一个推荐接单按钮');
+  const button = starts[0];
+  assert.equal(button.getAttribute('data-town-action'), 'start');
+  assert.equal(button.getAttribute('data-commission-id'), 'memory-flip.T1');
+  const recommendRow = byAttr(sheet, 'data-town-recommend-id', 'memory-flip.T1')[0];
+  assert.equal(recommendRow.getAttribute('data-commission-id'), 'memory-flip.T1');
+  const freeRows = byAttr(sheet.querySelector('[data-town-free-list]'), 'data-commission-id', 'memory-flip.T1');
+  assert.equal(freeRows.length, 0, '推荐单不重复出现在自由列表');
+  button.emit('click', { target: button });
+  assert.equal(ctx.__calls.start.length, 1);
+  assert.equal(ctx.__calls.start[0].commissionId, 'memory-flip.T1');
+  assert.equal(win.navigated, 'games/pendulum-tower.html?ticket=run-test');
+  return 'stable selector click -> start';
+});
 async function runAsyncChecks() {
   async function acheck(name, fn) {
     try {
