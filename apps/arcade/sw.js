@@ -5,6 +5,8 @@
  * - 0.9 挑战数据（./challenge/<gameId>.js，13 个）随外壳预缓存，保证离线可玩挑战模式；
  *   缓存 VERSION 与引擎/注册表保持一致。
  * - 导航网络优先（离线回退缓存），静态资源缓存优先；跨域请求一律不拦截。
+ * - 0.19.0 升级迁移：旧缓存只提供「预载过哪些游戏」的清单，页面字节重新联网取当前版本，
+ *   不复制旧游戏 HTML（0.18.2 的直接复制只适用于游戏页未改动的版本）。
  * - 0.11.2 更新检测：安装新版本后主动通知所有受控页面（arcade-sw-update-ready），
  *   页面通过 arcade-sw-version 查询当前 SW 版本；不再让已安装 PWA 静默停留在旧版本。
  * - 不使用任何远程资源、分析或第三方 API（AGENTS.md 约束 4）。
@@ -12,8 +14,7 @@
 const VERSION = '0.19.0';
 const CACHE_PREFIX = 'studiokit-arcade-';
 const CACHE_NAME = `${CACHE_PREFIX}${VERSION}-v1`;
-// 0.18.2 沿用 0.18.1 的游戏 HTML，更新时可以接续已缓存的游戏。
-const PREVIOUS_PRELOAD_CACHE = `${CACHE_PREFIX}0.18.1-v3`;
+/* 预载迁移见 carryPreloadedGames()：继承旧缓存的游戏清单，重新联网取当前版本页面。 */
 const GAME_FILE = /^[a-z0-9-]+(?:\.html)?$/;
 const BASE = new URL('./', self.location.href);
 const SCOPE_PATH = BASE.pathname;
@@ -124,19 +125,36 @@ async function cacheCore() {
   );
 }
 
+/* 升级时继承「预载过哪些游戏」，但不继承旧字节。
+   0.18.2 直接把 0.18.1 缓存里的游戏 HTML 复制过来，因为那一版游戏页没有改动；
+   0.19.0 改动了全部 16 款游戏页与引擎，旧页面配新引擎会缺按钮、缺绑定。
+   所以这里只取旧缓存里的游戏 URL 清单，逐个重新联网取当前版本；
+   安装时没网就跳过，等玩家下次在线打开时按原有 networkFirst 逻辑补缓存。 */
 async function carryPreloadedGames() {
-  if (!(await caches.has(PREVIOUS_PRELOAD_CACHE))) return;
-  const previous = await caches.open(PREVIOUS_PRELOAD_CACHE);
+  const names = await caches.keys();
+  const previousNames = names.filter((name) => name.startsWith(CACHE_PREFIX) && name !== CACHE_NAME);
+  if (!previousNames.length) return;
+  const wanted = new Set();
+  for (const name of previousNames) {
+    const previous = await caches.open(name);
+    for (const request of await previous.keys()) {
+      const url = new URL(request.url);
+      if (url.origin !== BASE.origin || !url.pathname.startsWith(GAMES_DIR.pathname)) continue;
+      const file = url.pathname.slice(GAMES_DIR.pathname.length);
+      if (!GAME_FILE.test(file)) continue;
+      wanted.add(file.endsWith('.html') ? file : file + '.html');
+    }
+  }
   const current = await caches.open(CACHE_NAME);
-  for (const request of await previous.keys()) {
-    const url = new URL(request.url);
-    if (url.origin !== BASE.origin || !url.pathname.startsWith(GAMES_DIR.pathname)) continue;
-    const file = url.pathname.slice(GAMES_DIR.pathname.length);
-    if (!GAME_FILE.test(file)) continue;
-    const key = new URL(file.endsWith('.html') ? file : file + '.html', GAMES_DIR);
-    if (await current.match(key.href)) continue;
-    const response = await previous.match(request);
-    if (cacheableResponse(response)) await current.put(key.href, response);
+  for (const file of wanted) {
+    const key = new URL(file, GAMES_DIR).href;
+    if (await current.match(key)) continue;
+    try {
+      const response = await fetch(new Request(key, { cache: 'reload', credentials: 'same-origin' }));
+      if (cacheableResponse(response)) await current.put(key, response);
+    } catch (err) {
+      /* 离线安装时保留空缺，不复制旧版本页面 */
+    }
   }
 }
 

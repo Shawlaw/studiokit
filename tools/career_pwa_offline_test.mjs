@@ -21,6 +21,7 @@
  * - P15 缓存内容审计：全部条目同源、无跨域/CDN、HTML 无外链资源、JS 无外部 fetch、
  *   内容文件之外不含 clueId / 信件地址（不提前泄漏剧透）
  * - P16 模拟 SW 升级/重装（伪造旧版本缓存 → 注销 → 重装）不会清掉 career IndexedDB，
+ *   旧缓存里的过期游戏页不会被搬进新缓存，只按 URL 清单重新取 0.19.0 页面；
  *   额外 caches 读写也不影响 DB；P17 收尾 deleteDatabase + 注销 SW + 清空本测试缓存
  *
  * 零 npm 依赖：复用 tools/lib/arcade_cdp.mjs。端口显式 `CAREER_PWA_PORT=8839` /
@@ -37,7 +38,7 @@ const SW_VERSION = '0.19.0';
 const CACHE_PREFIX = 'studiokit-arcade-';
 const CACHE_KEY = `${CACHE_PREFIX}${SW_VERSION}-v1`;
 const OLD_CACHE_KEY = 'studiokit-arcade-0.14.0-v1';
-const PREVIOUS_PRELOAD_KEY = 'studiokit-arcade-0.18.1-v1';
+const PREVIOUS_PRELOAD_KEY = 'studiokit-arcade-0.18.2-v1';
 /* 任务卡点名的 career 运行时 / 内容 / UI 资源（sw.js CORE_PATHS 中的 14 项）。 */
 const CAREER_CORE_PATHS = [
   './career/bridge.js',
@@ -927,16 +928,19 @@ async function main() {
     /* ============================================================ SW 升级不清 IDB */
     const dbBeforeUpgrade = await cdp.evaluate(READ_DB_SRC);
     await cdp.evaluate(FAKE_OLD_CACHE_SRC);
+    /* 在旧版本缓存里放一页「明显过期」的游戏 HTML：0.19.0 不允许把它搬进新缓存，
+       只能按旧缓存的 URL 清单重新联网取当前版本页面。 */
     const seededPreload = await cdp.evaluate(`(async () => {
       const game = new URL('games/gold-miner.html', ${JSON.stringify(ARCADE_BASE)}).href;
       const current = await caches.open(${JSON.stringify(CACHE_KEY)});
       const previous = await caches.open(${JSON.stringify(PREVIOUS_PRELOAD_KEY)});
-      const response = await current.match(game);
-      if (!response?.redirected) return false;
-      await previous.put(game, response);
-      return current.delete(game);
+      await previous.put(game, new Response('<!doctype html><title>STALE-0.18.2-PAGE</title>', {
+        headers: { 'Content-Type': 'text/html; charset=utf-8' }
+      }));
+      await current.delete(game);
+      return caches.keys().then((keys) => keys.includes(${JSON.stringify(PREVIOUS_PRELOAD_KEY)}));
     })()`);
-    assert(seededPreload, '测试准备失败：未将预载转移到 0.18.1 缓存');
+    assert(seededPreload, '测试准备失败：未在 0.18.2 旧缓存里种下过期游戏页');
     const registeredBefore = await cdp.evaluate(`navigator.serviceWorker.getRegistrations().then((regs) => regs.length)`);
     await cdp.evaluate(UNREGISTER_ALL_SRC);
     await cdp.navigate(GAME_URL);
@@ -945,13 +949,29 @@ async function main() {
     await cdp.waitFor(`caches.keys().then((keys) => keys.indexOf('${OLD_CACHE_KEY}') === -1)`, { timeout: 20000 }).catch(() => {});
     await sleep(400);
 
-    await check('P16 模拟 SW 升级，复用 0.18.1 的预载并保留生涯 IndexedDB', async () => {
+    /* 等 SW install 里的 carryPreloadedGames() 重新联网取回当前版本页面。 */
+    await cdp.waitFor(`caches.match(new URL('games/gold-miner.html', Arcade.baseUrl)).then(async (response) => {
+      if (!response) return false;
+      const text = await response.text();
+      return text.indexOf('data-thumb-pause') !== -1;
+    })`, { timeout: 25000 });
+
+    await check('P16 模拟 SW 升级，继承 0.18.2 预载清单并重取 0.19.0 页面、保留生涯 IndexedDB', async () => {
       const keysAfter = await cdp.evaluate(`caches.keys()`);
       assert(keysAfter.indexOf(OLD_CACHE_KEY) === -1, 'activate 未清理旧版本缓存 ' + OLD_CACHE_KEY + '：' + detail(keysAfter));
       assert(keysAfter.indexOf(CACHE_KEY) !== -1, '升级后缺少当前版本缓存 ' + CACHE_KEY + '：' + detail(keysAfter));
       assert(!keysAfter.includes(PREVIOUS_PRELOAD_KEY), '升级后还留有已迁移的旧版缓存');
-      const migrated = await cdp.evaluate(`caches.match(new URL('games/gold-miner.html', Arcade.baseUrl)).then((response) => response?.redirected === true)`);
-      assert(migrated, '升级后 0.18.1 预载的金矿工文档没有迁入当前缓存');
+      const migrated = await cdp.evaluate(`caches.match(new URL('games/gold-miner.html', Arcade.baseUrl)).then(async (response) => {
+        if (!response) return { present: false };
+        const text = await response.text();
+        return {
+          present: true,
+          fresh: text.indexOf('data-thumb-pause') !== -1,
+          stale: text.indexOf('STALE-0.18.2-PAGE') !== -1
+        };
+      })`);
+      assert(migrated.present, '升级后 0.18.2 预载的金矿工文档没有进入当前缓存');
+      assert(migrated.fresh && !migrated.stale, '升级后缓存的是旧版游戏页而不是 0.19.0 页面: ' + detail(migrated));
       assert(registeredBefore >= 1, '升级前应有 SW 注册，实际 ' + registeredBefore);
       const controller = await cdp.evaluate('!!navigator.serviceWorker.controller');
       assert(controller === true, '重装后页面未被 SW 接管');
