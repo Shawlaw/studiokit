@@ -2357,7 +2357,7 @@
         "设计/集成/ADR/根与工具 README、CHANGELOG、BASELINE、ROADMAP、AGENTS、TASKS、queue 同步；版本断言测试同步 0.20.0",
         "静态校验、构建、node --check engine/sw 通过；单项实测逐项记录，不伪造聚合门禁与发布结论"
       ],
-      "evidence": "本地 feat/arcade-career-flow。版本四处同步 0.20.0；validate_site/build_site/node --check 引擎与 SW 通过。单项实测：完整零种子首航 339/339（退出码 0，两轮）、campaign E2E 731/731、mobile 318/318、world 145/145、推荐 111/111、路线一致性 94/94、db 38/38、backup 34/34、a11y 75/75、PWA 18/18、compact 18/18、smoke 117/117。career_receipt_feedback 在当前树失败（tools/career_receipt_feedback_test.mjs 第 394 行；主 Agent 证据日志同一失败，属产品/测试断言，未擅改）。arcade_run_all_gates.py 追加 8 个纯 Node 新门禁与长跑 career_flow_e2e（9901/10301）；未启动聚合。聚合门禁仍在跑/待最终确认，独立复审已回灌但最终复验待完成；真机/真人首航 UNVERIFIED。未 push/merge/tag/部署，无 OWNER_AUTHORIZATION: PUBLISH_TO_MAIN。"
+      "evidence": "本地 feat/arcade-career-flow。版本四处同步 0.20.0；validate_site/build_site/node --check 引擎与 SW 通过。单项实测：完整零种子首航 339/339（退出码 0，两轮）、campaign E2E 731/731、mobile 318/318、world 145/145、推荐 111/111、路线一致性 94/94、db 38/38、backup 34/34、a11y 75/75、PWA 18/18、compact 18/18、smoke 117/117。career_receipt_feedback 曾在当前树失败，已由 67b18b4（从内容派生章节标题）修复并在最终树实跑 103/103。arcade_run_all_gates.py 追加 8 个纯 Node 新门禁与长跑 career_flow_e2e（9901/10301）。最终聚合门禁跑到 career_review4_same_route 因旧并发预期失败（exit 1，日志 /tmp/opencode/career-flow-final-gates.log），测试 Agent 正在修；仍未 ALL GATES PASSED。真机/真人首航 UNVERIFIED。未 push/merge/tag/部署，无 OWNER_AUTHORIZATION: PUBLISH_TO_MAIN。"
     }
   ]
 }
