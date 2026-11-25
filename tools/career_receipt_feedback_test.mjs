@@ -214,6 +214,28 @@ function noInternalTokens(text) {
   receipt.close();
 }
 
+/* 异步动作：Promise.resolve(action.run()) 的拒绝必须被吞掉，不产生未处理拒绝；
+   收据先关闭，动作继续在后台运行（E2E 应等面板而不是固定 300ms）。 */
+{
+  uiContext.document = createDocument();
+  let invoked = false;
+  const card = receipt.show({
+    result: settledResult(),
+    storyFeedback: storyFeedback('new'),
+    openCampaign() {
+      invoked = true;
+      return Promise.reject(new Error('ui still loading'));
+    },
+  });
+  const continueBtn = byText(card, '读回信');
+  assert(continueBtn, 'read-letter action exists for async failure case');
+  click(continueBtn);
+  assert(invoked, 'async action still invoked');
+  assert(!card.parentNode, 'receipt closed before async action resolves');
+  await Promise.resolve(); /* 让被吞掉的拒绝完成一个微任务周期 */
+  receipt.close();
+}
+
 /* Esc / 44px / 焦点：收据卡仍保留键盘出口与最小热区（结构级断言）。 */
 {
   uiContext.document = createDocument();

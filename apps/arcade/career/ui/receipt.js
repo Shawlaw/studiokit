@@ -1141,8 +1141,14 @@
       actionBtn.setAttribute('aria-label', action.label);
       applyStyle(actionBtn, { width: '100%', minHeight: '44px' });
       actionBtn.addEventListener('click', () => {
+        /* 先关收据，再运行页内动作；动作可能是异步的（懒加载 UI/内容），
+           Promise 失败必须吞掉，避免静默的未处理拒绝（不阻塞后续，也不新增跳转）。 */
         removeCard();
-        action.run();
+        try {
+          Promise.resolve(action.run()).catch(() => {});
+        } catch (err) {
+          /* 同步抛错同样不影响已关闭的收据 */
+        }
       }, false);
       el.appendChild(actionBtn);
     }
