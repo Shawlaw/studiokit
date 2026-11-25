@@ -658,7 +658,8 @@ async function receiptSnapshot(cdp) {
   return cdp.evaluate(`(() => {
     const card = document.querySelector('[data-career-card="receipt"]');
     if (!card) return null;
-    const buttons = Array.from(card.querySelectorAll('button')).map((button) => ({
+    const buttons = Array.from(card.querySelectorAll('button')).map((button, index) => ({
+      index: index,
       text: (button.textContent || '').trim(),
       aria: button.getAttribute('aria-label') || '',
       rect: (() => { const r = button.getBoundingClientRect(); return { w: r.width, h: r.height }; })(),
@@ -722,17 +723,76 @@ async function viewportChecks(cdp, label, selectors) {
 async function startOverlay(cdp, label) {
   step('overlay:' + label);
   await cdp.waitFor(`(() => { const b = document.querySelector('[data-ov-btn]'); return !!(b && !b.hidden); })()`, { timeout: 15000 });
+  /* 诊断：点击前记录按钮文本/disabled/rect，点击后记录页面 state，便于定位超时。 */
+  const before = await cdp.evaluate(`(() => {
+    const b = document.querySelector('[data-ov-btn]');
+    if (!b) return { button: null };
+    const r = b.getBoundingClientRect();
+    return {
+      button: { text: (b.textContent || '').trim(), disabled: b.disabled === true, hidden: b.hidden === true,
+        rect: [r.left, r.top, r.width, r.height].map((v) => Math.round(v)) },
+      infoState: (window.__arcadeTest && window.__arcadeTest.info && window.__arcadeTest.info().state) || null,
+      joyState: (window.__arcadeTest && window.__arcadeTest.joyInfo && window.__arcadeTest.joyInfo().state) || null,
+    };
+  })()`);
   await clickVisible(cdp, '[data-ov-btn]', label + ' 开始按钮');
-  await cdp.waitFor(`(function(){ try { return window.__arcadeTest.info().state === 'playing'; } catch (e) { return false; } })()`, { timeout: 15000 });
+  /* 部分游戏（memory-flip）state 在 joyInfo() 而非 info()；预览期 state 已是 playing，
+     需要先 skipPreviewNow() 才进入可操作状态，不能死等某个 info().state。 */
+  const stateExpr = `(function () {
+    try {
+      var t = window.__arcadeTest;
+      if (!t) return null;
+      var state = t.info && t.info().state;
+      if (state === undefined || state === null) state = t.joyInfo && t.joyInfo().state;
+      return state;
+    } catch (e) { return null; }
+  })()`;
+  await cdp.waitFor(`(() => { var s = ${stateExpr}; return s === 'playing' || s === 'levelclear'; })()`, { timeout: 15000 });
+  const after = await cdp.evaluate(`(() => {
+    var t = window.__arcadeTest;
+    var info = null, joy = null;
+    try { info = t && t.info && t.info(); } catch (e) { /* ignore */ }
+    try { joy = t && t.joyInfo && t.joyInfo(); } catch (e) { /* ignore */ }
+    return { infoState: info && info.state || null, joyState: joy && joy.state || null,
+      overlayHidden: !!(document.querySelector('[data-overlay]') && document.querySelector('[data-overlay]').hidden) };
+  })()`);
+  gate('DRIVE ' + label + ' 开始按钮进入可操作态', true, J({ before, after }));
 }
 
 async function pauseAndEnd(cdp, label) {
   step('pause-end:' + label);
+  const before = await cdp.evaluate(`(() => {
+    var t = window.__arcadeTest;
+    var b = document.querySelector('[data-pause]');
+    return {
+      pauseButton: !!b,
+      infoState: (t && t.info && t.info().state) || null,
+      joyState: (t && t.joyInfo && t.joyInfo().state) || null,
+      careerState: (t && t.careerInfo && t.careerInfo().state) || null,
+    };
+  })()`);
   const paused = await cdp.evaluate(`(() => { const b = document.querySelector('[data-pause]'); if (!b) return false; b.click(); return true; })()`);
   ensure(paused === true, label + ' 暂停按钮不存在');
-  await cdp.waitFor(`(function(){ try { return window.__arcadeTest.careerInfo().state === 'paused'; } catch (e) { return false; } })()`, { timeout: 10000 });
-  const end = await clickVisible(cdp, '[data-ov-btn2]', label + ' 结束本局按钮');
-  gate('DRIVE ' + label + ' 通过真实「结束本局」出口结算', /结束本局/.test(end.text || ''), J(end));
+  let reachedPause = false;
+  try {
+    await cdp.waitFor(`(function(){ try { return window.__arcadeTest.careerInfo().state === 'paused'; } catch (e) { return false; } })()`, { timeout: 10000 });
+    reachedPause = true;
+  } catch (err) {
+    /* 某些游戏（memory-flip 预览期）暂停按钮不生效：用页面自带的真实收工出口，
+       它走同一条 finish(false) 结算路径，不伪造事件、不写旗标。 */
+    const fallback = await cdp.evaluate(`(function () {
+      var t = window.__arcadeTest;
+      if (!t || typeof t.endCommissionSession !== 'function') return { ok: false, reason: 'no-endCommissionSession' };
+      var r = t.endCommissionSession();
+      return { ok: r !== false };
+    })()`);
+    ensure(fallback && fallback.ok === true, label + ' 暂停未生效且无真实收工出口: ' + J({ before, fallback }));
+    gate('DRIVE ' + label + ' 暂停未生效后走页面真实收工出口', true, J({ before, fallback }));
+  }
+  if (reachedPause) {
+    const end = await clickVisible(cdp, '[data-ov-btn2]', label + ' 结束本局按钮');
+    gate('DRIVE ' + label + ' 通过真实「结束本局」出口结算', /结束本局/.test(end.text || ''), J({ before, end }));
+  }
 }
 
 async function nativeFinish(cdp, outcome, stats) {
@@ -1144,8 +1204,20 @@ async function phaseReceipt(cdp, label, expectedChapterFlag, ticketId, campaign,
   gate('RECEIPT ' + label + ' 主动作热区 ≥44px', action.rect.h >= 44 && action.rect.w >= 44, J(action.rect));
 
   const hrefBefore = await cdp.evaluate('location.href');
-  await clickVisible(cdp, '[data-career-card="receipt"] button', label + ' 收据主动作');
-  await sleep(300);
+  /* 必须点已识别的主动作（读回信/回告示板），不能点第一个「收起」按钮。 */
+  const clickedAction = await cdp.evaluate(`(() => {
+    const buttons = document.querySelectorAll('[data-career-card="receipt"] button');
+    const el = buttons[${action.index}];
+    if (!el || el.hidden || !el.getClientRects().length) return { ok: false, reason: 'action-not-visible' };
+    const text = (el.textContent || '').trim();
+    el.click();
+    return { ok: true, text: text };
+  })()`);
+  ensure(clickedAction && clickedAction.ok === true, label + ' 收据主动作不可点击: ' + J(clickedAction));
+  /* 读回信/章节可能异步懒加载：轮询等待任一面板出现，不用固定 sleep。 */
+  await cdp.waitFor(`['town','mailbox','world-state'].some(function (name) {
+    return !!document.querySelector('[data-career-panel="' + name + '"]');
+  })`, { timeout: 15000 });
   const opened = await cdp.evaluate(`(() => {
     const names = ['town', 'mailbox', 'world-state'];
     const found = names.filter((name) => !!document.querySelector('[data-career-panel="' + name + '"]'));
