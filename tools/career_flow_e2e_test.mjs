@@ -1458,15 +1458,34 @@ async function runFullFlow(cdp, campaign, commissions) {
   requireFeature('C5 完成 C4 后当前屏出现三终局入口', !!(world && world.endings.length >= 3), J(world));
   gate('C5 终局按钮 ≥44px 且为玩家可见戏内文案', world.endings.every((ending) => ending.h >= 44 && ending.text.length > 2), J(world.endings));
   await viewportChecks(cdp, '章节面板', ['[data-career-panel="world-state"] [data-approach="' + ENDING_APPROACH + '"]']);
+  /* 与 acceptRecommended 同样：点击前记录旧 URL/ticket，等待真正导航到目标游戏的新 ticket；
+     文档切换中 __arcadeCareerTest 可能 undefined，必须先安全检测再调 commissionRun。 */
+  const beforeEndingHref = await cdp.evaluate('location.href');
+  const beforeEndingTicket = (beforeEndingHref.match(/[?&]career=([^&#]+)/) || [])[1] || null;
+  const targetEndingGame = ENDING_GAME;
   await clickVisible(cdp, '[data-career-panel="world-state"] [data-approach="' + ENDING_APPROACH + '"]', '终局入口');
-  /* 终局入口同样触发整页导航，目标可能不带 careerTest；用与接单相同的公开回退。 */
-  await cdp.waitFor('location.pathname.indexOf("/games/") >= 0 && location.search.indexOf("career=") >= 0', { timeout: 30000 });
+  await cdp.waitFor(`(() => {
+    var href = location.href;
+    var ticket = (href.match(/[?&]career=([^&#]+)/) || [])[1] || '';
+    return href !== ${J(beforeEndingHref)} &&
+      location.pathname.indexOf('/games/${targetEndingGame}.html') >= 0 &&
+      !!ticket && ticket !== ${J(beforeEndingTicket || '')};
+  })()`, { timeout: 30000 });
+  const endingLanded = await cdp.evaluate('({ href: location.href, path: location.pathname, search: location.search })');
+  const endingLandedTicket = (endingLanded.search.match(/[?&]career=([^&#]+)/) || [])[1] || null;
+  gate('C5 终局入口整页导航到新 ticket 的目标游戏',
+    endingLanded.href !== beforeEndingHref && endingLanded.path.indexOf('/games/' + targetEndingGame + '.html') >= 0 &&
+      !!endingLandedTicket && endingLandedTicket !== beforeEndingTicket,
+    J({ beforeEndingHref, beforeEndingTicket, endingLanded, endingLandedTicket }));
   const endingGameId = await cdp.evaluate('location.pathname.split("/games/")[1] || ""');
-  const endingHasTestApi = await cdp.evaluate('!!window.__arcadeCareerTest');
+  /* 安全检测：文档切换中 __arcadeCareerTest 可能是 undefined。 */
+  await cdp.waitFor('!!(window.ArcadeCareer && window.ArcadeCareer.ready)', { timeout: 20000 });
+  const endingHasTestApi = await cdp.evaluate('!!(window.__arcadeCareerTest && typeof window.__arcadeCareerTest.commissionRun === "function")');
   await waitBridge(cdp, 'ending-game', endingHasTestApi);
   const endingRunExpr = endingHasTestApi
-    ? 'window.__arcadeCareerTest.commissionRun()'
+    ? '(window.__arcadeCareerTest && typeof window.__arcadeCareerTest.commissionRun === "function" ? window.__arcadeCareerTest.commissionRun() : null)'
     : '(window.ArcadeCareer && window.ArcadeCareer.commissionRun) || null';
+  await cdp.waitFor(`(() => { var r = ${endingRunExpr}; return !!(r && r.ticketId); })()`, { timeout: 20000 });
   let endingRun = await cdp.evaluate(endingRunExpr);
   gate('C5 终局入口生成独立 ticket（玩家点击而非写旗标）', !!(endingRun && /^ending\./.test(endingRun.commissionId || '')), J(endingRun));
   if (!endingHasTestApi && endingRun && endingRun.ticketId) {
@@ -1474,8 +1493,8 @@ async function runFullFlow(cdp, campaign, commissions) {
     const hookUrl = gameUrl(String(endingGameId).replace(/\.html.*$/, ''), { career: endingTicketId });
     await go(cdp, hookUrl, 'ending-hook-reopen');
     await waitBridge(cdp, 'ending-game-hook');
-    await cdp.waitFor(`(() => { const t = window.__arcadeCareerTest; return !!(t && t.commissionRun && t.commissionRun()); })()`, { timeout: 15000 });
-    endingRun = await cdp.evaluate('window.__arcadeCareerTest.commissionRun()');
+    await cdp.waitFor(`(() => { const t = window.__arcadeCareerTest; return !!(t && typeof t.commissionRun === 'function' && t.commissionRun()); })()`, { timeout: 15000 });
+    endingRun = await cdp.evaluate('(window.__arcadeCareerTest && typeof window.__arcadeCareerTest.commissionRun === "function" ? window.__arcadeCareerTest.commissionRun() : null)');
     gate('C5 同 ticket 重新打开测试钩子（不重建票据）',
       !!(endingRun && endingRun.ticketId === endingTicketId && endingRun.commissionId === 'ending.' + ENDING_APPROACH),
       J({ original: endingTicketId, reopened: endingRun && endingRun.ticketId, commissionId: endingRun && endingRun.commissionId }));
