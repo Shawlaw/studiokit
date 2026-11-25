@@ -377,6 +377,23 @@ check('首屏一个主动作：live run 优先为推荐单，其余单折叠', (
   assert.ok(!win.navigated);
   return 'recommend=1, free collapsed';
 });
+check('推荐卡同时提供 data-town-recommend-kind 与 data-town-kind，值与文案一致', () => {
+  const { town } = loadTown();
+  const ctx = basicCtx();
+  delete ctx.commission.continuations;
+  const sheet = town.render(ctx);
+  const rec = byAttr(sheet, 'data-town-recommend', 'true')[0].firstChild;
+  assert.equal(rec.getAttribute('data-town-recommend-kind'), '推进本章');
+  assert.equal(rec.getAttribute('data-town-kind'), '推进本章');
+  assert.ok(rec.textContent.includes('推进本章'), '属性与可见文案一致，未改文案');
+  const ctx2 = basicCtx();
+  delete ctx2.commission.continuations;
+  ctx2.campaign.recommend = () => ({ commissionId: 'pendulum-tower.T1', goal: 'x', reason: 'y', kind: 'step' });
+  const rec2 = byAttr(town.render(ctx2), 'data-town-recommend', 'true')[0].firstChild;
+  assert.equal(rec2.getAttribute('data-town-recommend-kind'), '路线进展');
+  assert.equal(rec2.getAttribute('data-town-kind'), '路线进展');
+  return 'both kind attributes present';
+});
 check('无 live run 时推荐卡显示 campaign.recommend 的游戏名/目标/推进本章/理由', () => {
   const { win, town } = loadTown();
   const ctx = basicCtx();

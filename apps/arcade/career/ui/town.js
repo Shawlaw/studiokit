@@ -1057,7 +1057,12 @@
         item.setAttribute('data-town-recommend-id', row.commissionId);
       }
       if (opts.goalOverride) item.setAttribute('data-town-goal', opts.goalOverride);
-      if (opts.kindText) item.setAttribute('data-town-kind', opts.kindText);
+      if (opts.kindText) {
+        /* E2E 用 data-town-recommend-kind 判定 milestone/step；值保持玩家语言，
+           保留 data-town-kind 兼容旧选择器（文案不变）。 */
+        if (opts.recommended) item.setAttribute('data-town-recommend-kind', opts.kindText);
+        item.setAttribute('data-town-kind', opts.kindText);
+      }
       if (opts.reason) item.setAttribute('data-town-reason', opts.reason);
       if (opts.gameName) item.setAttribute('data-town-game', opts.gameName);
 
