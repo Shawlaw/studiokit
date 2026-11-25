@@ -1502,7 +1502,11 @@ async function runFullFlow(cdp, campaign, commissions) {
   await driveEndingResearch(cdp);
   const afterEnding = await readOnlyState(cdp);
   const c5Rows = (afterEnding.quests || []).filter((row) => row.nodeId === 'story:' + CHAPTER_FLAGS.C5);
-  const endingRows = (afterEnding.quests || []).filter((row) => row.nodeId === 'story:ending.' + ENDING_APPROACH);
+  /* career-db.writeEndingQuestRows 写 markerRow.nodeId='ending.research'（kind:'ending'），
+     不是 'story:ending.research'；兼容两种形状但优先真实写入形状。 */
+  const endingRows = (afterEnding.quests || []).filter((row) =>
+    row.nodeId === 'ending.' + ENDING_APPROACH ||
+    (row.kind === 'ending' && row.approach === ENDING_APPROACH));
   gate('C5 终局真实结算唯一写入 C5 + ending.research', c5Rows.length === 1 && endingRows.length === 1, J({ c5Rows, endingRows }));
   const endingView = await campaignView(cdp, afterEnding);
   gate('C5 章节视图显示已完成与后日常入口', endingView.ok === true && endingView.chapters.some((chapter) => chapter.chapterId === 'C5' && chapter.state === 'complete'), J(endingView));
