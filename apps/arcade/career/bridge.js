@@ -1497,24 +1497,11 @@
           }
         }
       }
-      /* 中间单没有章级旗标时，按本次收据旗标给一条所在章的回信（只说路线进展，不冒充本章完成）。 */
+      /* 中间单不再按 receipt.flags 的章号回放已完成章的 NPC 回信（例如 tower.T2 的 C1 旧事）。
+         没有本次新章级旗标时，只靠 newTokens 的一线现场回应 + 下一章路线进展表达所得。 */
       if (!matched && replies.length === 0 && newTokens.length) {
-        var receiptFlags = Array.isArray(result.receipt.flags) ? result.receipt.flags.slice() : [];
-        for (var rf = 0; rf < receiptFlags.length && replies.length < 1; rf += 1) {
-          var receiptChapter = chapterOfFlag(receiptFlags[rf]);
-          if (!receiptChapter || receiptChapter === 'C0') continue;
-          for (var nc = 0; nc < npcContent.characters.length && replies.length < 1; nc += 1) {
-            var npc = npcContent.characters[nc];
-            if (!npc || !Array.isArray(npc.replies)) continue;
-            for (var nr = 0; nr < npc.replies.length && replies.length < 1; nr += 1) {
-              var nrp = npc.replies[nr];
-              if (!nrp || nrp.chapterId !== receiptChapter) continue;
-              var nrText = cleanStoryText(nrp.text);
-              var nrName = cleanStoryText(npcNameOf(npc), 40);
-              if (nrText && nrName) replies.push({ name: nrName, text: nrText });
-            }
-          }
-        }
+        var routeLine = routeProgressLineOf(newTokens);
+        if (routeLine) replies.push({ name: '旧港告示', text: routeLine });
       }
     }
     feedback.replies = replies;
@@ -1533,18 +1520,56 @@
     return match ? 'C' + match[1] : null;
   }
 
-  /** 证据 token → 玩家语言物件名（不泄漏 E/BP/MAP token，也不显示长凭据号）。 */
+  /** 证据 token → 玩家语言物件名；按来源游戏/委托给出具体物件，不泄漏 E/BP/MAP/DEC token。 */
+  var EVIDENCE_LABELS = {
+    'patrol': '异常航报',
+    'flight': '异常航报',
+    'site': '工地记录',
+    'memory-flip': '档案照片与记录',
+    'gomoku': '布局推演',
+    'shadow-leap': '失落的卷轴拓片',
+    'scroll': '失落的卷轴拓片',
+    'solitaire': '码头调度记录',
+    'snowbells': '雪线观测记录',
+    'snake-run': '生态样本',
+    'mole-whack': '检修记录',
+    'block-drop': '仓库档案',
+    'merge-2048': '晶格现场记录',
+    'gravity-flip': '相位频率记录',
+    'road-rush': '遗迹驿站记录',
+    'star-raid': '巡航航报',
+    'blackjack': '风控记录',
+    'brick-breaker': '砖阵勘察记录',
+    'gold-miner': '矿场记录',
+    'pendulum-tower': '工地记录',
+  };
+
   function evidenceLabelOf(token) {
     var text = typeof token === 'string' ? token : '';
-    if (!text) return '';
-    var classMatch = /^(E|BP|MAP|DEC)-/.exec(text);
-    if (!classMatch) return '';
-    var kind = classMatch[1];
-    var label = kind === 'BP' ? '现场记录' : kind === 'MAP' ? '路线图' : kind === 'DEC' ? '决议文书' : '航报';
-    if (text.indexOf('patrol') >= 0 || text.indexOf('flight') >= 0) return '异常航报';
-    if (text.indexOf('site') >= 0) return '工地记录';
-    if (text.indexOf('scroll') >= 0) return '失落的卷轴拓片';
-    return label;
+    if (!/^(E|BP|MAP|DEC)-/.test(text)) return '';
+    for (var key in EVIDENCE_LABELS) {
+      if (Object.prototype.hasOwnProperty.call(EVIDENCE_LABELS, key) && text.indexOf(key) >= 0) {
+        return EVIDENCE_LABELS[key];
+      }
+    }
+    /* 未知 token 按类别给通用物件名，不回显原始 token。 */
+    var kind = text.slice(0, text.indexOf('-'));
+    if (kind === 'BP') return '现场记录';
+    if (kind === 'MAP') return '一份路线图';
+    if (kind === 'DEC') return '一份决议文书';
+    return '一份现场记录';
+  }
+
+  /** 中间单只有新证据 token 时的一线路线进展（不再回放已完成章的 NPC 回信）。 */
+  function routeProgressLineOf(newTokens) {
+    if (!newTokens.length) return '';
+    var labels = [];
+    for (var i = 0; i < newTokens.length && labels.length < 2; i += 1) {
+      var label = evidenceLabelOf(newTokens[i]);
+      if (label && labels.indexOf(label) < 0) labels.push(label);
+    }
+    if (!labels.length) return '这份记录已经送回旧港，路线又往前挪了一点。';
+    return '带回了' + labels.join('和') + '，旧港把路线又往前挪了一点。';
   }
 
   /** NPC 显示名统一玩家语言：内部代号改成戏内称呼。 */
