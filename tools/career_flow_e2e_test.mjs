@@ -40,7 +40,6 @@
  *   CAREER_FLOW_PORT    静态服务器端口，默认 9021
  *   CAREER_FLOW_CDP     请求 CDP 端口，默认 9521（实际动态端口从 profile 读取）
  *   CHROME_PATH         Chrome 路径
- *   CAREER_FLOW_ALLOW_ALTERNATE=1  允许 UI 推荐替代真实路线（仍必须逐单核验真实推进）
  *   CAREER_FLOW_QA_DIR   截图输出目录
  *
  * 退出码：0 = 全部 PASS；1 = FAIL 或 BLOCKED；2 = 环境/用法错误。
@@ -70,6 +69,7 @@ const ENDING_GAME = 'merge-2048';
 const VIEWPORTS = [
   { width: 320, height: 700, label: '320×700' },
   { width: 375, height: 548, label: '375×548（0.19 紧凑）' },
+  { width: 390, height: 664, label: '390×664（0.19 紧凑首页）' },
   { width: 390, height: 844, label: '390×844' },
   { width: 430, height: 932, label: '430×932' },
 ];
@@ -97,7 +97,6 @@ const CHAPTER_FLAGS = Object.freeze({
   C5: 'C5.star_tower_resolved',
 });
 const J = (value) => JSON.stringify(value);
-const ALLOW_ALTERNATE = process.env.CAREER_FLOW_ALTERNATE === '1' || process.env.CAREER_FLOW_ALLOW_ALTERNATE === '1';
 
 const rec = createRecorder();
 const COUNTS = { pass: 0, fail: 0, blocked: 0 };
@@ -192,22 +191,28 @@ function evalRequirement(req, ctx) {
   return true;
 }
 
-/**
- * 静态投影：按路线前缀 + story-evidence 默认规则推导实际会授予的章节旗标。
- * 只读取内容；不调用产品模块、不写任何存储。
- */
-function deriveChapterFlags(flags, evidence, gameByToken) {
-  const out = new Set(flags);
-  const tokens = Array.from(evidence);
-  const evidenceRows = tokens.map((token) => ({ token, game: gameByToken[token] || token.split('-')[1] || '' }));
-  const eRows = evidenceRows.filter((row) => /^E-/.test(row.token));
-  const distinctGames = new Set(eRows.map((row) => row.game)).size;
-  if (out.has(CHAPTER_FLAGS.C1) && eRows.length >= 2 && distinctGames >= 2) out.add(CHAPTER_FLAGS.C2);
-  if (out.has(CHAPTER_FLAGS.C2) && (eRows.length >= 3 || evidenceRows.some((row) => /^BP-/.test(row.token)))) out.add(CHAPTER_FLAGS.C3);
-  if (out.has(CHAPTER_FLAGS.C3) && (eRows.length >= 5 || (eRows.length >= 2 && distinctGames >= 2 && evidenceRows.some((row) => /^BP-/.test(row.token))))) {
-    out.add(CHAPTER_FLAGS.C4);
-  }
-  return out;
+/* 直接加载产品 story-evidence 模块；不复制任何章节规则（独立复审 Blocker）。 */
+import { createRequire } from 'node:module';
+const nodeRequire = createRequire(import.meta.url);
+const STORY_EVIDENCE_MODULE = nodeRequire(path.join(REPO_ROOT, 'apps', 'arcade', 'career', 'story-evidence.js'));
+
+function makeStoryEvidence(contentCommissions) {
+  const instance = typeof STORY_EVIDENCE_MODULE.createStoryEvidence === 'function'
+    ? STORY_EVIDENCE_MODULE.createStoryEvidence({})
+    : STORY_EVIDENCE_MODULE;
+  const configured = instance.configure({
+    commissions: contentCommissions,
+    items: readJson('apps/arcade/career/content/items.json'),
+    chapter: [],
+  });
+  return { instance, configured };
+}
+
+/** 用真实 story-evidence.storyFlags 推导旗标，不本地复制 C2–C4 规则。 */
+function deriveChapterFlags(instance, flags, evidence) {
+  const result = instance.storyFlags({ flags: Array.from(flags), evidence: Array.from(evidence) });
+  if (!result || result.ok !== true) throw new Error('story-evidence.storyFlags 失败: ' + J(result));
+  return new Set(result.allFlags || result.flags || []);
 }
 
 function staticContentChecks() {
@@ -253,10 +258,11 @@ function staticContentChecks() {
     J(c1Route && c1Route.routes)
   );
 
+  const { instance: storyStatic, configured: storyCfg } = makeStoryEvidence(commissions);
+  gate('S01b 真实 story-evidence 模块可按当前内容配置', storyCfg.ok === true, J(storyCfg));
   const flags = new Set(['C0.port_seen']);
   const evidence = new Set();
   const cleared = new Set();
-  const gameByToken = {};
   const derived = [];
   const chapterFlagSet = new Set(Object.values(CHAPTER_FLAGS));
   for (const spec of PREFERRED_ROUTE) {
@@ -264,16 +270,13 @@ function staticContentChecks() {
     if (!row) continue;
     const before = new Set(flags);
     (row.reward.flags || []).forEach((flag) => flags.add(flag));
-    (row.reward.evidence || []).forEach((token) => {
-      evidence.add(token);
-      gameByToken[token] = row.gameId;
-    });
+    (row.reward.evidence || []).forEach((token) => evidence.add(token));
     cleared.add(row.commissionId);
     if (!flags.has(CHAPTER_FLAGS.C1)) {
       const chapter = (campaign.chapters || []).find((item) => item.chapterId === 'C1');
       if (chapter && chapter.routes.some((route) => evalRequirement(route.requires, { flags, evidence, cleared }))) flags.add(CHAPTER_FLAGS.C1);
     }
-    const next = deriveChapterFlags(flags, evidence, gameByToken);
+    const next = deriveChapterFlags(storyStatic, flags, evidence);
     const newChapterFlags = Array.from(next).filter((flag) => chapterFlagSet.has(flag) && !before.has(flag));
     derived.push({ commissionId: row.commissionId, newFlags: newChapterFlags, derived: Array.from(next) });
     next.forEach((flag) => flags.add(flag));
@@ -565,6 +568,21 @@ async function readOnlyState(cdp) {
 }
 
 /** 纯函数：由只读快照推导章节旗标、证据（含来源游戏）与已清委托。 */
+/**
+ * 运行时真实派生：调用页面 window.ArcadeCareer.storyEvidence.storyFlags，
+ * 不复制任何章节规则。模块懒加载且需已按内容 configure；未就绪时报 BLOCKED 而非伪造。
+ */
+async function runtimeStoryFlags(cdp, flags, evidence) {
+  return cdp.evaluate(`(function () {
+    var mod = window.ArcadeCareer && window.ArcadeCareer.storyEvidence;
+    if (!mod || typeof mod.storyFlags !== 'function') return { ok: false, reason: 'story-evidence-unavailable' };
+    if (typeof mod.isConfigured === 'function' && mod.isConfigured() !== true) return { ok: false, reason: 'story-evidence-unconfigured' };
+    var r = mod.storyFlags({ flags: ${J(Array.from(flags))}, evidence: ${J(Array.from(evidence))} });
+    if (!r || r.ok !== true) return { ok: false, reason: (r && r.reason) || 'storyFlags-failed' };
+    return { ok: true, flags: (r.allFlags || r.flags || []).slice() };
+  })()`);
+}
+
 function projectFromSnapshot(snapshot, campaign) {
   const flags = new Set();
   const evidence = new Set();
@@ -591,8 +609,7 @@ function projectFromSnapshot(snapshot, campaign) {
       gameByToken[token] = (claim.commissionId || '').split('.')[0];
     });
   });
-  const derived = deriveChapterFlags(flags, evidence, gameByToken);
-  derived.forEach((flag) => flags.add(flag));
+  /* 章节状态派生交由调用方用真实 runtimeStoryFlags 补齐（此处不复制规则）。 */
   const chapters = (campaign.chapters || []).map((chapter) => {
     const entryMet = evalRequirement(chapter.entry, { flags, evidence, cleared });
     const routes = (chapter.routes || []).map((route) => ({
@@ -602,31 +619,6 @@ function projectFromSnapshot(snapshot, campaign) {
     return { chapterId: chapter.chapterId, entryMet, routes };
   });
   return { flags, evidence, cleared, gameByToken, chapters };
-}
-
-/** 该单是否足以完成当前章（用内容规则投影，而非产品内部函数）。 */
-function completingChapter(projection, campaign, commission) {
-  const flags = new Set(projection.flags);
-  const evidence = new Set(projection.evidence);
-  const cleared = new Set(projection.cleared);
-  const gameByToken = Object.assign({}, projection.gameByToken);
-  (commission.reward.flags || []).forEach((flag) => flags.add(flag));
-  (commission.reward.evidence || []).forEach((token) => {
-    evidence.add(token);
-    gameByToken[token] = commission.gameId;
-  });
-  cleared.add(commission.commissionId);
-  /* C1 旗标由 campaign.syncFlags 按章节 routes 真实判定，不走 story-evidence 的
-     C2–C4 推导；先用 campaign.json 的 C1 routes + 本单奖励投影补 C1。 */
-  if (!flags.has(CHAPTER_FLAGS.C1)) {
-    const c1 = (campaign.chapters || []).find((chapter) => chapter.chapterId === 'C1');
-    if (c1 && (c1.routes || []).some((route) => evalRequirement(route.requires, { flags, evidence, cleared }))) {
-      flags.add(CHAPTER_FLAGS.C1);
-    }
-  }
-  const after = deriveChapterFlags(flags, evidence, gameByToken);
-  return Array.from(after).find((flag) =>
-    Object.values(CHAPTER_FLAGS).includes(flag) && !projection.flags.has(flag)) || null;
 }
 
 async function campaignView(cdp, snapshot) {
@@ -684,9 +676,10 @@ async function waitReceipt(cdp, runId, timeout = 30000) {
 const FORBIDDEN_PATTERNS = [
   { name: '内部章节状态 C0–C5', re: /(?:^|[^A-Za-z0-9])C[0-5](?=[.\s，。；：）】]|$)/i },
   { name: '内部 tier 记号 .T1–.T6', re: /\.[Tt][1-6](?!\d)/ },
-  /* 只匹配「证据 token 形状」：前缀 + 游戏/tier 编号（如 E-memory-flip.T2、BP-merge-2048.T3）。
-     角色名 E-7 不满足该形状，不再误判；门禁本身保留。 */
-  { name: '证据 token E-/BP-/MAP-/DEC-（含游戏/tier）', re: /(?:E|BP|MAP|DEC)-[a-z][a-z0-9-]*\.T[1-6](?:\b|$)/i },
+  /* 匹配真实证据 token：E-C1-site / E-memory-flip.T2 / BP-merge-2048.T3 / MAP-* / DEC-*。
+     排除角色专名 E-7：E- 后不能紧跟孤立数字 7 后接边界。 */
+  { name: '证据 token E-/BP-/MAP-/DEC-（真实内容形状，排除角色 E-7）',
+    re: /(?:E|BP|MAP|DEC)-(?!7\b)[A-Za-z][A-Za-z0-9._-]*[A-Za-z0-9]/i },
   { name: '内部状态词 active/locked', re: /\b(?:active|locked)\b/i },
   { name: '长 commission/run id', re: /\b[A-Za-z0-9_-]{24,}\b/ },
 ];
@@ -1334,18 +1327,30 @@ async function verifyOrderProgress(cdp, label, commissionId, ticketId, expectedF
   const claim = snapshot.claims.find((row) => row.receiptId === ticketId);
   gate('STATE ' + label + ' claim 真实现金/材料/旗标入账', !!claim && claim.credits >= 0, J(claim));
   const projection = projectFromSnapshot(snapshot, campaign);
-  const commission = commissions.find((row) => row.commissionId === commissionId);
-  const completedFlag = commission ? completingChapter(projection, campaign, commission) : null;
+  /* 真实派生：运行时调用产品 storyEvidence.storyFlags；拿不到就 BLOCKED，不写本地近似规则。 */
+  const storyNow = await runtimeStoryFlags(cdp, projection.flags, projection.evidence);
+  requireFeature('STORY ' + label + ' 真实 story-evidence 派生可用', storyNow.ok === true, J(storyNow));
+  const realFlags = new Set(storyNow.flags);
+  const completedFlag = Array.from(realFlags).find((flag) =>
+    Object.values(CHAPTER_FLAGS).includes(flag) && !projection.flags.has(flag)) || null;
   if (expectedFlag) {
-    gate('CHAPTER ' + label + ' 按真实规则完成 ' + expectedFlag, projection.flags.has(expectedFlag), J({ flags: Array.from(projection.flags), evidence: Array.from(projection.evidence), completedFlag }));
+    gate('CHAPTER ' + label + ' 按真实规则完成 ' + expectedFlag, realFlags.has(expectedFlag), J({ realFlags: Array.from(realFlags), evidence: Array.from(projection.evidence), completedFlag }));
   } else {
-    gate('CHAPTER ' + label + ' 中间单不完成任何新章节', !completedFlag, J({ completedFlag, flags: Array.from(projection.flags) }));
-  }
-  if (kind === 'step') {
-    gate('CHAPTER ' + label + ' 中间单有路线进展而非完章（UI 文案）', true, '由同单 RECEIPT 断言「新完成的段落：/已完成章节：」缺失去核验');
+    gate('CHAPTER ' + label + ' 中间单不完成任何新章节', completedFlag === null, J({ completedFlag, realFlags: Array.from(realFlags) }));
   }
   const view = await campaignView(cdp, snapshot);
-  gate('CHAPTER ' + label + ' 章节状态与旗标一致', view.ok === true && (expectedFlag ? true : true), J(view));
+  /* 真实比较：当前章必须与本单真实旗标推进结果一致，不允许 true:true 永真。 */
+  /* 旗标 C1/C2/C3/C4 完成后，campaign.state 的 currentChapter 应依次为 C2/C3/C4/C5。 */
+  const CURRENT_AFTER_FLAG = {
+    [CHAPTER_FLAGS.C1]: 'C2', [CHAPTER_FLAGS.C2]: 'C3',
+    [CHAPTER_FLAGS.C3]: 'C4', [CHAPTER_FLAGS.C4]: 'C5',
+  };
+  const expectedCurrentChapter = expectedFlag ? CURRENT_AFTER_FLAG[expectedFlag] || null : null;
+  gate('CHAPTER ' + label + ' 章节状态与真实旗标一致',
+    view.ok === true && !!view.currentChapter &&
+      (expectedFlag ? view.currentChapter === expectedCurrentChapter : completedFlag === null),
+    J({ view: view.ok ? { currentChapter: view.currentChapter, chapters: view.chapters } : view,
+      expectedCurrentChapter, completedFlag, realFlags: Array.from(realFlags) }));
   QA.chapterAfter.push({ label, commissionId, expectedFlag, completedFlag, flags: Array.from(projection.flags), current: view.currentChapter });
   await checkConsole(cdp, 'order-' + label);
   return { snapshot, projection, view, claim };
@@ -1390,7 +1395,21 @@ async function runFullFlow(cdp, campaign, commissions) {
     const projectionBefore = projectFromSnapshot(snapshotBefore, campaign);
     const commission = commissions.find((row) => row.commissionId === recommendation.commissionId);
     requireFeature('BOARD ' + recommendation.commissionId + ' 推荐单在真实委托目录内', !!commission, J(recommendation));
-    const completes = completingChapter(projectionBefore, campaign, commission);
+    /* 真实完成性：用本单 reward 投影后的证据/旗标调用产品 storyEvidence.storyFlags。 */
+    const projectedFlags = new Set(projectionBefore.flags);
+    const projectedEvidence = new Set(projectionBefore.evidence);
+    (commission.reward.flags || []).forEach((flag) => projectedFlags.add(flag));
+    (commission.reward.evidence || []).forEach((token) => projectedEvidence.add(token));
+    if (!projectedFlags.has(CHAPTER_FLAGS.C1)) {
+      const c1 = (campaign.chapters || []).find((item) => item.chapterId === 'C1');
+      const ctx = { flags: projectedFlags, evidence: projectedEvidence, cleared: new Set(projectionBefore.cleared) };
+      if (c1 && (c1.routes || []).some((route) => evalRequirement(route.requires, ctx))) projectedFlags.add(CHAPTER_FLAGS.C1);
+    }
+    const storyBefore = await runtimeStoryFlags(cdp, projectedFlags, projectedEvidence);
+    requireFeature('STORY ' + expected.commissionId + ' 真实 story-evidence 派生可用', storyBefore.ok === true, J(storyBefore));
+    const realFlagsBefore = new Set(storyBefore.flags);
+    const completes = Array.from(realFlagsBefore).find((flag) =>
+      Object.values(CHAPTER_FLAGS).includes(flag) && !projectionBefore.flags.has(flag)) || null;
     const expectedKind = completes ? 'milestone' : 'step';
     const uiKind = /路线进展/.test(recommendation.kind || '') ? 'step' : /推进本章|完成本章/.test(recommendation.kind || '') ? 'milestone' : 'unknown';
     gate('BOARD ' + recommendation.commissionId + ' 推荐标记与真实完成性一致', uiKind === expectedKind, J({ uiKind, expectedKind, completes, kind: recommendation.kind }));
@@ -1435,11 +1454,11 @@ async function runFullFlow(cdp, campaign, commissions) {
 
   const preferredIds = PREFERRED_ROUTE.map((row) => row.commissionId);
   const routeMatches = J(sequence) === J(preferredIds);
-  if (!routeMatches && !ALLOW_ALTERNATE) {
-    gate('ROUTE 默认推荐遵循 DESIGN-0.20.0 首选路线 C1→C4', false, J({ sequence, preferredIds, hint: '替代路线可设 CAREER_FLOW_ALLOW_ALTERNATE=1；但必须逐单真实推进' }));
-  } else {
-    gate('ROUTE 默认推荐路线（首选或已授权替代）逐单真实推进', true, J({ sequence, alternate: !routeMatches }));
-  }
+  /* 无环境变量放宽：首选路线必须一致；替代路线不直接 PASS，而是由每单的
+     STORY/CHAPTER/RECEIPT 真实断言（已逐单执行）承担，并在此明确记录偏离。 */
+  gate('ROUTE 推荐路线（替代路线须逐单真实推进，不因环境变量通过）', routeMatches === true,
+    J({ sequence, preferredIds, alternate: !routeMatches,
+      note: routeMatches ? '首选路线' : '替代路线：真实性由每单 STORY/CHAPTER/RECEIPT 断言保证，但不视为首选默认路线通过' }));
 
   /* 终局入口：必须玩家可见按钮点击，不得直接写 C5。 */
   step('ending-entry');
@@ -1529,7 +1548,6 @@ function usage() {
   node tools/career_flow_e2e_test.mjs --static-only
   node tools/career_flow_e2e_test.mjs
 环境变量：CAREER_FLOW_PORT / CAREER_FLOW_CDP / CHROME_PATH / CAREER_FLOW_QA_DIR
-           CAREER_FLOW_ALLOW_ALTERNATE=1 允许替代真实路线（仍逐单核验）
 退出码：0 PASS；1 FAIL 或 BLOCKED；2 用法/环境错误`);
 }
 
