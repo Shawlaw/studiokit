@@ -243,26 +243,25 @@
 
 ## 13. 验收结果（实际执行，未发布）
 
-验证对象为本地分支 `feat/arcade-career-flow`，基线为已双端发布的 0.19.0（main `f8d7e7b`）。以下数字均来自实际执行输出，单门禁日志在仓库外 `/tmp/opencode/`（与既往证据同一位置）。独立复审已回灌，最终复验尚未完成；真机与真人首航验收 **UNVERIFIED**。
+验证对象为本地分支 `feat/arcade-career-flow`，基线为已双端发布的 0.19.0（main `f8d7e7b`）。**最终逐项串行门禁已全部通过，聚合三次长跑均被环境 / 旧断言阻断，没有任何一次聚合拿到 `ALL GATES PASSED`。**以下数字均来自实际执行输出，主要日志在仓库外 `/tmp/opencode/final-*.log` 与 `/tmp/opencode/career-flow-final-gates*.log`。真机与真人首航验收 **UNVERIFIED**。
 
 | 门禁 | 结果 | 证据 |
 |---|---|---|
-| 完整零种子首航 E2E | **339/339**（PASS 339 / FAIL 0 / BLOCKED 0，退出码 0） | `career-flow-final2.log`、`career-flow-postreview.log`；首选路线逐单真实推进、终局 C5 + `ending.research` 唯一 |
-| campaign E2E | **731/731** | `career-campaign-final.log`（CHECKS_TOTAL 731/731） |
-| 生涯移动端 | **318/318** | `career-mobile3.log` |
-| world-state | **145/145** | `career_world_state_test.out` |
-| 推荐一致性 | **111/111** | `career_recommendation_test.out` |
-| 路线一致性 | **94/94** | `career_route_consistency_test.out` |
-| career-db | **38/38** | `career-flow-all-gates.log` |
-| 备份 / 导入 | **34/34** | `career-backup.log` |
-| 可访问性 | **75/75** | `career-a11y.log` |
-| PWA 离线 | **18/18** | `career-pwa.log` |
-| 矮视口紧凑触控 | **18/18** | 0.19 基线门禁，本版零回退（见 §2.8 / §7） |
-| 通用冒烟 | **117/117** | `arcade-smoke-career.log` |
+| 静态 / 构建 | PASS | `final-inline.log`、`final-stage.log`；`validate_site.py`、`build_site.py`、`node --check engine.js/sw.js` |
+| 新增纯 Node 门禁 | 全 PASS | `final-career_continuation_test.mjs.log` 17/17、`final-career_recommendation_test.mjs.log` 111/111、`final-career_route_consistency_test.mjs.log` 94/94、`final-career_receipt_feedback_test.mjs.log` 103/103、`final-career_mailbox_flow_test.mjs.log` 56/56、`final-career_town_flow_test.mjs.log` 21/21、`final-career_town_recommend_preload_test.mjs.log` 15/15、`final-career_origin_letter_test.mjs.log` 5/5 |
+| 96 委托静态 / E2E | **34/34** / **16/16 游戏、96/96 档、3792/3792 检查** | `final-m96-static.log`；`career-96.log` 与 `career-flow-final-gates.log` 的首次完整 E2E SUMMARY；gates3 的若干档被 Chrome 启动阻断后单项重跑通过 |
+| campaign E2E | **732/732** | `final-campaign-e2e.log`（CHECKS_TOTAL 732/732） |
+| 完整零种子首航 E2E | **339/339**（PASS 339 / FAIL 0 / BLOCKED 0） | `final-flow.log`；首选路线逐单真实推进、终局 C5 + `ending.research` 唯一 |
+| 移动端 / world-state | **318/318** / **145/145** | `final-mobile.log`、`final-world.log` |
+| 通用冒烟 / 紧凑触控 | **117/117** / **18/18** | `final-smoke.log`、`final-compact.log` |
+| gameplay all / base | **208/208**（repeat 2）/ **22/22**（repeat 2） | `final-gameplay-all3.log`、`final-gameplay-base.log` |
+| zen / calm / review / pwa_update / interaction / immersive / tower | **14/14** / **17/17** / **5/5** / **9/9** / **5/5** / **42/42** / **23/23** | `final-zen.log`、`final-calm.log`、`final-review.log`、`final-pwa-update.log`、`final-interaction2.log`、`final-immersive.log`、`final-tower.log` |
+| PWA 离线 / a11y / db / backup / resume | **18/18** / **75/75** / **38/38** / **34/34** / **45/45** | `career-pwa.log`、`career-a11y.log`、聚合日志对应段、`career-backup.log`、`career-flow-final-gates2.log` 前后 resume 单项重跑通过 |
+| review3 / review4 / review5 / closeout / route_evidence / isolation | 全 PASS | `final-review3.log`、`final-review4.log`、`final-review5.log` 12/12、`final-closeout.log` 6/6、`final-route-evidence.log`、`final-isolation2.log` 9/9 |
 
-- **静态**：`tools/validate_site.py`、`tools/build_site.py`、`node --check apps/arcade/engine.js`、`node --check apps/arcade/sw.js` 在最终树通过。
-- **聚合门禁**：`tools/arcade_run_all_gates.py` **仍在运行 / 待最终确认**。截至收口时其日志 `career-flow-all-gates.log` 在 `career_96_missions` 段中途截断，未出现 `ALL GATES PASSED`；本文件不提前写该结论。聚合门禁必须串行运行，完成后以最终日志为准更新本节与 `TASKS.md`。
-- **独立复审**：首轮复审问题已回灌并在最终树上复跑（零种子 E2E 339/339 两轮、campaign E2E 731/731）；最终复验仍待完成。
+- **逐项串行结论**：上述所有单项门禁在最终树上串行执行均通过；这不是一次聚合脚本的长跑结果。
+- **聚合门禁三次长跑**：`career-flow-final-gates.log` 在 `career_review4_same_route` 因旧并发预期失败（exit 1）；`career-flow-final-gates2.log` 在 `career_run_resume` 因环境阻断（exit 2）；`career-flow-final-gates3.log` 在 96 E2E 多款游戏出现 `Chrome DevToolsActivePort 未就绪`（浏览器启动内存 / 端口偶发）。对应单项修复或重跑均通过，但**没有任何一次聚合输出 `ALL GATES PASSED`，不宣称一次聚合通过**。聚合门禁必须串行运行，环境偶发按单项重跑如实记录。
+- **独立复审**：首轮复审问题已回灌；最终逐项复验全绿，真机 / 真人仍待 Owner。
 - **真机 / 真人**：按 §10 的真人首航清单尚未进行；iOS / Android 真机触控手感与 PWA 安装态仍 **UNVERIFIED**。本版不发布，无 `OWNER_AUTHORIZATION: PUBLISH_TO_MAIN`。
 
 ## 14. 回滚

@@ -25,28 +25,27 @@
 
 | 类别 | 结果 | 说明 |
 |---|---|---|
-| 完整零种子首航 E2E | **339/339**（PASS 339 / FAIL 0 / BLOCKED 0） | 全新档案真实 UI 走完读信→进港→8 单默认路线→研究终局；无直接写旗标 / tier quest |
-| campaign E2E | **731/731** | 多路线 C0→C5、三终局真实结算、备份恢复、经典 5 键不变 |
-| 生涯移动端 | **318/318** | 320/375/390/430 与 0.19 紧凑视口 |
-| world-state | **145/145** | 章节面板 / 终局选择 / 后日常 / 降级 / 焦点 / reduced-motion |
-| 推荐一致性 | **111/111** | `campaign.recommend` 只读派生与真实可接单一致 |
-| 路线一致性 | **94/94** | 推荐路径按真实规则必定产对应旗标，中间单不跳章 |
-| career-db | **38/38** | IDB 事务与幂等 |
-| 备份 / 导入 | **34/34** | 独立导出 / 导入 / 旧备份兼容 |
-| 可访问性 | **75/75** | 焦点、44px 热区、读屏与 reduced-motion |
-| PWA 离线 | **18/18** | 两部署路径、断网跨页、升级迁移、生涯 IDB 保留 |
-| 矮视口紧凑触控 | **18/18** | 0.19 基线门禁，本版零回退 |
-| 通用冒烟 | **117/117** | 16 款经典 / 中心页 / 离线 / 生涯视图 |
-| 静态 | PASS | `validate_site.py`、`build_site.py`、`node --check engine.js/sw.js` |
+| 静态 / 构建 | PASS | `final-inline.log`、`final-stage.log`；`validate_site.py`、`build_site.py`、`node --check engine.js/sw.js` |
+| 新增纯 Node 门禁 | 全 PASS | `final-career_continuation_test.mjs.log` 17/17、recommendation 111/111、route-consistency 94/94、receipt-feedback 103/103、mailbox-flow 56/56、town-flow 21/21、town-recommend-preload 15/15、origin-letter 5/5 |
+| 96 委托静态 / E2E | **34/34** / **16/16 游戏、96/96 档、3792/3792 检查** | `final-m96-static.log`；`career-96.log` / `career-flow-final-gates.log` 首次完整 E2E；gates3 受阻档单项重跑通过 |
+| campaign E2E | **732/732** | `final-campaign-e2e.log`，多路线 C0→C5、三终局真实结算、经典 5 键不变 |
+| 完整零种子首航 E2E | **339/339**（PASS 339 / FAIL 0 / BLOCKED 0） | `final-flow.log`，真实 UI 走完读信→进港→8 单默认路线→研究终局 |
+| 移动端 / world-state | **318/318** / **145/145** | `final-mobile.log`、`final-world.log` |
+| 冒烟 / 紧凑触控 | **117/117** / **18/18** | `final-smoke.log`、`final-compact.log` |
+| gameplay all / base | **208/208**（repeat 2）/ **22/22**（repeat 2） | `final-gameplay-all3.log`、`final-gameplay-base.log` |
+| zen / calm / review / pwa_update / interaction / immersive / tower | **14/14** / **17/17** / **5/5** / **9/9** / **5/5** / **42/42** / **23/23** | `final-zen.log`、`final-calm.log`、`final-review.log`、`final-pwa-update.log`、`final-interaction2.log`、`final-immersive.log`、`final-tower.log` |
+| PWA 离线 / a11y / db / backup / resume | **18/18** / **75/75** / **38/38** / **34/34** / **45/45** | `career-pwa.log`、`career-a11y.log`、聚合日志对应段、`career-backup.log`、resume 单项重跑 |
+| review3 / review4 / review5 / closeout / route_evidence / isolation | 全 PASS | `final-review3.log`、`final-review4.log`、`final-review5.log` 12/12、`final-closeout.log` 6/6、`final-route-evidence.log`、`final-isolation2.log` 9/9 |
 
-- **聚合门禁**：`tools/arcade_run_all_gates.py` 仍在运行 / 待最终确认。收口时日志 `career-flow-all-gates.log` 在 `career_96_missions` 段中途截断，未出现 `ALL GATES PASSED`；不提前写聚合全绿。
-- **独立复审**：首轮问题已回灌并在最终树复跑（零种子 E2E 两轮 339/339、campaign E2E 731/731）；最终复验待完成。
+- **逐项串行结论**：上述所有单项门禁在最终树上串行执行均通过；**这是逐项串行全绿，不是一次聚合长跑通过**。
+- **聚合门禁三次长跑**：`career-flow-final-gates.log`（review4 旧断言，exit 1）、`career-flow-final-gates2.log`（resume 环境阻断，exit 2）、`career-flow-final-gates3.log`（96 E2E 多款 Chrome `DevToolsActivePort 未就绪` 的内存 / 端口偶发）均未输出 `ALL GATES PASSED`；对应单项修复或重跑通过。**不宣称一次聚合通过**。主要日志：`/tmp/opencode/final-*.log`、`/tmp/opencode/career-flow-final-gates*.log`。
+- **独立复审**：首轮问题已回灌；最终逐项复验全绿。
 - **真机 / 真人**：UNVERIFIED，见 `DESIGN-0.20.0.md` §10 真人首航清单；未发布，无 `OWNER_AUTHORIZATION: PUBLISH_TO_MAIN`。
 
 ## 4. 已知边界与未解决项
 
-- 聚合门禁最终结论尚未拿到；拿到后须以最终日志更新本节、设计 §13 与 `TASKS.md`，不得用单项通过替代聚合结论。
-- 最终独立复审复验待完成。
+- 聚合三次长跑被旧断言与 Chrome 启动环境阻断，虽对应单项重跑通过，仍无一次聚合 `ALL GATES PASSED`；不得用逐项全绿替代聚合结论。
+- 真机 / 真人首航仍待 Owner；最终逐项串行复验已全绿。
 - 真人首航（身份复述、无需提示开始第三单、信用点与星币不混淆、次日回访）未进行；真机 iOS / Android 手感与 PWA 安装态未验证。
 - 本版只在本地分支提交；远端 `main` 与双端线上仍为 0.19.0，发布需 Owner 单独授权。
 
