@@ -402,8 +402,16 @@ async function checkConsole(cdp, label) {
   return gate('ERR 无 console error / 未捕获异常 [' + label + ']', errors.length === 0, errors.join(' | '));
 }
 
-async function waitBridge(cdp, label) {
-  await cdp.waitFor('!!(window.ArcadeCareer && window.ArcadeCareer.ready && window.__arcadeCareerTest)', { timeout: 20000 });
+/**
+ * 等待游戏页 bridge ready。默认还要求 `?careerTest=1` 测试钩子；
+ * 真实首页回访链接按设计不带该参数，只有生产 `ArcadeCareer.ready`，
+ * 这类调用传 requireTestApi=false，只等公开 ready 并验证 available。
+ */
+async function waitBridge(cdp, label, requireTestApi = true) {
+  const readyExpr = requireTestApi
+    ? '!!(window.ArcadeCareer && window.ArcadeCareer.ready && window.__arcadeCareerTest)'
+    : '!!(window.ArcadeCareer && window.ArcadeCareer.ready)';
+  await cdp.waitFor(readyExpr, { timeout: 20000 });
   const ready = await cdp.evaluate('window.ArcadeCareer.ready.then(function (r) { return { ok: !!(r && r.available), reason: (r && r.reason) || null }; })');
   requireFeature('BOOT bridge 可用 [' + label + ']', ready && ready.ok === true, J(ready));
   return ready;
@@ -874,7 +882,8 @@ async function phaseHomepageRevisit(cdp) {
   /* 真实点击回访链接（不是直接改 URL）。 */
   await clickVisible(cdp, '[data-letter-entry] [data-letter-label]', '首页来信入口');
   await waitForRevisitUrl(cdp, '未读来信回访');
-  await waitBridge(cdp, 'careerLetter-revisit');
+  /* 首页回访链接不带 careerTest=1：只等公开 bridge ready。 */
+  await waitBridge(cdp, 'careerLetter-revisit', false);
   await waitPanel(cdp, 'mailbox', 15000);
   const mailbox1 = await panelSnapshot(cdp, 'mailbox');
   gate('HOME 回访自动重显未读来信（且留在游戏页）', !!(mailbox1 && mailbox1.text.length > 20), J(mailbox1 && mailbox1.text.slice(0, 300)));
@@ -891,7 +900,8 @@ async function phaseHomepageRevisit(cdp) {
   gate('HOME 读过未投递显示「继续旧港来信」', entry2.text === '继续旧港来信' && entry2.href === 'games/pendulum-tower.html?careerLetter=1', J(entry2));
   await clickVisible(cdp, '[data-letter-entry] [data-letter-label]', '首页续读入口');
   await waitForRevisitUrl(cdp, '已读未投递续读');
-  await waitBridge(cdp, 'careerLetter-undelivered');
+  /* 同上：真实首页续读链接只有生产 bridge。 */
+  await waitBridge(cdp, 'careerLetter-undelivered', false);
   await waitPanel(cdp, 'mailbox', 15000);
 }
 

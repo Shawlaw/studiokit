@@ -61,6 +61,7 @@ import * as fixtureRoad from './career_fixture_road-rush.mjs';
 import * as fixtureGomoku from './career_fixture_gomoku.mjs';
 import * as fixtureGold from './career_fixture_gold-miner.mjs';
 import * as fixtureBlackjack from './career_fixture_blackjack.mjs';
+import * as fixtureSnowbells from './career_fixture_snowbells.mjs';
 
 /* ------------------------------------------------------------------ *
  * 1. 环境 / 内容 / 常量
@@ -129,6 +130,21 @@ const ENDING_BY_APPROACH = new Map(
 const CAMPAIGN_EPILOGUE = CAMPAIGN_CONTENT.epilogue || {};
 const CHAPTER_TITLES = new Map(CAMPAIGN_CONTENT.chapters.map((chapter) => [chapter.chapterId, chapter.title]));
 
+/**
+ * 旧内容（main 基线）logistics 是扁平 anyCommissions：road-rush.T3 单项即 met；
+ * 修正内容（651e9fe+）是两段 all：必须先库存后供电，单项不 met。
+ * 中间步期望按当前实际内容推导，不对旧档放宽任何章节/证据断言。
+ */
+function logisticsSingleStepMeets(chapterId, routeId, commissionId) {
+  const chapter = (CAMPAIGN_CONTENT.chapters || []).find((row) => row.chapterId === chapterId);
+  const route = chapter && (chapter.routes || []).find((row) => row.routeId === routeId);
+  const requires = route && route.requires;
+  if (!requires) return false;
+  if (Array.isArray(requires.all) || Array.isArray(requires.any)) return false;
+  return Array.isArray(requires.anyCommissions) && requires.anyCommissions.indexOf(commissionId) >= 0;
+}
+const R2_LOGISTICS_STOCK_MET = logisticsSingleStepMeets('C4', 'logistics', 'road-rush.T3');
+
 const ITEMS_CONTENT = readJson(path.join(CONTENT_DIR, 'items.json'));
 const RENTAL_SHIP_ID = (Array.isArray(ITEMS_CONTENT.ships) ? ITEMS_CONTENT.ships : []).find((ship) => ship && ship.rental === true)?.shipId || 'old-wing';
 
@@ -143,6 +159,7 @@ const FIXTURES = {
   gomoku: fixtureGomoku,
   'gold-miner': fixtureGold,
   blackjack: fixtureBlackjack,
+  snowbells: fixtureSnowbells,
 };
 
 /* ------------------------------------------------------------------ *
@@ -1873,14 +1890,15 @@ const ROUTES = [
       },
       {
         /* 651e9fe 后 logistics 是两段 all：库存(road-rush.T3/block-drop.T3)
-           + 供电(merge-2048.T3/gomoku.T2)。road-rush.T2 不产证据，不能单独声称 met。 */
+           + 供电(merge-2048.T3/gomoku.T2)，单项不 met；main 基线是扁平 anyCommissions，
+           road-rush.T3 单项即 met。两者都按真实内容推导，不写死、不放宽断言。 */
         gameId: 'road-rush',
         tier: 3,
         label: 'R2.road-rush.T3',
         expect: {
           label: 'R2.C4-route-stock',
           chapters: { C0: 'complete', C1: 'complete', C2: 'complete', C3: 'complete', C4: 'active', C5: 'locked' },
-          route: { chapterId: 'C4', routeId: 'logistics', met: false, available: false },
+          route: { chapterId: 'C4', routeId: 'logistics', met: R2_LOGISTICS_STOCK_MET, available: R2_LOGISTICS_STOCK_MET },
           panelPortState: 'C3',
           endingsAllAvailable: false,
         },
