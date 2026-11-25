@@ -20,12 +20,12 @@ node tools/career_flow_e2e_test.mjs                # 全量（独占 Chrome 时�
 - 首页「旧港有一封来信」→ 真实点击 `?careerLetter=1` → 未读信重显 → 关闭回到游戏页 → 读过后「继续旧港来信」。
 - 信件单一主动作「按地址投递 · 去港口」→ 一次点击进港。
 - 告示板首屏只读推荐单：游戏名/世界目标/数量/原因/主按钮；推荐标记 `推进本章`/`路线进展` 与真实完成性一致。
-- 首选路线逐单：`star-raid.T1` → `pendulum-tower.T1` → `shadow-leap.T1`（中间）→ `shadow-leap.T2` → `star-raid.T2`（中间）→ `pendulum-tower.T2`，每单只读 claim/quests/evidence 核验真实旗标与章节状态；中间单不产章节旗标。
+- 首选路线逐单（与 `campaign.recommend`/ADR §20.9 一致）：`pendulum-tower.T1`(C1) → `memory-flip.T1`(step) → `memory-flip.T2`(C2) → `shadow-leap.T1`(step) → `shadow-leap.T2`(C3) → `pendulum-tower.T2`(step) → `gomoku.T1`(step) → `gomoku.T2`(C4)。每单用真实 `story-evidence.storyFlags` 派生旗标，只读 claim/quests/evidence 核验，并真实比较 `campaign.state.currentChapter` 与预期；中间单不产章节旗标。无环境变量放宽，替代路线不直接 PASS。
 - `shadow-leap.T1` 第一次真实做不足 → 失败收据 → 一键重接 → 再次真实成功。
-- 收据三回报 + 「下一步：」+「新完成的段落：」（兼容旧「已完成章节：」）+ 页内「回告示板 / 读回信」主动作（≥44px、至多一次整页跳转）。
-- 终局：C4 后当前屏三终局按钮（≥44px）→ 玩家点击 research → 真实 256+256 合并产出 512 事件 → C5 + ending.research 唯一。
-- 玩家可见文本扫描：无 `C0–C5`、`.T1–.T6`、`E-/BP-/MAP-/DEC-`、`active/locked`、长 id。
-- 320×700、375×548（0.19 紧凑）、390×844、430×932 四档视口无横向溢出、主动作热区 ≥44px。
+- 收据三回报 + 「下一步：」+「新完成的段落：」（兼容旧「已完成章节：」）+ 页内「回告示板 / 读回信」主动作（≥44px、至多一次整页跳转）；点击后轮询等面板出现，不固定 sleep。
+- 终局：C4 后当前屏三终局按钮（≥44px）→ 玩家点击 research → 等待新 ticket 的 merge-2048 页面 → 真实 256+256 合并产出 512 事件 → C5 + `ending.research` 唯一（quest 行 `nodeId='ending.research'`, `kind='ending'`）。
+- 玩家可见文本扫描：无 `C0–C5`、`.T1–.T6`、真实证据 token（`E-C1-site` / `E-xxx.T2` / `BP-xxx.T3`，但排除角色专名 `E-7`）、`active/locked`、长 id。
+- 320×700、375×548、390×664、390×844、430×932 五档视口无横向溢出、主动作热区 ≥44px。
 
 ## 依赖的产品接口（未集成时显式 BLOCKED，不静默跳过）
 
@@ -41,7 +41,12 @@ node tools/career_flow_e2e_test.mjs                # 全量（独占 Chrome 时�
 | 线索 chip `[data-career-clue]` | `apps/arcade/career/ui/clue-surface.js` | INTEGRATED |
 | 章节面板 `[data-chapter-id]` / `[data-approach]` | `apps/arcade/career/ui/world-state.js` | INTEGRATED |
 
-静态自检当前结果：PASS 12 / FAIL 1（非关键首屏 `data-town-intro`）/ BLOCKED 6。FAIL 为非关键记录，不阻断；BLOCKED 为关键接口缺失，退出码 1，符合“未集成时明确 fail/blocked”。
+静态自检当前结果：PASS 15 / FAIL 1（非关键首屏 `data-town-intro`）/ BLOCKED 6。FAIL 为非关键记录，不阻断；BLOCKED 为关键接口缺失，退出码 1，符合“未集成时明确 fail/blocked”。
+
+## 实跑日志与结果
+
+- 322/322 全链路（无 FAIL / 无 BLOCKED，退出码 0）日志：`C:\Users\rolle\AppData\Local\Temp\opencode\flow-integration15.log`（集成分支 `feat/arcade-career-flow`，合入 `6f55a04` 后，`CAREER_FLOW_PORT=19037` / `CAREER_FLOW_CDP=19537`）。
+- 独立复审修正后 339/339（退出码 0）日志：`C:\Users\rolle\AppData\Local\Temp\opencode\flow-integration16.log`（真实 `story-evidence.storyFlags` 派生、当前章真比较、390×664 视口、token 正则修正）。
 
 ## 路线内容一致性
 
