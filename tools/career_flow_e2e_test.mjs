@@ -684,7 +684,9 @@ async function waitReceipt(cdp, runId, timeout = 30000) {
 const FORBIDDEN_PATTERNS = [
   { name: '内部章节状态 C0–C5', re: /(?:^|[^A-Za-z0-9])C[0-5](?=[.\s，。；：）】]|$)/i },
   { name: '内部 tier 记号 .T1–.T6', re: /\.[Tt][1-6](?!\d)/ },
-  { name: '证据 token E-/BP-/MAP-/DEC-', re: /\b(?:E|BP|MAP|DEC)-[A-Za-z0-9]/ },
+  /* 只匹配「证据 token 形状」：前缀 + 游戏/tier 编号（如 E-memory-flip.T2、BP-merge-2048.T3）。
+     角色名 E-7 不满足该形状，不再误判；门禁本身保留。 */
+  { name: '证据 token E-/BP-/MAP-/DEC-（含游戏/tier）', re: /(?:E|BP|MAP|DEC)-[a-z][a-z0-9-]*\.T[1-6](?:\b|$)/i },
   { name: '内部状态词 active/locked', re: /\b(?:active|locked)\b/i },
   { name: '长 commission/run id', re: /\b[A-Za-z0-9_-]{24,}\b/ },
 ];
@@ -1139,18 +1141,49 @@ async function ensureTown(cdp, label) {
   return false;
 }
 
+/** 从最上层往下关闭所有生涯面板；world-state 叠在 town 上时先关它，避免 openTown 兜底被遮挡。 */
+async function closeAllCareerPanels(cdp) {
+  const names = ['world-state', 'mailbox', 'town', 'hangar', 'receipt', 'market', 'workshop', 'settings'];
+  for (const name of names) {
+    for (let guard = 0; guard < 4 && await cdp.evaluate(`!!document.querySelector('[data-career-panel=${J(name)}]')`); guard += 1) {
+      await closePanel(cdp, name);
+    }
+  }
+  await cdp.key('Escape');
+}
+
 async function acceptRecommended(cdp, commissionId, label) {
   step('accept:' + label);
+  /* 关闭上一单收据/章节等叠层，保证接单发生在最上层真实告示板。 */
+  await closeAllCareerPanels(cdp);
   await ensureTown(cdp, label);
   const selector = `[data-town-action="start"][data-commission-id=${J(commissionId)}]`;
   await cdp.waitFor('!!document.querySelector(' + J(selector) + ')', { timeout: 15000 });
   /* 接单按钮 data-commission-id 决定目标 gameId；据此等待精确的游戏页 pathname，
      避免只靠 /games/ 前缀在旧文档或别的游戏页上误命中。 */
   const targetGameId = commissionId.split('.')[0];
+  const beforeHref = await cdp.evaluate('location.href');
+  const beforeTicket = (beforeHref.match(/[?&]career=([^&#]+)/) || [])[1] || null;
+  const clicked = await cdp.evaluate(`(() => {
+    const b = document.querySelector(${J(selector)});
+    if (!b) return { ok: false, reason: 'missing' };
+    return { ok: true, commissionId: b.getAttribute('data-commission-id'), text: (b.textContent || '').trim() };
+  })()`);
+  gate('ACCEPT ' + label + ' 点击真实接单按钮且委托 id 一致', clicked.ok === true && clicked.commissionId === commissionId, J({ clicked, beforeHref }));
   await clickVisible(cdp, selector, label + ' 接单按钮');
-  await cdp.waitFor(`location.pathname.indexOf("/games/${targetGameId}.html") >= 0 && location.search.indexOf("career=") >= 0`, { timeout: 30000 });
-  const landed = await cdp.evaluate('({ path: location.pathname, search: location.search })');
-  gate('ACCEPT ' + label + ' 接单后整页导航到目标游戏职业入口', landed.path.indexOf('/games/' + targetGameId + '.html') >= 0 && landed.search.indexOf('career=') >= 0, J(landed));
+  /* 同游戏同 path 时 pathname 不变，必须比较 career= ticket 变化，且整体 href 与旧页不同。 */
+  await cdp.waitFor(`(() => {
+    var href = location.href;
+    var ticket = (href.match(/[?&]career=([^&#]+)/) || [])[1] || '';
+    var pathOk = location.pathname.indexOf('/games/${targetGameId}.html') >= 0;
+    var ticketOk = !!ticket && ticket !== ${J(beforeTicket || '')};
+    return href !== ${J(beforeHref)} && pathOk && ticketOk;
+  })()`, { timeout: 30000 });
+  const landed = await cdp.evaluate('({ href: location.href, path: location.pathname, search: location.search })');
+  const landedTicket = (landed.search.match(/[?&]career=([^&#]+)/) || [])[1] || null;
+  gate('ACCEPT ' + label + ' 接单后整页导航到新 ticket 的目标游戏职业入口',
+    landed.href !== beforeHref && landed.path.indexOf('/games/' + targetGameId + '.html') >= 0 && !!landedTicket && landedTicket !== beforeTicket,
+    J({ beforeHref, beforeTicket, landed, landedTicket }));
   const hasTestApi = await cdp.evaluate('!!window.__arcadeCareerTest');
   /* 目标 URL 可能不带 careerTest=1：生产页只有公开 bridge，按公开 commissionRun 校验。 */
   await waitBridge(cdp, label + '-game', hasTestApi);
