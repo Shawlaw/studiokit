@@ -1,6 +1,6 @@
 # Arcade Changelog
 
-## 0.20.0 — 2026-11-26（本地 `feat/arcade-career-flow`，未发布）
+## 0.20.0 — 2026-11-26
 
 生涯首航与剧情流畅度 V2。设计与回滚见 [`DESIGN-0.20.0.md`](DESIGN-0.20.0.md)，集成与门禁结果见 [`docs/arcade-life/INTEGRATION-0.20.md`](../../docs/arcade-life/INTEGRATION-0.20.md)。
 
