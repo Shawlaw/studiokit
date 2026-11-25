@@ -9,7 +9,7 @@
 - 首页工具清单唯一来源为 `shared/tool-registry.json`。
 - 共享运行时仅限 `shared/site.css` 与 `shared/site-shell.js`；不要引入大型框架。
 - 当前 Badge Studio 版本为 2.2.1，配置 Schema 为 v3，基线见 `docs/BASELINE.md`。
-- 0.19.0（本地未发布，分支 `feat/arcade-touch-019`，等待 Owner 试玩与发布授权）：矮视口紧凑模式（≤620×700 收起站点壳条与说明行、弹层改为底部弹层、选关/机库面板铺满屏幕）、11 款实时游戏的拇指区暂停、恢复门、结算防误触，以及逐游戏单手手感（上滑影冲、半屏方向锁、挡板相对拖动、抬起确认等）。引擎新增 `bindPress` / `createSideLatch`，`createLoop` 支持 `resume({ gate: true })`。不改任何 localStorage key / Schema、玩法数值与关卡数据。设计与回滚 `apps/arcade/DESIGN-0.19.0.md`。真机手感 UNVERIFIED；聚合门禁必须串行运行。
+- 0.19.0（2026-11-25 已双端发布）：矮视口紧凑模式（≤620×700 收起站点壳条与说明行、弹层改为底部弹层、选关/机库面板铺满屏幕）、11 款实时游戏的拇指区暂停、恢复门、结算防误触，以及逐游戏单手手感（上滑影冲、半屏方向锁、挡板相对拖动、抬起确认等）。引擎新增 `bindPress` / `createSideLatch`，`createLoop` 支持 `resume({ gate: true })`。不改任何 localStorage key / Schema、玩法数值与关卡数据。设计与回滚 `apps/arcade/DESIGN-0.19.0.md`。升级时只继承旧缓存的预载清单并重新取当前版本游戏页，不复制旧页面字节。真机手感 UNVERIFIED；聚合门禁必须串行运行。
 - 0.18.2（2026-11-25 已双端发布）修复 Cloudflare Pages 上预载后断网跨页失败。迁移 0.18.1 已缓存的游戏页面，SW 缓存键为 `studiokit-arcade-0.18.2-v1`。
 - 0.18.1（2026-11-24 已双端发布）：首页续玩与排序记忆、游戏页返回、贪吃蛇及俄罗斯方块触控。已开启生涯后，首页可切换经典与生涯、设置默认视图，并可直达告示板、信箱与已解锁章节。经典是初始默认视图。
 - 0.18.0（2026-11-24 已双端发布）：星塔回响——C0–C5 六章、三条并列终局（武力/研究/救援）与后日常；首次生涯沿用线索与信箱入口。新增 `campaign-core/ending-reducer/ui/world-state` 与 campaign/chapter/ending/npc/side-stories 内容；终局复用 commission 生命周期但独立于 96 告示板，C5 唯一、幂等、失败可重试；职业 run 仍不写经典 5 键/旧机库/星币。修复 C0 信箱旗标与终局跨页事件缓冲（adopt/attach）、mustKnow/正文/NPC 渲染、C1 代办路线。接口见 ADR §20，设计与回滚 `apps/arcade/DESIGN-0.18.0.md`，集成 `docs/arcade-life/INTEGRATION-0.18.md`；证据仓库外。发布需 Owner 明确授权。

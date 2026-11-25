@@ -5,6 +5,10 @@
 - 仓库：<https://github.com/Shawlaw/studiokit>
 - GitHub Pages：<https://shawlaw.github.io/studiokit/>
 - Cloudflare Pages：<https://studiokit.pages.dev/>
+- Arcade `0.19.0` 已于 2026-11-25 双端发布，发布提交 `f8d7e7b`（含与 0.18.2 的合并及合并后修复）。矮视口紧凑模式、拇指区暂停、恢复门、结算防误触与逐游戏单手手感。
+  - [Actions 发布记录](https://github.com/Shawlaw/studiokit/actions/runs/45554384478) 四项任务全部成功；`tools/verify_deploy.py` 双端各 87/87 文件与本地产物一致，arcade 0.19.0 / badge 2.2.1 / venue 0.2.0。
+  - 合并后复验：聚合门禁与 4 个独立门禁串行跑完；P16 预载迁移缺陷与 CT-18 断言随机性已修复，最终树上离线 18/18、compact_touch 两轮 18/18、冒烟 117/117、PWA 更新 9/9；明细见 `apps/arcade/DESIGN-0.19.0.md` 第 5.1 节。
+  - 线上运行时检查（无头 Chrome，375×548）：两个站点的中心页均为 0.19.0、16 张卡；记忆翻牌「开始游戏」首屏可见、无页面溢出、无 console error。真机手感 UNVERIFIED。
 - Arcade `0.18.2` 已于 2026-11-25 双端发布，提交 `fd064ee`。修复预载后断网跨页，并迁移 0.18.1 已缓存的游戏页。
   - [Actions 发布记录](https://github.com/Shawlaw/studiokit/actions/runs/45520196313) 四项任务通过，两个正式站点及 Cloudflare 部署地址的 87/87 项文件一致。本地逐文件复验确认两个正式站点各 87/87 项与发布产物相符。
   - 冒烟 117/117、离线 18/18、PWA 更新 9/9。Chromium 模拟两种部署路径从 0.18.1 更新，关停服务器后可打开首页、进入黄金矿工并返回。手机真机待验证。

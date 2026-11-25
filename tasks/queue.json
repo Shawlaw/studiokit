@@ -2303,7 +2303,7 @@
 ,
     {
       "id": "T137",
-      "title": "Arcade 0.19.0：矮视口紧凑布局、拇指区暂停、恢复门与单手触屏（本地未发布）",
+      "title": "Arcade 0.19.0：矮视口紧凑布局、拇指区暂停、恢复门与单手触屏",
       "kind": "agent",
       "status": "DONE",
       "dependsOn": ["T134"],
@@ -2315,6 +2315,21 @@
         "聚合门禁与新增门禁在最终提交树上通过"
       ],
       "evidence": "分支 feat/arcade-touch-019，未推送 / 未发布。无头 Chrome 实测 128 个「游戏 × 视口」组合零溢出；375×548 标签页画布占屏 25–32% → 33–47%，开局按钮由 10 款不可见变为 16 款全部可见。新增 arcade_compact_touch_test 18/18（真实触控事件：恢复门、暂停、防抖、方向锁、上滑影冲、相对拖动、抬起确认、选关面板）；冒烟 117/117、底部按钮抬升 42/42、层塔 23/23、交互 5/5、PWA 更新 9/9、回看 5/5。聚合门禁结果记录在 apps/arcade/DESIGN-0.19.0.md 第 5 节。真机触控手感 UNVERIFIED，首版取值待 Owner 试玩裁决。"
+    },
+    {
+      "id": "T138",
+      "title": "Arcade 0.19.0 合入 main 并双端发布",
+      "kind": "agent",
+      "status": "DONE",
+      "dependsOn": ["T137"],
+      "ownerAuthorizationRequired": true,
+      "ownerAuthorizationNote": "OWNER_AUTHORIZATION: PUBLISH_TO_MAIN。Owner 明确要求「可以，没问题，合回main之后发版吧」。",
+      "acceptance": [
+        "0.19.0 与 main 的 0.18.2 真正合并，保留两边内容",
+        "合并后门禁复验通过，合并暴露的 PWA 迁移缺陷修复",
+        "Actions 四项任务成功，GitHub Pages 与 Cloudflare Pages 逐文件核验一致"
+      ],
+      "evidence": "发布提交 f8d7e7b（含合并 1b286bc、修复 64cb754 与 71214d1）。Actions https://github.com/Shawlaw/studiokit/actions/runs/45554384478 四项成功；verify_deploy.py 双端各 87/87 文件一致，arcade 0.19.0 / badge 2.2.1 / venue 0.2.0。合并树全量门禁 + 最终树重跑：离线 18/18、compact_touch 两轮 18/18、world_state 109/109、closeout 6/6、冒烟 117/117、PWA 更新 9/9。线上运行时检查：两站点中心页 0.19.0、16 卡、记忆翻牌开局按钮首屏可见、零 console error。真机手感 UNVERIFIED。"
     }
   ]
 }
