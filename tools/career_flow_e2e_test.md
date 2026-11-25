@@ -22,7 +22,7 @@ node tools/career_flow_e2e_test.mjs                # 全量（独占 Chrome 时�
 - 告示板首屏只读推荐单：游戏名/世界目标/数量/原因/主按钮；推荐标记 `推进本章`/`路线进展` 与真实完成性一致。
 - 首选路线逐单：`star-raid.T1` → `pendulum-tower.T1` → `shadow-leap.T1`（中间）→ `shadow-leap.T2` → `star-raid.T2`（中间）→ `pendulum-tower.T2`，每单只读 claim/quests/evidence 核验真实旗标与章节状态；中间单不产章节旗标。
 - `shadow-leap.T1` 第一次真实做不足 → 失败收据 → 一键重接 → 再次真实成功。
-- 收据三回报 + 「下一步：」+「已完成章节：」+ 页内「回告示板 / 读回信」主动作（≥44px、至多一次整页跳转）。
+- 收据三回报 + 「下一步：」+「新完成的段落：」（兼容旧「已完成章节：」）+ 页内「回告示板 / 读回信」主动作（≥44px、至多一次整页跳转）。
 - 终局：C4 后当前屏三终局按钮（≥44px）→ 玩家点击 research → 真实 256+256 合并产出 512 事件 → C5 + ending.research 唯一。
 - 玩家可见文本扫描：无 `C0–C5`、`.T1–.T6`、`E-/BP-/MAP-/DEC-`、`active/locked`、长 id。
 - 320×700、375×548（0.19 紧凑）、390×844、430×932 四档视口无横向溢出、主动作热区 ≥44px。
@@ -34,7 +34,7 @@ node tools/career_flow_e2e_test.mjs                # 全量（独占 Chrome 时�
 | `campaign.recommend`（ADR §20.9） | `apps/arcade/career/campaign-core.js` | BLOCKED |
 | `[data-town-recommend-id]` / `[data-town-recommend-kind]` | `apps/arcade/career/ui/town.js` | BLOCKED |
 | `路线进展` / `推进本章` 推荐文案 | `apps/arcade/career/ui/town.js` | BLOCKED |
-| 收据 `已完成章节：` / `下一步：` | `apps/arcade/career/ui/receipt.js` | BLOCKED |
+| 收据 `新完成的段落：`（兼容 `已完成章节：`） / `下一步：` | `apps/arcade/career/ui/receipt.js` | BLOCKED |
 | 收据 `回告示板` / `读回信` 主动作 | `apps/arcade/career/ui/receipt.js` | BLOCKED |
 | 结算 storyFeedback 接线 | `apps/arcade/career/bridge.js` | BLOCKED |
 | 首页 `旧港有一封来信` / `继续旧港来信` / `careerLetter=1` | `apps/arcade/index.html` | INTEGRATED |

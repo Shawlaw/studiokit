@@ -28,7 +28,7 @@
  *   - 不 push / merge / rebase，不启动 Chrome（由主 Agent 独占时段执行）。
  *   - 使用 feature detection：接口缺失时用 `BLOCKED` 明确报告并使门禁失败，
  *     绝不静默跳过关键验收。静态模式同样校验接口是否落地。
- *   - `campaign.recommend` 与 UI 推荐标记、收据「下一步/已完成章节」反馈、失败重接
+ *   - `campaign.recommend` 与 UI 推荐标记、收据「下一步/新完成的段落」反馈、失败重接
  *     是尚未集成的依赖；本脚本在当前基线会显式 BLOCKED。
  *
  * 用法（仓库根）：
@@ -311,9 +311,12 @@ const INTERFACES = [
     critical: false,
   },
   {
-    name: 'I05 收据「已完成章节 / 下一步」反馈',
+    /* 产品最终文案用「新完成的段落：」替代「已完成章节：」（去掉系统词），
+       两者都能证明当前屏有段落完成反馈；优先新文案，兼容旧文案。 */
+    name: 'I05 收据「新完成的段落 / 下一步」反馈',
     file: 'apps/arcade/career/ui/receipt.js',
-    needles: ['已完成章节：', '下一步：'],
+    needles: ['下一步：'],
+    anyNeedles: [['新完成的段落：'], ['已完成章节：']],
     critical: true,
   },
   {
@@ -359,14 +362,18 @@ function staticInterfaceChecks() {
       continue;
     }
     const missing = item.needles.filter((needle) => text.indexOf(needle) < 0);
-    if (missing.length === 0) {
+    /* anyNeedles：多组文案互斥变体，任意一组全部命中即可（如「新完成的段落：」或旧「已完成章节：」）。 */
+    const anyHit = !item.anyNeedles || item.anyNeedles.length === 0 || item.anyNeedles.some((group) =>
+      group.every((needle) => text.indexOf(needle) >= 0));
+    if (missing.length === 0 && anyHit) {
       gate(item.name, true, 'INTEGRATED');
       continue;
     }
+    const detail = { missing, anyNeedles: item.anyNeedles };
     if (item.critical) {
-      block(item.name, 'MISSING ' + J(missing) + ' in ' + item.file);
+      block(item.name, 'MISSING ' + J(detail) + ' in ' + item.file);
     } else {
-      gate(item.name, false, 'MISSING(非关键，仅记录) ' + J(missing) + ' in ' + item.file);
+      gate(item.name, false, 'MISSING(非关键，仅记录) ' + J(detail) + ' in ' + item.file);
     }
   }
 }
@@ -956,12 +963,18 @@ async function phaseReceipt(cdp, label, expectedChapterFlag, ticketId, campaign)
   const snapshot = await readOnlyState(cdp);
   gate('RECEIPT ' + label + ' 收据/claim 来自真实结算而非内存假数据', !!(snapshot && snapshot.ok === true && snapshot.claims.some((claim) => claim.receiptId === ticketId)), J({ cardState: card.state, ticketId, claims: (snapshot.claims || []).map((claim) => claim.receiptId) }));
   const success = card.state === 'success';
+  /* 产品最终文案「新完成的段落：<标题>」无内部“章节”系统词，优先检查；
+     兼容旧文案「已完成章节：」。两者都不出现即视为未集成/BLOCKED。 */
+  const segmentDoneMarkers = ['新完成的段落：', '已完成章节：'];
+  const segmentDoneMarker = segmentDoneMarkers.find((marker) => card.text.indexOf(marker) >= 0) || null;
   if (success) {
     requireFeature('RECEIPT ' + label + ' 玩家可见「下一步」页内出口', card.text.indexOf('下一步：') >= 0, J(card.text));
     if (expectedChapterFlag) {
-      requireFeature('RECEIPT ' + label + ' 章节完成在当前屏反馈', card.text.indexOf('已完成章节：') >= 0, J(card.text));
+      requireFeature('RECEIPT ' + label + ' 段落完成在当前屏反馈', !!segmentDoneMarker,
+        J({ markers: segmentDoneMarkers, text: card.text }));
     } else {
-      gate('RECEIPT ' + label + ' 中间单不谎称完成本章', card.text.indexOf('已完成章节：') < 0, J(card.text));
+      gate('RECEIPT ' + label + ' 中间单不谎称完成段落', segmentDoneMarker === null,
+        J({ marker: segmentDoneMarker, text: card.text }));
     }
   } else {
     gate('RECEIPT ' + label + ' 失败如实显示原因（不伪造成功）', card.text.length > 10 && /未|差|不足|没/.test(card.text), J(card.text));
@@ -1003,7 +1016,7 @@ async function verifyOrderProgress(cdp, label, commissionId, ticketId, expectedF
     gate('CHAPTER ' + label + ' 中间单不完成任何新章节', !completedFlag, J({ completedFlag, flags: Array.from(projection.flags) }));
   }
   if (kind === 'step') {
-    gate('CHAPTER ' + label + ' 中间单有路线进展而非完章（UI 文案）', true, '由同单 RECEIPT 断言「已完成章节：」缺失去核验');
+    gate('CHAPTER ' + label + ' 中间单有路线进展而非完章（UI 文案）', true, '由同单 RECEIPT 断言「新完成的段落：/已完成章节：」缺失去核验');
   }
   const view = await campaignView(cdp, snapshot);
   gate('CHAPTER ' + label + ' 章节状态与旗标一致', view.ok === true && (expectedFlag ? true : true), J(view));
