@@ -78,7 +78,13 @@ function recommend({ flags = [], cleared = [], availableIds = ALL_AVAILABLE, evi
     claims,
   };
   if (withEvidence) input.storyEvidence = storyEvidence;
-  return { result: core.recommend(input), input };
+  const result = core.recommend(input);
+  if (result) {
+    const forbidden = /C[0-5]\.|\b(?:active|locked)\b|\b(?:E|BP|MAP|DEC)-|真实路线|验算|旗标|章节完成/;
+    ok(!forbidden.test(result.goal), '全部推荐：goal 无内部记号或系统口径');
+    ok(!forbidden.test(result.reason), '全部推荐：reason 无内部记号或系统口径');
+  }
+  return { result, input };
 }
 
 function expectShape(result, message) {
@@ -87,6 +93,10 @@ function expectShape(result, message) {
   ok(commissionById.has(result.commissionId), `${message}：commissionId 是真实委托`);
   ok(typeof result.goal === 'string' && result.goal.length > 0 && !/[A-Za-z0-9][.-]T\d/.test(result.goal), `${message}：goal 为玩家语言`);
   ok(typeof result.reason === 'string' && result.reason.length > 0 && !/[A-Za-z0-9][.-]T\d/.test(result.reason), `${message}：reason 为玩家语言`);
+  // 玩家可见文案不得泄漏内部记号或审核口径
+  const forbidden = /C[0-5]\.|\b(?:active|locked)\b|\b(?:E|BP|MAP|DEC)-|真实路线|验算|旗标|章节完成/;
+  ok(!forbidden.test(result.goal), `${message}：goal 无内部记号`);
+  ok(!forbidden.test(result.reason), `${message}：reason 无内部记号或系统口径`);
   ok(['milestone', 'step'].includes(result.kind), `${message}：kind 合法`);
 }
 

@@ -2228,8 +2228,8 @@
       var chapter = state.chapterIndex[chapterId];
       var title = commission.title;
       var name = chapter ? chapter.title : chapterId;
-      if (isMilestone) return '先接「' + title + '」；完成后就能把' + name + '往下推进。';
-      return '先做「' + title + '」这一步，沿' + name + '的真实路线继续。';
+      if (isMilestone) return '先接「' + title + '」；完成后「' + name + '」就往前推进了。';
+      return '先做「' + title + '」，把这一段需要的记录带回来。';
     }
 
     /**
