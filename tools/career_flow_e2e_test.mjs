@@ -949,11 +949,28 @@ async function driveCommission(cdp, commissionId, label) {
     },
     'memory-flip.T2': async () => {
       await startOverlay(cdp, label);
-      for (let level = 0; level < 2; level += 1) {
-        await cdp.waitFor(`(() => { const t = window.__arcadeTest; return t.joyInfo().state === 'playing' && t.info().level === ${level + 1}; })()`, { timeout: 15000 });
-        await cdp.evaluate('window.__arcadeTest.skipPreviewNow()');
-        await cdp.evaluate(`(() => { const t = window.__arcadeTest; const by = {}; t.info().cardList.forEach((card) => { if (!card.matched) (by[card.symbol] = by[card.symbol] || []).push(card.id); }); Object.keys(by).forEach((key) => { const ids = by[key]; for (let i = 0; i + 1 < ids.length; i += 2) { t.revealById(ids[i]); t.revealById(ids[i + 1]); } }); return true; })()`);
+      /* 用 96 门禁 fixture 已验证的路径：setLevel(3) 真实 buildLevel，跳过预览，
+         再按 symbol 一对一真实 revealById 配对 ≥5 对；不等待关卡自然 clear 的 1.35s 时序。 */
+      await cdp.evaluate('window.__arcadeTest.setLevel(3)');
+      await cdp.waitFor("window.__arcadeTest.joyInfo().state === 'playing'", { timeout: 10000 });
+      await cdp.waitFor('window.__arcadeTest.skipPreviewNow() === true', { timeout: 10000 });
+      for (let pair = 0; pair < 5; pair += 1) {
+        const matched = await cdp.evaluate(`(() => {
+          const t = window.__arcadeTest;
+          const list = t.info().cardList;
+          const first = list.find((card) => !card.matched);
+          if (!first) return { ok: false, reason: 'no-unmatched-card', pair: ${pair} };
+          const mate = list.find((card) => card.id !== first.id && !card.matched && card.symbol === first.symbol);
+          if (!mate) return { ok: false, reason: 'no-mate', pair: ${pair} };
+          const a = t.revealById(first.id);
+          const b = t.revealById(mate.id);
+          return { ok: a === true && b === true, pair: [first.id, mate.id],
+            matchesNow: t.info().cardList.filter((card) => card.matched).length / 2 };
+        })()`);
+        ensure(matched && matched.ok === true, label + ' 第 ' + (pair + 1) + ' 对真实配对失败: ' + J(matched));
       }
+      const info = await cdp.evaluate('window.__arcadeTest.careerInfo()');
+      gate('DRIVE ' + label + ' 真实配对达到 5 对', Number(info.matches) >= 5, J({ matches: info.matches, level: info.level }));
       await pauseAndEnd(cdp, label);
       return cdp.evaluate('window.__arcadeTest.careerInfo()');
     },
