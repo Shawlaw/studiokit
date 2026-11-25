@@ -1,5 +1,5 @@
 /*!
- * StudioKit Arcade Life — 旧港告示板（0.16 / D16-01）
+ * StudioKit Arcade Life — 旧港告示板（0.16 / D16-01；0.20 首航改版）
  *
  * 浏览器普通 <script>（非 ESM）。加载时只创建 window.ArcadeCareerUI.town，
  * 不读 DOM、不写存储、不发请求。bridge.js 在 DOMContentLoaded 之后调用：
@@ -8,20 +8,23 @@
  *   window.ArcadeCareerUI.town.render(ctx);
  *   window.ArcadeCareerUI.town.close();
  *
- * ctx（bridge 构造，见 docs/arcade-life/ADR-interfaces.md §18.7）：
- *   { state, api, commission, commissionRun, commissions, items, careerId,
- *     openTown, openHangar, openReceipt, openSettings, announce(text), reducedMotion }
+ * 首屏只读消费 bridge 传入的 ctx（ADR §18.7 / §20.9）：
+ *   originIntro()                    → null 或 {sourceGame, greeting, address}
+ *   campaign.state(input)            → 章节状态（只用当前章标题/玩家语言提示）
+ *   campaign.recommend(input)        → null 或 {commissionId, goal, reason, kind}
+ *   commission.listAvailable(input)  → 真实可接单集合（推荐只允许在其中）
+ *   commission.continuations(input)  → 可选；live run（issued/active）集合
+ * 任一接口缺失、抛错或返回异常时安全回退旧告示板列表，不阻塞接单。
  *
  * 约束：
  * - 覆盖当前页面的轻量浮层（position:fixed，可滚动），按钮 + Esc + 点遮罩关闭；
  * - 关闭后焦点返回打开前的元素；键盘 Tab 可在面板内遍历（不逃逸到游戏页）；
- * - 重复 open 复用同一面板（不重建、不叠层）；
- * - 只读 ctx.commission（listAvailable / start / getWallet）；不读写 IndexedDB、localStorage；
- * - ctx.commission 缺失或调用失败时显示「告示板暂不可用」并保持面板可用（降级不抛错）；
- * - 委托行来自 ctx.commissions.commissions；不可接的行显示「暂未开放」；
- * - 成功接单显示戏内提示，并只使用 commission.start 返回的 url 导航（window.location.assign）；
- * - 样式集中在本文件注入的 <style>（不新建 CSS 文件，不引用外部字体/图片）；
- * - 全部文案为戏内语言；无网络请求、无声音、无动画。
+ * - 重复 open 复用同一面板（不重建、不叠层、不因重绘抢走用户焦点）；
+ * - 只读 ctx 注入的模块；不读写 IndexedDB / localStorage；不发网络请求；
+ * - 全部文案为戏内语言：不显示 C 码、active/locked、长 token、96 条重复时长；
+ * - 卡片接单前显示游戏名与 objective.atLeast 的可读目标（无字段时退到 summary）；
+ * - 失败优先使用结果里的明确 message，未知原因才兜底；失败提供重接/回告示板路径；
+ * - 样式集中在本文件注入的 <style>，按钮 ≥44px，320–430 及紧凑视口可用。
  */
 (function (root) {
   'use strict';
@@ -40,8 +43,10 @@
   const LIST_EMPTY = '木牌上还空着，港务处没挂出新单子。';
   const LOCKED_LABEL = '暂未开放';
   const START_LABEL = '接单';
+  const CONTINUE_LABEL = '继续这张单';
   const STARTING_LABEL = '照单登记…';
   const START_OK = '单子已经接下，港里给你留了位置。';
+  const CONTINUE_OK = '接着上回那张单子继续。';
   const START_NO_URL = '单子已经接下，但从这里找不到去机位的路。';
   const START_FAILED = '这次没接上，告示板那边说还没排到。';
   const HANGAR_LABEL = '去机库';
@@ -52,15 +57,67 @@
   const ALT_TITLE = '港务处代办';
   const ALT_EMPTY = '港务处今天没有跑腿的活。';
   const ALT_BUY_LABEL = '接这单';
+  const FREE_LIST_TITLE = '自由接单';
+  const RECOMMEND_TITLE = '眼下这条路';
+  const RECOMMEND_KIND_TEXT = { milestone: '推进本章', step: '路线进展' };
+  const RECOMMEND_GOAL_TITLE = '这一单要做';
+  const RENTAL_LEAD = '阿砾那边可以先借机，别把它撞坏就行。';
+  const CAMPAIGN_SUBTITLE = '眼下走哪条路';
+  const INTRO_GOAL = '旧港告示板上有当天能接的活。';
   const CLOSE_LABEL = '收起告示板';
   const HANGAR_FAILED = '机库那边灯还亮着，门暂时没开。';
   const RECEIPT_FAILED = '账房今天没开窗，收据先拿不到。';
   const SETTINGS_FAILED = '线索提示那边暂时没应声。';
   const WALLET_HINT = '工钱和材料记在收据上。';
-  const WALLET_EMPTY = '工钱 0 · 材料：暂无';
   const MATERIAL_FALLBACK = { alloy: '合金', crystal: '棱晶' };
 
-  /* 接单失败原因 → 可归因戏内文本（未知原因使用通用兜底，不暴露系统词）。 */
+  /* kind → 玩家语言的动作短语；只用于 objective.kind + atLeast，不输出内部 kind。 */
+  const OBJECTIVE_ACTIONS = {
+    'pair.match': '配好 {n} 组牌',
+    'tile.created': '合成出 {n} 级方块',
+    'hand.settled': '打完 {n} 手牌',
+    'move.legal': '落子 {n} 手',
+    'session.finish': '完成 {n} 局',
+    'foundation.move': '归位 {n} 张牌',
+    'stock.face_up': '翻开 {n} 次牌堆',
+    'bell.unique': '敲响 {n} 种雪铃',
+    'height.reached': '爬到 {n} 层高',
+    'brick.destroyed': '打掉 {n} 块砖',
+    'stage.clear': '通过 {n} 关',
+    'distance.reached': '跑出 {n} 段距离',
+    'gravity.flip': '翻转 {n} 次重力',
+    'fruit.eaten': '吃到 {n} 个果子',
+    'combo.reached': '连中 {n} 次',
+    'mole.hit': '敲中 {n} 只地鼠',
+    'lines.cleared': '消掉 {n} 行',
+    'boss.defeated': '击退 {n} 个头目',
+    'wave.completed': '清理 {n} 波来袭',
+    'scroll.collected': '找回 {n} 枚卷轴',
+    'tower.floor_stable': '稳稳叠到 {n} 层',
+    'mineral.returned': '带回 {n} 份矿物',
+  };
+
+  /* 游戏 id → 戏内显示名（与 content/registry.json 的 displayName 一致；registry 不可用时兜底）。 */
+  const GAME_LABELS = {
+    'memory-flip': '记忆翻牌',
+    'merge-2048': '2048 合成',
+    blackjack: '二十一点',
+    gomoku: '五子棋',
+    solitaire: '纸牌接龙',
+    snowbells: '雪铃',
+    'brick-breaker': '砖块计划',
+    'gravity-flip': '重力翻转',
+    'snake-run': '贪吃蛇',
+    'mole-whack': '打地鼠',
+    'block-drop': '俄罗斯方块',
+    'star-raid': '星海突击',
+    'road-rush': '极速车道',
+    'shadow-leap': '影跃',
+    'pendulum-tower': '层塔',
+    'gold-miner': '黄金矿工',
+  };
+
+  /* 接单失败 reason → 可归因戏内文本（未知原因使用通用兜底，不暴露系统词）。 */
   const START_FAIL_TEXT = {
     'not-unlocked': '这张单子还没轮到你接。',
     locked: '这张单子还没轮到你接。',
@@ -91,6 +148,28 @@
     '  display: flex;',
     '  flex-direction: column;',
     '  gap: 10px;',
+    '  min-width: 0;',
+    '}',
+    '.ac-career-town__campaign {',
+    '  display: flex;',
+    '  flex-direction: column;',
+    '  gap: 6px;',
+    '  min-width: 0;',
+    '  padding: 10px;',
+    '  border: 1px solid var(--ac-career-line, #2a3560);',
+    '  border-radius: 10px;',
+    '  background: rgba(11, 16, 32, 0.55);',
+    '}',
+    '.ac-career-town__campaign .ac-career-town__subtitle {',
+    '  margin: 0;',
+    '  font-size: 13.5px;',
+    '  font-weight: 600;',
+    '}',
+    '.ac-career-town__recommend-list {',
+    '  order: 1;',
+    '}',
+    '.ac-career-town__scope {',
+    '  order: 2;',
     '  min-width: 0;',
     '}',
     '.ac-career-town__location {',
@@ -220,6 +299,126 @@
     '  min-width: 0;',
     '  padding-top: 4px;',
     '}',
+    '.ac-career-town__intro {',
+    '  display: flex;',
+    '  flex-direction: column;',
+    '  gap: 6px;',
+    '  min-width: 0;',
+    '  margin: 0;',
+    '  padding: 10px;',
+    '  border: 1px solid var(--ac-career-line, #2a3560);',
+    '  border-radius: 10px;',
+    '  background: rgba(11, 16, 32, 0.55);',
+    '}',
+    '.ac-career-town__intro-line,',
+    '.ac-career-town__chapter-note {',
+    '  margin: 0;',
+    '  color: var(--ac-career-ink, #eef1ff);',
+    '  font-size: 12.5px;',
+    '  line-height: 1.7;',
+    '  overflow-wrap: anywhere;',
+    '}',
+    '.ac-career-town__intro-line--meta {',
+    '  color: var(--ac-career-muted, #93a0c8);',
+    '  font-size: 11.5px;',
+    '}',
+    '.ac-career-town__free {',
+    '  min-width: 0;',
+    '  border: 1px solid var(--ac-career-line, #2a3560);',
+    '  border-radius: 10px;',
+    '  background: rgba(11, 16, 32, 0.4);',
+    '}',
+    '.ac-career-town__free > summary {',
+    '  display: flex;',
+    '  align-items: center;',
+    '  min-height: 44px;',
+    '  padding: 8px 10px;',
+    '  color: var(--ac-career-ink, #eef1ff);',
+    '  font-size: 12.5px;',
+    '  font-weight: 600;',
+    '  cursor: pointer;',
+    '  list-style-position: inside;',
+    '}',
+    '.ac-career-town__free > summary:focus-visible {',
+    '  outline: 2px solid var(--ac-career-line, #2a3560);',
+    '  outline-offset: 2px;',
+    '}',
+    '.ac-career-town__free-body {',
+    '  display: flex;',
+    '  flex-direction: column;',
+    '  gap: 8px;',
+    '  padding: 0 10px 10px;',
+    '}',
+    '.ac-career-town__row--recommend {',
+    '  border-color: var(--ac-career-ink, #eef1ff);',
+    '  background: rgba(255, 210, 63, 0.08);',
+    '}',
+    '.ac-career-town__row-heading {',
+    '  display: flex;',
+    '  flex-wrap: wrap;',
+    '  gap: 2px 8px;',
+    '  min-width: 0;',
+    '}',
+    '.ac-career-town__row-tag {',
+    '  color: var(--ac-career-muted, #93a0c8);',
+    '  font-size: 11.5px;',
+    '  overflow-wrap: anywhere;',
+    '}',
+    '.ac-career-town__retry {',
+    '  align-self: flex-start;',
+    '  min-height: 44px;',
+    '  padding: 8px 12px;',
+    '  border: 1px solid var(--ac-career-line, #2a3560);',
+    '  border-radius: 8px;',
+    '  background: transparent;',
+    '  color: var(--ac-career-ink, #eef1ff);',
+    '  font: inherit;',
+    '  font-size: 12px;',
+    '  cursor: pointer;',
+    '}',
+    '.ac-career-town__retry:focus-visible {',
+    '  outline: 2px solid var(--ac-career-ink, #eef1ff);',
+    '  outline-offset: 2px;',
+    '}',
+    '.ac-career-town__back {',
+    '  align-self: flex-start;',
+    '  min-height: 44px;',
+    '  display: inline-flex;',
+    '  align-items: center;',
+    '  padding: 8px 12px;',
+    '  color: var(--ac-career-muted, #93a0c8);',
+    '  font-size: 12px;',
+    '}',
+    '.ac-career-town__back:focus-visible {',
+    '  outline: 2px solid var(--ac-career-ink, #eef1ff);',
+    '  outline-offset: 2px;',
+    '}',
+    '.ac-career-town__more {',
+    '  min-width: 0;',
+    '  flex: 1 1 120px;',
+    '  border: 1px solid var(--ac-career-line, #2a3560);',
+    '  border-radius: 10px;',
+    '  background: rgba(11, 16, 32, 0.4);',
+    '}',
+    '.ac-career-town__more > summary {',
+    '  display: flex;',
+    '  align-items: center;',
+    '  min-height: 44px;',
+    '  padding: 8px 10px;',
+    '  color: var(--ac-career-muted, #93a0c8);',
+    '  font-size: 12px;',
+    '  cursor: pointer;',
+    '}',
+    '.ac-career-town__more > summary:focus-visible {',
+    '  outline: 2px solid var(--ac-career-ink, #eef1ff);',
+    '  outline-offset: 2px;',
+    '}',
+    '.ac-career-town__more-body {',
+    '  display: flex;',
+    '  flex-direction: column;',
+    '  gap: 8px;',
+    '  padding: 0 10px 10px;',
+    '}',
     '@media (max-width: 375px) {',
     '  .ac-career-town__row {',
     '    padding: 9px;',
@@ -242,7 +441,7 @@
     if (value === null || value === undefined) return '';
     return String(value)
       .replace(/\u00a0/g, ' ')
-      .replace(/[ \t]+/g, ' ')
+      .replace(/[ \t\r\n]+/g, ' ')
       .trim();
   }
 
@@ -253,6 +452,10 @@
   function numberOrZero(value) {
     const num = Number(value);
     return Number.isFinite(num) && num > 0 ? Math.floor(num) : 0;
+  }
+
+  function rootWindow() {
+    return typeof window !== 'undefined' && window ? window : null;
   }
 
   /** 面板专用样式只在第一次真正打开时注入一次；不新建 CSS 文件、不引用外部资源。 */
@@ -296,10 +499,6 @@
     } catch (err) {
       /* 焦点失败不影响面板可用性 */
     }
-  }
-
-  function rootWindow() {
-    return typeof window !== 'undefined' && window ? window : null;
   }
 
   /** 只接受相对地址或同源 http(s) 地址，拒绝协议相对/javascript: 之类的返回 url。 */
@@ -348,8 +547,7 @@
 
   /**
    * commission-core 的内容由调用方注入（ADR §18.1）。bridge 0.16 已会 configure；
-   * 这里再做一次仅内存的幂等兜底（不写 IndexedDB / localStorage），保证直接注入 ctx 的
-   * 场景、以及 bridge 未来回归时「告示板」仍能读到 ctx.commissions 的 4 条委托。
+   * 这里再做一次仅内存的幂等兜底（不写 IndexedDB / localStorage）。
    */
   function ensureCommissionContent(commission, context) {
     if (!commission || typeof commission.configure !== 'function') return;
@@ -409,6 +607,74 @@
     return parts.join(' · ');
   }
 
+  /** objective.kind + atLeast → 玩家语言；不显示内部 kind 字符串。 */
+  function objectiveTextOf(objective) {
+    if (!isObject(objective)) return '';
+    const atLeast = numberOrZero(objective.atLeast);
+    if (!atLeast) return '';
+    const template = OBJECTIVE_ACTIONS[cleanText(objective.kind)];
+    return template ? template.replace('{n}', String(atLeast)) : '';
+  }
+
+  /** 从多个真实来源取游戏名；registry 是 window.ArcadeCareer.registry / ctx.registry 的可选实例。 */
+  function gameNameOf(gameId, context) {
+    const id = idText(gameId);
+    if (!id) return '';
+    const bundle = isObject(context) ? context : null;
+    const api = bundle && isObject(bundle.api) ? bundle.api : null;
+    const win = rootWindow();
+    const career = win && isObject(win.ArcadeCareer) ? win.ArcadeCareer : null;
+    const registries = [
+      bundle && bundle.registry,
+      api && api.registry,
+      career && career.registry,
+      win && win.ArcadeCareerRegistry,
+    ];
+    for (let i = 0; i < registries.length; i += 1) {
+      const registry = registries[i];
+      if (!registry) continue;
+      if (typeof registry.getGame === 'function') {
+        try {
+          const game = registry.getGame(id);
+          const name = game && (cleanText(game.displayName) || cleanText(game.name));
+          if (name) return name;
+        } catch (err) {
+          /* 继续回退 */
+        }
+      }
+      if (typeof registry.listGames === 'function') {
+        try {
+          const games = registry.listGames();
+          if (Array.isArray(games)) {
+            for (let j = 0; j < games.length; j += 1) {
+              if (!isObject(games[j])) continue;
+              if (idText(games[j].gameId || games[j].id) !== id) continue;
+              const name = cleanText(games[j].displayName || games[j].name || games[j].title);
+              if (name) return name;
+            }
+          }
+        } catch (err) {
+          /* 继续回退 */
+        }
+      }
+      /* registry 内容对象：games 为数组或以 id 为键的映射。 */
+      const games = registry.games;
+      if (Array.isArray(games)) {
+        for (let j = 0; j < games.length; j += 1) {
+          if (!isObject(games[j])) continue;
+          if (idText(games[j].gameId || games[j].id) !== id) continue;
+          const name = cleanText(games[j].displayName || games[j].name || games[j].title);
+          if (name) return name;
+        }
+      } else if (isObject(games) && isObject(games[id])) {
+        const name = cleanText(games[id].displayName || games[id].name || games[id].title);
+        if (name) return name;
+      }
+    }
+    if (Object.prototype.hasOwnProperty.call(GAME_LABELS, id)) return GAME_LABELS[id];
+    return '';
+  }
+
   function commissionRowsOf(context) {
     const bundle = context && isObject(context.commissions) ? context.commissions : null;
     const raw = bundle && Array.isArray(bundle.commissions) ? bundle.commissions : [];
@@ -417,16 +683,35 @@
       if (!isObject(entry)) return;
       const commissionId = idText(entry.commissionId);
       if (!commissionId) return;
+      const gameId = idText(entry.gameId);
       rows.push({
         commissionId: commissionId,
+        gameId: gameId,
+        gameName: cleanText(entry.gameName) || gameNameOf(gameId, context),
         title: cleanText(entry.title) || '未命名的单子',
         summary: cleanText(entry.summary),
         issuer: cleanText(entry.issuer),
+        objective: isObject(entry.objective) ? entry.objective : null,
         rewardText: rewardTextOf(entry.reward, materialNamesOf(context)),
-        durationHint: cleanText(entry.durationHint),
       });
     });
     return rows;
+  }
+
+  function originIntroOf(context) {
+    if (!context || typeof context.originIntro !== 'function') return null;
+    let value = null;
+    try {
+      value = context.originIntro();
+    } catch (err) {
+      return null;
+    }
+    if (!isObject(value)) return null;
+    const sourceGame = idText(value.sourceGame);
+    const greeting = cleanText(value.greeting);
+    const address = cleanText(value.address);
+    if (!sourceGame && !greeting && !address) return null;
+    return { sourceGame: sourceGame, greeting: greeting, address: address };
   }
 
   function idsFromUnlockEntries(entries) {
@@ -461,6 +746,7 @@
   function normalizeUnlocked(result) {
     if (Array.isArray(result)) return idsFromUnlockEntries(result);
     if (!isObject(result)) return null;
+    if (result.ok === false) return null;
     const lists = [result.list, result.available, result.unlocked, result.commissions, result.entries, result.rows];
     for (let i = 0; i < lists.length; i += 1) {
       if (Array.isArray(lists[i])) return idsFromUnlockEntries(lists[i]);
@@ -474,6 +760,26 @@
     }
     if (result.ok === true) return Object.create(null);
     return null;
+  }
+
+  /** continuations → {commissionId: run}；只保留 issued/active 且非 ending.* 的真实委托单。 */
+  function normalizeContinuations(result) {
+    const out = Object.create(null);
+    if (!isObject(result) || result.ok === false || !Array.isArray(result.runs)) return out;
+    result.runs.forEach((run) => {
+      if (!isObject(run)) return;
+      const id = idText(run.commissionId);
+      const status = cleanText(run.status).toLowerCase();
+      if (!id || /^ending\./i.test(id)) return;
+      if (status !== 'issued' && status !== 'active') return;
+      out[id] = {
+        commissionId: id,
+        runId: cleanText(run.runId),
+        gameId: idText(run.gameId),
+        status: status,
+      };
+    });
+    return out;
   }
 
   function walletTextOf(wallet, materialNames) {
@@ -491,9 +797,11 @@
     return '工钱 ' + credits + ' · 材料：' + materialText;
   }
 
-  function failTextOf(result) {
-    const reason = result && isObject(result) ? (cleanText(result.reason) || cleanText(result.error)).toLowerCase() : '';
-    return START_FAIL_TEXT[reason] || START_FAILED;
+  function failureTextOf(result, fallback) {
+    const explicit = isObject(result) ? cleanText(result.message) : '';
+    if (explicit && !/^[a-z][a-z0-9._-]{6,}$/i.test(explicit)) return explicit;
+    const reason = isObject(result) ? (cleanText(result.reason) || cleanText(result.error)).toLowerCase() : '';
+    return START_FAIL_TEXT[reason] || fallback;
   }
 
   /**
@@ -542,6 +850,19 @@
     const location = make('p', 'ac-career-town__location', LOCATION_TEXT);
     location.id = DESC_ID;
 
+    const introSection = make('section', 'ac-career-town__intro');
+    introSection.setAttribute('data-town-intro', 'true');
+    introSection.hidden = true;
+    const introGreeting = make('p', 'ac-career-town__intro-line');
+    const introAddress = make('p', 'ac-career-town__intro-line ac-career-town__intro-line--meta');
+    const introGoal = make('p', 'ac-career-town__intro-line');
+    const introRental = make('p', 'ac-career-town__intro-line ac-career-town__intro-line--meta');
+    introRental.setAttribute('data-town-rental', 'true');
+    introSection.appendChild(introGreeting);
+    introSection.appendChild(introAddress);
+    introSection.appendChild(introGoal);
+    introSection.appendChild(introRental);
+
     const notice = make('p', 'ac-career-town__notice', BOARD_UNAVAILABLE);
     notice.hidden = true;
 
@@ -551,7 +872,25 @@
     wallet.appendChild(walletLabel);
     wallet.appendChild(walletValue);
 
-    const list = make('ul', 'ac-career-town__list');
+    /* 首屏推荐：一张卡片（真实 availableIds 内），其余委托折叠。 */
+    const recommendList = make('ul', 'ac-career-town__list ac-career-town__recommend-list');
+    recommendList.setAttribute('data-town-recommend', 'true');
+    recommendList.hidden = true;
+
+    const scope = make('div', 'ac-career-town__scope');
+    scope.setAttribute('data-town-scope', 'true');
+    const freeDetails = make('details', 'ac-career-town__free');
+    freeDetails.setAttribute('data-town-free', 'true');
+    freeDetails.open = false;
+    const freeSummary = make('summary', null, FREE_LIST_TITLE);
+    const freeList = make('ul', 'ac-career-town__list');
+    freeList.setAttribute('data-town-free-list', 'true');
+    const freeBody = make('div', 'ac-career-town__free-body');
+    freeDetails.appendChild(freeSummary);
+    freeDetails.appendChild(freeBody);
+    freeBody.appendChild(freeList);
+    scope.appendChild(freeDetails);
+
     const empty = make('p', 'ac-career-town__empty', LIST_EMPTY);
     empty.hidden = true;
 
@@ -563,20 +902,30 @@
 
     const statusLine = make('p', 'ac-career-status');
     statusLine.hidden = true;
+    const backLink = make('a', 'ac-career-town__back', '回告示板');
+    backLink.href = '#';
+    backLink.hidden = true;
+    backLink.setAttribute('data-town-action', 'back-to-board');
+    backLink.addEventListener('click', (event) => {
+      if (event && typeof event.preventDefault === 'function') event.preventDefault();
+      setStatus('');
+      showStatusRetry(null);
+      safelyFocus(freeSummary);
+    }, false);
 
-    /* 0.18 章节/终局只读卡：告示板也能看到当前章节与 C4 后三终局。 */
+    /* 0.18 章节/终局只读卡：只显示当前章，不提前列出后续章节标题。 */
     const campaignSection = make('section', 'ac-career-town__campaign');
     campaignSection.setAttribute('data-town-campaign', 'true');
     campaignSection.hidden = true;
-    const campaignHeading = make('h3', 'ac-career-town__subtitle', '旧港来信');
-    const campaignCurrent = make('p', 'ac-career-town__campaign-current');
-    const campaignList = make('ul', 'ac-career-town__list ac-career-town__campaign-list');
+    const campaignHeading = make('h3', 'ac-career-town__subtitle', CAMPAIGN_SUBTITLE);
+    const campaignCurrent = make('p', 'ac-career-town__campaign-current ac-career-town__chapter-note');
     const campaignEndings = make('div', 'ac-career-town__campaign-endings');
     campaignSection.appendChild(campaignHeading);
     campaignSection.appendChild(campaignCurrent);
-    campaignSection.appendChild(campaignList);
     campaignSection.appendChild(campaignEndings);
 
+    /* 经济入口按阶段出现：C0/C1 只留机库与收据；商店/制造台收进「港口其它去处」，
+       首航期间弱化但始终可发现（点开即可见），不写任何存储。 */
     const footer = make('div', 'ac-career-town__footer');
     const hangarBtn = make('button', 'ac-career-btn ac-career-btn--ghost', HANGAR_LABEL);
     hangarBtn.type = 'button';
@@ -587,28 +936,39 @@
     const settingsBtn = make('button', 'ac-career-btn ac-career-btn--ghost', SETTINGS_LABEL);
     settingsBtn.type = 'button';
     settingsBtn.setAttribute('data-town-action', 'settings');
+    const more = make('details', 'ac-career-town__more');
+    more.setAttribute('data-town-more', 'true');
+    more.open = false;
+    const moreSummary = make('summary', null, '港口其它去处');
+    more.appendChild(moreSummary);
+    const moreBody = make('div', 'ac-career-town__more-body');
     const marketBtn = make('button', 'ac-career-btn ac-career-btn--ghost', MARKET_LABEL);
     marketBtn.type = 'button';
     marketBtn.setAttribute('data-town-action', 'market');
     const workshopBtn = make('button', 'ac-career-btn ac-career-btn--ghost', WORKSHOP_LABEL);
     workshopBtn.type = 'button';
     workshopBtn.setAttribute('data-town-action', 'workshop');
+    moreBody.appendChild(marketBtn);
+    moreBody.appendChild(workshopBtn);
+    more.appendChild(moreBody);
     footer.appendChild(hangarBtn);
     footer.appendChild(receiptBtn);
-    footer.appendChild(marketBtn);
-    footer.appendChild(workshopBtn);
     footer.appendChild(settingsBtn);
+    footer.appendChild(more);
 
     townView.appendChild(location);
+    townView.appendChild(introSection);
     townView.appendChild(wallet);
     townView.appendChild(notice);
-    townView.appendChild(list);
+    townView.appendChild(campaignSection);
+    townView.appendChild(recommendList);
+    townView.appendChild(scope);
     townView.appendChild(empty);
     townView.appendChild(altHeading);
     townView.appendChild(altList);
     townView.appendChild(altEmpty);
-    townView.appendChild(campaignSection);
     townView.appendChild(statusLine);
+    townView.appendChild(backLink);
     townView.appendChild(footer);
 
     body.appendChild(townView);
@@ -625,6 +985,9 @@
     let liveContext = context;
     let requestSeq = 0;
     let alive = true;
+    let unlockedSet = null;
+    let continuations = Object.create(null);
+    let failedStart = null;
     const startingIds = Object.create(null);
 
     function announce(text) {
@@ -660,48 +1023,198 @@
       return !!(panel && panel.overlay === overlay);
     }
 
-    function actionButton(commissionId) {
-      const button = make('button', 'ac-career-btn ac-career-btn--primary', START_LABEL);
+    /** 失败后给一键重接按钮（仍走 commission.start）与回告示板链接。 */
+    function showStatusRetry(failed) {
+      failedStart = failed;
+      if (!failed) {
+        backLink.hidden = true;
+        return;
+      }
+      backLink.hidden = false;
+    }
+
+    function actionButton(row, continuing) {
+      const button = make('button', 'ac-career-btn ac-career-btn--primary', continuing ? CONTINUE_LABEL : START_LABEL);
       button.type = 'button';
       button.setAttribute('data-town-action', 'start');
-      button.setAttribute('data-commission-id', commissionId);
-      button.setAttribute('aria-label', '接下「' + (rowTitle(commissionId) || '这张单子') + '」');
+      button.setAttribute('data-commission-id', row.commissionId);
+      if (continuing) button.setAttribute('data-town-continuing', 'true');
+      button.setAttribute('aria-label', (continuing ? '继续「' : '接下「') + row.title + '」');
       return button;
     }
 
-    function rowTitle(commissionId) {
-      const rows = commissionRowsOf(liveContext);
-      for (let i = 0; i < rows.length; i += 1) {
-        if (rows[i].commissionId === commissionId) return rows[i].title;
-      }
-      return '';
+    function rowGoalText(row) {
+      return objectiveTextOf(row.objective) || row.summary || '到告示板看看这张单子的要求。';
     }
 
-    function renderRow(row, unlockedSet, boardReady) {
+    /** renderRow：严格要求真实 DOM（make 创建）；classList 可用，不手写 className 比较。 */
+    function renderRow(row, boardReady, options) {
+      const opts = isObject(options) ? options : {};
       const item = make('li', 'ac-career-town__row');
       item.setAttribute('data-commission-id', row.commissionId);
+      if (opts.recommended && typeof item.classList.add === 'function') {
+        item.classList.add('ac-career-town__row--recommend');
+        item.setAttribute('data-town-recommend-id', row.commissionId);
+      }
+      if (opts.goalOverride) item.setAttribute('data-town-goal', opts.goalOverride);
+      if (opts.kindText) item.setAttribute('data-town-kind', opts.kindText);
+      if (opts.reason) item.setAttribute('data-town-reason', opts.reason);
+      if (opts.gameName) item.setAttribute('data-town-game', opts.gameName);
+
+      if (opts.recommended) {
+        const heading = make('div', 'ac-career-town__row-heading');
+        heading.appendChild(make('span', 'ac-career-town__row-tag', RECOMMEND_TITLE));
+        if (opts.kindText) heading.appendChild(make('span', 'ac-career-town__row-tag', opts.kindText));
+        if (row.gameName) heading.appendChild(make('span', 'ac-career-town__row-tag', row.gameName));
+        item.appendChild(heading);
+      }
 
       const rowHead = make('div', 'ac-career-town__row-head');
-      rowHead.appendChild(make('h3', 'ac-career-town__row-title', row.title));
+      const title = make('h3', 'ac-career-town__row-title', opts.titleOverride || row.title);
+      rowHead.appendChild(title);
       if (row.issuer) rowHead.appendChild(make('span', 'ac-career-town__row-issuer', row.issuer));
       item.appendChild(rowHead);
 
-      if (row.summary) item.appendChild(make('p', 'ac-career-town__row-summary', row.summary));
+      /* 每张卡接单前都显示游戏名 + objective.atLeast 的可读目标。 */
+      const goal = rowGoalText(row);
+      item.appendChild(make('p', 'ac-career-town__row-summary',
+        (row.gameName ? row.gameName + '：' : '') + goal));
+      if (opts.recommended) {
+        item.appendChild(make('p', 'ac-career-town__row-summary',
+          RECOMMEND_GOAL_TITLE + '：' + (opts.goalOverride || row.title)));
+        if (opts.reason) item.appendChild(make('p', 'ac-career-town__row-summary', opts.reason));
+      }
 
       const meta = make('p', 'ac-career-town__row-meta');
       if (row.rewardText) meta.appendChild(make('span', 'ac-career-town__reward', row.rewardText));
-      if (row.durationHint) meta.appendChild(make('span', 'ac-career-town__duration', '时长：' + row.durationHint));
       if (meta.childNodes.length) item.appendChild(meta);
 
       const actions = make('div', 'ac-career-town__row-actions');
+      const continuing = !!continuations[row.commissionId];
       const unlocked = boardReady && !!unlockedSet && !!unlockedSet[row.commissionId];
-      if (unlocked) {
-        actions.appendChild(actionButton(row.commissionId));
+      if (unlocked || continuing) {
+        actions.appendChild(actionButton(row, continuing));
       } else {
         actions.appendChild(make('span', 'ac-career-town__locked', LOCKED_LABEL));
       }
       item.appendChild(actions);
+
+      /* 失败后对该单保留一键重接（同一 commissionId，仍走 commission.start）。 */
+      if (failedStart === row.commissionId && (unlocked || continuing)) {
+        const retry = make('button', 'ac-career-town__retry', CONTINUE_LABEL);
+        retry.type = 'button';
+        retry.setAttribute('data-town-action', 'retry');
+        retry.setAttribute('data-commission-id', row.commissionId);
+        actions.appendChild(retry);
+      }
       return item;
+    }
+
+    function rentalHintOf() {
+      const items = isObject(liveContext && liveContext.items) ? liveContext.items : null;
+      const ships = items && Array.isArray(items.ships) ? items.ships : [];
+      for (let i = 0; i < ships.length; i += 1) {
+        const ship = ships[i];
+        if (!isObject(ship) || ship.rental !== true) continue;
+        const name = cleanText(ship.name || ship.shipId);
+        return name ? '阿砾说「' + name + '」租机不要钱，别把它撞坏就行。' : RENTAL_LEAD;
+      }
+      return RENTAL_LEAD;
+    }
+
+    function currentChapterView() {
+      const campaign = isObject(liveContext && liveContext.campaign) ? liveContext.campaign : null;
+      if (!campaign || typeof campaign.state !== 'function') return null;
+      let model = null;
+      try {
+        model = campaign.state({
+          quests: Array.isArray(liveContext.quests) ? liveContext.quests : [],
+          claims: Array.isArray(liveContext.claims) ? liveContext.claims : [],
+          profile: liveContext.profile || null,
+          wallet: liveContext.wallet || null,
+        });
+      } catch (err) {
+        return null;
+      }
+      if (!isObject(model) || model.ok === false || !Array.isArray(model.chapters)) return null;
+      const chapters = model.chapters;
+      const currentId = isObject(model.currentChapter)
+        ? idText(model.currentChapter.chapterId)
+        : idText(model.currentChapter);
+      const current = chapters.filter((chapter) => isObject(chapter) && chapter.chapterId === currentId)[0]
+        || chapters.filter((chapter) => isObject(chapter) && chapter.state === 'active')[0]
+        || null;
+      return { model: model, current: current };
+    }
+
+    function currentGoalText() {
+      const view = currentChapterView();
+      if (!view || !view.current) return '';
+      const routes = Array.isArray(view.current.routes) ? view.current.routes : [];
+      for (let i = 0; i < routes.length; i += 1) {
+        const hint = cleanText(routes[i] && routes[i].hint);
+        if (hint) return hint;
+      }
+      const mustKnow = Array.isArray(view.current.mustKnow) ? view.current.mustKnow : [];
+      for (let i = 0; i < mustKnow.length; i += 1) {
+        const text = cleanText(isObject(mustKnow[i]) ? (mustKnow[i].text || mustKnow[i].label) : mustKnow[i]);
+        if (text) return text;
+      }
+      return '';
+    }
+
+    function renderOrigin() {
+      const intro = originIntroOf(liveContext);
+      if (!intro) {
+        introSection.hidden = true;
+        return;
+      }
+      const source = gameNameOf(intro.sourceGame, liveContext) || intro.sourceGame;
+      const sourceNote = intro.address
+        ? '这封信从' + (source || '旧港') + '来，收在' + intro.address + '。'
+        : source
+          ? '这封信从' + source + '来。'
+          : '这封信已经送到旧港。';
+      introGreeting.textContent = intro.greeting || sourceNote;
+      introAddress.textContent = intro.greeting ? sourceNote : '';
+      introAddress.hidden = !introAddress.textContent;
+      introGoal.textContent = '眼下：' + (currentGoalText() || INTRO_GOAL);
+      introRental.textContent = rentalHintOf();
+      introSection.hidden = false;
+    }
+
+    /**
+     * 推荐只消费 ctx.campaign.recommend 与真实 unlockedSet；
+     * 推荐 id 必须在 availableIds 内，不推荐锁定单；接口缺失返回 null 由旧列表兜底。
+     */
+    function recommendedSuggestionOf() {
+      const campaign = isObject(liveContext && liveContext.campaign) ? liveContext.campaign : null;
+      if (!campaign || typeof campaign.recommend !== 'function' || !unlockedSet) return null;
+      let suggestion = null;
+      try {
+        suggestion = campaign.recommend({
+          quests: Array.isArray(liveContext.quests) ? liveContext.quests : [],
+          claims: Array.isArray(liveContext.claims) ? liveContext.claims : [],
+          profile: liveContext.profile || null,
+          wallet: liveContext.wallet || null,
+          availableIds: Object.keys(unlockedSet),
+          storyEvidence: liveContext.storyEvidence || null,
+        });
+      } catch (err) {
+        return null;
+      }
+      if (!isObject(suggestion) || suggestion.ok === false) return null;
+      let id = idText(suggestion.commissionId);
+      if (id && !unlockedSet[id]) id = '';
+      if (!id) return null;
+      const row = commissionRowsOf(liveContext).filter((entry) => entry.commissionId === id)[0] || null;
+      if (!row) return null;
+      return {
+        row: row,
+        goal: cleanText(suggestion.goal) || rowGoalText(row),
+        reason: cleanText(suggestion.reason),
+        kindText: RECOMMEND_KIND_TEXT[cleanText(suggestion.kind)] || '路线进展',
+      };
     }
 
     function renderWallet() {
@@ -728,18 +1241,145 @@
       apply(result);
     }
 
-    function applyUnlocked(unlockedSet, initial) {
-      const boardReady = !!unlockedSet;
-      /* initial：先画「暂未开放」占位，不立刻报「暂不可用」，等 listAvailable 结果再决定。 */
-      setNotice(boardReady || initial ? '' : BOARD_UNAVAILABLE);
-      while (list.firstChild) list.removeChild(list.firstChild);
+    function renderCampaign() {
+      const view = currentChapterView();
+      if (!view || !view.current) {
+        campaignSection.hidden = true;
+        return;
+      }
+      campaignSection.hidden = false;
+      /* 只显示当前章的戏内标题，不显示 C 码、状态词或后续章节标题。 */
+      campaignCurrent.textContent = cleanText(view.current.title) || '旧港来信';
+      campaignCurrent.setAttribute('data-town-current', idText(view.current.chapterId));
+      campaignEndings.textContent = '';
+      const endings = Array.isArray(view.model.endings) ? view.model.endings : [];
+      endings.forEach((ending) => {
+        if (!isObject(ending) || ending.available !== true) return;
+        const button = make('button', 'ac-career-btn ac-career-btn--primary',
+          '去往结局 · ' + (cleanText(ending.title) || '未命名的路'));
+        button.type = 'button';
+        button.setAttribute('data-town-ending', cleanText(ending.approach));
+        button.addEventListener('click', function () {
+          if (typeof liveContext.startEnding !== 'function') return;
+          try { liveContext.startEnding(ending.approach); } catch (err) { /* ignore */ }
+        }, false);
+        campaignEndings.appendChild(button);
+      });
+    }
+
+    function renderList() {
+      while (recommendList.firstChild) recommendList.removeChild(recommendList.firstChild);
+      while (freeList.firstChild) freeList.removeChild(freeList.firstChild);
+
       const allRows = commissionRowsOf(liveContext);
-      /* 0.17：96 份委托只挂出当前可接的（已解锁）；后续阶在完成任务后自然出现。 */
-      const rows = boardReady ? allRows.filter((row) => !!unlockedSet[row.commissionId]) : [];
-      rows.forEach((row) => list.appendChild(renderRow(row, unlockedSet, boardReady)));
+      const boardReady = !!unlockedSet;
+      const suggestion = boardReady ? recommendedSuggestionOf() : null;
+      const recommendedId = suggestion ? suggestion.row.commissionId : '';
+
+      /* 有 live run 的同委托优先作为推荐（仍要求已解锁）。 */
+      let liveId = '';
+      if (boardReady) {
+        for (let i = 0; i < allRows.length; i += 1) {
+          if (continuations[allRows[i].commissionId] && unlockedSet[allRows[i].commissionId]) {
+            liveId = allRows[i].commissionId;
+            break;
+          }
+        }
+      }
+
+      const mainRow = liveId
+        ? allRows.filter((row) => row.commissionId === liveId)[0]
+        : suggestion ? suggestion.row : null;
+      if (mainRow) {
+        const opts = {
+          recommended: true,
+          gameName: mainRow.gameName,
+          titleOverride: liveId ? '继续这张单：' + mainRow.title : '眼下先做：' + mainRow.title,
+          goalOverride: suggestion && suggestion.row.commissionId === mainRow.commissionId ? suggestion.goal : '',
+          kindText: suggestion && suggestion.row.commissionId === mainRow.commissionId ? suggestion.kindText : '路线进展',
+          reason: suggestion && suggestion.row.commissionId === mainRow.commissionId ? suggestion.reason : '',
+        };
+        recommendList.appendChild(renderRow(mainRow, boardReady, opts));
+        recommendList.hidden = false;
+      } else {
+        recommendList.hidden = true;
+      }
+
+      const rows = boardReady
+        ? allRows.filter((row) => !!unlockedSet[row.commissionId] && row.commissionId !== recommendedId && row.commissionId !== liveId)
+        : [];
+      rows.forEach((row) => freeList.appendChild(renderRow(row, boardReady, {})));
       const hasRows = rows.length > 0;
-      list.hidden = !hasRows;
-      empty.hidden = hasRows || !boardReady;
+      freeList.hidden = !hasRows;
+      freeDetails.hidden = !hasRows;
+      empty.hidden = hasRows || !boardReady || !!mainRow;
+    }
+
+    function loadContinuations(seq) {
+      continuations = Object.create(null);
+      const commission = commissionOf(liveContext);
+      const provider = (commission && typeof commission.continuations === 'function' && commission.continuations)
+        || (typeof liveContext.careerContinuations === 'function' && liveContext.careerContinuations);
+      if (!provider || !careerIdOf(liveContext)) return;
+      let result = null;
+      try {
+        result = provider.call(commission || liveContext, { careerId: careerIdOf(liveContext) });
+      } catch (err) {
+        return;
+      }
+      const apply = (value) => {
+        if (!isCurrent() || seq !== requestSeq) return;
+        continuations = normalizeContinuations(value);
+        /* 仅重绘列表；不重建面板，不让用户焦点丢失。 */
+        renderList();
+      };
+      if (result && typeof result.then === 'function') {
+        result.then(apply, () => { /* 查询失败安全回退旧列表 */ });
+        return;
+      }
+      apply(result);
+    }
+
+    function loadUnlocks() {
+      requestSeq += 1;
+      const seq = requestSeq;
+      const commission = commissionOf(liveContext);
+      if (!commission) {
+        unlockedSet = null;
+        applyUnlocked(null);
+        return;
+      }
+      ensureCommissionContent(commission, liveContext);
+      if (typeof commission.listAvailable !== 'function') {
+        unlockedSet = null;
+        applyUnlocked(null);
+        return;
+      }
+      let result = null;
+      try {
+        result = commission.listAvailable({ careerId: careerIdOf(liveContext), ensure: true });
+      } catch (err) {
+        result = null;
+      }
+      const settle = (value) => {
+        if (!isCurrent() || seq !== requestSeq) return;
+        unlockedSet = normalizeUnlocked(value);
+        applyUnlocked(unlockedSet);
+        loadContinuations(seq);
+        renderAlternatives();
+      };
+      if (result && typeof result.then === 'function') {
+        result.then(settle, () => settle(null));
+        return;
+      }
+      settle(result);
+    }
+
+    function applyUnlocked(next, initial) {
+      /* initial：先画「暂未开放」占位，不立刻报「暂不可用」，等 listAvailable 结果再决定。 */
+      setNotice(next || initial ? '' : BOARD_UNAVAILABLE);
+      renderList();
+      if (next) renderWallet();
     }
 
     function renderAlternatives() {
@@ -771,8 +1411,7 @@
           const pieces = [];
           if (cost.credits) pieces.push(cost.credits + ' 信用点');
           if (cost.items && typeof cost.items === 'object') {
-            const names = materialNamesOf(liveContext);
-            Object.keys(cost.items).forEach((key) => pieces.push(cost.items[key] + ' ' + (names[key] || key)));
+            Object.keys(cost.items).forEach((key) => pieces.push(cost.items[key] + ' ' + (materialNames[key] || key)));
           }
           info.appendChild(make('span', 'ac-career-town__row-meta', pieces.length ? '工本：' + pieces.join(' + ') : '不用工本'));
           if (offer.summary) info.appendChild(make('span', 'ac-career-town__row-summary', String(offer.summary)));
@@ -808,50 +1447,21 @@
       const done = (value) => {
         if (!isCurrent()) return;
         if (value && value.ok === true) {
-          setStatus('这单记在港务处账上了。');
-          announce('这单记在港务处账上了。');
+          setStatus(cleanText(value.message) || '这单记在港务处账上了。');
+          announce(cleanText(value.message) || '这单记在港务处账上了。');
           renderWallet();
           renderAlternatives();
           return;
         }
         if (button) button.disabled = false;
-        const text = failTextOf(value);
+        /* 优先结果里的明确说明（尤其「钱已扣、旗标未记」），未知原因才兜底。 */
+        const text = failureTextOf(value, '这单没办成，港务处说再试一次。');
         setStatus(text);
         announce(text);
+        if (value && value.retryable === true) button.disabled = false;
       };
       if (result && typeof result.then === 'function') result.then(done, () => done(null));
       else done(result);
-    }
-
-    function loadUnlocks() {
-      requestSeq += 1;
-      const seq = requestSeq;
-      const commission = commissionOf(liveContext);
-      if (!commission) {
-        applyUnlocked(null);
-        return;
-      }
-      ensureCommissionContent(commission, liveContext);
-      if (typeof commission.listAvailable !== 'function') {
-        applyUnlocked(null);
-        return;
-      }
-      let result = null;
-      try {
-        result = commission.listAvailable({ careerId: careerIdOf(liveContext), ensure: true });
-      } catch (err) {
-        result = null;
-      }
-      const settle = (value) => {
-        if (!isCurrent() || seq !== requestSeq) return;
-        applyUnlocked(normalizeUnlocked(value));
-        renderAlternatives();
-      };
-      if (result && typeof result.then === 'function') {
-        result.then(settle, () => settle(null));
-        return;
-      }
-      settle(result);
     }
 
     function restoreButton(button) {
@@ -860,18 +1470,21 @@
       button.textContent = START_LABEL;
     }
 
-    function settleStart(result, button, commissionId) {
+    function settleStart(result, button, commissionId, wasContinuing) {
       delete startingIds[commissionId];
       const failed = !result || (isObject(result) && result.ok === false);
       if (failed) {
         restoreButton(button);
-        const text = failTextOf(result);
+        const text = failureTextOf(result, START_FAILED);
         setStatus(text);
         announce(text);
+        showStatusRetry(commissionId);
+        renderList();
         return;
       }
-      setStatus(START_OK);
-      announce(START_OK);
+      setStatus(wasContinuing && result && result.reused === true ? CONTINUE_OK : START_OK);
+      announce(wasContinuing && result && result.reused === true ? CONTINUE_OK : START_OK);
+      showStatusRetry(null);
       const navUrl = safeNavUrl(result && isObject(result) ? result.url : '');
       if (!navUrl) {
         restoreButton(button);
@@ -901,12 +1514,14 @@
         announce(BOARD_UNAVAILABLE);
         return;
       }
+      const wasContinuing = !!continuations[id];
       startingIds[id] = true;
       if (button) {
         button.disabled = true;
         button.textContent = STARTING_LABEL;
       }
       setStatus('');
+      showStatusRetry(null);
       let result = null;
       try {
         result = commission.start({ commissionId: id, careerId: careerIdOf(liveContext) });
@@ -915,12 +1530,12 @@
       }
       if (result && typeof result.then === 'function') {
         result.then(
-          (value) => settleStart(value, button, id),
-          () => settleStart(null, button, id)
+          (value) => settleStart(value, button, id, wasContinuing),
+          () => settleStart(null, button, id, wasContinuing)
         );
         return;
       }
-      settleStart(result, button, id);
+      settleStart(result, button, id, wasContinuing);
     }
 
     function openOther(name, failText) {
@@ -955,10 +1570,11 @@
         : null;
       if (!target || !townView.contains(target)) return;
       const action = cleanText(target.getAttribute('data-town-action'));
-      if (action === 'start') {
+      if (action === 'start' || action === 'retry') {
         startCommission(target.getAttribute('data-commission-id'), target);
         return;
       }
+      if (action === 'back-to-board') return;
       if (action === 'hangar') {
         openOther('openHangar', HANGAR_FAILED);
         return;
@@ -980,60 +1596,6 @@
       }
     }
 
-    function renderCampaign() {
-      const context2 = liveContext || {};
-      const module = context2.campaign;
-      if (!module || typeof module.state !== 'function' || !context2.careerId) {
-        campaignSection.hidden = true;
-        return;
-      }
-      let model = null;
-      try {
-        model = module.state({
-          quests: Array.isArray(context2.quests) ? context2.quests : [],
-          claims: Array.isArray(context2.claims) ? context2.claims : [],
-          profile: context2.profile || null,
-          wallet: context2.wallet || null,
-        });
-      } catch (err) {
-        campaignSection.hidden = true;
-        return;
-      }
-      const chapters = model && Array.isArray(model.chapters) ? model.chapters : [];
-      const currentId = model && model.currentChapter ? model.currentChapter.chapterId || model.currentChapter : '';
-      if (!chapters.length) {
-        campaignSection.hidden = true;
-        return;
-      }
-      campaignSection.hidden = false;
-      const current = chapters.filter((chapter) => chapter.chapterId === currentId)[0] || chapters.filter((chapter) => chapter.state === 'active')[0] || chapters[chapters.length - 1];
-      campaignCurrent.textContent = current
-        ? '当前：' + (current.chapterId || '') + ' · ' + (current.title || '') + '（' + (current.state || 'locked') + '）'
-        : '';
-      campaignCurrent.setAttribute('data-town-current', current ? current.chapterId || '' : '');
-      campaignList.textContent = '';
-      chapters.forEach((chapter) => {
-        const item = make('li', 'ac-career-town__campaign-item');
-        item.setAttribute('data-town-chapter', chapter.chapterId || '');
-        item.setAttribute('data-state', chapter.state || 'locked');
-        item.textContent = (chapter.chapterId || '') + ' · ' + (chapter.title || '') + ' · ' + (chapter.state || 'locked');
-        campaignList.appendChild(item);
-      });
-      campaignEndings.textContent = '';
-      const endings = model && Array.isArray(model.endings) ? model.endings : [];
-      endings.forEach((ending) => {
-        if (!ending || !ending.available) return;
-        const button = make('button', 'ac-career-btn ac-career-btn--primary', '终局 · ' + (ending.title || ending.approach));
-        button.type = 'button';
-        button.setAttribute('data-town-ending', ending.approach);
-        button.addEventListener('click', function () {
-          if (typeof context2.startEnding !== 'function') return;
-          try { context2.startEnding(ending.approach); } catch (err) { /* ignore */ }
-        }, false);
-        campaignEndings.appendChild(button);
-      });
-    }
-
     function refresh(next) {
       if (!isCurrent()) return sheet;
       const context2 = isObject(next) ? next : {};
@@ -1042,9 +1604,10 @@
       liveContext = context2;
       materialNames = materialNamesOf(context2);
       setStatus('');
-      /* 保留上一次的行与提示，直到新结果到达再整体替换，避免异步模块出现空列表/告示闪烁。 */
-      renderWallet();
+      showStatusRetry(null);
+      renderOrigin();
       renderCampaign();
+      renderWallet();
       loadUnlocks();
       return sheet;
     }
@@ -1059,11 +1622,11 @@
 
     /**
      * 首次填充内容。由 open()/render() 在面板对象就绪后调用：
-     * 同步返回的 listAvailable / getWallet 结果必须等到「当前面板」确定后才被接受，
-     * 否则会被 isCurrent() 当作过期结果丢弃（真实模块是 Promise，假 ctx 可能同步）。
+     * 同步返回的 listAvailable / getWallet 结果必须等到「当前面板」确定后才被接受。
      */
     function start() {
       applyUnlocked(null, true);
+      renderOrigin();
       renderWallet();
       renderCampaign();
       loadUnlocks();
@@ -1137,7 +1700,7 @@
 
     function onKeyDown(event) {
       if (!event) return;
-      /* 只处理最上层面板的键盘事件；下层面板（如机库/收据叠在告示板上）不抢 Esc/Tab。 */
+      /* 只处理最上层面板的键盘事件；下层面板不抢 Esc/Tab。 */
       const stacks = doc.querySelectorAll ? doc.querySelectorAll('[data-career-panel]') : [];
       if (stacks && stacks.length > 1 && stacks[stacks.length - 1] !== built.overlay) return;
       const key = typeof event.key === 'string' ? event.key : '';
