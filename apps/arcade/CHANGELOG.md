@@ -27,6 +27,7 @@
 ### Tests
 - `arcade_compact_touch_test` 18/18；`arcade_smoke` 117/117；`arcade_interaction` 5/5；`arcade_immersive_buttons` 42/42；`arcade_pwa_update` 9/9；`arcade_review` 5/5；`arcade_tower` 23/23；`validate_site` / `build_site` / 内联脚本语法通过。
 - 聚合门禁 `arcade_run_all_gates.py` 在只含本版改动的提交树上串行跑完：冒烟 117/117、`career_96_missions` 96/96 档、career_mobile 318/318、campaign E2E 700/700、玩法 104/104 与 22/22、其余各门禁通过。单轮里 `career_96_missions`（Chrome 启动超时）、`career_closeout`（时间戳差 1 毫秒）、`arcade_pwa_update`（等待 SW 接管超时）各偶发失败一次，单独重跑均通过；明细见 [`DESIGN-0.19.0.md`](DESIGN-0.19.0.md) 第 5 节。
+- 合并 0.18.2 后在合并树上又完整跑了一轮：`career_pwa_offline` 的 P16 暴露预载迁移缺陷并已修复（重跑 18/18）、`compact_touch` 的 CT-18 断言随机性已修正（连跑两轮 18/18）、`career_world_state` 与 `career_closeout` 偶发失败单独重跑通过（109/109、6/6）；其余门禁与 4 个独立门禁全过。见设计文档第 5.1 节。
 
 ### Notes
 - 版本链 0.19.0 / SW 缓存键 `studiokit-arcade-0.19.0-v1`。不改任何 localStorage key / Schema、玩法数值与关卡数据。
