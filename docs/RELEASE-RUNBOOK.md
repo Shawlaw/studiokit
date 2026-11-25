@@ -5,6 +5,9 @@
 - 仓库：<https://github.com/Shawlaw/studiokit>
 - GitHub Pages：<https://shawlaw.github.io/studiokit/>
 - Cloudflare Pages：<https://studiokit.pages.dev/>
+- Arcade `0.18.2` 已于 2026-11-25 双端发布，提交 `fd064ee`。修复预载后断网跨页，并迁移 0.18.1 已缓存的游戏页。
+  - [Actions 发布记录](https://github.com/Shawlaw/studiokit/actions/runs/45520196313) 四项任务通过，两个正式站点及 Cloudflare 部署地址的 87/87 项文件一致。本地逐文件复验确认两个正式站点各 87/87 项与发布产物相符。
+  - 冒烟 117/117、离线 18/18、PWA 更新 9/9。Chromium 模拟两种部署路径从 0.18.1 更新，关停服务器后可打开首页、进入黄金矿工并返回。手机真机待验证。
 - Arcade `0.18.1` 已于 2026-11-24 双端发布，提交 `5c16586`。包含首页续玩与排序记忆、触控与游戏返回、生涯首页切换。
   - 四项部署任务成功。两端各 87/87 项文件哈希与本地发布产物一致。见 [Actions 发布记录](https://github.com/Shawlaw/studiokit/actions/runs/45427632073)。
   - 冒烟 117/117。双端 Chromium 确认页面与 SW 都是 0.18.1，俄罗斯方块可在拇指区暂停，从顶栏返回街机厅后直接续玩。用正式产物复验从 0.18.0 手动检查更新、刷新与保留旧存档。部署切换期间，GitHub Pages 的旧页检测到 0.18.1，首次刷新确认超时。

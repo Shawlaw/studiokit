@@ -15,6 +15,7 @@
  *   导航由 SW 缓存兜底（离线期间服务器零文档请求）、engine 版本 0.19.0、
  *   `ArcadeCareer.available===true`（career 资源来自缓存）、`openMailbox()` 可打开并显示
  *   已发现线索、无未捕获异常/console error（区分并忽略离线网络噪声）、离线中心页 16 卡正常
+ * - P11a 模拟 Cloudflare Pages 的 308，点击预载后断网，逐一从游戏卡片进入 16 款游戏并返回
  * - P12 恢复在线；P13 Cloudflare 兼容无后缀 URL（`games/memory-flip`）gameId / 生涯事件正常
  * - P14 GitHub Pages 子路径（`/studiokit/apps/arcade/...`）SW scope 与 career 资源零 404
  * - P15 缓存内容审计：全部条目同源、无跨域/CDN、HTML 无外链资源、JS 无外部 fetch、
@@ -36,6 +37,7 @@ const SW_VERSION = '0.19.0';
 const CACHE_PREFIX = 'studiokit-arcade-';
 const CACHE_KEY = `${CACHE_PREFIX}${SW_VERSION}-v1`;
 const OLD_CACHE_KEY = 'studiokit-arcade-0.14.0-v1';
+const PREVIOUS_PRELOAD_KEY = 'studiokit-arcade-0.18.1-v1';
 /* 任务卡点名的 career 运行时 / 内容 / UI 资源（sw.js CORE_PATHS 中的 14 项）。 */
 const CAREER_CORE_PATHS = [
   './career/bridge.js',
@@ -548,7 +550,7 @@ async function main() {
   }
 
   async function listenServer() {
-    const next = await startServer({ root: REPO_ROOT, port: SERVER_PORT });
+    const next = await startServer({ root: REPO_ROOT, port: SERVER_PORT, cloudflarePages: true });
     attachRequestLog(next);
     return next;
   }
@@ -621,6 +623,9 @@ async function main() {
       assert(hall.offlineFallback === false, '中心页命中了离线兜底页');
       return { cards: hall.cards, version: hall.arcadeVersion, versionText: hall.versionText.trim() };
     });
+
+    await cdp.click('[data-offline]');
+    await cdp.waitFor('document.querySelector("[data-offline]").textContent.includes("已预载")', { timeout: 25000 });
 
     /* ============================================================ 在线：真实事件产生线索并落库 */
     await cdp.navigate(GAME_URL);
@@ -793,6 +798,32 @@ async function main() {
       return { cards: hall.cards, version: hall.arcadeVersion, noise: split.noise.length, real: split.real.length };
     });
 
+    await check('P11a Cloudflare 预载后断网，从游戏卡片进入从未访问的游戏并返回', async () => {
+      const games = await cdp.evaluate(`Array.from(document.querySelectorAll('.hall-card'), (card) => card.dataset.gameId)`);
+      const cached = await cdp.evaluate(`caches.match(new URL('games/gold-miner.html', Arcade.baseUrl)).then((response) => ({
+        redirected: response?.redirected,
+        encoding: response?.headers.get('content-encoding')
+      }))`);
+      assert(cached.redirected && cached.encoding === 'gzip', '预载没有缓存模拟 308 后的 gzip 响应: ' + detail(cached));
+      const start = requestLog.length;
+      for (const id of games) {
+        await cdp.click(`.hall-card[data-game-id=${JSON.stringify(id)}]`);
+        await cdp.waitFor(`window.Arcade?.Playtime.currentGame?.id === ${JSON.stringify(id)} && !!document.querySelector('.ac-back')`);
+        await cdp.click('.ac-back');
+        await cdp.waitFor('document.querySelectorAll(".hall-card").length === 16');
+      }
+      // 金矿工此前只以 .html 键预载；这里直接访问无后缀地址，且保留查询参数与片段。
+      await cdp.navigate(ARCADE_BASE + 'games/gold-miner?offlineProbe=1#test');
+      await cdp.waitFor(`window.Arcade?.Playtime.currentGame?.id === 'gold-miner' && !!window.__arcadeTest && location.search === '?offlineProbe=1' && location.hash === '#test'`);
+      await cdp.click('[data-ov-btn]');
+      await cdp.waitFor(`document.querySelector('[data-overlay]').hidden && window.__arcadeTest.info().target === 650`);
+      assert(games.length === 16, '未覆盖 16 款游戏');
+      assert(!requestLog.slice(start).some(({ url }) => /\/(?:games\/|index\.html|career\/)/.test(url)),
+        '断网往返期间仍有网页请求到达服务器');
+      return { games: games.length, prettyUrl: true, offlineTransport };
+    });
+
+    // 回归失败时浏览器可能已经打开错误页，下面先恢复网络再回中心页。
     /* ============================================================ 恢复在线 + CF 无后缀 + GH 子路径 */
     if (swSession) {
       try {
@@ -805,6 +836,7 @@ async function main() {
     }
     await cdp.send('Network.emulateNetworkConditions', { offline: false, latency: 0, downloadThroughput: -1, uploadThroughput: -1 });
     if (!server) server = await listenServer();
+    await cdp.navigate(HUB_URL);
     const onlineAgain = await cdp.evaluate(`fetch('/tools/validate_site.py', { cache: 'no-store' }).then((res) => 'status:' + res.status, (err) => 'rejected:' + err.message)`);
     await check('P12 恢复在线（emulateNetworkConditions offline:false 后网络可用）', async () => {
       assert(onlineAgain === 'status:200', '恢复在线后同源 fetch 应 200，实际 ' + detail(onlineAgain));
@@ -895,6 +927,16 @@ async function main() {
     /* ============================================================ SW 升级不清 IDB */
     const dbBeforeUpgrade = await cdp.evaluate(READ_DB_SRC);
     await cdp.evaluate(FAKE_OLD_CACHE_SRC);
+    const seededPreload = await cdp.evaluate(`(async () => {
+      const game = new URL('games/gold-miner.html', ${JSON.stringify(ARCADE_BASE)}).href;
+      const current = await caches.open(${JSON.stringify(CACHE_KEY)});
+      const previous = await caches.open(${JSON.stringify(PREVIOUS_PRELOAD_KEY)});
+      const response = await current.match(game);
+      if (!response?.redirected) return false;
+      await previous.put(game, response);
+      return current.delete(game);
+    })()`);
+    assert(seededPreload, '测试准备失败：未将预载转移到 0.18.1 缓存');
     const registeredBefore = await cdp.evaluate(`navigator.serviceWorker.getRegistrations().then((regs) => regs.length)`);
     await cdp.evaluate(UNREGISTER_ALL_SRC);
     await cdp.navigate(GAME_URL);
@@ -903,10 +945,13 @@ async function main() {
     await cdp.waitFor(`caches.keys().then((keys) => keys.indexOf('${OLD_CACHE_KEY}') === -1)`, { timeout: 20000 }).catch(() => {});
     await sleep(400);
 
-    await check('P16 模拟 SW 升级/重装（伪造旧缓存 → 注销 → 重装）不会清掉 career IndexedDB', async () => {
+    await check('P16 模拟 SW 升级，复用 0.18.1 的预载并保留生涯 IndexedDB', async () => {
       const keysAfter = await cdp.evaluate(`caches.keys()`);
       assert(keysAfter.indexOf(OLD_CACHE_KEY) === -1, 'activate 未清理旧版本缓存 ' + OLD_CACHE_KEY + '：' + detail(keysAfter));
       assert(keysAfter.indexOf(CACHE_KEY) !== -1, '升级后缺少当前版本缓存 ' + CACHE_KEY + '：' + detail(keysAfter));
+      assert(!keysAfter.includes(PREVIOUS_PRELOAD_KEY), '升级后还留有已迁移的旧版缓存');
+      const migrated = await cdp.evaluate(`caches.match(new URL('games/gold-miner.html', Arcade.baseUrl)).then((response) => response?.redirected === true)`);
+      assert(migrated, '升级后 0.18.1 预载的金矿工文档没有迁入当前缓存');
       assert(registeredBefore >= 1, '升级前应有 SW 注册，实际 ' + registeredBefore);
       const controller = await cdp.evaluate('!!navigator.serviceWorker.controller');
       assert(controller === true, '重装后页面未被 SW 接管');

@@ -12,6 +12,10 @@ StudioKit 门户本身没有独立的 semver；以下按仓库里程碑与工具
 - 修复 4 款游戏挑战选关层「返回开始」无反应、黄金矿工具品坞间隙误放钩、俄罗斯方块矮视口操作键被切；`career_96_missions` 的贪吃蛇夹具同步到固定四向键。
 - 新增门禁 `arcade_compact_touch_test`（18 项，真实触控事件）。详细变更与门禁结果见 [`apps/arcade/CHANGELOG.md`](apps/arcade/CHANGELOG.md) 与 [`apps/arcade/DESIGN-0.19.0.md`](apps/arcade/DESIGN-0.19.0.md)。
 
+## Arcade 0.18.2 — 2026-11-25
+
+- 修复 Cloudflare Pages 上预载后断网跨页失败，从 0.18.1 更新可沿用已有游戏预载。
+
 ## Arcade 0.18.1 — 2026-11-24
 
 - 首页优先展示最近存档和紧凑游戏目录，记住排序，统计和积分可按需展开。

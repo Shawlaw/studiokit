@@ -11,12 +11,13 @@
  */
 const VERSION = '0.19.0';
 const CACHE_PREFIX = 'studiokit-arcade-';
-/* v3 更新同一开发版本的游戏触控、导航与生涯首页。
-   全部读写都用 CACHE_NAME 常量，没有第二处硬编码的旧缓存名；
-   激活时按 CACHE_PREFIX 前缀清理非当前版本缓存。 */
 const CACHE_NAME = `${CACHE_PREFIX}${VERSION}-v1`;
+// 0.18.2 沿用 0.18.1 的游戏 HTML，更新时可以接续已缓存的游戏。
+const PREVIOUS_PRELOAD_CACHE = `${CACHE_PREFIX}0.18.1-v3`;
+const GAME_FILE = /^[a-z0-9-]+(?:\.html)?$/;
 const BASE = new URL('./', self.location.href);
 const SCOPE_PATH = BASE.pathname;
+const GAMES_DIR = new URL('./games/', BASE);
 const SHARED_PATH = new URL('../../shared/', BASE).pathname;
 const INDEX_URL = new URL('./index.html', BASE).href;
 /* 页面「检查更新」会 fetch 这个脚本读取线上发布版本（VERSION），
@@ -123,6 +124,22 @@ async function cacheCore() {
   );
 }
 
+async function carryPreloadedGames() {
+  if (!(await caches.has(PREVIOUS_PRELOAD_CACHE))) return;
+  const previous = await caches.open(PREVIOUS_PRELOAD_CACHE);
+  const current = await caches.open(CACHE_NAME);
+  for (const request of await previous.keys()) {
+    const url = new URL(request.url);
+    if (url.origin !== BASE.origin || !url.pathname.startsWith(GAMES_DIR.pathname)) continue;
+    const file = url.pathname.slice(GAMES_DIR.pathname.length);
+    if (!GAME_FILE.test(file)) continue;
+    const key = new URL(file.endsWith('.html') ? file : file + '.html', GAMES_DIR);
+    if (await current.match(key.href)) continue;
+    const response = await previous.match(request);
+    if (cacheableResponse(response)) await current.put(key.href, response);
+  }
+}
+
 async function precache(urls, port) {
   const cache = await caches.open(CACHE_NAME);
   const list = Array.from(new Set(urls))
@@ -194,6 +211,37 @@ function offlinePage() {
   });
 }
 
+async function cachedNavigation(cache, request) {
+  const url = new URL(request.url);
+  const isGame = url.pathname.startsWith(GAMES_DIR.pathname);
+  const match = (key) => cache.match(key, { ignoreSearch: true });
+  let response = await match(request);
+  if (!response && isGame) {
+    const file = url.pathname.slice(GAMES_DIR.pathname.length);
+    if (GAME_FILE.test(file)) {
+      const alternate = file.endsWith('.html') ? file.slice(0, -5) : file + '.html';
+      response = await match(new URL(alternate, GAMES_DIR).href);
+    }
+  }
+  if (!response && !isGame) {
+    response = (await match(INDEX_URL)) || (await match(BASE.href));
+  }
+  // Cloudflare Pages 的预载 fetch 会跟随 308。导航使用 redirect: 'manual'，
+  // 直接返回带 redirected 标记的缓存响应会被浏览器拒绝。
+  if (response && response.redirected) {
+    const headers = new Headers(response.headers);
+    // Fetch 已解压响应体，合成响应沿用媒体类型等头部，去掉压缩传输信息。
+    headers.delete('content-encoding');
+    headers.delete('content-length');
+    return new Response(response.body, {
+      status: response.status,
+      statusText: response.statusText,
+      headers,
+    });
+  }
+  return response;
+}
+
 async function networkFirst(request) {
   const cache = await caches.open(CACHE_NAME);
   try {
@@ -203,14 +251,7 @@ async function networkFirst(request) {
     }
     return response;
   } catch (err) {
-    const cached = await cache.match(request, { ignoreSearch: true });
-    if (cached) return cached;
-    const path = new URL(request.url).pathname;
-    if (path.indexOf('/games/') === -1) {
-      const index = (await cache.match(INDEX_URL, { ignoreSearch: true })) || (await cache.match(BASE.href));
-      if (index) return index;
-    }
-    return offlinePage();
+    return (await cachedNavigation(cache, request)) || offlinePage();
   }
 }
 
@@ -258,6 +299,7 @@ self.addEventListener('install', (event) => {
   event.waitUntil(
     (async () => {
       await cacheCore();
+      await carryPreloadedGames();
       await self.skipWaiting();
       // skipWaiting 后新 SW 立即进入 activate；activate 里再通知受控页面。
     })()
