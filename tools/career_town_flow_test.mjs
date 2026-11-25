@@ -415,7 +415,9 @@ check('推荐卡 goal 用真实世界目标，不重复委托标题', () => {
   const row = byAttr(sheet, 'data-town-recommend-id', 'pendulum-tower.T1')[0];
   const text = combinedText(row);
   assert.ok(text.includes('稳稳叠到 4 层'), '应显示 objective.atLeast 世界目标：' + text);
+  assert.equal((text.match(/稳稳叠到 4 层/g) || []).length, 1, '目标文本只出现一次：' + text);
   assert.ok(text.includes('层塔：'), '应显示游戏名：' + text);
+  assert.equal(row.getAttribute('data-town-goal'), '层塔：稳稳叠到 4 层', 'data-town-goal 保留完整目标');
   assert.ok(!text.includes('这一单要做：港口实习'), '不得把标题当目标：' + text);
   assert.ok(!/这一单要做：[^：]*实习/.test(text));
   assert.ok(text.includes('推进本章') && text.includes('阿砾等这份航报'), '理由/推进标记保留');
@@ -433,7 +435,7 @@ check('无 live run 时推荐卡显示 campaign.recommend 的游戏名/目标/�
   const text = combinedText(row);
   assert.ok(text.includes('层塔：稳稳叠到 4 层'), 'text=' + text);
   assert.ok(text.includes('推进本章'), 'text=' + text);
-  assert.ok(text.includes('这一单要做：稳稳叠到 4 层'), 'text=' + text);
+  assert.ok(text.includes('这一单要做：层塔：稳稳叠到 4 层'), 'text=' + text);
   assert.ok(text.includes('做完港里会把你记成在册自由职业者'), 'text=' + text);
   assert.ok(!win.navigated);
   return 'campaign recommendation shown';
