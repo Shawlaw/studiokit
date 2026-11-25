@@ -19,6 +19,8 @@ import fs from 'node:fs';
 import path from 'node:path';
 import { REPO_ROOT, createRecorder, envPort, launchChrome, openPage, startServer, stopChrome, sleep } from './lib/arcade_cdp.mjs';
 
+const CHAPTER_ORDER_EVERY = (predicate) => ['C0', 'C1', 'C2', 'C3', 'C4', 'C5'].every(predicate);
+
 let SERVER_PORT = 8994;
 let CDP_PORT = 9594;
 try {
@@ -40,12 +42,21 @@ const WIDTHS = [
   [375, 667],
   [390, 844],
   [430, 932],
+  /* 0.19 矮视口紧凑模式：面板必须仍可滚动、按钮 ≥44px、零横向溢出。 */
+  [375, 548],
+  [390, 664],
 ];
 
 const CAMPAIGN = JSON.parse(fs.readFileSync(path.join(CONTENT_DIR, 'campaign.json'), 'utf8'));
 const NPC = JSON.parse(fs.readFileSync(path.join(CONTENT_DIR, 'npc.json'), 'utf8'));
 const SIDE_STORIES = JSON.parse(fs.readFileSync(path.join(CONTENT_DIR, 'side-stories.json'), 'utf8'));
-const CONTENT = { campaign: CAMPAIGN, npc: NPC, sideStories: SIDE_STORIES };
+const CHAPTER_FILES = Object.fromEntries(
+  ['00', '01', '02', '03', '04', '05'].map((suffix) => {
+    const file = JSON.parse(fs.readFileSync(path.join(CONTENT_DIR, `chapter-${suffix}.json`), 'utf8'));
+    return [file.chapterId, file];
+  })
+);
+const CONTENT = { campaign: CAMPAIGN, npc: NPC, sideStories: SIDE_STORIES, chapters: CHAPTER_FILES };
 
 const { record, summary } = createRecorder();
 const shots = [];
@@ -212,8 +223,16 @@ const PANEL_EXPR = `(() => {
     state: node.getAttribute('data-state'),
     title: text(node.querySelector('.ac-career-world__chapter-title')),
     hint: text(node.querySelector('.ac-career-world__hint')),
+    stage: text(node.querySelector('.ac-career-world__stage-text')),
+    body: text(node.querySelector('.ac-career-world__chapter-body')),
+    factCount: Number((node.querySelector('.ac-career-world__facts') || { getAttribute: () => null }).getAttribute('data-fact-count') || 0),
+    contacts: text(node.querySelector('.ac-career-world__contact')),
+    clues: Array.from(node.querySelectorAll('.ac-career-world__clue')).map(text),
+    badgeLabel: node.querySelector('.ac-career-world__badge') ? node.querySelector('.ac-career-world__badge').getAttribute('data-state-label') : null,
     badge: text(node.querySelector('.ac-career-world__badge')),
   }));
+  const earlierToggle = ov.querySelector('[data-action="toggle-earlier-chapters"]');
+  const earlierList = ov.querySelector('.ac-career-world__earlier-list');
   const endingsSection = ov.querySelector('.ac-career-world__endings');
   const endings = Array.from(ov.querySelectorAll('.ac-career-world__endings-actions [data-approach]')).map((node) => ({
     approach: node.getAttribute('data-approach'),
@@ -243,12 +262,20 @@ const PANEL_EXPR = `(() => {
     chapterIds: chapters.map((c) => c.id),
     chapters,
     hints: chapters.map((c) => c.hint),
+    earlierHidden: earlierList ? !!earlierList.hidden : null,
+    earlierToggle: earlierToggle ? {
+      text: text(earlierToggle),
+      expanded: earlierToggle.getAttribute('aria-expanded'),
+      h: Math.round(earlierToggle.getBoundingClientRect().height * 10) / 10,
+    } : null,
+    recentIds: Array.from(ov.querySelectorAll('.ac-career-world__recent-list .ac-career-world__chapter')).map((node) => node.getAttribute('data-chapter-id')),
     badges: chapters.map((c) => c.badge),
     sideCount: (ov.querySelector('.ac-career-world__side') || { getAttribute: () => null }).getAttribute('data-side-count'),
     sideTitles: Array.from(ov.querySelectorAll('.ac-career-world__side-title')).map(text),
     replyCount: ov.querySelectorAll('.ac-career-world__reply').length,
     replies: Array.from(ov.querySelectorAll('.ac-career-world__reply')).map((node) => ({
       id: node.getAttribute('data-character-id'),
+      chapterId: node.getAttribute('data-chapter-id'),
       name: text(node.querySelector('.ac-career-world__reply-name')),
       text: text(node.querySelector('.ac-career-world__reply-text')),
     })),
@@ -429,6 +456,16 @@ async function main() {
   record('STATIC 模块无接单/发奖/写库调用（startCommission/写库 API）', !/startCommission|beginRun|writeTicket|db\.(purchase|sellItems|add|write|reset)/.test(source));
   record('STATIC 导航只走 location.assign（无 location.href 赋值）', !/location\.href\s*=/.test(source) && /location\.assign/.test(source));
   record('CONTENT campaign.json 六章 / 三终局 / 后日谈', Array.isArray(CAMPAIGN.chapters) && CAMPAIGN.chapters.length === 6 && CAMPAIGN.endings.length === 3 && !!CAMPAIGN.epilogue);
+  record('CONTENT chapter-00..05.json 均有可选 beats.start/progress/complete 玩家文案', CHAPTER_ORDER_EVERY((id) => {
+    const beats = CHAPTER_FILES[id] && CHAPTER_FILES[id].beats;
+    return !!(beats && ['start', 'progress', 'complete'].every((key) => typeof beats[key] === 'string' && beats[key].length >= 8));
+  }), JSON.stringify(Object.fromEntries(Object.entries(CHAPTER_FILES).map(([id, file]) => [id, Object.keys(file.beats || {})]))));
+  record('CONTENT beats 不提前揭晓 C1 首航以外的答案（不内含 mustKnow 原句）', CHAPTER_ORDER_EVERY((id) => {
+    const file = CHAPTER_FILES[id];
+    const beats = file && file.beats;
+    const secrets = (CAMPAIGN.chapters.find((chapter) => chapter.chapterId === id) || {}).mustKnow || [];
+    return !!(beats && secrets.every((secret) => [beats.start, beats.progress].every((text) => text.indexOf(secret) < 0)));
+  }), 'start/progress must not equal completed mustKnow');
   record('CONTENT npc.json 三名角色（E-7/阿砾/黎序）', Array.isArray(NPC.characters) && NPC.characters.length === 3 && ['E-7', '阿砾', '黎序'].every((name) => NPC.characters.some((c) => c.name === name)));
   record('CONTENT side-stories.json 至少四个可选支线家族', Array.isArray(SIDE_STORIES.families) && SIDE_STORIES.families.length >= 4, 'families=' + (SIDE_STORIES.families || []).length);
 
@@ -572,21 +609,44 @@ async function main() {
     surface.role === 'dialog' && surface.ariaModal === 'true' && surface.labelledby === 'ac-career-world-title' && surface.describedby === 'ac-career-world-desc',
     JSON.stringify({ role: surface.role, modal: surface.ariaModal, labelledby: surface.labelledby, describedby: surface.describedby })
   );
-  record('SURFACE 六章卡片（C0–C5）', surface.chapterCount === 6 && JSON.stringify(surface.chapterIds) === JSON.stringify(['C0', 'C1', 'C2', 'C3', 'C4', 'C5']), JSON.stringify(surface.chapterIds));
+  const chapterById = (panel, id) => panel.chapters.find((chapter) => chapter.id === id);
+  record('SURFACE 六章卡片（C0–C5 均可回顾）', surface.chapterCount === 6 && surface.chapterIds.slice().sort().join(',') === 'C0,C1,C2,C3,C4,C5', JSON.stringify(surface.chapterIds));
   record(
     'SURFACE 章节状态：C0 已完成 / C1 可以开始 / C2–C5 尚未开放',
-    JSON.stringify(surface.chapters.map((c) => c.state)) === JSON.stringify(['complete', 'available', 'locked', 'locked', 'locked', 'locked']) &&
-      surface.chapters[0].badge === '已完成' &&
-      surface.chapters[1].badge === '可以开始' &&
-      surface.chapters[2].badge === '尚未开放',
+    ['C0', 'C1', 'C2', 'C3', 'C4', 'C5'].map((id) => chapterById(surface, id).state).join(',') === 'complete,available,locked,locked,locked,locked' &&
+      chapterById(surface, 'C0').badge === '已完成' &&
+      chapterById(surface, 'C1').badge === '可以开始' &&
+      chapterById(surface, 'C2').badge === '尚未开放',
     JSON.stringify(surface.chapters.map((c) => [c.id, c.state, c.badge]))
   );
-  record('SURFACE 已开放章节有戏内提示，锁定章节不提前泄漏提示', surface.hints.length === 6 && surface.hints.filter((hint) => hint && hint.length >= 4).length >= 2 && surface.hints.every((hint) => !hint || hint.length >= 4), JSON.stringify(surface.hints));
-  record('SURFACE 章节标题来自真实 campaign 内容/兜底', surface.chapters.map((c) => c.title).join('|').indexOf('不起眼的印记') >= 0 && surface.chapters[5].title.indexOf('星塔的回响') >= 0, JSON.stringify(surface.chapters.map((c) => c.title)));
+  record('SURFACE 非锁定章有戏内提示，锁定章不提前泄漏提示（无正文/事实）', surface.hints.length === 6 && ['C0', 'C1'].every((id) => (chapterById(surface, id).hint || '').length >= 4) && ['C2', 'C3', 'C4', 'C5'].every((id) => (chapterById(surface, id).hint || '').length === 0), JSON.stringify(surface.hints));
+  record('SURFACE 章节标题来自真实 campaign 内容/兜底', surface.chapters.map((c) => c.title).join('|').indexOf('不起眼的印记') >= 0 && chapterById(surface, 'C5').title.indexOf('星塔的回响') >= 0, JSON.stringify(surface.chapters.map((c) => c.title)));
+  const entryChapter = (id) => chapterById(surface, id);
+  const chapterBodyOf = (id) => fs.readFileSync(path.join(CONTENT_DIR, `chapter-0${Number(id.slice(1))}.json`), 'utf8');
+  record('BEATS 完成后显示 complete 正文/事实，可用章只显示 start 且不剧透', entryChapter('C0').body.length > 0 && entryChapter('C0').factCount > 0 && entryChapter('C0').stage === CHAPTER_FILES.C0.beats.complete && entryChapter('C1').stage === CHAPTER_FILES.C1.beats.start && entryChapter('C1').body === '' && entryChapter('C1').factCount === 0, JSON.stringify(surface.chapters.slice(0, 2)));
+  record('BEATS 锁定章不显示任何阶段文案/正文/事实', surface.chapters.slice(2).every((chapter) => chapter.stage === '' && chapter.body === '' && chapter.factCount === 0), JSON.stringify(surface.chapters.slice(2).map((chapter) => chapter.id)));
+  record('BEATS 玩家可见标题/徽标不含内部编号或 active 状态词', surface.chapters.every((chapter) => !/\bC[0-5]\b/.test(chapter.title) && !/进行中|active/i.test(chapter.badge) && !/进行中|active/i.test(chapter.badgeLabel || '')), JSON.stringify(surface.chapters.map((chapter) => [chapter.title, chapter.badge, chapter.badgeLabel])));
+  record('BEATS 活动 C1 显示可信联系人与当前线索，不显示答案', /阿砾|老周/.test(entryChapter('C1').contacts) && entryChapter('C1').clues.length >= 1 && entryChapter('C1').body === '' && entryChapter('C1').factCount === 0, JSON.stringify({ contacts: entryChapter('C1').contacts, clues: entryChapter('C1').clues }));
+  record('PANEL 当前/最近完成在前，其余折叠且可展开回顾（44px/焦点安全）', JSON.stringify(surface.recentIds) === JSON.stringify(['C0', 'C1']) && surface.earlierHidden === true && surface.earlierToggle.expanded === 'false' && surface.earlierToggle.h >= 44 && surface.earlierToggle.text === '展开回顾', JSON.stringify({ recent: surface.recentIds, earlierHidden: surface.earlierHidden, toggle: surface.earlierToggle }));
+  await mouseClick('[data-career-panel="world-state"] [data-action="toggle-earlier-chapters"]');
+  const expanded = await page.evaluate(PANEL_EXPR);
+  record('PANEL 展开后六章仍可回顾且按钮切为收起', expanded.earlierHidden === false && expanded.earlierToggle.expanded === 'true' && expanded.earlierToggle.text === '收起回顾' && expanded.chapters.length === 6 && expanded.activeInside === true, JSON.stringify({ hidden: expanded.earlierHidden, toggle: expanded.earlierToggle, active: expanded.activeInside }));
+  await mouseClick('[data-career-panel="world-state"] [data-action="toggle-earlier-chapters"]');
+  record('BEATS 玩家语言：正文无 T1/T2、C0/C1、E/BP/MAP 等内部记号', CHAPTER_ORDER_EVERY((id) => {
+    const file = CHAPTER_FILES[id];
+    /* E-7 是玩家可知的调度员名字，不是内部证据 token；E-C1 / BP- / MAP- 才是。 */
+    return ['start', 'progress', 'complete'].every((key) => !/\b(?:T[1-6]|C[0-5])\b|\bE-[A-Z]|\b(?:BP|MAP)-/.test(file.beats[key] || ''));
+  }), 'no internal tokens in player beats');
+  record('BEATS 首航 start/progress 指向非战斗工作与另一份现场记录', /航报|夜航/.test(CHAPTER_FILES.C1.beats.start) && /叠稳|工钱/.test(CHAPTER_FILES.C1.beats.start) && /现场记录/.test(CHAPTER_FILES.C1.beats.progress) && !/星海|战斗/.test(CHAPTER_FILES.C1.beats.progress), CHAPTER_FILES.C1.beats.progress);
+  record('BEATS 中间单提示不提前揭晓 C1 的 mustKnow 结论', CHAPTER_FILES.C1.beats.progress.indexOf('信号与 P-07 吻合') < 0 && CHAPTER_FILES.C1.beats.start.indexOf('信号与 P-07 吻合') < 0, CHAPTER_FILES.C1.beats.start);
+  record('BEATS C3 进展铺垫三终局立场但不揭晓 E-7 结论', /重写旧许可信号/.test(CHAPTER_FILES.C3.beats.progress) && /旧核心闭嘴/.test(CHAPTER_FILES.C3.beats.progress) && /把当年的人接回来/.test(CHAPTER_FILES.C3.beats.progress) && CHAPTER_FILES.C3.beats.progress.indexOf('E-7 没有叛逃') < 0, CHAPTER_FILES.C3.beats.progress);
+  record('BEATS 每章有玩家语言 next 下一步、完成后才给事实', CHAPTER_ORDER_EVERY((id) => typeof CHAPTER_FILES[id].next === 'string' && CHAPTER_FILES[id].next.length >= 8), JSON.stringify(Object.fromEntries(Object.entries(CHAPTER_FILES).map(([id, f]) => [id, !!f.next]))));
+  record('CONTENT chapter-01.json 保留既有路径/旗标/价格字段', ['origins', 'pacing', 'beats', 'body'].every((key) => Object.prototype.hasOwnProperty.call(JSON.parse(chapterBodyOf('C1')), key)) && !!/paths|signals/.test(JSON.stringify(JSON.parse(chapterBodyOf('C1')).c1 || {})), 'chapter-01 field set');
   record('SURFACE C4 前不出现终局按钮/终局区块', surface.endingVisible === false && surface.endings.length === 0 && surface.epilogue === null, JSON.stringify({ endingVisible: surface.endingVisible, endings: surface.endings.length }));
   record('SURFACE 港口世界状态（灯光/广播）随 C0 出现', surface.port && surface.port.state === 'C0' && surface.port.litCount >= 2 && /旧港广播/.test(surface.port.broadcast) && surface.port.lightCount === 5, JSON.stringify(surface.port));
   record('SURFACE 港口灯光是装饰（aria-hidden），广播文本承载语义', await page.evaluate(`!!document.querySelector('[data-career-panel="world-state"] .ac-career-world__lights[aria-hidden="true"]')`));
-  record('SURFACE NPC 回信（E-7/阿砾）可跳过阅读', surface.replyCount >= 2 && !!surface.skip && surface.skip.text === '跳过回信' && surface.skip.h >= 44, JSON.stringify({ count: surface.replyCount, skip: surface.skip }));
+  record('SURFACE NPC 回信可跳过阅读', surface.replyCount >= 1 && !!surface.skip && surface.skip.text === '跳过回信' && surface.skip.h >= 44, JSON.stringify({ count: surface.replyCount, skip: surface.skip }));
+  record('REPLIES 仅显示已完成章的回信（C0 完成时只有阿砾）', surface.replies.every((reply) => reply.chapterId === 'C0') && surface.replyCount === 1, JSON.stringify(surface.replies));
   record(
     'SURFACE 桥接路径已解析真实生涯 → 可交互（C0 回流入口）',
     surface.readonly === 'false',
@@ -603,7 +663,7 @@ async function main() {
   record('REPLIES 「跳过回信」隐藏回信列表且 aria-pressed=true', hiddenReplies.repliesHidden === true && hiddenReplies.skip.pressed === 'true' && hiddenReplies.skip.text === '看看回信', JSON.stringify({ hidden: hiddenReplies.repliesHidden, skip: hiddenReplies.skip }));
   await mouseClick('[data-career-panel="world-state"] [data-action="skip-replies"]');
   const shownReplies = await page.evaluate(PANEL_EXPR);
-  record('REPLIES 再次点击恢复回信列表', shownReplies.repliesHidden === false && shownReplies.skip.pressed === 'false' && shownReplies.replyCount >= 2, JSON.stringify({ hidden: shownReplies.repliesHidden, count: shownReplies.replyCount }));
+  record('REPLIES 再次点击恢复回信列表', shownReplies.repliesHidden === false && shownReplies.skip.pressed === 'false' && shownReplies.replyCount >= 1, JSON.stringify({ hidden: shownReplies.repliesHidden, count: shownReplies.replyCount }));
 
   /* ---------- 阶段 3：直接 ctx（合成状态矩阵） ---------- */
   await closeDirect();
@@ -638,9 +698,10 @@ async function main() {
   await page.evaluate('window.__d18.snapshot = ' + JSON.stringify(snapC2));
   await openDirect(directCtx());
   const mid = await page.evaluate(PANEL_EXPR);
-  record('MODEL C2 时 C2 可以开始、C3–C5 尚未开放', mid.chapters[2].state === 'available' && mid.chapters[3].state === 'locked', JSON.stringify(mid.chapters.map((c) => [c.id, c.state])));
-  record('MODEL NPC 三人回信均出现（E-7/阿砾/黎序）', mid.replies.length === 3 && ['E-7', '阿砾', '黎序'].every((id) => mid.replies.some((r) => r.id === id)), JSON.stringify(mid.replies.map((r) => r.id)));
-  record('MODEL 回信文本来自真实 npc.json（非空、按章节）', mid.replies.every((r) => r.text && r.text.length >= 6) && mid.replies.some((r) => r.id === 'E-7' && /中继密钥|七号货柜/.test(r.text)), JSON.stringify(mid.replies));
+  record('MODEL C2 时 C2 可以开始、C3–C5 尚未开放', chapterById(mid, 'C2').state === 'available' && chapterById(mid, 'C3').state === 'locked', JSON.stringify(mid.chapters.map((c) => [c.id, c.state])));
+  record('MODEL NPC 只显示已完成章的回信（C2 活动中仅阿砾和 E-7）', mid.replies.length === 2 && ['E-7', '阿砾'].every((id) => mid.replies.some((r) => r.id === id)), JSON.stringify(mid.replies.map((r) => r.id)));
+  record('MODEL 回信文本来自真实 npc.json（非空、按章节）', mid.replies.every((r) => r.text && r.text.length >= 6) && mid.replies.some((r) => r.id === 'E-7' && /信号|求救/.test(r.text)), JSON.stringify(mid.replies));
+  record('MODEL C2 活动中只显示 C2 之前的已完成回信，不提前给七号货柜答案', mid.replies.every((reply) => ['C0', 'C1', 'C2'].indexOf(reply.chapterId) >= 0) && !mid.replies.some((reply) => /中继密钥|七号货柜/.test(reply.text)), JSON.stringify(mid.replies));
   record('MODEL 可选支线全部家族（标题/正文，动态数量）', mid.sideCount === String(SIDE_STORIES.families.length) && mid.sideTitles.length === SIDE_STORIES.families.length && mid.sideTitles.join('|').indexOf('港口的灯') >= 0, JSON.stringify(mid.sideTitles));
   record('MODEL 港口广播随已完成章节变化（C0/C1 完成 → P-07 旧编号）', mid.port.state === 'C1' && /P-07 的旧编号/.test(mid.port.broadcast) && mid.port.litCount === 3, JSON.stringify(mid.port));
   record('MODEL campaign.state() 收到 quests/claims/profile/wallet/flags 入参', await page.evaluate(`(() => {
@@ -659,7 +720,7 @@ async function main() {
   const c4 = await page.evaluate(PANEL_EXPR);
   record('MODEL C4 完成后出现三终局按钮（武力/研究/救援）', c4.endingVisible === true && c4.endings.length === 3 && JSON.stringify(c4.endings.map((e) => e.approach)) === JSON.stringify(['combat', 'research', 'rescue']), JSON.stringify(c4.endings));
   record('MODEL 终局按钮文案与 ≥44px', /武力/.test(c4.endings[0].text) && /理性重启|研究/.test(c4.endings[1].text) && /运输救援|救援/.test(c4.endings[2].text) && c4.endings.every((e) => e.h >= 44), JSON.stringify(c4.endings));
-  record('MODEL C5 可以开始（C4 已完成）', c4.chapters[4].state === 'complete' && c4.chapters[5].state === 'available', JSON.stringify(c4.chapters.map((c) => [c.id, c.state])));
+  record('MODEL C5 可以开始（C4 已完成）', chapterById(c4, 'C4').state === 'complete' && chapterById(c4, 'C5').state === 'available', JSON.stringify(c4.chapters.map((c) => [c.id, c.state])));
   record('MODEL C4 港口广播（城市灯重新亮起）与 5 盏灯', c4.port.state === 'C4' && c4.port.litCount === 5 && /城市的灯重新亮起/.test(c4.port.broadcast), JSON.stringify(c4.port));
   record('MODEL 有 careerId 时终局按钮可用（非只读）', c4.readonly === 'false' && c4.endings.every((e) => e.disabled === false) && c4.readonlyNote === false, JSON.stringify({ readonly: c4.readonly, endings: c4.endings }));
 
@@ -729,7 +790,7 @@ async function main() {
   })`);
   const derived = await page.evaluate(PANEL_EXPR);
   record('DERIVE 无 campaign-core 时按内容推导六章（C0 完成/C1 可用/C2 锁定）', derived.chapterCount === 6 && derived.chapters[0].state === 'complete' && derived.chapters[1].state === 'available' && derived.chapters[2].state === 'locked', JSON.stringify(derived.chapters.map((c) => [c.id, c.state])));
-  record('DERIVE 六章标题来自真实 campaign.json', derived.chapters.map((c) => c.title).join('|') === CAMPAIGN.chapters.map((c) => c.chapterId + ' · ' + c.title).join('|'), JSON.stringify(derived.chapters.map((c) => c.title)));
+  record('DERIVE 六章标题为玩家语言（无 C0/C1 内部编号）', derived.chapters.map((c) => c.title).join('|') === CAMPAIGN.chapters.map((c) => c.title).join('|') && derived.chapters.every((c) => !/\bC[0-5]\b/.test(c.title)), JSON.stringify(derived.chapters.map((c) => c.title)));
   record('DERIVE C4 前无终局、港口 C0', derived.endingVisible === false && derived.port.state === 'C0', JSON.stringify({ endingVisible: derived.endingVisible, port: derived.port.state }));
   await closeDirect();
 
