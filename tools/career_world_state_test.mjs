@@ -271,9 +271,19 @@ const PANEL_EXPR = `(() => {
       h: Math.round(earlierToggle.getBoundingClientRect().height * 10) / 10,
     } : null,
     recentIds: Array.from(ov.querySelectorAll('.ac-career-world__recent-list .ac-career-world__chapter')).map((node) => node.getAttribute('data-chapter-id')),
+    arrival: (() => {
+      const node = ov.querySelector('.ac-career-world__arrival');
+      if (!node) return null;
+      return {
+        role: text(node.querySelector('[data-arrival-role]')),
+        letters: Array.from(node.querySelectorAll('.ac-career-world__arrival-letter')).map(text),
+        meta: Array.from(node.querySelectorAll('.ac-career-world__arrival-meta')).map(text),
+      };
+    })(),
     badges: chapters.map((c) => c.badge),
     sideCount: (ov.querySelector('.ac-career-world__side') || { getAttribute: () => null }).getAttribute('data-side-count'),
     sideTitles: Array.from(ov.querySelectorAll('.ac-career-world__side-title')).map(text),
+    sideTexts: Array.from(ov.querySelectorAll('.ac-career-world__side-text')).map(text),
     replyCount: ov.querySelectorAll('.ac-career-world__reply').length,
     replies: Array.from(ov.querySelectorAll('.ac-career-world__reply')).map((node) => ({
       id: node.getAttribute('data-character-id'),
@@ -468,7 +478,10 @@ async function main() {
     const secrets = (CAMPAIGN.chapters.find((chapter) => chapter.chapterId === id) || {}).mustKnow || [];
     return !!(beats && secrets.every((secret) => [beats.start, beats.progress].every((text) => text.indexOf(secret) < 0)));
   }), 'start/progress must not equal completed mustKnow');
+  record('CONTENT chapter-00 C0 complete 补「那是一串柜号」且 C1 章标题统一', CHAPTER_FILES.C0.beats.complete.indexOf('那是一串柜号') >= 0 && CHAPTER_FILES.C1.title === '第一封工单' && CHAPTER_FILES.C1.c1.title === '第一封工单', JSON.stringify({ c0: CHAPTER_FILES.C0.beats.complete, c1: CHAPTER_FILES.C1.title }));
+  record('CONTENT 到港首屏内容含来源 c0Letter/身份句/阿砾首单回信，不依赖 originIntro', !!CHAPTER_FILES.C0.arrival && !!CHAPTER_FILES.C0.arrival.body && /自由职业者/.test(CHAPTER_FILES.C0.role) && /第一张纸|告示板/.test(JSON.stringify(CHAPTER_FILES.C0.arrival)) && Array.isArray(CHAPTER_FILES.C1.origins) && CHAPTER_FILES.C1.origins.every((o) => !!(o.c0Letter && o.c0Letter.body)), 'arrival + 16 origins c0Letter');
   record('CONTENT npc.json 三名角色（E-7/阿砾/黎序）', Array.isArray(NPC.characters) && NPC.characters.length === 3 && ['E-7', '阿砾', '黎序'].every((name) => NPC.characters.some((c) => c.name === name)));
+  record('CONTENT 阿砾 C0 回信指定首单（不再是空闲闲聊）', NPC.characters.some((c) => c.characterId === '阿砾' && c.replies.some((r) => r.chapterId === 'C0' && /第一张纸|告示板/.test(r.text) && /工钱|交割/.test(r.text))), JSON.stringify((NPC.characters.find((c) => c.characterId === '阿砾') || {}).replies || []));
   record('CONTENT side-stories.json 至少四个可选支线家族', Array.isArray(SIDE_STORIES.families) && SIDE_STORIES.families.length >= 4, 'families=' + (SIDE_STORIES.families || []).length);
 
   server = await startServer({ port: SERVER_PORT });
@@ -681,6 +694,8 @@ async function main() {
         campaignState: window.__d18.snapshot,
         npc: window.__d18.content.npc,
         sideStories: window.__d18.content.sideStories,
+        chapter: window.__d18.content.chapters.C1,
+        chapters: window.__d18.content.chapters,
         ending: window.__d18.fakeEnding,
         state: { stage: 'LOCAL', clues: {} },
         flags: []
@@ -707,8 +722,35 @@ async function main() {
   record('MODEL NPC 只显示已完成章的回信（C2 活动中仅阿砾和 E-7）', mid.replies.length === 2 && ['E-7', '阿砾'].every((id) => mid.replies.some((r) => r.id === id)), JSON.stringify(mid.replies.map((r) => r.id)));
   record('MODEL 回信文本来自真实 npc.json（非空、按章节）', mid.replies.every((r) => r.text && r.text.length >= 6) && mid.replies.some((r) => r.id === 'E-7' && /信号|求救/.test(r.text)), JSON.stringify(mid.replies));
   record('MODEL C2 活动中只显示 C2 之前的已完成回信，不提前给七号货柜答案', mid.replies.every((reply) => ['C0', 'C1', 'C2'].indexOf(reply.chapterId) >= 0) && !mid.replies.some((reply) => /中继密钥|七号货柜/.test(reply.text)), JSON.stringify(mid.replies));
+  record('MODEL E-7 揭示前显示为「旧港口的来信/不肯留名的调度员」，不泄漏代号', mid.replies.every((r) => r.id !== 'E-7' || (r.name === '旧港口的来信' && r.name.indexOf('E-7') < 0)) && mid.replies.some((r) => r.id === 'E-7' && r.name === '旧港口的来信'), JSON.stringify(mid.replies.map((r) => [r.id, r.name])));
   record('MODEL 可选支线全部家族（标题/正文，动态数量）', mid.sideCount === String(SIDE_STORIES.families.length) && mid.sideTitles.length === SIDE_STORIES.families.length && mid.sideTitles.join('|').indexOf('港口的灯') >= 0, JSON.stringify(mid.sideTitles));
   record('MODEL 港口广播随已完成章节变化（C0/C1 完成 → P-07 旧编号）', mid.port.state === 'C1' && /P-07 的旧编号/.test(mid.port.broadcast) && mid.port.litCount === 3, JSON.stringify(mid.port));
+  /* 支线剧透门槛：带 minChapter=C3 的家族在 C2 进行中不得出现。 */
+  await closeDirect();
+  await openDirect(`(() => {
+    const ctx = {
+      careerId: 'career-d18-12',
+      campaign: window.__d18.content.campaign,
+      campaignState: window.__d18.snapshot,
+      npc: window.__d18.content.npc,
+      chapter: window.__d18.content.chapters.C1,
+      chapters: window.__d18.content.chapters,
+      sideStories: {
+        families: [
+          { familyId: 'early', title: '早先的线索', text: '港区里有人修东西。' },
+          { familyId: 'late', title: '那座旧塔', text: '有人为关闭旧塔做准备。', minChapter: 'C3' },
+        ],
+      },
+      ending: window.__d18.fakeEnding,
+      state: { stage: 'LOCAL', clues: {} },
+      flags: [],
+    };
+    return ctx;
+  })()`);
+  const gatedSide = await page.evaluate(PANEL_EXPR);
+  record('MODEL minChapter=C3 支线在 C2 前被隐藏（无剧透旧塔文字）', gatedSide.sideCount === '1' && gatedSide.sideTitles.indexOf('早先的线索') >= 0 && gatedSide.sideTitles.indexOf('那座旧塔') < 0, JSON.stringify({ count: gatedSide.sideCount, titles: gatedSide.sideTitles }));
+  await closeDirect();
+  await openDirect(directCtx());
   record('MODEL campaign.state() 收到 quests/claims/profile/wallet/flags 入参', await page.evaluate(`(() => {
     const inputs = window.__d18.stateInputs || [];
     const last = inputs[inputs.length - 1];
@@ -1080,6 +1122,15 @@ async function main() {
       freshC0.factCount === 0 &&
       !/\bC[0-5]\b/.test(freshC0.role + freshC0.stage),
     JSON.stringify({ role: freshC0 && freshC0.role, stage: freshC0 && freshC0.stage, progress: freshC0 && freshC0.progress, body: freshC0 && freshC0.body, factCount: freshC0 && freshC0.factCount })
+  );
+  record(
+    'REAL 到港首屏显示来源 c0Letter 正文 + 身份句 + 阿砾指定首单回信（非弹窗）',
+    !!realBridge.arrival &&
+      realBridge.arrival.role === CHAPTER_FILES.C0.role &&
+      realBridge.arrival.letters.length >= 2 && realBridge.arrival.letters[0].length >= 20 &&
+      realBridge.arrival.letters.some((line) => line.indexOf('第一张纸') >= 0 || line.indexOf('告示板') >= 0) &&
+      realBridge.arrival.meta.some((line) => line.indexOf('阿砾') >= 0),
+    JSON.stringify(realBridge.arrival)
   );
   await closeDirect();
   const realDirect = await openDirect(`({

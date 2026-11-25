@@ -81,6 +81,8 @@
   const ANNOUNCE_REPLIES_SHOWN = '回信重新摊开。';
   const ANNOUNCE_CHAPTERS_EXPANDED = '更早的信已经展开。';
   const ANNOUNCE_CHAPTERS_COLLAPSED = '更早的信已经收起。';
+  /* 与 bridge.npcNameOf 一致：揭示前不写内部代号。 */
+  const NPC_ALIAS = { 'E-7': { before: '旧港口的来信', after: 'E-7', revealChapter: 'C2' } };
 
   const STAGE_RANK = { DORMANT: 0, GLIMPSED: 1, CURIOUS: 2, LOCAL: 3, RESIDENT: 4, EXPLORER: 5 };
   const CHAPTER_ORDER = ['C0', 'C1', 'C2', 'C3', 'C4', 'C5'];
@@ -215,6 +217,30 @@
     '  color: #b9c6f2;',
     '  font-size: 12px;',
     '  line-height: 1.7;',
+    '  overflow-wrap: anywhere;',
+    '}',
+    '.ac-career-world__arrival {',
+    '  display: flex;',
+    '  flex-direction: column;',
+    '  gap: 6px;',
+    '  min-width: 0;',
+    '  padding: 10px;',
+    '  border: 1px solid var(--ac-career-line, #2a3560);',
+    '  border-radius: 10px;',
+    '  background: rgba(21, 29, 58, 0.72);',
+    '}',
+    '.ac-career-world__arrival-letter {',
+    '  margin: 0;',
+    '  color: var(--ac-career-ink, #eef1ff);',
+    '  font-size: 12px;',
+    '  line-height: 1.7;',
+    '  overflow-wrap: anywhere;',
+    '}',
+    '.ac-career-world__arrival-meta {',
+    '  margin: 0;',
+    '  color: var(--ac-career-muted, #93a0c8);',
+    '  font-size: 11.5px;',
+    '  line-height: 1.6;',
     '  overflow-wrap: anywhere;',
     '}',
     '.ac-career-world__stage-text {',
@@ -1317,6 +1343,42 @@
     return null;
   }
 
+  /** 来源首信：优先 ctx.chapter.origins 中按当前来源游戏匹配，其次首条。 */
+  function originLetterOf(context, chapters) {
+    const c = isObject(context) ? context : {};
+    let origins = [];
+    const candidates = [c.chapter, isObject(c.chapters) ? c.chapters.C1 : null, isObject(c.content) ? c.content.chapter : null];
+    for (let i = 0; i < candidates.length; i += 1) {
+      const entry = candidates[i];
+      if (isObject(entry) && Array.isArray(entry.origins)) {
+        origins = entry.origins;
+        break;
+      }
+    }
+    if (!origins.length) return null;
+    let sourceGame = cleanText(c.state && c.state.firstSourceGame);
+    if (!sourceGame && isObject(c.state) && isObject(c.state.clues)) {
+      const clueIds = Object.keys(c.state.clues);
+      for (let i = 0; i < clueIds.length; i += 1) {
+        const row = c.state.clues[clueIds[i]];
+        if (isObject(row) && cleanText(row.sourceGame)) { sourceGame = cleanText(row.sourceGame); break; }
+      }
+    }
+    if (!sourceGame && typeof c.originIntro === 'function') {
+      try {
+        const intro = c.originIntro();
+        if (isObject(intro)) sourceGame = cleanText(intro.sourceGame);
+      } catch (err) { /* 忽略 */ }
+    }
+    let chosen = null;
+    origins.forEach((entry) => {
+      if (!isObject(entry)) return;
+      if (!chosen && cleanText(entry.gameId) === sourceGame) chosen = entry;
+    });
+    if (!chosen) chosen = origins[0];
+    return isObject(chosen) && isObject(chosen.c0Letter) ? chosen : null;
+  }
+
   function discoveredIdsOf(context) {
     const out = new Set();
     const c = isObject(context) ? context : {};
@@ -1368,10 +1430,18 @@
         if (!chosen || CHAPTER_ORDER.indexOf(chapterId) > CHAPTER_ORDER.indexOf(chosen.chapterId)) chosen = { chapterId: chapterId, text: text };
       });
       if (!chosen) return;
+      let name = cleanText(character.name) || characterId;
+      let role = cleanText(character.role);
+      const alias = NPC_ALIAS[characterId];
+      if (alias) {
+        const revealed = CHAPTER_ORDER.indexOf(chosen.chapterId) >= CHAPTER_ORDER.indexOf(alias.revealChapter);
+        name = revealed ? alias.after : alias.before;
+        role = revealed ? role : '不肯留名的调度员';
+      }
       out.push({
         characterId: characterId,
-        name: cleanText(character.name) || characterId,
-        role: cleanText(character.role),
+        name: name,
+        role: role,
         chapterId: chosen.chapterId,
         text: chosen.text,
       });
@@ -1379,7 +1449,7 @@
     return out;
   }
 
-  function sideStoriesOf(context) {
+  function sideStoriesOf(context, chapterRank) {
     const bundle = sideStoriesContentOf(context);
     if (!bundle) return [];
     const hasDiscoveryData = isObject(context) && (isObject(context.state) || isArray(context.discoveredClues) || isArray(context.clueIds));
@@ -1398,6 +1468,9 @@
       const title = cleanText(family.title);
       const text = cleanText(family.text);
       if (!familyId || (!title && !text)) return;
+      /* 剧透门槛：带 minChapter 的支线在 C3 完成前不出现（内容层即使写了也不提前泄漏）。 */
+      const minChapter = idText(family.minChapter);
+      if (minChapter && CHAPTER_ORDER.indexOf(minChapter) > (chapterRank || 0)) return;
       const marked = family.available === true || family.unlocked === true || explicit.has(familyId);
       const links = isArray(family.links) ? family.links.map(idText).filter(Boolean) : [];
       const hit = links.some((link) => discovered.has(link));
@@ -1559,6 +1632,41 @@
       return item;
     }
 
+    /** 到港首屏：来源 c0Letter 正文 + 身份句 + 阿砾/港务处指定首单回信。 */
+    function arrivalSectionOf(model) {
+      const c0 = chapterOf(model, 'C0');
+      /* 只在到港首屏（C0 待办/进行中）呈现，完成章不再重复倾倒来源信。 */
+      if (!c0 || (c0.state !== 'active' && c0.state !== 'available')) return null;
+      const c0File = isObject(liveContext.chapters) ? liveContext.chapters.C0 : null;
+      const arrival = isObject(c0File && c0File.arrival) ? c0File.arrival : null;
+      const origin = originLetterOf(liveContext, isObject(liveContext.chapters) ? liveContext.chapters : {});
+      const letter = origin ? origin.c0Letter : null;
+      const sender = cleanText(letter && letter.from) || cleanText(arrival && arrival.from) || '旧港 · 收货窗口';
+      const body = cleanText(letter && letter.body) || cleanText(arrival && arrival.body);
+      const firstOrder = isObject(arrival && arrival.firstOrder) ? arrival.firstOrder : null;
+      const identity = c0.role || cleanText(c0File && c0File.role);
+      if (!body && !identity && !firstOrder) return null;
+      const section = make('section', 'ac-career-world__section ac-career-world__arrival');
+      section.setAttribute('data-arrival', 'c0');
+      section.appendChild(make('h3', 'ac-career-world__heading', '刚到旧港'));
+      if (identity) {
+        const role = make('p', 'ac-career-world__role', identity);
+        role.setAttribute('data-arrival-role', 'true');
+        section.appendChild(role);
+      }
+      if (body) {
+        section.appendChild(make('p', 'ac-career-world__arrival-letter', body));
+        section.appendChild(make('p', 'ac-career-world__arrival-meta', '—— ' + sender));
+      }
+      if (firstOrder) {
+        const orderBody = cleanText(firstOrder.body);
+        if (orderBody) section.appendChild(make('p', 'ac-career-world__arrival-letter', orderBody));
+        const orderFrom = cleanText(firstOrder.from);
+        if (orderFrom) section.appendChild(make('p', 'ac-career-world__arrival-meta', '—— ' + orderFrom));
+      }
+      return section;
+    }
+
     function chaptersSectionOf(model) {
       const section = make('section', 'ac-career-world__section ac-career-world__chapters-section');
       section.appendChild(make('h3', 'ac-career-world__heading', model.chapters.length === 6 ? CHAPTERS_HEADING : CHAPTERS_HEADING_OTHER));
@@ -1607,8 +1715,8 @@
       return section;
     }
 
-    function sideSectionOf(context2) {
-      const families = sideStoriesOf(context2);
+    function sideSectionOf(context2, chapterRank) {
+      const families = sideStoriesOf(context2, chapterRank);
       if (!families.length) return null;
       const section = make('section', 'ac-career-world__section ac-career-world__side');
       section.setAttribute('data-side-count', String(families.length));
@@ -1828,9 +1936,15 @@
         view.appendChild(footerOf());
         return;
       }
+      const arrival = arrivalSectionOf(model);
+      if (arrival) view.appendChild(arrival);
       view.appendChild(chaptersSectionOf(model));
 
-      const side = sideSectionOf(liveContext);
+      let chapterRank = 0;
+      model.chapters.forEach((chapter) => {
+        if (chapter.state === 'complete') chapterRank = Math.max(chapterRank, CHAPTER_ORDER.indexOf(chapter.chapterId));
+      });
+      const side = sideSectionOf(liveContext, chapterRank);
       if (side) view.appendChild(side);
       const replies = repliesSectionOf(liveContext, model);
       if (replies) view.appendChild(replies);
