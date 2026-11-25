@@ -174,6 +174,9 @@ async function bringIntoView(page, selector) {
   const found = await page.evaluate(`(() => {
     const el = document.querySelector(${JSON.stringify(selector)});
     if (!el) return false;
+    /* 闭合 details 内的按钮不可达：先展开所属 details 再滚动，避免坐标落在隐藏区。 */
+    const closed = el.closest && el.closest('details:not([open])');
+    if (closed) closed.open = true;
     if (el.scrollIntoView) el.scrollIntoView({ block: 'center', inline: 'center' });
     return true;
   })()`);
@@ -303,6 +306,8 @@ function panelMetricsExpr(id) {
       if (node.hidden) return false;
       if (node.closest && node.closest('[hidden]')) return false;
       if (node.closest && node.closest('.ac-career-sr-only')) return false;
+      /* 商店/制造台等折叠 details 内的控件当前不可达，不计入可见按钮/焦点链。 */
+      if (node.closest && node.closest('details:not([open])')) return false;
       return node.getClientRects().length > 0;
     };
     const buttons = Array.from(sheet ? sheet.querySelectorAll('button') : []).filter(visible).map((node) => {
@@ -366,6 +371,8 @@ function scrollToEndExpr(id) {
       if (node.hidden) return false;
       if (node.closest && node.closest('[hidden]')) return false;
       if (node.closest && node.closest('.ac-career-sr-only')) return false;
+      /* 商店/制造台等折叠 details 内的控件当前不可达，不计入可见按钮/焦点链。 */
+      if (node.closest && node.closest('details:not([open])')) return false;
       return node.getClientRects().length > 0;
     };
     const interactive = Array.from(body.querySelectorAll('button, [href], [tabindex]:not([tabindex="-1"])')).filter(visible);
@@ -986,10 +993,19 @@ async function phaseTouch(page) {
   await sleep(350);
   record('TOUCH 关闭（收起机库）触控命中', !(await panelPresent(page, 'hangar')), 'touch=' + JSON.stringify(close));
 
-  /* 触控接单：告示板第一条委托 → 跳转职业 run 页面 */
+  /* 触控接单：优先点当前推荐卡内的接单按钮（首屏真实可见）；推荐卡未出现时
+     仍用原委托 id 选择器，bringIntoView 会展开所属 details 后再滚动。 */
   await openPanel(page, 'town', { waitMs: 1000 });
   const beforeUrl = await page.evaluate('location.href');
-  const start = await touchClick(page, '[data-career-panel="town"] [data-town-action="start"][data-commission-id="pendulum-tower.T1"]');
+  const recommendedStart = '[data-career-panel="town"] [data-town-recommend-id] [data-town-action="start"]';
+  const fallbackStart = '[data-career-panel="town"] [data-town-action="start"][data-commission-id="pendulum-tower.T1"]';
+  const hasRecommended = await page.evaluate(`!!document.querySelector(${JSON.stringify(recommendedStart)})`);
+  const startSelector = hasRecommended ? recommendedStart : fallbackStart;
+  const clickedCommission = await page.evaluate(`(() => {
+    const el = document.querySelector(${JSON.stringify(startSelector)});
+    return (el && el.getAttribute('data-commission-id')) || 'pendulum-tower.T1';
+  })()`);
+  const start = await touchClick(page, startSelector);
   const navigated = await waitForNavigation(page, beforeUrl, 12000);
   await waitBridge(page);
   await sleep(500);
@@ -1005,7 +1021,7 @@ async function phaseTouch(page) {
   })()`);
   record(
     'TOUCH 接单（告示板触控）→ 跳转并激活职业 run',
-    !!(navigated && careerRun.hasCareerParam && careerRun.run && careerRun.run.commissionId === 'pendulum-tower.T1'),
+    !!(navigated && careerRun.hasCareerParam && careerRun.run && careerRun.run.commissionId === clickedCommission),
     det(['touch=' + JSON.stringify(start), 'url=' + (navigated || 'no-nav'), 'run=' + JSON.stringify(careerRun.run), 'testRun=' + JSON.stringify(careerRun.testRun)])
   );
   await clearErrors(page, 'TOUCH');
