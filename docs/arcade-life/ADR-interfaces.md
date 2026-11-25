@@ -865,3 +865,12 @@ export async function cleanup(ctx) {}
 - 游戏页 bridge 在 `?careerLetter=1` 下，待 ready 后以已加载的最新发现状态校验：优先选择未读线索；若无未读且严格未投递（阶段仍为 `GLIMPSED`/`CURIOUS` 且 `portSeenAt` 为空），则选择已发现且内容配置中真实存在的首条线索。随后调用现有 `openClue()`（未读时记录 `CLUE_OPENED`），打开原信件信箱，并沿用既有读信路径的 C0 同步与返回街机厅链接。无合格线索、阶段已越过 `CURIOUS` 或已经投递时静默。既有 `?careerPanel=*` 仍需生涯身份、`?story=1` 仍需 C0 旗标，均不受影响。
 - 首次发现仍只来自真实有效结算的 `RUN_ENDED`；`finish` 返回的“本次新发现”语义不变，也不重复写 `discovery`。在后续 classic/challenge/zen 有效结算中，若成功事务后的最新状态保留同一游戏的未读线索且 `hintsEnabled !== false`，bridge 可重显该未读线索的 chip；跨标签已读以事务合并后状态为准，已读线索不重显。已读但未投递的线索只在玩家显式点击首页回访入口、由 `?careerLetter=1` 打开原信件，不在新的结算中重现。URL 回访、信箱浏览与线索 chip 均不改变玩法、掉率、数值或经典存储。
 - 入口复用现有信箱/线索校验和现有返回街机厅路径。保留 chip ≥44px 热区、键盘激活、焦点安全及 `prefers-reduced-motion`；不新增 storage key、store、schema 或远程依赖。
+
+### 20.9 主线推荐接口（独立增补，向后兼容）
+
+- `campaign.recommend({quests, claims, profile, wallet, availableIds, storyEvidence})` 为同步只读函数，返回 `null` 或 `{commissionId, goal, reason, kind}`。`availableIds` 必须由调用方先以 `commission.listAvailable` 校验，推荐层只从中选择；`kind` 为 `'milestone' | 'step'`。
+- `goal` / `reason` 只使用玩家语言的委托标题与章节语言，不输出内部 token、旗标名或奖励代码；保留 `campaign.state` 既有形状与内容/旗标兼容。
+- 缺 `storyEvidence`、阶段不明、终局已开放、章节已完成、`availableIds` 为空或没有可执行后续时返回 `null`；绝不推荐锁定单、已首次清掉的单，也不新增经济前置。
+- 优先真实路线：C1 层塔 T1「港口实习」，C2 记忆翻牌 T1「旧档案夹」→ T2「差一张的照片」，C3 影跃 T1 → T2，C4 层塔 T2 + 五子棋 T1「布局练习」→ T2「破解防线」；2048.T2 不产 E，不能替代 E 路线。C1 星海 T1「首次巡航」仅在主单不可用时作次选；C2/C3 首选不可用时才落到其它路线中的真实可接单。
+- 候选完成性以实际 `commission.reward` 与 `storyEvidence.storyFlags` 验算；C1 完成口径直接复用 `campaign.syncFlags` 的入口/路线判定，不平行复制通关公式。替代候选只从 `storyEvidence.missingFor` / route-planner 能提供的真实未完成条件派生，优先非战斗。
+- 中间单固定标 `'step'`，只有当前单足以完成本章时才标 `'milestone'`，不会因本单完章就承诺终局。纯函数：无 DOM/IDB/网络/存储写入，不改变任何 localStorage key、Schema、缓存版本或内容文件；测试见 `tools/career_recommendation_test.mjs`。
