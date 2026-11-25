@@ -92,6 +92,18 @@
   var REQUIREMENT_KEYS = REQUIREMENT_LIST_KEYS.concat(REQUIREMENT_NODE_KEYS);
 
   /* 每章最少可玩路线数：C0 是序章单路线，C5 由三终局承担（ADR §20.2「C5 为三终局」）。 */
+  /**
+   * 主线推荐的固定候选顺序（只引用真实委托与真实 storyEvidence 旗标）。
+   * 只是候选顺序，不复制通关公式；候选是否能完成一律回到章节路线要求、
+   * commission reward 与 storyEvidence 状态验算。
+   */
+  var RECOMMEND_ROUTES = Object.freeze([
+    Object.freeze({ chapterId: 'C1', prefer: ['pendulum-tower.T1'], alternatives: ['star-raid.T1'] }),
+    Object.freeze({ chapterId: 'C2', prefer: ['memory-flip.T1', 'memory-flip.T2', 'shadow-leap.T1'], alternatives: [] }),
+    Object.freeze({ chapterId: 'C3', prefer: ['shadow-leap.T1', 'shadow-leap.T2', 'memory-flip.T1', 'memory-flip.T2'], alternatives: [] }),
+    Object.freeze({ chapterId: 'C4', prefer: ['pendulum-tower.T2', 'gomoku.T1', 'gomoku.T2'], alternatives: [] }),
+  ]);
+
   var MIN_ROUTES = Object.freeze({ C0: 1, C1: 2, C2: 2, C3: 2, C4: 2, C5: 3 });
   var MAX_REQUIREMENT_DEPTH = 4;
   var MAX_TOKENS_PER_LIST = 32;
@@ -911,6 +923,8 @@
           commissionId: commissionId,
           gameId: trimText(rawCommission.gameId, 40),
           tier: Number(rawCommission.tier) || 0,
+          title: trimText(rawCommission.title, 120),
+          unlock: isObject(rawCommission.unlock) ? clone(rawCommission.unlock) : null,
           rewardFlags: sortedTokens(reward.flags),
           rewardEvidence: sortedTokens(reward.evidence),
         });
@@ -2038,6 +2052,313 @@
       }
     }
 
+    /* ---------------- 主线推荐（只读） ---------------- */
+
+    /**
+     * 推荐只认调用方注入的 storyEvidence 模块（真实 storyFlags 函数）；浏览器里
+     * 也接受镜像到 ArcadeCareer.storyEvidence 的同一实现。缺接口一律降级 null。
+     */
+    function recommendedEvidenceModule(input) {
+      var options = isObject(input) ? input : {};
+      var direct = options.storyEvidence;
+      if (isObject(direct) && isFunction(direct.storyFlags)) return direct;
+      var exported = root && isObject(root.ArcadeCareer) ? root.ArcadeCareer.storyEvidence : null;
+      if (isObject(exported) && isFunction(exported.storyFlags)) {
+        if (isFunction(exported.isConfigured) && exported.isConfigured() !== true) return null;
+        return exported;
+      }
+      return null;
+    }
+
+    /**
+     * 调真实 storyEvidence.storyFlags 并把 flags/evidence 换成投影集合。
+     * 用于“模拟本单 reward 后是否真的授予章节旗标”的验算，不复制任何规则。
+     */
+    function storySnapshot(evidenceModule, input, flags, evidence) {
+      if (!evidenceModule || !isFunction(evidenceModule.storyFlags)) return null;
+      var story;
+      try {
+        story = evidenceModule.storyFlags({
+          quests: input && input.quests,
+          claims: input && input.claims,
+          profile: input && input.profile,
+          wallet: input && input.wallet,
+          flags: Array.from(flags),
+          evidence: Array.from(evidence),
+        });
+      } catch (err) {
+        return null;
+      }
+      if (!isObject(story) || story.ok !== true) return null;
+      var derived = new Set();
+      tokenArray(story.flags).forEach(function (flag) {
+        if (isFlagToken(flag)) derived.add(flag);
+      });
+      tokenArray(story.allFlags).forEach(function (flag) {
+        if (isFlagToken(flag)) derived.add(flag);
+      });
+      return {
+        flags: derived,
+        missing: isObject(story.missing) ? story.missing : Object.create(null),
+      };
+    }
+
+    function projectedContext(ctx, commission) {
+      return {
+        flags: new Set(Array.from(ctx.flags).concat(commission.rewardFlags)),
+        evidence: new Set(Array.from(ctx.evidence).concat(commission.rewardEvidence)),
+        cleared: new Set(Array.from(ctx.cleared).concat([commission.commissionId])),
+      };
+    }
+
+    function producesForChapter(commission, chapterId) {
+      if (!commission) return false;
+      if (chapterId === 'C1') {
+        return commission.rewardFlags.length > 0 || commission.rewardEvidence.length > 0;
+      }
+      return commission.rewardEvidence.length > 0;
+    }
+
+    function unlockRequiresCommission(unlock, commissionId) {
+      if (!isObject(unlock)) return false;
+      var nodes = (isArray(unlock.all) ? unlock.all : []).concat(isArray(unlock.any) ? unlock.any : []);
+      for (var i = 0; i < nodes.length; i += 1) {
+        if (isObject(nodes[i]) && nodes[i].commissionCleared === commissionId) return true;
+      }
+      return false;
+    }
+
+    /** T1 本身不产证据也可以作为真实前置，但必须能走到真正产证/产旗标的下一单。 */
+    function leadsToProducer(commissionId, chapterId, depth) {
+      if (depth > 3) return false;
+      var commission = state.commissionIndex[commissionId];
+      if (!commission) return false;
+      if (producesForChapter(commission, chapterId)) return true;
+      for (var i = 0; i < state.commissions.length; i += 1) {
+        var other = state.commissions[i];
+        if (other.commissionId === commissionId) continue;
+        if (unlockRequiresCommission(other.unlock, commissionId)
+            && leadsToProducer(other.commissionId, chapterId, depth + 1)) return true;
+      }
+      return false;
+    }
+
+    function usefulCandidate(chapterId, commission, directOnly) {
+      if (!commission) return false;
+      if (producesForChapter(commission, chapterId)) return true;
+      return !directOnly && leadsToProducer(commission.commissionId, chapterId, 0);
+    }
+
+    function unlockNodeMet(node, ctx, flags) {
+      if (!isObject(node)) return false;
+      if (typeof node.commissionCleared === 'string') return ctx.cleared.has(node.commissionCleared);
+      if (typeof node.chapterFlag === 'string') return flags.has(node.chapterFlag);
+      /* credits/items 等经济条件归 commission.listAvailable，推荐层不新增经济前置。 */
+      return true;
+    }
+
+    function commissionUnlockMet(commission, ctx, flags) {
+      var unlock = commission.unlock;
+      if (!isObject(unlock)) return true;
+      if (isArray(unlock.all)) {
+        for (var i = 0; i < unlock.all.length; i += 1) {
+          if (!unlockNodeMet(unlock.all[i], ctx, flags)) return false;
+        }
+      }
+      if (isArray(unlock.any)) {
+        if (!unlock.any.length) return false;
+        var hit = false;
+        for (var j = 0; j < unlock.any.length; j += 1) {
+          if (unlockNodeMet(unlock.any[j], ctx, flags)) {
+            hit = true;
+            break;
+          }
+        }
+        if (!hit) return false;
+      }
+      return true;
+    }
+
+    /**
+     * 只有“模拟本单真实 reward 后，当前章节旗标确实被授予”才是 milestone。
+     * C1 直接复用 syncFlags 的入口 + 首条可达路线判定；C2–C4 把投影后的证据喂给
+     * 真实 storyEvidence.storyFlags。本单 reward 无任何贡献时一律只标 step。
+     */
+    function candidateMilestone(chapterId, commission, projected, evidenceModule, input) {
+      var flag = chapterFlagOf(chapterId);
+      if (!flag || !commission || !producesForChapter(commission, chapterId)) return false;
+      if (chapterId === 'C1') {
+        var chapter = state.chapterIndex.C1;
+        return !!chapter && evalRequirement(chapter.entry, projected) && !!firstMetRoute(chapter, projected);
+      }
+      var snapshot = storySnapshot(evidenceModule, input, projected.flags, projected.evidence);
+      return !!snapshot && snapshot.flags.has(flag);
+    }
+
+    /** 从 missingFor 的真实缺口（证据 token / 旗标）反推能补缺口的真实委托。 */
+    function alternativeCommissionIds(missing, ctx, chapterId) {
+      var out = [];
+      (missing || []).forEach(function (item) {
+        if (!isObject(item)) return;
+        var tokens = [];
+        if (typeof item.token === 'string') tokens.push(item.token);
+        if (typeof item.flag === 'string') tokens.push(item.flag);
+        if (isArray(item.candidates)) tokens = tokens.concat(item.candidates);
+        tokens.forEach(function (token) {
+          if (typeof token !== 'string') return;
+          var games = (state.evidenceProducers[token] || []).concat(state.flagProducers[token] || []);
+          games.forEach(function (gameId) {
+            state.commissions.forEach(function (commission) {
+              if (commission.gameId !== gameId) return;
+              if (commission.rewardEvidence.indexOf(token) < 0 && commission.rewardFlags.indexOf(token) < 0) return;
+              out.push(commission.commissionId);
+            });
+          });
+        });
+      });
+      var seen = Object.create(null);
+      return out.filter(function (id) {
+        if (seen[id] || ctx.cleared.has(id) || !state.commissionIndex[id]) return false;
+        seen[id] = true;
+        return producesForChapter(state.commissionIndex[id], chapterId);
+      });
+    }
+
+    function recommendationReason(chapterId, commission, isMilestone) {
+      var chapter = state.chapterIndex[chapterId];
+      var title = commission.title;
+      var name = chapter ? chapter.title : chapterId;
+      if (isMilestone) return '先接「' + title + '」；完成后就能把' + name + '往下推进。';
+      return '先做「' + title + '」这一步，沿' + name + '的真实路线继续。';
+    }
+
+    /**
+     * 同步只读推荐：null 或 {commissionId, goal, reason, kind}。
+     * availableIds 必须是调用方 commission.listAvailable 校验过的可接单 id；
+     * 只从中挑未清、未锁、真实产证/真实前置的单。不写任何存储。
+     */
+    function recommend(input) {
+      try {
+        if (!state.configured || !state.chapterIndex.C1) return null;
+        var options = isObject(input) ? input : {};
+        var evidenceModule = recommendedEvidenceModule(options);
+        if (!evidenceModule || !isFunction(evidenceModule.storyFlags)) return null;
+        if (isFunction(evidenceModule.isConfigured) && evidenceModule.isConfigured() !== true) return null;
+
+        var available = tokenArray(options.availableIds).filter(function (id) {
+          return !!state.commissionIndex[id];
+        });
+        if (!available.length) return null;
+        var availableSet = new Set(available);
+        var ctx = resolveContext(options);
+        var baseline = storySnapshot(evidenceModule, options, ctx.flags, ctx.evidence);
+        if (!baseline) return null;
+        var routeFlags = new Set(Array.from(ctx.flags).concat(Array.from(baseline.flags)));
+
+        /* 让 campaign.state 看见 story-evidence 真实派生的旗标，避免阶段误判。 */
+        var viewInput = Object.assign({}, options, {
+          flags: Array.from(routeFlags),
+          evidence: Array.from(ctx.evidence),
+        });
+        var view = stateFn(viewInput);
+        if (!view.ok || !Array.isArray(view.chapters)) return null;
+        var current = view.currentChapter;
+        if (current === FINALE_CHAPTER || current === EPILOGUE_HANDOFF || !current) return null;
+
+        var chapterOrder = current === 'C0' ? ['C1'] : [current];
+        for (var c = 0; c < chapterOrder.length; c += 1) {
+          var chapterId = chapterOrder[c];
+          var chapter = state.chapterIndex[chapterId];
+          if (!chapter) return null;
+          var chapterView = view.chapters.filter(function (item) {
+            return item.chapterId === chapterId;
+          })[0];
+          if (!chapterView || chapterView.state === 'complete' || chapterView.state === 'locked') return null;
+          var flag = chapterFlagOf(chapterId);
+          if (!flag || routeFlags.has(flag)) return null;
+
+          var routeSpec = RECOMMEND_ROUTES.filter(function (item) {
+            return item.chapterId === chapterId;
+          })[0];
+          var prefer = routeSpec ? routeSpec.prefer : [];
+          var fallbacks = routeSpec ? routeSpec.alternatives : [];
+          var candidates = [];
+          var seenCandidates = Object.create(null);
+
+          function push(id, directOnly) {
+            if (!id || seenCandidates[id]) return;
+            var commission = state.commissionIndex[id];
+            if (!commission || !commission.title) return;
+            if (!availableSet.has(id) || ctx.cleared.has(id)) return;
+            if (!commissionUnlockMet(commission, ctx, routeFlags)) return;
+            if (!usefulCandidate(chapterId, commission, directOnly)) return;
+            seenCandidates[id] = true;
+            candidates.push({
+              id: id,
+              milestone: candidateMilestone(chapterId, commission, projectedContext(ctx, commission), evidenceModule, options),
+            });
+          }
+
+          prefer.forEach(function (id) {
+            push(id, false);
+          });
+          if (!candidates.length) {
+            chapter.routes.forEach(function (route) {
+              var leaves = collectRequirementTokens(route.requires, { flags: [], commissions: [], evidence: [] });
+              leaves.commissions.forEach(function (id) {
+                push(id, true);
+              });
+              leaves.evidence.forEach(function (token) {
+                (state.evidenceProducers[token] || []).forEach(function (gameId) {
+                  state.commissions.forEach(function (commission) {
+                    if (commission.gameId === gameId && commission.rewardEvidence.indexOf(token) >= 0) {
+                      push(commission.commissionId, true);
+                    }
+                  });
+                });
+              });
+            });
+          }
+          if (!candidates.length) {
+            fallbacks.forEach(function (id) {
+              push(id, false);
+            });
+          }
+          if (!candidates.length) {
+            var missing = null;
+            if (isFunction(evidenceModule.missingFor)) {
+              try {
+                var gap = evidenceModule.missingFor(flag, {
+                  flags: Array.from(routeFlags),
+                  evidence: Array.from(ctx.evidence),
+                });
+                if (isObject(gap) && gap.ok === true && isArray(gap.missing)) missing = gap.missing;
+              } catch (err) {
+                missing = null;
+              }
+            }
+            if (!missing) missing = isObject(baseline.missing[flag]) ? baseline.missing[flag] : null;
+            alternativeCommissionIds(missing, ctx, chapterId).forEach(function (id) {
+              push(id, true);
+            });
+          }
+          if (!candidates.length) return null;
+
+          var picked = candidates[0];
+          var pickedCommission = state.commissionIndex[picked.id];
+          return {
+            commissionId: picked.id,
+            goal: pickedCommission.title,
+            reason: recommendationReason(chapterId, pickedCommission, picked.milestone),
+            kind: picked.milestone ? 'milestone' : 'step',
+          };
+        }
+        return null;
+      } catch (err) {
+        return null;
+      }
+    }
+
     /* ---------------- 只读诊断 ---------------- */
 
     function moduleSource() {
@@ -2089,6 +2410,7 @@
         return state.configured === true;
       },
       state: stateFn,
+      recommend: recommend,
       routeRequirementsMet: routeRequirementsMet,
       contextFrom: contextFrom,
       syncFlags: syncFlags,
