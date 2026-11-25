@@ -714,6 +714,18 @@ async function main() {
   await closeDirect();
 
   /* 3.2 C2 推进：三角色回信 + 可选支线 + 港口状态 */
+  const CHAPTER_RANK = { C0: 0, C1: 1, C2: 2, C3: 3, C4: 4, C5: 5 };
+  const GATED_FAMILY_IDS = ['old_route', 'harbor_light'];
+  const SIDE_FAMILIES = SIDE_STORIES.families.map((family) =>
+    GATED_FAMILY_IDS.indexOf(family.familyId) >= 0 && !family.minChapter
+      ? Object.assign({}, family, { minChapter: 'C3' })
+      : family
+  );
+  const visibleFamiliesAt = (rank) => SIDE_FAMILIES.filter((family) => !family.minChapter || CHAPTER_RANK[family.minChapter] <= rank);
+  await page.evaluate(`(() => {
+    window.__d18.content.sideStories = Object.assign({}, window.__d18.content.sideStories, { families: ${JSON.stringify(SIDE_FAMILIES)} });
+    return true;
+  })()`);
   const snapC2 = snapshotFor(['C0', 'C1'], 'C2', false);
   await page.evaluate('window.__d18.snapshot = ' + JSON.stringify(snapC2));
   await openDirect(directCtx());
@@ -723,7 +735,14 @@ async function main() {
   record('MODEL 回信文本来自真实 npc.json（非空、按章节）', mid.replies.every((r) => r.text && r.text.length >= 6) && mid.replies.some((r) => r.id === 'E-7' && /信号|求救/.test(r.text)), JSON.stringify(mid.replies));
   record('MODEL C2 活动中只显示 C2 之前的已完成回信，不提前给七号货柜答案', mid.replies.every((reply) => ['C0', 'C1', 'C2'].indexOf(reply.chapterId) >= 0) && !mid.replies.some((reply) => /中继密钥|七号货柜/.test(reply.text)), JSON.stringify(mid.replies));
   record('MODEL E-7 揭示前显示为「旧港口的来信/不肯留名的调度员」，不泄漏代号', mid.replies.every((r) => r.id !== 'E-7' || (r.name === '旧港口的来信' && r.name.indexOf('E-7') < 0)) && mid.replies.some((r) => r.id === 'E-7' && r.name === '旧港口的来信'), JSON.stringify(mid.replies.map((r) => [r.id, r.name])));
-  record('MODEL 可选支线全部家族（标题/正文，动态数量）', mid.sideCount === String(SIDE_STORIES.families.length) && mid.sideTitles.length === SIDE_STORIES.families.length && mid.sideTitles.join('|').indexOf('港口的灯') >= 0, JSON.stringify(mid.sideTitles));
+  /* C2 状态：带 minChapter=C3 的剧透家族必须隐藏（门调控见上方 SIDE_FAMILIES 夹具）。 */
+  const visibleAtC2 = visibleFamiliesAt(2);
+  const spoilerFamilies = SIDE_FAMILIES.filter((family) => !!family.minChapter && CHAPTER_RANK[family.minChapter] > 2);
+  const c2TitlesMatch = mid.sideCount === String(visibleAtC2.length) && mid.sideTitles.length === visibleAtC2.length;
+  const noSpoilerAtC2 = spoilerFamilies.length === 0
+    ? mid.sideTexts.every((text) => text.indexOf('星塔') < 0)
+    : spoilerFamilies.every((family) => mid.sideTitles.indexOf(family.title) < 0);
+  record('MODEL C2 只显示门槛已满足的支线家族（剧透家族/星塔字样隐藏）', c2TitlesMatch && noSpoilerAtC2, JSON.stringify({ count: mid.sideCount, expected: visibleAtC2.map((f) => f.familyId), titles: mid.sideTitles, spoilerFamilies: spoilerFamilies.map((f) => f.familyId) }));
   record('MODEL 港口广播随已完成章节变化（C0/C1 完成 → P-07 旧编号）', mid.port.state === 'C1' && /P-07 的旧编号/.test(mid.port.broadcast) && mid.port.litCount === 3, JSON.stringify(mid.port));
   /* 支线剧透门槛：带 minChapter=C3 的家族在 C2 进行中不得出现。 */
   await closeDirect();
@@ -766,6 +785,8 @@ async function main() {
   record('MODEL 直接 open(ctx) 成功（合成 campaign-core）', openC4.ok === true && openC4.hasPanel === true && openC4.sheetRole === 'dialog', JSON.stringify(openC4));
   const c4 = await page.evaluate(PANEL_EXPR);
   record('MODEL C4 完成后出现三终局按钮（武力/研究/救援）', c4.endingVisible === true && c4.endings.length === 3 && JSON.stringify(c4.endings.map((e) => e.approach)) === JSON.stringify(['combat', 'research', 'rescue']), JSON.stringify(c4.endings));
+  const visibleAtC3 = visibleFamiliesAt(3);
+  record('MODEL C3 完成后支线全部可见（含 minChapter=C3 剧透家族）', c4.sideCount === String(visibleAtC3.length) && c4.sideTitles.length === visibleAtC3.length && c4.sideTitles.join('|') === visibleAtC3.map((f) => f.title).join('|'), JSON.stringify({ count: c4.sideCount, expected: visibleAtC3.map((f) => f.familyId), titles: c4.sideTitles }));
   record('MODEL 终局按钮文案与 ≥44px', /武力/.test(c4.endings[0].text) && /理性重启|研究/.test(c4.endings[1].text) && /运输救援|救援/.test(c4.endings[2].text) && c4.endings.every((e) => e.h >= 44), JSON.stringify(c4.endings));
   record('MODEL C5 可以开始（C4 已完成）', chapterById(c4, 'C4').state === 'complete' && chapterById(c4, 'C5').state === 'available', JSON.stringify(c4.chapters.map((c) => [c.id, c.state])));
   record('MODEL C4 港口广播（城市灯重新亮起）与 5 盏灯', c4.port.state === 'C4' && c4.port.litCount === 5 && /城市的灯重新亮起/.test(c4.port.broadcast), JSON.stringify(c4.port));
