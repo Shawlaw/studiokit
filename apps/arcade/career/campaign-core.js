@@ -657,6 +657,8 @@
           chapterId: chapterId,
           title: trimText(raw.title, 120),
           body: trimText(raw.body, 2000),
+          /* 可选戏内身份/角色说明：旧章节文件没有该字段时安全缺省为空。 */
+          role: trimText(raw.role, 240),
           contentVersion: trimText(raw.contentVersion, 32),
         };
       });
@@ -767,6 +769,8 @@
           index: CHAPTER_IDS.indexOf(chapterId),
           title: trimText(raw.title, 120) || (file && file.title) || chapterId,
           body: file && file.body ? file.body : '',
+          /* 可选、向后兼容：从章节文件读取，缺省为空串；不参与 validate/signature。 */
+          role: file && file.role ? file.role : '',
           entry: entry,
           entryRaw: isObject(entryRaw) ? clone(entryRaw) || {} : {},
           routes: routes,
@@ -1703,6 +1707,8 @@
           chapterId: chapter.chapterId,
           title: chapter.title,
           body: chapter.body,
+          /* 可选字段：旧档/旧内容读到空串，town 可直接安全使用。 */
+          role: chapter.role || '',
           state: statuses.statuses[index],
           entryMet: evalRequirement(chapter.entry, ctx),
           completionFlag: chapterFlagOf(chapter.chapterId),

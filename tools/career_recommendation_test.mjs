@@ -151,6 +151,7 @@ function assertCompletionContract(result, input, chapterFlag, message) {
 
 section('A. 冻结接口与降级');
 ok(typeof core.recommend === 'function', 'campaign-core 导出 recommend');
+eq(core.state({ flags: ['C0.port_seen'] }).chapters[0].role, '', '旧内容 C0 role 缺省空串，推荐核心仍可用');
 eq(JSON.stringify(recommend({ availableIds: [] }).result), 'null', '空 availableIds 降级 null');
 eq(JSON.stringify(recommend({ withEvidence: false }).result), 'null', '缺 storyEvidence 降级 null');
 eq(JSON.stringify(core.recommend(null)), 'null', 'null 输入降级 null');

@@ -429,6 +429,30 @@ async function groupA() {
     return 'warnings=' + JSON.stringify(codesOf(cfg.warnings));
   });
 
+  await check('A03b 可选章节 role：注入后可读、旧内容缺省空串、不进 validate/signature', async () => {
+    const ROLE = '你是刚到折光港、靠接零工维生的自由职业者。';
+    const withoutRole = fresh();
+    eq(withoutRole.cfg.ok, true, '旧内容（无 role）configure ok');
+    const oldView = withoutRole.core.state({ flags: ['C0.port_seen'] });
+    eq(oldView.chapters[0].chapterId, 'C0', 'C0 chapter first');
+    eq(oldView.chapters[0].role, '', '旧内容无 role 缺省空串');
+
+    const { core, cfg, input } = fresh((value) => {
+      const chapter00 = value.chapters.find((chapter) => chapter.chapterId === 'C0');
+      chapter00.role = ROLE;
+    });
+    eq(cfg.ok, true, '含 role 内容 configure ok');
+    const view = core.state({ flags: ['C0.port_seen'] });
+    eq(view.chapters[0].role, ROLE, 'campaign.state().chapters[0].role 可读');
+    eq(view.chapters[1].role, '', '未注入 role 的章节仍为空串');
+    const report = core.validate();
+    eq(report.ok, true, 'role 不参与必需校验');
+    const plain = fresh();
+    eq(cfg.signature, plain.cfg.signature, 'role 不改变内容 signature');
+    eq(input.chapters[0].role, ROLE, 'configure 不篡改输入 role');
+    return 'role forwarded, legacy empty, signature stable';
+  });
+
   await check('A04 validate 真实内容：可达性摘要、每章替代路线', async () => {
     const { core, cfg } = fresh();
     eq(cfg.ok, true, 'configure ok');
