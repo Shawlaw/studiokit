@@ -40,6 +40,7 @@
 import fs from 'node:fs';
 import path from 'node:path';
 import crypto from 'node:crypto';
+import { createRequire } from 'node:module';
 import {
   REPO_ROOT,
   createRecorder,
@@ -59,6 +60,7 @@ import * as fixtureShadow from './career_fixture_shadow-leap.mjs';
 import * as fixtureRoad from './career_fixture_road-rush.mjs';
 import * as fixtureGomoku from './career_fixture_gomoku.mjs';
 import * as fixtureGold from './career_fixture_gold-miner.mjs';
+import * as fixtureBlackjack from './career_fixture_blackjack.mjs';
 
 /* ------------------------------------------------------------------ *
  * 1. 环境 / 内容 / 常量
@@ -140,6 +142,7 @@ const FIXTURES = {
   'road-rush': fixtureRoad,
   gomoku: fixtureGomoku,
   'gold-miner': fixtureGold,
+  blackjack: fixtureBlackjack,
 };
 
 /* ------------------------------------------------------------------ *
@@ -1170,6 +1173,11 @@ async function runCommissionStep(h, careerId, spec) {
     check(label + '.evidence-row.' + token, !!row, row ? row.nodeId : 'missing evidence row');
   });
 
+  /* 修正路线核验：按真实累计证据调用 story-evidence，单份 E 不足时不得误判完章。 */
+  if (spec.storyEvidence) {
+    await verifyEvidenceDerivation(label, h, careerId, spec.storyEvidence);
+  }
+
   const classicAfter = await h.classicKeys();
   check(label + '.classic-keys-unchanged', stable(classicBefore) === stable(classicAfter), stable({ before: classicBefore, after: classicAfter }).slice(0, 700));
   const noRun = await h.evaluateSoft(EXPR.noLiveRun, 'no-live-run');
@@ -1281,6 +1289,52 @@ function routeOf(campaign, chapterId, routeId) {
   const chapter = (campaign && campaign.chapters ? campaign.chapters : []).find((item) => item.chapterId === chapterId);
   if (!chapter) return null;
   return chapter.routes.find((route) => route.routeId === routeId) || null;
+}
+
+/**
+ * 真实累计证据核验（只读）：按当前生涯 quests/evidence 的真实行调用产品
+ * story-evidence 的 storyUnlocked，验证章节旗标确由证据授予；并对指定的单份
+ * 证据做负向检查，防止把“做了一单”误当成充分完章。
+ */
+function verifyEvidenceDerivation(label, h, careerId, rule) {
+  const tokens = Array.isArray(rule.requires) ? rule.requires.filter((token) => typeof token === 'string') : [];
+  const insufficient = Array.isArray(rule.singleEvidenceInsufficient) ? rule.singleEvidenceInsufficient : [];
+  return h.rows(careerId).then((rows) => {
+    /* 真实 DB quests/evidence 行：必须包含所需 token；只读，不写任何旗标。 */
+    const realTokens = new Set();
+    ((rows && rows.rows) || []).forEach((row) => {
+      (Array.isArray(row && row.evidence) ? row.evidence : []).forEach((token) => {
+        if (typeof token === 'string') realTokens.add(token);
+      });
+      if (typeof row.nodeId === 'string' && row.nodeId.indexOf('evidence:') === 0) {
+        realTokens.add(row.nodeId.slice('evidence:'.length));
+      }
+    });
+    const missing = tokens.filter((token) => !realTokens.has(token));
+    check(label + '.real-evidence-rows', missing.length === 0, 'need=' + stable(tokens) + ' missing=' + stable(missing) + ' have=' + stable(Array.from(realTokens)));
+    if (missing.length) return false;
+    const nodeRequire = createRequire(import.meta.url);
+    const module = nodeRequire(path.join(CAREER_DIR, 'story-evidence.js'));
+    const instance = module && typeof module.createStoryEvidence === 'function' ? module.createStoryEvidence({}) : module;
+    const configured = instance && typeof instance.configure === 'function'
+      ? instance.configure({ commissions: COMMISSIONS, items: ITEMS_CONTENT, chapter: [] })
+      : { ok: false };
+    check(label + '.story-evidence-configured', configured.ok === true, stable(configured).slice(0, 400));
+    if (configured.ok !== true) return false;
+    const evidenceSet = new Set(tokens);
+    const all = instance.storyUnlocked(rule.chapterFlag, { evidence: evidenceSet, flags: [] });
+    check(label + '.evidence-grants-' + rule.chapterFlag, all === true, 'evidence=' + stable(tokens));
+    if (insufficient.length) {
+      for (const token of insufficient) {
+        const one = instance.storyUnlocked(rule.chapterFlag, { evidence: new Set([token]), flags: [] });
+        check(label + '.single-evidence-insufficient.' + token, one === false, 'evidence=' + token + ' unlocked=' + one);
+      }
+    }
+    return all === true;
+  }).catch((err) => {
+    check(label + '.story-evidence-readonly', false, String(err && err.message ? err.message : err));
+    return false;
+  });
 }
 
 async function verifyStoryState(h, careerId, spec) {
@@ -1708,6 +1762,8 @@ const ROUTES = [
         persistence: true,
       },
       {
+        /* 651e9fe 后 C2 research 仍接受 memory-flip.T2，但与 layer T1 的 E-C1-site
+           共同构成“两份不同来源现场记录”才真实授予 C2；memory-flip.T2 单独不足。 */
         gameId: 'memory-flip',
         tier: 2,
         label: 'R1.memory-flip.T2',
@@ -1718,6 +1774,12 @@ const ROUTES = [
           mustKnow: { chapterId: 'C2' },
           panelPortState: 'C2',
           endingsAllAvailable: false,
+          /* 真实累计证据：E-C1-site(pendulum-tower.T1) + E-memory-flip.T2。 */
+          storyEvidence: {
+            requires: ['E-C1-site', 'E-memory-flip.T2'],
+            chapterFlag: 'C2.research_complete',
+            singleEvidenceInsufficient: ['E-C1-site', 'E-memory-flip.T2'],
+          },
         },
         persistence: true,
       },
@@ -1766,7 +1828,7 @@ const ROUTES = [
   },
   {
     id: 'R2',
-    title: 'B 探索/生态（star → memory → shadow → 物流 → 救援终局）',
+    title: 'B 探索/生态（star → memory → shadow → 物流两段 → 救援终局）',
     ending: 'rescue',
     endingNote: 'rescue：road-rush 真实驾驶 5000m',
     steps: [
@@ -1810,26 +1872,31 @@ const ROUTES = [
         persistence: true,
       },
       {
+        /* 651e9fe 后 logistics 是两段 all：库存(road-rush.T3/block-drop.T3)
+           + 供电(merge-2048.T3/gomoku.T2)。road-rush.T2 不产证据，不能单独声称 met。 */
         gameId: 'road-rush',
-        tier: 2,
-        label: 'R2.road-rush.T2',
+        tier: 3,
+        label: 'R2.road-rush.T3',
         expect: {
-          label: 'R2.C4-route',
+          label: 'R2.C4-route-stock',
           chapters: { C0: 'complete', C1: 'complete', C2: 'complete', C3: 'complete', C4: 'active', C5: 'locked' },
-          route: { chapterId: 'C4', routeId: 'logistics', met: true, available: true },
+          route: { chapterId: 'C4', routeId: 'logistics', met: false, available: false },
           panelPortState: 'C3',
           endingsAllAvailable: false,
         },
         persistence: false,
       },
       {
+        /* 第二段真实供电证据：由真实 merge-2048.T3 合并 128 产出 BP，
+           两段齐备后 logistics 才 met，C4 真实完成（不写旗标）。 */
         gameId: 'merge-2048',
         tier: 3,
-        label: 'R2.merge-2048.T3',
+        label: 'R2.merge-2048.T3(C4-logistics)',
         expect: {
           label: 'R2.C4',
           chapters: { C0: 'complete', C1: 'complete', C2: 'complete', C3: 'complete', C4: 'complete', C5: 'available' },
           route: { chapterId: 'C4', routeId: 'logistics', met: true, available: false },
+          mustKnow: { chapterId: 'C4' },
           panelPortState: 'C4',
           endingsAllAvailable: true,
         },
@@ -1839,7 +1906,7 @@ const ROUTES = [
   },
   {
     id: 'R3',
-    title: 'C 战斗/租赁（免费租机 → star → 矿工/gomoku → 探索 → 维护 → 战斗终局）',
+    title: 'C 战斗/租赁（免费租机 → star → 风控 → 探索 → 维护 → 战斗终局）',
     ending: 'combat',
     endingNote: 'combat：star-raid 第 6 关 mothership 真实 Boss 击破',
     rentalOpening: true,
@@ -1873,9 +1940,11 @@ const ROUTES = [
         persistence: false,
       },
       {
-        gameId: 'gomoku',
-        tier: 2,
-        label: 'R3.gomoku.T2',
+        /* 651e9fe 后 C2 market 候选改为 blackjack.T3 / solitaire.T3；gomoku.T2 不在此路线。
+           真实六手对局产出 E-blackjack.T3，与 E-C1-patrol 累计满足 C2。 */
+        gameId: 'blackjack',
+        tier: 3,
+        label: 'R3.blackjack.T3',
         expect: {
           label: 'R3.C2',
           chapters: { C0: 'complete', C1: 'complete', C2: 'complete', C3: 'active', C4: 'locked', C5: 'locked' },
@@ -1899,13 +1968,32 @@ const ROUTES = [
         persistence: true,
       },
       {
+        /* 651e9fe 后 maintenance 是两段 all：隐患(mole-whack.T3/blackjack.T3)
+           + 协调(gomoku.T2/snowbells.T3)。blackjack.T3 已提供隐患段，这里真接
+           snowbells.T3 补齐协调段；此时路线 met，但证据仍不足以真正授予 C4。 */
+        gameId: 'snowbells',
+        tier: 3,
+        label: 'R3.snowbells.T3(C4-route)',
+        expect: {
+          label: 'R3.C4-route',
+          chapters: { C0: 'complete', C1: 'complete', C2: 'complete', C3: 'complete', C4: 'active', C5: 'locked' },
+          route: { chapterId: 'C4', routeId: 'maintenance', met: true, available: true },
+          panelPortState: 'C3',
+          endingsAllAvailable: false,
+        },
+        persistence: false,
+      },
+      {
+        /* 最后一份真实 BP（merge-2048.T3 合并 128）让 story-evidence 真正授予 C4，
+           不写章节旗标；C4 完成后三终局开放。 */
         gameId: 'merge-2048',
         tier: 3,
-        label: 'R3.merge-2048.T3',
+        label: 'R3.merge-2048.T3(C4)',
         expect: {
           label: 'R3.C4',
           chapters: { C0: 'complete', C1: 'complete', C2: 'complete', C3: 'complete', C4: 'complete', C5: 'available' },
           route: { chapterId: 'C4', routeId: 'maintenance', met: true, available: false },
+          mustKnow: { chapterId: 'C4' },
           panelPortState: 'C4',
           endingsAllAvailable: true,
         },
