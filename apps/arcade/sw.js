@@ -6,12 +6,13 @@
  *   缓存 VERSION 与引擎/注册表保持一致。
  * - 导航网络优先（离线回退缓存），静态资源缓存优先；跨域请求一律不拦截。
  * - 0.19.0 升级迁移：旧缓存只提供「预载过哪些游戏」的清单，页面字节重新联网取当前版本，
- *   不复制旧游戏 HTML（0.18.2 的直接复制只适用于游戏页未改动的版本）。
+ *   不复制旧游戏 HTML（0.18.2 的直接复制只适用于游戏页未改动的版本）；0.20.0 沿用同一策略。
+ * - 0.20.0 生涯首航 V2：缓存键 studiokit-arcade-0.20.0-v1，升级时同样只继承预载清单并重新取当前页面。
  * - 0.11.2 更新检测：安装新版本后主动通知所有受控页面（arcade-sw-update-ready），
  *   页面通过 arcade-sw-version 查询当前 SW 版本；不再让已安装 PWA 静默停留在旧版本。
  * - 不使用任何远程资源、分析或第三方 API（AGENTS.md 约束 4）。
  */
-const VERSION = '0.19.0';
+const VERSION = '0.20.0';
 const CACHE_PREFIX = 'studiokit-arcade-';
 const CACHE_NAME = `${CACHE_PREFIX}${VERSION}-v1`;
 /* 预载迁移见 carryPreloadedGames()：继承旧缓存的游戏清单，重新联网取当前版本页面。 */

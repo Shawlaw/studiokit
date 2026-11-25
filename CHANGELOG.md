@@ -4,6 +4,14 @@ StudioKit 门户本身没有独立的 semver；以下按仓库里程碑与工具
 
 > 说明：Arcade `0.11.2`–`0.14.0` 的条目于 2026-11-22 依据 [`apps/arcade/CHANGELOG.md`](apps/arcade/CHANGELOG.md) 补齐（本文件当时落后于工具版本），逐条数值与证据以工具 CHANGELOG 与对应 `DESIGN-*.md` 为准。
 
+## Arcade 0.20.0 — 2026-11-26（本地未发布）
+
+- 生涯首航 V2：错过的旧港来信可从首页找回并一次点击投递进港；告示板首屏只突出按真实规则推导的当前推荐单，中间单标「路线进展」；收据给出工钱 / 剧情物件 / 世界反应三类回报与下一步，支持关标签后显式继续未完成委托。
+- 内容以 `start / progress / complete` 节拍向后兼容扩展，新增 ADR §21 冻结 `originLetter()` / `chapterZero` / `continuations()` 三个只读接口；生涯内容 `contentVersion` 仍 `0.18.0`，IDB v1 / 11 stores / 所有 localStorage key 与玩法数值不变。
+- 版本链 0.20.0 / SW `studiokit-arcade-0.20.0-v1`，沿用 0.19 预载迁移策略。
+- 门禁：完整零种子首航 339/339、campaign E2E 731/731、移动端 318/318、world 145/145、推荐 111/111、路线一致性 94/94、db 38/38、备份 34/34、a11y 75/75、PWA 18/18、紧凑触控 18/18、冒烟 117/117；聚合门禁仍待最终确认，独立复审已回灌、最终复验待完成，真机 / 真人首航 UNVERIFIED。
+- 未发布：本地 `feat/arcade-career-flow`，无 `OWNER_AUTHORIZATION: PUBLISH_TO_MAIN`；详见 [`apps/arcade/CHANGELOG.md`](apps/arcade/CHANGELOG.md)、[`DESIGN-0.20.0.md`](apps/arcade/DESIGN-0.20.0.md) 与 [`INTEGRATION-0.20.md`](docs/arcade-life/INTEGRATION-0.20.md)。
+
 ## Arcade 0.19.0 — 2026-11-25（已双端发布）
 
 - 矮视口紧凑模式：带地址栏的手机标签页（≤620×700）收起站点壳条和键盘提示行，画布占屏在 375×548 下从 25–32% 提高到 33–47%；开局弹层改为贴底部的底部弹层，选关与机库面板铺满屏幕，所有开局按钮首屏可见。高屏布局不变。

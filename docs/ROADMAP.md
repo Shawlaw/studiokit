@@ -258,6 +258,16 @@ Owner 两条真机反馈：①已安装 PWA 点「检查更新」显示的是已
 - [x] 新增门禁 `arcade_compact_touch_test`（18 项，真实触控事件）并入聚合门禁；版本链 0.19.0
 - [ ] Owner 真机试玩并裁决首版取值（半屏方向锁 40px、挡板增益 1.2、上滑影冲 56px/350ms、防抖 450ms）；发布需 Owner 明确授权
 
+## 0.20.0 生涯首航 V2（2026-11-26 本地 `feat/arcade-career-flow`，未发布）
+
+- [x] 错过的首封线索可从首页找回并一次点击投递进港；到港首信明确身份与当前目标，告示板只突出真实可执行的推荐单
+- [x] 默认路线由 `campaign.recommend` / `story-evidence` / `route-planner` 按真实规则推导，中间单标「路线进展」；收据三回报 + 下一步 + 页内回告示板 / 读回信
+- [x] 关标签丢 ticket 后可显式继续未完成委托；终局 C5 唯一、幂等、失败可重试
+- [x] C0–C5 以 `start / progress / complete` 节拍向后兼容扩展；ADR §21 冻结 `originLetter()` / `chapterZero` / `continuations()` 只读接口；内容 `contentVersion` 仍 `0.18.0`，IDB / key / 数值零改动
+- [x] 版本链 0.20.0 / SW `studiokit-arcade-0.20.0-v1`；单门禁：首航 339/339、campaign E2E 731/731、mobile 318/318、world 145/145、推荐 111/111、路线 94/94、db 38/38、backup 34/34、a11y 75/75、PWA 18/18、compact 18/18、smoke 117/117
+- [ ] 聚合门禁最终确认（尚未出现 `ALL GATES PASSED`）；独立复审最终复验
+- [ ] Owner 真人首航与真机试玩；发布需 Owner 明确授权（未 push / 未发布）
+
 ## 0.18.0 星塔回响：六章、三终局与后日常（2026-11-24 已双端发布）
 
 - [x] C0–C5 六章（`campaign.json` + `chapter-00..05`）：信箱/告示板进入，无顶层生涯 CTA

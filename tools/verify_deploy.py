@@ -27,6 +27,7 @@ PATHS = [
     'apps/arcade/arcade.css',
     'apps/arcade/sw.js',
     'apps/arcade/manifest.webmanifest',
+    'apps/arcade/DESIGN-0.20.0.md',
     'apps/arcade/career/bridge.js',
     'apps/arcade/career/router.js',
     'apps/arcade/career/registry.js',

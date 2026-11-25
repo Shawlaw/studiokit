@@ -874,3 +874,26 @@ export async function cleanup(ctx) {}
 - 优先真实路线：C1 层塔 T1「港口实习」，C2 记忆翻牌 T1「旧档案夹」→ T2「差一张的照片」，C3 影跃 T1 → T2，C4 层塔 T2 + 五子棋 T1「布局练习」→ T2「破解防线」；2048.T2 不产 E，不能替代 E 路线。C1 星海 T1「首次巡航」仅在主单不可用时作次选；C2/C3 首选不可用时才落到其它路线中的真实可接单。
 - 候选完成性以实际 `commission.reward` 与 `storyEvidence.storyFlags` 验算；C1 完成口径直接复用 `campaign.syncFlags` 的入口/路线判定，不平行复制通关公式。替代候选只从 `storyEvidence.missingFor` / route-planner 能提供的真实未完成条件派生，优先非战斗。
 - 中间单固定标 `'step'`，只有当前单足以完成本章时才标 `'milestone'`，不会因本单完章就承诺终局。纯函数：无 DOM/IDB/网络/存储写入，不改变任何 localStorage key、Schema、缓存版本或内容文件；测试见 `tools/career_recommendation_test.mjs`。
+
+## 21. 0.20 首航 V2 只读接口增补（向后兼容，冻结）
+
+本节只增补 0.20 首航可读性所需的三个**只读**接口/字段；0.15–0.18 已冻结的 IDB Schema、localStorage key、`contentVersion`（仍 `0.18.0`）与事件模型均不变。三者都只从既有内容/DB 派生，不创建身份、不建 run、不写 storage、不导航。
+
+### 21.1 `originLetter()`（首封来信身份与正文）
+
+- 位置：`bridge.js` 暴露 `api.originLetter()`，并作为 `uiContext().originLetter` 传给 UI 模块；与既有 `originIntro()` 并存，互不覆盖。
+- 形状：`{ sourceGame, professionId, opening, c0Letter: { from, body, address } }`；按 discovery 状态 `firstSourceGame` 在 `chapter-00.json` 的 `origins[]` 中定位，正文直接取 `origins[i].c0Letter.body`。
+- 失败语义：找不到首源游戏、内容未装载或条目缺 `c0Letter.body` 时返回 `null`（不编造正文，lead 冻结）。UI 用稳定字段读取，不再自行翻章节 map。
+
+### 21.2 `chapterZero`（C0 章节内容只读快照）
+
+- 位置：`uiContext().chapterZero`，由 bridge 从 `internal.chapterFiles.C0` 深拷贝注入（`null` 表示内容未装载）。
+- 用途：mailbox / town / world-state 以稳定字段读取 C0 章节正文与身份句，避免 UI 侧依赖 `chapters` map 的具体形状；只读，调用方修改不污染内部内容。
+
+### 21.3 `continuations()`（只读生涯连续性查询）
+
+- 位置：`commission-core.js` 的 `continuations({ careerId? })`，bridge 同时在 `ctx.commission.continuations` 与 `ctx.careerContinuations`（同一函数）暴露；仅 `?careerTest=1` 下另暴露 `api.careerContinuations` 供测试查询。
+- 形状（成功）：`{ ok: true, careerId: string|null, runs: [{ runId, ticketId, commissionId, gameId, status: 'issued'|'active', issuedAt, startedAt|null }] }`；失败 `{ ok: false, reason, careerId: null, runs: [] }`，绝不把读失败伪装成空列表。
+- 语义：只读 DB `runs`，仅按 `status ∈ {issued, active}` 且 `mode === 'commission'` 过滤（失败 / 放弃 / 结算不算）；`careerId` 缺省时读 `state` store 的生涯指针，指针不存在返回 `{ok:true, careerId:null, runs:[]}`。排序稳定：active 优先 → `issuedAt` 升序 → `runId` 字典序。
+- 边界：不 `ensureCareer`、不 `createRun`、不写 sessionStorage；继续委托必须由玩家显式点击，UI 只用返回的 `commissionId` 调 `commission.start`（复用 DB live run 恢复 ticket）并只用其 `url` 导航。C5 终局 run（`ending.<approach>`）由 UI 按需过滤，本方法不改其语义。
+- 测试：`tools/career_continuation_test.mjs`。

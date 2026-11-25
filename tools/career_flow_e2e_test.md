@@ -1,6 +1,6 @@
 # career_flow_e2e_test.mjs 说明
 
-生涯首航 V2（DESIGN-0.20.0）零剧情种子真实 UI 链路门禁。工作树分支 `codex/career-flow-test`，基线 `1e22a52`。
+生涯首航 V2（DESIGN-0.20.0）零剧情种子真实 UI 链路门禁。当前集成工作树分支 `feat/arcade-career-flow`（版本链 0.20.0，未发布）；最初奠基分支 `codex/career-flow-test`、基线 `1e22a52`。
 
 ## 运行
 
@@ -47,6 +47,8 @@ node tools/career_flow_e2e_test.mjs                # 全量（独占 Chrome 时�
 
 - 322/322 全链路（无 FAIL / 无 BLOCKED，退出码 0）日志：`C:\Users\rolle\AppData\Local\Temp\opencode\flow-integration15.log`（集成分支 `feat/arcade-career-flow`，合入 `6f55a04` 后，`CAREER_FLOW_PORT=19037` / `CAREER_FLOW_CDP=19537`）。
 - 独立复审修正后 339/339（退出码 0）日志：`C:\Users\rolle\AppData\Local\Temp\opencode\flow-integration16.log`（真实 `story-evidence.storyFlags` 派生、当前章真比较、390×664 视口、token 正则修正）。
+- 最终集成树复验两轮 339/339（PASS 339 / FAIL 0 / BLOCKED 0，退出码 0）：`C:\Users\rolle\AppData\Local\Temp\opencode\career-flow-final2.log` 与 `career-flow-postreview.log`；推荐顺序与逐单章节推进见日志 SUMMARY。
+- 已登记进 `tools/arcade_run_all_gates.py`（长跑 Chrome 门禁，端口 `CAREER_FLOW_PORT` / `CAREER_FLOW_CDP` 默认 9901/10301）；聚合门禁仍待主 Agent 串行最终确认，不提前写 ALL GATES PASSED。
 
 ## 路线内容一致性
 

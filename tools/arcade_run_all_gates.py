@@ -132,6 +132,20 @@ def main() -> int:
             'ARCADE_GAMEPLAY_PORT': os.environ.get('ARCADE_GAMEPLAY_BASE_PORT', '8825'),
             'ARCADE_GAMEPLAY_CDP_PORT': os.environ.get('ARCADE_GAMEPLAY_BASE_CDP_PORT', '9425'),
         }, 2),
+        # 0.20 生涯首航 V2 新增纯 Node 门禁（无 Chrome、无端口占用）。
+        ('career_continuation', ['node', 'tools/career_continuation_test.mjs'], None),
+        ('career_recommendation', ['node', 'tools/career_recommendation_test.mjs'], None),
+        ('career_route_consistency', ['node', 'tools/career_route_consistency_test.mjs'], None),
+        ('career_receipt_feedback', ['node', 'tools/career_receipt_feedback_test.mjs'], None),
+        ('career_mailbox_flow', ['node', 'tools/career_mailbox_flow_test.mjs'], None),
+        ('career_town_flow', ['node', 'tools/career_town_flow_test.mjs'], None),
+        ('career_town_recommend_preload', ['node', 'tools/career_town_recommend_preload_test.mjs'], None),
+        ('career_origin_letter', ['node', 'tools/career_origin_letter_test.mjs'], None),
+        # 0.20 零种子完整首航：Chrome 长跑门禁，独占 CDP，串行运行时放最后。
+        ('career_flow_e2e', ['node', 'tools/career_flow_e2e_test.mjs'], {
+            'CAREER_FLOW_PORT': os.environ.get('CAREER_FLOW_PORT', '9901'),
+            'CAREER_FLOW_CDP': os.environ.get('CAREER_FLOW_CDP', '10301'),
+        }),
     ]
     failed = []
     for label, args, env, *rest in checks:

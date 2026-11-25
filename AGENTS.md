@@ -9,6 +9,7 @@
 - 首页工具清单唯一来源为 `shared/tool-registry.json`。
 - 共享运行时仅限 `shared/site.css` 与 `shared/site-shell.js`；不要引入大型框架。
 - 当前 Badge Studio 版本为 2.2.1，配置 Schema 为 v3，基线见 `docs/BASELINE.md`。
+- 0.20.0（本地开发批次，分支 `feat/arcade-career-flow`，**未发布**）：Arcade 生涯首航 V2——错过的旧港来信可从首页找回并一次点击投递进港，告示板首屏只突出由 `campaign.recommend` / `story-evidence` / `route-planner` 按真实规则推导的当前推荐单（中间单标「路线进展」），收据给出工钱 / 剧情物件 / 世界反应三类回报与下一步，关标签后可显式继续未完成委托；C0–C5 以 `start / progress / complete` 节拍向后兼容扩展，ADR §21 冻结 `originLetter()` / `chapterZero` / `continuations()` 三个只读接口。生涯内容 `contentVersion` 仍 `0.18.0`，不改 IDB v1 / 11 stores / `rulesetVersion` / localStorage key / 玩法数值；版本链 0.20.0、SW 缓存 `studiokit-arcade-0.20.0-v1`（沿用 0.19 预载迁移）。设计/回滚 `apps/arcade/DESIGN-0.20.0.md`，集成 `docs/arcade-life/INTEGRATION-0.20.md`。单项门禁：零种子首航 339/339、campaign E2E 731/731、mobile 318/318、world 145/145、推荐 111/111、路线 94/94、db 38/38、backup 34/34、a11y 75/75、PWA 18/18、compact 18/18、smoke 117/117；聚合门禁仍在跑 / 待最终确认，独立复审已回灌但最终复验待完成。**真机 / 真人首航 UNVERIFIED，无发布授权，不得声称发布完成。**
 - 0.19.0（2026-11-25 已双端发布）：矮视口紧凑模式（≤620×700 收起站点壳条与说明行、弹层改为底部弹层、选关/机库面板铺满屏幕）、11 款实时游戏的拇指区暂停、恢复门、结算防误触，以及逐游戏单手手感（上滑影冲、半屏方向锁、挡板相对拖动、抬起确认等）。引擎新增 `bindPress` / `createSideLatch`，`createLoop` 支持 `resume({ gate: true })`。不改任何 localStorage key / Schema、玩法数值与关卡数据。设计与回滚 `apps/arcade/DESIGN-0.19.0.md`。升级时只继承旧缓存的预载清单并重新取当前版本游戏页，不复制旧页面字节。真机手感 UNVERIFIED；聚合门禁必须串行运行。
 - 0.18.2（2026-11-25 已双端发布）修复 Cloudflare Pages 上预载后断网跨页失败。迁移 0.18.1 已缓存的游戏页面，SW 缓存键为 `studiokit-arcade-0.18.2-v1`。
 - 0.18.1（2026-11-24 已双端发布）：首页续玩与排序记忆、游戏页返回、贪吃蛇及俄罗斯方块触控。已开启生涯后，首页可切换经典与生涯、设置默认视图，并可直达告示板、信箱与已解锁章节。经典是初始默认视图。

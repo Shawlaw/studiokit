@@ -1,5 +1,23 @@
 # Arcade Changelog
 
+## 0.20.0 — 2026-11-26（本地 `feat/arcade-career-flow`，未发布）
+
+生涯首航与剧情流畅度 V2。设计与回滚见 [`DESIGN-0.20.0.md`](DESIGN-0.20.0.md)，集成与门禁结果见 [`docs/arcade-life/INTEGRATION-0.20.md`](../../docs/arcade-life/INTEGRATION-0.20.md)。
+
+### Added / Changed
+- 错过的首封线索可在同一游戏后续有效结算重显，首页经典视图目录上方提供小字入口「旧港有一封来信 / 继续旧港来信」，读信一次点击完成投递进港（`?careerLetter=1`），不自动投递、不创建生涯身份。
+- 到港后 C0 首封信明确玩家身份与当前目标，告示板首屏只突出真实可执行的推荐单；默认路线由 `campaign.recommend` / `story-evidence` / `route-planner` 按真实规则推导，中间单标「路线进展」。
+- 收据给出工钱材料、剧情物件与世界反应三类回报及下一步，提供页内「回告示板 / 读回信」主动作；关标签丢 ticket 后可从 DB live run 只读发现并显式继续；终局 C5 唯一、幂等、失败可重试。
+- C0–C5 内容以 `start / progress / complete` 节拍向后兼容扩展；新增 ADR §21 冻结 `originLetter()` / `chapterZero` / `continuations()` 三个只读接口。
+- 版本链 0.20.0（engine / sw / 中心页 / 注册表 / validate / verify_deploy）；SW 缓存键 `studiokit-arcade-0.20.0-v1`，沿用 0.19 的「只继承预载清单、重取当前页面」迁移策略。生涯内容 `contentVersion` 仍 `0.18.0`，不改 IDB v1 / 11 stores / `rulesetVersion` / localStorage key。
+
+### Tests
+- 完整零种子首航 339/339、campaign E2E 731/731、移动端 318/318、world 145/145、推荐 111/111、路线一致性 94/94、db 38/38、备份 34/34、a11y 75/75、PWA 18/18、紧凑触控 18/18、冒烟 117/117；静态校验与构建、`node --check engine/sw` 通过。
+- 聚合门禁 `arcade_run_all_gates.py` 仍在运行 / 待最终确认；独立复审已回灌、最终复验待完成；真机与真人首航 UNVERIFIED。
+
+### Notes
+- 未发布：无 `OWNER_AUTHORIZATION: PUBLISH_TO_MAIN`，远端 `main` 与双端线上仍为 0.19.0；未 push / merge / tag / 部署。
+
 ## 0.19.0 — 2026-11-25（已双端发布）
 
 按「路上走着玩 / 地铁站着玩 / 等车坐着玩」三种场景审视 16 款游戏的交互后的改进（已合入 `main` 并双端发布）。设计与回滚见 [`DESIGN-0.19.0.md`](DESIGN-0.19.0.md)。

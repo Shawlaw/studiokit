@@ -9,11 +9,11 @@
 | 线上站点 | <https://shawlaw.github.io/studiokit/> · <https://studiokit.pages.dev/> |
 | 仓库 | <https://github.com/Shawlaw/studiokit> |
 | Badge Studio | `2.2.1`｜`available` |
-| 街机厅 Arcade | `0.19.0`｜`available`（16 款竖屏小游戏，13 款带 6 关挑战；0.15 被动线索与独立生涯数据层；0.16 开放旧港告示板委托、免费租机与飞船机库，经典/挑战/禅/割草零改动） |
+| 街机厅 Arcade | 线上 `0.19.0`｜`available`；本地 `feat/arcade-career-flow` 为 `0.20.0`（生涯首航 V2，**未发布**）（16 款竖屏小游戏，13 款带 6 关挑战；0.15 被动线索与独立生涯数据层；0.16 开放旧港告示板委托、免费租机与飞船机库，经典/挑战/禅/割草零改动） |
 | Venue Compare | `0.2.0`｜`available` |
 | Rounded Image | `planned`｜**尚未实现**，等待原始需求 / 规格，不凭空复刻 |
 
-- 三个工具均已双端发布（GitHub Pages + Cloudflare Pages）。**变更、门禁结果与发布证据以各工具目录下的 `CHANGELOG.md` 为准**（Arcade 见 [`apps/arcade/CHANGELOG.md`](apps/arcade/CHANGELOG.md)），根目录 [`CHANGELOG.md`](CHANGELOG.md) 记录站点级变更；本文不复述，避免过期。
+- 三个工具均已双端发布（GitHub Pages + Cloudflare Pages）。Arcade 本地分支 0.20.0 生涯首航 V2 尚未发布，线上仍为 0.19.0；聚合门禁仍在跑、真机 / 真人首航 UNVERIFIED，不得据此声称发布完成。**变更、门禁结果与发布证据以各工具目录下的 `CHANGELOG.md` 为准**（Arcade 见 [`apps/arcade/CHANGELOG.md`](apps/arcade/CHANGELOG.md)），根目录 [`CHANGELOG.md`](CHANGELOG.md) 记录站点级变更；本文不复述，避免过期。
 - 当前基线事实（版本、Schema、存储键）见 [`docs/BASELINE.md`](docs/BASELINE.md)；任务、证据与未决项见 [`TASKS.md`](TASKS.md)。
 - 全局未验证项：iOS / Android 真机触控手感、原生全屏、系统分享面板、PWA 安装与更新提示时机均为 **UNVERIFIED**；Arcade 0.8.0 竖切片的 Owner 试玩门槛仍未收集（`TASKS.md` T039 `BLOCKED`）。
 
