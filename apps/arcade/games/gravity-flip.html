@@ -70,6 +70,7 @@
       <button type="button" class="touch-btn" data-joy-tool="magnet" aria-label="星星磁铁 8 秒，剩余 2 次（快捷键 2）" title="星星磁铁（2）：8 秒内吸附 180px 范围内的星星">
         <span aria-hidden="true">🧲</span><span>磁铁</span><span data-joy-count aria-hidden="true">2</span>
       </button>
+      <button type="button" class="ac-thumb-pause" data-thumb-pause aria-label="暂停游戏">⏸</button>
     </div>
     <p class="game-hint">点击 / 空格翻转重力 · 吃星星加分 · 道具 1/2 · 3000m 抵达星门 · P / Esc 暂停</p>
   </main>
@@ -370,7 +371,7 @@
 
       function bindJoyTools() {
         document.querySelectorAll('[data-joy-tool]').forEach((button) => {
-          button.addEventListener('click', () => {
+          A.bindPress(button, () => {
             joyLastResult = activateJoyTool(button.dataset.joyTool);
           });
         });
@@ -444,7 +445,7 @@
         if (state !== 'paused') return;
         state = 'playing';
         ui.hide();
-        loop.resume();
+        loop.resume({ gate: true });
         pauseUi.sync();
         syncJoyTools();
         if (mode === 'challenge') updateChallengeHud();
@@ -571,7 +572,11 @@
         if (dom.chHud) dom.chHud.hidden = !chMode;
         document.body.classList.toggle('has-subhud', chMode || menuMode);
         const pad = document.querySelector('[data-game-tools]');
-        if (pad) pad.style.display = chMode || menuMode ? 'none' : '';
+        /* 0.19.0：挑战模式只收起道具按钮，行尾的拇指区暂停键留在原位；选关菜单里整行照旧隐藏。 */
+        if (pad) {
+          pad.classList.toggle('is-tools-off', chMode);
+          pad.style.display = menuMode ? 'none' : '';
+        }
         syncJoyTools();
         if (chMode) updateChallengeHud();
       }
@@ -1603,7 +1608,7 @@
         ctx.restore();
       }
 
-      const loop = A.createLoop({
+      const loop = A.createLoop({ input,
         update,
         render,
         onAutoPause() {

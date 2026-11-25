@@ -59,6 +59,7 @@
     <div class="touch-pad game-tools" aria-label="可选道具（快捷键 1 / 2）">
       <button type="button" class="touch-btn" data-joy-tool="magnet" aria-label="铃磁，剩余 2 次（快捷键 1）"><span aria-hidden="true">🧲</span> 铃磁 <strong data-joy-count>2</strong></button>
       <button type="button" class="touch-btn" data-joy-tool="encore" aria-label="安可，剩余 2 次（快捷键 2）"><span aria-hidden="true">🎵</span> 安可 <strong data-joy-count>2</strong></button>
+      <button type="button" class="ac-thumb-pause" data-thumb-pause aria-label="暂停游戏">⏸</button>
     </div>
     <p class="game-hint">←→ / A D 或触摸左右半屏移动 · 踩铃铛连跳 · 1 铃磁 / 2 安可 · 连击越高得分越多 · P / Esc 暂停</p>
   </main>
@@ -88,6 +89,9 @@
       const stage = A.createStage(canvas, W, H);
       const ctx = stage.ctx;
       const input = A.createInput(canvas);
+      /* 0.19.0 触点半屏方向锁：落指按所在半屏定向并锁定，换边需越过中线 40 逻辑像素，
+         几像素的抖动或急刹时手机相对拇指的位移不会让角色瞬间反向。 */
+      const readTouchSide = A.createSideLatch(input, W / 2, 40);
       A.installSfxUnlock();
 
       const dom = {
@@ -271,7 +275,7 @@
         return true;
       }
       Object.keys(joyButtons).forEach((id) => {
-        joyButtons[id].addEventListener('click', () => useJoy(id));
+        A.bindPress(joyButtons[id], () => useJoy(id));
       });
       window.addEventListener('keydown', (e) => {
         if (e.repeat || e.metaKey || e.ctrlKey || e.altKey) return;
@@ -337,7 +341,7 @@
         if (state !== 'paused') return;
         state = 'playing';
         ui.hide();
-        loop.resume();
+        loop.resume({ gate: true });
         pauseUi.sync(); syncJoyTools();
       }
 
@@ -955,7 +959,7 @@
         let dir = 0;
         if (input.isDown('ArrowLeft', 'a')) dir -= 1;
         if (input.isDown('ArrowRight', 'd')) dir += 1;
-        if (input.pointer.down) dir = input.pointer.x < W / 2 ? -1 : 1;
+        if (input.pointer.down) dir = readTouchSide();
         if (dir !== 0) {
           player.vx += dir * ACC * dt;
           player.face = dir;
@@ -1276,7 +1280,7 @@
         let dir = 0;
         if (input.isDown('ArrowLeft', 'a')) dir -= 1;
         if (input.isDown('ArrowRight', 'd')) dir += 1;
-        if (input.pointer.down) dir = input.pointer.x < W / 2 ? -1 : 1;
+        if (input.pointer.down) dir = readTouchSide();
         if (dir !== 0) {
           player.vx += dir * ACC * dt;
           player.face = dir;
@@ -1686,7 +1690,9 @@
         ctx.restore();
       }
 
-      const loop = A.createLoop({
+      /* 0.19.0：挑战选关层的「返回开始」此前只有显隐、没有绑定，点了没反应。 */
+      if (chDom.back) chDom.back.addEventListener('click', () => backToStartFromPanel());
+      const loop = A.createLoop({ input,
         update,
         render,
         onAutoPause() {

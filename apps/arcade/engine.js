@@ -7,7 +7,7 @@
 (() => {
   'use strict';
 
-  const ARCADE_VERSION = '0.18.1';
+  const ARCADE_VERSION = '0.19.0';
   const PROGRESS_KEY = 'studiokit:arcade:progress:v1';
   const PREFS_KEY = 'studiokit:arcade:prefs:v1';
   const RUNS_KEY = 'studiokit:arcade:runs:v1';
@@ -1991,6 +1991,7 @@
     canvas.style.touchAction = 'none';
 
     return {
+      canvas,
       pointer,
       isDown(...codes) {
         return codes.some((c) => keys.has(c));
@@ -2056,17 +2057,73 @@
   }
 
   /* ----------------------------------------------------------
+   * 恢复门（0.19.0）
+   * 触屏会话里点「继续」后先只解冻画面、不推进模拟，等玩家下一次真实
+   * 触控/按键才恢复，并吞掉这一下的按下沿——拇指从「继续」回到操作区的
+   * 路上，方块不会下落、弹幕不会续飞、摆与倒计时不会继续走。
+   * - 只认 isTrusted 事件：自动化/自测注入的合成事件保持「点继续立即恢复」。
+   * - 按住/拖动类读的是 pointer.down，开门的那一下仍然自然生效；
+   *   读 wentDown 的点按类动作则被吞掉（不翻转/不放箱/不放钩）。
+   * ---------------------------------------------------------- */
+  let lastPointerType = 'mouse';
+  let pointerTypeTracked = false;
+  function installPointerTypeTracking() {
+    if (pointerTypeTracked) return;
+    pointerTypeTracked = true;
+    const mark = (e) => {
+      if (!e.isTrusted || !e.pointerType) return;
+      lastPointerType = e.pointerType;
+    };
+    window.addEventListener('pointerdown', mark, true);
+    window.addEventListener('pointermove', mark, { capture: true, passive: true });
+  }
+  const GATE_MODIFIER_KEYS = new Set(['Shift', 'Control', 'Alt', 'Meta']);
+
+  /* ----------------------------------------------------------
    * 固定步长游戏循环（rAF + accumulator，dt 上限防螺旋）
    * ---------------------------------------------------------- */
-  function createLoop({ step = 1 / 60, maxDelta = 0.1, update, render, onAutoPause, onAutoResume }) {
+  function createLoop({ step = 1 / 60, maxDelta = 0.1, update, render, onAutoPause, onAutoResume, input = null }) {
     let rafId = 0;
     let last = 0;
     let acc = 0;
     let running = false;
     let userPaused = false;
     let autoPaused = false;
+    let gated = false;
+    let gateOpenRequested = false;
+    let gateEl = null;
     let lastPausedRender = 0;
     let frameErrors = 0;
+    installPointerTypeTracking();
+
+    function hideGateHint() {
+      if (!gateEl) return;
+      gateEl.remove();
+      gateEl = null;
+    }
+    function showGateHint() {
+      hideGateHint();
+      const stage = input && input.canvas ? input.canvas.closest('.stage-box') : document.querySelector('.game-page .stage-box');
+      if (!stage) return;
+      gateEl = document.createElement('div');
+      gateEl.className = 'ac-resume-gate';
+      gateEl.setAttribute('role', 'status');
+      gateEl.textContent = '▶ 点按屏幕继续';
+      stage.appendChild(gateEl);
+    }
+    function cancelGate() {
+      gated = false;
+      gateOpenRequested = false;
+      hideGateHint();
+    }
+    function onGateInput(e) {
+      if (!gated || gateOpenRequested || !e.isTrusted) return;
+      if (e.type === 'keydown' && GATE_MODIFIER_KEYS.has(e.key)) return;
+      /* 不在这里直接开门：留到下一帧开头，先清掉这一下的按下沿再恢复模拟。 */
+      gateOpenRequested = true;
+    }
+    window.addEventListener('pointerdown', onGateInput, true);
+    window.addEventListener('keydown', onGateInput, true);
 
     /* 0.8.5：单帧异常（例如某款游戏在极端缩放下画不出图形）不能让 rAF 链断掉，
        否则整个游戏会永久停在半张画面上、只能刷新页面。这里逐帧兜底并把前几次
@@ -2084,8 +2141,16 @@
       if (!running) return;
       const delta = Math.min(maxDelta, (now - last) / 1000);
       last = now;
-      if (userPaused || autoPaused) {
-        /* 暂停时 resize 会重建 canvas 像素缓冲；低频重绘保证不出现空白画布。 */
+      if (gateOpenRequested && gated) {
+        /* 开门：恢复模拟，但这一下触控只算「继续」，不触发点按类动作。 */
+        gated = false;
+        gateOpenRequested = false;
+        hideGateHint();
+        if (input) input.pointer.wentDown = false;
+        Playtime.setOverlayVisible(false);
+      }
+      if (userPaused || autoPaused || gated) {
+        /* 暂停/恢复门期间 resize 会重建 canvas 像素缓冲；低频重绘保证不出现空白画布。 */
         if (now - lastPausedRender > 200) {
           lastPausedRender = now;
           guard(render, 'render');
@@ -2113,14 +2178,23 @@
       stop() {
         running = false;
         cancelAnimationFrame(rafId);
+        cancelGate();
       },
       pause() {
         userPaused = true;
+        cancelGate();
       },
-      resume() {
+      /* options.gate：从暂停弹层恢复时请求恢复门；鼠标会话（未见过真实触控）保持立即恢复。 */
+      resume(options) {
         userPaused = false;
         last = performance.now();
         acc = 0;
+        cancelGate();
+        if (options && options.gate && lastPointerType !== 'mouse') {
+          gated = true;
+          showGateHint();
+          Playtime.setOverlayVisible(true);
+        }
       },
       renderOnce() {
         render();
@@ -2131,11 +2205,15 @@
       get paused() {
         return userPaused || autoPaused;
       },
+      get gated() {
+        return gated;
+      },
     };
 
     function onWindowBlur() {
       if (!running || userPaused || autoPaused) return;
       autoPaused = true;
+      cancelGate();
       if (onAutoPause) onAutoPause();
     }
     function onWindowFocus() {
@@ -2558,9 +2636,9 @@
       const record = { def, button, countSpan, name, description, key };
       records.push(record);
       if (key) keyMap[key] = record;
-      button.addEventListener('click', () => {
-        activate(record);
-      });
+      /* options.press（0.19.0）：动作类游戏在触屏上按下即触发，其余保持抬指（click）生效。 */
+      if (o.press) bindPress(button, () => { activate(record); });
+      else button.addEventListener('click', () => { activate(record); });
     });
 
     const columns = Math.min(4, Math.max(1, records.length));
@@ -2569,6 +2647,18 @@
     /* 没有可用定义时不插入空栏，避免给页面留下 68px 空白。 */
     if (!records.length) {
       return { element: null, buttons, sync() {}, destroy() {} };
+    }
+    /* 0.19.0 options.pause：行尾追加拇指区暂停格，点击与禁用态由 A.bindPause 统一处理。 */
+    if (o.pause) {
+      const pauseButton = document.createElement('button');
+      pauseButton.type = 'button';
+      pauseButton.className = 'ac-thumb-pause';
+      pauseButton.setAttribute('data-thumb-pause', '');
+      pauseButton.setAttribute('aria-label', '暂停游戏');
+      pauseButton.textContent = '⏸';
+      pauseButton.disabled = true;
+      elements.appendChild(pauseButton);
+      elements.style.gridTemplateColumns = `repeat(${columns}, minmax(0, 1fr)) 56px`;
     }
     if (below) {
       /* 画布外：插在舞台之后、提示文字之前，不占用画布逻辑坐标。 */
@@ -2629,6 +2719,25 @@
     let reviewLabel = '回看终局';
     let reviewBtn = null;
     let reviewFab = null;
+    /* 0.19.0 结算防误触：连点类游戏在死亡瞬间拇指往往还在点，结算弹层出现后的
+       短暂窗口内面板不接收指针（只拦真实触摸/点击；键盘激活与程序化 click 不受影响）。 */
+    const RESULT_TAP_GUARD_MS = 450;
+    let tapGuardTimer = 0;
+    function clearTapGuard() {
+      if (tapGuardTimer) {
+        clearTimeout(tapGuardTimer);
+        tapGuardTimer = 0;
+      }
+      if (dom.overlay) dom.overlay.classList.remove('is-fresh');
+    }
+    function armTapGuard() {
+      clearTapGuard();
+      dom.overlay.classList.add('is-fresh');
+      tapGuardTimer = setTimeout(() => {
+        tapGuardTimer = 0;
+        if (dom.overlay) dom.overlay.classList.remove('is-fresh');
+      }, RESULT_TAP_GUARD_MS);
+    }
     function setReviewHidden(value) {
       reviewHidden = !!value;
       if (!reviewInit) return;
@@ -2680,6 +2789,9 @@
     function hide() {
       dom.overlay.hidden = true;
       dom.overlay.classList.remove('is-result', 'is-reviewing');
+      clearTapGuard();
+      /* has-overlay：矮视口紧凑模式下让舞台（连同其中的全屏弹层）盖到顶栏之上。 */
+      document.body.classList.remove('has-overlay');
       setReviewHidden(false);
       if (previousFocus && typeof previousFocus.focus === 'function') {
         try {
@@ -2692,7 +2804,8 @@
     }
     function show(opts) {
       const o = opts || {};
-      if (dom.overlay.hidden) previousFocus = document.activeElement;
+      const wasHidden = dom.overlay.hidden;
+      if (wasHidden) previousFocus = document.activeElement;
       dom.ovTitle.textContent = o.title || '';
       dom.ovText.innerHTML = o.text || '';
       dom.ovBtn.textContent = o.btn || '开始游戏';
@@ -2746,7 +2859,11 @@
       } else if (reviewInit) {
         setReviewHidden(false);
       }
+      clearTapGuard();
       dom.overlay.hidden = false;
+      document.body.classList.add('has-overlay');
+      /* 只在弹层从隐藏变为显示的那一刻防抖；同一结算内的重复 show 不重复计时。 */
+      if (isResult && wasHidden) armTapGuard();
       try {
         dom.ovBtn.focus({ preventScroll: true });
       } catch (err) {
@@ -2804,23 +2921,49 @@
     };
   }
 
-  /* 顶栏暂停按钮 + P / Esc 快捷键；按钮在非游玩态自动禁用。 */
+  /* 顶栏暂停按钮 + P / Esc 快捷键；按钮在非游玩态自动禁用。
+     0.19.0 拇指区暂停：页面在底部操作区放置 [data-thumb-pause]（行尾独立一格或画布角落
+     悬浮钮），这里一并绑定点击并同步禁用态——单手够不到顶栏时也能一键暂停。 */
   function bindPause(opts) {
     const button = opts.button;
+    function toggle() {
+      if (opts.isPaused()) opts.resume();
+      else if (opts.isPlaying()) opts.pause();
+      sync();
+    }
     function sync() {
-      if (!button) return;
       const paused = !!opts.isPaused();
       const playing = !!opts.isPlaying();
-      button.disabled = !paused && !playing;
-      button.textContent = paused ? '▶' : '⏸';
-      button.setAttribute('aria-label', paused ? '继续游戏' : '暂停游戏');
-      button.title = paused ? '继续游戏（P / Esc）' : '暂停游戏（P / Esc）';
+      const disabled = !paused && !playing;
+      if (button) {
+        button.disabled = disabled;
+        button.textContent = paused ? '▶' : '⏸';
+        button.setAttribute('aria-label', paused ? '继续游戏' : '暂停游戏');
+        button.title = paused ? '继续游戏（P / Esc）' : '暂停游戏（P / Esc）';
+      }
+      document.querySelectorAll('.game-page [data-thumb-pause]').forEach((thumb) => {
+        thumb.disabled = disabled;
+        thumb.textContent = paused ? '▶' : '⏸';
+        thumb.setAttribute('aria-label', paused ? '继续游戏' : '暂停游戏');
+        thumb.title = paused ? '继续游戏' : '暂停游戏';
+        /* 所在行标记出来，样式据此把行尾固定 56px 留给暂停、其余列照旧等分。 */
+        if (thumb.parentElement && !thumb.parentElement.classList.contains('has-thumb-pause')) {
+          thumb.parentElement.classList.add('has-thumb-pause');
+        }
+      });
     }
     if (button) {
       button.addEventListener('click', () => {
-        if (opts.isPaused()) opts.resume();
-        else if (opts.isPlaying()) opts.pause();
-        sync();
+        toggle();
+      });
+    }
+    /* 拇指区暂停键用委托绑定：行可能是道具带在运行期才创建的。 */
+    const page = document.querySelector('.game-page');
+    if (page) {
+      page.addEventListener('click', (e) => {
+        const thumb = e.target && e.target.closest ? e.target.closest('[data-thumb-pause]') : null;
+        if (!thumb || thumb.disabled) return;
+        toggle();
       });
     }
     if (opts.keyboard !== false) {
@@ -2840,6 +2983,52 @@
     }
     sync();
     return { sync };
+  }
+
+  /* 按下即触发（0.19.0）：动作类游戏的道具键在触屏上 pointerdown 立即生效，不必等抬指——
+     影冲、星盾这类时机型道具差一次抬指就是差半拍。鼠标与键盘（Enter / 空格激活出的 click）
+     仍走 click；触屏 pointerdown 之后浏览器补发的那个 click 在这里吞掉，保证只触发一次。 */
+  function bindPress(button, handler) {
+    if (!button) return;
+    let swallowClickUntil = 0;
+    const run = (e) => {
+      if (button.disabled) return;
+      handler(e);
+    };
+    button.addEventListener('pointerdown', (e) => {
+      if (e.pointerType === 'mouse') return;
+      if (e.button != null && e.button !== 0) return;
+      swallowClickUntil = performance.now() + 700;
+      run(e);
+    });
+    button.addEventListener('click', (e) => {
+      if (performance.now() < swallowClickUntil) return;
+      run(e);
+    });
+  }
+
+  /* 半屏方向锁（0.19.0）：按住画布左右半屏移动的游戏，落指时按所在半屏定向并锁定；
+     按住期间要换边，触点得越过中线 margin 逻辑像素。几像素的抖动或急刹时手机相对拇指的
+     位移不会再让角色瞬间反向。每帧调用一次，返回 -1 / 0 / 1（0 = 没有触点）。 */
+  function createSideLatch(input, midX, margin) {
+    let side = 0;
+    let wasDown = false;
+    return function readSide() {
+      const p = input.pointer;
+      if (!p.down) {
+        side = 0;
+        wasDown = false;
+        return 0;
+      }
+      if (!wasDown) {
+        side = p.x < midX ? -1 : 1;
+        wasDown = true;
+        return side;
+      }
+      if (side < 0 && p.x > midX + margin) side = 1;
+      else if (side > 0 && p.x < midX - margin) side = -1;
+      return side;
+    };
   }
 
   // 中心页的续玩链接只在这次进入游戏时直达存档，刷新或直访仍走原来的开局流程。
@@ -3622,11 +3811,43 @@
     return displayMode;
   }
 
+  /* ----------------------------------------------------------
+   * 矮视口紧凑模式（0.19.0）
+   * 视口又窄又矮（≤620×700，典型是带地址栏的手机标签页）时隐藏站点壳条与底部
+   * 说明行，把高度还给画布。各条舞台高度公式是按「说明行可见」标定的，这里量出
+   * 说明行的自然高度加行距写进 --ac-hint-refund，紧凑模式的 CSS 再把它加回画布。
+   * 只量不改布局；说明行此时可能已被样式隐藏，临时显示与恢复发生在同一步内，不会闪现。
+   * ---------------------------------------------------------- */
+  let compactLayoutInstalled = false;
+  function syncCompactHintRefund() {
+    const page = document.querySelector('.game-page');
+    const hint = page ? page.querySelector('.game-hint') : null;
+    if (!page || !hint) return;
+    const previous = hint.style.getPropertyValue('display');
+    const priority = hint.style.getPropertyPriority('display');
+    hint.style.setProperty('display', 'block', 'important');
+    const height = hint.getBoundingClientRect().height;
+    if (previous) hint.style.setProperty('display', previous, priority);
+    else hint.style.removeProperty('display');
+    const gap = parseFloat(getComputedStyle(page).rowGap) || 0;
+    /* 向下取整：返还量宁可少 1px 也不能让页面多出可滚动的 1px。 */
+    const refund = Number.isFinite(height) && height > 0 ? Math.floor(height + gap) : 0;
+    document.documentElement.style.setProperty('--ac-hint-refund', refund + 'px');
+  }
+  function installCompactLayout() {
+    if (compactLayoutInstalled) return;
+    compactLayoutInstalled = true;
+    syncCompactHintRefund();
+    window.addEventListener('resize', syncCompactHintRefund);
+    window.addEventListener('orientationchange', () => setTimeout(syncCompactHintRefund, 140));
+  }
+
   function autoInstallDisplayMode() {
     if (displayAutoInstalled) return;
     displayAutoInstalled = true;
     installDisplayMode();
     installShareInline();
+    installCompactLayout();
   }
 
   if (document.readyState === 'loading') {
@@ -3665,6 +3886,8 @@
     createOverlayUi,
     createToolbelt,
     bindPause,
+    bindPress,
+    createSideLatch,
     showResumePrompt,
     formatSavedAt,
     formatDuration,

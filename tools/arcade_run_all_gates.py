@@ -120,6 +120,10 @@ def main() -> int:
             'ARCADE_REVIEW_PORT': os.environ.get('ARCADE_REVIEW_PORT', '8826'),
             'ARCADE_REVIEW_CDP_PORT': os.environ.get('ARCADE_REVIEW_CDP_PORT', '9426'),
         }),
+        ('compact_touch', ['node', 'tools/arcade_compact_touch_test.mjs'], {
+            'ARCADE_COMPACT_PORT': os.environ.get('ARCADE_COMPACT_PORT', '8827'),
+            'ARCADE_COMPACT_CDP': os.environ.get('ARCADE_COMPACT_CDP', '9427'),
+        }),
         ('gameplay_all', ['node', 'tools/arcade_gameplay_test.mjs', '--suite=all', '--repeat=1'], {
             'ARCADE_GAMEPLAY_PORT': os.environ.get('ARCADE_GAMEPLAY_PORT', '8824'),
             'ARCADE_GAMEPLAY_CDP_PORT': os.environ.get('ARCADE_GAMEPLAY_CDP_PORT', '9424'),

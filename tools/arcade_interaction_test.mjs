@@ -1,6 +1,6 @@
 #!/usr/bin/env node
 /**
- * Arcade 0.18.1 门禁：移动端误触放大防护 + 五子棋落子按钮重影 / 预览取消出口。
+ * Arcade 0.19.0 门禁：移动端误触放大防护 + 五子棋落子按钮重影 / 预览取消出口。
  *
  * 覆盖：
  * - IX-01 17 个 Arcade 页面（中心页 + 16 游戏）viewport 均含 maximum-scale=1/user-scalable=no，
@@ -68,7 +68,7 @@ async function main() {
     await sleep(400);
     const ready = await cdp.evaluate(`({ hooks: !!(window.__arcadeTest && typeof window.__arcadeTest.actionButtons === 'function'), version: Arcade.version })`);
     assert(ready.hooks, '五子棋缺少 0.13.2 actionButtons 钩子');
-    assert(ready.version === '0.18.1', 'Arcade version=' + ready.version);
+    assert(ready.version === '0.19.0', 'Arcade version=' + ready.version);
 
     await cdp.click('[data-ov-btn]');
     await sleep(150);
@@ -151,7 +151,7 @@ async function main() {
     if (server) await new Promise((r) => server.close(r));
     if (launched) await stopChrome(launched);
   }
-  const outcome = summary('Arcade 0.18.1 交互门禁');
+  const outcome = summary('Arcade 0.19.0 交互门禁');
   if (outcome.failed) process.exitCode = 1;
 }
 

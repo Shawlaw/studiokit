@@ -104,6 +104,7 @@
       <button type="button" class="touch-btn" data-joy-tool="calm" aria-label="车流慢放 6 秒，剩余 2 次（快捷键 2）" title="车流慢放（2）：6 秒内迎面车流相对速度降至 55%">
         <span aria-hidden="true">🫧</span><span data-joy-count aria-hidden="true">2</span>
       </button>
+      <button type="button" class="ac-thumb-pause" data-thumb-pause aria-label="暂停游戏">⏸</button>
     </div>
     <p class="game-hint">←→ / A D 变道 · 道具 1/2 · 5000m 抵达终点 · P / Esc 暂停</p>
   </main>
@@ -651,7 +652,7 @@
         if (state !== 'paused') return;
         state = 'playing';
         hideOverlay();
-        loop.resume();
+        loop.resume({ gate: true });
         pauseUi.sync();
         syncTouchPad();
       }
@@ -1139,7 +1140,7 @@
 
       function bindJoyTools() {
         document.querySelectorAll('[data-joy-tool]').forEach((button) => {
-          button.addEventListener('click', () => {
+          A.bindPress(button, () => {
             joyLastResult = activateJoyTool(button.dataset.joyTool);
           });
         });
@@ -2388,7 +2389,7 @@
       }
 
       /* ---------- 输入与循环 ---------- */
-      const loop = A.createLoop({
+      const loop = A.createLoop({ input,
         update,
         render,
         onAutoPause() {

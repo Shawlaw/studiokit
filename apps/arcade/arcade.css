@@ -249,7 +249,7 @@ body.has-arcade-game-shell .studiokit-shell-home {
   );
   /* 支持 dvh 的浏览器用动态视口高度覆盖（移动端地址栏收放更准确） */
   height: min(
-    calc(100dvh - var(--studiokit-shellbar-h, 0px) - 160px),
+    calc(100dvh - var(--studiokit-shellbar-h, 0px) - 160px + var(--ac-compact-refund, 0px)),
     calc(min(520px, 100vw - 24px) * 740 / 420)
   );
   aspect-ratio: 420 / 740;
@@ -266,7 +266,7 @@ canvas.game-canvas {
 }
 body.has-subhud .stage-box {
   height: min(
-    calc(100dvh - var(--studiokit-shellbar-h, 0px) - 188px),
+    calc(100dvh - var(--studiokit-shellbar-h, 0px) - 188px + var(--ac-compact-refund, 0px)),
     calc(min(520px, 100vw - 24px) * 740 / 420)
   );
 }
@@ -545,13 +545,13 @@ body.has-subhud .stage-box {
   .ac-back { display: inline-flex; align-items: center; min-height: 44px; }
   body.has-extra-controls .stage-box {
     height: min(
-      calc(100dvh - var(--studiokit-shellbar-h, 0px) - 214px),
+      calc(100dvh - var(--studiokit-shellbar-h, 0px) - 214px + var(--ac-compact-refund, 0px)),
       calc(min(520px, 100vw - 24px) * 740 / 420)
     );
   }
   body.has-subhud .stage-box {
     height: min(
-      calc(100dvh - var(--studiokit-shellbar-h, 0px) - 188px),
+      calc(100dvh - var(--studiokit-shellbar-h, 0px) - 188px + var(--ac-compact-refund, 0px)),
       calc(min(520px, 100vw - 24px) * 740 / 420)
     );
   }
@@ -1318,19 +1318,19 @@ body.has-subhud .stage-box {
   .overlay.is-result .ac-review-fab { min-width: 80px; min-height: 44px; font-size: 12px; top: 6px; right: 6px; }
   .stage-box {
     height: min(
-      calc(100dvh - var(--studiokit-shellbar-h, 0px) - 172px),
+      calc(100dvh - var(--studiokit-shellbar-h, 0px) - 172px + var(--ac-compact-refund, 0px)),
       calc(min(520px, 100vw - 16px) * 740 / 420)
     );
   }
   body.has-extra-controls .stage-box {
     height: min(
-      calc(100dvh - var(--studiokit-shellbar-h, 0px) - 218px),
+      calc(100dvh - var(--studiokit-shellbar-h, 0px) - 218px + var(--ac-compact-refund, 0px)),
       calc(min(520px, 100vw - 16px) * 740 / 420)
     );
   }
   body.has-subhud .stage-box {
     height: min(
-      calc(100dvh - var(--studiokit-shellbar-h, 0px) - 196px),
+      calc(100dvh - var(--studiokit-shellbar-h, 0px) - 196px + var(--ac-compact-refund, 0px)),
       calc(min(520px, 100vw - 16px) * 740 / 420)
     );
   }
@@ -1496,25 +1496,25 @@ html.studiokit-shell-standalone body.arcade-body:not(.arcade-immersive) {
      相抵后画布仍比浏览器模式大 34px，且不会溢出。 */
   html.studiokit-shell-standalone body.arcade-body:not(.arcade-immersive).has-game-tools .stage-box {
     height: min(
-      calc(100dvh - var(--studiokit-shellbar-h, 0px) - 180px - env(safe-area-inset-bottom, 0px)),
+      calc(100dvh - var(--studiokit-shellbar-h, 0px) - 180px - env(safe-area-inset-bottom, 0px) + var(--ac-compact-refund, 0px)),
       calc(min(520px, 100vw - 24px) * 740 / 420)
     );
   }
   html.studiokit-shell-standalone body.arcade-body:not(.arcade-immersive).has-joy-row .stage-box {
     height: min(
-      calc(100dvh - var(--studiokit-shellbar-h, 0px) - 192px - env(safe-area-inset-bottom, 0px)),
+      calc(100dvh - var(--studiokit-shellbar-h, 0px) - 192px - env(safe-area-inset-bottom, 0px) + var(--ac-compact-refund, 0px)),
       calc(min(520px, 100vw - 24px) * 740 / 420)
     );
   }
   html.studiokit-shell-standalone body.arcade-body:not(.arcade-immersive).has-joy-row.has-extra-controls .stage-box {
     height: min(
-      calc(100dvh - var(--studiokit-shellbar-h, 0px) - 212px - env(safe-area-inset-bottom, 0px)),
+      calc(100dvh - var(--studiokit-shellbar-h, 0px) - 212px - env(safe-area-inset-bottom, 0px) + var(--ac-compact-refund, 0px)),
       calc(min(520px, 100vw - 24px) * 740 / 420)
     );
   }
   html.studiokit-shell-standalone body.arcade-body:not(.arcade-immersive).has-subhud .stage-box {
     height: min(
-      calc(100dvh - var(--studiokit-shellbar-h, 0px) - 154px - env(safe-area-inset-bottom, 0px)),
+      calc(100dvh - var(--studiokit-shellbar-h, 0px) - 154px - env(safe-area-inset-bottom, 0px) + var(--ac-compact-refund, 0px)),
       calc(min(520px, 100vw - 24px) * 740 / 420)
     );
   }
@@ -1556,7 +1556,9 @@ html.studiokit-shell-standalone body.arcade-body:not(.arcade-immersive) {
   gap: 5px;
   padding: 18px 6px 6px;
   background: linear-gradient(180deg, rgba(7, 11, 24, 0), rgba(7, 11, 24, 0.9) 48%);
-  pointer-events: none;
+  /* 0.19.0：容器自身也接收指针。此前为 none，按钮间隙与内边距处会穿透到画布，
+     点偏一点就变成放钩（3 关起还可能抓到炸药）。 */
+  pointer-events: auto;
 }
 
 body.arcade-immersive .toolbelt {
@@ -1777,7 +1779,7 @@ body.has-game-tools .road-pad {
 body.has-game-tools .road-pad .touch-btn { font-size: 14px; }
 body.has-game-tools:not(.arcade-immersive) .stage-box {
   height: min(
-    calc(100dvh - var(--studiokit-shellbar-h, 0px) - 180px - env(safe-area-inset-bottom, 0px)),
+    calc(100dvh - var(--studiokit-shellbar-h, 0px) - 180px - env(safe-area-inset-bottom, 0px) + var(--ac-compact-refund, 0px)),
     calc(min(520px, 100vw - 24px) * 740 / 420)
   );
 }
@@ -1793,13 +1795,13 @@ body.has-game-tools:not(.arcade-immersive) .stage-box {
 .joy-tools-below .tool-btn { gap: 4px; }
 body.has-joy-row:not(.arcade-immersive) .stage-box {
   height: min(
-    calc(100dvh - var(--studiokit-shellbar-h, 0px) - 192px - env(safe-area-inset-bottom, 0px)),
+    calc(100dvh - var(--studiokit-shellbar-h, 0px) - 192px - env(safe-area-inset-bottom, 0px) + var(--ac-compact-refund, 0px)),
     calc(min(520px, 100vw - 24px) * 740 / 420)
   );
 }
 body.has-joy-row.has-extra-controls:not(.arcade-immersive) .stage-box {
   height: min(
-    calc(100dvh - var(--studiokit-shellbar-h, 0px) - 212px - env(safe-area-inset-bottom, 0px)),
+    calc(100dvh - var(--studiokit-shellbar-h, 0px) - 212px - env(safe-area-inset-bottom, 0px) + var(--ac-compact-refund, 0px)),
     calc(min(520px, 100vw - 24px) * 740 / 420)
   );
 }
@@ -1819,13 +1821,13 @@ body.has-joy-row.has-extra-controls:not(.arcade-immersive) .stage-box {
 @media (max-width: 360px) {
   body.has-joy-row:not(.arcade-immersive) .stage-box {
     height: min(
-      calc(100dvh - var(--studiokit-shellbar-h, 0px) - 230px - env(safe-area-inset-bottom, 0px)),
+      calc(100dvh - var(--studiokit-shellbar-h, 0px) - 230px - env(safe-area-inset-bottom, 0px) + var(--ac-compact-refund, 0px)),
       calc(min(520px, 100vw - 16px) * 740 / 420)
     );
   }
   body.has-joy-row.has-extra-controls:not(.arcade-immersive) .stage-box {
     height: min(
-      calc(100dvh - var(--studiokit-shellbar-h, 0px) - 242px - env(safe-area-inset-bottom, 0px)),
+      calc(100dvh - var(--studiokit-shellbar-h, 0px) - 242px - env(safe-area-inset-bottom, 0px) + var(--ac-compact-refund, 0px)),
       calc(min(520px, 100vw - 16px) * 740 / 420)
     );
   }
@@ -2054,4 +2056,196 @@ body.has-joy-row.has-extra-controls:not(.arcade-immersive) .stage-box {
 @media (prefers-reduced-motion: reduce) {
   .ac-stage-btn { transition: none; }
   .ac-stage-btn:active:not(:disabled) { transform: none; }
+}
+
+/* ==========================================================
+ * 0.19.0 单手触屏与矮视口体验
+ * ----------------------------------------------------------
+ * 1) 拇指区暂停：行尾独立一格，或画布角落的悬浮钮（点击由引擎 A.bindPause 统一绑定）
+ * 2) 恢复门提示、结算弹层防误触
+ * 3) 矮视口紧凑模式（≤620×700）：隐藏站点壳条与说明行、把高度还给画布、
+ *    降低拇指抬升、弹层改为贴底部的底部弹层
+ * 放在文件末尾，保证覆盖前面各断点里的同名规则。
+ * ========================================================== */
+
+/* ---------- 1) 拇指区暂停 ---------- */
+/* 样式刻意低调、宽度固定：它紧挨限量道具，但暂停点错了只是暂停，道具点错会消耗次数。 */
+.ac-thumb-pause {
+  appearance: none;
+  min-width: 44px;
+  min-height: 48px;
+  padding: 4px 0;
+  border: 1px solid var(--ac-line);
+  border-radius: 12px;
+  background: rgba(21, 29, 58, 0.6);
+  color: var(--ac-muted);
+  font: inherit;
+  font-size: 18px;
+  font-weight: 700;
+  line-height: 1;
+  cursor: pointer;
+  touch-action: manipulation;
+  -webkit-user-select: none;
+  user-select: none;
+  -webkit-tap-highlight-color: transparent;
+}
+.ac-thumb-pause:active:not(:disabled) { color: var(--ac-ink); border-color: var(--ac-accent); }
+.ac-thumb-pause:focus-visible { outline: 2px solid var(--ac-accent); outline-offset: 2px; }
+.ac-thumb-pause:disabled { opacity: 0.35; cursor: default; }
+/* has-thumb-pause 由引擎加在暂停键所在的行上：原有各列等分，行尾固定 56px 给暂停。 */
+.touch-pad.game-tools.has-thumb-pause { grid-template-columns: repeat(2, minmax(0, 1fr)) 56px; }
+.touch-pad.game-tools.has-air-dash.has-thumb-pause,
+.touch-pad.game-tools.tower-tools.has-thumb-pause { grid-template-columns: repeat(3, minmax(0, 1fr)) 56px; }
+body.has-game-tools .road-pad.has-thumb-pause { grid-template-columns: repeat(4, minmax(0, 1fr)) 56px; }
+/* 星海突击：道具行列数已满，暂停钮悬浮在画布右下角；相对拖动下这块角落不挡操作。 */
+.ac-thumb-pause.ac-pause-chip {
+  position: absolute;
+  right: 8px;
+  bottom: 8px;
+  z-index: 2;
+  min-width: 44px;
+  min-height: 44px;
+  border-radius: 999px;
+  background: rgba(7, 11, 24, 0.55);
+  opacity: 0.72;
+}
+.ac-thumb-pause.ac-pause-chip:disabled { opacity: 0; }
+/* 黄金矿工：画布够宽时暂停是道具坞第 5 格；太窄时 5 格挤不进 44px，见下方紧凑模式。 */
+.toolbelt.dock-wide { grid-template-columns: repeat(4, minmax(0, 1fr)) 52px; }
+.toolbelt .ac-thumb-pause { min-height: 44px; }
+.toolbelt:not(.dock-wide) .ac-thumb-pause { display: none; }
+/* 挑战模式道具不可用：只收起道具按钮（保留格子，行尾暂停键的位置与经典模式一致），
+   行本身留给拇指区暂停键。 */
+.touch-pad.game-tools.is-tools-off > button:not([data-thumb-pause]) { visibility: hidden; pointer-events: none; }
+
+/* ---------- 2) 恢复门与结算防误触 ---------- */
+.ac-resume-gate {
+  position: absolute;
+  left: 50%;
+  top: 50%;
+  z-index: 3;
+  transform: translate(-50%, -50%);
+  max-width: calc(100% - 16px);
+  padding: 8px 14px;
+  border: 1px solid var(--ac-line);
+  border-radius: 999px;
+  background: rgba(7, 11, 24, 0.84);
+  color: var(--ac-ink);
+  font-size: 13px;
+  font-weight: 700;
+  letter-spacing: 0.5px;
+  white-space: nowrap;
+  pointer-events: none;
+}
+/* 结算弹层刚出现的 450ms：面板不接收指针，按钮淡入，挡掉死亡瞬间还在连点的那几下。 */
+.overlay.is-fresh .overlay-panel { pointer-events: none; }
+.overlay.is-fresh .overlay-panel .ac-btn { animation: ac-btn-fresh-in 0.28s ease 0.12s both; }
+@keyframes ac-btn-fresh-in {
+  from { opacity: 0.35; transform: translateY(4px); }
+  to { opacity: 1; transform: none; }
+}
+
+/* ---------- 3) 矮视口紧凑模式 ---------- */
+@media (max-width: 620px) and (max-height: 700px) {
+  /* 返还量 = 说明行自然高度 + 行距（引擎写入 --ac-hint-refund）减去顶部多出的内边距（--ac-top-extra）；
+     说明行仍需可见的情况不返还。 */
+  body.arcade-body {
+    --ac-top-extra: 0px;
+    --ac-compact-refund: calc(var(--ac-hint-refund, 0px) - var(--ac-top-extra));
+  }
+  body.arcade-body.is-career-run { --ac-compact-refund: calc(0px - var(--ac-top-extra)); }
+  /* 黄金矿工窄画布：画布下方要留一条给悬浮暂停钮，所以只返还说明行高度减 20px。 */
+  html:not(.studiokit-shell-standalone) body.arcade-body.dock-narrow {
+    --ac-compact-refund: max(0px, calc(var(--ac-hint-refund, 0px) - 20px));
+  }
+  /* 站点壳条与游戏顶栏重复显示标题：矮屏只留游戏顶栏，返回改用顶栏自带的箭头。 */
+  body.arcade-body.has-arcade-game-shell:not(.arcade-immersive) > .studiokit-shellbar { display: none; }
+  body.arcade-body.has-arcade-game-shell:not(.arcade-immersive) .game-topbar .ac-back { display: inline-flex; }
+  /* 说明行以键盘键位为主，矮屏让位给画布；职业委托的目标行是戏内信息，保留。 */
+  body.arcade-body:not(.arcade-immersive):not(.is-career-run) .game-page .game-hint { display: none; }
+  /* 拇指抬升（--ac-thumb-lift / --block-pad-lift，0.12.0）刻意不动：它解决的是按钮离「设备」
+     底边太近，与视口高度无关，独立窗口和全屏在矮屏上同样需要。 */
+  html.studiokit-shell-standalone body.arcade-body:not(.arcade-immersive) .game-page {
+    padding-top: max(10px, env(safe-area-inset-top, 0px));
+  }
+  /* 独立窗口的顶部安全区原本由站点壳条承担；壳条收起后页面自己让位，
+     多出的内边距（安全区减去原本的 10px）要从舞台高度里扣回来。 */
+  html.studiokit-shell-standalone body.arcade-body:not(.arcade-immersive) {
+    --ac-top-extra: max(0px, calc(env(safe-area-inset-top, 0px) - 10px));
+  }
+  /* 黄金矿工窄画布：说明行的位置空出来，悬浮暂停钮放在画布下方右侧。 */
+  html:not(.studiokit-shell-standalone) body.arcade-body.dock-narrow:not(.arcade-immersive) .toolbelt:not(.dock-wide) .ac-thumb-pause {
+    display: block;
+    position: fixed;
+    right: max(10px, env(safe-area-inset-right, 0px));
+    bottom: calc(8px + env(safe-area-inset-bottom, 0px));
+    z-index: 3;
+    min-width: 56px;
+  }
+  /* 弹层改为底部弹层：舞台太矮时面板内的按钮曾被折进滚动区、首屏看不到「开始游戏」。
+     说明文字在弹层内部滚动，按钮始终可见并落在拇指区。 */
+  body.arcade-body .game-page .overlay {
+    position: fixed;
+    z-index: 40;
+    align-items: flex-end;
+    padding: 0 10px max(10px, env(safe-area-inset-bottom, 0px));
+  }
+  body.arcade-body .game-page .overlay.is-reviewing { padding: 0; }
+  body.arcade-body.has-overlay .stage-box { z-index: 6; }
+  body.arcade-body .game-page .overlay-panel {
+    display: flex;
+    flex-direction: column;
+    width: min(440px, 100%);
+    max-width: none;
+    max-height: calc(100dvh - var(--studiokit-shellbar-h, 0px) - 64px - env(safe-area-inset-top, 0px));
+    margin: 0 auto;
+    padding: 18px 16px 14px;
+    overflow: hidden;
+  }
+  body.arcade-body .game-page .overlay-panel > * { flex-shrink: 0; }
+  body.arcade-body .game-page .overlay-panel > [data-ov-text] {
+    flex-shrink: 1;
+    min-height: 0;
+    overflow-y: auto;
+    -webkit-overflow-scrolling: touch;
+  }
+  body.arcade-body .game-page .overlay-panel > .ac-btn { width: 100%; }
+  body.arcade-body .game-page .overlay.is-result .ac-review-fab {
+    top: calc(var(--studiokit-shellbar-h, 0px) + 58px + env(safe-area-inset-top, 0px));
+  }
+  /* 选关 / 机库等挂在舞台里的面板同样提出来：紧凑模式下舞台只有 200 多像素宽，
+     面板挤在里面又窄又要滚。面板从顶栏下方（10 + 44 + 8 = 62px）起铺满剩余屏幕。 */
+  body.arcade-body .game-page .challenge-layer,
+  body.arcade-body .game-page .challenge-sheet,
+  body.arcade-body .game-page .stage-box > .challenge-select,
+  body.arcade-body .game-page .stage-box > .hangar-panel,
+  body.arcade-body .game-page .stage-wrap > .ac-challenge-panel {
+    position: fixed;
+    inset: calc(var(--studiokit-shellbar-h, 0px) + 62px + env(safe-area-inset-top, 0px)) 0 max(0px, env(safe-area-inset-bottom, 0px));
+    z-index: 45;
+    box-sizing: border-box;
+    padding: 10px;
+    max-height: none;
+    max-width: none;
+    border-radius: 0;
+    justify-content: flex-start;
+  }
+  /* .challenge-sheet / .challenge-select 自身只是不带底色的容器：补一层与 .challenge-layer 一致的深色底，
+     盖住下面的画布与道具行（指针也一并挡住）。 */
+  body.arcade-body .game-page .challenge-sheet,
+  body.arcade-body .game-page .stage-box > .challenge-select { background: rgba(8, 13, 28, 0.96); }
+  /* 部分游戏打开选关层时不关闭开局弹层（原先靠选关层盖在弹层上）。弹层改成全屏底部弹层后，
+     它的模糊蒙层会从选关层底下透出来、把顶栏也糊掉：选关层打开时不再绘制弹层。
+     同时把舞台的层级抬到道具行之上——否则星海突击的道具行会画在选关 / 机库面板上面。
+     面板从顶栏下方开始，两者不重叠；:has() 不可用的旧浏览器只是观感差异，功能不受影响。 */
+  body.arcade-body:has(.game-page :is([data-ch-layer], .challenge-sheet, .stage-box > .challenge-select, .stage-wrap > .ac-challenge-panel):not([hidden])) .game-page .overlay { visibility: hidden; }
+  body.arcade-body:has(.game-page :is([data-ch-layer], .challenge-sheet, .stage-box > .challenge-select, .stage-wrap > .ac-challenge-panel, .stage-box > .hangar-panel):not([hidden])) .stage-box { z-index: 7; }
+}
+@media (max-width: 620px) and (min-height: 561px) and (max-height: 700px) {
+  /* 独立窗口：说明行本来就已隐藏、拇指抬升保持不变，没有可返还的高度——
+     画布只吃掉壳条让出的那一条。 */
+  html.studiokit-shell-standalone body.arcade-body:not(.arcade-immersive) { --ac-compact-refund: calc(0px - var(--ac-top-extra)); }
+}
+@media (prefers-reduced-motion: reduce) {
+  .overlay.is-fresh .overlay-panel .ac-btn { animation: none; }
 }

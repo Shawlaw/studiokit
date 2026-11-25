@@ -228,6 +228,7 @@
     <div class="stage-wrap">
       <div class="stage-box">
         <canvas class="game-canvas" aria-label="星海突击游戏画面"></canvas>
+        <button type="button" class="ac-thumb-pause ac-pause-chip" data-thumb-pause aria-label="暂停游戏">⏸</button>
         <div class="overlay" data-overlay hidden>
           <div class="overlay-panel">
             <h2 data-ov-title>星海突击</h2>
@@ -1680,10 +1681,18 @@
       function syncItemButtons() {
         if (!dom.itemButtons || !dom.itemButtons.length) return;
         const inChallenge = mode === 'challenge';
+        const filled = run.items.filter(Boolean).length;
+        let emptyPlaceholderShown = false;
         dom.itemButtons.forEach((button) => {
           const slot = Number(button.getAttribute('data-item-slot'));
           const inRange = slot < run.itemCap;
-          button.hidden = !inRange || inChallenge;
+          /* 0.19.0 经典模式：空槽只保留一格作容量指示，把行宽让给三个主动道具（割草模式槽位常满，不变）。 */
+          let hidden = !inRange || inChallenge;
+          if (!isMow() && inRange && !run.items[slot]) {
+            if (emptyPlaceholderShown) hidden = true;
+            else emptyPlaceholderShown = true;
+          }
+          button.hidden = hidden;
           if (!inRange) return;
           const type = run.items[slot] || null;
           const spec = type ? ITEM_SPECS[type] : null;
@@ -1698,14 +1707,15 @@
             button.title = spec.name + '（' + (4 + slot) + '）：' + spec.desc + costText;
             button.style.borderColor = spec.color;
           } else {
-            button.innerHTML = '<span class="item-icon" aria-hidden="true">▢</span><span class="item-name">军械</span>';
-            button.setAttribute('aria-label', '空的大杀器槽位 ' + (slot + 1) + '（快捷键 ' + (4 + slot) + '）');
+            button.innerHTML = '<span class="item-icon" aria-hidden="true">▢</span><span class="item-name">军械 ' + filled + '/' + run.itemCap + '</span>';
+            button.setAttribute('aria-label', '空的大杀器槽位 ' + (slot + 1) + '（快捷键 ' + (4 + slot) + '），已持有 ' + filled + '/' + run.itemCap);
             button.title = '空槽位：击落敌机有几率获得稀有军械，或从 Boss 后的整备中领取';
             button.style.borderColor = '';
           }
         });
         if (dom.gameTools) {
-          const cols = inChallenge ? 2 : 3 + run.itemCap;
+          const slots = isMow() ? run.itemCap : Math.min(run.itemCap, filled + (filled < run.itemCap ? 1 : 0));
+          const cols = inChallenge ? 2 : 3 + slots;
           dom.gameTools.style.gridTemplateColumns = 'repeat(' + Math.max(1, Math.min(6, cols)) + ', minmax(0, 1fr))';
         }
       }
@@ -2533,19 +2543,19 @@
 
       function bindJoyTools() {
         document.querySelectorAll('[data-joy-tool]').forEach((button) => {
-          button.addEventListener('click', () => {
+          A.bindPress(button, () => {
             joyLastResult = activateJoyTool(button.dataset.joyTool);
           });
         });
         /* 编队是 0.13.0 新加的特殊装备按钮：独立 data 属性，不改变既有「每款游戏 2 个主动道具」契约。 */
         document.querySelectorAll('[data-squad-tool]').forEach((button) => {
-          button.addEventListener('click', () => {
+          A.bindPress(button, () => {
             joyLastResult = activateJoyTool(button.dataset.squadTool);
           });
         });
         if (dom.itemButtons) {
           dom.itemButtons.forEach((button) => {
-            button.addEventListener('click', () => {
+            A.bindPress(button, () => {
               useItem(button.getAttribute('data-item-slot'));
             });
           });
@@ -3127,7 +3137,7 @@
         if (state !== 'paused') return;
         state = 'playing';
         ui.hide();
-        loop.resume();
+        loop.resume({ gate: true });
         pauseUi.sync();
         syncJoyTools();
       }
@@ -3345,12 +3355,14 @@
         } else {
           ui.show({
             title: '星海突击',
-            text:
-              '纵版弹幕射击：击落敌机，躲开弹幕。<br/>' +
-              '吃下 <b>散射 / 激光 / 追踪 / 速射</b>，同种可叠加时长；能量见底会火力下降，记得捡能量核心<br/>' +
-              'Boss 后三选一整备继续下一星区 · 编队 3 · 大杀器 4–7<br/>' +
-              '机库星币 <b>' + hangar.credits + '</b> · 已远征 ' + hangar.runs + ' 次<br/>' +
-              '<b>星海割草</b>：模拟割草演武，弹种常驻 / 大杀器满载无限 / 敌潮密集；<b>不记分、不给星币</b>',
+            /* 0.19.0 窄屏开局文案只留要点：矮视口下弹层空间有限，详细机制在道具提示与机库里。 */
+            text: window.matchMedia && window.matchMedia('(max-width: 620px)').matches
+              ? '纵版弹幕射击：拖动移动，自动开火，躲开弹幕。<br/>击破 Boss 后三选一整备，继续下一星区<br/>机库星币 <b>' + hangar.credits + '</b> · 已远征 ' + hangar.runs + ' 次'
+              : '纵版弹幕射击：击落敌机，躲开弹幕。<br/>' +
+                '吃下 <b>散射 / 激光 / 追踪 / 速射</b>，同种可叠加时长；能量见底会火力下降，记得捡能量核心<br/>' +
+                'Boss 后三选一整备继续下一星区 · 编队 3 · 大杀器 4–7<br/>' +
+                '机库星币 <b>' + hangar.credits + '</b> · 已远征 ' + hangar.runs + ' 次<br/>' +
+                '<b>星海割草</b>：模拟割草演武，弹种常驻 / 大杀器满载无限 / 敌潮密集；<b>不记分、不给星币</b>',
             btn: '开始游戏',
             onBtn: startGame,
             btn2: hasChallenge ? '挑战 6 关' : '挑战数据不可用',
@@ -5244,7 +5256,7 @@
       }
 
       /* ---------- 输入与循环 ---------- */
-      const loop = A.createLoop({
+      const loop = A.createLoop({ input,
         update,
         render,
         onAutoPause() {

@@ -4,15 +4,15 @@
  *
  * 用真实 Chrome + Service Worker 覆盖：
  * - P01/P02 中心页注册 SW 并等待 ready；线上 sw.js 的 VERSION / CACHE_PREFIX 推导缓存键
- *   `studiokit-arcade-0.18.1-v3`，`caches.keys()` 含该键，SW 版本握手一致
+ *   `studiokit-arcade-0.19.0-v1`，`caches.keys()` 含该键，SW 版本握手一致
  * - P03 sw.js `CORE_PATHS` 全量在核心缓存中，且 career 运行时/内容/UI 14 项逐个存在
  *   （按 registration.scope 相对 URL 断言）
- * - P04 中心页基线：16 张游戏卡 + 版本 0.18.1（career 不破坏中心页）
+ * - P04 中心页基线：16 张游戏卡 + 版本 0.19.0（career 不破坏中心页）
  * - P05/P06 在线游戏页（`?careerTest=1#test`）发现前无剧透 DOM，真实 `observe()`×2 +
  *   `finish()` 产出一条线索（CL-memory-flip / reason=event），并直接读 IndexedDB
  *   断言 discovery 行与 state 快照都已落库
  * - P07~P11 CDP `Network.emulateNetworkConditions({offline:true})` 置离线后 reload：
- *   导航由 SW 缓存兜底（离线期间服务器零文档请求）、engine 版本 0.18.1、
+ *   导航由 SW 缓存兜底（离线期间服务器零文档请求）、engine 版本 0.19.0、
  *   `ArcadeCareer.available===true`（career 资源来自缓存）、`openMailbox()` 可打开并显示
  *   已发现线索、无未捕获异常/console error（区分并忽略离线网络噪声）、离线中心页 16 卡正常
  * - P12 恢复在线；P13 Cloudflare 兼容无后缀 URL（`games/memory-flip`）gameId / 生涯事件正常
@@ -32,9 +32,9 @@ import { CDP, REPO_ROOT, createRecorder, envPort, launchChrome, openPage, sleep,
 
 const ARTIFACTS = path.join(REPO_ROOT, 'test-artifacts');
 const DB_NAME = 'studiokit:arcade:career';
-const SW_VERSION = '0.18.1';
+const SW_VERSION = '0.19.0';
 const CACHE_PREFIX = 'studiokit-arcade-';
-const CACHE_KEY = `${CACHE_PREFIX}${SW_VERSION}-v3`;
+const CACHE_KEY = `${CACHE_PREFIX}${SW_VERSION}-v1`;
 const OLD_CACHE_KEY = 'studiokit-arcade-0.14.0-v1';
 /* 任务卡点名的 career 运行时 / 内容 / UI 资源（sw.js CORE_PATHS 中的 14 项）。 */
 const CAREER_CORE_PATHS = [
@@ -572,7 +572,7 @@ async function main() {
       assert(state.readyScope === ARCADE_BASE, 'navigator.serviceWorker.ready 的 scope 应为 ' + ARCADE_BASE + '，实际 ' + JSON.stringify(state.readyScope));
       assert(state.controller === true && state.controllerScript === ARCADE_BASE + 'sw.js',
         '页面未被 SW 控制（controller=' + state.controller + '，script=' + state.controllerScript + '）');
-      assert(state.arcadeVersion === '0.18.1', '中心页 Arcade.version 应为 0.18.1，实际 ' + JSON.stringify(state.arcadeVersion));
+      assert(state.arcadeVersion === '0.19.0', '中心页 Arcade.version 应为 0.19.0，实际 ' + JSON.stringify(state.arcadeVersion));
       assert(startDeleteStatus === 'ok', '测试开始时 deleteDatabase(' + DB_NAME + ') 未成功: ' + startDeleteStatus);
       return { scope: state.scope, controllerScript: state.controllerScript, startDelete: startDeleteStatus };
     });
@@ -613,11 +613,11 @@ async function main() {
       return { cacheKey: probe.key, entries: cached.size, career: CAREER_CORE_PATHS.length, corePaths: swCorePaths.length };
     });
 
-    await check('P04 中心页基线：16 张游戏卡 + 版本 0.18.1（career 不破坏中心页）', async () => {
+    await check('P04 中心页基线：16 张游戏卡 + 版本 0.19.0（career 不破坏中心页）', async () => {
       const hall = await cdp.evaluate(HALL_SRC);
       assert(hall.cards === 16, '中心页游戏卡应为 16，实际 ' + hall.cards);
-      assert(hall.arcadeVersion === '0.18.1', 'Arcade.version 应为 0.18.1，实际 ' + JSON.stringify(hall.arcadeVersion));
-      assert(hall.versionText.indexOf('0.18.1') !== -1, '中心页版本文案应含 0.18.1，实际 ' + JSON.stringify(hall.versionText));
+      assert(hall.arcadeVersion === '0.19.0', 'Arcade.version 应为 0.19.0，实际 ' + JSON.stringify(hall.arcadeVersion));
+      assert(hall.versionText.indexOf('0.19.0') !== -1, '中心页版本文案应含 0.19.0，实际 ' + JSON.stringify(hall.versionText));
       assert(hall.offlineFallback === false, '中心页命中了离线兜底页');
       return { cards: hall.cards, version: hall.arcadeVersion, versionText: hall.versionText.trim() };
     });
@@ -725,9 +725,9 @@ async function main() {
       };
     });
 
-    await check('P08 离线页 engine 0.18.1 + career 资源全部来自缓存（available/info 无加载错误）', async () => {
+    await check('P08 离线页 engine 0.19.0 + career 资源全部来自缓存（available/info 无加载错误）', async () => {
       const page = await cdp.evaluate(OFFLINE_PAGE_SRC);
-      assert(page.engineVersion === '0.18.1', '离线页 Arcade.version 应为 0.18.1，实际 ' + JSON.stringify(page.engineVersion));
+      assert(page.engineVersion === '0.19.0', '离线页 Arcade.version 应为 0.19.0，实际 ' + JSON.stringify(page.engineVersion));
       assert(page.careerAvailable === true, '离线页 ArcadeCareer.available 应为 true（career 资源来自缓存），实际 ' +
         detail({ available: page.careerAvailable, reason: page.careerInfo && page.careerInfo.reason }));
       assert(page.careerGameId === 'memory-flip', '离线页 gameId 应为 memory-flip，实际 ' + JSON.stringify(page.careerGameId));
@@ -778,13 +778,13 @@ async function main() {
       return { real: 0, offlineNetworkNoise: split.noise.length, sample: split.noise.slice(0, 2) };
     });
 
-    await check('P11 离线中心页：16 张卡 + 版本 0.18.1，career 不破坏中心页且无错误', async () => {
+    await check('P11 离线中心页：16 张卡 + 版本 0.19.0，career 不破坏中心页且无错误', async () => {
       await cdp.navigate(HUB_URL);
       await cdp.waitFor('document.querySelectorAll(".hall-card").length === 16', { timeout: 20000 });
       const hall = await cdp.evaluate(HALL_SRC);
       assert(hall.cards === 16, '离线中心页游戏卡应为 16，实际 ' + hall.cards);
-      assert(hall.arcadeVersion === '0.18.1', '离线中心页 Arcade.version 应为 0.18.1，实际 ' + JSON.stringify(hall.arcadeVersion));
-      assert(hall.versionText.indexOf('0.18.1') !== -1, '离线中心页版本文案应含 0.18.1，实际 ' + JSON.stringify(hall.versionText));
+      assert(hall.arcadeVersion === '0.19.0', '离线中心页 Arcade.version 应为 0.19.0，实际 ' + JSON.stringify(hall.arcadeVersion));
+      assert(hall.versionText.indexOf('0.19.0') !== -1, '离线中心页版本文案应含 0.19.0，实际 ' + JSON.stringify(hall.versionText));
       assert(hall.offlineFallback === false, '离线中心页命中了 SW 未预载兜底页');
       assert(hall.careerPanel === false, '中心页不应出现生涯面板（0.15 无显眼入口）');
       const split = splitErrors(cdp.errors.slice());
@@ -843,7 +843,7 @@ async function main() {
     await check('P14 GitHub Pages 子路径（/studiokit/apps/arcade/...）：SW scope / career 基址 / 资源零 404', async () => {
       const hubScope = await cdp.evaluate(`navigator.serviceWorker.getRegistration().then((reg) => reg ? reg.scope : null)`);
       assert(hubScope === BASE + '/studiokit/apps/arcade/', 'GH 子路径 SW scope 应为 ' + BASE + '/studiokit/apps/arcade/，实际 ' + detail(hubScope));
-      assert(ghHub.cards === 16 && ghHub.arcadeVersion === '0.18.1' && ghHub.offlineFallback === false,
+      assert(ghHub.cards === 16 && ghHub.arcadeVersion === '0.19.0' && ghHub.offlineFallback === false,
         'GH 子路径中心页异常: ' + detail({ cards: ghHub.cards, version: ghHub.arcadeVersion, fallback: ghHub.offlineFallback }));
       const gh = await cdp.evaluate(GH_PAGE_SRC);
       assert(gh.gameId === 'memory-flip', 'GH 子路径 gameId 应为 memory-flip，实际 ' + detail(gh.gameId));

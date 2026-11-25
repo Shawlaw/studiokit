@@ -413,7 +413,7 @@
         if (state !== 'paused') return;
         state = 'playing';
         ui.hide();
-        loop.resume();
+        loop.resume({ gate: true });
         pauseUi.sync();
         joyTools.sync();
       }
@@ -1076,15 +1076,7 @@
 
         if (input.pointer.wentDown) {
           lastPointer = { x: input.pointer.x, y: input.pointer.y };
-          let best = -1;
-          let bestDist = Infinity;
-          HOLES.forEach((hole, i) => {
-            const d = Math.hypot(input.pointer.x - hole.x, input.pointer.y - hole.y);
-            if (d < HOLE_R + 22 && d < bestDist) {
-              bestDist = d;
-              best = i;
-            }
-          });
+          const best = nearestClassicHole(input.pointer.x, input.pointer.y);
           if (best >= 0) tapSlot(best);
         }
 
@@ -1271,7 +1263,7 @@
       const joyTools = A.createToolbelt([
         { id: 'rush', icon: '🌟', name: '金鼠三连', description: '接下来三次实际生成都是金鼠', getCount: () => tools.rush, use: () => useTool('rush'), active: () => goldRushSpawns > 0 },
         { id: 'shield', icon: '🛡', name: '安心锤', description: '6 秒内炸弹不扣心、时间和连击', getCount: () => tools.shield, use: () => useTool('shield'), active: () => shieldTimer > 0 },
-      ], { isPlaying: () => state === 'playing' && mode === 'classic', keys: ['q', 'e'], label: '打地鼠道具', placement: 'below' });
+      ], { isPlaying: () => state === 'playing' && mode === 'classic', keys: ['q', 'e'], label: '打地鼠道具', placement: 'below', pause: true, press: true });
 
       window.addEventListener('keydown', (e) => {
         const n = Number(e.key);
@@ -1280,16 +1272,37 @@
 
       /* 挑战模式双指并点：共享输入只跟踪一根画布指针，这里为额外手指补一条页面本地判定路径。
          仅挑战模式生效；主指针仍由共享输入处理，避免同一次点击被记两次。 */
+      let classicSecondFingerTaps = 0;
+      /* 最近的可敲地鼠（判定圈半径 = 洞半径 + 22，相邻判定圈重叠时取最近）。 */
+      function nearestClassicHole(x, y) {
+        let best = -1;
+        let bestDist = Infinity;
+        HOLES.forEach((hole, i) => {
+          const d = Math.hypot(x - hole.x, y - hole.y);
+          if (d < HOLE_R + 22 && d < bestDist) {
+            bestDist = d;
+            best = i;
+          }
+        });
+        return best;
+      }
       canvas.addEventListener('pointerdown', (e) => {
-        if (mode !== 'challenge' || state !== 'playing') return;
+        if (state !== 'playing' || (mode !== 'challenge' && mode !== 'classic')) return;
         if (input.pointer.id === e.pointerId) return;
         const rect = canvas.getBoundingClientRect();
         if (!rect.width || !rect.height) return;
         e.preventDefault();
         const x = ((e.clientX - rect.left) / rect.width) * W;
         const y = ((e.clientY - rect.top) / rect.height) * H;
-        const index = chNearestHole(x, y);
-        if (index >= 0) chTap(index);
+        if (mode === 'challenge') {
+          const index = chNearestHole(x, y);
+          if (index >= 0) chTap(index);
+          return;
+        }
+        /* 0.19.0 经典模式同样认第二根手指：坐着双手时可以双拇指一起敲。 */
+        const classic = nearestClassicHole(x, y);
+        classicSecondFingerTaps += 1;
+        if (classic >= 0) tapSlot(classic);
       });
 
       function drawMole(mole, index) {
@@ -1523,7 +1536,7 @@
         ctx.restore();
       }
 
-      const loop = A.createLoop({
+      const loop = A.createLoop({ input,
         update,
         render,
         onAutoPause() {
@@ -1572,6 +1585,7 @@
               tools: { rush: tools.rush, shield: tools.shield },
               goldRushSpawns,
               shieldTimer,
+              classicSecondFingerTaps,
               floaters: floaters.map((f) => f.text),
             };
           },

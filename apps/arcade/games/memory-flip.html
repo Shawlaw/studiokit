@@ -1167,19 +1167,40 @@
         return true;
       }
 
-      function handleTap(x, y) {
+      /* 0.19.0：命中取「离指尖最近的牌心」而不是闭区间——牌与牌之间 6–12 逻辑像素的间隙不再是指针死区。
+         离最近牌心超过「半张牌 + 间隙」的点（HUD、棋盘外沿）不算点在牌上。 */
+      function cardAt(x, y) {
+        let best = null;
+        let bestDist = Infinity;
+        for (const card of cards) {
+          const rect = cardRect(card);
+          const d = Math.max(Math.abs(x - (rect.x + rect.w / 2)), Math.abs(y - (rect.y + rect.h / 2)));
+          if (d < bestDist) {
+            bestDist = d;
+            best = card;
+          }
+        }
+        if (!best || bestDist > Math.max(layout.cw, layout.ch) / 2 + layout.gap) return null;
+        return best;
+      }
+
+      /* 0.19.0 抬起确认：按下只选中，抬起时指尖仍在同一张牌上才翻开，滑开即取消。
+         此前按下即翻且不可撤销，走路或急刹时手一抖就翻错牌。预览期点按跳过仍在按下时生效。 */
+      let tapCard = null;
+      function handleTapDown(x, y) {
+        tapCard = null;
         if (state !== 'playing') return;
         if (previewTimer > 0) {
           skipPreview();
           return;
         }
-        for (const card of cards) {
-          const rect = cardRect(card);
-          if (x >= rect.x && x <= rect.x + rect.w && y >= rect.y && y <= rect.y + rect.h) {
-            reveal(card);
-            return;
-          }
-        }
+        tapCard = cardAt(x, y);
+      }
+      function handleTapUp(x, y) {
+        const card = tapCard;
+        tapCard = null;
+        if (!card || state !== 'playing') return;
+        if (cardAt(x, y) === card) reveal(card);
       }
 
       function updateChallenge(dt) {
@@ -1215,7 +1236,9 @@
             joyTools.sync();
           }
         }
-        if (input.pointer.wentDown) handleTap(input.pointer.x, input.pointer.y);
+        /* 一次极快的点按可能落在同一帧：先选后抬，同一位置即视为确认。 */
+        if (input.pointer.wentDown) handleTapDown(input.pointer.x, input.pointer.y);
+        if (input.pointer.wentUp) handleTapUp(input.pointer.x, input.pointer.y);
         syncChallengeHud();
         input.endFrame();
       }
@@ -1269,7 +1292,9 @@
             mismatchTimer = 0;
           }
         }
-        if (input.pointer.wentDown) handleTap(input.pointer.x, input.pointer.y);
+        /* 一次极快的点按可能落在同一帧：先选后抬，同一位置即视为确认。 */
+        if (input.pointer.wentDown) handleTapDown(input.pointer.x, input.pointer.y);
+        if (input.pointer.wentUp) handleTapUp(input.pointer.x, input.pointer.y);
         input.endFrame();
       }
 
@@ -1390,6 +1415,8 @@
         }
       }
 
+      /* 0.19.0：挑战选关层的「返回开始」此前只有显隐、没有绑定，点了没反应。 */
+      if (chDom.back) chDom.back.addEventListener('click', () => backToStartFromPanel());
       const loop = A.createLoop({
         update,
         render,
@@ -1429,6 +1456,8 @@
               score,
               moves,
               cardList: cards.map((c) => ({ id: c.id, symbol: c.symbol, matched: c.matched })),
+              /* 0.19.0 门禁用：每张牌的逻辑坐标矩形（抬起确认 / 最近牌心命中的验证需要）。 */
+              cardRects: cards.map((c) => cardRect(c)),
             };
           },
           joyInfo() {

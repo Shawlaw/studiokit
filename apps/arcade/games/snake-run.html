@@ -49,6 +49,10 @@
     /* 浏览器与 PWA 共用 360×430，方向键紧跟棋盘。 */
     body.has-snake-pad:not(.arcade-immersive) .game-page { gap: 6px; }
     body.has-snake-pad:not(.arcade-immersive) .stage-wrap { flex: 0 0 auto; }
+    /* 0.19.0 触屏高屏：棋盘与方向键作为一组贴到页面底部，空白留在顶部，方向键落进拇指区。 */
+    @media (hover: none), (max-width: 620px) {
+      body.has-snake-pad:not(.arcade-immersive) .stage-wrap { flex: 1 0 auto; align-items: flex-end; }
+    }
     #snake-stage {
       aspect-ratio: 360 / 430;
       height: min(
@@ -118,6 +122,7 @@
       <button type="button" class="touch-btn" data-joy-tool="trim" aria-label="轻身剪，剩余 1 次（快捷键 2）" title="轻身剪（2）：去掉尾巴 6 节，最短保留 3 节，不扣分">
         <span aria-hidden="true">✂</span><span>轻身</span><span data-joy-count aria-hidden="true">1</span>
       </button>
+      <button type="button" class="ac-thumb-pause" data-thumb-pause aria-label="暂停游戏">⏸</button>
     </div>
     <p class="game-hint snake-hint">方向键 / WASD / 在棋盘上滑动 · 道具 1/2 · 吃满 20 个果实丰收收局 · P / Esc 暂停</p>
   </main>
@@ -604,7 +609,7 @@
 
       function bindJoyTools() {
         document.querySelectorAll('[data-joy-tool]').forEach((button) => {
-          button.addEventListener('click', () => {
+          A.bindPress(button, () => {
             joyLastResult = activateJoyTool(button.dataset.joyTool);
           });
         });
@@ -682,7 +687,7 @@
         if (state !== 'paused') return;
         state = 'playing';
         ui.hide();
-        loop.resume();
+        loop.resume({ gate: true });
         pauseUi.sync();
         syncJoyTools();
       }
@@ -1510,7 +1515,9 @@
         }
       }
 
-      const loop = A.createLoop({
+      /* 0.19.0：挑战选关层的「返回开始」此前只有显隐、没有绑定，点了没反应。 */
+      if (chDom.back) chDom.back.addEventListener('click', () => backToStartFromPanel());
+      const loop = A.createLoop({ input,
         update,
         render,
         onAutoPause() {

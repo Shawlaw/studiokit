@@ -869,29 +869,25 @@
         return x >= rect.x && x <= rect.x + rect.w && y >= rect.y && y <= rect.y + rect.h;
       }
 
-      function handleTap() {
-        const x = input.pointer.x;
-        const y = input.pointer.y;
+      /* 0.19.0 抬起确认：按下只高亮候选按钮，抬起时指尖落在哪个按钮上就执行哪个，滑出按钮即取消。
+         要牌 / 停牌只隔 12 逻辑像素，此前按下即生效且不可撤销，抖动一下就会爆牌。 */
+      let pressArmed = false;
+      function choiceAt(x, y) {
         if (phase === 'player') {
-          if (inRect(HIT_RECT, x, y)) {
-            pressTimer = 0.12;
-            pressChoice = 'hit';
-            hit();
-            return;
-          }
-          if (inRect(STAND_RECT, x, y)) {
-            pressTimer = 0.12;
-            pressChoice = 'stand';
-            stand();
-            return;
-          }
+          if (inRect(HIT_RECT, x, y)) return 'hit';
+          if (inRect(STAND_RECT, x, y)) return 'stand';
         } else if (phase === 'settled') {
-          if (inRect(NEXT_RECT, x, y)) {
-            pressTimer = 0.12;
-            pressChoice = 'next';
-            next();
-          }
+          if (inRect(NEXT_RECT, x, y)) return 'next';
         }
+        return null;
+      }
+      function commitChoice(choice) {
+        if (!choice) return;
+        pressTimer = 0.12;
+        pressChoice = choice;
+        if (choice === 'hit') hit();
+        else if (choice === 'stand') stand();
+        else next();
       }
 
       window.addEventListener('keydown', (event) => {
@@ -902,10 +898,13 @@
           if (tag === 'input' || tag === 'textarea' || tag === 'select' || target.isContentEditable) return;
         }
         if (event.key === 'h' || event.key === 'H') {
+          pressArmed = false;
           if (hit()) event.preventDefault();
         } else if (event.key === 's' || event.key === 'S') {
+          pressArmed = false;
           if (stand()) event.preventDefault();
         } else if (event.key === ' ' || event.key === 'Spacebar') {
+          pressArmed = false;
           if (next()) event.preventDefault();
         }
       });
@@ -927,7 +926,17 @@
           return;
         }
         autosave.tick(dt);
-        if (input.pointer.wentDown) handleTap();
+        if (input.pointer.wentDown) pressArmed = true;
+        if (pressArmed) {
+          const here = choiceAt(input.pointer.x, input.pointer.y);
+          if (input.pointer.wentUp) {
+            pressArmed = false;
+            if (here) commitChoice(here);
+          } else if (here) {
+            pressChoice = here;
+            pressTimer = 0.06;
+          }
+        }
         input.endFrame();
       }
 

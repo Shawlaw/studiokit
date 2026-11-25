@@ -362,13 +362,17 @@ const gravityFlipModule = {
         const chUi = await cdp.evaluate(`(() => ({
           chHudHidden: document.querySelector('[data-ch-hud]').hidden,
           classicHudHidden: [...document.querySelectorAll('.game-hud > span')].every((el) => el.hidden),
-          toolsDisplay: document.querySelector('[data-game-tools]').style.display,
-          toolsDisabled: [...document.querySelectorAll('[data-game-tools] button')].every((b) => b.disabled),
+          toolsOff: document.querySelector('[data-game-tools]').classList.contains('is-tools-off'),
+          toolsHidden: [...document.querySelectorAll('[data-game-tools] [data-joy-tool]')].every((b) => getComputedStyle(b).visibility === 'hidden'),
+          toolsDisabled: [...document.querySelectorAll('[data-game-tools] [data-joy-tool]')].every((b) => b.disabled),
+          /* 0.19.0：挑战模式下行尾的拇指区暂停键保留并可用 */
+          thumbPauseUsable: (() => { const b = document.querySelector('[data-game-tools] [data-thumb-pause]'); return !!b && !b.disabled && getComputedStyle(b).visibility !== 'hidden' && b.getBoundingClientRect().width >= 44; })(),
         }))()`);
         ctx.assert(chUi.chHudHidden === false, '挑战模式挑战 HUD 未显示');
         ctx.assert(chUi.classicHudHidden === true, '挑战模式经典 HUD 未隐藏');
-        ctx.assert(chUi.toolsDisplay === 'none', '挑战模式道具区未隐藏');
+        ctx.assert(chUi.toolsOff && chUi.toolsHidden, '挑战模式道具按钮未收起：' + JSON.stringify(chUi));
         ctx.assert(chUi.toolsDisabled === true, '挑战模式道具按钮未禁用');
+        ctx.assert(chUi.thumbPauseUsable === true, '挑战模式拇指区暂停键应保留并可用');
 
         /* 320×568 与 390×844 无横向溢出，按钮 ≥44px */
         const viewports = [

@@ -85,6 +85,7 @@
       <button type="button" class="touch-btn" data-joy-tool="feather" aria-label="羽落，剩余 2 次（快捷键 1）"><span aria-hidden="true">🪶</span> 羽落 <strong data-joy-count>2</strong></button>
       <button type="button" class="touch-btn" data-joy-tool="boost" aria-label="月弹，剩余 2 次（快捷键 2）"><span aria-hidden="true">🌙</span> 月弹 <strong data-joy-count>2</strong></button>
       <button type="button" class="touch-btn touch-btn-air" data-air-dash aria-label="影冲：本跳可用 1 次（Shift / J 或点按）"><span aria-hidden="true">💨</span> 影冲 <strong data-air-dash-count>1</strong></button>
+      <button type="button" class="ac-thumb-pause" data-thumb-pause aria-label="暂停游戏">⏸</button>
     </div>
     <p class="game-hint">←→ / A D 或触摸左右半屏移动 · Shift / J 或点 💨 影冲（着陆补充） · 1 羽落 / 2 月弹 · P / Esc 暂停</p>
   </main>
@@ -331,6 +332,9 @@
       const stage = A.createStage(canvas, W, H);
       const ctx = stage.ctx;
       const input = A.createInput(canvas);
+      /* 0.19.0 触点半屏方向锁：落指按所在半屏定向并锁定，换边需越过中线 40 逻辑像素，
+         几像素的抖动或急刹时手机相对拇指的位移不会让角色瞬间反向。 */
+      const readTouchSide = A.createSideLatch(input, W / 2, 40);
       A.installSfxUnlock();
 
       const dom = {
@@ -809,7 +813,7 @@
         return true;
       }
       Object.keys(joyButtons).forEach((id) => {
-        joyButtons[id].addEventListener('click', () => useJoy(id));
+        A.bindPress(joyButtons[id], () => useJoy(id));
       });
 
       /* ---------- GP004 影冲：一次空中水平短冲，每次着陆补充 ---------- */
@@ -833,7 +837,7 @@
         let dir = 0;
         if (input.isDown('ArrowLeft', 'a')) dir -= 1;
         if (input.isDown('ArrowRight', 'd')) dir += 1;
-        if (input.pointer.down) dir = input.pointer.x < W / 2 ? -1 : 1;
+        if (input.pointer.down) dir = readTouchSide();
         return dir;
       }
       /* 仅用于 #test 观察：角色是否正踩在某块平台上（无尽模式落地即自动起跳）。 */
@@ -861,6 +865,27 @@
           gravity: 0,
         });
       }
+      /* 0.19.0 上滑影冲：转向的拇指不抬指，快速上滑即按当前按住的方向影冲——
+         单手也能做到「按住方向 + 定向影冲」，不必抬指去点道具行里的按钮。一次触控只触发一次。 */
+      const SWIPE_DASH_PX = 56;
+      const SWIPE_DASH_MS = 350;
+      let swipeDash = null;
+      function pollSwipeDash() {
+        const p = input.pointer;
+        if (!p.down) {
+          swipeDash = null;
+          return;
+        }
+        if (!swipeDash) {
+          swipeDash = { y: p.y, at: performance.now(), used: false };
+          return;
+        }
+        if (swipeDash.used || performance.now() - swipeDash.at > SWIPE_DASH_MS) return;
+        if (swipeDash.y - p.y < SWIPE_DASH_PX) return;
+        swipeDash.used = true;
+        tryDash();
+      }
+
       function tryDash() {
         if (state !== 'playing') return false;
         if (dashCharges <= 0 || dashTimer > 0) return false;
@@ -882,7 +907,7 @@
         autosave.saveNow();
         return true;
       }
-      if (dashButton) dashButton.addEventListener('click', () => tryDash());
+      if (dashButton) A.bindPress(dashButton, () => tryDash());
 
       window.addEventListener('keydown', (e) => {
         if (e.repeat || e.metaKey || e.ctrlKey || e.altKey) return;
@@ -1036,7 +1061,7 @@
         if (state !== 'paused') return;
         state = 'playing';
         ui.hide();
-        loop.resume();
+        loop.resume({ gate: true });
         pauseUi.sync(); syncJoyTools();
       }
 
@@ -1921,6 +1946,7 @@
         /* 水平控制：影冲期间锁定为朝向 × DASH_SPEED，不再响应转向；结束后保留冲刺方向惯性。 */
         const ACC = 2400;
         const MAX_VX = 265;
+        pollSwipeDash();
         const dashing = dashTimer > 0;
         if (dashing) {
           dashTimer = Math.max(0, dashTimer - dt);
@@ -2511,7 +2537,7 @@
         }
       }
 
-      const loop = A.createLoop({
+      const loop = A.createLoop({ input,
         update,
         render,
         onAutoPause() {

@@ -139,6 +139,7 @@
             <span class="tool-name">瞄准线</span>
             <span class="tool-count tool-rate" data-tool-count aria-hidden="true">$2/s</span>
           </button>
+          <button type="button" class="ac-thumb-pause" data-thumb-pause aria-label="暂停游戏">⏸</button>
         </div>
         <button type="button" class="ac-btn ac-cashout" data-cashout hidden>达标 · 立即进入下一关</button>
         <span class="ac-challenge-hud" data-ch-hud hidden></span>
@@ -1106,8 +1107,18 @@
         return clamp(H - hidden - 14, 420, H - 90);
       }
 
+      /* 0.19.0 拇指区暂停：画布够宽（≥255px）时它是道具坞第 5 格；太窄时 5 格挤不进 44px，
+         由 arcade.css 的紧凑模式改为悬浮在画布下方（标签页）或不显示，顶栏暂停键始终可用。 */
+      function syncDockPause() {
+        const canvasRect = canvas.getBoundingClientRect();
+        const wide = canvasRect.width >= 255;
+        if (dom.toolbelt) dom.toolbelt.classList.toggle('dock-wide', wide);
+        document.body.classList.toggle('dock-narrow', !wide);
+      }
+
       /* 首帧/地址栏收放/全屏切换可能改变舞台与道具条比例；只向上收，绝不把物品往下推。 */
       function refreshItemFloor() {
+        syncDockPause();
         const next = measureItemFloor();
         itemFloor = next;
         items.forEach((o) => {
@@ -1267,7 +1278,7 @@
         if (state !== 'paused') return;
         state = 'playing';
         ui.hide();
-        loop.resume();
+        loop.resume({ gate: true });
         pauseUi.sync();
         syncCashout();
       }
@@ -2185,7 +2196,7 @@
         }
       }
 
-      const loop = A.createLoop({
+      const loop = A.createLoop({ input,
         update,
         render,
         onAutoPause() {

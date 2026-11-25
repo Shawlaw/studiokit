@@ -63,6 +63,7 @@
       <button type="button" class="touch-btn" data-joy-tool="guide" aria-label="垂线预览，剩余 3 次（快捷键 1）"><span aria-hidden="true">📐</span> 垂线 <strong data-joy-count>3</strong></button>
       <button type="button" class="touch-btn" data-joy-tool="brace" aria-label="配重，剩余 2 次（快捷键 2）"><span aria-hidden="true">⚖️</span> 配重 <strong data-joy-count>2</strong></button>
       <button type="button" class="touch-btn" data-overview-btn aria-label="全览全塔（快捷键 3）" aria-pressed="false"><span aria-hidden="true">🗺</span> 全览</button>
+      <button type="button" class="ac-thumb-pause" data-thumb-pause aria-label="暂停游戏">⏸</button>
     </div>
     <p class="game-hint">吊臂摇摆吊装集装箱 · 点击 / 空格松手 · 1 垂线 / 2 配重 / 3 全览 · 完美对齐有连击 · P / Esc 暂停</p>
   </main>
@@ -693,7 +694,7 @@
         return true;
       }
       Object.keys(joyButtons).forEach((id) => {
-        joyButtons[id].addEventListener('click', () => useJoy(id));
+        A.bindPress(joyButtons[id], () => useJoy(id));
       });
 
       /* ---------- 全览（地图式缩放）：按钮 / 快捷键 3，切换时动画，期间禁止落箱 ---------- */
@@ -715,7 +716,7 @@
         syncJoyTools();
         return overviewActive;
       }
-      if (overviewBtn) overviewBtn.addEventListener('click', toggleOverview);
+      if (overviewBtn) A.bindPress(overviewBtn, toggleOverview);
       window.addEventListener('keydown', (e) => {
         if (e.repeat || e.metaKey || e.ctrlKey || e.altKey) return;
         const target = e.target;
@@ -810,7 +811,7 @@
         if (state !== 'paused') return;
         state = 'playing';
         ui.hide();
-        loop.resume();
+        loop.resume({ gate: true });
         pauseUi.sync(); syncJoyTools();
       }
 
@@ -2540,7 +2541,9 @@
         ctx.restore();
       }
 
-      const loop = A.createLoop({
+      /* 0.19.0：挑战选关层的「返回开始」此前只有显隐、没有绑定，点了没反应。 */
+      if (chDom.back) chDom.back.addEventListener('click', () => backToStartFromPanel());
+      const loop = A.createLoop({ input,
         update,
         render,
         onAutoPause() {

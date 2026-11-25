@@ -982,6 +982,20 @@
         { id: 'hammer', icon: '🧹', name: '小锤', description: '移除一个不超过 64 的方块', getCount: () => tools.hammer, use: () => useTool('hammer'), active: () => armedTool === 'hammer' },
         { id: 'upgrade', icon: '✨', name: '升一级', description: '将一个不超过 256 的方块翻倍', getCount: () => tools.upgrade, use: () => useTool('upgrade'), active: () => armedTool === 'upgrade' },
       ], { isPlaying: () => state === 'playing', keys: ['1', '2'], label: '2048 道具', placement: 'below' });
+      /* 0.19.0：撤销是手机上最高频的辅助操作，顶栏那一颗单手够不到——道具行行尾再放一颗，
+         与顶栏按钮共用同一个 undo()，快捷键 Z 不变。 */
+      if (joyTools.element) {
+        const undoThumb = document.createElement('button');
+        undoThumb.type = 'button';
+        undoThumb.className = 'ac-thumb-pause ac-thumb-undo';
+        undoThumb.setAttribute('data-undo-thumb', '');
+        undoThumb.setAttribute('aria-label', '撤销一步');
+        undoThumb.title = '撤销一步（Z）';
+        undoThumb.textContent = '↶';
+        undoThumb.addEventListener('click', undo);
+        joyTools.element.appendChild(undoThumb);
+        joyTools.element.style.gridTemplateColumns = 'repeat(2, minmax(0, 1fr)) 56px';
+      }
 
       function lineCoords(dir, index, step) {
         if (dir === 'left') return { r: index, c: step };

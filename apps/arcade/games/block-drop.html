@@ -88,8 +88,10 @@
     @media (max-height: 560px) {
       body.arcade-immersive.has-block-layout,
       html.studiokit-shell-standalone .has-block-layout { --block-pad-lift: calc(30px + env(safe-area-inset-bottom)); }
-      .has-block-layout:not(.arcade-immersive) .game-page { height: auto; }
-      .has-block-layout:not(.arcade-immersive) #block-stage { height: max(220px, calc(100dvh - 200px)); }
+      /* 0.19.0：矮视口不再把页面改成可滚动（375×548 下操作键曾被切掉一半）。
+         舞台吃掉顶栏、道具行、操作键之外的剩余高度；只有剩余高度不足 220px（横屏）时才让页面滚动。 */
+      .has-block-layout:not(.arcade-immersive) .stage-wrap,
+      .has-block-layout:not(.arcade-immersive) #block-stage { min-height: 220px; }
     }
     /* 0.8.1 可发现性修复：窄屏开始弹层压缩文案/间距，保证「开始游戏 / 挑战 6 关 / 🧘 禅模式」三个入口首屏完整可见。 */
     @media (max-width: 460px) {
@@ -954,7 +956,7 @@
         if (state !== 'paused') return;
         state = 'playing';
         hideOverlay();
-        loop.resume();
+        loop.resume({ gate: true });
         pauseUi.sync();
         syncTouchPad();
         syncZenBar();
@@ -2059,7 +2061,7 @@
       }
 
       /* ---------- 输入与循环 ---------- */
-      const loop = A.createLoop({
+      const loop = A.createLoop({ input,
         update,
         render,
         onAutoPause() {

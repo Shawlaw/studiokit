@@ -358,12 +358,16 @@ const brickBreakerModule = {
           return {
             chHudHidden: document.querySelector('[data-ch-hud]').hidden,
             classicHudHidden: [...document.querySelectorAll('.game-hud > span')].every((el) => el.hidden),
-            toolsDisplay: tool ? tool.style.display : 'missing',
+            toolsOff: tool ? tool.classList.contains('is-tools-off') : false,
+            toolsHidden: [...document.querySelectorAll('.game-tools .tool-btn')].every((b) => getComputedStyle(b).visibility === 'hidden'),
+            /* 0.19.0：挑战模式下行尾的拇指区暂停键保留并可用 */
+            thumbPauseUsable: (() => { const b = document.querySelector('.game-tools [data-thumb-pause]'); return !!b && !b.disabled && getComputedStyle(b).visibility !== 'hidden' && b.getBoundingClientRect().width >= 44; })(),
           };
         })()`);
         ctx.assert(chUi.chHudHidden === false, '挑战模式挑战 HUD 未显示');
         ctx.assert(chUi.classicHudHidden === true, '挑战模式经典 HUD 未隐藏');
-        ctx.assert(chUi.toolsDisplay === 'none', '挑战模式经典道具栏未隐藏：' + chUi.toolsDisplay);
+        ctx.assert(chUi.toolsOff && chUi.toolsHidden, '挑战模式经典道具未收起：' + JSON.stringify(chUi));
+        ctx.assert(chUi.thumbPauseUsable === true, '挑战模式拇指区暂停键应保留并可用');
 
         const viewports = [
           { width: 320, height: 568 },

@@ -9,12 +9,12 @@
  *   页面通过 arcade-sw-version 查询当前 SW 版本；不再让已安装 PWA 静默停留在旧版本。
  * - 不使用任何远程资源、分析或第三方 API（AGENTS.md 约束 4）。
  */
-const VERSION = '0.18.1';
+const VERSION = '0.19.0';
 const CACHE_PREFIX = 'studiokit-arcade-';
 /* v3 更新同一开发版本的游戏触控、导航与生涯首页。
    全部读写都用 CACHE_NAME 常量，没有第二处硬编码的旧缓存名；
    激活时按 CACHE_PREFIX 前缀清理非当前版本缓存。 */
-const CACHE_NAME = `${CACHE_PREFIX}${VERSION}-v3`;
+const CACHE_NAME = `${CACHE_PREFIX}${VERSION}-v1`;
 const BASE = new URL('./', self.location.href);
 const SCOPE_PATH = BASE.pathname;
 const SHARED_PATH = new URL('../../shared/', BASE).pathname;

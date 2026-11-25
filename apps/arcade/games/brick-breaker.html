@@ -526,7 +526,7 @@
         if (state !== 'paused') return;
         state = 'playing';
         ui.hide();
-        loop.resume();
+        loop.resume({ gate: true });
         pauseUi.sync();
         joyTools.sync();
         if (mode === 'challenge') updateChallengeHud();
@@ -651,7 +651,21 @@
       /* ---------- 发球手势（触屏/鼠标统一） ----------
        * pointerdown 只记录起点；pointermove 超过 8 CSS px 视为拖动挡板；
        * pointerup 时若未拖动且球未发出才发球。经典与 C01–C06 共用；键盘空格发球逻辑不变。 */
-      const LAUNCH_DRAG_PX = 8;
+      /* 0.19.0：8px 在走路/急刹的抖动下会把「想发球」判成拖动，放宽到 14px。 */
+      const LAUNCH_DRAG_PX = 14;
+      /* 0.19.0 相对拖动：挡板跟的是指尖的位移，而不是瞬移到指尖位置。手指可以放在画布任意处
+         （包括上半区），不再挡住位于画布底部的挡板和来球；抖动也不会原样变成挡板跳动。
+         增益 1.2：拇指横向扫过约 200 CSS px 即可覆盖挡板全程。 */
+      const PADDLE_DRAG_GAIN = 1.2;
+      let paddleDrag = null;
+      function dragPaddle(currentX) {
+        if (!input.pointer.down) {
+          paddleDrag = null;
+          return currentX;
+        }
+        if (!paddleDrag) paddleDrag = { px: input.pointer.x, x: currentX };
+        return paddleDrag.x + (input.pointer.x - paddleDrag.px) * PADDLE_DRAG_GAIN;
+      }
       const launchGesture = { tracking: false, dragged: false, startX: 0, startY: 0, pointerId: null };
       function launchGestureDown(event) {
         if (event && event.button != null && event.button !== 0) return;
@@ -895,7 +909,7 @@
         if (input.isDown('ArrowLeft', 'a')) dir -= 1;
         if (input.isDown('ArrowRight', 'd')) dir += 1;
         if (dir !== 0) paddle.x += dir * 380 * dt;
-        if (input.pointer.down) paddle.x = input.pointer.x - paddle.w / 2;
+        if (input.pointer.down) paddle.x = dragPaddle(paddle.x);
         paddle.x = clamp(paddle.x, FIELD.x + 6, FIELD.x + FIELD.w - paddle.w - 6);
 
         /* #test + ?careerTest=1 专用挡板辅助：真实挡板居中跟随真实球（只改 paddle.x）。
@@ -1077,7 +1091,7 @@
       const joyTools = A.createToolbelt([
         { id: 'wide', icon: '↔', name: '主动宽板', description: '立即加宽挡板 10 秒', getCount: () => tools.wide, use: () => useTool('wide'), active: () => wideTimer > 0 },
         { id: 'smash', icon: '🔨', name: '重锤球', description: '接下来三次砖碰直接击碎', getCount: () => tools.smash, use: () => useTool('smash'), active: () => smashHits > 0 },
-      ], { isPlaying: () => state === 'playing', keys: ['1', '2'], label: '砖块计划道具', placement: 'below' });
+      ], { isPlaying: () => state === 'playing', keys: ['1', '2'], label: '砖块计划道具', placement: 'below', pause: true, press: true });
 
       /* ============================================================
        * 0.9 挑战模式（C01–C06）：固定 8×5 砖阵 + K 钥匙砖 / G 门 + 固定球参数
@@ -1111,7 +1125,11 @@
         if (dom.chHud) dom.chHud.hidden = !chMode;
         document.body.classList.toggle('has-subhud', chMode || menuMode);
         const toolbelt = joyTools && joyTools.element ? joyTools.element : document.querySelector('[data-game-tools]');
-        if (toolbelt) toolbelt.style.display = chMode || menuMode ? 'none' : '';
+        /* 0.19.0：挑战模式只收起道具按钮，行尾的拇指区暂停键留在原位；选关菜单里整行照旧隐藏。 */
+        if (toolbelt) {
+          toolbelt.classList.toggle('is-tools-off', chMode);
+          toolbelt.style.display = menuMode ? 'none' : '';
+        }
         joyTools.sync();
         if (chMode) updateChallengeHud();
       }
@@ -1566,7 +1584,7 @@
         if (input.isDown('ArrowLeft', 'a')) dir -= 1;
         if (input.isDown('ArrowRight', 'd')) dir += 1;
         if (dir !== 0) paddle.x += dir * 380 * dt;
-        if (input.pointer.down) paddle.x = input.pointer.x - paddle.w / 2;
+        if (input.pointer.down) paddle.x = dragPaddle(paddle.x);
         paddle.x = clamp(paddle.x, FIELD.x + 6, FIELD.x + FIELD.w - paddle.w - 6);
         if (!ch.launched) {
           ch.ball.x = paddle.x + paddle.w / 2;
@@ -1988,7 +2006,7 @@
         ctx.restore();
       }
 
-      const loop = A.createLoop({
+      const loop = A.createLoop({ input,
         update,
         render,
         onAutoPause() {
