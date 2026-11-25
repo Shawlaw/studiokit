@@ -555,30 +555,38 @@ async function groupB() {
     return 'C2 active';
   });
 
-  await check('B05 C2 由委托结算驱动：memory-flip.T2 → research 满足 → 旗标后 C2 complete', async () => {
+  await check('B05 C2 由委托结算驱动：单份现场记录只满足路线、不授予旗标；两份跨游戏记录才推进', async () => {
     const { core } = fresh();
-    const baseQuests = storyQuests([C0_FLAG, C1_FLAG]).concat(commissionQuests([['memory-flip.T2', []]]));
-    const before = core.state({ quests: baseQuests });
-    const research = routeView(before, 'C2', 'research');
-    eq([research.met, research.available], [true, true], 'research route met+available');
+    /* 路线可满足 ≠ 章节旗标已授予：真实 C2 规则要求跨游戏的两份现场记录。 */
+    const one = storyQuests([C0_FLAG, C1_FLAG]).concat(commissionQuests([['memory-flip.T2', []]]));
+    const before = core.state({ quests: one });
+    eq([routeView(before, 'C2', 'research').met, routeView(before, 'C2', 'research').available], [true, true], 'research route met by one E commission');
+    eq(statusMap(before).C2, 'active', 'C2 flag not granted by one E token');
     eq(routeView(before, 'C2', 'mining').met, false, 'mining not met');
-    const after = core.state({ quests: baseQuests.concat(storyQuests([C2_FLAG])) });
+    /* 旗标由 story-evidence 真实推导（C05 有完整落库证明），这里只验证视图随旗标推进。 */
+    const after = core.state({ quests: one.concat(storyQuests([C2_FLAG])) });
     eq(statusMap(after).C2, 'complete', 'C2 complete');
     eq(statusMap(after).C3, 'active', 'C3 active');
-    return 'C2 complete via memory-flip.T2';
+    return 'one E meets route but not flag; C2 complete after derived flag';
   });
 
-  await check('B06 C3/C4 推进：solitaire.T2 → archive，road-rush.T2 → logistics', async () => {
+  await check('B06 C3/C4 推进：真实产证据的委托驱动路线（不再把无证据 T2 当完章充分条件）', async () => {
     const { core } = fresh();
-    const quests = storyQuests([C0_FLAG, C1_FLAG, C2_FLAG]).concat(commissionQuests([['solitaire.T2', []], ['road-rush.T2', []]]));
+    /* 无证据的 solitaire.T2 / road-rush.T2 仍可清单，但不得让任何 C3/C4 路线显示为已满足。 */
+    const staleQuests = storyQuests([C0_FLAG, C1_FLAG, C2_FLAG]).concat(commissionQuests([['solitaire.T2', []], ['road-rush.T2', []]]));
+    const stale = core.state({ quests: staleQuests });
+    eq(stale.chapters.find((item) => item.chapterId === 'C3').routes.map((route) => route.met), [false, false, false], 'no-evidence T2 routes not met');
+    eq(statusMap(stale).C3, 'active', 'C3 active');
+    /* 真实产记录/底稿的 T3 委托才让路线可用；旗标按真实 story-evidence 推导后再推进。 */
+    const quests = storyQuests([C0_FLAG, C1_FLAG, C2_FLAG]).concat(commissionQuests([['solitaire.T3', []], ['block-drop.T3', []], ['merge-2048.T3', []]]));
     const st = core.state({ quests });
-    eq(routeView(st, 'C3', 'archive').met, true, 'archive met');
-    eq(statusMap(st).C3, 'active', 'C3 active');
+    eq(routeView(st, 'C3', 'archive').met, true, 'archive met by solitaire.T3');
+    eq(routeView(st, 'C3', 'explore').met, false, 'explore not met by archive evidence');
     const st3 = core.state({ quests: quests.concat(storyQuests([C3_FLAG])) });
     eq(statusMap(st3).C3, 'complete', 'C3 complete');
     eq(statusMap(st3).C4, 'active', 'C4 active');
-    eq(routeView(st3, 'C4', 'logistics').met, true, 'logistics met');
-    return 'C3/C4 route requirements driven by commissions';
+    eq(routeView(st3, 'C4', 'logistics').met, true, 'logistics met by block-drop.T3');
+    return 'C3/C4 route requirements driven by real evidence-producing commissions';
   });
 
   await check('B07 C4 完成：C5 available（终局三选一开放），currentChapter=C5', async () => {
@@ -821,8 +829,9 @@ async function groupC() {
       assert(typeof route.hint === 'string' && route.hint.length > 0, route.routeId + ' hint');
       assert(Array.isArray(route.missions), route.routeId + ' missions');
     });
-    eq(c2.routes[0].missions, ['merge-2048.T2', 'merge-2048.T3', 'memory-flip.T2', 'memory-flip.T3'], 'research missions');
-    eq(c2.routes[2].selfReferential, false, 'market route now uses trade commissions, not self flag');
+    eq(c2.routes[0].missions, ['memory-flip.T2', 'merge-2048.T3'], 'research missions (real evidence-producing commissions)');
+    eq(c2.routes[2].missions, ['blackjack.T3', 'solitaire.T3'], 'market missions (trade-window records)');
+    eq(c2.routes[2].selfReferential, false, 'market route uses records, not self flag');
     return 'routes expose requires/rewardFlags/missions/hint';
   });
 }

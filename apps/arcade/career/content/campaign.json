@@ -97,16 +97,14 @@
           "label": "交给晶格研究员",
           "requires": {
             "anyCommissions": [
-              "merge-2048.T2",
-              "merge-2048.T3",
               "memory-flip.T2",
-              "memory-flip.T3"
+              "merge-2048.T3"
             ]
           },
           "rewardFlags": [
             "C2.research_complete"
           ],
-          "hint": "晨光研究院愿意看晶格模型。"
+          "hint": "晨光研究院要《差一张的照片》或《信标电路》里的任意一份记录，交上来就能解译信号。"
         },
         {
           "routeId": "mining",
@@ -120,22 +118,21 @@
           "rewardFlags": [
             "C2.research_complete"
           ],
-          "hint": "雪铃 T3「冰桥观察」带回雪线样本，贪吃蛇 T3「生态样本」带回林地样本；两份 E 都收齐才能给研究组。"
+          "hint": "雪铃的《冰桥观察》带回雪线样本，贪吃蛇的《生态样本》带回林地样本；两份都收齐才能交给研究组。"
         },
         {
           "routeId": "market",
           "label": "买一份认证样本",
           "requires": {
             "anyCommissions": [
-              "blackjack.T2",
-              "gomoku.T2",
-              "solitaire.T2"
+              "blackjack.T3",
+              "solitaire.T3"
             ]
           },
           "rewardFlags": [
             "C2.research_complete"
           ],
-          "hint": "港务处的贸易窗口能买到研究院认证的样本。"
+          "hint": "贸易窗口认《基础风控》或《码头调度》，带一份过来就能换到研究院认证的样本。"
         }
       ],
       "mustKnow": [
@@ -160,46 +157,43 @@
           "requires": {
             "anyCommissions": [
               "shadow-leap.T2",
-              "shadow-leap.T3",
-              "gravity-flip.T2",
               "gravity-flip.T3"
             ]
           },
           "rewardFlags": [
             "C3.truth_found"
           ],
-          "hint": "旧观测站的坐标在月影一侧。"
+          "hint": "月影的旧观测站里有一卷失落卷轴；重力研究的相位记录也能对上时间差，任选其一。"
         },
         {
           "routeId": "ecology",
           "label": "听雪谷的第七段旋律",
           "requires": {
             "anyCommissions": [
-              "snowbells.T2",
               "snowbells.T3",
-              "snake-run.T2",
-              "snake-run.T3"
+              "snake-run.T3",
+              "blackjack.T3"
             ]
           },
           "rewardFlags": [
             "C3.truth_found"
           ],
-          "hint": "雪铃谷的老人们记得七段旋律。"
+          "hint": "雪铃谷的《冰桥观察》、林地的《生态样本》或牌桌的《基础风控》，任意一份都记着那段旋律。"
         },
         {
           "routeId": "archive",
           "label": "查旧档案",
           "requires": {
             "anyCommissions": [
-              "memory-flip.T3",
-              "solitaire.T2",
-              "solitaire.T3"
+              "solitaire.T3",
+              "merge-2048.T3",
+              "gomoku.T2"
             ]
           },
           "rewardFlags": [
             "C3.truth_found"
           ],
-          "hint": "档案室的翻牌与航线记录都能拼出旧时间线。"
+          "hint": "档案室认《码头调度》《信标电路》或《破解防线》，任一份记录都能拼出旧时间线。"
         }
       ],
       "mustKnow": [
@@ -231,38 +225,55 @@
           "rewardFlags": [
             "C4.city_power_restored"
           ],
-          "hint": "打地鼠 T3「检修记录」与砖块计划 T3「仓库档案」两份 E，再加合成 2048 T3「信标电路」的 BP，材料才能对上。"
+          "hint": "打地鼠的《检修记录》和砖块计划的《仓库档案》两份现场单，再配上合成游戏的《信标电路》底稿，材料才对得上。"
         },
         {
           "routeId": "logistics",
           "label": "组织物流",
           "requires": {
-            "anyCommissions": [
-              "road-rush.T2",
-              "road-rush.T3",
-              "block-drop.T2",
-              "block-drop.T3"
+            "all": [
+              {
+                "anyCommissions": [
+                  "block-drop.T3",
+                  "road-rush.T3"
+                ]
+              },
+              {
+                "anyCommissions": [
+                  "merge-2048.T3",
+                  "gomoku.T2"
+                ]
+              }
             ]
           },
           "rewardFlags": [
             "C4.city_power_restored"
           ],
-          "hint": "电池与仓储必须同时到位。"
+          "hint": "砖块计划的《仓库档案》或极速车道的《遗迹驿站》定库存，再用《信标电路》或五子棋的《破解防线》排供电，两样齐全才能发车。"
         },
         {
           "routeId": "maintenance",
           "label": "维护与协调",
           "requires": {
-            "anyCommissions": [
-              "mole-whack.T2",
-              "gomoku.T2",
-              "blackjack.T2"
+            "all": [
+              {
+                "anyCommissions": [
+                  "mole-whack.T3",
+                  "blackjack.T3"
+                ]
+              },
+              {
+                "anyCommissions": [
+                  "gomoku.T2",
+                  "snowbells.T3"
+                ]
+              }
             ]
           },
           "rewardFlags": [
             "C4.city_power_restored"
           ],
-          "hint": "检修、疏散布局、风险预测都算贡献。"
+          "hint": "打地鼠的《检修记录》或牌桌的《基础风控》查隐患，再拿五子棋的《破解防线》或雪铃的《冰桥观察》做协调，两处确认才算完成。"
         }
       ],
       "mustKnow": [
