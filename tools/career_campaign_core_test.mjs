@@ -431,13 +431,17 @@ async function groupA() {
 
   await check('A03b 可选章节 role：注入后可读、旧内容缺省空串、不进 validate/signature', async () => {
     const ROLE = '你是刚到折光港、靠接零工维生的自由职业者。';
-    const withoutRole = fresh();
-    eq(withoutRole.cfg.ok, true, '旧内容（无 role）configure ok');
+    // 显式删除 role，构造旧内容：真实章节文件可能已加入 role，不能依赖它缺省。
+    const withoutRole = fresh((value) => {
+      value.chapters.forEach((chapter) => { delete chapter.role; });
+    });
+    eq(withoutRole.cfg.ok, true, '旧内容（显式删除 role）configure ok');
     const oldView = withoutRole.core.state({ flags: ['C0.port_seen'] });
     eq(oldView.chapters[0].chapterId, 'C0', 'C0 chapter first');
     eq(oldView.chapters[0].role, '', '旧内容无 role 缺省空串');
 
     const { core, cfg, input } = fresh((value) => {
+      value.chapters.forEach((chapter) => { delete chapter.role; });
       const chapter00 = value.chapters.find((chapter) => chapter.chapterId === 'C0');
       chapter00.role = ROLE;
     });

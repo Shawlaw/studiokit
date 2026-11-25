@@ -2134,55 +2134,138 @@
       return false;
     }
 
-    /** T1 本身不产证据也可以作为真实前置，但必须能走到真正产证/产旗标的下一单。 */
-    function leadsToProducer(commissionId, chapterId, depth) {
-      if (depth > 3) return false;
-      var commission = state.commissionIndex[commissionId];
-      if (!commission) return false;
-      if (producesForChapter(commission, chapterId)) return true;
-      for (var i = 0; i < state.commissions.length; i += 1) {
-        var other = state.commissions[i];
-        if (other.commissionId === commissionId) continue;
-        if (unlockRequiresCommission(other.unlock, commissionId)
-            && leadsToProducer(other.commissionId, chapterId, depth + 1)) return true;
+    /** 把若干委托的真实 reward 投影到证据集合（不写库、不复制规则）。 */
+    function projectEvidence(evidenceSet, commissions) {
+      var out = new Set(Array.from(evidenceSet));
+      commissions.forEach(function (commission) {
+        if (!commission) return;
+        commission.rewardEvidence.forEach(function (token) {
+          out.add(token);
+        });
+        commission.rewardFlags.forEach(function (flag) {
+          out.add(flag);
+        });
+      });
+      return out;
+    }
+
+    /** 从当前章真实缺口取可补缺的证据/旗标 token（排除泛化的 class 计数项之外的具体候选）。 */
+    function gapTokens(missing) {
+      var tokens = [];
+      (missing || []).forEach(function (item) {
+        if (!isObject(item)) return;
+        if (typeof item.token === 'string') tokens.push(item.token);
+        if (typeof item.flag === 'string') tokens.push(item.flag);
+        if (isArray(item.candidates)) tokens = tokens.concat(item.candidates);
+      });
+      return tokens;
+    }
+
+    function missingSignature(missing) {
+      var parts = [];
+      (missing || []).forEach(function (item) {
+        if (!isObject(item)) return;
+        parts.push([
+          item.kind || '',
+          item.class || '',
+          item.token || item.flag || item.game || '',
+          item.atLeast === undefined ? '' : item.atLeast,
+          item.have === undefined ? '' : item.have,
+          item.need === undefined ? '' : item.need,
+        ].join(':'));
+      });
+      parts.sort();
+      return parts.join('|');
+    }
+
+    function missingForChapter(evidenceModule, chapterId, flags, evidence) {
+      var flag = chapterFlagOf(chapterId);
+      if (!flag || !evidenceModule || !isFunction(evidenceModule.missingFor)) return null;
+      try {
+        var result = evidenceModule.missingFor(flag, {
+          flags: Array.from(flags),
+          evidence: Array.from(evidence),
+        });
+        if (!isObject(result) || result.ok !== true || !isArray(result.missing)) return null;
+        return {
+          unlocked: result.unlocked === true,
+          missing: result.missing,
+          signature: missingSignature(result.missing),
+          tokens: gapTokens(result.missing),
+        };
+      } catch (err) {
+        return null;
+      }
+    }
+
+    /** 某单（及其必要下游）的 reward 是否真能减少当前章缺口或授予本章旗标。 */
+    function closesGap(chapterId, chain, baseline, gap, evidenceModule, input) {
+      if (!gap) return false;
+      var evidence = projectEvidence(baseline.evidence, chain);
+      var snapshot = storySnapshot(evidenceModule, input, baseline.flags, evidence);
+      if (!snapshot || snapshot.flags.has(chapterFlagOf(chapterId))) return !!snapshot && snapshot.flags.has(chapterFlagOf(chapterId));
+      var after = missingForChapter(evidenceModule, chapterId, baseline.flags, evidence);
+      if (!after) return false;
+      if (!after.missing.length) return true;
+      if (after.missing.length < gap.missing.length) return true;
+      if (after.signature !== gap.signature) {
+        /* 计数类缺口：need 减少即为真实进展；token 类缺口：补进具体候选也算。 */
+        for (var i = 0; i < gap.missing.length; i += 1) {
+          var beforeItem = gap.missing[i];
+          var afterItem = after.missing.filter(function (item) {
+            return isObject(item) && item.kind === beforeItem.kind
+              && item.class === beforeItem.class
+              && (item.token || item.flag || item.game) === (beforeItem.token || beforeItem.flag || beforeItem.game);
+          })[0];
+          if (!afterItem) return true;
+          if (typeof beforeItem.need === 'number' && typeof afterItem.need === 'number'
+              && afterItem.need < beforeItem.need) return true;
+        }
+        var gained = gap.tokens.filter(function (token) {
+          return evidence.has(token);
+        });
+        if (gained.length) return true;
       }
       return false;
     }
 
-    function usefulCandidate(chapterId, commission, directOnly) {
+    /**
+     * 找一条从本单开始的真实下游链，其全部 reward 投影后能减少当前章缺口。
+     * T1 本身不产证时允许带上下游单，但只接受确实补当前章缺口的下游。
+     */
+    function gapClosingChain(commissionId, chapterId, baseline, gap, evidenceModule, input, depth, seen, allowedDownstream) {
+      if (depth > 3) return null;
+      var commission = state.commissionIndex[commissionId];
+      if (!commission || seen[commissionId]) return null;
+      var chainSeen = Object.create(null);
+      Object.keys(seen).forEach(function (key) { chainSeen[key] = true; });
+      chainSeen[commissionId] = true;
+      var chain = [commission];
+      if (closesGap(chapterId, chain, baseline, gap, evidenceModule, input)) return chain;
+      for (var i = 0; i < state.commissions.length; i += 1) {
+        var other = state.commissions[i];
+        if (allowedDownstream && !allowedDownstream[other.commissionId]) continue;
+        if (!unlockRequiresCommission(other.unlock, commissionId)) continue;
+        var downstream = gapClosingChain(other.commissionId, chapterId, baseline, gap, evidenceModule, input, depth + 1, chainSeen, allowedDownstream);
+        if (downstream) return chain.concat(downstream);
+      }
+      return null;
+    }
+
+    /** 首选/次选单本身必须足以补当前章缺口，不能靠“下游也许会产证”放行。 */
+    function usefulDirectCandidate(chapterId, commission, baseline, gap, evidenceModule, input) {
+      if (!commission || !producesForChapter(commission, chapterId)) return false;
+      return closesGap(chapterId, [commission], baseline, gap, evidenceModule, input);
+    }
+
+    /** 一般路线候选可带必要下游，但整条链必须真实减少当前章缺口。 */
+    function usefulCandidate(chapterId, commission, baseline, gap, evidenceModule, input, allowedDownstream) {
       if (!commission) return false;
-      if (producesForChapter(commission, chapterId)) return true;
-      return !directOnly && leadsToProducer(commission.commissionId, chapterId, 0);
-    }
-
-    function unlockNodeMet(node, ctx, flags) {
-      if (!isObject(node)) return false;
-      if (typeof node.commissionCleared === 'string') return ctx.cleared.has(node.commissionCleared);
-      if (typeof node.chapterFlag === 'string') return flags.has(node.chapterFlag);
-      /* credits/items 等经济条件归 commission.listAvailable，推荐层不新增经济前置。 */
-      return true;
-    }
-
-    function commissionUnlockMet(commission, ctx, flags) {
-      var unlock = commission.unlock;
-      if (!isObject(unlock)) return true;
-      if (isArray(unlock.all)) {
-        for (var i = 0; i < unlock.all.length; i += 1) {
-          if (!unlockNodeMet(unlock.all[i], ctx, flags)) return false;
-        }
+      if (!producesForChapter(commission, chapterId)) {
+        var chain = gapClosingChain(commission.commissionId, chapterId, baseline, gap, evidenceModule, input, 0, Object.create(null), allowedDownstream);
+        return !!chain;
       }
-      if (isArray(unlock.any)) {
-        if (!unlock.any.length) return false;
-        var hit = false;
-        for (var j = 0; j < unlock.any.length; j += 1) {
-          if (unlockNodeMet(unlock.any[j], ctx, flags)) {
-            hit = true;
-            break;
-          }
-        }
-        if (!hit) return false;
-      }
-      return true;
+      return closesGap(chapterId, [commission], baseline, gap, evidenceModule, input);
     }
 
     /**
@@ -2224,9 +2307,10 @@
       });
       var seen = Object.create(null);
       return out.filter(function (id) {
-        if (seen[id] || ctx.cleared.has(id) || !state.commissionIndex[id]) return false;
+        var pass = !seen[id] && !ctx.cleared.has(id) && !!state.commissionIndex[id] && producesForChapter(state.commissionIndex[id], chapterId);
+        if (!pass) return false;
         seen[id] = true;
-        return producesForChapter(state.commissionIndex[id], chapterId);
+        return true;
       });
     }
 
@@ -2283,6 +2367,15 @@
           var flag = chapterFlagOf(chapterId);
           if (!flag || routeFlags.has(flag)) return null;
 
+          var gapBase = {
+            flags: routeFlags,
+            evidence: new Set(Array.from(ctx.evidence)),
+            cleared: ctx.cleared,
+          };
+          var gap = chapterId === 'C1'
+            ? null
+            : missingForChapter(evidenceModule, chapterId, gapBase.flags, gapBase.evidence);
+          if (chapterId !== 'C1' && !gap) return null;
           var routeSpec = RECOMMEND_ROUTES.filter(function (item) {
             return item.chapterId === chapterId;
           })[0];
@@ -2290,25 +2383,38 @@
           var fallbacks = routeSpec ? routeSpec.alternatives : [];
           var candidates = [];
           var seenCandidates = Object.create(null);
+          var preferIndex = Object.create(null);
+          prefer.forEach(function (id) { preferIndex[id] = true; });
 
-          function push(id, directOnly) {
+          function push(id, allowDownstream, routeOnly) {
             if (!id || seenCandidates[id]) return;
             var commission = state.commissionIndex[id];
             if (!commission || !commission.title) return;
             if (!availableSet.has(id) || ctx.cleared.has(id)) return;
-            if (!commissionUnlockMet(commission, ctx, routeFlags)) return;
-            if (!usefulCandidate(chapterId, commission, directOnly)) return;
+            var direct = chapterId === 'C1'
+              ? producesForChapter(commission, chapterId)
+              : usefulDirectCandidate(chapterId, commission, gapBase, gap, evidenceModule, options);
+            var useful = chapterId === 'C1'
+              ? direct
+              : (direct || (allowDownstream
+                ? usefulCandidate(chapterId, commission, gapBase, gap, evidenceModule, options, routeOnly ? preferIndex : null)
+                : false));
+            if (!useful) return;
             seenCandidates[id] = true;
             candidates.push({
               id: id,
+              direct: direct,
               milestone: candidateMilestone(chapterId, commission, projectedContext(ctx, commission), evidenceModule, options),
             });
           }
 
+          function hasDirect() {
+            return candidates.some(function (item) { return item.direct; });
+          }
           prefer.forEach(function (id) {
-            push(id, false);
+            push(id, true, true);
           });
-          if (!candidates.length) {
+          if (!hasDirect()) {
             chapter.routes.forEach(function (route) {
               var leaves = collectRequirementTokens(route.requires, { flags: [], commissions: [], evidence: [] });
               leaves.commissions.forEach(function (id) {
@@ -2325,26 +2431,15 @@
               });
             });
           }
-          if (!candidates.length) {
+          if (!hasDirect()) {
             fallbacks.forEach(function (id) {
-              push(id, false);
+              push(id, true);
             });
           }
-          if (!candidates.length) {
-            var missing = null;
-            if (isFunction(evidenceModule.missingFor)) {
-              try {
-                var gap = evidenceModule.missingFor(flag, {
-                  flags: Array.from(routeFlags),
-                  evidence: Array.from(ctx.evidence),
-                });
-                if (isObject(gap) && gap.ok === true && isArray(gap.missing)) missing = gap.missing;
-              } catch (err) {
-                missing = null;
-              }
-            }
-            if (!missing) missing = isObject(baseline.missing[flag]) ? baseline.missing[flag] : null;
-            alternativeCommissionIds(missing, ctx, chapterId).forEach(function (id) {
+          /* 真实缺口派生候选始终检查：即使 prefer 里只有“先做前置”的步骤，
+             只要当前可用单里有本单就能补缺口的委托，就不能推荐伪进展步骤。 */
+          if (gap) {
+            alternativeCommissionIds(gap.missing, ctx, chapterId).forEach(function (id) {
               push(id, true);
             });
           }

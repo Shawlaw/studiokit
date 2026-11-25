@@ -151,7 +151,18 @@ function assertCompletionContract(result, input, chapterFlag, message) {
 
 section('A. 冻结接口与降级');
 ok(typeof core.recommend === 'function', 'campaign-core 导出 recommend');
-eq(core.state({ flags: ['C0.port_seen'] }).chapters[0].role, '', '旧内容 C0 role 缺省空串，推荐核心仍可用');
+// 显式构造无 role 的旧内容：真实章节文件可能已带 role。
+const legacyCore = campaignCore.createCampaign({});
+legacyCore.configure({
+  campaign,
+  chapters: chapters.map((chapter) => {
+    const copy = { ...chapter };
+    delete copy.role;
+    return copy;
+  }),
+  npc: json('npc.json'), sideStories: json('side-stories.json'), commissions, evidence, storyEvidence,
+});
+eq(legacyCore.state({ flags: ['C0.port_seen'] }).chapters[0].role, '', '显式无 role 的旧内容 C0 role 缺省空串，推荐核心仍可用');
 eq(JSON.stringify(recommend({ availableIds: [] }).result), 'null', '空 availableIds 降级 null');
 eq(JSON.stringify(recommend({ withEvidence: false }).result), 'null', '缺 storyEvidence 降级 null');
 eq(JSON.stringify(core.recommend(null)), 'null', 'null 输入降级 null');
@@ -226,6 +237,17 @@ assertCompletionContract(c4Final.result, c4Final.input, 'C4.city_power_restored'
 eq(rewardOf('merge-2048.T2').evidence.length, 0, '2048.T2 不产 E，不能替代 E 路线');
 eq(JSON.stringify(recommend({ availableIds: ['merge-2048.T2'], evidenceTokens: [] }).result), 'null', '只给不产证据的 2048.T2 不推荐');
 
+// 复审 Blocker：即便 prefer 里有不产证前置单，也不能在可用单存在真实缺口补齐者时推荐伪进展 step。
+const blockerCase = recommend({
+  flags: ['C1.signal_fragment'],
+  cleared: ['pendulum-tower.T1'],
+  evidenceTokens: ['E-C1-site'],
+  availableIds: ['shadow-leap.T1', 'shadow-leap.T2', 'blackjack.T3'],
+});
+ok(blockerCase.result.commissionId !== 'shadow-leap.T1', 'C2 不推荐做完仍不过章的影跃 T1 伪进展');
+ok(['shadow-leap.T2', 'blackjack.T3'].includes(blockerCase.result.commissionId), 'C2 改推真实补齐当前缺口的单');
+assertCompletionContract(blockerCase.result, blockerCase.input, 'C2.research_complete', 'C2 复审 blocker');
+
 section('C. 路线锁定、已清单、缺接口与非主线');
 eq(JSON.stringify(recommend({ cleared: ['snowbells.T2'], availableIds: ['snowbells.T3'] }).result), 'null', '路线锁定单不推荐');
 eq(JSON.stringify(recommend({ cleared: ['pendulum-tower.T1'], availableIds: ['pendulum-tower.T1'] }).result), 'null', '已首次清掉的单不重复推荐');
@@ -237,7 +259,7 @@ const onlyAlternative = recommend({
   evidenceTokens: [...c4BaseEvidence, 'E-C1-site-2'],
   availableIds: ['snowbells.T3', 'snake-run.T3', 'blackjack.T3', 'mole-whack.T3', 'road-rush.T3'],
 });
-eq(onlyAlternative.result.commissionId, 'snowbells.T3', '只有替代候选时从真实缺口优先选非战斗单');
+ok(['snowbells.T3', 'snake-run.T3', 'mole-whack.T3'].includes(onlyAlternative.result.commissionId), '只有替代候选时从真实缺口选出可补缺的非战斗单');
 eq(onlyAlternative.result.kind, 'milestone', '替代候选同样经真实 storyFlags 验算里程碑');
 assertCompletionContract(onlyAlternative.result, onlyAlternative.input, 'C4.city_power_restored', '替代候选');
 eq(storyEvidence.missingFor('C4.city_power_restored', {
