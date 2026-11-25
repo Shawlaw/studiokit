@@ -1090,9 +1090,11 @@
       if (meta.childNodes.length) item.appendChild(meta);
 
       const actions = make('div', 'ac-career-town__row-actions');
-      const continuing = !!continuations[row.commissionId];
+      const live = !!continuations[row.commissionId];
       const unlocked = boardReady && !!unlockedSet && !!unlockedSet[row.commissionId];
-      if (unlocked || continuing) {
+      /* 继续按钮必须同时满足：真实解锁 + 真实 live run；未解锁的 run 只显示锁定态。 */
+      const continuing = unlocked && live;
+      if (unlocked) {
         actions.appendChild(actionButton(row, continuing));
       } else {
         actions.appendChild(make('span', 'ac-career-town__locked', LOCKED_LABEL));
@@ -1100,7 +1102,7 @@
       item.appendChild(actions);
 
       /* 失败后对该单保留一键重接（同一 commissionId，仍走 commission.start）。 */
-      if (failedStart === row.commissionId && (unlocked || continuing)) {
+      if (failedStart === row.commissionId && unlocked) {
         const retry = make('button', 'ac-career-town__retry', CONTINUE_LABEL);
         retry.type = 'button';
         retry.setAttribute('data-town-action', 'retry');
@@ -1327,17 +1329,23 @@
       } catch (err) {
         return;
       }
-      const apply = (value) => {
+      const apply = (value, failed) => {
         if (!isCurrent() || seq !== requestSeq) return;
         continuations = normalizeContinuations(value);
         /* 仅重绘列表；不重建面板，不让用户焦点丢失。 */
         renderList();
+        if (failed) {
+          const text = '港里一时查不到进行中的单子，能接的单还挂在木牌上。';
+          statusLine.textContent = text;
+          statusLine.hidden = false;
+        }
       };
+      const reject = () => apply(null, true);
       if (result && typeof result.then === 'function') {
-        result.then(apply, () => { /* 查询失败安全回退旧列表 */ });
+        result.then((value) => apply(value, !!(value && value.ok === false)), reject);
         return;
       }
-      apply(result);
+      apply(result, !!(result && result.ok === false));
     }
 
     function loadUnlocks() {
