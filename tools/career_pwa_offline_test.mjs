@@ -4,17 +4,18 @@
  *
  * 用真实 Chrome + Service Worker 覆盖：
  * - P01/P02 中心页注册 SW 并等待 ready；线上 sw.js 的 VERSION / CACHE_PREFIX 推导缓存键
- *   `studiokit-arcade-0.18.1-v3`，`caches.keys()` 含该键，SW 版本握手一致
+ *   `studiokit-arcade-0.18.2-v1`，`caches.keys()` 含该键，SW 版本握手一致
  * - P03 sw.js `CORE_PATHS` 全量在核心缓存中，且 career 运行时/内容/UI 14 项逐个存在
  *   （按 registration.scope 相对 URL 断言）
- * - P04 中心页基线：16 张游戏卡 + 版本 0.18.1（career 不破坏中心页）
+ * - P04 中心页基线：16 张游戏卡 + 版本 0.18.2（career 不破坏中心页）
  * - P05/P06 在线游戏页（`?careerTest=1#test`）发现前无剧透 DOM，真实 `observe()`×2 +
  *   `finish()` 产出一条线索（CL-memory-flip / reason=event），并直接读 IndexedDB
  *   断言 discovery 行与 state 快照都已落库
  * - P07~P11 CDP `Network.emulateNetworkConditions({offline:true})` 置离线后 reload：
- *   导航由 SW 缓存兜底（离线期间服务器零文档请求）、engine 版本 0.18.1、
+ *   导航由 SW 缓存兜底（离线期间服务器零文档请求）、engine 版本 0.18.2、
  *   `ArcadeCareer.available===true`（career 资源来自缓存）、`openMailbox()` 可打开并显示
  *   已发现线索、无未捕获异常/console error（区分并忽略离线网络噪声）、离线中心页 16 卡正常
+ * - P11a 模拟 Cloudflare Pages 的 308，点击预载后断网，逐一从游戏卡片进入 16 款游戏并返回
  * - P12 恢复在线；P13 Cloudflare 兼容无后缀 URL（`games/memory-flip`）gameId / 生涯事件正常
  * - P14 GitHub Pages 子路径（`/studiokit/apps/arcade/...`）SW scope 与 career 资源零 404
  * - P15 缓存内容审计：全部条目同源、无跨域/CDN、HTML 无外链资源、JS 无外部 fetch、
@@ -32,10 +33,11 @@ import { CDP, REPO_ROOT, createRecorder, envPort, launchChrome, openPage, sleep,
 
 const ARTIFACTS = path.join(REPO_ROOT, 'test-artifacts');
 const DB_NAME = 'studiokit:arcade:career';
-const SW_VERSION = '0.18.1';
+const SW_VERSION = '0.18.2';
 const CACHE_PREFIX = 'studiokit-arcade-';
-const CACHE_KEY = `${CACHE_PREFIX}${SW_VERSION}-v3`;
+const CACHE_KEY = `${CACHE_PREFIX}${SW_VERSION}-v1`;
 const OLD_CACHE_KEY = 'studiokit-arcade-0.14.0-v1';
+const PREVIOUS_PRELOAD_KEY = 'studiokit-arcade-0.18.1-v3';
 /* 任务卡点名的 career 运行时 / 内容 / UI 资源（sw.js CORE_PATHS 中的 14 项）。 */
 const CAREER_CORE_PATHS = [
   './career/bridge.js',
@@ -548,7 +550,7 @@ async function main() {
   }
 
   async function listenServer() {
-    const next = await startServer({ root: REPO_ROOT, port: SERVER_PORT });
+    const next = await startServer({ root: REPO_ROOT, port: SERVER_PORT, cloudflarePages: true });
     attachRequestLog(next);
     return next;
   }
@@ -572,7 +574,7 @@ async function main() {
       assert(state.readyScope === ARCADE_BASE, 'navigator.serviceWorker.ready 的 scope 应为 ' + ARCADE_BASE + '，实际 ' + JSON.stringify(state.readyScope));
       assert(state.controller === true && state.controllerScript === ARCADE_BASE + 'sw.js',
         '页面未被 SW 控制（controller=' + state.controller + '，script=' + state.controllerScript + '）');
-      assert(state.arcadeVersion === '0.18.1', '中心页 Arcade.version 应为 0.18.1，实际 ' + JSON.stringify(state.arcadeVersion));
+      assert(state.arcadeVersion === '0.18.2', '中心页 Arcade.version 应为 0.18.2，实际 ' + JSON.stringify(state.arcadeVersion));
       assert(startDeleteStatus === 'ok', '测试开始时 deleteDatabase(' + DB_NAME + ') 未成功: ' + startDeleteStatus);
       return { scope: state.scope, controllerScript: state.controllerScript, startDelete: startDeleteStatus };
     });
@@ -613,14 +615,17 @@ async function main() {
       return { cacheKey: probe.key, entries: cached.size, career: CAREER_CORE_PATHS.length, corePaths: swCorePaths.length };
     });
 
-    await check('P04 中心页基线：16 张游戏卡 + 版本 0.18.1（career 不破坏中心页）', async () => {
+    await check('P04 中心页基线：16 张游戏卡 + 版本 0.18.2（career 不破坏中心页）', async () => {
       const hall = await cdp.evaluate(HALL_SRC);
       assert(hall.cards === 16, '中心页游戏卡应为 16，实际 ' + hall.cards);
-      assert(hall.arcadeVersion === '0.18.1', 'Arcade.version 应为 0.18.1，实际 ' + JSON.stringify(hall.arcadeVersion));
-      assert(hall.versionText.indexOf('0.18.1') !== -1, '中心页版本文案应含 0.18.1，实际 ' + JSON.stringify(hall.versionText));
+      assert(hall.arcadeVersion === '0.18.2', 'Arcade.version 应为 0.18.2，实际 ' + JSON.stringify(hall.arcadeVersion));
+      assert(hall.versionText.indexOf('0.18.2') !== -1, '中心页版本文案应含 0.18.2，实际 ' + JSON.stringify(hall.versionText));
       assert(hall.offlineFallback === false, '中心页命中了离线兜底页');
       return { cards: hall.cards, version: hall.arcadeVersion, versionText: hall.versionText.trim() };
     });
+
+    await cdp.click('[data-offline]');
+    await cdp.waitFor('document.querySelector("[data-offline]").textContent.includes("已预载")', { timeout: 25000 });
 
     /* ============================================================ 在线：真实事件产生线索并落库 */
     await cdp.navigate(GAME_URL);
@@ -725,9 +730,9 @@ async function main() {
       };
     });
 
-    await check('P08 离线页 engine 0.18.1 + career 资源全部来自缓存（available/info 无加载错误）', async () => {
+    await check('P08 离线页 engine 0.18.2 + career 资源全部来自缓存（available/info 无加载错误）', async () => {
       const page = await cdp.evaluate(OFFLINE_PAGE_SRC);
-      assert(page.engineVersion === '0.18.1', '离线页 Arcade.version 应为 0.18.1，实际 ' + JSON.stringify(page.engineVersion));
+      assert(page.engineVersion === '0.18.2', '离线页 Arcade.version 应为 0.18.2，实际 ' + JSON.stringify(page.engineVersion));
       assert(page.careerAvailable === true, '离线页 ArcadeCareer.available 应为 true（career 资源来自缓存），实际 ' +
         detail({ available: page.careerAvailable, reason: page.careerInfo && page.careerInfo.reason }));
       assert(page.careerGameId === 'memory-flip', '离线页 gameId 应为 memory-flip，实际 ' + JSON.stringify(page.careerGameId));
@@ -778,13 +783,13 @@ async function main() {
       return { real: 0, offlineNetworkNoise: split.noise.length, sample: split.noise.slice(0, 2) };
     });
 
-    await check('P11 离线中心页：16 张卡 + 版本 0.18.1，career 不破坏中心页且无错误', async () => {
+    await check('P11 离线中心页：16 张卡 + 版本 0.18.2，career 不破坏中心页且无错误', async () => {
       await cdp.navigate(HUB_URL);
       await cdp.waitFor('document.querySelectorAll(".hall-card").length === 16', { timeout: 20000 });
       const hall = await cdp.evaluate(HALL_SRC);
       assert(hall.cards === 16, '离线中心页游戏卡应为 16，实际 ' + hall.cards);
-      assert(hall.arcadeVersion === '0.18.1', '离线中心页 Arcade.version 应为 0.18.1，实际 ' + JSON.stringify(hall.arcadeVersion));
-      assert(hall.versionText.indexOf('0.18.1') !== -1, '离线中心页版本文案应含 0.18.1，实际 ' + JSON.stringify(hall.versionText));
+      assert(hall.arcadeVersion === '0.18.2', '离线中心页 Arcade.version 应为 0.18.2，实际 ' + JSON.stringify(hall.arcadeVersion));
+      assert(hall.versionText.indexOf('0.18.2') !== -1, '离线中心页版本文案应含 0.18.2，实际 ' + JSON.stringify(hall.versionText));
       assert(hall.offlineFallback === false, '离线中心页命中了 SW 未预载兜底页');
       assert(hall.careerPanel === false, '中心页不应出现生涯面板（0.15 无显眼入口）');
       const split = splitErrors(cdp.errors.slice());
@@ -793,6 +798,32 @@ async function main() {
       return { cards: hall.cards, version: hall.arcadeVersion, noise: split.noise.length, real: split.real.length };
     });
 
+    await check('P11a Cloudflare 预载后断网，从游戏卡片进入从未访问的游戏并返回', async () => {
+      const games = await cdp.evaluate(`Array.from(document.querySelectorAll('.hall-card'), (card) => card.dataset.gameId)`);
+      const cached = await cdp.evaluate(`caches.match(new URL('games/gold-miner.html', Arcade.baseUrl)).then((response) => ({
+        redirected: response?.redirected,
+        encoding: response?.headers.get('content-encoding')
+      }))`);
+      assert(cached.redirected && cached.encoding === 'gzip', '预载没有缓存模拟 308 后的 gzip 响应: ' + detail(cached));
+      const start = requestLog.length;
+      for (const id of games) {
+        await cdp.click(`.hall-card[data-game-id=${JSON.stringify(id)}]`);
+        await cdp.waitFor(`window.Arcade?.Playtime.currentGame?.id === ${JSON.stringify(id)} && !!document.querySelector('.ac-back')`);
+        await cdp.click('.ac-back');
+        await cdp.waitFor('document.querySelectorAll(".hall-card").length === 16');
+      }
+      // 金矿工此前只以 .html 键预载；这里直接访问无后缀地址，且保留查询参数与片段。
+      await cdp.navigate(ARCADE_BASE + 'games/gold-miner?offlineProbe=1#test');
+      await cdp.waitFor(`window.Arcade?.Playtime.currentGame?.id === 'gold-miner' && !!window.__arcadeTest && location.search === '?offlineProbe=1' && location.hash === '#test'`);
+      await cdp.click('[data-ov-btn]');
+      await cdp.waitFor(`document.querySelector('[data-overlay]').hidden && window.__arcadeTest.info().target === 650`);
+      assert(games.length === 16, '未覆盖 16 款游戏');
+      assert(!requestLog.slice(start).some(({ url }) => /\/(?:games\/|index\.html|career\/)/.test(url)),
+        '断网往返期间仍有网页请求到达服务器');
+      return { games: games.length, prettyUrl: true, offlineTransport };
+    });
+
+    // 回归失败时浏览器可能已经打开错误页，下面先恢复网络再回中心页。
     /* ============================================================ 恢复在线 + CF 无后缀 + GH 子路径 */
     if (swSession) {
       try {
@@ -805,6 +836,7 @@ async function main() {
     }
     await cdp.send('Network.emulateNetworkConditions', { offline: false, latency: 0, downloadThroughput: -1, uploadThroughput: -1 });
     if (!server) server = await listenServer();
+    await cdp.navigate(HUB_URL);
     const onlineAgain = await cdp.evaluate(`fetch('/tools/validate_site.py', { cache: 'no-store' }).then((res) => 'status:' + res.status, (err) => 'rejected:' + err.message)`);
     await check('P12 恢复在线（emulateNetworkConditions offline:false 后网络可用）', async () => {
       assert(onlineAgain === 'status:200', '恢复在线后同源 fetch 应 200，实际 ' + detail(onlineAgain));
@@ -843,7 +875,7 @@ async function main() {
     await check('P14 GitHub Pages 子路径（/studiokit/apps/arcade/...）：SW scope / career 基址 / 资源零 404', async () => {
       const hubScope = await cdp.evaluate(`navigator.serviceWorker.getRegistration().then((reg) => reg ? reg.scope : null)`);
       assert(hubScope === BASE + '/studiokit/apps/arcade/', 'GH 子路径 SW scope 应为 ' + BASE + '/studiokit/apps/arcade/，实际 ' + detail(hubScope));
-      assert(ghHub.cards === 16 && ghHub.arcadeVersion === '0.18.1' && ghHub.offlineFallback === false,
+      assert(ghHub.cards === 16 && ghHub.arcadeVersion === '0.18.2' && ghHub.offlineFallback === false,
         'GH 子路径中心页异常: ' + detail({ cards: ghHub.cards, version: ghHub.arcadeVersion, fallback: ghHub.offlineFallback }));
       const gh = await cdp.evaluate(GH_PAGE_SRC);
       assert(gh.gameId === 'memory-flip', 'GH 子路径 gameId 应为 memory-flip，实际 ' + detail(gh.gameId));
@@ -895,6 +927,16 @@ async function main() {
     /* ============================================================ SW 升级不清 IDB */
     const dbBeforeUpgrade = await cdp.evaluate(READ_DB_SRC);
     await cdp.evaluate(FAKE_OLD_CACHE_SRC);
+    const seededPreload = await cdp.evaluate(`(async () => {
+      const game = new URL('games/gold-miner.html', ${JSON.stringify(ARCADE_BASE)}).href;
+      const current = await caches.open(${JSON.stringify(CACHE_KEY)});
+      const previous = await caches.open(${JSON.stringify(PREVIOUS_PRELOAD_KEY)});
+      const response = await current.match(game);
+      if (!response?.redirected) return false;
+      await previous.put(game, response);
+      return current.delete(game);
+    })()`);
+    assert(seededPreload, '测试准备失败：未将预载转移到 0.18.1 缓存');
     const registeredBefore = await cdp.evaluate(`navigator.serviceWorker.getRegistrations().then((regs) => regs.length)`);
     await cdp.evaluate(UNREGISTER_ALL_SRC);
     await cdp.navigate(GAME_URL);
@@ -903,10 +945,13 @@ async function main() {
     await cdp.waitFor(`caches.keys().then((keys) => keys.indexOf('${OLD_CACHE_KEY}') === -1)`, { timeout: 20000 }).catch(() => {});
     await sleep(400);
 
-    await check('P16 模拟 SW 升级/重装（伪造旧缓存 → 注销 → 重装）不会清掉 career IndexedDB', async () => {
+    await check('P16 模拟 SW 升级，复用 0.18.1 的预载并保留生涯 IndexedDB', async () => {
       const keysAfter = await cdp.evaluate(`caches.keys()`);
       assert(keysAfter.indexOf(OLD_CACHE_KEY) === -1, 'activate 未清理旧版本缓存 ' + OLD_CACHE_KEY + '：' + detail(keysAfter));
       assert(keysAfter.indexOf(CACHE_KEY) !== -1, '升级后缺少当前版本缓存 ' + CACHE_KEY + '：' + detail(keysAfter));
+      assert(!keysAfter.includes(PREVIOUS_PRELOAD_KEY), '升级后还留有已迁移的旧版缓存');
+      const migrated = await cdp.evaluate(`caches.match(new URL('games/gold-miner.html', Arcade.baseUrl)).then((response) => response?.redirected === true)`);
+      assert(migrated, '升级后 0.18.1 预载的金矿工文档没有迁入当前缓存');
       assert(registeredBefore >= 1, '升级前应有 SW 注册，实际 ' + registeredBefore);
       const controller = await cdp.evaluate('!!navigator.serviceWorker.controller');
       assert(controller === true, '重装后页面未被 SW 接管');

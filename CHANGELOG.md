@@ -4,6 +4,10 @@ StudioKit 门户本身没有独立的 semver；以下按仓库里程碑与工具
 
 > 说明：Arcade `0.11.2`–`0.14.0` 的条目于 2026-11-22 依据 [`apps/arcade/CHANGELOG.md`](apps/arcade/CHANGELOG.md) 补齐（本文件当时落后于工具版本），逐条数值与证据以工具 CHANGELOG 与对应 `DESIGN-*.md` 为准。
 
+## Arcade 0.18.2 — 2026-11-25
+
+- 修复 Cloudflare Pages 上预载后断网跨页失败，从 0.18.1 更新可沿用已有游戏预载。
+
 ## Arcade 0.18.1 — 2026-11-24
 
 - 首页优先展示最近存档和紧凑游戏目录，记住排序，统计和积分可按需展开。

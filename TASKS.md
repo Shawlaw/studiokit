@@ -4,6 +4,8 @@
 
 | ID | 类型 | 任务 | 状态 | 依赖 | 备注 |
 |---|---|---|---|---|---|
+| T136 | agent | Arcade 0.18.2 合入 main 并双端发布 | IN_PROGRESS | T135 | Owner 已授权发布离线修复。候选包含 0.18.1 预载迁移。 |
+| T135 | agent | Arcade PWA 预载后断网跨页修复（本地未发布） | DONE | T134 | 模拟 Cloudflare 308 先复现失败，再通过 Chromium 断网验证 16 款游戏往返和无后缀直达。从旧 SW 更新后可直接复用预载。离线 18/18，PWA 更新 9/9，隔离副本冒烟 117/117，静态校验与构建通过。当前工作区的黄金矿工沉浸布局断言在绕过 SW 后仍复现。手机真机待验证。 |
 | T124 | agent | 全分支复审（cd9e555）P1/P2 修复与复测（本地未发布） | DONE | T123 | 6 项 P1 + 10 项 P2 已在 `6481322` 修复；逐项独立探针、campaign E2E 701/701、world 109/109、a11y 75、PWA 17、smoke 113、mobile 318；96 16/16 游戏按批/单游戏全 PASS；8fc73f1 完整聚合门禁 ALL GATES PASSED（exit 0）。 |
 | T125 | agent | 第三轮复审（400db62）2 P1 + 5 P2 修复与门禁（本地未发布） | DONE | T124 | 回归先于修复：`219bd67` 在 400db62 失败；产品修复 `009bc77`；新增 review3 regression/workshop/route-evidence 门禁；`py -3 tools/arcade_run_all_gates.py` 在 009bc77 **ALL GATES PASSED**（日志 REVIEW3-GATE4.log）。 |
 | T126 | agent | 第四轮复审（9ce51ec）1 P1 + 4 P2 修复与门禁（本地未发布） | DONE | T125 | 附录同路线探针在 `9ce51ec` 实跑 exit 1，修复 `575096f`；新增 review4 same-route 门禁；发现代次/旧档首通/20001 行导出/C2-C4 回退补齐；`py -3 tools/arcade_run_all_gates.py` 在 `ab79c79` **ALL GATES PASSED**（日志 REVIEW4-GATE6.log）。 |

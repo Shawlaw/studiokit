@@ -9,7 +9,7 @@
  * 覆盖（全部实际执行）：
  *   1. 无显眼生涯入口：中心页 + memory-flip / pendulum-tower / star-raid 首屏可见文本与按钮
  *      不含「生涯模式 / 进入生涯 / 开始冒险 / 职业系统 / 解锁 RPG / 签到 / 奖励」等 CTA；
- *      中心页 16 卡片、版本 0.18.1；无新增首屏 banner / 弹窗。
+ *      中心页 16 卡片、版本 0.18.2；无新增首屏 banner / 弹窗。
  *   2. 微线索 chip 无障碍（?careerTest=1 + renderDebug，或真实结算路径同样使用该渲染管线）：
  *      role=button / tabindex=0 / aria-label 含「信」/ 热区 ≥44×44；真实 Tab 可聚焦，
  *      Enter 与 Space 各打开信箱一次；dialog + aria-modal + 焦点进入面板；
@@ -491,9 +491,9 @@ async function runCenterSession() {
     assert(visibleCards === 16, '可见 .hall-card 期望 16，实际 ' + visibleCards);
     return 'cards=' + scan.cards + ' visible=' + visibleCards;
   });
-  await check('A02 中心页版本 0.18.1 正确呈现', async () => {
+  await check('A02 中心页版本 0.18.2 正确呈现', async () => {
     const scan = await scanFirstScreen();
-    assert(scan.version === '0.18.1', '版本节点 [data-hall-version] 期望 0.18.1，实际 ' + detail(scan.version) + '（url=' + scan.url + '）');
+    assert(scan.version === '0.18.2', '版本节点 [data-hall-version] 期望 0.18.2，实际 ' + detail(scan.version) + '（url=' + scan.url + '）');
     return 'version=' + scan.version + ' title=' + scan.title;
   });
   await check('A03 中心页可见文本/按钮无生涯 CTA（否定式「无签到/无奖励」白名单）', async () => {

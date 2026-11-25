@@ -25,6 +25,7 @@ import path from 'node:path';
 import net from 'node:net';
 import { spawn } from 'node:child_process';
 import { fileURLToPath } from 'node:url';
+import { createGzip } from 'node:zlib';
 
 /** 仓库根目录（本文件位于 <root>/tools/lib/）。 */
 export const REPO_ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..', '..');
@@ -66,15 +67,22 @@ export function envPort(name, fallback) {
 /**
  * 启动本地静态文件服务器（127.0.0.1，仅本机）。
  * 支持 `/studiokit/` 形式的 GitHub Pages 项目站点前缀；禁止路径逃逸（403）；
- * 目录自动补 index.html；找不到文件返回 404。
- * @param {{root?: string, port: number, host?: string}} options
+ * 目录自动补 index.html；找不到文件返回 404。可模拟 Cloudflare Pages 的街机厅地址重定向与压缩。
+ * @param {{root?: string, port: number, host?: string, cloudflarePages?: boolean}} options
  * @returns {Promise<import('node:http').Server>}
  */
-export function startServer({ root = REPO_ROOT, port, host = '127.0.0.1' } = {}) {
+export function startServer({ root = REPO_ROOT, port, host = '127.0.0.1', cloudflarePages = false } = {}) {
   if (!Number.isInteger(port)) throw new Error('startServer 需要整数 port');
   const server = http.createServer((req, res) => {
     try {
       const urlPath = decodeURIComponent((req.url || '/').split('?')[0]);
+      if (cloudflarePages && /^\/apps\/arcade\/(?:index|games\/[a-z0-9-]+)\.html$/.test(urlPath)) {
+        const canonical = urlPath === '/apps/arcade/index.html' ? '/apps/arcade/' : urlPath.slice(0, -5);
+        const search = new URL(req.url, 'http://localhost').search;
+        res.writeHead(308, { Location: canonical + search });
+        res.end();
+        return;
+      }
       let filePath = path.join(root, urlPath.startsWith('/studiokit/') ? urlPath.slice('/studiokit'.length) : urlPath);
       if (!filePath.startsWith(root)) {
         res.writeHead(403);
@@ -93,8 +101,15 @@ export function startServer({ root = REPO_ROOT, port, host = '127.0.0.1' } = {})
         res.end('not found');
         return;
       }
-      res.writeHead(200, { 'Content-Type': MIME[path.extname(filePath)] || 'application/octet-stream' });
-      fs.createReadStream(filePath).pipe(res);
+      const ext = path.extname(filePath);
+      const headers = { 'Content-Type': MIME[ext] || 'application/octet-stream' };
+      let body = fs.createReadStream(filePath);
+      if (cloudflarePages && urlPath.startsWith('/apps/arcade/') && ext === '.html' && /\bgzip\b/.test(req.headers['accept-encoding'] || '')) {
+        headers['Content-Encoding'] = 'gzip';
+        body = body.pipe(createGzip());
+      }
+      res.writeHead(200, headers);
+      body.pipe(res);
     } catch (err) {
       res.writeHead(500);
       res.end(String(err));

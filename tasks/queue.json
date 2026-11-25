@@ -2268,6 +2268,37 @@
         "GitHub Pages 与 Cloudflare Pages 部署均成功并逐文件核验"
       ],
       "evidence": "基于 cfd8119（0.18.0），两笔迭代 fadd6de、ee13f26 移入 main，5c16586 发布。静态校验、构建通过，冒烟 117/117，PWA 更新 9/9、离线 17/17、可访问性 75/75。Actions 45427632073 四项成功，双端各 87/87 项文件匹配本地产物。双端 Chromium 验证方块拇指暂停、返回街机厅与续玩。用正式产物复验 0.18.0 检查更新、刷新和保留旧存档。"
+    },
+    {
+      "id": "T135",
+      "title": "Arcade PWA 预载后断网跨页修复（本地未发布）",
+      "kind": "agent",
+      "status": "DONE",
+      "dependsOn": ["T134"],
+      "ownerAuthorizationRequired": false,
+      "acceptance": [
+        "模拟 Cloudflare Pages 的 308 跳转并复现游戏卡片离线导航失败",
+        "断网时已预载的 16 款游戏可从中心页进入并返回，支持无后缀地址",
+        "离线修复兼容现有缓存及 GitHub Pages 子路径"
+      ],
+      "evidence": "旧 SW 在模拟 Cloudflare 308 时断网卡片导航失败（17/18）。修复后以 308 和 gzip 响应预载，Chromium 页面与 SW 同时断网，16 款均可往返，黄金矿工可从带查询与片段的无后缀地址直达并开始，服务器零页面请求。从旧 SW 更新接管后关停服务器可直接复用预载。离线 18/18，PWA 更新 9/9，静态校验、构建及脚本语法检查通过。当前工作区冒烟停在黄金矿工沉浸画布高度增益断言（55px，要求 >60px），绕过 SW 仍复现。隔离副本以 0.18.1 基线加离线修复跑完冒烟 117/117，涵盖桌面和四档窄屏。本地未发布，手机真机待验证。"
+    },
+    {
+      "id": "T136",
+      "title": "Arcade 0.18.2 合入 main 并双端发布",
+      "kind": "agent",
+      "status": "IN_PROGRESS",
+      "dependsOn": [
+        "T135"
+      ],
+      "ownerAuthorizationRequired": true,
+      "ownerAuthorizationNote": "OWNER_AUTHORIZATION: PUBLISH_TO_MAIN。Owner 明确要求「那就在main分支发布上线吧」。",
+      "acceptance": [
+        "仅发布离线修复，0.18.2 可迁移 0.18.1 的游戏预载",
+        "通过本地发布门禁及 Actions 四项任务",
+        "GitHub Pages 与 Cloudflare Pages 线上逐文件核验一致"
+      ],
+      "evidence": "0.18.2 发布候选，等待门禁和双端部署核验。"
     }
   ]
 }
