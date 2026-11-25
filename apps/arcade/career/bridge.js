@@ -3377,11 +3377,20 @@
       extraModules.push('campaign');
       extraModules.push('ending');
     }
+    /* 告示板首屏推荐由 campaign.recommend 推导，它要求已配置的 storyEvidence
+       （isConfigured + storyFlags 真实规则），否则返回 null、没有 data-town-recommend-id。
+       routePlanner 同属推荐/缺口链路，一并预装以保持一致（若后续 recommend 依赖它）。 */
+    if (name === 'town') {
+      extraModules.push('storyEvidence');
+      extraModules.push('routePlanner');
+    }
     var preloadList = [ensureLazyModule('commission'), ensureLazyModule('alternatives'), loadCareerContent()];
     extraModules.forEach(function (moduleName) {
       preloadList.push(ensureLazyModule(moduleName));
     });
     var preload = Promise.all(preloadList).then(function () {
+      /* 必须在 loadStorySnapshot / UI ctx 之前用真实 commissions/campaign 内容配置
+         storyEvidence 与 campaign；否则 campaign.recommend 因 evidence 模块未配置返回 null。 */
       configureCommissionContent();
       configureCareerModules();
       return configureRentalModule();
