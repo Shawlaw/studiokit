@@ -463,6 +463,41 @@ async function runAsyncChecks() {
     return 'continue -> commission.start';
   });
 
+  await acheck('未解锁的 live run 只显示锁定态，不提供继续按钮', async () => {
+    const { town } = loadTown();
+    const ctx = basicCtx();
+    ctx.commission.listAvailable = () => ({ ok: true, list: ['pendulum-tower.T1'] });
+    const sheet = town.render(ctx);
+    await Promise.resolve();
+    assert.equal(byAttr(sheet, 'data-town-continuing', 'true').length, 0, 'locked live run 不得有继续按钮');
+    const lockedRows = byClass(sheet, 'ac-career-town__row')
+      .filter((row) => row.getAttribute('data-commission-id') === 'memory-flip.T1');
+    const anyContinueForLocked = byAttr(sheet, 'data-town-continuing', 'true')
+      .filter((node) => node.getAttribute('data-commission-id') === 'memory-flip.T1');
+    assert.equal(anyContinueForLocked.length, 0, 'locked live run 不得有继续按钮');
+    const startForLocked = byAttr(sheet, 'data-town-action', 'start')
+      .filter((node) => node.getAttribute('data-commission-id') === 'memory-flip.T1');
+    assert.equal(startForLocked.length, 0, 'locked live run 不得可点');
+    const retryForLocked = byAttr(sheet, 'data-town-action', 'retry')
+      .filter((node) => node.getAttribute('data-commission-id') === 'memory-flip.T1');
+    assert.equal(retryForLocked.length, 0, 'locked live run 不得重接');
+    return 'locked live run has no continue/start/retry';
+  });
+
+  await acheck('continuations ok:false 保留 unlocked 列表并给出非阻塞提示', async () => {
+    const { town } = loadTown();
+    const ctx = basicCtx();
+    ctx.commission.continuations = () => ({ ok: false, reason: 'db-unavailable', runs: [] });
+    const sheet = town.render(ctx);
+    await Promise.resolve();
+    assert.ok(byClass(sheet, 'ac-career-town__row').length >= 3, '列表保留');
+    const status = byClass(sheet, 'ac-career-status')[0];
+    assert.ok(status && status.hidden === false, '应给出非阻塞状态');
+    assert.ok(status.textContent.includes('进行中的单子'), 'status=' + status.textContent);
+    assert.ok(!status.textContent.includes('db-unavailable'), '不暴露系统 reason');
+    return 'ok:false surfaced';
+  });
+
   await acheck('continuations 缺接口/失败时回退 unlocked 列表', async () => {
     const { town } = loadTown();
     const ctx = basicCtx();
