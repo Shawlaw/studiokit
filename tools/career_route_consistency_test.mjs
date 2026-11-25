@@ -273,6 +273,21 @@ check('默认路线 C4 未在 C3 前跳章', se.storyUnlocked('C4.city_power_res
   flags: receiptViewOf(['pendulum-tower.T1', 'memory-flip.T2']).flags,
 }) === false, 'ok');
 
+/* ------------------------------------------------------------------ *
+ * 5. 支线剧透门槛：含「星塔」的家族必须声明 minChapter=C3（或改写为不含该词）
+ * ------------------------------------------------------------------ */
+const sideStories = readJson('side-stories.json');
+const chapterRank = new Map((campaign.chapters || []).map((chapter, index) => [chapter.chapterId, index]));
+(sideStories.families || []).forEach((family) => {
+  const mentionsStarTower = typeof family.text === 'string' && family.text.indexOf('星塔') >= 0;
+  const gated = family.minChapter === 'C3' && chapterRank.has('C3');
+  check('支线 ' + family.familyId + ' 不在 C3 前泄漏星塔', !mentionsStarTower || gated,
+    'mentions=' + mentionsStarTower + ' minChapter=' + (family.minChapter || '-'));
+});
+check('C1 标题与章节 Agent 统一口径为「第一封工单」',
+  (campaign.chapters || []).find((chapter) => chapter.chapterId === 'C1')?.title === '第一封工单',
+  'title');
+
 console.log('');
 if (failures) {
   console.log(failures + ' failed / ' + total + ' checks');

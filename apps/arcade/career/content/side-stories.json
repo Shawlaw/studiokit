@@ -32,6 +32,7 @@
       "familyId": "old_route",
       "title": "旧航线",
       "text": "月影的旧航线与今天的货运航线重叠；有人早就在为关闭星塔做准备。",
+      "minChapter": "C3",
       "clueIds": [
         "CL-gravity-flip",
         "CL-shadow-leap"
@@ -58,6 +59,7 @@
       "familyId": "harbor_light",
       "title": "港口的灯",
       "text": "物流司机与维修工都见过同一盏忽明忽暗的灯；它亮起时，星塔会短暂地安静。",
+      "minChapter": "C3",
       "clueIds": [
         "CL-road-rush",
         "CL-mole-whack"
