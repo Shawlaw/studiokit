@@ -223,7 +223,9 @@ const PANEL_EXPR = `(() => {
     state: node.getAttribute('data-state'),
     title: text(node.querySelector('.ac-career-world__chapter-title')),
     hint: text(node.querySelector('.ac-career-world__hint')),
+    role: text(node.querySelector('.ac-career-world__role')),
     stage: text(node.querySelector('.ac-career-world__stage-text')),
+    progress: text(node.querySelector('.ac-career-world__progress')),
     body: text(node.querySelector('.ac-career-world__chapter-body')),
     factCount: Number((node.querySelector('.ac-career-world__facts') || { getAttribute: () => null }).getAttribute('data-fact-count') || 0),
     contacts: text(node.querySelector('.ac-career-world__contact')),
@@ -624,6 +626,8 @@ async function main() {
   const entryChapter = (id) => chapterById(surface, id);
   const chapterBodyOf = (id) => fs.readFileSync(path.join(CONTENT_DIR, `chapter-0${Number(id.slice(1))}.json`), 'utf8');
   record('BEATS 完成后显示 complete 正文/事实，可用章只显示 start 且不剧透', entryChapter('C0').body.length > 0 && entryChapter('C0').factCount > 0 && entryChapter('C0').stage === CHAPTER_FILES.C0.beats.complete && entryChapter('C1').stage === CHAPTER_FILES.C1.beats.start && entryChapter('C1').body === '' && entryChapter('C1').factCount === 0, JSON.stringify(surface.chapters.slice(0, 2)));
+  record('CONTENT chapter-00.json 有向后兼容 role 身份字段（玩家语言，无 C 码）', typeof CHAPTER_FILES.C0.role === 'string' && /自由职业者/.test(CHAPTER_FILES.C0.role) && !/\bC[0-5]\b/.test(CHAPTER_FILES.C0.role), CHAPTER_FILES.C0.role || '');
+  record('BEATS 身份句在 C0 章节可见（已完成章仍能看到）', entryChapter('C0').role === CHAPTER_FILES.C0.role, JSON.stringify({ role: entryChapter('C0').role }));
   record('BEATS 锁定章不显示任何阶段文案/正文/事实', surface.chapters.slice(2).every((chapter) => chapter.stage === '' && chapter.body === '' && chapter.factCount === 0), JSON.stringify(surface.chapters.slice(2).map((chapter) => chapter.id)));
   record('BEATS 玩家可见标题/徽标不含内部编号或 active 状态词', surface.chapters.every((chapter) => !/\bC[0-5]\b/.test(chapter.title) && !/进行中|active/i.test(chapter.badge) && !/进行中|active/i.test(chapter.badgeLabel || '')), JSON.stringify(surface.chapters.map((chapter) => [chapter.title, chapter.badge, chapter.badgeLabel])));
   record('BEATS 活动 C1 显示可信联系人与当前线索，不显示答案', /阿砾|老周/.test(entryChapter('C1').contacts) && entryChapter('C1').clues.length >= 1 && entryChapter('C1').body === '' && entryChapter('C1').factCount === 0, JSON.stringify({ contacts: entryChapter('C1').contacts, clues: entryChapter('C1').clues }));
@@ -1021,6 +1025,20 @@ async function main() {
     'REAL 真实 campaign-core 状态可被面板渲染（六章、C0 进行中、港口 C0）',
     realBridge.chapterCount === 6 && realBridge.chapters[0].state === 'active' && realBridge.chapters[1].state === 'locked' && realBridge.port.state === 'C0' && realBridge.degraded.length === 0,
     JSON.stringify({ count: realBridge.chapterCount, first: realBridge.chapters[0], port: realBridge.port && realBridge.port.state, degraded: realBridge.degraded })
+  );
+  const freshC0 = chapterById(realBridge, 'C0');
+  record(
+    'REAL 新档 C0 进行中：身份句与 start 当前目标可见，不提前显示 complete/progress 答案',
+    !!freshC0 &&
+      freshC0.role === CHAPTER_FILES.C0.role &&
+      /自由职业者/.test(freshC0.role) &&
+      freshC0.stage === CHAPTER_FILES.C0.beats.start &&
+      freshC0.progress.indexOf(CHAPTER_FILES.C0.beats.progress) >= 0 &&
+      freshC0.stage.indexOf(CHAPTER_FILES.C0.beats.complete) < 0 &&
+      freshC0.body === '' &&
+      freshC0.factCount === 0 &&
+      !/\bC[0-5]\b/.test(freshC0.role + freshC0.stage),
+    JSON.stringify({ role: freshC0 && freshC0.role, stage: freshC0 && freshC0.stage, progress: freshC0 && freshC0.progress, body: freshC0 && freshC0.body, factCount: freshC0 && freshC0.factCount })
   );
   await closeDirect();
   const realDirect = await openDirect(`({

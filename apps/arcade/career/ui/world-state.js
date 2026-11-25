@@ -55,6 +55,7 @@
   const COLLAPSE_LABEL = '收起回顾';
   const CONTACTS_HEADING = '可以问的人';
   const NEXT_HEADING = '下一步';
+  const PROGRESS_LABEL = '后续线索：';
   const NEXT_FALLBACK = {
     C0: '去街角的告示板，挑一张今天能做成的水上零工。',
     C1: '再带回一份与航报不同来源的现场记录，让研究院把那截信号比对完。',
@@ -102,7 +103,7 @@
 
   /* 内容兜底：只在 ctx 里读不到 campaign.json 时使用（真实内容优先，逐项合并）。 */
   const CHAPTER_FALLBACK = {
-    C0: { title: '不起眼的印记', hint: '线索信的背面有一行旧港地址。', fallback: '信箱可随时找回这封信。' },
+    C0: { title: '不起眼的印记', hint: '线索信的背面有一行旧港地址。', fallback: '信箱可随时找回这封信。', role: '你是刚到折光港、靠接零工维生的自由职业者。' },
     C1: { title: '第一封工单', hint: '告示板上的工钱够不够，是接下来最实际的问题。', fallback: '不买飞船也能租；不战斗也能委托代办。' },
     C2: { title: '谁留下了七号货柜', hint: '晨光研究院愿意看晶格模型。', fallback: '研究、开采、贸易三条线都能解译，不锁死游戏。' },
     C3: { title: '月影里的时间差', hint: '旧观测站的坐标在月影一侧。', fallback: '探索、生态、档案三条替代线任选。' },
@@ -209,9 +210,23 @@
     '  font-weight: 600;',
     '  overflow-wrap: anywhere;',
     '}',
+    '.ac-career-world__role {',
+    '  margin: 0;',
+    '  color: #b9c6f2;',
+    '  font-size: 12px;',
+    '  line-height: 1.7;',
+    '  overflow-wrap: anywhere;',
+    '}',
     '.ac-career-world__stage-text {',
     '  margin: 0;',
     '  color: var(--ac-career-ink, #eef1ff);',
+    '  font-size: 12px;',
+    '  line-height: 1.7;',
+    '  overflow-wrap: anywhere;',
+    '}',
+    '.ac-career-world__progress {',
+    '  margin: 0;',
+    '  color: var(--ac-career-muted, #93a0c8);',
     '  font-size: 12px;',
     '  line-height: 1.7;',
     '  overflow-wrap: anywhere;',
@@ -1060,6 +1075,7 @@
       state: state,
       title: title,
       hint: pickHint(state, routes, contentRoutes, contentChapter, builtin),
+      role: cleanText(contentChapter && contentChapter.role) || cleanText(builtin.role),
       beats: beatsOf(contentChapter && contentChapter.beats),
       contacts: textList(contentChapter && contentChapter.contacts),
       clues: textList(contentChapter && contentChapter.clues),
@@ -1181,7 +1197,8 @@
       const fileChapter = chapterFiles && isObject(chapterFiles[chapterId]) ? chapterFiles[chapterId] : null;
       const mergedChapter = contentMap[chapterId]
         ? Object.assign({}, fileChapter || {}, contentMap[chapterId], {
-            /* beats/contacts/clues 只存在于章节文件，campaign-core 的章视图可能没有；取文件优先。 */
+            /* role/beats/contacts/clues 只存在于章节文件，campaign-core 的章视图可能没有；取文件优先。 */
+            role: cleanText(fileChapter && fileChapter.role) || cleanText(contentMap[chapterId] && contentMap[chapterId].role),
             beats: beatsOf((fileChapter && fileChapter.beats) || (contentMap[chapterId] && contentMap[chapterId].beats)),
             contacts: textList((fileChapter && fileChapter.contacts) || (contentMap[chapterId] && contentMap[chapterId].contacts)),
             clues: textList((fileChapter && fileChapter.clues) || (contentMap[chapterId] && contentMap[chapterId].clues)),
@@ -1491,13 +1508,17 @@
       badge.setAttribute('data-state-label', chapter.state === 'active' ? 'current' : chapter.state === 'complete' ? 'recent' : chapter.state);
       rowHead.appendChild(badge);
       item.appendChild(rowHead);
-      /* 锁定章只显示标题与状态；进行中只给待查疑问，不给答案。 */
+      /* 锁定章只显示标题与状态；进行中把 start 作为当前目标显示，progress 只作后续线索。 */
       if (chapter.state === 'locked') return item;
       const isCurrent = chapter.state === 'active' || chapter.state === 'available';
+      if (chapter.role) item.appendChild(make('p', 'ac-career-world__role', chapter.role));
       const playerText = chapter.beats[
-        chapter.state === 'complete' ? 'complete' : chapter.state === 'active' ? 'progress' : 'start'
+        chapter.state === 'complete' ? 'complete' : 'start'
       ];
       if (playerText) item.appendChild(make('p', 'ac-career-world__stage-text', playerText));
+      if (isCurrent && chapter.state === 'active' && chapter.beats.progress) {
+        item.appendChild(make('p', 'ac-career-world__progress', PROGRESS_LABEL + chapter.beats.progress));
+      }
       if (isCurrent) {
         const contacts = textList(chapter.contacts);
         if (contacts.length) {
