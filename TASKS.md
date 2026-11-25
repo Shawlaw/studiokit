@@ -4,6 +4,7 @@
 
 | ID | 类型 | 任务 | 状态 | 依赖 | 备注 |
 |---|---|---|---|---|---|
+| T136 | agent | Arcade 0.19.0：矮视口紧凑布局、拇指区暂停、恢复门与单手触屏（本地未发布） | DONE | T134 | 分支 `feat/arcade-touch-019`，未推送 / 未发布。修复挑战选关「返回开始」无反应（记忆翻牌 / 贪吃蛇 / 雪铃 / 层塔）、黄金矿道具坞间隙误放钩、俄罗斯方块矮视口溢出；11 款实时游戏拇指区暂停、恢复门、结算防误触；16 款 × 8 档视口零溢出，375×548 标签页画布占屏 25–32% → 33–47%，开局按钮全部首屏可见，高屏布局不变。新增门禁 `arcade_compact_touch_test` 18/18（真实触控事件）；冒烟 117/117、底部按钮抬升 42/42、层塔 23/23、交互 5/5、PWA 更新 9/9、回看 5/5；聚合门禁结果见 `apps/arcade/DESIGN-0.19.0.md` 第 5 节。真机手感 UNVERIFIED。 |
 | T124 | agent | 全分支复审（cd9e555）P1/P2 修复与复测（本地未发布） | DONE | T123 | 6 项 P1 + 10 项 P2 已在 `6481322` 修复；逐项独立探针、campaign E2E 701/701、world 109/109、a11y 75、PWA 17、smoke 113、mobile 318；96 16/16 游戏按批/单游戏全 PASS；8fc73f1 完整聚合门禁 ALL GATES PASSED（exit 0）。 |
 | T125 | agent | 第三轮复审（400db62）2 P1 + 5 P2 修复与门禁（本地未发布） | DONE | T124 | 回归先于修复：`219bd67` 在 400db62 失败；产品修复 `009bc77`；新增 review3 regression/workshop/route-evidence 门禁；`py -3 tools/arcade_run_all_gates.py` 在 009bc77 **ALL GATES PASSED**（日志 REVIEW3-GATE4.log）。 |
 | T126 | agent | 第四轮复审（9ce51ec）1 P1 + 4 P2 修复与门禁（本地未发布） | DONE | T125 | 附录同路线探针在 `9ce51ec` 实跑 exit 1，修复 `575096f`；新增 review4 same-route 门禁；发现代次/旧档首通/20001 行导出/C2-C4 回退补齐；`py -3 tools/arcade_run_all_gates.py` 在 `ab79c79` **ALL GATES PASSED**（日志 REVIEW4-GATE6.log）。 |
