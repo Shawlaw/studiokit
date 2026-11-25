@@ -477,6 +477,22 @@
     }
   }
 
+  /** 节点自身及所有祖先都必须可见：排除 hidden、closed details、display:none 与零矩形。 */
+  function isVisibleInTree(node, scope) {
+    for (let cur = node; cur; cur = cur.parentNode) {
+      if (cur.hidden === true) return false;
+      if (typeof cur.getAttribute === 'function' && cur.getAttribute('aria-hidden') === 'true') return false;
+      if (cur.tagName === 'DETAILS' && cur.open !== true) return false;
+      if (typeof cur.getAttribute === 'function') {
+        const style = cleanText(cur.getAttribute('style')).toLowerCase();
+        if (/display\s*:\s*none/.test(style) || /visibility\s*:\s*hidden/.test(style)) return false;
+      }
+      if (cur === scope) break;
+    }
+    if (typeof node.getClientRects === 'function' && node.getClientRects().length === 0) return false;
+    return true;
+  }
+
   function focusableIn(scope) {
     if (!scope || typeof scope.querySelectorAll !== 'function') return [];
     const nodes = scope.querySelectorAll('button, [href], input, select, textarea, [tabindex]:not([tabindex="-1"])');
@@ -484,9 +500,8 @@
     for (let i = 0; i < nodes.length; i += 1) {
       const node = nodes[i];
       if (!node || node.disabled) continue;
-      if (node.hidden) continue;
       if (typeof node.closest === 'function' && node.closest('[hidden]')) continue;
-      if (typeof node.getClientRects === 'function' && node.getClientRects().length === 0) continue;
+      if (!isVisibleInTree(node, scope)) continue;
       out.push(node);
     }
     return out;
@@ -1033,12 +1048,14 @@
       backLink.hidden = false;
     }
 
-    function actionButton(row, continuing) {
+    function actionButton(row, continuing, recommended) {
       const button = make('button', 'ac-career-btn ac-career-btn--primary', continuing ? CONTINUE_LABEL : START_LABEL);
       button.type = 'button';
       button.setAttribute('data-town-action', 'start');
       button.setAttribute('data-commission-id', row.commissionId);
       if (continuing) button.setAttribute('data-town-continuing', 'true');
+      /* 首屏主动作的稳定选择器：E2E/触控无需用易与折叠列表重名的 commissionId 定位。 */
+      if (recommended) button.setAttribute('data-town-recommend-start', 'true');
       button.setAttribute('aria-label', (continuing ? '继续「' : '接下「') + row.title + '」');
       return button;
     }
@@ -1100,7 +1117,7 @@
       /* 继续按钮必须同时满足：真实解锁 + 真实 live run；未解锁的 run 只显示锁定态。 */
       const continuing = unlocked && live;
       if (unlocked) {
-        actions.appendChild(actionButton(row, continuing));
+        actions.appendChild(actionButton(row, continuing, !!opts.recommended));
       } else {
         actions.appendChild(make('span', 'ac-career-town__locked', LOCKED_LABEL));
       }
