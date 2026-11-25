@@ -32,9 +32,30 @@ try {
   console.log(JSON.stringify({ careerId, one, two, state }));
   const c5Rows = state.quests.filter(([nodeId]) => nodeId.includes('C5'));
   const endingRows = state.quests.filter(([nodeId]) => nodeId === 'ending.combat');
-  if (!one.ok || two.ok || two.reason !== 'already-resolved' || two.settled !== false || state.claims.length !== 1 || state.ledger.length !== 1 || state.quests.length !== 2 || c5Rows.length !== 1 || endingRows.length !== 1 || state.quests.some(([, receiptId]) => receiptId !== one.ticketId)) {
-    process.exitCode = 1;
-  }
+
+  /* 0.20 continuations 原子去重后有两种合法并发形态：
+     A) 不同 ticket：败者 already-resolved / settled:false / 未写；
+     B) 同 ticket：败者复用同一 run，duplicate:true / wrote:false / settled:true，
+        且返回同一收据（不重复入账）。两者都必须满足：一 claim / 一 ledger / 一 C5 /
+        一 ending / 同一 receiptId。 */
+  const sameTicket = !!two && !!one && two.ticketId === one.ticketId;
+  const loserOk = sameTicket
+    ? !!(two.ok === true && two.duplicate === true && two.wrote === false && two.settled === true)
+    : !!(two.ok === false && two.reason === 'already-resolved' && two.settled === false && two.wrote === false);
+  const receiptId = one && one.receipt && one.receipt.receiptId;
+  const twoReceiptId = two && two.receipt && two.receipt.receiptId;
+  const invariants =
+    !!one && one.ok === true && one.wrote === true && one.settled === true &&
+    !!receiptId &&
+    loserOk &&
+    (!twoReceiptId || twoReceiptId === receiptId) &&
+    state.claims.length === 1 && state.ledger.length === 1 &&
+    state.quests.length === 2 && c5Rows.length === 1 && endingRows.length === 1 &&
+    state.quests.every(([, rowReceiptId]) => rowReceiptId === receiptId) &&
+    state.claims.every(([runId]) => runId === receiptId) &&
+    state.ledger.every((runId) => runId === receiptId);
+  console.log(JSON.stringify({ form: sameTicket ? 'same-ticket-duplicate' : 'already-resolved', receiptId, loserOk, invariants }));
+  if (!invariants) process.exitCode = 1;
 } finally {
   for (const p of tabs) { try { p.ws.close(); } catch {} }
   await stopChrome(chrome);
