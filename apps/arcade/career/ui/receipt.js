@@ -74,6 +74,12 @@
   const NO_SHIP_TEXT = '还没有自己的飞船';
   const NO_MONEY_TEXT = '没有动钱';
   const DEFAULT_FAILURE_TEXT = '这笔工钱还没结清。';
+  const CARD_TOWN_TEXT = '回告示板';
+  const CARD_CONTINUE_TEXT = '读回信';
+  const CARD_TOWN_LABEL = '关闭收据并回到告示板';
+  const CARD_CONTINUE_LABEL = '关闭收据并读回信';
+  const STORY_NEW_LINE = '这趟留下了一条新线索。';
+  const STORY_RECORDED_LINE = '这趟留下的线索已经归档。';
   const DUPLICATE_NOTE = '这张收据先前已经开过，工钱不会重复进账。';
 
   /* 戏内语言：这些系统/营销词不允许出现在 UI 文案里（失败 message 透传时也过滤）。 */
@@ -489,6 +495,72 @@
       duplicate: duplicate,
       claimedAt: claimedAt,
     };
+  }
+
+  function storyTextOf(value, limit) {
+    const text = cleanText(value);
+    if (!text) return '';
+    const capped = limit || 160;
+    const chars = Array.from(text);
+    return chars.length > capped ? chars.slice(0, capped).join('') + '…' : text;
+  }
+
+  function readStoryFeedback(outer, result) {
+    const rawValue = isObject(outer.storyFeedback) ? outer.storyFeedback : isObject(result.storyFeedback) ? result.storyFeedback : null;
+    if (!isObject(rawValue)) return null;
+    const raw = rawValue;
+    const status = storyTextOf(raw.status, 24);
+    if (status !== 'new' && status !== 'recorded' && status !== 'unavailable') return null;
+    const lines = [];
+    const discovered = Array.isArray(raw.discovered) ? raw.discovered : [];
+    discovered.slice(0, 3).forEach((item) => {
+      const text = storyTextOf(isObject(item) ? item.text : item);
+      if (text && lines.indexOf(text) < 0) lines.push(text);
+    });
+    if (status === 'new' && !lines.length) lines.push(STORY_NEW_LINE);
+    if (status === 'recorded' && !lines.length) lines.push(STORY_RECORDED_LINE);
+    const replies = [];
+    const rawReplies = Array.isArray(raw.replies) ? raw.replies : [];
+    rawReplies.slice(0, 2).forEach((item) => {
+      if (!isObject(item)) return;
+      const name = storyTextOf(item.name, 40);
+      const text = storyTextOf(item.text);
+      if (name && text) replies.push({ name: name, text: text });
+    });
+    const rawChapter = isObject(raw.chapter) ? raw.chapter : null;
+    const chapterId = /^C[0-5]$/.test(storyTextOf(rawChapter && rawChapter.id, 12)) ? storyTextOf(rawChapter.id, 12) : '';
+    /* 只保留玩家语言标题；C1/C2 这类内部章号绝不出现在玩家可见文案。 */
+    const chapterTitle = chapterId ? storyTextOf(rawChapter.title, 160) : '';
+    return {
+      status: status,
+      lines: lines,
+      replies: replies,
+      chapterTitle: chapterTitle,
+      chapterCount: Math.max(0, Math.floor(Number(raw.chapterCount) || 0)),
+      nextStep: storyTextOf(raw.nextStep),
+      unavailable: status === 'unavailable' ? storyTextOf(raw.unavailable) || '剧情这会儿没能记进账。' : '',
+    };
+  }
+
+  function storyActionOf(feedback, outer) {
+    if (!feedback) return null;
+    let handler = null;
+    if ((feedback.status === 'new' || feedback.status === 'recorded') && (feedback.chapterTitle || feedback.replies.length || feedback.nextStep)) {
+      handler = typeof outer.openCampaign === 'function'
+        ? () => outer.openCampaign()
+        : typeof outer.openMailbox === 'function'
+          ? () => outer.openMailbox()
+          : null;
+      if (handler) return { text: CARD_CONTINUE_TEXT, label: CARD_CONTINUE_LABEL, run: handler };
+    }
+    const api = isObject(outer.api) ? outer.api : null;
+    if (api && typeof api.openTown === 'function') {
+      handler = () => api.openTown();
+    } else if (typeof outer.openTown === 'function') {
+      handler = () => outer.openTown();
+    }
+    if (!handler) return null;
+    return { text: CARD_TOWN_TEXT, label: CARD_TOWN_LABEL, run: handler };
   }
 
   function failureSentenceOf(fields) {
@@ -959,7 +1031,29 @@
     };
   }
 
-  function buildCard(doc, fields, reducedMotion) {
+  function appendStoryBlock(doc, parent, feedback) {
+    if (!feedback) return;
+    const block = make(doc, 'section', 'ac-career-receipt-story');
+    applyStyle(block, { display: 'flex', flexDirection: 'column', gap: '4px' });
+    const heading = make(doc, 'h3', 'ac-career-receipt-story__title', '这趟带回来的事');
+    applyStyle(heading, { margin: '2px 0 0', fontSize: '12px', fontWeight: '600' });
+    block.appendChild(heading);
+    if (feedback.status === 'unavailable') {
+      block.appendChild(make(doc, 'p', 'ac-career-status', feedback.unavailable));
+    } else {
+      feedback.lines.forEach((text) => block.appendChild(make(doc, 'p', 'ac-career-status', text)));
+      if (feedback.chapterTitle) {
+        block.appendChild(make(doc, 'p', 'ac-career-status', '新完成的段落：' + feedback.chapterTitle));
+      }
+      if (feedback.nextStep) block.appendChild(make(doc, 'p', 'ac-career-status', '下一步：' + feedback.nextStep));
+      feedback.replies.forEach((reply) => {
+        block.appendChild(make(doc, 'p', 'ac-career-status', reply.name + '：' + reply.text));
+      });
+    }
+    parent.appendChild(block);
+  }
+
+  function buildCard(doc, fields, reducedMotion, feedback, action) {
     const el = make(doc, 'div', 'ac-career-card');
     el.setAttribute('data-career-card', 'receipt');
     el.setAttribute('data-state', fields.ok ? 'success' : 'failure');
@@ -1039,6 +1133,19 @@
       bodyBox.appendChild(make(doc, 'p', 'ac-career-status', '工钱：还没结清'));
     }
     el.appendChild(bodyBox);
+    appendStoryBlock(doc, el, feedback);
+
+    if (action) {
+      const actionBtn = make(doc, 'button', 'ac-career-btn ac-career-btn--primary', action.text);
+      actionBtn.type = 'button';
+      actionBtn.setAttribute('aria-label', action.label);
+      applyStyle(actionBtn, { width: '100%', minHeight: '44px' });
+      actionBtn.addEventListener('click', () => {
+        removeCard();
+        action.run();
+      }, false);
+      el.appendChild(actionBtn);
+    }
 
     closeBtn.addEventListener('click', () => removeCard(), false);
     el.addEventListener('keydown', (event) => {
@@ -1065,11 +1172,13 @@
     const outer = isObject(payload) ? payload : {};
     const result = isObject(outer.result) ? outer.result : outer;
     const fields = readReceiptFields(result, outer);
+    const feedback = readStoryFeedback(outer, result);
+    const action = storyActionOf(feedback, outer);
     closePanel();
     removeCard();
     let reduced = outer.reducedMotion === true;
     if (!reduced && isObject(result) && result.reducedMotion === true) reduced = true;
-    const el = buildCard(doc, fields, reduced);
+    const el = buildCard(doc, fields, reduced, feedback, action);
     try {
       doc.body.appendChild(el);
     } catch (err) {
