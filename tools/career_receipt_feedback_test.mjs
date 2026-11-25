@@ -62,6 +62,7 @@ function findAll(node, predicate, out = []) {
 function buttons(node) { return findAll(node, (item) => item.tagName === 'button'); }
 function byText(node, text) { return buttons(node).find((button) => button.textContent === text); }
 function click(node) { node.dispatch('click'); }
+async function drain() { for (let i = 0; i < 6; i += 1) await Promise.resolve(); }
 
 let checks = 0;
 function eq(actual, expected, label) { deepStrictEqual(actual, expected, label); checks += 1; }
@@ -214,25 +215,53 @@ function noInternalTokens(text) {
   receipt.close();
 }
 
-/* 异步动作：Promise.resolve(action.run()) 的拒绝必须被吞掉，不产生未处理拒绝；
-   收据先关闭，动作继续在后台运行（E2E 应等面板而不是固定 300ms）。 */
+/* 异步动作失败：收据先关闭，但必须给戏内提示 + 重试按钮（成功才只关闭），不静默吞错。 */
 {
   uiContext.document = createDocument();
-  let invoked = false;
+  let invoked = 0;
+  const announcements = [];
   const card = receipt.show({
     result: settledResult(),
     storyFeedback: storyFeedback('new'),
+    announce(text) { announcements.push(text); },
     openCampaign() {
-      invoked = true;
+      invoked += 1;
       return Promise.reject(new Error('ui still loading'));
     },
   });
   const continueBtn = byText(card, '读回信');
   assert(continueBtn, 'read-letter action exists for async failure case');
   click(continueBtn);
-  assert(invoked, 'async action still invoked');
   assert(!card.parentNode, 'receipt closed before async action resolves');
-  await Promise.resolve(); /* 让被吞掉的拒绝完成一个微任务周期 */
+  await drain();
+  assert(invoked === 1, 'async action invoked once');
+  assert(uiContext.document.body.children.some((n) => n.className && n.className.indexOf('ac-career-action-failure') >= 0),
+    'action failure notice shown');
+  assert(announcements.some((t) => t.includes('这会儿没能打开')), 'announce in-fiction failure');
+  const again = buttons(uiContext.document.body).find((b) => b.textContent === '再试一次');
+  assert(again, 'retry action available');
+  assert(again.getAttribute('aria-label'), 'retry action labelled');
+  click(again); /* 再次失败只应保留一条提示 */
+  await drain();
+  assert(invoked === 2, 'retry re-invokes action');
+  eq(uiContext.document.body.children.filter((n) => n.className && n.className.indexOf('ac-career-action-failure') >= 0).length, 1,
+    'only one failure notice remains');
+  receipt.close();
+}
+
+/* 异步动作返回 ok:false：同样给提示 + 重试（openTown/openCampaign 结构化失败）。 */
+{
+  uiContext.document = createDocument();
+  const card = receipt.show({
+    result: settledResult(),
+    storyFeedback: storyFeedback('new'),
+    api: { openTown() { return Promise.resolve({ ok: false, reason: 'ui-unavailable' }); } },
+  });
+  const townBtn = byText(card, '回告示板');
+  assert(townBtn, 'town action exists for ok:false case');
+  click(townBtn);
+  await drain();
+  assert(byText(uiContext.document.body, '再试一次'), 'ok:false also offers retry');
   receipt.close();
 }
 
@@ -401,6 +430,56 @@ function configureCampaign(campaign) {
   /* object 形状的 currentChapter 仍可定位当前章。 */
   const objectState = { ok: true, chapters: c2State.chapters, currentChapter: { chapterId: 'C2' }, endingChosen: null };
   assert(api.nextStepOfCurrent(objectState).includes('谁留下了七号货柜'), 'object-shaped currentChapter resolves to C2');
+}
+
+/* ---------------------------------------------------------------- 行为级 VM：证据命名 + 中间单不回放旧章回信 */
+
+function extractStoryHelpers() {
+  const start = bridgeSource.indexOf('  function storyFeedbackFailure(');
+  const end = bridgeSource.indexOf('  function attachCampaignProgress(', start);
+  const body = bridgeSource.slice(start, end);
+  const sandbox = {
+    console,
+    STORY_TEXT_LIMIT: 160,
+    clipText(value, max) { const chars = Array.from(String(value == null ? '' : value)); return chars.length > max ? chars.slice(0, max).join('') + '…' : String(value); },
+    nowIso: () => '2026-11-25T00:00:00.000Z',
+    internal: { npcContent: JSON.parse(readFileSync(resolve(root, 'apps/arcade/career/content/npc.json'), 'utf8')) },
+  };
+  vm.createContext(sandbox);
+  vm.runInContext([body, 'this.__api = { storyFeedbackFor, evidenceLabelOf, routeProgressLineOf };'].join(String.fromCharCode(10)), sandbox, { filename: 'story-helpers' });
+  return sandbox.__api;
+}
+
+{
+  const helpers = extractStoryHelpers();
+
+  /* 中间单：receipt.flags 带已完成 C1 章旗标，但无本次章级 newFlags —— 不得回放 C1 NPC 旧事。 */
+  const result = {
+    ok: true,
+    receipt: { receiptId: 'run-x', credits: 90, flags: ['C1.work_done', 'C1.foreman'], evidence: ['E-C1-site-2'] },
+  };
+  const record = { ok: true, duplicate: false, newTokens: ['E-C1-site-2'], newFlags: [], flags: [], tokens: ['E-C1-site-2'] };
+  const feedback = helpers.storyFeedbackFor(result, record);
+  assert(feedback.status === 'new', 'intermediate record status new');
+  assert(feedback.replies.length <= 1, 'intermediate single route-progress line at most');
+  assert(!feedback.replies.some((r) => r.text.includes('标准舰') || r.text.includes('门牌号') || r.text.includes('中继密钥')),
+    'no replay of completed C1 NPC replies');
+  assert(feedback.replies.length === 0 || feedback.replies[0].name === '旧港告示', 'route progress uses anonymous in-fiction source');
+
+  /* 按来源给玩家物件名，且不泄漏原始 token。 */
+  const cases = [
+    ['E-memory-flip.T2', '档案照片'],
+    ['E-gomoku.T2', '布局推演'],
+    ['E-C1-site', '工地记录'],
+    ['E-shadow-leap.T2', '卷轴拓片'],
+  ];
+  for (const [token, expected] of cases) {
+    const label = helpers.evidenceLabelOf(token);
+    assert(label.includes(expected), 'evidence label for ' + token + ' is ' + label);
+    assert(!label.includes(token), 'evidence label never leaks token');
+  }
+  assert(helpers.evidenceLabelOf('E-C1-patrol') === '异常航报', 'patrol evidence labeled航报');
+  assert(helpers.evidenceLabelOf('unknown-token') === '', 'non-evidence token has no label');
 }
 
 console.log(`career receipt feedback: ${checks}/${checks} checks passed`);

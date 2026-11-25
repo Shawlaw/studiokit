@@ -78,6 +78,7 @@
   const CARD_CONTINUE_TEXT = '读回信';
   const CARD_TOWN_LABEL = '关闭收据并回到告示板';
   const CARD_CONTINUE_LABEL = '关闭收据并读回信';
+  const ACTION_FAILED_TEXT = '这会儿没能打开，稍后再试一次。';
   const STORY_NEW_LINE = '这趟留下了一条新线索。';
   const STORY_RECORDED_LINE = '这趟留下的线索已经归档。';
   const DUPLICATE_NOTE = '这张收据先前已经开过，工钱不会重复进账。';
@@ -133,6 +134,7 @@
 
   let panel = null;
   let card = null;
+  let actionFailure = null;
   let panelSeq = 0;
 
   /* ---------------------------------------------------------------- 通用小工具 */
@@ -1053,7 +1055,56 @@
     parent.appendChild(block);
   }
 
-  function buildCard(doc, fields, reducedMotion, feedback, action) {
+  /** 页内动作失败：戏内提示 + 可重试按钮（不恢复整张收据，避免误读为结算失败）。 */
+  function showActionFailure(retry, announce) {
+    const doc = documentOf();
+    if (!doc || !doc.body) return;
+    removeActionFailure();
+    const note = make(doc, 'div', 'ac-career-card ac-career-action-failure');
+    applyStyle(note, {
+      boxSizing: 'border-box', position: 'fixed', left: '50%', bottom: 'calc(12px + env(safe-area-inset-bottom, 0px))',
+      transform: 'translateX(-50%)', zIndex: '68', width: 'min(92vw, 360px)', padding: '10px 12px',
+      border: '1px solid var(--ac-career-line)', borderRadius: '12px', background: 'var(--ac-career-panel)',
+      color: 'var(--ac-career-ink)', fontSize: '12px', lineHeight: '1.7', display: 'flex', flexDirection: 'column', gap: '6px',
+    });
+    note.setAttribute('role', 'status');
+    note.setAttribute('aria-live', 'polite');
+    note.appendChild(make(doc, 'p', 'ac-career-status', ACTION_FAILED_TEXT));
+    const again = make(doc, 'button', 'ac-career-btn ac-career-btn--primary', '再试一次');
+    again.type = 'button';
+    again.setAttribute('aria-label', '再试一次打开');
+    applyStyle(again, { width: '100%', minHeight: '44px' });
+    again.addEventListener('click', () => {
+      removeActionFailure();
+      retry();
+    }, false);
+    note.appendChild(again);
+    doc.body.appendChild(note);
+    actionFailure = note;
+    if (typeof announce === 'function') {
+      try { announce(ACTION_FAILED_TEXT); } catch (err) { /* 读屏失败不影响可见提示 */ }
+    }
+  }
+
+  function removeActionFailure() {
+    if (!actionFailure) return false;
+    const node = actionFailure;
+    actionFailure = null;
+    try { if (node.parentNode) node.parentNode.removeChild(node); } catch (err) { /* ignore */ }
+    return true;
+  }
+
+  function runAction(action, announce) {
+    try {
+      Promise.resolve(action.run()).then((outcome) => {
+        if (outcome && outcome.ok === false) showActionFailure(() => runAction(action, announce), announce);
+      }, () => showActionFailure(() => runAction(action, announce), announce));
+    } catch (err) {
+      showActionFailure(() => runAction(action, announce), announce);
+    }
+  }
+
+  function buildCard(doc, fields, reducedMotion, feedback, action, announce) {
     const el = make(doc, 'div', 'ac-career-card');
     el.setAttribute('data-career-card', 'receipt');
     el.setAttribute('data-state', fields.ok ? 'success' : 'failure');
@@ -1141,13 +1192,17 @@
       actionBtn.setAttribute('aria-label', action.label);
       applyStyle(actionBtn, { width: '100%', minHeight: '44px' });
       actionBtn.addEventListener('click', () => {
-        /* 先关收据，再运行页内动作；动作可能是异步的（懒加载 UI/内容），
-           Promise 失败必须吞掉，避免静默的未处理拒绝（不阻塞后续，也不新增跳转）。 */
+        /* 先关收据，再运行页内动作；动作可能是异步的（懒加载 UI/内容）。
+           成功不再显示收据；失败/ok:false 必须给出戏内提示并留一个可重试动作，
+           不静默吞错，也不新增整页跳转。 */
         removeCard();
+        const retry = () => runAction(action, announce);
         try {
-          Promise.resolve(action.run()).catch(() => {});
+          Promise.resolve(action.run()).then((outcome) => {
+            if (outcome && outcome.ok === false) showActionFailure(retry, announce);
+          }, () => showActionFailure(retry, announce));
         } catch (err) {
-          /* 同步抛错同样不影响已关闭的收据 */
+          showActionFailure(retry, announce);
         }
       }, false);
       el.appendChild(actionBtn);
@@ -1182,9 +1237,10 @@
     const action = storyActionOf(feedback, outer);
     closePanel();
     removeCard();
+    removeActionFailure();
     let reduced = outer.reducedMotion === true;
     if (!reduced && isObject(result) && result.reducedMotion === true) reduced = true;
-    const el = buildCard(doc, fields, reduced, feedback, action);
+    const el = buildCard(doc, fields, reduced, feedback, action, outer.announce);
     try {
       doc.body.appendChild(el);
     } catch (err) {
@@ -1199,7 +1255,8 @@
   function close() {
     const closedPanel = closePanel();
     const closedCard = removeCard();
-    return closedPanel || closedCard;
+    const closedFailure = removeActionFailure();
+    return closedPanel || closedCard || closedFailure;
   }
 
   return {
