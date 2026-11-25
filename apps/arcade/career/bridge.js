@@ -1488,8 +1488,12 @@
       }
     }
     feedback.replies = replies;
-    /* 仅内部使用：告诉章节快照本次真实新增了哪些章级旗标，不进入玩家可见文案。 */
+    /* 仅内部使用（UI 前删除）：newFlags 只含 recordFromReceipt 当场落库的章级旗标；
+       C1.signal_fragment 由随后的 syncCampaignFlags 补写，不在这里。故另存本次
+       receipt.flags 与是否重复记录，供 attachCampaignProgress 用真实快照判定 C1 是否本次完成。 */
     feedback.__newChapterFlags = newFlags.filter(function (flag) { return !!chapterOfFlag(flag); });
+    feedback.__receiptFlags = Array.isArray(result.receipt.flags) ? result.receipt.flags.slice() : [];
+    feedback.__storyRecordDuplicate = storyRecord.duplicate === true;
     return feedback;
   }
 
@@ -1529,7 +1533,6 @@
    */
   function attachCampaignProgress(feedback, snapshot) {
     if (!feedback || (feedback.status !== 'recorded' && feedback.status !== 'new')) return feedback;
-    var newFlags = Array.isArray(feedback.__newChapterFlags) ? feedback.__newChapterFlags : [];
     var campaign = readGlobal('campaign');
     var state = null;
     if (campaign && typeof campaign.state === 'function' && snapshot) {
@@ -1537,42 +1540,61 @@
     }
     var validState = state && state.ok === true && Array.isArray(state.chapters) ? state : null;
 
-    if (!newFlags.length) {
-      /* 中间单：只报线索/NPC 回应 + 当前进行章的下一步；绝不设置 chapter。 */
-      feedback.nextStep = nextStepOfCurrent(validState);
+    /* 本次真实新完成的章节：recordFromReceipt 当场落库的章级旗标，或本次收据旗标
+       在真实快照中已满足 C1 路线（C1.signal_fragment 由随后 syncCampaignFlags 补写，
+       不在 storyRecord.newFlags），且不是重复记录。旧章节一律不冒充本次所得。 */
+    var claimed = [];
+    if (validState) {
+      var newFlags = Array.isArray(feedback.__newChapterFlags) ? feedback.__newChapterFlags : [];
+      var receiptFlags = Array.isArray(feedback.__receiptFlags) ? feedback.__receiptFlags : [];
+      var isDuplicate = feedback.__storyRecordDuplicate === true;
+      validState.chapters.forEach(function (chapter) {
+        if (!chapter || chapter.state !== 'complete') return;
+        var flag = chapter.completionFlag;
+        if (newFlags.indexOf(flag) >= 0) { claimed.push(chapter); return; }
+        if (chapter.chapterId === 'C1' && !isDuplicate && c1RouteMetByReceipt(receiptFlags)) {
+          claimed.push(chapter);
+        }
+      });
+    }
+    if (claimed.length) {
+      var titles = claimed.map(function (chapter) { return cleanStoryText(chapterTitleOf(chapter), 80); }).filter(Boolean);
+      var latest = claimed[claimed.length - 1];
+      feedback.chapter = { id: latest.chapterId, title: titles.join('、') };
+      feedback.chapterCount = claimed.length;
+      /* 里程碑完成后才用最近完成章的 handoff 指向下一章。 */
+      feedback.nextStep = nextStepOf(latest, validState);
       return feedback;
     }
-    if (!validState) return feedback;
-    var completed = [];
-    validState.chapters.forEach(function (chapter) {
-      if (!chapter || chapter.state !== 'complete') return;
-      if (newFlags.indexOf(chapter.completionFlag) < 0) return; /* 旧章不算本次 */
-      completed.push(chapter);
-    });
-    if (!completed.length) {
-      /* 旗标存在但快照里没有匹配的完成章：仍给下一步，不设 chapter。 */
-      feedback.nextStep = nextStepOfCurrent(validState);
-      return feedback;
-    }
-    var titles = completed.map(function (chapter) { return cleanStoryText(chapterTitleOf(chapter), 80); }).filter(Boolean);
-    var latest = completed[completed.length - 1];
-    feedback.chapter = {
-      id: latest.chapterId,
-      title: titles.join('、'),
-    };
-    feedback.chapterCount = completed.length;
-    feedback.nextStep = nextStepOf(latest, validState);
+    /* 中间单：只报线索/NPC 回应 + 当前进行章自身的下一步（不跳 handoff，不设 chapter）。 */
+    feedback.nextStep = nextStepOfCurrent(validState);
     return feedback;
   }
 
-  /** 当前进行章（campaign.state.currentChapter）的 handoff → 玩家语言下一步；快照不可用给兜底。 */
+  /** 本次 C1 收据旗标是否满足 C1 任一路线（work_done/flight_done/signal/records）。 */
+  function c1RouteMetByReceipt(receiptFlags) {
+    if (!Array.isArray(receiptFlags)) return false;
+    var flags = Object.create(null);
+    receiptFlags.forEach(function (flag) { if (typeof flag === 'string') flags[flag] = true; });
+    if (flags['C1.work_done'] || flags['C1.flight_done']) return true;
+    if (flags['C1.signal'] || flags['C1.records']) return true;
+    return false;
+  }
+
+  /**
+   * 当前进行章的下一步：指向当前章自身（提示继续做这一章），而不是它的下一章 handoff。
+   * campaign.state.currentChapter 是字符串 chapterId（见 campaign-core.currentChapterOf），
+   * 兼容对象形状时取其 chapterId；绝不按数组下标或标题猜测。
+   */
   function nextStepOfCurrent(state) {
     if (!state || !Array.isArray(state.chapters)) return '去告示板看看下一张单。';
-    var currentId = state.currentChapter;
+    var raw = state.currentChapter;
+    var currentId = typeof raw === 'string' ? raw : raw && typeof raw === 'object' ? raw.chapterId : '';
+    if (!currentId) return '去告示板看看下一张单。';
     for (var i = 0; i < state.chapters.length; i += 1) {
       var chapter = state.chapters[i];
       if (!chapter || chapter.chapterId !== currentId || chapter.state === 'complete') continue;
-      return nextStepOf(chapter, state) || '去告示板看看下一张单。';
+      return '继续当前这段「' + cleanStoryText(chapterTitleOf(chapter), 60) + '」，去告示板看看还差哪张单。';
     }
     return '去告示板看看下一张单。';
   }
@@ -1611,7 +1633,10 @@
   function storyFeedbackForUi(feedback) {
     if (!feedback) return null;
     var out = clone(feedback);
-    delete out.__newChapterFlags; /* 内部旗标只用于章节比对，不进入 UI/日志 */
+    /* 内部字段只用于章节比对，不进入 UI/日志。 */
+    delete out.__newChapterFlags;
+    delete out.__receiptFlags;
+    delete out.__storyRecordDuplicate;
     return out;
   }
 
