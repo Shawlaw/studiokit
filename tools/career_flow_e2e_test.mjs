@@ -1041,13 +1041,34 @@ async function acceptRecommended(cdp, commissionId, label) {
   await ensureTown(cdp, label);
   const selector = `[data-town-action="start"][data-commission-id=${J(commissionId)}]`;
   await cdp.waitFor('!!document.querySelector(' + J(selector) + ')', { timeout: 15000 });
+  /* 接单按钮 data-commission-id 决定目标 gameId；据此等待精确的游戏页 pathname，
+     避免只靠 /games/ 前缀在旧文档或别的游戏页上误命中。 */
+  const targetGameId = commissionId.split('.')[0];
   await clickVisible(cdp, selector, label + ' 接单按钮');
-  /* 整页导航：先等 pathname 进入游戏页，再等 ticket 参数，避免在旧文档上 waitBridge 超时。 */
-  await cdp.waitFor('location.pathname.indexOf("/games/") >= 0 && location.search.indexOf("career=") >= 0', { timeout: 20000 });
-  await waitBridge(cdp, label + '-game');
-  await cdp.waitFor(`(() => { const t = window.__arcadeCareerTest; return !!(t && t.commissionRun && t.commissionRun()); })()`, { timeout: 15000 });
-  const run = await cdp.evaluate('window.__arcadeCareerTest.commissionRun()');
+  await cdp.waitFor(`location.pathname.indexOf("/games/${targetGameId}.html") >= 0 && location.search.indexOf("career=") >= 0`, { timeout: 30000 });
+  const landed = await cdp.evaluate('({ path: location.pathname, search: location.search })');
+  gate('ACCEPT ' + label + ' 接单后整页导航到目标游戏职业入口', landed.path.indexOf('/games/' + targetGameId + '.html') >= 0 && landed.search.indexOf('career=') >= 0, J(landed));
+  const hasTestApi = await cdp.evaluate('!!window.__arcadeCareerTest');
+  /* 目标 URL 可能不带 careerTest=1：生产页只有公开 bridge，按公开 commissionRun 校验。 */
+  await waitBridge(cdp, label + '-game', hasTestApi);
+  const runExpr = hasTestApi
+    ? 'window.__arcadeCareerTest.commissionRun()'
+    : '(window.ArcadeCareer && window.ArcadeCareer.commissionRun) || null';
+  await cdp.waitFor(`(() => { const r = ${runExpr}; return !!(r && r.ticketId); })()`, { timeout: 20000 });
+  const run = await cdp.evaluate(runExpr);
   gate('ACCEPT ' + label + ' 真实接单生成 ticket 并进入职业局', !!(run && run.commissionId === commissionId), J(run && { commissionId: run.commissionId, gameId: run.gameId, ticketId: run.ticketId }));
+  if (!hasTestApi) {
+    /* 玩法钩子阶段：沿用同一 ticket 显式导航到带 careerTest=1 的 URL，不重建 ticket。 */
+    const ticketId = run.ticketId;
+    const hookUrl = gameUrl(targetGameId, { career: ticketId });
+    await go(cdp, hookUrl, label + '-hook-reopen');
+    await waitBridge(cdp, label + '-game-hook');
+    await cdp.waitFor(`(() => { const t = window.__arcadeCareerTest; return !!(t && t.commissionRun && t.commissionRun()); })()`, { timeout: 15000 });
+    const reopened = await cdp.evaluate('window.__arcadeCareerTest.commissionRun()');
+    gate('ACCEPT ' + label + ' 同 ticket 重新打开测试钩子（不重建票据）',
+      !!(reopened && reopened.ticketId === ticketId && reopened.commissionId === commissionId),
+      J({ original: run.ticketId, reopened: reopened && reopened.ticketId, commissionId: reopened && reopened.commissionId }));
+  }
   return run;
 }
 
@@ -1220,11 +1241,27 @@ async function runFullFlow(cdp, campaign, commissions) {
   gate('C5 终局按钮 ≥44px 且为玩家可见戏内文案', world.endings.every((ending) => ending.h >= 44 && ending.text.length > 2), J(world.endings));
   await viewportChecks(cdp, '章节面板', ['[data-career-panel="world-state"] [data-approach="' + ENDING_APPROACH + '"]']);
   await clickVisible(cdp, '[data-career-panel="world-state"] [data-approach="' + ENDING_APPROACH + '"]', '终局入口');
-  /* 终局入口同样触发整页导航：先确认游戏页 pathname，再 waitBridge。 */
-  await cdp.waitFor('location.pathname.indexOf("/games/") >= 0 && location.search.indexOf("career=") >= 0', { timeout: 20000 });
-  await waitBridge(cdp, 'ending-game');
-  const endingRun = await cdp.evaluate('window.__arcadeCareerTest.commissionRun()');
+  /* 终局入口同样触发整页导航，目标可能不带 careerTest；用与接单相同的公开回退。 */
+  await cdp.waitFor('location.pathname.indexOf("/games/") >= 0 && location.search.indexOf("career=") >= 0', { timeout: 30000 });
+  const endingGameId = await cdp.evaluate('location.pathname.split("/games/")[1] || ""');
+  const endingHasTestApi = await cdp.evaluate('!!window.__arcadeCareerTest');
+  await waitBridge(cdp, 'ending-game', endingHasTestApi);
+  const endingRunExpr = endingHasTestApi
+    ? 'window.__arcadeCareerTest.commissionRun()'
+    : '(window.ArcadeCareer && window.ArcadeCareer.commissionRun) || null';
+  let endingRun = await cdp.evaluate(endingRunExpr);
   gate('C5 终局入口生成独立 ticket（玩家点击而非写旗标）', !!(endingRun && /^ending\./.test(endingRun.commissionId || '')), J(endingRun));
+  if (!endingHasTestApi && endingRun && endingRun.ticketId) {
+    const endingTicketId = endingRun.ticketId;
+    const hookUrl = gameUrl(String(endingGameId).replace(/\.html.*$/, ''), { career: endingTicketId });
+    await go(cdp, hookUrl, 'ending-hook-reopen');
+    await waitBridge(cdp, 'ending-game-hook');
+    await cdp.waitFor(`(() => { const t = window.__arcadeCareerTest; return !!(t && t.commissionRun && t.commissionRun()); })()`, { timeout: 15000 });
+    endingRun = await cdp.evaluate('window.__arcadeCareerTest.commissionRun()');
+    gate('C5 同 ticket 重新打开测试钩子（不重建票据）',
+      !!(endingRun && endingRun.ticketId === endingTicketId && endingRun.commissionId === 'ending.' + ENDING_APPROACH),
+      J({ original: endingTicketId, reopened: endingRun && endingRun.ticketId, commissionId: endingRun && endingRun.commissionId }));
+  }
   await driveEndingResearch(cdp);
   const afterEnding = await readOnlyState(cdp);
   const c5Rows = (afterEnding.quests || []).filter((row) => row.nodeId === 'story:' + CHAPTER_FLAGS.C5);
