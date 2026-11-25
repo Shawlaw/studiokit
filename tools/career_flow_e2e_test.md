@@ -9,7 +9,7 @@ node tools/career_flow_e2e_test.mjs --static-only   # 无 Chrome：内容路线 
 node tools/career_flow_e2e_test.mjs                # 全量（独占 Chrome 时段）
 ```
 
-端口环境变量：`CAREER_FLOW_PORT`（默认 9021）、`CAREER_FLOW_CDP`（默认 9521）、`CHROME_PATH`、`CAREER_FLOW_QA_DIR`。替代真实路线可设 `CAREER_FLOW_ALLOW_ALTERNATE=1`，但仍逐单核验真实推进。
+端口环境变量：`CAREER_FLOW_PORT`（默认 9021）、`CAREER_FLOW_CDP`（默认 9521）、`CHROME_PATH`、`CAREER_FLOW_QA_DIR`。
 
 退出码：0 全 PASS；1 FAIL 或 BLOCKED；2 用法/环境错误。
 
@@ -41,7 +41,7 @@ node tools/career_flow_e2e_test.mjs                # 全量（独占 Chrome 时�
 | 线索 chip `[data-career-clue]` | `apps/arcade/career/ui/clue-surface.js` | INTEGRATED |
 | 章节面板 `[data-chapter-id]` / `[data-approach]` | `apps/arcade/career/ui/world-state.js` | INTEGRATED |
 
-静态自检当前结果：PASS 15 / FAIL 1（非关键首屏 `data-town-intro`）/ BLOCKED 6。FAIL 为非关键记录，不阻断；BLOCKED 为关键接口缺失，退出码 1，符合“未集成时明确 fail/blocked”。
+静态自检当前结果（最终集成树，`--static-only`，退出码 0）：**PASS 22 / FAIL 0 / BLOCKED 0 / TOTAL 22**。S00–S09 内容路线投影与 I01–I11 接口矩阵均为 INTEGRATED。
 
 ## 实跑日志与结果
 

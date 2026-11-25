@@ -882,7 +882,7 @@ export async function cleanup(ctx) {}
 ### 21.1 `originLetter()`（首封来信身份与正文）
 
 - 位置：`bridge.js` 暴露 `api.originLetter()`，并作为 `uiContext().originLetter` 传给 UI 模块；与既有 `originIntro()` 并存，互不覆盖。
-- 形状：`{ sourceGame, professionId, opening, c0Letter: { from, body, address } }`；按 discovery 状态 `firstSourceGame` 在 `chapter-00.json` 的 `origins[]` 中定位，正文直接取 `origins[i].c0Letter.body`。
+- 形状：`{ sourceGame, professionId, opening, c0Letter: { from, body, address } }`；按 discovery 状态 `firstSourceGame` 在 `chapter-01.json` 的 `origins[]` 中定位，正文直接取 `origins[i].c0Letter.body`。
 - 失败语义：找不到首源游戏、内容未装载或条目缺 `c0Letter.body` 时返回 `null`（不编造正文，lead 冻结）。UI 用稳定字段读取，不再自行翻章节 map。
 
 ### 21.2 `chapterZero`（C0 章节内容只读快照）
