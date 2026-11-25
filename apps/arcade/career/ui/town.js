@@ -1110,8 +1110,10 @@
       item.appendChild(make('p', 'ac-career-town__row-summary',
         (row.gameName ? row.gameName + '：' : '') + goal));
       if (opts.recommended) {
+        const hasObjective = !!(row.objective && numberOrZero(row.objective.atLeast));
+        const goalLine = hasObjective ? rowGoalText(row) : (opts.goalOverride || rowGoalText(row));
         item.appendChild(make('p', 'ac-career-town__row-summary',
-          RECOMMEND_GOAL_TITLE + '：' + (opts.goalOverride || row.title)));
+          RECOMMEND_GOAL_TITLE + '：' + goalLine));
         if (opts.reason) item.appendChild(make('p', 'ac-career-town__row-summary', opts.reason));
       }
 
@@ -1264,9 +1266,13 @@
       if (!id) return null;
       const row = commissionRowsOf(liveContext).filter((entry) => entry.commissionId === id)[0] || null;
       if (!row) return null;
+      /* 首屏目标是世界内目标（游戏名 + objective.atLeast 可读数量），
+         不用 campaign.recommend.goal（常为委托标题，会与卡片标题重复）。 */
+      const worldGoal = rowGoalText(row);
+      const hasObjective = !!(row.objective && numberOrZero(row.objective.atLeast));
       return {
         row: row,
-        goal: cleanText(suggestion.goal) || rowGoalText(row),
+        goal: hasObjective ? worldGoal : (cleanText(suggestion.goal) || worldGoal),
         reason: cleanText(suggestion.reason),
         kindText: RECOMMEND_KIND_TEXT[cleanText(suggestion.kind)] || '路线进展',
       };
