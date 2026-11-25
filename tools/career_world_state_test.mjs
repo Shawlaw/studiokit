@@ -499,7 +499,7 @@ async function main() {
   clearErrors('BOOT');
 
   /* 合成 campaign-core / ending-reducer（ADR §20.2/§20.3 接口），避免 0.18 核心未落地时 404。 */
-  const stub = await page.evaluate(`(() => {
+  const installStub = () => page.evaluate(`(() => {
     const content = ${JSON.stringify(CONTENT)};
     const clone = (value) => (value === null || value === undefined ? value : JSON.parse(JSON.stringify(value)));
     window.__d18 = {
@@ -559,6 +559,7 @@ async function main() {
       chapters: content.campaign.chapters.length,
     };
   })()`);
+  const stub = await installStub();
   record('STUB 合成 campaign-core/ending-reducer 已挂到 bridge（真实内容注入）', stub.stubbed === true && stub.chapters === 6, JSON.stringify(stub));
 
   const seed = await page.evaluate(`window.__arcadeCareerTest.seedState({
@@ -735,7 +736,7 @@ async function main() {
   await sleep(240);
   const failed = await page.evaluate(PANEL_EXPR);
   const callAfterFailure = await page.evaluate('window.__d18.endingStarts[window.__d18.endingStarts.length - 1]');
-  record('ENDING 点击武力调用 ending.startEnding({approach:"combat"})', !!(callAfterFailure && callAfterFailure.approach === 'combat' && Object.keys(callAfterFailure).length === 1), JSON.stringify(callAfterFailure));
+  record('ENDING 点击武力调用 ending.startEnding({approach:"combat",careerId})', !!(callAfterFailure && callAfterFailure.approach === 'combat' && callAfterFailure.careerId === 'career-d18-12'), JSON.stringify(callAfterFailure));
   record('ENDING 失败结果：显示失败提示、按钮可重试、不导航', failed.status.length > 0 && failed.endings.every((e) => e.disabled === false) && (await page.evaluate('location.href')) === urlBeforeFailure, JSON.stringify({ status: failed.status }));
   const afterFailureBaseline = await page.evaluate(BASELINE_EXPR);
   record('ENDING 失败不写经典存档/localStorage', afterFailureBaseline.storageJSON === beforeC4.storageJSON && afterFailureBaseline.storageJSON === baseline.storageJSON, 'storage changed');
@@ -747,6 +748,46 @@ async function main() {
   const badUrl = await page.evaluate(PANEL_EXPR);
   const callBadUrl = await page.evaluate('window.__d18.endingStarts[window.__d18.endingStarts.length - 1]');
   record('ENDING 非法 url 被拒绝（不导航、提示找不到路）', callBadUrl && callBadUrl.approach === 'research' && badUrl.status.length > 0 && (await page.evaluate('location.href')) === urlBeforeFailure, JSON.stringify({ status: badUrl.status, url: await page.evaluate('location.href') }));
+
+  /* 3.5b 模块失败/无 url 时回退 bridge.startEnding（不只在面板显示失败） */
+  await closeDirect();
+  await page.evaluate(`(() => {
+    window.__d18.bridgeEndingCalls = [];
+    window.__d18.bridgeEndingResult = { ok: true, url: '' };
+    return true;
+  })()`);
+  const fallbackCtx = () => `(() => {
+    const ctx = {
+      careerId: 'career-d18-12',
+      campaign: window.__d18.content.campaign,
+      campaignState: window.__d18.snapshot,
+      npc: window.__d18.content.npc,
+      sideStories: window.__d18.content.sideStories,
+      ending: {
+        startEnding: function (opts) {
+          window.__d18.endingStarts.push(JSON.parse(JSON.stringify(opts)));
+          return { ok: false, reason: 'module-failed' };
+        },
+      },
+      startEnding: function (approach) {
+        window.__d18.bridgeEndingCalls.push(approach);
+        return window.__d18.bridgeEndingResult;
+      },
+      state: { stage: 'LOCAL', clues: {} },
+      flags: [],
+    };
+    return ctx;
+  })()`;
+  await page.evaluate('window.__d18.snapshot = ' + JSON.stringify(snapC4));
+  await openDirect(fallbackCtx());
+  await mouseClick('[data-career-panel="world-state"] [data-approach="combat"]');
+  const fallback = await page.evaluate(PANEL_EXPR);
+  const fbState = await page.evaluate(`({
+    bridgeCalls: window.__d18.bridgeEndingCalls.slice(),
+    lastModule: window.__d18.endingStarts[window.__d18.endingStarts.length - 1],
+  })`);
+  record('ENDING 模块失败时回退 bridge.startEnding（带同一 approach）', fbState.bridgeCalls.length === 1 && fbState.bridgeCalls[0] === 'combat' && fbState.lastModule.careerId === 'career-d18-12' && fallback.endings.every((e) => e.disabled === false), JSON.stringify(fbState));
+  await closeDirect();
 
   /* 3.6 后日谈：已选终局 */
   await closeDirect();
@@ -1061,6 +1102,130 @@ async function main() {
   await closeDirect();
   clearErrors('REAL');
 
+  /* ---------- 阶段 8b：真实 ending-reducer 从面板点击生成 ending.* ticket/url 并导航 ---------- */
+  const realTicketSetup = await page.evaluate(`(async () => {
+    const t = window.__arcadeCareerTest;
+    const db = t && typeof t.db === 'function' ? t.db() : null;
+    if (!db) return { ok: false, reason: 'db-unavailable' };
+    let career = null;
+    try { career = await db.ensureCareer({}); } catch (err) { return { ok: false, reason: 'ensure-threw' }; }
+    if (!career || career.ok !== true || !career.careerId) return { ok: false, reason: (career && career.reason) || 'ensure-failed' };
+    const careerId = career.careerId;
+    const rows = [{
+      nodeId: 'story:C4.city_power_restored',
+      kind: 'story-flag',
+      status: 'cleared',
+      flags: ['C4.city_power_restored'],
+      evidence: [],
+    }];
+    try {
+      const written = await db.putQuests(careerId, rows);
+      if (!written || written.ok !== true) return { ok: false, reason: 'seed-failed', detail: written && written.reason };
+    } catch (err) { return { ok: false, reason: 'seed-threw' }; }
+    return { ok: true, careerId: careerId };
+  })()`);
+  record('REAL 终局前置：真实生涯 + C4 旗标写入成功', realTicketSetup.ok === true, JSON.stringify(realTicketSetup));
+  if (realTicketSetup.ok === true) {
+    const snapC4Flags = JSON.parse(JSON.stringify(snapC4));
+    snapC4Flags.chapters.forEach((chapter) => {
+      if (['C0', 'C1', 'C2', 'C3', 'C4'].indexOf(chapter.chapterId) >= 0) chapter.state = 'complete';
+      if (chapter.chapterId === 'C5') chapter.state = 'available';
+    });
+    await page.evaluate('window.__d18.snapshot = ' + JSON.stringify(snapC4Flags));
+    await page.evaluate(`(() => {
+      window.__d18.realEndingStart = null;
+      return true;
+    })()`);
+    await openDirect(`(() => ({
+      careerId: ${JSON.stringify(realTicketSetup.careerId)},
+      campaign: window.ArcadeCareer.campaign,
+      campaignState: window.__d18.snapshot,
+      npc: window.__d18.content.npc,
+      sideStories: window.__d18.content.sideStories,
+      ending: {
+        startEnding: function (opts) {
+          window.__d18.realEndingStart = JSON.parse(JSON.stringify(opts));
+          const result = window.ArcadeCareer.ending.startEnding(opts);
+          const stash = function (value) {
+            window.__d18.realEndingResult = value ? JSON.parse(JSON.stringify(value)) : null;
+            const copy = { start: window.__d18.realEndingStart, result: window.__d18.realEndingResult };
+            const t = window.__arcadeCareerTest;
+            const db = t && typeof t.db === 'function' ? t.db() : null;
+            const save = function (run) {
+              const row = run && run.ok === true && run.run ? run.run : run;
+              copy.run = row && typeof row === 'object' ? {
+                commissionId: row.commissionId,
+                status: row.status,
+                careerId: row.careerId,
+              } : null;
+              try { sessionStorage.setItem('d18:real-ending', JSON.stringify(copy)); } catch (err) { /* ignore */ }
+            };
+            if (db && value && typeof value.ticketId === 'string') {
+              const read = db.getRun(value.ticketId);
+              if (read && typeof read.then === 'function') {
+                return read.then(save).then(function () { return value; });
+              }
+              save(read);
+              return value;
+            }
+            save(null);
+            return value;
+          };
+          if (result && typeof result.then === 'function') {
+            return result.then(stash);
+          }
+          return stash(result);
+        },
+      },
+      state: { stage: 'LOCAL', clues: {} },
+      flags: [],
+    }))()`);
+    const realNavBefore = await page.evaluate('location.href');
+    await mouseClick('[data-career-panel="world-state"] [data-approach="research"]');
+    const realTicket = await page.evaluate(`(() => {
+      let saved = null;
+      try { saved = JSON.parse(sessionStorage.getItem('d18:real-ending') || 'null'); } catch (err) { saved = null; }
+      return {
+        start: saved && saved.start,
+        result: saved && saved.result ? { ok: saved.result.ok, approach: saved.result.approach, ticketId: saved.result.ticketId, careerId: saved.result.careerId, url: saved.result.url } : null,
+        run: saved && saved.run ? saved.run : null,
+        href: location.href,
+      };
+    })()`);
+    const realNavigated = realTicket.href.indexOf('merge-2048') >= 0;
+    record(
+      'REAL 面板点击 research：module.startEnding 收到 careerId，真实生成 ending.research ticket 并导航',
+      !!(
+        realTicket.start && realTicket.start.careerId === realTicketSetup.careerId &&
+        realTicket.result && realTicket.result.ok === true && typeof realTicket.result.ticketId === 'string' &&
+        realTicket.result.approach === 'research' &&
+        realTicket.run && realTicket.run.commissionId === 'ending.research' && realTicket.run.careerId === realTicketSetup.careerId &&
+        realNavigated
+      ),
+      JSON.stringify({ start: realTicket.start, result: realTicket.result, run: realTicket.run, before: realNavBefore, after: realTicket.href })
+    );
+    await page.navigate(base + PAGE_PATH);
+    await waitReady(page);
+    await closeDirect();
+    /* 导航后页面重载，重新挂回合成 stub 与焦点触发按钮供阶段 9 使用。 */
+    await installStub();
+    await page.evaluate('window.__d18.snapshot = ' + JSON.stringify(snapC4));
+    /* 重载后 world-state 是 lazy 模块，先经 bridge 打开一次把它装载进来。 */
+    await openBridgePanel('openCampaign', 'world-state', 15000);
+    await closeDirect();
+    await page.evaluate(`(() => {
+      if (!document.getElementById('d18-trigger')) {
+        const btn = document.createElement('button');
+        btn.id = 'd18-trigger';
+        btn.type = 'button';
+        btn.textContent = 'D18';
+        btn.style.cssText = 'position:fixed;left:4px;bottom:4px;z-index:9999';
+        document.body.appendChild(btn);
+      }
+      return true;
+    })()`);
+  }
+
   /* ---------- 阶段 9：终局导航（成功路径）与最终零错误 ---------- */
   await page.evaluate('window.__d18.snapshot = ' + JSON.stringify(snapC4));
   await page.evaluate(`window.__d18.nextEndingResult = {
@@ -1068,7 +1233,8 @@ async function main() {
     url: ${JSON.stringify(base + '/apps/arcade/games/merge-2048.html?careerTest=1#test')}
   }`);
   await page.evaluate('document.getElementById("d18-trigger").focus()');
-  await openDirect(directCtx());
+  const stage9Open = await openDirect(directCtx());
+  record('NAV 阶段 9 面板重新打开成功', stage9Open.ok === true && stage9Open.hasPanel === true, JSON.stringify(stage9Open));
   const hrefBeforeNav = await page.evaluate('location.href');
   await mouseClick('[data-career-panel="world-state"] [data-approach="research"]');
   const navigated = await page
