@@ -18,6 +18,15 @@ const here = dirname(fileURLToPath(import.meta.url));
 const root = resolve(here, '..');
 const receiptSource = readFileSync(resolve(root, 'apps/arcade/career/ui/receipt.js'), 'utf8');
 const bridgeSource = readFileSync(resolve(root, 'apps/arcade/career/bridge.js'), 'utf8');
+const campaignContent = JSON.parse(readFileSync(resolve(root, 'apps/arcade/career/content/campaign.json'), 'utf8'));
+const titleOf = (id) => {
+  const found = campaignContent.chapters.find((chapter) => chapter.chapterId === id);
+  if (!found || !found.title) throw new Error('missing content title for ' + id);
+  return found.title;
+};
+const C1_TITLE = titleOf('C1');
+const C2_TITLE = titleOf('C2');
+const C3_TITLE = titleOf('C3');
 
 class Element {
   constructor(tag) {
@@ -77,9 +86,9 @@ function storyFeedback(status) {
     status,
     discovered: status === 'unavailable' ? [] : ['异常航报'],
     replies: status === 'unavailable' ? [] : [{ name: '旧港口的来信', text: '信号不是坐标，是门牌号。' }],
-    chapter: status === 'unavailable' ? null : { id: 'C1', title: '旧港的第一封信' },
+    chapter: status === 'unavailable' ? null : { id: 'C1', title: C1_TITLE },
     chapterCount: status === 'unavailable' ? 0 : 1,
-    nextStep: status === 'unavailable' ? '' : '去告示板看看「谁留下了七号货柜」有什么新活儿。',
+    nextStep: status === 'unavailable' ? '' : '去告示板看看「' + C2_TITLE + '」有什么新活儿。',
     unavailable: status === 'unavailable' ? '工钱已结，剧情这会儿没能记进账。' : '',
   };
 }
@@ -104,7 +113,7 @@ function noInternalTokens(text) {
   assert(text.includes('工钱：+70') || text.includes('工钱：70'), 'work reward shown');
   assert(text.includes('异常航报'), 'story gain in player language');
   assert(text.includes('旧港口的来信：信号不是坐标，是门牌号。'), 'npc reply shown');
-  assert(text.includes('新完成的段落：旧港的第一封信'), 'new chapter title in player language');
+  assert(text.includes('新完成的段落：' + C1_TITLE), 'new chapter title in player language');
   assert(text.includes('下一步：去告示板看看'), 'next step shown');
   assert(noInternalTokens(text), 'no internal chapter/evidence/token visible');
   assert(!text.includes('E-memory'), 'evidence token not shown');
@@ -147,7 +156,7 @@ function noInternalTokens(text) {
       replies: [],
       chapter: null,
       chapterCount: 0,
-      nextStep: '继续当前这段「谁留下了七号货柜」，去告示板看看还差哪张单。',
+      nextStep: '继续当前这段「' + C2_TITLE + '」，去告示板看看还差哪张单。',
       unavailable: '',
     },
     /* 无章节完成但存在剧情反馈与下一步：页内主动作读回信；无 openCampaign 时回退到回告示板。 */
@@ -155,8 +164,8 @@ function noInternalTokens(text) {
   });
   const text = card.textContent;
   assert(text.includes('工地记录'), 'intermediate commission still reports story gain');
-  assert(text.includes('下一步：继续当前这段「谁留下了七号货柜」'), 'step next step points at current chapter, not its handoff');
-  assert(!text.includes('月影里的时间差'), 'step must not jump to C3 via C2.handoff');
+  assert(text.includes('下一步：继续当前这段「' + C2_TITLE + '」'), 'step next step points at current chapter, not its handoff');
+  assert(!text.includes(C3_TITLE), 'step must not jump to C3 via C2.handoff');
   assert(!text.includes('新完成的段落'), 'step receipt never claims chapter completion');
   assert(byText(card, '回告示板'), 'town action stays available');
   assert(noInternalTokens(text), 'intermediate text has no internal tokens');
@@ -167,14 +176,14 @@ function noInternalTokens(text) {
 {
   uiContext.document = createDocument();
   const feedback = storyFeedback('new');
-  feedback.chapter = { id: 'C1', title: '旧港的第一封信' };
+  feedback.chapter = { id: 'C1', title: C1_TITLE };
   feedback.chapterCount = 1;
-  feedback.nextStep = '去告示板看看「谁留下了七号货柜」有什么新活儿。';
+  feedback.nextStep = '去告示板看看「' + C2_TITLE + '」有什么新活儿。';
   const card = receipt.show({ result: settledResult(), storyFeedback: feedback, openCampaign() {} });
   const text = card.textContent;
-  assert(text.includes('新完成的段落：旧港的第一封信'), 'C1 milestone shows completed chapter');
-  assert(text.includes('下一步：去告示板看看「谁留下了七号货柜」'), 'C1 milestone next step is C2');
-  assert(!text.includes('月影里的时间差'), 'C1 milestone next step is not C3');
+  assert(text.includes('新完成的段落：' + C1_TITLE), 'C1 milestone shows completed chapter');
+  assert(text.includes('下一步：去告示板看看「' + C2_TITLE + '」'), 'C1 milestone next step is C2');
+  assert(!text.includes(C3_TITLE), 'C1 milestone next step is not C3');
   assert(noInternalTokens(text), 'milestone never leaks chapter tokens');
   receipt.close();
 }
@@ -183,13 +192,13 @@ function noInternalTokens(text) {
 {
   uiContext.document = createDocument();
   const feedback = storyFeedback('new');
-  feedback.chapter = { id: 'C2', title: '谁留下了七号货柜' };
+  feedback.chapter = { id: 'C2', title: C2_TITLE };
   feedback.chapterCount = 1;
-  feedback.nextStep = '去告示板看看「月影里的时间差」有什么新活儿。';
+  feedback.nextStep = '去告示板看看「' + C3_TITLE + '」有什么新活儿。';
   const card = receipt.show({ result: settledResult(), storyFeedback: feedback, openCampaign() {} });
   const text = card.textContent;
-  assert(text.includes('新完成的段落：谁留下了七号货柜'), 'C2 milestone shows completed chapter');
-  assert(text.includes('下一步：去告示板看看「月影里的时间差」'), 'C2 milestone next step is C3');
+  assert(text.includes('新完成的段落：' + C2_TITLE), 'C2 milestone shows completed chapter');
+  assert(text.includes('下一步：去告示板看看「' + C3_TITLE + '」'), 'C2 milestone next step is C3');
   assert(noInternalTokens(text), 'C2 milestone never leaks chapter tokens');
   receipt.close();
 }
@@ -391,9 +400,9 @@ function configureCampaign(campaign) {
     __newChapterFlags: [], __receiptFlags: ['C1.work_done'], __storyRecordDuplicate: false,
   };
   api.attachCampaignProgress(c1Feedback, c1Snapshot);
-  assert(c1Feedback.chapter && c1Feedback.chapter.title === '旧港的第一封信', 'first commission claims C1 completion from receipt work flag');
-  assert(c1Feedback.nextStep.includes('谁留下了七号货柜'), 'C1 next step points to C2 via handoff');
-  assert(!c1Feedback.nextStep.includes('月影里的时间差'), 'C1 next step is not C3');
+  assert(c1Feedback.chapter && c1Feedback.chapter.title === C1_TITLE, 'first commission claims C1 completion from receipt work flag');
+  assert(c1Feedback.nextStep.includes(C2_TITLE), 'C1 next step points to C2 via handoff');
+  assert(!c1Feedback.nextStep.includes(C3_TITLE), 'C1 next step is not C3');
 
   /* 中间单：currentChapter=C2（真实快照字符串），无新章旗标 → 不下完成段落，
      下一步指向当前章 C2 自身，不跳到 C3。 */
@@ -410,9 +419,9 @@ function configureCampaign(campaign) {
   };
   api.attachCampaignProgress(stepFeedback, c2Snapshot);
   assert(!stepFeedback.chapter, 'step receipt never sets completed chapter');
-  assert(stepFeedback.nextStep.includes('谁留下了七号货柜'), 'step next step names current chapter C2');
-  assert(!stepFeedback.nextStep.includes('月影里的时间差'), 'step next step never jumps to C3');
-  assert(!stepFeedback.nextStep.includes('旧港的第一封信'), 'step next step never reverts to completed C1');
+  assert(stepFeedback.nextStep.includes(C2_TITLE), 'step next step names current chapter C2');
+  assert(!stepFeedback.nextStep.includes(C3_TITLE), 'step next step never jumps to C3');
+  assert(!stepFeedback.nextStep.includes(C1_TITLE), 'step next step never reverts to completed C1');
 
   /* C2 → C3：真实快照 C2 完成后 nextStepOf 用 C2.handoff 指向 C3。 */
   const c2DoneSnapshot = {
@@ -424,12 +433,12 @@ function configureCampaign(campaign) {
     __newChapterFlags: ['C2.research_complete'], __receiptFlags: [], __storyRecordDuplicate: false,
   };
   api.attachCampaignProgress(c2DoneFeedback, c2DoneSnapshot);
-  assert(c2DoneFeedback.chapter && c2DoneFeedback.chapter.title === '谁留下了七号货柜', 'C2 milestone claims C2 completion');
-  assert(c2DoneFeedback.nextStep.includes('月影里的时间差'), 'C2 milestone next step is C3 via own handoff');
+  assert(c2DoneFeedback.chapter && c2DoneFeedback.chapter.title === C2_TITLE, 'C2 milestone claims C2 completion');
+  assert(c2DoneFeedback.nextStep.includes(C3_TITLE), 'C2 milestone next step is C3 via own handoff');
 
   /* object 形状的 currentChapter 仍可定位当前章。 */
   const objectState = { ok: true, chapters: c2State.chapters, currentChapter: { chapterId: 'C2' }, endingChosen: null };
-  assert(api.nextStepOfCurrent(objectState).includes('谁留下了七号货柜'), 'object-shaped currentChapter resolves to C2');
+  assert(api.nextStepOfCurrent(objectState).includes(C2_TITLE), 'object-shaped currentChapter resolves to C2');
 }
 
 /* ---------------------------------------------------------------- 行为级 VM：证据命名 + 中间单不回放旧章回信 */
