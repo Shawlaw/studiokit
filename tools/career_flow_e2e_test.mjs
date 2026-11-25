@@ -907,14 +907,26 @@ async function phaseHomepageRevisit(cdp) {
 
 async function phaseSingleDelivery(cdp) {
   step('phase:single-delivery');
+  /* 首封未投递：产品只显示 [data-action="send-to-port"]「送去折光港」，
+     旧「按地址投递 · 去港口」按设计隐藏；已投递/回看仍用 open-town，不全局替换。 */
   const actionCount = await cdp.evaluate(`(() => {
     const panel = document.querySelector('[data-career-panel="mailbox"]');
-    if (!panel) return { town: 0, deliveryLike: 0, text: '' };
-    const town = panel.querySelectorAll('[data-action="open-town"]');
-    const deliveryLike = Array.from(panel.querySelectorAll('button')).filter((button) => /按地址投递|送去折光港/.test(button.textContent || '') && !button.hidden);
-    return { town: town.length, deliveryLike: deliveryLike.length, text: (panel.textContent || '').replace(/\\s+/g, ' ').trim().slice(0, 600) };
+    if (!panel) return { sendToPort: 0, town: 0, deliveryLike: 0, text: '' };
+    const visible = (node) => !!node && !node.hidden && node.getClientRects && node.getClientRects().length > 0;
+    const buttons = Array.from(panel.querySelectorAll('button')).filter(visible);
+    const send = buttons.filter((button) => button.getAttribute('data-action') === 'send-to-port');
+    const town = buttons.filter((button) => button.getAttribute('data-action') === 'open-town');
+    const deliveryLike = buttons.filter((button) => /按地址投递|送去折光港/.test(button.textContent || ''));
+    return {
+      sendToPort: send.length,
+      town: town.length,
+      deliveryLike: deliveryLike.length,
+      text: (panel.textContent || '').replace(/\\s+/g, ' ').trim().slice(0, 600),
+    };
   })()`);
-  gate('LETTER 只保留一个主动作「把单据送到旧港」', actionCount.town === 1 && actionCount.deliveryLike === 1, J(actionCount));
+  gate('LETTER 只保留一个主动作「把单据送到旧港」',
+    actionCount.deliveryLike === 1 && actionCount.sendToPort + actionCount.town === 1,
+    J(actionCount));
   const letter = await cdp.evaluate(`(() => {
     const panel = document.querySelector('[data-career-panel="mailbox"]');
     const body = panel && panel.querySelector('.ac-career-letter__body');
@@ -923,9 +935,13 @@ async function phaseSingleDelivery(cdp) {
     return { body: body ? (body.textContent || '').trim().slice(0, 500) : null, address: address ? (address.textContent || '').trim() : null, sender: sender ? (sender.textContent || '').trim() : null };
   })()`);
   gate('LETTER 信件给出身份线索、地址与旧港去向', !!(letter.body && letter.body.length > 20 && letter.address), J(letter));
-  await viewportChecks(cdp, '信箱', ['[data-career-panel="mailbox"] [data-action="open-town"]']);
+  const primaryAction = actionCount.sendToPort === 1
+    ? '[data-career-panel="mailbox"] [data-action="send-to-port"]'
+    : '[data-career-panel="mailbox"] [data-action="open-town"]';
+  await viewportChecks(cdp, '信箱', [primaryAction]);
 
-  await clickVisible(cdp, '[data-career-panel="mailbox"] [data-action="open-town"]', '按地址投递 · 去港口');
+  await clickVisible(cdp, primaryAction, '把单据送到旧港');
+  /* 首封投递走 followLetter → 当前页内打开告示板（无 ?career=，不触发整页导航）。 */
   await waitPanel(cdp, 'town', 15000);
   const board = await panelSnapshot(cdp, 'town');
   gate('TOWN 一次点击进港并打开告示板', !!board, J(board && board.text.slice(0, 300)));
