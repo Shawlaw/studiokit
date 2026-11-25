@@ -349,6 +349,14 @@ const INTERFACES = [
     needles: ['recordFromReceipt', 'storyFeedback'],
     critical: true,
   },
+  {
+    /* 生产游戏页（无 careerTest）只读快照回退：ArcadeCareer.db（若暴露）或
+       ArcadeCareer.backup.exportCareerLife（内部 db.exportAll，不写库）。 */
+    name: 'I11 生产页只读快照回退接口（公开 db 或 backup.exportCareerLife）',
+    file: 'apps/arcade/career/bridge.js',
+    needles: ['api.backup = backupFacade()'],
+    critical: true,
+  },
 ];
 
 function staticInterfaceChecks() {
@@ -459,31 +467,77 @@ async function closePanel(cdp, panelName) {
 async function readOnlyState(cdp) {
   return cdp.evaluate(`(async () => {
     const test = window.__arcadeCareerTest;
-    const db = test && typeof test.db === 'function' ? test.db() : null;
-    if (!db) return { ok: false, reason: 'db-unavailable' };
-    let pointer = null;
-    try { pointer = await db.getState('career'); } catch (err) { return { ok: false, reason: 'getState-threw' }; }
+    const api = window.ArcadeCareer;
+    const safe = (promise) => Promise.resolve(promise).catch(() => null);
+    /* 首页回访/投递落在生产游戏页（无 ?careerTest=1），没有 __arcadeCareerTest；
+       优先测试钩子 db，缺失时回退生产公开只读接口（若存在 ArcadeCareer.db），
+       再退到 ArcadeCareer.backup.exportCareerLife（内部只用 db.exportAll）。
+       绝不调用 ensureCareer 或任何写入口。 */
+    let db = test && typeof test.db === 'function' ? test.db() : null;
+    let dbSource = db ? 'careerTest' : null;
+    if (!db && api && typeof api.db === 'function') {
+      try { db = api.db() || null; } catch (err) { db = null; }
+      if (db) dbSource = 'public';
+    }
+    if (db) {
+      let pointer = null;
+      try { pointer = await db.getState('career'); } catch (err) { return { ok: false, reason: 'getState-threw' }; }
+      const careerId = pointer && pointer.value ? pointer.value.careerId : null;
+      if (!careerId) return { ok: false, reason: 'no-career' };
+      const [quests, profile, exported] = await Promise.all([
+        safe(db.readQuestState(careerId)),
+        safe(db.getProfile(careerId)),
+        safe(db.exportAll()),
+      ]);
+      const rows = (quests && Array.isArray(quests.quests) ? quests.quests : []).map((row) => ({
+        nodeId: row.nodeId || null,
+        kind: row.kind || null,
+        status: row.status || null,
+        evidence: Array.isArray(row.evidence) ? row.evidence.slice() : [],
+        flags: Array.isArray(row.flags) ? row.flags.slice() : [],
+      }));
+      const claims = (exported && exported.ok && exported.payload && Array.isArray(exported.payload.claims)) ? exported.payload.claims : [];
+      return {
+        ok: true,
+        dbSource: dbSource,
+        careerId: careerId,
+        quests: rows,
+        profile: profile || null,
+        claims: claims.map((row) => ({
+          receiptId: row.receiptId || null,
+          commissionId: row.commissionId || null,
+          credits: Number(row.credits) || 0,
+          evidence: Array.isArray(row.evidence) ? row.evidence.slice() : [],
+          flags: Array.isArray(row.flags) ? row.flags.slice() : [],
+          receipt: row.receipt && typeof row.receipt === 'object' ? row.receipt : null,
+        })),
+      };
+    }
+    /* 生产页公开 backup.exportCareerLife 只读导出（内部 db.exportAll，不建 career）。 */
+    const backup = api && api.backup;
+    if (!backup || typeof backup.exportCareerLife !== 'function') return { ok: false, reason: 'db-unavailable' };
+    const exported = await safe(backup.exportCareerLife());
+    if (!exported || exported.ok !== true || !exported.payload) return { ok: false, reason: 'backup-export-failed' };
+    const payload = exported.payload;
+    const stateRows = Array.isArray(payload.state) ? payload.state : [];
+    const pointer = stateRows.find((row) => row && row.key === 'career') || null;
     const careerId = pointer && pointer.value ? pointer.value.careerId : null;
     if (!careerId) return { ok: false, reason: 'no-career' };
-    const safe = (promise) => Promise.resolve(promise).catch(() => null);
-    const [quests, profile, exported] = await Promise.all([
-      safe(db.readQuestState(careerId)),
-      safe(db.getProfile(careerId)),
-      safe(db.exportAll()),
-    ]);
-    const rows = (quests && Array.isArray(quests.quests) ? quests.quests : []).map((row) => ({
+    const rows = (Array.isArray(payload.quests) ? payload.quests : []).filter((row) => row && row.careerId === careerId).map((row) => ({
       nodeId: row.nodeId || null,
       kind: row.kind || null,
       status: row.status || null,
       evidence: Array.isArray(row.evidence) ? row.evidence.slice() : [],
       flags: Array.isArray(row.flags) ? row.flags.slice() : [],
     }));
-    const claims = (exported && exported.ok && exported.payload && Array.isArray(exported.payload.claims)) ? exported.payload.claims : [];
+    const profile = (Array.isArray(payload.profiles) ? payload.profiles : []).find((row) => row && row.careerId === careerId) || null;
+    const claims = (Array.isArray(payload.claims) ? payload.claims : []).filter((row) => row && row.careerId === careerId);
     return {
       ok: true,
+      dbSource: 'public-backup',
       careerId: careerId,
       quests: rows,
-      profile: profile || null,
+      profile: profile,
       claims: claims.map((row) => ({
         receiptId: row.receiptId || null,
         commissionId: row.commissionId || null,
@@ -1093,6 +1147,11 @@ async function runFullFlow(cdp, campaign, commissions) {
     step('order:' + expected.commissionId);
     const snapshotBefore = await readOnlyState(cdp);
     requireFeature('STATE ' + expected.commissionId + ' 接单前可只读职业档案', snapshotBefore && snapshotBefore.ok === true, J(snapshotBefore && { ok: snapshotBefore.ok, reason: snapshotBefore.reason }));
+    /* 生产页无 __arcadeCareerTest 时必须回退 ArcadeCareer.db；有钩子时仍优先钩子。 */
+    const noTestApi = await cdp.evaluate('!window.__arcadeCareerTest');
+    gate('STATE ' + expected.commissionId + ' 只读快照来源正确' + (noTestApi ? '（生产页公开只读回退）' : ''),
+      !!snapshotBefore.dbSource && (!noTestApi || snapshotBefore.dbSource !== 'careerTest'),
+      J({ noTestApi, dbSource: snapshotBefore.dbSource }));
     const projectionBefore = projectFromSnapshot(snapshotBefore, campaign);
     const commission = commissions.find((row) => row.commissionId === recommendation.commissionId);
     requireFeature('BOARD ' + recommendation.commissionId + ' 推荐单在真实委托目录内', !!commission, J(recommendation));
