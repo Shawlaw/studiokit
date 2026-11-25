@@ -1081,7 +1081,9 @@
         item.classList.add('ac-career-town__row--recommend');
         item.setAttribute('data-town-recommend-id', row.commissionId);
       }
-      if (opts.goalOverride) item.setAttribute('data-town-goal', opts.goalOverride);
+      /* 目标属性供测试/读屏定位：始终是带游戏名的完整世界目标，不用委托标题兜底。 */
+      const fullGoalText = (row.gameName ? row.gameName + '：' : '') + rowGoalText(row);
+      item.setAttribute('data-town-goal', fullGoalText);
       if (opts.kindText) {
         /* E2E 用 data-town-recommend-kind 判定 milestone/step；值保持玩家语言，
            保留 data-town-kind 兼容旧选择器（文案不变）。 */
@@ -1105,16 +1107,12 @@
       if (row.issuer) rowHead.appendChild(make('span', 'ac-career-town__row-issuer', row.issuer));
       item.appendChild(rowHead);
 
-      /* 每张卡接单前都显示游戏名 + objective.atLeast 的可读目标。 */
-      const goal = rowGoalText(row);
+      /* 每张卡接单前只显示一行完整目标（带游戏名 + objective.atLeast 可读数量）。
+         推荐卡不重复目标行；推荐理由单独一行。 */
       item.appendChild(make('p', 'ac-career-town__row-summary',
-        (row.gameName ? row.gameName + '：' : '') + goal));
-      if (opts.recommended) {
-        const hasObjective = !!(row.objective && numberOrZero(row.objective.atLeast));
-        const goalLine = hasObjective ? rowGoalText(row) : (opts.goalOverride || rowGoalText(row));
-        item.appendChild(make('p', 'ac-career-town__row-summary',
-          RECOMMEND_GOAL_TITLE + '：' + goalLine));
-        if (opts.reason) item.appendChild(make('p', 'ac-career-town__row-summary', opts.reason));
+        opts.recommended ? RECOMMEND_GOAL_TITLE + '：' + fullGoalText : fullGoalText));
+      if (opts.recommended && opts.reason) {
+        item.appendChild(make('p', 'ac-career-town__row-summary', opts.reason));
       }
 
       const meta = make('p', 'ac-career-town__row-meta');
