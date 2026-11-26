@@ -1669,6 +1669,7 @@
     const contentVersion = typeof options.contentVersion === 'string' && options.contentVersion ? options.contentVersion : DEFAULT_CONTENT_VERSION;
     return txRun(['state'].concat(CLAIM_STORES), 'readwrite', (ctx) => {
       assertCareerWritable(ctx, 'settle-ending');
+      assertCareerActive(ctx, careerId, 'settle-ending');
       ctx.bind(ctx.store('claims').get(runId), (existingClaim) => {
         readEndingRows(ctx, careerId, (rows) => {
           const canonicalResolved = resolvedEndingFromRows(rows);
@@ -1795,6 +1796,7 @@
     if (!core.isValidCareerId(careerId)) return Promise.resolve(failure('bad-career-id'));
     return txRun(['state', 'claims', 'runs', 'quests', 'migrations'], 'readwrite', (ctx) => {
       assertCareerWritable(ctx, 'repair-ending');
+      assertCareerActive(ctx, careerId, 'repair-ending');
       const claimsStore = ctx.store('claims');
       const questsStore = ctx.store('quests');
       const migrationsStore = ctx.store('migrations');
@@ -2334,6 +2336,7 @@
     const at = nowIso();
     return txRun(['state', 'migrations', 'runs'], 'readwrite', (ctx) => {
       assertCareerWritable(ctx, 'reserve-ending');
+      assertCareerActive(ctx, careerId, 'reserve-ending');
       const store = ctx.store('migrations');
       const runs = ctx.store('runs');
       ctx.bind(store.get(markerId), (existing) => {
@@ -2421,6 +2424,7 @@
     const markerId = 'commission-first:' + careerId + ':' + commissionId;
     return txRun(['state', 'migrations', 'quests', 'runs'], 'readwrite', (ctx) => {
       assertCareerWritable(ctx, 'reserve-first-clear');
+      assertCareerActive(ctx, careerId, 'reserve-first-clear');
       const quests = ctx.store('quests');
       ctx.bind(quests.get([careerId, commissionId]), (questRow) => {
         if (questRow && questRow.status === 'cleared') {
