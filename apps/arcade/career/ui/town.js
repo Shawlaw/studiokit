@@ -1368,7 +1368,7 @@
           gameName: mainRow.gameName,
           titleOverride: liveId ? '继续这张单：' + mainRow.title : '眼下先做：' + mainRow.title,
           goalOverride: suggestion && suggestion.row.commissionId === mainRow.commissionId ? suggestion.goal : '',
-          kindText: suggestion && suggestion.row.commissionId === mainRow.commissionId ? suggestion.kindText : '路线进展',
+          kindText: suggestion && suggestion.row.commissionId === mainRow.commissionId ? suggestion.kindText : '能积攒下一步所需',
           reason: suggestion && suggestion.row.commissionId === mainRow.commissionId ? suggestion.reason : '',
         };
         recommendList.appendChild(renderRow(mainRow, boardReady, opts));
