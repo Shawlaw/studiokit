@@ -1,5 +1,25 @@
 # Arcade Changelog
 
+## 0.21.1 — 2026-11-26（本地修复，未发布）
+
+本地分支 `fix/arcade-career-entry-0211`，HEAD `242d0a3`；设计与回滚见 [`DESIGN-0.21.1.md`](DESIGN-0.21.1.md)，集成与验证口径见 [`docs/arcade-life/INTEGRATION-0.21.1.md`](../../docs/arcade-life/INTEGRATION-0.21.1.md)。**未发布**：线上仍为 0.21.0，产品版本链与 SW 缓存键仍为 0.21.0 / `studiokit-arcade-0.21.0-v1`（本次未做版本 bump）。
+
+### Fixed
+
+- 修正 0.21.0「身份建立后也无内容入口」的过度实现：生涯身份一旦建立（已开生涯或已有章节），中心页在经典目录旁常驻「旧港生涯」内容入口，直达 `games/pendulum-tower.html?careerPanel=town`，最小热区 44px；身份建立前仍只有「继续上次」附近的被动来信小字。
+- 封存时隐藏常驻内容入口与来信小字，但保留页尾「生涯设置（已封存）」；解冻恢复内容入口；完全重置后内容入口与设置入口一起消失。
+- 中心页仍无生涯视图 / 默认视图切换，也不恢复常驻告示板 / 信箱 / 章节链接；经典目录、排序记忆、积分与游玩记录零改动。
+
+### Tests
+
+- 0.21.1 实跑：`career_passive_entry` **59/59 PASS**；`arcade_smoke` **117/117 PASS（第一轮）**。
+- `arcade_smoke` 加入 320/375/390/430 四档窄屏增强断言后的最终复跑**仍待主 Agent**；其余门禁、full profile、真机 / 真人（0.21.1）UNVERIFIED。0.21.0 的历史通过数字仅作为已发布基线，不作为本版已跑证据。
+
+### Notes
+
+- 只改 `apps/arcade/index.html` / `arcade.css` 与对应测试断言；不改 localStorage key / IDB v1 / 11 stores / `contentVersion 0.18.0` / 玩法数值 / 关卡数据，不引入远程资源。
+- 无 `PUBLISH_TO_MAIN`、无 push、无 Actions / 双端校验 / 线上 0.21.1 证据；不得声称发布成功。
+
 ## 0.21.0 — 2026-11-26（已双端发布）
 
 本地分支 `feat/arcade-career-passive-021`。设计 / 回滚见 [`DESIGN-0.21.0.md`](DESIGN-0.21.0.md)，接口冻结见 [`docs/arcade-life/ADR-interfaces.md`](../../docs/arcade-life/ADR-interfaces.md) §22，集成与验证口径见 [`docs/arcade-life/INTEGRATION-0.21.md`](../../docs/arcade-life/INTEGRATION-0.21.md)。**版本链 0.21.0 / SW `studiokit-arcade-0.21.0-v1`；2026-11-26 已双端发布。**

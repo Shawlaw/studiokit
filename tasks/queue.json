@@ -2389,6 +2389,25 @@
       ],
       "evidence": "Released both targets 2026-11-26; main 14a19b0; Actions 45750286945 all jobs success; verify_deploy 89/89 identical, arcade 0.21.0. static 35/35; release 41/41 release passed (not full); 96 missions 16/16 games, 96/96 tiers, 3792/3792 checks; archive lifecycle 60/60; DB 38/38; backup 34/34; mobile 318/318; smoke 117/117; flow 339/339; PWA 18/18. full profile and real-device/human testing UNVERIFIED. See docs/arcade-life/INTEGRATION-0.21.md.",
       "completedAt": "2026-11-26T03:45:00Z"
+    },
+    {
+      "id": "T142",
+      "title": "Arcade 0.21.1 文档 / 任务口径同步（本地修复，未发布）",
+      "kind": "agent",
+      "status": "DONE",
+      "dependsOn": [
+        "T141"
+      ],
+      "ownerAuthorizationRequired": false,
+      "acceptance": [
+        "独立 worktree codex/career-entry-0211-docs，仅基线 242d0a3，不改产品代码、测试或门禁脚本",
+        "同步 apps/arcade/README|CHANGELOG、根 README|CHANGELOG、AGENTS、BASELINE、ROADMAP、TASKS、queue，并新建 DESIGN-0.21.1.md 与 INTEGRATION-0.21.1.md",
+        "写清 0.21.1 修正 0.21.0 过度实现：身份建立前只有被动来信小字，建立后常驻旧港生涯内容入口，封存隐藏但保留设置、解冻恢复、完全重置后消失；不恢复生涯视图 / 默认视图切换；线上仍 0.21.0、版本链未 bump",
+        "只写主 Agent 实跑的 career_passive_entry 59/59 与 arcade_smoke 117/117（第一轮；四档窄屏增强后最终复跑待主 Agent）；0.21.0 历史结果明确为已发布基线，不冒充 0.21.1 已跑",
+        "实跑 validate_site.py / build_site.py / check_readme_links.py / git diff --check 并如实记录；不 push、不声称发布"
+      ],
+      "evidence": "Docs-only worktree codex/career-entry-0211-docs at 242d0a3; no product code, tests or gate scripts changed. Online arcade 0.21.0; local 0.21.1 unpublished with version chain / SW cache still 0.21.0. Main agent actually ran career_passive_entry 59/59 and arcade_smoke 117/117 first round; final smoke rerun after four-width narrow-screen assertions still pending main agent. 0.21.0 historical results kept as published baseline only; all other 0.21.1 gates/full/real-device/publish UNVERIFIED. validate_site.py, build_site.py, check_readme_links.py and git diff --check run in docs worktree; see docs/arcade-life/INTEGRATION-0.21.1.md. No push, no publish authorization.",
+      "completedAt": "2026-11-26T05:30:00Z"
     }
   ]
 }
