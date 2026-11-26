@@ -3015,7 +3015,7 @@ async function main() {
     await cdp.screenshot('star-mow-320.png');
     record('星海突击 320px 星海割草 4 按钮入口 + 6 列无限道具行无溢出', true);
 
-    /* ---------- 0.21 被动发现：中心页无生涯 CTA、仅未投递来信低强调小字、页尾生涯设置入口、经典目录与排序不变 ---------- */
+    /* ---------- 0.21 被动发现 + 生涯开启后常驻内容入口；经典目录与排序不变 ---------- */
     await cdp.navigate(base + '/apps/arcade/games/pendulum-tower.html?careerPanel=town');
     await cdp.waitFor('window.ArcadeCareer?.available && ArcadeCareer.db');
     assert(!(await cdp.evaluate('ArcadeCareer.db.getState("career")')), 'career panel deep link created a profile');
@@ -3025,7 +3025,7 @@ async function main() {
     await cdp.evaluate('Arcade.Prefs.save({...Arcade.Prefs.load(), hallSort: "name"})');
     await cdp.navigate(base + '/apps/arcade/');
     await cdp.waitFor('document.querySelectorAll("[data-hall-grid] a").length >= 16');
-    /* 无生涯 CTA：旧版视图切换、常驻告示板/信箱/章节链接与 C0 故事入口全部消失。 */
+    /* 不恢复旧版视图切换与常驻章节链接；生涯身份建立后只增加一个内容入口。 */
     assert(await cdp.evaluate(`!document.querySelector('[data-hall-modes]') && !document.querySelector('[data-hall-view]') && !document.querySelector('[data-career-view]') && !document.querySelector('[data-story-entry]') && !document.querySelector('[data-default-view]') && !document.querySelector('[data-career-panel-link]') && !document.querySelector('[data-career-chapters]')`), 'career CTA/view switch still present on classic home');
     /* 经典目录与排序不变：有生涯身份也始终停留在经典目录，name 排序保留。 */
     assert(await cdp.evaluate('document.querySelector("[data-classic-view]")?.hidden !== true'), 'classic directory hidden on home');
@@ -3036,6 +3036,27 @@ async function main() {
     assert(await cdp.evaluate('document.querySelector("[data-career-settings-label]").textContent.trim() === "生涯设置"'), 'career settings entry label changed');
     assert(await cdp.evaluate('document.querySelector("[data-career-settings-label]").getAttribute("href") === "games/pendulum-tower.html?careerPanel=settings"'), 'career settings entry href missing');
     assert(await cdp.evaluate('document.querySelector("[data-letter-entry]").hidden === true'), 'letter hint should stay hidden without clues');
+    await cdp.waitFor('document.querySelector("[data-career-entry]")?.hidden === false');
+    assert(await cdp.evaluate('document.querySelector("[data-career-entry-label]").textContent.trim() === "旧港生涯"'), 'persistent career entry label missing');
+    assert(await cdp.evaluate('document.querySelector("[data-career-entry]").getAttribute("href") === "games/pendulum-tower.html?careerPanel=town"'), 'persistent career entry href missing');
+    const careerEntryRect = await cdp.evaluate(`(() => { const r = document.querySelector('[data-career-entry]').getBoundingClientRect(); return {w:r.width,h:r.height}; })()`);
+    assert(careerEntryRect.w >= 44 && careerEntryRect.h >= 44, 'persistent career entry touch target too small: ' + JSON.stringify(careerEntryRect));
+    for (const [width, height] of [[320, 568], [375, 667], [390, 844], [430, 932]]) {
+      await setViewport(cdp, width, height);
+      await sleep(80);
+      const entryLayout = await cdp.evaluate(`(() => {
+        const el = document.querySelector('[data-career-entry]');
+        const r = el.getBoundingClientRect();
+        return { hidden: el.hidden, w: r.width, h: r.height, right: r.right, overflow: document.documentElement.scrollWidth - document.documentElement.clientWidth };
+      })()`);
+      assert(!entryLayout.hidden && entryLayout.w >= 44 && entryLayout.h >= 44 && entryLayout.right <= width + 1 && entryLayout.overflow <= 1,
+        width + 'px persistent career entry layout failed: ' + JSON.stringify(entryLayout));
+    }
+    await setViewport(cdp, 390, 844);
+    await cdp.click('[data-career-entry]');
+    await cdp.waitFor('!!document.querySelector("[data-career-panel=town]")');
+    await cdp.navigate(base + '/apps/arcade/');
+    await cdp.waitFor('document.querySelector("[data-career-entry]")?.hidden === false');
 
     /* 未投递来信只驱动「继续上次」附近的小字，不切视图、不弹窗。 */
     await cdp.evaluate(`new Promise((resolve, reject) => {
@@ -3075,10 +3096,19 @@ async function main() {
     await cdp.navigate(base + '/apps/arcade/');
     await cdp.waitFor('document.querySelector("[data-career-settings-label]")?.textContent.trim() === "生涯设置（已封存）"');
     assert(await cdp.evaluate('document.querySelector("[data-letter-entry]").hidden === true'), 'letter hint still visible after archive');
+    assert(await cdp.evaluate('document.querySelector("[data-career-entry]").hidden === true'), 'career content entry still visible after archive');
     assert(await cdp.evaluate('document.querySelector("[data-career-settings-entry]").hidden === false'), 'career settings entry missing after archive');
     assert(await cdp.evaluate('document.querySelector("[data-career-settings-label]").getAttribute("href") === "games/pendulum-tower.html?careerPanel=settings"'), 'archived career settings entry href changed');
     assert(await cdp.evaluate('document.querySelector("[data-classic-view]")?.hidden !== true && document.querySelector("[data-sort]").value === "name" && !document.querySelector("[data-career-view]")'), 'archive changed classic catalog, sort or view');
-    record('街机厅被动发现：无生涯 CTA + 来信小字 + 页尾生涯设置入口 + 经典目录与排序不变，封存后隐藏来信仍保留设置入口', true);
+    /* 完全重置后：常驻生涯入口与设置入口都消失，经典目录仍可见。 */
+    await cdp.navigate(base + '/apps/arcade/games/pendulum-tower.html');
+    await cdp.waitFor('window.ArcadeCareer?.available && ArcadeCareer.db');
+    const resetCareer = await cdp.evaluate('ArcadeCareer.db.resetAllCareer()');
+    assert(resetCareer.ok, 'career reset fixture failed: ' + JSON.stringify(resetCareer));
+    await cdp.navigate(base + '/apps/arcade/');
+    await cdp.waitFor('document.querySelector("[data-career-entry]").hidden === true && document.querySelector("[data-career-settings-entry]").hidden === true');
+    assert(await cdp.evaluate('document.querySelector("[data-classic-view]")?.hidden !== true && document.querySelectorAll("[data-hall-grid] a").length >= 16'), 'career reset changed classic catalog');
+    record('街机厅被动发现：身份建立后常驻旧港生涯入口，封存隐藏内容，完全重置后入口消失；经典目录与排序不变', true);
 
     /* ---------- 清理测试产生的本地数据 ---------- */
     await cdp.evaluate(`localStorage.clear()`);

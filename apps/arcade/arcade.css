@@ -835,6 +835,25 @@ body.has-subhud .stage-box {
 .hall-fold[open] > summary { border-bottom: 1px solid var(--ac-line); border-end-start-radius: 0; border-end-end-radius: 0; }
 .hall-letter-entry { margin: 0 0 12px; font-size: 12px; }
 .hall-letter-entry a { display: inline-flex; align-items: center; min-height: 44px; max-width: 100%; color: var(--ac-muted); }
+/* 生涯身份建立后常驻的内容入口：比未投递来信更醒目，但不切换首页视图。 */
+.hall-career-entry {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  box-sizing: border-box;
+  min-height: 44px;
+  margin: 0 0 12px;
+  padding: 10px 12px;
+  border: 1px solid var(--ac-line);
+  border-radius: 12px;
+  background: var(--ac-panel);
+  color: var(--ac-ink);
+  text-decoration: none;
+}
+.hall-career-entry[hidden] { display: none; }
+.hall-career-entry:hover { border-color: var(--ac-accent); }
+.hall-career-entry__hint { flex: 1 1 auto; color: var(--ac-muted); font-size: 12px; }
+.hall-career-entry__arrow { color: var(--ac-accent); font-size: 20px; line-height: 1; }
 .hall-app { margin-top: 16px; }
 
 .hall-manage {

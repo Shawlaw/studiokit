@@ -44,6 +44,12 @@
         <button type="button" class="hall-resume-more" data-resume-more aria-expanded="false" aria-controls="hall-resume-list" hidden></button>
       </section>
 
+      <a class="hall-career-entry" href="games/pendulum-tower.html?careerPanel=town" data-career-entry hidden>
+        <span data-career-entry-label>旧港生涯</span>
+        <span class="hall-career-entry__hint">回折光港看看</span>
+        <span class="hall-career-entry__arrow" aria-hidden="true">›</span>
+      </a>
+
       <p class="hall-letter-entry" data-letter-entry hidden>
         <a data-letter-label>旧港有一封来信</a>
       </p>
@@ -1094,8 +1100,10 @@
         }
       });
 
-      /* 0.21：中心页始终经典目录；生涯只读探针只驱动「继续上次」附近的低强调来信小字
+      /* 中心页始终经典目录；生涯只读探针只驱动未投递来信小字、身份建立后的常驻内容入口
          与页尾二级生涯设置入口，不切视图、不弹窗、不创建生涯。 */
+      const careerEntry = document.querySelector('[data-career-entry]');
+      const careerEntryLabel = document.querySelector('[data-career-entry-label]');
       const letterEntry = document.querySelector('[data-letter-entry]');
       const settingsEntry = document.querySelector('[data-career-settings-entry]');
       const settingsLabel = document.querySelector('[data-career-settings-label]');
@@ -1165,9 +1173,17 @@
         const generation = ++hallReadGeneration;
         const career = await readHallCareer().catch(() => null);
         if (generation !== hallReadGeneration) return;
-        /* 封存时只保留页尾的二级设置入口；来信与任何生涯内容 CTA 全部隐藏。 */
+        /* 封存时隐藏生涯内容入口，只保留页尾的二级设置入口。 */
         const archived = !!(career && career.archived);
-        const active = !!(career && career.active);
+        const started = !!(career && (career.active || career.chapters));
+        const showCareerEntry = started && !archived;
+        careerEntry.hidden = !showCareerEntry;
+        careerEntryLabel.textContent = '旧港生涯';
+        if (showCareerEntry) {
+          careerEntry.href = 'games/pendulum-tower.html?careerPanel=town';
+        } else {
+          careerEntry.removeAttribute('href');
+        }
         const hasLetter = !!(career && !archived && (career.unreadLetter || career.followUpLetter));
         letterEntry.hidden = !hasLetter;
         const letterLink = letterEntry.querySelector('[data-letter-label]');
@@ -1177,7 +1193,7 @@
         } else {
           letterLink.removeAttribute('href');
         }
-        settingsEntry.hidden = !(active || archived);
+        settingsEntry.hidden = !(started || archived);
         settingsLabel.textContent = archived ? '生涯设置（已封存）' : '生涯设置';
         settingsLabel.href = 'games/pendulum-tower.html?careerPanel=settings';
       }

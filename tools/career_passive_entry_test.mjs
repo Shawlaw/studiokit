@@ -6,7 +6,7 @@
  *  1. 无线索 / 无生涯库 → 无来信小字、无生涯设置入口，中心页只有经典目录。
  *  2. 未读线索 → 「继续上次」附近的低强调小字「旧港有一封来信」（?careerLetter=1）；
  *     已读未投递 → 「继续旧港来信」；都不切视图、不创建生涯。
- *  3. C0 后 → 中心页不再出现生涯视图 / 常驻章节链接。
+ *  3. 生涯身份建立后 → 经典目录旁显示常驻「旧港生涯」内容入口；不恢复视图切换。
  *  4. 生涯已开启 → 页尾「生涯设置」；封存后 → 页尾「生涯设置（已封存）」、
  *     来信小字隐藏，链接固定 ?careerPanel=settings。
  *  5. 旧偏好 hallDefaultView=career 不再影响经典目录（只读不写回）。
@@ -68,7 +68,7 @@ check('CE-S 经典目录包裹节点仍在', HUB_HTML.indexOf('data-classic-view
 check('CE-S 来信低强调小字保留在继续上次附近', (() => {
   const resume = HUB_HTML.indexOf('data-resume-section');
   const letter = HUB_HTML.indexOf('data-letter-entry');
-  return resume >= 0 && letter > resume && letter - resume < 600;
+  return resume >= 0 && letter > resume && letter - resume < 1200;
 })());
 check('CE-S 页尾生涯设置入口存在且链接固定 ?careerPanel=settings', (() => {
   const footer = HUB_HTML.indexOf('<footer class="hall-foot"');
@@ -77,9 +77,16 @@ check('CE-S 页尾生涯设置入口存在且链接固定 ?careerPanel=settings'
   return footer >= 0 && entry > footer && href > entry;
 })());
 check('CE-S 保留 ?careerLetter=1 回访路由', HUB_HTML.indexOf('games/pendulum-tower.html?careerLetter=1') >= 0);
+check('CE-S 生涯身份建立后的常驻内容入口存在', (() => {
+  const resume = HUB_HTML.indexOf('data-resume-section');
+  const entry = HUB_HTML.indexOf('data-career-entry');
+  const href = HUB_HTML.indexOf('href="games/pendulum-tower.html?careerPanel=town"');
+  return resume >= 0 && entry > resume && entry - resume < 900 && href > resume && HUB_HTML.slice(entry - 120, entry + 220).indexOf('href="games/pendulum-tower.html?careerPanel=town"') >= 0;
+})());
 check('CE-S 44px 热区规则保留（来信 + 生涯设置）',
   /\.hall-letter-entry a\s*\{[^}]*min-height:\s*44px/.test(CSS) &&
-  /\.hall-career-settings a\s*\{[^}]*min-height:\s*44px/.test(CSS));
+  /\.hall-career-settings a\s*\{[^}]*min-height:\s*44px/.test(CSS) &&
+  /\.hall-career-entry\s*\{[^}]*min-height:\s*44px/.test(CSS));
 check('CE-S reduced-motion 规则保留', CSS.indexOf('@media (prefers-reduced-motion: reduce)') >= 0);
 check('CE-S 移除生涯视图/常驻链接的旧 CSS',
   CSS.indexOf('.hall-mode-switch') < 0 && CSS.indexOf('.hall-career-links') < 0 && CSS.indexOf('.hall-story-entry') < 0);
@@ -215,6 +222,15 @@ class StubDocument {
     const settingsLabel = new StubNode('a', { 'data-career-settings-label': '' });
     settings.appendChild(settingsLabel);
     this.settingsLabel = settingsLabel;
+    // [data-career-entry] 常驻内容入口（仅在生涯身份建立后显示）
+    const career = this.nodes.get('[data-career-entry]');
+    if (!career) {
+      this.nodes.set('[data-career-entry]', new StubNode('a', { 'data-career-entry': '' }));
+    }
+    this.careerEntry = this.nodes.get('[data-career-entry]');
+    this.careerEntry.hidden = true;
+    this.careerLabel = new StubNode('span', { 'data-career-entry-label': '' });
+    this.careerEntry.appendChild(this.careerLabel);
     // [data-filters] 容器与 [data-scores-game]/[data-manage-game] 的 select 行为
     const filters = this.nodes.get('[data-filters]');
     filters.appendChild(new StubNode('button', { 'data-category': '全部' }));
@@ -223,6 +239,7 @@ class StubDocument {
     if (selector === '.hall-filter-details > summary') return new StubNode('summary');
     if (selector === '[data-letter-label]') return this.letterLabel;
     if (selector === '[data-career-settings-label]') return this.settingsLabel;
+    if (selector === '[data-career-entry-label]') return this.careerLabel;
     return this.nodes.get(selector) || null;
   }
   createElement(tag) { return new StubNode(tag); }
@@ -429,6 +446,13 @@ async function boot(prefs = {}, fixture = { hasDb: false }, options = {}) {
         href: doc.letterLabel.getAttribute('href'),
       };
     },
+    career() {
+      return {
+        hidden: doc.nodes.get('[data-career-entry]').hidden,
+        text: doc.careerLabel.textContent,
+        href: doc.nodes.get('[data-career-entry]').getAttribute('href'),
+      };
+    },
     settings() {
       return {
         hidden: doc.nodes.get('[data-career-settings-entry]').hidden,
@@ -452,6 +476,7 @@ async function run() {
     const h = await boot();
     check('CE-01 无库无线索：来信小字隐藏', h.letter().hidden === true, h.letter());
     check('CE-01 无库无线索：生涯设置入口隐藏', h.settings().hidden === true, h.settings());
+    check('CE-01 无库无线索：生涯内容入口隐藏', h.career().hidden === true, h.career());
     check('CE-01 无库不创建生涯库', h.idb.calls.every((c) => c[0] !== 'open'), h.idb.calls);
   }
   /* CE-02 有库但无线索、无 profile：仍无入口，不创建生涯。 */
@@ -459,6 +484,7 @@ async function run() {
     const h = await boot({}, { hasDb: true, state: { discovery: { stage: 'IDLE', clues: {} } } });
     check('CE-02 有库无线索：来信小字隐藏', h.letter().hidden === true, h.letter());
     check('CE-02 有库无线索：生涯设置入口隐藏', h.settings().hidden === true, h.settings());
+    check('CE-02 有库无线索：生涯内容入口隐藏', h.career().hidden === true, h.career());
     check('CE-02 只读探针不建库（只 open 不 upgrade）', h.idb.calls.filter((c) => c[0] === 'open').length === 1, h.idb.calls);
   }
   /* CE-03 未读线索：低强调小字，不切视图、不创建生涯。 */
@@ -468,6 +494,7 @@ async function run() {
     check('CE-03 未读：文案「旧港有一封来信」', h.letter().text === '旧港有一封来信', h.letter());
     check('CE-03 未读：链接 ?careerLetter=1', h.letter().href === 'games/pendulum-tower.html?careerLetter=1', h.letter());
     check('CE-03 未读：不显示生涯设置入口', h.settings().hidden === true, h.settings());
+    check('CE-03 未读：身份建立前不显示生涯内容入口', h.career().hidden === true, h.career());
     check('CE-03 未读：不写回偏好', h.arcade.prefWrites.length === 0, h.arcade.prefWrites);
   }
   /* CE-04 已读未投递：续读小字。 */
@@ -475,7 +502,7 @@ async function run() {
     const h = await boot({}, { hasDb: true, state: { discovery: READ_UNDELIVERED_DISC } });
     check('CE-04 已读未投递：文案「继续旧港来信」', h.letter().hidden === false && h.letter().text === '继续旧港来信', h.letter());
   }
-  /* CE-05 C0 后 / 已开启生涯：无生涯视图、只显示页尾设置。 */
+  /* CE-05 生涯身份建立后：常驻内容入口 + 页尾设置，不恢复视图切换。 */
   {
     const h = await boot({}, {
       hasDb: true,
@@ -486,11 +513,26 @@ async function run() {
       profiles: { 'career-1': { careerId: 'career-1' } },
       quests: { 'career-1|story:C0.port_seen': { nodeId: 'story:C0.port_seen' } },
     });
-    check('CE-05 C0 后：中心页无生涯内容入口（来信小字隐藏）', h.letter().hidden === true, h.letter());
+    check('CE-05 C0 后：未投递来信小字隐藏', h.letter().hidden === true, h.letter());
+    check('CE-05 C0 后：常驻生涯内容入口可见', h.career().hidden === false, h.career());
+    check('CE-05 C0 后：生涯入口文案为旧港生涯', h.career().text === '旧港生涯', h.career());
+    check('CE-05 C0 后：生涯入口直达告示板', h.career().href === 'games/pendulum-tower.html?careerPanel=town', h.career());
+    check('CE-05 C0 后：不恢复生涯视图切换', h.doc.querySelector('[data-career-view]') === null);
     check('CE-05 C0 后：页尾生涯设置可见', h.settings().hidden === false, h.settings());
     check('CE-05 C0 后：文案「生涯设置」', h.settings().text === '生涯设置', h.settings());
     check('CE-05 C0 后：链接固定 ?careerPanel=settings', h.settings().href === 'games/pendulum-tower.html?careerPanel=settings', h.settings());
   }
+  /* CE-05b 身份刚建立、尚未完成 C0 / 委托时也常驻显示。 */
+  {
+    const h = await boot({}, {
+      state: { career: { careerId: 'career-1' } },
+      profiles: { 'career-1': { careerId: 'career-1' } },
+      quests: {},
+    });
+    check('CE-05b 身份建立即显示常驻生涯入口', h.career().hidden === false, h.career());
+    check('CE-05b 身份建立即显示生涯设置', h.settings().hidden === false, h.settings());
+  }
+
   /* CE-06 封存：只显示「生涯设置（已封存）」，来信隐藏。 */
   {
     const h = await boot({}, {
@@ -500,6 +542,7 @@ async function run() {
       quests: { 'career-1|story:C0.port_seen': { nodeId: 'story:C0.port_seen' } },
     });
     check('CE-06 封存：来信小字隐藏', h.letter().hidden === true, h.letter());
+    check('CE-06 封存：生涯内容入口隐藏', h.career().hidden === true, h.career());
     check('CE-06 封存：生涯设置仍可见', h.settings().hidden === false, h.settings());
     check('CE-06 封存：文案「生涯设置（已封存）」', h.settings().text === '生涯设置（已封存）', h.settings());
     check('CE-06 封存：链接仍为 ?careerPanel=settings', h.settings().href === 'games/pendulum-tower.html?careerPanel=settings', h.settings());
@@ -531,6 +574,7 @@ async function run() {
     h.doc.dispatch('visibilitychange');
     for (let i = 0; i < 6; i += 1) await new Promise((r) => setTimeout(r, 5));
     check('CE-08 visibilitychange 后刷新出生涯设置', h.settings().hidden === false && h.letter().hidden === true, { letter: h.letter(), settings: h.settings() });
+    check('CE-08 visibilitychange 后刷新出常驻生涯入口', h.career().hidden === false && h.career().href === 'games/pendulum-tower.html?careerPanel=town', h.career());
 
     // 竞态：第一次读取慢（25ms），第二次读取快（0ms）；旧结果不得覆盖新结果。
     const raceFixture = { hasDb: true, state: { discovery: { stage: 'IDLE', clues: {} } }, profiles: {}, quests: {} };
@@ -547,6 +591,24 @@ async function run() {
     for (let i = 0; i < 14; i += 1) await new Promise((r) => setTimeout(r, 5));
     check('CE-08 代际防竞态：最新读取胜出', race.letter().hidden === false && race.letter().text === '旧港有一封来信', race.letter());
   }
+  /* CE-10 完全重置后：常驻生涯入口与设置入口一起消失。 */
+  {
+    const fixture = {
+      state: { career: { careerId: 'career-1' } },
+      profiles: { 'career-1': { careerId: 'career-1' } },
+      quests: { 'career-1|story:C0.port_seen': { nodeId: 'story:C0.port_seen' } },
+    };
+    const h = await boot({}, fixture);
+    check('CE-10 重置前常驻生涯入口可见', h.career().hidden === false, h.career());
+    delete fixture.state.career;
+    delete fixture.profiles['career-1'];
+    fixture.quests = Object.create(null);
+    h.windowStub.dispatch('pageshow');
+    for (let i = 0; i < 8; i += 1) await new Promise((resolve) => setTimeout(resolve, 5));
+    check('CE-10 完全重置后生涯入口消失', h.career().hidden === true, h.career());
+    check('CE-10 完全重置后生涯设置入口消失', h.settings().hidden === true, h.settings());
+  }
+
   /* CE-09 后备兼容性：archive 标记写成 {careerId, archivedAt} 或 {archived:true} 都能识别。 */
   {
     const fixture = {
@@ -556,6 +618,7 @@ async function run() {
     };
     const h = await boot({}, fixture);
     check('CE-09 封存标记 {careerId, archivedAt} 被识别', h.settings().hidden === false && h.settings().text === '生涯设置（已封存）', h.settings());
+    check('CE-09 封存标记下生涯内容入口隐藏', h.career().hidden === true, h.career());
   }
 }
 
