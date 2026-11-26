@@ -3042,7 +3042,7 @@ async function main() {
     const careerEntryRect = await cdp.evaluate(`(() => { const r = document.querySelector('[data-career-entry]').getBoundingClientRect(); return {w:r.width,h:r.height}; })()`);
     assert(careerEntryRect.w >= 44 && careerEntryRect.h >= 44, 'persistent career entry touch target too small: ' + JSON.stringify(careerEntryRect));
     for (const [width, height] of [[320, 568], [375, 667], [390, 844], [430, 932]]) {
-      await setViewport(cdp, width, height);
+      await cdp.send('Emulation.setDeviceMetricsOverride', { width, height, deviceScaleFactor: 1, mobile: true });
       await sleep(80);
       const entryLayout = await cdp.evaluate(`(() => {
         const el = document.querySelector('[data-career-entry]');
@@ -3052,7 +3052,7 @@ async function main() {
       assert(!entryLayout.hidden && entryLayout.w >= 44 && entryLayout.h >= 44 && entryLayout.right <= width + 1 && entryLayout.overflow <= 1,
         width + 'px persistent career entry layout failed: ' + JSON.stringify(entryLayout));
     }
-    await setViewport(cdp, 390, 844);
+    await cdp.send('Emulation.setDeviceMetricsOverride', { width: 390, height: 844, deviceScaleFactor: 1, mobile: true });
     await cdp.click('[data-career-entry]');
     await cdp.waitFor('!!document.querySelector("[data-career-panel=town]")');
     await cdp.navigate(base + '/apps/arcade/');
