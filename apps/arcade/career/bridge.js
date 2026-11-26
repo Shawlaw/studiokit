@@ -3504,8 +3504,20 @@
       });
   }
 
-  /** 0.16：港口告示板/飞船商店/钱包收据入口；UI 缺失时结构化失败，不做替代渲染。 */
-  /** 章节/信箱打开前的只读剧情快照：真实 quests/wallet/equipment（失败不阻塞 UI）。 */
+  /** 读信和告示板沿用已确认的身份，或从原档识别身份。只有全新生涯可以走 ensureCareer。 */
+  function resolveStoryCareer(db) {
+    if (internal.commissionLastCareerId) return Promise.resolve({ careerId: internal.commissionLastCareerId });
+    if (typeof db.readHubEntry !== 'function') return Promise.resolve(db.ensureCareer({}));
+    return Promise.resolve(db.readHubEntry()).then(function (entry) {
+      if (!entry || !entry.ok) return { issue: 'hub-entry-unavailable' };
+      if (entry.archived) return { issue: 'career-archived' };
+      if (entry.careerId) return { careerId: entry.careerId };
+      if (entry.started) return { issue: entry.issue || 'incomplete-career' };
+      return db.ensureCareer({});
+    });
+  }
+
+  /** 章节/信箱打开前的剧情快照：真实 quests/wallet/equipment（失败不阻塞 UI）。 */
   function loadStorySnapshot() {
     var db = api.db || readGlobal('db');
     var careerId = internal.commissionLastCareerId || null;
@@ -3547,17 +3559,15 @@
       });
     }
     if (careerId) return read(careerId);
-    /* ?story=1 等直接打开章节时没有 run 指针：解析已存在的生涯（不新建空内容）。 */
     if (typeof db.ensureCareer !== 'function') return read(null);
-    return Promise.resolve(db.ensureCareer({}))
-      .then(function (career) {
-        if (career && career.careerId) {
-          internal.commissionLastCareerId = career.careerId;
-          return read(career.careerId);
-        }
-        return read(null);
-      })
-      .catch(function () { return read(null); });
+    return resolveStoryCareer(db).then(function (career) {
+      if (career && career.careerId) {
+        internal.commissionLastCareerId = career.careerId;
+        return read(career.careerId);
+      }
+      if (career && career.issue) return { identityIssue: career.issue };
+      return read(null);
+    }).catch(function () { return { identityIssue: 'hub-entry-unavailable' }; });
   }
 
   /** 当前 DB 是否仍有至少一条发现线索；C0 只允许在真实有效读信后推进。 */
@@ -3587,7 +3597,7 @@
       return Promise.resolve(gate)
         .then(function (allowed) {
           if (!allowed) return null;
-          return Promise.resolve(db.ensureCareer({}))
+          return resolveStoryCareer(db)
             .then(function (career) {
               if (!career || !career.careerId) return null;
               internal.commissionLastCareerId = career.careerId;
@@ -3624,13 +3634,10 @@
         if (result.preserved === true || result.mode === 'none') return result;
         /* 替换导入可能换生涯：同步当前页缓存的 careerId，章节/任务面板不能继续读旧生涯。 */
         var db = readGlobal('db');
-        var ensure = db && pickMethod(db, ['ensureCareer']);
-        var syncCareer = ensure
-          ? Promise.resolve(callMaybeAsync(ensure, db, [{}])).then(function (raw) {
-              var career = unwrapRecord(raw);
-              if (career && typeof career.careerId === 'string' && career.careerId) {
-                internal.commissionLastCareerId = career.careerId;
-              }
+        internal.commissionLastCareerId = null;
+        var syncCareer = db && typeof db.readHubEntry === 'function'
+          ? Promise.resolve(db.readHubEntry()).then(function (entry) {
+              if (entry && entry.ok) internal.commissionLastCareerId = entry.careerId || null;
             }).catch(function () {})
           : Promise.resolve();
         return syncCareer
@@ -3693,6 +3700,7 @@
       return loadStorySnapshot();
     });
     return preload.then(function (storySnapshot) {
+      if (name === 'town' && storySnapshot && storySnapshot.identityIssue) return showHubEntryIssue(storySnapshot.identityIssue);
       var uiModule = readUi(name);
       if (!uiModule) {
         return ensureLazyModule(name).then(function (loaded) {
@@ -4295,25 +4303,54 @@
     }).catch(function () { return null; });
   }
 
-  function openHubCareerPanel(panel) {
+  function showHubEntryIssue(reason) {
+    var messages = {
+      'career-archived': '旧港生涯已封存。返回街机厅后，可以在生涯设置里解冻。',
+      'incomplete-career': '找到了旧港记录，但缺少接单所需的档案或工钱账册。返回街机厅后，可以在生涯设置里导入原档备份。',
+      'ambiguous-career': '本机有多份旧港记录，暂时无法确认要打开哪份。返回街机厅后，可以在生涯设置里导入要继续的档案。',
+      'no-career': '本机已找不到可以打开的旧港生涯。请返回街机厅查看当前状态。',
+    };
+    if (DOC && !DOC.querySelector('[data-career-hub-error]')) {
+      var topbar = DOC.querySelector('.game-topbar');
+      var back = DOC.querySelector('.game-topbar .ac-back[href]');
+      var notice = DOC.createElement('section');
+      notice.className = 'ac-noscript';
+      notice.setAttribute('data-career-hub-error', reason);
+      notice.setAttribute('role', 'alert');
+      var text = DOC.createElement('p');
+      text.textContent = messages[reason] || '暂时打不开旧港生涯。请返回街机厅后重试。';
+      var link = DOC.createElement('a');
+      link.className = 'ac-btn ac-btn-secondary';
+      link.href = back ? back.href : '../index.html';
+      link.textContent = '返回街机厅';
+      notice.append(text, link);
+      if (topbar) topbar.insertAdjacentElement('afterend', notice);
+      else DOC.body.appendChild(notice);
+    }
+    return { ok: false, reason: reason };
+  }
+
+  async function openHubCareerPanel(panel) {
     var db = api.db || readGlobal('db');
-    if (!api.available || !db || typeof db.getState !== 'function' || typeof db.getProfile !== 'function') return;
     if (panel === 'settings') {
+      if (!api.available || !db) return;
       internal.hubPanel = true;
       return openSettings();
     }
-    if (internal.careerArchived) return { ok: false, reason: 'career-archived' };
-    return Promise.resolve(db.getState('career')).then(function (pointer) {
-      if (!pointer || !pointer.careerId) return null;
-      return db.getProfile(pointer.careerId);
-    }).then(function (profile) {
-      if (!profile) return null;
+    if (!api.available || !db || typeof db.readHubEntry !== 'function') return showHubEntryIssue('hub-entry-unavailable');
+    try {
+      var entry = await db.readHubEntry();
+      if (!entry.ok) return showHubEntryIssue('hub-entry-unavailable');
+      if (entry.archived || internal.careerArchived) return showHubEntryIssue('career-archived');
+      if (!entry.careerId) return showHubEntryIssue(entry.issue || 'no-career');
       internal.hubPanel = true;
-      internal.commissionLastCareerId = profile.careerId;
-      if (panel === 'town') return openTown();
-      if (panel === 'mailbox') return openCareerUi('mailbox');
-      return openCampaign();
-    });
+      internal.commissionLastCareerId = entry.careerId;
+      var result = await (panel === 'town' ? openTown() : panel === 'mailbox' ? openCareerUi('mailbox') : openCampaign());
+      return result && result.ok ? result : showHubEntryIssue('hub-entry-unavailable');
+    } catch (err) {
+      warnOnce('hub-career-panel', err);
+      return showHubEntryIssue('hub-entry-unavailable');
+    }
   }
 
   function finalizeReady() {

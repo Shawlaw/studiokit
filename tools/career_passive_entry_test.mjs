@@ -52,6 +52,12 @@ function check(name, ok, detail) {
 
 const HUB_HTML = fs.readFileSync(HUB_ABS, 'utf8');
 const CSS = fs.readFileSync(CSS_ABS, 'utf8');
+const CAREER_CORE = fs.readFileSync(path.join(ROOT, 'apps/arcade/career/career-core.js'), 'utf8');
+const CAREER_DB = fs.readFileSync(path.join(ROOT, 'apps/arcade/career/career-db.js'), 'utf8');
+const BRIDGE = fs.readFileSync(path.join(ROOT, 'apps/arcade/career/bridge.js'), 'utf8');
+const HUB_BRIDGE = BRIDGE.slice(BRIDGE.indexOf('  function addHubReturnLink('), BRIDGE.indexOf('  function finalizeReady('));
+const RESOLVE_CAREER = BRIDGE.slice(BRIDGE.indexOf('  function resolveStoryCareer('), BRIDGE.indexOf('  /** 章节/信箱打开前'));
+const IDENTITY_SYNC = BRIDGE.slice(BRIDGE.indexOf('  function syncCampaignFlags('), BRIDGE.indexOf('  /** 备份模块门面'));
 
 /* ------------------------------------------------------------------ *
  * 静态 DOM 契约（先跑，失败也能继续跑 VM 用例）
@@ -148,6 +154,12 @@ class StubNode {
     return node;
   }
   append(...nodes) { nodes.forEach((n) => this.appendChild(n)); }
+  insertAdjacentElement(position, node) {
+    if (position !== 'afterend') throw new Error('unsupported position: ' + position);
+    const siblings = this.parentNode.children;
+    siblings.splice(siblings.indexOf(this) + 1, 0, node);
+    node.parentNode = this.parentNode;
+  }
   add(node) { this.appendChild(node); }
   removeChild(node) {
     const i = this.children.indexOf(node);
@@ -259,6 +271,7 @@ function makeIndexedDB(fixture, options = {}) {
   const stateRows = fixture.state;
   const profiles = fixture.profiles;
   const quests = fixture.quests;
+  const balances = fixture.balances || Object.create(null);
   const calls = [];
   return {
     calls,
@@ -268,15 +281,17 @@ function makeIndexedDB(fixture, options = {}) {
     },
     open(name) {
       calls.push(['open', name]);
-      const request = { transaction: { abort() {} }, onsuccess: null, onerror: null, onupgradeneeded: null };
+      const request = { transaction: { abort() { calls.push(['abort-upgrade']); } }, onsuccess: null, onerror: null, onupgradeneeded: null };
       setTimeout(() => {
         if (fixture.hasDb === false) {
-          if (request.onerror) request.onerror(new Error('no-db'));
+          if (request.onupgradeneeded) request.onupgradeneeded();
+          request.error = new Error('no-db');
+          if (request.onerror) request.onerror();
           return;
         }
-        if (request.onupgradeneeded) request.onupgradeneeded();
         const db = {
-          transaction() {
+          transaction(stores, mode) {
+            calls.push(['transaction', mode]);
             const tx = {};
             let pending = 0;
             const done = () => { if (tx.oncomplete) tx.oncomplete(); };
@@ -293,9 +308,10 @@ function makeIndexedDB(fixture, options = {}) {
                 schedule(() => {
                   let row = null;
                   const fixtureKey = Array.isArray(key) ? key.join('|') : key;
-                  if (store === 'state') row = stateRows[fixtureKey] === undefined ? null : { key: fixtureKey, value: stateRows[fixtureKey] };
-                  else if (store === 'profiles') row = profiles[fixtureKey] === undefined ? null : { key: fixtureKey, value: profiles[fixtureKey] };
-                  else if (store === 'quests') row = quests[fixtureKey] === undefined ? null : { key: fixtureKey, value: quests[fixtureKey] };
+                  if (store === 'state') row = fixture.flatState?.[fixtureKey] || (stateRows[fixtureKey] === undefined ? null : { key: fixtureKey, value: stateRows[fixtureKey] });
+                  else if (store === 'profiles') row = profiles[fixtureKey] || null;
+                  else if (store === 'balances') row = balances[fixtureKey] || null;
+                  else if (store === 'quests') row = quests[fixtureKey] || null;
                   req.result = row;
                   if (req.onsuccess) req.onsuccess({ result: row });
                 }, delay);
@@ -391,6 +407,7 @@ async function boot(prefs = {}, fixture = { hasDb: false }, options = {}) {
   const doc = new StubDocument(SELECTORS);
   const arcade = makeArcade(prefs);
   const idb = makeIndexedDB(fixture, options);
+  if (options.noDatabasesApi) delete idb.databases;
   const windowStub = {
     Arcade: arcade.api,
     matchMedia() { return { matches: false }; },
@@ -432,6 +449,7 @@ async function boot(prefs = {}, fixture = { hasDb: false }, options = {}) {
   sandbox.globalThis = sandbox;
   sandbox.console = console;
   vm.createContext(sandbox);
+  for (const source of [CAREER_CORE, CAREER_DB]) vm.runInContext(source, sandbox);
   vm.runInContext(SCRIPT, sandbox, { filename: HUB_REL });
   // 等待 readHallCareer 的 IDB 回调链 + refreshHallViews 完成。
   for (let i = 0; i < 8; i += 1) await new Promise((resolve) => setTimeout(resolve, 5));
@@ -464,6 +482,46 @@ async function boot(prefs = {}, fixture = { hasDb: false }, options = {}) {
   };
 }
 
+/* 跟随首页链接，在同一份 IDB 上执行目的页真实 hub 路由。UI opener 只记录收到的档案 ID。 */
+async function followCareerLink(hall) {
+  const doc = new StubDocument([...SELECTORS, '.game-topbar', '.game-topbar .ac-back[href]']);
+  doc.querySelector('.game-topbar .ac-back[href]').href = '../index.html';
+  const internal = {};
+  let opened = null;
+  let syncedId = null;
+  let ensureCalls = 0;
+  const sandbox = {
+    DOC: doc,
+    api: {
+      available: true,
+      db: {
+        ...hall.windowStub.ArcadeCareer.db,
+        ensureCareer() { ensureCalls += 1; return { careerId: 'unexpected-new-career' }; },
+      },
+    },
+    internal,
+    readGlobal(name) {
+      return name === 'campaign' ? { syncFlags({ careerId }) { syncedId = careerId; } } : null;
+    },
+    warnOnce() {},
+  };
+  vm.createContext(sandbox);
+  vm.runInContext(HUB_BRIDGE + RESOLVE_CAREER + IDENTITY_SYNC, sandbox);
+  sandbox.openTown = async () => {
+    opened = { panel: 'town', careerId: internal.commissionLastCareerId };
+    await vm.runInContext('syncCampaignFlags(false)', sandbox);
+    return { ok: true };
+  };
+  const href = new URL(hall.career().href, 'https://example.test/project/apps/arcade/');
+  await sandbox.openHubCareerPanel(href.searchParams.get('careerPanel'));
+  const failure = doc.body.querySelector('[data-career-hub-error]');
+  return { opened, syncedId, ensureCalls, issue: failure?.getAttribute('data-career-hub-error'), message: failure?.children[0]?.textContent, back: failure?.children[1]?.href };
+}
+
+function oldC0(careerId, nodeId = 'story:C0.port_seen') {
+  return { careerId, nodeId, kind: 'story-flag', status: 'cleared', flags: ['C0.port_seen'], source: 'campaign', schemaVersion: 1 };
+}
+
 /* ------------------------------------------------------------------ *
  * VM 用例
  * ------------------------------------------------------------------ */
@@ -479,6 +537,8 @@ async function run() {
     check('CE-01 无库无线索：生涯设置入口隐藏', h.settings().hidden === true, h.settings());
     check('CE-01 无库无线索：生涯内容入口隐藏', h.career().hidden === true, h.career());
     check('CE-01 无库不创建生涯库', h.idb.calls.every((c) => c[0] !== 'open'), h.idb.calls);
+    const oldBrowser = await boot({}, { hasDb: false }, { noDatabasesApi: true });
+    check('CE-01 无 databases() 时中止创建事务', oldBrowser.idb.calls.some(([call]) => call === 'abort-upgrade') && oldBrowser.career().hidden, oldBrowser.idb.calls);
   }
   /* CE-02 有库但无线索、无 profile：仍无入口，不创建生涯。 */
   {
@@ -528,21 +588,65 @@ async function run() {
     const h = await boot({}, {
       state: { career: { careerId: 'career-1' } },
       profiles: { 'career-1': { careerId: 'career-1' } },
-      quests: {},
+      balances: { 'career-1': { careerId: 'career-1', credits: 80 } },
+      quests: { 'legacy|story:C0.port_seen': oldC0('legacy') },
     });
     check('CE-05b 身份建立即显示常驻生涯入口', h.career().hidden === false, h.career());
     check('CE-05b 身份建立即显示生涯设置', h.settings().hidden === false, h.settings());
+    const result = await followCareerLink(h);
+    check('CE-05b 当前档优先于残余旧 C0，点击后进入当前告示板', result.opened?.careerId === 'career-1' && result.syncedId === 'career-1', result);
   }
 
-  /* CE-05c 旧档无 profile 但有 C0：兼容显示常驻生涯入口与设置。 */
+  /* CE-05c 有 C0 和原档，但缺少 career 指针。 */
   {
     const h = await boot({}, {
-      state: {},
-      profiles: {},
-      quests: { 'legacy|story:C0.port_seen': { careerId: 'legacy', nodeId: 'story:C0.port_seen' } },
+      profiles: { legacy: { careerId: 'legacy' } },
+      balances: { legacy: { careerId: 'legacy', credits: 150 } },
+      quests: { 'legacy|story:C0.port_seen': oldC0('legacy') },
     });
-    check('CE-05c 旧档 C0 无 profile：常驻生涯入口可见', h.career().hidden === false, h.career());
-    check('CE-05c 旧档 C0 无 profile：生涯设置可见', h.settings().hidden === false, h.settings());
+    check('CE-05c 旧档无指针：常驻生涯入口可见', h.career().hidden === false, h.career());
+    const landing = await followCareerLink(h);
+    check('CE-05c 点击后以原身份打开告示板', landing.opened?.panel === 'town' && landing.opened.careerId === 'legacy', landing);
+    check('CE-05c 入港后仍以原身份同步，不新建身份', landing.syncedId === 'legacy' && landing.ensureCalls === 0, landing);
+    check('CE-05c 首页及目的页身份读取均为只读', h.idb.calls.every(([call, mode]) => call !== 'transaction' || mode === 'readonly'), h.idb.calls);
+  }
+
+  /* CE-05d 孤立 C0：保留入口并明确告知如何返回。 */
+  {
+    const h = await boot({}, { quests: { 'legacy|story:C0.port_seen': oldC0('legacy') } });
+    const landing = await followCareerLink(h);
+    check('CE-05d 孤立 C0：生涯入口与设置可见', !h.career().hidden && !h.settings().hidden);
+    check('CE-05d 孤立 C0：点击后显示档案缺失说明和返回链接', !landing.opened && landing.ensureCalls === 0 && /档案/.test(landing.message) && landing.back === '../index.html', landing);
+    h.idb.fixture.state['career-archive'] = { archived: false, careerId: 'legacy' };
+    const archived = await followCareerLink(h);
+    check('CE-05d 跨页遇到仍有效的封存标记，沿用 DB 写入守卫', archived.issue === 'career-archived' && archived.ensureCalls === 0, archived);
+  }
+
+  /* CE-05e 旧扁平指针、退役记录和无法消歧的旧档。 */
+  {
+    const flat = await boot({}, {
+      flatState: { career: { key: 'career', careerId: 'legacy' } },
+      profiles: { legacy: { careerId: 'legacy' } },
+      balances: { legacy: { careerId: 'legacy' } },
+    });
+    const landing = await followCareerLink(flat);
+    check('CE-05e 扁平 career 指针仍打开原档', !flat.career().hidden && landing.opened?.careerId === 'legacy', landing);
+    const ambiguous = await boot({}, {
+      quests: { 'old-a|story:C0.port_seen': oldC0('old-a'), 'old-b|C0.port_seen': oldC0('old-b', 'C0.port_seen') },
+    });
+    const unresolved = await followCareerLink(ambiguous);
+    check('CE-05e 多份合法 C0 不擅选档案', !ambiguous.career().hidden && unresolved.issue === 'ambiguous-career', unresolved);
+    const retired = await boot({}, {
+      state: { career: { careerId: 'legacy' }, 'former-career:legacy': { careerId: 'legacy' } },
+      profiles: { legacy: { careerId: 'legacy' } },
+      balances: { legacy: { careerId: 'legacy' } },
+      quests: {
+        'legacy|story:C0.port_seen': oldC0('legacy'),
+        'bad id|story:C0.port_seen': oldC0('bad id'),
+        'locked|story:C0.port_seen': { ...oldC0('locked'), status: 'locked' },
+      },
+    });
+    check('CE-05e 退役、坏 ID 和锁定行都不恢复首页入口', retired.career().hidden && retired.settings().hidden, retired.career());
   }
 
   /* CE-06 封存：只显示「生涯设置（已封存）」，来信隐藏。 */

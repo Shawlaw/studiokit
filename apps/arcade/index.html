@@ -18,6 +18,8 @@
   <link rel="stylesheet" href="./arcade.css" />
   <script src="../../shared/site-shell.js" defer></script>
   <script src="./engine.js"></script>
+  <script src="./career/career-core.js" defer></script>
+  <script src="./career/career-db.js" defer></script>
   <title>街机厅 Arcade · StudioKit</title>
 </head>
 <body class="arcade-body" data-studiokit-app="arcade" data-studiokit-app-title="街机厅 Arcade">
@@ -1109,73 +1111,13 @@
       const settingsLabel = document.querySelector('[data-career-settings-label]');
       let hallReadGeneration = 0;
 
-      async function readHallCareer() {
-        if (typeof indexedDB === 'undefined') return null;
-        const name = 'studiokit:arcade:career';
-        if (typeof indexedDB.databases === 'function') {
-          const databases = await indexedDB.databases();
-          if (!databases.some((db) => db?.name === name)) return null;
-        }
-        const db = await new Promise((resolve, reject) => {
-          const request = indexedDB.open(name);
-          // 旧浏览器无 databases() 时也不为经典玩家创建数据库。
-          request.onupgradeneeded = () => request.transaction.abort();
-          request.onsuccess = () => resolve(request.result);
-          request.onerror = () => reject(request.error);
-        });
-        try {
-          return await new Promise((resolve, reject) => {
-            const transaction = db.transaction(['state', 'profiles', 'quests'], 'readonly');
-            const quests = transaction.objectStore('quests');
-            const result = { active: false, chapters: false, unreadLetter: false, archived: false };
-            transaction.oncomplete = () => resolve(result);
-            transaction.onabort = () => reject(transaction.error);
-            const archivePointer = transaction.objectStore('state').get('career-archive');
-            archivePointer.onsuccess = () => {
-              const marker = archivePointer.result?.value;
-              if (!marker || typeof marker !== 'object' || marker.archived === false) return;
-              /* 兼容两种标记写法：{archived:true,...} 与 {careerId,archivedAt}。 */
-              result.archived = marker.archived === true || !!marker.careerId || !!marker.archivedAt;
-            };
-            const discoveryPointer = transaction.objectStore('state').get('discovery');
-            discoveryPointer.onsuccess = () => {
-              const value = discoveryPointer.result?.value;
-              const clues = value?.clues;
-              if (!clues || typeof clues !== 'object') return;
-              const rows = Object.values(clues).filter((row) => row && typeof row === 'object' && !!row.sourceGame);
-              result.unreadLetter = rows.some((row) => !row.openedAt);
-              const stage = value.stage;
-              const pendingDelivery = !value.portSeenAt && (stage === 'GLIMPSED' || stage === 'CURIOUS');
-              result.followUpLetter = !result.unreadLetter && pendingDelivery && rows.some((row) => !!row.openedAt);
-            };
-            const pointer = transaction.objectStore('state').get('career');
-            pointer.onsuccess = () => {
-              const id = pointer.result?.value?.careerId;
-              if (typeof id !== 'string' || !id) {
-                const legacy = quests.getAll();
-                legacy.onsuccess = () => {
-                  result.chapters = legacy.result.some((row) => row?.nodeId === 'story:C0.port_seen');
-                };
-                return;
-              }
-              const profile = transaction.objectStore('profiles').get(id);
-              profile.onsuccess = () => { result.active = Boolean(profile.result); };
-              const chapter = quests.get([id, 'story:C0.port_seen']);
-              chapter.onsuccess = () => { result.chapters = Boolean(chapter.result); };
-            };
-          });
-        } finally {
-          db.close();
-        }
-      }
-
       async function refreshHallViews() {
         const generation = ++hallReadGeneration;
-        const career = await readHallCareer().catch(() => null);
+        const career = await Promise.resolve().then(() => window.ArcadeCareer?.db?.readHubEntry?.()).catch(() => null);
         if (generation !== hallReadGeneration) return;
         /* 封存时隐藏生涯内容入口，只保留页尾的二级设置入口。 */
         const archived = !!(career && career.archived);
-        const started = !!(career && (career.active || career.chapters));
+        const started = career?.started === true;
         const showCareerEntry = started && !archived;
         careerEntry.hidden = !showCareerEntry;
         careerEntryLabel.textContent = '旧港生涯';
@@ -1199,7 +1141,11 @@
       }
 
       render();
-      refreshHallViews();
+      if (document.readyState === 'loading') {
+        document.addEventListener('DOMContentLoaded', refreshHallViews, { once: true });
+      } else {
+        refreshHallViews();
+      }
     })();
   </script>
 </body>

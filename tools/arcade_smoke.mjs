@@ -3119,6 +3119,43 @@ async function main() {
     assert(await cdp.evaluate('document.querySelector("[data-classic-view]")?.hidden !== true && document.querySelectorAll("[data-hall-grid] a").length >= 16'), 'career reset changed classic catalog');
     record('街机厅被动发现：身份建立后常驻旧港生涯入口，封存隐藏内容，完全重置后入口消失；经典目录与排序不变', true);
 
+    /* 旧档在同一 IDB 内丢失指针：保留并验证原钱包，之后再模拟只剩孤立 C0。 */
+    await cdp.navigate(base + '/apps/arcade/games/pendulum-tower.html');
+    await cdp.waitFor('window.ArcadeCareer?.available && ArcadeCareer.db');
+    const legacy = await cdp.evaluate('ArcadeCareer.db.ensureCareer({originGameId: "pendulum-tower"})');
+    assert(legacy.ok && legacy.careerId, 'could not set up legacy career fixture');
+    const legacyId = JSON.stringify(legacy.careerId);
+    const legacyQuest = await cdp.evaluate(`ArcadeCareer.db.putQuests(${legacyId}, [{nodeId:'story:C0.port_seen', kind:'story-flag', status:'cleared', flags:['C0.port_seen'], source:'campaign'}])`);
+    assert(legacyQuest.ok, 'could not write legacy C0 fixture');
+    const mutateLegacy = (script) => cdp.evaluate(`new Promise((resolve, reject) => {
+      const request = indexedDB.open('studiokit:arcade:career');
+      request.onerror = () => reject(request.error);
+      request.onsuccess = () => {
+        const db = request.result;
+        const tx = db.transaction(['state', 'profiles', 'balances'], 'readwrite');
+        tx.oncomplete = () => { db.close(); resolve(); };
+        tx.onabort = () => { db.close(); reject(tx.error); };
+        ${script}
+      };
+    })`);
+    await mutateLegacy(`tx.objectStore('state').delete('career');
+      tx.objectStore('balances').put({careerId: ${legacyId}, credits: 321, revision: 0});`);
+    await cdp.navigate(base + '/apps/arcade/');
+    await cdp.waitFor('document.querySelector("[data-career-entry]")?.hidden === false');
+    await cdp.click('[data-career-entry]');
+    await cdp.waitFor('document.querySelector("[data-career-panel=town] .ac-career-town__wallet-value")?.textContent.includes("321")');
+    assert(!(await cdp.evaluate('ArcadeCareer.db.getState("career")')), 'opening legacy career rewrote career pointer');
+    await mutateLegacy(`tx.objectStore('profiles').delete(${legacyId});
+      tx.objectStore('balances').delete(${legacyId});`);
+    await cdp.navigate(base + '/apps/arcade/');
+    await cdp.waitFor('document.querySelector("[data-career-entry]")?.hidden === false');
+    await cdp.click('[data-career-entry]');
+    await cdp.waitFor('document.querySelector("[data-career-hub-error=incomplete-career]")?.textContent.includes("档案")');
+    assert(!(await cdp.evaluate('ArcadeCareer.db.getState("career")')), 'opening isolated C0 created a new career');
+    await cdp.click('[data-career-hub-error] a');
+    await cdp.waitFor('document.querySelectorAll("[data-hall-grid] a").length >= 16');
+    record('旧港入口：缺指针复用原档工钱，孤立 C0 显示修复说明并可返回街机厅', true);
+
     /* ---------- 清理测试产生的本地数据 ---------- */
     await cdp.evaluate(`localStorage.clear()`);
   } finally {

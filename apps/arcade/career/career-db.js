@@ -885,6 +885,107 @@
    * 生涯身份 / 初始钱包
    * ------------------------------------------------------------------ */
 
+  /** 首页与告示板深链共用的只读探针。已有库才打开，整次判定使用同一事务快照。 */
+  async function readHubEntry() {
+    const core = coreApi();
+    const factory = factoryRef();
+    if (!core || !factory) return failure('hub-entry-unavailable');
+    let db;
+    try {
+      if (typeof factory.databases === 'function') {
+        const databases = await factory.databases();
+        if (!databases.some((entry) => entry.name === DB_NAME)) return { ok: true };
+      }
+      db = await new Promise((resolve, reject) => {
+        const request = factory.open(DB_NAME);
+        let blocked = false;
+        request.onupgradeneeded = () => request.transaction.abort();
+        request.onsuccess = () => {
+          if (blocked) request.result.close();
+          else resolve(request.result);
+        };
+        request.onerror = () => reject(request.error);
+        request.onblocked = () => {
+          blocked = true;
+          reject(new Error('open-blocked'));
+        };
+      });
+      return await new Promise((resolve, reject) => {
+        const tx = db.transaction(['state', 'profiles', 'balances', 'quests'], 'readonly');
+        const state = tx.objectStore('state');
+        const profiles = tx.objectStore('profiles');
+        const balances = tx.objectStore('balances');
+        const quests = tx.objectStore('quests');
+        const result = { ok: true, started: false, archived: false, careerId: null, issue: null };
+        tx.oncomplete = () => resolve(result);
+        tx.onabort = () => reject(tx.error);
+        const read = (request, done) => { request.onsuccess = () => done(request.result); };
+
+        function acceptIdentity(id, profile) {
+          result.started = true;
+          read(balances.get(id), (balance) => {
+            if (profile && balance) result.careerId = id;
+            else result.issue = 'incomplete-career';
+          });
+        }
+
+        function findLegacyIdentity() {
+          read(quests.getAll(), (rows) => {
+            const ids = new Set(rows.filter((row) =>
+              row && core.isValidCareerId(row.careerId) &&
+              (row.nodeId === 'story:C0.port_seen' || row.nodeId === 'C0.port_seen') &&
+              (row.status === undefined || row.status === 'cleared')
+            ).map((row) => row.careerId));
+            const activeIds = [];
+            let pending = ids.size;
+            for (const id of ids) {
+              read(state.get(formerCareerKey(id)), (former) => {
+                if (!former) activeIds.push(id);
+                pending -= 1;
+                if (pending > 0) return;
+                if (activeIds.length === 1) {
+                  const [legacyId] = activeIds;
+                  read(profiles.get(legacyId), (profile) => acceptIdentity(legacyId, profile));
+                } else if (activeIds.length > 1) {
+                  result.started = true;
+                  result.issue = 'ambiguous-career';
+                }
+              });
+            }
+          });
+        }
+
+        read(state.get(STATE_KEY_CAREER_ARCHIVE), (row) => {
+          // 解冻会删除标记。只要仍有合法标记，就沿用 DB 写入守卫的判定。
+          result.archived = !!normalizeArchiveRow(row) || row?.value?.archived === true;
+        });
+        read(state.get(STATE_KEY_DISCOVERY), (row) => {
+          const discovery = row?.value;
+          if (!isObject(discovery?.clues)) return;
+          const clues = Object.values(discovery.clues).filter((clue) => isObject(clue) && !!clue.sourceGame);
+          result.unreadLetter = clues.some((clue) => !clue.openedAt);
+          const pendingDelivery = !discovery.portSeenAt && (discovery.stage === 'GLIMPSED' || discovery.stage === 'CURIOUS');
+          result.followUpLetter = !result.unreadLetter && pendingDelivery && clues.some((clue) => !!clue.openedAt);
+        });
+        read(state.get(STATE_KEY_CAREER), (pointer) => {
+          const id = (pointer?.value || pointer)?.careerId;
+          if (!core.isValidCareerId(id)) return findLegacyIdentity();
+          read(state.get(formerCareerKey(id)), (former) => {
+            if (former) return findLegacyIdentity();
+            read(profiles.get(id), (profile) => {
+              if (profile) acceptIdentity(id, profile);
+              else findLegacyIdentity();
+            });
+          });
+        });
+      });
+    } catch (err) {
+      return failure('hub-entry-unavailable', errorText(err));
+    } finally {
+      if (db) db.close();
+    }
+  }
+
   function getProfile(careerId) {
     const core = coreApi();
     if (!core || !core.isValidCareerId(careerId)) return Promise.resolve(null);
@@ -2957,6 +3058,7 @@
     /* 兼容适配层（非 ADR 必需）：供 D15-04 bridge.js 探测名使用，语义同 discovery 读写。 */
     saveState,
     getState,
+    readHubEntry,
     getProfile,
     putProfile,
     ensureCareer,
