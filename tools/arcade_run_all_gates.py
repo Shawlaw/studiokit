@@ -136,6 +136,11 @@ def gates():
         _gate('career_chrome_isolation', ['node', 'tools/career_chrome_isolation_test.mjs'], kind=CHROME, profiles=P_CHROME_RELEASE),
         _gate('career_review3_workshop', ['node', 'tools/career_review3_workshop_test.mjs'], kind=CHROME),
         _gate('career_route_evidence', ['node', 'tools/career_route_evidence_test.mjs']),
+        # 0.21 生涯封存 / 解冻 / 完全重置生命周期（真实 IDB + 两个 CDP 标签，严格串行）。
+        _gate('career_archive_lifecycle_e2e', ['node', 'tools/career_archive_lifecycle_e2e_test.mjs'], {
+            'CAREER_ARCHIVE_LIFE_PORT': _env('CAREER_ARCHIVE_LIFE_PORT', '9932'),
+            'CAREER_ARCHIVE_LIFE_CDP': _env('CAREER_ARCHIVE_LIFE_CDP', '10532'),
+        }, kind=CHROME),
         _gate('stage_coverage', ['node', 'tools/arcade_stage_coverage.mjs']),
         _gate('smoke', ['node', 'tools/arcade_smoke.mjs'], {
             'ARCADE_SMOKE_PORT': _env('ARCADE_SMOKE_PORT', '8821'),
