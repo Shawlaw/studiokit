@@ -4,7 +4,7 @@
   "commissionId": "ending.research",
   "gameId": "merge-2048",
   "title": "星塔回响·理性重启",
-  "summary": "把晶格模型推到许可信号的频率上。",
+  "summary": "你愿意把晶格模型推到许可信号的频率上吗？",
   "objective": {
     "kind": "tile.created",
     "atLeast": 1,
@@ -19,5 +19,5 @@
     "ending.research"
   ],
   "repeatSalaryCredits": 0,
-  "epilogueText": "许可信号重写成功，星塔把货船认成了朋友。"
+  "epilogueText": "你重写了许可信号，星塔把货船认成了朋友。"
 }

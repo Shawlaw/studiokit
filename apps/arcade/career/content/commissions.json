@@ -7,7 +7,7 @@
       "professionId": "research.archivist",
       "tier": 1,
       "title": "旧档案夹",
-      "summary": "完成一组牌的有效配对",
+      "summary": "你愿意完成一组牌的有效配对吗？",
       "issuer": "旧港职业中心",
       "objective": {
         "kind": "pair.match",
@@ -35,7 +35,7 @@
       "professionId": "research.archivist",
       "tier": 2,
       "title": "差一张的照片",
-      "summary": "完成更多配对并揭示旧照片",
+      "summary": "你愿意完成更多配对、揭示旧照片吗？",
       "issuer": "旧港职业中心",
       "objective": {
         "kind": "pair.match",
@@ -69,7 +69,7 @@
       "professionId": "research.archivist",
       "tier": 3,
       "title": "七号索引",
-      "summary": "完成一盘档案翻牌",
+      "summary": "你愿意完成一盘档案翻牌吗？",
       "issuer": "旧港职业中心",
       "objective": {
         "kind": "pair.match",
@@ -101,7 +101,7 @@
       "professionId": "research.archivist",
       "tier": 4,
       "title": "应急工单",
-      "summary": "完成指定的通信档案配对",
+      "summary": "你愿意完成指定的通信档案配对吗？",
       "issuer": "旧港职业中心",
       "objective": {
         "kind": "pair.match",
@@ -138,7 +138,7 @@
       "professionId": "research.archivist",
       "tier": 5,
       "title": "远征工单",
-      "summary": "在较高难度档案内完成全部配对",
+      "summary": "你愿意在较高难度档案内完成全部配对吗？",
       "issuer": "旧港职业中心",
       "objective": {
         "kind": "pair.match",
@@ -175,7 +175,7 @@
       "professionId": "research.archivist",
       "tier": 6,
       "title": "余波工单",
-      "summary": "补全旧调度记录的最终信息",
+      "summary": "你愿意补全旧调度记录的最终信息吗？",
       "issuer": "旧港职业中心",
       "objective": {
         "kind": "pair.match",
@@ -212,7 +212,7 @@
       "professionId": "research.lattice",
       "tier": 1,
       "title": "初阶晶格",
-      "summary": "在一局中生成数值32的格子",
+      "summary": "你愿意在一局中生成数值32的格子吗？",
       "issuer": "旧港职业中心",
       "objective": {
         "kind": "tile.created",
@@ -244,7 +244,7 @@
       "professionId": "research.lattice",
       "tier": 2,
       "title": "碎片相容",
-      "summary": "在一局中生成数值64的格子",
+      "summary": "你愿意在一局中生成数值64的格子吗？",
       "issuer": "旧港职业中心",
       "objective": {
         "kind": "tile.created",
@@ -282,7 +282,7 @@
       "professionId": "research.lattice",
       "tier": 3,
       "title": "信标电路",
-      "summary": "在一局中生成数值128的格子",
+      "summary": "你愿意在一局中生成数值128的格子吗？",
       "issuer": "旧港职业中心",
       "objective": {
         "kind": "tile.created",
@@ -320,7 +320,7 @@
       "professionId": "research.lattice",
       "tier": 4,
       "title": "应急工单",
-      "summary": "在一局中生成数值256的格子",
+      "summary": "你愿意在一局中生成数值256的格子吗？",
       "issuer": "旧港职业中心",
       "objective": {
         "kind": "tile.created",
@@ -359,7 +359,7 @@
       "professionId": "research.lattice",
       "tier": 5,
       "title": "远征工单",
-      "summary": "在一局中生成数值512的格子",
+      "summary": "你愿意在一局中生成数值512的格子吗？",
       "issuer": "旧港职业中心",
       "objective": {
         "kind": "tile.created",
@@ -400,7 +400,7 @@
       "professionId": "research.lattice",
       "tier": 6,
       "title": "余波工单",
-      "summary": "在一局中生成数值1024的格子",
+      "summary": "你愿意在一局中生成数值1024的格子吗？",
       "issuer": "旧港职业中心",
       "objective": {
         "kind": "tile.created",
@@ -441,7 +441,7 @@
       "professionId": "intel.risk",
       "tier": 1,
       "title": "六手评估",
-      "summary": "完成一场完整的六手牌训练",
+      "summary": "你愿意完成一场完整的六手牌训练吗？",
       "issuer": "旧港职业中心",
       "objective": {
         "kind": "hand.settled",
@@ -469,7 +469,7 @@
       "professionId": "intel.risk",
       "tier": 2,
       "title": "保持冷静",
-      "summary": "在训练中完成至少4手有效决策",
+      "summary": "你愿意在训练中完成至少4手有效决策吗？",
       "issuer": "旧港职业中心",
       "objective": {
         "kind": "hand.settled",
@@ -501,7 +501,7 @@
       "professionId": "intel.risk",
       "tier": 3,
       "title": "基础风控",
-      "summary": "完成第二场独立六手评估",
+      "summary": "你愿意完成第二场独立六手评估吗？",
       "issuer": "旧港职业中心",
       "objective": {
         "kind": "hand.settled",
@@ -535,7 +535,7 @@
       "professionId": "intel.risk",
       "tier": 4,
       "title": "应急工单",
-      "summary": "完成一次完整训练并提交报告",
+      "summary": "你愿意完成一次完整训练并提交报告吗？",
       "issuer": "旧港职业中心",
       "objective": {
         "kind": "hand.settled",
@@ -570,7 +570,7 @@
       "professionId": "intel.risk",
       "tier": 5,
       "title": "远征工单",
-      "summary": "完成第三份航线风险评估",
+      "summary": "你愿意完成第三份航线风险评估吗？",
       "issuer": "旧港职业中心",
       "objective": {
         "kind": "hand.settled",
@@ -607,7 +607,7 @@
       "professionId": "intel.risk",
       "tier": 6,
       "title": "余波工单",
-      "summary": "完成最终决策演练",
+      "summary": "你愿意完成最终决策演练吗？",
       "issuer": "旧港职业中心",
       "objective": {
         "kind": "hand.settled",
@@ -644,7 +644,7 @@
       "professionId": "intel.tactics",
       "tier": 1,
       "title": "布局练习",
-      "summary": "合法落子至少8手并正常结束对局",
+      "summary": "你愿意合法落子至少8手并正常结束对局吗？",
       "issuer": "旧港职业中心",
       "objective": {
         "kind": "move.legal",
@@ -672,7 +672,7 @@
       "professionId": "intel.tactics",
       "tier": 2,
       "title": "破解防线",
-      "summary": "完整结束一次战术模拟对局",
+      "summary": "你愿意完整结束一次战术模拟对局吗？",
       "issuer": "旧港职业中心",
       "objective": {
         "kind": "session.finish",
@@ -710,7 +710,7 @@
       "professionId": "intel.tactics",
       "tier": 3,
       "title": "主轴争夺",
-      "summary": "在有效对局中落子至少12手",
+      "summary": "你愿意在有效对局中落子至少12手吗？",
       "issuer": "旧港职业中心",
       "objective": {
         "kind": "move.legal",
@@ -742,7 +742,7 @@
       "professionId": "intel.tactics",
       "tier": 4,
       "title": "应急工单",
-      "summary": "完成指定战术演练",
+      "summary": "你愿意完成指定战术演练吗？",
       "issuer": "旧港职业中心",
       "objective": {
         "kind": "session.finish",
@@ -781,7 +781,7 @@
       "professionId": "intel.tactics",
       "tier": 5,
       "title": "远征工单",
-      "summary": "完成一场高阶棋局演练",
+      "summary": "你愿意完成一场高阶棋局演练吗？",
       "issuer": "旧港职业中心",
       "objective": {
         "kind": "session.finish",
@@ -822,7 +822,7 @@
       "professionId": "intel.tactics",
       "tier": 6,
       "title": "余波工单",
-      "summary": "完成最终对局，保存纪念棋谱",
+      "summary": "你愿意完成最终对局、保存纪念棋谱吗？",
       "issuer": "旧港职业中心",
       "objective": {
         "kind": "session.finish",
@@ -863,7 +863,7 @@
       "professionId": "engineering.dispatcher",
       "tier": 1,
       "title": "整理航单",
-      "summary": "翻开至少3张有效暗牌",
+      "summary": "你愿意翻开至少3张有效暗牌吗？",
       "issuer": "旧港职业中心",
       "objective": {
         "kind": "stock.face_up",
@@ -891,7 +891,7 @@
       "professionId": "engineering.dispatcher",
       "tier": 2,
       "title": "货柜排序",
-      "summary": "翻开至少5张有效暗牌",
+      "summary": "你愿意翻开至少5张有效暗牌吗？",
       "issuer": "旧港职业中心",
       "objective": {
         "kind": "stock.face_up",
@@ -923,7 +923,7 @@
       "professionId": "engineering.dispatcher",
       "tier": 3,
       "title": "码头调度",
-      "summary": "至少向基础牌堆移动3张牌",
+      "summary": "你愿意至少向基础牌堆移动3张牌吗？",
       "issuer": "旧港职业中心",
       "objective": {
         "kind": "foundation.move",
@@ -957,7 +957,7 @@
       "professionId": "engineering.dispatcher",
       "tier": 4,
       "title": "应急工单",
-      "summary": "在一盘里完成8次有效牌堆移动",
+      "summary": "你愿意在一盘里完成8次有效牌堆移动吗？",
       "issuer": "旧港职业中心",
       "objective": {
         "kind": "move.legal",
@@ -992,7 +992,7 @@
       "professionId": "engineering.dispatcher",
       "tier": 5,
       "title": "远征工单",
-      "summary": "至少向基础牌堆移动7张牌",
+      "summary": "你愿意至少向基础牌堆移动7张牌吗？",
       "issuer": "旧港职业中心",
       "objective": {
         "kind": "foundation.move",
@@ -1029,7 +1029,7 @@
       "professionId": "engineering.dispatcher",
       "tier": 6,
       "title": "余波工单",
-      "summary": "完成指定深度的牌堆调度",
+      "summary": "你愿意完成指定深度的牌堆调度吗？",
       "issuer": "旧港职业中心",
       "objective": {
         "kind": "move.legal",
@@ -1066,7 +1066,7 @@
       "professionId": "nature.snowscout",
       "tier": 1,
       "title": "第一声铃",
-      "summary": "踩中3个不同的铃铛",
+      "summary": "你愿意踩中3个不同的铃铛吗？",
       "issuer": "旧港职业中心",
       "objective": {
         "kind": "bell.unique",
@@ -1094,7 +1094,7 @@
       "professionId": "nature.snowscout",
       "tier": 2,
       "title": "山谷回声",
-      "summary": "踩中6个不同的铃铛",
+      "summary": "你愿意踩中6个不同的铃铛吗？",
       "issuer": "旧港职业中心",
       "objective": {
         "kind": "bell.unique",
@@ -1128,7 +1128,7 @@
       "professionId": "nature.snowscout",
       "tier": 3,
       "title": "冰桥观察",
-      "summary": "到达指定上跳高度",
+      "summary": "你愿意到达指定上跳高度吗？",
       "issuer": "旧港职业中心",
       "objective": {
         "kind": "height.reached",
@@ -1166,7 +1166,7 @@
       "professionId": "nature.snowscout",
       "tier": 4,
       "title": "应急工单",
-      "summary": "踩中8个不同的铃铛",
+      "summary": "你愿意踩中8个不同的铃铛吗？",
       "issuer": "旧港职业中心",
       "objective": {
         "kind": "bell.unique",
@@ -1201,7 +1201,7 @@
       "professionId": "nature.snowscout",
       "tier": 5,
       "title": "远征工单",
-      "summary": "到达更高观察位置",
+      "summary": "你愿意到达更高观察位置吗？",
       "issuer": "旧港职业中心",
       "objective": {
         "kind": "height.reached",
@@ -1242,7 +1242,7 @@
       "professionId": "nature.snowscout",
       "tier": 6,
       "title": "余波工单",
-      "summary": "完成最终自然采样",
+      "summary": "你愿意完成最终自然采样吗？",
       "issuer": "旧港职业中心",
       "objective": {
         "kind": "bell.unique",
@@ -1279,7 +1279,7 @@
       "professionId": "engineering.demolition",
       "tier": 1,
       "title": "旧墙清理",
-      "summary": "击碎至少8块砖",
+      "summary": "你愿意击碎至少8块砖吗？",
       "issuer": "旧港职业中心",
       "objective": {
         "kind": "brick.destroyed",
@@ -1307,7 +1307,7 @@
       "professionId": "engineering.demolition",
       "tier": 2,
       "title": "材料回收",
-      "summary": "击碎至少15块砖",
+      "summary": "你愿意击碎至少15块砖吗？",
       "issuer": "旧港职业中心",
       "objective": {
         "kind": "brick.destroyed",
@@ -1341,7 +1341,7 @@
       "professionId": "engineering.demolition",
       "tier": 3,
       "title": "旧站封条",
-      "summary": "完成一层障碍清除",
+      "summary": "你愿意完成一层障碍清除吗？",
       "issuer": "旧港职业中心",
       "objective": {
         "kind": "stage.clear",
@@ -1375,7 +1375,7 @@
       "professionId": "engineering.demolition",
       "tier": 4,
       "title": "应急工单",
-      "summary": "击碎至少22块指定障碍",
+      "summary": "你愿意击碎至少22块指定障碍吗？",
       "issuer": "旧港职业中心",
       "objective": {
         "kind": "brick.destroyed",
@@ -1410,7 +1410,7 @@
       "professionId": "engineering.demolition",
       "tier": 5,
       "title": "远征工单",
-      "summary": "完成第二处定向清障",
+      "summary": "你愿意完成第二处定向清障吗？",
       "issuer": "旧港职业中心",
       "objective": {
         "kind": "stage.clear",
@@ -1447,7 +1447,7 @@
       "professionId": "engineering.demolition",
       "tier": 6,
       "title": "余波工单",
-      "summary": "完成最终工程拆除",
+      "summary": "你愿意完成最终工程拆除吗？",
       "issuer": "旧港职业中心",
       "objective": {
         "kind": "brick.destroyed",
@@ -1484,7 +1484,7 @@
       "professionId": "research.gravity",
       "tier": 1,
       "title": "反向实验",
-      "summary": "完成5次有效重力翻转并存活至收工",
+      "summary": "你愿意完成5次有效重力翻转并存活至收工吗？",
       "issuer": "旧港职业中心",
       "objective": {
         "kind": "gravity.flip",
@@ -1512,7 +1512,7 @@
       "professionId": "research.gravity",
       "tier": 2,
       "title": "实验通道",
-      "summary": "前进至少500米",
+      "summary": "你愿意前进至少500米吗？",
       "issuer": "旧港职业中心",
       "objective": {
         "kind": "distance.reached",
@@ -1548,7 +1548,7 @@
       "professionId": "research.gravity",
       "tier": 3,
       "title": "相位频率",
-      "summary": "前进至少800米",
+      "summary": "你愿意前进至少800米吗？",
       "issuer": "旧港职业中心",
       "objective": {
         "kind": "distance.reached",
@@ -1586,7 +1586,7 @@
       "professionId": "research.gravity",
       "tier": 4,
       "title": "应急工单",
-      "summary": "前进至少1000米",
+      "summary": "你愿意前进至少1000米吗？",
       "issuer": "旧港职业中心",
       "objective": {
         "kind": "distance.reached",
@@ -1625,7 +1625,7 @@
       "professionId": "research.gravity",
       "tier": 5,
       "title": "远征工单",
-      "summary": "前进至少1600米",
+      "summary": "你愿意前进至少1600米吗？",
       "issuer": "旧港职业中心",
       "objective": {
         "kind": "distance.reached",
@@ -1666,7 +1666,7 @@
       "professionId": "research.gravity",
       "tier": 6,
       "title": "余波工单",
-      "summary": "抵达3000米星门",
+      "summary": "你愿意抵达3000米星门吗？",
       "issuer": "旧港职业中心",
       "objective": {
         "kind": "distance.reached",
@@ -1707,7 +1707,7 @@
       "professionId": "nature.ecologist",
       "tier": 1,
       "title": "果园日报",
-      "summary": "在一局里吃到5个果实",
+      "summary": "你愿意在一局里吃到5个果实吗？",
       "issuer": "旧港职业中心",
       "objective": {
         "kind": "fruit.eaten",
@@ -1735,7 +1735,7 @@
       "professionId": "nature.ecologist",
       "tier": 2,
       "title": "特殊作物",
-      "summary": "吃到8个果实",
+      "summary": "你愿意吃到8个果实吗？",
       "issuer": "旧港职业中心",
       "objective": {
         "kind": "fruit.eaten",
@@ -1769,7 +1769,7 @@
       "professionId": "nature.ecologist",
       "tier": 3,
       "title": "生态样本",
-      "summary": "吃到10个果实",
+      "summary": "你愿意吃到10个果实吗？",
       "issuer": "旧港职业中心",
       "objective": {
         "kind": "fruit.eaten",
@@ -1803,7 +1803,7 @@
       "professionId": "nature.ecologist",
       "tier": 4,
       "title": "应急工单",
-      "summary": "吃到14个果实",
+      "summary": "你愿意吃到14个果实吗？",
       "issuer": "旧港职业中心",
       "objective": {
         "kind": "fruit.eaten",
@@ -1838,7 +1838,7 @@
       "professionId": "nature.ecologist",
       "tier": 5,
       "title": "远征工单",
-      "summary": "吃到17个果实",
+      "summary": "你愿意吃到17个果实吗？",
       "issuer": "旧港职业中心",
       "objective": {
         "kind": "fruit.eaten",
@@ -1875,7 +1875,7 @@
       "professionId": "nature.ecologist",
       "tier": 6,
       "title": "余波工单",
-      "summary": "达成游戏现有20果实自然终点",
+      "summary": "你愿意达成游戏现有20果实自然终点吗？",
       "issuer": "旧港职业中心",
       "objective": {
         "kind": "fruit.eaten",
@@ -1912,7 +1912,7 @@
       "professionId": "engineering.maintenance",
       "tier": 1,
       "title": "管线检查",
-      "summary": "在45秒工作中正确击中8次",
+      "summary": "你愿意在45秒工作中正确击中8次吗？",
       "issuer": "旧港职业中心",
       "objective": {
         "kind": "mole.hit",
@@ -1940,7 +1940,7 @@
       "professionId": "engineering.maintenance",
       "tier": 2,
       "title": "地下异响",
-      "summary": "正确击中12次",
+      "summary": "你愿意正确击中12次吗？",
       "issuer": "旧港职业中心",
       "objective": {
         "kind": "mole.hit",
@@ -1974,7 +1974,7 @@
       "professionId": "engineering.maintenance",
       "tier": 3,
       "title": "检修记录",
-      "summary": "达到连续5次正确击中",
+      "summary": "你愿意达到连续5次正确击中吗？",
       "issuer": "旧港职业中心",
       "objective": {
         "kind": "combo.reached",
@@ -2012,7 +2012,7 @@
       "professionId": "engineering.maintenance",
       "tier": 4,
       "title": "应急工单",
-      "summary": "正确击中18次",
+      "summary": "你愿意正确击中18次吗？",
       "issuer": "旧港职业中心",
       "objective": {
         "kind": "mole.hit",
@@ -2047,7 +2047,7 @@
       "professionId": "engineering.maintenance",
       "tier": 5,
       "title": "远征工单",
-      "summary": "达到连续8次正确击中",
+      "summary": "你愿意达到连续8次正确击中吗？",
       "issuer": "旧港职业中心",
       "objective": {
         "kind": "combo.reached",
@@ -2088,7 +2088,7 @@
       "professionId": "engineering.maintenance",
       "tier": 6,
       "title": "余波工单",
-      "summary": "正确击中22次",
+      "summary": "你愿意正确击中22次吗？",
       "issuer": "旧港职业中心",
       "objective": {
         "kind": "mole.hit",
@@ -2125,7 +2125,7 @@
       "professionId": "engineering.warehouse",
       "tier": 1,
       "title": "整理第一批",
-      "summary": "有效消除2行",
+      "summary": "你愿意有效消除2行吗？",
       "issuer": "旧港职业中心",
       "objective": {
         "kind": "lines.cleared",
@@ -2153,7 +2153,7 @@
       "professionId": "engineering.warehouse",
       "tier": 2,
       "title": "压缩运输",
-      "summary": "有效消除4行",
+      "summary": "你愿意有效消除4行吗？",
       "issuer": "旧港职业中心",
       "objective": {
         "kind": "lines.cleared",
@@ -2187,7 +2187,7 @@
       "professionId": "engineering.warehouse",
       "tier": 3,
       "title": "仓库档案",
-      "summary": "有效消除6行",
+      "summary": "你愿意有效消除6行吗？",
       "issuer": "旧港职业中心",
       "objective": {
         "kind": "lines.cleared",
@@ -2221,7 +2221,7 @@
       "professionId": "engineering.warehouse",
       "tier": 4,
       "title": "应急工单",
-      "summary": "有效消除8行",
+      "summary": "你愿意有效消除8行吗？",
       "issuer": "旧港职业中心",
       "objective": {
         "kind": "lines.cleared",
@@ -2256,7 +2256,7 @@
       "professionId": "engineering.warehouse",
       "tier": 5,
       "title": "远征工单",
-      "summary": "有效消除12行",
+      "summary": "你愿意有效消除12行吗？",
       "issuer": "旧港职业中心",
       "objective": {
         "kind": "lines.cleared",
@@ -2293,7 +2293,7 @@
       "professionId": "engineering.warehouse",
       "tier": 6,
       "title": "余波工单",
-      "summary": "有效消除16行",
+      "summary": "你愿意有效消除16行吗？",
       "issuer": "旧港职业中心",
       "objective": {
         "kind": "lines.cleared",
@@ -2330,7 +2330,7 @@
       "professionId": "adventure.pilot",
       "tier": 1,
       "title": "首次巡航",
-      "summary": "击败第一阶段Boss",
+      "summary": "你愿意击败第一阶段Boss吗？",
       "issuer": "旧港职业中心",
       "objective": {
         "kind": "boss.defeated",
@@ -2368,7 +2368,7 @@
       "professionId": "adventure.pilot",
       "tier": 2,
       "title": "陨石航道",
-      "summary": "清理一波陨石威胁",
+      "summary": "你愿意清理一波陨石威胁吗？",
       "issuer": "旧港职业中心",
       "objective": {
         "kind": "wave.completed",
@@ -2409,7 +2409,7 @@
       "professionId": "adventure.pilot",
       "tier": 3,
       "title": "电磁侦查",
-      "summary": "击败指定电磁区域Boss",
+      "summary": "你愿意击败指定电磁区域Boss吗？",
       "issuer": "旧港职业中心",
       "objective": {
         "kind": "boss.defeated",
@@ -2449,7 +2449,7 @@
       "professionId": "adventure.pilot",
       "tier": 4,
       "title": "应急工单",
-      "summary": "完成舰队封锁任务",
+      "summary": "你愿意完成舰队封锁任务吗？",
       "issuer": "旧港职业中心",
       "objective": {
         "kind": "wave.completed",
@@ -2487,7 +2487,7 @@
       "professionId": "adventure.pilot",
       "tier": 5,
       "title": "远征工单",
-      "summary": "击败星云迷雾区域Boss",
+      "summary": "你愿意击败星云迷雾区域Boss吗？",
       "issuer": "旧港职业中心",
       "objective": {
         "kind": "boss.defeated",
@@ -2530,7 +2530,7 @@
       "professionId": "adventure.pilot",
       "tier": 6,
       "title": "余波工单",
-      "summary": "击败母舰防线Boss",
+      "summary": "你愿意击败母舰防线Boss吗？",
       "issuer": "旧港职业中心",
       "objective": {
         "kind": "boss.defeated",
@@ -2573,7 +2573,7 @@
       "professionId": "engineering.driver",
       "tier": 1,
       "title": "第一单快递",
-      "summary": "安全行驶至少500米",
+      "summary": "你愿意安全行驶至少500米吗？",
       "issuer": "旧港职业中心",
       "objective": {
         "kind": "distance.reached",
@@ -2605,7 +2605,7 @@
       "professionId": "engineering.driver",
       "tier": 2,
       "title": "仪器急件",
-      "summary": "安全行驶至少1000米",
+      "summary": "你愿意安全行驶至少1000米吗？",
       "issuer": "旧港职业中心",
       "objective": {
         "kind": "distance.reached",
@@ -2643,7 +2643,7 @@
       "professionId": "engineering.driver",
       "tier": 3,
       "title": "遗迹驿站",
-      "summary": "安全行驶至少1500米",
+      "summary": "你愿意安全行驶至少1500米吗？",
       "issuer": "旧港职业中心",
       "objective": {
         "kind": "distance.reached",
@@ -2681,7 +2681,7 @@
       "professionId": "engineering.driver",
       "tier": 4,
       "title": "应急工单",
-      "summary": "安全行驶至少2200米",
+      "summary": "你愿意安全行驶至少2200米吗？",
       "issuer": "旧港职业中心",
       "objective": {
         "kind": "distance.reached",
@@ -2720,7 +2720,7 @@
       "professionId": "engineering.driver",
       "tier": 5,
       "title": "远征工单",
-      "summary": "安全行驶至少3000米",
+      "summary": "你愿意安全行驶至少3000米吗？",
       "issuer": "旧港职业中心",
       "objective": {
         "kind": "distance.reached",
@@ -2761,7 +2761,7 @@
       "professionId": "engineering.driver",
       "tier": 6,
       "title": "余波工单",
-      "summary": "抵达既有5000米终点",
+      "summary": "你愿意抵达既有5000米终点吗？",
       "issuer": "旧港职业中心",
       "objective": {
         "kind": "distance.reached",
@@ -2802,7 +2802,7 @@
       "professionId": "adventure.relicseeker",
       "tier": 1,
       "title": "月下脚印",
-      "summary": "到达指定探索高度",
+      "summary": "你愿意到达指定探索高度吗？",
       "issuer": "旧港职业中心",
       "objective": {
         "kind": "height.reached",
@@ -2834,7 +2834,7 @@
       "professionId": "adventure.relicseeker",
       "tier": 2,
       "title": "失落卷轴",
-      "summary": "取得一枚可选卷轴",
+      "summary": "你愿意取得一枚可选卷轴吗？",
       "issuer": "旧港职业中心",
       "objective": {
         "kind": "scroll.collected",
@@ -2868,7 +2868,7 @@
       "professionId": "adventure.relicseeker",
       "tier": 3,
       "title": "跃迁台阶",
-      "summary": "到达更高探索位置",
+      "summary": "你愿意到达更高探索位置吗？",
       "issuer": "旧港职业中心",
       "objective": {
         "kind": "height.reached",
@@ -2904,7 +2904,7 @@
       "professionId": "adventure.relicseeker",
       "tier": 4,
       "title": "应急工单",
-      "summary": "取得第二枚档案卷轴",
+      "summary": "你愿意取得第二枚档案卷轴吗？",
       "issuer": "旧港职业中心",
       "objective": {
         "kind": "scroll.collected",
@@ -2941,7 +2941,7 @@
       "professionId": "adventure.relicseeker",
       "tier": 5,
       "title": "远征工单",
-      "summary": "到达指定遗迹上层",
+      "summary": "你愿意到达指定遗迹上层吗？",
       "issuer": "旧港职业中心",
       "objective": {
         "kind": "height.reached",
@@ -2982,7 +2982,7 @@
       "professionId": "adventure.relicseeker",
       "tier": 6,
       "title": "余波工单",
-      "summary": "完成最终遗迹勘查",
+      "summary": "你愿意完成最终遗迹勘查吗？",
       "issuer": "旧港职业中心",
       "objective": {
         "kind": "height.reached",
@@ -3023,7 +3023,7 @@
       "professionId": "engineering.structural",
       "tier": 1,
       "title": "港口实习",
-      "summary": "完成稳定的4层塔",
+      "summary": "你愿意完成稳定的4层塔吗？",
       "issuer": "旧港职业中心",
       "objective": {
         "kind": "tower.floor_stable",
@@ -3055,7 +3055,7 @@
       "professionId": "engineering.structural",
       "tier": 2,
       "title": "码头脚手架",
-      "summary": "完成稳定的6层塔",
+      "summary": "你愿意完成稳定的6层塔吗？",
       "issuer": "旧港职业中心",
       "objective": {
         "kind": "tower.floor_stable",
@@ -3093,7 +3093,7 @@
       "professionId": "engineering.structural",
       "tier": 3,
       "title": "观测塔基础",
-      "summary": "完成稳定的8层塔",
+      "summary": "你愿意完成稳定的8层塔吗？",
       "issuer": "旧港职业中心",
       "objective": {
         "kind": "tower.floor_stable",
@@ -3125,7 +3125,7 @@
       "professionId": "engineering.structural",
       "tier": 4,
       "title": "应急工单",
-      "summary": "完成稳定的10层塔",
+      "summary": "你愿意完成稳定的10层塔吗？",
       "issuer": "旧港职业中心",
       "objective": {
         "kind": "tower.floor_stable",
@@ -3162,7 +3162,7 @@
       "professionId": "engineering.structural",
       "tier": 5,
       "title": "远征工单",
-      "summary": "完成稳定的12层塔",
+      "summary": "你愿意完成稳定的12层塔吗？",
       "issuer": "旧港职业中心",
       "objective": {
         "kind": "tower.floor_stable",
@@ -3197,7 +3197,7 @@
       "professionId": "engineering.structural",
       "tier": 6,
       "title": "余波工单",
-      "summary": "完成稳定的15层塔",
+      "summary": "你愿意完成稳定的15层塔吗？",
       "issuer": "旧港职业中心",
       "objective": {
         "kind": "tower.floor_stable",
@@ -3234,7 +3234,7 @@
       "professionId": "nature.miner",
       "tier": 1,
       "title": "入井勘探",
-      "summary": "成功吊回两件矿物",
+      "summary": "你愿意成功吊回两件矿物吗？",
       "issuer": "旧港职业中心",
       "objective": {
         "kind": "mineral.returned",
@@ -3262,7 +3262,7 @@
       "professionId": "nature.miner",
       "tier": 2,
       "title": "金属订单",
-      "summary": "成功吊回三件矿物",
+      "summary": "你愿意成功吊回三件矿物吗？",
       "issuer": "旧港职业中心",
       "objective": {
         "kind": "mineral.returned",
@@ -3296,7 +3296,7 @@
       "professionId": "nature.miner",
       "tier": 3,
       "title": "未知晶脉",
-      "summary": "成功吊回四件矿物",
+      "summary": "你愿意成功吊回四件矿物吗？",
       "issuer": "旧港职业中心",
       "objective": {
         "kind": "mineral.returned",
@@ -3330,7 +3330,7 @@
       "professionId": "nature.miner",
       "tier": 4,
       "title": "应急工单",
-      "summary": "成功吊回五件矿物",
+      "summary": "你愿意成功吊回五件矿物吗？",
       "issuer": "旧港职业中心",
       "objective": {
         "kind": "mineral.returned",
@@ -3367,7 +3367,7 @@
       "professionId": "nature.miner",
       "tier": 5,
       "title": "远征工单",
-      "summary": "成功吊回六件矿物",
+      "summary": "你愿意成功吊回六件矿物吗？",
       "issuer": "旧港职业中心",
       "objective": {
         "kind": "mineral.returned",
@@ -3404,7 +3404,7 @@
       "professionId": "nature.miner",
       "tier": 6,
       "title": "余波工单",
-      "summary": "成功吊回八件矿物",
+      "summary": "你愿意成功吊回八件矿物吗？",
       "issuer": "旧港职业中心",
       "objective": {
         "kind": "mineral.returned",
