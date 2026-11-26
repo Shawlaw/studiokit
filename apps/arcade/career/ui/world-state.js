@@ -43,7 +43,7 @@
   const PANEL_LABEL = '旧港来信';
   const WHERE_TEXT = '旧码头门房边的信箱，信纸边角还带着海风的潮气。';
   const DEGRADED_TEXT = '港务处还在整理旧信。';
-  const GATE_TEXT = '信还没送到旧港。先在信箱里把线索信按地址投递。';
+  const GATE_TEXT = '信还没送到旧港。你想先在信箱里把线索信按地址投递吗？';
   const READONLY_TEXT = '没有登记过的生涯，这里只能看，不能签。';
   const CHAPTERS_HEADING = '港里的六封信';
   const CHAPTERS_HEADING_OTHER = '港里的信';
@@ -57,12 +57,12 @@
   const NEXT_HEADING = '下一步';
   const PROGRESS_LABEL = '后续线索：';
   const NEXT_FALLBACK = {
-    C0: '去街角的告示板，挑一张今天能做成的水上零工。',
-    C1: '再带回一份与航报不同来源的现场记录，让研究院把那截信号比对完。',
-    C2: '去月影一侧的旧观测站查值班表，看看当年那位调度员遭遇了什么。',
-    C3: '城市要撑不住了，先去旧机库问问还能顶用的料，让街灯亮起来。',
-    C4: '星塔的选择摆在你面前：让它停、改写它认得的信号，或赶在窗口关上前把人接回来。',
-    C5: '事情了结，告示板又挂满了工单。想接什么活，随你。',
+    C0: '你想去街角的告示板，挑一张今天能做成的水上零工吗？',
+    C1: '你愿意再带回一份与航报不同来源的现场记录，让研究院把那截信号比对完吗？',
+    C2: '你想去月影一侧的旧观测站查值班表，看看当年那位调度员遭遇了什么吗？',
+    C3: '城市要撑不住了，你想先去旧机库问问还能顶用的料，让街灯亮起来吗？',
+    C4: '你想让星塔停下、改写它认得的信号，还是赶在窗口关上前把人接回来？',
+    C5: '事情了结，告示板又挂满了工单。你想接什么活？',
   };
   const ENDINGS_HEADING = '星塔的回响';
   const EPILOGUE_HEADING = '后日谈';
@@ -73,7 +73,7 @@
   const UNSKIP_LABEL = '看看回信';
   const BACK_LABEL = '回到游戏';
   const CLOSE_LABEL = '收起旧港来信';
-  const STATUS_FAILED = '星塔那边没应声，过一会儿再试。';
+  const STATUS_FAILED = '星塔那边没应声，你想过一会儿再试吗？';
   const STATUS_READONLY = '这里只能看，不能签字。';
   const STATUS_NO_URL = '已经登记，但从这里找不到去星塔的路。';
   const STATUS_NAVIGATING = '已经登记，正在去星塔。';

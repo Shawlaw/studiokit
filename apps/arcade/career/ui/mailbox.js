@@ -35,7 +35,7 @@
   const FOLLOW_FALLBACK = '按地址投递';
   const FOLLOW_AGAIN = '再看告示';
   const BACK_LABEL = '回到游戏';
-  const SEND_FAILED_TEXT = '这次没能送出去，过一会儿再试。';
+  const SEND_FAILED_TEXT = '这次没能送出去，你想再试一次吗？';
   const FOLLOWED_FLAG = '已投递';
   const DELIVERED_NOTE = '这封信已经按地址投递过，告示还留在信箱里。';
   const FALLBACK_TITLE = '来源不明的信';
@@ -45,7 +45,7 @@
   const TOWN_ARIA = '按地址投递，去港口告示板';
   const CAMPAIGN_LABEL = '旧港来信 · 章节';
   const CAMPAIGN_ARIA = '打开旧港来信章节面板';
-  const TOWN_FAILED_TEXT = '港口那边没应声，过一会儿再试。';
+  const TOWN_FAILED_TEXT = '港口那边没应声，你想过一会儿再试吗？';
   const FIRST_READ_LABEL = '送去折光港';
   const SEND_TO_PORT_DATA_ACTION = 'send-to-port';
   const STAGE_RANK = { DORMANT: 0, GLIMPSED: 1, CURIOUS: 2, LOCAL: 3, RESIDENT: 4, EXPLORER: 5 };
@@ -585,7 +585,7 @@
         noticeActions.insertBefore(townBtn, noticeActions.firstChild);
       }
       safelyFocus(backBtn);
-      announce('信已经按地址送出，折光港的告示留在信箱里。');
+      announce('你已把信按地址送出，折光港的告示留在信箱里。');
     }
 
     function settleFollow(result, clueId, openTownAfter, activePanel) {

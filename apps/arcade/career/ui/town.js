@@ -42,13 +42,13 @@
   const BOARD_UNAVAILABLE = '告示板暂不可用';
   const LIST_EMPTY = '木牌上还空着，港务处没挂出新单子。';
   const LOCKED_LABEL = '暂未开放';
-  const START_LABEL = '接单';
+  const START_LABEL = '接下这单';
   const CONTINUE_LABEL = '继续这张单';
-  const STARTING_LABEL = '照单登记…';
-  const START_OK = '单子已经接下，港里给你留了位置。';
-  const CONTINUE_OK = '接着上回那张单子继续。';
-  const START_NO_URL = '单子已经接下，但从这里找不到去机位的路。';
-  const START_FAILED = '这次没接上，告示板那边说还没排到。';
+  const STARTING_LABEL = '正在替你登记…';
+  const START_OK = '你接下了这张单子，港里给你留了位置。';
+  const CONTINUE_OK = '你接着上回那张单子继续。';
+  const START_NO_URL = '你接下了单子，但这里找不到去机位的路，要再试一次吗？';
+  const START_FAILED = '这次没接上，你想过一会儿再试吗？';
   const HANGAR_LABEL = '去机库';
   const RECEIPT_LABEL = '钱包与收据';
   const SETTINGS_LABEL = '线索提示';
@@ -56,14 +56,14 @@
   const WORKSHOP_LABEL = '制造台';
   const ALT_TITLE = '港务处代办';
   const ALT_EMPTY = '港务处今天没有跑腿的活。';
-  const ALT_BUY_LABEL = '接这单';
-  const FREE_LIST_TITLE = '自由接单';
-  const RECOMMEND_TITLE = '眼下这条路';
-  const RECOMMEND_KIND_TEXT = { milestone: '推进本章', step: '路线进展' };
-  const RECOMMEND_GOAL_TITLE = '这一单要做';
-  const RENTAL_LEAD = '阿砾那边可以先借机，别把它撞坏就行。';
-  const CAMPAIGN_SUBTITLE = '眼下走哪条路';
-  const INTRO_GOAL = '旧港告示板上有当天能接的活。';
+  const ALT_BUY_LABEL = '请他们代办';
+  const FREE_LIST_TITLE = '想自由接单？';
+  const RECOMMEND_TITLE = '你想先走这条路吗？';
+  const RECOMMEND_KIND_TEXT = { milestone: '能推进这一段', step: '能积攒下一步所需' };
+  const RECOMMEND_GOAL_TITLE = '你愿意完成';
+  const RENTAL_LEAD = '阿砾问：要不要先借一架标准舰？这次不用花信用点。';
+  const CAMPAIGN_SUBTITLE = '你想继续哪一段？';
+  const INTRO_GOAL = '告示板上钉着今天的活，你想先接哪一张？';
   const CLOSE_LABEL = '收起告示板';
   const HANGAR_FAILED = '机库那边灯还亮着，门暂时没开。';
   const RECEIPT_FAILED = '账房今天没开窗，收据先拿不到。';
@@ -119,28 +119,29 @@
 
   /* 接单失败 reason → 可归因戏内文本（未知原因使用通用兜底，不暴露系统词）。 */
   const START_FAIL_TEXT = {
-    'not-unlocked': '这张单子还没轮到你接。',
-    locked: '这张单子还没轮到你接。',
-    'already-active': '手上还有一张没跑完的单子。',
-    'run-conflict': '手上还有一张没跑完的单子。',
-    'run-active': '手上还有一张没跑完的单子。',
-    'no-career': '港务处还没记上你的名字，先去信箱看看地址。',
-    'career-missing': '港务处还没记上你的名字，先去信箱看看地址。',
-    'career-unavailable': '港务处还没记上你的名字，先去信箱看看地址。',
-    'db-unavailable': '港务处的册子翻不开，过一会儿再试。',
-    'storage-unavailable': '港务处的册子翻不开，过一会儿再试。',
-    'wallet-missing': '港务处还没给你立账户，先去信箱看看地址。',
-    'run-create-failed': '单子没能登记上，过一会儿再试。',
-    'ticket-failed': '单子没能登记上，过一会儿再试。',
-    'bad-commission-id': '这张单子的字看不清了，先看看别的。',
-    'missing-commission': '这张单子的字看不清了，先看看别的。',
-    'invalid-commission': '这张单子的字看不清了，先看看别的。',
-    'unknown-commission': '这张单子的字看不清了，先看看别的。',
-    'content-unavailable': '告示板那边今天没把单子备好，先看看别的。',
-    'content-invalid': '告示板那边今天没把单子备好，先看看别的。',
-    'unsupported-content': '告示板那边今天没把单子备好，先看看别的。',
-    'core-unavailable': '告示板那边今天没把单子备好，先看看别的。',
-    exception: '告示板那边卡了一下，过一会儿再试。',
+    'not-unlocked': '你想接的这张单子还没开放，要不要看看别的？',
+    locked: '你想接的这张单子还没开放，要不要看看别的？',
+    'already-active': '你手上还有一张没跑完的单子，要先继续它吗？',
+    'run-conflict': '你手上还有一张没跑完的单子，要先继续它吗？',
+    'run-active': '你手上还有一张没跑完的单子，要先继续它吗？',
+    'no-career': '港务处还没记上你的名字，你想先去信箱看看地址吗？',
+    'career-missing': '港务处还没记上你的名字，你想先去信箱看看地址吗？',
+    'career-unavailable': '港务处还没记上你的名字，你想先去信箱看看地址吗？',
+    'db-unavailable': '港务处的册子翻不开，你想过一会儿再试吗？',
+    'storage-unavailable': '港务处的册子翻不开，你想过一会儿再试吗？',
+    'wallet-missing': '港务处还没给你立账户，你想先去信箱看看地址吗？',
+    'run-create-failed': '单子没能登记上，你想过一会儿再试吗？',
+    'ticket-failed': '单子没能登记上，你想过一会儿再试吗？',
+    'bad-commission-id': '这张单子的字看不清了，你想先看看别的吗？',
+    'missing-commission': '这张单子的字看不清了，你想先看看别的吗？',
+    'invalid-commission': '这张单子的字看不清了，你想先看看别的吗？',
+    'unknown-commission': '这张单子的字看不清了，你想先看看别的吗？',
+    'content-unavailable': '告示板今天没把单子备好，你想先看看别的吗？',
+    'content-invalid': '告示板今天没把单子备好，你想先看看别的吗？',
+    'unsupported-content': '告示板今天没把单子备好，你想先看看别的吗？',
+    'core-unavailable': '告示板今天没把单子备好，你想先看看别的吗？',
+    exception: '告示板那边卡了一下，你想过一会儿再试吗？',
+    'career-archived': '生涯已封存。你想先在生涯设置里解冻吗？',
   };
 
   const STYLE_TEXT = [

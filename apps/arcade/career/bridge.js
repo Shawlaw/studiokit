@@ -201,6 +201,9 @@
     commissionConfigured: false,
     commissionLastCareerId: null,
     endingEvents: [],
+    careerArchived: false,
+    careerArchiveCareerId: null,
+    careerArchivedAt: null,
   };
 
   /* ---------------------------------------------------------------- 基础工具 */
@@ -1117,6 +1120,7 @@
 
   /** 根据 URL ticket + DB run 激活职业 mode；失败静默回到经典。 */
   function activateCommissionRun() {
+    if (internal.careerArchived) return Promise.resolve();
     if (internal.commissionActivated) return Promise.resolve();
     internal.commissionActivated = true;
     var ticketId = readTicketParam();
@@ -2076,7 +2080,61 @@
     return loadDiscoveryStateFromDb().then(function () { return true; }).catch(function () { return false; });
   }
 
+  function archiveSnapshotOf(raw) {
+    var value = unwrapRecord(raw);
+    if (!isObject(value)) return { archived: false, careerId: null, archivedAt: null };
+    var marker = isObject(value.value) ? value.value : value;
+    return {
+      archived: marker.archived === true,
+      careerId: typeof marker.careerId === 'string' ? marker.careerId : null,
+      archivedAt: typeof marker.archivedAt === 'string' ? marker.archivedAt : null,
+    };
+  }
+
+  function applyArchiveSnapshot(snapshot) {
+    var normalized = archiveSnapshotOf(snapshot);
+    internal.careerArchived = normalized.archived;
+    internal.careerArchiveCareerId = normalized.careerId;
+    internal.careerArchivedAt = normalized.archivedAt;
+    api.careerArchived = normalized.archived;
+    return normalized;
+  }
+
+  function readCareerArchive() {
+    var dbModule = readGlobal('db');
+    if (!dbModule) return Promise.resolve(applyArchiveSnapshot(null));
+    if (typeof dbModule.getArchiveState === 'function') {
+      return Promise.resolve(dbModule.getArchiveState()).then(applyArchiveSnapshot).catch(function () {
+        return { archived: internal.careerArchived, careerId: internal.careerArchiveCareerId, archivedAt: internal.careerArchivedAt };
+      });
+    }
+    var getter = pickMethod(dbModule, ['getState']);
+    if (getter) {
+      return callMaybeAsync(getter, dbModule, ['career-archive']).then(applyArchiveSnapshot).catch(function () {
+        return { archived: internal.careerArchived, careerId: internal.careerArchiveCareerId, archivedAt: internal.careerArchivedAt };
+      });
+    }
+    return Promise.resolve(applyArchiveSnapshot(null));
+  }
+
+  function requireCareerWritable() {
+    if (!internal.careerArchived) return Promise.resolve({ ok: true });
+    return Promise.resolve({
+      ok: false,
+      reason: 'career-archived',
+      error: 'career-archived',
+      message: '生涯已封存。要留下新线索或继续委托，请先在生涯设置里解冻。',
+    });
+  }
+
   function writeDbState(state, discoveryRecords, action) {
+    return requireCareerWritable().then(function (gate) {
+      if (!gate.ok) return gate;
+      return writeDbStateUnlocked(state, discoveryRecords, action);
+    });
+  }
+
+  function writeDbStateUnlocked(state, discoveryRecords, action) {
     var actionWithGeneration = action && isObject(action) ? Object.assign({}, action) : null;
     if (actionWithGeneration) actionWithGeneration.generation = internal.discoveryGeneration || 0;
     /* 多标签/多游戏页并发：优先走 DB 同事务读-合并-写，避免两页都先读旧状态再依次覆盖。
@@ -2200,6 +2258,12 @@
   }
 
   function loadDiscoveryStateFromDb() {
+    return readCareerArchive().then(function () {
+      return loadDiscoveryStateFromDbUnlocked();
+    });
+  }
+
+  function loadDiscoveryStateFromDbUnlocked() {
     var discovery = readGlobal('discovery');
     if (internal.hashTest && !internal.testMode) {
       /* 仅 #test：不读也不写生涯 DB。 */
@@ -2461,6 +2525,7 @@
     try {
       /* 仅 #test 探针：完全静默（不缓冲、不写库、不发奖励）。 */
       if (isSilentTestOnly()) return false;
+      if (internal.careerArchived) return false;
       if (typeof kind !== 'string' || !kind || kind.length > 80) return false;
       /* 0.16 职业委托：只进本 run 的委托缓冲，不进发现判定、不渲染微线索。 */
       if (internal.commissionRun) return observeCommission(kind, payload);
@@ -2675,6 +2740,10 @@
   }
 
   function doFinish(input) {
+    if (internal.careerArchived) {
+      internal.lastFinish = { input: summarizeInput(input), result: null, reason: 'career-archived', at: nowIso(), runId: null };
+      return Promise.resolve(null);
+    }
     /* 仅既有 #test 探针（无 ?careerTest=1）：整体静默，绝不污染 smoke 的存储与 DOM。 */
     if (isSilentTestOnly()) {
       internal.lastFinish = { input: summarizeInput(input), result: null, reason: 'test-silent', at: nowIso(), runId: null };
@@ -2898,6 +2967,9 @@
         var wanted = enabled !== false;
         /* 未 ready 时排队（等待 ready，而不是丢弃）。 */
         return waitReady(READY_TIMEOUT_MS).then(function () {
+          return readCareerArchive();
+        }).then(function (archive) {
+          if (archive.archived) return { ok: false, error: 'career-archived', hintsEnabled: currentStateSnapshot().hintsEnabled !== false };
           var discovery = readGlobal('discovery');
           var current = currentStateSnapshot();
           var next = current;
@@ -2922,6 +2994,11 @@
                   backup: backupFacade(),
                   reducedMotion: reducedMotionPreferred(),
                   api: api,
+                  careerArchived: internal.careerArchived,
+                  getCareerArchive: readCareerArchive,
+                  freezeCareer: freezeCareer,
+                  unfreezeCareer: unfreezeCareer,
+                  resetAllCareer: uiResetAllCareer,
                 });
               } catch (err) {
                 warnOnce('settings-apply', err);
@@ -2976,6 +3053,7 @@
 
   /** 记录已读（CLUE_OPENED）——供信箱内部调用；不再打开 UI，避免递归。 */
   function markClueOpened(clueId) {
+    if (internal.careerArchived) return Promise.resolve({ ok: false, reason: 'career-archived' });
     var id = typeof clueId === 'string' ? clueId : isObject(clueId) && typeof clueId.clueId === 'string' ? clueId.clueId : '';
     if (!id) return Promise.resolve({ ok: false, reason: 'invalid-clue-id' });
     var state = currentStateSnapshot();
@@ -3017,6 +3095,7 @@
     return safeAsync(
       'follow-letter',
       function () {
+        if (internal.careerArchived) return { ok: false, reason: 'career-archived', error: '生涯已封存，暂时不能投递新信。' };
         var discovery = readGlobal('discovery');
         var state = currentStateSnapshot();
         var next = state;
@@ -3151,6 +3230,70 @@
     );
   }
 
+  function freezeCareer() {
+    return safeAsync('freeze-career', function () {
+      var db = api.db || readGlobal('db');
+      if (!db || typeof db.setCareerArchived !== 'function') return { ok: false, reason: 'archive-api-missing' };
+      return Promise.resolve(db.setCareerArchived(true, { careerId: internal.commissionLastCareerId || null })).then(function (result) {
+        if (!result || result.ok !== true) return result || { ok: false, reason: 'archive-failed' };
+        applyArchiveSnapshot({ archived: true, careerId: result.careerId || internal.commissionArchiveCareerId, archivedAt: nowIso() });
+        internal.commissionRun = null;
+        api.commissionRun = null;
+        clearStoredTicket();
+        clearRentalMarker();
+        internal.events = [];
+        internal.seq = 0;
+        var surface = readUi('clueSurface');
+        if (surface && typeof surface.clear === 'function') surface.clear();
+        return { ok: true, archived: true, careerId: result.careerId || null, generation: result.generation };
+      });
+    }, { ok: false, reason: 'exception' });
+  }
+
+  function unfreezeCareer() {
+    return safeAsync('unfreeze-career', function () {
+      var db = api.db || readGlobal('db');
+      if (!db || typeof db.setCareerArchived !== 'function') return { ok: false, reason: 'archive-api-missing' };
+      return Promise.resolve(db.setCareerArchived(false, { careerId: internal.commissionLastCareerId || null })).then(function (result) {
+        if (!result || result.ok !== true) return result || { ok: false, reason: 'archive-failed' };
+        applyArchiveSnapshot({ archived: false, careerId: result.careerId || null, archivedAt: null });
+        return loadDiscoveryStateFromDb().then(function () {
+          return { ok: true, archived: false, careerId: result.careerId || null, generation: result.generation };
+        });
+      });
+    }, { ok: false, reason: 'exception' });
+  }
+
+  function uiResetAllCareer() {
+    return safeAsync('reset-all-career', function () {
+      var db = api.db || readGlobal('db');
+      if (!db || typeof db.resetAllCareer !== 'function') return { ok: false, reason: 'reset-api-missing' };
+      return Promise.resolve(db.resetAllCareer()).then(function (result) {
+        if (!result || result.ok !== true) return result || { ok: false, reason: 'reset-failed' };
+        internal.events = [];
+        internal.commissionEvents = [];
+        internal.endingEvents = [];
+        internal.seq = 0;
+        internal.commissionSeq = 0;
+        internal.commissionRun = null;
+        api.commissionRun = null;
+        internal.commissionLastCareerId = null;
+        internal.finished = false;
+        internal.finishedResult = null;
+        internal.rendered = {};
+        clearStoredTicket();
+        clearRentalMarker();
+        applyArchiveSnapshot({ archived: false, careerId: null, archivedAt: null });
+        if (Number.isFinite(Number(result.generation))) internal.discoveryGeneration = Math.floor(Number(result.generation));
+        var discovery = readGlobal('discovery');
+        internal.discoveryState = discovery && typeof discovery.initialState === 'function' ? discovery.initialState() : fallbackInitialState();
+        var surface = readUi('clueSurface');
+        if (surface && typeof surface.clear === 'function') surface.clear();
+        return { ok: true, generation: result.generation };
+      });
+    }, { ok: false, reason: 'exception' });
+  }
+
   /** bridge 传给 UI 模块的统一上下文（mailbox/settings 只读消费，缺字段按空处理）。 */
   function uiContext(extra) {
     var context = {
@@ -3164,6 +3307,13 @@
       followLetter: followLetter,
       setHintsEnabled: setHintsEnabledDetailed,
       resetDiscovery: uiResetDiscovery,
+      careerArchived: internal.careerArchived,
+      careerArchiveCareerId: internal.careerArchiveCareerId,
+      careerArchivedAt: internal.careerArchivedAt,
+      getCareerArchive: readCareerArchive,
+      freezeCareer: freezeCareer,
+      unfreezeCareer: unfreezeCareer,
+      resetAllCareer: uiResetAllCareer,
       announce: announceToUser,
       backup: backupFacade(),
       reducedMotion: reducedMotionPreferred(),
@@ -3210,6 +3360,7 @@
       'open-mailbox',
       function () {
         if (isSilentTestOnly()) return uiUnavailable('test-silent');
+        if (internal.careerArchived) return uiUnavailable('career-archived');
         warmLazyModules();
         var mailbox = readUi('mailbox');
         if (!mailbox) return uiUnavailable('ui-unavailable');
@@ -3256,7 +3407,16 @@
         var target = typeof settings.open === 'function' ? settings.open : typeof settings.show === 'function' ? settings.show : null;
         if (!target) return uiUnavailable('ui-unavailable');
         try {
-          var returned = target.call(settings, uiContext({ hintsEnabled: currentStateSnapshot().hintsEnabled !== false }));
+          var returned = target.call(settings, uiContext({
+            hintsEnabled: currentStateSnapshot().hintsEnabled !== false,
+            careerArchived: internal.careerArchived,
+            careerArchiveCareerId: internal.careerArchiveCareerId,
+            careerArchivedAt: internal.careerArchivedAt,
+            getCareerArchive: readCareerArchive,
+            freezeCareer: freezeCareer,
+            unfreezeCareer: unfreezeCareer,
+            resetAllCareer: uiResetAllCareer,
+          }));
           if (returned && typeof returned.then === 'function') {
             Promise.resolve(returned).catch(function (err) {
               warnOnce('open-settings', err);
@@ -3363,6 +3523,7 @@
 
   /** 打开信箱/告示板后同步 C0/C1 章节旗标（幂等；缺模块/DB 时静默）。 */
   function syncCampaignFlags(mailboxOpened) {
+    if (internal.careerArchived) return Promise.resolve(null);
     var mod = readGlobal('campaign');
     var db = api.db || readGlobal('db');
     if (!mod || typeof mod.syncFlags !== 'function' || !db || typeof db.ensureCareer !== 'function') return null;
@@ -3548,11 +3709,20 @@
   }
 
   function openTown() {
-    return openCareerUi('town');
+    return requireCareerWritable().then(function (gate) {
+      if (!gate.ok) {
+        announceToUser(gate.message);
+        return gate;
+      }
+      return openCareerUi('town');
+    });
   }
 
   function openHangar() {
-    return openCareerUi('hangar');
+    return requireCareerWritable().then(function (gate) {
+      if (!gate.ok) return gate;
+      return openCareerUi('hangar');
+    });
   }
 
   function openReceipt() {
@@ -3560,18 +3730,40 @@
   }
 
   function openMarket() {
-    return openCareerUi('market');
+    return requireCareerWritable().then(function (gate) {
+      if (!gate.ok) return gate;
+      return openCareerUi('market');
+    });
   }
 
   function openWorkshop() {
-    return openCareerUi('workshop');
+    return requireCareerWritable().then(function (gate) {
+      if (!gate.ok) return gate;
+      return openCareerUi('workshop');
+    });
   }
 
   function openCampaign() {
-    return openCareerUi('worldState');
+    return requireCareerWritable().then(function (gate) {
+      if (!gate.ok) {
+        announceToUser(gate.message);
+        return gate;
+      }
+      return openCareerUi('worldState');
+    });
   }
 
   function startEnding(approach) {
+    return requireCareerWritable().then(function (gate) {
+      if (!gate.ok) {
+        announceToUser(gate.message);
+        return gate;
+      }
+      return startEndingUnlocked(approach);
+    });
+  }
+
+  function startEndingUnlocked(approach) {
     /* 任何入口（告示板/章节面板）都必须能在未预载时懒加载终局模块。 */
     return Promise.all([ensureLazyModule('ending'), loadCareerContent()])
       .then(function () {
@@ -3785,6 +3977,9 @@
           deferredModules: clone(internal.deferredModules) || [],
           cluesEnabled: internal.cluesEnabled,
           clueCount: internal.clues.length,
+          careerArchived: internal.careerArchived,
+          careerArchiveCareerId: internal.careerArchiveCareerId,
+          careerArchivedAt: internal.careerArchivedAt,
           uiLoaded: {
             clueSurface: !!readUi('clueSurface'),
             mailbox: !!readUi('mailbox'),
@@ -4013,6 +4208,7 @@
   }
 
   function openLetterFromHub() {
+    if (internal.careerArchived) return Promise.resolve({ ok: false, reason: 'career-archived' });
     if (isSilentTestOnly() || !api.available) return Promise.resolve(null);
     return waitReady(READY_TIMEOUT_MS).then(function () {
       var state = currentStateSnapshot();
@@ -4047,6 +4243,11 @@
   function openHubCareerPanel(panel) {
     var db = api.db || readGlobal('db');
     if (!api.available || !db || typeof db.getState !== 'function' || typeof db.getProfile !== 'function') return;
+    if (panel === 'settings') {
+      internal.hubPanel = true;
+      return openSettings();
+    }
+    if (internal.careerArchived) return { ok: false, reason: 'career-archived' };
     return Promise.resolve(db.getState('career')).then(function (pointer) {
       if (!pointer || !pointer.careerId) return null;
       return db.getProfile(pointer.careerId);
@@ -4068,13 +4269,14 @@
       /* 中心页「旧港来信」回流入口：?story=1 时自动打开章节面板（仅真实 C0 后才有内容）。 */
       try {
         var search = WINDOW && WINDOW.location ? WINDOW.location.search || '' : '';
-        var panel = /(?:^|[?&])careerPanel=(town|mailbox|chapters)(?:&|$)/.exec(search);
+        var panel = /(?:^|[?&])careerPanel=(town|mailbox|chapters|settings)(?:&|$)/.exec(search);
         if (panel) {
           Promise.resolve().then(function () { return openHubCareerPanel(panel[1]); }).catch(function (err) { warnOnce('hub-career-panel', err); });
         } else if (/(?:^|[?&])careerLetter=1(?:&|$)/.test(search)) {
           Promise.resolve().then(function () { return openLetterFromHub(); }).catch(function (err) { warnOnce('hub-career-letter', err); });
         } else if (/(?:^|[?&])story=1(?:&|$)/.test(search)) {
-          Promise.resolve().then(function () { return openCampaign(); }).catch(function () {});
+          if (internal.careerArchived) announceToUser('生涯已封存。要读旧港来信，请先在生涯设置里解冻。');
+          else Promise.resolve().then(function () { return openCampaign(); }).catch(function () {});
         }
       } catch (err) {
         warnOnce('auto-story', err);
@@ -4115,6 +4317,12 @@
         return loadDiscoveryStateFromDb();
       })
       .then(function () {
+        if (internal.careerArchived) {
+          internal.commissionRun = null;
+          api.commissionRun = null;
+          clearStoredTicket();
+          clearRentalMarker();
+        }
         var registryReady = !!(internal.registryInstance && Array.isArray(internal.registryInstance.errors) && internal.registryInstance.errors.length === 0);
         var gameId = detectGameIdSafe();
         api.gameId = gameId || null;
@@ -4150,6 +4358,10 @@
     api.openMailbox = openMailbox;
     api.openClue = openClue;
     api.openSettings = openSettings;
+    api.getCareerArchive = readCareerArchive;
+    api.freezeCareer = freezeCareer;
+    api.unfreezeCareer = unfreezeCareer;
+    api.resetAllCareer = uiResetAllCareer;
     api.setHintsEnabled = setHintsEnabled;
     api.saveState = saveState;
     api.originIntro = originIntro;
@@ -4157,6 +4369,7 @@
     api.originLetter = originLetter;
     /* 0.16 职业委托（向后兼容扩展）：无 ticket 时 commissionRun=null，行为与 0.15 相同。 */
     api.commission = null;
+    api.careerArchived = false;
     /* 0.20 只读 continuation 查询：与 ctx.careerContinuations 同函数；不建 run、不自动导航。 */
     api.careerContinuations = careerContinuations;
     api.commissionRun = null;
@@ -4209,6 +4422,27 @@
   }, BOOT_GUARD_MS);
 
   try {
+    WINDOW.addEventListener(
+      'pageshow',
+      function () {
+        readCareerArchive().then(function () {
+          if (internal.careerArchived) {
+            internal.commissionRun = null;
+            api.commissionRun = null;
+            clearStoredTicket();
+            clearRentalMarker();
+          }
+        });
+      },
+      false
+    );
+    WINDOW.addEventListener(
+      'visibilitychange',
+      function () {
+        if (!DOC.hidden) readCareerArchive();
+      },
+      false
+    );
     WINDOW.addEventListener(
       'pagehide',
       function () {

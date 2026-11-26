@@ -61,7 +61,7 @@
 
   const LOADING_TEXT = '正在翻账本…';
   const NO_CAREER_TEXT = '还没有可查的账目。';
-  const NO_CAREER_HINT = '先在港口的告示板上接一单活儿吧。';
+  const NO_CAREER_HINT = '你想先在港口的告示板上接一单活儿吗？';
   const DB_UNAVAILABLE_TEXT = '账本这会儿打不开，过会儿再来看看。';
   const WALLET_FAILED_TEXT = '这个钱袋暂时打不开，过会儿再来看看。';
   const NO_WALLET_TEXT = '这个钱袋还没有开张。';
@@ -74,13 +74,13 @@
   const NO_SHIP_TEXT = '还没有自己的飞船';
   const NO_MONEY_TEXT = '没有动钱';
   const DEFAULT_FAILURE_TEXT = '这笔工钱还没结清。';
-  const CARD_TOWN_TEXT = '回告示板';
-  const CARD_CONTINUE_TEXT = '读回信';
+  const CARD_TOWN_TEXT = '回告示板看看';
+  const CARD_CONTINUE_TEXT = '读读回信';
   const CARD_TOWN_LABEL = '关闭收据并回到告示板';
   const CARD_CONTINUE_LABEL = '关闭收据并读回信';
-  const ACTION_FAILED_TEXT = '这会儿没能打开，稍后再试一次。';
-  const STORY_NEW_LINE = '这趟留下了一条新线索。';
-  const STORY_RECORDED_LINE = '这趟留下的线索已经归档。';
+  const ACTION_FAILED_TEXT = '这会儿没能打开，你想再试一次吗？';
+  const STORY_NEW_LINE = '你这一趟留下了一条新线索。';
+  const STORY_RECORDED_LINE = '你这一趟留下的线索已经归档。';
   const DUPLICATE_NOTE = '这张收据先前已经开过，工钱不会重复进账。';
 
   /* 戏内语言：这些系统/营销词不允许出现在 UI 文案里（失败 message 透传时也过滤）。 */
@@ -1037,7 +1037,7 @@
     if (!feedback) return;
     const block = make(doc, 'section', 'ac-career-receipt-story');
     applyStyle(block, { display: 'flex', flexDirection: 'column', gap: '4px' });
-    const heading = make(doc, 'h3', 'ac-career-receipt-story__title', '这趟带回来的事');
+    const heading = make(doc, 'h3', 'ac-career-receipt-story__title', '你这一趟带回了什么？');
     applyStyle(heading, { margin: '2px 0 0', fontSize: '12px', fontWeight: '600' });
     block.appendChild(heading);
     if (feedback.status === 'unavailable') {

@@ -2318,8 +2318,8 @@
       var chapter = state.chapterIndex[chapterId];
       var title = commission.title;
       var name = chapter ? chapter.title : chapterId;
-      if (isMilestone) return '先接「' + title + '」；完成后「' + name + '」就往前推进了。';
-      return '先做「' + title + '」，把这一段需要的记录带回来。';
+      if (isMilestone) return '你愿意先接「' + title + '」吗？完成后「' + name + '」就能往前推进。';
+      return '你愿意先做「' + title + '」吗？这样能把这一段需要的记录带回来。';
     }
 
     /**
