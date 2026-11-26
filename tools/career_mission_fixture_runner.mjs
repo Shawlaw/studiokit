@@ -35,6 +35,7 @@ import {
   envPort,
   startServer,
   launchChrome,
+  getLastLaunchFailure,
   stopChrome,
   openPage,
   sleep,
@@ -627,6 +628,19 @@ class MissionHarness {
         windowSize: '430,932',
       });
     } catch (err) {
+      /* 每次启动失败的退出码 / stderr 尾部 / profile 证据由 launcher 保留；此处如实打印，不掩盖。 */
+      const failure = getLastLaunchFailure();
+      if (failure && failure.failures.length) {
+        failure.failures.forEach((item) => {
+          console.error(
+            'CHROME-LAUNCH attempt ' + item.attempt + '/' + failure.attempts +
+            ' failed: ' + item.message +
+            ' | exit=' + q(item.exit) + ' pid=' + q(item.pid) +
+            ' profile=' + q(item.profile) + ' portFile=' + q(item.portFile) +
+            ' stderrTail=' + q(item.stderrTail)
+          );
+        });
+      }
       await this.stop();
       throw err;
     }

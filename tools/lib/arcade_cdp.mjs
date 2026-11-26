@@ -175,6 +175,41 @@ function isPortFree(port) {
   });
 }
 
+/** 最近一次 Chrome 启动失败的证据（供调用方打印，不写入产品文件）。 */
+let lastLaunchFailure = null;
+const STDERR_TAIL_LIMIT = 4000;
+
+export function getLastLaunchFailure() {
+  return lastLaunchFailure ? { ...lastLaunchFailure } : null;
+}
+
+function errorText(err) {
+  return err && typeof err.message === 'string' && err.message ? err.message : String(err);
+}
+
+function tailText(text, limit = STDERR_TAIL_LIMIT) {
+  const str = String(text || '');
+  return str.length > limit ? str.slice(-limit) : str;
+}
+
+function describePortFile(file) {
+  try {
+    if (!fs.existsSync(file)) return { exists: false, raw: null, port: null, wsPath: null };
+    const raw = fs.readFileSync(file, 'utf8');
+    const lines = raw.split(/\r?\n/);
+    const port = Number(lines[0]);
+    const wsPath = (lines[1] || '').trim();
+    return {
+      exists: true,
+      raw: tailText(raw, 300),
+      port: Number.isInteger(port) && port > 0 ? port : null,
+      wsPath: wsPath || null,
+    };
+  } catch (err) {
+    return { exists: true, error: errorText(err) };
+  }
+}
+
 function readDevToolsActivePort(profile, timeoutMs = 10000, signal = null) {
   const file = path.join(profile, 'DevToolsActivePort');
   const start = Date.now();
@@ -195,7 +230,11 @@ function readDevToolsActivePort(profile, timeoutMs = 10000, signal = null) {
         /* 文件可能正在写入，下一轮再读 */
       }
       if (Date.now() - start >= timeoutMs) {
-        reject(new Error('Chrome DevToolsActivePort 未就绪'));
+        const detail = describePortFile(file);
+        reject(new Error(
+          'Chrome DevToolsActivePort 未就绪（等待 ' + (Date.now() - start) + 'ms，profile=' + profile +
+          '，文件=' + JSON.stringify(detail) + '）'
+        ));
         return;
       }
       setTimeout(tick, 80).unref();
@@ -253,27 +292,12 @@ function verifyBrowserCdp(version, timeoutMs = 4000, signal = null) {
 const ownedBrowsers = new Map();
 
 /**
- * 启动本机 Chrome 并等待 DevTools 端口就绪。
- * 每次调用使用独立 mkdtemp profile；port 省略或传 0 时由 Chrome 选择动态端口，
- * 从该 profile 的 DevToolsActivePort 读取实际端口，绝不连接端口上已有的其它服务。
- * 固定端口在启动前先检测占用，并在就绪后通过 Chrome 身份 + Browser.getVersion
- * （CDP WebSocket）确认归属；冲突/替身时无副作用退出，不触碰占用者。
- * @param {{port?: number, chromePath?: string, profilePrefix?: string, windowSize?: string, headless?: boolean, extraArgs?: string[]}} options
- * @returns {Promise<{chrome: import('node:child_process').ChildProcess, profile: string, port: number, dynamicPort: boolean}>}
+ * 单次 Chrome 启动尝试：捕获 stderr/exit/profile/端口证据，不并发、不触碰其它实例。
+ * 返回 { ok, launched, evidence }；evidence 在失败时由外层记录/重试。
  */
-export async function launchChrome({
-  port = 0,
-  chromePath = DEFAULT_CHROME,
-  profilePrefix = 'studiokit-arcade-',
-  windowSize = '420,900',
-  headless = true,
-  extraArgs = [],
-} = {}) {
-  if (!Number.isInteger(port) || port < 0) throw new Error('launchChrome 需要非负整数 port');
-  const requestedPort = port;
-  if (requestedPort > 0 && !(await isPortFree(requestedPort))) {
-    throw new Error('launchChrome: CDP 端口已被占用，拒绝启动（未触碰占用进程）: ' + requestedPort);
-  }
+async function launchChromeOnce({
+  requestedPort, chromePath, profilePrefix, windowSize, headless, extraArgs,
+}) {
   const profile = fs.mkdtempSync(path.join(os.tmpdir(), profilePrefix));
   const args = [
     ...(headless ? ['--headless=new'] : []),
@@ -290,19 +314,31 @@ export async function launchChrome({
     ...extraArgs,
     'about:blank',
   ];
-  const chrome = spawn(chromePath, args, { stdio: 'ignore' });
+  /* 不再 stdio:'ignore'：stderr 是诊断 Chrome 启动失败的关键证据，仅在内存保存尾部，不落盘产品文件。 */
+  const chrome = spawn(chromePath, args, { stdio: ['ignore', 'pipe', 'pipe'], windowsHide: true });
+  let stderr = '';
+  let stdout = '';
+  let exitInfo = null;
+  chrome.stderr.on('data', (chunk) => { stderr = tailText(stderr + String(chunk)); });
+  chrome.stdout.on('data', (chunk) => { stdout = tailText(stdout + String(chunk)); });
+  chrome.once('exit', (code, signal) => { exitInfo = { code, signal }; });
+  const evidence = () => ({
+    profile,
+    portFile: describePortFile(path.join(profile, 'DevToolsActivePort')),
+    exit: exitInfo,
+    pid: Number.isInteger(chrome.pid) ? chrome.pid : null,
+    chromePath,
+    stderrTail: tailText(stderr),
+    stdoutTail: tailText(stdout, 800),
+  });
   const exited = new Promise((resolve, reject) => {
     chrome.once('exit', (code, signal) => reject(new Error('Chrome 提前退出（code=' + code + ', signal=' + signal + '）')));
   });
   const spawnFailed = new Promise((resolve, reject) => {
     chrome.once('error', (err) => reject(new Error('Chrome 启动失败（' + chromePath + '）：' + err.message)));
   });
-  exited.catch(() => {
-    /* 启动成功后不再需要；避免 unhandled rejection */
-  });
-  spawnFailed.catch(() => {
-    /* 与 ready 竞速，失败时由外层 catch 处理 */
-  });
+  exited.catch(() => { /* 成功后不再需要，避免 unhandled rejection */ });
+  spawnFailed.catch(() => { /* 与 ready 竞速，失败时由外层 catch 处理 */ });
   const abort = new AbortController();
   try {
     const actual = await Promise.race([
@@ -329,17 +365,83 @@ export async function launchChrome({
     };
     ownedBrowsers.set(actual.port, entry);
     if (requestedPort > 0 && requestedPort !== actual.port) ownedBrowsers.set(requestedPort, entry);
-    return { chrome, profile, port: actual.port, requestedPort, dynamicPort: true, cdpProduct: ready && ready.cdpProduct, browserWsPath: ready && ready.version ? ready.version.webSocketDebuggerUrl : null };
+    return {
+      ok: true,
+      evidence: evidence(),
+      launched: {
+        chrome, profile, port: actual.port, requestedPort, dynamicPort: true,
+        cdpProduct: ready && ready.cdpProduct,
+        browserWsPath: ready && ready.version ? ready.version.webSocketDebuggerUrl : null,
+      },
+    };
   } catch (err) {
     abort.abort();
     try {
       if (chrome.exitCode === null) chrome.kill();
-    } catch (killErr) {
-      /* ignore */
-    }
+    } catch (killErr) { /* ignore */ }
+    /* 保留证据副本：随后 removeProfile 会删掉 DevToolsActivePort 文件。 */
+    const failure = { message: errorText(err), ...evidence() };
     removeProfile(profile);
-    throw err;
+    return { ok: false, evidence: failure };
   }
+}
+
+/**
+ * 启动本机 Chrome 并等待 DevTools 端口就绪。
+ * 每次调用使用独立 mkdtemp profile；port 省略或传 0 时由 Chrome 选择动态端口，
+ * 从该 profile 的 DevToolsActivePort 读取实际端口，绝不连接端口上已有的其它服务。
+ * 固定端口在启动前先检测占用，并在就绪后通过 Chrome 身份 + Browser.getVersion
+ * （CDP WebSocket）确认归属；冲突/替身时无副作用退出，不触碰占用者。
+ *
+ * 启动韧性：Chrome 冷启动偶尔在 10s 内未写出 DevToolsActivePort（系统资源/磁盘抖动）。
+ * 这里对「未完成握手」做有限次数**串行**重试（每次新 profile + 新子进程，前一次先 kill/清 profile），
+ * 不并发、不接触用户浏览器；确定性失败（路径不存在、端口被占、CDP 身份不符、提前退出）立即终止。
+ * 每次失败证据记录到 getLastLaunchFailure()，重试耗尽时完整抛给用户，不掩盖真实失败。
+ *
+ * @param {{port?: number, chromePath?: string, profilePrefix?: string, windowSize?: string, headless?: boolean, extraArgs?: string[], attempts?: number}} options
+ * @returns {Promise<{chrome: import('node:child_process').ChildProcess, profile: string, port: number, dynamicPort: boolean}>}
+ */
+export async function launchChrome({
+  port = 0,
+  chromePath = DEFAULT_CHROME,
+  profilePrefix = 'studiokit-arcade-',
+  windowSize = '420,900',
+  headless = true,
+  extraArgs = [],
+  attempts = 3,
+} = {}) {
+  if (!Number.isInteger(port) || port < 0) throw new Error('launchChrome 需要非负整数 port');
+  if (!Number.isInteger(attempts) || attempts < 1 || attempts > 5) {
+    throw new Error('launchChrome.attempts 必须是 1-5 的整数');
+  }
+  const requestedPort = port;
+  if (requestedPort > 0 && !(await isPortFree(requestedPort))) {
+    throw new Error('launchChrome: CDP 端口已被占用，拒绝启动（未触碰占用进程）: ' + requestedPort);
+  }
+  const failures = [];
+  for (let attempt = 1; attempt <= attempts; attempt += 1) {
+    const result = await launchChromeOnce({
+      requestedPort, chromePath, profilePrefix, windowSize, headless, extraArgs,
+    });
+    if (result.ok) {
+      lastLaunchFailure = null;
+      return result.launched;
+    }
+    failures.push({ attempt, ...result.evidence });
+    const msg = result.evidence.message;
+    /* 确定性错误不重试：路径不存在、端口占用、身份/CDP 不符或子进程提前退出。 */
+    const fatal = /启动失败（|CDP \/json\/version|提前退出|启动后已退出/.test(msg);
+    if (fatal) break;
+    if (attempt < attempts) await sleep(300 * attempt);
+  }
+  lastLaunchFailure = { attempts: failures.length, failures };
+  const summary = failures.map((f) =>
+    '#' + f.attempt + ' ' + f.message +
+    ' [exit=' + JSON.stringify(f.exit) + ', pid=' + f.pid +
+    ', profile=' + f.profile + ', portFile=' + JSON.stringify(f.portFile) +
+    ', stderr=' + JSON.stringify(f.stderrTail.slice(-500)) + ']'
+  ).join(' | ');
+  throw new Error('Chrome 启动重试 ' + failures.length + '/' + attempts + ' 次均失败：' + summary);
 }
 
 /**
