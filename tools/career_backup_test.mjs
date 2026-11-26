@@ -797,7 +797,7 @@ async function runChromeChecks(cdp) {
 
   await check('B01 注入后 API 面完整 + 起始 deleteDatabase（测试隔离）', async () => {
     assert(injected.format === FORMAT, 'browser FORMAT=' + injected.format);
-    const required = ['FORMAT', 'SCHEMA_VERSION', 'buildExportPayload', 'parseAndValidate', 'formatFilename', 'exportCareerLife', 'importCareerLife', 'migrateSnapshot'];
+    const required = ['FORMAT', 'SCHEMA_VERSION', 'buildExportPayload', 'parseAndValidate', 'formatFilename', 'exportCareerLife', 'importCareerLife', 'migrateSnapshot', 'getArchiveStateFromPayload'];
     const missing = required.filter((name) => injected.methods.indexOf(name) === -1);
     assert(!missing.length, '缺少方法：' + missing.join(','));
     assert(injected.methods.length === required.length, 'API 面多了未知方法：' + JSON.stringify(injected.methods));
