@@ -2,7 +2,7 @@
 
 - 基线：0.21.0（2026-11-26 已双端发布，main `28a0182`，Actions `45752833025` 全绿，双端 89/89 文件一致，SW `studiokit-arcade-0.21.0-v1`）
 - 本地产品分支 `fix/arcade-career-entry-0211`。T142 恢复身份建立后的回港入口，T143 收尾首航交付与旧档回流。
-- 状态为**本地修复，未发布**。版本沿用 0.21.1，SW 缓存键沿用 `studiokit-arcade-0.21.1-v1`。线上仍为 0.21.0。
+- 状态为**已授权发布**。版本沿用 0.21.1，SW 缓存键沿用 `studiokit-arcade-0.21.1-v1`；推送前线上仍为 0.21.0，发布结果待补记。
 - 各轮验证范围与结果见[集成与验证记录](../../docs/arcade-life/INTEGRATION-0.21.1.md)。
 
 ## 1. 问题与边界
@@ -63,8 +63,9 @@
 | `career_passive_entry` | **61/61 PASS** |
 | `arcade_smoke` | **117/117 PASS**（含四档窄屏、解冻与重置） |
 | static / mobile / PWA / archive lifecycle | **35/35 / 318/318 / 18/18 / 60/60 PASS** |
-| `release` / `full` / 96 全量 / 首航 / 真机 / 真人 | **UNVERIFIED** |
-| Actions / 双端 `verify_deploy` / 线上 0.21.1 | **未执行**：无 `PUBLISH_TO_MAIN`，本地未发布 |
+| `release` / 96 全量 / 首航 | **41/41 / 3792/3792 / 404/404 PASS** |
+| `full` / 真机 / 真人 | **UNVERIFIED** |
+| Actions / 双端 `verify_deploy` / 线上 0.21.1 | **待执行**：Owner 已授权 `PUBLISH_TO_MAIN` |
 
 ## 7. 回滚
 

@@ -1,9 +1,9 @@
-# Arcade 0.21.1 集成与验证（本地修复，未发布）
+# Arcade 0.21.1 集成与验证（已授权发布）
 
 - 本地分支 `fix/arcade-career-entry-0211`。T142 入口补丁的产品代码截止 `87746d4`，以 `89fd9e6` 为 T143 复审补丁基线。
 - 基线：0.21.0（2026-11-26 已双端发布，main `28a0182`，Actions `45752833025` 全绿，双端 89/89 一致）。
 - 设计 / 回滚：`apps/arcade/DESIGN-0.21.1.md`；0.21.0 接口冻结：`docs/arcade-life/ADR-interfaces.md` §22；门禁分层：`tools/README-gates.md`。
-- **0.21.1 未发布**：线上仍为 0.21.0；本地版本链已同步 0.21.1 / SW `studiokit-arcade-0.21.1-v1`。没有 `PUBLISH_TO_MAIN`，不声称 Actions 或双端校验成功。
+- **Owner 已授权 `PUBLISH_TO_MAIN` 双端发布**。本地版本链已同步 0.21.1 / SW `studiokit-arcade-0.21.1-v1`；推送前线上仍为 0.21.0，Actions 与双端校验结果待实际执行后补记。
 
 ## 1. 交付范围
 
@@ -26,7 +26,9 @@
 | `career_pwa_offline_test.mjs` | **18/18 PASS** | 0.21.1 缓存、0.18.2 预载清单迁移、GH 子路径与 CF 无后缀 |
 | `career_archive_lifecycle_e2e_test.mjs` | **60/60 PASS** | 真实 IDB + 双 CDP 标签，封存 / 解冻 / 重置 / 旧标签阻断 |
 | 独立只读复审 | **APPROVE，无 P0** | 发现的测试桩保真 P1 已修正并补旧档 / 解冻覆盖 |
-| `release` / `full` profile、96 全量 E2E、首航、真机 / 真人 | **UNVERIFIED** | 本补丁未执行，不以 0.21.0 历史结果代替 |
+| `release` profile | **41/41 PASS** | 稳定 HEAD `5e3f2af`，`release passed (not full)`，1799.477s |
+| 96 全量 E2E | **16/16 游戏、96/96 tiers、3792/3792 checks PASS** | release profile 内一次通过，0 环境错误 |
+| `full` profile、真机 / 真人 | **UNVERIFIED** | 本补丁未执行，不以 0.21.0 历史结果代替 |
 | Actions / 双端线上 / `verify_deploy` | **未执行** | 本地未发布，无发布授权 |
 
 ## 3. T143 整体验证
@@ -43,7 +45,8 @@
 | `career_mobile_016_test.mjs` / `career_pwa_offline_test.mjs` / `career_archive_lifecycle_e2e_test.mjs` | **319/319 / 18/18 / 60/60 PASS** | 单项串行通过。移动端实际展开出航，机库入口热区 69×44 |
 | 章节面板 / DB / 备份专项 | **145/145 / 38/38 / 34/34 PASS** | 独立执行 |
 | `career_flow_e2e_test.mjs` | **404/404 PASS** | 二十一点与记忆翻牌真实进港，首单收据从界面续接，失败后签新票并成功，跨标签恢复原票和 nonce，原页打开后日谈 |
-| 真机 / 真人、Actions / 双端线上 | **未执行** | 本地未发布 |
+| 真机 / 真人 | **UNVERIFIED** | 无真实设备或真人体验证据 |
+| Actions / 双端线上 | **待执行** | Owner 已授权发布，推送后补记 |
 
 第三轮首航为 398/400。两处失败分别是折叠内容可见性判定与影跃目标比较。当时 375×548 的出航摘要在 y575–619，这项为独立的首屏位置测量。矮屏调整后，集成 `c2080d4` 的最终复跑在 375×548 实测接单按钮 y372–416、「看看出航」y437–481，两项都能在未滚动时实际点中。首两单的收据也在该视口实点「回告示板看看」，均在当前页打开告示板。
 
@@ -63,6 +66,6 @@
 
 ## 6. 未解决项与发布门槛
 
-1. T143 未执行 `release` / `full` 聚合门禁与 96 委托全量 E2E。真机与真人首航仍待验证。
-2. 未 push、未 PR、未部署；若进入发布流程需取得明确的 `OWNER_AUTHORIZATION: PUBLISH_TO_MAIN`，随后双端 Actions 与逐文件校验均须实际成功。
+1. T143 最终 `release` profile 41/41 与 96 委托全量 E2E 已通过；`full` profile 未执行，真机与真人首航仍待验证。
+2. Owner 已明确授权 `PUBLISH_TO_MAIN`；推送后须确认双端 Actions 与逐文件校验均实际成功，再补记发布证据。
 3. 封存期间内容入口按 0.21.0 既有语义隐藏；若 Owner 希望封存时仍显示常驻入口，需要另行调整产品语义。
