@@ -2966,11 +2966,33 @@
       function () {
         var wanted = enabled !== false;
         /* 未 ready 时排队（等待 ready，而不是丢弃）。 */
-        return waitReady(READY_TIMEOUT_MS).then(function () {
-          return readCareerArchive();
-        }).then(function (archive) {
-          if (archive.archived) return { ok: false, error: 'career-archived', hintsEnabled: currentStateSnapshot().hintsEnabled !== false };
-          var discovery = readGlobal('discovery');
+      return waitReady(READY_TIMEOUT_MS).then(function () {
+        return readCareerArchive();
+      }).then(function (archive) {
+        if (archive.archived) {
+          var settings = readUi('settings');
+          if (settings && typeof settings.apply === 'function') {
+            try {
+              settings.apply({
+                hintsEnabled: currentStateSnapshot().hintsEnabled !== false,
+                state: clone(currentStateSnapshot()),
+                backup: backupFacade(),
+                reducedMotion: reducedMotionPreferred(),
+                api: api,
+                archived: true,
+                archiveState: archive,
+                getCareerArchive: readCareerArchive,
+                freezeCareer: freezeCareer,
+                unfreezeCareer: unfreezeCareer,
+                resetAllCareer: uiResetAllCareer,
+              });
+            } catch (err) {
+              warnOnce('settings-apply', err);
+            }
+          }
+          return { ok: false, error: 'career-archived', hintsEnabled: currentStateSnapshot().hintsEnabled !== false };
+        }
+        var discovery = readGlobal('discovery');
           var current = currentStateSnapshot();
           var next = current;
           if (discovery && typeof discovery.reduce === 'function') {
@@ -2988,17 +3010,23 @@
             var settings = readUi('settings');
             if (settings && typeof settings.apply === 'function') {
               try {
-                settings.apply({
-                  hintsEnabled: latest.hintsEnabled !== false,
-                  state: clone(latest),
-                  backup: backupFacade(),
-                  reducedMotion: reducedMotionPreferred(),
-                  api: api,
-                  careerArchived: internal.careerArchived,
-                  getCareerArchive: readCareerArchive,
-                  freezeCareer: freezeCareer,
-                  unfreezeCareer: unfreezeCareer,
-                  resetAllCareer: uiResetAllCareer,
+                var careerArchive = readCareerArchive();
+                Promise.resolve(careerArchive).then(function (archive) {
+                  settings.apply({
+                    hintsEnabled: latest.hintsEnabled !== false,
+                    state: clone(latest),
+                    backup: backupFacade(),
+                    reducedMotion: reducedMotionPreferred(),
+                    api: api,
+                    archived: archive.archived === true,
+                    archiveState: archive,
+                    getCareerArchive: readCareerArchive,
+                    freezeCareer: freezeCareer,
+                    unfreezeCareer: unfreezeCareer,
+                    resetAllCareer: uiResetAllCareer,
+                  });
+                }).catch(function (err) {
+                  warnOnce('settings-apply', err);
                 });
               } catch (err) {
                 warnOnce('settings-apply', err);
@@ -3314,6 +3342,12 @@
       freezeCareer: freezeCareer,
       unfreezeCareer: unfreezeCareer,
       resetAllCareer: uiResetAllCareer,
+      archived: internal.careerArchived === true,
+      archiveState: {
+        archived: internal.careerArchived === true,
+        careerId: internal.careerArchiveCareerId || null,
+        archivedAt: internal.careerArchivedAt || null,
+      },
       announce: announceToUser,
       backup: backupFacade(),
       reducedMotion: reducedMotionPreferred(),
@@ -3406,27 +3440,32 @@
         if (!settings) return uiUnavailable('ui-unavailable');
         var target = typeof settings.open === 'function' ? settings.open : typeof settings.show === 'function' ? settings.show : null;
         if (!target) return uiUnavailable('ui-unavailable');
-        try {
-          var returned = target.call(settings, uiContext({
-            hintsEnabled: currentStateSnapshot().hintsEnabled !== false,
-            careerArchived: internal.careerArchived,
-            careerArchiveCareerId: internal.careerArchiveCareerId,
-            careerArchivedAt: internal.careerArchivedAt,
-            getCareerArchive: readCareerArchive,
-            freezeCareer: freezeCareer,
-            unfreezeCareer: unfreezeCareer,
-            resetAllCareer: uiResetAllCareer,
-          }));
-          if (returned && typeof returned.then === 'function') {
-            Promise.resolve(returned).catch(function (err) {
-              warnOnce('open-settings', err);
-            });
+        var settingsContext = uiContext({
+          hintsEnabled: currentStateSnapshot().hintsEnabled !== false,
+          getCareerArchive: readCareerArchive,
+          freezeCareer: freezeCareer,
+          unfreezeCareer: unfreezeCareer,
+          resetAllCareer: uiResetAllCareer,
+        });
+        return readCareerArchive().then(function (archive) {
+          settingsContext.archived = archive.archived === true;
+          settingsContext.archiveState = archive;
+          try {
+            var returned = target.call(settings, settingsContext);
+            if (returned && typeof returned.then === 'function') {
+              Promise.resolve(returned).catch(function (err) {
+                warnOnce('open-settings', err);
+              });
+            }
+            return { ok: true };
+          } catch (err) {
+            warnOnce('open-settings', err);
+            return uiUnavailable('ui-error');
           }
-        } catch (err) {
+        }).catch(function (err) {
           warnOnce('open-settings', err);
-          return uiUnavailable('ui-error');
-        }
-        return { ok: true };
+          return uiUnavailable('archive-read-failed');
+        });
       },
       uiUnavailable('ui-unavailable')
     );

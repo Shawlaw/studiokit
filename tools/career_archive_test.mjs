@@ -394,10 +394,11 @@ await check('CA-05 resetAllCareer：单事务清空 11 stores（含 archive/gene
   /* 经典键用 VM 全局 localStorage 诱饵验证：DB 代码从未读/写它。 */
   await db.setCareerArchived(false, { now: '2026-11-26T04:00:00.000Z' });
   const classic = { 'studiokit:arcade:scores:v1': 'keep', 'studiokit:arcade:career:legacy': 'keep' };
-  const sandbox = {
+  const emptyIdb = createFakeIndexedDB();
+  const resetSandbox = {
     module: { exports: {} },
     require: (name) => name === './career-core.js' ? core : (() => { throw new Error(name); })(),
-    indexedDB: fakeIdb,
+    indexedDB: emptyIdb,
     localStorage: {
       getItem: (k) => (Object.prototype.hasOwnProperty.call(classic, k) ? classic[k] : null),
       setItem: (k, v) => { classic[k] = v; },
@@ -405,12 +406,15 @@ await check('CA-05 resetAllCareer：单事务清空 11 stores（含 archive/gene
     },
     Date, JSON, Math, Number, Object, Array, String, Boolean, Promise, setTimeout, clearTimeout, queueMicrotask, Error,
   };
-  sandbox.globalThis = sandbox;
-  vm.createContext(sandbox);
-  vm.runInContext(dbSource, sandbox, { filename: 'career-db-reset.js' });
-  const db2 = sandbox.module.exports;
+  resetSandbox.globalThis = resetSandbox;
+  vm.createContext(resetSandbox);
+  vm.runInContext(dbSource, resetSandbox, { filename: 'career-db-reset.js' });
+  const db2 = resetSandbox.module.exports;
   const ensured = await db2.ensureCareer({ originGameId: 'memory-flip', now: '2026-11-26T04:00:00.000Z' });
   assert(ensured.ok, 'ensureCareer');
+  const staleRunId = core.newId('run');
+  const staleRun = await db2.createRun({ runId: staleRunId, careerId: ensured.careerId, gameId: 'memory-flip', nonce: 'stale', mode: 'commission' });
+  assert(staleRun.ok, 'stale run fixture');
   await db2.saveDiscoveryState({ stage: 'CURIOUS', clues: { x: { sourceGame: 'memory-flip' } } });
   await db2.setCareerArchived(true, { careerId: ensured.careerId, now: '2026-11-26T04:01:00.000Z' });
   const reset = await db2.resetAllCareer();
@@ -425,15 +429,37 @@ await check('CA-05 resetAllCareer：单事务清空 11 stores（含 archive/gene
   const gen = await db2.getDiscoveryGeneration();
   assert(gen.ok && gen.generation === reset.generation && gen.generation >= 1, '重置后 generation: ' + JSON.stringify(gen));
   eq(classic, { 'studiokit:arcade:scores:v1': 'keep', 'studiokit:arcade:career:legacy': 'keep' }, '经典 localStorage 被修改');
+
+  /* 完全重置后仍持有旧 careerId/runId 的标签必须被退役标记拒绝。 */
+  const staleWrites = {
+    createRun: await db2.createRun({ runId: core.newId('run'), careerId: ensured.careerId, gameId: 'memory-flip', nonce: 'late', mode: 'commission' }),
+    putQuests: await db2.putQuests(ensured.careerId, [{ nodeId: 'story:C0.port_seen', status: 'cleared' }]),
+    putProfile: await db2.putProfile({ careerId: ensured.careerId, originGameId: 'memory-flip' }),
+    purchase: await db2.purchase({ careerId: ensured.careerId, purchaseId: 'P-late', cost: 1, grants: {} }),
+    writeEquipment: await db2.writeEquipment({ careerId: ensured.careerId, patch: { 'module:x:level': 1 } }),
+  };
+  Object.keys(staleWrites).forEach((name) => {
+    const result = staleWrites[name];
+    assert(result && result.ok === false, '旧标签仍可 ' + name + ': ' + JSON.stringify(result));
+    assert(String(result.reason || result.error).indexOf('career-reset') >= 0, name + ' 未返回 career-reset: ' + JSON.stringify(result));
+  });
+  eq(await db2.getRun(staleRunId), null, '退役 run 被旧标签更新');
+  const recreated = await db2.createRun({ runId: staleRunId, careerId: ensured.careerId, gameId: 'memory-flip', nonce: 'late', mode: 'commission' });
+  assert(recreated.ok === false && String(recreated.reason || recreated.error).indexOf('career-reset') >= 0, '旧 runId 未被退役守卫拒绝: ' + JSON.stringify(recreated));
+  eq(await db2.getProfile(ensured.careerId), null, '退役 profile 被旧标签重建');
+  const afterStale = await db2.exportAll();
+  db2.STORES.forEach((name) => {
+    assert(afterStale.payload[name].length === 0, '旧标签回写污染 ' + name);
+  });
   db2.close();
-  return '11 stores cleared, generation=' + reset.generation;
+  return '11 stores cleared; stale writes rejected; generation=' + reset.generation;
 });
 
 await check('CA-06 备份往返：封存标记随 state 走，replace 以文件状态为准，旧档无标记兼容', async () => {
   const backup = require(BACKUP_SRC);
   /* export：封存行必须在 payload.state 中。 */
   const fresh = await db.ensureCareer({ originGameId: 'memory-flip', now: '2026-11-26T04:30:00.000Z' });
-  assert(fresh.ok && fresh.created, 'CA-06 ensureCareer: ' + JSON.stringify(fresh));
+  assert(fresh.ok, 'CA-06 ensureCareer: ' + JSON.stringify(fresh));
   await db.saveDiscoveryState({ stage: 'CURIOUS', clues: {}, hintsEnabled: true });
   await db.setCareerArchived(true, { careerId: fresh.careerId, now: '2026-11-26T05:00:00.000Z' });
   const exported = await backup.exportCareerLife({ db });

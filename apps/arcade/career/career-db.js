@@ -448,6 +448,66 @@
     });
   }
 
+  /* 退役生涯在完全重置/替换导入后仍留在库里，但已不属于当前身份，旧标签不得再写。 */
+  const FORMER_CAREER_MARKER = 'former-career';
+  const FORMER_CAREER_PREFIX = FORMER_CAREER_MARKER + ':';
+  const FORMER_CAREER_LIMIT = 256;
+
+  function formerCareerKey(careerId) {
+    return FORMER_CAREER_PREFIX + careerId;
+  }
+
+  function rememberFormerCareer(ctx, careerId, done) {
+    const core = coreApi();
+    if (!core || !core.isValidCareerId(careerId)) {
+      if (typeof done === 'function') done();
+      return;
+    }
+    const store = ctx.store('state');
+    ctx.bind(store.get(formerCareerKey(careerId)), (existing) => {
+      if (existing) {
+        if (typeof done === 'function') done();
+        return;
+      }
+      ctx.bind(store.getAll(), (rows) => {
+        const keys = (Array.isArray(rows) ? rows : [])
+          .filter((row) => row && typeof row.key === 'string' && row.key.indexOf(FORMER_CAREER_PREFIX) === 0)
+          .map((row) => row.key)
+          .sort();
+        const retire = (removeDone) => {
+          if (keys.length < FORMER_CAREER_LIMIT) {
+            removeDone();
+            return;
+          }
+          const remove = (index) => {
+            if (index >= keys.length - FORMER_CAREER_LIMIT + 1) {
+              removeDone();
+              return;
+            }
+            ctx.bind(store.delete(keys[index]), () => remove(index + 1));
+          };
+          remove(0);
+        };
+        retire(() => ctx.bind(store.put({
+          key: formerCareerKey(careerId),
+          schemaVersion: SCHEMA_VERSION,
+          updatedAt: nowIso(),
+          value: { careerId, retiredAt: nowIso() },
+        }), () => {
+          if (typeof done === 'function') done();
+        }));
+      });
+    });
+  }
+
+  function assertCareerActive(ctx, careerId, reasonPrefix) {
+    if (!careerId) return;
+    const prefix = typeof reasonPrefix === 'string' && reasonPrefix ? reasonPrefix : 'career-write';
+    ctx.bind(ctx.store('state').get(formerCareerKey(careerId)), (row) => {
+      if (row) ctx.fail('career-reset', prefix + ':career-reset');
+    });
+  }
+
   /**
    * 只读封存状态：{ok:true, archived:boolean, careerId:string|null, archivedAt:string|null}。
    * 无标记（含 DB 不可用时）archived:false；读失败也返回结构化失败，不伪装为未封存。
@@ -806,6 +866,7 @@
     const at = nowIso();
     return txRun(['state', 'profiles'], 'readwrite', (ctx) => {
       assertCareerWritable(ctx, 'put-profile');
+      assertCareerActive(ctx, profile.careerId, 'put-profile');
       ctx.bind(ctx.store('profiles').get(profile.careerId), (existing) => {
         const record = jsonClone(profile) || {};
         record.careerId = profile.careerId;
@@ -868,13 +929,19 @@
           writeInitialCareer(ctx, core, originGameId, at);
           return;
         }
-        ctx.bind(ctx.store('profiles').get(careerId), (profile) => {
-          if (!profile) {
-            writeInitialCareer(ctx, core, originGameId, at);
+        ctx.bind(ctx.store('state').get(formerCareerKey(careerId)), (former) => {
+          if (former) {
+            ctx.fail('career-reset', 'ensure-career:career-reset');
             return;
           }
-          ctx.bind(ctx.store('balances').get(careerId), (balance) => {
-            ctx.done({ ok: true, created: false, careerId, profile, balance: balance || null });
+          ctx.bind(ctx.store('profiles').get(careerId), (profile) => {
+            if (!profile) {
+              writeInitialCareer(ctx, core, originGameId, at);
+              return;
+            }
+            ctx.bind(ctx.store('balances').get(careerId), (balance) => {
+              ctx.done({ ok: true, created: false, careerId, profile, balance: balance || null });
+            });
           });
         });
       });
@@ -958,6 +1025,7 @@
     const record = sanitizeRun(run, at);
     return txRun(['state', 'runs'], 'readwrite', (ctx) => {
       assertCareerWritable(ctx, 'create-run');
+      assertCareerActive(ctx, record.careerId, 'create-run');
       const store = ctx.store('runs');
       ctx.bind(store.get(record.runId), (existing) => {
         if (existing) {
@@ -1007,6 +1075,7 @@
     return txRun(['state', 'runs'], 'readwrite', (ctx) => {
       assertCareerWritable(ctx, 'update-run');
       ctx.bind(ctx.store('runs').get(runId), (existing) => {
+        assertCareerActive(ctx, existing && existing.careerId, 'update-run');
         if (!existing) {
           ctx.fail('missing-run');
           return;
@@ -1350,6 +1419,7 @@
     const providedReceipt = isObject(options.receipt) ? options.receipt : null;
     return txRun(['state'].concat(CLAIM_STORES), 'readwrite', (ctx) => {
       assertCareerWritable(ctx, 'settle-and-claim');
+      assertCareerActive(ctx, careerId, 'settle-and-claim');
       ctx.bind(ctx.store('claims').get(runId), (existing) => {
         if (existing) {
           if (existing.careerId && existing.careerId !== careerId) {
@@ -1870,6 +1940,7 @@
     const txId = 'purchase:' + purchaseId;
     return txRun(['state', 'ledgers', 'balances', 'inventory', 'equipment'], 'readwrite', (ctx) => {
       assertCareerWritable(ctx, 'purchase');
+      assertCareerActive(ctx, careerId, 'purchase');
       ctx.bind(ctx.store('ledgers').get(txId), (existing) => {
         if (existing) {
           ctx.done({ ok: true, duplicate: true, receipt: existing.receipt || purchaseReceiptFromLedger(existing) });
@@ -2062,6 +2133,7 @@
     const at = typeof options.now === 'string' && options.now ? options.now : nowIso();
     return txRun(['state', 'equipment', 'balances'], 'readwrite', (ctx) => {
       assertCareerWritable(ctx, 'write-equipment');
+      assertCareerActive(ctx, careerId, 'write-equipment');
       ctx.bind(ctx.store('balances').get(careerId), (balance) => {
         if (!balance) {
           ctx.fail('no-wallet');
@@ -2154,6 +2226,7 @@
     const txId = 'sale:' + saleId;
     return txRun(['state', 'ledgers', 'balances', 'inventory'], 'readwrite', (ctx) => {
       assertCareerWritable(ctx, 'sell-items');
+      assertCareerActive(ctx, careerId, 'sell-items');
       ctx.bind(ctx.store('ledgers').get(txId), (existing) => {
         if (existing) {
           ctx.done({ ok: true, duplicate: true, receipt: existing.receipt || null });
@@ -2436,6 +2509,7 @@
     }
     return txRun(['state', 'quests'], 'readwrite', (ctx) => {
       assertCareerWritable(ctx, 'put-quests');
+      assertCareerActive(ctx, careerId, 'put-quests');
       const store = ctx.store('quests');
       const tasks = records.map((record) => (next) => ctx.bind(store.put(record), next));
       sequence(tasks, () => ctx.done({ ok: true, count: records.length }));
@@ -2469,6 +2543,7 @@
     const requireClue = !!(guard && guard.requireClue === true);
     return txRun(['state', 'discovery', 'quests'], 'readwrite', (ctx) => {
       assertCareerWritable(ctx, 'put-quests-guarded');
+      assertCareerActive(ctx, careerId, 'put-quests-guarded');
       readDiscoveryGeneration(ctx, (currentGeneration) => {
         if (expectedGeneration !== null && expectedGeneration !== currentGeneration) {
           ctx.done({ ok: false, reason: 'stale-generation', generation: currentGeneration });
@@ -2532,6 +2607,7 @@
             next();
           });
         },
+        (next) => rememberFormerCareer(ctx, careerId, next),
       ];
       sequence(tasks, () => ctx.done({ ok: true, careerId }));
     }).then((res) => (res.ok ? res.result : failure(res.reason, res.error)));
@@ -2553,18 +2629,46 @@
     }).then((res) => (res.ok ? res.result : failure(res.reason, res.error)));
   }
 
+  function retiredIdsIn(snapshot) {
+    const ids = [];
+    const stateRows = snapshot && Array.isArray(snapshot.state) ? snapshot.state : [];
+    stateRows.forEach((row) => {
+      if (!row || typeof row.key !== 'string') return;
+      if (row.key === STATE_KEY_CAREER && row.value && typeof row.value.careerId === 'string') ids.push(row.value.careerId);
+      if (row.key.indexOf(FORMER_CAREER_PREFIX) === 0 && row.value && typeof row.value.careerId === 'string') ids.push(row.value.careerId);
+    });
+    return ids;
+  }
+
   /**
-   * 0.21 完全重置：单事务清空全部 11 个 store（含 career-archive 与 discovery-generation），
-   * 并把发现代次推进到下一值（防止旧标签持旧代次回写）。
+   * 0.21 完全重置：单事务清空 11 个 store，但保留有界退役身份标记与新一代次，
+   * 使完全重置前已打开的旧标签不能继续通过 createRun/updateRun/settle/purchase 回写。
    * 只操作生涯 IDB，绝不触碰任何 classic localStorage key；不可回滚，调用方需二次确认。
    */
   function resetAllCareer() {
     return txRun(STORES, 'readwrite', (ctx) => {
-      readDiscoveryGeneration(ctx, (current) => {
-        const next = current + 1;
-        const tasks = STORES.map((name) => (nextTask) => ctx.bind(ctx.store(name).clear(), nextTask));
-        tasks.push((nextTask) => writeDiscoveryGeneration(ctx, next, nextTask));
-        sequence(tasks, () => ctx.done({ ok: true, generation: next }));
+      const stateStore = ctx.store('state');
+      ctx.bind(stateStore.getAll(), (stateRows) => {
+        const retiredIds = [];
+        stateRows.forEach((row) => {
+          if (!row || typeof row.key !== 'string') return;
+          if (row.key === STATE_KEY_CAREER && row.value && typeof row.value.careerId === 'string') retiredIds.push(row.value.careerId);
+          if (row.key.indexOf(FORMER_CAREER_PREFIX) === 0 && row.value && typeof row.value.careerId === 'string') retiredIds.push(row.value.careerId);
+        });
+        readDiscoveryGeneration(ctx, (current) => {
+          const next = current + 1;
+          const tasks = STORES.map((name) => (nextTask) => ctx.bind(ctx.store(name).clear(), nextTask));
+          tasks.push((nextTask) => writeDiscoveryGeneration(ctx, next, nextTask));
+          Array.from(new Set(retiredIds)).slice(-FORMER_CAREER_LIMIT).forEach((careerId) => {
+            tasks.push((nextTask) => ctx.bind(stateStore.put({
+              key: formerCareerKey(careerId),
+              schemaVersion: SCHEMA_VERSION,
+              updatedAt: nowIso(),
+              value: { careerId, retiredAt: nowIso() },
+            }), nextTask));
+          });
+          sequence(tasks, () => ctx.done({ ok: true, generation: next, retiredCareerCount: Math.min(new Set(retiredIds).size, FORMER_CAREER_LIMIT) }));
+        });
       });
     }).then((res) => (res.ok ? res.result : failure(res.reason, res.error)));
   }
@@ -2598,9 +2702,9 @@
         STORES.forEach((name) => {
           payload[name] = data[name] || [];
         });
-        /* 发现代次是本机防旧标签回写的内部元数据，不随旧港档案迁移。 */
+        /* 发现代次与退役身份标记是本机防旧标签回写的内部元数据，不随旧港档案迁移。 */
         if (Array.isArray(payload.state)) {
-          payload.state = payload.state.filter((row) => !row || row.key !== STATE_KEY_DISCOVERY_GENERATION);
+          payload.state = payload.state.filter((row) => !row || (row.key !== STATE_KEY_DISCOVERY_GENERATION && !(typeof row.key === 'string' && row.key.indexOf(FORMER_CAREER_PREFIX) === 0)));
         }
         ctx.done(payload);
       });
@@ -2654,26 +2758,41 @@
     if (!validated.ok) return Promise.resolve(failure(validated.reason, validated.error));
     return txRun(STORES, 'readwrite', (ctx) => {
       const stateStore = ctx.store('state');
-      readDiscoveryGeneration(ctx, (currentGeneration) => {
-        const nextGeneration = currentGeneration + 1;
-        const entries = {};
-        STORES.forEach((name) => {
-          entries[name] = (validated.entries[name] || []).filter((record) => {
-            return !(name === 'state' && record && record.key === STATE_KEY_DISCOVERY_GENERATION);
+      ctx.bind(stateStore.getAll(), (currentRows) => {
+        const retiredIds = retiredIdsIn({ state: currentRows });
+        readDiscoveryGeneration(ctx, (currentGeneration) => {
+          const nextGeneration = currentGeneration + 1;
+          const entries = {};
+          STORES.forEach((name) => {
+            entries[name] = (validated.entries[name] || []).filter((record) => {
+              return !(name === 'state' && record && record.key === STATE_KEY_DISCOVERY_GENERATION);
+            });
           });
-        });
-        const tasks = [];
-        if (mode === 'replace') {
-          STORES.forEach((name) => tasks.push((next) => ctx.bind(ctx.store(name).clear(), next)));
-        }
-        STORES.forEach((name) => {
-          const store = ctx.store(name);
-          entries[name].forEach((record) => {
-            tasks.push((next) => ctx.bindConstraint(store.put(record), 'write-failed', next));
+          const tasks = [];
+          if (mode === 'replace') {
+            STORES.forEach((name) => tasks.push((next) => ctx.bind(ctx.store(name).clear(), next)));
+            retiredIdsIn({ state: validated.entries.state || [] }).forEach((id) => retiredIds.push(id));
+          }
+          STORES.forEach((name) => {
+            const store = ctx.store(name);
+            entries[name].forEach((record) => {
+              tasks.push((next) => ctx.bindConstraint(store.put(record), 'write-failed', next));
+            });
           });
+          tasks.push((next) => writeDiscoveryGeneration(ctx, nextGeneration, next));
+          Array.from(new Set(retiredIds)).filter((id) => {
+            const imported = mode === 'replace' && retiredIdsIn({ state: entries.state || [] }).indexOf(id) >= 0;
+            return !imported;
+          }).slice(-FORMER_CAREER_LIMIT).forEach((careerId) => {
+            tasks.push((nextTask) => ctx.bind(stateStore.put({
+              key: formerCareerKey(careerId),
+              schemaVersion: SCHEMA_VERSION,
+              updatedAt: nowIso(),
+              value: { careerId, retiredAt: nowIso() },
+            }), nextTask));
+          });
+          sequence(tasks, () => ctx.done({ ok: true, mode, counts: validated.counts, generation: nextGeneration }));
         });
-        tasks.push((next) => writeDiscoveryGeneration(ctx, nextGeneration, next));
-        sequence(tasks, () => ctx.done({ ok: true, mode, counts: validated.counts, generation: nextGeneration }));
       });
     }).then((res) => (res.ok ? res.result : failure(res.reason, res.error)));
   }
