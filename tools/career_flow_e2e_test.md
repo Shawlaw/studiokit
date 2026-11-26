@@ -1,59 +1,30 @@
-# career_flow_e2e_test.mjs 说明
-
-生涯首航 V2（DESIGN-0.20.0）零剧情种子真实 UI 链路门禁。当前集成工作树分支 `feat/arcade-career-flow`（版本链 0.20.0，未发布）；最初奠基分支 `codex/career-flow-test`、基线 `1e22a52`。
+# Arcade 生涯首航端到端门禁
 
 ## 运行
 
+```sh
+node --check tools/career_flow_e2e_test.mjs
+node tools/career_flow_e2e_test.mjs --static-only
+node tools/career_flow_e2e_test.mjs
+node tools/career_flow_e2e_test.mjs --memory-origin-only
 ```
-node tools/career_flow_e2e_test.mjs --static-only   # 无 Chrome：内容路线 + 接口矩阵
-node tools/career_flow_e2e_test.mjs                # 全量（独占 Chrome 时段）
-```
 
-端口环境变量：`CAREER_FLOW_PORT`（默认 9021）、`CAREER_FLOW_CDP`（默认 9521）、`CHROME_PATH`、`CAREER_FLOW_QA_DIR`。
+静态模式校验委托内容、剧情规则与既有接口。默认浏览器模式依次运行二十一点到研究终局、记忆翻牌到港。每个场景使用独立 Chrome profile，避免首封来信和生涯档互相影响。浏览器模式请串行运行。
 
-退出码：0 全 PASS；1 FAIL 或 BLOCKED；2 用法/环境错误。
+可用环境变量为 `CAREER_FLOW_PORT`（默认 9021）、`CAREER_FLOW_CDP`（默认 9521）、`CHROME_PATH` 和 `CAREER_FLOW_QA_DIR`。退出码 0 表示通过，1 表示失败或浏览器验收所需接口缺失，2 表示参数错误或启动前异常。
 
-## 覆盖清单
+## 浏览器覆盖
 
-- 新 profile 与 `resetAll()`：无 career 身份、无旗标、无 claim，不写 C0/C1/tier quest。
-- 经典黑杰克真实 6 手自然结算 → 线索 chip 可点/热区/aria → 故意错过 chip。
-- 首页「旧港有一封来信」→ 真实点击 `?careerLetter=1` → 未读信重显 → 关闭回到游戏页 → 读过后「继续旧港来信」。
-- 信件单一主动作「按地址投递 · 去港口」→ 一次点击进港。
-- 告示板首屏只读推荐单：游戏名/世界目标/数量/原因/主按钮；推荐标记 `推进本章`/`路线进展` 与真实完成性一致。
-- 首选路线逐单（与 `campaign.recommend`/ADR §20.9 一致）：`pendulum-tower.T1`(C1) → `memory-flip.T1`(step) → `memory-flip.T2`(C2) → `shadow-leap.T1`(step) → `shadow-leap.T2`(C3) → `pendulum-tower.T2`(step) → `gomoku.T1`(step) → `gomoku.T2`(C4)。每单用真实 `story-evidence.storyFlags` 派生旗标，只读 claim/quests/evidence 核验，并真实比较 `campaign.state.currentChapter` 与预期；中间单不产章节旗标。无环境变量放宽，替代路线不直接 PASS。
-- `shadow-leap.T1` 第一次真实做不足 → 失败收据 → 一键重接 → 再次真实成功。
-- 收据三回报 + 「下一步：」+「新完成的段落：」（兼容旧「已完成章节：」）+ 页内「回告示板 / 读回信」主动作（≥44px、至多一次整页跳转）；点击后轮询等面板出现，不固定 sleep。
-- 终局：C4 后当前屏三终局按钮（≥44px）→ 玩家点击 research → 等待新 ticket 的 merge-2048 页面 → 真实 256+256 合并产出 512 事件 → C5 + `ending.research` 唯一（quest 行 `nodeId='ending.research'`, `kind='ending'`）。
-- 玩家可见文本扫描：无 `C0–C5`、`.T1–.T6`、真实证据 token（`E-C1-site` / `E-xxx.T2` / `BP-xxx.T3`，但排除角色专名 `E-7`）、`active/locked`、长 id。
-- 320×700、375×548、390×664、390×844、430×932 五档视口无横向溢出、主动作热区 ≥44px。
+- 从首页点击游戏入口。二十一点真实结算六手，记忆翻牌通过原生 `revealById` 钩子完成六关。翻牌记录各关匹配对数和实际 `pair.match` 触发的存根线索。两条路线均从新档开始，剧情旗标、委托等级和证据都由实际玩法与 UI 产生。
+- 故意错过结算线索，从首页找回并读信，离开后从首页续读。点击投递后在告示板看到来源专属回应，二十一点验证阿德和单据，翻牌验证老周和存根。
+- 二十一点场景在 375×548 下记录滚动前「看看出航」的位置，验证阿砾的租机说明折叠时隐藏。实际展开确认免费租机提示和「首次巡航」按钮可用，收起后继续默认路线。
+- 接首单并激活职业局后关闭原标签。同一 Chrome 进程新开首页，确认没有原来的 `sessionStorage` 票据。点击「旧港生涯」和「继续这张单」，验证 `ticketId`、`runId`、`nonce` 都复用，随后用原票完成首单并结算。
+- 首两单从收据主按钮「回告示板」打开同页告示板，再点击实际推荐单。检查「旧档案夹」的下一步明确指向「差一张的照片」，收据没有声称获得新线索，实际收据和档案均无新增证据。
+- 首次接到影跃「月下脚印」时故意未达标。点击失败收据上的「回告示板」，实际重接同一委托并验证新票、成功结算和失败票未入账。按 `commissionId` 触发，路线重排后仍会执行。
+- 逐单用真实 `story-evidence.storyFlags` 和只读档案核验推荐、证据和章节。C4 收据通过可见的终局动作进入章节面板，再点击「理性重启」，验证 512 方块事件及唯一的终局记录。
+- 在收据打开期间扫描卡片实际可见文本，覆盖证据 token、内部章节或状态码和长 ID。沿用的旧收据「凭据号」行仅在与本单 `runId` 精确一致时排除，其他位置的内部编号仍会触发门禁。
+- 在 320×700、375×548、390×664、390×844、430×932 检查关键面板横向溢出和按钮热区。
 
-## 依赖的产品接口（未集成时显式 BLOCKED，不静默跳过）
+## 验证记录
 
-| 接口 | 位置 | 状态（基线 1e22a52 静态检查） |
-| --- | --- | --- |
-| `campaign.recommend`（ADR §20.9） | `apps/arcade/career/campaign-core.js` | BLOCKED |
-| `[data-town-recommend-id]` / `[data-town-recommend-kind]` | `apps/arcade/career/ui/town.js` | BLOCKED |
-| `路线进展` / `推进本章` 推荐文案 | `apps/arcade/career/ui/town.js` | BLOCKED |
-| 收据 `新完成的段落：`（兼容 `已完成章节：`） / `下一步：` | `apps/arcade/career/ui/receipt.js` | BLOCKED |
-| 收据 `回告示板` / `读回信` 主动作 | `apps/arcade/career/ui/receipt.js` | BLOCKED |
-| 结算 storyFeedback 接线 | `apps/arcade/career/bridge.js` | BLOCKED |
-| 首页 `旧港有一封来信` / `继续旧港来信` / `careerLetter=1` | `apps/arcade/index.html` | INTEGRATED |
-| 线索 chip `[data-career-clue]` | `apps/arcade/career/ui/clue-surface.js` | INTEGRATED |
-| 章节面板 `[data-chapter-id]` / `[data-approach]` | `apps/arcade/career/ui/world-state.js` | INTEGRATED |
-
-静态自检当前结果（最终集成树，`--static-only`，退出码 0）：**PASS 22 / FAIL 0 / BLOCKED 0 / TOTAL 22**。S00–S09 内容路线投影与 I01–I11 接口矩阵均为 INTEGRATED。
-
-## 实跑日志与结果
-
-- 322/322 全链路（无 FAIL / 无 BLOCKED，退出码 0）日志：`C:\Users\rolle\AppData\Local\Temp\opencode\flow-integration15.log`（集成分支 `feat/arcade-career-flow`，合入 `6f55a04` 后，`CAREER_FLOW_PORT=19037` / `CAREER_FLOW_CDP=19537`）。
-- 独立复审修正后 339/339（退出码 0）日志：`C:\Users\rolle\AppData\Local\Temp\opencode\flow-integration16.log`（真实 `story-evidence.storyFlags` 派生、当前章真比较、390×664 视口、token 正则修正）。
-- 最终集成树复验两轮 339/339（PASS 339 / FAIL 0 / BLOCKED 0，退出码 0）：`C:\Users\rolle\AppData\Local\Temp\opencode\career-flow-final2.log` 与 `career-flow-postreview.log`；推荐顺序与逐单章节推进见日志 SUMMARY。
-- 已登记进 `tools/arcade_run_all_gates.py`（长跑 Chrome 门禁，端口 `CAREER_FLOW_PORT` / `CAREER_FLOW_CDP` 默认 9901/10301）；聚合门禁仍待主 Agent 串行最终确认，不提前写 ALL GATES PASSED。
-
-## 路线内容一致性
-
-`--static-only` 的 S01–S09 按真实 `commissions.json` / `campaign.json` / `chapter-01.json` / `ending-research.json` 投影首选路线证据，验证 C1→C2→C3→C4 逐单真实完成、中间单不跳章、C5 终局需 C4 且真实产出两个旗标。内容被修正（如 651e9fe）后须重跑静态模式确认路由投影仍成立。
-
-## 不做的改动
-
-不修改产品文件、既有测试、localStorage key、IndexedDB Schema、游戏数值；不 push/merge/rebase；不直接写章节旗标或 tier quest。游戏侧只用页面自带 `?careerTest=1#test` / `#test` 钩子驱动真实事件与结算。
+基于 `89fd9e6` 的独立测试工作树，语法检查通过，`--static-only` 24/24 通过，站点静态校验与构建通过。新增浏览器场景及 Arcade 冒烟由集成工作树串行复跑，旧版 339/339 不覆盖本次新增断言。
