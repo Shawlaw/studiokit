@@ -188,7 +188,7 @@ class StubDocument {
       const attr = /^\[([^\]]+)\]$/.exec(selector);
       const key = attr ? attr[1] : selector;
       const child = new StubNode('div', attr ? { [key]: '' } : { class: key.replace(/^\./, '') });
-      if (key === 'data-hall-version') child.textContent = '0.20.0';
+      if (key === 'data-hall-version') child.textContent = '0.21.0';
       if (key === 'data-manage-note') child.textContent = '游玩记录和局内进度只保存在此浏览器内。';
       if (key === 'data-hall-grid') child.className = 'hall-grid';
       if (key === 'data-sort') {
@@ -328,7 +328,7 @@ function makeArcade(prefs) {
     games,
     prefWrites,
     api: {
-      version: '0.20.0',
+      version: '0.21.0',
       GAMES: games,
       DIFFICULTY_NAMES: { 1: '轻松', 2: '适中', 3: '挑战', 4: '硬核' },
       Prefs: {
