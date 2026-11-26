@@ -2259,7 +2259,10 @@
       "title": "Arcade 0.18.1 合入 main 并双端发布",
       "kind": "agent",
       "status": "DONE",
-      "dependsOn": ["T132", "T133"],
+      "dependsOn": [
+        "T132",
+        "T133"
+      ],
       "ownerAuthorizationRequired": true,
       "ownerAuthorizationNote": "OWNER_AUTHORIZATION: PUBLISH_TO_MAIN。Owner 当前任务明确要求「切回main分支，然后把迭代挪过去，然后发版吧」，按既有双端发布约定执行。",
       "acceptance": [
@@ -2274,7 +2277,9 @@
       "title": "Arcade PWA 预载后断网跨页修复",
       "kind": "agent",
       "status": "DONE",
-      "dependsOn": ["T134"],
+      "dependsOn": [
+        "T134"
+      ],
       "ownerAuthorizationRequired": false,
       "acceptance": [
         "模拟 Cloudflare Pages 的 308 跳转并复现游戏卡片离线导航失败",
@@ -2299,14 +2304,15 @@
         "GitHub Pages 与 Cloudflare Pages 线上逐文件核验一致"
       ],
       "evidence": "发布提交 fd064ee，Actions https://github.com/Shawlaw/studiokit/actions/runs/45520196313 四项成功，两个正式域名与 Cloudflare 部署地址均为 0.18.2，87/87 文件一致，本地逐文件复验两个正式域名均与发布产物匹配。冒烟 117/117、离线 18/18、PWA 更新 9/9、静态校验和构建通过。Chromium 本地模拟两种部署路径，从 0.18.1 更新后 16 款预载均保留，关停服务器后能打开首页、进入黄金矿工并返回。手机真机待验证。"
-    }
-,
+    },
     {
       "id": "T137",
       "title": "Arcade 0.19.0：矮视口紧凑布局、拇指区暂停、恢复门与单手触屏",
       "kind": "agent",
       "status": "DONE",
-      "dependsOn": ["T134"],
+      "dependsOn": [
+        "T134"
+      ],
       "ownerAuthorizationRequired": false,
       "acceptance": [
         "修复 4 处确定缺陷：挑战选关「返回开始」无反应（4 款）、黄金矿道具坞间隙误放钩、俄罗斯方块矮视口溢出、矮视口开局按钮不可见",
@@ -2321,7 +2327,9 @@
       "title": "Arcade 0.19.0 合入 main 并双端发布",
       "kind": "agent",
       "status": "DONE",
-      "dependsOn": ["T137"],
+      "dependsOn": [
+        "T137"
+      ],
       "ownerAuthorizationRequired": true,
       "ownerAuthorizationNote": "OWNER_AUTHORIZATION: PUBLISH_TO_MAIN。Owner 明确要求「可以，没问题，合回main之后发版吧」。",
       "acceptance": [
@@ -2336,7 +2344,9 @@
       "title": "Arcade 生涯首航入口与首次投递",
       "kind": "agent",
       "status": "DONE",
-      "dependsOn": ["T138"],
+      "dependsOn": [
+        "T138"
+      ],
       "ownerAuthorizationRequired": false,
       "acceptance": [
         "已有线索可从首页找回，读过未投递可以续读，同一游戏有效结算可重显未读线索",
@@ -2350,7 +2360,9 @@
       "title": "Arcade 0.20.0 生涯首航 V2 版本/文档收口",
       "kind": "agent",
       "status": "DONE",
-      "dependsOn": ["T139"],
+      "dependsOn": [
+        "T139"
+      ],
       "ownerAuthorizationRequired": true,
       "ownerAuthorizationNote": "OWNER_AUTHORIZATION: PUBLISH_TO_MAIN。Owner 在独立复审 APPROVE、确认主流程无问题后明确要求「先发版」，按双端发布约定执行。",
       "acceptance": [
@@ -2364,8 +2376,10 @@
       "id": "T141",
       "title": "Arcade 0.21.0 文档 / 任务口径同步（目标发布，未验证 / 未发布）",
       "kind": "agent",
-      "status": "DONE",
-      "dependsOn": ["T140"],
+      "status": "IN_PROGRESS",
+      "dependsOn": [
+        "T140"
+      ],
       "ownerAuthorizationRequired": false,
       "acceptance": [
         "独立 worktree codex/career-passive-docs，仅基线 4ffc27d，不改产品代码、测试或门禁脚本",
@@ -2373,7 +2387,7 @@
         "说明中心页彻底 passive、选择式叙事、生涯设置二级入口、可解冻封存、仅生涯数据完全重置、static/release/full 分层门禁；保留历史版本事实",
         "实跑 validate_site.py / build_site.py / git diff --check 并如实记录；不伪造门禁、Actions 与线上验证结果"
       ],
-      "evidence": "独立 worktree D:/LocalAgentWorkspace/StudioKit-career-passive-021-docs，分支 codex/career-passive-docs 基于 4ffc27d。仅改文档与任务记录。实跑：py -3 tools/validate_site.py PASS、py -3 tools/build_site.py PASS（两者因产品版本断言仍为 0.20.0 而通过，不证明 0.21 版本链同步）；node tools/career_archive_test.mjs 8/8 PASS；git diff --check 在提交前复核。目标版本链 0.21.0 / SW studiokit-arcade-0.21.0-v1；当前 engine/sw/中心页/注册表与校验断言仍为 0.20.0，版本 bump 未执行。Chrome 门禁、static/release/full 聚合、Actions、双端 verify_deploy、真机 / 真人均 UNVERIFIED；无 OWNER_AUTHORIZATION: PUBLISH_TO_MAIN，未 push。"
+      "evidence": "Branch feat/arcade-career-passive-021; version chain 0.21.0. static 35/35; archive 8/8; archive lifecycle 60/60; DB 38/38; backup 34/34; mobile 318/318; smoke 117/117; flow 339/339; PWA 18/18. 96 full serial: 15/16 games and 90/90 executed tiers passed, pendulum-tower Chrome DevToolsActivePort environment error pending. Release first pass 37/40; real mobile/smoke failures fixed and individually rerun; no single aggregate release pass claimed. full/Actions/live/real-device UNVERIFIED. See docs/arcade-life/INTEGRATION-0.21.md."
     }
   ]
 }

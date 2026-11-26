@@ -1,8 +1,8 @@
 # Arcade Changelog
 
-## 0.21.0 — 2026-11-26（目标发布；本地开发，未验证 / 未发布）
+## 0.21.0 — 2026-11-26（发布前）
 
-本地分支 `feat/arcade-career-passive-021`，HEAD `4ffc27d`。设计 / 回滚见 [`DESIGN-0.21.0.md`](DESIGN-0.21.0.md)，接口冻结见 [`docs/arcade-life/ADR-interfaces.md`](../../docs/arcade-life/ADR-interfaces.md) §22，集成与验证口径见 [`docs/arcade-life/INTEGRATION-0.21.md`](../../docs/arcade-life/INTEGRATION-0.21.md)。**版本链目标 0.21.0 / SW `studiokit-arcade-0.21.0-v1`；当前产品代码（engine / sw / 中心页 / 注册表）与校验断言仍为 0.20.0，版本 bump 未执行，本条目只同步文档口径。**
+本地分支 `feat/arcade-career-passive-021`。设计 / 回滚见 [`DESIGN-0.21.0.md`](DESIGN-0.21.0.md)，接口冻结见 [`docs/arcade-life/ADR-interfaces.md`](../../docs/arcade-life/ADR-interfaces.md) §22，集成与验证口径见 [`docs/arcade-life/INTEGRATION-0.21.md`](../../docs/arcade-life/INTEGRATION-0.21.md)。**版本链已同步 0.21.0 / SW `studiokit-arcade-0.21.0-v1`；尚未发布。**
 
 ### Added / Changed
 
@@ -15,8 +15,8 @@
 
 ### Tests
 
-- 本轮文档分支实跑：`py -3 tools/validate_site.py` PASS、`py -3 tools/build_site.py` PASS（两者因版本断言仍为 0.20.0 而通过，不证明 0.21 版本链已同步）；纯 Node `node tools/career_archive_test.mjs` **8/8**。`git diff --check` 结果见 `docs/arcade-life/INTEGRATION-0.21.md`。
-- Chrome 门禁（smoke / mobile / PWA / 首航 E2E 等）、`release` / `full` profile 聚合、Actions、双端 `verify_deploy.py`、真机 / 真人：**均 UNVERIFIED，本分支未执行**，不得据此声称通过或发布。
+- 已通过：static **35/35**、archive **8/8**、archive lifecycle **60/60**、DB **38/38**、backup **34/34**、mobile **318/318**、smoke **117/117**、完整首航 **339/339**、PWA 离线 **18/18**。
+- 96 全量串行与 release 首轮仍记录 Chrome `DevToolsActivePort` 环境错误；full / Actions / 双端 `verify_deploy.py` / 真机 / 真人仍 **UNVERIFIED**。详见集成记录，不得据此声称发布。
 
 ### Notes
 
