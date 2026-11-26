@@ -353,6 +353,9 @@
     '[data-town-flight][open] > summary::before {',
     '  content: "▾";',
     '}',
+    '[data-town-flight]:not([open]) > .ac-career-town__free-body {',
+    '  display: none;',
+    '}',
     '.ac-career-town__free > summary:focus-visible {',
     '  outline: 2px solid var(--ac-career-line, #2a3560);',
     '  outline-offset: 2px;',
@@ -1005,10 +1008,10 @@
     townView.appendChild(introSection);
     townView.appendChild(location);
     townView.appendChild(notice);
-    townView.appendChild(campaignSection);
     townView.appendChild(recommendList);
     townView.appendChild(scope);
     townView.appendChild(empty);
+    townView.appendChild(campaignSection);
     townView.appendChild(wallet);
     townView.appendChild(altHeading);
     townView.appendChild(altList);
@@ -1362,6 +1365,8 @@
       const mainRow = liveId
         ? allRows.filter((row) => row.commissionId === liveId)[0]
         : suggestion ? suggestion.row : null;
+      /* 推荐卡已有当前目标，首航首屏留给收件回话和两个可执行选项。 */
+      introGoal.hidden = !!mainRow && !introGreeting.hidden;
       if (mainRow) {
         const opts = {
           recommended: true,

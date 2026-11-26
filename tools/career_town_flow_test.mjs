@@ -552,6 +552,11 @@ check('可选出航默认收起，首次巡航与机库走已有动作', () => {
   assert.equal(flight.hidden, false);
   assert.equal(flight.open, false);
   assert.equal(flight.firstChild.textContent, '看看出航');
+  const view = flight.parentNode.parentNode;
+  const recommend = byAttr(view, 'data-town-recommend', 'true')[0];
+  const campaign = byAttr(view, 'data-town-campaign', 'true')[0];
+  assert.equal(view.childNodes.indexOf(recommend) + 1, view.childNodes.indexOf(flight.parentNode));
+  assert.ok(view.childNodes.indexOf(flight.parentNode) < view.childNodes.indexOf(campaign));
   assert.equal(flight.firstChild.getClientRects().length, 1);
   assert.equal(rental.getClientRects().length, 0);
   assert.equal(byAttr(sheet, 'data-town-intro', 'true')[0].textContent.includes('租机'), false);
