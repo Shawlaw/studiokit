@@ -4,7 +4,7 @@
   "commissionId": "ending.combat",
   "gameId": "star-raid",
   "title": "星塔回响·武力解除",
-  "summary": "穿过母舰防线，让旧防御核心停下。",
+  "summary": "你愿意穿过母舰防线，让旧防御核心停下吗？",
   "objective": {
     "kind": "boss.defeated",
     "atLeast": 1,
@@ -21,5 +21,5 @@
     "ending.combat"
   ],
   "repeatSalaryCredits": 0,
-  "epilogueText": "夜安静下来，巡防队把星塔列入了禁区。"
+  "epilogueText": "你让夜安静下来，巡防队把星塔列入了禁区。"
 }

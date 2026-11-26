@@ -4,7 +4,7 @@
   "commissionId": "ending.rescue",
   "gameId": "road-rush",
   "title": "星塔回响·运输救援",
-  "summary": "在关闭窗口前把补给送进旧港。",
+  "summary": "你愿意在关闭窗口前把补给送进旧港吗？",
   "objective": {
     "kind": "distance.reached",
     "atLeast": 1,
@@ -19,5 +19,5 @@
     "ending.rescue"
   ],
   "repeatSalaryCredits": 0,
-  "epilogueText": "补给车队穿过关闭窗口，港口自己走了出来。"
+  "epilogueText": "你带补给车队穿过关闭窗口，港口自己走了出来。"
 }
