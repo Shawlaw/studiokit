@@ -66,10 +66,7 @@ function loadUmd(absolutePath, globalName) {
 }
 
 const storyEvidence = loadUmd(resolve(careerDir, 'story-evidence.js'), 'ArcadeCareerStoryEvidence');
-/* campaign.recommend 属于并行规则工作树（codex/career-rules）的交付；本地基线 campaign-core
-   尚无 recommend。用集成工作树中的真实源码直接 VM 加载，验证 ctx.storyEvidence 的契约。 */
-const integratedCampaignPath = resolve(root, '..', 'StudioKit-career-flow', 'apps/arcade/career/campaign-core.js');
-const campaignSource = readFileSync(integratedCampaignPath, 'utf8');
+const campaignSource = readFileSync(resolve(careerDir, 'campaign-core.js'), 'utf8');
 check(campaignSource.includes('recommend: recommend,'), 'integrated campaign-core exports recommend');
 check(campaignSource.includes('isConfigured() !== true) return null'), 'recommend guard requires configured storyEvidence');
 const sandbox = { module: { exports: {} }, exports: {}, window: undefined, console };
