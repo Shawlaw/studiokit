@@ -660,14 +660,28 @@ async function phaseEntry(page) {
   })()`);
   record('ENTRY 去港口后信箱收起、告示板打开（触控）', !!(townOpen.town && !townOpen.mailbox), JSON.stringify({ town: townOpen.town, mailbox: townOpen.mailbox }));
   const townActions = townOpen.actions || [];
-  const hangarBtn = townActions.find((item) => item.action === 'hangar');
   const receiptBtn = townActions.find((item) => item.action === 'receipt');
   const settingsBtn = townActions.find((item) => item.action === 'settings');
+  const flightSummary = await page.evaluate(`(() => {
+    const node = document.querySelector('[data-career-panel="town"] [data-town-flight] > summary');
+    if (!node) return null;
+    const r = node.getBoundingClientRect();
+    return { text: node.textContent.trim(), w: Math.round(r.width), h: Math.round(r.height) };
+  })()`);
   record(
-    'ENTRY 告示板可见机库 / 钱包与收据 / 线索提示且 ≥44',
-    !!hangarBtn && !!receiptBtn && !!settingsBtn && [hangarBtn, receiptBtn, settingsBtn].every((item) => !item.hidden && item.w >= 44 && item.h >= 44),
-    JSON.stringify(townActions)
+    'ENTRY 告示板可见「看看出航」/ 钱包与收据 / 线索提示且 ≥44',
+    !!flightSummary && !!receiptBtn && !!settingsBtn && [flightSummary, receiptBtn, settingsBtn].every((item) => item.w >= 44 && item.h >= 44),
+    JSON.stringify({ flightSummary, townActions })
   );
+  await mouseClick(page, '[data-career-panel="town"] [data-town-flight] > summary');
+  await sleep(120);
+  const hangarBtn = await page.evaluate(`(() => {
+    const node = document.querySelector('[data-career-panel="town"] [data-town-action="hangar"]');
+    if (!node) return null;
+    const r = node.getBoundingClientRect();
+    return { hidden: node.hidden, w: Math.round(r.width), h: Math.round(r.height) };
+  })()`);
+  record('ENTRY 展开「看看出航」后机库入口可见且 ≥44', !!hangarBtn && !hangarBtn.hidden && hangarBtn.w >= 44 && hangarBtn.h >= 44, JSON.stringify(hangarBtn));
 
   /* 机库入口 → 叠层关闭后回告示板 */
   await mouseClick(page, '[data-career-panel="town"] [data-town-action="hangar"]');

@@ -479,7 +479,7 @@ async function main() {
     return !!(beats && secrets.every((secret) => [beats.start, beats.progress].every((text) => text.indexOf(secret) < 0)));
   }), 'start/progress must not equal completed mustKnow');
   record('CONTENT chapter-00 C0 complete 补「那是一串柜号」且 C1 章标题统一', CHAPTER_FILES.C0.beats.complete.indexOf('那是一串柜号') >= 0 && CHAPTER_FILES.C1.title === '第一封工单' && CHAPTER_FILES.C1.c1.title === '第一封工单', JSON.stringify({ c0: CHAPTER_FILES.C0.beats.complete, c1: CHAPTER_FILES.C1.title }));
-  record('CONTENT 到港首屏内容含来源 c0Letter/身份句/阿砾首单回信，不依赖 originIntro', !!CHAPTER_FILES.C0.arrival && !!CHAPTER_FILES.C0.arrival.body && /自由职业者/.test(CHAPTER_FILES.C0.role) && /第一张纸|告示板/.test(JSON.stringify(CHAPTER_FILES.C0.arrival)) && Array.isArray(CHAPTER_FILES.C1.origins) && CHAPTER_FILES.C1.origins.every((o) => !!(o.c0Letter && o.c0Letter.body)), 'arrival + 16 origins c0Letter');
+  record('CONTENT 到港首屏内容含来源 c0Letter/身份句/港务处首单回信，不依赖 originIntro', !!CHAPTER_FILES.C0.arrival && !!CHAPTER_FILES.C0.arrival.body && /自由职业者/.test(CHAPTER_FILES.C0.role) && /第一张纸|告示板/.test(JSON.stringify(CHAPTER_FILES.C0.arrival)) && Array.isArray(CHAPTER_FILES.C1.origins) && CHAPTER_FILES.C1.origins.every((o) => !!(o.c0Letter && o.c0Letter.body)), 'arrival + 16 origins c0Letter');
   record('CONTENT npc.json 三名角色（E-7/阿砾/黎序）', Array.isArray(NPC.characters) && NPC.characters.length === 3 && ['E-7', '阿砾', '黎序'].every((name) => NPC.characters.some((c) => c.name === name)));
   record('CONTENT 阿砾 C0 回信指定首单（不再是空闲闲聊）', NPC.characters.some((c) => c.characterId === '阿砾' && c.replies.some((r) => r.chapterId === 'C0' && /第一张纸|告示板/.test(r.text) && /工钱|交割/.test(r.text))), JSON.stringify((NPC.characters.find((c) => c.characterId === '阿砾') || {}).replies || []));
   record('CONTENT side-stories.json 至少四个可选支线家族', Array.isArray(SIDE_STORIES.families) && SIDE_STORIES.families.length >= 4, 'families=' + (SIDE_STORIES.families || []).length);
@@ -1144,13 +1144,16 @@ async function main() {
       !/\bC[0-5]\b/.test(freshC0.role + freshC0.stage),
     JSON.stringify({ role: freshC0 && freshC0.role, stage: freshC0 && freshC0.stage, progress: freshC0 && freshC0.progress, body: freshC0 && freshC0.body, factCount: freshC0 && freshC0.factCount })
   );
+  const arrivalOrigin = CHAPTER_FILES.C1.origins.find((origin) => origin.gameId === 'pendulum-tower');
+  const arrivalLead = arrivalOrigin && arrivalOrigin.c0Letter.body.split(/[。！？]/)[0];
   record(
-    'REAL 到港首屏显示来源 c0Letter 正文 + 身份句 + 阿砾指定首单回信（非弹窗）',
-    !!realBridge.arrival &&
+    'REAL 到港首屏显示来源 c0Letter 正文 + 身份句 + 港务处指定首单回信（非弹窗）',
+    !!realBridge.arrival && !!arrivalOrigin &&
       realBridge.arrival.role === CHAPTER_FILES.C0.role &&
-      realBridge.arrival.letters.length >= 2 && realBridge.arrival.letters[0].length >= 20 &&
+      realBridge.arrival.letters.length >= 2 && !!arrivalLead && realBridge.arrival.letters[0].indexOf(arrivalLead) >= 0 &&
       realBridge.arrival.letters.some((line) => line.indexOf('第一张纸') >= 0 || line.indexOf('告示板') >= 0) &&
-      realBridge.arrival.meta.some((line) => line.indexOf('阿砾') >= 0),
+      realBridge.arrival.meta.some((line) => line.indexOf(arrivalOrigin.c0Letter.from) >= 0) &&
+      realBridge.arrival.meta.some((line) => line.indexOf(CHAPTER_FILES.C0.arrival.firstOrder.from) >= 0),
     JSON.stringify(realBridge.arrival)
   );
   await closeDirect();
