@@ -31,40 +31,11 @@
       <a class="hall-head-link" href="#hall-records">游玩记录 ↓</a>
     </header>
 
-    <div class="hall-mode-controls" data-hall-modes hidden>
-      <div class="hall-mode-switch" role="group" aria-label="街机厅首页视图">
-        <button type="button" class="ac-btn-ghost" data-hall-view="classic" aria-pressed="true">经典街机</button>
-        <button type="button" class="ac-btn-ghost" data-hall-view="career" aria-pressed="false">生涯</button>
-      </div>
-      <label>
-        <span>默认打开</span>
-        <select class="hall-sort" data-default-view>
-          <option value="classic">经典街机</option>
-          <option value="career">生涯</option>
-        </select>
-      </label>
-    </div>
-
     <div class="hall-update-banner" data-update-banner hidden role="status" aria-live="polite">
       <span data-update-text>发现新版本，刷新后生效。</span>
       <button type="button" class="ac-btn hall-update-btn" data-update-reload>立即刷新</button>
       <button type="button" class="ac-btn-ghost hall-update-btn" data-update-dismiss>稍后</button>
     </div>
-
-    <section class="hall-career" data-career-view hidden aria-labelledby="hall-career-title">
-      <h2 id="hall-career-title">折光港</h2>
-      <div class="hall-career-links">
-        <a class="hall-career-main" data-career-panel-link="town">
-          <strong>告示板</strong><span>接取委托，查看港口事务</span>
-        </a>
-        <a data-career-panel-link="mailbox">
-          <strong>信箱</strong><span>查看已收到的线索和来信</span>
-        </a>
-        <a data-career-panel-link="chapters" data-career-chapters hidden>
-          <strong>章节</strong><span>继续星塔回响</span>
-        </a>
-      </div>
-    </section>
 
     <div data-classic-view>
       <section class="hall-resume" data-resume-section hidden aria-labelledby="hall-resume-title">
@@ -193,7 +164,6 @@
             </div>
           </div>
         </details>
-        <p class="hall-story-entry" data-story-entry hidden><a href="games/pendulum-tower.html?story=1">旧港来信</a></p>
       </section>
     </div>
 
@@ -213,6 +183,9 @@
 
     <footer class="hall-foot">
       <p>离开游戏时会自动保存可续玩的进度。</p>
+      <p class="hall-career-settings" data-career-settings-entry hidden>
+        <a href="games/pendulum-tower.html?careerPanel=settings" data-career-settings-label>生涯设置</a>
+      </p>
       <span>v<span data-hall-version>0.20.0</span></span>
     </footer>
 
@@ -1121,29 +1094,12 @@
         }
       });
 
-      const hallModes = document.querySelector('[data-hall-modes]');
-      const hallModeButtons = hallModes.querySelectorAll('[data-hall-view]');
-      const defaultView = document.querySelector('[data-default-view]');
-      const classicView = document.querySelector('[data-classic-view]');
-      const careerView = document.querySelector('[data-career-view]');
-      const careerLinks = careerView.querySelectorAll('[data-career-panel-link]');
-      const careerChapters = document.querySelector('[data-career-chapters]');
-      const recordsLink = document.querySelector('.hall-head-link');
-      const storyEntry = document.querySelector('[data-story-entry]');
+      /* 0.21：中心页始终经典目录；生涯只读探针只驱动「继续上次」附近的低强调来信小字
+         与页尾二级生涯设置入口，不切视图、不弹窗、不创建生涯。 */
       const letterEntry = document.querySelector('[data-letter-entry]');
-      let currentHallView;
+      const settingsEntry = document.querySelector('[data-career-settings-entry]');
+      const settingsLabel = document.querySelector('[data-career-settings-label]');
       let hallReadGeneration = 0;
-
-      function showHallView(view) {
-        currentHallView = view;
-        const career = view === 'career';
-        classicView.hidden = career;
-        recordsLink.hidden = career;
-        careerView.hidden = !career;
-        for (const button of hallModeButtons) {
-          button.setAttribute('aria-pressed', String(button.dataset.hallView === view));
-        }
-      }
 
       async function readHallCareer() {
         if (typeof indexedDB === 'undefined') return null;
@@ -1163,9 +1119,16 @@
           return await new Promise((resolve, reject) => {
             const transaction = db.transaction(['state', 'profiles', 'quests'], 'readonly');
             const quests = transaction.objectStore('quests');
-            const result = { active: false, chapters: false, unreadLetter: false };
+            const result = { active: false, chapters: false, unreadLetter: false, archived: false };
             transaction.oncomplete = () => resolve(result);
             transaction.onabort = () => reject(transaction.error);
+            const archivePointer = transaction.objectStore('state').get('career-archive');
+            archivePointer.onsuccess = () => {
+              const marker = archivePointer.result?.value;
+              if (!marker || typeof marker !== 'object' || marker.archived === false) return;
+              /* 兼容两种标记写法：{archived:true,...} 与 {careerId,archivedAt}。 */
+              result.archived = marker.archived === true || !!marker.careerId || !!marker.archivedAt;
+            };
             const discoveryPointer = transaction.objectStore('state').get('discovery');
             discoveryPointer.onsuccess = () => {
               const value = discoveryPointer.result?.value;
@@ -1202,41 +1165,25 @@
         const generation = ++hallReadGeneration;
         const career = await readHallCareer().catch(() => null);
         if (generation !== hallReadGeneration) return;
-        hallModes.hidden = !career?.active;
-        careerChapters.hidden = !career?.chapters;
-        storyEntry.hidden = !career?.chapters;
-        letterEntry.hidden = !(career?.unreadLetter || career?.followUpLetter);
+        /* 封存时只保留页尾的二级设置入口；来信与任何生涯内容 CTA 全部隐藏。 */
+        const archived = !!(career && career.archived);
+        const active = !!(career && career.active);
+        const hasLetter = !!(career && !archived && (career.unreadLetter || career.followUpLetter));
+        letterEntry.hidden = !hasLetter;
         const letterLink = letterEntry.querySelector('[data-letter-label]');
         letterLink.textContent = career?.unreadLetter ? '旧港有一封来信' : '继续旧港来信';
-        if (career?.unreadLetter || career?.followUpLetter) {
+        if (hasLetter) {
           letterLink.href = 'games/pendulum-tower.html?careerLetter=1';
         } else {
           letterLink.removeAttribute('href');
         }
-        for (const link of careerLinks) {
-          if (career?.active && !link.hidden) {
-            link.href = './games/pendulum-tower.html?careerPanel=' + link.dataset.careerPanelLink;
-          } else {
-            link.removeAttribute('href');
-          }
-        }
-        const preferred = A.Prefs.load().hallDefaultView === 'career' ? 'career' : 'classic';
-        defaultView.value = preferred;
-        if (!career?.active) {
-          showHallView('classic');
-        } else if (!currentHallView) {
-          showHallView(location.hash === '#hall-records' ? 'classic' : preferred);
-        }
+        settingsEntry.hidden = !(active || archived);
+        settingsLabel.textContent = archived ? '生涯设置（已封存）' : '生涯设置';
+        settingsLabel.href = 'games/pendulum-tower.html?careerPanel=settings';
       }
-
-      for (const button of hallModeButtons) {
-        button.addEventListener('click', () => showHallView(button.dataset.hallView));
-      }
-      defaultView.addEventListener('change', () => {
-        A.Prefs.save({ ...A.Prefs.load(), hallDefaultView: defaultView.value });
-      });
 
       render();
+      refreshHallViews();
     })();
   </script>
 </body>
