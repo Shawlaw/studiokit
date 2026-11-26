@@ -17,7 +17,7 @@
  *      shadow-leap.T2(C3) → star-raid.T2(中间单) → pendulum-tower.T2(C4) →
  *      玩家点击终局入口（research）→ C5 + ending.research。
  *      每单以只读 DB/claim/campaign.state 核验真实旗标与证据推进；中间单必须显示
- *      「路线进展」，不得冒充「推进本章/完成本章」；C5 只能由终局真实结算产生。
+ *      「能积攒下一步所需」，不得冒充「能推进这一段/完成本章」；C5 只能由终局真实结算产生。
  *   4. shadow-leap.T1 第一次故意做不足 → 如实失败反馈 → 从收据/告示板重接并成功。
  *   5. 玩家可见文本扫描：无 C0/C1/C4、T1/T2、E-/BP-/MAP-/DEC-、active/locked、
  *      长 commission/run id。
@@ -286,7 +286,7 @@ function staticContentChecks() {
   gate('S04 首选路线按真实规则恰好推进 C1→C2→C3→C4（不跳章）', J(actualFlags) === J(expectedFlags), J(derived));
   const stepIndexes = PREFERRED_ROUTE.map((spec, index) => (spec.kind === 'step' ? index : -1)).filter((index) => index >= 0);
   const silent = stepIndexes.filter((index) => derived[index].newFlags.length !== 0);
-  gate('S05 中间单不产章节旗标（必须显示路线进展）', silent.length === 0, J(silent.map((index) => ({ id: PREFERRED_ROUTE[index].commissionId, flags: derived[index].newFlags }))));
+  gate('S05 中间单不产章节旗标（必须显示能积攒下一步所需）', silent.length === 0, J(silent.map((index) => ({ id: PREFERRED_ROUTE[index].commissionId, flags: derived[index].newFlags }))));
 
   gate('S06 终局 research 由内容真实产出 C5 + ending.research，且前置为 C4',
     !!(ending && (ending.flags || []).includes('C5.star_tower_resolved') && (ending.flags || []).includes('ending.research') && ending.gameId === ENDING_GAME),
@@ -309,15 +309,15 @@ const INTERFACES = [
     critical: true,
   },
   {
-    name: 'I02 推荐文案区分「推进本章 / 路线进展」',
+    name: 'I02 推荐文案区分「能推进这一段 / 能积攒下一步所需」',
     file: 'apps/arcade/career/ui/town.js',
-    needles: ['路线进展', '推进本章'],
+    needles: ['能推进这一段', '能积攒下一步所需'],
     critical: true,
   },
   {
-    name: 'I03 campaign.recommend 纯函数（ADR §20.9）',
+    name: 'I03 campaign.recommend 纯函数与第二人称 reason（ADR §20.9）',
     file: 'apps/arcade/career/campaign-core.js',
-    needles: ['function recommend', 'RECOMMEND_ROUTES'],
+    needles: ['function recommend', 'RECOMMEND_ROUTES', '你愿意先接', '吗？'],
     critical: true,
   },
   {
@@ -336,9 +336,9 @@ const INTERFACES = [
     critical: true,
   },
   {
-    name: 'I06 收据页内「回告示板 / 读回信」主动作',
+    name: 'I06 收据页内「回告示板看看 / 读读回信」主动作',
     file: 'apps/arcade/career/ui/receipt.js',
-    needles: ['回告示板', '读回信'],
+    needles: ['回告示板看看', '读读回信'],
     critical: true,
   },
   {
@@ -1278,12 +1278,12 @@ async function phaseReceipt(cdp, label, expectedChapterFlag, ticketId, campaign,
   } else {
     gate('RECEIPT ' + label + ' 失败如实显示原因（不伪造成功）', card.text.length > 10 && /未|差|不足|没/.test(card.text), J(card.text));
   }
-  const action = card.buttons.find((button) => /回告示板|读回信|再接|重接/.test(button.text) || /关闭收据并读回信|回到告示板/.test(button.aria));
-  requireFeature('RECEIPT ' + label + ' 页内「回告示板 / 读回信」主动作', !!action, J(card.buttons));
+  const action = card.buttons.find((button) => /回告示板看看|读读回信|再接|重接/.test(button.text) || /回告示板|读回信/.test(button.text) || /关闭收据并读回信|回到告示板/.test(button.aria));
+  requireFeature('RECEIPT ' + label + ' 页内「回告示板看看 / 读读回信」主动作', !!action, J(card.buttons));
   gate('RECEIPT ' + label + ' 主动作热区 ≥44px', action.rect.h >= 44 && action.rect.w >= 44, J(action.rect));
 
   const hrefBefore = await cdp.evaluate('location.href');
-  /* 必须点已识别的主动作（读回信/回告示板），不能点第一个「收起」按钮。 */
+  /* 必须点已识别的主动作（读读回信/回告示板看看），不能点第一个「收起」按钮。 */
   const clickedAction = await cdp.evaluate(`(() => {
     const buttons = document.querySelectorAll('[data-career-card="receipt"] button');
     const el = buttons[${action.index}];
@@ -1293,7 +1293,7 @@ async function phaseReceipt(cdp, label, expectedChapterFlag, ticketId, campaign,
     return { ok: true, text: text };
   })()`);
   ensure(clickedAction && clickedAction.ok === true, label + ' 收据主动作不可点击: ' + J(clickedAction));
-  /* 读回信/章节可能异步懒加载：轮询等待任一面板出现，不用固定 sleep。 */
+  /* 读读回信/章节可能异步懒加载：轮询等待任一面板出现，不用固定 sleep。 */
   await cdp.waitFor(`['town','mailbox','world-state'].some(function (name) {
     return !!document.querySelector('[data-career-panel="' + name + '"]');
   })`, { timeout: 15000 });
@@ -1304,7 +1304,7 @@ async function phaseReceipt(cdp, label, expectedChapterFlag, ticketId, campaign,
   })()`);
   gate('RECEIPT ' + label + ' 下一步在当前页内打开面板（至多一次整页跳转）', opened.panels.length >= 1 && opened.href === hrefBefore, J({ before: hrefBefore, after: opened }));
   if (opened.panels.indexOf('mailbox') >= 0 && opened.panels.indexOf('town') < 0) {
-    await clickVisible(cdp, '[data-career-panel="mailbox"] [data-action="open-town"]', label + ' 读回信后去告示板');
+    await clickVisible(cdp, '[data-career-panel="mailbox"] [data-action="open-town"]', label + ' 读读回信后去告示板');
     await waitPanel(cdp, 'town', 15000);
   }
   await forbiddenTextScan(cdp, 'receipt-' + label);
@@ -1371,8 +1371,8 @@ async function runFullFlow(cdp, campaign, commissions) {
   let recommendation = await readBoardRecommendation(cdp);
   requireFeature('BOARD 告示板首屏提供真实可执行推荐单', recommendation.ok === true && !!recommendation.commissionId, J(recommendation));
   /* 目标必须真正在卡片里出现且只出现一次：data-town-goal 提供稳定目标文本，
-     「这一单要做」标签在整段文本中不得重复（防文案回归造成目标重复渲染）。 */
-  const goalLabel = '这一单要做';
+     「你愿意完成」标签在整段文本中不得重复（防文案回归造成目标重复渲染）。 */
+  const goalLabel = '你愿意完成';
   const labelOccurrences = recommendation.text.split(goalLabel).length - 1;
   gate('BOARD 推荐单一行给出游戏名/世界目标/数量/原因/主动作',
     !!recommendation.text && recommendation.text.length >= 20 && !!recommendation.goal &&
@@ -1411,7 +1411,7 @@ async function runFullFlow(cdp, campaign, commissions) {
     const completes = Array.from(realFlagsBefore).find((flag) =>
       Object.values(CHAPTER_FLAGS).includes(flag) && !projectionBefore.flags.has(flag)) || null;
     const expectedKind = completes ? 'milestone' : 'step';
-    const uiKind = /路线进展/.test(recommendation.kind || '') ? 'step' : /推进本章|完成本章/.test(recommendation.kind || '') ? 'milestone' : 'unknown';
+    const uiKind = /能积攒下一步所需|路线进展/.test(recommendation.kind || '') ? 'step' : /能推进这一段|推进本章|完成本章/.test(recommendation.kind || '') ? 'milestone' : 'unknown';
     gate('BOARD ' + recommendation.commissionId + ' 推荐标记与真实完成性一致', uiKind === expectedKind, J({ uiKind, expectedKind, completes, kind: recommendation.kind }));
 
     if (recommendation.commissionId === 'shadow-leap.T1' && index === 2) {

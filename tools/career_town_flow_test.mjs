@@ -373,7 +373,7 @@ check('首屏一个主动作：live run 优先为推荐单，其余单折叠', (
   assert.equal(recRow.getAttribute('data-town-recommend-id'), 'memory-flip.T1', 'live run should lead');
   const text = combinedText(sheet);
   assert.ok(text.includes('记忆翻牌：配好 3 组牌'), 'text=' + text);
-  assert.ok(text.includes('路线进展'), 'text=' + text);
+  assert.ok(text.includes('能积攒下一步所需'), 'text=' + text);
   assert.ok(text.includes('继续这张单'), 'text=' + text);
   assert.ok(text.includes('旧档案夹'), 'text=' + text);
   const free = byAttr(sheet, 'data-town-free', 'true')[0];
@@ -390,15 +390,15 @@ check('推荐卡同时提供 data-town-recommend-kind 与 data-town-kind，值�
   delete ctx.commission.continuations;
   const sheet = town.render(ctx);
   const rec = byAttr(sheet, 'data-town-recommend', 'true')[0].firstChild;
-  assert.equal(rec.getAttribute('data-town-recommend-kind'), '推进本章');
-  assert.equal(rec.getAttribute('data-town-kind'), '推进本章');
-  assert.ok(rec.textContent.includes('推进本章'), '属性与可见文案一致，未改文案');
+  assert.equal(rec.getAttribute('data-town-recommend-kind'), '能推进这一段');
+  assert.equal(rec.getAttribute('data-town-kind'), '能推进这一段');
+  assert.ok(rec.textContent.includes('能推进这一段'), '属性与可见文案一致，未改文案');
   const ctx2 = basicCtx();
   delete ctx2.commission.continuations;
   ctx2.campaign.recommend = () => ({ commissionId: 'pendulum-tower.T1', goal: 'x', reason: 'y', kind: 'step' });
   const rec2 = byAttr(town.render(ctx2), 'data-town-recommend', 'true')[0].firstChild;
-  assert.equal(rec2.getAttribute('data-town-recommend-kind'), '路线进展');
-  assert.equal(rec2.getAttribute('data-town-kind'), '路线进展');
+  assert.equal(rec2.getAttribute('data-town-recommend-kind'), '能积攒下一步所需');
+  assert.equal(rec2.getAttribute('data-town-kind'), '能积攒下一步所需');
   return 'both kind attributes present';
 });
 check('推荐卡 goal 用真实世界目标，不重复委托标题', () => {
@@ -418,13 +418,13 @@ check('推荐卡 goal 用真实世界目标，不重复委托标题', () => {
   assert.equal((text.match(/稳稳叠到 4 层/g) || []).length, 1, '目标文本只出现一次：' + text);
   assert.ok(text.includes('层塔：'), '应显示游戏名：' + text);
   assert.equal(row.getAttribute('data-town-goal'), '层塔：稳稳叠到 4 层', 'data-town-goal 保留完整目标');
-  assert.ok(!text.includes('这一单要做：港口实习'), '不得把标题当目标：' + text);
-  assert.ok(!/这一单要做：[^：]*实习/.test(text));
-  assert.ok(text.includes('推进本章') && text.includes('阿砾等这份航报'), '理由/推进标记保留');
+  assert.ok(!text.includes('你愿意完成：港口实习'), '不得把标题当目标：' + text);
+  assert.ok(!/你愿意完成：[^：]*实习/.test(text));
+  assert.ok(text.includes('能推进这一段') && text.includes('阿砾等这份航报'), '理由/推进标记保留');
   assert.ok(byAttr(row, 'data-town-recommend-start', 'true').length === 1, '主动作保留');
   return 'world goal with count, reason and action';
 });
-check('无 live run 时推荐卡显示 campaign.recommend 的游戏名/目标/推进本章/理由', () => {
+check('无 live run 时推荐卡显示 campaign.recommend 的游戏名/目标/推进标记/理由', () => {
   const { win, town } = loadTown();
   const ctx = basicCtx();
   delete ctx.commission.continuations;
@@ -434,8 +434,8 @@ check('无 live run 时推荐卡显示 campaign.recommend 的游戏名/目标/�
   assert.equal(row.getAttribute('data-town-recommend-id'), 'pendulum-tower.T1');
   const text = combinedText(row);
   assert.ok(text.includes('层塔：稳稳叠到 4 层'), 'text=' + text);
-  assert.ok(text.includes('推进本章'), 'text=' + text);
-  assert.ok(text.includes('这一单要做：层塔：稳稳叠到 4 层'), 'text=' + text);
+  assert.ok(text.includes('能推进这一段'), 'text=' + text);
+  assert.ok(text.includes('你愿意完成：层塔：稳稳叠到 4 层'), 'text=' + text);
   assert.ok(text.includes('做完港里会把你记成在册自由职业者'), 'text=' + text);
   assert.ok(!win.navigated);
   return 'campaign recommendation shown';
