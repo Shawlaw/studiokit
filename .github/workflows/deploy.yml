@@ -53,10 +53,29 @@ jobs:
           retention-days: 3
           if-no-files-found: error
 
+  # L0 静态层：纯 python/node 门禁，不启动 Chrome（普通 ubuntu runner 无本机 Chrome）。
+  # release/full 的 Chrome 集只在本地有 Chrome 的环境串行跑，CI 不承担。
+  static-gates:
+    name: Arcade static gates (L0, no Chrome)
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+      - name: Set up Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+      - name: Run static profile
+        run: python tools/arcade_run_all_gates.py --profile static --workers 3
+
   deploy-pages:
     name: Deploy GitHub Pages
     if: github.event_name != 'pull_request' && github.ref == 'refs/heads/main'
-    needs: build
+    needs: [build, static-gates]
     runs-on: ubuntu-latest
     outputs:
       page_url: ${{ steps.deployment.outputs.page_url }}
@@ -77,7 +96,7 @@ jobs:
   deploy-cloudflare:
     name: Deploy Cloudflare Pages
     if: github.event_name != 'pull_request' && github.ref == 'refs/heads/main'
-    needs: build
+    needs: [build, static-gates]
     runs-on: ubuntu-latest
     outputs:
       deployment_url: ${{ steps.deploy.outputs.deployment-url }}

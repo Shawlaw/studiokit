@@ -10,6 +10,9 @@
  * - `--self-test`：无 fixture 也验证 runner 自身（schema/事件目录/fixture 形状/退出码语义/缺口报告）。
  * - `--run=<gameId|all>`：通用 Chrome harness，驱动每个 tier 的 success / failure /
  *   suspend / receipt-claim-idempotent 通用证据；fixture 只负责把真实游戏状态驱动到目标附近。
+ * - `--skip-static`：只对 `--run` 有效；父进程已跑过 96 static 时跳过子进程里重复的
+ *   content schema / fixture 形状静态校验。仍读取真实内容与 fixture、仍跑全部真实 E2E 与
+ *   隔离证据，并打印 `SKIP-STATIC` 标记供父进程核对；不跳过任何 tier 证据、不改退出码语义。
  *
  * 设计约束：
  * - 只使用 Node 内置模块 + tools/lib/arcade_cdp.mjs，无 npm 依赖、不联网；
@@ -285,13 +288,17 @@ async function loadFixtureModule(entry) {
  * 校验 16 个 fixture 形状；返回逐游戏结果。
  * @returns {Promise<{entries:Array, present:number, ok:number, invalid:number, missing:number}>}
  */
-async function validateFixtures() {
+async function validateFixtures(options) {
+  const only = options && Array.isArray(options.gameIds) && options.gameIds.length
+    ? options.gameIds.filter((id) => id !== 'all')
+    : null;
   const entries = [];
   let present = 0;
   let ok = 0;
   let invalid = 0;
   let missing = 0;
   for (const entry of discoverFixtures()) {
+    if (only && only.indexOf(entry.gameId) < 0) continue;
     const result = { gameId: entry.gameId, rel: entry.rel, present: entry.present, status: 'missing', errors: [], warnings: [], fixture: null };
     if (!entry.present) {
       missing += 1;
@@ -1646,13 +1653,38 @@ async function runMode(options) {
     return EXIT_ENV;
   }
   const bundle = loadContentBundle();
-  const contentResult = validateLoadedContent(bundle);
-  if (!reportContent(contentResult, options)) {
-    console.error('FAIL   内容 schema 未通过，拒绝驱动 fixture（请看上面的 errors/warnings；或去掉 --strict 仅跑内容告警版本）');
-    return EXIT_FAIL;
+  /*
+   * --skip-static 只在父进程已通过 96 static 时使用：不再重复做 content schema 与
+   * fixture 形状的静态校验（16 个子进程各自跑一遍很贵），但内容/fixture 仍真实读取，
+   * tier 索引、fixture 导入、Chrome E2E、收据幂等与隔离证据一项都不跳过。
+   * 子进程如果不带此开关则维持原行为（完整静态校验），兼容既有调用。
+   */
+  const skipStatic = options.skipStatic === true;
+  let contentResult;
+  if (skipStatic) {
+    console.log('SKIP-STATIC content schema / fixture shape 由父进程 96 --static 承担');
+    if (!bundle || !bundle.commissions) {
+      console.error('FAIL   内容不可读（--skip-static 不能替代内容装载）');
+      return EXIT_FAIL;
+    }
+    contentResult = { ok: true, errors: [], warnings: [], counts: { games: GAMES.length, tiers: TIERS.length, total: GAMES.length * TIERS.length } };
+    console.log('PASS  content-schema  ' + (GAMES.length * TIERS.length) + '/' + (GAMES.length * TIERS.length) +
+      '  games=' + GAMES.length + '  tiers=' + TIERS.length + ' (parent-static-trust)');
+  } else {
+    contentResult = validateLoadedContent(bundle);
+    if (!reportContent(contentResult, options)) {
+      console.error('FAIL   内容 schema 未通过，拒绝驱动 fixture（请看上面的 errors/warnings；或去掉 --strict 仅跑内容告警版本）');
+      return EXIT_FAIL;
+    }
   }
   const index = buildContentIndex(bundle.commissions);
-  const fixtures = await validateFixtures();
+  let fixtures;
+  if (skipStatic) {
+    /* 只对目标游戏做轻量形状探测（缺 tier / 非法形状仍 FAIL，绝不静默通过）。 */
+    fixtures = await validateFixtures({ gameIds: [target], shapeOnly: true });
+  } else {
+    fixtures = await validateFixtures();
+  }
   const targets = target === 'all' ? GAMES.slice() : [target];
   const runnable = [];
   let missing = 0;
@@ -1979,10 +2011,12 @@ const USAGE = [
   '  node tools/career_mission_fixture_runner.mjs --list                  # 列出内容/fixture 缺口',
   '  node tools/career_mission_fixture_runner.mjs --self-test             # runner 自检（无 fixture 也可）',
   '  node tools/career_mission_fixture_runner.mjs --run=<gameId|all> [--tier=1,4,6] [--allow-missing] [--verbose]',
+  '  node tools/career_mission_fixture_runner.mjs --run=<gameId|all> --skip-static   # 父进程已通过 96 static 时跳过重复静态校验',
   '',
   '选项：',
   '  --strict          内容告警/缺失 fixture 视为失败（门禁模式）',
   '  --allow-missing   --run=all 时允许缺失 fixture（默认缺失不算通过）',
+  '  --skip-static     仅 --run 可用；信任父进程 96 --static，跳过子进程重复 schema/形状校验；真实 E2E 不跳过',
   '  --verbose         打印每条证据检查结果',
   '  --timeout=<ms>    harness 单 tier 超时（默认 ' + DEFAULT_TIER_TIMEOUT_MS + 'ms）',
   '  --help            显示本帮助',
@@ -2005,6 +2039,7 @@ function parseArgs(argv) {
     strict: false,
     verbose: false,
     allowMissing: false,
+    skipStatic: false,
     help: false,
     handlerTimeoutMs: DEFAULT_HANDLER_TIMEOUT_MS,
     tierTimeoutMs: DEFAULT_TIER_TIMEOUT_MS,
@@ -2026,6 +2061,7 @@ function parseArgs(argv) {
     else if (arg === '--strict') options.strict = true;
     else if (arg === '--verbose') options.verbose = true;
     else if (arg === '--allow-missing') options.allowMissing = true;
+    else if (arg === '--skip-static') options.skipStatic = true;
     else if (arg.indexOf('--run=') === 0) {
       setMode('run');
       options.gameId = arg.slice('--run='.length);
@@ -2052,6 +2088,9 @@ function parseArgs(argv) {
     }
   });
   if (options.unknown.length) options.errors.push('未知参数：' + options.unknown.join(' '));
+  if (options.skipStatic && options.mode !== 'run') {
+    options.errors.push('--skip-static 只能与 --run=<gameId|all> 同用（静态模式本身就是静态校验）');
+  }
   return options;
 }
 
