@@ -28,15 +28,15 @@
 | `career_pwa_offline_test.mjs` | **18/18 PASS** | 0.21.0 缓存、0.18.2 预载清单迁移、GH 子路径与 CF 无后缀 |
 | `career_chrome_isolation_test.mjs` | **9/9 PASS** | 动态端口、profile 归属、失败清理 |
 | `arcade_gameplay_test.mjs --suite=base --repeat=2` | **22/22 PASS** | release profile 内通过 |
-| 96 委托 Chrome E2E | 首轮 13/16 游戏通过；blackjack/solitaire/pendulum-tower 因 `DevToolsActivePort` 环境错误未执行 | 三款单独串行重跑均 6/6 tiers（各 237/237 checks）；全量串行复跑结果见本节后续更新 |
-| `release` profile | 首轮 **37/40 PASS，3 FAIL** | 96 的三个 Chrome 启动环境错误；mobile 种子缺代次（已修复并 318/318）；smoke 旧版本断言（已修复并 117/117）。不得声称首轮 release 通过 |
+| 96 委托 Chrome E2E | **16/16 游戏、96/96 tiers、3792/3792 checks PASS** | 最终 `--e2e --skip-static` 全量串行 exit 0，0 环境错误 |
+| `release` profile | **41/41 PASS** | 最终 verdict `release passed (not full)`，1801.411s；含 lifecycle 60/60、96 3792/3792、flow 339/339 |
 | `full` profile | **UNVERIFIED** | 未执行完整 56 项集合 |
 | GitHub Actions / 双端 `verify_deploy.py` / 线上页面 | **UNVERIFIED** | 尚未 push / 触发部署 |
 | 真机 / 真人、读屏、PWA 安装态 | **UNVERIFIED** | 无真实设备证据 |
 
-## 3. 首轮 release 失败闭环
+## 3. 首轮 release 失败与最终闭环
 
-- `career_96_missions`：exit 2，blackjack / solitaire / pendulum-tower 的 Chrome `DevToolsActivePort` 未就绪，属于环境错误，未执行 tier。定向复跑中 solitaire 通过，blackjack 与 pendulum-tower 仍遇到相同环境错误；三者随后各自单独运行均通过 6/6 tiers。全量串行复跑用于消除逐进程启动波动。
+- `career_96_missions`：首轮 exit 2，blackjack / solitaire / pendulum-tower 的 Chrome `DevToolsActivePort` 未就绪，属于环境错误，未执行 tier。后续全量串行仍有一次层塔启动超时；为测试 launcher 增加 stderr/exit/profile 诊断与最多 3 次串行冷启动重试（新 profile、先清理、确定性错误不重试）后，最终全量 16/16、96/96、3792/3792 一次通过，0 环境错误。
 - `career_mobile`：`seedState()` 未传 action，发现写入缺少必填代次；已在测试种子路径显式注入 `SEED_STATE`，复跑 318/318。
 - `smoke`：版本断言仍为 0.20.0；已同步 0.21.0，复跑 117/117。
 
@@ -49,7 +49,7 @@
 
 ## 5. 未解决项与发布门槛
 
-1. 完成全量 96 串行复跑与最终 release profile；若仍只有环境错误，必须保留真实失败记录并逐项重跑，不得伪称一次聚合通过。
-2. `full` profile 未执行；release 通过不能替代 full，更不等于发布就绪。
+1. 最终 release profile 已 41/41 通过；`full` profile 未执行，不能把 release 结论写成 full。
+2. 发布后需确认 Actions 四个 job 与双端 `verify_deploy.py`；通过前不得声称已发布。
 3. 需要真实设备/真人验证被动来信、封存/解冻、重置提示与经典记录保留。
 4. 发布后检查 Actions 四个 job 成功，并用 `tools/verify_deploy.py` 双端逐文件校验；此前不得声称 0.21.0 已发布。

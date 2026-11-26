@@ -16,7 +16,7 @@
 ### Tests
 
 - 已通过：static **35/35**、archive **8/8**、archive lifecycle **60/60**、DB **38/38**、backup **34/34**、mobile **318/318**、smoke **117/117**、完整首航 **339/339**、PWA 离线 **18/18**。
-- 96 全量串行与 release 首轮仍记录 Chrome `DevToolsActivePort` 环境错误；full / Actions / 双端 `verify_deploy.py` / 真机 / 真人仍 **UNVERIFIED**。详见集成记录，不得据此声称发布。
+- 最终 96 全量串行 **16/16 游戏、96/96 tiers、3792/3792 checks**；release profile **41/41 `release passed (not full)`**（1801.411s）。full / Actions / 双端 `verify_deploy.py` / 真机 / 真人仍 **UNVERIFIED**。
 
 ### Notes
 
