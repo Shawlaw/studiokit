@@ -1,8 +1,8 @@
 # Arcade 0.21.1 — 生涯身份建立后的常驻旧港内容入口
 
-- 基线：0.21.0（2026-11-26 已双端发布，main `14a19b0`，Actions `45750286945` 全绿，双端 89/89 文件一致，SW `studiokit-arcade-0.21.0-v1`）
-- 本地产品分支：`fix/arcade-career-entry-0211`，HEAD `87746d4`（`fix(arcade): 生涯身份建立后显示常驻旧港入口`）；文档工作树 `codex/career-entry-0211-docs` 仅同步文档 / 任务记录，不改产品代码、测试或门禁脚本。
-- 状态：**本地修复，未发布**。0.21.1 是本批次文档目标版本；版本链已同步 0.21.1 / SW `studiokit-arcade-0.21.1-v1`；线上仍为 0.21.0。
+- 基线：0.21.0（2026-11-26 已双端发布，main `28a0182`，Actions `45752833025` 全绿，双端 89/89 文件一致，SW `studiokit-arcade-0.21.0-v1`）
+- 本地产品分支：`fix/arcade-career-entry-0211`；产品代码截止 `87746d4`，后续为版本 / 文档 / 测试收尾提交。
+- 状态：**本地修复，未发布**。版本链已同步 0.21.1 / SW `studiokit-arcade-0.21.1-v1`；线上仍为 0.21.0。
 - 验证口径：static 35/35、`career_passive_entry` 61/61、`arcade_smoke` 117/117（含四档窄屏与解冻 / 重置）、mobile 318/318、PWA 18/18、archive lifecycle 60/60；release / full / 96 全量 / 首航 / 真机未跑。详见 [`docs/arcade-life/INTEGRATION-0.21.1.md`](../../docs/arcade-life/INTEGRATION-0.21.1.md)。
 
 ## 1. 问题与边界
