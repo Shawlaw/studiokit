@@ -174,6 +174,9 @@ def gates():
         _gate('career_town_flow', ['node', 'tools/career_town_flow_test.mjs']),
         _gate('career_town_recommend_preload', ['node', 'tools/career_town_recommend_preload_test.mjs']),
         _gate('career_origin_letter', ['node', 'tools/career_origin_letter_test.mjs']),
+        _gate('career_archive', ['node', 'tools/career_archive_test.mjs']),
+        _gate('career_passive_entry', ['node', 'tools/career_passive_entry_test.mjs']),
+        _gate('career_narrative_voice', ['node', 'tools/career_narrative_voice_test.mjs']),
         # 0.20 零种子完整首航：Chrome 长跑门禁，独占 CDP，串行运行时放最后。
         _gate('career_flow_e2e', ['node', 'tools/career_flow_e2e_test.mjs'], {
             'CAREER_FLOW_PORT': _env('CAREER_FLOW_PORT', '9901'),
