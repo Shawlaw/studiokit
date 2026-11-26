@@ -823,11 +823,11 @@ async function runChromeChecks(cdp) {
          },
          runs: { 'memory-flip': { eligibleRuns: 2, lastRunId: null, lastRunAt: '2026-11-22T01:00:00.000Z' } }
        };
-       const savedState = await db.saveDiscoveryState(state);
+       const savedState = await db.saveDiscoveryState(state, { generation: 0 });
        const put = await db.putDiscovery([
          { clueId: 'CL-memory-flip', sourceGame: 'memory-flip', firstSeenRunId: null, seenAt: '2026-11-22T01:00:00.000Z', openedAt: null, dismissed: false },
          { clueId: 'CL-gomoku', sourceGame: 'gomoku', firstSeenRunId: null, seenAt: '2026-11-22T01:00:00.000Z', openedAt: null, dismissed: true }
-       ]);
+       ], { generation: 0 });
        const ensured = await db.ensureCareer({ originGameId: 'memory-flip', now: '2026-11-22T01:00:00.000Z' });
        if (!ensured.ok) throw new Error('ensureCareer: ' + JSON.stringify(ensured));
        const runId = core.newId('run');

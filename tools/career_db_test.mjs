@@ -363,7 +363,7 @@ async function runNodeChecks() {
     const opened = await dbModule.open();
     assert(opened.ok === false && opened.reason === 'no-indexeddb', 'open=' + JSON.stringify(opened));
     assert((await dbModule.isAvailable()) === false, 'isAvailable 应为 false');
-    const saved = await dbModule.saveDiscoveryState({ stage: 'DORMANT' });
+    const saved = await dbModule.saveDiscoveryState({ stage: 'DORMANT' }, { generation: 0 });
     assert(saved.ok === false && saved.reason === 'no-indexeddb', 'save=' + JSON.stringify(saved));
     assert((await dbModule.getDiscoveryState()) === null, 'getDiscoveryState 应为 null');
     assert(sameJson(await dbModule.listDiscovery(), []), 'listDiscovery 应为 []');
@@ -409,10 +409,10 @@ async function runNodeChecks() {
   await check('A11 bridge 兼容别名存在（saveState/getState，非 ADR 必需但可被探测）', async () => {
     assert(typeof dbModule.saveState === 'function', '缺少 saveState');
     assert(typeof dbModule.getState === 'function', '缺少 getState');
-    const save = await dbModule.saveState({ key: 'discovery', stage: 'DORMANT' });
+    const save = await dbModule.saveState({ key: 'discovery', stage: 'DORMANT' }, { generation: 0 });
     assert(save.ok === false && save.reason === 'no-indexeddb', 'saveState=' + JSON.stringify(save));
     assert((await dbModule.getState('discovery')) === null, 'getState 应为 null');
-    const single = await dbModule.putDiscovery({ clueId: 'CL-gomoku', sourceGame: 'gomoku' });
+    const single = await dbModule.putDiscovery({ clueId: 'CL-gomoku', sourceGame: 'gomoku' }, { generation: 0 });
     assert(single.ok === false && single.reason === 'no-indexeddb', 'putDiscovery 单条=' + JSON.stringify(single));
     return 'aliases present';
   });
@@ -505,9 +505,9 @@ async function runChromeChecks(cdp) {
     const roundTrip = await pageEval(
       cdp,
       `const state = ${JSON.stringify(state)};
-       const saved = await db.saveDiscoveryState(state);
+       const saved = await db.saveDiscoveryState(state, { generation: 0 });
        const readBack = await db.getDiscoveryState();
-       const put = await db.putDiscovery([{ clueId: 'CL-gomoku', sourceGame: 'gomoku', firstSeenRunId: null, seenAt: '2026-11-22T00:00:00.000Z', openedAt: null, dismissed: false }]);
+       const put = await db.putDiscovery([{ clueId: 'CL-gomoku', sourceGame: 'gomoku', firstSeenRunId: null, seenAt: '2026-11-22T00:00:00.000Z', openedAt: null, dismissed: false }], { generation: 0 });
        const listed = await db.listDiscovery();
        const second = await db.getDiscoveryState();
        return { saved, equal: JSON.stringify(readBack) === JSON.stringify(state), put, listed: listed.map((row) => row.clueId).sort(), stable: JSON.stringify(second) === JSON.stringify(state) };`,
@@ -524,11 +524,11 @@ async function runChromeChecks(cdp) {
     const bad = await pageEval(
       cdp,
       `const out = [];
-       out.push(await db.saveDiscoveryState('garbage-string'));
+       out.push(await db.saveDiscoveryState('garbage-string', { generation: 0 }));
        const a = await db.getDiscoveryState();
-       out.push(await db.saveDiscoveryState(null));
+       out.push(await db.saveDiscoveryState(null, { generation: 0 }));
        const b = await db.getDiscoveryState();
-       out.push(await db.saveDiscoveryState({ broken: [1, 2, 3] }));
+       out.push(await db.saveDiscoveryState({ broken: [1, 2, 3] }, { generation: 0 }));
        const c = await db.getDiscoveryState();
        out.push(await db.putDiscovery([{ clueId: 'bad id' }]));
        return { out, a, b, c, putInvalid: out[3] };`,
@@ -1000,8 +1000,8 @@ async function runChromeChecks(cdp) {
     const before = await snapshot(cdp);
     const result = await pageEval(
       cdp,
-      `await db.saveDiscoveryState({ schemaVersion: 1, stage: 'GLIMPSED', clues: {}, runs: {} });
-       await db.putDiscovery([{ clueId: 'CL-gomoku', sourceGame: 'gomoku', seenAt: '2026-11-22T00:10:00.000Z' }]);
+      `await db.saveDiscoveryState({ schemaVersion: 1, stage: 'GLIMPSED', clues: {}, runs: {} }, { generation: 0 });
+       await db.putDiscovery([{ clueId: 'CL-gomoku', sourceGame: 'gomoku', seenAt: '2026-11-22T00:10:00.000Z' }], { generation: 0 });
        const reset = await db.resetDiscovery();
        const stateNow = await db.getDiscoveryState();
        const listed = await db.listDiscovery();
@@ -1160,7 +1160,7 @@ async function runChromeChecks(cdp) {
       page2 = await openSecondPage();
       const opened2 = await pageEval(page2, `const opened = await db.open(); return { ok: opened.ok, version: opened.ok ? opened.db.version : 0 };`);
       assert(opened2.ok && opened2.version === 1, '第二标签 open 失败：' + JSON.stringify(opened2));
-      await pageEval(page2, `await db.saveDiscoveryState({ marker: 'second-tab' }); return true;`);
+      await pageEval(page2, `await db.saveDiscoveryState({ marker: 'second-tab' }, { generation: 0 }); return true;`);
       const deleted = await pageEval(cdp, `return await db.__coreTest.deleteDatabase();`);
       assert(deleted.ok === true, 'deleteDatabase 被 blocked（versionchange 未关闭连接）：' + JSON.stringify(deleted));
       const readBack = await pageEval(page2, `const state = await db.getDiscoveryState(); return { state, ok: true };`);
@@ -1196,10 +1196,10 @@ async function runChromeChecks(cdp) {
          clues: { 'CL-gomoku': { clueId: 'CL-gomoku', sourceGame: 'gomoku', seenAt: '2026-11-22T00:14:00.000Z' } },
          runs: { gomoku: { eligibleRuns: 1 } }
        };
-       const saved = await db.saveState(flat);
+       const saved = await db.saveState(flat, { generation: 0 });
        const viaGetState = await db.getState('discovery');
        const viaPrimary = await db.getDiscoveryState();
-       const single = await db.putDiscovery({ clueId: 'CL-shadow-leap', sourceGame: 'shadow-leap', seenAt: '2026-11-22T00:14:01.000Z' });
+       const single = await db.putDiscovery({ clueId: 'CL-shadow-leap', sourceGame: 'shadow-leap', seenAt: '2026-11-22T00:14:01.000Z' }, { generation: 0 });
        const listed = await db.listDiscovery();
        const missingKey = await db.getState('no-such-key');
        return { saved, viaGetState, viaPrimary, single, listed: listed.map((row) => row.clueId).sort(), missingKey };`,

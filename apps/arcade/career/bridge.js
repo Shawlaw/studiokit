@@ -2000,6 +2000,7 @@
         );
         var strategies = [];
 
+        var generationOptions = { generation: internal.discoveryGeneration || 0 };
         var stateSave = pickMethod(dbModule, ['saveDiscoveryState', 'saveState', 'putState', 'writeState', 'setState']);
         var discoverySaveMany = pickMethod(dbModule, ['putDiscovery', 'putDiscoveries', 'saveDiscoveries']);
         var discoverySaveOne = pickMethod(dbModule, ['saveDiscovery', 'writeDiscovery', 'addDiscovery']);
@@ -2009,7 +2010,7 @@
             if (records.length) {
               if (discoverySaveMany) {
                 chain = chain.then(function () {
-                  return callMaybeAsync(discoverySaveMany, dbModule, [records]).then(function (raw) {
+                  return callMaybeAsync(discoverySaveMany, dbModule, [records, generationOptions]).then(function (raw) {
                     var normalized = normalizeWriteResult(raw);
                     if (!normalized.ok) throw new Error(normalized.error || 'discovery-write-failed');
                   });
@@ -2034,7 +2035,7 @@
             return chain.then(function () {
               /* career-db.saveDiscoveryState 期望发现状态本体（DB 层自己包 {key,value}）。 */
               var payload = stateSave.name === 'saveDiscoveryState' ? state : stateRecord;
-              return callMaybeAsync(stateSave, dbModule, [payload]).then(function (raw) {
+              return callMaybeAsync(stateSave, dbModule, [payload, generationOptions]).then(function (raw) {
                 var normalized = normalizeWriteResult(raw);
                 if (!normalized.ok) throw new Error(normalized.error || 'state-write-failed');
                 return { ok: true, method: 'career-db:' + stateSave.name };

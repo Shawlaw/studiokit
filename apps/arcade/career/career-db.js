@@ -590,13 +590,36 @@
     }).then((res) => (res.ok ? res.result : failure(res.reason, res.error)));
   }
 
-  function saveDiscoveryState(state) {
+  function normalizeDiscoveryGeneration(options) {
+    const value = isObject(options) ? options.generation : undefined;
+    return Number.isFinite(Number(value)) && Number(value) >= 0 ? Math.floor(Number(value)) : null;
+  }
+
+  function requireDiscoveryGeneration(ctx, options, reasonPrefix, done) {
+    const prefix = typeof reasonPrefix === 'string' && reasonPrefix ? reasonPrefix : 'discovery-write';
+    const expected = normalizeDiscoveryGeneration(options);
+    readDiscoveryGeneration(ctx, (current) => {
+      if (expected === null) {
+        ctx.done({ ok: false, reason: 'missing-generation', generation: current });
+        return;
+      }
+      if (expected !== current) {
+        ctx.done({ ok: false, reason: 'stale-generation', generation: current });
+        return;
+      }
+      done(current);
+    });
+  }
+
+  function saveDiscoveryState(state, options) {
     const value = state === undefined ? null : state;
     const at = nowIso();
     return txRun(['state'], 'readwrite', (ctx) => {
       assertCareerWritable(ctx, 'save-discovery-state');
-      const row = { key: STATE_KEY_DISCOVERY, schemaVersion: SCHEMA_VERSION, updatedAt: at, value };
-      ctx.bind(ctx.store('state').put(row), () => ctx.done({ ok: true }));
+      requireDiscoveryGeneration(ctx, options, 'save-discovery-state', () => {
+        const row = { key: STATE_KEY_DISCOVERY, schemaVersion: SCHEMA_VERSION, updatedAt: at, value };
+        ctx.bind(ctx.store('state').put(row), () => ctx.done({ ok: true }));
+      });
     }).then((res) => (res.ok ? res.result : failure(res.reason, res.error)));
   }
 
@@ -684,7 +707,11 @@
       const stateStore = ctx.store('state');
       readDiscoveryGeneration(ctx, (currentGeneration) => {
         const requestedGeneration = action && Number.isFinite(Number(action.generation)) ? Math.floor(Number(action.generation)) : null;
-        if (requestedGeneration !== null && requestedGeneration !== currentGeneration) {
+        if (requestedGeneration === null) {
+          ctx.done({ ok: false, reason: 'missing-generation', generation: currentGeneration });
+          return;
+        }
+        if (requestedGeneration !== currentGeneration) {
           ctx.done({ ok: false, reason: 'stale-generation', generation: currentGeneration });
           return;
         }
@@ -777,7 +804,7 @@
     return record;
   }
 
-  function putDiscovery(records) {
+  function putDiscovery(records, options) {
     const core = coreApi();
     const list = Array.isArray(records) ? records : isObject(records) ? [records] : null;
     if (!list) return Promise.resolve(failure('bad-records'));
@@ -788,11 +815,13 @@
     const at = nowIso();
     return txRun(['state', 'discovery'], 'readwrite', (ctx) => {
       assertCareerWritable(ctx, 'put-discovery');
-      const store = ctx.store('discovery');
-      const tasks = list.map((record) => (next) => {
-        ctx.bind(store.put(normalizeDiscoveryRecord(record, at)), next);
+      requireDiscoveryGeneration(ctx, options, 'put-discovery', () => {
+        const store = ctx.store('discovery');
+        const tasks = list.map((record) => (next) => {
+          ctx.bind(store.put(normalizeDiscoveryRecord(record, at)), next);
+        });
+        sequence(tasks, () => ctx.done({ ok: true, count: list.length }));
       });
-      sequence(tasks, () => ctx.done({ ok: true, count: list.length }));
     }).then((res) => (res.ok ? res.result : failure(res.reason, res.error)));
   }
 
@@ -806,20 +835,25 @@
    * - getState(key) → 扁平 {key, ...state}（bridge 侧 discovery.normalizeState 需要扁平对象）
    * ------------------------------------------------------------------ */
 
-  function saveState(record) {
+  function saveState(record, options) {
     if (!isObject(record)) return Promise.resolve(failure('bad-state'));
     const key = typeof record.key === 'string' && record.key && record.key.length <= 120 ? record.key : STATE_KEY_DISCOVERY;
     const copy = jsonClone(record) || {};
     delete copy.key;
+    const requestedGeneration = isObject(options) ? options.generation : copy.generation;
+    delete copy.generation;
     const keys = Object.keys(copy);
     const value = keys.length === 1 && Object.prototype.hasOwnProperty.call(record, 'value') ? record.value : copy;
+    const generationOptions = { generation: requestedGeneration };
     const at = nowIso();
     /* 封存禁止改写任何生涯 state 行（包括 discovery 与 career 指针）。 */
     if (key === STATE_KEY_CAREER_ARCHIVE) return Promise.resolve(failure('archive-reserved'));
     return txRun(['state'], 'readwrite', (ctx) => {
       assertCareerWritable(ctx, 'save-state');
-      const row = { key, schemaVersion: SCHEMA_VERSION, updatedAt: at, value };
-      ctx.bind(ctx.store('state').put(row), () => ctx.done({ ok: true }));
+      requireDiscoveryGeneration(ctx, generationOptions, 'save-state', () => {
+        const row = { key, schemaVersion: SCHEMA_VERSION, updatedAt: at, value };
+        ctx.bind(ctx.store('state').put(row), () => ctx.done({ ok: true }));
+      });
     }).then((res) => (res.ok ? res.result : failure(res.reason, res.error)));
   }
 
@@ -2653,17 +2687,14 @@
     return txRun(STORES, 'readwrite', (ctx) => {
       const stateStore = ctx.store('state');
       ctx.bind(stateStore.getAll(), (stateRows) => {
-        const retiredIds = [];
-        stateRows.forEach((row) => {
-          if (!row || typeof row.key !== 'string') return;
-          if (row.key === STATE_KEY_CAREER && row.value && typeof row.value.careerId === 'string') retiredIds.push(row.value.careerId);
-          if (row.key.indexOf(FORMER_CAREER_PREFIX) === 0 && row.value && typeof row.value.careerId === 'string') retiredIds.push(row.value.careerId);
-        });
+        const pointer = stateRows.find((row) => row && row.key === STATE_KEY_CAREER);
+        const currentCareerId = pointer && pointer.value && typeof pointer.value.careerId === 'string' ? pointer.value.careerId : null;
+        const retiredIds = retiredIdsIn({ state: stateRows }).filter((id) => id !== currentCareerId);
         readDiscoveryGeneration(ctx, (current) => {
           const next = current + 1;
           const tasks = STORES.map((name) => (nextTask) => ctx.bind(ctx.store(name).clear(), nextTask));
           tasks.push((nextTask) => writeDiscoveryGeneration(ctx, next, nextTask));
-          Array.from(new Set(retiredIds)).slice(-FORMER_CAREER_LIMIT).forEach((careerId) => {
+          retiredIds.slice(-(FORMER_CAREER_LIMIT - 1)).forEach((careerId) => {
             tasks.push((nextTask) => ctx.bind(stateStore.put({
               key: formerCareerKey(careerId),
               schemaVersion: SCHEMA_VERSION,
@@ -2671,7 +2702,16 @@
               value: { careerId, retiredAt: nowIso() },
             }), nextTask));
           });
-          sequence(tasks, () => ctx.done({ ok: true, generation: next, retiredCareerCount: Math.min(new Set(retiredIds).size, FORMER_CAREER_LIMIT) }));
+          /* 当前身份最后写入且不参与 slice，保证达到上限时本轮退役标记不会被挤掉。 */
+          if (currentCareerId) {
+            tasks.push((nextTask) => ctx.bind(stateStore.put({
+              key: formerCareerKey(currentCareerId),
+              schemaVersion: SCHEMA_VERSION,
+              updatedAt: nowIso(),
+              value: { careerId: currentCareerId, retiredAt: nowIso() },
+            }), nextTask));
+          }
+          sequence(tasks, () => ctx.done({ ok: true, generation: next, retiredCareerCount: retiredIds.slice(-(FORMER_CAREER_LIMIT - 1)).length + (currentCareerId ? 1 : 0) }));
         });
       });
     }).then((res) => (res.ok ? res.result : failure(res.reason, res.error)));
