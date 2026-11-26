@@ -1,8 +1,8 @@
 # Arcade Changelog
 
-## 0.21.1 — 2026-11-26（已授权发布）
+## 0.21.1 — 2026-11-26（已双端发布）
 
-本地分支 `fix/arcade-career-entry-0211`，产品代码截止 `87746d4`；设计与回滚见 [`DESIGN-0.21.1.md`](DESIGN-0.21.1.md)，集成与验证口径见 [`docs/arcade-life/INTEGRATION-0.21.1.md`](../../docs/arcade-life/INTEGRATION-0.21.1.md)。**未发布**：线上仍为 0.21.0；本地版本链已同步 0.21.1 / SW `studiokit-arcade-0.21.1-v1`。
+本地分支 `fix/arcade-career-entry-0211`，产品代码截止 `87746d4`；设计与回滚见 [`DESIGN-0.21.1.md`](DESIGN-0.21.1.md)，集成与验证口径见 [`docs/arcade-life/INTEGRATION-0.21.1.md`](../../docs/arcade-life/INTEGRATION-0.21.1.md)。**2026-11-26 已双端发布**：main `cbfeef6`，Actions `45840350943` 全绿，双端 90/90 文件一致；版本链 0.21.1 / SW `studiokit-arcade-0.21.1-v1`。
 
 ### Fixed
 
@@ -13,12 +13,12 @@
 ### Tests
 
 - 0.21.1 实跑：static **35/35**、`career_passive_entry` **61/61**、`arcade_smoke` **117/117**（含四档窄屏、封存 / 解冻 / 重置）、mobile **318/318**、PWA **18/18**、archive lifecycle **60/60**；独立复审 APPROVE。
-- `arcade_smoke` 加入 320/375/390/430 四档窄屏增强断言后的最终复跑**仍待主 Agent**；其余门禁、full profile、真机 / 真人（0.21.1）UNVERIFIED。0.21.0 的历史通过数字仅作为已发布基线，不作为本版已跑证据。
+- `arcade_smoke` 最终 118/118（含 320/375/390/430、封存 / 解冻 / 重置）；release 41/41、96 全量 3792/3792、首航 404/404 已通过。full profile 与真机 / 真人仍 UNVERIFIED。
 
 ### Notes
 
 - 只改 `apps/arcade/index.html` / `arcade.css` 与对应测试断言；不改 localStorage key / IDB v1 / 11 stores / `contentVersion 0.18.0` / 玩法数值 / 关卡数据，不引入远程资源。
-- 无 `PUBLISH_TO_MAIN`、无 push、无 Actions / 双端校验 / 线上 0.21.1 证据；不得声称发布成功。
+- 发布提交 `cbfeef6`，Actions `45840350943` 全绿，双端 90/90 文件一致，线上 Arcade 0.21.1。
 
 ## 0.21.0 — 2026-11-26（已双端发布）
 

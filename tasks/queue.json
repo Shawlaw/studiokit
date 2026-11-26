@@ -2411,7 +2411,7 @@
     },
     {
       "id": "T143",
-      "title": "Arcade 0.21.1 首航交付与旧档回港复审修复",
+      "title": "Arcade 0.21.1 首航交付与旧档回港复审修复 / 双端发布",
       "kind": "agent",
       "status": "DONE",
       "dependsOn": [
@@ -2425,7 +2425,7 @@
         "旧档案夹收据只在实际新解锁差一张的照片时显示该进展",
         "记录集成验证结果；版本沿用 0.21.1，本地未发布，真机与真人待验证"
       ],
-      "evidence": "产品提交 68b83fb、5d45afc、eef710b、425656e；稳定 HEAD 5e3f2af。最终 static 35/35、入口 71/71、收据 134/134、告示板 24/24、冒烟 118/118、mobile 319/319、PWA 18/18、封存生命周期 60/60、章节 145/145、DB 38/38、备份 34/34。release profile 41/41 release passed (not full)，1799.477s；96 全量 16/16 游戏、96/96 tiers、3792/3792；首航 404/404。full/真机/真人 UNVERIFIED。Owner 已授权 PUBLISH_TO_MAIN，Actions 与双端校验待补记。"
+      "evidence": "Released both targets 2026-11-26; main cbfeef6; Actions 45840350943 all jobs success; verify_deploy 90/90 identical, arcade 0.21.1. Product commits 68b83fb, 5d45afc, eef710b, 425656e. release profile 41/41 release passed (not full), 1799.477s; 96 missions 16/16 games, 96/96 tiers, 3792/3792 checks; first-flight 404/404; static 35/35; entry 71/71; receipt 134/134; town 24/24; smoke 118/118; mobile 319/319; PWA 18/18; lifecycle 60/60; world 145/145; DB 38/38; backup 34/34. full profile and real-device/human UNVERIFIED. Cloudflare live browser confirmed 0.21.1 and persistent career entry; test profile cleaned. See docs/arcade-life/INTEGRATION-0.21.1.md."
     }
   ]
 }
