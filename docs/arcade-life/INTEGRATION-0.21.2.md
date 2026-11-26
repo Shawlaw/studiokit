@@ -20,9 +20,11 @@
 | `career_flow_e2e_test.mjs` | **404/404 PASS** | 首航、失败重签、跨标签续单、终局；首页入口与票号路径 |
 | `career_pwa_offline_test.mjs` | **18/18 PASS** | 0.21.2 SW 缓存、GH 子路径、CF 无后缀、预载迁移 |
 | `arcade_compact_touch_test.mjs` | **18/18 PASS** | 5 档紧凑视口 × 16 游戏、真实触控、标题无截断 |
+| `arcade_pwa_update_test.mjs` | **9/9 PASS** | 0.21.2 当前版本与 0.21.3 模拟线上新版本，横幅/广播/刷新前后判定 |
 | `career_passive_entry_test.mjs` | **71/71 PASS** | 入口可见性、旧档、封存/解冻/重置 |
 | `career_commission_test.mjs` | **64/64 PASS** | 委托票号、URL、幂等与奖励 |
 | `validate_site.py` / `build_site.py` / `node --check` | **PASS** | 静态校验、构建与脚本语法 |
+| `arcade_run_all_gates.py --profile release` | **40/41 PASS** | 唯一失败为测试缓存键字面量误写 `-v2`；产品 SW 实际为 `0.21.2-v1`。修正断言后 `career_pwa_offline` 18/18、`arcade_pwa_update` 9/9、static 35/35 均复跑通过；其余 40 项未重跑，未改产品代码 |
 
 ## 3. 发布证据
 
