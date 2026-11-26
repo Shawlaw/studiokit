@@ -140,7 +140,7 @@ def gates():
         _gate('career_archive_lifecycle_e2e', ['node', 'tools/career_archive_lifecycle_e2e_test.mjs'], {
             'CAREER_ARCHIVE_LIFE_PORT': _env('CAREER_ARCHIVE_LIFE_PORT', '9932'),
             'CAREER_ARCHIVE_LIFE_CDP': _env('CAREER_ARCHIVE_LIFE_CDP', '10532'),
-        }, kind=CHROME),
+        }, kind=CHROME, profiles=P_CHROME_RELEASE),
         _gate('stage_coverage', ['node', 'tools/arcade_stage_coverage.mjs']),
         _gate('smoke', ['node', 'tools/arcade_smoke.mjs'], {
             'ARCADE_SMOKE_PORT': _env('ARCADE_SMOKE_PORT', '8821'),
