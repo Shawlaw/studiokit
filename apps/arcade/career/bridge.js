@@ -4107,7 +4107,7 @@
             return normalized.clues[clueId];
           });
           if (!internal.dbUsable) return { ok: true, persisted: false, state: clone(normalized) };
-          return writeDbState(normalized, records.length ? records : null).then(function (writeResult) {
+          return writeDbState(normalized, records.length ? records : null, { type: 'SEED_STATE' }).then(function (writeResult) {
             var persisted = !!(writeResult && writeResult.ok);
             return {
               ok: persisted,
