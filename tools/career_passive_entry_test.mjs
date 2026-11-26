@@ -292,9 +292,10 @@ function makeIndexedDB(fixture, options = {}) {
                 const delay = typeof options.getDelay === 'function' ? options.getDelay(store, key) : (options.getDelay || 0);
                 schedule(() => {
                   let row = null;
-                  if (store === 'state') row = stateRows[key] === undefined ? null : { key, value: stateRows[key] };
-                  else if (store === 'profiles') row = profiles[key] === undefined ? null : { key, value: profiles[key] };
-                  else if (store === 'quests') row = quests[key] === undefined ? null : { key, value: quests[key] };
+                  const fixtureKey = Array.isArray(key) ? key.join('|') : key;
+                  if (store === 'state') row = stateRows[fixtureKey] === undefined ? null : { key: fixtureKey, value: stateRows[fixtureKey] };
+                  else if (store === 'profiles') row = profiles[fixtureKey] === undefined ? null : { key: fixtureKey, value: profiles[fixtureKey] };
+                  else if (store === 'quests') row = quests[fixtureKey] === undefined ? null : { key: fixtureKey, value: quests[fixtureKey] };
                   req.result = row;
                   if (req.onsuccess) req.onsuccess({ result: row });
                 }, delay);
@@ -303,7 +304,7 @@ function makeIndexedDB(fixture, options = {}) {
               getAll() {
                 const req = {};
                 schedule(() => {
-                  const rows = Object.keys(quests).map((key) => ({ key, value: quests[key] }));
+                  const rows = Object.values(quests);
                   req.result = rows;
                   if (req.onsuccess) req.onsuccess({ result: rows });
                 });
@@ -533,6 +534,17 @@ async function run() {
     check('CE-05b 身份建立即显示生涯设置', h.settings().hidden === false, h.settings());
   }
 
+  /* CE-05c 旧档无 profile 但有 C0：兼容显示常驻生涯入口与设置。 */
+  {
+    const h = await boot({}, {
+      state: {},
+      profiles: {},
+      quests: { 'legacy|story:C0.port_seen': { careerId: 'legacy', nodeId: 'story:C0.port_seen' } },
+    });
+    check('CE-05c 旧档 C0 无 profile：常驻生涯入口可见', h.career().hidden === false, h.career());
+    check('CE-05c 旧档 C0 无 profile：生涯设置可见', h.settings().hidden === false, h.settings());
+  }
+
   /* CE-06 封存：只显示「生涯设置（已封存）」，来信隐藏。 */
   {
     const h = await boot({}, {
@@ -602,7 +614,7 @@ async function run() {
     check('CE-10 重置前常驻生涯入口可见', h.career().hidden === false, h.career());
     delete fixture.state.career;
     delete fixture.profiles['career-1'];
-    fixture.quests = Object.create(null);
+    delete fixture.quests['career-1|story:C0.port_seen'];
     h.windowStub.dispatch('pageshow');
     for (let i = 0; i < 8; i += 1) await new Promise((resolve) => setTimeout(resolve, 5));
     check('CE-10 完全重置后生涯入口消失', h.career().hidden === true, h.career());

@@ -3100,6 +3100,15 @@ async function main() {
     assert(await cdp.evaluate('document.querySelector("[data-career-settings-entry]").hidden === false'), 'career settings entry missing after archive');
     assert(await cdp.evaluate('document.querySelector("[data-career-settings-label]").getAttribute("href") === "games/pendulum-tower.html?careerPanel=settings"'), 'archived career settings entry href changed');
     assert(await cdp.evaluate('document.querySelector("[data-classic-view]")?.hidden !== true && document.querySelector("[data-sort]").value === "name" && !document.querySelector("[data-career-view]")'), 'archive changed classic catalog, sort or view');
+    /* 解冻后：常驻生涯入口恢复，设置文案恢复。 */
+    await cdp.navigate(base + '/apps/arcade/games/pendulum-tower.html');
+    await cdp.waitFor('window.ArcadeCareer?.available && ArcadeCareer.db');
+    const unfrozen = await cdp.evaluate('ArcadeCareer.db.setCareerArchived(false)');
+    assert(unfrozen.ok && unfrozen.archived === false, 'career unfreeze fixture failed: ' + JSON.stringify(unfrozen));
+    await cdp.navigate(base + '/apps/arcade/');
+    await cdp.waitFor('document.querySelector("[data-career-entry]")?.hidden === false && document.querySelector("[data-career-settings-label]")?.textContent.trim() === "生涯设置"');
+    assert(await cdp.evaluate('document.querySelector("[data-career-entry]").getAttribute("href") === "games/pendulum-tower.html?careerPanel=town"'), 'career entry did not return after unfreeze');
+
     /* 完全重置后：常驻生涯入口与设置入口都消失，经典目录仍可见。 */
     await cdp.navigate(base + '/apps/arcade/games/pendulum-tower.html');
     await cdp.waitFor('window.ArcadeCareer?.available && ArcadeCareer.db');
