@@ -7,8 +7,10 @@
  *   window.ArcadeCareerUI.settings.open(ctx);
  *   window.ArcadeCareerUI.settings.close();
  *
- * ctx（bridge 构造，见 docs/arcade-life/ADR-interfaces.md §17）：
- *   { state, setHintsEnabled(bool), resetDiscovery(), announce(text), ... }
+ * ctx（bridge 构造，见 docs/arcade-life/ADR-interfaces.md §17 / §22）：
+ *   { state, setHintsEnabled(bool), resetDiscovery(), announce(text),
+ *     archived?, archiveState?, freezeCareer?(), unfreezeCareer?(), resetAllCareer?(), ... }
+ * 0.21 封存/重置入口按 ctx 方法是否存在渲染；缺失时不显示，旧 bridge 行为零变化。
  *
  * 约束：
  * - 小面板：开关「街机里的神秘线索」+「清除本机线索记录」；
@@ -35,6 +37,24 @@
   const STATUS_SAVE_FAILED = '这次没能记下来，可以再试一次。';
   const STATUS_CLEARED = '本机的线索记录已经清空。';
   const STATUS_CLEAR_FAILED = '没能清空，可以再试一次。';
+
+  /* 0.21 生涯封存 / 完全重置（可选：只在 ctx 提供对应方法时渲染）。 */
+  const CAREER_ARCHIVE_TITLE = '生涯保管';
+  const CAREER_ARCHIVE_DESC = '暂时封存生涯内容，经典街机照常可玩；随时可以解冻恢复原进度。';
+  const FREEZE_LABEL = '封存生涯';
+  const UNFREEZE_LABEL = '解冻生涯';
+  const FREEZE_CONFIRM_TEXT = '封存后新线索、接单与结算都会暂停写入生涯；已保存的进度与 live run 会保留，经典记录不受影响。';
+  const CONFIRM_FREEZE_LABEL = '确认封存';
+  const RESET_ALL_LABEL = '完全重置生涯';
+  const RESET_ALL_CONFIRM_TEXT = '这一步不可撤销：生涯全部记录（线索、委托、钱包、章节）会被清空；经典街机的记录不受影响。请先导出档案，再输入「重置生涯」确认。';
+  const RESET_ALL_PHRASE = '重置生涯';
+  const CONFIRM_RESET_ALL_LABEL = '确认完全重置';
+  const STATUS_FREEZE_OK = '生涯已封存，经典街机照常可玩。';
+  const STATUS_UNFREEZE_OK = '生涯已解冻，原进度已恢复。';
+  const STATUS_ARCHIVE_FAILED = '操作没有成功，请稍后再试。';
+  const STATUS_RESET_ALL_OK = '生涯已完全重置；经典街机记录未改动。';
+  const STATUS_RESET_ALL_FAILED = '重置没有完成，请稍后再试。';
+  const STATUS_RESET_ALL_PHRASE_BAD = '请输入「重置生涯」四个字再确认。';
 
   /* 旧港档案（可选区块）：只有 bridge 在 ctx 里提供 backup 时才渲染。 */
   const ARCHIVE_TITLE = '旧港档案';
@@ -275,9 +295,99 @@
       archiveRow.appendChild(archiveStatus);
     }
 
+    /* 0.21 生涯保管区块：ctx 完全未提供封存/重置方法时整块不渲染（旧 bridge 向后兼容）。 */
+    const canFreeze = typeof context.freezeCareer === 'function';
+    const canUnfreeze = typeof context.unfreezeCareer === 'function';
+    const canResetAll = typeof context.resetAllCareer === 'function';
+    let archived = false;
+    if (isObject(context.archiveState) && typeof context.archiveState.archived === 'boolean') archived = context.archiveState.archived;
+    else if (typeof context.archived === 'boolean') archived = context.archived;
+    let careerArchiveRow = null;
+    let freezeBtn = null;
+    let unfreezeBtn = null;
+    let resetAllBtn = null;
+    let freezeConfirmBox = null;
+    let freezeCancelBtn = null;
+    let freezeConfirmBtn = null;
+    let resetAllConfirmBox = null;
+    let resetAllInput = null;
+    let resetAllCancelBtn = null;
+    let resetAllConfirmBtn = null;
+    let archiveActionStatus = null;
+    if (canFreeze || canUnfreeze || canResetAll) {
+      careerArchiveRow = make('div', 'ac-career-setting ac-career-setting--archive');
+      careerArchiveRow.appendChild(make('h3', 'ac-career-setting__title', CAREER_ARCHIVE_TITLE));
+      careerArchiveRow.appendChild(make('p', 'ac-career-switch__desc', CAREER_ARCHIVE_DESC));
+      const actions = make('div', 'ac-career-confirm__actions');
+      if (canFreeze) {
+        freezeBtn = make('button', 'ac-career-btn ac-career-btn--ghost', FREEZE_LABEL);
+        freezeBtn.type = 'button';
+        freezeBtn.setAttribute('data-action', 'freeze-career');
+        actions.appendChild(freezeBtn);
+      }
+      if (canUnfreeze) {
+        unfreezeBtn = make('button', 'ac-career-btn ac-career-btn--ghost', UNFREEZE_LABEL);
+        unfreezeBtn.type = 'button';
+        unfreezeBtn.setAttribute('data-action', 'unfreeze-career');
+        actions.appendChild(unfreezeBtn);
+      }
+      if (canResetAll) {
+        resetAllBtn = make('button', 'ac-career-btn ac-career-btn--danger', RESET_ALL_LABEL);
+        resetAllBtn.type = 'button';
+        resetAllBtn.setAttribute('data-action', 'reset-all-career');
+        actions.appendChild(resetAllBtn);
+      }
+      careerArchiveRow.appendChild(actions);
+
+      if (canFreeze) {
+        freezeConfirmBox = make('div', 'ac-career-confirm');
+        freezeConfirmBox.hidden = true;
+        freezeConfirmBox.appendChild(make('p', 'ac-career-confirm__text', FREEZE_CONFIRM_TEXT));
+        const freezeActions = make('div', 'ac-career-confirm__actions');
+        freezeCancelBtn = make('button', 'ac-career-btn ac-career-btn--ghost', CANCEL_LABEL);
+        freezeCancelBtn.type = 'button';
+        freezeConfirmBtn = make('button', 'ac-career-btn ac-career-btn--danger', CONFIRM_FREEZE_LABEL);
+        freezeConfirmBtn.type = 'button';
+        freezeActions.appendChild(freezeCancelBtn);
+        freezeActions.appendChild(freezeConfirmBtn);
+        freezeConfirmBox.appendChild(freezeActions);
+        careerArchiveRow.appendChild(freezeConfirmBox);
+      }
+      if (canResetAll) {
+        resetAllConfirmBox = make('div', 'ac-career-confirm');
+        resetAllConfirmBox.hidden = true;
+        resetAllConfirmBox.appendChild(make('p', 'ac-career-confirm__text', RESET_ALL_CONFIRM_TEXT));
+        resetAllInput = make('input', 'ac-career-reset-input');
+        resetAllInput.type = 'text';
+        resetAllInput.autocomplete = 'off';
+        resetAllInput.setAttribute('aria-label', '输入「重置生涯」确认');
+        resetAllInput.setAttribute('placeholder', RESET_ALL_PHRASE);
+        /* 仅用内联样式保证 44px 热区与窄屏不溢出（不修改共享 CSS 文件）。 */
+        resetAllInput.style.minHeight = '44px';
+        resetAllInput.style.width = '100%';
+        resetAllInput.style.boxSizing = 'border-box';
+        resetAllInput.style.borderRadius = '10px';
+        resetAllInput.style.padding = '0 10px';
+        const resetActions = make('div', 'ac-career-confirm__actions');
+        resetAllCancelBtn = make('button', 'ac-career-btn ac-career-btn--ghost', CANCEL_LABEL);
+        resetAllCancelBtn.type = 'button';
+        resetAllConfirmBtn = make('button', 'ac-career-btn ac-career-btn--danger', CONFIRM_RESET_ALL_LABEL);
+        resetAllConfirmBtn.type = 'button';
+        resetActions.appendChild(resetAllCancelBtn);
+        resetActions.appendChild(resetAllConfirmBtn);
+        resetAllConfirmBox.appendChild(resetAllInput);
+        resetAllConfirmBox.appendChild(resetActions);
+        careerArchiveRow.appendChild(resetAllConfirmBox);
+      }
+      archiveActionStatus = make('p', 'ac-career-status');
+      archiveActionStatus.hidden = true;
+      careerArchiveRow.appendChild(archiveActionStatus);
+    }
+
     body.appendChild(switchRow);
     body.appendChild(dangerRow);
     if (archiveRow) body.appendChild(archiveRow);
+    if (careerArchiveRow) body.appendChild(careerArchiveRow);
     sheet.appendChild(head);
     sheet.appendChild(body);
     overlay.appendChild(sheet);
@@ -657,6 +767,148 @@
       });
     }
 
+    /* ---------- 0.21 生涯封存 / 解冻 / 完全重置 ---------- */
+
+    function setArchiveActionStatus(text) {
+      if (!archiveActionStatus) return;
+      const value = cleanText(text);
+      archiveActionStatus.textContent = value;
+      archiveActionStatus.hidden = !value;
+    }
+
+    function applyArchivePatch(patch) {
+      const data = isObject(patch) ? patch : {};
+      let next = null;
+      if (isObject(data.archiveState) && typeof data.archiveState.archived === 'boolean') next = data.archiveState.archived;
+      else if (typeof data.archived === 'boolean') next = data.archived;
+      if (next === null) return;
+      archived = next;
+      if (!careerArchiveRow) return;
+      if (freezeBtn) freezeBtn.hidden = archived;
+      if (unfreezeBtn) unfreezeBtn.hidden = !archived;
+      if (resetAllBtn) resetAllBtn.disabled = false;
+      if (freezeConfirmBox) freezeConfirmBox.hidden = true;
+      if (freezeConfirmBtn) freezeConfirmBtn.disabled = false;
+    }
+
+    function invokeArchiveMethod(method, okText, failText, expectedArchived, onSettle) {
+      if (typeof method !== 'function') {
+        setArchiveActionStatus(STATUS_ARCHIVE_FAILED);
+        announce(STATUS_ARCHIVE_FAILED);
+        if (typeof onSettle === 'function') onSettle();
+        return;
+      }
+      let result = null;
+      try {
+        result = method.call(context);
+      } catch (err) {
+        result = { ok: false };
+      }
+      const settle = (value) => {
+        if (!value || (isObject(value) && value.ok === false)) {
+          setArchiveActionStatus(failText);
+          announce(failText);
+          if (typeof onSettle === 'function') onSettle();
+          return;
+        }
+        const patch = isObject(value) ? Object.assign({}, value) : {};
+        if (typeof patch.archived !== 'boolean' && typeof expectedArchived === 'boolean') patch.archived = expectedArchived;
+        applyArchivePatch(patch);
+        setArchiveActionStatus(okText);
+        announce(okText);
+        if (typeof onSettle === 'function') onSettle();
+      };
+      if (result && typeof result.then === 'function') {
+        result.then(settle, () => settle({ ok: false }));
+        return;
+      }
+      settle(result);
+    }
+
+    function cancelFreeze() {
+      if (freezeConfirmBox) freezeConfirmBox.hidden = true;
+      if (freezeBtn) freezeBtn.hidden = archived;
+      if (unfreezeBtn) unfreezeBtn.hidden = !archived;
+      if (freezeConfirmBtn) freezeConfirmBtn.disabled = false;
+      if (freezeBtn) safelyFocus(freezeBtn.hidden ? unfreezeBtn : freezeBtn);
+    }
+
+    function showFreezeConfirm() {
+      if (!freezeConfirmBox) return;
+      freezeConfirmBox.hidden = false;
+      if (freezeBtn) freezeBtn.hidden = true;
+      if (unfreezeBtn) unfreezeBtn.hidden = true;
+      setArchiveActionStatus('');
+      safelyFocus(freezeCancelBtn);
+    }
+
+    function confirmFreeze() {
+      if (!freezeConfirmBox || freezeConfirmBox.hidden) return;
+      if (freezeConfirmBtn) freezeConfirmBtn.disabled = true;
+      invokeArchiveMethod(context.freezeCareer, STATUS_FREEZE_OK, STATUS_ARCHIVE_FAILED, true, () => {
+        if (freezeConfirmBtn) freezeConfirmBtn.disabled = false;
+      });
+    }
+
+    function unfreeze() {
+      invokeArchiveMethod(context.unfreezeCareer, STATUS_UNFREEZE_OK, STATUS_ARCHIVE_FAILED, false);
+    }
+
+    function cancelResetAll() {
+      if (resetAllConfirmBox) resetAllConfirmBox.hidden = true;
+      if (resetAllBtn) resetAllBtn.hidden = false;
+      if (resetAllConfirmBtn) resetAllConfirmBtn.disabled = false;
+      if (resetAllInput) resetAllInput.value = '';
+      if (resetAllBtn) safelyFocus(resetAllBtn);
+    }
+
+    function showResetAllConfirm() {
+      if (!resetAllConfirmBox) return;
+      setArchiveActionStatus('');
+      resetAllConfirmBox.hidden = false;
+      if (resetAllBtn) resetAllBtn.hidden = true;
+      if (resetAllInput) resetAllInput.value = '';
+      safelyFocus(resetAllInput || resetAllCancelBtn);
+    }
+
+    function confirmResetAll() {
+      if (!resetAllConfirmBox || resetAllConfirmBox.hidden) return;
+      if (!resetAllInput || cleanText(resetAllInput.value) !== RESET_ALL_PHRASE) {
+        setArchiveActionStatus(STATUS_RESET_ALL_PHRASE_BAD);
+        announce(STATUS_RESET_ALL_PHRASE_BAD);
+        if (resetAllInput) safelyFocus(resetAllInput);
+        return;
+      }
+      if (resetAllConfirmBtn) resetAllConfirmBtn.disabled = true;
+      let result = null;
+      try {
+        result = context.resetAllCareer.call(context);
+      } catch (err) {
+        result = { ok: false };
+      }
+      const settle = (value) => {
+        if (resetAllConfirmBtn) resetAllConfirmBtn.disabled = false;
+        cancelResetAll();
+        if (!value || (isObject(value) && value.ok === false)) {
+          setArchiveActionStatus(STATUS_RESET_ALL_FAILED);
+          announce(STATUS_RESET_ALL_FAILED);
+          return;
+        }
+        applyArchivePatch({ archived: false });
+        applySwitch();
+        setStatus(STATUS_CLEARED);
+        setArchiveActionStatus(STATUS_RESET_ALL_OK);
+        announce(STATUS_RESET_ALL_OK);
+      };
+      if (result && typeof result.then === 'function') {
+        result.then(settle, () => settle({ ok: false }));
+        return;
+      }
+      settle(result);
+    }
+
+    applyArchivePatch({ archived });
+
     switchBtn.addEventListener('click', toggleHints, false);
     resetBtn.addEventListener('click', showConfirm, false);
     cancelBtn.addEventListener('click', () => hideConfirm(true), false);
@@ -669,6 +921,21 @@
       fileInput.addEventListener('change', onFilePicked, false);
       archiveCancelBtn.addEventListener('click', cancelImport, false);
       archiveConfirmBtn.addEventListener('click', confirmImport, false);
+    }
+    if (careerArchiveRow) {
+      if (freezeBtn) freezeBtn.addEventListener('click', showFreezeConfirm, false);
+      if (unfreezeBtn) unfreezeBtn.addEventListener('click', unfreeze, false);
+      if (freezeCancelBtn) freezeCancelBtn.addEventListener('click', cancelFreeze, false);
+      if (freezeConfirmBtn) freezeConfirmBtn.addEventListener('click', confirmFreeze, false);
+      if (resetAllBtn) resetAllBtn.addEventListener('click', showResetAllConfirm, false);
+      if (resetAllCancelBtn) resetAllCancelBtn.addEventListener('click', cancelResetAll, false);
+      if (resetAllConfirmBtn) resetAllConfirmBtn.addEventListener('click', confirmResetAll, false);
+      if (resetAllInput) resetAllInput.addEventListener('keydown', (event) => {
+        if (event && event.key === 'Enter') {
+          if (typeof event.preventDefault === 'function') event.preventDefault();
+          confirmResetAll();
+        }
+      }, false);
     }
 
     let pressedBackdrop = false;
@@ -728,6 +995,7 @@
       }
       if (data.reducedMotion === true) overlay.classList.add('is-reduced-motion');
       else if (data.reducedMotion === false) overlay.classList.remove('is-reduced-motion');
+      applyArchivePatch(data);
       return true;
     }
 

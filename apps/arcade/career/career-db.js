@@ -77,6 +77,8 @@
   const STATE_KEY_DISCOVERY = 'discovery';
   const STATE_KEY_CAREER = 'career';
   const STATE_KEY_DISCOVERY_GENERATION = 'discovery-generation';
+  /* 0.21 生涯封存标记：仍是既有的 state store 行，不新增 store / key / schema。 */
+  const STATE_KEY_CAREER_ARCHIVE = 'career-archive';
   const BLOCKED_TIMEOUT_MS = 3000;
   const TX_TIMEOUT_MS = 15000;
   const MAX_IMPORT_ROWS = 20000;
@@ -413,6 +415,95 @@
     }), done);
   }
 
+  /* ------------------------------------------------------------------ *
+   * 0.21 生涯封存（career-archive state 行）
+   *
+   * - 封存只写标记，保留全部数据/live run；解冻删除标记并推进 discovery-generation，
+   *   使旧标签持有的代次失效。
+   * - assertCareerWritable 是同步 helper，供 readwrite 事务 body 内调用：同一事务内
+   *   通过 IDBRequest 回调重读标记，封存则 ctx.fail('career-archived', ...) abort，
+   *   绝不先写后判，杜绝半提交。
+   * ------------------------------------------------------------------ */
+
+  function normalizeArchiveRow(row) {
+    if (!row || typeof row !== 'object' || !isObject(row.value)) return null;
+    const value = row.value;
+    const careerId = typeof value.careerId === 'string' && value.careerId ? value.careerId : null;
+    const archivedAt = typeof value.archivedAt === 'string' && value.archivedAt ? value.archivedAt : null;
+    if (!careerId && !archivedAt) return null;
+    return { careerId, archivedAt };
+  }
+
+  function readCareerArchive(ctx, done) {
+    ctx.bind(ctx.store('state').get(STATE_KEY_CAREER_ARCHIVE), (row) => {
+      done(normalizeArchiveRow(row));
+    });
+  }
+
+  /** 同步事务内封存守卫：封存时 ctx.fail('career-archived', ...)（当前事务整体 abort）。 */
+  function assertCareerWritable(ctx, reasonPrefix) {
+    const prefix = typeof reasonPrefix === 'string' && reasonPrefix ? reasonPrefix : 'career-write';
+    readCareerArchive(ctx, (archive) => {
+      if (archive) ctx.fail('career-archived', prefix + ':career-archived');
+    });
+  }
+
+  /**
+   * 只读封存状态：{ok:true, archived:boolean, careerId:string|null, archivedAt:string|null}。
+   * 无标记（含 DB 不可用时）archived:false；读失败也返回结构化失败，不伪装为未封存。
+   */
+  function getArchiveState() {
+    return txRun(['state'], 'readonly', (ctx) => {
+      readCareerArchive(ctx, (archive) => {
+        ctx.done({
+          ok: true,
+          archived: !!archive,
+          careerId: archive ? archive.careerId : null,
+          archivedAt: archive ? archive.archivedAt : null,
+        });
+      });
+    }).then((res) => (res.ok ? res.result : failure(res.reason, res.error)));
+  }
+
+  /**
+   * 封存 / 解冻：setCareerArchived(true, {careerId, now}) 写标记；false 删除标记并递增代次。
+   * 成功返回 {ok:true, archived, careerId, generation}；失败结构化且事务 abort。
+   */
+  function setCareerArchived(archived, options) {
+    const opts = isObject(options) ? options : {};
+    const want = archived === true;
+    const at = typeof opts.now === 'string' && opts.now ? opts.now : nowIso();
+    return txRun(['state'], 'readwrite', (ctx) => {
+      readCareerArchive(ctx, (current) => {
+        if (want) {
+          const careerId = typeof opts.careerId === 'string' && opts.careerId
+            ? opts.careerId
+            : current && current.careerId ? current.careerId : null;
+          const row = {
+            key: STATE_KEY_CAREER_ARCHIVE,
+            schemaVersion: SCHEMA_VERSION,
+            updatedAt: at,
+            value: { careerId, archivedAt: current && current.archivedAt ? current.archivedAt : at },
+          };
+          ctx.bind(ctx.store('state').put(row), () => {
+            readDiscoveryGeneration(ctx, (generation) => {
+              ctx.done({ ok: true, archived: true, careerId, generation });
+            });
+          });
+          return;
+        }
+        ctx.bind(ctx.store('state').delete(STATE_KEY_CAREER_ARCHIVE), () => {
+          readDiscoveryGeneration(ctx, (generation) => {
+            const next = generation + 1;
+            writeDiscoveryGeneration(ctx, next, () => {
+              ctx.done({ ok: true, archived: false, careerId: current ? current.careerId : null, generation: next });
+            });
+          });
+        });
+      });
+    }).then((res) => (res.ok ? res.result : failure(res.reason, res.error)));
+  }
+
   function getDiscoveryGeneration() {
     return txRun(['state'], 'readonly', (ctx) => {
       readDiscoveryGeneration(ctx, (value) => ctx.done({ ok: true, generation: value }));
@@ -421,6 +512,7 @@
 
   function bumpDiscoveryGeneration() {
     return txRun(['state'], 'readwrite', (ctx) => {
+      assertCareerWritable(ctx, 'bump-generation');
       readDiscoveryGeneration(ctx, (value) => {
         const next = value + 1;
         writeDiscoveryGeneration(ctx, next, () => ctx.done({ ok: true, generation: next }));
@@ -442,6 +534,7 @@
     const value = state === undefined ? null : state;
     const at = nowIso();
     return txRun(['state'], 'readwrite', (ctx) => {
+      assertCareerWritable(ctx, 'save-discovery-state');
       const row = { key: STATE_KEY_DISCOVERY, schemaVersion: SCHEMA_VERSION, updatedAt: at, value };
       ctx.bind(ctx.store('state').put(row), () => ctx.done({ ok: true }));
     }).then((res) => (res.ok ? res.result : failure(res.reason, res.error)));
@@ -527,6 +620,7 @@
         : [];
     const at = nowIso();
     return txRun(['state', 'discovery'], 'readwrite', (ctx) => {
+      assertCareerWritable(ctx, 'merge-discovery');
       const stateStore = ctx.store('state');
       readDiscoveryGeneration(ctx, (currentGeneration) => {
         const requestedGeneration = action && Number.isFinite(Number(action.generation)) ? Math.floor(Number(action.generation)) : null;
@@ -632,7 +726,8 @@
       if (!isObject(record) || !core || !core.isToken(record.clueId)) return Promise.resolve(failure('bad-record'));
     }
     const at = nowIso();
-    return txRun(['discovery'], 'readwrite', (ctx) => {
+    return txRun(['state', 'discovery'], 'readwrite', (ctx) => {
+      assertCareerWritable(ctx, 'put-discovery');
       const store = ctx.store('discovery');
       const tasks = list.map((record) => (next) => {
         ctx.bind(store.put(normalizeDiscoveryRecord(record, at)), next);
@@ -659,7 +754,10 @@
     const keys = Object.keys(copy);
     const value = keys.length === 1 && Object.prototype.hasOwnProperty.call(record, 'value') ? record.value : copy;
     const at = nowIso();
+    /* 封存禁止改写任何生涯 state 行（包括 discovery 与 career 指针）。 */
+    if (key === STATE_KEY_CAREER_ARCHIVE) return Promise.resolve(failure('archive-reserved'));
     return txRun(['state'], 'readwrite', (ctx) => {
+      assertCareerWritable(ctx, 'save-state');
       const row = { key, schemaVersion: SCHEMA_VERSION, updatedAt: at, value };
       ctx.bind(ctx.store('state').put(row), () => ctx.done({ ok: true }));
     }).then((res) => (res.ok ? res.result : failure(res.reason, res.error)));
@@ -706,7 +804,8 @@
     if (!core) return Promise.resolve(failure('core-unavailable'));
     if (!isObject(profile) || !core.isValidCareerId(profile.careerId)) return Promise.resolve(failure('bad-profile'));
     const at = nowIso();
-    return txRun(['profiles'], 'readwrite', (ctx) => {
+    return txRun(['state', 'profiles'], 'readwrite', (ctx) => {
+      assertCareerWritable(ctx, 'put-profile');
       ctx.bind(ctx.store('profiles').get(profile.careerId), (existing) => {
         const record = jsonClone(profile) || {};
         record.careerId = profile.careerId;
@@ -761,6 +860,7 @@
     const at = typeof options.now === 'string' && options.now ? options.now : nowIso();
     const originGameId = typeof options.originGameId === 'string' ? options.originGameId : null;
     return txRun(['state', 'profiles', 'balances', 'ledgers'], 'readwrite', (ctx) => {
+      assertCareerWritable(ctx, 'ensure-career');
       ctx.bind(ctx.store('state').get(STATE_KEY_CAREER), (pointer) => {
         const value = pointer && isObject(pointer.value) ? pointer.value : null;
         const careerId = value && core.isValidCareerId(value.careerId) ? value.careerId : null;
@@ -856,7 +956,8 @@
     if (!isObject(run) || !core.isValidRunId(run.runId)) return Promise.resolve(failure('bad-run'));
     const at = nowIso();
     const record = sanitizeRun(run, at);
-    return txRun(['runs'], 'readwrite', (ctx) => {
+    return txRun(['state', 'runs'], 'readwrite', (ctx) => {
+      assertCareerWritable(ctx, 'create-run');
       const store = ctx.store('runs');
       ctx.bind(store.get(record.runId), (existing) => {
         if (existing) {
@@ -903,7 +1004,8 @@
     if (!core.isValidRunId(runId)) return Promise.resolve(failure('bad-run-id'));
     if (!isObject(patch)) return Promise.resolve(failure('bad-patch'));
     const at = nowIso();
-    return txRun(['runs'], 'readwrite', (ctx) => {
+    return txRun(['state', 'runs'], 'readwrite', (ctx) => {
+      assertCareerWritable(ctx, 'update-run');
       ctx.bind(ctx.store('runs').get(runId), (existing) => {
         if (!existing) {
           ctx.fail('missing-run');
@@ -1246,7 +1348,8 @@
           ? core.DEFAULT_CONTENT_VERSION
           : DEFAULT_CONTENT_VERSION;
     const providedReceipt = isObject(options.receipt) ? options.receipt : null;
-    return txRun(CLAIM_STORES, 'readwrite', (ctx) => {
+    return txRun(['state'].concat(CLAIM_STORES), 'readwrite', (ctx) => {
+      assertCareerWritable(ctx, 'settle-and-claim');
       ctx.bind(ctx.store('claims').get(runId), (existing) => {
         if (existing) {
           if (existing.careerId && existing.careerId !== careerId) {
@@ -1494,7 +1597,8 @@
     const plan = core.normalizePlan(options.plan);
     const at = typeof options.now === 'string' && options.now ? options.now : nowIso();
     const contentVersion = typeof options.contentVersion === 'string' && options.contentVersion ? options.contentVersion : DEFAULT_CONTENT_VERSION;
-    return txRun(CLAIM_STORES, 'readwrite', (ctx) => {
+    return txRun(['state'].concat(CLAIM_STORES), 'readwrite', (ctx) => {
+      assertCareerWritable(ctx, 'settle-ending');
       ctx.bind(ctx.store('claims').get(runId), (existingClaim) => {
         readEndingRows(ctx, careerId, (rows) => {
           const canonicalResolved = resolvedEndingFromRows(rows);
@@ -1619,7 +1723,8 @@
     const options = isObject(input) ? input : {};
     const careerId = options.careerId;
     if (!core.isValidCareerId(careerId)) return Promise.resolve(failure('bad-career-id'));
-    return txRun(['claims', 'runs', 'quests', 'migrations'], 'readwrite', (ctx) => {
+    return txRun(['state', 'claims', 'runs', 'quests', 'migrations'], 'readwrite', (ctx) => {
+      assertCareerWritable(ctx, 'repair-ending');
       const claimsStore = ctx.store('claims');
       const questsStore = ctx.store('quests');
       const migrationsStore = ctx.store('migrations');
@@ -1763,7 +1868,8 @@
           ? core.DEFAULT_CONTENT_VERSION
           : DEFAULT_CONTENT_VERSION;
     const txId = 'purchase:' + purchaseId;
-    return txRun(['ledgers', 'balances', 'inventory', 'equipment'], 'readwrite', (ctx) => {
+    return txRun(['state', 'ledgers', 'balances', 'inventory', 'equipment'], 'readwrite', (ctx) => {
+      assertCareerWritable(ctx, 'purchase');
       ctx.bind(ctx.store('ledgers').get(txId), (existing) => {
         if (existing) {
           ctx.done({ ok: true, duplicate: true, receipt: existing.receipt || purchaseReceiptFromLedger(existing) });
@@ -1954,7 +2060,8 @@
       clean[key] = value === null ? null : typeof value === 'object' ? jsonClone(value) : value;
     }
     const at = typeof options.now === 'string' && options.now ? options.now : nowIso();
-    return txRun(['equipment', 'balances'], 'readwrite', (ctx) => {
+    return txRun(['state', 'equipment', 'balances'], 'readwrite', (ctx) => {
+      assertCareerWritable(ctx, 'write-equipment');
       ctx.bind(ctx.store('balances').get(careerId), (balance) => {
         if (!balance) {
           ctx.fail('no-wallet');
@@ -2045,7 +2152,8 @@
           ? core.DEFAULT_CONTENT_VERSION
           : DEFAULT_CONTENT_VERSION;
     const txId = 'sale:' + saleId;
-    return txRun(['ledgers', 'balances', 'inventory'], 'readwrite', (ctx) => {
+    return txRun(['state', 'ledgers', 'balances', 'inventory'], 'readwrite', (ctx) => {
+      assertCareerWritable(ctx, 'sell-items');
       ctx.bind(ctx.store('ledgers').get(txId), (existing) => {
         if (existing) {
           ctx.done({ ok: true, duplicate: true, receipt: existing.receipt || null });
@@ -2151,7 +2259,8 @@
     if (!core.isValidCareerId(careerId)) return Promise.resolve(failure('bad-career-id'));
     if (!core.isToken(markerId) || !core.isToken(ticketId)) return Promise.resolve(failure('bad-ending-marker'));
     const at = nowIso();
-    return txRun(['migrations', 'runs'], 'readwrite', (ctx) => {
+    return txRun(['state', 'migrations', 'runs'], 'readwrite', (ctx) => {
+      assertCareerWritable(ctx, 'reserve-ending');
       const store = ctx.store('migrations');
       const runs = ctx.store('runs');
       ctx.bind(store.get(markerId), (existing) => {
@@ -2207,7 +2316,8 @@
     const core = coreApi();
     if (!core) return Promise.resolve(failure('core-unavailable'));
     if (!core.isToken(markerId)) return Promise.resolve(failure('bad-ending-marker'));
-    return txRun(['migrations'], 'readwrite', (ctx) => {
+    return txRun(['state', 'migrations'], 'readwrite', (ctx) => {
+      assertCareerWritable(ctx, 'release-ending');
       const store = ctx.store('migrations');
       ctx.bind(store.get(markerId), (existing) => {
         if (!existing || existing.kind !== 'ending-reservation') {
@@ -2236,7 +2346,8 @@
     if (!core.isToken(commissionId)) return Promise.resolve(failure('bad-commission-id'));
     if (!core.isToken(ticketId)) return Promise.resolve(failure('bad-ticket'));
     const markerId = 'commission-first:' + careerId + ':' + commissionId;
-    return txRun(['migrations', 'quests', 'runs'], 'readwrite', (ctx) => {
+    return txRun(['state', 'migrations', 'quests', 'runs'], 'readwrite', (ctx) => {
+      assertCareerWritable(ctx, 'reserve-first-clear');
       const quests = ctx.store('quests');
       ctx.bind(quests.get([careerId, commissionId]), (questRow) => {
         if (questRow && questRow.status === 'cleared') {
@@ -2288,7 +2399,8 @@
     const core = coreApi();
     if (!core) return Promise.resolve(failure('core-unavailable'));
     if (!core.isToken(markerId)) return Promise.resolve(failure('bad-marker'));
-    return txRun(['migrations'], 'readwrite', (ctx) => {
+    return txRun(['state', 'migrations'], 'readwrite', (ctx) => {
+      assertCareerWritable(ctx, 'release-first-clear');
       const store = ctx.store('migrations');
       ctx.bind(store.get(markerId), (existing) => {
         if (!existing || existing.kind !== 'commission-first') {
@@ -2322,7 +2434,8 @@
       row.updatedAt = at;
       records.push(row);
     }
-    return txRun(['quests'], 'readwrite', (ctx) => {
+    return txRun(['state', 'quests'], 'readwrite', (ctx) => {
+      assertCareerWritable(ctx, 'put-quests');
       const store = ctx.store('quests');
       const tasks = records.map((record) => (next) => ctx.bind(store.put(record), next));
       sequence(tasks, () => ctx.done({ ok: true, count: records.length }));
@@ -2355,6 +2468,7 @@
     const expectedGeneration = guard && Number.isFinite(Number(guard.generation)) ? Math.floor(Number(guard.generation)) : null;
     const requireClue = !!(guard && guard.requireClue === true);
     return txRun(['state', 'discovery', 'quests'], 'readwrite', (ctx) => {
+      assertCareerWritable(ctx, 'put-quests-guarded');
       readDiscoveryGeneration(ctx, (currentGeneration) => {
         if (expectedGeneration !== null && expectedGeneration !== currentGeneration) {
           ctx.done({ ok: false, reason: 'stale-generation', generation: currentGeneration });
@@ -2426,6 +2540,7 @@
   /** 清除发现状态（state 的 'discovery' 记录 + 整个 discovery store），不动生涯资产。 */
   function resetDiscovery() {
     return txRun(['state', 'discovery'], 'readwrite', (ctx) => {
+      assertCareerWritable(ctx, 'reset-discovery');
       readDiscoveryGeneration(ctx, (current) => {
         const next = current + 1;
         const tasks = [
@@ -2433,6 +2548,22 @@
           (nextTask) => ctx.bind(ctx.store('state').delete(STATE_KEY_DISCOVERY), nextTask),
           (nextTask) => writeDiscoveryGeneration(ctx, next, nextTask),
         ];
+        sequence(tasks, () => ctx.done({ ok: true, generation: next }));
+      });
+    }).then((res) => (res.ok ? res.result : failure(res.reason, res.error)));
+  }
+
+  /**
+   * 0.21 完全重置：单事务清空全部 11 个 store（含 career-archive 与 discovery-generation），
+   * 并把发现代次推进到下一值（防止旧标签持旧代次回写）。
+   * 只操作生涯 IDB，绝不触碰任何 classic localStorage key；不可回滚，调用方需二次确认。
+   */
+  function resetAllCareer() {
+    return txRun(STORES, 'readwrite', (ctx) => {
+      readDiscoveryGeneration(ctx, (current) => {
+        const next = current + 1;
+        const tasks = STORES.map((name) => (nextTask) => ctx.bind(ctx.store(name).clear(), nextTask));
+        tasks.push((nextTask) => writeDiscoveryGeneration(ctx, next, nextTask));
         sequence(tasks, () => ctx.done({ ok: true, generation: next }));
       });
     }).then((res) => (res.ok ? res.result : failure(res.reason, res.error)));
@@ -2629,6 +2760,7 @@
     DB_VERSION,
     SCHEMA_VERSION,
     STORES: STORES.slice(),
+    STATE_KEY_CAREER_ARCHIVE,
     FORMAT,
     open: openDb,
     close() {
@@ -2653,6 +2785,10 @@
     getDiscoveryGeneration,
     bumpDiscoveryGeneration,
     getDiscoverySnapshot,
+    /* 0.21 生涯封存 / 完全重置（state 行，不新增 store / key / schema）。 */
+    getArchiveState,
+    setCareerArchived,
+    assertCareerWritable,
     listDiscovery,
     putDiscovery,
     /* 兼容适配层（非 ADR 必需）：供 D15-04 bridge.js 探测名使用，语义同 discovery 读写。 */
@@ -2685,6 +2821,7 @@
     putQuestsGuarded,
     resetCareer,
     resetDiscovery,
+    resetAllCareer,
     exportAll,
     importAll,
     __coreTest: coreTest,

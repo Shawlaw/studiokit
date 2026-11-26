@@ -897,3 +897,48 @@ export async function cleanup(ctx) {}
 - 语义：只读 DB `runs`，仅按 `status ∈ {issued, active}` 且 `mode === 'commission'` 过滤（失败 / 放弃 / 结算不算）；`careerId` 缺省时读 `state` store 的生涯指针，指针不存在返回 `{ok:true, careerId:null, runs:[]}`。排序稳定：active 优先 → `issuedAt` 升序 → `runId` 字典序。
 - 边界：不 `ensureCareer`、不 `createRun`、不写 sessionStorage；继续委托必须由玩家显式点击，UI 只用返回的 `commissionId` 调 `commission.start`（复用 DB live run 恢复 ticket）并只用其 `url` 导航。C5 终局 run（`ending.<approach>`）由 UI 按需过滤，本方法不改其语义。
 - 测试：`tools/career_continuation_test.mjs`。
+## 22. 0.21 生涯封存 / 完全重置（冻结，向后兼容）
+
+本节只增补 0.21 的**生涯归档数据接口**与设置 UI 约定。不新增 IndexedDB store、localStorage key、IDB 版本 / Schema（`studiokit:arcade:career` v1 / 11 stores 不变），不修改 `contentVersion`（仍 `0.18.0`）、`rulesetVersion`、玩法数值或经典记录；0.15–0.20 已冻结接口继续有效。
+
+### 22.1 career-db.js 封存 API
+
+- 封存状态写在既有 `state` store 的 `key='career-archive'` 行：`value = {careerId: string|null, archivedAt: string|null}`，`schemaVersion: 1`，`updatedAt: ISO 时间`。无此行即未封存。绝不删除 `discovery-generation` 来“封存”，也不使用 `__coreTest` / `deleteDatabase` 做生产重置。
+- `getArchiveState()` → `Promise<{ok:true, archived:boolean, careerId:string|null, archivedAt:string|null}>`；无标记返回 `archived:false, careerId:null, archivedAt:null`。只读；失败返回 `{ok:false, reason, error}`，绝不把读失败伪装为未封存。
+- `setCareerArchived(archived:boolean, {careerId?:string, now?:string}={})` → `Promise<{ok:true, archived:boolean, careerId:string|null, generation:number}>`。`true` 写/覆盖标记（保留首次 `archivedAt`；`careerId` 缺省时沿用既有标记或 `null`），**不删任何数据/live run**；`false` 删除标记并把 `discovery-generation` 递增 1（使旧标签持有的代次失效）。失败返回结构化 `{ok:false, reason, error}`，事务 abort、零写入。
+- `resetAllCareer()` → `Promise<{ok:true, generation:number}>`；单事务 `clear()` 全部 11 个 store（含 `career-archive` 与 `discovery-generation`），然后写入递增后的 generation。只操作生涯 IDB；绝不触碰任何 `studiokit:arcade:*` 经典 localStorage 键（progress/runs/playtime/scores/challenge/meta/prefs）。不可回滚，调用方必须二次确认并先导出档案。失败结构化且整事务回滚。
+- `assertCareerWritable(ctx, reasonPrefix?)`：**同步**事务内守卫，只在 `txRun` 的 `readwrite` body 内调用。它在同一事务内以 `IDBRequest` 回调重读 `career-archive`，若封存则 `ctx.fail('career-archived', <prefix>+':career-archived')`，由 txRun abort 整个写入事务。写入前判定、不先写后判，杜绝半提交；调用方不得用事务外的旧快照代替此守卫。
+
+### 22.2 事务内写门禁覆盖范围
+
+- 已统一在以下写方法的事务 body 内调用 `assertCareerWritable`：`saveDiscoveryState` / `mergeDiscoveryState` / `putDiscovery` / `saveState` / `bumpDiscoveryGeneration` / `resetDiscovery` / `putProfile` / `ensureCareer` / `createRun` / `updateRun` / `settleAndClaim` / `settleEndingAndClaim` / `repairEndingRecords` / `purchase` / `writeEquipment` / `sellItems` / `reserveEnding` / `releaseEnding` / `reserveCommissionFirstClear` / `releaseCommissionFirstClear` / `putQuests` / `putQuestsGuarded`。
+- 封存时这些写方法统一返回失败，失败原因包含 `career-archived`（`reason` 或 `error`），且整库零变化；只读方法（`getState` / `getProfile` / `readWallet` / `listRuns` / `readQuestState` / `exportAll` 等）不受影响。
+- 不覆盖的显式管理员操作：`setCareerArchived`（解冻必须可写标记）、`resetAllCareer`（必须先清空）、`importAll`（replace 以文件为准，允许覆盖封存状态，属于显式恢复动作）、`__coreTest.clearAll`（测试辅助）。
+- bridge 侧仍应在写路径前用 `getArchiveState()` 预检并尽早拒绝/隐藏 UI，但这只是优化；**最终裁决必须依赖上述事务内守卫**，旧标签/旧页持有的过期状态不得绕过。
+
+### 22.3 备份标记与导入语义
+
+- 封存标记随既有 `state` store 的 `career-archive` 行原样进出备份（不新增顶层字段，不改 `PAYLOAD_KEYS` 顺序与 `careerSchemaVersion: 1`）。`backup.js` 新增纯函数 `getArchiveStateFromPayload(payload)` → `{archived, careerId, archivedAt}` 或 `null`（重复行/非法值返回 `null`，不得当未封存导入；无该行返回未封存）。
+- `validateStateRows` 对 `career-archive` 行校验 `value` 为对象、`careerId` 为可选合法 ID、`archivedAt` 为可选 ISO 时间字符串；坏档整体拒绝、零写库。
+- `importCareerLife(text, {mode:'replace'})` 以文件状态为准：文件无标记时 `db.importAll` 的 replace 会清掉本机标记（解冻）；文件有标记时恢复封存。旧档（缺 format / 缺版本 / 缺 store / 空生涯）仍返回 `{ok:true, preserved:true, reason:'legacy', mode:'none'}` 且零写库；旧档无标记视为未封存的兼容状态，绝不删除用户数据。
+- `merge` 模式语义不变（按 career-db 的既有合并规则）；封存不是经济/剧情资源，不参与重复领取判定。
+
+### 22.4 settings.js UI 约定（ctx 契约）
+
+- `uiContext()` 可选字段：`archived?:boolean` 或 `archiveState?:{archived:boolean,...}`；可选方法：`freezeCareer?()` / `unfreezeCareer?()` / `resetAllCareer?()`。三者都不存在时封存区块整块不渲染，旧 bridge 行为零变化；个别方法缺失时对应按钮隐藏/禁用，不得报错。
+- 封存需二次确认（先出现确认文案与「取消 / 确认封存」，未确认时绝不调用 `freezeCareer`）；解冻可单击但需成功回执。
+- 完全重置需**二次确认 + 输入框精确等于「重置生涯」四个字**；短语不符只提示、绝不调用 `resetAllCareer`。确认文案必须说明不可撤销且经典记录不受影响，并提示先导出档案。
+- 导出继续复用 `ctx.backup.exportCareerLife()`（已有功能），失败显示具体原因，不静默吞错。任何封存/解冻/重置失败都在可见状态行与 `aria-live` 区域提示；输入/按钮保持 ≥44px、Tab 焦点与 Esc 只关最上层、返回原焦点、`prefers-reduced-motion` 下无动画。
+- 保留既有「街机里的神秘线索」开关与「清除本机线索记录」二次确认；封存后 bridge 隐藏线索/生涯内容入口，设置面板只保留封存/解冻/重置/档案。
+
+### 22.5 多标签与失败语义
+
+- 封存/解冻/重置都是单事务操作；多标签并发以 IDB 事务串行化为准。写方法的事务内守卫重读同一 `state` 行，旧标签用旧的 `archived:false` 预检结果也必须在事务内被拒绝。
+- 解冻推进 `discovery-generation`，旧标签持有的旧代次写入会得到 `stale-generation` 或封存守卫失败，不会把已解冻/重置后的库写回旧状态。
+- 任何 IDB 失败（blocked / 事务超时 / 约束冲突 / 连接丢失）均返回结构化 `{ok:false, reason, error}`；`txRun` 统一 abort，禁止部分 store 已写、部分未写。
+- 经典隔离：本节所有 API 只读/写 `studiokit:arcade:career` 生涯库；不引入网络、分析、远程资源；不改任何经典 localStorage key 的值或 Schema。
+
+### 22.6 测试
+
+- `tools/career_archive_test.mjs`：纯 Node + VM 内存 IDB 桩，覆盖 API 形状、封存往返与数据保留、11 stores 完全重置与经典键零触碰、事务内 guard 零半提交、备份标记往返/replace 以文件为准/旧档兼容、settings 确认门与失败提示、静态边界。不启动 Chrome。
+- 既有 `career_db_test.mjs` / `career_backup_test.mjs` 的 A 组（Node-only）继续全通过。
