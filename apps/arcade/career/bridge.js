@@ -3216,8 +3216,10 @@
       'reset-discovery-ui',
       function () {
         if (isSilentTestOnly()) return { ok: false, error: 'test-silent' };
-        if (!internal.dbUsable) return { ok: false, error: 'db-unavailable', state: stateSnapshot() };
-        return resetDb().then(function (result) {
+        return readCareerArchive().then(function (archive) {
+          if (archive.archived) return { ok: false, error: 'career-archived', state: stateSnapshot() };
+          if (!internal.dbUsable) return { ok: false, error: 'db-unavailable', state: stateSnapshot() };
+          return resetDb().then(function (result) {
           var ok = !!(result && result.ok);
           if (!ok) {
             /* 清除失败：保留/恢复最后已保存线索，绝不先清空当页内存。 */
@@ -3252,6 +3254,7 @@
             method: (result && result.method) || null,
             state: stateSnapshot(),
           };
+        });
         });
       },
       { ok: false, error: 'exception' }
