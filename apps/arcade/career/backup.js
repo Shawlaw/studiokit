@@ -363,6 +363,24 @@
    * @returns {object}
    */
   /** 导出与导入共享的单表行数上限检查。 */
+  /**
+   * 0.21 从备份 payload 只读恢复封存标记（标记位于 state store 的 career-archive 行）。
+   * 旧档无该行时返回未封存；格式/值非法时返回 null（调用方不得把坏档当未封存导入）。
+   */
+  function getArchiveStateFromPayload(payload) {
+    if (!isObject(payload) || !Array.isArray(payload.state)) return null;
+    const rows = payload.state.filter((row) => isObject(row) && row.key === 'career-archive');
+    if (rows.length === 0) return { archived: false, careerId: null, archivedAt: null };
+    if (rows.length > 1) return null;
+    const value = rows[0].value;
+    if (!isObject(value)) return null;
+    const careerId = value.careerId === undefined || value.careerId === null ? null : value.careerId;
+    const archivedAt = value.archivedAt === undefined || value.archivedAt === null ? null : value.archivedAt;
+    if (typeof careerId !== 'string' || (careerId && !isId(careerId))) return null;
+    if (typeof archivedAt !== 'string' && archivedAt !== null) return null;
+    return { archived: true, careerId: careerId || null, archivedAt };
+  }
+
   function rowLimitFailure(payload) {
     if (!isObject(payload)) return null;
     for (let i = 0; i < STORES.length; i += 1) {
@@ -595,6 +613,15 @@
           continue;
         }
         checkId(row.value.careerId, path + '.value.careerId', ctx);
+      }
+      /* 0.21 封存标记仍是 state 行（无新 store / key / schema），随备份原样往返。 */
+      if (row.key === 'career-archive') {
+        if (!isObject(row.value)) {
+          pushIssue(ctx, 'bad-value', path + '.value', 'career-archive value must be an object');
+          continue;
+        }
+        checkOptionalId(row.value.careerId, path + '.value.careerId', ctx);
+        checkOptionalTimestamp(row.value.archivedAt, path + '.value.archivedAt', ctx);
       }
       checkOptionalTimestamp(row.updatedAt, path + '.updatedAt', ctx);
     }
@@ -1132,6 +1159,7 @@
     FORMAT,
     SCHEMA_VERSION,
     buildExportPayload,
+    getArchiveStateFromPayload,
     parseAndValidate,
     formatFilename,
     exportCareerLife,
