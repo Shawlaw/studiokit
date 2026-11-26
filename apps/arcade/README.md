@@ -185,7 +185,7 @@ apps/arcade/
 | --- | --- | --- |
 | `studiokit:arcade:progress:v1` | 每款游戏的 `{ high, plays, lastAt, lastScore }` | v1 |
 | `studiokit:arcade:runs:v1` | 未完成的局内快照（每款一条，含 `savedAt` / `score` / `summary` / `data`） | v1 |
-| `studiokit:arcade:prefs:v1` | 偏好：`muted` 静音、`immersive` 上次全屏选择、可选 `hallSort` 目录排序和 `hallDefaultView` 首页视图 | v1 |
+| `studiokit:arcade:prefs:v1` | 偏好：`muted` 静音、`immersive` 上次全屏选择、可选 `hallSort` 目录排序；`hallDefaultView` 为 0.21 前历史兼容字段，当前忽略 | v1 |
 | `studiokit:arcade:playtime:v1` | 游玩统计：`ms` 总时长、`count` 轮次、最近 30 轮 `rounds`、最近 120 天 `days` | v1 |
 | `studiokit:arcade:scores:v1` | 积分记录：最多 300 条 `{ at, gameId, mode, score, lines, level, durationMs, detail }` | v1 |
 | `studiokit:arcade:challenge:v1` | 挑战记录：每游戏 `cleared` / `best` / `assisted` / `collectibles` | v1 |
@@ -300,7 +300,7 @@ node tools/arcade_stage_solver.mjs --stages=docs/arcade/stages-0.8.json  # 影�
 | 0.18.0 | [`DESIGN-0.18.0.md`](DESIGN-0.18.0.md) | 星塔回响六章、三条终局与后日常（本地未发布） |
 | 0.19.0 | [`DESIGN-0.19.0.md`](DESIGN-0.19.0.md) | 矮视口紧凑布局、拇指区暂停、恢复门与单手触屏 |
 | 0.20.0 | [`DESIGN-0.20.0.md`](DESIGN-0.20.0.md) | 生涯首航 V2：来信找回 / 一次投递进港 / 真实推荐路线 / 三回报收据 / 继续委托（已双端发布） |
-| 0.21.0 | [`DESIGN-0.21.0.md`](DESIGN-0.21.0.md) | 生涯彻底被动发现 / 选择式叙事 / 二级生涯设置 / 可解冻封存 / 仅生涯完全重置 / static-release-full 分层门禁（目标发布，未验证 / 未发布） |
+| 0.21.0 | [`DESIGN-0.21.0.md`](DESIGN-0.21.0.md) | 生涯彻底被动发现 / 选择式叙事 / 二级生涯设置 / 可解冻封存 / 仅生涯完全重置 / static-release-full 分层门禁（发布前；验证见 INTEGRATION-0.21） |
 
 ### 回滚要点
 
