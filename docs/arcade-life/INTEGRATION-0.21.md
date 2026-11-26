@@ -1,5 +1,6 @@
-# Arcade 0.21.0 集成与验证（发布前）
+# Arcade 0.21.0 集成与验证（已双端发布）
 
+- 发布：2026-11-26 已双端发布；main 发布提交 `14a19b0`，[Actions 45750286945](https://github.com/Shawlaw/studiokit/actions/runs/45750286945) 的 Validate and build / Arcade static gates / Deploy GitHub Pages / Deploy Cloudflare Pages / Verify both deployments 全部成功；双端 `verify_deploy.py` **89/89** 文件一致，Arcade 0.21.0 / Badge 2.2.1 / Venue 0.2.0。
 - 分支：`feat/arcade-career-passive-021`；基线：0.20.0（main `ac56577`，已双端发布，提交 `df91715`、Actions `45719028590` 四项成功、双端各 88/88 文件一致）。
 - 设计 / 回滚：`apps/arcade/DESIGN-0.21.0.md`；接口冻结：`docs/arcade-life/ADR-interfaces.md` §22；门禁分层：`tools/README-gates.md`。
 - 版本链已同步 `0.21.0` / SW `studiokit-arcade-0.21.0-v1`。本文件只记录实际执行结果；未执行项保持 UNVERIFIED。
@@ -31,7 +32,7 @@
 | 96 委托 Chrome E2E | **16/16 游戏、96/96 tiers、3792/3792 checks PASS** | 最终 `--e2e --skip-static` 全量串行 exit 0，0 环境错误 |
 | `release` profile | **41/41 PASS** | 最终 verdict `release passed (not full)`，1801.411s；含 lifecycle 60/60、96 3792/3792、flow 339/339 |
 | `full` profile | **UNVERIFIED** | 未执行完整 56 项集合 |
-| GitHub Actions / 双端 `verify_deploy.py` / 线上页面 | **UNVERIFIED** | 尚未 push / 触发部署 |
+| GitHub Actions / 双端 `verify_deploy.py` / 线上页面 | **PASS** | Actions `45750286945` 全部成功；双端 89/89 文件一致；线上中心页 0.21.0、16 卡、无生涯常驻 CTA，设置深链可打开 |
 | 真机 / 真人、读屏、PWA 安装态 | **UNVERIFIED** | 无真实设备证据 |
 
 ## 3. 首轮 release 失败与最终闭环
@@ -50,6 +51,14 @@
 ## 5. 未解决项与发布门槛
 
 1. 最终 release profile 已 41/41 通过；`full` profile 未执行，不能把 release 结论写成 full。
-2. 发布后需确认 Actions 四个 job 与双端 `verify_deploy.py`；通过前不得声称已发布。
+2. Actions 与双端逐文件校验已完成，结果见第 2 节。
 3. 需要真实设备/真人验证被动来信、封存/解冻、重置提示与经典记录保留。
-4. 发布后检查 Actions 四个 job 成功，并用 `tools/verify_deploy.py` 双端逐文件校验；此前不得声称 0.21.0 已发布。
+4. 首次推送的 CI 静态层因旧工作目录硬编码与浅克隆基线缺失失败，部署被正确阻断；修复为仓库相对路径与 `fetch-depth: 0` 后，Actions `45750286945` 全绿。
+
+## 6. 发布后记录
+
+- 发布提交：`14a19b0`（功能提交 `f88888c` + CI 可移植性修复）。
+- Actions：`45750286945`，Validate and build、Arcade static gates、Deploy GitHub Pages、Deploy Cloudflare Pages、Verify both deployments 全部成功。
+- 双端校验：`verify_deploy.py --base https://shawlaw.github.io/studiokit/ --base https://studiokit.pages.dev/` → **89/89 files identical**，Arcade 0.21.0 / Badge 2.2.1 / Venue 0.2.0。
+- 线上浏览器抽查：GitHub Pages 中心页 16 卡、经典目录可见、无生涯视图/常驻 CTA、版本 0.21.0；`?careerPanel=settings` 深链显示「生涯保管 / 封存生涯 / 完全重置生涯」。
+- `full` profile 与真机/真人仍 UNVERIFIED；release 通过不冒充 full。

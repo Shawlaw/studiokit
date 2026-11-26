@@ -32,12 +32,12 @@
 
 ## 工具一览
 
-以下三个工具均已双端发布、注册表状态为 `available`；Rounded Image 仅为规划项，**尚未实现**。Arcade 线上为 0.20.0；本地 `feat/arcade-career-passive-021` 有 0.21.0 生涯被动化 / 归档改动，**目标发布但未验证、未发布**，其产品代码版本链仍为 0.20.0。
+以下三个工具均已双端发布、注册表状态为 `available`；Rounded Image 仅为规划项，**尚未实现**。Arcade 线上为 **0.21.0**（2026-11-26 已双端发布：生涯被动化、选择式叙事、可解冻封存、仅生涯完全重置与分层门禁；真机 / full profile 仍 UNVERIFIED）。
 
 | 工具 | 版本 | 状态 | 入口 | 一句话说明 |
 | --- | --- | --- | --- | --- |
 | ◎ **Badge Studio** | `2.2.1` | `available` | [`apps/badge-studio/`](apps/badge-studio/) | 同心圆徽章工作台：弧形文字排版、多方案并排对比、透明 PNG / SVG 导出 |
-| 🕹 **街机厅 Arcade** | `0.20.0`（目标 `0.21.0`） | `available` | [`apps/arcade/`](apps/arcade/) | 16 款竖屏小游戏（13 款带 6 关挑战 + 三款平和棋牌），支持全屏、暂停、本地续玩、分享与离线预载；线上 0.20.0，本地 0.21.0 目标把生涯入口收回被动发现、改为选择式叙事并加入可解冻封存 / 仅生涯完全重置 / 分层门禁（未验证、未发布） |
+| 🕹 **街机厅 Arcade** | `0.21.0` | `available` | [`apps/arcade/`](apps/arcade/) | 16 款竖屏小游戏（13 款带 6 关挑战 + 三款平和棋牌），支持全屏、暂停、本地续玩、分享与离线预载；生涯入口收回被动发现、选择式叙事、可解冻封存 / 仅生涯完全重置 / 分层门禁 |
 | 🍽 **Venue Compare** | `0.2.0` | `available` | [`apps/restaurant-compare/`](apps/restaurant-compare/) | 餐厅考察对比：地图标注 + 横向对比表 + 外部链接备注，导出可转发的独立 HTML |
 | ▧ **Rounded Image** | — | `planned` | — | 预留给图片圆角工具，原始规格待恢复或重新定义；**当前没有实现** |
 
@@ -239,7 +239,7 @@ Cloudflare 侧项目为 `studiokit`（Production branch `main`），所需 Secre
 | [`docs/badge-studio-upstream-readme.md`](docs/badge-studio-upstream-readme.md) | Badge Studio 上游 v2.2.0 说明原文存档（当前集成版本以 `BASELINE.md` 为准） |
 | [`apps/<tool>/README.md`](apps/) | 各工具的产品文档（功能、数据模型、边界、测试） |
 | [`apps/arcade/DESIGN-*.md`](apps/arcade/) | Arcade 逐版设计与回滚说明（`DESIGN-0.4.0` … `DESIGN-0.21.0`） |
-| [`docs/arcade-life/INTEGRATION-0.21.md`](docs/arcade-life/INTEGRATION-0.21.md) | 0.21.0 集成、分层门禁与未验证项（目标发布，未发布） |
+| [`docs/arcade-life/INTEGRATION-0.21.md`](docs/arcade-life/INTEGRATION-0.21.md) | 0.21.0 集成、分层门禁与双端发布证据 |
 
 ## 已知边界
 

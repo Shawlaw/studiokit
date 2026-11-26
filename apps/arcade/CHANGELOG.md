@@ -1,8 +1,8 @@
 # Arcade Changelog
 
-## 0.21.0 — 2026-11-26（发布前）
+## 0.21.0 — 2026-11-26（已双端发布）
 
-本地分支 `feat/arcade-career-passive-021`。设计 / 回滚见 [`DESIGN-0.21.0.md`](DESIGN-0.21.0.md)，接口冻结见 [`docs/arcade-life/ADR-interfaces.md`](../../docs/arcade-life/ADR-interfaces.md) §22，集成与验证口径见 [`docs/arcade-life/INTEGRATION-0.21.md`](../../docs/arcade-life/INTEGRATION-0.21.md)。**版本链已同步 0.21.0 / SW `studiokit-arcade-0.21.0-v1`；尚未发布。**
+本地分支 `feat/arcade-career-passive-021`。设计 / 回滚见 [`DESIGN-0.21.0.md`](DESIGN-0.21.0.md)，接口冻结见 [`docs/arcade-life/ADR-interfaces.md`](../../docs/arcade-life/ADR-interfaces.md) §22，集成与验证口径见 [`docs/arcade-life/INTEGRATION-0.21.md`](../../docs/arcade-life/INTEGRATION-0.21.md)。**版本链 0.21.0 / SW `studiokit-arcade-0.21.0-v1`；2026-11-26 已双端发布。**
 
 ### Added / Changed
 
@@ -16,11 +16,11 @@
 ### Tests
 
 - 已通过：static **35/35**、archive **8/8**、archive lifecycle **60/60**、DB **38/38**、backup **34/34**、mobile **318/318**、smoke **117/117**、完整首航 **339/339**、PWA 离线 **18/18**。
-- 最终 96 全量串行 **16/16 游戏、96/96 tiers、3792/3792 checks**；release profile **41/41 `release passed (not full)`**（1801.411s）。full / Actions / 双端 `verify_deploy.py` / 真机 / 真人仍 **UNVERIFIED**。
+- 最终 96 全量串行 **16/16 游戏、96/96 tiers、3792/3792 checks**；release profile **41/41 `release passed (not full)`**（1801.411s）。Actions `45750286945` 全部成功，双端 `verify_deploy.py` **89/89** 一致；full / 真机 / 真人仍 **UNVERIFIED**。
 
 ### Notes
 
-- 未发布：无 `OWNER_AUTHORIZATION: PUBLISH_TO_MAIN`，未 push / merge / tag / 部署；远端 `main` 与双端线上仍为 0.20.0。
+- 发布：main 提交 `14a19b0`，Actions `45750286945` 全绿，双端各 89/89 文件一致；线上中心页 0.21.0、16 卡、无生涯常驻入口，设置深链可用。
 
 ## 0.20.0 — 2026-11-26（已双端发布）
 

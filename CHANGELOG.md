@@ -4,14 +4,15 @@ StudioKit 门户本身没有独立的 semver；以下按仓库里程碑与工具
 
 > 说明：Arcade `0.11.2`–`0.14.0` 的条目于 2026-11-22 依据 [`apps/arcade/CHANGELOG.md`](apps/arcade/CHANGELOG.md) 补齐（本文件当时落后于工具版本），逐条数值与证据以工具 CHANGELOG 与对应 `DESIGN-*.md` 为准。
 
-## Arcade 0.21.0 — 2026-11-26（目标发布；本地开发，未验证 / 未发布）
+## Arcade 0.21.0 — 2026-11-26（已双端发布）
 
 - 生涯中心页彻底被动：经典目录无生涯视图 / 默认视图切换 / 常驻告示板、信箱、章节入口；未读 / 未投递来信只以低强调小字在「继续上次」附近找回，页尾新增二级「生涯设置」入口（封存 / 解冻 / 重置 / 档案），封存时隐藏生涯内容入口与结算线索。
 - 故事与任务改为面向玩家的第二人称选择式叙事，选项对应真实动作 / 路线 / 终局；NPC 自述仍保留第一人称，不做虚假分支。
 - 生涯设置支持可解冻封存（既有 `state` store 的 `career-archive` 行、事务内重读守卫、解冻推进代次、备份携带标记）与**仅生涯数据**完全重置 `resetAllCareer()`（单事务清空 11 stores，不触碰经典 progress / runs / playtime / scores / challenge / meta / prefs，不可撤销且二次确认）。ADR §22 冻结接口。
 - 门禁分层 `static` / `release` / `full`：release 结论明确为 `release passed (not full)`，只有 full 全绿才可写 `ALL GATES PASSED`；CI 增加 L0 static job，Chrome 集严格串行，输出真实耗时，不把「没跑」写成「通过」。
-- 经典 localStorage key、IDB v1 / 11 stores、`contentVersion 0.18.0`、玩法数值、关卡与挑战数据零变化。目标版本链 0.21.0 / SW `studiokit-arcade-0.21.0-v1`；**当前产品代码版本链仍为 0.20.0，版本 bump 未执行**。
-- 本分支实跑：`validate_site.py` / `build_site.py` PASS（因断言仍为 0.20.0 而通过，不证明 0.21 版本链同步）、纯 Node `career_archive_test.mjs` 8/8。Chrome 门禁、release / full、Actions、双端线上与真人均 UNVERIFIED；无发布授权。详见 [`apps/arcade/CHANGELOG.md`](apps/arcade/CHANGELOG.md)、[`DESIGN-0.21.0.md`](apps/arcade/DESIGN-0.21.0.md) 与 [`INTEGRATION-0.21.md`](docs/arcade-life/INTEGRATION-0.21.md)。
+- 经典 localStorage key、IDB v1 / 11 stores、`contentVersion 0.18.0`、玩法数值、关卡与挑战数据零变化。版本链 0.21.0 / SW `studiokit-arcade-0.21.0-v1`。
+- 最终 static 35/35、release 41/41 `release passed (not full)`、96 委托 3792/3792、首航 339/339、mobile 318/318、smoke 117/117、archive lifecycle 60/60；full 与真机 / 真人仍 UNVERIFIED。
+- 发布提交 `14a19b0`，Actions `45750286945` 全部成功，双端 89/89 文件一致，线上 Arcade 0.21.0。首次 CI 静态层失败（旧目录硬编码 / 浅克隆基线）已修复并重跑成功。详见 [`apps/arcade/CHANGELOG.md`](apps/arcade/CHANGELOG.md)、[`DESIGN-0.21.0.md`](apps/arcade/DESIGN-0.21.0.md) 与 [`INTEGRATION-0.21.md`](docs/arcade-life/INTEGRATION-0.21.md)。
 
 ## Arcade 0.20.0 — 2026-11-26（已双端发布）
 

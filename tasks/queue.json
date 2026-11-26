@@ -2376,7 +2376,7 @@
       "id": "T141",
       "title": "Arcade 0.21.0 文档 / 任务口径同步（目标发布，未验证 / 未发布）",
       "kind": "agent",
-      "status": "IN_PROGRESS",
+      "status": "DONE",
       "dependsOn": [
         "T140"
       ],
@@ -2387,7 +2387,8 @@
         "说明中心页彻底 passive、选择式叙事、生涯设置二级入口、可解冻封存、仅生涯数据完全重置、static/release/full 分层门禁；保留历史版本事实",
         "实跑 validate_site.py / build_site.py / git diff --check 并如实记录；不伪造门禁、Actions 与线上验证结果"
       ],
-      "evidence": "Branch feat/arcade-career-passive-021; version chain 0.21.0. static 35/35; archive 8/8; archive lifecycle 60/60; DB 38/38; backup 34/34; mobile 318/318; smoke 117/117; flow 339/339; PWA 18/18. 96 full serial: 15/16 games and 90/90 executed tiers passed, pendulum-tower Chrome DevToolsActivePort environment error pending. Release first pass 37/40; real mobile/smoke failures fixed and individually rerun; no single aggregate release pass claimed. full/Actions/live/real-device UNVERIFIED. See docs/arcade-life/INTEGRATION-0.21.md."
+      "evidence": "Released both targets 2026-11-26; main 14a19b0; Actions 45750286945 all jobs success; verify_deploy 89/89 identical, arcade 0.21.0. static 35/35; release 41/41 release passed (not full); 96 missions 16/16 games, 96/96 tiers, 3792/3792 checks; archive lifecycle 60/60; DB 38/38; backup 34/34; mobile 318/318; smoke 117/117; flow 339/339; PWA 18/18. full profile and real-device/human testing UNVERIFIED. See docs/arcade-life/INTEGRATION-0.21.md.",
+      "completedAt": "2026-11-26T03:45:00Z"
     }
   ]
 }

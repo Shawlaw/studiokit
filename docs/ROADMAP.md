@@ -258,7 +258,7 @@ Owner 两条真机反馈：①已安装 PWA 点「检查更新」显示的是已
 - [x] 新增门禁 `arcade_compact_touch_test`（18 项，真实触控事件）并入聚合门禁；版本链 0.19.0
 - [ ] Owner 真机试玩并裁决首版取值（半屏方向锁 40px、挡板增益 1.2、上滑影冲 56px/350ms、防抖 450ms）；发布需 Owner 明确授权
 
-## 0.21.0 生涯被动化与归档（2026-11-26 本地 `feat/arcade-career-passive-021`，目标发布，未验证 / 未发布）
+## 0.21.0 生涯被动化与归档（2026-11-26 已双端发布）
 
 - [x] 中心页生涯彻底被动：经典目录无生涯视图 / 默认视图切换 / 常驻告示板、信箱、章节入口；未读 / 未投递来信只在「继续上次」附近低强调小字找回；生涯已开启 / 已封存时页尾二级「生涯设置」入口，封存时隐藏生涯内容 CTA
 - [x] 故事与任务改为面向玩家的第二人称选择式叙事，选项对应真实动作 / 路线 / 终局；NPC 自述保留第一人称；`clues.json` / `chapter-01.json` 同源改写
@@ -266,7 +266,8 @@ Owner 两条真机反馈：①已安装 PWA 点「检查更新」显示的是已
 - [x] 仅生涯完全重置 `resetAllCareer()`：单事务清空 11 stores，经典 progress / runs / playtime / scores / challenge / meta / prefs 零触碰；二次确认输入「重置生涯」，不可撤销
 - [x] 门禁分层 `static` / `release` / `full`；release 不等于 full；CI 新增 L0 static job；96 `--skip-static`；输出真实耗时，没跑不说通过
 - [x] 设计 `apps/arcade/DESIGN-0.21.0.md`、集成 `docs/arcade-life/INTEGRATION-0.21.md`、ADR §22 同步；目标版本链 0.21.0 / SW `studiokit-arcade-0.21.0-v1`
-- [ ] 版本 bump：当前 engine / sw / 中心页 / 注册表与校验断言仍为 0.20.0（本任务只改文档，未改产品代码）
+- [x] 版本链 0.21.0 / SW `studiokit-arcade-0.21.0-v1`；release 41/41、96 3792/3792、首航 339/339、mobile 318/318、smoke 117/117、archive lifecycle 60/60；full / 真机 UNVERIFIED
+- [x] main `14a19b0`，Actions `45750286945` 全绿，双端 89/89 文件一致
 - [ ] Chrome 门禁、release / full 聚合、Actions、双端 verify_deploy、真机 / 真人验证（均未执行 / UNVERIFIED）
 - [ ] Owner 授权与双端发布（无 `PUBLISH_TO_MAIN`，未 push）
 
@@ -353,7 +354,7 @@ Owner 在 iPhone 主屏 PWA（Cloudflare Pages）复测 0.13.2：星海/2048/俄
 
 ## Now
 
-1. **Arcade 0.21.0 版本 bump 与完整验证**（本地 `4ffc27d`，目标发布）：先把 engine / sw / 中心页 / 注册表 / 校验断言升到 0.21.0，再跑 `static` / `release` / `full` 分层门禁、真机 / 真人验证；在此之前不得声称发布。文档口径已同步，但版本代码未同步。
+1. **Arcade 0.21.0 真机 / full 收尾**（已双端发布）：release 41/41 与双端 89/89 已完成；full profile、真机 / 真人体验仍 UNVERIFIED，不得把 release 结论冒充 full。
 2. **Arcade 0.19.0 真机试玩**（已双端发布，手感待裁决）：按「走路 / 地铁站立 / 等车坐着」三种场景试 16 款游戏，重点裁决半屏方向锁、挡板相对拖动、上滑影冲、恢复门与结算防抖的首版取值，以及紧凑模式在真机标签页里的实际高度。
 3. **Arcade 0.13.0 真机试玩**：已双端发布（见上一节）；剩余真机试玩（星币节奏/能量取舍/核弹稀缺度/主题可感知度）。
 4. **Arcade 0.10.0 真机试玩**：重点验证三款棋牌的点按精度（320px 五子棋/接龙）、五子棋 AI 难度是否合适、挑战修复后的手感（砖块拖动发球、层塔对齐提示、矿工最后一钩、影跃累计计时文案）。
