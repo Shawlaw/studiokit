@@ -1025,7 +1025,10 @@
     if (internal.commissionConfigured) return mod;
     if (!internal.commissionContent) return mod;
     try {
-      var result = mod.configure({ content: internal.commissionContent });
+      var result = mod.configure({
+        content: internal.commissionContent,
+        arcadeBase: api.gameId ? '../' : internal.base || './',
+      });
       internal.commissionConfigured = true;
       if (result && result.errors && result.errors.length) {
         warnOnce('commission-content', result.errors.join('; '));
@@ -4305,10 +4308,10 @@
 
   function showHubEntryIssue(reason) {
     var messages = {
-      'career-archived': '旧港生涯已封存。返回街机厅后，可以在生涯设置里解冻。',
-      'incomplete-career': '找到了旧港记录，但缺少接单所需的档案或工钱账册。返回街机厅后，可以在生涯设置里导入原档备份。',
-      'ambiguous-career': '本机有多份旧港记录，暂时无法确认要打开哪份。返回街机厅后，可以在生涯设置里导入要继续的档案。',
-      'no-career': '本机已找不到可以打开的旧港生涯。请返回街机厅查看当前状态。',
+      'career-archived': '旧港生涯已封存。可以在街机厅的生涯设置里解冻。',
+      'incomplete-career': '找到了旧港记录，但缺少接单所需的档案或工钱账册。可以在街机厅的生涯设置里导入原档备份。',
+      'ambiguous-career': '本机有多份旧港记录，暂时无法确认要打开哪份。可以在街机厅的生涯设置里导入要继续的档案。',
+      'no-career': '本机已找不到可以打开的旧港生涯。',
     };
     if (DOC && !DOC.querySelector('[data-career-hub-error]')) {
       var topbar = DOC.querySelector('.game-topbar');
@@ -4318,19 +4321,26 @@
       notice.setAttribute('data-career-hub-error', reason);
       notice.setAttribute('role', 'alert');
       var text = DOC.createElement('p');
-      text.textContent = messages[reason] || '暂时打不开旧港生涯。请返回街机厅后重试。';
-      var link = DOC.createElement('a');
-      link.className = 'ac-btn ac-btn-secondary';
-      link.href = back ? back.href : '../index.html';
-      link.textContent = '返回街机厅';
-      notice.append(text, link);
-      if (topbar) topbar.insertAdjacentElement('afterend', notice);
-      else DOC.body.appendChild(notice);
+      text.textContent = messages[reason] || '暂时打不开旧港生涯，请稍后重试。';
+      notice.appendChild(text);
+      var homeEntry = DOC.querySelector('[data-career-entry]');
+      if (homeEntry) {
+        homeEntry.insertAdjacentElement('afterend', notice);
+      } else {
+        var link = DOC.createElement('a');
+        link.className = 'ac-btn ac-btn-secondary';
+        link.href = back ? back.href : '../index.html';
+        link.textContent = '返回街机厅';
+        notice.appendChild(link);
+        if (topbar) topbar.insertAdjacentElement('afterend', notice);
+        else DOC.body.appendChild(notice);
+      }
     }
     return { ok: false, reason: reason };
   }
 
   async function openHubCareerPanel(panel) {
+    await readyPromise;
     var db = api.db || readGlobal('db');
     if (panel === 'settings') {
       if (!api.available || !db) return;
@@ -4472,6 +4482,7 @@
       return !!internal.commissionRun;
     };
     api.openTown = openTown;
+    api.openHubCareerPanel = openHubCareerPanel;
     api.openHangar = openHangar;
     api.openReceipt = openReceipt;
     api.openMarket = openMarket;

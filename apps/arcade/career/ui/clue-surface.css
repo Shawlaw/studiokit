@@ -148,12 +148,18 @@
   }
 }
 
-/* ---------- 浮层与面板（信箱 / 设置共用） ---------- */
+/* ---------- 生涯浮层与面板 ---------- */
+
+html:has(.ac-career-overlay),
+body:has(.ac-career-overlay) {
+  overflow: hidden;
+}
 
 .ac-career-overlay {
   position: fixed;
   inset: 0;
-  z-index: 70;
+  /* 高于独立窗口的置顶站点导航。 */
+  z-index: 10000;
   display: flex;
   align-items: center;
   justify-content: center;

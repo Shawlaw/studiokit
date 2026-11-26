@@ -126,6 +126,7 @@ body.arcade-immersive .game-topbar {
   display: flex;
   align-items: center;
   gap: 10px;
+  padding-inline-start: 8px;
 }
 
 .ac-back {
@@ -846,12 +847,16 @@ body.has-subhud .stage-box {
   padding: 10px 12px;
   border: 1px solid var(--ac-line);
   border-radius: 12px;
+  width: 100%;
   background: var(--ac-panel);
   color: var(--ac-ink);
-  text-decoration: none;
+  font: inherit;
+  text-align: start;
+  cursor: pointer;
 }
 .hall-career-entry[hidden] { display: none; }
-.hall-career-entry:hover { border-color: var(--ac-accent); }
+.hall-career-entry:hover,
+.hall-career-entry:focus-visible { border-color: var(--ac-accent); }
 .hall-career-entry__hint { flex: 1 1 auto; color: var(--ac-muted); font-size: 12px; }
 .hall-career-entry__arrow { color: var(--ac-accent); font-size: 20px; line-height: 1; }
 .hall-app { margin-top: 16px; }
@@ -1285,7 +1290,8 @@ body.has-subhud .stage-box {
 
 @media (max-width: 360px) {
   .game-page { gap: 6px; padding-left: max(8px, env(safe-area-inset-left)); padding-right: max(8px, env(safe-area-inset-right)); }
-  .game-topbar { gap: 4px; }
+  /* 320px 的标题已接近宽度上限，页面自身的 8px 边距足够，不再挤占标题。 */
+  .game-topbar { gap: 4px; padding-inline-start: 0; }
   .game-title { font-size: 12px; letter-spacing: 0; }
   body.has-undo .game-topbar { gap: 2px; }
   body.has-undo .game-title { font-size: 11px; }

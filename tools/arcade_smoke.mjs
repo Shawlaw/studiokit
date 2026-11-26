@@ -46,8 +46,8 @@ async function main() {
     })()`);
     assert(home.cards >= 2, 'home cards=' + home.cards);
     assert(home.href.indexOf('apps/arcade') !== -1, 'arcade card not clickable: ' + JSON.stringify(home));
-    assert(home.version.indexOf('0.21.1') !== -1, 'arcade version missing on home card');
-    record('门户街机厅卡片可点击且版本 0.21.1', true);
+    assert(home.version.indexOf('0.21.2') !== -1, 'arcade version missing on home card');
+    record('门户街机厅卡片可点击且版本 0.21.2', true);
 
     /* ---------- GitHub Pages 项目子路径：shell 返回链接 ---------- */
     await cdp.navigate(base + '/studiokit/apps/arcade/games/star-raid.html');
@@ -68,10 +68,10 @@ async function main() {
       cards: document.querySelectorAll('.hall-card').length,
       runs: window.Arcade && Arcade.RunSave.count()
     })`);
-    assert(hallInfo.version === '0.21.1', 'version is ' + hallInfo.version);
+    assert(hallInfo.version === '0.21.2', 'version is ' + hallInfo.version);
     assert(hallInfo.games === 16, 'game count is ' + hallInfo.games);
     assert(hallInfo.cards === 16, 'card count is ' + hallInfo.cards);
-    record('中心页 16 款游戏与版本 0.21.1', true);
+    record('中心页 16 款游戏与版本 0.21.2', true);
 
     await cdp.evaluate(`(() => { const i = document.querySelector('[data-search]'); i.value = '雪铃'; i.dispatchEvent(new Event('input', { bubbles: true })); })()`);
     await sleep(120);
@@ -319,6 +319,7 @@ async function main() {
       const info = await cdp.evaluate(`({ hasArcade: !!window.Arcade, overlay: document.querySelector('[data-overlay]') ? !document.querySelector('[data-overlay]').hidden : false, title: document.querySelector('[data-ov-title]')?.textContent })`);
       assert(info.hasArcade, game.id + ': Arcade missing');
       assert(info.overlay, game.id + ': start overlay missing');
+      assert(await cdp.evaluate('parseFloat(getComputedStyle(document.querySelector(".game-topbar")).paddingInlineStart) >= 8'), game.id + ': game title row has no leading padding');
       await cdp.click('[data-ov-btn]');
       await sleep(450);
       const playing = await cdp.evaluate(`document.querySelector('[data-overlay]').hidden`);
@@ -2843,7 +2844,7 @@ async function main() {
       version: window.Arcade && Arcade.version,
       title: document.title
     })`);
-    assert(offlineHall.cards === 16 && offlineHall.version === '0.21.1', 'offline hall failed: ' + JSON.stringify(offlineHall));
+    assert(offlineHall.cards === 16 && offlineHall.version === '0.21.2', 'offline hall failed: ' + JSON.stringify(offlineHall));
     const offlineStatus = await cdp.evaluate(`(async () => {
       try {
         await Arcade.Offline.register();
@@ -2865,7 +2866,7 @@ async function main() {
       overlay: !!document.querySelector('[data-overlay]'),
       version: window.Arcade && window.Arcade.version
     })`);
-    assert(offlineGame.hasArcade && offlineGame.overlay && offlineGame.version === '0.21.1', 'offline game failed: ' + JSON.stringify(offlineGame));
+    assert(offlineGame.hasArcade && offlineGame.overlay && offlineGame.version === '0.21.2', 'offline game failed: ' + JSON.stringify(offlineGame));
     await cdp.navigate(base + '/apps/arcade/games/not-preloaded.html');
     const offlineMissing = await cdp.text('body');
     assert(offlineMissing && offlineMissing.includes('还没有预载'), 'offline missing page: ' + String(offlineMissing).slice(0, 120));
@@ -3038,7 +3039,7 @@ async function main() {
     assert(await cdp.evaluate('document.querySelector("[data-letter-entry]").hidden === true'), 'letter hint should stay hidden without clues');
     await cdp.waitFor('document.querySelector("[data-career-entry]")?.hidden === false');
     assert(await cdp.evaluate('document.querySelector("[data-career-entry-label]").textContent.trim() === "旧港生涯"'), 'persistent career entry label missing');
-    assert(await cdp.evaluate('document.querySelector("[data-career-entry]").getAttribute("href") === "games/pendulum-tower.html?careerPanel=town"'), 'persistent career entry href missing');
+    assert(await cdp.evaluate('document.querySelector("button[data-career-entry]")?.getAttribute("aria-haspopup") === "dialog"'), 'persistent career entry is not a dialog trigger');
     const careerEntryRect = await cdp.evaluate(`(() => { const r = document.querySelector('[data-career-entry]').getBoundingClientRect(); return {w:r.width,h:r.height}; })()`);
     assert(careerEntryRect.w >= 44 && careerEntryRect.h >= 44, 'persistent career entry touch target too small: ' + JSON.stringify(careerEntryRect));
     for (const [width, height] of [[320, 568], [375, 667], [390, 844], [430, 932]]) {
@@ -3053,10 +3054,51 @@ async function main() {
         width + 'px persistent career entry layout failed: ' + JSON.stringify(entryLayout));
     }
     await cdp.send('Emulation.setDeviceMetricsOverride', { width: 390, height: 844, deviceScaleFactor: 1, mobile: true });
+    const careerHome = await cdp.evaluate('location.href');
+    await cdp.evaluate(`(async () => {
+      document.documentElement.classList.add('studiokit-shell-standalone');
+      scrollTo(0, 30);
+      const request = indexedDB.open('studiokit:arcade:career');
+      await new Promise((resolve, reject) => {
+        request.onerror = () => reject(request.error);
+        request.onsuccess = () => {
+          const db = request.result;
+          const transaction = db.transaction('ledgers', 'readwrite');
+          transaction.oncomplete = () => { db.close(); resolve(); };
+          transaction.onabort = () => { db.close(); reject(transaction.error); };
+          const ledger = transaction.objectStore('ledgers');
+          for (let i = 0; i < 24; i++) ledger.put({ txId: 'smoke-receipt-' + i, careerId: ${JSON.stringify(profile.careerId)}, kind: 'claim', credits: 10 });
+        };
+      });
+    })()`);
+    const homeScroll = await cdp.evaluate('scrollY');
+    assert(homeScroll > 0, 'career hall scroll fixture is not scrollable');
+    assert(await cdp.evaluate('!window.ArcadeCareer.openHubCareerPanel'), 'career bridge loaded before opening the panel');
     await cdp.click('[data-career-entry]');
     await cdp.waitFor('!!document.querySelector("[data-career-panel=town]")');
-    await cdp.navigate(base + '/apps/arcade/');
-    await cdp.waitFor('document.querySelector("[data-career-entry]")?.hidden === false');
+    assert(await cdp.evaluate('location.href') === careerHome, 'opening town navigated away from the hall');
+    const receiptLabel = await cdp.text('[data-town-action=receipt]');
+    await cdp.click('[data-town-action=receipt]');
+    await cdp.waitFor('!!document.querySelector("[data-career-panel=receipt] [data-section=ledger-rows]")');
+    assert((await cdp.text('[data-career-panel=receipt] h2')).trim() === receiptLabel.trim(), 'wallet title differs from its action label');
+    await sleep(180);
+    assert(await cdp.evaluate('document.elementFromPoint(12, 12).closest("[data-career-panel]")?.dataset.careerPanel') === 'receipt', 'sticky shellbar was above the wallet overlay');
+    const receiptBody = '[data-career-panel=receipt] .ac-career-sheet__body';
+    const receiptPoint = await cdp.evaluate(`(() => {
+      const r = document.querySelector(${JSON.stringify(receiptBody)}).getBoundingClientRect();
+      return { x: Math.round(r.left + r.width / 2), y: Math.round(r.top + r.height / 2) };
+    })()`);
+    await cdp.send('Input.dispatchMouseEvent', { type: 'mouseWheel', ...receiptPoint, deltaX: 0, deltaY: 3000 });
+    await cdp.waitFor(`document.querySelector(${JSON.stringify(receiptBody)}).scrollTop > 0`);
+    await cdp.send('Input.dispatchMouseEvent', { type: 'mouseWheel', ...receiptPoint, deltaX: 0, deltaY: 1000 });
+    await cdp.send('Input.dispatchMouseEvent', { type: 'mouseWheel', x: 12, y: 12, deltaX: 0, deltaY: 500 });
+    await sleep(150);
+    assert(await cdp.evaluate('scrollY') === homeScroll, 'wallet scrolling moved the background');
+    await cdp.click('[data-career-panel=receipt] .ac-career-close');
+    assert(await cdp.evaluate('getComputedStyle(document.documentElement).overflowY') === 'hidden', 'closing the wallet unlocked the background behind town');
+    await cdp.click('[data-career-panel=town] .ac-career-close');
+    assert(await cdp.evaluate(`location.href === ${JSON.stringify(careerHome)} && scrollY === ${homeScroll} && document.activeElement.matches('[data-career-entry]') && getComputedStyle(document.documentElement).overflowY !== 'hidden'`), 'closing town failed to restore the hall, focus or scrolling');
+    record('街机厅首页直接打开告示板，钱包标题一致且独立滚动，关闭恢复首页焦点与滚动', true);
 
     /* 未投递来信只驱动「继续上次」附近的小字，不切视图、不弹窗。 */
     await cdp.evaluate(`new Promise((resolve, reject) => {
@@ -3107,7 +3149,7 @@ async function main() {
     assert(unfrozen.ok && unfrozen.archived === false, 'career unfreeze fixture failed: ' + JSON.stringify(unfrozen));
     await cdp.navigate(base + '/apps/arcade/');
     await cdp.waitFor('document.querySelector("[data-career-entry]")?.hidden === false && document.querySelector("[data-career-settings-label]")?.textContent.trim() === "生涯设置"');
-    assert(await cdp.evaluate('document.querySelector("[data-career-entry]").getAttribute("href") === "games/pendulum-tower.html?careerPanel=town"'), 'career entry did not return after unfreeze');
+    assert(await cdp.evaluate('!!document.querySelector("button[data-career-entry]:not([hidden])")'), 'career entry did not return after unfreeze');
 
     /* 完全重置后：常驻生涯入口与设置入口都消失，经典目录仍可见。 */
     await cdp.navigate(base + '/apps/arcade/games/pendulum-tower.html');
@@ -3152,9 +3194,8 @@ async function main() {
     await cdp.click('[data-career-entry]');
     await cdp.waitFor('document.querySelector("[data-career-hub-error=incomplete-career]")?.textContent.includes("档案")');
     assert(!(await cdp.evaluate('ArcadeCareer.db.getState("career")')), 'opening isolated C0 created a new career');
-    await cdp.click('[data-career-hub-error] a');
-    await cdp.waitFor('document.querySelectorAll("[data-hall-grid] a").length >= 16');
-    record('旧港入口：缺指针复用原档工钱，孤立 C0 显示修复说明并可返回街机厅', true);
+    assert(await cdp.evaluate('location.pathname === "/apps/arcade/" && document.querySelectorAll("[data-hall-grid] a").length >= 16'), 'legacy career error navigated away from the hall');
+    record('旧港入口：缺指针复用原档工钱，孤立 C0 在首页显示修复说明', true);
 
     /* ---------- 清理测试产生的本地数据 ---------- */
     await cdp.evaluate(`localStorage.clear()`);

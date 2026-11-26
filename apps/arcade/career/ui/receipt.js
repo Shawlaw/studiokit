@@ -47,7 +47,7 @@
   const OVERLAY_CLASS = 'ac-career-overlay';
   const SHEET_CLASS = 'ac-career-sheet ac-career-sheet--small';
   const TITLE_ID = 'ac-career-receipt-title';
-  const PANEL_TITLE = '钱袋与账本';
+  const PANEL_TITLE = '钱包与收据';
   const PANEL_CLOSE_LABEL = '收起账本';
   const CLOSE_GLYPH = '×';
   const SUMMARY_TITLE = '眼下的家当';

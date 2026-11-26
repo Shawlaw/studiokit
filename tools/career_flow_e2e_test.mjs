@@ -1360,11 +1360,11 @@ async function resumeFromNewTab(cdp, run, browser, newPage) {
   const reopened = await newPage();
   await go(reopened, HOME_URL, 'resume-fresh-home');
   requireFeature('RESUME 新首页标签没有原标签的 sessionStorage 票据', await readBrowserTicket(reopened) === null, '新标签需要从持久化委托找回票据');
-  const homeAction = await pressVisible(reopened, 'a[data-career-entry]', '新首页的旧港生涯入口');
+  const homeLocation = await reopened.evaluate('location.href');
+  const homeAction = await pressVisible(reopened, 'button[data-career-entry]', '新首页的旧港生涯入口');
   gate('RESUME 首页可见旧港生涯入口', homeAction.text.includes('旧港生涯'), J(homeAction.text));
-  await reopened.waitFor(`new URLSearchParams(location.search).get('careerPanel') === 'town'`, { timeout: 15000 });
-  await waitBridge(reopened, 'resume-town', false);
   await waitPanel(reopened, 'town');
+  requireFeature('RESUME 告示板在首页打开', await reopened.evaluate('location.href') === homeLocation, homeLocation);
   requireFeature('RESUME 进入旧港后仍须显式点击续单', await readBrowserTicket(reopened) === null, '打开告示板时不应自动恢复票据');
 
   const resumed = await acceptRecommended(reopened, run.commissionId, 'resume-original-order', { resumeTicket: original.ticketId });

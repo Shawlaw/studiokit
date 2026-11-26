@@ -46,11 +46,11 @@
         <button type="button" class="hall-resume-more" data-resume-more aria-expanded="false" aria-controls="hall-resume-list" hidden></button>
       </section>
 
-      <a class="hall-career-entry" href="games/pendulum-tower.html?careerPanel=town" data-career-entry hidden>
+      <button type="button" class="hall-career-entry" data-career-entry aria-haspopup="dialog" hidden>
         <span data-career-entry-label>旧港生涯</span>
         <span class="hall-career-entry__hint">回折光港看看</span>
         <span class="hall-career-entry__arrow" aria-hidden="true">›</span>
-      </a>
+      </button>
 
       <p class="hall-letter-entry" data-letter-entry hidden>
         <a data-letter-label>旧港有一封来信</a>
@@ -194,7 +194,7 @@
       <p class="hall-career-settings" data-career-settings-entry hidden>
         <a href="games/pendulum-tower.html?careerPanel=settings" data-career-settings-label>生涯设置</a>
       </p>
-      <span>v<span data-hall-version>0.21.1</span></span>
+      <span>v<span data-hall-version>0.21.2</span></span>
     </footer>
 
     <dialog class="ac-dialog" data-install-dialog aria-labelledby="install-title">
@@ -1102,14 +1102,41 @@
         }
       });
 
-      /* 中心页始终经典目录；生涯只读探针只驱动未投递来信小字、身份建立后的常驻内容入口
-         与页尾二级生涯设置入口，不切视图、不弹窗、不创建生涯。 */
+      /* 只读探针决定入口可见性。告示板在点击入口后按需加载。 */
       const careerEntry = document.querySelector('[data-career-entry]');
       const careerEntryLabel = document.querySelector('[data-career-entry-label]');
       const letterEntry = document.querySelector('[data-letter-entry]');
       const settingsEntry = document.querySelector('[data-career-settings-entry]');
       const settingsLabel = document.querySelector('[data-career-settings-label]');
       let hallReadGeneration = 0;
+      let openingCareer = false;
+
+      careerEntry.addEventListener('click', async () => {
+        if (careerEntry.hidden || openingCareer) return;
+        openingCareer = true;
+        careerEntry.focus({ preventScroll: true });
+        document.querySelector('[data-career-hub-error]')?.remove();
+        try {
+          if (!window.ArcadeCareer?.openHubCareerPanel) {
+            await new Promise((resolve, reject) => {
+              const script = document.createElement('script');
+              script.src = './career/bridge.js';
+              script.onload = resolve;
+              script.onerror = () => {
+                script.remove();
+                reject(new Error('Career bridge unavailable'));
+              };
+              document.head.appendChild(script);
+            });
+          }
+          await window.ArcadeCareer.openHubCareerPanel('town');
+          await refreshHallViews();
+        } catch (err) {
+          A.showToast('暂时打不开旧港生涯，请稍后重试。');
+        } finally {
+          openingCareer = false;
+        }
+      });
 
       async function refreshHallViews() {
         const generation = ++hallReadGeneration;
@@ -1121,11 +1148,6 @@
         const showCareerEntry = started && !archived;
         careerEntry.hidden = !showCareerEntry;
         careerEntryLabel.textContent = '旧港生涯';
-        if (showCareerEntry) {
-          careerEntry.href = 'games/pendulum-tower.html?careerPanel=town';
-        } else {
-          careerEntry.removeAttribute('href');
-        }
         const hasLetter = !!(career && !archived && (career.unreadLetter || career.followUpLetter));
         letterEntry.hidden = !hasLetter;
         const letterLink = letterEntry.querySelector('[data-letter-label]');

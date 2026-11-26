@@ -2426,6 +2426,25 @@
         "记录集成验证结果；版本沿用 0.21.1，本地未发布，真机与真人待验证"
       ],
       "evidence": "Released both targets 2026-11-26; main cbfeef6; Actions 45840350943 all jobs success; verify_deploy 90/90 identical, arcade 0.21.1. Product commits 68b83fb, 5d45afc, eef710b, 425656e. release profile 41/41 release passed (not full), 1799.477s; 96 missions 16/16 games, 96/96 tiers, 3792/3792 checks; first-flight 404/404; static 35/35; entry 71/71; receipt 134/134; town 24/24; smoke 118/118; mobile 319/319; PWA 18/18; lifecycle 60/60; world 145/145; DB 38/38; backup 34/34. full profile and real-device/human UNVERIFIED. Cloudflare live browser confirmed 0.21.1 and persistent career entry; test profile cleaned. See docs/arcade-life/INTEGRATION-0.21.1.md."
+    },
+    {
+      "id": "T144",
+      "title": "Arcade 0.21.2 生涯入口、钱包弹窗与标题栏交互修复 / 双端发布",
+      "kind": "agent",
+      "status": "DONE",
+      "dependsOn": [
+        "T143"
+      ],
+      "ownerAuthorizationRequired": false,
+      "acceptance": [
+        "旧港生涯入口在中心页直接打开告示板弹窗，点击后按需加载 bridge，关闭后恢复原滚动位置与入口焦点",
+        "钱包弹窗标题与入口文案一致为「钱包与收据」",
+        "生涯弹窗层级高于置顶站点导航，弹窗期间只滚动面板内容，背景与顶栏不滚动",
+        "游戏页顶栏标题行左侧留白，320px 不截断标题",
+        "不改 localStorage key、IDB Schema、contentVersion 与玩法数值；版本链 0.21.2 / SW studiokit-arcade-0.21.2-v1",
+        "本地回归通过；双端发布后以 Actions 与 verify_deploy 为准，真机 UNVERIFIED"
+      ],
+      "evidence": "Branch fix/arcade-career-entry-0211; version 0.21.2 / SW studiokit-arcade-0.21.2-v1. Actual gates: arcade_smoke 119/119 (new homepage modal + title padding + wallet scroll assertions), career_flow_e2e 404/404, career_pwa_offline 18/18 (cache studiokit-arcade-0.21.2-v1), arcade_compact_touch 18/18, career_passive_entry 71/71, career_commission 64/64, validate_site/build_site/node --check all pass. Release status to be updated after Actions and verify_deploy."
     }
   ]
 }

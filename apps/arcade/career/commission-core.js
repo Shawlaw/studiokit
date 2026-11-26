@@ -579,6 +579,7 @@
     var injectedCore = opts.core || null;
     var injectedStorage = opts.storage !== undefined ? opts.storage : undefined;
     var injectedNow = isFunction(opts.now) ? opts.now : null;
+    var arcadeBase = '../';
 
     var nodeCore = null;
     if (isNode && typeof require === 'function') {
@@ -882,10 +883,11 @@
     /* ---------------- ticket 形状 ---------------- */
 
     function ticketUrl(ticket) {
+      var gameUrl = arcadeBase + 'games/' + ticket.gameId + '.html?' + TICKET_PARAM + '=';
       try {
-        return '../games/' + ticket.gameId + '.html?' + TICKET_PARAM + '=' + encodeURIComponent(ticket.ticketId);
+        return gameUrl + encodeURIComponent(ticket.ticketId);
       } catch (err) {
-        return '../games/' + ticket.gameId + '.html?' + TICKET_PARAM + '=' + ticket.ticketId;
+        return gameUrl + ticket.ticketId;
       }
     }
 
@@ -1024,6 +1026,7 @@
           return { ok: false, contentVersion: CONTENT_VERSION, count: 0, errors: [REASONS.coreUnavailable], warnings: [], usable: false };
         }
         var normalized = applyContent(content);
+        if (isObject(input) && typeof input.arcadeBase === 'string') arcadeBase = input.arcadeBase;
         return {
           ok: normalized.errors.length === 0,
           contentVersion: normalized.contentVersion,

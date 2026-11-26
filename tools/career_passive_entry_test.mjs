@@ -86,8 +86,8 @@ check('CE-S 保留 ?careerLetter=1 回访路由', HUB_HTML.indexOf('games/pendul
 check('CE-S 生涯身份建立后的常驻内容入口存在', (() => {
   const resume = HUB_HTML.indexOf('data-resume-section');
   const entry = HUB_HTML.indexOf('data-career-entry');
-  const href = HUB_HTML.indexOf('href="games/pendulum-tower.html?careerPanel=town"');
-  return resume >= 0 && entry > resume && entry - resume < 900 && href > resume && HUB_HTML.slice(entry - 120, entry + 220).indexOf('href="games/pendulum-tower.html?careerPanel=town"') >= 0;
+  return resume >= 0 && entry > resume && entry - resume < 900 &&
+    /<button[^>]+data-career-entry aria-haspopup="dialog"/.test(HUB_HTML);
 })());
 check('CE-S 44px 热区规则保留（来信 + 生涯设置）',
   /\.hall-letter-entry a\s*\{[^}]*min-height:\s*44px/.test(CSS) &&
@@ -207,7 +207,7 @@ class StubDocument {
       const attr = /^\[([^\]]+)\]$/.exec(selector);
       const key = attr ? attr[1] : selector;
       const child = new StubNode('div', attr ? { [key]: '' } : { class: key.replace(/^\./, '') });
-      if (key === 'data-hall-version') child.textContent = '0.21.1';
+      if (key === 'data-hall-version') child.textContent = '0.21.2';
       if (key === 'data-manage-note') child.textContent = '游玩记录和局内进度只保存在此浏览器内。';
       if (key === 'data-hall-grid') child.className = 'hall-grid';
       if (key === 'data-sort') {
@@ -237,7 +237,7 @@ class StubDocument {
     // [data-career-entry] 常驻内容入口（仅在生涯身份建立后显示）
     const career = this.nodes.get('[data-career-entry]');
     if (!career) {
-      this.nodes.set('[data-career-entry]', new StubNode('a', { 'data-career-entry': '' }));
+      this.nodes.set('[data-career-entry]', new StubNode('button', { 'data-career-entry': '' }));
     }
     this.careerEntry = this.nodes.get('[data-career-entry]');
     this.careerEntry.hidden = true;
@@ -362,7 +362,7 @@ function makeArcade(prefs) {
     games,
     prefWrites,
     api: {
-      version: '0.21.1',
+      version: '0.21.2',
       GAMES: games,
       DIFFICULTY_NAMES: { 1: '轻松', 2: '适中', 3: '挑战', 4: '硬核' },
       Prefs: {
@@ -485,6 +485,8 @@ async function boot(prefs = {}, fixture = { hasDb: false }, options = {}) {
 /* 跟随首页链接，在同一份 IDB 上执行目的页真实 hub 路由。UI opener 只记录收到的档案 ID。 */
 async function followCareerLink(hall) {
   const doc = new StubDocument([...SELECTORS, '.game-topbar', '.game-topbar .ac-back[href]']);
+  // 首页点击时会先清理旧提示；桩里不该预置一个游离的错误节点。
+  doc.nodes.delete('[data-career-hub-error]');
   doc.querySelector('.game-topbar .ac-back[href]').href = '../index.html';
   const internal = {};
   let opened = null;
@@ -492,6 +494,7 @@ async function followCareerLink(hall) {
   let ensureCalls = 0;
   const sandbox = {
     DOC: doc,
+    readyPromise: Promise.resolve(),
     api: {
       available: true,
       db: {
@@ -512,10 +515,9 @@ async function followCareerLink(hall) {
     await vm.runInContext('syncCampaignFlags(false)', sandbox);
     return { ok: true };
   };
-  const href = new URL(hall.career().href, 'https://example.test/project/apps/arcade/');
-  await sandbox.openHubCareerPanel(href.searchParams.get('careerPanel'));
+  await sandbox.openHubCareerPanel('town');
   const failure = doc.body.querySelector('[data-career-hub-error]');
-  return { opened, syncedId, ensureCalls, issue: failure?.getAttribute('data-career-hub-error'), message: failure?.children[0]?.textContent, back: failure?.children[1]?.href };
+  return { opened, syncedId, ensureCalls, issue: failure?.getAttribute('data-career-hub-error'), message: failure?.children[0]?.textContent, back: failure?.children[1]?.href, linkCount: failure?.children.length || 0 };
 }
 
 function oldC0(careerId, nodeId = 'story:C0.port_seen') {
@@ -577,7 +579,7 @@ async function run() {
     check('CE-05 C0 后：未投递来信小字隐藏', h.letter().hidden === true, h.letter());
     check('CE-05 C0 后：常驻生涯内容入口可见', h.career().hidden === false, h.career());
     check('CE-05 C0 后：生涯入口文案为旧港生涯', h.career().text === '旧港生涯', h.career());
-    check('CE-05 C0 后：生涯入口直达告示板', h.career().href === 'games/pendulum-tower.html?careerPanel=town', h.career());
+    check('CE-05 C0 后：生涯入口保留在首页', h.career().href === null, h.career());
     check('CE-05 C0 后：不恢复生涯视图切换', h.doc.querySelector('[data-career-view]') === null);
     check('CE-05 C0 后：页尾生涯设置可见', h.settings().hidden === false, h.settings());
     check('CE-05 C0 后：文案「生涯设置」', h.settings().text === '生涯设置', h.settings());
@@ -616,7 +618,7 @@ async function run() {
     const h = await boot({}, { quests: { 'legacy|story:C0.port_seen': oldC0('legacy') } });
     const landing = await followCareerLink(h);
     check('CE-05d 孤立 C0：生涯入口与设置可见', !h.career().hidden && !h.settings().hidden);
-    check('CE-05d 孤立 C0：点击后显示档案缺失说明和返回链接', !landing.opened && landing.ensureCalls === 0 && /档案/.test(landing.message) && landing.back === '../index.html', landing);
+    check('CE-05d 孤立 C0：点击后在当前页显示档案缺失说明', !landing.opened && landing.ensureCalls === 0 && /档案/.test(landing.message) && landing.linkCount === 1, landing);
     h.idb.fixture.state['career-archive'] = { archived: false, careerId: 'legacy' };
     const archived = await followCareerLink(h);
     check('CE-05d 跨页遇到仍有效的封存标记，沿用 DB 写入守卫', archived.issue === 'career-archived' && archived.ensureCalls === 0, archived);
@@ -690,7 +692,7 @@ async function run() {
     h.doc.dispatch('visibilitychange');
     for (let i = 0; i < 6; i += 1) await new Promise((r) => setTimeout(r, 5));
     check('CE-08 visibilitychange 后刷新出生涯设置', h.settings().hidden === false && h.letter().hidden === true, { letter: h.letter(), settings: h.settings() });
-    check('CE-08 visibilitychange 后刷新出常驻生涯入口', h.career().hidden === false && h.career().href === 'games/pendulum-tower.html?careerPanel=town', h.career());
+    check('CE-08 visibilitychange 后刷新出常驻生涯入口', h.career().hidden === false && h.career().href === null, h.career());
 
     // 竞态：第一次读取慢（25ms），第二次读取快（0ms）；旧结果不得覆盖新结果。
     const raceFixture = { hasDb: true, state: { discovery: { stage: 'IDLE', clues: {} } }, profiles: {}, quests: {} };
