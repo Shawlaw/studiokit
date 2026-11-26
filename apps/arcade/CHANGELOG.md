@@ -1,12 +1,12 @@
 # Arcade Changelog
 
-## 0.21.2 — 2026-11-26（发布中）
+## 0.21.2 — 2026-11-26（已双端发布）
 
 - 「旧港生涯 / 回折光港看看」改为在中心页直接打开告示板弹窗，不再先跳层塔游戏页；点击后按需加载生涯桥接，关闭后回到原滚动位置与入口焦点。
 - 钱包弹窗标题统一为入口文案「钱包与收据」（原为「钱袋与账本」）。
 - 生涯弹窗层级提高到站点壳条之上，并在弹窗打开时锁定背景滚动，滑动只作用于面板内容。
 - 游戏页顶栏标题行增加左侧留白；320px 保留页面原有边距，避免标题被截断。
-- 版本链 0.21.2 / SW `studiokit-arcade-0.21.2-v1`，不改 localStorage key、IDB Schema 或玩法数值。发布前实测：冒烟 119/119、首航 404/404、PWA 18/18、紧凑触控 18/18、入口 71/71、委托 64/64。设计见 [`DESIGN-0.21.2.md`](DESIGN-0.21.2.md)，验证见 [`INTEGRATION-0.21.2.md`](../../docs/arcade-life/INTEGRATION-0.21.2.md)。
+- 版本链 0.21.2 / SW `studiokit-arcade-0.21.2-v1`，不改 localStorage key、IDB Schema 或玩法数值。发布前实测：冒烟 119/119、首航 404/404、PWA 18/18、紧凑触控 18/18、入口 71/71、委托 64/64。设计见 [`DESIGN-0.21.2.md`](DESIGN-0.21.2.md)，验证见 [`INTEGRATION-0.21.2.md`](../../docs/arcade-life/INTEGRATION-0.21.2.md)。**发布提交 `bc50e61`，[Actions 45858201941](https://github.com/Shawlaw/studiokit/actions/runs/45858201941) 全绿，双端 91/91 文件一致，Arcade 0.21.2 / SW `studiokit-arcade-0.21.2-v1`。**
 
 ## 0.21.1 — 2026-11-26（已双端发布）
 

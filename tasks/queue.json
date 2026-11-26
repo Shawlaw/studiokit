@@ -2444,7 +2444,7 @@
         "不改 localStorage key、IDB Schema、contentVersion 与玩法数值；版本链 0.21.2 / SW studiokit-arcade-0.21.2-v1",
         "本地回归通过；双端发布后以 Actions 与 verify_deploy 为准，真机 UNVERIFIED"
       ],
-      "evidence": "Branch fix/arcade-career-entry-0211; version 0.21.2 / SW studiokit-arcade-0.21.2-v1. Actual gates: arcade_smoke 119/119, career_flow_e2e 404/404, career_96_missions 16/16 games 96/96 tiers 3792/3792, career_mobile 319/319, career_archive_lifecycle 60/60, gameplay_base 22/22, arcade_compact_touch 18/18, career_passive_entry 71/71, career_commission 64/64, career_pwa_offline 18/18, arcade_pwa_update 9/9, static 35/35. Release profile first run 40/41 due a test-only cache key typo; corrected CACHE_KEY to 0.21.2-v1 and reran failed PWA offline plus update/static successfully. Release status to be updated after Actions and verify_deploy."
+      "evidence": "Branch fix/arcade-career-entry-0211; version 0.21.2 / SW studiokit-arcade-0.21.2-v1. Actual gates: arcade_smoke 119/119, career_flow_e2e 404/404, career_96_missions 16/16 games 96/96 tiers 3792/3792, career_mobile 319/319, career_archive_lifecycle 60/60, gameplay_base 22/22, arcade_compact_touch 18/18, career_passive_entry 71/71, career_commission 64/64, career_pwa_offline 18/18, arcade_pwa_update 9/9, static 35/35. Release profile first run 40/41 due a test-only cache key typo; corrected CACHE_KEY to 0.21.2-v1 and reran failed PWA offline plus update/static successfully. Release status: published main bc50e61; Actions 45858201941 all jobs success; verify_deploy 91/91 identical, arcade 0.21.2 / SW studiokit-arcade-0.21.2-v1. Live browser on both targets confirmed homepage modal, wallet title, overlay z-index 10000 and scroll lock, zero console errors."
     }
   ]
 }

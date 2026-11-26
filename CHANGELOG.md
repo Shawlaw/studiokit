@@ -4,12 +4,12 @@ StudioKit 门户本身没有独立的 semver；以下按仓库里程碑与工具
 
 > 说明：Arcade `0.11.2`–`0.14.0` 的条目于 2026-11-22 依据 [`apps/arcade/CHANGELOG.md`](apps/arcade/CHANGELOG.md) 补齐（本文件当时落后于工具版本），逐条数值与证据以工具 CHANGELOG 与对应 `DESIGN-*.md` 为准。
 
-## Arcade 0.21.2 — 2026-11-26（发布中）
+## Arcade 0.21.2 — 2026-11-26（已双端发布）
 
 - 「旧港生涯 / 回折光港看看」改为在中心页直接打开告示板弹窗，不再先跳层塔游戏页；关闭后恢复首页位置、焦点与滚动。
 - 钱包弹窗标题统一为「钱包与收据」；生涯弹窗层级高于独立窗口导航栏，并锁定背景滚动，只滚动面板正文。
 - 游戏页顶栏标题行增加左侧留白；320px 保留页面边距，避免标题截断。
-- 版本链 0.21.2 / SW `studiokit-arcade-0.21.2-v1`；不改 key / Schema / IDB / 玩法数值。发布前实测：冒烟 119/119、首航 404/404、PWA 18/18、紧凑触控 18/18、入口 71/71、委托 64/64。设计见 [`DESIGN-0.21.2.md`](apps/arcade/DESIGN-0.21.2.md)，验证见 [`INTEGRATION-0.21.2.md`](docs/arcade-life/INTEGRATION-0.21.2.md)。
+- 版本链 0.21.2 / SW `studiokit-arcade-0.21.2-v1`；不改 key / Schema / IDB / 玩法数值。发布前实测：冒烟 119/119、首航 404/404、PWA 18/18、紧凑触控 18/18、入口 71/71、委托 64/64。设计见 [`DESIGN-0.21.2.md`](apps/arcade/DESIGN-0.21.2.md)，验证见 [`INTEGRATION-0.21.2.md`](docs/arcade-life/INTEGRATION-0.21.2.md)。发布提交 `bc50e61`，[Actions 45858201941](https://github.com/Shawlaw/studiokit/actions/runs/45858201941) 全绿，双端 91/91 文件一致。
 
 ## Arcade 0.21.1 — 2026-11-26（已双端发布）
 

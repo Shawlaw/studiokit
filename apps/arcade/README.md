@@ -1,6 +1,6 @@
 # 街机厅 Arcade
 
-**应用版本 `0.21.2`（2026-11-26 发布中）**｜进度 / 局内 / 游玩统计 / 积分记录 / 挑战记录 / 游戏数据 meta 的 Schema 均为 `v1`；0.15 新增独立生涯 IndexedDB（`studiokit:arcade:career` v1，11 stores），不改变既有 localStorage 键；生涯内容 `contentVersion` 仍为 `0.18.0`。0.21.2 修复首页「旧港生涯」入口直接打开告示板弹窗、钱包标题一致性、生涯弹窗滚动层级与游戏标题栏留白。**版本链 0.21.2 / SW `studiokit-arcade-0.21.2-v1`；实测范围见 [`INTEGRATION-0.21.2.md`](../../docs/arcade-life/INTEGRATION-0.21.2.md)**。
+**应用版本 `0.21.2`（2026-11-26 已双端发布，main `bc50e61`，Actions `45858201941` 全绿，双端 91/91 一致）**｜进度 / 局内 / 游玩统计 / 积分记录 / 挑战记录 / 游戏数据 meta 的 Schema 均为 `v1`；0.15 新增独立生涯 IndexedDB（`studiokit:arcade:career` v1，11 stores），不改变既有 localStorage 键；生涯内容 `contentVersion` 仍为 `0.18.0`。0.21.2 修复首页「旧港生涯」入口直接打开告示板弹窗、钱包标题一致性、生涯弹窗滚动层级与游戏标题栏留白。**版本链 0.21.2 / SW `studiokit-arcade-0.21.2-v1`；实测范围见 [`INTEGRATION-0.21.2.md`](../../docs/arcade-life/INTEGRATION-0.21.2.md)**。
 
 16 款竖屏小游戏合集的纯前端实现：加载后完全本地游玩，自带自研轻量物理引擎（重力、AABB 与圆碰撞、单向平台、单摆积分、塔体倾斜力矩），所有游戏由简到难、随时可暂停，并把未完成的局内进度自动保存在本机。支持全屏/沉浸、可安装 PWA、离线预载、游玩统计、积分记录与分享；连续有效游玩 20 分钟只温柔提醒一次，**没有签到、每日奖励、付费抽奖、内购或广告**。
 

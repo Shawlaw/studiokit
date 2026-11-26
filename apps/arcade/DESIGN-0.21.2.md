@@ -4,6 +4,7 @@
 - 产品分支：`fix/arcade-career-entry-0211`
 - 版本链：0.21.2；SW 缓存键 `studiokit-arcade-0.21.2-v1`
 - 验证口径见[集成与验证记录](../../docs/arcade-life/INTEGRATION-0.21.2.md)
+- 状态：**已双端发布**（2026-11-26，main `bc50e61`，Actions `45858201941` 全绿，双端 91/91 一致）
 
 ## 1. 问题与修复
 

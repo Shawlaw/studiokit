@@ -28,7 +28,9 @@
 
 ## 3. 发布证据
 
-待发布完成后补充：main 提交、Actions run、双端 `verify_deploy` 文件数、线上版本与浏览器功能复核。
+- 发布提交：`bc50e61`；[Actions 45858201941](https://github.com/Shawlaw/studiokit/actions/runs/45858201941) 的 Validate and build、Arcade static gates、Deploy GitHub Pages、Deploy Cloudflare Pages、Verify both deployments 全部成功。
+- 双端校验：`verify_deploy.py` → **91/91 files identical**，Arcade 0.21.2 / Badge 2.2.1 / Venue 0.2.0。
+- 线上浏览器实测：GitHub Pages 与 Cloudflare Pages 均为 `Arcade.version=0.21.2`；建立测试生涯后点击「旧港生涯」，URL 保持中心页且告示板直接打开；钱包弹窗标题为「钱包与收据」、遮罩层级 `10000`、背景滚动锁 `hidden`；两端均无 console error。
 
 ## 4. 未解决项
 
