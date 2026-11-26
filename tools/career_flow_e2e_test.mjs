@@ -941,8 +941,8 @@ async function driveStarBoss(cdp, waves, label) {
   return cdp.evaluate('window.__arcadeTest.careerInfo()');
 }
 
-async function driveShadowHeight(cdp, targetMeters, shouldSucceed, label) {
-  step('drive:shadow-' + targetMeters + '-' + shouldSucceed);
+async function driveShadowHeight(cdp, targetMeters, label) {
+  step('drive:shadow-' + targetMeters);
   await startOverlay(cdp, label);
   const deadline = Date.now() + 90000;
   let info = null;
@@ -957,8 +957,7 @@ async function driveShadowHeight(cdp, targetMeters, shouldSucceed, label) {
     dashed = true;
   }
   const before = await cdp.evaluate('window.__arcadeTest.careerInfo()');
-  if (shouldSucceed) gate('DRIVE ' + label + ' 真实攀升达到目标高度', Number(before.meters) >= targetMeters, J({ meters: before.meters, target: targetMeters }));
-  else gate('DRIVE ' + label + ' 真实攀升未达标（用于失败重接）', Number(before.meters) < targetMeters, J({ meters: before.meters, target: targetMeters }));
+  gate('DRIVE ' + label + ' 达到本轮驱动目标高度', Number(before.meters) >= targetMeters, J({ meters: before.meters, target: targetMeters }));
   await pauseAndEnd(cdp, label);
   return before;
 }
@@ -1017,7 +1016,7 @@ async function driveCommission(cdp, commissionId, label) {
     'star-raid.T2': () => driveStarBoss(cdp, 2, label),
     'pendulum-tower.T1': () => driveTower(cdp, 4, label),
     'pendulum-tower.T2': () => driveTower(cdp, 6, label),
-    'shadow-leap.T1': () => driveShadowHeight(cdp, 130, true, label),
+    'shadow-leap.T1': () => driveShadowHeight(cdp, 130, label),
     'shadow-leap.T2': () => driveShadowScroll(cdp, label),
     'memory-flip.T1': async () => {
       await startOverlay(cdp, label);
@@ -1223,18 +1222,26 @@ async function checkOptionalFlight(cdp) {
   const summary = '[data-town-flight] > summary';
   const rental = '[data-town-flight] [data-town-rental]';
   const patrol = '[data-town-flight] [data-town-action="start"][data-commission-id="star-raid.T1"]';
-  await cdp.waitFor(`!!document.querySelector(${J(summary)})`, { timeout: 15000 });
+  const recommend = '[data-town-recommend-id="pendulum-tower.T1"] [data-town-action="start"]';
+  await cdp.waitFor(`document.querySelector(${J(summary)})?.getClientRects().length &&
+    document.querySelector(${J(recommend)})?.getClientRects().length`, { timeout: 15000 });
   const viewport = { deviceScaleFactor: 1, mobile: true };
   await cdp.send('Emulation.setDeviceMetricsOverride', { ...viewport, width: 375, height: 548 });
-  const placement = await cdp.evaluate(`(() => {
-    const rect = document.querySelector(${J(summary)}).getBoundingClientRect();
-    return { top: Math.round(rect.top), bottom: Math.round(rect.bottom), height: innerHeight,
-      visibleBeforeScroll: rect.top >= 0 && rect.bottom <= innerHeight };
-  })()`);
-  console.log('INFO  375×548 首次到港的出航入口位置 — ' + J(placement));
-  gate('TOWN 出航默认折叠，租机说明隐藏', await cdp.evaluate(`(() => {
+  const placement = await cdp.evaluate(`new Promise((resolve) => requestAnimationFrame(() => requestAnimationFrame(() => {
+    const items = ${J([summary, recommend])}.map((selector) => {
+      const el = document.querySelector(selector);
+      const { left, right, top, bottom, width, height } = el.getBoundingClientRect();
+      const hit = document.elementFromPoint(left + width / 2, top + height / 2);
+      return { selector, top, bottom, hit: el.contains(hit), inViewport: left >= 0 && top >= 0 && right <= innerWidth && bottom <= innerHeight };
+    });
+    resolve({ height: innerHeight, items });
+  })))`);
+  gate('TOWN 375×548 首次到港无需滚动即可看到并点到推荐单和出航入口',
+    placement.items.every((item) => item.hit && item.inViewport), J(placement));
+  gate('TOWN 出航默认折叠，租机说明不可见', await cdp.evaluate(`(() => {
     const flight = document.querySelector('[data-town-flight]');
-    return !flight.open && !document.querySelector(${J(rental)})?.getClientRects().length;
+    const hint = document.querySelector(${J(rental)});
+    return !flight.open && hint && !hint.checkVisibility({ contentVisibilityAuto: true, visibilityProperty: true });
   })()`));
   await pressVisible(cdp, summary, '看看出航');
   const option = await cdp.waitFor(`(() => {
@@ -1395,9 +1402,11 @@ async function phaseReceipt(cdp, label, expectedChapterFlag, card) {
   await forbiddenTextScan(cdp, 'after-receipt-' + label);
 }
 
-async function failShadowOrder(cdp, commissionId) {
-  const failedRun = await acceptRecommended(cdp, commissionId, 'shadow-leap.T1-失败');
-  await driveShadowHeight(cdp, 35, false, 'shadow-leap.T1-失败');
+async function failShadowOrder(cdp, commission) {
+  const failedRun = await acceptRecommended(cdp, commission.commissionId, 'shadow-leap.T1-失败');
+  const before = await driveShadowHeight(cdp, 35, 'shadow-leap.T1-失败');
+  const required = commission.objective.minValue.value;
+  gate('FAIL 真实攀升不足委托要求', Number(before.meters) < required, J({ meters: before.meters, required }));
   const card = await waitReceipt(cdp, failedRun.ticketId);
   requireFeature('FAIL 未达标后出现对应票据的失败收据', card?.state === 'failure' && card.runId === failedRun.ticketId, J(card));
   checkReceiptText(card, 'shadow-leap-failure');
@@ -1514,7 +1523,7 @@ async function runFullFlow(cdp, browser, newPage, campaign, commissions) {
 
     const commissionId = recommendation.commissionId;
     const label = 'order-' + (index + 1);
-    const failedTicket = commissionId === 'shadow-leap.T1' ? await failShadowOrder(cdp, commissionId) : null;
+    const failedTicket = commissionId === 'shadow-leap.T1' ? await failShadowOrder(cdp, commission) : null;
     const testContinuation = index === 0;
     const run = await acceptRecommended(cdp, commissionId, label, { enableHook: !testContinuation });
     if (testContinuation) cdp = await resumeFromNewTab(cdp, run, browser, newPage);
@@ -1632,6 +1641,15 @@ async function runFullFlow(cdp, browser, newPage, campaign, commissions) {
   gate('C5 章节视图显示已完成与后日常入口', endingView.ok === true && endingView.chapters.some((chapter) => chapter.chapterId === 'C5' && chapter.state === 'complete'), J(endingView));
   const endingCard = await waitReceipt(cdp, endingRun.ticketId);
   checkReceiptText(endingCard, 'ending');
+  const epilogueAction = endingCard.buttons.find((button) => button.action === 'read-epilogue');
+  requireFeature('C5 终局收据的主动作是读后日谈', epilogueAction?.primary && epilogueAction.text === '读后日谈', J(endingCard.buttons));
+  const endingHref = await cdp.evaluate('location.href');
+  await pressVisible(cdp, RECEIPT_CARD + ' [data-action="read-epilogue"]', '终局收据读后日谈');
+  const epilogue = await cdp.waitFor(`(() => {
+    const section = document.querySelector('[data-career-panel="world-state"] [data-epilogue]');
+    return section?.getClientRects().length && section.innerText.trim();
+  })()`, { timeout: 15000 });
+  gate('C5 读后日谈在当前页打开真实后日谈', /后日谈/.test(epilogue) && epilogue.length > 10 && await cdp.evaluate('location.href') === endingHref, J(epilogue));
   await checkConsole(cdp, 'ending');
 }
 
