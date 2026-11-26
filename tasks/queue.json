@@ -2408,6 +2408,24 @@
       ],
       "evidence": "Branch fix/arcade-career-entry-0211; product code through 87746d4. Persistent career entry appears when profile or legacy C0 exists, hidden while archived, restored after unfreeze, removed after full reset. Local version chain 0.21.1 and SW studiokit-arcade-0.21.1-v1. Actual gates: static 35/35 (6.762s), career_passive_entry 61/61, arcade_smoke 117/117 including 320/375/390/430 touch target/overflow and archive/unfreeze/reset flow, career_mobile 318/318, career_pwa_offline 18/18, career_archive_lifecycle_e2e 60/60. Independent review APPROVE; IDB stub fidelity P1 fixed. release/full/96 full E2E/flow/real-device/publish UNVERIFIED. No push or publish. See docs/arcade-life/INTEGRATION-0.21.1.md.",
       "completedAt": "2026-11-26T05:20:00Z"
+    },
+    {
+      "id": "T143",
+      "title": "Arcade 0.21.1 首航交付与旧档回港复审修复",
+      "kind": "agent",
+      "status": "DONE",
+      "dependsOn": [
+        "T142"
+      ],
+      "ownerAuthorizationRequired": false,
+      "acceptance": [
+        "首单收据主动作直达告示板并可从界面接下一单，剧情回信可另读",
+        "首页回港入口对正常档、完整旧档和残缺旧档给出明确结果，探针只读",
+        "二十一点与记忆翻牌投递获得不同收件确认，单一来源续访保留确认，多来源旧档无法识别投递物时用中性确认；港口实习仍默认，首次巡航与免费租机按需展示",
+        "旧档案夹收据只在实际新解锁差一张的照片时显示该进展",
+        "记录集成验证结果；版本沿用 0.21.1，本地未发布，真机与真人待验证"
+      ],
+      "evidence": "产品提交 68b83fb、5d45afc、eef710b、425656e。最终集成 static 35/35、入口 71/71、收据 134/134、告示板 24/24、冒烟 118/118、mobile 319/319、PWA 18/18、封存生命周期 60/60。首航 404/404，375×548 首屏接单与出航可点、首两单收据实点后同页回告示板。章节 145/145、DB 38/38、备份 34/34。release/full 聚合、96 全量 E2E、真机/真人未验证。本地未发布。详见 docs/arcade-life/INTEGRATION-0.21.1.md。"
     }
   ]
 }
