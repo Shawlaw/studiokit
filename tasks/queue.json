@@ -2359,6 +2359,21 @@
         "静态校验、构建、node --check engine/sw 通过；单项实测逐项记录，不伪造聚合门禁与发布结论"
       ],
       "evidence": "本地 feat/arcade-career-flow。版本四处同步 0.20.0；validate_site/build_site/node --check 引擎与 SW 通过。最终逐项串行门禁全绿：8 个新增纯 Node 门禁（receipt 103/103 由 67b18b4 修复）、96 static 34/34 与 E2E 16/16 游戏 96/96 档 3792/3792、campaign E2E 732/732、首航 339/339、mobile 318/318、world 145/145、smoke 117/117、compact 18/18、gameplay all repeat2 208/208 与 base repeat2 22/22、zen 14/calm 17/review 5/pwa_update 9/interaction 5/immersive 42/tower 23/PWA 18/a11y 75/db 38/backup 34/resume 45、review3/4/5/closeout/route_evidence/isolation9 全通过。arcade_run_all_gates.py 追加 8 个纯 Node 新门禁与长跑 career_flow_e2e（9901/10301）。聚合三次长跑分别被 review4 旧断言、Chrome 启动内存/端口偶发阻断，对应单项修复/重跑通过，但没有任何一次聚合 ALL GATES PASSED，不宣称一次聚合通过。主要日志 /tmp/opencode/final-*.log 与 /tmp/opencode/career-flow-final-gates*.log。真机/真人首航 UNVERIFIED。Owner 在独立复审 APPROVE 后明确授权 OWNER_AUTHORIZATION: PUBLISH_TO_MAIN 双端发布。发布提交 df91715，Actions 45719028590 四项成功；verify_deploy.py 双端各 88/88 文件一致，arcade 0.20.0 / badge 2.2.1 / venue 0.2.0。线上中心页 HTML 逐字节一致，包含生涯视图与「旧港有一封来信」入口。真机/真人首航 UNVERIFIED。"
+    },
+    {
+      "id": "T141",
+      "title": "Arcade 0.21.0 文档 / 任务口径同步（目标发布，未验证 / 未发布）",
+      "kind": "agent",
+      "status": "DONE",
+      "dependsOn": ["T140"],
+      "ownerAuthorizationRequired": false,
+      "acceptance": [
+        "独立 worktree codex/career-passive-docs，仅基线 4ffc27d，不改产品代码、测试或门禁脚本",
+        "版本链文档口径同步为 0.21.0 目标发布（实际未验证 / 未发布如实标注），覆盖 apps/arcade/README|CHANGELOG、根 README|CHANGELOG、BASELINE、ROADMAP、AGENTS、TASKS、queue、DESIGN-0.21.0 并新建 INTEGRATION-0.21.md",
+        "说明中心页彻底 passive、选择式叙事、生涯设置二级入口、可解冻封存、仅生涯数据完全重置、static/release/full 分层门禁；保留历史版本事实",
+        "实跑 validate_site.py / build_site.py / git diff --check 并如实记录；不伪造门禁、Actions 与线上验证结果"
+      ],
+      "evidence": "独立 worktree D:/LocalAgentWorkspace/StudioKit-career-passive-021-docs，分支 codex/career-passive-docs 基于 4ffc27d。仅改文档与任务记录。实跑：py -3 tools/validate_site.py PASS、py -3 tools/build_site.py PASS（两者因产品版本断言仍为 0.20.0 而通过，不证明 0.21 版本链同步）；node tools/career_archive_test.mjs 8/8 PASS；git diff --check 在提交前复核。目标版本链 0.21.0 / SW studiokit-arcade-0.21.0-v1；当前 engine/sw/中心页/注册表与校验断言仍为 0.20.0，版本 bump 未执行。Chrome 门禁、static/release/full 聚合、Actions、双端 verify_deploy、真机 / 真人均 UNVERIFIED；无 OWNER_AUTHORIZATION: PUBLISH_TO_MAIN，未 push。"
     }
   ]
 }

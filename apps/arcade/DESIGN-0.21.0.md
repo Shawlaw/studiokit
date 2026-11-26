@@ -1,8 +1,9 @@
 # Arcade 0.21.0 — 被动发现、选择式叙事与生涯归档
 
-- 基线：0.20.0（main `ac56577`，已双端发布）
-- 分支：`feat/arcade-career-passive-021`（本地开发，Owner 已授权完成开发后双端发布）
+- 基线：0.20.0（main `ac56577`，已双端发布，提交 `df91715` / Actions `45719028590` 四项成功 / 双端各 88/88 文件一致）
+- 分支：`feat/arcade-career-passive-021`（本地 HEAD `4ffc27d`，**目标发布；未验证 / 未发布，无 `PUBLISH_TO_MAIN` 授权**）
 - 目标：把生涯入口收回被动发现；统一面向玩家的选择式叙事；增加可解冻封存与仅生涯完全重置；优化发布回归耗时。
+- 版本口径：**目标**版本链 0.21.0 / SW `studiokit-arcade-0.21.0-v1`；当前产品代码（engine / sw / 中心页 / 注册表）与 validate/verify 断言仍为 0.20.0，版本 bump 未执行。本文与其余文档只同步口径，**不代表验证通过或已发布**。本分支实跑：`validate_site.py` / `build_site.py` PASS（因断言仍为 0.20.0）、纯 Node `career_archive_test.mjs` 8/8；Chrome / release / full 门禁、Actions、双端线上与真人均 UNVERIFIED。
 
 ## 1. 目标与边界
 
@@ -57,11 +58,12 @@
 - 完全重置后生涯 11 stores 清空，经典存储逐字节不变，旧标签不能回写。
 - 文案视角检查通过，所有提问有真实动作承接。
 - 320/375/390/430、紧凑视口、读屏/reduced-motion、PWA 离线与两种部署路径通过。
-- `release` profile 通过，完整 `full` 单独如实记录。
-- 版本链 0.21.0、SW `studiokit-arcade-0.21.0-v1`，Actions 四项成功，双端 verify_deploy 一致。
+- `release` profile 通过，完整 `full` 单独如实记录；release 结论 `release passed (not full)` 不得冒充 full。
+- **待完成（本分支未执行）**：版本链升到 0.21.0、SW `studiokit-arcade-0.21.0-v1`、Actions 四项成功、双端 verify_deploy 一致；未拿到这三项证据前不得声称发布。
 
 ## 8. 回滚
 
-- 回退 0.21 功能提交并将版本链归 0.20.0；SW 新缓存随 activate 清理。
+- 回退 0.21 功能提交并将版本链归 0.20.0（当前产品代码尚未升版，实际回退只需丢弃功能提交）；SW 新缓存随 activate 清理。
 - 生涯 `career-archive` 是 state 行，旧代码会忽略；封存数据不删除。
 - 已执行完全重置不可回滚，操作前需导出档案并二次确认。
+- 集成与验证记录见 [`docs/arcade-life/INTEGRATION-0.21.md`](../../docs/arcade-life/INTEGRATION-0.21.md)；接口冻结见 `docs/arcade-life/ADR-interfaces.md` §22。
