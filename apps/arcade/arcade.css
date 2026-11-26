@@ -585,51 +585,7 @@ body.has-subhud .stage-box {
   white-space: nowrap;
   text-underline-offset: 3px;
 }
-.hall-head-link[hidden], .hall-mode-controls[hidden], .hall-career [hidden] { display: none; }
-.hall-mode-controls {
-  display: flex;
-  flex-wrap: wrap;
-  align-items: center;
-  justify-content: space-between;
-  gap: 6px 10px;
-  margin-bottom: 16px;
-}
-.hall-mode-switch { display: flex; gap: 6px; }
-.hall-mode-switch button { min-height: 44px; }
-.hall-mode-switch button[aria-pressed="true"] {
-  color: var(--ac-bg);
-  background: var(--ac-accent);
-  border-color: var(--ac-accent);
-  font-weight: 700;
-}
-.hall-mode-controls label { display: flex; gap: 6px; align-items: center; color: var(--ac-muted); font-size: 12px; }
-.hall-career {
-  padding: clamp(14px, 4vw, 28px);
-  border: 1px solid #554981;
-  border-radius: 16px;
-  background: linear-gradient(120deg, #232143, var(--ac-panel));
-}
-.hall-career h2 { margin: 0 0 12px; font-size: 22px; }
-.hall-career-links {
-  display: grid;
-  grid-template-columns: repeat(auto-fit, minmax(min(100%, 190px), 1fr));
-  gap: 8px;
-}
-.hall-career-links a {
-  display: flex;
-  flex-direction: column;
-  gap: 3px;
-  min-height: 60px;
-  padding: 12px;
-  border: 1px solid #554981;
-  border-radius: 10px;
-  background: var(--ac-bg);
-  color: var(--ac-ink);
-  text-decoration: none;
-}
-.hall-career-links a:hover { border-color: var(--ac-accent); }
-.hall-career-links a span { color: var(--ac-muted); font-size: 12px; }
-.hall-career-links .hall-career-main strong { color: var(--ac-accent); }
+.hall-head-link[hidden] { display: none; }
 .hall-library-head { margin-bottom: 10px; }
 .hall-library-head h2, .hall-records h2 { margin: 0; font-size: 18px; }
 
@@ -877,8 +833,6 @@ body.has-subhud .stage-box {
 .hall-fold > summary:has(> span)::after { margin-left: 0; }
 .hall-fold[open] > summary::after { transform: rotate(225deg); margin-top: 3px; }
 .hall-fold[open] > summary { border-bottom: 1px solid var(--ac-line); border-end-start-radius: 0; border-end-end-radius: 0; }
-.hall-story-entry { margin: 12px 0; font-size: 12px; }
-.hall-story-entry a { color: var(--ac-muted); }
 .hall-letter-entry { margin: 0 0 12px; font-size: 12px; }
 .hall-letter-entry a { display: inline-flex; align-items: center; min-height: 44px; max-width: 100%; color: var(--ac-muted); }
 .hall-app { margin-top: 16px; }
@@ -906,8 +860,23 @@ body.has-subhud .stage-box {
 .ac-btn-ghost:hover { color: var(--ac-ink); border-color: var(--ac-accent); }
 .ac-btn-ghost.ac-danger:hover { border-color: var(--ac-danger); color: var(--ac-danger); }
 
-.hall-foot { display: flex; align-items: baseline; justify-content: space-between; gap: 8px; margin-top: 14px; color: var(--ac-muted); font-size: 12px; }
+.hall-foot { display: flex; align-items: baseline; flex-wrap: wrap; justify-content: space-between; gap: 2px 10px; margin-top: 14px; color: var(--ac-muted); font-size: 12px; }
 .hall-foot p { margin: 0; }
+/* 0.21：页尾二级「生涯设置」——44px 热区但低强调（非生涯内容 CTA）。 */
+.hall-career-settings { flex: 1 1 auto; }
+.hall-career-settings[hidden] { display: none; }
+.hall-career-settings a {
+  display: inline-flex;
+  align-items: center;
+  min-height: 44px;
+  max-width: 100%;
+  color: var(--ac-muted);
+  font-size: 12px;
+  text-decoration: underline;
+  text-decoration-color: var(--ac-line);
+  text-underline-offset: 3px;
+}
+.hall-career-settings a:hover { color: var(--ac-ink); text-decoration-color: var(--ac-accent); }
 
 /* ---------- 分享 / 安装 / 离线预载（0.5.0） ---------- */
 
