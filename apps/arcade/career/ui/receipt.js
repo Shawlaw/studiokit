@@ -79,8 +79,6 @@
   const CARD_TOWN_LABEL = '关闭收据并回到告示板';
   const CARD_CONTINUE_LABEL = '关闭收据并读回信';
   const ACTION_FAILED_TEXT = '这会儿没能打开，你想再试一次吗？';
-  const STORY_NEW_LINE = '你这一趟留下了一条新线索。';
-  const STORY_RECORDED_LINE = '你这一趟留下的线索已经归档。';
   const DUPLICATE_NOTE = '这张收据先前已经开过，工钱不会重复进账。';
 
   /* 戏内语言：这些系统/营销词不允许出现在 UI 文案里（失败 message 透传时也过滤）。 */
@@ -489,6 +487,7 @@
     const claimedAt = cleanText((receipt && receipt.claimedAt) || value.claimedAt);
     return {
       ok: ok,
+      ending: /^(combat|research|rescue)$/.test(value.approach) || /^ending\./.test(receipt && receipt.commissionId),
       key: key.slice(0, 120),
       credits: credits,
       items: items,
@@ -519,8 +518,6 @@
       const text = storyTextOf(isObject(item) ? item.text : item);
       if (text && lines.indexOf(text) < 0) lines.push(text);
     });
-    if (status === 'new' && !lines.length) lines.push(STORY_NEW_LINE);
-    if (status === 'recorded' && !lines.length) lines.push(STORY_RECORDED_LINE);
     const replies = [];
     const rawReplies = Array.isArray(raw.replies) ? raw.replies : [];
     rawReplies.slice(0, 2).forEach((item) => {
@@ -537,6 +534,7 @@
       status: status,
       lines: lines,
       replies: replies,
+      chapterId: chapterId,
       chapterTitle: chapterTitle,
       chapterCount: Math.max(0, Math.floor(Number(raw.chapterCount) || 0)),
       nextStep: storyTextOf(raw.nextStep),
@@ -544,25 +542,28 @@
     };
   }
 
-  function storyActionOf(feedback, outer) {
-    if (!feedback) return null;
-    let handler = null;
-    if ((feedback.status === 'new' || feedback.status === 'recorded') && (feedback.chapterTitle || feedback.replies.length || feedback.nextStep)) {
-      handler = typeof outer.openCampaign === 'function'
-        ? () => outer.openCampaign()
-        : typeof outer.openMailbox === 'function'
-          ? () => outer.openMailbox()
-          : null;
-      if (handler) return { text: CARD_CONTINUE_TEXT, label: CARD_CONTINUE_LABEL, run: handler };
-    }
+  function storyActionsOf(fields, feedback, outer) {
+    const actions = [];
     const api = isObject(outer.api) ? outer.api : null;
-    if (api && typeof api.openTown === 'function') {
-      handler = () => api.openTown();
-    } else if (typeof outer.openTown === 'function') {
-      handler = () => outer.openTown();
+    const openTown = api && typeof api.openTown === 'function'
+      ? () => api.openTown()
+      : typeof outer.openTown === 'function' ? () => outer.openTown() : null;
+    if (openTown) actions.push({ id: 'return-to-town', text: CARD_TOWN_TEXT, label: CARD_TOWN_LABEL, run: openTown });
+
+    const openCampaign = typeof outer.openCampaign === 'function' ? () => outer.openCampaign() : null;
+    if (fields.ending && openCampaign) {
+      actions.unshift(fields.ok
+        ? { id: 'read-epilogue', text: '读后日谈', label: '关闭收据并读后日谈', run: openCampaign }
+        : { id: 'choose-ending', text: '回去选终局路线', label: '关闭收据并返回终局选择', run: openCampaign });
+    } else if (fields.ok && feedback && feedback.status !== 'unavailable') {
+      if (feedback.chapterId === 'C4' && openCampaign) {
+        actions.push({ id: 'choose-ending', text: '选择终局路线', label: '关闭收据并打开终局选择', run: openCampaign });
+      } else if (feedback.chapterTitle || feedback.replies.length) {
+        const readReply = openCampaign || (typeof outer.openMailbox === 'function' ? () => outer.openMailbox() : null);
+        if (readReply) actions.push({ id: 'read-reply', text: CARD_CONTINUE_TEXT, label: CARD_CONTINUE_LABEL, run: readReply });
+      }
     }
-    if (!handler) return null;
-    return { text: CARD_TOWN_TEXT, label: CARD_TOWN_LABEL, run: handler };
+    return actions;
   }
 
   function failureSentenceOf(fields) {
@@ -1034,12 +1035,14 @@
   }
 
   function appendStoryBlock(doc, parent, feedback) {
-    if (!feedback) return;
+    if (!feedback || !(feedback.unavailable || feedback.lines.length || feedback.chapterTitle || feedback.nextStep || feedback.replies.length)) return;
     const block = make(doc, 'section', 'ac-career-receipt-story');
     applyStyle(block, { display: 'flex', flexDirection: 'column', gap: '4px' });
-    const heading = make(doc, 'h3', 'ac-career-receipt-story__title', '你这一趟带回了什么？');
-    applyStyle(heading, { margin: '2px 0 0', fontSize: '12px', fontWeight: '600' });
-    block.appendChild(heading);
+    if (feedback.lines.length || feedback.chapterTitle || feedback.replies.length) {
+      const heading = make(doc, 'h3', 'ac-career-receipt-story__title', '你这一趟带回了什么？');
+      applyStyle(heading, { margin: '2px 0 0', fontSize: '12px', fontWeight: '600' });
+      block.appendChild(heading);
+    }
     if (feedback.status === 'unavailable') {
       block.appendChild(make(doc, 'p', 'ac-career-status', feedback.unavailable));
     } else {
@@ -1047,11 +1050,11 @@
       if (feedback.chapterTitle) {
         block.appendChild(make(doc, 'p', 'ac-career-status', '新完成的段落：' + feedback.chapterTitle));
       }
-      if (feedback.nextStep) block.appendChild(make(doc, 'p', 'ac-career-status', '下一步：' + feedback.nextStep));
       feedback.replies.forEach((reply) => {
         block.appendChild(make(doc, 'p', 'ac-career-status', reply.name + '：' + reply.text));
       });
     }
+    if (feedback.nextStep) block.appendChild(make(doc, 'p', 'ac-career-status', '下一步：' + feedback.nextStep));
     parent.appendChild(block);
   }
 
@@ -1072,6 +1075,7 @@
     note.appendChild(make(doc, 'p', 'ac-career-status', ACTION_FAILED_TEXT));
     const again = make(doc, 'button', 'ac-career-btn ac-career-btn--primary', '再试一次');
     again.type = 'button';
+    again.setAttribute('data-action', 'retry-open');
     again.setAttribute('aria-label', '再试一次打开');
     applyStyle(again, { width: '100%', minHeight: '44px' });
     again.addEventListener('click', () => {
@@ -1104,7 +1108,7 @@
     }
   }
 
-  function buildCard(doc, fields, reducedMotion, feedback, action, announce) {
+  function buildCard(doc, fields, reducedMotion, feedback, actions, announce) {
     const el = make(doc, 'div', 'ac-career-card');
     el.setAttribute('data-career-card', 'receipt');
     el.setAttribute('data-state', fields.ok ? 'success' : 'failure');
@@ -1186,27 +1190,19 @@
     el.appendChild(bodyBox);
     appendStoryBlock(doc, el, feedback);
 
-    if (action) {
-      const actionBtn = make(doc, 'button', 'ac-career-btn ac-career-btn--primary', action.text);
+    actions.forEach((action, index) => {
+      const style = index === 0 ? 'ac-career-btn--primary' : 'ac-career-btn--ghost';
+      const actionBtn = make(doc, 'button', 'ac-career-btn ' + style, action.text);
       actionBtn.type = 'button';
+      actionBtn.setAttribute('data-action', action.id);
       actionBtn.setAttribute('aria-label', action.label);
       applyStyle(actionBtn, { width: '100%', minHeight: '44px' });
       actionBtn.addEventListener('click', () => {
-        /* 先关收据，再运行页内动作；动作可能是异步的（懒加载 UI/内容）。
-           成功不再显示收据；失败/ok:false 必须给出戏内提示并留一个可重试动作，
-           不静默吞错，也不新增整页跳转。 */
         removeCard();
-        const retry = () => runAction(action, announce);
-        try {
-          Promise.resolve(action.run()).then((outcome) => {
-            if (outcome && outcome.ok === false) showActionFailure(retry, announce);
-          }, () => showActionFailure(retry, announce));
-        } catch (err) {
-          showActionFailure(retry, announce);
-        }
+        runAction(action, announce);
       }, false);
       el.appendChild(actionBtn);
-    }
+    });
 
     closeBtn.addEventListener('click', () => removeCard(), false);
     el.addEventListener('keydown', (event) => {
@@ -1234,13 +1230,13 @@
     const result = isObject(outer.result) ? outer.result : outer;
     const fields = readReceiptFields(result, outer);
     const feedback = readStoryFeedback(outer, result);
-    const action = storyActionOf(feedback, outer);
+    const actions = storyActionsOf(fields, feedback, outer);
     closePanel();
     removeCard();
     removeActionFailure();
     let reduced = outer.reducedMotion === true;
     if (!reduced && isObject(result) && result.reducedMotion === true) reduced = true;
-    const el = buildCard(doc, fields, reduced, feedback, action, outer.announce);
+    const el = buildCard(doc, fields, reduced, feedback, actions, outer.announce);
     try {
       doc.body.appendChild(el);
     } catch (err) {

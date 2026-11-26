@@ -1329,11 +1329,15 @@
           return commissionFailure('ending-settle-error');
         });
     }
-    return Promise.resolve(mod.settle({
-      ticketId: run.ticketId,
-      outcome: outcome,
-      stats: stats || {},
-    }))
+    var photoWasLocked = false;
+    var beforeSettlement = run.commissionId === 'memory-flip.T1'
+      ? withTimeout(readArchivePhotoCommission(mod, run.careerId), 1000, 'receipt-follow-up')
+      : Promise.resolve(null);
+    return beforeSettlement.catch(function () { return null; })
+      .then(function (photo) {
+        photoWasLocked = !!photo && photo.unlocked === false;
+        return mod.settle({ ticketId: run.ticketId, outcome: outcome, stats: stats || {} });
+      })
       .then(function (result) {
         if (!result || typeof result !== 'object') {
           return commissionFailure('commission-settle-empty');
@@ -1357,7 +1361,9 @@
         internal.finished = true;
         internal.finishedResult = normalized;
         /* 0.17：把收据里的剧情证据登记为只读 evidence token（失败不影响结算结果）。 */
-        return withStoryTimeout(storyFeedbackPipeline(normalized, run))
+        return withStoryTimeout(storyFeedbackPipeline(normalized, run).then(function (feedback) {
+          return attachArchiveFollowUp(feedback, normalized, mod, run.careerId, photoWasLocked);
+        }))
           .then(function (storyFeedback) {
             renderCommissionReceipt(normalized, storyFeedback);
             return normalized;
@@ -1372,6 +1378,26 @@
         warnOnce('commission-settle', err);
         return commissionFailure('commission-settle-error');
       });
+  }
+
+  function readArchivePhotoCommission(mod, careerId) {
+    if (typeof mod.listAvailable !== 'function') return Promise.resolve(null);
+    return safeAsync('receipt-follow-up', function () {
+      return Promise.resolve(mod.listAvailable({ careerId: careerId })).then(function (listing) {
+        if (!listing || listing.ok !== true || !Array.isArray(listing.commissions)) return null;
+        return listing.commissions.find(function (row) { return row.commissionId === 'memory-flip.T2'; }) || null;
+      });
+    }, null);
+  }
+
+  /** 只有本次首通前锁定、结算后真的可接，才报出这一份后续。 */
+  function attachArchiveFollowUp(feedback, result, mod, careerId, photoWasLocked) {
+    if (!photoWasLocked || !feedback || result.ok !== true || result.firstClear !== true || result.duplicate === true) return feedback;
+    return readArchivePhotoCommission(mod, careerId).then(function (photo) {
+      var title = photo && photo.unlocked === true ? cleanStoryText(photo.title, 60) : '';
+      if (title) feedback.nextStep = '档案夹已整理好。回告示板接「' + title + '」，去找缺的那张照片。';
+      return feedback;
+    });
   }
 
   /** 剧情反馈同步等待上限：模块/DB 卡住不能挡住结算收据；超时按「工钱已结、剧情未记」如实展示。 */
@@ -1433,8 +1459,11 @@
         if (!feedback || (feedback.status !== 'recorded' && feedback.status !== 'new')) return feedback;
         /* C1 同步 + 快照都放在 recordFromReceipt 之后，快照必须看见真实剧情结果。 */
         return Promise.resolve(syncCampaignFlags(false))
-          .then(function () { return loadStorySnapshot(); })
-          .then(function (snapshot) { return attachCampaignProgress(feedback, snapshot); })
+          .then(function (syncResult) {
+            return loadStorySnapshot().then(function (snapshot) {
+              return attachCampaignProgress(feedback, snapshot, syncResult);
+            });
+          })
           .catch(function (err) {
             warnOnce('story-campaign-progress', err);
             return feedback;
@@ -1470,24 +1499,27 @@
   function storyFeedbackFor(result, storyRecord) {
     var feedback = storyFeedbackFailure(result);
     if (!result || result.ok !== true || !storyRecord || storyRecord.ok !== true) return feedback;
-    feedback.status = storyRecord.duplicate === true ? 'recorded' : 'new';
+    var duplicate = result.duplicate === true || storyRecord.duplicate === true;
+    feedback.status = duplicate ? 'recorded' : 'new';
     feedback.unavailable = '';
-    var newTokens = Array.isArray(storyRecord.newTokens) ? storyRecord.newTokens.slice() : [];
+    var newTokens = !duplicate && Array.isArray(storyRecord.newTokens) ? storyRecord.newTokens.slice() : [];
     var discovered = [];
     for (var t = 0; t < newTokens.length && discovered.length < 2; t += 1) {
       var label = evidenceLabelOf(newTokens[t]);
       if (label && discovered.indexOf(label) < 0) discovered.push(label);
     }
     feedback.discovered = discovered;
-    var newFlags = Array.isArray(storyRecord.newFlags) ? storyRecord.newFlags.slice() : [];
+    var receiptFlags = Array.isArray(result.receipt.flags) ? result.receipt.flags : [];
+    var newFlags = !duplicate && Array.isArray(storyRecord.newFlags) ? storyRecord.newFlags.slice() : [];
+    /* 终局事务已写入完成旗标，证据登记不会再把它列为新增。 */
+    if (!duplicate && result.settled === true && receiptFlags.indexOf('C5.star_tower_resolved') >= 0
+      && newFlags.indexOf('C5.star_tower_resolved') < 0) newFlags.push('C5.star_tower_resolved');
     var replies = [];
     var npcContent = internal.npcContent;
     if (npcContent && Array.isArray(npcContent.characters)) {
-      var matched = 0;
       for (var f = 0; f < newFlags.length && replies.length < 2; f += 1) {
         var chapterId = chapterOfFlag(newFlags[f]);
         if (!chapterId || chapterId === 'C0') continue; /* C0 由读信推进，不是工单结算所得 */
-        matched += 1;
         for (var c = 0; c < npcContent.characters.length && replies.length < 2; c += 1) {
           var character = npcContent.characters[c];
           if (!character || !Array.isArray(character.replies)) continue;
@@ -1501,20 +1533,11 @@
           }
         }
       }
-      /* 中间单不再按 receipt.flags 的章号回放已完成章的 NPC 回信（例如 tower.T2 的 C1 旧事）。
-         没有本次新章级旗标时，只靠 newTokens 的一线现场回应 + 下一章路线进展表达所得。 */
-      if (!matched && replies.length === 0 && newTokens.length) {
-        var routeLine = routeProgressLineOf(newTokens);
-        if (routeLine) replies.push({ name: '旧港告示', text: routeLine });
-      }
     }
     feedback.replies = replies;
-    /* 仅内部使用（UI 前删除）：newFlags 只含 recordFromReceipt 当场落库的章级旗标；
-       C1.signal_fragment 由随后的 syncCampaignFlags 补写，不在这里。故另存本次
-       receipt.flags 与是否重复记录，供 attachCampaignProgress 用真实快照判定 C1 是否本次完成。 */
+    /* C1 由随后的 syncCampaignFlags 补写；还要用本次收据旗标确认它来自这一单。 */
     feedback.__newChapterFlags = newFlags.filter(function (flag) { return !!chapterOfFlag(flag); });
-    feedback.__receiptFlags = Array.isArray(result.receipt.flags) ? result.receipt.flags.slice() : [];
-    feedback.__storyRecordDuplicate = storyRecord.duplicate === true;
+    feedback.__receiptFlags = duplicate ? [] : receiptFlags.slice();
     return feedback;
   }
 
@@ -1564,18 +1587,6 @@
     return '一份现场记录';
   }
 
-  /** 中间单只有新证据 token 时的一线路线进展（不再回放已完成章的 NPC 回信）。 */
-  function routeProgressLineOf(newTokens) {
-    if (!newTokens.length) return '';
-    var labels = [];
-    for (var i = 0; i < newTokens.length && labels.length < 2; i += 1) {
-      var label = evidenceLabelOf(newTokens[i]);
-      if (label && labels.indexOf(label) < 0) labels.push(label);
-    }
-    if (!labels.length) return '这份记录已经送回旧港，路线又往前挪了一点。';
-    return '带回了' + labels.join('和') + '，旧港把路线又往前挪了一点。';
-  }
-
   /** NPC 显示名统一玩家语言：内部代号改成戏内称呼。 */
   function npcNameOf(character) {
     if (!character) return '';
@@ -1590,7 +1601,7 @@
    * 成功结算即使没有新章节旗标（中间单），也读真实 campaign.state 给出下一步，
    * 但不设置 feedback.chapter、不冒充任何章节完成。
    */
-  function attachCampaignProgress(feedback, snapshot) {
+  function attachCampaignProgress(feedback, snapshot, syncResult) {
     if (!feedback || (feedback.status !== 'recorded' && feedback.status !== 'new')) return feedback;
     var campaign = readGlobal('campaign');
     var state = null;
@@ -1599,19 +1610,17 @@
     }
     var validState = state && state.ok === true && Array.isArray(state.chapters) ? state : null;
 
-    /* 本次真实新完成的章节：recordFromReceipt 当场落库的章级旗标，或本次收据旗标
-       在真实快照中已满足 C1 路线（C1.signal_fragment 由随后 syncCampaignFlags 补写，
-       不在 storyRecord.newFlags），且不是重复记录。旧章节一律不冒充本次所得。 */
+    /* 只展示本次结算新完成的段落。C1 需同时有本次的收据旗标和实际补写结果。 */
     var claimed = [];
     if (validState) {
       var newFlags = Array.isArray(feedback.__newChapterFlags) ? feedback.__newChapterFlags : [];
       var receiptFlags = Array.isArray(feedback.__receiptFlags) ? feedback.__receiptFlags : [];
-      var isDuplicate = feedback.__storyRecordDuplicate === true;
+      var syncedFlags = syncResult && syncResult.ok === true && Array.isArray(syncResult.added) ? syncResult.added : [];
       validState.chapters.forEach(function (chapter) {
         if (!chapter || chapter.state !== 'complete') return;
         var flag = chapter.completionFlag;
         if (newFlags.indexOf(flag) >= 0) { claimed.push(chapter); return; }
-        if (chapter.chapterId === 'C1' && !isDuplicate && c1RouteMetByReceipt(receiptFlags)) {
+        if (chapter.chapterId === 'C1' && syncedFlags.indexOf(flag) >= 0 && c1RouteMetByReceipt(receiptFlags)) {
           claimed.push(chapter);
         }
       });
@@ -1677,7 +1686,11 @@
   function nextStepOf(chapter, state) {
     if (!chapter) return '';
     if (chapter.chapterId === 'C5' || state.endingChosen) {
-      return '港口已经安静下来，接下来可以自由接单。';
+      return '读一读港口的后日谈，或回告示板自由接单。';
+    }
+    if (chapter.chapterId === 'C4' && Array.isArray(state.endings)
+      && state.endings.some(function (ending) { return ending.available; })) {
+      return '在武力解除、理性重启和运输救援中选一条终局路线。';
     }
     var handoff = chapter.handoff;
     var chapters = Array.isArray(state.chapters) ? state.chapters : [];
@@ -1695,7 +1708,6 @@
     /* 内部字段只用于章节比对，不进入 UI/日志。 */
     delete out.__newChapterFlags;
     delete out.__receiptFlags;
-    delete out.__storyRecordDuplicate;
     return out;
   }
 

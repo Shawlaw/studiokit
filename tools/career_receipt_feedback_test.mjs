@@ -10,6 +10,7 @@
  */
 import { deepStrictEqual, ok } from 'node:assert/strict';
 import { readFileSync } from 'node:fs';
+import { createRequire } from 'node:module';
 import { dirname, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import vm from 'node:vm';
@@ -117,8 +118,13 @@ function noInternalTokens(text) {
   assert(text.includes('下一步：去告示板看看'), 'next step shown');
   assert(noInternalTokens(text), 'no internal chapter/evidence/token visible');
   assert(!text.includes('E-memory'), 'evidence token not shown');
+  const townBtn = byText(card, '回告示板看看');
   const continueBtn = byText(card, '读读回信');
-  assert(continueBtn, 'read-letter action exists');
+  assert(townBtn && continueBtn, 'town and read-letter both exist');
+  assert(townBtn.className.includes('--primary'), 'ordinary milestone sends player back to the board first');
+  assert(continueBtn.className.includes('--ghost'), 'read-letter is secondary');
+  eq(townBtn.getAttribute('data-action'), 'return-to-town', 'board action selector');
+  eq(continueBtn.getAttribute('data-action'), 'read-reply', 'reply action selector');
   eq(continueBtn.getAttribute('aria-label'), '关闭收据并读回信', 'action label');
   click(continueBtn);
   eq(opened, 1, 'continue opens campaign');
@@ -159,7 +165,7 @@ function noInternalTokens(text) {
       nextStep: '继续当前这段「' + C2_TITLE + '」，去告示板看看还差哪张单。',
       unavailable: '',
     },
-    /* 无章节完成但存在剧情反馈与下一步：页内主动作读回信；无 openCampaign 时回退到回告示板。 */
+    openCampaign() { throw new Error('there is no reply to read'); },
     api: { openTown() {} },
   });
   const text = card.textContent;
@@ -168,6 +174,7 @@ function noInternalTokens(text) {
   assert(!text.includes(C3_TITLE), 'step must not jump to C3 via C2.handoff');
   assert(!text.includes('新完成的段落'), 'step receipt never claims chapter completion');
   assert(byText(card, '回告示板看看'), 'town action stays available');
+  assert(!byText(card, '读读回信'), 'a next step and an evidence label do not imply a reply');
   assert(noInternalTokens(text), 'intermediate text has no internal tokens');
   receipt.close();
 }
@@ -205,11 +212,15 @@ function noInternalTokens(text) {
 
 {
   uiContext.document = createDocument();
-  const card = receipt.show({ result: { ok: false, reason: 'objective-not-met' }, storyFeedback: storyFeedback('unavailable'), api: { openTown() {} } });
+  let opened = 0;
+  const card = receipt.show({ result: { ok: false, reason: 'objective-not-met' }, openTown() { opened += 1; } });
   const text = card.textContent;
   assert(text.includes('这趟活儿没干成'), 'failed settlement shows honest work result');
-  assert(text.includes('工钱已结，剧情这会儿没能记进账.' ) === false, 'failure does not claim pay settled');
-  assert(byText(card, '回告示板看看'), 'failure still has an exit');
+  assert(!text.includes('工钱已结'), 'failure does not claim pay settled');
+  const town = byText(card, '回告示板看看');
+  assert(town && town.className.includes('--primary'), 'failure without story feedback can re-enter the board');
+  click(town);
+  eq(opened, 1, 'failure returns to the board to accept the commission again');
   assert(noInternalTokens(text), 'failure text has no internal tokens');
   receipt.close();
 }
@@ -286,19 +297,63 @@ function noInternalTokens(text) {
   receipt.close();
 }
 
+for (const status of ['new', 'recorded']) {
+  uiContext.document = createDocument();
+  const card = receipt.show({
+    result: settledResult(),
+    storyFeedback: { status, discovered: [], replies: [], nextStep: '回告示板接下一单。' },
+    openTown() {},
+    openCampaign() {},
+  });
+  assert(!card.textContent.includes('线索'), 'empty story bookkeeping does not claim a story find: ' + status);
+  assert(!byText(card, '读读回信'), 'empty story bookkeeping does not offer a reply: ' + status);
+  receipt.close();
+}
+
+{
+  uiContext.document = createDocument();
+  let opened = 0;
+  function openCampaign() { opened += 1; }
+  const ui = { openCampaign, openTown() { throw new Error('ending action must open the campaign'); } };
+  const c4 = receipt.show({ ...ui, result: settledResult(), storyFeedback: {
+    ...storyFeedback('new'), chapter: { id: 'C4', title: titleOf('C4') },
+  } });
+  const board = byText(c4, '回告示板看看');
+  const chooseEnding = byText(c4, '选择终局路线');
+  assert(board && board.className.includes('--primary'), 'C4 still offers the board as primary');
+  eq(chooseEnding.getAttribute('data-action'), 'choose-ending', 'C4 has a direct ending selector');
+  click(chooseEnding);
+  eq(opened, 1, 'C4 opens the three-ending campaign panel');
+  assert(!c4.parentNode, 'C4 action closes the receipt');
+
+  const ending = receipt.show({ ...ui, result: { ok: true, approach: 'research', receipt: { commissionId: 'ending.research' } },
+    storyFeedback: storyFeedback('unavailable'),
+  });
+  const epilogue = byText(ending, '读后日谈');
+  assert(epilogue && epilogue.className.includes('--primary'), 'committed ending keeps epilogue reachable if feedback recording fails');
+  eq(epilogue.getAttribute('data-action'), 'read-epilogue', 'epilogue selector');
+  click(epilogue);
+  eq(opened, 2, 'epilogue action opens the campaign panel');
+
+  const retry = receipt.show({ ...ui, result: { ok: false, approach: 'research', reason: 'objective-not-met' } });
+  assert(!byText(retry, '读后日谈'), 'failed ending does not offer an epilogue');
+  click(byText(retry, '回去选终局路线'));
+  eq(opened, 3, 'failed ending returns to the ending choices');
+  receipt.close();
+}
+
 /* bridge 静态合同：先记录后渲染、同步 C1、失败如实显示、有超时、不泄漏内部旗标。 */
-assert(bridgeSource.includes('return withStoryTimeout(storyFeedbackPipeline(normalized, run))'), 'bridge waits (with timeout) for story result');
+assert(bridgeSource.includes('return withStoryTimeout(storyFeedbackPipeline(normalized, run)'), 'bridge waits (with timeout) for story result');
 assert(bridgeSource.includes('return storyFeedbackFor(result, storyRecord);'), 'bridge waits for structured evidence result');
 assert(bridgeSource.includes('return Promise.resolve(syncCampaignFlags(false))'), 'bridge syncs C1 at settlement');
-assert(bridgeSource.includes('.then(function () { return loadStorySnapshot(); })'), 'bridge reads snapshot after persistence');
+assert(bridgeSource.includes('return loadStorySnapshot().then('), 'bridge reads snapshot after persistence');
 assert(bridgeSource.includes('renderCommissionReceipt(normalized, storyFeedback);'), 'bridge renders after persistence');
 assert(bridgeSource.includes("storyFeedback: storyFeedbackForUi(feedback),"), 'bridge strips internal flags before UI');
 assert(bridgeSource.includes("delete out.__newChapterFlags;"), 'internal chapter flags never reach UI');
 assert(bridgeSource.includes("delete out.__receiptFlags;"), 'internal receipt flags never reach UI');
-assert(bridgeSource.includes("delete out.__storyRecordDuplicate;"), 'internal duplicate marker never reaches UI');
 assert(bridgeSource.includes('工钱已结，剧情这会儿没能记进账。'), 'bridge failure feedback is explicit');
 assert(bridgeSource.includes('STORY_PIPELINE_TIMEOUT_MS'), 'bridge has bounded story wait');
-assert(bridgeSource.includes('var newTokens = Array.isArray(storyRecord.newTokens)'), 'story gains derive from newTokens (not flags)');
+assert(bridgeSource.includes('Array.isArray(storyRecord.newTokens)'), 'story gains derive from newTokens');
 assert(bridgeSource.includes('var wanted = newFlags.length') === false, 'old flag-based discovered fallback removed');
 assert(bridgeSource.includes('if (newFlags.indexOf(flag) >= 0) { claimed.push(chapter); return; }'), 'only chapters with this run new flags are claimed as completed');
 assert(bridgeSource.includes('feedback.chapterCount = claimed.length;'), 'multi-jump reports all new chapters');
@@ -306,7 +361,6 @@ assert(bridgeSource.includes('feedback.nextStep = nextStepOfCurrent(validState);
 assert(bridgeSource.includes("c1RouteMetByReceipt(receiptFlags)"), 'C1 completion derived from this run receipt flags');
 assert(bridgeSource.includes("flags['C1.work_done'] || flags['C1.flight_done']"), 'C1 work/flight route flags recognized');
 assert(bridgeSource.includes("flags['C1.signal'] || flags['C1.records'])"), 'C1 signal/records route flags recognized');
-assert(bridgeSource.includes('chapter.chapterId === \'C1\' && !isDuplicate'), 'duplicate C1 receipts not falsely claimed as new');
 assert(bridgeSource.includes('继续当前这段「'), 'current-chapter next step points at current chapter itself');
 assert(bridgeSource.includes('raw && typeof raw === \'object\' ? raw.chapterId'), 'currentChapter object shape supported');
 assert(bridgeSource.includes("return '去告示板看看下一张单。';"), 'bridge has a next-step fallback when snapshot is unavailable');
@@ -397,10 +451,13 @@ function configureCampaign(campaign) {
   assert(c1Chapter && c1Chapter.state === 'complete', 'C1 is complete in real snapshot');
   const c1Feedback = {
     status: 'new', discovered: ['工地记录'], replies: [], chapter: null, chapterCount: 0,
-    __newChapterFlags: [], __receiptFlags: ['C1.work_done'], __storyRecordDuplicate: false,
+    __newChapterFlags: [], __receiptFlags: ['C1.work_done'],
   };
-  api.attachCampaignProgress(c1Feedback, c1Snapshot);
-  assert(c1Feedback.chapter && c1Feedback.chapter.title === C1_TITLE, 'first commission claims C1 completion from receipt work flag');
+  const earlierCompletedC1 = { ...c1Feedback };
+  api.attachCampaignProgress(c1Feedback, c1Snapshot, { ok: true, added: ['C1.signal_fragment'] });
+  assert(c1Feedback.chapter && c1Feedback.chapter.title === C1_TITLE, 'first commission claims C1 completion from receipt work flag and actual write');
+  api.attachCampaignProgress(earlierCompletedC1, c1Snapshot, { ok: true, added: [] });
+  assert(!earlierCompletedC1.chapter, 'later completion of an alternative C1 job does not report C1 again');
   assert(c1Feedback.nextStep.includes(C2_TITLE), 'C1 next step points to C2 via handoff');
   assert(!c1Feedback.nextStep.includes(C3_TITLE), 'C1 next step is not C3');
 
@@ -444,7 +501,7 @@ function configureCampaign(campaign) {
 /* ---------------------------------------------------------------- 行为级 VM：证据命名 + 中间单不回放旧章回信 */
 
 function extractStoryHelpers() {
-  const start = bridgeSource.indexOf('  function storyFeedbackFailure(');
+  const start = bridgeSource.indexOf('  function cleanStoryText(');
   const end = bridgeSource.indexOf('  function attachCampaignProgress(', start);
   const body = bridgeSource.slice(start, end);
   const sandbox = {
@@ -455,7 +512,7 @@ function extractStoryHelpers() {
     internal: { npcContent: JSON.parse(readFileSync(resolve(root, 'apps/arcade/career/content/npc.json'), 'utf8')) },
   };
   vm.createContext(sandbox);
-  vm.runInContext([body, 'this.__api = { storyFeedbackFor, evidenceLabelOf, routeProgressLineOf };'].join(String.fromCharCode(10)), sandbox, { filename: 'story-helpers' });
+  vm.runInContext([body, 'this.__api = { storyFeedbackFor, evidenceLabelOf };'].join(String.fromCharCode(10)), sandbox, { filename: 'story-helpers' });
   return sandbox.__api;
 }
 
@@ -489,6 +546,60 @@ function extractStoryHelpers() {
   }
   assert(helpers.evidenceLabelOf('E-C1-patrol') === '异常航报', 'patrol evidence labeled航报');
   assert(helpers.evidenceLabelOf('unknown-token') === '', 'non-evidence token has no label');
+  const replay = helpers.storyFeedbackFor({ ...result, duplicate: true }, { ...record, newFlags: ['C2.research_complete'] });
+  eq(replay.status, 'recorded', 'a duplicate settlement is recorded');
+  eq(replay.discovered.length + replay.replies.length + replay.__newChapterFlags.length, 0, 'duplicate receipt cannot claim evidence, replies, or chapters');
+  const ending = helpers.storyFeedbackFor({ ok: true, settled: true, receipt: { flags: ['C5.star_tower_resolved'] } }, record);
+  assert(ending.__newChapterFlags.includes('C5.star_tower_resolved'), 'first ending completion is available for receipt feedback');
+}
+
+{
+  const start = bridgeSource.indexOf('  function readArchivePhotoCommission(');
+  const end = bridgeSource.indexOf('  function withStoryTimeout(', start);
+  const { readArchivePhotoCommission, attachArchiveFollowUp } = vm.runInNewContext(
+    bridgeSource.slice(start, end) + '\n({ readArchivePhotoCommission, attachArchiveFollowUp });',
+    {
+      safeAsync: (_key, action, fallback) => Promise.resolve().then(action).catch(() => fallback),
+      cleanStoryText: (value) => typeof value === 'string' ? value.trim() : '',
+    },
+  );
+  const require = createRequire(import.meta.url);
+  const loadModule = (name) => require(resolve(root, 'apps/arcade/career', name + '.js'));
+  const careerId = 'career-test';
+  let quests = [];
+  const commission = loadModule('commission-core').createCommissionCore({
+    core: loadModule('career-core'),
+    db: {
+      readQuestState: async () => ({ ok: true, quests }),
+      getProfile: async () => ({ careerId }),
+    },
+  });
+  const content = loadContent('commissions.json');
+  commission.configure({ content });
+  const before = await readArchivePhotoCommission(commission, careerId);
+  eq(before?.unlocked, false, 'real commission list reports the photo locked before settlement');
+  const settled = { ok: true, firstClear: true };
+  const base = { status: 'new', nextStep: '去告示板看看下一张单。' };
+  const whileLocked = await attachArchiveFollowUp({ ...base }, settled, commission, careerId, !before.unlocked);
+  eq(whileLocked.nextStep, base.nextStep, 'a still-locked commission is not advertised');
+  quests = [{ careerId, nodeId: 'memory-flip.T1', status: 'cleared' }];
+  const after = await readArchivePhotoCommission(commission, careerId);
+  eq(after?.unlocked, true, 'real commission list reports the photo available after first clear');
+  const feedback = await attachArchiveFollowUp({ ...base }, settled, commission, careerId, !before.unlocked);
+  assert(feedback.nextStep.includes('档案夹已整理好') && feedback.nextStep.includes(after.title), 'receipt names the real follow-up unlocked on this settlement');
+  for (const [result, wasLocked] of [
+    [settled, false],
+    [{ ...settled, duplicate: true }, true],
+    [{ ok: true, firstClear: false }, true],
+    [{ ok: false }, true],
+  ]) {
+    const old = await attachArchiveFollowUp({ ...base }, result, commission, careerId, wasLocked);
+    eq(old.nextStep, base.nextStep, 'already available, duplicate, repeat, or failed runs never announce an unlock');
+  }
+  const readFailed = { listAvailable: async () => ({ ok: false }) };
+  eq(await readArchivePhotoCommission(readFailed, careerId), null, 'unavailable commission list does not imply a lock');
+  const unknown = await attachArchiveFollowUp({ ...base }, settled, readFailed, careerId, true);
+  eq(unknown.nextStep, base.nextStep, 'an unconfirmed after-state does not announce an unlock');
 }
 
 console.log(`career receipt feedback: ${checks}/${checks} checks passed`);
