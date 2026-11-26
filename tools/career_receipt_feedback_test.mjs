@@ -117,7 +117,7 @@ function noInternalTokens(text) {
   assert(text.includes('下一步：去告示板看看'), 'next step shown');
   assert(noInternalTokens(text), 'no internal chapter/evidence/token visible');
   assert(!text.includes('E-memory'), 'evidence token not shown');
-  const continueBtn = byText(card, '读回信');
+  const continueBtn = byText(card, '读读回信');
   assert(continueBtn, 'read-letter action exists');
   eq(continueBtn.getAttribute('aria-label'), '关闭收据并读回信', 'action label');
   click(continueBtn);
@@ -137,7 +137,7 @@ function noInternalTokens(text) {
   assert(!text.includes('新完成的段落'), 'failure never claims chapter progress');
   assert(!text.includes('剧情已记'), 'failure never claims story recorded');
   assert(noInternalTokens(text), 'failure text has no internal tokens');
-  const townBtn = byText(card, '回告示板');
+  const townBtn = byText(card, '回告示板看看');
   assert(townBtn, 'town action exists');
   click(townBtn);
   eq(opened, 1, 'town opens once');
@@ -167,7 +167,7 @@ function noInternalTokens(text) {
   assert(text.includes('下一步：继续当前这段「' + C2_TITLE + '」'), 'step next step points at current chapter, not its handoff');
   assert(!text.includes(C3_TITLE), 'step must not jump to C3 via C2.handoff');
   assert(!text.includes('新完成的段落'), 'step receipt never claims chapter completion');
-  assert(byText(card, '回告示板'), 'town action stays available');
+  assert(byText(card, '回告示板看看'), 'town action stays available');
   assert(noInternalTokens(text), 'intermediate text has no internal tokens');
   receipt.close();
 }
@@ -209,7 +209,7 @@ function noInternalTokens(text) {
   const text = card.textContent;
   assert(text.includes('这趟活儿没干成'), 'failed settlement shows honest work result');
   assert(text.includes('工钱已结，剧情这会儿没能记进账.' ) === false, 'failure does not claim pay settled');
-  assert(byText(card, '回告示板'), 'failure still has an exit');
+  assert(byText(card, '回告示板看看'), 'failure still has an exit');
   assert(noInternalTokens(text), 'failure text has no internal tokens');
   receipt.close();
 }
@@ -238,7 +238,7 @@ function noInternalTokens(text) {
       return Promise.reject(new Error('ui still loading'));
     },
   });
-  const continueBtn = byText(card, '读回信');
+  const continueBtn = byText(card, '读读回信');
   assert(continueBtn, 'read-letter action exists for async failure case');
   click(continueBtn);
   assert(!card.parentNode, 'receipt closed before async action resolves');
@@ -266,7 +266,7 @@ function noInternalTokens(text) {
     storyFeedback: storyFeedback('new'),
     api: { openTown() { return Promise.resolve({ ok: false, reason: 'ui-unavailable' }); } },
   });
-  const townBtn = byText(card, '回告示板');
+  const townBtn = byText(card, '回告示板看看');
   assert(townBtn, 'town action exists for ok:false case');
   click(townBtn);
   await drain();

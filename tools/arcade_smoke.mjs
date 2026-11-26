@@ -3015,57 +3015,52 @@ async function main() {
     await cdp.screenshot('star-mow-320.png');
     record('星海突击 320px 星海割草 4 按钮入口 + 6 列无限道具行无溢出', true);
 
-    /* ---------- 有生涯身份后才显示首页视图切换 ---------- */
+    /* ---------- 0.21 被动发现：中心页无生涯 CTA，仅低强调来信小字 + 页尾设置入口 ---------- */
     await cdp.navigate(base + '/apps/arcade/games/pendulum-tower.html?careerPanel=town');
     await cdp.waitFor('window.ArcadeCareer?.available && ArcadeCareer.db');
     assert(!(await cdp.evaluate('ArcadeCareer.db.getState("career")')), 'career panel deep link created a profile');
     assert(!(await cdp.evaluate('document.querySelector("[data-career-panel=town]")')), 'career panel deep link opened without a profile');
     const profile = await cdp.evaluate('ArcadeCareer.db.ensureCareer({originGameId: "pendulum-tower"})');
     assert(profile.ok && profile.careerId, 'could not set up career hall fixture');
-    await cdp.evaluate('Arcade.Prefs.save({...Arcade.Prefs.load(), hallDefaultView: "classic", hallSort: "name"})');
+    await cdp.evaluate('Arcade.Prefs.save({...Arcade.Prefs.load(), hallSort: "name"})');
     await cdp.navigate(base + '/apps/arcade/');
-    await cdp.waitFor('!document.querySelector("[data-hall-modes]").hidden');
-    assert(await cdp.evaluate('document.querySelector("[data-career-view]").hidden && document.querySelector("[data-career-chapters]").hidden'), 'career content should be gated behind view and chapter unlock');
-    await cdp.click('[data-hall-view="career"]');
-    assert(await cdp.evaluate('document.querySelector("[data-classic-view]").hidden'), 'career switch did not change the directory layout');
-    await cdp.click('[href$="careerPanel=town"]');
-    await cdp.waitFor('!!document.querySelector("[data-career-panel=town] .ac-career-hub-back")', { timeout: 12000 });
-    await cdp.click('[data-career-panel=town] .ac-career-hub-back');
-    await cdp.waitFor('!document.querySelector("[data-hall-modes]")?.hidden && !document.querySelector("[data-classic-view]")?.hidden');
+    await cdp.waitFor('document.querySelectorAll("[data-hall-grid] a").length >= 16');
+    /* 旧版视图切换/常驻生涯链接必须消失：经典目录始终直达，不再切视图。 */
+    assert(await cdp.evaluate(`!document.querySelector('[data-hall-modes]') && !document.querySelector('[data-career-view]') && !document.querySelector('[data-story-entry]') && !document.querySelector('[data-default-view]')`), 'career CTA/view switch still present on classic home');
+    assert(await cdp.evaluate('document.querySelector("[data-classic-view]")?.hidden !== true'), 'classic directory hidden on home');
+    await cdp.waitFor('document.querySelector("[data-career-settings-entry]")?.hidden === false');
+    assert(await cdp.evaluate('document.querySelector("[data-career-settings-label]").textContent.trim() === "生涯设置"'), 'career settings entry label changed');
+    assert(await cdp.evaluate('/careerPanel=settings/.test(document.querySelector("[data-career-settings-label]").getAttribute("href") || "")'), 'career settings entry href missing');
+    assert(await cdp.evaluate('document.querySelector("[data-letter-entry]").hidden === true'), 'letter hint should stay hidden without clues');
 
+    /* 未读线索只驱动「继续上次」附近的小字，不切视图、不弹窗。 */
+    await cdp.evaluate(`new Promise((resolve, reject) => {
+      const request = indexedDB.open('studiokit:arcade:career');
+      request.onerror = () => reject(request.error);
+      request.onsuccess = () => {
+        const db = request.result;
+        const tx = db.transaction(['state'], 'readwrite');
+        tx.objectStore('state').put({ key: 'discovery', value: { stage: 'GLIMPSED', clues: { 'CL-pendulum-tower': { sourceGame: 'pendulum-tower', openedAt: null } } } });
+        tx.oncomplete = () => { db.close(); resolve(); };
+        tx.onerror = () => reject(tx.error);
+      };
+    })`);
+    await cdp.navigate(base + '/apps/arcade/');
+    await cdp.waitFor('document.querySelector("[data-letter-entry]")?.hidden === false');
+    assert(await cdp.evaluate('document.querySelector("[data-letter-label]").textContent.trim() === "旧港有一封来信"'), 'unread letter hint text missing');
+    assert(await cdp.evaluate('/careerLetter=1/.test(document.querySelector("[data-letter-label]").getAttribute("href") || "")'), 'unread letter hint href missing');
+    assert(await cdp.evaluate('document.querySelector("[data-classic-view]")?.hidden !== true && !document.querySelector("[data-career-panel]")'), 'letter hint changed home view or opened a panel');
+
+    /* C0 章节旗标不产生中心页常驻章节链接；生涯设置入口仍在页尾。 */
     await cdp.navigate(base + '/apps/arcade/games/pendulum-tower.html');
     await cdp.waitFor('window.ArcadeCareer?.available && ArcadeCareer.db');
     const chapter = await cdp.evaluate(`ArcadeCareer.db.putQuests(${JSON.stringify(profile.careerId)}, [{nodeId:"story:C0.port_seen", kind:"story", status:"cleared"}])`);
     assert(chapter.ok, 'chapter fixture failed');
     await cdp.navigate(base + '/apps/arcade/');
-    await cdp.waitFor('!document.querySelector("[data-hall-modes]").hidden');
-    await cdp.click('[data-hall-view="career"]');
-    assert(await cdp.evaluate('!document.querySelector("[data-career-chapters]").hidden'), 'chapter entry missing after C0');
-    await cdp.evaluate(`(() => {
-      const option = document.querySelector('[data-default-view]');
-      option.value = 'career';
-      option.dispatchEvent(new Event('change'));
-    })()`);
-    await cdp.navigate(base + '/apps/arcade/');
-    await cdp.waitFor('document.querySelector("[data-career-view]")?.hidden === false');
-    await cdp.click('[href$="careerPanel=chapters"]');
-    await cdp.waitFor('!!document.querySelector("[data-career-panel=world-state] .ac-career-hub-back")', { timeout: 12000 });
-    await cdp.click('[data-career-panel=world-state] .ac-career-hub-back');
-    await cdp.waitFor('document.querySelector("[data-career-view]")?.hidden === false');
-    await cdp.click('[href$="careerPanel=mailbox"]');
-    await cdp.waitFor('!!document.querySelector("[data-career-panel=mailbox] .ac-career-hub-back")', { timeout: 12000 });
-    await cdp.click('[data-career-panel=mailbox] .ac-career-hub-back');
-    await cdp.waitFor('document.querySelector("[data-career-view]")?.hidden === false');
-    await cdp.click('[data-hall-view="classic"]');
-    await cdp.evaluate(`(() => {
-      const option = document.querySelector('[data-default-view]');
-      option.value = 'classic';
-      option.dispatchEvent(new Event('change'));
-    })()`);
-    await cdp.navigate(base + '/apps/arcade/');
-    await cdp.waitFor('!document.querySelector("[data-hall-modes]").hidden && !document.querySelector("[data-classic-view]").hidden');
-    assert(await cdp.evaluate('document.querySelector("[data-sort]").value') === 'name', 'career view switch overwrote classic order');
-    record('街机厅生涯视图解锁、告示板/信箱/章节返回、恢复经典默认和排序', true);
+    await cdp.waitFor('document.querySelector("[data-career-settings-entry]")?.hidden === false');
+    assert(await cdp.evaluate('!document.querySelector("[data-career-chapters]") && !document.querySelector("[data-career-panel-link]")'), 'chapter CTA leaked into classic home');
+    assert(await cdp.evaluate('document.querySelector("[data-sort]").value') === 'name', 'career entry overwrote classic order');
+    record('街机厅被动发现：无生涯 CTA + 来信小字 + 页尾生涯设置入口，经典目录不变', true);
 
     /* ---------- 清理测试产生的本地数据 ---------- */
     await cdp.evaluate(`localStorage.clear()`);
