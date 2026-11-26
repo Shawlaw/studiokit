@@ -269,6 +269,7 @@ const USAGE = [
   '  --sample    static + 独立抽样 E2E',
   '  --games=a,b          只跑指定游戏的 runner E2E（默认 16 款）',
   '  --samples=x.Tn,...   只跑指定抽样委托（默认 8 条）',
+  '  --skip-static        父进程已通过 static 时，子进程 runner 跳过重复静态校验（真实 E2E 不跳过）',
   '  --timeout=MS         单 tier 超时（默认 120000，传给 runner --timeout）',
   '  --verbose            展开每条 check 明细',
   '  --help',
@@ -286,6 +287,7 @@ function parseArgs(argv) {
     sample: false,
     games: null,
     samples: null,
+    skipStatic: false,
     tierTimeoutMs: DEFAULT_TIER_TIMEOUT_MS,
     verbose: false,
     errors: [],
@@ -295,6 +297,7 @@ function parseArgs(argv) {
     else if (arg === '--static') options.staticOnly = true;
     else if (arg === '--e2e') options.e2e = true;
     else if (arg === '--sample') options.sample = true;
+    else if (arg === '--skip-static') options.skipStatic = true;
     else if (arg === '--verbose') options.verbose = true;
     else if (arg.indexOf('--games=') === 0) {
       const list = arg.slice('--games='.length).split(',').map((item) => item.trim()).filter(Boolean);
@@ -317,6 +320,9 @@ function parseArgs(argv) {
   });
   if (options.staticOnly && (options.e2e || options.sample)) {
     options.errors.push('--static 不能与 --e2e/--sample 同时使用');
+  }
+  if (options.skipStatic && (options.staticOnly || (!options.e2e && !options.sample))) {
+    options.errors.push('--skip-static 只在 E2E/抽样阶段有效（且父进程须已通过 static 门禁）');
   }
   if (!options.staticOnly && !options.e2e && !options.sample) {
     options.e2e = true;
@@ -914,7 +920,8 @@ function parseRunnerOutput(gameId, output) {
   let sawContentPASS = false;
   const lines = String(output || '').split(/\r?\n/);
   lines.forEach((line) => {
-    if (line.indexOf('SKIP') === 0) skipped += 1;
+    /* SKIP-STATIC 是父进程已验证 static 后的显式优化标记，不是跳过 tier 证据。 */
+    if (line.indexOf('SKIP') === 0 && line.indexOf('SKIP-STATIC') !== 0) skipped += 1;
     if (/^PASS {2}content-schema/.test(line)) sawContentPASS = true;
     const summaryMatch = SUMMARY_RE.exec(line);
     if (summaryMatch) {
@@ -1149,9 +1156,11 @@ async function runE2EPhase(options, basePort, baseCdp) {
       attempts = attempt + 1;
       portUsed = port + attempt * 100;
       cdpUsed = cdpPort + attempt * 100;
+      const runnerArgs = [RUNNER_PATH, '--run=' + gameId, '--timeout=' + options.tierTimeoutMs, '--verbose'];
+      if (options.skipStatic) runnerArgs.push('--skip-static');
       run = await spawnCapture(
         process.execPath,
-        [RUNNER_PATH, '--run=' + gameId, '--timeout=' + options.tierTimeoutMs, '--verbose'],
+        runnerArgs,
         {
           env: Object.assign({}, process.env, {
             CAREER_MISSION_PORT: String(portUsed),
@@ -2586,6 +2595,7 @@ async function main(argv) {
   const staticEnabled = !options.e2e && !options.sample;
   console.log(
     'RUN     static=' + staticEnabled + ' e2e=' + options.e2e + ' sample=' + options.sample +
+    ' skipStatic=' + options.skipStatic +
     ' port=' + options.portBase + '/' + options.cdpBase + ' (requested ' + portBase + '/' + cdpBase + ', shift=' + options.portShift + ')' +
     ' samplePort=' + options.samplePort + '/' + options.sampleCdp +
     ' timeout=' + options.tierTimeoutMs + 'ms artifacts=' + ARTIFACTS_DIR
@@ -2679,6 +2689,7 @@ async function main(argv) {
       cdpBase: options.cdpBase,
       samplePort: options.samplePort,
       sampleCdp: options.sampleCdp,
+      skipStatic: options.skipStatic === true,
       tierTimeoutMs: options.tierTimeoutMs,
       artifacts: ARTIFACTS_DIR,
     },
