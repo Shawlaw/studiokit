@@ -4,13 +4,22 @@ StudioKit 门户本身没有独立的 semver；以下按仓库里程碑与工具
 
 > 说明：Arcade `0.11.2`–`0.14.0` 的条目于 2026-11-22 依据 [`apps/arcade/CHANGELOG.md`](apps/arcade/CHANGELOG.md) 补齐（本文件当时落后于工具版本），逐条数值与证据以工具 CHANGELOG 与对应 `DESIGN-*.md` 为准。
 
-## Arcade 0.20.0 — 2026-11-26（本地未发布）
+## Arcade 0.21.0 — 2026-11-26（目标发布；本地开发，未验证 / 未发布）
 
-- 生涯首航 V2：错过的旧港来信可从首页找回并一次点击投递进港；告示板首屏只突出按真实规则推导的当前推荐单，中间单标「路线进展」；收据给出工钱 / 剧情物件 / 世界反应三类回报与下一步，支持关标签后显式继续未完成委托。
-- 内容以 `start / progress / complete` 节拍向后兼容扩展，新增 ADR §21 冻结 `originLetter()` / `chapterZero` / `continuations()` 三个只读接口；生涯内容 `contentVersion` 仍 `0.18.0`，IDB v1 / 11 stores / 所有 localStorage key 与玩法数值不变。
+- 生涯中心页彻底被动：经典目录无生涯视图 / 默认视图切换 / 常驻告示板、信箱、章节入口；未读 / 未投递来信只以低强调小字在「继续上次」附近找回，页尾新增二级「生涯设置」入口（封存 / 解冻 / 重置 / 档案），封存时隐藏生涯内容入口与结算线索。
+- 故事与任务改为面向玩家的第二人称选择式叙事，选项对应真实动作 / 路线 / 终局；NPC 自述仍保留第一人称，不做虚假分支。
+- 生涯设置支持可解冻封存（既有 `state` store 的 `career-archive` 行、事务内重读守卫、解冻推进代次、备份携带标记）与**仅生涯数据**完全重置 `resetAllCareer()`（单事务清空 11 stores，不触碰经典 progress / runs / playtime / scores / challenge / meta / prefs，不可撤销且二次确认）。ADR §22 冻结接口。
+- 门禁分层 `static` / `release` / `full`：release 结论明确为 `release passed (not full)`，只有 full 全绿才可写 `ALL GATES PASSED`；CI 增加 L0 static job，Chrome 集严格串行，输出真实耗时，不把「没跑」写成「通过」。
+- 经典 localStorage key、IDB v1 / 11 stores、`contentVersion 0.18.0`、玩法数值、关卡与挑战数据零变化。目标版本链 0.21.0 / SW `studiokit-arcade-0.21.0-v1`；**当前产品代码版本链仍为 0.20.0，版本 bump 未执行**。
+- 本分支实跑：`validate_site.py` / `build_site.py` PASS（因断言仍为 0.20.0 而通过，不证明 0.21 版本链同步）、纯 Node `career_archive_test.mjs` 8/8。Chrome 门禁、release / full、Actions、双端线上与真人均 UNVERIFIED；无发布授权。详见 [`apps/arcade/CHANGELOG.md`](apps/arcade/CHANGELOG.md)、[`DESIGN-0.21.0.md`](apps/arcade/DESIGN-0.21.0.md) 与 [`INTEGRATION-0.21.md`](docs/arcade-life/INTEGRATION-0.21.md)。
+
+## Arcade 0.20.0 — 2026-11-26（已双端发布）
+
+- 生涯首航 V2：错过的旧港来信可从首页找回并一次点击投递进港；告示板首屏只突出按真实规则推导的当前推荐单，中间单标「路线进展」；收据给出工钱 / 剧情物件 / 世界反应三类回报与下一步，支持继续未完成委托。
+- 内容以 `start / progress / complete` 节拍向后兼容扩展，新增 ADR §21 冻结 `originLetter()` / `chapterZero()` / `continuations()` 三个只读接口；生涯内容 `contentVersion` 仍 `0.18.0`，IDB v1 / 11 stores / 所有 localStorage key 与玩法数值不变。
 - 版本链 0.20.0 / SW `studiokit-arcade-0.20.0-v1`，沿用 0.19 预载迁移策略。
-- 门禁：完整零种子首航 339/339、campaign E2E 731/731、移动端 318/318、world 145/145、推荐 111/111、路线一致性 94/94、db 38/38、备份 34/34、a11y 75/75、PWA 18/18、紧凑触控 18/18、冒烟 117/117；聚合门禁仍待最终确认，独立复审已回灌、最终复验待完成，真机 / 真人首航 UNVERIFIED。
-- 未发布：本地 `feat/arcade-career-flow`，无 `OWNER_AUTHORIZATION: PUBLISH_TO_MAIN`；详见 [`apps/arcade/CHANGELOG.md`](apps/arcade/CHANGELOG.md)、[`DESIGN-0.20.0.md`](apps/arcade/DESIGN-0.20.0.md) 与 [`INTEGRATION-0.20.md`](docs/arcade-life/INTEGRATION-0.20.md)。
+- 单项门禁逐项串行全绿（首航 339/339、campaign E2E 731/731、移动端 318/318、world 145/145、推荐 111/111、路线一致性 94/94、db 38/38、备份 34/34、a11y 75/75、PWA 18/18、紧凑触控 18/18、冒烟 117/117），但无一次聚合 `ALL GATES PASSED`；真机 / 真人首航 UNVERIFIED。
+- 发布：Owner 独立复审 APPROVE 后授权；发布提交 `df91715`，Actions `45719028590` 四项成功，双端各 88/88 文件一致，线上为 0.20.0。详见 [`apps/arcade/CHANGELOG.md`](apps/arcade/CHANGELOG.md)、[`DESIGN-0.20.0.md`](apps/arcade/DESIGN-0.20.0.md) 与 [`INTEGRATION-0.20.md`](docs/arcade-life/INTEGRATION-0.20.md)。
 
 ## Arcade 0.19.0 — 2026-11-25（已双端发布）
 

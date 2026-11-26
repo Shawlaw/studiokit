@@ -1,5 +1,27 @@
 # Arcade Changelog
 
+## 0.21.0 — 2026-11-26（目标发布；本地开发，未验证 / 未发布）
+
+本地分支 `feat/arcade-career-passive-021`，HEAD `4ffc27d`。设计 / 回滚见 [`DESIGN-0.21.0.md`](DESIGN-0.21.0.md)，接口冻结见 [`docs/arcade-life/ADR-interfaces.md`](../../docs/arcade-life/ADR-interfaces.md) §22，集成与验证口径见 [`docs/arcade-life/INTEGRATION-0.21.md`](../../docs/arcade-life/INTEGRATION-0.21.md)。**版本链目标 0.21.0 / SW `studiokit-arcade-0.21.0-v1`；当前产品代码（engine / sw / 中心页 / 注册表）与校验断言仍为 0.20.0，版本 bump 未执行，本条目只同步文档口径。**
+
+### Added / Changed
+
+- 中心页生涯彻底被动：经典目录不再有生涯视图、默认视图切换或常驻告示板 / 信箱 / 章节入口；错过来信只在「继续上次」附近显示低强调小字，C0 后保留游戏内章节入口与收据回流；生涯已开启 / 已封存时页尾提供二级「生涯设置」入口（封存 / 解冻 / 重置 / 档案，不是内容 CTA），封存时隐藏所有生涯内容入口与结算线索。
+- 故事与任务改为面向玩家的第二人称选择式叙事：委托标题 / 摘要、章节 start / progress / complete / next、路线 hint、NPC 回信、支线与三终局统一「你愿意……吗？/ 你想先……哪一项？」视角；选项对应真实可执行动作 / 路线 / 终局，不新增虚假分支；NPC 自述仍保留第一人称。`clues.json` 与 `chapter-01.json` 同源信件同步改写。
+- 可解冻封存：既有 `state` store 增 `career-archive` 标记行，不新增 store / key / schema；封存保留全部数据与 live run 但禁止新线索、接单、继续委托与结算写入；解冻删除标记并推进代次；写方法必须在 DB 事务内重读标记（`assertCareerWritable`），旧标签不能绕过；备份携带标记，replace 导入以文件为准。接口冻结见 ADR §22。
+- **仅生涯数据完全重置**：`resetAllCareer()` 单事务清空生涯库 11 个 store 与封存标记；不触碰经典 progress / runs / playtime / scores / challenge / meta / prefs，不改旧 key；bridge 清当前页内存与线索 UI；设置面板二次确认并输入「重置生涯」，提示经典记录不受影响。操作不可撤销。
+- 门禁分层：新增 `static` / `release` / `full` profile（默认无参数仍是 `full`）；`release` 只跑关键 Chrome 集，结论为 `release passed (not full)`，只有 `full` 全绿才写 `ALL GATES PASSED`；输出 `PROFILE SUMMARY` + JSON 与每项真实墙钟耗时，不把「没跑」写成「通过」；96 委托 runner 支持 `--skip-static` 只在父进程已过 static 时生效；CI 新增 L0 `static-gates` job，未启动 Chrome。
+- 经典 localStorage key、IDB v1 / 11 stores、`contentVersion 0.18.0`、`rulesetVersion`、玩法数值、委托奖励、关卡与挑战数据零变化。
+
+### Tests
+
+- 本轮文档分支实跑：`py -3 tools/validate_site.py` PASS、`py -3 tools/build_site.py` PASS（两者因版本断言仍为 0.20.0 而通过，不证明 0.21 版本链已同步）；纯 Node `node tools/career_archive_test.mjs` **8/8**。`git diff --check` 结果见 `docs/arcade-life/INTEGRATION-0.21.md`。
+- Chrome 门禁（smoke / mobile / PWA / 首航 E2E 等）、`release` / `full` profile 聚合、Actions、双端 `verify_deploy.py`、真机 / 真人：**均 UNVERIFIED，本分支未执行**，不得据此声称通过或发布。
+
+### Notes
+
+- 未发布：无 `OWNER_AUTHORIZATION: PUBLISH_TO_MAIN`，未 push / merge / tag / 部署；远端 `main` 与双端线上仍为 0.20.0。
+
 ## 0.20.0 — 2026-11-26（已双端发布）
 
 发布提交 `df91715`，[Actions 45719028590](https://github.com/Shawlaw/studiokit/actions/runs/45719028590) 四项成功；两个正式域名各 88/88 文件与本地产物一致，版本 arcade 0.20.0。线上 HTML 均包含生涯视图与「旧港有一封来信」入口。真机 / 真人首航 UNVERIFIED。
@@ -15,10 +37,10 @@
 
 ### Tests
 - 完整零种子首航 339/339、campaign E2E 731/731、移动端 318/318、world 145/145、推荐 111/111、路线一致性 94/94、db 38/38、备份 34/34、a11y 75/75、PWA 18/18、紧凑触控 18/18、冒烟 117/117；静态校验与构建、`node --check engine/sw` 通过。
-- 聚合门禁 `arcade_run_all_gates.py` 仍在运行 / 待最终确认；独立复审已回灌、最终复验待完成；真机与真人首航 UNVERIFIED。
+- 发布前状态：聚合门禁 `arcade_run_all_gates.py` 无一次 `ALL GATES PASSED`（逐项串行全绿，部分聚合长跑被旧断言 / Chrome 环境阻断后单项重跑通过）；真机与真人首航 UNVERIFIED。Owner 独立复审 APPROVE 后授权发布，见本节开头发布记录。
 
 ### Notes
-- 未发布：无 `OWNER_AUTHORIZATION: PUBLISH_TO_MAIN`，远端 `main` 与双端线上仍为 0.19.0；未 push / merge / tag / 部署。
+- 发布后状态：提交 `df91715` 合入 `main`，Actions `45719028590` 四项成功，双端各 88/88 文件一致，线上为 0.20.0；真机 / 真人首航 UNVERIFIED。
 
 ## 0.19.0 — 2026-11-25（已双端发布）
 

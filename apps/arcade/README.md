@@ -1,6 +1,6 @@
 # 街机厅 Arcade
 
-**应用版本 `0.20.0`（本地 `feat/arcade-career-flow`，未发布；线上仍为 0.19.0）**｜进度 / 局内 / 游玩统计 / 积分记录 / 挑战记录 / 游戏数据 meta 的 Schema 均为 `v1`；0.15 新增独立生涯 IndexedDB（`studiokit:arcade:career` v1），不改变既有 localStorage 键；生涯内容 `contentVersion` 仍为 `0.18.0`
+**应用版本目标 `0.21.0`（本地 `feat/arcade-career-passive-021` HEAD `4ffc27d`，未验证 / 未发布；线上仍为 0.20.0）**｜进度 / 局内 / 游玩统计 / 积分记录 / 挑战记录 / 游戏数据 meta 的 Schema 均为 `v1`；0.15 新增独立生涯 IndexedDB（`studiokit:arcade:career` v1，11 stores），不改变既有 localStorage 键；生涯内容 `contentVersion` 仍为 `0.18.0`。0.21.0 把中心页生涯入口收回被动发现，增加选择式叙事、可解冻封存与仅生涯数据完全重置；**目标版本链 0.21.0 / SW `studiokit-arcade-0.21.0-v1`，当前产品代码仍为 0.20.0（版本 bump 未执行），文档口径同步不代表已验证或已发布**。
 
 16 款竖屏小游戏合集的纯前端实现：加载后完全本地游玩，自带自研轻量物理引擎（重力、AABB 与圆碰撞、单向平台、单摆积分、塔体倾斜力矩），所有游戏由简到难、随时可暂停，并把未完成的局内进度自动保存在本机。支持全屏/沉浸、可安装 PWA、离线预载、游玩统计、积分记录与分享；连续有效游玩 20 分钟只温柔提醒一次，**没有签到、每日奖励、付费抽奖、内购或广告**。
 
@@ -89,7 +89,8 @@
 - **分享**：中心页「分享给朋友」分享合集链接；游戏弹层内分享当前游戏深链。优先调用系统分享面板（`navigator.share`），不支持时复制文案 + 链接；不读取或上传任何成绩。
 - **安装与离线预载**：`manifest.webmanifest` + `sw.js` 让中心页可安装到桌面（Android / 桌面 Chrome、Edge、Safari「添加到主屏幕」）并以独立窗口启动。SW 安装时只缓存中心页外壳，16 款游戏由用户在中心页「预载全部游戏」显式缓存并显示进度。断网后可从中心页进入已缓存的游戏并返回，带 `.html` 和无后缀的游戏地址共用离线缓存。未预载的游戏显示离线提示页，版本更新后清理旧版本缓存；更新时按旧缓存里的预载清单重新联网取当前版本游戏页（0.19.0 起不再复制旧页面字节，避免新引擎配旧页面）。
 - **中心页管理**：「惊喜一下」在目录顶部随机打开一款，连续点击会避开上一款。「游玩记录」里的「进度管理」支持清除单款或全部游戏记录，并可导出或导入 JSON 备份。页尾的「安装、离线与分享」提供应用安装、检查更新和离线预载。
-- **开启生涯后可以切换首页视图。** 「生涯」集中提供折光港告示板、信箱和解锁后的章节。用「默认打开」选择下次进街机厅看到的视图，初始默认经典街机。此设置只影响首页展示。
+- **生涯入口彻底被动（0.21.0 目标行为）。** 中心页始终展示经典目录：不再有生涯视图 / 默认视图切换，也不常驻告示板、信箱或章节 CTA。错过旧港来信时只在「继续上次」附近显示一行低强调小字（「旧港有一封来信」/「继续旧港来信」），点开深链显式阅读；未读 / 未投递线索不会自动创建生涯身份。生涯已开启或已封存时，页尾提供二级「生涯设置」小字入口，仅用于封存 / 解冻、重置和档案，不是生涯内容 CTA。C0 之后保留游戏内章节入口与收据回流。封存时隐藏所有生涯内容入口与结算线索，只保留生涯设置；经典游玩不受影响。
+- **生涯封存 / 解冻与仅生涯完全重置（0.21.0 目标行为）。** 设置面板可封存生涯（保留全部数据与 live run，但禁止新线索、接单、继续委托与结算写入，事务内重读 `career-archive` 标记防旧标签绕过）并随时解冻（删除标记、推进代次、恢复原进度）。「完全重置生涯」需二次确认并输入「重置生涯」：单事务清空生涯库 11 个 store 与封存标记，**不触碰经典 progress / runs / playtime / scores / challenge / meta / prefs**，不可撤销，操作前应先导出档案。备份携带封存标记，replace 导入以文件状态为准；详细接口见 ADR §22。
 
 ## 星海突击（星域远征）
 
@@ -210,7 +211,11 @@ py -3 -m http.server 8000
 全部零 npm 依赖，只使用 Node 内置模块与本机 Chrome（可用 `CHROME_PATH` 覆盖路径）。脚本会自行启动临时静态服务器与无头 Chrome，端口可用环境变量覆盖。
 
 ```powershell
-py -3 tools/arcade_run_all_gates.py   # 串联全部门禁，失败即停（推荐入口）
+py -3 tools/arcade_run_all_gates.py   # 默认 full：历史全量门禁，严格串行（推荐入口）
+py -3 tools/arcade_run_all_gates.py --profile static   # L0：校验 / 构建 / 纯 Node / 静态片段，不启动 Chrome
+py -3 tools/arcade_run_all_gates.py --profile release  # static + 关键 Chrome 集串行；结论为 release passed (not full)
+py -3 tools/arcade_run_all_gates.py --profile full     # 与无参数等价；全量 Chrome 集严格串行
+node tools/career_archive_test.mjs    # 封存 / 解冻 / 仅生涯完全重置的纯 Node 门禁
 
 # 也可单独运行
 py -3 tools/validate_site.py
@@ -233,7 +238,7 @@ node tools/arcade_09_data.mjs              # 78 关数据校验 / 生成
 node tools/arcade_stage_solver.mjs --stages=docs/arcade/stages-0.8.json  # 影跃 S1–S3 可达性
 ```
 
-各脚本的具体项数随版本演进，**以实际运行输出为准**；历史门禁结果与发布证据记录在 [`CHANGELOG.md`](CHANGELOG.md)。
+0.21.0 起门禁分层口径唯一：`static` 不启动 Chrome（CI 的 L0 job）；`release` 追加关键 Chrome 集但仍**不等于** full；只有 `full` 全绿才可写 `ALL GATES PASSED`。每次运行输出 `PROFILE SUMMARY` 与 JSON（含每项真实墙钟耗时），不得把「没跑」写成「通过」，也不得用 release 结论替代 full。分层设计见 [`tools/README-gates.md`](../../tools/README-gates.md)。各脚本的具体项数随版本演进，**以实际运行输出为准**；历史门禁结果与发布证据记录在 [`CHANGELOG.md`](CHANGELOG.md)。
 
 ## 已知边界
 
@@ -294,13 +299,14 @@ node tools/arcade_stage_solver.mjs --stages=docs/arcade/stages-0.8.json  # 影�
 | 0.17.0 | [`DESIGN-0.17.0.md`](DESIGN-0.17.0.md) | 活世界 96 委托、五材商店、制造台、职业成长（本地未发布） |
 | 0.18.0 | [`DESIGN-0.18.0.md`](DESIGN-0.18.0.md) | 星塔回响六章、三条终局与后日常（本地未发布） |
 | 0.19.0 | [`DESIGN-0.19.0.md`](DESIGN-0.19.0.md) | 矮视口紧凑布局、拇指区暂停、恢复门与单手触屏 |
-| 0.20.0 | [`DESIGN-0.20.0.md`](DESIGN-0.20.0.md) | 生涯首航 V2：来信找回 / 一次投递进港 / 真实推荐路线 / 三回报收据 / 继续委托（本地未发布） |
+| 0.20.0 | [`DESIGN-0.20.0.md`](DESIGN-0.20.0.md) | 生涯首航 V2：来信找回 / 一次投递进港 / 真实推荐路线 / 三回报收据 / 继续委托（已双端发布） |
+| 0.21.0 | [`DESIGN-0.21.0.md`](DESIGN-0.21.0.md) | 生涯彻底被动发现 / 选择式叙事 / 二级生涯设置 / 可解冻封存 / 仅生涯完全重置 / static-release-full 分层门禁（目标发布，未验证 / 未发布） |
 
 ### 回滚要点
 
 - 无新增 key 的版本：还原对应 `games/*.html`、`engine.js`、`arcade.css` 并递增 SW `VERSION` 即可，用户数据不受影响。
 - 涉及新 key 的版本：0.8.1 的 `scores:v1` 与 0.8.0 的 `challenge:v1` 为独立新增键，旧版页面会忽略它们；0.13.0 的机库存在通用 `meta:v1` 内，回滚只需删除该键并还原 `engine.js` / `star-raid.html`。
-- 逐版回滚步骤写在各自的 `DESIGN-*.md` 末尾章节。
+- 0.21.0 的 `career-archive` 是既有 `state` store 的一行，旧代码会忽略，封存数据不会因回退而删除；完全重置不可回滚，操作前必须导出档案并二次确认。逐版回滚步骤写在各自的 `DESIGN-*.md` 末尾章节。
 
 ## 在 StudioKit 中的位置
 
