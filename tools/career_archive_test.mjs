@@ -437,6 +437,10 @@ await check('CA-05 resetAllCareer：单事务清空 11 stores（含 archive/gene
     putProfile: await db2.putProfile({ careerId: ensured.careerId, originGameId: 'memory-flip' }),
     purchase: await db2.purchase({ careerId: ensured.careerId, purchaseId: 'P-late', cost: 1, grants: {} }),
     writeEquipment: await db2.writeEquipment({ careerId: ensured.careerId, patch: { 'module:x:level': 1 } }),
+    settleEndingAndClaim: await db2.settleEndingAndClaim({ runId: staleRunId, careerId: ensured.careerId, nonce: 'late', approach: 'research', plan: { credits: 1 } }),
+    repairEndingRecords: await db2.repairEndingRecords({ careerId: ensured.careerId }),
+    reserveEnding: await db2.reserveEnding({ careerId: ensured.careerId, markerId: 'ending-research', ticketId: 'ticket-late', approach: 'research' }),
+    reserveCommissionFirstClear: await db2.reserveCommissionFirstClear({ careerId: ensured.careerId, commissionId: 'memory-flip.T1', ticketId: 'ticket-late' }),
   };
   Object.keys(staleWrites).forEach((name) => {
     const result = staleWrites[name];

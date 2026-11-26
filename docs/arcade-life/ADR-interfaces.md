@@ -906,7 +906,7 @@ export async function cleanup(ctx) {}
 - 封存状态写在既有 `state` store 的 `key='career-archive'` 行：`value = {careerId: string|null, archivedAt: string|null}`，`schemaVersion: 1`，`updatedAt: ISO 时间`。无此行即未封存。绝不删除 `discovery-generation` 来“封存”，也不使用 `__coreTest` / `deleteDatabase` 做生产重置。
 - `getArchiveState()` → `Promise<{ok:true, archived:boolean, careerId:string|null, archivedAt:string|null}>`；无标记返回 `archived:false, careerId:null, archivedAt:null`。只读；失败返回 `{ok:false, reason, error}`，绝不把读失败伪装为未封存。
 - `setCareerArchived(archived:boolean, {careerId?:string, now?:string}={})` → `Promise<{ok:true, archived:boolean, careerId:string|null, generation:number}>`。`true` 写/覆盖标记（保留首次 `archivedAt`；`careerId` 缺省时沿用既有标记或 `null`），**不删任何数据/live run**；`false` 删除标记并把 `discovery-generation` 递增 1（使旧标签持有的代次失效）。失败返回结构化 `{ok:false, reason, error}`，事务 abort、零写入。
-- `resetAllCareer()` → `Promise<{ok:true, generation:number}>`；单事务 `clear()` 全部 11 个 store（含 `career-archive` 与 `discovery-generation`），然后写入递增后的 generation。只操作生涯 IDB；绝不触碰任何 `studiokit:arcade:*` 经典 localStorage 键（progress/runs/playtime/scores/challenge/meta/prefs）。不可回滚，调用方必须二次确认并先导出档案。失败结构化且整事务回滚。
+- `resetAllCareer()` → `Promise<{ok:true, generation:number, retiredCareerCount:number}>`；单事务清空全部 11 个 store 的玩家数据（含 `career-archive` 与 `discovery-generation`），然后写入递增后的 generation，并在同一事务保留最多 256 个 `state['former-career:<careerId>']` 内部退役标记。退役标记只用于拒绝完全重置/单生涯重置/替换导入前已打开的旧标签回写，不随备份导出，不参与游戏逻辑；受上限约束，超出上限的最早退役 ID 不再保证阻断。只操作生涯 IDB；绝不触碰任何 `studiokit:arcade:*` 经典 localStorage 键（progress/runs/playtime/scores/challenge/meta/prefs）。不可回滚，调用方必须二次确认并先导出档案。失败结构化且整事务回滚。
 - `assertCareerWritable(ctx, reasonPrefix?)`：**同步**事务内守卫，只在 `txRun` 的 `readwrite` body 内调用。它在同一事务内以 `IDBRequest` 回调重读 `career-archive`，若封存则 `ctx.fail('career-archived', <prefix>+':career-archived')`，由 txRun abort 整个写入事务。写入前判定、不先写后判，杜绝半提交；调用方不得用事务外的旧快照代替此守卫。
 
 ### 22.2 事务内写门禁覆盖范围
@@ -914,6 +914,7 @@ export async function cleanup(ctx) {}
 - 已统一在以下写方法的事务 body 内调用 `assertCareerWritable`：`saveDiscoveryState` / `mergeDiscoveryState` / `putDiscovery` / `saveState` / `bumpDiscoveryGeneration` / `resetDiscovery` / `putProfile` / `ensureCareer` / `createRun` / `updateRun` / `settleAndClaim` / `settleEndingAndClaim` / `repairEndingRecords` / `purchase` / `writeEquipment` / `sellItems` / `reserveEnding` / `releaseEnding` / `reserveCommissionFirstClear` / `releaseCommissionFirstClear` / `putQuests` / `putQuestsGuarded`。
 - 封存时这些写方法统一返回失败，失败原因包含 `career-archived`（`reason` 或 `error`），且整库零变化；只读方法（`getState` / `getProfile` / `readWallet` / `listRuns` / `readQuestState` / `exportAll` 等）不受影响。
 - 不覆盖的显式管理员操作：`setCareerArchived`（解冻必须可写标记）、`resetAllCareer`（必须先清空）、`importAll`（replace 以文件为准，允许覆盖封存状态，属于显式恢复动作）、`__coreTest.clearAll`（测试辅助）。
+- `assertCareerActive(ctx, careerId, reasonPrefix?)`：同步事务内辅助，供带 `careerId` 的写路径调用；同一事务重读 `former-career:<careerId>`，命中则 `ctx.fail('career-reset', ...)` 并 abort。已覆盖 `ensureCareer` / `putProfile` / `createRun` / `updateRun` / `settleAndClaim` / `settleEndingAndClaim` / `repairEndingRecords` / `purchase` / `writeEquipment` / `sellItems` / `reserveEnding` / `reserveCommissionFirstClear` / `putQuests` / `putQuestsGuarded`。`releaseEnding` / `releaseCommissionFirstClear` 只删除预留 marker，不新增生涯资产；`saveState` / `mergeDiscoveryState` / `putDiscovery` 无 careerId 参数，沿用发现代次与动作存在性守卫，不声称提供旧身份隔离。
 - bridge 侧仍应在写路径前用 `getArchiveState()` 预检并尽早拒绝/隐藏 UI，但这只是优化；**最终裁决必须依赖上述事务内守卫**，旧标签/旧页持有的过期状态不得绕过。
 
 ### 22.3 备份标记与导入语义
@@ -934,7 +935,7 @@ export async function cleanup(ctx) {}
 ### 22.5 多标签与失败语义
 
 - 封存/解冻/重置都是单事务操作；多标签并发以 IDB 事务串行化为准。写方法的事务内守卫重读同一 `state` 行，旧标签用旧的 `archived:false` 预检结果也必须在事务内被拒绝。
-- 解冻推进 `discovery-generation`，旧标签持有的旧代次写入会得到 `stale-generation` 或封存守卫失败，不会把已解冻/重置后的库写回旧状态。
+- 解冻推进 `discovery-generation`；完全重置/单生涯重置/replace 导入把被替换的旧 careerId 登记为有界退役标记，旧标签对这些 ID 的 `createRun` / `settle` / `purchase` / `putQuests` 等写在事务内返回 `career-reset`。退役标记不随备份迁移；最多 256 个，超出上限的最早 ID 不再保证阻断。发现状态写路径无 careerId，仍以代次和动作存在性守卫为准。
 - 任何 IDB 失败（blocked / 事务超时 / 约束冲突 / 连接丢失）均返回结构化 `{ok:false, reason, error}`；`txRun` 统一 abort，禁止部分 store 已写、部分未写。
 - 经典隔离：本节所有 API 只读/写 `studiokit:arcade:career` 生涯库；不引入网络、分析、远程资源；不改任何经典 localStorage key 的值或 Schema。
 

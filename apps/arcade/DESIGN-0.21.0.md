@@ -38,7 +38,8 @@
 
 ## 5. 完全重置
 
-- 新增单事务 `resetAllCareer()`，清空生涯库 11 个 store、封存标记与代次。
+- 新增单事务 `resetAllCareer()`，清空生涯库 11 个 store 的玩家数据、封存标记与旧代次；同事务保留有界 `former-career:<id>` 退役标记（最多 256，不进备份）与新一代次，拒绝重置前旧标签继续写生涯资产。
+- 退役标记超出上限时，最早退役 ID 不再保证阻断；无 careerId 的发现状态写入仍靠发现代次/动作存在性守卫。
 - 不同步清除经典 progress/runs/playtime/scores/challenge/meta/prefs，也不改旧 key。
 - bridge 清当前页内存、sessionStorage ticket/rental marker 与线索 UI。
 - 设置面板要求二次确认并输入「重置生涯」，提示经典记录不受影响。
@@ -55,7 +56,7 @@
 
 - 新档与错过 chip 的被动回访链路通过，中心页无生涯常驻 CTA。
 - 封存后零生涯写入、经典正常；解冻恢复原进度。
-- 完全重置后生涯 11 stores 清空，经典存储逐字节不变，旧标签不能回写。
+- 完全重置后生涯 11 stores 玩家数据清空、经典存储逐字节不变，旧标签不能通过带 careerId 的资产写入回写；无 careerId 的发现状态以代次/动作守卫为准。
 - 文案视角检查通过，所有提问有真实动作承接。
 - 320/375/390/430、紧凑视口、读屏/reduced-motion、PWA 离线与两种部署路径通过。
 - `release` profile 通过，完整 `full` 单独如实记录；release 结论 `release passed (not full)` 不得冒充 full。

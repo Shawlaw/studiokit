@@ -27,6 +27,11 @@ const FILE_NAMES = [
   'ending-rescue.json', 'npc.json', 'side-stories.json',
 ];
 const CHAPTER_IDS = ['C0', 'C1', 'C2', 'C3', 'C4', 'C5'];
+const STRUCTURE_BASELINE = 'ac565772710cd4dd37965f9c2744903ea16718cb';
+
+function baselineContent(name) {
+  return JSON.parse(execFileSync('git', ['-C', ROOT, 'show', STRUCTURE_BASELINE + ':apps/arcade/career/content/' + name], { encoding: 'utf8' }));
+}
 
 let failures = 0;
 let total = 0;
@@ -195,7 +200,7 @@ check('clues.json 与 chapter-01.origins[].c0Letter 邀请句口径/地址同源
  * 4. 结构 / 路线 / 术语 / 剧透顺序零回归
  * ------------------------------------------------------------------ */
 check('内容文件字段集合（非叙述字段）零改动', (() => {
-  // 与基线逐字节对比：加载 HEAD 内容做结构签名（非叙述字段 + key 集合）。
+  // 与 0.20.0 发布基线逐字段对比，避免提交后 HEAD==工作树导致自比较假通过。
   const scrub = (obj) => {
     if (Array.isArray(obj)) return obj.map(scrub);
     if (obj && typeof obj === 'object') return Object.fromEntries(Object.keys(obj).map((k) => [k, scrub(obj[k])]));
@@ -203,7 +208,7 @@ check('内容文件字段集合（非叙述字段）零改动', (() => {
   };
   let ok = true;
   for (const file of FILE_NAMES) {
-    const old = JSON.parse(execFileSync('git', ['-C', ROOT, 'show', 'HEAD:apps/arcade/career/content/' + file], { encoding: 'utf8' }));
+    const old = baselineContent(file);
     if (JSON.stringify(scrub(old)) !== JSON.stringify(scrub(content[file]))) {
       console.log('    结构差异: ' + file);
       ok = false;
@@ -230,7 +235,7 @@ check('章节 beats/next/arrival 字段齐全、flags 与数值字段不丢失',
 check('96 委托的 commissionId / 数值 / 旗标 / 证据 / 解锁字段不变', (() => {
   if (commissions.length !== 96) return false;
   const numericKeys = ['commissionId', 'gameId', 'professionId', 'tier', 'title', 'issuer', 'reward', 'objective', 'objectiveBonus', 'startParams', 'unlock', 'chapterGate', 'repeatSalaryCredits', 'risk', 'durationHint'];
-  const old = JSON.parse(execFileSync('git', ['-C', ROOT, 'show', 'HEAD:apps/arcade/career/content/commissions.json'], { encoding: 'utf8' })).commissions;
+  const old = baselineContent('commissions.json').commissions;
   return old.every((row, i) => numericKeys.every((key) => JSON.stringify(row[key]) === JSON.stringify(commissions[i][key])));
 })(), '96 rows');
 
