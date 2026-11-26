@@ -9,7 +9,7 @@
  *   window.ArcadeCareerUI.town.close();
  *
  * 首屏只读消费 bridge 传入的 ctx（ADR §18.7 / §20.9）：
- *   originIntro()                    → null 或 {sourceGame, greeting, address}
+ *   originLetter()                   → null 或 {sourceGame, c0Letter: {from, body, address}}
  *   campaign.state(input)            → 章节状态（只用当前章标题/玩家语言提示）
  *   campaign.recommend(input)        → null 或 {commissionId, goal, reason, kind}
  *   commission.listAvailable(input)  → 真实可接单集合（推荐只允许在其中）
@@ -61,7 +61,8 @@
   const RECOMMEND_TITLE = '你想先走这条路吗？';
   const RECOMMEND_KIND_TEXT = { milestone: '能推进这一段', step: '能积攒下一步所需' };
   const RECOMMEND_GOAL_TITLE = '你愿意完成';
-  const RENTAL_LEAD = '阿砾问：要不要先借一架标准舰？这次不用花信用点。';
+  const FIRST_PATROL_ID = 'star-raid.T1';
+  const RENTAL_LEAD = '阿砾：标准舰可以免费借。';
   const CAMPAIGN_SUBTITLE = '你想继续哪一段？';
   const INTRO_GOAL = '告示板上钉着今天的活，你想先接哪一张？';
   const CLOSE_LABEL = '收起告示板';
@@ -166,12 +167,13 @@
     '  font-size: 13.5px;',
     '  font-weight: 600;',
     '}',
-    '.ac-career-town__recommend-list {',
-    '  order: 1;',
-    '}',
     '.ac-career-town__scope {',
-    '  order: 2;',
+    '  display: grid;',
+    '  gap: 6px;',
     '  min-width: 0;',
+    '}',
+    '.ac-career-town__free-body > .ac-career-btn {',
+    '  align-self: flex-start;',
     '}',
     '.ac-career-town__location {',
     '  margin: 0;',
@@ -344,6 +346,13 @@
     '  cursor: pointer;',
     '  list-style-position: inside;',
     '}',
+    '[data-town-flight] > summary::before {',
+    '  content: "▸";',
+    '  margin-inline-end: 6px;',
+    '}',
+    '[data-town-flight][open] > summary::before {',
+    '  content: "▾";',
+    '}',
     '.ac-career-town__free > summary:focus-visible {',
     '  outline: 2px solid var(--ac-career-line, #2a3560);',
     '  outline-offset: 2px;',
@@ -487,7 +496,7 @@
     for (let cur = node; cur; cur = cur.parentNode) {
       if (cur.hidden === true) return false;
       if (typeof cur.getAttribute === 'function' && cur.getAttribute('aria-hidden') === 'true') return false;
-      if (cur.tagName === 'DETAILS' && cur.open !== true) return false;
+      if (cur.tagName === 'DETAILS' && cur.open !== true && !(node.tagName === 'SUMMARY' && node.parentNode === cur)) return false;
       if (typeof cur.getAttribute === 'function') {
         const style = cleanText(cur.getAttribute('style')).toLowerCase();
         if (/display\s*:\s*none/.test(style) || /visibility\s*:\s*hidden/.test(style)) return false;
@@ -500,7 +509,7 @@
 
   function focusableIn(scope) {
     if (!scope || typeof scope.querySelectorAll !== 'function') return [];
-    const nodes = scope.querySelectorAll('button, [href], input, select, textarea, [tabindex]:not([tabindex="-1"])');
+    const nodes = scope.querySelectorAll('button, [href], summary, input, select, textarea, [tabindex]:not([tabindex="-1"])');
     const out = [];
     for (let i = 0; i < nodes.length; i += 1) {
       const node = nodes[i];
@@ -718,20 +727,27 @@
     return rows;
   }
 
-  function originIntroOf(context) {
-    if (!context || typeof context.originIntro !== 'function') return null;
-    let value = null;
+  function arrivalLineOf(context) {
+    const state = context.state;
+    if (!isObject(state) || !state.portSeenAt) return '';
+    const arrival = context.chapterZero && context.chapterZero.arrival;
+    const fallback = cleanText(arrival && arrival.body) || '旧物已经收下了。';
+    if (typeof context.originLetter !== 'function') return fallback;
+    /* 投递只保存到港时间。多来源档案里的首封信可能不是实际投递的那封。 */
+    const sourceGames = new Set(Object.values(isObject(state.clues) ? state.clues : {})
+      .map((clue) => clue && idText(clue.sourceGame)).filter(Boolean));
+    if (sourceGames.size !== 1) return fallback;
+    let origin = null;
     try {
-      value = context.originIntro();
+      origin = context.originLetter();
     } catch (err) {
-      return null;
+      return fallback;
     }
-    if (!isObject(value)) return null;
-    const sourceGame = idText(value.sourceGame);
-    const greeting = cleanText(value.greeting);
-    const address = cleanText(value.address);
-    if (!sourceGame && !greeting && !address) return null;
-    return { sourceGame: sourceGame, greeting: greeting, address: address };
+    if (!isObject(origin) || !sourceGames.has(origin.sourceGame) || !isObject(origin.c0Letter)) return fallback;
+    const sender = cleanText(origin.c0Letter.from);
+    const body = cleanText(origin.c0Letter.body);
+    const firstSentence = body.match(/^[^。！？]+[。！？]/);
+    return sender && firstSentence ? sender + '：' + firstSentence[0] : fallback;
   }
 
   function idsFromUnlockEntries(entries) {
@@ -872,20 +888,15 @@
 
     const introSection = make('section', 'ac-career-town__intro');
     introSection.setAttribute('data-town-intro', 'true');
-    introSection.hidden = true;
     const introRole = make('p', 'ac-career-town__intro-line ac-career-town__intro-line--role');
     introRole.setAttribute('data-town-role', 'true');
     introRole.hidden = true;
     const introGreeting = make('p', 'ac-career-town__intro-line');
-    const introAddress = make('p', 'ac-career-town__intro-line ac-career-town__intro-line--meta');
+    introGreeting.setAttribute('data-town-arrival', 'true');
     const introGoal = make('p', 'ac-career-town__intro-line');
-    const introRental = make('p', 'ac-career-town__intro-line ac-career-town__intro-line--meta');
-    introRental.setAttribute('data-town-rental', 'true');
-    introSection.appendChild(introRole);
     introSection.appendChild(introGreeting);
-    introSection.appendChild(introAddress);
+    introSection.appendChild(introRole);
     introSection.appendChild(introGoal);
-    introSection.appendChild(introRental);
 
     const notice = make('p', 'ac-career-town__notice', BOARD_UNAVAILABLE);
     notice.hidden = true;
@@ -903,6 +914,18 @@
 
     const scope = make('div', 'ac-career-town__scope');
     scope.setAttribute('data-town-scope', 'true');
+    const flightDetails = make('details', 'ac-career-town__free');
+    flightDetails.setAttribute('data-town-flight', 'true');
+    flightDetails.hidden = true;
+    flightDetails.appendChild(make('summary', null, '看看出航'));
+    const flightBody = make('div', 'ac-career-town__free-body');
+    const flightRental = make('p', 'ac-career-town__intro-line ac-career-town__intro-line--meta');
+    flightRental.setAttribute('data-town-rental', 'true');
+    const flightList = make('ul', 'ac-career-town__list');
+    flightBody.appendChild(flightRental);
+    flightBody.appendChild(flightList);
+    flightDetails.appendChild(flightBody);
+    scope.appendChild(flightDetails);
     const freeDetails = make('details', 'ac-career-town__free');
     freeDetails.setAttribute('data-town-free', 'true');
     freeDetails.open = false;
@@ -948,8 +971,7 @@
     campaignSection.appendChild(campaignCurrent);
     campaignSection.appendChild(campaignEndings);
 
-    /* 经济入口按阶段出现：C0/C1 只留机库与收据；商店/制造台收进「港口其它去处」，
-       首航期间弱化但始终可发现（点开即可见），不写任何存储。 */
+    /* 机库属于出航选项；商店和制造台收进「港口其它去处」。 */
     const footer = make('div', 'ac-career-town__footer');
     const hangarBtn = make('button', 'ac-career-btn ac-career-btn--ghost', HANGAR_LABEL);
     hangarBtn.type = 'button';
@@ -975,19 +997,19 @@
     moreBody.appendChild(marketBtn);
     moreBody.appendChild(workshopBtn);
     more.appendChild(moreBody);
-    footer.appendChild(hangarBtn);
+    flightBody.appendChild(hangarBtn);
     footer.appendChild(receiptBtn);
     footer.appendChild(settingsBtn);
     footer.appendChild(more);
 
-    townView.appendChild(location);
     townView.appendChild(introSection);
-    townView.appendChild(wallet);
+    townView.appendChild(location);
     townView.appendChild(notice);
     townView.appendChild(campaignSection);
     townView.appendChild(recommendList);
     townView.appendChild(scope);
     townView.appendChild(empty);
+    townView.appendChild(wallet);
     townView.appendChild(altHeading);
     townView.appendChild(altList);
     townView.appendChild(altEmpty);
@@ -1150,7 +1172,7 @@
         const ship = ships[i];
         if (!isObject(ship) || ship.rental !== true) continue;
         const name = cleanText(ship.name || ship.shipId);
-        return name ? '阿砾说「' + name + '」租机不要钱，别把它撞坏就行。' : RENTAL_LEAD;
+        return name ? '阿砾：「' + name + '」租机免费。' : RENTAL_LEAD;
       }
       return RENTAL_LEAD;
     }
@@ -1219,36 +1241,14 @@
     }
 
     function renderOrigin() {
+      const arrival = arrivalLineOf(liveContext);
+      introGreeting.textContent = arrival;
+      introGreeting.hidden = !arrival;
+      location.hidden = !!arrival;
       const role = roleTextOf();
       introRole.textContent = role;
       introRole.hidden = !role;
-      const intro = originIntroOf(liveContext);
-      const goalText = currentGoalText();
-      const rentalText = rentalHintOf();
-      /* 身份/目标/租机提示不依赖 originIntro：无来信上下文时仍显示已能确定的部分。 */
-      if (!intro) {
-        introGreeting.textContent = '';
-        introGreeting.hidden = true;
-        introAddress.textContent = '';
-        introAddress.hidden = true;
-        introGoal.textContent = '眼下：' + (goalText || INTRO_GOAL);
-        introRental.textContent = rentalText;
-        introSection.hidden = !(role || goalText || rentalText);
-        return;
-      }
-      introGreeting.hidden = false;
-      const source = gameNameOf(intro.sourceGame, liveContext) || intro.sourceGame;
-      const sourceNote = intro.address
-        ? '这封信从' + (source || '旧港') + '来，收在' + intro.address + '。'
-        : source
-          ? '这封信从' + source + '来。'
-          : '这封信已经送到旧港。';
-      introGreeting.textContent = intro.greeting || sourceNote;
-      introAddress.textContent = intro.greeting ? sourceNote : '';
-      introAddress.hidden = !introAddress.textContent;
-      introGoal.textContent = '眼下：' + (goalText || INTRO_GOAL);
-      introRental.textContent = rentalText;
-      introSection.hidden = false;
+      introGoal.textContent = '眼下：' + (currentGoalText() || INTRO_GOAL);
     }
 
     /**
@@ -1341,12 +1341,12 @@
 
     function renderList() {
       while (recommendList.firstChild) recommendList.removeChild(recommendList.firstChild);
+      while (flightList.firstChild) flightList.removeChild(flightList.firstChild);
       while (freeList.firstChild) freeList.removeChild(freeList.firstChild);
 
       const allRows = commissionRowsOf(liveContext);
       const boardReady = !!unlockedSet;
       const suggestion = boardReady ? recommendedSuggestionOf() : null;
-      const recommendedId = suggestion ? suggestion.row.commissionId : '';
 
       /* 有 live run 的同委托优先作为推荐（仍要求已解锁）。 */
       let liveId = '';
@@ -1377,8 +1377,18 @@
         recommendList.hidden = true;
       }
 
+      const patrol = boardReady && unlockedSet[FIRST_PATROL_ID]
+        ? allRows.find((row) => row.commissionId === FIRST_PATROL_ID) : null;
+      const showPatrol = patrol && (!mainRow || mainRow.commissionId !== FIRST_PATROL_ID);
+      if (showPatrol) flightList.appendChild(renderRow(patrol, boardReady, {}));
+      flightList.hidden = !showPatrol;
+      hangarBtn.hidden = typeof openerOf(liveContext, 'openHangar') !== 'function';
+      flightDetails.hidden = !patrol && hangarBtn.hidden;
+      flightRental.textContent = rentalHintOf();
+
+      const mainId = mainRow ? mainRow.commissionId : '';
       const rows = boardReady
-        ? allRows.filter((row) => !!unlockedSet[row.commissionId] && row.commissionId !== recommendedId && row.commissionId !== liveId)
+        ? allRows.filter((row) => unlockedSet[row.commissionId] && row.commissionId !== mainId && row.commissionId !== FIRST_PATROL_ID)
         : [];
       rows.forEach((row) => freeList.appendChild(renderRow(row, boardReady, {})));
       const hasRows = rows.length > 0;

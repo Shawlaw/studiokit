@@ -26,6 +26,8 @@ const source = fs.readFileSync(TOWN, 'utf8');
 const commissionsContent = JSON.parse(fs.readFileSync(path.join(CONTENT, 'commissions.json'), 'utf8'));
 const itemsContent = JSON.parse(fs.readFileSync(path.join(CONTENT, 'items.json'), 'utf8'));
 const registryContent = JSON.parse(fs.readFileSync(path.join(CONTENT, 'registry.json'), 'utf8'));
+const firstOrders = JSON.parse(fs.readFileSync(path.join(CONTENT, 'chapter-01.json'), 'utf8'));
+const chapterZero = JSON.parse(fs.readFileSync(path.join(CONTENT, 'chapter-00.json'), 'utf8'));
 
 function commissionById(id) {
   const row = commissionsContent.commissions.filter((entry) => entry.commissionId === id)[0];
@@ -155,7 +157,7 @@ class El {
     if (this.hidden) return [];
     for (let cur = this; cur; cur = cur.parentNode) {
       if (cur.hidden === true) return [];
-      if (cur.tagName === 'DETAILS' && cur.open !== true) return [];
+      if (cur.tagName === 'DETAILS' && cur.open !== true && !(this.tagName === 'SUMMARY' && this.parentNode === cur)) return [];
       const style = String(cur.getAttribute && cur.getAttribute('style') || '');
       if (/display\s*:\s*none/.test(style)) return [];
     }
@@ -293,19 +295,18 @@ function basicCtx(overrides = {}) {
     ] },
     items: itemsContent,
     registry: { games: registryContent.games },
-    originIntro: () => ({ sourceGame: 'pendulum-tower', greeting: '阿砾把旧物收下了。', address: '旧码头门房' }),
     campaign: {
       state: () => ({
         ok: true,
         currentChapter: 'C0',
-        chapters: [{ chapterId: 'C0', title: '不起眼的印记', state: 'active', routes: [{ hint: '先接阿砾指定的那单。' }] }],
+        chapters: [{ chapterId: 'C0', title: '不起眼的印记', state: 'active', routes: [{ hint: '先看看今天的工单。' }] }],
         endings: [],
       }),
       recommend: (input) => {
         calls.recommend.push(input);
         return {
           commissionId: 'pendulum-tower.T1',
-          goal: '阿砾指定的第一份单子',
+          goal: '港务处的新工单',
           reason: '做完港里会把你记成在册自由职业者',
           kind: 'milestone',
         };
@@ -447,7 +448,7 @@ check('首航 intro 显示章节 role 身份一行，缺失时隐藏', () => {
   ctx.campaign.state = () => ({
     ok: true,
     currentChapter: 'C0',
-    chapters: [{ chapterId: 'C0', title: '不起眼的印记', state: 'active', role: ROLE, routes: [{ hint: '先接阿砾指定的那单。' }] }],
+    chapters: [{ chapterId: 'C0', title: '不起眼的印记', state: 'active', role: ROLE, routes: [{ hint: '先看看今天的工单。' }] }],
     endings: [],
   });
   const sheet = town.render(ctx);
@@ -457,7 +458,7 @@ check('首航 intro 显示章节 role 身份一行，缺失时隐藏', () => {
   assert.equal(roleLine.textContent, ROLE);
   const text = combinedText(sheet);
   assert.ok(text.indexOf(ROLE) < text.indexOf('眼下：'), '身份在目标之前');
-  assert.ok(text.indexOf(ROLE) < text.indexOf('租机'), '身份在免费租机提示之前');
+  assert.ok(!byAttr(sheet, 'data-town-intro', 'true')[0].textContent.includes('租机'), '租机提示不在身份介绍内');
   const ctx2 = basicCtx();
   const sheet2 = town.render(ctx2);
   const roleLine2 = byAttr(sheet2, 'data-town-role', 'true')[0];
@@ -490,22 +491,90 @@ check('身份句优先 chapterZero.role / chapters.C0.role，C1 当前章也能�
   assert.equal(roleLine2.textContent, ROLE);
   return 'C0 role first';
 });
-check('originIntro 缺失时 intro 仍显示身份与当前目标', () => {
+check('无投递记录时保留身份与当前目标', () => {
   const ROLE = '你是刚到折光港、靠接零工维生的自由职业者。';
   const { town } = loadTown();
-  const ctx = basicCtx();
-  delete ctx.originIntro;
-  ctx.chapterZero = { role: ROLE };
+  const ctx = basicCtx({ chapterZero: { role: ROLE } });
   const sheet = town.render(ctx);
   const intro = byAttr(sheet, 'data-town-intro', 'true')[0];
-  assert.equal(intro.hidden, false, 'intro 不应因缺 originIntro 而整体隐藏');
   const roleLine = byAttr(intro, 'data-town-role', 'true')[0];
+  assert.equal(byAttr(intro, 'data-town-arrival', 'true')[0].hidden, true);
   assert.equal(roleLine.hidden, false);
   assert.equal(roleLine.textContent, ROLE);
   assert.ok(combinedText(intro).includes('眼下：'), '当前目标仍在');
-  assert.ok(byAttr(intro, 'data-town-rental', 'true')[0].textContent.includes('租机'), '免费租机提示仍在');
-  return 'intro visible without originIntro';
 });
+function arrivalContext(gameId, otherGameId) {
+  const origin = firstOrders.origins.find((entry) => entry.gameId === gameId);
+  const clues = { first: { sourceGame: gameId } };
+  if (otherGameId) clues.other = { sourceGame: otherGameId };
+  const ctx = basicCtx({
+    state: { stage: 'LOCAL', portSeenAt: '2026-11-26T06:00:00Z', clues },
+    chapterZero,
+    originLetter: () => ({ sourceGame: gameId, c0Letter: origin.c0Letter }),
+  });
+  delete ctx.commission.continuations;
+  return ctx;
+}
+
+check('投递与续访：实际来源对应一句收件确认，再引向港口实习', () => {
+  for (const [gameId, sender, object] of [['blackjack', '阿德', '单据'], ['memory-flip', '老周', '存根'], ['gomoku', '老陶', '谱子']]) {
+    const { town } = loadTown();
+    const ctx = arrivalContext(gameId);
+    for (let visit = 0; visit < 2; visit += 1) {
+      const sheet = town.render(ctx);
+      const intro = byAttr(sheet, 'data-town-intro', 'true')[0];
+      const arrival = byAttr(intro, 'data-town-arrival', 'true')[0];
+      assert.equal(arrival.hidden, false);
+      assert.equal(intro.firstChild, arrival, '先回应旧物');
+      assert.match(arrival.textContent, new RegExp(sender + '.*' + object + '.*。$'));
+      assert.equal((arrival.textContent.match(/。/g) || []).length, 1);
+      assert.equal(byAttr(sheet, 'data-town-recommend-id', 'pendulum-tower.T1').length, 1);
+      town.close();
+    }
+  }
+});
+
+check('多来源投递未记录具体信件时显示中性收件确认', () => {
+  const { town } = loadTown();
+  const sheet = town.render(arrivalContext('blackjack', 'memory-flip'));
+  const arrival = byAttr(sheet, 'data-town-arrival', 'true')[0];
+  assert.equal(arrival.textContent, '旧物已经收下了。');
+});
+
+check('可选出航默认收起，首次巡航与机库走已有动作', () => {
+  const { town, win } = loadTown();
+  const ctx = arrivalContext('blackjack');
+  let hangarOpened = 0;
+  ctx.openHangar = () => { hangarOpened += 1; };
+  const { panel: sheet } = town.open(ctx);
+  const flight = byAttr(sheet, 'data-town-flight', 'true')[0];
+  const rental = byAttr(flight, 'data-town-rental', 'true')[0];
+  assert.equal(flight.hidden, false);
+  assert.equal(flight.open, false);
+  assert.equal(flight.firstChild.textContent, '看看出航');
+  assert.equal(flight.firstChild.getClientRects().length, 1);
+  assert.equal(rental.getClientRects().length, 0);
+  assert.equal(byAttr(sheet, 'data-town-intro', 'true')[0].textContent.includes('租机'), false);
+  assert.equal(ctx.__calls.start.length, 0);
+  flight.open = true;
+  assert.equal(rental.getClientRects().length, 1);
+  assert.match(rental.textContent, /阿砾.*租机/);
+  byAttr(flight, 'data-town-action', 'hangar')[0].emit('click');
+  assert.equal(hangarOpened, 1);
+  const patrolButtons = all(sheet, (node) => node.getAttribute('data-town-action') === 'start'
+    && node.getAttribute('data-commission-id') === 'star-raid.T1');
+  assert.equal(patrolButtons.length, 1);
+  const [patrol] = patrolButtons;
+  assert.ok(flight.contains(patrol));
+  patrol.emit('click');
+  assert.equal(ctx.__calls.start[0].commissionId, 'star-raid.T1');
+  assert.match(win.navigated, /ticket=run-test/);
+  ctx.commission.listAvailable = () => ({ ok: true, list: ['pendulum-tower.T1'] });
+  town.render(ctx);
+  assert.equal(byAttr(sheet, 'data-commission-id', 'star-raid.T1').length, 0, '锁定时不提供接单');
+  assert.equal(flight.hidden, false, '机库仍可进入');
+});
+
 check('C0/C1 首航弱化商店/制造台入口但保留可发现性', () => {
   const { town } = loadTown();
   const sheet = town.render(basicCtx());
