@@ -2,7 +2,7 @@
 
 ## 0.21.1 — 2026-11-26（本地修复，未发布）
 
-本地分支 `fix/arcade-career-entry-0211`，HEAD `87746d4`；设计与回滚见 [`DESIGN-0.21.1.md`](DESIGN-0.21.1.md)，集成与验证口径见 [`docs/arcade-life/INTEGRATION-0.21.1.md`](../../docs/arcade-life/INTEGRATION-0.21.1.md)。**未发布**：线上仍为 0.21.0；本地版本链已同步 0.21.1 / SW `studiokit-arcade-0.21.1-v1`。
+本地分支 `fix/arcade-career-entry-0211`，产品代码截止 `87746d4`；设计与回滚见 [`DESIGN-0.21.1.md`](DESIGN-0.21.1.md)，集成与验证口径见 [`docs/arcade-life/INTEGRATION-0.21.1.md`](../../docs/arcade-life/INTEGRATION-0.21.1.md)。**未发布**：线上仍为 0.21.0；本地版本链已同步 0.21.1 / SW `studiokit-arcade-0.21.1-v1`。
 
 ### Fixed
 

@@ -277,7 +277,7 @@ Owner 两条真机反馈：①已安装 PWA 点「检查更新」显示的是已
 - [x] 门禁分层 `static` / `release` / `full`；release 不等于 full；CI 新增 L0 static job；96 `--skip-static`；输出真实耗时，没跑不说通过
 - [x] 设计 `apps/arcade/DESIGN-0.21.0.md`、集成 `docs/arcade-life/INTEGRATION-0.21.md`、ADR §22 同步；目标版本链 0.21.0 / SW `studiokit-arcade-0.21.0-v1`
 - [x] 版本链 0.21.0 / SW `studiokit-arcade-0.21.0-v1`；release 41/41、96 3792/3792、首航 339/339、mobile 318/318、smoke 117/117、archive lifecycle 60/60；full / 真机 UNVERIFIED
-- [x] main `14a19b0`，Actions `45750286945` 全绿，双端 89/89 文件一致
+- [x] main `28a0182`，Actions `45752833025` 全绿，双端 89/89 文件一致
 - [x] Chrome 门禁与 release 41/41、Actions `45750286945`、双端 `verify_deploy` 89/89 已完成（发布证据见 `INTEGRATION-0.21.md`）
 - [ ] full profile 与真机 / 真人验证 UNVERIFIED；不得把 release 结论写成 full
 - [x] Owner 授权与双端发布已完成（main `14a19b0`，无遗留 push 动作）

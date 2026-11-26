@@ -1,6 +1,6 @@
 # Arcade 0.21.1 集成与验证（本地修复，未发布）
 
-- 本地分支：`fix/arcade-career-entry-0211`，HEAD `87746d4`。
+- 本地分支：`fix/arcade-career-entry-0211`，产品代码截止 `87746d4`。
 - 基线：0.21.0（2026-11-26 已双端发布，main `28a0182`，Actions `45752833025` 全绿，双端 89/89 一致）。
 - 设计 / 回滚：`apps/arcade/DESIGN-0.21.1.md`；0.21.0 接口冻结：`docs/arcade-life/ADR-interfaces.md` §22；门禁分层：`tools/README-gates.md`。
 - **0.21.1 未发布**：线上仍为 0.21.0；本地版本链已同步 0.21.1 / SW `studiokit-arcade-0.21.1-v1`。没有 `PUBLISH_TO_MAIN`，不声称 Actions 或双端校验成功。

@@ -2406,7 +2406,7 @@
         "static 35/35、career_passive_entry 61/61、smoke 117/117（含四档窄屏、封存/解冻/重置）、mobile 318/318、PWA 18/18、archive lifecycle 60/60；独立复审 APPROVE",
         "release/full/96 全量 E2E/首航/真机与发布保持 UNVERIFIED；不 push、不声称发布"
       ],
-      "evidence": "Branch fix/arcade-career-entry-0211 HEAD 87746d4. Persistent career entry appears when profile or legacy C0 exists, hidden while archived, restored after unfreeze, removed after full reset. Local version chain 0.21.1 and SW studiokit-arcade-0.21.1-v1. Actual gates: static 35/35 (6.762s), career_passive_entry 61/61, arcade_smoke 117/117 including 320/375/390/430 touch target/overflow and archive/unfreeze/reset flow, career_mobile 318/318, career_pwa_offline 18/18, career_archive_lifecycle_e2e 60/60. Independent review APPROVE; IDB stub fidelity P1 fixed. release/full/96 full E2E/flow/real-device/publish UNVERIFIED. No push or publish. See docs/arcade-life/INTEGRATION-0.21.1.md.",
+      "evidence": "Branch fix/arcade-career-entry-0211; product code through 87746d4. Persistent career entry appears when profile or legacy C0 exists, hidden while archived, restored after unfreeze, removed after full reset. Local version chain 0.21.1 and SW studiokit-arcade-0.21.1-v1. Actual gates: static 35/35 (6.762s), career_passive_entry 61/61, arcade_smoke 117/117 including 320/375/390/430 touch target/overflow and archive/unfreeze/reset flow, career_mobile 318/318, career_pwa_offline 18/18, career_archive_lifecycle_e2e 60/60. Independent review APPROVE; IDB stub fidelity P1 fixed. release/full/96 full E2E/flow/real-device/publish UNVERIFIED. No push or publish. See docs/arcade-life/INTEGRATION-0.21.1.md.",
       "completedAt": "2026-11-26T05:20:00Z"
     }
   ]
