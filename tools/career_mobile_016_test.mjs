@@ -174,9 +174,9 @@ async function bringIntoView(page, selector) {
   const found = await page.evaluate(`(() => {
     const el = document.querySelector(${JSON.stringify(selector)});
     if (!el) return false;
-    /* 闭合 details 内的按钮不可达：先展开所属 details 再滚动，避免坐标落在隐藏区。 */
+    /* 隐藏区内的按钮要先展开；首个 summary 本身可点，应由真实触控切换开合。 */
     const closed = el.closest && el.closest('details:not([open])');
-    if (closed) closed.open = true;
+    if (closed && !closed.querySelector(':scope > summary')?.contains(el)) closed.open = true;
     if (el.scrollIntoView) el.scrollIntoView({ block: 'center', inline: 'center' });
     return true;
   })()`);
