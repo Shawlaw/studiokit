@@ -1127,7 +1127,10 @@ async function waitForRevisitUrl(cdp, label) {
 
 async function phaseHomepageRevisit(cdp) {
   step('phase:homepage-revisit');
-  /* 故意不点 chip，直接离开：验证「错过 chip 后不会永久失联」。 */
+  /* 故意不点 chip。先用结算内的回看按钮解除遮罩，再点游戏顶栏返回。 */
+  const review = await pressVisible(cdp, '[data-overlay] [data-ov-review]', '错过线索后回看终局');
+  gate('HOME 通过结算回看让出顶栏', /回看/.test(review.text), J(review.text));
+  await cdp.waitFor(`!!document.querySelector('[data-overlay].is-reviewing')`, { timeout: 5000 });
   await pressVisible(cdp, '.game-topbar .ac-back[href]', '错过结算线索后回街机厅');
   await cdp.waitFor(`!!document.querySelector('[data-letter-entry]')`, { timeout: 15000 });
   await cdp.waitFor(`(() => { const el = document.querySelector('[data-letter-entry]'); return !!el && el.hidden === false; })()`, { timeout: 12000 });
