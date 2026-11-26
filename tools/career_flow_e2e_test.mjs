@@ -455,8 +455,9 @@ async function clickVisible(cdp, selector, label) {
 
 async function pressVisible(cdp, selector, label) {
   const target = await cdp.waitFor(`(() => {
-    const el = document.querySelector(${J(selector)});
-    if (!el || el.disabled || !el.getClientRects().length || getComputedStyle(el).visibility !== 'visible') return null;
+    const el = [...document.querySelectorAll(${J(selector)})].find((node) =>
+      !node.disabled && node.getClientRects().length && getComputedStyle(node).visibility === 'visible');
+    if (!el) return null;
     el.scrollIntoView({ block: 'center', inline: 'nearest', behavior: 'instant' });
     const rect = el.getBoundingClientRect();
     const x = (Math.max(0, rect.left) + Math.min(innerWidth, rect.right)) / 2;
@@ -1131,7 +1132,7 @@ async function phaseHomepageRevisit(cdp) {
   const review = await pressVisible(cdp, '[data-overlay] [data-ov-review]', '错过线索后回看终局');
   gate('HOME 通过结算回看让出顶栏', /回看/.test(review.text), J(review.text));
   await cdp.waitFor(`!!document.querySelector('[data-overlay].is-reviewing')`, { timeout: 5000 });
-  await pressVisible(cdp, '.game-topbar .ac-back[href]', '错过结算线索后回街机厅');
+  await pressVisible(cdp, '.studiokit-shell-home[href], .game-topbar .ac-back[href]', '错过结算线索后回街机厅');
   await cdp.waitFor(`!!document.querySelector('[data-letter-entry]')`, { timeout: 15000 });
   await cdp.waitFor(`(() => { const el = document.querySelector('[data-letter-entry]'); return !!el && el.hidden === false; })()`, { timeout: 12000 });
   const entry1 = await cdp.evaluate(`(() => {
