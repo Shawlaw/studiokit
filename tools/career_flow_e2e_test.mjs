@@ -1389,16 +1389,20 @@ async function phaseReceipt(cdp, label, expectedChapterFlag, card) {
   const action = card.buttons.find((button) => button.action === actionId);
   const expectedText = actionId === 'return-to-town' ? /回告示板/ : /终局|结局|选/;
   requireFeature('RECEIPT ' + label + ' 收据显示实际下一步按钮', action && expectedText.test(action.text), J(card.buttons));
-  if (label === 'order-1' || label === 'order-2') {
-    gate('RECEIPT ' + label + ' 回告示板为主动作', action.primary, J(action));
-  }
+  const firstTwoOrders = label === 'order-1' || label === 'order-2';
+  if (firstTwoOrders) gate('RECEIPT ' + label + ' 回告示板为主动作', action.primary, J(action));
   gate('RECEIPT ' + label + ' 下一步按钮热区 ≥44px', action.rect.h >= 44 && action.rect.w >= 44, J(action.rect));
 
   const hrefBefore = await cdp.evaluate('location.href');
+  const viewport = { deviceScaleFactor: 1, mobile: true };
+  if (firstTwoOrders) await cdp.send('Emulation.setDeviceMetricsOverride', { ...viewport, width: 375, height: 548 });
   await pressVisible(cdp, `${RECEIPT_CARD} [data-action=${J(actionId)}]`, label + ' 收据下一步');
   await waitPanel(cdp, panelName);
   const hrefAfter = await cdp.evaluate('location.href');
-  gate('RECEIPT ' + label + ' 点击后在当前页打开预期面板', hrefAfter === hrefBefore, J({ panel: panelName, hrefBefore, hrefAfter }));
+  const viewportLabel = firstTwoOrders ? ' 375×548' : '';
+  gate('RECEIPT ' + label + viewportLabel + ' 实际命中按钮并在当前页打开预期面板', hrefAfter === hrefBefore,
+    J({ panel: panelName, hrefBefore, hrefAfter }));
+  if (firstTwoOrders) await cdp.send('Emulation.setDeviceMetricsOverride', { ...viewport, width: 390, height: 844 });
   await forbiddenTextScan(cdp, 'after-receipt-' + label);
 }
 
