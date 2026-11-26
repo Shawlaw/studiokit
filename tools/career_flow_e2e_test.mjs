@@ -2,34 +2,10 @@
 /**
  * StudioKit Arcade 生涯首航 V2 — 零剧情种子、真实 UI 全链路门禁（E 组）
  *
- * 基线：1e22a52。设计依据：apps/arcade/DESIGN-0.20.0.md §3/§4/§6/§10，
- * 接口冻结：docs/arcade-life/ADR-interfaces.md §13/§18/§20（含 §20.8/§20.9）。
- *
- * 本门禁做什么（与既有 career_campaign_e2e_test.mjs / career_first_flight_test_016.mjs 互补）：
- *   1. 全新 Chrome profile + 清空生涯 IDB；不 putQuests、不 seedState、不写 C0/C1、
- *      不预置 tier 解锁、不预置任何剧情旗标。游戏侧只用页面自带 `?careerTest=1#test`
- *      / `#test` 钩子驱动**真实玩法事件**与真实结算入口。
- *   2. 经典局自然产生线索 → 结算 chip 渲染 → 故意错过 chip → 首页「旧港有一封来信」
- *      → `?careerLetter=1` 重显未读信 → 读过后首页「继续旧港来信」→ 再进入 →
- *      **一次**主动作投递 → 告示板当前推荐单 → 接单 → 职业局 → 收据三回报 + 页内下一步。
- *   3. 按 DESIGN-0.20.0 首选路线逐单推进：
- *      star-raid.T1(C1) → pendulum-tower.T1(C2) → shadow-leap.T1(中间单) →
- *      shadow-leap.T2(C3) → star-raid.T2(中间单) → pendulum-tower.T2(C4) →
- *      玩家点击终局入口（research）→ C5 + ending.research。
- *      每单以只读 DB/claim/campaign.state 核验真实旗标与证据推进；中间单必须显示
- *      「能积攒下一步所需」，不得冒充「能推进这一段/完成本章」；C5 只能由终局真实结算产生。
- *   4. shadow-leap.T1 第一次故意做不足 → 如实失败反馈 → 从收据/告示板重接并成功。
- *   5. 玩家可见文本扫描：无 C0/C1/C4、T1/T2、E-/BP-/MAP-/DEC-、active/locked、
- *      长 commission/run id。
- *   6. 320×700、375×548、390×844、430×932 四档视口的面板无横向溢出、主按钮 ≥44px。
- *
- * 关键纪律：
- *   - 不修改任何产品文件、既有测试或数据；只在独立工作树新增本文件与同名 .md 说明。
- *   - 不 push / merge / rebase，不启动 Chrome（由主 Agent 独占时段执行）。
- *   - 使用 feature detection：接口缺失时用 `BLOCKED` 明确报告并使门禁失败，
- *     绝不静默跳过关键验收。静态模式同样校验接口是否落地。
- *   - `campaign.recommend` 与 UI 推荐标记、收据「下一步/新完成的段落」反馈、失败重接
- *     是尚未集成的依赖；本脚本在当前基线会显式 BLOCKED。
+ * 二十一点起源从经典入口走到研究终局，途中验证首单关标签续接、影跃失败重接、
+ * 两张开场收据的回告示板动作及可见剧情所得。记忆翻牌使用独立新档跑到首次到港。
+ * 两个场景均通过真实 UI 读信、投递与导航，只使用游戏原生钩子辅助玩法，
+ * 不预写剧情旗标、委托通关或证据。接口约定见 ADR §20.8、§20.9 与 §21。
  *
  * 用法（仓库根）：
  *   node tools/career_flow_e2e_test.mjs --help
@@ -47,6 +23,7 @@
 import fs from 'node:fs';
 import path from 'node:path';
 import {
+  CDP,
   REPO_ROOT,
   createRecorder,
   envPort,
@@ -64,6 +41,14 @@ import {
 const DB_NAME = 'studiokit:arcade:career';
 const ORIGIN_GAME = 'blackjack';
 const ORIGIN_CLUE = 'CL-blackjack';
+const MEMORY_ORIGIN = 'memory-flip';
+const ORIGIN_ARRIVAL = {
+  [ORIGIN_GAME]: { sender: '阿德', object: '单据', otherSender: '老周', otherObject: '存根' },
+  [MEMORY_ORIGIN]: { sender: '老周', object: '存根', otherSender: '阿德', otherObject: '单据' },
+};
+const TICKET_STORAGE_KEY = 'studiokit:arcade:career:ticket.v1';
+const RECEIPT_CARD = '[data-career-card="receipt"]';
+const RETURN_TO_TOWN = RECEIPT_CARD + ' [data-action="return-to-town"]';
 const ENDING_APPROACH = 'research';
 const ENDING_GAME = 'merge-2048';
 const VIEWPORTS = [
@@ -158,6 +143,7 @@ function parsePort(name, fallback) {
 const SERVER_PORT = parsePort('CAREER_FLOW_PORT', 9021);
 const CDP_PORT = parsePort('CAREER_FLOW_CDP', 9521);
 const BASE = 'http://127.0.0.1:' + SERVER_PORT;
+const HOME_URL = BASE + '/apps/arcade/index.html';
 const ARTIFACTS_DIR = process.env.CAREER_FLOW_QA_DIR || path.join(REPO_ROOT, 'test-artifacts', 'career-flow');
 const QA = {
   careerId: null,
@@ -298,6 +284,20 @@ function staticContentChecks() {
   gate('S08 起源线索由真实事件产生且有信件地址', !!(clue && clue.gameId === ORIGIN_GAME && clue.trigger && clue.letter && clue.letter.address), J(clue && { id: clue.clueId, trigger: clue.trigger, address: clue.letter && clue.letter.address }));
   const origin = (chapter1.origins || []).find((row) => row.gameId === ORIGIN_GAME);
   gate('S09 起源信箱正文给出身份与旧港地址', !!(origin && origin.c0Letter && origin.c0Letter.body && origin.c0Letter.address === (clue && clue.letter.address)), J(origin && origin.c0Letter));
+  const memoryClue = clues.find((row) => row.clueId === 'CL-memory-flip');
+  const memoryOrigin = chapter1.origins.find((row) => row.gameId === MEMORY_ORIGIN);
+  gate('S10 翻牌线索由配对触发，来信对应老周收下存根',
+    memoryClue?.gameId === MEMORY_ORIGIN && memoryClue.trigger?.kind === 'pair.match' &&
+      memoryOrigin?.c0Letter?.from?.includes(ORIGIN_ARRIVAL[MEMORY_ORIGIN].sender) &&
+      memoryOrigin.c0Letter.body?.includes(ORIGIN_ARRIVAL[MEMORY_ORIGIN].object) &&
+      memoryOrigin.c0Letter.address === memoryClue.letter?.address,
+    J({ trigger: memoryClue?.trigger, letter: memoryOrigin?.c0Letter }));
+  const archive = commissions.find((row) => row.commissionId === 'memory-flip.T1');
+  const photo = commissions.find((row) => row.commissionId === 'memory-flip.T2');
+  gate('S11 旧档案夹不产证据，但解锁差一张的照片',
+    archive?.reward?.evidence?.length === 0 && photo?.title === '差一张的照片' &&
+      !!photo.unlock?.all?.some((condition) => condition.commissionCleared === archive.commissionId),
+    J({ archive: archive?.reward, photo: photo?.unlock }));
 }
 
 /** 接口矩阵：缺失的关键项必须 BLOCKED，不允许静默跳过。 */
@@ -453,6 +453,23 @@ async function clickVisible(cdp, selector, label) {
   return result;
 }
 
+async function pressVisible(cdp, selector, label) {
+  const target = await cdp.waitFor(`(() => {
+    const el = document.querySelector(${J(selector)});
+    if (!el || el.disabled || !el.getClientRects().length || getComputedStyle(el).visibility !== 'visible') return null;
+    el.scrollIntoView({ block: 'center', inline: 'nearest', behavior: 'instant' });
+    const rect = el.getBoundingClientRect();
+    const x = (Math.max(0, rect.left) + Math.min(innerWidth, rect.right)) / 2;
+    const y = (Math.max(0, rect.top) + Math.min(innerHeight, rect.bottom)) / 2;
+    if (!el.contains(document.elementFromPoint(x, y))) return null;
+    return { x, y, text: el.innerText.trim() };
+  })()`, { timeout: 10000 }).catch((err) => { throw new Error(label + ' 不可点击', { cause: err }); });
+  const { x, y } = target;
+  await cdp.send('Input.dispatchMouseEvent', { type: 'mousePressed', x, y, button: 'left', clickCount: 1 });
+  await cdp.send('Input.dispatchMouseEvent', { type: 'mouseReleased', x, y, button: 'left', clickCount: 1 });
+  return target;
+}
+
 async function panelSnapshot(cdp, panelName) {
   return cdp.evaluate(`(() => {
     const panel = document.querySelector('[data-career-panel=${J(panelName)}]');
@@ -464,19 +481,6 @@ async function panelSnapshot(cdp, panelName) {
 async function waitPanel(cdp, panelName, timeout = 15000) {
   await cdp.waitFor(`!!document.querySelector('[data-career-panel=${J(panelName)}]')`, { timeout });
   return panelSnapshot(cdp, panelName);
-}
-
-async function closePanel(cdp, panelName) {
-  const closed = await cdp.evaluate(`(() => {
-    const panel = document.querySelector('[data-career-panel=${J(panelName)}]');
-    if (!panel) return true;
-    const button = panel.querySelector('.ac-career-close');
-    if (!button) return false;
-    button.click();
-    return true;
-  })()`);
-  await cdp.waitFor(`!document.querySelector('[data-career-panel=${J(panelName)}]')`, { timeout: 6000 }).catch(() => {});
-  return closed;
 }
 
 /** 只读：取职业身份、quest flags、证据、claims（不写任何库行）。 */
@@ -650,16 +654,18 @@ async function receiptSnapshot(cdp) {
   return cdp.evaluate(`(() => {
     const card = document.querySelector('[data-career-card="receipt"]');
     if (!card) return null;
-    const buttons = Array.from(card.querySelectorAll('button')).map((button, index) => ({
-      index: index,
-      text: (button.textContent || '').trim(),
+    const buttons = Array.from(card.querySelectorAll('button')).map((button) => ({
+      action: button.getAttribute('data-action'),
+      primary: button.classList.contains('ac-career-btn--primary'),
+      text: (button.innerText || '').trim(),
       aria: button.getAttribute('aria-label') || '',
       rect: (() => { const r = button.getBoundingClientRect(); return { w: r.width, h: r.height }; })(),
     }));
     return {
       state: card.getAttribute('data-state'),
       runId: card.getAttribute('data-run-id'),
-      text: (card.textContent || '').replace(/\\s+/g, ' ').trim().slice(0, 1600),
+      text: card.innerText.trim(),
+      next: [...card.querySelectorAll('p')].find((line) => line.getClientRects().length && /^下一步[：:]/.test(line.innerText.trim()))?.innerText.trim() || '',
       buttons: buttons,
     };
   })()`);
@@ -684,10 +690,20 @@ const FORBIDDEN_PATTERNS = [
   { name: '长 commission/run id', re: /\b[A-Za-z0-9_-]{24,}\b/ },
 ];
 
+function checkForbiddenText(text, label) {
+  const hits = FORBIDDEN_PATTERNS.filter((pattern) => pattern.re.test(text)).map((pattern) => pattern.name);
+  return gate('TEXT 玩家可见文本无内部记号 [' + label + ']', !!text && hits.length === 0, J({ hits, snippet: text.slice(0, 400) }));
+}
+
 async function forbiddenTextScan(cdp, label) {
   const text = await cdp.evaluate('(document.body && document.body.innerText) ? document.body.innerText.slice(0, 6000) : ""');
-  const hits = FORBIDDEN_PATTERNS.filter((pattern) => pattern.re.test(String(text))).map((pattern) => pattern.name);
-  return gate('TEXT 玩家可见文本无内部记号 [' + label + ']', hits.length === 0, J({ hits, snippet: String(text).slice(0, 400) }));
+  return checkForbiddenText(text, label);
+}
+
+function checkReceiptText(card, label) {
+  /* 旧版凭据号行可见。本次扫描只豁免这行原有的票号，其余可见收据文本照常检查。 */
+  const text = card.text.split('\n').filter((line) => line.trim() !== '凭据号：' + card.runId).join('\n').trim();
+  checkForbiddenText(text, 'receipt-' + label);
 }
 
 async function viewportChecks(cdp, label, selectors) {
@@ -844,6 +860,39 @@ async function driveBlackjackOrigin(cdp) {
     !!(finish && finish.input && finish.input.mode === 'classic' && finish.result && finish.result.persisted === true),
     J({ played, finish: finish && { input: finish.input, result: finish.result } }));
   return finish;
+}
+
+async function driveMemoryOrigin(cdp) {
+  await startOverlay(cdp, 'memory-flip-origin');
+  const matchedByLevel = [];
+  for (let level = 1; level <= 6; level += 1) {
+    await cdp.waitFor(`(() => {
+      const t = window.__arcadeTest;
+      return t.info().level === ${level} && t.joyInfo().state === 'playing' &&
+        (t.joyInfo().previewTimer <= 0 || t.skipPreviewNow());
+    })()`, { timeout: 10000 });
+    const matched = await cdp.evaluate(`(() => {
+      const t = window.__arcadeTest;
+      const pairs = new Map();
+      for (const card of t.info().cardList) {
+        if (pairs.has(card.symbol)) {
+          t.revealById(pairs.get(card.symbol));
+          t.revealById(card.id);
+        } else {
+          pairs.set(card.symbol, card.id);
+        }
+      }
+      return t.info().cardList.filter((card) => card.matched).length / 2;
+    })()`);
+    matchedByLevel.push(matched);
+  }
+  await cdp.waitFor('window.__arcadeCareerTest.info().finished === true', { timeout: 25000 });
+  const finish = await cdp.evaluate('window.__arcadeCareerTest.lastFinish()');
+  gate('ORIGIN 记忆翻牌真实翻牌配对并完成经典局，以 pair.match 发现存根',
+    matchedByLevel.every((count) => count >= 2) && finish?.input?.mode === 'classic' && finish.input.outcome === 'won' &&
+      finish.result?.persisted === true && finish.result.clueId === 'CL-memory-flip' && finish.result.reason === 'event' &&
+      finish.result.clue?.trigger?.kind === 'pair.match',
+    J({ matchedByLevel, input: finish?.input, clueId: finish?.result?.clueId, reason: finish?.result?.reason, trigger: finish?.result?.clue?.trigger }));
 }
 
 async function driveTower(cdp, floors, label) {
@@ -1034,27 +1083,32 @@ async function driveCommission(cdp, commissionId, label) {
  * 5. 首航链路（真实 UI）
  * ------------------------------------------------------------------ */
 
-async function phaseDiscovery(cdp, campaign) {
-  step('phase:discovery');
-  await go(cdp, gameUrl(ORIGIN_GAME), 'origin-game');
-  await waitBridge(cdp, 'origin-game');
-  const reset = await cdp.evaluate('window.__arcadeCareerTest.resetAll()');
-  gate('NEW 新档：resetAll 清空生涯数据（不写任何旗标）', !!(reset && reset.ok === true), J(reset));
+async function phaseDiscovery(cdp, gameId) {
+  step('discovery:' + gameId);
+  await go(cdp, HOME_URL, 'origin-home');
+  await pressVisible(cdp, `.hall-card[data-game-id=${J(gameId)}]`, '从首页打开经典游戏');
+  await cdp.waitFor(`location.pathname.endsWith(${J('/games/' + gameId + '.html')})`, { timeout: 15000 });
+  await waitBridge(cdp, 'origin-game', false);
+  /* 首页已用真实点击打开游戏，再加载同一页的原生玩法钩子。 */
+  await go(cdp, gameUrl(gameId), 'origin-game-hook');
+  await waitBridge(cdp, 'origin-game-hook');
   const snapshot0 = await readOnlyState(cdp);
-  gate('NEW 新档无 career 身份 / 无旗标 / 无 claim', snapshot0 && snapshot0.ok === false && snapshot0.reason === 'no-career', J(snapshot0 && { ok: snapshot0.ok, reason: snapshot0.reason }));
+  requireFeature('NEW ' + gameId + ' 独立新档无生涯身份', snapshot0?.ok === false && snapshot0.reason === 'no-career', J(snapshot0));
 
-  await driveBlackjackOrigin(cdp);
-  await cdp.waitFor(`!!document.querySelector('[data-career-clue=${J(ORIGIN_CLUE)}]')`, { timeout: 12000 });
+  const clueId = gameId === MEMORY_ORIGIN ? 'CL-memory-flip' : ORIGIN_CLUE;
+  if (gameId === MEMORY_ORIGIN) await driveMemoryOrigin(cdp);
+  else await driveBlackjackOrigin(cdp);
+  const chipSelector = `[data-career-clue=${J(clueId)}]`;
+  await cdp.waitFor(`!!document.querySelector(${J(chipSelector)})`, { timeout: 12000 });
   const chip = await cdp.evaluate(`(() => {
-    const node = document.querySelector('[data-career-clue=${J(ORIGIN_CLUE)}]');
+    const node = document.querySelector(${J(chipSelector)});
     if (!node) return null;
     const rect = node.getBoundingClientRect();
     return { role: node.getAttribute('role'), tabindex: node.getAttribute('tabindex'), label: node.getAttribute('aria-label'), w: Math.round(rect.width), h: Math.round(rect.height), text: (node.textContent || '').trim() };
   })()`);
-  gate('CLUE 结算卡片阅读流出现可交互线索 chip', !!(chip && chip.role === 'button' && chip.tabindex === '0' && chip.h >= 44 && /信/.test(chip.label || '')), J(chip));
-  await forbiddenTextScan(cdp, 'origin-settlement');
-  await checkConsole(cdp, 'discovery');
-  return campaign;
+  gate('CLUE ' + gameId + ' 结算卡片阅读流出现可交互线索 chip', !!(chip && chip.role === 'button' && chip.tabindex === '0' && chip.h >= 44 && /信/.test(chip.label || '')), J(chip));
+  await forbiddenTextScan(cdp, 'origin-settlement-' + gameId);
+  await checkConsole(cdp, 'discovery-' + gameId);
 }
 
 /**
@@ -1074,7 +1128,8 @@ async function waitForRevisitUrl(cdp, label) {
 async function phaseHomepageRevisit(cdp) {
   step('phase:homepage-revisit');
   /* 故意不点 chip，直接离开：验证「错过 chip 后不会永久失联」。 */
-  await go(cdp, BASE + '/apps/arcade/index.html', 'homepage-after-missed-chip');
+  await pressVisible(cdp, '.game-topbar .ac-back[href]', '错过结算线索后回街机厅');
+  await cdp.waitFor(`!!document.querySelector('[data-letter-entry]')`, { timeout: 15000 });
   await cdp.waitFor(`(() => { const el = document.querySelector('[data-letter-entry]'); return !!el && el.hidden === false; })()`, { timeout: 12000 });
   const entry1 = await cdp.evaluate(`(() => {
     const el = document.querySelector('[data-letter-entry]');
@@ -1084,7 +1139,7 @@ async function phaseHomepageRevisit(cdp) {
   gate('HOME 未读线索在首页继续上次附近显示次级入口', entry1.text === '旧港有一封来信' && entry1.href === 'games/pendulum-tower.html?careerLetter=1', J(entry1));
 
   /* 真实点击回访链接（不是直接改 URL）。 */
-  await clickVisible(cdp, '[data-letter-entry] [data-letter-label]', '首页来信入口');
+  await pressVisible(cdp, '[data-letter-entry] [data-letter-label]', '首页来信入口');
   await waitForRevisitUrl(cdp, '未读来信回访');
   /* 首页回访链接不带 careerTest=1：只等公开 bridge ready。 */
   await waitBridge(cdp, 'careerLetter-revisit', false);
@@ -1092,24 +1147,22 @@ async function phaseHomepageRevisit(cdp) {
   const mailbox1 = await panelSnapshot(cdp, 'mailbox');
   gate('HOME 回访自动重显未读来信（且留在游戏页）', !!(mailbox1 && mailbox1.text.length > 20), J(mailbox1 && mailbox1.text.slice(0, 300)));
   await forbiddenTextScan(cdp, 'revisit-mailbox');
-  const urlInGame = await cdp.evaluate('location.pathname');
-  await closePanel(cdp, 'mailbox');
-  const afterClose = await cdp.evaluate('({ path: location.pathname, canvas: !!document.querySelector(".game-canvas") })');
-  gate('NAV 关闭来信面板回到同一游戏页（不落到层塔开局界面）', afterClose.path === urlInGame && afterClose.canvas === true, J(afterClose));
+  /* 从信箱内的首页出口离开，保留「已读、未投递」状态。 */
+  await pressVisible(cdp, '[data-career-panel="mailbox"] .ac-career-hub-back', '读信后回街机厅');
+  await cdp.waitFor(`!!document.querySelector('[data-letter-entry]')`, { timeout: 15000 });
 
   /* 读过但未投递：首页显示「继续旧港来信」。 */
-  await go(cdp, BASE + '/apps/arcade/index.html', 'homepage-after-read');
   await cdp.waitFor(`(() => { const el = document.querySelector('[data-letter-entry]'); return !!el && el.hidden === false; })()`, { timeout: 12000 });
   const entry2 = await cdp.evaluate(`(() => { const link = document.querySelector('[data-letter-entry] [data-letter-label]'); return { text: link ? (link.textContent || '').trim() : null, href: link ? link.getAttribute('href') : null }; })()`);
   gate('HOME 读过未投递显示「继续旧港来信」', entry2.text === '继续旧港来信' && entry2.href === 'games/pendulum-tower.html?careerLetter=1', J(entry2));
-  await clickVisible(cdp, '[data-letter-entry] [data-letter-label]', '首页续读入口');
+  await pressVisible(cdp, '[data-letter-entry] [data-letter-label]', '首页续读入口');
   await waitForRevisitUrl(cdp, '已读未投递续读');
   /* 同上：真实首页续读链接只有生产 bridge。 */
   await waitBridge(cdp, 'careerLetter-undelivered', false);
   await waitPanel(cdp, 'mailbox', 15000);
 }
 
-async function phaseSingleDelivery(cdp) {
+async function phaseSingleDelivery(cdp, gameId) {
   step('phase:single-delivery');
   /* 首封未投递：产品只显示 [data-action="send-to-port"]「送去折光港」，
      旧「按地址投递 · 去港口」按设计隐藏；已投递/回看仍用 open-town，不全局替换。 */
@@ -1144,13 +1197,52 @@ async function phaseSingleDelivery(cdp) {
     : '[data-career-panel="mailbox"] [data-action="open-town"]';
   await viewportChecks(cdp, '信箱', [primaryAction]);
 
-  await clickVisible(cdp, primaryAction, '把单据送到旧港');
-  /* 首封投递走 followLetter → 当前页内打开告示板（无 ?career=，不触发整页导航）。 */
-  await waitPanel(cdp, 'town', 15000);
-  const board = await panelSnapshot(cdp, 'town');
-  gate('TOWN 一次点击进港并打开告示板', !!board, J(board && board.text.slice(0, 300)));
-  await forbiddenTextScan(cdp, 'town-first');
-  await checkConsole(cdp, 'delivery');
+  const before = await cdp.evaluate('location.href');
+  await pressVisible(cdp, primaryAction, '把旧物送到旧港');
+  const board = await waitPanel(cdp, 'town', 15000);
+  gate('TOWN 一次点击进港并在当前页打开告示板', !!board && await cdp.evaluate('location.href') === before, J(board && board.text.slice(0, 300)));
+  const arrival = await cdp.evaluate(`(() => {
+    const reply = document.querySelector('[data-career-panel="town"] [data-town-intro] [data-town-arrival]');
+    return reply?.getClientRects().length ? reply.innerText.trim() : '';
+  })()`);
+  const expected = ORIGIN_ARRIVAL[gameId];
+  gate('TOWN ' + gameId + ' 到港回应同时写明正确寄信人和旧物',
+    arrival.includes(expected.sender) && arrival.includes(expected.object) &&
+      !arrival.includes(expected.otherSender) && !arrival.includes(expected.otherObject),
+    J({ expected, arrival }));
+  if (gameId === ORIGIN_GAME) await checkOptionalFlight(cdp);
+  await forbiddenTextScan(cdp, 'town-first-' + gameId);
+  await checkConsole(cdp, 'delivery-' + gameId);
+}
+
+async function checkOptionalFlight(cdp) {
+  const summary = '[data-town-flight] > summary';
+  const rental = '[data-town-flight] [data-town-rental]';
+  const patrol = '[data-town-flight] [data-town-action="start"][data-commission-id="star-raid.T1"]';
+  await cdp.waitFor(`!!document.querySelector(${J(summary)})`, { timeout: 15000 });
+  const viewport = { deviceScaleFactor: 1, mobile: true };
+  await cdp.send('Emulation.setDeviceMetricsOverride', { ...viewport, width: 375, height: 548 });
+  const placement = await cdp.evaluate(`(() => {
+    const rect = document.querySelector(${J(summary)}).getBoundingClientRect();
+    return { top: Math.round(rect.top), bottom: Math.round(rect.bottom), height: innerHeight,
+      visibleBeforeScroll: rect.top >= 0 && rect.bottom <= innerHeight };
+  })()`);
+  console.log('INFO  375×548 首次到港的出航入口位置 — ' + J(placement));
+  gate('TOWN 出航默认折叠，租机说明隐藏', await cdp.evaluate(`(() => {
+    const flight = document.querySelector('[data-town-flight]');
+    return !flight.open && !document.querySelector(${J(rental)})?.getClientRects().length;
+  })()`));
+  await pressVisible(cdp, summary, '看看出航');
+  const option = await cdp.waitFor(`(() => {
+    const hint = document.querySelector(${J(rental)});
+    const start = document.querySelector(${J(patrol)});
+    return hint?.getClientRects().length && start?.getClientRects().length && !start.disabled &&
+      { rental: hint.innerText.trim(), button: start.innerText.trim() };
+  })()`, { timeout: 10000 });
+  gate('TOWN 展开出航后有阿砾的免费租机说明和可接的首次巡航', /阿砾/.test(option.rental) && /免费|不要钱/.test(option.rental), J(option));
+  await pressVisible(cdp, summary, '收起出航并继续默认路线');
+  await cdp.waitFor(`!document.querySelector('[data-town-flight]').open`, { timeout: 5000 });
+  await cdp.send('Emulation.setDeviceMetricsOverride', { ...viewport, width: 390, height: 844 });
 }
 
 function readBoardRecommendation(cdp) {
@@ -1173,38 +1265,13 @@ function readBoardRecommendation(cdp) {
   })()`);
 }
 
-async function ensureTown(cdp, label) {
-  step('ensure-town:' + label);
-  if (await cdp.evaluate('!!document.querySelector(\'[data-career-panel="town"]\')')) return true;
-  if (await cdp.evaluate('!!document.querySelector(\'[data-career-panel="mailbox"]\')')) {
-    await clickVisible(cdp, '[data-career-panel="mailbox"] [data-action="open-town"]', label + ' 信箱去港口');
-    await waitPanel(cdp, 'town', 15000);
-    return true;
-  }
-  /* 面板不在时的兜底：公开桥入口，不直接写任何存储。 */
-  await cdp.evaluate('window.ArcadeCareer.openTown()');
-  await waitPanel(cdp, 'town', 15000);
-  return false;
-}
-
-/** 从最上层往下关闭所有生涯面板；world-state 叠在 town 上时先关它，避免 openTown 兜底被遮挡。 */
-async function closeAllCareerPanels(cdp) {
-  const names = ['world-state', 'mailbox', 'town', 'hangar', 'receipt', 'market', 'workshop', 'settings'];
-  for (const name of names) {
-    for (let guard = 0; guard < 4 && await cdp.evaluate(`!!document.querySelector('[data-career-panel=${J(name)}]')`); guard += 1) {
-      await closePanel(cdp, name);
-    }
-  }
-  await cdp.key('Escape');
-}
-
-async function acceptRecommended(cdp, commissionId, label) {
+async function acceptRecommended(cdp, commissionId, label, { enableHook = true, resumeTicket = null } = {}) {
   step('accept:' + label);
-  /* 关闭上一单收据/章节等叠层，保证接单发生在最上层真实告示板。 */
-  await closeAllCareerPanels(cdp);
-  await ensureTown(cdp, label);
-  const selector = `[data-town-action="start"][data-commission-id=${J(commissionId)}]`;
-  await cdp.waitFor('!!document.querySelector(' + J(selector) + ')', { timeout: 15000 });
+  const selector = `[data-career-panel="town"] [data-town-recommend-id=${J(commissionId)}] [data-town-action="start"][data-commission-id=${J(commissionId)}]`;
+  await cdp.waitFor(`(() => {
+    const button = document.querySelector(${J(selector)});
+    return !!button && (!${!!resumeTicket} || button.innerText.trim() === '继续这张单');
+  })()`, { timeout: 15000 });
   /* 接单按钮 data-commission-id 决定目标 gameId；据此等待精确的游戏页 pathname，
      避免只靠 /games/ 前缀在旧文档或别的游戏页上误命中。 */
   const targetGameId = commissionId.split('.')[0];
@@ -1215,31 +1282,30 @@ async function acceptRecommended(cdp, commissionId, label) {
     if (!b) return { ok: false, reason: 'missing' };
     return { ok: true, commissionId: b.getAttribute('data-commission-id'), text: (b.textContent || '').trim() };
   })()`);
-  gate('ACCEPT ' + label + ' 点击真实接单按钮且委托 id 一致', clicked.ok === true && clicked.commissionId === commissionId, J({ clicked, beforeHref }));
-  await clickVisible(cdp, selector, label + ' 接单按钮');
-  /* 同游戏同 path 时 pathname 不变，必须比较 career= ticket 变化，且整体 href 与旧页不同。 */
+  const buttonMatches = resumeTicket ? clicked.text === '继续这张单' : clicked.text !== '继续这张单';
+  requireFeature('ACCEPT ' + label + ' 告示板显示对应的接单/继续按钮', clicked.ok && clicked.commissionId === commissionId && buttonMatches, J({ clicked, beforeHref }));
+  await pressVisible(cdp, selector, label + ' 告示板按钮');
+  /* 接新单要签新票；首次续单必须保留关闭标签前的原票。 */
   await cdp.waitFor(`(() => {
     var href = location.href;
     var ticket = (href.match(/[?&]career=([^&#]+)/) || [])[1] || '';
     var pathOk = location.pathname.indexOf('/games/${targetGameId}.html') >= 0;
-    var ticketOk = !!ticket && ticket !== ${J(beforeTicket || '')};
+    var ticketOk = ${resumeTicket ? 'ticket === ' + J(resumeTicket) : '!!ticket && ticket !== ' + J(beforeTicket || '')};
     return href !== ${J(beforeHref)} && pathOk && ticketOk;
   })()`, { timeout: 30000 });
   const landed = await cdp.evaluate('({ href: location.href, path: location.pathname, search: location.search })');
   const landedTicket = (landed.search.match(/[?&]career=([^&#]+)/) || [])[1] || null;
-  gate('ACCEPT ' + label + ' 接单后整页导航到新 ticket 的目标游戏职业入口',
-    landed.href !== beforeHref && landed.path.indexOf('/games/' + targetGameId + '.html') >= 0 && !!landedTicket && landedTicket !== beforeTicket,
-    J({ beforeHref, beforeTicket, landed, landedTicket }));
-  const hasTestApi = await cdp.evaluate('!!window.__arcadeCareerTest');
-  /* 目标 URL 可能不带 careerTest=1：生产页只有公开 bridge，按公开 commissionRun 校验。 */
-  await waitBridge(cdp, label + '-game', hasTestApi);
-  const runExpr = hasTestApi
-    ? 'window.__arcadeCareerTest.commissionRun()'
-    : '(window.ArcadeCareer && window.ArcadeCareer.commissionRun) || null';
+  gate('ACCEPT ' + label + ' 导航到目标游戏职业入口并使用预期票号',
+    landed.href !== beforeHref && landed.path.endsWith('/games/' + targetGameId + '.html') && !!landedTicket &&
+      (resumeTicket ? landedTicket === resumeTicket : landedTicket !== beforeTicket),
+    J({ beforeHref, beforeTicket, landed, landedTicket, resumeTicket }));
+  await waitBridge(cdp, label + '-game', false);
+  const runExpr = 'window.ArcadeCareer?.commissionRun';
   await cdp.waitFor(`(() => { const r = ${runExpr}; return !!(r && r.ticketId); })()`, { timeout: 20000 });
   const run = await cdp.evaluate(runExpr);
-  gate('ACCEPT ' + label + ' 真实接单生成 ticket 并进入职业局', !!(run && run.commissionId === commissionId), J(run && { commissionId: run.commissionId, gameId: run.gameId, ticketId: run.ticketId }));
-  if (!hasTestApi) {
+  requireFeature('ACCEPT ' + label + ' 激活同一委托的职业局', run?.commissionId === commissionId && run.ticketId === landedTicket,
+    J(run && { commissionId: run.commissionId, gameId: run.gameId, ticketId: run.ticketId }));
+  if (enableHook) {
     /* 玩法钩子阶段：沿用同一 ticket 显式导航到带 careerTest=1 的 URL，不重建 ticket。 */
     const ticketId = run.ticketId;
     const hookUrl = gameUrl(targetGameId, { career: ticketId });
@@ -1254,63 +1320,88 @@ async function acceptRecommended(cdp, commissionId, label) {
   return run;
 }
 
-/** 收据反馈 + 页内下一步；返回是否打开了 town（供下一单继续）。 */
-async function phaseReceipt(cdp, label, expectedChapterFlag, ticketId, campaign, takenCard = null) {
-  step('receipt:' + label);
-  const card = takenCard || await waitReceipt(cdp, ticketId);
-  requireFeature('RECEIPT ' + label + ' 结算后显示收据卡片', !!card, 'no [data-career-card="receipt"]');
-  const snapshot = await readOnlyState(cdp);
-  gate('RECEIPT ' + label + ' 收据/claim 来自真实结算而非内存假数据', !!(snapshot && snapshot.ok === true && snapshot.claims.some((claim) => claim.receiptId === ticketId)), J({ cardState: card.state, ticketId, claims: (snapshot.claims || []).map((claim) => claim.receiptId) }));
-  const success = card.state === 'success';
-  /* 产品最终文案「新完成的段落：<标题>」无内部“章节”系统词，优先检查；
-     兼容旧文案「已完成章节：」。两者都不出现即视为未集成/BLOCKED。 */
-  const segmentDoneMarkers = ['新完成的段落：', '已完成章节：'];
-  const segmentDoneMarker = segmentDoneMarkers.find((marker) => card.text.indexOf(marker) >= 0) || null;
-  if (success) {
-    requireFeature('RECEIPT ' + label + ' 玩家可见「下一步」页内出口', card.text.indexOf('下一步：') >= 0, J(card.text));
-    if (expectedChapterFlag) {
-      requireFeature('RECEIPT ' + label + ' 段落完成在当前屏反馈', !!segmentDoneMarker,
-        J({ markers: segmentDoneMarkers, text: card.text }));
-    } else {
-      gate('RECEIPT ' + label + ' 中间单不谎称完成段落', segmentDoneMarker === null,
-        J({ marker: segmentDoneMarker, text: card.text }));
-    }
-  } else {
-    gate('RECEIPT ' + label + ' 失败如实显示原因（不伪造成功）', card.text.length > 10 && /未|差|不足|没/.test(card.text), J(card.text));
+async function readBrowserTicket(cdp) {
+  return cdp.evaluate(`JSON.parse(sessionStorage.getItem(${J(TICKET_STORAGE_KEY)}))`);
+}
+
+async function resumeFromNewTab(cdp, run, browser, newPage) {
+  step('resume:close-tab');
+  const original = await readBrowserTicket(cdp);
+  requireFeature('RESUME 关标签前持有已激活委托的完整票据',
+    original?.ticketId === run.ticketId && !!original.runId && !!original.nonce, J({ ticketId: run.ticketId, hasNonce: !!original?.nonce }));
+  const { targetInfo: { targetId } } = await cdp.send('Target.getTargetInfo');
+  const { targetInfos } = await browser.send('Target.getTargets');
+  ensure(targetInfos.some((target) => target.type === 'page' && target.url === 'about:blank' && target.targetId !== targetId),
+    '关闭委托前需要同浏览器中保留另一标签');
+  await checkConsole(cdp, 'before-close-tab');
+  const closed = await browser.send('Target.closeTarget', { targetId });
+  cdp.close();
+  let stillOpen = true;
+  const deadline = Date.now() + 5000;
+  while (stillOpen && Date.now() < deadline) {
+    const remaining = await browser.send('Target.getTargets');
+    stillOpen = remaining.targetInfos.some((target) => target.targetId === targetId);
+    if (stillOpen) await sleep(50);
   }
-  const action = card.buttons.find((button) => /回告示板看看|读读回信|再接|重接/.test(button.text) || /回告示板|读回信/.test(button.text) || /关闭收据并读回信|回到告示板/.test(button.aria));
-  requireFeature('RECEIPT ' + label + ' 页内「回告示板看看 / 读读回信」主动作', !!action, J(card.buttons));
-  gate('RECEIPT ' + label + ' 主动作热区 ≥44px', action.rect.h >= 44 && action.rect.w >= 44, J(action.rect));
+  requireFeature('RESUME 实际关闭原职业游戏标签', closed.success && !stillOpen, J({ closed, stillOpen }));
+
+  step('resume:reopen-home');
+  const reopened = await newPage();
+  await go(reopened, HOME_URL, 'resume-fresh-home');
+  requireFeature('RESUME 新首页标签没有原标签的 sessionStorage 票据', await readBrowserTicket(reopened) === null, '新标签需要从持久化委托找回票据');
+  const homeAction = await pressVisible(reopened, 'a[data-career-entry]', '新首页的旧港生涯入口');
+  gate('RESUME 首页可见旧港生涯入口', homeAction.text.includes('旧港生涯'), J(homeAction.text));
+  await reopened.waitFor(`new URLSearchParams(location.search).get('careerPanel') === 'town'`, { timeout: 15000 });
+  await waitBridge(reopened, 'resume-town', false);
+  await waitPanel(reopened, 'town');
+  requireFeature('RESUME 进入旧港后仍须显式点击续单', await readBrowserTicket(reopened) === null, '打开告示板时不应自动恢复票据');
+
+  const resumed = await acceptRecommended(reopened, run.commissionId, 'resume-original-order', { resumeTicket: original.ticketId });
+  const ticket = await readBrowserTicket(reopened);
+  requireFeature('RESUME 点击「继续这张单」后复用原 ticketId / runId / nonce',
+    resumed.ticketId === original.ticketId && ticket?.ticketId === original.ticketId && ticket.runId === original.runId && ticket.nonce === original.nonce,
+    J({ original: original.ticketId, resumed: ticket?.ticketId, sameRun: ticket?.runId === original.runId, sameNonce: ticket?.nonce === original.nonce }));
+  return reopened;
+}
+
+/** 先检查可见收据，再通过玩家按钮推进。 */
+async function phaseReceipt(cdp, label, expectedChapterFlag, card) {
+  step('receipt:' + label);
+  requireFeature('RECEIPT ' + label + ' 显示成功收据', card?.state === 'success', J(card));
+  checkReceiptText(card, label);
+  requireFeature('RECEIPT ' + label + ' 玩家可见下一步', !!card.next, J(card.text));
+  const segmentDone = /(?:新完成的段落|已完成章节)[：:]/.test(card.text);
+  gate('RECEIPT ' + label + ' 仅在本单完章时显示段落完成', segmentDone === !!expectedChapterFlag, J(card.text));
+
+  const actionId = expectedChapterFlag === CHAPTER_FLAGS.C4 ? 'choose-ending' : 'return-to-town';
+  const panelName = actionId === 'choose-ending' ? 'world-state' : 'town';
+  const action = card.buttons.find((button) => button.action === actionId);
+  const expectedText = actionId === 'return-to-town' ? /回告示板/ : /终局|结局|选/;
+  requireFeature('RECEIPT ' + label + ' 收据显示实际下一步按钮', action && expectedText.test(action.text), J(card.buttons));
+  if (label === 'order-1' || label === 'order-2') {
+    gate('RECEIPT ' + label + ' 回告示板为主动作', action.primary, J(action));
+  }
+  gate('RECEIPT ' + label + ' 下一步按钮热区 ≥44px', action.rect.h >= 44 && action.rect.w >= 44, J(action.rect));
 
   const hrefBefore = await cdp.evaluate('location.href');
-  /* 必须点已识别的主动作（读读回信/回告示板看看），不能点第一个「收起」按钮。 */
-  const clickedAction = await cdp.evaluate(`(() => {
-    const buttons = document.querySelectorAll('[data-career-card="receipt"] button');
-    const el = buttons[${action.index}];
-    if (!el || el.hidden || !el.getClientRects().length) return { ok: false, reason: 'action-not-visible' };
-    const text = (el.textContent || '').trim();
-    el.click();
-    return { ok: true, text: text };
-  })()`);
-  ensure(clickedAction && clickedAction.ok === true, label + ' 收据主动作不可点击: ' + J(clickedAction));
-  /* 读读回信/章节可能异步懒加载：轮询等待任一面板出现，不用固定 sleep。 */
-  await cdp.waitFor(`['town','mailbox','world-state'].some(function (name) {
-    return !!document.querySelector('[data-career-panel="' + name + '"]');
-  })`, { timeout: 15000 });
-  const opened = await cdp.evaluate(`(() => {
-    const names = ['town', 'mailbox', 'world-state'];
-    const found = names.filter((name) => !!document.querySelector('[data-career-panel="' + name + '"]'));
-    return { panels: found, href: location.href };
-  })()`);
-  gate('RECEIPT ' + label + ' 下一步在当前页内打开面板（至多一次整页跳转）', opened.panels.length >= 1 && opened.href === hrefBefore, J({ before: hrefBefore, after: opened }));
-  if (opened.panels.indexOf('mailbox') >= 0 && opened.panels.indexOf('town') < 0) {
-    await clickVisible(cdp, '[data-career-panel="mailbox"] [data-action="open-town"]', label + ' 读读回信后去告示板');
-    await waitPanel(cdp, 'town', 15000);
-  }
-  await forbiddenTextScan(cdp, 'receipt-' + label);
-  const view = await campaignView(cdp, snapshot);
-  gate('CHAPTER ' + label + ' campaign.state 可读（真实旗标推导）', view.ok === true, J(view));
-  return { card, snapshot, view };
+  await pressVisible(cdp, `${RECEIPT_CARD} [data-action=${J(actionId)}]`, label + ' 收据下一步');
+  await waitPanel(cdp, panelName);
+  const hrefAfter = await cdp.evaluate('location.href');
+  gate('RECEIPT ' + label + ' 点击后在当前页打开预期面板', hrefAfter === hrefBefore, J({ panel: panelName, hrefBefore, hrefAfter }));
+  await forbiddenTextScan(cdp, 'after-receipt-' + label);
+}
+
+async function failShadowOrder(cdp, commissionId) {
+  const failedRun = await acceptRecommended(cdp, commissionId, 'shadow-leap.T1-失败');
+  await driveShadowHeight(cdp, 35, false, 'shadow-leap.T1-失败');
+  const card = await waitReceipt(cdp, failedRun.ticketId);
+  requireFeature('FAIL 未达标后出现对应票据的失败收据', card?.state === 'failure' && card.runId === failedRun.ticketId, J(card));
+  checkReceiptText(card, 'shadow-leap-failure');
+  gate('FAIL 失败收据如实提示未达标', /未|差|不足|没/.test(card.text), J(card.text));
+  const action = await pressVisible(cdp, RETURN_TO_TOWN, '失败收据回告示板');
+  gate('FAIL 点的是失败收据里的回告示板按钮', /回告示板/.test(action.text), J(action.text));
+  await waitPanel(cdp, 'town');
+  return failedRun.ticketId;
 }
 
 async function verifyOrderProgress(cdp, label, commissionId, ticketId, expectedFlag, kind, campaign, commissions) {
@@ -1360,13 +1451,16 @@ async function verifyOrderProgress(cdp, label, commissionId, ticketId, expectedF
  * 6. 主链路
  * ------------------------------------------------------------------ */
 
-async function runFullFlow(cdp, campaign, commissions) {
-  await phaseDiscovery(cdp, campaign);
+async function runOriginToTown(cdp, gameId) {
+  await phaseDiscovery(cdp, gameId);
   await phaseHomepageRevisit(cdp);
-  await phaseSingleDelivery(cdp);
+  await phaseSingleDelivery(cdp, gameId);
+}
 
-  /* 首单：读取 UI 推荐 → 接单 → 真实职业局 → 收据 → 状态核验。 */
-  await ensureTown(cdp, 'first-recommendation');
+async function runFullFlow(cdp, browser, newPage, campaign, commissions) {
+  await runOriginToTown(cdp, ORIGIN_GAME);
+
+  /* 首单：读取 UI 推荐 → 接单 → 关标签后续单 → 真实职业局 → 收据。 */
   await cdp.waitFor(`!!document.querySelector('[data-town-recommend-id]')`, { timeout: 15000 });
   let recommendation = await readBoardRecommendation(cdp);
   requireFeature('BOARD 告示板首屏提供真实可执行推荐单', recommendation.ok === true && !!recommendation.commissionId, J(recommendation));
@@ -1414,36 +1508,39 @@ async function runFullFlow(cdp, campaign, commissions) {
     const uiKind = /能积攒下一步所需|路线进展/.test(recommendation.kind || '') ? 'step' : /能推进这一段|推进本章|完成本章/.test(recommendation.kind || '') ? 'milestone' : 'unknown';
     gate('BOARD ' + recommendation.commissionId + ' 推荐标记与真实完成性一致', uiKind === expectedKind, J({ uiKind, expectedKind, completes, kind: recommendation.kind }));
 
-    if (recommendation.commissionId === 'shadow-leap.T1' && index === 2) {
-      /* 失败重接：第一次真实做不足 → 如实失败 → 从收据/告示板重接。 */
-      const failRun = await acceptRecommended(cdp, recommendation.commissionId, 'shadow-leap.T1-失败');
-      await driveShadowHeight(cdp, 35, false, 'shadow-leap.T1-失败');
-      const failCard = await waitReceipt(cdp, failRun.ticketId);
-      gate('FAIL 失败收据数据状态为 failure（不伪造成功）', failCard.state === 'failure', J({ state: failCard.state, text: failCard.text.slice(0, 300) }));
-      const retryAction = failCard.buttons.find((button) => /回告示板|再接|重接/.test(button.text));
-      requireFeature('FAIL 失败收据提供一键重接入口', !!retryAction, J(failCard.buttons));
-      await clickVisible(cdp, '[data-career-card="receipt"] button', '失败后重接');
-      await sleep(300);
-      await ensureTown(cdp, 'after-failure');
-      const stillOpen = await cdp.evaluate(`!!document.querySelector('[data-town-action="start"][data-commission-id="shadow-leap.T1"]')`);
-      gate('FAIL 失败后同一委托仍可重接（无隐形惩罚）', stillOpen === true, J({ stillOpen }));
-    }
-
-    const run = await acceptRecommended(cdp, recommendation.commissionId, 'order-' + (index + 1));
-    if (recommendation.commissionId === 'ending.research') break;
-    await driveCommission(cdp, recommendation.commissionId, 'order-' + (index + 1));
+    const commissionId = recommendation.commissionId;
+    const label = 'order-' + (index + 1);
+    const failedTicket = commissionId === 'shadow-leap.T1' ? await failShadowOrder(cdp, commissionId) : null;
+    const testContinuation = index === 0;
+    const run = await acceptRecommended(cdp, commissionId, label, { enableHook: !testContinuation });
+    if (testContinuation) cdp = await resumeFromNewTab(cdp, run, browser, newPage);
+    if (failedTicket) gate('FAIL 重接同一委托签发新票', run.ticketId !== failedTicket, J({ failedTicket, newTicket: run.ticketId }));
+    await driveCommission(cdp, commissionId, label);
     /* 塔倒塌/射击收局后 finish 是异步落库：先等真实收据出现，再核验只读档案，
        避免 claim/quests 尚未写入导致 no-career；收据卡片复用于 phaseReceipt，不重复等待。 */
     const card = await waitReceipt(cdp, run.ticketId);
-    requireFeature('RECEIPT order-' + (index + 1) + ' 结算后显示收据卡片', !!card, 'no [data-career-card="receipt"]');
-    const after = await verifyOrderProgress(cdp, 'order-' + (index + 1), recommendation.commissionId, run.ticketId,
-      completes, expectedKind, campaign, commissions);
-    await phaseReceipt(cdp, 'order-' + (index + 1), completes, run.ticketId, campaign, card);
+    requireFeature('RECEIPT ' + label + ' 显示这张单的成功收据', card?.state === 'success' && card.runId === run.ticketId, J(card));
+    const after = await verifyOrderProgress(cdp, label, commissionId, run.ticketId, completes, expectedKind, campaign, commissions);
+    if (failedTicket) {
+      gate('FAIL 重接后完成同一委托，只有成功票有收据入账',
+        after.claim?.commissionId === commissionId && !after.snapshot.claims.some((claim) => claim.receiptId === failedTicket),
+        J({ newClaim: after.claim?.receiptId, failedTicket }));
+    }
+    if (testContinuation) {
+      gate('RESUME 恢复原票后完成首单并用原票结算', after.claim?.receiptId === run.ticketId, J(after.claim));
+    }
+    if (commissionId === 'memory-flip.T1') {
+      const newEvidence = [...after.projection.evidence].filter((token) => !projectionBefore.evidence.has(token));
+      gate('RECEIPT 旧档案夹指向差一张的照片，未虚报新线索或授予证据',
+        card.next.includes('差一张的照片') && !/你这一趟留下了一条新线索|带回了.{0,8}新线索/.test(card.text) &&
+          after.claim?.evidence?.length === 0 && newEvidence.length === 0,
+        J({ next: card.next, text: card.text, receiptEvidence: after.claim?.evidence, newEvidence }));
+    }
+    await phaseReceipt(cdp, label, completes, card);
     sequence.push(recommendation.commissionId);
     previousChapter = after.view.currentChapter || previousChapter;
 
     if (index < PREFERRED_ROUTE.length - 1) {
-      await ensureTown(cdp, 'next-' + (index + 1));
       await cdp.waitFor(`!!document.querySelector('[data-town-recommend-id]')`, { timeout: 15000 });
       recommendation = await readBoardRecommendation(cdp);
       requireFeature('BOARD 第 ' + (index + 2) + ' 单推荐仍真实可执行', recommendation.ok === true && !!recommendation.commissionId, J(recommendation));
@@ -1466,7 +1563,7 @@ async function runFullFlow(cdp, campaign, commissions) {
   gate('C5 终局前不存在 C5.star_tower_resolved 旗标',
     !(beforeEnding.quests || []).some((row) => row.nodeId === 'story:' + CHAPTER_FLAGS.C5),
     J((beforeEnding.quests || []).filter((row) => row.nodeId && row.nodeId.indexOf('C5') >= 0)));
-  await cdp.evaluate('window.ArcadeCareer.openCampaign && window.ArcadeCareer.openCampaign()');
+  /* C4 收据上的「选择终局」已打开章节面板。 */
   await waitPanel(cdp, 'world-state', 15000);
   const world = await cdp.evaluate(`(() => {
     const panel = document.querySelector('[data-career-panel="world-state"]');
@@ -1482,7 +1579,7 @@ async function runFullFlow(cdp, campaign, commissions) {
   const beforeEndingHref = await cdp.evaluate('location.href');
   const beforeEndingTicket = (beforeEndingHref.match(/[?&]career=([^&#]+)/) || [])[1] || null;
   const targetEndingGame = ENDING_GAME;
-  await clickVisible(cdp, '[data-career-panel="world-state"] [data-approach="' + ENDING_APPROACH + '"]', '终局入口');
+  await pressVisible(cdp, '[data-career-panel="world-state"] [data-approach="' + ENDING_APPROACH + '"]', '终局入口');
   await cdp.waitFor(`(() => {
     var href = location.href;
     var ticket = (href.match(/[?&]career=([^&#]+)/) || [])[1] || '';
@@ -1529,9 +1626,9 @@ async function runFullFlow(cdp, campaign, commissions) {
   gate('C5 终局真实结算唯一写入 C5 + ending.research', c5Rows.length === 1 && endingRows.length === 1, J({ c5Rows, endingRows }));
   const endingView = await campaignView(cdp, afterEnding);
   gate('C5 章节视图显示已完成与后日常入口', endingView.ok === true && endingView.chapters.some((chapter) => chapter.chapterId === 'C5' && chapter.state === 'complete'), J(endingView));
-  await forbiddenTextScan(cdp, 'ending');
+  const endingCard = await waitReceipt(cdp, endingRun.ticketId);
+  checkReceiptText(endingCard, 'ending');
   await checkConsole(cdp, 'ending');
-  gate('QA 全程 console error 为零', QA.errors.length === 0, J(QA.errors.slice(0, 5)));
 }
 
 function expectChapterAdvance(sequence, expected, after, previousChapter) {
@@ -1543,10 +1640,37 @@ function expectChapterAdvance(sequence, expected, after, previousChapter) {
  * 7. 入口 / 清理 / 汇总
  * ------------------------------------------------------------------ */
 
+async function runBrowserScenario(label, runScenario) {
+  step('browser:' + label);
+  let launched = null;
+  let browser = null;
+  const pages = [];
+  try {
+    launched = await launchChrome({ port: CDP_PORT, profilePrefix: 'studiokit-career-flow-', windowSize: '420,900' });
+    const newPage = async () => {
+      const page = await openPage({ port: launched.port, width: 390, height: 844, artifactsDir: ARTIFACTS_DIR });
+      pages.push(page);
+      return page;
+    };
+    browser = new CDP(launched.browserWsPath);
+    await browser.ready();
+    await runScenario(await newPage(), browser, newPage);
+  } catch (err) {
+    if (!(err instanceof GateBlocked)) {
+      gate('RUN ' + label + ' 链路中断 [' + CURRENT_STEP + ']', false, String(err?.stack || err));
+    }
+  } finally {
+    pages.forEach((page) => page.close());
+    if (browser) browser.close();
+    if (launched) await stopChrome(launched);
+  }
+}
+
 function usage() {
   console.log(`用法：
   node tools/career_flow_e2e_test.mjs --static-only
   node tools/career_flow_e2e_test.mjs
+  node tools/career_flow_e2e_test.mjs --memory-origin-only
 环境变量：CAREER_FLOW_PORT / CAREER_FLOW_CDP / CHROME_PATH / CAREER_FLOW_QA_DIR
 退出码：0 PASS；1 FAIL 或 BLOCKED；2 用法/环境错误`);
 }
@@ -1557,40 +1681,32 @@ async function main() {
     usage();
     return 0;
   }
-  const unknown = args.filter((arg) => arg !== '--static-only');
-  if (unknown.length) {
-    console.error('参数错误: ' + J(unknown));
+  const memoryOriginOnly = args.includes('--memory-origin-only');
+  const unknown = args.filter((arg) => !['--static-only', '--memory-origin-only'].includes(arg));
+  if (unknown.length || (memoryOriginOnly && args.includes('--static-only'))) {
+    console.error('参数错误: ' + J(args));
     usage();
     return 2;
   }
   STATIC_ONLY = args.includes('--static-only');
 
-  console.log('=== StudioKit career flow gate (baseline 1e22a52) ===');
-  console.log('mode: ' + (STATIC_ONLY ? 'static-only' : 'full Chrome'));
+  console.log('=== StudioKit career flow gate ===');
+  console.log('mode: ' + (STATIC_ONLY ? 'static-only' : memoryOriginOnly ? 'memory-flip arrival Chrome' : 'full Chrome'));
   staticContentChecks();
   staticInterfaceChecks();
 
-  let server = null;
-  let launched = null;
-  let cdp = null;
   if (!STATIC_ONLY) {
+    const server = await startServer({ root: REPO_ROOT, port: SERVER_PORT });
     try {
-      server = await startServer({ root: REPO_ROOT, port: SERVER_PORT });
-      launched = await launchChrome({ port: CDP_PORT, profilePrefix: 'studiokit-career-flow-', windowSize: '420,900' });
-      cdp = await openPage({ port: launched.port, width: 390, height: 844, artifactsDir: ARTIFACTS_DIR });
-      const campaign = readJson('apps/arcade/career/content/campaign.json');
-      const commissions = readJson('apps/arcade/career/content/commissions.json').commissions;
-      await runFullFlow(cdp, campaign, commissions);
-    } catch (err) {
-      if (err instanceof GateBlocked) {
-        /* BLOCKED 已逐项记录，不重复计 FAIL。 */
-      } else {
-        gate('RUN 链路中断 [' + CURRENT_STEP + ']', false, String(err && err.stack ? err.stack : err));
+      if (!memoryOriginOnly) {
+        const campaign = readJson('apps/arcade/career/content/campaign.json');
+        const commissions = readJson('apps/arcade/career/content/commissions.json').commissions;
+        await runBrowserScenario('二十一点到研究终局', (cdp, browser, newPage) => runFullFlow(cdp, browser, newPage, campaign, commissions));
       }
+      await runBrowserScenario('记忆翻牌到港', (cdp) => runOriginToTown(cdp, MEMORY_ORIGIN));
+      gate('QA 全程 console error 为零', QA.errors.length === 0, J(QA.errors.slice(0, 5)));
     } finally {
-      if (cdp) cdp.close();
-      if (launched) await stopChrome(launched);
-      if (server) await new Promise((resolve) => server.close(resolve));
+      await new Promise((resolve) => server.close(resolve));
     }
   }
 
