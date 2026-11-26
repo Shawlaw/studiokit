@@ -1,6 +1,6 @@
 # 街机厅 Arcade
 
-**线上 `0.21.0`（2026-11-26 已双端发布）；本地 `0.21.1` 为未发布修复（`fix/arcade-career-entry-0211` HEAD `242d0a3`）**｜进度 / 局内 / 游玩统计 / 积分记录 / 挑战记录 / 游戏数据 meta 的 Schema 均为 `v1`；0.15 新增独立生涯 IndexedDB（`studiokit:arcade:career` v1，11 stores），不改变既有 localStorage 键；生涯内容 `contentVersion` 仍为 `0.18.0`。0.21.0 把中心页生涯入口收回被动发现，增加选择式叙事、可解冻封存与仅生涯数据完全重置；0.21.1 修正「身份建立后也无内容入口」的过度实现：身份建立后显示常驻「旧港生涯」内容入口，封存隐藏、解冻恢复、完全重置后消失，仍不恢复生涯视图 / 默认视图切换。**产品版本链与 SW 缓存键仍为 0.21.0 / `studiokit-arcade-0.21.0-v1`（未做版本 bump）；0.21.1 未发布、未全量验证，实测范围见 [`INTEGRATION-0.21.1.md`](../../docs/arcade-life/INTEGRATION-0.21.1.md)**。
+**线上 `0.21.0`（2026-11-26 已双端发布）；本地 `0.21.1` 为未发布修复（`fix/arcade-career-entry-0211` HEAD `87746d4`）**｜进度 / 局内 / 游玩统计 / 积分记录 / 挑战记录 / 游戏数据 meta 的 Schema 均为 `v1`；0.15 新增独立生涯 IndexedDB（`studiokit:arcade:career` v1，11 stores），不改变既有 localStorage 键；生涯内容 `contentVersion` 仍为 `0.18.0`。0.21.0 把中心页生涯入口收回被动发现，增加选择式叙事、可解冻封存与仅生涯数据完全重置；0.21.1 修正「身份建立后也无内容入口」的过度实现：身份建立后显示常驻「旧港生涯」内容入口，封存隐藏、解冻恢复、完全重置后消失，仍不恢复生涯视图 / 默认视图切换。**本地版本链已同步 0.21.1 / SW `studiokit-arcade-0.21.1-v1`；0.21.1 未发布，实测范围见 [`INTEGRATION-0.21.1.md`](../../docs/arcade-life/INTEGRATION-0.21.1.md)**。
 
 16 款竖屏小游戏合集的纯前端实现：加载后完全本地游玩，自带自研轻量物理引擎（重力、AABB 与圆碰撞、单向平台、单摆积分、塔体倾斜力矩），所有游戏由简到难、随时可暂停，并把未完成的局内进度自动保存在本机。支持全屏/沉浸、可安装 PWA、离线预载、游玩统计、积分记录与分享；连续有效游玩 20 分钟只温柔提醒一次，**没有签到、每日奖励、付费抽奖、内购或广告**。
 
@@ -238,7 +238,7 @@ node tools/arcade_09_data.mjs              # 78 关数据校验 / 生成
 node tools/arcade_stage_solver.mjs --stages=docs/arcade/stages-0.8.json  # 影跃 S1–S3 可达性
 ```
 
-0.21.0 起门禁分层口径唯一：`static` 不启动 Chrome（CI 的 L0 job）；`release` 追加关键 Chrome 集但仍**不等于** full；只有 `full` 全绿才可写 `ALL GATES PASSED`。每次运行输出 `PROFILE SUMMARY` 与 JSON（含每项真实墙钟耗时），不得把「没跑」写成「通过」，也不得用 release 结论替代 full。分层设计见 [`tools/README-gates.md`](../../tools/README-gates.md)。各脚本的具体项数随版本演进，**以实际运行输出为准**；历史门禁结果与发布证据记录在 [`CHANGELOG.md`](CHANGELOG.md)。0.21.1 本地修复只实跑了 `career_passive_entry` 59/59 与 `arcade_smoke` 第一轮 117/117（四档窄屏增强后的最终复跑待主 Agent），其余未跑项见 [`INTEGRATION-0.21.1.md`](../../docs/arcade-life/INTEGRATION-0.21.1.md)。
+0.21.0 起门禁分层口径唯一：`static` 不启动 Chrome（CI 的 L0 job）；`release` 追加关键 Chrome 集但仍**不等于** full；只有 `full` 全绿才可写 `ALL GATES PASSED`。每次运行输出 `PROFILE SUMMARY` 与 JSON（含每项真实墙钟耗时），不得把「没跑」写成「通过」，也不得用 release 结论替代 full。分层设计见 [`tools/README-gates.md`](../../tools/README-gates.md)。各脚本的具体项数随版本演进，**以实际运行输出为准**；历史门禁结果与发布证据记录在 [`CHANGELOG.md`](CHANGELOG.md)。0.21.1 本地修复已实跑 static 35/35、`career_passive_entry` 61/61、`arcade_smoke` 117/117（含四档窄屏、封存 / 解冻 / 重置）、mobile 318/318、PWA 18/18、archive lifecycle 60/60；其余未跑项见 [`INTEGRATION-0.21.1.md`](../../docs/arcade-life/INTEGRATION-0.21.1.md)。
 
 ## 已知边界
 

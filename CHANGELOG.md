@@ -7,8 +7,8 @@ StudioKit 门户本身没有独立的 semver；以下按仓库里程碑与工具
 ## Arcade 0.21.1 — 2026-11-26（本地修复，未发布）
 
 - 修正 0.21.0「身份建立后也无内容入口」的过度实现：生涯身份建立后，中心页在经典目录旁常驻「旧港生涯」内容入口（`?careerPanel=town`，44px 热区）；身份建立前仍只有低强调来信小字，封存时隐藏内容入口但保留生涯设置，解冻恢复，完全重置后消失。
-- 不恢复生涯视图 / 默认视图切换或常驻告示板 / 信箱 / 章节链接；经典目录、排序、积分与游玩记录不变。只改中心页 HTML / CSS 与对应断言，不改 key / Schema / IDB / 玩法数据，版本链与 SW 缓存键仍为 0.21.0 / `studiokit-arcade-0.21.0-v1`。
-- 0.21.1 实测：`career_passive_entry` 59/59、`arcade_smoke` 117/117（第一轮；四档窄屏增强后的最终复跑待主 Agent）。full profile、其余门禁、真机 / 真人与双端发布 UNVERIFIED，0.21.0 历史数字不作为本版已跑证据。
+- 不恢复生涯视图 / 默认视图切换或常驻告示板 / 信箱 / 章节链接；经典目录、排序、积分与游玩记录不变。只改中心页 HTML / CSS 与对应断言，不改 key / Schema / IDB / 玩法数据；本地版本链已同步 0.21.1 / SW `studiokit-arcade-0.21.1-v1`，未发布。
+- 0.21.1 实测：static 35/35、`career_passive_entry` 61/61、`arcade_smoke` 117/117（含四档窄屏、封存 / 解冻 / 重置）、mobile 318/318、PWA 18/18、archive lifecycle 60/60；独立复审 APPROVE。release / full、96 全量 E2E、首航、真机 / 真人与双端发布 UNVERIFIED。
 - 无 `PUBLISH_TO_MAIN`、无 push、无 Actions / 线上校验；设计见 [`DESIGN-0.21.1.md`](apps/arcade/DESIGN-0.21.1.md)，验证口径见 [`INTEGRATION-0.21.1.md`](docs/arcade-life/INTEGRATION-0.21.1.md)。
 
 ## Arcade 0.21.0 — 2026-11-26（已双端发布）

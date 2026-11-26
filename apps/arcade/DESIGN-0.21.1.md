@@ -1,9 +1,9 @@
 # Arcade 0.21.1 — 生涯身份建立后的常驻旧港内容入口
 
 - 基线：0.21.0（2026-11-26 已双端发布，main `14a19b0`，Actions `45750286945` 全绿，双端 89/89 文件一致，SW `studiokit-arcade-0.21.0-v1`）
-- 本地产品分支：`fix/arcade-career-entry-0211`，HEAD `242d0a3`（`fix(arcade): 生涯身份建立后显示常驻旧港入口`）；文档工作树 `codex/career-entry-0211-docs` 仅同步文档 / 任务记录，不改产品代码、测试或门禁脚本。
-- 状态：**本地修复，未发布**。0.21.1 是本批次文档目标版本；产品代码没有版本 bump，版本链、注册表与 SW 缓存键仍为 0.21.0 / `studiokit-arcade-0.21.0-v1`，线上仍为 0.21.0。
-- 验证口径：0.21.1 仅记录主 Agent 实际完成的 `career_passive_entry` 59/59、`arcade_smoke` 117/117（第一轮；加入 320/375/390/430 四档窄屏增强断言后的最终复跑仍待主 Agent）。其余数字都是 0.21.0 已发布历史结果，不得冒充 0.21.1 已跑；详见 [`docs/arcade-life/INTEGRATION-0.21.1.md`](../../docs/arcade-life/INTEGRATION-0.21.1.md)。
+- 本地产品分支：`fix/arcade-career-entry-0211`，HEAD `87746d4`（`fix(arcade): 生涯身份建立后显示常驻旧港入口`）；文档工作树 `codex/career-entry-0211-docs` 仅同步文档 / 任务记录，不改产品代码、测试或门禁脚本。
+- 状态：**本地修复，未发布**。0.21.1 是本批次文档目标版本；版本链已同步 0.21.1 / SW `studiokit-arcade-0.21.1-v1`；线上仍为 0.21.0。
+- 验证口径：static 35/35、`career_passive_entry` 61/61、`arcade_smoke` 117/117（含四档窄屏与解冻 / 重置）、mobile 318/318、PWA 18/18、archive lifecycle 60/60；release / full / 96 全量 / 首航 / 真机未跑。详见 [`docs/arcade-life/INTEGRATION-0.21.1.md`](../../docs/arcade-life/INTEGRATION-0.21.1.md)。
 
 ## 1. 问题与边界
 
@@ -31,7 +31,7 @@
 
 ## 3. 版本、数据与兼容
 
-- 只改 `apps/arcade/index.html`（探针与内容入口节点）和 `apps/arcade/arcade.css`（`.hall-career-entry` 样式）；不改 `engine.js`、`sw.js`、`shared/tool-registry.json`、`validate_site.py` 或门禁聚合脚本。
+- 产品行为只改 `apps/arcade/index.html`（探针与内容入口节点）和 `apps/arcade/arcade.css`（`.hall-career-entry` 样式）；版本链与发布清单同步到 0.21.1，不改生涯数据 Schema 或门禁聚合脚本。
 - 不新增 / 修改 localStorage key、IndexedDB 版本 / 11 stores / `careerSchemaVersion`、生涯内容 `contentVersion 0.18.0`、`rulesetVersion`、玩法数值、委托奖励与关卡 / 挑战数据。
 - 封存标记仍写在既有 `state` store；完全重置仍由 `resetAllCareer()` 单事务执行并保留退役标记。0.21.1 只改变中心页对已有状态的呈现。
 - 无 CDN、远程字体、分析 SDK、后端请求或第三方资源；离线缓存策略与 0.21.0 相同。
@@ -42,20 +42,21 @@
 - 身份一建立（即使尚未完成 C0 或委托）即显示常驻「旧港生涯」入口，不恢复生涯视图切换；点击后打开 `?careerPanel=town`。
 - 封存后内容入口与来信小字同时隐藏、页尾仍保留「生涯设置（已封存）」；解冻后内容入口恢复。
 - 完全重置后内容入口与设置入口一起消失，经典目录仍可见且有 16 张卡。
-- 内容入口在 320/375/390/430 四档窄屏不溢出、右侧不越界、热区不小于 44px；四档增强断言加入后的 `arcade_smoke` 最终复跑仍待主 Agent 执行。
+- 内容入口在 320/375/390/430 四档窄屏不溢出、右侧不越界、热区不小于 44px；最终 `arcade_smoke` 117/117 已验证。
 - 文档检查（静态校验、构建、README 链接、diff 空白）完成；不把 0.21.0 历史结果写成 0.21.1 实跑，不声称发布。
 
 ## 5. 验证状态
 
 | 项目 | 0.21.1 状态 |
 | --- | --- |
-| `career_passive_entry` | **59/59 PASS**（主 Agent 实跑） |
-| `arcade_smoke` | **117/117 PASS**（主 Agent 第一轮；四档窄屏增强断言后的最终复跑待主 Agent） |
-| `full` profile / 96 全量 / 首航 / PWA / mobile / 真机 / 真人 | **UNVERIFIED**（0.21.1 未跑；0.21.0 历史结果见集成记录） |
+| `career_passive_entry` | **61/61 PASS** |
+| `arcade_smoke` | **117/117 PASS**（含四档窄屏、解冻与重置） |
+| static / mobile / PWA / archive lifecycle | **35/35 / 318/318 / 18/18 / 60/60 PASS** |
+| `release` / `full` / 96 全量 / 首航 / 真机 / 真人 | **UNVERIFIED** |
 | Actions / 双端 `verify_deploy` / 线上 0.21.1 | **未执行**：无 `PUBLISH_TO_MAIN`，本地未发布 |
 
 ## 6. 回滚
 
 - 回退 `242d0a3` 对 `index.html` / `arcade.css` 的改动及相关测试断言即回到 0.21.0 的中心页行为；无需数据迁移，也不影响已封存数据。
-- 版本链 / SW 缓存键本就没有变更；若后续正式 bump 到 0.21.1 后再回退，再按 0.21.0 的缓存策略清理新缓存。
+- 版本链已升到 0.21.1；回退时同时将版本链归 0.21.0，SW 新缓存随 activate 清理。
 - 已执行的完全重置不可回滚，只能靠事先导出的档案恢复；这一点与 0.21.0 相同。

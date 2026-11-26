@@ -262,9 +262,9 @@ Owner 两条真机反馈：①已安装 PWA 点「检查更新」显示的是已
 
 - [x] 修正 0.21.0「身份建立后也无内容入口」的过度实现：身份建立后经典目录旁常驻「旧港生涯」入口（`?careerPanel=town`，44px 热区）；身份建立前仍只有被动来信小字
 - [x] 不恢复生涯视图 / 默认视图切换或常驻章节链接；封存隐藏内容入口但保留生涯设置，解冻恢复，完全重置后入口消失；经典目录与排序不变
-- [x] 只改中心页 HTML / CSS 与对应断言；key / Schema / IDB / 玩法数值零变化；版本链与 SW 缓存键仍为 0.21.0（未 bump），线上仍 0.21.0
+- [x] 产品行为只改中心页 HTML / CSS 与对应断言；key / Schema / IDB / 玩法数值零变化；本地版本链已同步 0.21.1 / SW `studiokit-arcade-0.21.1-v1`，线上仍 0.21.0
 - [x] 设计 / 回滚 `apps/arcade/DESIGN-0.21.1.md`、验证口径 `docs/arcade-life/INTEGRATION-0.21.1.md` 与根 / 工具文档、任务记录同步
-- [x] 主 Agent 实跑：`career_passive_entry` 59/59、`arcade_smoke` 117/117（第一轮）
+- [x] 主 Agent 实跑：static 35/35、`career_passive_entry` 61/61、`arcade_smoke` 117/117（含四档窄屏、封存 / 解冻 / 重置）、mobile 318/318、PWA 18/18、archive lifecycle 60/60；独立复审 APPROVE
 - [ ] `arcade_smoke` 四档窄屏（320/375/390/430）增强断言加入后的最终复跑仍待主 Agent
 - [ ] 0.21.1 其余门禁 / full profile / 真机 / 真人验证 UNVERIFIED；无 `PUBLISH_TO_MAIN`，未 push、未发布
 
@@ -365,7 +365,7 @@ Owner 在 iPhone 主屏 PWA（Cloudflare Pages）复测 0.13.2：星海/2048/俄
 
 ## Now
 
-1. **Arcade 0.21.1 本地修复收尾**（未发布）：待主 Agent 完成四档窄屏增强后的 `arcade_smoke` 最终复跑；`career_passive_entry` 59/59 与第一轮 smoke 117/117 已是实测，其余 0.21.1 门禁 / full / 真机 UNVERIFIED；版本 bump 与发布均需 Owner 明确授权。
+1. **Arcade 0.21.1 发布决策**（本地修复已完成，未发布）：static 35/35、入口 61/61、smoke 117/117、mobile 318/318、PWA 18/18、lifecycle 60/60 已通过；release / full / 96 全量 / 首航 / 真机 UNVERIFIED。版本链已升 0.21.1；推送与发布需 Owner 明确授权。
 2. **Arcade 0.21.0 真机 / full 收尾**（已双端发布）：release 41/41 与双端 89/89 已完成；full profile、真机 / 真人体验仍 UNVERIFIED，不得把 release 结论冒充 full。
 3. **Arcade 0.19.0 真机试玩**（已双端发布，手感待裁决）：按「走路 / 地铁站立 / 等车坐着」三种场景试 16 款游戏，重点裁决半屏方向锁、挡板相对拖动、上滑影冲、恢复门与结算防抖的首版取值，以及紧凑模式在真机标签页里的实际高度。
 4. **Arcade 0.13.0 真机试玩**：已双端发布（见上一节）；剩余真机试玩（星币节奏/能量取舍/核弹稀缺度/主题可感知度）。

@@ -2,7 +2,7 @@
 
 ## 0.21.1 — 2026-11-26（本地修复，未发布）
 
-本地分支 `fix/arcade-career-entry-0211`，HEAD `242d0a3`；设计与回滚见 [`DESIGN-0.21.1.md`](DESIGN-0.21.1.md)，集成与验证口径见 [`docs/arcade-life/INTEGRATION-0.21.1.md`](../../docs/arcade-life/INTEGRATION-0.21.1.md)。**未发布**：线上仍为 0.21.0，产品版本链与 SW 缓存键仍为 0.21.0 / `studiokit-arcade-0.21.0-v1`（本次未做版本 bump）。
+本地分支 `fix/arcade-career-entry-0211`，HEAD `87746d4`；设计与回滚见 [`DESIGN-0.21.1.md`](DESIGN-0.21.1.md)，集成与验证口径见 [`docs/arcade-life/INTEGRATION-0.21.1.md`](../../docs/arcade-life/INTEGRATION-0.21.1.md)。**未发布**：线上仍为 0.21.0；本地版本链已同步 0.21.1 / SW `studiokit-arcade-0.21.1-v1`。
 
 ### Fixed
 
@@ -12,7 +12,7 @@
 
 ### Tests
 
-- 0.21.1 实跑：`career_passive_entry` **59/59 PASS**；`arcade_smoke` **117/117 PASS（第一轮）**。
+- 0.21.1 实跑：static **35/35**、`career_passive_entry` **61/61**、`arcade_smoke` **117/117**（含四档窄屏、封存 / 解冻 / 重置）、mobile **318/318**、PWA **18/18**、archive lifecycle **60/60**；独立复审 APPROVE。
 - `arcade_smoke` 加入 320/375/390/430 四档窄屏增强断言后的最终复跑**仍待主 Agent**；其余门禁、full profile、真机 / 真人（0.21.1）UNVERIFIED。0.21.0 的历史通过数字仅作为已发布基线，不作为本版已跑证据。
 
 ### Notes
