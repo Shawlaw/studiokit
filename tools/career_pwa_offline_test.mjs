@@ -36,7 +36,7 @@ const ARTIFACTS = path.join(REPO_ROOT, 'test-artifacts');
 const DB_NAME = 'studiokit:arcade:career';
 const SW_VERSION = '0.21.2';
 const CACHE_PREFIX = 'studiokit-arcade-';
-const CACHE_KEY = `${CACHE_PREFIX}${SW_VERSION}-v2`;
+const CACHE_KEY = `${CACHE_PREFIX}${SW_VERSION}-v1`;
 const OLD_CACHE_KEY = 'studiokit-arcade-0.14.0-v1';
 const PREVIOUS_PRELOAD_KEY = 'studiokit-arcade-0.18.2-v1';
 /* 任务卡点名的 career 运行时 / 内容 / UI 资源（sw.js CORE_PATHS 中的 14 项）。 */
