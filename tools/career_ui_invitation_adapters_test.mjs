@@ -366,6 +366,21 @@ function loadUi(doc) {
   return sandbox.ArcadeCareerUI;
 }
 
+function trackShellProps(ui) {
+  const props = [];
+  const originalCreate = ui.components.CareerShell.create;
+  ui.components.CareerShell.create = function trackedCreate(panelKey) {
+    const shell = originalCreate(panelKey);
+    if (!shell) return shell;
+    return {
+      open(ctx) { props.push({ method: 'open', ctx: ctx }); return shell.open(ctx); },
+      render(ctx) { props.push({ method: 'render', ctx: ctx }); return shell.render(ctx); },
+      close() { return shell.close(); },
+    };
+  };
+  return props;
+}
+
 function buttonBy(doc, action) {
   return doc.querySelectorAll('[data-action="' + action + '"]')[0] || null;
 }
@@ -388,6 +403,11 @@ check('ReceiptCard is rendered by T11 component', /components\.ReceiptCard\(/.te
 check('no adapter injects copied stylesheet', invitationSources.every((key) => !/<style|\.style\.cssText|appendChild\(style/.test(source[key])));
 check('accept action is the only profession-write path in mailbox', /accept\.call\(session\.context, \{ professionId: invitation\.professionId, gameId: invitation\.gameId \}\)/.test(source.mailbox) && !/applyProfessionEvent|\.acceptProfessionInvitation\(/.test(source.mailbox));
 check('mailbox awaits openClue and subscribes to projection changes', /await Promise\.resolve\(session\.context\.openClue\(clueId\)\)/.test(source.mailbox) && /subscribeComponentChanges\(session\)/.test(source.mailbox) && /COMPONENT_DESTRUCTIVE_REASONS/.test(source.mailbox));
+check('T12 shells pass showHeader:false where T15 requires it',
+  (source.mailbox.match(/showHeader: false/g) || []).length >= 2
+  && (source.invitation.match(/showHeader: false/g) || []).length >= 4);
+check('P01 adapter wrapper has no copied surface styling', /wrapper\.className = 'ac-career-ui';/.test(source.clue) && !/wrapper\.className = [^;]*ac-career-ui__surface/.test(source.clue));
+check('P04 work reward is composed once before the kv list', /data-receipt-reward', 'work'/.test(source.receipt) && /insertBefore\(workRow, anchor \|\| null\)/.test(source.receipt));
 check('receipt projection never reads storyFeedback.nextStep', !/raw\.nextStep/.test(source.receipt) && /projectedStoryOf\(outer\)/.test(source.receipt));
 
 /* ------------------------------------------------------------------ *
@@ -416,6 +436,10 @@ check('receipt projection never reads storyFeedback.nextStep', !/raw\.nextStep/.
     onOpen(id) { opened += 1; eq('P01 onOpen receives fixture clueId', id, clue.clueId); },
   });
   eq('P01 clue root is career token root', rendered && rendered.className, 'ac-career-ui');
+  check('P01 adapter wrapper adds no surface/border/padding', !!rendered
+    && !rendered.hasAttribute('style')
+    && rendered.querySelectorAll('.ac-career-ui__surface').length === 0
+    && rendered.children.length === 1);
   const row = rendered && rendered.querySelector('.ac-career-ui__clue');
   eq('P01 ClueRow component state', row && row.getAttribute('data-clue-state'), 'glimpsed');
   eq('P01 ClueRow placement', row && row.getAttribute('data-placement'), 'result-host');
@@ -482,6 +506,7 @@ function invitationContext(doc, overrides = {}) {
 {
   const doc = makeDocument();
   const ui = loadUi(doc);
+  const shellProps = trackShellProps(ui);
   const p02 = stateOfFixture('P02').props.letterCard;
   const openedClues = [];
   let settleOpenClue = null;
@@ -494,6 +519,7 @@ function invitationContext(doc, overrides = {}) {
   check('P02 pending openClue exposes no guessed action', !buttonBy(doc, 'accept-invitation') && !buttonBy(doc, 'send-to-port') && !buttonBy(doc, 'deliver-letter'));
   settleOpenClue({ ok: true });
   await drain();
+  check('P02 CareerShell receives showHeader:false on every render', shellProps.length > 0 && shellProps.every((item) => item.ctx.showHeader === false), shellProps);
   const card = doc.querySelector('.ac-career-ui__letter');
   check('P02 LetterCard is present', !!card && !!panelOf(doc));
   eq('P02 letter state', card.parentNode.getAttribute('data-letter-state'), 'unread');
@@ -590,6 +616,7 @@ function narrativeFor(professionId) {
 {
   const doc = makeDocument();
   const ui = loadUi(doc);
+  const shellProps = trackShellProps(ui);
   const p05 = stateOfFixture('P05');
   const p06 = stateOfFixture('P06');
   const events = [];
@@ -612,6 +639,7 @@ function narrativeFor(professionId) {
   const opened = ui.invitation.open(ctx);
   eq('P06 adapter open ok', opened.ok, true);
   await drain();
+  check('P06 CareerShell receives showHeader:false on every render', shellProps.length > 0 && shellProps.every((item) => item.ctx.showHeader === false), shellProps);
   const panel = panelOf(doc);
   const shellBody = doc.querySelector('.ac-career-ui__body');
   check('P06 shell body was rendered', !!shellBody && shellBody.children.length > 0, {
@@ -650,6 +678,7 @@ function narrativeFor(professionId) {
 {
   const doc = makeDocument();
   const ui = loadUi(doc);
+  const shellProps = trackShellProps(ui);
   const p03 = stateOfFixture('P03');
   const events = [];
   let accepted = false;
@@ -692,6 +721,7 @@ function narrativeFor(professionId) {
   check('P03 no commission before identity is accepted', derived.firstCommission === null);
   ui.invitation.open(ctx);
   await drain();
+  check('P03 CareerShell receives showHeader:false on every render', shellProps.length > 0 && shellProps.every((item) => item.ctx.showHeader === false), shellProps);
   check('P03 harbor + caption are present', !!panelOf(doc).querySelector('svg.harbor') && textOf(panelOf(doc)).includes('折光港 · 旧码头'));
   eq('P03 NPC state first', panelOf(doc).querySelector('.ac-career-ui__npc').getAttribute('data-npc-state'), 'first');
   check('P03 freshIntro paragraphs are used', p03.props.npcDialogue.paragraphs.every((line) => textOf(panelOf(doc)).includes(line)));
@@ -790,6 +820,9 @@ function receiptPayload(overrides = {}) {
       title: p04.title,
       resultLine: p04.resultLine,
       exitLabel: p04.exitAction.label,
+      workRewardLabel: '工作报酬',
+      creditLabel: '工钱',
+      materialLabel: '材料',
     },
     careerView: {
       schemaVersion: 1,
@@ -824,7 +857,20 @@ function receiptPayload(overrides = {}) {
   check('P04 ReceiptCard component is used', !!card && card.className.includes('ac-career-ui__receipt') && card.getAttribute('role') === 'status');
   eq('P04 success state', card.getAttribute('data-receipt-state'), p04.state);
   check('P04 fixture title/resultLine shown', textOf(card).includes(p04.title) && textOf(card).includes(p04.resultLine));
-  check('P04 real credits/materials shown', textOf(card).includes(String(p04.rewards.credits)) && textOf(card).includes(p04.rewards.materials[0].name));
+  const workRow = card.querySelector('[data-receipt-reward="work"]');
+  const material = p04.rewards.materials[0];
+  eq('P04 work reward/material use one aligned row', workRow && workRow.className, 'ac-career-ui__kv');
+  eq('P04 work row composes fixture presentation with real numbers', workRow && workRow.querySelector('.ac-career-ui__kv-value').textContent,
+    '工钱 ' + p04.rewards.credits + ' · 材料 ' + material.name + ' ×' + material.count);
+  eq('P04 reward rows are not split into four equal rows', card.querySelectorAll('.ac-career-ui__kv').length, 3);
+  eq('P04 reward row order is work/identity/experience',
+    JSON.stringify(card.querySelectorAll('.ac-career-ui__kv').map((node) => node.textContent)),
+    JSON.stringify([
+      '工作报酬工钱 ' + p04.rewards.credits + ' · 材料 ' + material.name + ' ×' + material.count,
+      '生涯身份' + p04.rewards.identity,
+      '经历' + p04.rewards.experience,
+    ]));
+  check('P04 nonmodal card has no shell header/close', !doc.querySelector('.ac-career-ui__header') && !doc.querySelector('[role="dialog"]'));
   check('P04 projected identity/experience shown', textOf(card).includes(p04.rewards.identity) && textOf(card).includes(p04.rewards.experience));
   check('P04 NPC reply shown', textOf(card).includes(p04.npcReply.name) && textOf(card).includes(p04.npcReply.paragraphs[0]), textOf(card));
   check('P04 next step only from careerView', textOf(doc.body).includes('下一步：' + p04.nextAction.label) && !textOf(doc.body).includes('UNTRUSTED_FEEDBACK_STEP'));
