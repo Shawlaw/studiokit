@@ -1072,10 +1072,24 @@
     return documentOf() || { createElement(tag) { return { tagName: String(tag).toUpperCase(), className: '', textContent: '', childNodes: [], children: [], appendChild(node) { this.childNodes.push(node); this.children.push(node); return node; }, setAttribute() {} }; } };
   }
 
+  function portFixtureToolId(entry) {
+    if (!isObject(entry)) return '';
+    const direct = cleanText(entry.toolId) || cleanText(entry.id);
+    if (Object.prototype.hasOwnProperty.call(PORT_TOOL_FALLBACK, direct)) return direct;
+    const byAction = {
+      openReceipt: 'wallet',
+      openMarket: 'shop',
+      openWorkshop: 'workshop',
+      openHangar: 'hangar',
+    };
+    const actionId = cleanText(entry.actionId);
+    return byAction[actionId] || '';
+  }
+
   function portFixtureToolItems(context, fixture) {
     const source = fixture && Array.isArray(fixture.toolGrid) ? fixture.toolGrid : [];
     return Object.keys(PORT_TOOL_FALLBACK).map((id) => {
-      const tool = source.filter((entry) => isObject(entry) && cleanText(entry.id) === id)[0];
+      const tool = source.filter((entry) => isObject(entry) && portFixtureToolId(entry) === id)[0];
       if (!tool) return null;
       const openerName = id === 'wallet' ? 'openReceipt' : (id === 'shop' ? 'openMarket' : (id === 'workshop' ? 'openWorkshop' : 'openHangar'));
       return {
