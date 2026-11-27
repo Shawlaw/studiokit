@@ -84,6 +84,26 @@ const STAR_PAGE = '/apps/arcade/games/star-raid.html?careerTest=1';
 const TICKET_KEY = 'studiokit:arcade:career:ticket.v1';
 const RENTAL_KEY = 'studiokit:arcade:career:rental.v1';
 const DB_NAME = 'studiokit:arcade:career';
+const ACCEPT_INVITATION_SELECTOR = '[data-career-panel="mailbox"] [data-action="accept-invitation"]';
+const INVITATION_PORT_SELECTOR = '[data-career-panel="mailbox"] [data-action="invitation-port"]';
+
+const readJsonRel = (rel) => JSON.parse(fs.readFileSync(path.join(REPO_ROOT, rel), 'utf8'));
+const CAREER_CATALOG_FIXTURE = (() => {
+  const registry = readJsonRel('apps/arcade/career/content/registry.json');
+  const worldWork = readJsonRel('apps/arcade/career/content/world-work.json');
+  return Object.assign({}, registry, {
+    clues: readJsonRel('apps/arcade/career/content/clues.json').clues,
+    commissions: readJsonRel('apps/arcade/career/content/commissions.json').commissions,
+    worldWorkIds: worldWork.commissionIds,
+    worldWork: worldWork,
+    tools: [
+      { toolId: 'wallet', name: '钱包', introducedOnAccept: true },
+      { toolId: 'shop', name: '商店', introducedOnAccept: true },
+      { toolId: 'workshop', name: '工作台', introducedOnAccept: true },
+      { toolId: 'hangar', name: '机库', introducedOnAccept: true },
+    ],
+  });
+})();
 
 const { record, assert, summary } = createRecorder();
 const shots = [];
@@ -258,6 +278,70 @@ async function closeAllPanels(page) {
 
 async function panelPresent(page, id) {
   return !!(await page.evaluate(`!!document.querySelector('[data-career-panel="${id}"]')`));
+}
+
+/** 只读身份/职业投影与本地票据，验证邀请只建身份、不签委托。 */
+function careerIdentityExpr() {
+  return `(async () => {
+    const api = window.ArcadeCareer;
+    let view = null;
+    try { if (api && typeof api.careerView === 'function') view = await api.careerView({ surface: 'receipt' }); } catch (err) { /* ignore */ }
+    const run = api && api.commissionRun ? api.commissionRun : null;
+    return {
+      ok: !!view,
+      originGameId: view && view.originGameId ? view.originGameId : null,
+      activeProfessionId: view && view.activeProfessionId ? view.activeProfessionId : null,
+      professions: view && Array.isArray(view.professions)
+        ? view.professions.map((row) => ({ professionId: row.professionId, state: row.state })) : [],
+      nextAction: view && view.story && view.story.nextAction
+        ? { commissionId: view.story.nextAction.commissionId || null, label: view.story.nextAction.label || '' } : null,
+      run: run ? { commissionId: run.commissionId, ticketId: run.ticketId } : null,
+      hasCareerParam: /[?&]career=/.test(location.search),
+    };
+  })()`;
+}
+
+/** 包裹受控 API 只回读真实结果；仍由信箱按钮调用原实现，不预写状态。 */
+async function watchAcceptInvitation(page) {
+  return page.evaluate(`(() => {
+    const api = window.ArcadeCareer;
+    if (!api || typeof api.acceptProfessionInvitation !== 'function') return false;
+    const original = api.acceptProfessionInvitation;
+    window.__d1613AcceptOriginal = original;
+    window.__d1613AcceptCalls = [];
+    api.acceptProfessionInvitation = function (input) {
+      const returned = original.call(api, input);
+      Promise.resolve(returned).then(
+        (result) => window.__d1613AcceptCalls.push({ input: input, result: result }),
+        (err) => window.__d1613AcceptCalls.push({ error: String((err && err.message) || err) })
+      );
+      return returned;
+    };
+    return true;
+  })()`);
+}
+
+async function readAcceptInvitationCalls(page) {
+  return page.evaluate(`(() => {
+    const calls = window.__d1613AcceptCalls || [];
+    if (window.__d1613AcceptOriginal && window.ArcadeCareer) {
+      window.ArcadeCareer.acceptProfessionInvitation = window.__d1613AcceptOriginal;
+    }
+    return calls;
+  })()`);
+}
+
+/** 0.22 核心 gate 的 catalog 只能由 configure 注入；用仓库真实内容补齐，不伪造授权。 */
+async function configureCommissionCatalog(page) {
+  return page.evaluate(`(async () => {
+    const api = window.ArcadeCareer;
+    if (!api || typeof api.careerView !== 'function') return { ok: false, reason: 'bridge-unavailable' };
+    try { await api.careerView({ surface: 'work' }); } catch (err) { /* ignore */ }
+    if (!api.commission || typeof api.commission.configure !== 'function') return { ok: false, reason: 'commission-unavailable' };
+    const returned = api.commission.configure({ catalog: ${JSON.stringify(CAREER_CATALOG_FIXTURE)} });
+    const result = returned && typeof returned.then === 'function' ? await returned : returned;
+    return { ok: !!(result && result.ok === true), result: result };
+  })()`);
 }
 
 async function openPanel(page, id, { waitMs = 900 } = {}) {
@@ -504,6 +588,8 @@ async function setUpFixture(page) {
 async function phaseBoot(page, base) {
   await page.navigate(`${base}/apps/arcade/games/pendulum-tower.html?careerTest=1#test`);
   await waitReady(page);
+  const catalogConfig = await configureCommissionCatalog(page);
+  record('BOOT commission-core 由真实注册表目录完成 gate 配置', catalogConfig.ok === true, JSON.stringify(catalogConfig));
   const info = await page.evaluate(`(() => ({
     available: !!(window.ArcadeCareer && window.ArcadeCareer.available),
     gameId: window.ArcadeCareer && window.ArcadeCareer.gameId,
@@ -611,8 +697,75 @@ async function phaseEntry(page) {
     JSON.stringify(sendIndex)
   );
 
+  const beforeDelivery = await page.evaluate(careerIdentityExpr());
+  record(
+    'ENTRY 真实线索/读信后仍无生涯身份与职业 run',
+    !!(beforeDelivery.ok && beforeDelivery.originGameId === null && beforeDelivery.professions.length === 0 &&
+      beforeDelivery.run === null && beforeDelivery.hasCareerParam === false),
+    JSON.stringify(beforeDelivery)
+  );
+
   await touchClick(page, sendSelector);
-  await sleep(1000);
+  await page.waitFor(`(() => {
+    const b = document.querySelector(${JSON.stringify(ACCEPT_INVITATION_SELECTOR)});
+    return !!b && !b.hidden && !b.disabled && b.getClientRects().length > 0;
+  })()`, { timeout: 8000 });
+  const invitationState = await page.evaluate(`(() => {
+    const panel = document.querySelector('[data-career-panel="mailbox"]');
+    const accept = panel && panel.querySelector('[data-action="accept-invitation"]');
+    const defer = panel && panel.querySelector('[data-action="defer-invitation"]');
+    const legacyTown = panel && panel.querySelector('[data-action="open-town"]');
+    const rectOf = (node) => {
+      if (!node) return null;
+      const r = node.getBoundingClientRect();
+      return { w: Math.round(r.width), h: Math.round(r.height) };
+    };
+    return {
+      accept: accept ? { text: (accept.textContent || '').trim(), rect: rectOf(accept) } : null,
+      defer: defer ? { text: (defer.textContent || '').trim() } : null,
+      legacyTownHidden: !legacyTown || legacyTown.hidden === true,
+      town: !!document.querySelector('[data-career-panel="town"]'),
+    };
+  })()`);
+  record(
+    'ENTRY 投递只出现「接受邀请 / 以后再说」，不自动开港口、不建身份（按钮 ≥44）',
+    !!(invitationState && invitationState.accept && invitationState.accept.text === '接受这份邀请' &&
+      invitationState.accept.rect.w >= 44 && invitationState.accept.rect.h >= 44 &&
+      invitationState.defer && invitationState.defer.text === '以后再说' &&
+      invitationState.legacyTownHidden && invitationState.town === false),
+    JSON.stringify(invitationState)
+  );
+
+  const invitation = await page.evaluate(`window.ArcadeCareer.invitationForClue('CL-pendulum-tower')`);
+  record(
+    'ENTRY 邀请小面来自真实线索与注册表映射',
+    !!(invitation && invitation.professionId === 'engineering.structural' && invitation.gameId === 'pendulum-tower' && invitation.canAccept === true),
+    JSON.stringify(invitation)
+  );
+  await watchAcceptInvitation(page);
+  const acceptHit = await touchClick(page, ACCEPT_INVITATION_SELECTOR);
+  await page.waitFor(`(() => {
+    const b = document.querySelector(${JSON.stringify(INVITATION_PORT_SELECTOR)});
+    return !!b && !b.hidden && b.getClientRects().length > 0;
+  })()`, { timeout: 8000 });
+  const acceptCalls = await readAcceptInvitationCalls(page);
+  const afterAccept = await page.evaluate(careerIdentityExpr());
+  const acceptedCall = acceptCalls.find((row) => row.result && row.result.ok === true);
+  record(
+    'ENTRY 真实受控 acceptProfessionInvitation 建立首次身份/职业且不接委托',
+    !!(acceptCalls.length === 1 && acceptedCall &&
+      acceptedCall.input.professionId === 'engineering.structural' && acceptedCall.input.gameId === 'pendulum-tower' &&
+      acceptedCall.result.created === true && acceptedCall.result.newlyAccepted === true &&
+      afterAccept.ok === true && afterAccept.originGameId === 'pendulum-tower' &&
+      afterAccept.activeProfessionId === 'engineering.structural' &&
+      afterAccept.professions.some((row) => row.professionId === 'engineering.structural' && row.state === 'accepted') &&
+      afterAccept.run === null && afterAccept.hasCareerParam === false &&
+      acceptHit.w >= 44 && acceptHit.h >= 44),
+    det(['call=' + JSON.stringify(acceptCalls), 'identity=' + JSON.stringify(afterAccept), 'touch=' + JSON.stringify(acceptHit)])
+  );
+
+  const portHit = await touchClick(page, INVITATION_PORT_SELECTOR);
+  await sleep(800);
   const afterSend = await page.evaluate(`(() => {
     const state = window.ArcadeCareer.state();
     return {
@@ -623,10 +776,10 @@ async function phaseEntry(page) {
     };
   })()`);
   record(
-    'ENTRY 触控首读主按钮一次完成投递：LOCAL 已生效、告示板打开、信箱收起',
+    'ENTRY 触控「去港口看看」打开告示板、信箱收起（接委托仍待显式点击，按钮 ≥44）',
     !!(afterSend && afterSend.stage === 'LOCAL' && afterSend.town && !afterSend.mailbox &&
-      afterSend.panels.length === 1 && afterSend.panels[0] === 'town'),
-    JSON.stringify(afterSend)
+      afterSend.panels.length === 1 && afterSend.panels[0] === 'town' && portHit.w >= 44 && portHit.h >= 44),
+    det(['state=' + JSON.stringify(afterSend), 'touch=' + JSON.stringify(portHit)])
   );
 
   await esc(page);
@@ -643,10 +796,18 @@ async function phaseEntry(page) {
     JSON.stringify(afterSendTownEsc)
   );
 
-  /* 重新打开信箱 → 去港口 → 告示板 */
+  /* 重新打开信箱 → 旧港入口 → 告示板；接受后邀请小面让位给常态去港口入口。 */
   await page.evaluate(`(() => { const b = document.getElementById('d1613-trigger'); if (b) b.focus(); return true; })()`);
   await openPanel(page, 'mailbox', { waitMs: 400 });
-  await touchClick(page, '[data-career-panel="mailbox"] [data-action="open-town"]');
+  const legacyPortSelector = await page.evaluate(`(() => {
+    const panel = document.querySelector('[data-career-panel="mailbox"]');
+    const visible = (node) => !!node && !node.hidden && node.getClientRects().length > 0;
+    if (visible(panel && panel.querySelector('[data-action="invitation-port"]'))) return '[data-career-panel="mailbox"] [data-action="invitation-port"]';
+    if (visible(panel && panel.querySelector('[data-action="open-town"]'))) return '[data-career-panel="mailbox"] [data-action="open-town"]';
+    return null;
+  })()`);
+  record('ENTRY 首次身份建立后旧港入口仍在信箱可点', !!legacyPortSelector, 'selector=' + String(legacyPortSelector));
+  await touchClick(page, legacyPortSelector || '[data-career-panel="mailbox"] [data-action="open-town"]');
   await sleep(800);
   const townOpen = await page.evaluate(`(() => {
     const town = document.querySelector('[data-career-panel="town"]');
@@ -1007,8 +1168,31 @@ async function phaseTouch(page) {
   await sleep(350);
   record('TOUCH 关闭（收起机库）触控命中', !(await panelPresent(page, 'hangar')), 'touch=' + JSON.stringify(close));
 
-  /* 触控接单：优先点当前推荐卡内的接单按钮（首屏真实可见）；推荐卡未出现时
-     仍用原委托 id 选择器，bringIntoView 会展开所属 details 后再滚动。 */
+  /* 触控接单：先确认邀请已建立身份但未创建 run，再点当前推荐卡内的接单按钮。 */
+  const beforeCommission = await page.evaluate(careerIdentityExpr());
+  record(
+    'TOUCH 接单前首次身份/职业已建立且无职业 run',
+    !!(beforeCommission.ok && beforeCommission.originGameId === 'pendulum-tower' &&
+      beforeCommission.activeProfessionId === 'engineering.structural' && beforeCommission.run === null &&
+      beforeCommission.hasCareerParam === false),
+    JSON.stringify(beforeCommission)
+  );
+  const boardFacts = await page.evaluate(`(async () => {
+    const api = window.ArcadeCareer;
+    const listing = api && api.commission && typeof api.commission.listAvailable === 'function'
+      ? await api.commission.listAvailable({ ensure: false, surface: 'work' }) : null;
+    const view = api && typeof api.careerView === 'function' ? await api.careerView({ surface: 'work' }) : null;
+    return {
+      listingOk: !!(listing && listing.ok), reason: listing && listing.reason || null,
+      ids: listing && Array.isArray(listing.availableIds) ? listing.availableIds : [],
+      viewCount: view && Array.isArray(view.commissions) ? view.commissions.length : null,
+    };
+  })()`);
+  record(
+    'TOUCH 接单前 commission-core 有真实可接集合',
+    !!(boardFacts.listingOk && boardFacts.ids.length > 0 && boardFacts.viewCount === boardFacts.ids.length),
+    JSON.stringify(boardFacts)
+  );
   await openPanel(page, 'town', { waitMs: 1000 });
   const beforeUrl = await page.evaluate('location.href');
   const recommendedStart = '[data-career-panel="town"] [data-town-recommend-id] [data-town-action="start"]';
@@ -1164,6 +1348,8 @@ async function phasePwa(base) {
     });
     await pwa.navigate(`${base}${GAME_PAGE}`);
     await waitReady(pwa);
+    const pwaCatalog = await configureCommissionCatalog(pwa);
+    record('PWA 面板页已注入真实 commission-core catalog', pwaCatalog.ok === true, JSON.stringify(pwaCatalog));
     const env = await pwa.evaluate(`(() => ({
       injected: window.__d1613Standalone === true,
       media: !!(window.matchMedia && window.matchMedia('(display-mode: standalone)').matches),
@@ -1339,6 +1525,8 @@ async function main() {
 
     await page.navigate(`${base}${GAME_PAGE}`);
     await waitReady(page);
+    const touchCatalog = await configureCommissionCatalog(page);
+    record('NAV 触控接单页已注入真实 commission-core catalog', touchCatalog.ok === true, JSON.stringify(touchCatalog));
     await page.evaluate(`window.__arcadeCareerTest.seedState({
       stage: 'LOCAL',
       firstClueId: 'CL-pendulum-tower',
@@ -1362,6 +1550,8 @@ async function main() {
     await setViewport(page, 390, 844);
     await page.navigate(`${base}${GAME_PAGE}`);
     await waitReady(page);
+    const starCatalog = await configureCommissionCatalog(page);
+    record('NAV star 接单页已注入真实 commission-core catalog', starCatalog.ok === true, JSON.stringify(starCatalog));
     await page.evaluate(`sessionStorage.removeItem(${JSON.stringify(TICKET_KEY)})`);
     await page.evaluate(`(async () => { try { await window.ArcadeCareer.openTown(); } catch (err) { /* ignore */ } await new Promise((r) => setTimeout(r, 500)); return true; })()`);
     await closeAllPanels(page);

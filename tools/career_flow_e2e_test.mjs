@@ -58,6 +58,22 @@ const VIEWPORTS = [
   { width: 390, height: 844, label: '390×844' },
   { width: 430, height: 932, label: '430×932' },
 ];
+const CAREER_CATALOG_FIXTURE = (() => {
+  const registry = readJson('apps/arcade/career/content/registry.json');
+  const worldWork = readJson('apps/arcade/career/content/world-work.json');
+  return Object.assign({}, registry, {
+    clues: readJson('apps/arcade/career/content/clues.json').clues,
+    commissions: readJson('apps/arcade/career/content/commissions.json').commissions,
+    worldWorkIds: worldWork.commissionIds,
+    worldWork: worldWork,
+    tools: [
+      { toolId: 'wallet', name: '钱包', introducedOnAccept: true },
+      { toolId: 'shop', name: '商店', introducedOnAccept: true },
+      { toolId: 'workshop', name: '工作台', introducedOnAccept: true },
+      { toolId: 'hangar', name: '机库', introducedOnAccept: true },
+    ],
+  });
+})();
 
 /**
  * 与当前 campaign.recommend / ADR §20.9 一致的首选零种子路线
@@ -327,12 +343,11 @@ const INTERFACES = [
     critical: false,
   },
   {
-    /* 产品最终文案用「新完成的段落：」替代「已完成章节：」（去掉系统词），
-       两者都能证明当前屏有段落完成反馈；优先新文案，兼容旧文案。 */
-    name: 'I05 收据「新完成的段落 / 下一步」反馈',
+    /* 0.22 统一披露：收据的下一步与经历只从 careerView.story 投影读取，
+       不再依赖「新完成的段落 / 已完成章节」这类特定文案；玩家仍须看到下一步。 */
+    name: 'I05 收据 nextAction/经历来自 careerView 投影且下一步可见',
     file: 'apps/arcade/career/ui/receipt.js',
-    needles: ['下一步：'],
-    anyNeedles: [['新完成的段落：'], ['已完成章节：']],
+    needles: ['projectedStoryOf', 'story.nextAction', 'story.history', '下一步：'],
     critical: true,
   },
   {
@@ -572,6 +587,72 @@ async function readOnlyState(cdp) {
   })()`);
 }
 
+/** 只读职业身份投影与当前票据：证明接受邀请只建身份，未签下委托。 */
+async function careerIdentitySnapshot(cdp) {
+  return cdp.evaluate(`(async () => {
+    const api = window.ArcadeCareer;
+    let view = null;
+    try { if (api && typeof api.careerView === 'function') view = await api.careerView({ surface: 'receipt' }); } catch (err) { /* ignore */ }
+    const run = api && api.commissionRun ? api.commissionRun : null;
+    return {
+      ok: !!view,
+      originGameId: view && view.originGameId ? view.originGameId : null,
+      activeProfessionId: view && view.activeProfessionId ? view.activeProfessionId : null,
+      professions: view && Array.isArray(view.professions)
+        ? view.professions.map((row) => ({ professionId: row.professionId, state: row.state })) : [],
+      nextAction: view && view.story && view.story.nextAction
+        ? { commissionId: view.story.nextAction.commissionId || null, label: view.story.nextAction.label || '' } : null,
+      run: run ? { commissionId: run.commissionId, ticketId: run.ticketId } : null,
+      hasCareerParam: /[?&]career=/.test(location.search),
+    };
+  })()`);
+}
+
+/** 包裹受控 API 回读真实结果；信箱仍点击调用原实现，不预写 accepted。 */
+async function watchAcceptInvitation(cdp) {
+  return cdp.evaluate(`(() => {
+    const api = window.ArcadeCareer;
+    if (!api || typeof api.acceptProfessionInvitation !== 'function') return false;
+    const original = api.acceptProfessionInvitation;
+    window.__flowAcceptOriginal = original;
+    window.__flowAcceptCalls = [];
+    api.acceptProfessionInvitation = function (input) {
+      const returned = original.call(api, input);
+      Promise.resolve(returned).then(
+        (result) => window.__flowAcceptCalls.push({ input: input, result: result }),
+        (err) => window.__flowAcceptCalls.push({ error: String((err && err.message) || err) })
+      );
+      return returned;
+    };
+    return true;
+  })()`);
+}
+
+async function readAcceptInvitationCalls(cdp) {
+  return cdp.evaluate(`(() => {
+    const calls = window.__flowAcceptCalls || [];
+    if (window.__flowAcceptOriginal && window.ArcadeCareer) {
+      window.ArcadeCareer.acceptProfessionInvitation = window.__flowAcceptOriginal;
+    }
+    return calls;
+  })()`);
+}
+
+/** 0.22 核心 gate 的 catalog 只能由 configure 注入；测试只补真实目录，不伪造状态。 */
+async function configureCommissionCatalog(cdp, label) {
+  const configured = await cdp.evaluate(`(async () => {
+    const api = window.ArcadeCareer;
+    if (!api || typeof api.careerView !== 'function') return { ok: false, reason: 'bridge-unavailable' };
+    try { await api.careerView({ surface: 'work' }); } catch (err) { /* ignore */ }
+    if (!api.commission || typeof api.commission.configure !== 'function') return { ok: false, reason: 'commission-unavailable' };
+    const returned = api.commission.configure({ catalog: ${JSON.stringify(CAREER_CATALOG_FIXTURE)} });
+    const result = returned && typeof returned.then === 'function' ? await returned : returned;
+    return { ok: !!(result && result.ok === true), result: result };
+  })()`);
+  requireFeature('CATALOG ' + label + ' 真实 commission-core 目录已配置', configured.ok === true, J(configured));
+  return configured;
+}
+
 /** 纯函数：由只读快照推导章节旗标、证据（含来源游戏）与已清委托。 */
 /**
  * 运行时真实派生：调用页面 window.ArcadeCareer.storyEvidence.storyFlags，
@@ -667,6 +748,9 @@ async function receiptSnapshot(cdp) {
       runId: card.getAttribute('data-run-id'),
       text: card.innerText.trim(),
       next: [...card.querySelectorAll('p')].find((line) => line.getClientRects().length && /^下一步[：:]/.test(line.innerText.trim()))?.innerText.trim() || '',
+      storyLines: [...card.querySelectorAll('.ac-career-receipt-story p')]
+        .filter((line) => line.getClientRects().length)
+        .map((line) => (line.innerText || '').trim()),
       buttons: buttons,
     };
   })()`);
@@ -678,6 +762,29 @@ async function waitReceipt(cdp, runId, timeout = 30000) {
     : `!!document.querySelector('[data-career-card="receipt"]')`;
   await cdp.waitFor(expression, { timeout });
   return receiptSnapshot(cdp);
+}
+
+/** 结算卡可见的下一步/经历必须来自真实 careerView 投影，不靠章节完成文案猜测。 */
+async function receiptProjection(cdp) {
+  return cdp.evaluate(`(async () => {
+    const api = window.ArcadeCareer;
+    if (!api || typeof api.careerView !== 'function') return { ok: false, reason: 'careerView-missing' };
+    let view = null;
+    try { view = await api.careerView({ surface: 'receipt' }); } catch (err) { return { ok: false, reason: 'careerView-threw' }; }
+    if (!view || !view.story) return { ok: false, reason: 'no-projection' };
+    const action = view.story.nextAction || null;
+    const label = typeof action === 'string' ? action
+      : action ? (action.label || action.text || action.description || '') : '';
+    return {
+      ok: true,
+      nextLabel: String(label || '').trim(),
+      nextKind: action && typeof action === 'object' ? action.kind || null : null,
+      history: (Array.isArray(view.story.history) ? view.story.history : []).map((row) =>
+        String(typeof row === 'string' ? row : (row && (row.label || row.text)) || '').trim()).filter(Boolean),
+      originGameId: view.originGameId || null,
+      activeProfessionId: view.activeProfessionId || null,
+    };
+  })()`);
 }
 
 const FORBIDDEN_PATTERNS = [
@@ -1092,6 +1199,7 @@ async function phaseDiscovery(cdp, gameId) {
   /* 首页已用真实点击打开游戏，再加载同一页的原生玩法钩子。 */
   await go(cdp, gameUrl(gameId), 'origin-game-hook');
   await waitBridge(cdp, 'origin-game-hook');
+  await configureCommissionCatalog(cdp, gameId + '-origin');
   const snapshot0 = await readOnlyState(cdp);
   requireFeature('NEW ' + gameId + ' 独立新档无生涯身份', snapshot0?.ok === false && snapshot0.reason === 'no-career', J(snapshot0));
 
@@ -1146,6 +1254,7 @@ async function phaseHomepageRevisit(cdp) {
   await waitForRevisitUrl(cdp, '未读来信回访');
   /* 首页回访链接不带 careerTest=1：只等公开 bridge ready。 */
   await waitBridge(cdp, 'careerLetter-revisit', false);
+  await configureCommissionCatalog(cdp, 'revisit-unread');
   await waitPanel(cdp, 'mailbox', 15000);
   const mailbox1 = await panelSnapshot(cdp, 'mailbox');
   gate('HOME 回访自动重显未读来信（且留在游戏页）', !!(mailbox1 && mailbox1.text.length > 20), J(mailbox1 && mailbox1.text.slice(0, 300)));
@@ -1162,11 +1271,13 @@ async function phaseHomepageRevisit(cdp) {
   await waitForRevisitUrl(cdp, '已读未投递续读');
   /* 同上：真实首页续读链接只有生产 bridge。 */
   await waitBridge(cdp, 'careerLetter-undelivered', false);
+  await configureCommissionCatalog(cdp, 'revisit-read');
   await waitPanel(cdp, 'mailbox', 15000);
 }
 
 async function phaseSingleDelivery(cdp, gameId) {
   step('phase:single-delivery');
+  await configureCommissionCatalog(cdp, gameId + '-delivery');
   /* 首封未投递：产品只显示 [data-action="send-to-port"]「送去折光港」，
      旧「按地址投递 · 去港口」按设计隐藏；已投递/回看仍用 open-town，不全局替换。 */
   const actionCount = await cdp.evaluate(`(() => {
@@ -1200,28 +1311,102 @@ async function phaseSingleDelivery(cdp, gameId) {
     : '[data-career-panel="mailbox"] [data-action="open-town"]';
   await viewportChecks(cdp, '信箱', [primaryAction]);
 
+  const beforeDelivery = await careerIdentitySnapshot(cdp);
+  gate('LETTER 读信后仍无生涯身份与职业 run',
+    beforeDelivery.ok === true && beforeDelivery.originGameId === null && beforeDelivery.professions.length === 0 &&
+      beforeDelivery.run === null && beforeDelivery.hasCareerParam === false,
+    J(beforeDelivery));
+
   const before = await cdp.evaluate('location.href');
   await pressVisible(cdp, primaryAction, '把旧物送到旧港');
+  await cdp.waitFor(`(() => {
+    const b = document.querySelector('[data-career-panel="mailbox"] [data-action="accept-invitation"]');
+    return !!b && !b.hidden && !b.disabled && b.getClientRects().length > 0;
+  })()`, { timeout: 10000 });
+  const afterDelivery = await careerIdentitySnapshot(cdp);
+  gate('LETTER 一次投递只送达信件，不自动建身份/开港口/接委托',
+    afterDelivery.ok === true && afterDelivery.originGameId === null && afterDelivery.professions.length === 0 &&
+      afterDelivery.run === null && afterDelivery.hasCareerParam === false &&
+      await cdp.evaluate('location.href') === before,
+    J(afterDelivery));
+
+  const clueId = gameId === MEMORY_ORIGIN ? 'CL-memory-flip' : ORIGIN_CLUE;
+  const invitation = await cdp.evaluate(`window.ArcadeCareer.invitationForClue(${J(clueId)})`);
+  requireFeature('INVITE 受控邀请小面来自真实线索映射',
+    !!invitation && invitation.gameId === gameId && invitation.state === 'read' && invitation.canAccept === true,
+    J(invitation));
+  await viewportChecks(cdp, '邀请信箱', ['[data-career-panel="mailbox"] [data-action="accept-invitation"]']);
+  await watchAcceptInvitation(cdp);
+  await pressVisible(cdp, '[data-career-panel="mailbox"] [data-action="accept-invitation"]', '接受职业邀请');
+  await cdp.waitFor(`(() => {
+    const b = document.querySelector('[data-career-panel="mailbox"] [data-action="invitation-port"]');
+    return !!b && !b.hidden && b.getClientRects().length > 0;
+  })()`, { timeout: 10000 });
+  const acceptCalls = await readAcceptInvitationCalls(cdp);
+  const afterInvitation = await careerIdentitySnapshot(cdp);
+  const acceptedCall = acceptCalls.find((row) => row.result && row.result.ok === true);
+  gate('INVITE 真实 acceptProfessionInvitation 建立首次身份且不接委托',
+    acceptCalls.length === 1 && !!acceptedCall &&
+      acceptedCall.input.professionId === invitation.professionId && acceptedCall.input.gameId === gameId &&
+      acceptedCall.result.created === true && acceptedCall.result.newlyAccepted === true &&
+      afterInvitation.ok === true && afterInvitation.originGameId === gameId &&
+      afterInvitation.activeProfessionId === invitation.professionId &&
+      afterInvitation.professions.some((row) => row.professionId === invitation.professionId && row.state === 'accepted') &&
+      afterInvitation.run === null && afterInvitation.hasCareerParam === false,
+    J({ calls: acceptCalls, identity: afterInvitation, invitation }));
+  await viewportChecks(cdp, '接受后的信箱', ['[data-career-panel="mailbox"] [data-action="invitation-port"]']);
+
+  await pressVisible(cdp, '[data-career-panel="mailbox"] [data-action="invitation-port"]', '接受邀请后去港口');
   const board = await waitPanel(cdp, 'town', 15000);
-  gate('TOWN 一次点击进港并在当前页打开告示板', !!board && await cdp.evaluate('location.href') === before, J(board && board.text.slice(0, 300)));
-  const arrival = await cdp.evaluate(`(() => {
-    const reply = document.querySelector('[data-career-panel="town"] [data-town-intro] [data-town-arrival]');
-    return reply?.getClientRects().length ? reply.innerText.trim() : '';
-  })()`);
-  const expected = ORIGIN_ARRIVAL[gameId];
-  gate('TOWN ' + gameId + ' 到港回应同时写明正确寄信人和旧物',
-    arrival.includes(expected.sender) && arrival.includes(expected.object) &&
-      !arrival.includes(expected.otherSender) && !arrival.includes(expected.otherObject),
-    J({ expected, arrival }));
+  gate('TOWN 显式打开港口并在当前页打开告示板，仍未自动接单',
+    !!board && await cdp.evaluate('location.href') === before &&
+      await cdp.evaluate('!window.ArcadeCareer.commissionRun'),
+    J(board && board.text.slice(0, 300)));
+  await verifyOriginArrival(cdp, gameId);
   if (gameId === ORIGIN_GAME) await checkOptionalFlight(cdp);
   await forbiddenTextScan(cdp, 'town-first-' + gameId);
   await checkConsole(cdp, 'delivery-' + gameId);
 }
 
+async function verifyOriginArrival(cdp, gameId) {
+  step('arrival:' + gameId);
+  /* 0.22 到港回应只在身份起源游戏页展示；从统一信箱深链进入的港口页不伪造来源。 */
+  await go(cdp, gameUrl(gameId), 'arrival-origin-' + gameId);
+  await waitBridge(cdp, 'arrival-origin-' + gameId, true);
+  await configureCommissionCatalog(cdp, 'arrival-origin-' + gameId);
+  await cdp.evaluate('window.ArcadeCareer.openTown()');
+  await waitPanel(cdp, 'town', 15000);
+  /* 投影与 reveal 是异步装载：等主卡出现后再读取到港回应，避免读到空初始帧。 */
+  await cdp.waitFor(`!!document.querySelector('[data-career-panel="town"] [data-town-recommend-id]')`, { timeout: 12000 });
+  const arrival = await cdp.evaluate(`(() => {
+    const reply = document.querySelector('[data-career-panel="town"] [data-town-arrival]');
+    return reply?.getClientRects().length ? reply.innerText.trim() : '';
+  })()`);
+  const arrivalView = await cdp.evaluate(`(async () => {
+    const api = window.ArcadeCareer;
+    const view = await api.careerView({ surface: 'port' });
+    return { gameId: api.gameId, originGameId: view && view.originGameId,
+      professions: view && Array.isArray(view.professions) ? view.professions.map((row) => ({ id: row.professionId, state: row.state })) : [],
+      stage: api.state && api.state().stage, portSeenAt: api.state && api.state().portSeenAt };
+  })()`);
+  const expected = ORIGIN_ARRIVAL[gameId];
+  gate('TOWN ' + gameId + ' 到港回应同时写明正确寄信人和旧物',
+    arrival.includes(expected.sender) && arrival.includes(expected.object) &&
+      !arrival.includes(expected.otherSender) && !arrival.includes(expected.otherObject),
+    J({ expected, arrival, arrivalView }));
+  /* 后续首单仍从统一告示板继续；回到测试页并显式打开港口，不接委托。 */
+  await go(cdp, gameUrl('pendulum-tower'), 'arrival-return-' + gameId);
+  await waitBridge(cdp, 'arrival-return-' + gameId, true);
+  await configureCommissionCatalog(cdp, 'arrival-return-' + gameId);
+  await cdp.evaluate('window.ArcadeCareer.openTown()');
+  await waitPanel(cdp, 'town', 15000);
+}
+
 async function checkOptionalFlight(cdp) {
   const summary = '[data-town-flight] > summary';
   const rental = '[data-town-flight] [data-town-rental]';
-  const patrol = '[data-town-flight] [data-town-action="start"][data-commission-id="star-raid.T1"]';
+  /* 0.22 通用工作列表不再把 star-raid.T1 硬塞进出航折叠区。 */
+  const patrol = '[data-career-panel="town"] [data-town-action="start"][data-commission-id="star-raid.T1"]';
   const recommend = '[data-town-recommend-id="pendulum-tower.T1"] [data-town-action="start"]';
   await cdp.waitFor(`document.querySelector(${J(summary)})?.getClientRects().length &&
     document.querySelector(${J(recommend)})?.getClientRects().length`, { timeout: 15000 });
@@ -1250,7 +1435,7 @@ async function checkOptionalFlight(cdp) {
     return hint?.getClientRects().length && start?.getClientRects().length && !start.disabled &&
       { rental: hint.innerText.trim(), button: start.innerText.trim() };
   })()`, { timeout: 10000 });
-  gate('TOWN 展开出航后有阿砾的免费租机说明和可接的首次巡航', /阿砾/.test(option.rental) && /免费|不要钱/.test(option.rental), J(option));
+  gate('TOWN 展开出航后有阿砾的免费租机说明和港口通用巡航可接', /阿砾/.test(option.rental) && /免费|不要钱/.test(option.rental), J(option));
   await pressVisible(cdp, summary, '收起出航并继续默认路线');
   await cdp.waitFor(`!document.querySelector('[data-town-flight]').open`, { timeout: 5000 });
   await cdp.send('Emulation.setDeviceMetricsOverride', { ...viewport, width: 390, height: 844 });
@@ -1268,6 +1453,7 @@ function readBoardRecommendation(cdp) {
       commissionId: node.getAttribute('data-town-recommend-id'),
       kind: node.getAttribute('data-town-recommend-kind'),
       reason: node.getAttribute('data-town-recommend-reason') || '',
+      storyAction: node.getAttribute('data-town-story-action') === 'true',
       goal: node.getAttribute('data-town-goal') || '',
       text: (node.textContent || '').replace(/\\s+/g, ' ').trim().slice(0, 400),
       boardText: (panel.textContent || '').replace(/\\s+/g, ' ').trim().slice(0, 900),
@@ -1311,6 +1497,7 @@ async function acceptRecommended(cdp, commissionId, label, { enableHook = true, 
       (resumeTicket ? landedTicket === resumeTicket : landedTicket !== beforeTicket),
     J({ beforeHref, beforeTicket, landed, landedTicket, resumeTicket }));
   await waitBridge(cdp, label + '-game', false);
+  await configureCommissionCatalog(cdp, label + '-game');
   const runExpr = 'window.ArcadeCareer?.commissionRun';
   await cdp.waitFor(`(() => { const r = ${runExpr}; return !!(r && r.ticketId); })()`, { timeout: 20000 });
   const run = await cdp.evaluate(runExpr);
@@ -1322,6 +1509,7 @@ async function acceptRecommended(cdp, commissionId, label, { enableHook = true, 
     const hookUrl = gameUrl(targetGameId, { career: ticketId });
     await go(cdp, hookUrl, label + '-hook-reopen');
     await waitBridge(cdp, label + '-game-hook');
+    await configureCommissionCatalog(cdp, label + '-hook');
     await cdp.waitFor(`(() => { const t = window.__arcadeCareerTest; return !!(t && t.commissionRun && t.commissionRun()); })()`, { timeout: 15000 });
     const reopened = await cdp.evaluate('window.__arcadeCareerTest.commissionRun()');
     gate('ACCEPT ' + label + ' 同 ticket 重新打开测试钩子（不重建票据）',
@@ -1364,6 +1552,10 @@ async function resumeFromNewTab(cdp, run, browser, newPage) {
   const homeAction = await pressVisible(reopened, 'button[data-career-entry]', '新首页的旧港生涯入口');
   gate('RESUME 首页可见旧港生涯入口', homeAction.text.includes('旧港生涯'), J(homeAction.text));
   await waitPanel(reopened, 'town');
+  await waitBridge(reopened, 'resume-home', false);
+  await configureCommissionCatalog(reopened, 'resume-home');
+  await reopened.evaluate('window.ArcadeCareer.openTown()');
+  await waitPanel(reopened, 'town');
   requireFeature('RESUME 告示板在首页打开', await reopened.evaluate('location.href') === homeLocation, homeLocation);
   requireFeature('RESUME 进入旧港后仍须显式点击续单', await readBrowserTicket(reopened) === null, '打开告示板时不应自动恢复票据');
 
@@ -1381,8 +1573,19 @@ async function phaseReceipt(cdp, label, expectedChapterFlag, card) {
   requireFeature('RECEIPT ' + label + ' 显示成功收据', card?.state === 'success', J(card));
   checkReceiptText(card, label);
   requireFeature('RECEIPT ' + label + ' 玩家可见下一步', !!card.next, J(card.text));
-  const segmentDone = /(?:新完成的段落|已完成章节)[：:]/.test(card.text);
-  gate('RECEIPT ' + label + ' 仅在本单完章时显示段落完成', segmentDone === !!expectedChapterFlag, J(card.text));
+  /* 完章事实已由 verifyOrderProgress 的真实旗标/章节状态断言承担；收据只验证
+     统一投影的 nextAction/公开经历确实渲染，不再依赖「新完成的段落」固定文案。 */
+  const projection = await receiptProjection(cdp);
+  requireFeature('RECEIPT ' + label + ' 真实 careerView 投影可用', projection.ok === true, J(projection));
+  const visibleHistory = (card.storyLines || []).filter((line) => line && line !== card.next);
+  const projectedNextVisible = !!projection.nextLabel && card.next === '下一步：' + projection.nextLabel;
+  const projectedHistoryVisible = projection.history.every((text) => visibleHistory.includes(text));
+  const projectedTextsClean = !FORBIDDEN_PATTERNS.some((pattern) =>
+    pattern.re.test([projection.nextLabel].concat(projection.history).join(' ')));
+  gate('RECEIPT ' + label + ' nextAction/经历来自真实投影且不含内部 token',
+    projectedNextVisible && projectedHistoryVisible && projectedTextsClean,
+    J({ next: card.next, projectedNext: projection.nextLabel, visibleHistory, projectedHistory: projection.history,
+      expectedChapterFlag }));
 
   const actionId = expectedChapterFlag === CHAPTER_FLAGS.C4 ? 'choose-ending' : 'return-to-town';
   const panelName = actionId === 'choose-ending' ? 'world-state' : 'town';
@@ -1521,9 +1724,15 @@ async function runFullFlow(cdp, browser, newPage, campaign, commissions) {
     const realFlagsBefore = new Set(storyBefore.flags);
     const completes = Array.from(realFlagsBefore).find((flag) =>
       Object.values(CHAPTER_FLAGS).includes(flag) && !projectionBefore.flags.has(flag)) || null;
-    const expectedKind = completes ? 'milestone' : 'step';
-    const uiKind = /能积攒下一步所需|路线进展/.test(recommendation.kind || '') ? 'step' : /能推进这一段|推进本章|完成本章/.test(recommendation.kind || '') ? 'milestone' : 'unknown';
-    gate('BOARD ' + recommendation.commissionId + ' 推荐标记与真实完成性一致', uiKind === expectedKind, J({ uiKind, expectedKind, completes, kind: recommendation.kind }));
+    const boardView = await cdp.evaluate(`(async () => {
+      const view = await window.ArcadeCareer.careerView({ surface: 'work' });
+      return { ok: !!view, nextId: view && view.story && view.story.nextAction ? view.story.nextAction.commissionId || null : null };
+    })()`);
+    const publicKind = /能推进这一段|能积攒下一步所需|路线进展/.test(recommendation.kind || '');
+    gate('BOARD ' + recommendation.commissionId + ' 主卡来自真实投影且推荐标记为公开进展语言',
+      boardView.ok === true && boardView.nextId === recommendation.commissionId &&
+        recommendation.storyAction === true && publicKind,
+      J({ boardView, storyAction: recommendation.storyAction, uiKind: recommendation.kind, completes }));
 
     const commissionId = recommendation.commissionId;
     const label = 'order-' + (index + 1);
@@ -1537,6 +1746,7 @@ async function runFullFlow(cdp, browser, newPage, campaign, commissions) {
        避免 claim/quests 尚未写入导致 no-career；收据卡片复用于 phaseReceipt，不重复等待。 */
     const card = await waitReceipt(cdp, run.ticketId);
     requireFeature('RECEIPT ' + label + ' 显示这张单的成功收据', card?.state === 'success' && card.runId === run.ticketId, J(card));
+    const expectedKind = completes ? 'milestone' : 'step';
     const after = await verifyOrderProgress(cdp, label, commissionId, run.ticketId, completes, expectedKind, campaign, commissions);
     if (failedTicket) {
       gate('FAIL 重接后完成同一委托，只有成功票有收据入账',
@@ -1615,6 +1825,7 @@ async function runFullFlow(cdp, browser, newPage, campaign, commissions) {
   await cdp.waitFor('!!(window.ArcadeCareer && window.ArcadeCareer.ready)', { timeout: 20000 });
   const endingHasTestApi = await cdp.evaluate('!!(window.__arcadeCareerTest && typeof window.__arcadeCareerTest.commissionRun === "function")');
   await waitBridge(cdp, 'ending-game', endingHasTestApi);
+  await configureCommissionCatalog(cdp, 'ending-game');
   const endingRunExpr = endingHasTestApi
     ? '(window.__arcadeCareerTest && typeof window.__arcadeCareerTest.commissionRun === "function" ? window.__arcadeCareerTest.commissionRun() : null)'
     : '(window.ArcadeCareer && window.ArcadeCareer.commissionRun) || null';
@@ -1626,6 +1837,7 @@ async function runFullFlow(cdp, browser, newPage, campaign, commissions) {
     const hookUrl = gameUrl(String(endingGameId).replace(/\.html.*$/, ''), { career: endingTicketId });
     await go(cdp, hookUrl, 'ending-hook-reopen');
     await waitBridge(cdp, 'ending-game-hook');
+    await configureCommissionCatalog(cdp, 'ending-hook');
     await cdp.waitFor(`(() => { const t = window.__arcadeCareerTest; return !!(t && typeof t.commissionRun === 'function' && t.commissionRun()); })()`, { timeout: 15000 });
     endingRun = await cdp.evaluate('(window.__arcadeCareerTest && typeof window.__arcadeCareerTest.commissionRun === "function" ? window.__arcadeCareerTest.commissionRun() : null)');
     gate('C5 同 ticket 重新打开测试钩子（不重建票据）',
