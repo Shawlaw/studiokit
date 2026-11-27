@@ -575,6 +575,9 @@ const primaryBlock = cssBlock('.ac-career-ui button.ac-career-ui__action--primar
 const secondaryBlock = cssBlock('.ac-career-ui button.ac-career-ui__action--secondary {');
 check('primary cascade beats generic button rule', primaryBlock.includes('background: var(--ac-career-ui-gold)') && primaryBlock.includes('color: var(--ac-career-ui-on-gold)'));
 check('secondary cascade keeps 1px border and transparent background', secondaryBlock.includes('border: var(--ac-career-ui-line-width) solid var(--ac-career-ui-secondary-border)') && secondaryBlock.includes('background: transparent'));
+const textActionBlock = cssBlock('.ac-career-ui button.ac-career-ui__action--secondary.ac-career-ui__action--text {');
+check('text action has zero border and normal weight', textActionBlock.includes('border: 0') && textActionBlock.includes('font-weight: var(--ac-career-ui-font-weight-normal)'));
+check('outlined secondary keeps its 1px border', secondaryBlock.includes('border: var(--ac-career-ui-line-width)'));
 check('action base cascade sets 10px/12px padding and 8px radius', cssBlock('.ac-career-ui button.ac-career-ui__action {').includes('padding: 10px 12px') && cssBlock('.ac-career-ui button.ac-career-ui__action {').includes('border-radius: var(--ac-career-ui-action-radius)'));
 check('LetterCard title h2 is 20px/600/1.35 gold-light', cssBlock('.ac-career-ui__letter h2 {').includes('font-size: var(--ac-career-ui-font-h2-size)') && cssBlock('.ac-career-ui__letter h2 {').includes('font-weight: var(--ac-career-ui-font-weight-heading)') && cssBlock('.ac-career-ui__letter h2 {').includes('line-height: var(--ac-career-ui-font-h2-leading)'));
 const tabBlock = cssBlock('.ac-career-ui button.ac-career-ui__tab {');
@@ -585,6 +588,7 @@ check('tool font 12px, padding 8px, internal gap 4px', toolBlock.includes('font-
 check('tool grid narrow gap 4px', cssBlock('.ac-career-ui__tools {', componentsCss.indexOf('@media (max-width: 360px)')).includes('gap: var(--ac-career-ui-tools-gap-narrow)'));
 check('clue title strong 700', cssBlock('.ac-career-ui__clue-title {').includes('font-weight: var(--ac-career-ui-font-weight-strong)'));
 check('result-host has no extra surface/border/padding', !componentsCss.includes('data-placement="result-host"'));
+check('work header inherits centered row geometry', cssBlock('.ac-career-ui__row {').includes('align-items: center') && !cssBlock('.ac-career-ui__work-header {').includes('align-items: flex-start'));
 check('work name/card uses 14px body typography and 8px gap', cssBlock('.ac-career-ui__work-name {').includes('font-size: var(--ac-career-ui-font-body-size)') && cssBlock('.ac-career-ui__work-name {').includes('font-weight: var(--ac-career-ui-font-weight-strong)') && cssBlock('.ac-career-ui__work {').includes('gap: var(--ac-career-ui-space-2)'));
 check('avatar radius is 10px token', cssBlock('.ac-career-ui__avatar {').includes('border-radius: var(--ac-career-ui-radius)'));
 check('receipt result normal weight and kv-list no flex gap', cssBlock('.ac-career-ui__receipt-result {').includes('var(--ac-career-ui-font-weight-normal)') && !cssBlock('.ac-career-ui__kv-list {').includes('gap:'));
@@ -923,8 +927,22 @@ eq('tab click selects work', tabs.getAttribute('data-selected-id'), 'work');
 
 let startCalls = [];
 let pauseCalls = [];
+function checkWorkHeader(card, expectedName, expectedStatus) {
+  const header = card.querySelector('.ac-career-ui__work-header');
+  const children = header.children;
+  const name = card.querySelector('.ac-career-ui__work-name');
+  const status = card.querySelector('.ac-career-ui__work-status');
+  check('WorkCard header is icon + strong + caption siblings', children.length === 3 && children[0].tagName === 'SVG' && children[1] === name && children[2] === status, children.map((node) => node.tagName));
+  eq('WorkCard name is strong.grow', name.tagName, 'STRONG');
+  check('WorkCard name has grow class', name.classList.contains('ac-career-ui__grow'));
+  eq('WorkCard status tag', status.tagName, 'P');
+  check('WorkCard status is caption and right of name', status.classList.contains('ac-career-ui__caption') && children.indexOf(status) > children.indexOf(name));
+  eq('WorkCard header name text', name.textContent, expectedName);
+  eq('WorkCard header status text', status.textContent, expectedStatus);
+  check('WorkCard header name/status share row parent', name.parentNode === header && status.parentNode === header);
+}
 const work = components.WorkCard({
-  professionId: 'nature.miner', displayName: '合成职业', icon: 'pick', state: 'active',
+  professionId: 'nature.miner', displayName: '合成职业', icon: 'pick', state: 'active', statusLabel: '进行中',
   commissions: [
     { commissionId: 'synthetic.T1', category: 'profession', title: '合成首单', summary: '合成摘要', gameName: '合成游戏', objectiveText: '合成目标', rewardText: '合成报酬' },
     { commissionId: 'synthetic.T2', category: 'profession', title: '合成次单', summary: '合成摘要二' },
@@ -934,6 +952,9 @@ const work = components.WorkCard({
 eq('WorkCard state', work.getAttribute('data-work-state'), 'active');
 eq('WorkCard category', work.getAttribute('data-work-category'), 'profession');
 eq('WorkCard name', work.querySelector('.ac-career-ui__work-name').textContent, '合成职业');
+checkWorkHeader(work, '合成职业', '进行中');
+eq('WorkCard commission title is h3 on next row', work.querySelector('.ac-career-ui__commission-title').tagName, 'H3');
+check('WorkCard h3 is outside header row', !work.querySelector('.ac-career-ui__work-header').contains(work.querySelector('.ac-career-ui__commission-title')));
 eq('WorkCard first commission visible', work.querySelectorAll('.ac-career-ui__commission').length, 2);
 eq('WorkCard details initially collapsed', work.querySelector('details').open, false);
 eq('WorkCard expanded attr', work.getAttribute('data-expanded'), 'false');
@@ -943,24 +964,27 @@ work.querySelectorAll('.ac-career-ui__work-more')[0].click();
 eq('details summary is native', work.querySelector('summary').tagName, 'SUMMARY');
 
 const pausedWork = components.WorkCard({
-  professionId: 'nature.miner', displayName: '合成职业', icon: 'pick', state: 'paused',
+  professionId: 'nature.miner', displayName: '合成职业', icon: 'pick', state: 'paused', statusLabel: '已搁置',
   commissions: [{ commissionId: 'synthetic.T1', category: 'profession', title: '隐藏任务详情' }],
   onPause(id, paused) { pauseCalls.push([id, paused]); },
 });
 eq('paused state', pausedWork.getAttribute('data-work-state'), 'paused');
+checkWorkHeader(pausedWork, '合成职业', '已搁置');
 eq('paused hides details', pausedWork.querySelectorAll('.ac-career-ui__commission').length, 0);
 check('paused shows resume label', pausedWork.textContent.includes('恢复这段经历'));
 pausedWork.querySelectorAll('button')[0].click();
 eq('paused resume callback', JSON.stringify(pauseCalls[pauseCalls.length - 1]), JSON.stringify(['nature.miner', false]));
 
 const worldWork = components.WorkCard({
-  professionId: null, displayName: 'SECRET_PROFESSION', icon: 'tool', state: 'active',
-  commissions: [{ commissionId: 'synthetic.world', category: 'world', title: '通用工作', summary: '通用说明', gameName: 'SECRET_GAME', objectiveText: '通用目标', rewardText: 'SECRET_REWARD' }],
+  professionId: null, title: '通用外勤', displayName: 'SECRET_PROFESSION', icon: 'tool', state: 'optional', statusLabel: '可选',
+  commissions: [{ commissionId: 'synthetic.world', category: 'world', title: '合成短差', summary: '通用说明', gameName: 'SECRET_GAME', objectiveText: '通用目标', rewardText: 'SECRET_REWARD' }],
   onStart(id) { startCalls.push(id); },
 });
 eq('world card category', worldWork.getAttribute('data-work-category'), 'world');
+checkWorkHeader(worldWork, '通用外勤', '可选');
+eq('world commission title is h3 on next row', worldWork.querySelector('.ac-career-ui__commission-title').tagName, 'H3');
 check('world card hides profession/game/reward', !worldWork.textContent.includes('SECRET_PROFESSION') && !worldWork.textContent.includes('SECRET_GAME') && !worldWork.textContent.includes('SECRET_REWARD'));
-check('world card keeps generic copy', worldWork.textContent.includes('通用工作') && worldWork.textContent.includes('通用目标'));
+check('world card keeps generic copy', worldWork.textContent.includes('通用外勤') && worldWork.textContent.includes('合成短差') && worldWork.textContent.includes('通用目标'));
 eq('world card has no pause button', worldWork.querySelectorAll('button').length, 1);
 eq('world work empty state', components.WorkCard({ professionId: null, state: 'empty', commissions: [] }).getAttribute('data-work-state'), 'empty');
 
@@ -977,6 +1001,13 @@ eq('ReceiptCard state', receipt.getAttribute('data-receipt-state'), 'success');
 eq('ReceiptCard role', receipt.getAttribute('role'), 'status');
 eq('ReceiptCard aria-live', receipt.getAttribute('aria-live'), 'polite');
 eq('ReceiptCard max two actions', receipt.querySelectorAll('button').length, 2);
+const receiptReply = receipt.querySelector('.ac-career-ui__receipt-reply');
+check('ReceiptCard npcReply is avatar-free', !!receiptReply && !receipt.querySelector('.ac-career-ui__avatar') && !receipt.querySelector('.ac-career-ui__npc') && receiptReply.querySelectorAll('.ac-career-ui__row').length === 0);
+eq('ReceiptCard npcReply state', receiptReply.getAttribute('data-npc-state'), 'return');
+eq('ReceiptCard npcReply name is gold strong', receiptReply.querySelector('.ac-career-ui__npc-name').tagName, 'STRONG');
+check('ReceiptCard npcReply name has gold class', receiptReply.querySelector('.ac-career-ui__npc-name').classList.contains('ac-career-ui__gold'));
+eq('ReceiptCard npcReply paragraph count', receiptReply.querySelectorAll('.ac-career-ui__npc-paragraph').length, 1);
+check('ReceiptCard npcReply name and paragraph are siblings', receiptReply.querySelector('.ac-career-ui__npc-name').parentNode === receiptReply && receiptReply.querySelector('.ac-career-ui__npc-paragraph').parentNode === receiptReply);
 check('ReceiptCard rewards text', receipt.textContent.includes('12') && receipt.textContent.includes('合成材料') && receipt.textContent.includes('合成身份'));
 check('ReceiptCard no tx/run/reason', !/(txId|runId|not-|unknown-|REASON)/.test(receipt.textContent));
 const noDuplicate = components.ReceiptCard({ outcome: 'success', state: 'no-duplicate-reward', title: '回看', resultLine: '已完成', rewards: { credits: 99 } });

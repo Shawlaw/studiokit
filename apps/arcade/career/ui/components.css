@@ -308,7 +308,7 @@ html.ac-career-ui-scroll-lock body {
 }
 
 .ac-career-ui button.ac-career-ui__action--secondary.ac-career-ui__action--text {
-  border-color: transparent;
+  border: 0;
   color: var(--ac-career-ui-muted);
   font-weight: var(--ac-career-ui-font-weight-normal);
 }
@@ -447,10 +447,6 @@ html.ac-career-ui-scroll-lock body {
   display: flex;
   flex-direction: column;
   gap: var(--ac-career-ui-space-2);
-}
-
-.ac-career-ui__work-header {
-  align-items: flex-start;
 }
 
 .ac-career-ui__work-name {

@@ -399,7 +399,7 @@
   function commissionNode(doc, commission, isWorld, onStart) {
     const entry = isObject(commission) ? commission : {};
     const node = element(doc, 'article', 'ac-career-ui__commission');
-    node.appendChild(element(doc, 'h4', 'ac-career-ui__commission-title', cleanText(entry.title)));
+    node.appendChild(element(doc, 'h3', 'ac-career-ui__commission-title', cleanText(entry.title)));
     const summary = cleanText(entry.summary);
     if (summary) node.appendChild(element(doc, 'p', 'ac-career-ui__commission-summary', summary));
     const objective = cleanText(entry.objectiveText);
@@ -434,11 +434,9 @@
 
     const header = element(doc, 'div', 'ac-career-ui__row ac-career-ui__work-header');
     header.appendChild(icon(input.icon));
-    const heading = element(doc, 'div', 'ac-career-ui__grow');
-    const displayName = isWorld ? cleanText(commissions[0] && commissions[0].title) : cleanText(input.displayName);
-    heading.appendChild(element(doc, 'h3', 'ac-career-ui__work-name', displayName));
-    heading.appendChild(element(doc, 'p', 'ac-career-ui__caption ac-career-ui__work-status', workStatusText(state)));
-    header.appendChild(heading);
+    const displayName = cleanText(input.title) || cleanText(input.displayName);
+    header.appendChild(element(doc, 'strong', 'ac-career-ui__grow ac-career-ui__work-name', displayName));
+    header.appendChild(element(doc, 'p', 'ac-career-ui__caption ac-career-ui__work-status', cleanText(input.statusLabel) || workStatusText(state)));
     card.appendChild(header);
 
     if (state === 'empty') {
@@ -460,6 +458,7 @@
     if (commissions.length) {
       const first = commissions[0];
       if (isWorld) {
+        list.appendChild(element(doc, 'h3', 'ac-career-ui__commission-title', cleanText(first.title)));
         const summary = cleanText(first.summary);
         if (summary) list.appendChild(element(doc, 'p', 'ac-career-ui__commission-summary', summary));
         const objective = cleanText(first.objectiveText);
@@ -535,9 +534,12 @@
     }
 
     if (isObject(input.npcReply)) {
-      const npcProps = Object.assign({}, input.npcReply);
-      delete npcProps.actions;
-      card.appendChild(NPCDialogue(npcProps));
+      const reply = element(doc, 'div', 'ac-career-ui__stack ac-career-ui__stack--small ac-career-ui__receipt-reply');
+      reply.setAttribute('data-npc-state', oneOf(input.npcReply.state, NPC_STATES, 'return'));
+      reply.appendChild(element(doc, 'strong', 'ac-career-ui__gold ac-career-ui__npc-name', cleanText(input.npcReply.name)));
+      const paragraphs = Array.isArray(input.npcReply.paragraphs) ? input.npcReply.paragraphs : [];
+      paragraphs.forEach((paragraph) => reply.appendChild(element(doc, 'p', 'ac-career-ui__npc-paragraph', cleanText(paragraph))));
+      card.appendChild(reply);
     }
     const actions = [input.nextAction, input.exitAction].filter(isObject).slice(0, 2);
     if (actions.length) {
