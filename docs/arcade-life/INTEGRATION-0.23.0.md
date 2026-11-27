@@ -38,7 +38,7 @@
 
 ## 4. L3 结果
 
-- 冻结 SHA `6218646`：`py -3 tools/arcade_run_all_gates.py --profile release` **47/47 PASS**，3008.288s，`verdict: release passed (not full)`、`fully_passed: false`。release profile 现已包含 6 个 0.23 纯 Node 套件（components / invitation adapters / port journal / narrative content / work journal / invitation tools），CI 的 static job 同样覆盖。
+- 候选冻结 SHA `79301da`（收口提交）：`py -3 tools/arcade_run_all_gates.py --profile release` **47/47 PASS**，3030.957s，`verdict: release passed (not full)`、`fully_passed: false`；同版本更早一次 `6218646` 的 47/47（3008.288s）为未含首到港消费缝修复的中间态，仅作历史记录。release profile 现已包含 6 个 0.23 纯 Node 套件（components / invitation adapters / port journal / narrative content / work journal / invitation tools），CI 的 static job 同样覆盖。
 - 首轮同版本运行 `dd7eb03` 为 44/47（`career_pwa_offline`、`smoke`、`career_flow_e2e`），失败项均为 0.23 界面替换后的真实回归或旧钩子：信箱列表丢失真实信件标题（产品已修）、smoke 仍点旧告示板钱包入口（迁移到 `[data-tool=wallet]` 并改用真实已接受职业夹具）、港口装载完成会重建 body 导致装载期点击丢失（测试等待 shell normal 后再点）。修复后定向复跑全部通过，再以新 SHA 完整重跑一次 L3。
 - 本 SHA 无同 SHA 的线上 CI 或发布证据；`release passed (not full)` 不得写成 full / ALL GATES PASSED。full、真机、真人、线上部署仍为 UNVERIFIED。
 
