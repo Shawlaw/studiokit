@@ -678,13 +678,16 @@
 
     const story = isObject(fixture.storyCard) ? fixture.storyCard : null;
     if (story && typeof components.StoryCard === 'function') {
+      const retry = isObject(fixture.secondaryAction) ? portFixtureAction(context, state, fixture.secondaryAction, 'retry', components) : null;
+      const variant = fixture.id === 'P10-loading' ? 'loading' : (fixture.id === 'P10-error' ? 'error' : (fixture.id === 'P10-empty' ? 'empty' : undefined));
       const storyProps = {
+        variant: variant,
         eyebrow: cleanText(story.eyebrow),
         title: cleanText(story.title),
         summary: cleanText(story.summary),
         state: oneOfFixtureState(story.state),
         tags: Array.isArray(story.tags) ? story.tags.map(cleanText).filter(Boolean) : [],
-        action: isObject(story.action) ? portFixtureAction(context, state, story.action, '', components) : null,
+        action: variant === 'error' ? retry : (isObject(story.action) ? portFixtureAction(context, state, story.action, '', components) : null),
       };
       content.appendChild(components.StoryCard(storyProps));
       hasNode = true;
@@ -737,7 +740,7 @@
     }
 
     const secondary = isObject(fixture.secondaryAction) ? fixture.secondaryAction : null;
-    if (secondary && typeof components.SecondaryAction === 'function') {
+    if (secondary && !(story && fixture.id === 'P10-error') && typeof components.SecondaryAction === 'function') {
       const action = portFixtureAction(context, state, secondary, 'retry', components);
       if (action) {
         content.appendChild(components.SecondaryAction(action));
@@ -1027,7 +1030,7 @@
 
     if (phase === 'loading') {
       content.appendChild(components.StoryCard({
-        eyebrow: '港口记录',
+        variant: 'loading',
         title: PORT_LOADING_TITLE,
         summary: PORT_LOADING_SUMMARY,
         state: 'no-action',
@@ -1036,17 +1039,16 @@
     }
     if (phase === 'error') {
       content.appendChild(components.StoryCard({
-        eyebrow: '港口记录',
+        variant: 'error',
         title: PORT_ERROR_TITLE,
         summary: PORT_ERROR_SUMMARY,
         state: 'no-action',
-      }));
-      content.appendChild(components.SecondaryAction({
-        id: 'port-retry',
-        label: PORT_RETRY_LABEL,
-        kind: 'secondary',
-        variant: 'border',
-        onClick: () => { loadPortData(state.context, state); return { ok: true }; },
+        action: {
+          id: 'port-retry',
+          label: PORT_RETRY_LABEL,
+          kind: 'primary',
+          onClick: () => { loadPortData(state.context, state); return { ok: true }; },
+        },
       }));
       return content;
     }
@@ -1118,7 +1120,6 @@
     const caption = fixture && cleanText(fixture.caption);
     body.appendChild(portTextNode(doc, 'ac-career-ui__caption', caption || cleanText(portNarrativeOf(context).caption) || PORT_CAPTION));
     const listCaption = fixture && cleanText(fixture.listCaption);
-    if (listCaption) body.appendChild(portTextNode(doc, 'ac-career-ui__caption', listCaption));
     body.appendChild(components.SegmentedTabs({
       tabs: PORT_TABS,
       selectedId: state.tab,
@@ -1130,14 +1131,18 @@
         renderPortSurface(state.context, state);
       },
     }));
-    body.appendChild(portContentNode(context, state, view, components));
+    const content = portContentNode(context, state, view, components);
+    if (listCaption) content.insertBefore(portTextNode(doc, 'ac-career-ui__caption', listCaption), content.firstChild);
+    body.appendChild(content);
     const fixtureTools = fixture ? portFixtureToolItems(context, fixture) : [];
     const tools = fixtureTools.length ? fixtureTools : portToolItems(context, (state.views && state.views.port) || view);
     if (tools.length) {
+      const divider = doc.createElement('hr');
+      divider.className = 'ac-career-ui__line';
+      body.appendChild(divider);
       body.appendChild(components.ToolGrid({ tools: tools, state: 'available', label: (fixture && cleanText(fixture.toolGrid && fixture.toolGrid.label)) || '已知工具' }));
     }
     const footer = doc.createElement('footer');
-    footer.className = 'ac-career-ui__footer';
     footer.appendChild(components.SecondaryAction({
       id: 'port-exit',
       label: (fixture && cleanText(fixture.exitLabel)) || PORT_EXIT_LABEL,

@@ -475,7 +475,7 @@ html.ac-career-ui-scroll-lock body {
 .ac-career-ui__commission {
   display: flex;
   flex-direction: column;
-  gap: var(--ac-career-ui-space-1);
+  gap: var(--ac-career-ui-space-2);
   min-width: 0;
 }
 
@@ -485,6 +485,10 @@ html.ac-career-ui-scroll-lock body {
   font-size: var(--ac-career-ui-font-h3-size);
   font-weight: var(--ac-career-ui-font-weight-heading);
   line-height: var(--ac-career-ui-font-h3-leading);
+}
+
+.ac-career-ui__story-work-title.ac-career-ui__danger {
+  color: var(--ac-career-ui-danger);
 }
 
 .ac-career-ui__commission-reward {

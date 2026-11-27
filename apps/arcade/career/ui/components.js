@@ -307,6 +307,7 @@
     if (!doc) return null;
     const state = oneOf(input.state, STORY_STATES, 'current');
     const work = input.variant === 'work';
+    const status = oneOf(input.variant, ['empty', 'loading', 'error'], '');
     const card = element(doc, 'article', (work ? '' : 'ac-career-ui__surface ') + 'ac-career-ui__stack ac-career-ui__stack--small');
     card.setAttribute('data-story-state', state);
     const eyebrow = cleanText(input.eyebrow);
@@ -317,9 +318,14 @@
       tags.forEach((tag) => tagRow.appendChild(element(doc, 'span', 'ac-career-ui__tag', tag)));
       card.appendChild(tagRow);
     }
-    card.appendChild(element(doc, work ? 'h3' : 'h2', work ? 'ac-career-ui__story-work-title' : 'ac-career-ui__story-title', cleanText(input.title)));
-    card.appendChild(element(doc, 'p', work ? 'ac-career-ui__story-summary ac-career-ui__caption' : 'ac-career-ui__story-summary', cleanText(input.summary)));
-    if (state === 'current' && isObject(input.action)) card.appendChild(renderAction(input.action));
+    const titleClass = work || status ? 'ac-career-ui__story-work-title' : 'ac-career-ui__story-title';
+    const title = element(doc, work || status ? 'h3' : 'h2', titleClass, cleanText(input.title));
+    if (status === 'error') title.classList.add('ac-career-ui__danger');
+    if (status === 'loading') card.setAttribute('aria-busy', 'true');
+    card.appendChild(title);
+    const summaryClass = work || status === 'empty' || status === 'loading' ? ' ac-career-ui__caption' : '';
+    card.appendChild(element(doc, 'p', 'ac-career-ui__story-summary' + summaryClass, cleanText(input.summary)));
+    if ((state === 'current' || status === 'error') && isObject(input.action)) card.appendChild(renderAction(input.action));
     return card;
   }
 
@@ -461,7 +467,7 @@
       if (isWorld) {
         list.appendChild(element(doc, 'h3', 'ac-career-ui__commission-title', cleanText(first.title)));
         const summary = cleanText(first.summary);
-        if (summary) list.appendChild(element(doc, 'p', 'ac-career-ui__commission-summary', summary));
+        if (summary) list.appendChild(element(doc, 'p', 'ac-career-ui__commission-summary ac-career-ui__caption', summary));
         const objective = cleanText(first.objectiveText);
         if (objective) list.appendChild(element(doc, 'p', 'ac-career-ui__caption ac-career-ui__commission-objective', objective));
         if (typeof input.onStart === 'function') {
