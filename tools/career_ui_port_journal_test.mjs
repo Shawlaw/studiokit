@@ -663,7 +663,7 @@ const beforeRetry = variantRun.viewCalls();
 retryButton.click();
 await settle();
 check('P10-error retry calls fixture action and refetches projection once',
-  variantRun.actionCalls.includes('retry') && variantRun.viewCalls() > beforeRetry);
+  variantRun.actionCalls.includes(fixture.secondaryAction.id) && variantRun.viewCalls() > beforeRetry);
 variantRun.local.ui.town.close();
 
 variantRun = await openFixtureVariant('P10-longtext');

@@ -213,6 +213,7 @@
     narrativeByProfessionId: Object.create(null),
     careerUiStyles: '',
     careerUiStylesPromise: null,
+    keyboardGuardInstalled: false,
     careerDataListeners: [],
     endingEvents: [],
     careerArchived: false,
@@ -4814,6 +4815,29 @@
     }
   }
 
+  /** 生涯对话打开时必须压住游戏键；守卫先于游戏脚本注册，Tab/Esc 与 tab 内方向键仍交组件处理。 */
+  function installCareerKeyboardGuard() {
+    if (internal.keyboardGuardInstalled || !WINDOW || typeof WINDOW.addEventListener !== 'function') return;
+    internal.keyboardGuardInstalled = true;
+    WINDOW.addEventListener('keydown', function (event) {
+      if (!event || !DOC || typeof DOC.querySelector !== 'function') return;
+      var dialog = DOC.querySelector('.ac-career-ui__panel[role="dialog"]');
+      if (!dialog) return;
+      var key = event.key;
+      if (key === 'Tab' || key === 'Escape') return;
+      var target = event.target;
+      var inTab = target && typeof target.closest === 'function'
+        ? target.closest('[role="tab"], [role="tablist"], [data-career-ui-tabs]')
+        : null;
+      if (inTab) return;
+      try {
+        event.stopImmediatePropagation();
+      } catch (err) {
+        /* ignore */
+      }
+    }, true);
+  }
+
   function boot() {
     /* 仅既有 #test 探针（无 ?careerTest=1）：完全静默。
        连依赖/内容都不装载——既有 smoke/回归把资源 404 记为 console error，
@@ -4995,6 +5019,9 @@
   } catch (err) {
     /* ignore */
   }
+
+  /* 键盘守卫必须在游戏脚本注册 window capture 之前安装；常驻但仅对话打开时生效。 */
+  installCareerKeyboardGuard();
 
   /* 异步启动，不阻塞游戏脚本执行。 */
   Promise.resolve()
