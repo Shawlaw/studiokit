@@ -1,11 +1,11 @@
 # Arcade Changelog
 
-## 0.22.0 — 2026-11-27（本地开发，未发布）
+## 0.22.0 — 2026-11-27（本地发布准备，未发布）
 
 - 完善职业独立发现与统一披露：各职业保持平行、被动的发现方式，玩家可见内容由统一口径裁决；不新增职业、委托总量、章节或终局。
 - 新增世界通用工作界面：以通用文案呈现，与具体职业解耦，不暴露玩家已拥有的职业；沿用既有委托与奖励，不克隆内容。
 - 版本链 0.22.0 / SW `studiokit-arcade-0.22.0-v1`；不新增 IndexedDB store / localStorage key / Schema，`contentVersion 0.18.0` / IDB v1 / 11 stores / 经典玩法数值零改动。
-- 状态：LOCAL_VERIFIED / 待最终门禁与独立 review 收口；未获 `OWNER_AUTHORIZATION: PUBLISH_TO_MAIN`，未 push、未发布，不写 RELEASE_READY 或 PUBLISHED。设计 / 回滚见 [`DESIGN-0.22.0.md`](DESIGN-0.22.0.md)，验证口径见 [`INTEGRATION-0.22.0.md`](../../docs/arcade-life/INTEGRATION-0.22.0.md)。线上最近发布版本仍为 0.21.2（已双端发布，见下一节）。
+- 状态：GATE_PASSED / RELEASE_READY（本地发布准备，未发布；release 41/41，not full）；未获 `OWNER_AUTHORIZATION: PUBLISH_TO_MAIN`，未 push、未发布，不写 PUBLISHED。设计 / 回滚见 [`DESIGN-0.22.0.md`](DESIGN-0.22.0.md)，验证口径见 [`INTEGRATION-0.22.0.md`](../../docs/arcade-life/INTEGRATION-0.22.0.md)。线上最近发布版本仍为 0.21.2（已双端发布，见下一节）。
 
 ## 0.21.2 — 2026-11-26（已双端发布）
 

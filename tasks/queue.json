@@ -2448,9 +2448,9 @@
     },
     {
       "id": "T145",
-      "title": "Arcade 0.22.0 本地开发：职业独立发现、统一披露与世界通用工作界面 / 文档同步",
+      "title": "Arcade 0.22.0 本地发布准备：职业独立发现、统一披露与世界通用工作界面 / 文档同步",
       "kind": "agent",
-      "status": "LOCAL_VERIFIED",
+      "status": "GATE_PASSED",
       "dependsOn": [
         "T144"
       ],
@@ -2459,10 +2459,10 @@
         "本地版本链与文档口径统一为 Arcade 0.22.0 / SW studiokit-arcade-0.22.0-v1，并保留 0.21.2 已双端发布的历史事实",
         "只用非剧透措辞描述完善职业独立发现、统一披露与世界通用工作界面；不写完整触发条件、任务路线、NPC 台词、私有证据或路径",
         "不新增 IndexedDB store / localStorage key / Schema；contentVersion 0.18.0、IDB v1 / 11 stores、经典玩法数值零改动",
-        "状态按集成记录写为 LOCAL_VERIFIED / 待最终门禁与独立 review 收口；不写 DONE / PUBLISHED / RELEASE_READY，不声称发布成功",
+        "状态按集成记录写为 GATE_PASSED / RELEASE_READY（本地发布准备，未发布；release 41/41，not full）；不写 DONE / PUBLISHED，不声称发布成功",
         "TASKS.md 与 queue.json 同步；运行 git diff --check 与文档格式检查，不跑全站构建或测试/full"
       ],
-      "evidence": "文档同步范围：AGENTS.md、CHANGELOG.md、README.md、docs/BASELINE.md、docs/ROADMAP.md、apps/arcade/README.md、apps/arcade/CHANGELOG.md、TASKS.md、tasks/queue.json。版本链只读核对 engine.js/sw.js/index.html/shared/tool-registry.json/validate_site.py 与测试字面量均为 0.22.0；设计见 apps/arcade/DESIGN-0.22.0.md，状态以 docs/arcade-life/INTEGRATION-0.22.0.md（LOCAL_VERIFIED / 待最终门禁与独立 review 收口）为准。本地改动未 push、未发布、未跑测试或 full；线上最近发布仍为 0.21.2。文档格式检查：git diff --check（全树与仅所负责文档）PASS；tasks/queue.json JSON 解析 PASS；py -3 tools/check_readme_links.py PASS（9 份文档）。"
+      "evidence": "文档同步范围：AGENTS.md、CHANGELOG.md、README.md、docs/BASELINE.md、docs/ROADMAP.md、apps/arcade/README.md、apps/arcade/CHANGELOG.md、TASKS.md、tasks/queue.json。版本链只读核对 engine.js/sw.js/index.html/shared/tool-registry.json/validate_site.py 与测试字面量均为 0.22.0；设计见 apps/arcade/DESIGN-0.22.0.md，状态以 docs/arcade-life/INTEGRATION-0.22.0.md（GATE_PASSED / RELEASE_READY，本地发布准备，未发布；release 41/41 `release passed (not full)`）为准；版本门禁 reviewer PASS，4 个非阻断 Minor 已在本轮文档同步中收口。本地改动未 push、未发布、未跑测试或 full；线上最近发布仍为 0.21.2。文档格式检查：git diff --check（全树与仅所负责文档）PASS；tasks/queue.json JSON 解析 PASS；py -3 tools/check_readme_links.py PASS（9 份文档）。README 发布清单按 tools/verify_deploy.py 的 PATHS 实测 95 个文件更新。"
     }
   ]
 }

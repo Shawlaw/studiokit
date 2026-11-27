@@ -1,6 +1,6 @@
 # 街机厅 Arcade
 
-**本地开发版本 `0.22.0` / SW `studiokit-arcade-0.22.0-v1`（未发布；LOCAL_VERIFIED / 待最终门禁与独立 review 收口）**｜线上最近发布为 `0.21.2`（2026-11-26 已双端发布，main `bc50e61`，Actions `45858201941` 全绿，双端 91/91 一致；修复首页告示板弹窗、钱包标题、弹窗滚动层级与游戏标题栏留白）｜进度 / 局内 / 游玩统计 / 积分记录 / 挑战记录 / 游戏数据 meta 的 Schema 均为 `v1`；0.15 新增独立生涯 IndexedDB（`studiokit:arcade:career` v1，11 stores），不改变既有 localStorage 键；生涯内容 `contentVersion` 仍为 `0.18.0`。本轮非剧透范围：完善职业独立发现、统一披露与世界通用工作界面；不新增 key / store / schema、章节或玩法数值。设计见 [`DESIGN-0.22.0.md`](DESIGN-0.22.0.md)，本地状态见 [`INTEGRATION-0.22.0.md`](../../docs/arcade-life/INTEGRATION-0.22.0.md)；上一版实测见 [`INTEGRATION-0.21.2.md`](../../docs/arcade-life/INTEGRATION-0.21.2.md)。
+**本地发布准备版本 `0.22.0` / SW `studiokit-arcade-0.22.0-v1`（GATE_PASSED / RELEASE_READY，未发布；release 41/41，not full）**｜线上最近发布为 `0.21.2`（2026-11-26 已双端发布，main `bc50e61`，Actions `45858201941` 全绿，双端 91/91 一致；修复首页告示板弹窗、钱包标题、弹窗滚动层级与游戏标题栏留白）｜进度 / 局内 / 游玩统计 / 积分记录 / 挑战记录 / 游戏数据 meta 的 Schema 均为 `v1`；0.15 新增独立生涯 IndexedDB（`studiokit:arcade:career` v1，11 stores），不改变既有 localStorage 键；生涯内容 `contentVersion` 仍为 `0.18.0`。本轮非剧透范围：完善职业独立发现、统一披露与世界通用工作界面；不新增 key / store / schema、章节或玩法数值。设计见 [`DESIGN-0.22.0.md`](DESIGN-0.22.0.md)，本地状态见 [`INTEGRATION-0.22.0.md`](../../docs/arcade-life/INTEGRATION-0.22.0.md)；上一版实测见 [`INTEGRATION-0.21.2.md`](../../docs/arcade-life/INTEGRATION-0.21.2.md)。
 
 16 款竖屏小游戏合集的纯前端实现：加载后完全本地游玩，自带自研轻量物理引擎（重力、AABB 与圆碰撞、单向平台、单摆积分、塔体倾斜力矩），所有游戏由简到难、随时可暂停，并把未完成的局内进度自动保存在本机。支持全屏/沉浸、可安装 PWA、离线预载、游玩统计、积分记录与分享；连续有效游玩 20 分钟只温柔提醒一次，**没有签到、每日奖励、付费抽奖、内购或广告**。
 
@@ -91,7 +91,7 @@
 - **中心页管理**：「惊喜一下」在目录顶部随机打开一款，连续点击会避开上一款。「游玩记录」里的「进度管理」支持清除单款或全部游戏记录，并可导出或导入 JSON 备份。页尾的「安装、离线与分享」提供应用安装、检查更新和离线预载。
 - **生涯入口被动发现 + 身份建立后的常驻内容入口（0.21.1 已双端发布）。** 中心页始终展示经典目录：不再有生涯视图 / 默认视图切换，也不常驻告示板、信箱或章节 CTA。身份建立前，错过旧港来信时只在「继续上次」附近显示一行低强调小字（「旧港有一封来信」/「继续旧港来信」），点开深链显式阅读；未读 / 未投递线索不会自动创建生涯身份。**生涯身份一旦建立（已开生涯或已有章节），目录旁常驻「旧港生涯」入口，点击后在首页直接打开告示板弹窗（不再跳转游戏页），最小热区 44px；封存时隐藏内容入口与来信小字但保留页尾「生涯设置（已封存）」，解冻后恢复，完全重置后内容入口与设置入口一起消失。** 页尾小字入口仅用于封存 / 解冻、重置和档案，不是生涯内容 CTA；C0 之后保留游戏内章节入口与收据回流，经典目录与排序不受影响。设计见 [`DESIGN-0.21.1.md`](DESIGN-0.21.1.md)。
 - **生涯封存 / 解冻与仅生涯完全重置（0.21.0 引入，0.21.1 沿用）。** 设置面板可封存生涯（保留全部数据与 live run，但禁止新线索、接单、继续委托与结算写入，事务内重读 `career-archive` 标记防旧标签绕过）并随时解冻（删除标记、推进代次、恢复原进度）。「完全重置生涯」需二次确认并输入「重置生涯」：单事务清空生涯库 11 个 store 与封存标记，**不触碰经典 progress / runs / playtime / scores / challenge / meta / prefs**，不可撤销，操作前应先导出档案。备份携带封存标记，replace 导入以文件状态为准；详细接口见 ADR §22。
-- **0.22.0 本地开发（未发布）**：完善各职业彼此独立的被动发现与统一披露，并新增世界通用工作界面；工作界面以通用文案呈现，与具体职业解耦，不暴露玩家已拥有的职业。不新增职业 / 委托总量 / 章节 / 终局，不改存储 key / Schema / 内容版本 / 玩法数值。设计与回滚见 [`DESIGN-0.22.0.md`](DESIGN-0.22.0.md)，状态以 [`INTEGRATION-0.22.0.md`](../../docs/arcade-life/INTEGRATION-0.22.0.md) 为准。
+- **0.22.0 本地发布准备（未发布）**：完善各职业彼此独立的被动发现与统一披露，并新增世界通用工作界面；工作界面以通用文案呈现，与具体职业解耦，不暴露玩家已拥有的职业。不新增职业 / 委托总量 / 章节 / 终局，不改存储 key / Schema / 内容版本 / 玩法数值。设计与回滚见 [`DESIGN-0.22.0.md`](DESIGN-0.22.0.md)，状态以 [`INTEGRATION-0.22.0.md`](../../docs/arcade-life/INTEGRATION-0.22.0.md) 为准。
 
 ## 星海突击（星域远征）
 
@@ -239,7 +239,7 @@ node tools/arcade_09_data.mjs              # 78 关数据校验 / 生成
 node tools/arcade_stage_solver.mjs --stages=docs/arcade/stages-0.8.json  # 影跃 S1–S3 可达性
 ```
 
-0.21.0 起门禁分层口径唯一：`static` 不启动 Chrome（CI 的 L0 job）；`release` 追加关键 Chrome 集但仍**不等于** full；只有 `full` 全绿才可写 `ALL GATES PASSED`。每次运行输出 `PROFILE SUMMARY` 与 JSON（含每项真实墙钟耗时），不得把「没跑」写成「通过」，也不得用 release 结论替代 full。分层设计见 [`tools/README-gates.md`](../../tools/README-gates.md)。各脚本的具体项数随版本演进，**以实际运行输出为准**；历史门禁结果与发布证据记录在 [`CHANGELOG.md`](CHANGELOG.md)。0.21.1 已实跑 static 35/35、`career_passive_entry` 61/61、`arcade_smoke` 117/117（含四档窄屏、封存 / 解冻 / 重置）、mobile 318/318、PWA 18/18、archive lifecycle 60/60；release 41/41、96 全量 3792/3792、首航 404/404；full / 真机未跑，见 [`INTEGRATION-0.21.1.md`](../../docs/arcade-life/INTEGRATION-0.21.1.md)。0.22.0 本地开发状态以 [`INTEGRATION-0.22.0.md`](../../docs/arcade-life/INTEGRATION-0.22.0.md) 为准：LOCAL_VERIFIED / 待最终门禁与独立 review 收口，本文件不预写版本门禁结论；未发布。
+0.21.0 起门禁分层口径唯一：`static` 不启动 Chrome（CI 的 L0 job）；`release` 追加关键 Chrome 集但仍**不等于** full；只有 `full` 全绿才可写 `ALL GATES PASSED`。每次运行输出 `PROFILE SUMMARY` 与 JSON（含每项真实墙钟耗时），不得把「没跑」写成「通过」，也不得用 release 结论替代 full。分层设计见 [`tools/README-gates.md`](../../tools/README-gates.md)。各脚本的具体项数随版本演进，**以实际运行输出为准**；历史门禁结果与发布证据记录在 [`CHANGELOG.md`](CHANGELOG.md)。0.21.1 已实跑 static 35/35、`career_passive_entry` 61/61、`arcade_smoke` 117/117（含四档窄屏、封存 / 解冻 / 重置）、mobile 318/318、PWA 18/18、archive lifecycle 60/60；release 41/41、96 全量 3792/3792、首航 404/404；full / 真机未跑，见 [`INTEGRATION-0.21.1.md`](../../docs/arcade-life/INTEGRATION-0.21.1.md)。0.22.0 本地发布准备状态以 [`INTEGRATION-0.22.0.md`](../../docs/arcade-life/INTEGRATION-0.22.0.md) 为准：GATE_PASSED / RELEASE_READY（本地发布准备，未发布；release 41/41，not full）；full / 真机 / 真人仍 UNVERIFIED。
 
 ## 已知边界
 
@@ -304,7 +304,7 @@ node tools/arcade_stage_solver.mjs --stages=docs/arcade/stages-0.8.json  # 影�
 | 0.21.0 | [`DESIGN-0.21.0.md`](DESIGN-0.21.0.md) | 生涯彻底被动发现 / 选择式叙事 / 二级生涯设置 / 可解冻封存 / 仅生涯完全重置 / static-release-full 分层门禁（已双端发布；验证见 INTEGRATION-0.21） |
 | 0.21.1 | [`DESIGN-0.21.1.md`](DESIGN-0.21.1.md) | 身份建立后常驻「旧港生涯」内容入口，封存隐藏、解冻恢复、完全重置消失；不恢复生涯视图 / 默认视图（已双端发布；验证见 INTEGRATION-0.21.1） |
 | 0.21.2 | [`DESIGN-0.21.2.md`](DESIGN-0.21.2.md) | 首页直接打开告示板弹窗、钱包标题统一、生涯弹窗滚动层级与游戏标题栏留白（已双端发布；验证见 INTEGRATION-0.21.2） |
-| 0.22.0 | [`DESIGN-0.22.0.md`](DESIGN-0.22.0.md) | 本地开发：职业独立发现、统一披露与世界通用工作界面（未发布；状态见 INTEGRATION-0.22.0） |
+| 0.22.0 | [`DESIGN-0.22.0.md`](DESIGN-0.22.0.md) | 本地发布准备：职业独立发现、统一披露与世界通用工作界面（GATE_PASSED / RELEASE_READY，未发布；release 41/41，not full；状态见 INTEGRATION-0.22.0） |
 
 ### 回滚要点
 
@@ -312,7 +312,7 @@ node tools/arcade_stage_solver.mjs --stages=docs/arcade/stages-0.8.json  # 影�
 - 涉及新 key 的版本：0.8.1 的 `scores:v1` 与 0.8.0 的 `challenge:v1` 为独立新增键，旧版页面会忽略它们；0.13.0 的机库存在通用 `meta:v1` 内，回滚只需删除该键并还原 `engine.js` / `star-raid.html`。
 - 0.21.0 的 `career-archive` 是既有 `state` store 的一行，旧代码会忽略，封存数据不会因回退而删除；完全重置不可回滚，操作前必须导出档案并二次确认。逐版回滚步骤写在各自的 `DESIGN-*.md` 末尾章节。
 - 0.21.1 只改中心页 HTML / CSS 与对应断言，回退 `242d0a3` 即回到 0.21.0 行为，无需数据迁移；版本链已升 0.21.1，回退时同时归 0.21.0；详见 [`DESIGN-0.21.1.md`](DESIGN-0.21.1.md) 第 6 节。
-- 0.22.0 仍在本地开发，只在既有生涯状态上追加字段，未新增 key / store / schema；回滚前先导出职业数据、禁止静默降级，并同时把版本链与 SW 缓存键归回线上 0.21.2；详见 [`DESIGN-0.22.0.md`](DESIGN-0.22.0.md) 第 6 节。
+- 0.22.0 处于本地发布准备、尚未发布，只在既有生涯状态上追加字段，未新增 key / store / schema；回滚前先导出职业数据、禁止静默降级，并同时把版本链与 SW 缓存键归回线上 0.21.2；详见 [`DESIGN-0.22.0.md`](DESIGN-0.22.0.md) 第 6 节。
 
 ## 在 StudioKit 中的位置
 
