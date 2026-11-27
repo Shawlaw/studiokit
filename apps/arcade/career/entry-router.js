@@ -238,6 +238,8 @@
       }
     }
     if (input.commissionId) {
+      var authoritative = input.coreAuthoritative === true && Array.isArray(ctx.availableIds);
+      if (authoritative && ctx.availableIds.indexOf(input.commissionId) >= 0) return { ok: true, reason: null };
       let shown = null;
       try {
         shown = view.canShowCommission({ state, catalog, context: ctx, commissionId: input.commissionId });

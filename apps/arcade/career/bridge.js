@@ -2210,31 +2210,40 @@
     catalog.commissions = internal.commissionContent && Array.isArray(internal.commissionContent.commissions)
       ? clone(internal.commissionContent.commissions)
       : Array.isArray(catalog.commissions) ? catalog.commissions : [];
+    if (internal.worldWorkContent) {
+      catalog.worldWorkIds = Array.isArray(internal.worldWorkContent.commissionIds)
+        ? internal.worldWorkContent.commissionIds.slice() : [];
+      catalog.worldWork = clone(internal.worldWorkContent);
+    }
     return catalog;
   }
 
-  /** context 的时钟/表面由 bridge 提供，其余字段一律显式、不得由纯模块自行读取存储。 */
+  /**
+   * bridge 只提供展示收窄，不构造授权事实。世界旗标、故事证据、已清委托、历史与
+   * 可接集合均由 T04 commission-core 从 DB 推导；调用方传入的同名字段一律丢弃。
+   */
   function careerContext(extra, surface) {
-    var context = isObject(extra) ? Object.assign({}, extra) : {};
+    var source = isObject(extra) ? extra : {};
     var state = currentStateSnapshot();
     var opened = [];
     var records = isObject(state.clues) ? state.clues : {};
     Object.keys(records).forEach(function (clueId) {
       if (isObject(records[clueId]) && records[clueId].openedAt) opened.push(clueId);
     });
-    if (context.now === undefined) context.now = nowIso();
-    if (context.surface === undefined) context.surface = surface || 'work';
-    if (context.gameId === undefined) context.gameId = api.gameId || null;
-    if (context.openedClueIds === undefined) context.openedClueIds = opened;
-    if (context.knownNpcIds === undefined) context.knownNpcIds = [];
-    if (context.worldFlags === undefined) context.worldFlags = {};
-    if (context.storyEvidence === undefined) context.storyEvidence = [];
-    if (context.clearedCommissions === undefined) context.clearedCommissions = [];
-    if (context.activeRuns === undefined) context.activeRuns = internal.commissionRun ? [clone(internal.commissionRun)] : [];
-    if (context.history === undefined) context.history = [];
-    if (context.walletKnown === undefined) context.walletKnown = !!internal.commissionLastCareerId;
-    if (context.availableIds === undefined) context.availableIds = [];
-    if (context.archived === undefined) context.archived = internal.careerArchived === true;
+    var context = {
+      now: typeof source.now === 'string' ? source.now : nowIso(),
+      surface: typeof source.surface === 'string' && source.surface ? source.surface : surface || 'work',
+      gameId: source.gameId !== undefined ? source.gameId : api.gameId || null,
+      openedClueIds: opened,
+      activeRuns: source.activeRuns !== undefined
+        ? clone(source.activeRuns)
+        : (internal.commissionRun ? [clone(internal.commissionRun)] : []),
+      walletKnown: internal.careerArchived !== true && !!internal.commissionLastCareerId,
+      archived: internal.careerArchived === true,
+      bridgeDisplayOnly: true,
+      authority: 'commission-core',
+    };
+    if (typeof source.careerId === 'string') context.careerId = source.careerId;
     return context;
   }
 
@@ -2288,6 +2297,49 @@
       .map(function (row) { return row.commissionId; });
   }
 
+  /**
+   * 核心权威事实：只从 commission-core 的 DB-backed listAvailable / continuations 取得。
+   * bridge context 不被允许改写 worldFlags/storyEvidence/clearedCommissions/history；
+   * 返回 context 只携带核心已裁决的 availableIds/history 与展示字段。
+   */
+  function careerCoreFacts(context, surface) {
+    var display = careerContext(context, surface);
+    return Promise.all([ensureLazyModule('commission'), loadCareerContent()]).then(function () {
+      configureCommissionContent();
+      var mod = commissionModule();
+      if (!mod || typeof mod.listAvailable !== 'function') return { listing: null, context: display };
+      var input = {
+        careerId: internal.commissionLastCareerId || null,
+        state: currentStateSnapshot(),
+        catalog: careerCatalog(),
+        context: display,
+        ensure: false,
+      };
+      return Promise.resolve(mod.listAvailable(input)).then(function (listing) {
+        var ids = listing && listing.ok && Array.isArray(listing.availableIds)
+          ? listing.availableIds.slice()
+          : commissionIdsFromListing(listing);
+        display.availableIds = ids;
+        display.bridgeCoreAuthority = !!(listing && listing.ok);
+        if (listing && typeof listing.careerId === 'string') display.careerId = listing.careerId;
+        var continuations = typeof mod.continuations === 'function'
+          ? Promise.resolve(mod.continuations({ careerId: display.careerId || null })).catch(function () { return null; })
+          : Promise.resolve(null);
+        return continuations.then(function (result) {
+          if (result && result.ok !== true && result.ok !== false) return { listing: listing, context: display };
+          if (result && result.ok === true && Array.isArray(result.runs)) {
+            display.history = clone(result.runs);
+          }
+          return { listing: listing, context: display };
+        });
+      }).catch(function () {
+        display.availableIds = [];
+        display.bridgeCoreAuthority = false;
+        return { listing: null, context: display };
+      });
+    });
+  }
+
   /** 只读投影；模块不可用时返回 null，不编造投影、不创建身份。 */
   function careerView(context) {
     return waitReady(READY_TIMEOUT_MS).then(function () {
@@ -2295,29 +2347,20 @@
     }).then(function () {
       var view = professionViewModule();
       if (!view || typeof view.projectCareerView !== 'function') return null;
-      var state = currentStateSnapshot();
-      var catalog = careerCatalog();
-      var projectionContext = careerContext(context, isObject(context) && context.surface ? context.surface : 'work');
-      if (projectionContext.availableIds.length === 0) {
-        return Promise.all([ensureLazyModule('commission'), loadCareerContent()]).then(function () {
-          configureCommissionContent();
-          var mod = commissionModule();
-          if (!mod || typeof mod.listAvailable !== 'function') return null;
-          return Promise.resolve(mod.listAvailable({
-            careerId: internal.commissionLastCareerId || null,
-            state: state,
-            catalog: catalog,
-            context: projectionContext,
-            ensure: false,
-          })).then(function (listing) {
-            projectionContext.availableIds = commissionIdsFromListing(listing);
-            return view.projectCareerView({ state: state, catalog: catalog, context: projectionContext });
-          }).catch(function () {
-            return view.projectCareerView({ state: state, catalog: catalog, context: projectionContext });
-          });
+      var surface = isObject(context) && context.surface ? context.surface : 'work';
+      return careerCoreFacts(context, surface).then(function (facts) {
+        var projection = view.projectCareerView({
+          state: currentStateSnapshot(),
+          catalog: careerCatalog(),
+          context: facts.context,
         });
-      }
-      return view.projectCareerView({ state: state, catalog: catalog, context: projectionContext });
+        if (!projection) return null;
+        /* 可接/可见集合只认核心裁决，投影模块不得凭空扩大。 */
+        if (facts.listing && facts.listing.ok && Array.isArray(facts.listing.commissions)) {
+          projection.commissions = clone(facts.listing.commissions);
+        }
+        return projection;
+      });
     }).catch(function (err) {
       warnOnce('career-view', err);
       return null;
@@ -2327,17 +2370,18 @@
   /** 深链/旧链接/搜索/调试入口的统一只读 gate；模块不可用时 fail closed。 */
   function careerEntryGate(request) {
     return waitReady(READY_TIMEOUT_MS).then(function () {
-      return Promise.all([ensureLazyModule('professionView'), loadCareerContent()]);
-    }).then(function () {
-      configureCareerModules();
-      var view = professionViewModule();
+      return Promise.all([ensureLazyModule('professionView'), careerCoreFacts(request, 'deep-link')]);
+    }).then(function (values) {
+      var view = values[0];
+      var facts = values[1];
       var router = readGlobal('entryRouter');
       if (!view || !router || typeof router.gateCareerEntry !== 'function') {
         return { ok: false, reason: 'profession-view-unavailable' };
       }
       var input = isObject(request) ? Object.assign({}, request) : {};
-      input.gameId = input.gameId || api.gameId || null;
-      return router.gateCareerEntry(input, view, currentStateSnapshot(), careerCatalog(), careerContext(input, 'deep-link'));
+      input.context = facts.context;
+      input.coreAuthoritative = facts.context.bridgeCoreAuthority === true;
+      return router.gateCareerEntry(input, view, currentStateSnapshot(), careerCatalog(), facts.context);
     }).catch(function () {
       return { ok: false, reason: 'gate-failed' };
     });
@@ -2385,8 +2429,12 @@
           return game && Array.isArray(game.professions) && game.professions.indexOf(professionId) >= 0;
         })
         : [];
+      var accepted = state.professionProgress && isObject(state.professionProgress[professionId])
+        ? state.professionProgress[professionId] : null;
+      var duplicate = accepted && ['accepted', 'developed', 'completed'].indexOf(accepted.state) >= 0;
       var origin = mapping.find(function (game) { return game.gameId === state.acceptedOriginGameId; });
-      gameId = origin ? origin.gameId : mapping.length === 1 ? mapping[0].gameId : null;
+      /* 重复调用只借映射做探测；起源不得被替换，未接受职业仍必须显式给 gameId。 */
+      gameId = origin ? origin.gameId : duplicate && mapping.length ? mapping[0].gameId : null;
     }
     return applyProfessionAction('ACCEPT_INVITATION', {
       professionId: professionId,

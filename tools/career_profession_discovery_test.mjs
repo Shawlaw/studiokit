@@ -24,6 +24,9 @@ const HERE = path.dirname(fileURLToPath(import.meta.url));
 const ROOT = path.resolve(HERE, '..');
 const CAREER = path.join(ROOT, 'apps', 'arcade', 'career');
 const BRIDGE_SRC = fs.readFileSync(path.join(CAREER, 'bridge.js'), 'utf8');
+const DISCOVERY_SRC = fs.readFileSync(path.join(CAREER, 'discovery.js'), 'utf8');
+const ROUTER_SRC = fs.readFileSync(path.join(CAREER, 'router.js'), 'utf8');
+const ENTRY_ROUTER_SRC = fs.readFileSync(path.join(CAREER, 'entry-router.js'), 'utf8');
 const REGISTRY = JSON.parse(fs.readFileSync(path.join(CAREER, 'content', 'registry.json'), 'utf8'));
 const CLUES_BUNDLE = JSON.parse(fs.readFileSync(path.join(CAREER, 'content', 'clues.json'), 'utf8'));
 const COMMISSIONS_BUNDLE = JSON.parse(fs.readFileSync(path.join(CAREER, 'content', 'commissions.json'), 'utf8'));
@@ -219,7 +222,7 @@ professionState.recordRead = function (state, input) {
   }, { clueConfigs: [virtualClue], catalog: virtualCatalog });
   eq('D-06a N+1 单局产出两个映射职业事件', virtual.professionEvents.length, 2);
   eq('D-06b N+1 职业状态来自 catalog', Object.keys(virtual.state.professionProgress), ['virtual.one', 'virtual.two']);
-  check('D-06c 没有硬编码 16 / 固定职业 ID', !/nature\.miner|research\.archivist/.test(BRIDGE_SRC.slice(0, 0)));
+  check('D-06c 纯路由/发现模块无硬编码职业 ID', !/nature\.miner|research\.archivist|adventure\.pilot/.test(DISCOVERY_SRC + ROUTER_SRC + ENTRY_ROUTER_SRC));
 }
 professionState.recordGlimpsed = originalGlimpsed;
 professionState.recordRead = originalRead;
@@ -441,9 +444,31 @@ async function makeBridge(options) {
       store.listingCalls.push(clone(input));
       const state = input && input.state ? input.state : store.discovery;
       const accepted = acceptedProfessionIds(state);
-      const visible = commissioned.filter((row) => accepted.indexOf(row.professionId) >= 0
-        || store.acceptedCommissionIds.indexOf(row.commissionId) >= 0);
-      return { ok: true, careerId: (input && input.careerId) || null, commissions: clone(visible) };
+      const catalog = input && input.catalog ? input.catalog : {};
+      const worldIds = (Array.isArray(catalog.worldWorkIds) ? catalog.worldWorkIds : [])
+        .concat(catalog.worldWork && Array.isArray(catalog.worldWork.commissionIds) ? catalog.worldWork.commissionIds : []);
+      const visible = commissioned.filter((row) => {
+        if (store.acceptedCommissionIds.indexOf(row.commissionId) >= 0) return true;
+        if (worldIds.indexOf(row.commissionId) >= 0) return accepted.length > 0;
+        return accepted.indexOf(row.professionId) >= 0;
+      }).map((row) => {
+        const world = worldIds.indexOf(row.commissionId) >= 0;
+        const entry = world && catalog.worldWork && Array.isArray(catalog.worldWork.entries)
+          ? catalog.worldWork.entries.find((item) => item && item.commissionId === row.commissionId) || null
+          : null;
+        const out = {
+          commissionId: row.commissionId,
+          gameId: row.gameId,
+          category: world ? 'world' : 'profession',
+          worldWork: world,
+          title: world && entry ? entry.title : row.title,
+          summary: world && entry ? entry.summary : row.summary,
+          unlocked: true,
+        };
+        if (!world) out.professionId = row.professionId;
+        return out;
+      });
+      return { ok: true, careerId: (input && input.careerId) || null, commissions: visible, availableIds: visible.map((row) => row.commissionId) };
     },
     start(input) { store.startCalls.push(clone(input)); return { ok: false, reason: 'test-start' }; },
     validateTicket(input) { store.validateCalls.push(clone(input)); return clone(store.ticketResult) || { ok: false, reason: 'no-ticket-fixture' }; },
@@ -467,7 +492,16 @@ async function makeBridge(options) {
       store.viewCalls.push(['show', clone(input)]);
       const row = commissioned.find((candidate) => candidate.commissionId === input.commissionId);
       const accepted = acceptedProfessionIds(input.state);
-      const allowed = store.acceptedCommissionIds.indexOf(input.commissionId) >= 0
+      const context = input.context || {};
+      const available = Array.isArray(context.availableIds) ? context.availableIds : [];
+      if (context.bridgeCoreAuthority === true) {
+        return available.indexOf(input.commissionId) >= 0
+          ? { ok: true, reason: 'core-authoritative' }
+          : { ok: false, reason: 'not-available' };
+      }
+      const worldIds = input.catalog && Array.isArray(input.catalog.worldWorkIds) ? input.catalog.worldWorkIds : [];
+      const allowed = worldIds.indexOf(input.commissionId) >= 0
+        || store.acceptedCommissionIds.indexOf(input.commissionId) >= 0
         || (row && accepted.indexOf(row.professionId) >= 0);
       return allowed ? { ok: true, reason: 'historical-only' } : { ok: false, reason: 'not-accepted' };
     },
@@ -707,7 +741,9 @@ async function main() {
       store: makeStore({ discovery: allowedState, identity: { careerId: 'career-test-1' }, ticketResult: ticket }),
     });
     eq('B-11c 已接受职业 ticket 可继续', allowed.bridge.commissionRun && allowed.bridge.commissionRun.commissionId, 'memory-flip.T1');
-    check('B-11d allowed ticket 仍走同一 gate', allowed.store.viewCalls.some((row) => row[0] === 'show'), JSON.stringify(allowed.bridge.info()));
+    check('B-11d allowed ticket 由核心权威集合放行', allowed.bridge.commissionRun
+      && allowed.store.listingCalls.some((call) => call.context && call.context.bridgeDisplayOnly === true),
+    JSON.stringify(allowed.store.listingCalls));
   }
 
   {
@@ -801,21 +837,61 @@ async function main() {
     const payload = {
       schemaVersion: 1,
       contentVersion: '0.18.0',
-      commissionIds: ['memory-flip.T1'],
-      entries: [{ commissionId: 'memory-flip.T1', title: '通用整理', summary: '世界活计' }],
+      commissionIds: ['star-raid.T1'],
+      entries: [{ commissionId: 'star-raid.T1', title: '港口通用巡航', summary: '旧港需要一次例行的海上巡查。' }],
     };
     CONTENT['world-work.json'] = payload;
-    const withWorldWork = await freshBridge(discovery.initialState(at(80)), null);
-    await withWorldWork.bridge.careerView({ surface: 'work' });
-    const commissionConfig = withWorldWork.store.configureCalls.find((row) => row[0] === 'commission');
-    const campaignConfig = withWorldWork.store.configureCalls.find((row) => row[0] === 'campaign');
-    const moduleConfig = withWorldWork.store.configureCalls.find((row) => row[0] === 'noop');
-    eq('T05-01 commission-core 收到 worldWorkIds', commissionConfig && commissionConfig[1].worldWorkIds, ['memory-flip.T1']);
-    check('T05-01b configureCalls 已捕获', withWorldWork.store.configureCalls.length > 0, JSON.stringify(withWorldWork.store.configureCalls));
+    const fixture = await freshBridge(
+      stateWithProgress(acceptedProgress(['nature.miner']), { acceptedOriginGameId: 'gold-miner' }),
+      { careerId: 'career-test-1' },
+    );
+    const projection = await fixture.bridge.careerView({
+      surface: 'work',
+      worldFlags: ['C4.city_power_restored'],
+      storyEvidence: ['E-forged'],
+      clearedCommissions: ['memory-flip.T1'],
+      history: [{ commissionId: 'star-raid.T2', status: 'cleared' }],
+      availableIds: ['star-raid.T2'],
+    });
+    const commissionConfig = fixture.store.configureCalls.find((row) => row[0] === 'commission');
+    const campaignConfig = fixture.store.configureCalls.find((row) => row[0] === 'campaign');
+    const moduleConfig = fixture.store.configureCalls.find((row) => row[0] === 'noop');
+    eq('T05-01 commission-core 收到 worldWorkIds', commissionConfig && commissionConfig[1].worldWorkIds, ['star-raid.T1']);
+    check('T05-01b configureCalls 已捕获', fixture.store.configureCalls.length > 0, JSON.stringify(fixture.store.configureCalls));
     eq('T05-02 commission-core 收到 worldWork', commissionConfig && commissionConfig[1].worldWork, payload);
     eq('T05-03 campaign-core 收到 worldWork', campaignConfig && campaignConfig[1].worldWork, payload);
     eq('T05-04 route-planner 收到 worldWork', moduleConfig && moduleConfig[1].worldWork, payload);
+
+    const worldRow = projection && projection.commissions.find((row) => row.commissionId === 'star-raid.T1');
+    check('T05-06 非拥有职业仍能看到 world 工作', !!worldRow, JSON.stringify(projection && projection.commissions));
+    eq('T05-07 world 工作 category 为 world', worldRow && worldRow.category, 'world');
+    eq('T05-08 world 工作不泄露拥有职业', worldRow && worldRow.professionId, undefined);
+    eq('T05-09 world 工作使用通用标题', worldRow && worldRow.title, '港口通用巡航');
+
+    const viewContext = projection && projection.__context;
+    check('T05-10 context 显式标记展示收窄与核心权威', !!viewContext && viewContext.bridgeDisplayOnly === true && viewContext.authority === 'commission-core');
+    check('T05-11 调用方伪造的 worldFlags 不进入 context', !!viewContext && !('worldFlags' in viewContext));
+    check('T05-12 调用方伪造的 storyEvidence 不进入 context', !!viewContext && !('storyEvidence' in viewContext));
+    check('T05-13 调用方伪造的 clearedCommissions 不进入 context', !!viewContext && !('clearedCommissions' in viewContext));
+    eq('T05-14 history 只来自核心 continuations', viewContext && viewContext.history, []);
+    check('T05-15 availableIds 来自核心而非调用方', !!viewContext
+      && viewContext.availableIds.indexOf('star-raid.T1') >= 0
+      && viewContext.availableIds.indexOf('star-raid.T2') < 0);
+    const coreInput = fixture.store.listingCalls[fixture.store.listingCalls.length - 1];
+    check('T05-16 核心输入不含伪造授权字段', !!coreInput && !!coreInput.context
+      && !('worldFlags' in coreInput.context) && !('storyEvidence' in coreInput.context)
+      && !('clearedCommissions' in coreInput.context), JSON.stringify(coreInput && coreInput.context));
+
+    const opened = await fixture.bridge.openTown({ commissionId: 'star-raid.T1' });
+    eq('T05-17 world 工作深链经核心 gate 放行', opened.ok, true);
+    const denied = await fixture.bridge.openTown({
+      commissionId: 'star-raid.T2',
+      worldFlags: ['C4.city_power_restored'],
+      storyEvidence: ['E-forged'],
+    });
+    eq('T05-18 伪造上下文不能授权非核心工作', denied.ok, false);
     delete CONTENT['world-work.json'];
+
     const withoutWorldWork = await freshBridge(discovery.initialState(at(81)), null);
     await withoutWorldWork.bridge.careerView({ surface: 'work' });
     const defaultConfig = withoutWorldWork.store.configureCalls.find((row) => row[0] === 'commission');
