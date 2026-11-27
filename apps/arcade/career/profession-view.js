@@ -453,7 +453,8 @@
       if (!commission || commission.readOnly) return;
       var accepted = canAcceptCommission({ state: state, catalog: catalog, context: context, commissionId: commissionId });
       if (!accepted.ok) return;
-      var rank = commission.category === 'world' ? 0 : (commission.professionId === active ? 1 : 2);
+      var cleared = tokens(context, 'clearedCommissions').indexOf(commissionId) >= 0;
+      var rank = (commission.category === 'world' ? 0 : (commission.professionId === active ? 1 : 2)) + (cleared ? 10 : 0);
       candidates.push({ commission: commission, rank: rank });
     });
     candidates.sort(function (a, b) {
