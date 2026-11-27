@@ -404,6 +404,78 @@
    * 内容规整
    * ------------------------------------------------------------------ */
 
+  function readWorldWorkOption(raw, commissionSet, errors, warnings) {
+    if (raw === undefined || raw === null) return null;
+    if (!isObject(raw)) {
+      errors.push('world-work-invalid');
+      return null;
+    }
+    if (!Array.isArray(raw.commissionIds)) {
+      errors.push('world-work-ids-missing');
+      return null;
+    }
+    if (!Array.isArray(raw.entries)) {
+      errors.push('world-work-entries-missing');
+      return null;
+    }
+    var ids = [];
+    var idSet = makeMap();
+    raw.commissionIds.forEach(function (value) {
+      var id = trimText(value, 120);
+      if (!ID_RE.test(id)) {
+        errors.push('world-work-id-invalid');
+        return;
+      }
+      if (idSet[id]) {
+        errors.push('world-work-id-duplicate:' + id);
+        return;
+      }
+      if (!commissionSet[id]) {
+        errors.push('world-work-id-unknown:' + id);
+        return;
+      }
+      idSet[id] = true;
+      ids.push(id);
+    });
+    var entries = [];
+    var index = makeMap();
+    raw.entries.forEach(function (entry) {
+      if (!isObject(entry)) {
+        errors.push('world-work-entry-invalid');
+        return;
+      }
+      var id = trimText(entry.commissionId, 120);
+      if (!ID_RE.test(id) || !idSet[id]) {
+        errors.push('world-work-entry-unknown:' + id);
+        return;
+      }
+      if (index[id]) {
+        errors.push('world-work-entry-duplicate:' + id);
+        return;
+      }
+      var title = trimText(entry.title, 120);
+      var summary = trimText(entry.summary, 240);
+      if (!title || !summary) {
+        errors.push('world-work-entry-text-missing:' + id);
+        return;
+      }
+      var normalized = { commissionId: id, title: title, summary: summary };
+      entries.push(normalized);
+      index[id] = normalized;
+    });
+    ids.forEach(function (id) {
+      if (!index[id]) errors.push('world-work-entry-missing:' + id);
+    });
+    if (entries.length !== ids.length) errors.push('world-work-entry-count');
+    return {
+      contentVersion: trimText(raw.contentVersion, 32) || null,
+      schemaVersion: nonNegInt(raw.schemaVersion, 1),
+      commissionIds: ids.slice(),
+      entries: entries.slice(),
+      byId: index,
+    };
+  }
+
   function buildAliasMap(items, warnings) {
     var alias = makeMap();
     alias.crystal = 'starcrystal';
@@ -699,6 +771,7 @@
       contentVersion: null,
       commissions: [],
       commissionSet: makeMap(),
+      commissionIndex: makeMap(),
       byProfession: makeMap(),
       professionIds: [],
       professionSet: makeMap(),
@@ -721,6 +794,10 @@
       tokenIndex: makeMap(),
       alternatives: [],
       evidence: null,
+      worldWork: null,
+      worldWorkIds: [],
+      worldWorkSet: makeMap(),
+      worldWorkIndex: makeMap(),
       warnings: [],
       materialsSource: 'none',
     };
@@ -759,6 +836,7 @@
     next.commissions = accepted;
     accepted.forEach(function (commission) {
       next.commissionSet[commission.commissionId] = true;
+      next.commissionIndex[commission.commissionId] = commission;
       if (!has(next.byProfession, commission.professionId)) next.byProfession[commission.professionId] = [];
       next.byProfession[commission.professionId].push(commission);
       mark(next.gameSet, commission.gameId);
@@ -952,6 +1030,16 @@
         return compareText(a.offerId, b.offerId);
       });
 
+    /* ---- 世界通用工作（只读 overlay，不改变既有委托归属） ---- */
+    next.worldWork = readWorldWorkOption(options.worldWork, next.commissionSet, errors, warnings);
+    if (next.worldWork) {
+      next.worldWorkIds = next.worldWork.commissionIds.slice();
+      next.worldWorkIds.forEach(function (id) {
+        next.worldWorkSet[id] = true;
+        next.worldWorkIndex[id] = next.worldWork.byId[id];
+      });
+    }
+
     /* ---- 内容版本（只读展示） ---- */
     var contentVersion = null;
     if (isObject(options.commissions) && typeof options.commissions.contentVersion === 'string') {
@@ -995,6 +1083,7 @@
           materials: input.materials !== undefined ? input.materials : input.content.materials,
           evidence: input.evidence !== undefined ? input.evidence : input.content.evidence,
           alternatives: input.alternatives !== undefined ? input.alternatives : input.content.alternatives,
+          worldWork: input.worldWork !== undefined ? input.worldWork : input.content.worldWork,
           offers: input.offers,
         };
       } else if (isObject(input)) {
@@ -1021,7 +1110,7 @@
         };
       }
       state = next;
-      return {
+      var report = {
         ok: true,
         errors: [],
         warnings: state.warnings.slice(),
@@ -1036,6 +1125,8 @@
         offerCount: state.alternatives.length,
         contentVersion: state.contentVersion,
       };
+      if (state.worldWork) report.worldWorkCount = state.worldWorkIds.length;
+      return report;
     } catch (err) {
       return failure(REASONS.exception, { error: errorText(err), errors: [REASONS.exception], unchanged: true });
     }
@@ -1051,7 +1142,7 @@
   }
 
   function status() {
-    return {
+    var report = {
       moduleVersion: MODULE_VERSION,
       schemaVersion: SCHEMA_VERSION,
       configured: isConfigured(),
@@ -1069,6 +1160,8 @@
       offerCount: state.alternatives.length,
       warnings: state.warnings.slice(),
     };
+    if (state.worldWork) report.worldWorkCount = state.worldWorkIds.length;
+    return report;
   }
 
   function domainOf(professionId) {
@@ -1961,6 +2054,254 @@
   }
 
   /* ------------------------------------------------------------------ *
+   * 世界通用工作路径（只读；不改变原 plan() 的单职业链语义）
+   * ------------------------------------------------------------------ */
+
+  function worldWorkFailure(reason, extra) {
+    var out = {
+      ok: false,
+      reason: reason,
+      complete: false,
+      originGameId: null,
+      acceptedProfessionId: null,
+      originCommissionId: null,
+      steps: [],
+      worldCommissionIds: [],
+      plannedWorldCommissionIds: [],
+      flagsAfter: [],
+      evidence: [],
+      economy: {
+        initialCredits: 0,
+        plannedCredits: 0,
+        plannedItems: {},
+        spentCredits: 0,
+        spentItems: {},
+        repeatSalaryUsed: false,
+        marketRequired: false,
+      },
+      blockers: [],
+    };
+    if (isObject(extra)) {
+      Object.keys(extra).forEach(function (key) { out[key] = extra[key]; });
+    }
+    if (!out.blockers.length) {
+      out.blockers.push({ kind: reason, id: reason, reason: reason, commissionId: null });
+    }
+    return out;
+  }
+
+  function applyChapterSignalFlags(flags) {
+    var chapter = state.chapter;
+    if (!chapter || !Array.isArray(chapter.signals)) return;
+    chapter.signals.forEach(function (signal) {
+      if (!isObject(signal) || typeof signal.flag !== 'string') return;
+      var target = typeof signal.mapsTo === 'string' && FLAG_RE.test(signal.mapsTo) ? signal.mapsTo : signal.flag;
+      if (marked(flags, target)) return;
+      var from = Array.isArray(signal.from) ? signal.from : [];
+      if (from.some(function (flag) { return marked(flags, flag); })) {
+        mark(flags, signal.flag);
+        mark(flags, target);
+      }
+    });
+  }
+
+  function worldWorkStep(commission, meta, order) {
+    return {
+      kind: 'commission',
+      category: 'world',
+      id: commission.commissionId,
+      commissionId: commission.commissionId,
+      tier: commission.tier,
+      gameId: commission.gameId,
+      title: meta.title,
+      summary: meta.summary,
+      reason: meta.summary,
+      optional: false,
+      missing: [],
+      order: order,
+    };
+  }
+
+  function professionStep(commission, order) {
+    return {
+      kind: 'commission',
+      category: 'profession',
+      id: commission.commissionId,
+      commissionId: commission.commissionId,
+      tier: commission.tier,
+      gameId: commission.gameId,
+      title: commission.title,
+      reason: '先把这张属于你当前职业的工单交回，再沿港里的通用活计往下走。',
+      optional: false,
+      missing: [],
+      order: order,
+    };
+  }
+
+  function buildWorldWorkPath(input) {
+    try {
+      if (!isConfigured()) return worldWorkFailure(REASONS.notConfigured);
+      if (!state.worldWork) return worldWorkFailure('world-work-not-configured');
+      var options = isObject(input) ? input : {};
+      var originGameId = typeof options.originGameId === 'string' ? options.originGameId : '';
+      var acceptedProfessionId = typeof options.acceptedProfessionId === 'string'
+        ? options.acceptedProfessionId
+        : (typeof options.professionId === 'string' ? options.professionId : '');
+      if (!originGameId || !has(state.gameSet, originGameId)) {
+        return worldWorkFailure(REASONS.unknownOrigin, { originGameId: originGameId || null });
+      }
+      if (!acceptedProfessionId || !has(state.professionSet, acceptedProfessionId)) {
+        return worldWorkFailure(REASONS.unknownProfession, { acceptedProfessionId: acceptedProfessionId || null });
+      }
+      var origin = state.originMap[originGameId] || null;
+      if (origin && origin.professionId && origin.professionId !== acceptedProfessionId) {
+        return worldWorkFailure('origin-profession-mismatch', {
+          originGameId: originGameId,
+          acceptedProfessionId: acceptedProfessionId,
+        });
+      }
+      var ownList = state.byProfession[acceptedProfessionId] || [];
+      var originCommission = null;
+      for (var oi = 0; oi < ownList.length; oi += 1) {
+        if (ownList[oi].gameId === originGameId && ownList[oi].tier === 1) {
+          originCommission = ownList[oi];
+          break;
+        }
+      }
+      if (!originCommission) return worldWorkFailure('origin-first-commission-missing', {
+        originGameId: originGameId,
+        acceptedProfessionId: acceptedProfessionId,
+      });
+
+      var wallet = walletView(options.wallet);
+      var quests = questRowsOf(options.quests);
+      var claims = claimRowsOf(options.claims);
+      var flagsInput = readFlagsInput(options.flags);
+      var cleared = collectCleared(quests, claims);
+      var resolved = makeMap();
+      Object.keys(cleared).forEach(function (id) { mark(resolved, id); });
+      var story = evaluateStory(flagsInput, quests, claims, wallet);
+      var steps = [];
+      var blockers = [];
+      var plannedReceipts = [];
+      var plannedCredits = 0;
+      var plannedItems = {};
+      var rentalAdded = false;
+      var ownsShip = ownsAnyShip(wallet.equipment);
+
+      function refreshStory() {
+        if (!plannedReceipts.length || !activeEvidenceModule()) return;
+        var next = evaluateStory(flagsInput, quests, claims.concat(plannedReceipts), wallet);
+        if (next.evidenceUsed) story = next;
+      }
+
+      function addReward(commission) {
+        plannedCredits += commission.reward.credits;
+        Object.keys(commission.reward.items).forEach(function (itemId) {
+          plannedItems[itemId] = (plannedItems[itemId] || 0) + commission.reward.items[itemId];
+        });
+      }
+
+      if (!marked(cleared, originCommission.commissionId)) {
+        var originUnlock = evaluateUnlock(originCommission, resolved, story.flags);
+        if (!originUnlock.ok) {
+          blockers.push({ kind: 'origin-locked', id: originCommission.commissionId, reason: 'origin-unlock-not-met', commissionId: originCommission.commissionId });
+        } else {
+          steps.push(professionStep(originCommission, steps.length + 1));
+          mark(resolved, originCommission.commissionId);
+          plannedReceipts.push(syntheticReceipt(originCommission));
+          addReward(originCommission);
+          refreshStory();
+        }
+      }
+
+      var worldList = [];
+      state.worldWorkIds.forEach(function (id) {
+        var commission = state.commissionIndex[id];
+        if (commission) worldList.push(commission);
+      });
+      var chain = buildChain(worldList, 'standard');
+      if (!chain.ok) {
+        blockers.push({ kind: 'world-chain-cycle', id: 'world-chain-cycle', reason: 'world-chain-cycle', commissionId: null, missing: chain.cycle.slice() });
+      } else {
+        for (var wi = 0; wi < chain.order.length; wi += 1) {
+          var commission = chain.order[wi];
+          if (marked(resolved, commission.commissionId)) continue;
+          var unlocked = evaluateUnlock(commission, resolved, story.flags);
+          if (!unlocked.ok) {
+            blockers.push({ kind: 'world-locked', id: commission.commissionId, reason: 'world-unlock-not-met', commissionId: commission.commissionId });
+            continue;
+          }
+          if (has(state.combatGames, commission.gameId) && !ownsShip) {
+            if (!state.rentalShip) {
+              blockers.push({ kind: 'world-ship-missing', id: commission.commissionId, reason: 'rental-ship-missing', commissionId: commission.commissionId });
+              continue;
+            }
+            if (!rentalAdded) {
+              steps.push(rentalStep(state.rentalShip, commission.gameId));
+              rentalAdded = true;
+            }
+          }
+          var meta = state.worldWorkIndex[commission.commissionId];
+          steps.push(worldWorkStep(commission, meta, steps.length + 1));
+          mark(resolved, commission.commissionId);
+          plannedReceipts.push(syntheticReceipt(commission));
+          addReward(commission);
+          refreshStory();
+        }
+      }
+
+      applyChapterSignalFlags(story.flags);
+      /* 章节信号表未注入时，仍按冻结的 C1 收据旗标派生唯一里程碑；只读，不写库。 */
+      if (!marked(story.flags, 'C1.signal_fragment')) {
+        var c1Sources = ['C1.work_done', 'C1.flight_done', 'C1.signal', 'C1.records'];
+        if (c1Sources.some(function (flag) { return marked(story.flags, flag); })) {
+          mark(story.flags, 'C1.signal_fragment');
+        }
+      }
+      var evidenceModule = activeEvidenceModule();
+      if (!evidenceModule && !blockers.length) {
+        blockers.push({ kind: 'evidence-unavailable', id: 'evidence-unavailable', reason: 'evidence-unavailable', commissionId: null });
+      }
+      var flagsAfter = mapValues(story.flags);
+      var evidence = mapValues(story.tokens);
+      var complete = blockers.length === 0
+        && marked(story.flags, 'C1.signal_fragment')
+        && marked(story.flags, 'C2.research_complete')
+        && marked(story.flags, 'C3.truth_found')
+        && marked(story.flags, 'C4.city_power_restored');
+      assignStepOrder(steps);
+      return {
+        ok: true,
+        reason: null,
+        complete: complete,
+        originGameId: originGameId,
+        acceptedProfessionId: acceptedProfessionId,
+        originCommissionId: originCommission.commissionId,
+        steps: steps,
+        worldCommissionIds: state.worldWorkIds.slice(),
+        plannedWorldCommissionIds: state.worldWorkIds.filter(function (id) {
+          return marked(resolved, id) && !marked(cleared, id);
+        }),
+        flagsAfter: flagsAfter,
+        evidence: evidence,
+        economy: {
+          initialCredits: wallet.credits,
+          plannedCredits: plannedCredits,
+          plannedItems: plannedItems,
+          spentCredits: 0,
+          spentItems: {},
+          repeatSalaryUsed: false,
+          marketRequired: false,
+        },
+        blockers: blockers,
+      };
+    } catch (err) {
+      return worldWorkFailure(REASONS.exception, { error: errorText(err) });
+    }
+  }
+
+  /* ------------------------------------------------------------------ *
    * 替代路径（工作 / 研究 / 贸易 / 租机 / 代办，至少三种同时存在）
    * ------------------------------------------------------------------ */
 
@@ -2562,7 +2903,7 @@
       var professionGameId = list.length ? list[0].gameId : null;
       var gameDisplayName = professionGameId ? state.gameNames[professionGameId] || professionGameId : null;
 
-      return {
+      var result = {
         ok: true,
         reason: null,
         complete: complete,
@@ -2602,6 +2943,10 @@
         summaryText: summaryText,
         contentVersion: state.contentVersion,
       };
+      if (options.includeWorldWork === true) {
+        result.worldWorkPath = buildWorldWorkPath(Object.assign({}, options, { acceptedProfessionId: professionId }));
+      }
+      return result;
     } catch (err) {
       return failurePlan(REASONS.exception, { error: errorText(err) });
     }
@@ -3015,7 +3360,75 @@
     }
     addCheck('evidence-module', evidenceCheck, evidenceDetail);
 
-    /* 10. 静态边界：无 DOM/存储/网络/写库/随机/时钟/其它模块 */
+    /* 10. 世界通用工作：内容引用、全起源到 C4、披露与经济边界。 */
+    if (state.worldWork) {
+      var badWorldIds = [];
+      state.worldWorkIds.forEach(function (id) {
+        if (!has(commissionIds, id) || !state.worldWorkIndex[id]) badWorldIds.push(id);
+      });
+      addCheck('world-work-ids-known', badWorldIds.length === 0 && state.worldWorkIds.length > 0,
+        badWorldIds.length ? badWorldIds.join(',') : 'count=' + state.worldWorkIds.length);
+
+      var worldPaths = [];
+      var badWorldPaths = [];
+      var badWorldLeaks = [];
+      var badWorldEconomy = [];
+      state.originIds.forEach(function (originId) {
+        var originMeta = state.originMap[originId] || null;
+        var professionId = originMeta && originMeta.professionId;
+        if (!professionId) {
+          badWorldPaths.push(originId + ':profession-missing');
+          return;
+        }
+        var path = buildWorldWorkPath({
+          originGameId: originId,
+          acceptedProfessionId: professionId,
+          wallet: { credits: 80, items: {} },
+          quests: [],
+          claims: [],
+          flags: ['C0.port_seen'],
+        });
+        worldPaths.push({ originGameId: originId, professionId: professionId, path: path });
+        if (!path.ok || !path.complete) badWorldPaths.push(originId + ':' + (path.reason || 'incomplete'));
+        var worldSteps = (path.steps || []).filter(function (step) { return step.category === 'world'; });
+        worldSteps.forEach(function (step) {
+          if (Object.prototype.hasOwnProperty.call(step, 'professionId')) badWorldLeaks.push(originId + ':profession-field');
+          var text = (step.title || '') + ' ' + (step.summary || '') + ' ' + (step.reason || '');
+          state.professionIds.forEach(function (id) {
+            var meta = state.professionMeta[id] || {};
+            if (text.indexOf(id) >= 0 || (meta.displayName && text.indexOf(meta.displayName) >= 0)) {
+              badWorldLeaks.push(originId + ':' + id);
+            }
+          });
+        });
+        var expectedCredits = 0;
+        var expectedItems = {};
+        (path.steps || []).forEach(function (step) {
+          if (step.kind !== 'commission') return;
+          var commission = state.commissionIndex[step.commissionId];
+          if (!commission) return;
+          expectedCredits += commission.reward.credits;
+          Object.keys(commission.reward.items).forEach(function (itemId) {
+            expectedItems[itemId] = (expectedItems[itemId] || 0) + commission.reward.items[itemId];
+          });
+        });
+        var economy = path.economy || {};
+        if (economy.plannedCredits !== expectedCredits
+            || JSON.stringify(economy.plannedItems || {}) !== JSON.stringify(expectedItems)
+            || economy.spentCredits !== 0
+            || Object.keys(economy.spentItems || {}).length !== 0
+            || economy.repeatSalaryUsed !== false
+            || economy.marketRequired !== false) {
+          badWorldEconomy.push(originId);
+        }
+      });
+      addCheck('world-work-origin-paths', badWorldPaths.length === 0 && worldPaths.length === state.originIds.length,
+        badWorldPaths.length ? badWorldPaths.slice(0, MAX_WALK).join(',') : 'paths=' + worldPaths.length);
+      addCheck('world-work-no-profession-leak', badWorldLeaks.length === 0, badWorldLeaks.slice(0, MAX_WALK).join(','));
+      addCheck('world-work-economy', badWorldEconomy.length === 0, badWorldEconomy.slice(0, MAX_WALK).join(','));
+    }
+
+    /* 11. 静态边界：无 DOM/存储/网络/写库/随机/时钟/其它模块 */
     var source = '';
     try {
       source = String(routePlannerFactory);
@@ -3085,6 +3498,7 @@
     status: status,
     isConfigured: isConfigured,
     plan: plan,
+    worldWorkPath: buildWorldWorkPath,
     explain: explain,
     validate: validate,
     create: buildInstance,
