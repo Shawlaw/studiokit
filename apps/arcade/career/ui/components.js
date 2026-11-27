@@ -506,22 +506,31 @@
     const doc = documentOf();
     if (!doc) return null;
     const state = oneOf(input.state, RECEIPT_STATES, 'success');
-    const card = element(doc, 'section', 'ac-career-ui__surface ac-career-ui__receipt');
+    const card = element(doc, 'section', 'ac-career-ui__receipt ac-career-ui__stack');
     card.setAttribute('data-receipt-state', state);
     card.setAttribute('role', 'status');
     card.setAttribute('aria-live', 'polite');
     card.setAttribute('aria-atomic', 'true');
+    const caption = cleanText(input.caption);
+    if (caption) card.appendChild(element(doc, 'p', 'ac-career-ui__caption', caption));
     card.appendChild(element(doc, 'h2', 'ac-career-ui__receipt-title', cleanText(input.title)));
     const result = element(doc, 'div', 'ac-career-ui__row ac-career-ui__receipt-result ' + (input.outcome === 'failure' ? 'ac-career-ui__danger' : 'ac-career-ui__success'));
     result.appendChild(icon(input.outcome === 'failure' ? 'x' : 'check'));
-    result.appendChild(element(doc, 'span', 'ac-career-ui__grow', cleanText(input.resultLine)));
+    result.appendChild(element(doc, 'span', 'ac-career-ui__receipt-result-text', cleanText(input.resultLine)));
     card.appendChild(result);
 
     const rewards = isObject(input.rewards) ? input.rewards : null;
     if (state !== 'no-duplicate-reward' && rewards) {
-      const rows = element(doc, 'div', 'ac-career-ui__kv-list');
-      if (typeof rewards.credits === 'number' && Number.isFinite(rewards.credits)) rows.appendChild(rewardRow(doc, '工作报酬', String(rewards.credits)));
-      const materials = Array.isArray(rewards.materials) ? rewards.materials : [];
+      const rows = element(doc, 'div', 'ac-career-ui__kv-list ac-career-ui__stack ac-career-ui__stack--small');
+      const workText = cleanText(rewards.workText);
+      if (workText) {
+        const work = rewardRow(doc, cleanText(rewards.workLabel) || '工作报酬', workText);
+        work.setAttribute('data-receipt-reward', 'work');
+        rows.appendChild(work);
+      } else if (typeof rewards.credits === 'number' && Number.isFinite(rewards.credits)) {
+        rows.appendChild(rewardRow(doc, '工作报酬', String(rewards.credits)));
+      }
+      const materials = !workText && Array.isArray(rewards.materials) ? rewards.materials : [];
       materials.filter(isObject).forEach((material) => {
         const name = cleanText(material.name);
         const count = typeof material.count === 'number' && Number.isFinite(material.count) ? String(material.count) : cleanText(material.count);
@@ -531,7 +540,10 @@
       if (identity) rows.appendChild(rewardRow(doc, '生涯身份', identity));
       const experience = cleanText(rewards.experience);
       if (experience) rows.appendChild(rewardRow(doc, '经历', experience));
-      if (rows.children.length) card.appendChild(rows);
+      if (rows.children.length) {
+        card.appendChild(element(doc, 'hr', 'ac-career-ui__line'));
+        card.appendChild(rows);
+      }
     }
 
     if (isObject(input.npcReply)) {
@@ -540,6 +552,7 @@
       reply.appendChild(element(doc, 'strong', 'ac-career-ui__gold ac-career-ui__npc-name', cleanText(input.npcReply.name)));
       const paragraphs = Array.isArray(input.npcReply.paragraphs) ? input.npcReply.paragraphs : [];
       paragraphs.forEach((paragraph) => reply.appendChild(element(doc, 'p', 'ac-career-ui__npc-paragraph', cleanText(paragraph))));
+      card.appendChild(element(doc, 'hr', 'ac-career-ui__line'));
       card.appendChild(reply);
     }
     const actions = [input.nextAction, input.exitAction].filter(isObject).slice(0, 2);

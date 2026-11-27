@@ -507,6 +507,28 @@ html.ac-career-ui-scroll-lock body {
   padding-top: var(--ac-career-ui-space-2);
 }
 
+.ac-career-ui.ac-career-ui__receipt-popover {
+  position: fixed;
+  inset: 0;
+  width: min(var(--ac-career-ui-panel), calc(100% - 24px));
+  height: fit-content;
+  max-height: calc(100dvh - 24px);
+  margin: auto;
+  padding: 0;
+  overflow: auto;
+  border: 0;
+  background: transparent;
+}
+
+.ac-career-ui__receipt-popover > .ac-career-ui__receipt {
+  width: 100%;
+  max-height: none;
+}
+
+.ac-career-ui__receipt > .ac-career-ui__actions {
+  gap: var(--ac-career-ui-gap);
+}
+
 .ac-career-ui__receipt-title {
   color: var(--ac-career-ui-ink);
   font-size: var(--ac-career-ui-font-h2-size);

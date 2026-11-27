@@ -407,7 +407,7 @@ check('T12 shells pass showHeader:false where T15 requires it',
   (source.mailbox.match(/showHeader: false/g) || []).length >= 2
   && (source.invitation.match(/showHeader: false/g) || []).length >= 4);
 check('P01 adapter wrapper has no copied surface styling', /wrapper\.className = 'ac-career-ui';/.test(source.clue) && !/wrapper\.className = [^;]*ac-career-ui__surface/.test(source.clue));
-check('P04 work reward is composed once before the kv list', /data-receipt-reward', 'work'/.test(source.receipt) && /insertBefore\(workRow, anchor \|\| null\)/.test(source.receipt));
+check('P04 passes work reward text derived from settled rewards to ReceiptCard', /workText: workRewardTextOf\(allRewards, presentation\)/.test(source.receipt));
 check('receipt projection never reads storyFeedback.nextStep', !/raw\.nextStep/.test(source.receipt) && /projectedStoryOf\(outer\)/.test(source.receipt));
 
 /* ------------------------------------------------------------------ *

@@ -1329,7 +1329,7 @@
     return actions;
   }
 
-  function workRewardRowOf(doc, rewards, presentation) {
+  function workRewardTextOf(rewards, presentation) {
     const creditLabel = cleanText(presentation && presentation.creditLabel) || '工钱';
     const materialLabel = cleanText(presentation && presentation.materialLabel) || '材料';
     const parts = [];
@@ -1341,13 +1341,7 @@
       const name = cleanText(material.name);
       if (name && count) parts.push(materialLabel + ' ' + name + ' ×' + count);
     });
-    if (!parts.length) return null;
-    const row = doc.createElement('div');
-    row.className = 'ac-career-ui__kv';
-    row.setAttribute('data-receipt-reward', 'work');
-    row.appendChild(make(doc, 'span', 'ac-career-ui__muted', cleanText(presentation && presentation.workRewardLabel) || '工作报酬'));
-    row.appendChild(make(doc, 'span', 'ac-career-ui__kv-value', parts.join(' · ')));
-    return row;
+    return parts.join(' · ');
   }
 
   function componentActionNode(components, input) {
@@ -1364,6 +1358,7 @@
     const reduced = outer.reducedMotion === true || contextReducedMotion(outer);
     const rootNode = doc.createElement('div');
     rootNode.className = 'ac-career-ui';
+    rootNode.className += ' ac-career-ui__receipt-popover';
     rootNode.setAttribute('data-reduced-motion', String(reduced));
     rootNode.setAttribute('popover', 'manual');
 
@@ -1387,10 +1382,16 @@
        never come from here. Without it the adapter keeps honest generic wording. */
     const presentation = isObject(outer.receiptPresentation) ? outer.receiptPresentation : null;
     const allRewards = fields.ok && !fields.duplicate ? projectedRewards(fields, projection, outer) : null;
-    const rewards = allRewards ? { identity: allRewards.identity, experience: allRewards.experience } : undefined;
+    const rewards = allRewards ? {
+      workText: workRewardTextOf(allRewards, presentation),
+      workLabel: cleanText(presentation && presentation.workRewardLabel),
+      identity: allRewards.identity,
+      experience: allRewards.experience,
+    } : undefined;
     const card = components.ReceiptCard({
       outcome: fields.ok ? 'success' : 'failure',
       state: fields.duplicate && fields.ok ? 'no-duplicate-reward' : (fields.ok ? 'success' : 'failure'),
+      caption: cleanText(presentation && presentation.caption),
       title: cleanText(presentation && presentation.title) || (fields.ok ? CARD_SUCCESS_TITLE : CARD_FAILURE_TITLE),
       resultLine: fields.duplicate ? DUPLICATE_NOTE : (cleanText(presentation && presentation.resultLine) || resultLineOf(fields, projection)),
       rewards: rewards,
@@ -1398,13 +1399,7 @@
       nextAction: null,
       exitAction: null,
     });
-    if (allRewards) {
-      const workRow = workRewardRowOf(doc, allRewards, presentation);
-      if (workRow) {
-        const anchor = card.querySelector('.ac-career-ui__kv-list') || card.querySelector('.ac-career-ui__npc') || card.querySelector('.ac-career-ui__actions');
-        card.insertBefore(workRow, anchor || null);
-      }
-    }
+    card.classList.add('ac-career-ui__panel');
     card.setAttribute('data-career-card', 'receipt');
     card.setAttribute('data-state', fields.ok ? 'success' : 'failure');
     if (fields.key) card.setAttribute('data-run-id', fields.key);
