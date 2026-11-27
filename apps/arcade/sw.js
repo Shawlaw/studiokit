@@ -10,11 +10,13 @@
  * - 0.20.0 生涯首航 V2：缓存键 studiokit-arcade-0.20.0-v1，升级时同样只继承预载清单并重新取当前页面。
  * - 0.21.0 被动发现与选择式叙事：缓存键 studiokit-arcade-0.21.0-v1，沿用只继承预载清单并重新取当前页面的迁移策略。
  * - 0.21.2 首页告示板弹窗、钱包标题、滚动层级与游戏标题留白修复：缓存键 studiokit-arcade-0.21.2-v1。
+ * - 0.22.0 独立职业披露与世界通用工作：缓存键 studiokit-arcade-0.22.0-v1；新增 profession-state /
+ *   profession-view / world-work 同源资源，沿用只继承预载清单并重新取当前页面字节的策略。
  * - 0.11.2 更新检测：安装新版本后主动通知所有受控页面（arcade-sw-update-ready），
  *   页面通过 arcade-sw-version 查询当前 SW 版本；不再让已安装 PWA 静默停留在旧版本。
  * - 不使用任何远程资源、分析或第三方 API（AGENTS.md 约束 4）。
  */
-const VERSION = '0.21.2';
+const VERSION = '0.22.0';
 const CACHE_PREFIX = 'studiokit-arcade-';
 const CACHE_NAME = `${CACHE_PREFIX}${VERSION}-v1`;
 /* 预载迁移见 carryPreloadedGames()：继承旧缓存的游戏清单，重新联网取当前版本页面。 */
@@ -38,6 +40,8 @@ const CORE_PATHS = [
   './career/router.js',
   './career/registry.js',
   './career/discovery.js',
+  './career/profession-state.js',
+  './career/profession-view.js',
   './career/career-core.js',
   './career/career-db.js',
   './career/entry-router.js',
@@ -49,6 +53,7 @@ const CORE_PATHS = [
   './career/content/registry.json',
   './career/content/clues.json',
   './career/content/commissions.json',
+  './career/content/world-work.json',
   './career/content/items.json',
   './career/content/chapter-01.json',
   './career/ui/clue-surface.js',
