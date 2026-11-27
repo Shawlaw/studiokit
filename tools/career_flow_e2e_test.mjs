@@ -1467,8 +1467,16 @@ async function phaseSingleDelivery(cdp, gameId) {
   /* 0.23：接受邀请后先进入首次到港叙事面板（P03），第一份工作必须来自真实
      port 投影，且仍由玩家显式点击；未接受职业/隐藏任务不得出现。 */
   const arrivalPanel = await waitPanel(cdp, 'arrival', 15000);
-  /* 0.23 到港叙事面板关闭后无法再读，先取样供 verifyOriginArrival 逐游戏断言寄信人/旧物。 */
-  QA.arrivalText[gameId] = arrivalPanel ? arrivalPanel.text : '';
+  /* 到港面板先出标题、再异步填叙事与首单；必须等到真实投影行渲染完再取样。 */
+  await cdp.waitFor(`(() => {
+    const panel = document.querySelector('[data-career-panel="arrival"]');
+    if (!panel) return false;
+    const shell = panel.querySelector('.ac-career-ui__panel');
+    return !!shell && shell.getAttribute('data-shell-state') === 'normal'
+      && panel.querySelectorAll('[data-action]').length >= 2;
+  })()`, { timeout: 15000 });
+  /* 0.23 到港叙事面板关闭后无法再读：等真实内容渲染完再取样，供 verifyOriginArrival 逐游戏断言寄信人/旧物。 */
+  QA.arrivalText[gameId] = await cdp.evaluate("(() => { const panel = document.querySelector('[data-career-panel=\"arrival\"]'); return panel ? panel.innerText : ''; })()");
   const arrivalProjection = await cdp.evaluate(`(async () => {
     const api = window.ArcadeCareer;
     const view = await api.careerView({ surface: 'port' });
@@ -2356,6 +2364,44 @@ async function runFullFlow(cdp, browser, newPage, campaign, commissions) {
     /后日谈/.test(epilogue) && epilogue.length > 10 && await cdp.evaluate('location.href') === endingHref,
     J({ epilogue, epilogueAction, buttons: endingCard.buttons }));
   await checkConsole(cdp, 'ending');
+  await verifyFirstArrivalConsumed(cdp);
+}
+
+/* 首到港的消费必须是持久事实：真实接单（任何入口）之后，关页重开、回到起源游戏，
+   信件只能「去港口」，不能再重播到港与第一份工作。 */
+async function verifyFirstArrivalConsumed(cdp) {
+  const clueId = ORIGIN_CLUE;
+  /* 游戏页的 bridge 是懒加载：必须带 careerLetter=1 才会装载并恢复信件。 */
+  await go(cdp, BASE + '/apps/arcade/games/' + ORIGIN_GAME + '.html?careerLetter=1');
+  await waitBridge(cdp, 'first-arrival-consumed', false);
+  const mailbox = await cdp.evaluate(`(async () => {
+    const opened = await ArcadeCareer.openMailbox();
+    return { ok: !!(opened && opened.ok !== false) };
+  })()`);
+  gate('FIRST-ARRIVAL 重新打开信箱仍可用', mailbox.ok, J(mailbox));
+  await cdp.waitFor('!!document.querySelector("[data-career-panel=mailbox]")', { timeout: 15000 });
+  await cdp.waitFor(`(() => {
+    const panel = document.querySelector('[data-career-panel="mailbox"] .ac-career-ui__panel');
+    return !!panel && panel.getAttribute('data-shell-state') === 'normal';
+  })()`, { timeout: 15000 });
+  await pressVisible(cdp, `[data-career-panel="mailbox"] [data-clue-id="${clueId}"]`, 'FIRST-ARRIVAL 起源信');
+  /* 打开真实线索后动作要等 openClue 落定才出现（不得猜动作）。 */
+  await cdp.waitFor(`!!document.querySelector('[data-career-panel="mailbox"] [data-action]')`, { timeout: 15000 });
+  const actions = await cdp.evaluate(`(() => {
+    const panel = document.querySelector('[data-career-panel="mailbox"]');
+    return {
+      ids: Array.from(panel.querySelectorAll('[data-action]')).map((node) => node.getAttribute('data-action')),
+      arrivalReplayed: !!document.querySelector('[data-career-panel="arrival"]'),
+      text: panel.innerText.replace(/\\s+/g, ' ').trim().slice(0, 240)
+    };
+  })()`);
+  gate('FIRST-ARRIVAL 重开信件不再重播到港面板',
+    actions.arrivalReplayed === false && actions.ids.indexOf('invitation-port') < 0, J(actions));
+  await cdp.evaluate('ArcadeCareer.closeCareerPanel && ArcadeCareer.closeCareerPanel()');
+  await sleep(120);
+  await go(cdp, BASE + '/apps/arcade/games/' + ORIGIN_GAME + '.html?careerLetter=1');
+  await waitBridge(cdp, 'first-arrival-consumed-tail', false);
+  await checkConsole(cdp, 'first-arrival-consumed');
 }
 
 function expectChapterAdvance(sequence, expected, after, previousChapter) {

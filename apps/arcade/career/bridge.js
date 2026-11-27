@@ -2431,12 +2431,40 @@
           }
           args[0] = input;
         }
-        return fn.apply(mod, args);
+        var returned = fn.apply(mod, args);
+        if (key !== 'start') return returned;
+        /* 真实开局成功即消费首到港（与具体入口无关）；失败/被 gate 拒绝不消费。 */
+        var commission = isObject(args[0]) ? args[0] : {};
+        return Promise.resolve(returned).then(function (result) {
+          if (!result || result.ok !== true) return result;
+          var started = isObject(result.commission) ? result.commission : commission;
+          return consumeFirstArrivalForStart(started).then(function () { return result; });
+        });
       };
     });
     internal.commissionUiSource = mod;
     internal.commissionUiFacade = facade;
     return facade;
+  }
+
+  /**
+   * 玩家真正开始一单（不论入口是到港面板、港口工作页还是告示板）后，
+   * 首到港就算被消费：把叙事游标从 `invitation:<id>` 推进到 `arrival:<id>`。
+   * 只处理「已接受职业仍停在邀请游标」的情况；终局与未接受职业不动。
+   */
+  function consumeFirstArrivalForStart(commission) {
+    try {
+      var state = currentStateSnapshot();
+      var cursor = state && state.narrativeCursor ? state.narrativeCursor : null;
+      var activeId = state && typeof state.activeProfessionId === 'string' ? state.activeProfessionId : null;
+      var professionId = commission && typeof commission.professionId === 'string' ? commission.professionId : activeId;
+      if (!professionId || !cursor || cursor.nodeId !== 'invitation:' + professionId) return Promise.resolve(null);
+      if (commission && commission.category === 'ending') return Promise.resolve(null);
+      if (commission && commission.commissionId && String(commission.commissionId).indexOf('ending.') === 0) return Promise.resolve(null);
+      return applyProfessionAction('CONSUME_FIRST_ARRIVAL', { professionId: professionId }).catch(function () { return null; });
+    } catch (err) {
+      return Promise.resolve(null);
+    }
   }
 
   function professionViewModule() {
