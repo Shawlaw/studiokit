@@ -402,7 +402,11 @@
     section.setAttribute('data-journal-surface', 'experience');
 
     var timeline = typeof section.querySelector === 'function' ? section.querySelector('.ac-career-ui__timeline') : null;
-    var items = timeline && timeline.children ? timeline.children : [];
+    /* 真实 DOM 的 children 是 HTMLCollection（没有 forEach），必须显式转数组；
+       纯 Node 夹具用数组，容易漏测，这里统一按数组处理。 */
+    var items = timeline && timeline.children
+      ? (Array.isArray(timeline.children) ? timeline.children : Array.prototype.slice.call(timeline.children))
+      : [];
     var state = {
       model: model,
       items: items,
