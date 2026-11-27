@@ -10,7 +10,12 @@
  * ctx（bridge 构造，见 docs/arcade-life/ADR-interfaces.md §17 / §23）：
  *   { state, clues, openClue(clueId), followLetter(), announce(text),
  *     invitationForClue?(clueId), acceptProfessionInvitation?(input),
- *     careerView?(context), ... }
+ *     careerView?(context), uiComponents?, letterTitle?, openInvitation?, ... }
+ *
+ * 0.23 bridge request: inject uiComponents and openInvitation(ctx) (the shared
+ * arrival adapter), plus the projected letterTitle for LetterCard. Either
+ * uiComponents or the global T11 component module is required for the new card
+ * path; without both the legacy host path remains safe.
  *
  * 约束：
  * - 覆盖当前页面的轻量浮层（position:fixed，可滚动），按钮 + Esc + 点遮罩关闭；
@@ -267,7 +272,7 @@
   }
 
   /** 关闭当前信箱浮层并把焦点还给打开前的元素（可重复调用）。 */
-  function close() {
+  function closeLegacy() {
     const current = panel;
     panel = null;
     if (!current) return false;
@@ -294,7 +299,7 @@
    * @param {object} [ctx] bridge 上下文（缺失字段按空处理，不抛异常）
    * @returns {Element|null} 面板元素；无 DOM 或挂载失败时返回 null
    */
-  function open(ctx) {
+  function openLegacy(ctx) {
     const doc = documentOf();
     if (!doc) return null;
     const context = isObject(ctx) ? ctx : {};
@@ -967,8 +972,440 @@
     return sheet;
   }
 
+  /* ---------------------------------------------------------------- 0.23 T12 */
+
+  let componentShell = null;
+  let componentSession = null;
+  const FAMILY_ICONS = { record: 'mail', signal: 'scroll', bio: 'gem', industrial: 'pick', route: 'chevron' };
+
+  function componentsOf(context) {
+    if (isObject(context) && isObject(context.uiComponents) && typeof context.uiComponents.CareerShell === 'function') return context.uiComponents;
+    return root.ArcadeCareerUI && root.ArcadeCareerUI.components;
+  }
+
+  function close() {
+    const current = componentSession;
+    const shell = componentShell;
+    componentSession = null;
+    componentShell = null;
+    if (current) current.token += 1;
+    const closed = !!(shell && shell.close());
+    return closeLegacy() || closed;
+  }
+
+  function listPropsOf(clue, state, record) {
+    const opened = !!cleanText(record.openedAt);
+    const hasRead = Object.keys(state.clues || {}).some((id) => id !== clue.clueId && !!(state.clues[id] && cleanText(state.clues[id].openedAt)));
+    const stage = cleanText(state.stage).toUpperCase();
+    const recoverable = !opened && !cleanText(state.portSeenAt) && (stage === 'GLIMPSED' || stage === 'CURIOUS') && hasRead;
+    const clueState = recoverable ? 'recoverable' : (opened ? 'read' : 'glimpsed');
+    const letter = letterOf(clue);
+    return {
+      clueId: cleanText(clue.clueId),
+      gameId: cleanText(clue.gameId),
+      professionId: null,
+      icon: recoverable ? 'mail' : (FAMILY_ICONS[cleanText(clue.family)] || 'gem'),
+      title: cleanText(clue.ambientLabel) || titleOf(clue),
+      teaser: cleanText(clue.ambientText),
+      actionLabel: recoverable ? (cleanText(letter.actionLabel) || '按地址投递') : (opened ? '查看这封信' : '仔细看看'),
+      state: clueState,
+      placement: 'list',
+      reducedMotion: !!componentSession.context.reducedMotion,
+    };
+  }
+
+  function letterParagraphs(value) {
+    const text = typeof value === 'string' ? value : '';
+    const rows = text.split(/\r?\n+/).map(cleanText).filter(Boolean);
+    return rows.length ? rows : (text ? [cleanText(text)] : []);
+  }
+
+  function decorateLetter(card, clue, session) {
+    const doc = session.doc;
+    const article = card.querySelector('.ac-career-ui__letter');
+    const title = card.querySelector('.ac-career-ui__letter h2');
+    const paragraphs = card.querySelectorAll('.ac-career-ui__letter-paragraph');
+    const signature = card.querySelector('.ac-career-ui__signature');
+    const ambient = card.querySelector('.ac-career-ui__caption');
+    if (title) title.classList.add('ac-career-letter__title');
+    if (ambient) ambient.classList.add('ac-career-letter__ambient');
+    if (paragraphs[0]) paragraphs[0].classList.add('ac-career-letter__body');
+    if (signature) signature.classList.add('ac-career-letter__sender');
+
+    /* Compatibility metadata only; the visible node is still LetterCard's signature. */
+    if (article && signature) {
+      const address = doc.createElement('p');
+      address.className = 'ac-career-ui__caption ac-career-letter__address';
+      address.textContent = cleanText(letterOf(clue).address);
+      address.hidden = !address.textContent;
+      article.insertBefore(address, signature);
+    }
+    if (article) {
+      const role = doc.createElement('p');
+      role.className = 'ac-career-ui__caption ac-career-letter__role';
+      const first = isFirstFlightClue(session, session.selectedId);
+      role.textContent = first && !session.identity && !session.invitation ? cleanText(session.context.identityLine) : '';
+      role.hidden = !role.textContent;
+      article.insertBefore(role, article.children[0] || null);
+    }
+  }
+
+  function annotateActions(card) {
+    card.querySelectorAll('button').forEach((button) => {
+      const id = cleanText(button.id);
+      if (id) button.setAttribute('data-action', id);
+    });
+  }
+
+  function isFirstFlightClue(session, clueId) {
+    if (!clueId || followedClues[clueId]) return false;
+    if (typeof session.context.followLetter !== 'function' || !townOpenerOf(session.context)) return false;
+    const state = isObject(session.context.state) ? session.context.state : null;
+    if (!state) return false;
+    const stage = cleanText(state.stage).toUpperCase();
+    const rank = STAGE_RANK[stage] === undefined ? 0 : STAGE_RANK[stage];
+    if (rank >= STAGE_RANK.LOCAL) return false;
+    const firstId = cleanText(state.firstClueId) || session.ids[0];
+    return !!firstId && firstId === clueId;
+  }
+
+  function setComponentStatus(session, text) {
+    session.status = cleanText(text);
+    renderComponent(session);
+    if (session.status) announceComponent(session, session.status);
+  }
+
+  function announceComponent(session, text) {
+    if (typeof session.context.announce !== 'function') return;
+    try { session.context.announce(text); } catch (err) { /* ignore */ }
+  }
+
+  function invitationPort(session) {
+    close();
+    const run = () => {
+      if (typeof session.context.openInvitation === 'function') return session.context.openInvitation({ clueId: session.selectedId, returnFocus: session.returnFocus });
+      const invitationUi = root.ArcadeCareerUI && root.ArcadeCareerUI.invitation;
+      if (invitationUi && typeof invitationUi.open === 'function') {
+        const opened = invitationUi.open(Object.assign({}, session.context, { clueId: session.selectedId, returnFocus: session.returnFocus }));
+        if (opened && opened.ok === false) return opened;
+        return opened;
+      }
+      return townOpenerOf(session.context) ? townOpenerOf(session.context)() : { ok: false };
+    };
+    let result = null;
+    try { result = run(); } catch (err) { result = { ok: false }; }
+    const settle = (value) => {
+      if (value && value.ok === false) {
+        pendingTownStatus = '港口那边没应声，你想过一会儿再试吗？';
+        openComponent(session.context);
+      }
+    };
+    if (result && typeof result.then === 'function') Promise.resolve(result).then(settle, () => settle({ ok: false }));
+    else settle(result);
+    return result;
+  }
+
+  function openTownComponent(session) {
+    close();
+    const opener = townOpenerOf(session.context);
+    if (!opener) return { ok: false };
+    let result = null;
+    try { result = opener(); } catch (err) { result = { ok: false }; }
+    const settle = (value) => {
+      if (value && value.ok === false) {
+        pendingTownStatus = '港口那边没应声，你想过一会儿再试吗？';
+        openComponent(session.context);
+      }
+    };
+    if (result && typeof result.then === 'function') Promise.resolve(result).then(settle, () => settle({ ok: false }));
+    else settle(result);
+    return result;
+  }
+
+  function deliverComponent(session, openTownAfter) {
+    const clueId = session.selectedId;
+    if (!clueId || pendingFirstFlight[clueId]) return { ok: false };
+    if (followedClues[clueId]) {
+      session.notice = true;
+      renderComponent(session);
+      return { ok: true };
+    }
+    if (typeof session.context.followLetter !== 'function') {
+      setComponentStatus(session, SEND_FAILED_TEXT);
+      return { ok: false };
+    }
+    const token = session.token;
+    if (openTownAfter) pendingFirstFlight[clueId] = true;
+    renderComponent(session);
+    let result = null;
+    try { result = session.context.followLetter(); } catch (err) { result = { ok: false }; }
+    const settle = (value) => {
+      if (openTownAfter) delete pendingFirstFlight[clueId];
+      if (token !== session.token || componentSession !== session) return;
+      const failed = openTownAfter
+        ? !(isObject(value) && value.ok === true && value.persisted !== false)
+        : !!(value && isObject(value) && value.ok === false);
+      if (failed) {
+        setComponentStatus(session, SEND_FAILED_TEXT);
+        return;
+      }
+      followedClues[clueId] = true;
+      session.status = '';
+      session.notice = true;
+      renderComponent(session);
+      if (openTownAfter) openTownComponent(session);
+    };
+    if (result && typeof result.then === 'function') return Promise.resolve(result).then(settle, () => settle({ ok: false }));
+    settle(result);
+    return result;
+  }
+
+  function acceptComponent(session) {
+    const invitation = session.invitation;
+    const key = invitationKeyOf(invitation);
+    const accept = acceptInvitationFnOf(session.context);
+    if (!invitation || acceptedInvitationOf(invitation) || !invitation.canAccept || !accept || !invitation.gameId || pendingInvitations[key]) {
+      return { ok: false };
+    }
+    const token = session.token;
+    pendingInvitations[key] = true;
+    renderComponent(session);
+    let result = null;
+    try { result = accept.call(session.context, { professionId: invitation.professionId, gameId: invitation.gameId }); }
+    catch (err) { result = { ok: false }; }
+    const settle = (value) => {
+      delete pendingInvitations[key];
+      if (token !== session.token || componentSession !== session) return;
+      if (!isObject(value) || value.ok !== true) {
+        setComponentStatus(session, ACCEPT_FAILED_TEXT);
+        return;
+      }
+      acceptedInvitations[key] = true;
+      session.invitation = Object.assign({}, invitation, { state: 'accepted', canAccept: false });
+      session.identity = true;
+      session.status = '';
+      renderComponent(session);
+      announceComponent(session, INVITE_ACCEPTED);
+    };
+    if (result && typeof result.then === 'function') return Promise.resolve(result).then(settle, () => settle({ ok: false }));
+    settle(result);
+    return result;
+  }
+
+  function renderComponent(session) {
+    if (componentSession !== session || !componentShell || !session.ready) return;
+    const components = componentsOf(session.context);
+    const doc = session.doc;
+    const body = doc.createElement('div');
+    body.className = 'ac-career-ui__stack';
+    const state = isObject(session.context.state) ? session.context.state : { clues: {} };
+    const clue = session.content[session.selectedId] || null;
+
+    if (session.ids.length) {
+      const list = doc.createElement('div');
+      list.className = 'ac-career-ui__stack ac-career-ui__stack--small';
+      list.setAttribute('data-view', 'mailbox');
+      list.setAttribute('role', 'list');
+      session.ids.forEach((clueId) => {
+        const rowClue = session.content[clueId];
+        if (!rowClue) return;
+        const record = state.clues && state.clues[clueId] ? state.clues[clueId] : {};
+        const row = components.ClueRow(Object.assign({}, listPropsOf(rowClue, state, record), {
+          onOpen(id) { selectComponentClue(session, id, true); },
+        }));
+        if (!row) return;
+        row.setAttribute('data-clue-id', clueId);
+        row.setAttribute('role', 'listitem');
+        row.setAttribute('aria-current', String(clueId === session.selectedId));
+        list.appendChild(row);
+      });
+      body.appendChild(list);
+    } else {
+      const empty = doc.createElement('p');
+      empty.className = 'ac-career-ui__muted';
+      empty.textContent = EMPTY_TEXT;
+      body.appendChild(empty);
+    }
+
+    if (clue) {
+      const letterContent = letterOf(clue);
+      const invitation = session.invitation;
+      const accepted = acceptedInvitationOf(invitation);
+      const firstFlight = isFirstFlightClue(session, session.selectedId);
+      const delivered = !!followedClues[session.selectedId];
+      const actions = [];
+      if (session.notice) {
+        actions.push({ id: 'open-town', label: '去港口看看', kind: 'primary', onClick: () => openTownComponent(session) });
+        actions.push({ id: 'close-mailbox', label: '回到游戏', kind: 'text', onClick: close });
+      } else if (invitation) {
+        if (accepted) {
+          if (townOpenerOf(session.context) || (root.ArcadeCareerUI && root.ArcadeCareerUI.invitation)) {
+            actions.push({ id: 'invitation-port', label: INVITE_PORT_LABEL, kind: 'primary', ariaLabel: INVITE_PORT_ARIA, onClick: () => invitationPort(session) });
+          }
+          actions.push({ id: 'defer-invitation', label: '以后再说', kind: 'text', onClick: close });
+        } else if (invitation.canAccept && acceptInvitationFnOf(session.context)) {
+          actions.push({ id: 'accept-invitation', label: ACCEPT_LABEL, kind: 'primary', disabled: !!pendingInvitations[invitationKeyOf(invitation)], onClick: () => acceptComponent(session) });
+          actions.push({ id: 'defer-invitation', label: DEFER_LABEL, kind: 'text', onClick: close });
+        } else {
+          actions.push({ id: 'defer-invitation', label: DEFER_LABEL, kind: 'primary', onClick: close });
+        }
+      } else if (firstFlight) {
+        actions.push({ id: 'send-to-port', label: FIRST_READ_LABEL, ariaLabel: FIRST_READ_LABEL, kind: 'primary', busy: !!pendingFirstFlight[session.selectedId], onClick: () => deliverComponent(session, true) });
+        actions.push({ id: 'defer-letter', label: '以后再说', kind: 'text', onClick: close });
+      } else if (townEntryAllowed(session.context) || delivered) {
+        actions.push({ id: 'open-town', label: delivered ? FOLLOW_AGAIN : TOWN_LABEL, kind: 'primary', onClick: () => openTownComponent(session) });
+        actions.push(campaignOpenerOf(session.context)
+          ? { id: 'open-campaign', label: CAMPAIGN_LABEL, kind: 'text', onClick: () => { close(); return campaignOpenerOf(session.context)(); } }
+          : { id: 'defer-letter', label: '以后再说', kind: 'text', onClick: close });
+      } else {
+        actions.push({ id: 'deliver-letter', label: cleanText(letterContent.actionLabel) || FOLLOW_FALLBACK, kind: 'primary', onClick: () => deliverComponent(session, false) });
+        actions.push({ id: 'defer-letter', label: '以后再说', kind: 'text', onClick: close });
+      }
+
+      const card = components.LetterCard({
+        title: session.notice ? NOTICE_TITLE : (cleanText(session.context.letterTitle) || titleOf(clue)),
+        paragraphs: session.notice ? NOTICE_LINES : letterParagraphs(letterContent.body),
+        sender: session.notice ? '' : cleanText(letterContent.sender),
+        ambientLabel: session.notice ? '' : cleanText(clue.ambientLabel || clue.ambientText),
+        state: session.notice ? 'read' : (cleanText(state.clues && state.clues[session.selectedId] && state.clues[session.selectedId].openedAt) ? 'read' : 'unread'),
+        actions: actions,
+      });
+      decorateLetter(card, clue, session);
+      annotateActions(card);
+      body.appendChild(card);
+      if (accepted) {
+        const note = doc.createElement('p');
+        note.className = 'ac-career-ui__caption ac-career-mailbox__invite-status';
+        note.textContent = INVITE_ACCEPTED;
+        body.appendChild(note);
+      }
+    }
+    if (session.status || pendingTownStatus) {
+      const status = doc.createElement('p');
+      status.className = 'ac-career-ui__caption ac-career-status';
+      status.setAttribute('role', 'status');
+      status.setAttribute('aria-live', 'polite');
+      status.textContent = session.status || pendingTownStatus;
+      body.appendChild(status);
+      pendingTownStatus = '';
+    }
+    const result = componentShell.render({
+      title: PANEL_LABEL,
+      state: 'normal',
+      body: body,
+      reducedMotion: !!session.context.reducedMotion,
+      returnFocus: session.returnFocus || null,
+      onClose: close,
+    });
+    if (result && result.panel) result.panel.setAttribute('data-mailbox-view', session.notice ? 'notice' : 'mailbox');
+  }
+
+  function selectComponentClue(session, clueId, userInitiated) {
+    if (!clueId || session.ids.indexOf(clueId) < 0) return;
+    session.selectedId = clueId;
+    session.notice = false;
+    session.status = '';
+    session.invitation = null;
+    renderComponent(session);
+    if (typeof session.context.openClue === 'function') {
+      try { session.context.openClue(clueId); } catch (err) { /* reading remains available */ }
+    }
+    if (userInitiated) announceComponent(session, '翻到「' + titleOf(session.content[clueId]) + '」。');
+    loadComponentInvitation(session, clueId);
+  }
+
+  async function loadComponentInvitation(session, clueId) {
+    const token = ++session.invitationToken;
+    let invitation = null;
+    try { invitation = invitationOf(session.context, clueId); } catch (err) { invitation = null; }
+    invitation = await Promise.resolve(invitation);
+    if (token !== session.invitationToken || componentSession !== session || session.selectedId !== clueId) return;
+    session.invitation = invitation;
+    if (session.ready) renderComponent(session);
+  }
+
+  async function loadComponentIdentity(session) {
+    const reader = typeof session.context.careerView === 'function'
+      ? session.context.careerView
+      : isObject(session.context.api) && typeof session.context.api.careerView === 'function' ? session.context.api.careerView : null;
+    if (!reader) return;
+    let view = null;
+    try { view = await reader.call(session.context, { surface: 'letter' }); } catch (err) { return; }
+    if (componentSession !== session) return;
+    session.identity = !!cleanText(session.context.careerId)
+      || !!(isObject(view) && (!!cleanText(view.originGameId) || (Array.isArray(view.professions) && view.professions.length > 0)))
+      || !!(isObject(session.context.state) && cleanText(session.context.state.acceptedOriginGameId));
+    if (session.ready) renderComponent(session);
+  }
+
+  function openComponent(ctx) {
+    const components = componentsOf(ctx);
+    const doc = documentOf();
+    if (!components || !doc || !doc.body) return null;
+    close();
+    const context = isObject(ctx) ? ctx : {};
+    const content = clueListOf(context);
+    const ids = discoveredIds(context);
+    const bridgeSelected = cleanText(context.clueId) || cleanText(context.clue && context.clue.clueId);
+    const preferred = bridgeSelected || cleanText(context.state && context.state.lastClueId);
+    const selectedId = ids.indexOf(preferred) >= 0 ? preferred : ids[ids.length - 1];
+    const shell = components.CareerShell.create('mailbox');
+    const session = {
+      doc: doc,
+      context: context,
+      content: content,
+      ids: ids,
+      selectedId: selectedId || '',
+      identity: !!cleanText(context.careerId) || !!(isObject(context.state) && cleanText(context.state.acceptedOriginGameId)),
+      invitation: null,
+      notice: false,
+      status: '',
+      ready: !ids.length,
+      token: 1,
+      invitationToken: 0,
+      returnFocus: context.returnFocus || (doc.activeElement && typeof doc.activeElement.focus === 'function' ? doc.activeElement : null),
+    };
+    componentShell = shell;
+    componentSession = session;
+    const opened = shell.open({
+      title: PANEL_LABEL,
+      state: ids.length ? 'loading' : 'normal',
+      body: null,
+      reducedMotion: !!context.reducedMotion,
+      returnFocus: session.returnFocus,
+      onClose: close,
+    });
+    if (!opened || !opened.ok) {
+      componentShell = null;
+      componentSession = null;
+      return null;
+    }
+    renderComponent(session);
+    if (selectedId && typeof context.openClue === 'function' && selectedId !== bridgeSelected) {
+      try { context.openClue(selectedId); } catch (err) { /* ignore */ }
+    }
+    Promise.all([
+      loadComponentIdentity(session),
+      selectedId ? loadComponentInvitation(session, selectedId) : Promise.resolve(null),
+    ]).then(() => {
+      if (componentSession !== session) return;
+      session.ready = true;
+      renderComponent(session);
+    });
+    return opened;
+  }
+
+  function open(ctx) {
+    return componentsOf(ctx) ? openComponent(ctx) : openLegacy(ctx);
+  }
+
+  function render(ctx) {
+    return componentShell ? openComponent(ctx) : open(ctx);
+  }
+
   const api = {
     open: open,
+    render: render,
     close: close,
   };
 

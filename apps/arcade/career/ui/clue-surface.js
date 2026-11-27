@@ -4,8 +4,13 @@
  * 浏览器普通 <script>（非 ESM）。加载时只创建 window.ArcadeCareerUI.clueSurface，
  * 不读 DOM、不写存储、不发请求。bridge.js 在 DOMContentLoaded 之后调用：
  *
- *   window.ArcadeCareerUI.clueSurface.render({ clue, onOpen, host });
+ *   window.ArcadeCareerUI.clueSurface.render({ clue, onOpen, host, placement, anchor,
+ *     state, uiComponents, invitationForClue, reducedMotion });
  *   window.ArcadeCareerUI.clueSurface.clear();
+ *
+ * 0.23 bridge request: pass uiComponents, the frozen stateSnapshot and, when
+ * available, invitationForClue(clueId) so the internal profession gate can use
+ * the gated small face. Never pass a full catalog.
  *
  * 0.22 披露边界（ADR §23.3）：
  * - bridge 只传入一条已判定的 clue；本模块只消费 clue/onOpen/host；
@@ -93,14 +98,18 @@
   function clear() {
     const current = active;
     active = null;
-    if (!current) return;
+    if (!current) return false;
     try {
-      current.node.removeEventListener('click', current.onClick, false);
-      current.node.removeEventListener('keydown', current.onKeyDown, false);
+      if (typeof current.cleanup === 'function') current.cleanup();
+      else {
+        current.node.removeEventListener('click', current.onClick, false);
+        current.node.removeEventListener('keydown', current.onKeyDown, false);
+      }
     } catch (err) {
       /* 老引擎的监听器移除失败不影响 DOM 清理 */
     }
     removeNode(current.node);
+    return true;
   }
 
   /**
@@ -108,7 +117,7 @@
    * @param {{clue?: object, onOpen?: (clueId: string) => void, host?: Element|string}} [options]
    * @returns {Element|null} 新建的 chip；无 DOM / 无合法 clue / 宿主不可用时返回 null
    */
-  function render(options) {
+  function renderLegacy(options) {
     const opts = options && typeof options === 'object' ? options : {};
     const clue = opts.clue && typeof opts.clue === 'object' ? opts.clue : null;
     /* 契约要求：重复 render 先 clear（无效参数也要清掉旧 chip，避免陈旧线索残留）。 */
@@ -192,9 +201,103 @@
     return node;
   }
 
+  /* 0.23 T12：真实 bridge payload → T11 ClueRow 的唯一派生面。 */
+  const FAMILY_ICONS = { record: 'mail', signal: 'scroll', bio: 'gem', industrial: 'pick', route: 'chevron' };
+
+  function invitationOf(opts, clueId) {
+    let raw = opts.invitation;
+    if (!raw && typeof opts.invitationForClue === 'function') {
+      try { raw = opts.invitationForClue(clueId); } catch (err) { raw = null; }
+    }
+    if (!raw || typeof raw !== 'object' || Array.isArray(raw)) return null;
+    const professionId = cleanText(raw.professionId);
+    return professionId ? { professionId: professionId, state: cleanText(raw.state) } : null;
+  }
+
+  function deriveProps(options) {
+    const opts = options && typeof options === 'object' ? options : {};
+    const clue = opts.clue && typeof opts.clue === 'object' ? opts.clue : null;
+    if (!clue) return null;
+    const clueId = cleanText(clue.clueId);
+    const gameId = cleanText(clue.gameId);
+    const state = opts.state && typeof opts.state === 'object' ? opts.state : null;
+    const records = state && state.clues && typeof state.clues === 'object' ? state.clues : null;
+    const record = records && records[clueId] && typeof records[clueId] === 'object' ? records[clueId] : null;
+    if (!clueId || !gameId || !record) return null;
+
+    const opened = !!cleanText(record.openedAt);
+    const hasReadClue = Object.keys(records).some((id) => id !== clueId && !!(records[id] && cleanText(records[id].openedAt)));
+    const stage = cleanText(state.stage).toUpperCase();
+    const recoverable = !opened && !cleanText(state.portSeenAt)
+      && (stage === 'GLIMPSED' || stage === 'CURIOUS') && hasReadClue;
+    const clueState = recoverable ? 'recoverable' : (opened ? 'read' : 'glimpsed');
+    const letter = clue.letter && typeof clue.letter === 'object' ? clue.letter : {};
+    const family = cleanText(clue.family);
+    const placement = opts.placement === 'page-corner' ? 'page-corner'
+      : (opts.placement === 'list' ? 'list' : 'result-host');
+    const invitation = invitationOf(opts, clueId);
+    return {
+      clueId: clueId,
+      gameId: gameId,
+      professionId: invitation ? invitation.professionId : (cleanText(opts.professionId) || null),
+      icon: recoverable ? 'mail' : (FAMILY_ICONS[family] || 'gem'),
+      title: cleanText(clue.ambientLabel) || cleanText(clue.title),
+      teaser: cleanText(clue.ambientText),
+      actionLabel: recoverable ? (cleanText(letter.actionLabel) || '按地址投递')
+        : (clueState === 'read' ? '查看这封信' : '仔细看看'),
+      state: clueState,
+      placement: placement,
+      reducedMotion: opts.reducedMotion === true,
+    };
+  }
+
+  function render(options) {
+    const opts = options && typeof options === 'object' ? options : {};
+    const props = deriveProps(opts);
+    clear();
+    const components = opts.uiComponents && typeof opts.uiComponents.ClueRow === 'function'
+      ? opts.uiComponents
+      : root.ArcadeCareerUI && root.ArcadeCareerUI.components;
+    if (!components || typeof components.ClueRow !== 'function') {
+      /* T11 尚未装载时保留旧宿主可用性；正式 0.23 loader 必须提供组件。 */
+      return renderLegacy(opts);
+    }
+    if (!props) return null;
+    const mount = resolveMount(opts.host);
+    if (!mount) return null;
+    const doc = mount.target.ownerDocument || documentOf();
+    if (!doc || typeof doc.createElement !== 'function') return null;
+    const clueId = props.clueId;
+    const node = components.ClueRow(Object.assign({}, props, {
+      onOpen(id) {
+        if (typeof opts.onOpen !== 'function') return;
+        try { opts.onOpen(id); } catch (err) { /* 结算主流程不受线索回调异常影响 */ }
+      },
+    }));
+    if (!node) return null;
+    node.setAttribute('data-clue-id', clueId);
+    const wrapper = doc.createElement('div');
+    wrapper.className = 'ac-career-ui';
+    wrapper.setAttribute('data-career-clue', clueId);
+    wrapper.appendChild(node);
+    let next = null;
+    if (opts.anchor && opts.anchor.parentNode && typeof opts.anchor.parentNode.insertBefore === 'function') {
+      next = opts.anchor.nextSibling || null;
+    }
+    try {
+      if (next && next.parentNode === mount.target && typeof mount.target.insertBefore === 'function') mount.target.insertBefore(wrapper, next);
+      else mount.target.appendChild(wrapper);
+    } catch (err) {
+      return null;
+    }
+    active = { node: wrapper, cleanup: null };
+    return wrapper;
+  }
+
   const api = {
     render: render,
     clear: clear,
+    deriveProps: deriveProps,
   };
 
   root.ArcadeCareerUI = root.ArcadeCareerUI && typeof root.ArcadeCareerUI === 'object' ? root.ArcadeCareerUI : {};

@@ -14,6 +14,11 @@
  *   { result: { ok, receipt?, runId?, reason?, duplicate? }, ... }
  *   { ok: true, receipt: { receiptId, credits, items, txIds, ... } }
  *
+ * 0.23 bridge request: inject uiComponents, careerView({surface:'receipt'})
+ * and, for an honest failure retry, retrySettlement() -> real result object.
+ * Only true success / a real receipt updates the card. storyFeedback contributes
+ * status and NPC replies, never the next step.
+ *
  * 数据来源硬规则（ADR §18.7）：
  * - 金额/材料只读 db.readWallet / db.readLedger / db.getClaim 的 DB 行（txId），UI 不自算；
  * - 同一 txId 重复行只渲染一次；同 run 重复 show 只保留一张卡；同 run 重复打开面板显示
@@ -495,14 +500,20 @@
     const reason = cleanText(value.reason) || cleanText(value.error) || cleanText(outer.reason);
     const duplicate = value.duplicate === true || (receipt && receipt.duplicate === true);
     const claimedAt = cleanText((receipt && receipt.claimedAt) || value.claimedAt);
+    const commissionId = cleanText((receipt && receipt.commissionId) || value.commissionId);
+    const professionId = cleanText((receipt && receipt.professionId) || value.professionId);
     return {
+      commissionId: commissionId,
+      professionId: professionId,
+      identity: cleanText(value.identity || (receipt && receipt.identity)),
+      experience: cleanText(value.experience || (receipt && receipt.experience)),
+      message: typeof value.message === 'string' ? value.message : '',
       ok: ok,
       ending: /^(combat|research|rescue)$/.test(value.approach) || /^ending\./.test(receipt && receipt.commissionId),
       key: key.slice(0, 120),
       credits: credits,
       items: items,
       reason: reason,
-      message: typeof value.message === 'string' ? value.message : '',
       duplicate: duplicate,
       claimedAt: claimedAt,
     };
@@ -546,24 +557,28 @@
 
   /** bridge 注入的已投影结果；字段缺失一律忽略，不回退到未 gate 的章节推导。 */
   function projectedStoryOf(outer) {
-    const view = isObject(outer.careerView) ? outer.careerView
-      : isObject(outer.projectedCareerView) ? outer.projectedCareerView : null;
+    /* Next step comes only from the bridge's projected careerView story. */
+    const view = isObject(outer.careerView) ? outer.careerView : null;
     const story = view && isObject(view.story) ? view.story : null;
-    const direct = isObject(outer.projectedNextAction) ? outer.projectedNextAction : null;
-    const action = story && story.nextAction ? story.nextAction : direct;
+    const action = story && story.nextAction ? story.nextAction : null;
     let nextStep = '';
     if (typeof action === 'string') nextStep = storyTextOf(action);
     else if (isObject(action)) nextStep = storyTextOf(action.label || action.text || action.description);
     const history = [];
+    const historyRows = [];
     if (story && Array.isArray(story.history)) {
       story.history.slice(0, 6).forEach((entry) => {
         const label = storyTextOf(isObject(entry) ? entry.label || entry.text : entry, 120);
         if (label && history.indexOf(label) < 0) history.push(label);
+        if (isObject(entry) && label) historyRows.push(Object.assign({}, entry, { label: label }));
       });
     }
     return {
       nextStep: nextStep,
       history: history,
+      historyRows: historyRows,
+      action: isObject(action) ? action : null,
+      view: view,
       endingAction: !!(isObject(action) && action.kind === 'ending'),
     };
   }
@@ -1050,7 +1065,8 @@
     if (!current) return false;
     unsubscribeCareerPanelChanges();
     try {
-      if (current.el && current.el.parentNode) current.el.parentNode.removeChild(current.el);
+      const target = current.root && current.root.parentNode ? current.root : current.el;
+      if (target && target.parentNode) target.parentNode.removeChild(target);
     } catch (err) {
       /* ignore */
     }
@@ -1123,11 +1139,7 @@
   }
 
   function removeActionFailure() {
-    if (!actionFailure) return false;
-    const node = actionFailure;
-    actionFailure = null;
-    try { if (node.parentNode) node.parentNode.removeChild(node); } catch (err) { /* ignore */ }
-    return true;
+    return removeActionFailureNode();
   }
 
   function runAction(action, announce) {
@@ -1138,6 +1150,249 @@
     } catch (err) {
       showActionFailure(() => runAction(action, announce), announce);
     }
+  }
+
+  /* ------------------------- 0.23 T12 ReceiptCard path ------------------------- */
+
+  function componentsOf(context) {
+    if (isObject(context) && isObject(context.uiComponents) && typeof context.uiComponents.ReceiptCard === 'function') return context.uiComponents;
+    return root.ArcadeCareerUI && root.ArcadeCareerUI.components;
+  }
+
+  function removeActionFailureNode() {
+    const current = actionFailure;
+    actionFailure = null;
+    if (!current) return false;
+    const target = current.root && current.root.parentNode ? current.root : (current.el || current);
+    try { if (target && target.parentNode) target.parentNode.removeChild(target); } catch (err) { /* ignore */ }
+    return true;
+  }
+
+  function showComponentActionFailure(components, announce, retry) {
+    const doc = documentOf();
+    if (!doc || !doc.body) return;
+    removeActionFailureNode();
+    const rootNode = doc.createElement('div');
+    rootNode.className = 'ac-career-ui ac-career-action-failure';
+    rootNode.setAttribute('popover', 'manual');
+    const note = doc.createElement('p');
+    note.className = 'ac-career-ui__caption';
+    note.textContent = ACTION_FAILED_TEXT;
+    rootNode.appendChild(note);
+    const retryButton = components.PrimaryAction({
+      id: 'retry-open', label: '再试一次', kind: 'primary', ariaLabel: '再试一次打开',
+      onClick: () => { removeActionFailureNode(); retry(); return { ok: true }; },
+    });
+    retryButton.setAttribute('data-action', 'retry-open');
+    rootNode.appendChild(retryButton);
+    try {
+      doc.body.appendChild(rootNode);
+      if (typeof rootNode.showPopover === 'function') rootNode.showPopover();
+    } catch (err) { /* visible DOM remains mounted */ }
+    actionFailure = { el: note, root: rootNode };
+    if (typeof announce === 'function') {
+      try { announce(ACTION_FAILED_TEXT); } catch (err) { /* ignore */ }
+    }
+  }
+
+  function invokeControlled(components, fn, announce) {
+    if (typeof fn !== 'function') {
+      showComponentActionFailure(components, announce, () => {});
+      return { ok: false };
+    }
+    let outcome = null;
+    try { outcome = fn(); } catch (err) { outcome = { ok: false }; }
+    return Promise.resolve(outcome).then((value) => {
+      if (value && value.ok === false) showComponentActionFailure(components, announce, () => invokeControlled(components, fn, announce));
+      return value || { ok: true };
+    }, () => {
+      showComponentActionFailure(components, announce, () => invokeControlled(components, fn, announce));
+      return { ok: false };
+    });
+  }
+
+  function openerOf(outer, name) {
+    if (isObject(outer.api) && typeof outer.api[name] === 'function') return () => outer.api[name]();
+    return typeof outer[name] === 'function' ? () => outer[name]() : null;
+  }
+
+  function retryOf(outer) {
+    if (typeof outer.retrySettlement === 'function') return () => outer.retrySettlement();
+    if (isObject(outer.api) && typeof outer.api.retrySettlement === 'function') return () => outer.api.retrySettlement();
+    return null;
+  }
+
+  function rewardMaterials(items, outer) {
+    const out = [];
+    if (!isObject(items)) return out;
+    Object.keys(items).forEach((itemId) => {
+      const count = Math.floor(finiteNumber(items[itemId]) === null ? 0 : finiteNumber(items[itemId]));
+      if (count > 0) out.push({ name: materialName(itemId, outer), count: count });
+    });
+    return out;
+  }
+
+  function projectedRewards(fields, projection, outer) {
+    const view = isObject(projection.view) ? projection.view : null;
+    const professions = view && Array.isArray(view.professions) ? view.professions : [];
+    const commissions = view && Array.isArray(view.commissions) ? view.commissions : [];
+    const owner = commissions.find((row) => isObject(row) && row.commissionId === fields.commissionId);
+    const professionId = fields.professionId || (owner && owner.professionId);
+    const profession = professions.find((row) => isObject(row) && row.professionId === professionId);
+    const experienceRow = (projection.historyRows || []).find((row) => row && row.commissionId === fields.commissionId);
+    const rewards = {
+      credits: typeof fields.credits === 'number' ? fields.credits : undefined,
+      materials: rewardMaterials(fields.items, outer),
+    };
+    const identity = fields.identity || cleanText(profession && profession.displayName);
+    const experience = fields.experience || cleanText(experienceRow && experienceRow.label);
+    if (identity) rewards.identity = identity;
+    if (experience) rewards.experience = experience;
+    return rewards;
+  }
+
+  function resultLineOf(fields, projection) {
+    if (fields.duplicate) return DUPLICATE_NOTE;
+    if (!fields.ok) return failureSentenceOf(fields);
+    const message = looksSafeText(fields.message);
+    if (message) return message;
+    const view = isObject(projection.view) ? projection.view : null;
+    const commission = view && Array.isArray(view.commissions)
+      ? view.commissions.find((row) => isObject(row) && row.commissionId === fields.commissionId) : null;
+    const title = cleanText(commission && commission.title);
+    return title ? title + '已登记。' : '这趟活儿已经结清。';
+  }
+
+  function componentActionsOf(fields, projection, feedback, outer, components, announce) {
+    const actions = [];
+    const town = openerOf(outer, 'openTown');
+    const campaign = openerOf(outer, 'openCampaign');
+    const mailbox = openerOf(outer, 'openMailbox');
+    const retry = retryOf(outer);
+    const invoked = (fn) => ({
+      kind: 'primary',
+      onClick: () => {
+        removeCard();
+        return invokeControlled(components, fn, announce);
+      },
+    });
+    if (fields.ok) {
+      const projected = projection.action;
+      let opener = null;
+      if (projected && projected.kind === 'ending') opener = campaign;
+      else if (projected && projected.kind === 'letter') opener = mailbox || campaign || town;
+      else if (projected) opener = town || campaign || mailbox;
+      if (projected && opener) {
+        actions.push(Object.assign({
+          id: 'continue', label: '继续：' + storyTextOf(projected.label, 48),
+        }, invoked(opener)));
+      } else if (town) {
+        actions.push(Object.assign({ id: 'return-to-town', label: CARD_TOWN_TEXT }, invoked(town)));
+      }
+    } else if (retry) {
+      actions.push({
+        id: 'retry-settlement',
+        label: '再试一次',
+        kind: 'primary',
+        onClick: () => {
+          let returned = null;
+          try { returned = retry(); } catch (err) { returned = { ok: false }; }
+          return Promise.resolve(returned).then((value) => {
+            const next = value && isObject(value.result) ? value.result : value;
+            if (!isObject(next) || next.ok !== true) {
+              showComponentActionFailure(components, announce, () => {
+                Promise.resolve(retry()).then((again) => {
+                  const result = again && isObject(again.result) ? again.result : again;
+                  if (isObject(result) && result.ok === true) show(Object.assign({}, outer, { result: result, careerView: projection.view }));
+                });
+              });
+              return { ok: false };
+            }
+            show(Object.assign({}, outer, { result: next, careerView: projection.view }));
+            return { ok: true };
+          }, () => {
+            showComponentActionFailure(components, announce, () => retry());
+            return { ok: false };
+          });
+        },
+      });
+    } else if (town) {
+      actions.push(Object.assign({ id: 'return-to-town', label: CARD_TOWN_TEXT }, invoked(town)));
+    }
+    actions.push({
+      id: 'dismiss-receipt',
+      label: fields.ok ? '今天先到这里' : '先收起收据',
+      kind: actions.length ? 'text' : 'primary',
+      onClick: () => { removeCard(); return { ok: true }; },
+    });
+    return actions;
+  }
+
+  function componentActionNode(components, input) {
+    const props = Object.assign({}, input, { busy: false });
+    const button = input.kind === 'primary' ? components.PrimaryAction(props) : components.SecondaryAction(Object.assign({}, props, { variant: 'text' }));
+    if (input.ariaLabel) button.setAttribute('aria-label', input.ariaLabel);
+    if (input.id) button.setAttribute('data-action', input.id);
+    return button;
+  }
+
+  function buildComponentCard(fields, projection, feedback, outer, components) {
+    const doc = documentOf();
+    if (!doc || !doc.body) return null;
+    const reduced = outer.reducedMotion === true || contextReducedMotion(outer);
+    const rootNode = doc.createElement('div');
+    rootNode.className = 'ac-career-ui';
+    rootNode.setAttribute('data-reduced-motion', String(reduced));
+    rootNode.setAttribute('popover', 'manual');
+
+    if (feedback && feedback.status === 'unavailable' && feedback.unavailable) {
+      const note = doc.createElement('p');
+      note.className = 'ac-career-ui__caption';
+      note.textContent = feedback.unavailable;
+      rootNode.appendChild(note);
+    }
+    if (fields.ok && projection.nextStep) {
+      const next = doc.createElement('p');
+      next.className = 'ac-career-ui__caption';
+      next.setAttribute('role', 'status');
+      next.setAttribute('aria-live', 'polite');
+      next.textContent = '下一步：' + projection.nextStep;
+      rootNode.appendChild(next);
+    }
+
+    const reply = feedback && feedback.replies.length ? feedback.replies[0] : null;
+    const card = components.ReceiptCard({
+      outcome: fields.ok ? 'success' : 'failure',
+      state: fields.duplicate && fields.ok ? 'no-duplicate-reward' : (fields.ok ? 'success' : 'failure'),
+      title: fields.ok ? CARD_SUCCESS_TITLE : CARD_FAILURE_TITLE,
+      resultLine: resultLineOf(fields, projection),
+      rewards: fields.ok && !fields.duplicate ? projectedRewards(fields, projection, outer) : undefined,
+      npcReply: reply ? { name: reply.name, paragraphs: [reply.text], state: 'return' } : undefined,
+      nextAction: null,
+      exitAction: null,
+    });
+    card.setAttribute('data-career-card', 'receipt');
+    card.setAttribute('data-state', fields.ok ? 'success' : 'failure');
+    if (fields.key) card.setAttribute('data-run-id', fields.key);
+    const actions = componentActionsOf(fields, projection, feedback, outer, components, outer.announce);
+    const actionRow = doc.createElement('div');
+    actionRow.className = 'ac-career-ui__actions';
+    actions.forEach((input) => actionRow.appendChild(componentActionNode(components, input)));
+    card.appendChild(actionRow);
+    rootNode.appendChild(card);
+    card.addEventListener('keydown', (event) => {
+      const key = event && typeof event.key === 'string' ? event.key : '';
+      if (key !== 'Escape' && key !== 'Esc') return;
+      if (event.preventDefault) event.preventDefault();
+      removeCard();
+    });
+    try {
+      doc.body.appendChild(rootNode);
+      if (typeof rootNode.showPopover === 'function') rootNode.showPopover();
+    } catch (err) {
+      /* the mounted DOM remains the readable receipt */
+    }
+    return { root: rootNode, card: card };
   }
 
   function buildCard(doc, fields, reducedMotion, feedback, actions, announce) {
@@ -1255,7 +1510,7 @@
    * @param {object} payload
    * @returns {Element|null}
    */
-  function show(payload) {
+  function showLegacy(payload) {
     const doc = documentOf();
     if (!doc || !doc.body) return null;
     const outer = isObject(payload) ? payload : {};
@@ -1288,6 +1543,34 @@
       removeCard();
     });
     return el;
+  }
+
+  function show(payload) {
+    const doc = documentOf();
+    if (!doc || !doc.body) return null;
+    const outer = isObject(payload) ? payload : {};
+    const components = componentsOf(outer);
+    const result = isObject(outer.result) ? outer.result : (Object.prototype.hasOwnProperty.call(outer, 'ok') || isObject(outer.receipt) ? outer : null);
+    if (!isObject(result)) return null;
+    /* T11 未装载时只保留旧宿主降级；0.23 loader 注入后只用统一 ReceiptCard/token。 */
+    if (!components || typeof components.ReceiptCard !== 'function' || typeof components.PrimaryAction !== 'function') {
+      return showLegacy(payload);
+    }
+    closePanel();
+    removeCard();
+    removeActionFailure();
+    const fields = readReceiptFields(result, outer);
+    const feedback = readStoryFeedback(outer, result);
+    const projection = projectedStoryOf(outer);
+    const built = buildComponentCard(fields, projection, feedback, outer, components);
+    if (!built) return null;
+    card = { el: built.card, root: built.root, key: fields.key, fields: fields };
+    unsubscribeCareerChanges = subscribeCareerChanges(outer, (change) => {
+      if (!card || card.el !== built.card) return;
+      if (CAREER_CHANGE_REASONS.indexOf(cleanText(change && change.reason)) < 0) return;
+      removeCard();
+    });
+    return built.card;
   }
 
   /* ---------------------------------------------------------------- 对外 API */
