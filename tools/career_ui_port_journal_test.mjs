@@ -19,8 +19,13 @@ const FILES = {
   town: path.join(ROOT, 'apps/arcade/career/ui/town.js'),
   world: path.join(ROOT, 'apps/arcade/career/ui/world-state.js'),
   settings: path.join(ROOT, 'apps/arcade/career/ui/settings.js'),
+  market: path.join(ROOT, 'apps/arcade/career/ui/market.js'),
+  workshop: path.join(ROOT, 'apps/arcade/career/ui/workshop.js'),
+  hangar: path.join(ROOT, 'apps/arcade/career/ui/hangar.js'),
+  fixtures: path.join(ROOT, 'tools/career_ui_fixture_states.json'),
 };
-const SOURCE = Object.fromEntries(Object.entries(FILES).map(([key, file]) => [key, fs.readFileSync(file, 'utf8')]));
+const SOURCE = Object.fromEntries(Object.entries(FILES).filter(([key]) => key !== 'fixtures').map(([key, file]) => [key, fs.readFileSync(file, 'utf8')]));
+const FIXTURE_PACK = JSON.parse(fs.readFileSync(FILES.fixtures, 'utf8'));
 
 let pass = 0;
 const failures = [];
@@ -390,7 +395,7 @@ function harness() {
   sandbox.globalThis = sandbox;
   sandbox.window.document = doc;
   vm.createContext(sandbox);
-  ['components', 'harbor', 'town', 'world', 'settings'].forEach((key) => {
+  ['components', 'harbor', 'town', 'world', 'settings', 'market', 'workshop', 'hangar'].forEach((key) => {
     vm.runInContext(SOURCE[key], sandbox, { filename: path.basename(FILES[key]) });
   });
   return {
@@ -447,9 +452,11 @@ check('work cards stay projection-only: no star-raid special case, no full catal
 check('journal consumes only public history fields',
   SOURCE.town.includes('view.story.history') && SOURCE.town.includes('label: cleanText(row.label)') &&
   !/data-event-id|row\.eventId/.test(SOURCE.town));
-check('tool adapters use T11 shell and controlled projection gates',
-  ['market', 'hangar', 'workshop', 'settings'].every((key) => SOURCE[key] === undefined || true) &&
-  fs.readFileSync(FILES.harbor, 'utf8').includes('aria-hidden="true"'));
+check('tool adapters preserve injected UI fields through normalizeContext',
+  ['market', 'workshop', 'hangar'].every((key) => {
+    const source = SOURCE[key];
+    return ['uiComponents', 'uiHarbor', 'narrative', 'portClue', 'recoverableClue'].every((field) => source.includes(field + ': ctx.' + field));
+  }));
 
 /* ------------------------------------------------------------------ P07 */
 
@@ -548,6 +555,13 @@ eq('P07 four real tools in fixed order', toolButtons.map((node) => node.getAttri
 check('P07 unknown tool ignored', !text(panel).includes('未知工具'));
 byAttr(panel, 'data-tool', 'wallet')[0].click();
 eq('P07 wallet tool calls openReceipt once', calls.tools.join(','), 'wallet');
+
+const samePanel = ui.town.open(portCtx);
+await settle();
+check('repeat open reuses port shell/state and releases the stale subscription',
+  samePanel.ok === true && samePanel.panel === panel &&
+  doc.querySelectorAll('.ac-career-ui__panel').length === 1 &&
+  listeners.length === 2 && unsubscribed === 1);
 byAttr(panel, 'data-action-kind', 'primary')[0].click();
 await settle();
 check('P07 story action calls controlled commission.start with ensure:false',
@@ -579,56 +593,109 @@ check('P09 timeline is ordered, public-only, and has no total or eventId',
   !text(doc.body).includes('secret:event') && !/总数|百分比|\d+%/.test(text(doc.body)));
 
 /* subscriptions and close */
-check('port subscribes once to invalidation', listeners.length === 1 && unsubscribed === 0);
-listeners[0]({ reason: 'accept-invitation' });
+check('port keeps exactly one active invalidation subscription after repeat open', listeners.length === 2 && unsubscribed === 1);
+listeners[1]({ reason: 'accept-invitation' });
 await settle();
-check('ordinary career event refreshes without closing', calls.view.length > 3 && !!doc.querySelector('.ac-career-ui__panel'));
-listeners[0]({ reason: 'career-imported' });
-check('import invalidation closes panel and unsubscribes exactly once',
-  !doc.querySelector('.ac-career-ui__panel') && unsubscribed === 1);
+check('ordinary career event refreshes without closing', calls.view.length > 6 && !!doc.querySelector('.ac-career-ui__panel'));
+listeners[1]({ reason: 'career-imported' });
+check('import invalidation closes panel and releases the active subscription',
+  !doc.querySelector('.ac-career-ui__panel') && unsubscribed === 2);
 ui.town.close();
 
 /* ------------------------------------------------------------------ P10 */
 
-async function portVariant(narrative, viewOverride) {
+const p10Fixture = FIXTURE_PACK.fixtures.find((fixture) => fixture.id === 'P10');
+check('frozen fixture pack exposes four P10 variants', !!p10Fixture && p10Fixture.variants.length === 4);
+function fixtureVariant(id) { return p10Fixture.variants.find((variant) => variant.id === id); }
+function hiddenTextsAbsent(panel, variant) {
+  const visible = text(panel);
+  const fixtureText = [
+    variant.storyCard && [variant.storyCard.eyebrow, variant.storyCard.title, variant.storyCard.summary].join(' '),
+    variant.letterCard && [variant.letterCard.ambientLabel, variant.letterCard.title, variant.letterCard.sender, ...(variant.letterCard.paragraphs || [])].join(' '),
+    variant.secondaryAction && variant.secondaryAction.label,
+  ].filter(Boolean).join(' ');
+  return (variant.expected.hiddenTexts || []).filter((term) => !fixtureText.includes(term)).every((term) => !visible.includes(term));
+}
+
+async function openFixtureVariant(id) {
   const local = harness();
+  let viewCalls = 0;
+  const actionCalls = [];
+  const emptyView = { schemaVersion: 1, professions: [], commissions: [], tools: [], story: { nextAction: null, messages: [], history: [] } };
   const ctx = {
     uiComponents: local.components,
-    narrative: narrative,
-    careerView() { return viewOverride || { schemaVersion: 1, professions: [], commissions: [], tools: [], story: { nextAction: null, messages: [], history: [] } }; },
+    portFixture: fixtureVariant(id),
+    careerView() { viewCalls += 1; return emptyView; },
+    fixtureAction(actionId) { actionCalls.push(actionId); },
   };
   local.ui.town.open(ctx);
   await settle();
-  return local;
+  return { local, ctx, actionCalls, viewCalls: () => viewCalls };
 }
 
-let variant = await portVariant({});
-const emptyPanel = variant.doc.querySelector('.ac-career-ui__panel');
-check('P10 empty state is natural language with no unknown placeholder',
-  !!emptyPanel && text(emptyPanel).includes('港口暂时没有新的安排') && !text(emptyPanel).includes('未知') &&
-  emptyPanel.getAttribute('data-shell-state') === 'normal');
-variant.ui.town.close();
+let variantRun = await openFixtureVariant('P10-empty');
+let fixture = fixtureVariant('P10-empty');
+let fixturePanel = variantRun.local.doc.querySelector('.ac-career-ui__panel');
+check('P10-empty consumes frozen fixture text and state',
+  fixture.expected.visibleTexts.every((term) => text(fixturePanel).includes(term)) && hiddenTextsAbsent(fixturePanel, fixture) &&
+  fixturePanel.getAttribute('data-shell-state') === fixture.careerShell.state &&
+  byAttr(fixturePanel, 'data-story-state', fixture.storyCard.state).length === 1);
+variantRun.local.ui.town.close();
 
-variant = await portVariant({ state: 'loading' });
-const loadingPanel = variant.doc.querySelector('.ac-career-ui__panel');
-eq('P10 loading keeps shell structure and aria-busy', loadingPanel.getAttribute('aria-busy'), 'true');
-check('P10 loading keeps close and tab structure', !!loadingPanel.querySelector('.ac-career-ui__close') && byAttr(loadingPanel, 'role', 'tab').length === 3);
-variant.ui.town.close();
+variantRun = await openFixtureVariant('P10-loading');
+fixture = fixtureVariant('P10-loading');
+fixturePanel = variantRun.local.doc.querySelector('.ac-career-ui__panel');
+eq('P10-loading fixture keeps aria-busy and shell state', fixturePanel.getAttribute('aria-busy'), 'true');
+check('P10-loading consumes frozen fixture text and keeps structure',
+  fixture.expected.visibleTexts.every((term) => text(fixturePanel).includes(term)) && hiddenTextsAbsent(fixturePanel, fixture) &&
+  fixturePanel.getAttribute('data-shell-state') === fixture.careerShell.state &&
+  !!fixturePanel.querySelector('.ac-career-ui__close') && byAttr(fixturePanel, 'role', 'tab').length === 3);
+variantRun.local.ui.town.close();
 
-variant = await portVariant({ state: 'error' });
-const errorPanel = variant.doc.querySelector('.ac-career-ui__panel');
-eq('P10 error shell state', errorPanel.getAttribute('data-shell-state'), 'error');
-const retry = find(errorPanel, (node) => node.localName === 'button' && text(node) === '重试');
-check('P10 error exposes a reachable retry button and no reason code', !!retry && !text(errorPanel).includes('error'));
-variant.ui.town.close();
+variantRun = await openFixtureVariant('P10-error');
+fixture = fixtureVariant('P10-error');
+fixturePanel = variantRun.local.doc.querySelector('.ac-career-ui__panel');
+check('P10-error consumes frozen fixture text and retry action',
+  fixture.expected.visibleTexts.every((term) => text(fixturePanel).includes(term)) && hiddenTextsAbsent(fixturePanel, fixture) &&
+  fixturePanel.getAttribute('data-shell-state') === fixture.careerShell.state);
+const retryButton = find(fixturePanel, (node) => node.localName === 'button' && text(node) === fixture.secondaryAction.label);
+const beforeRetry = variantRun.viewCalls();
+retryButton.click();
+await settle();
+check('P10-error retry calls fixture action and refetches projection once',
+  variantRun.actionCalls.includes('retry') && variantRun.viewCalls() > beforeRetry);
+variantRun.local.ui.town.close();
 
-const longText = '合成港口说明'.repeat(28);
-variant = await portVariant({ storyTitle: longText, storySummary: longText });
-const longPanel = variant.doc.querySelector('.ac-career-ui__panel');
-check('P10 long text keeps body scroll and full visible copy',
-  !!longPanel && text(longPanel).includes(longText) && !!longPanel.querySelector('.ac-career-ui__body') &&
-  longPanel.getAttribute('data-shell-state') === 'normal');
-variant.ui.town.close();
+variantRun = await openFixtureVariant('P10-longtext');
+fixture = fixtureVariant('P10-longtext');
+fixturePanel = variantRun.local.doc.querySelector('.ac-career-ui__panel');
+const letterCard = fixturePanel.querySelector('.ac-career-ui__letter');
+const longTextFacts = {
+  letter: !!letterCard,
+  visible: fixture.expected.visibleTexts.map((term) => [term, text(fixturePanel).includes(term)]),
+  hidden: hiddenTextsAbsent(fixturePanel, fixture),
+  sender: text(fixturePanel).includes(fixture.letterCard.sender),
+  paragraphs: fixture.letterCard.paragraphs.map((paragraph) => text(fixturePanel).includes(paragraph)),
+  noStory: byAttr(fixturePanel, 'data-story-state', 'current').length === 0,
+};
+check('P10-longtext consumes frozen LetterCard fixture, not StoryCard/narrative',
+  Object.values(longTextFacts).every((value) => Array.isArray(value) ? value.every((entry) => Array.isArray(entry) ? entry[1] : entry) : value === true),
+  longTextFacts);
+check('P10-longtext body scrolls structurally and exposes T11 text action',
+  !!fixturePanel.querySelector('.ac-career-ui__body') && text(fixturePanel).includes(fixture.letterCard.actions[0].label));
+variantRun.local.ui.town.close();
+
+/* ------------------------------------------------------------------ tool panels */
+
+for (const panelKey of ['market', 'workshop', 'hangar']) {
+  const local = harness();
+  const sheet = local.ui[panelKey].open({ uiComponents: local.components, careerView() { return null; } });
+  const toolPanel = local.doc.querySelector('.ac-career-ui__panel');
+  check(panelKey + ' normalizeContext preserves uiComponents and opens T11 shell',
+    !!sheet && !!toolPanel && toolPanel.parentNode.getAttribute('data-career-panel') === panelKey &&
+    toolPanel.querySelectorAll('.ac-career-ui__body').length === 1);
+  local.ui[panelKey].close();
+}
 
 /* ------------------------------------------------------------------ world journal + settings */
 

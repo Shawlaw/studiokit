@@ -547,6 +547,11 @@
         : isObject(ctx.api) && typeof ctx.api.careerView === 'function' ? ctx.api.careerView : null,
       announce: typeof ctx.announce === 'function' ? ctx.announce : null,
       onCareerDataChanged: typeof ctx.onCareerDataChanged === 'function' ? ctx.onCareerDataChanged : null,
+      uiComponents: ctx.uiComponents,
+      uiHarbor: ctx.uiHarbor,
+      narrative: ctx.narrative,
+      portClue: ctx.portClue,
+      recoverableClue: ctx.recoverableClue,
     };
   }
 
@@ -1796,7 +1801,7 @@
   function buildPanel(doc, context) {
     const previousFocus = doc.activeElement && typeof doc.activeElement.focus === 'function' ? doc.activeElement : null;
 
-    const body = make(doc, 'div', 'ac-career-ui__body');
+    const body = make(doc, 'div', toolComponentsOf(context) ? 'ac-career-ui__stack' : 'ac-career-sheet__body');
     const wrap = make(doc, 'div', 'ac-career-market');
     const lede = make(doc, 'p', 'ac-career-market__lede', PANEL_LEDE);
     lede.id = LEDE_ID;

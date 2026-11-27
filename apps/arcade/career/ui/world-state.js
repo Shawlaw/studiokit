@@ -569,7 +569,7 @@
     const direct = context && context.uiComponents;
     if (direct === true && root.ArcadeCareerUI && isObject(root.ArcadeCareerUI.components)) return root.ArcadeCareerUI.components;
     if (!isObject(direct)) return null;
-    const required = ['CareerShell', 'JournalTimeline', 'NPCDialogue', 'StoryCard'];
+    const required = ['CareerShell', 'JournalTimeline', 'NPCDialogue', 'StoryCard', 'icon'];
     return required.every((name) => typeof direct[name] === 'function') ? direct : null;
   }
 

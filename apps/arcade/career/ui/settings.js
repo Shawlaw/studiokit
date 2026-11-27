@@ -229,7 +229,7 @@
       return legacy;
     }
 
-    const body = make('div', 'ac-career-ui__body');
+    const body = make('div', settingsComponentsOf(context) ? 'ac-career-ui__stack' : 'ac-career-sheet__body');
 
     const switchRow = make('div', 'ac-career-setting');
     const switchBtn = make('button', 'ac-career-switch');

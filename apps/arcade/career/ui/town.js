@@ -501,7 +501,7 @@
     const direct = context && context.uiComponents;
     if (direct === true && root.ArcadeCareerUI && isObject(root.ArcadeCareerUI.components)) return root.ArcadeCareerUI.components;
     if (!isObject(direct)) return null;
-    const required = ['CareerShell', 'StoryCard', 'SegmentedTabs', 'WorkCard', 'JournalTimeline', 'ToolGrid', 'SecondaryAction'];
+    const required = ['CareerShell', 'StoryCard', 'SegmentedTabs', 'WorkCard', 'JournalTimeline', 'ToolGrid', 'ClueRow', 'PrimaryAction', 'SecondaryAction', 'LetterCard', 'icon'];
     return required.every((name) => typeof direct[name] === 'function') ? direct : null;
   }
 
@@ -596,6 +596,99 @@
 
   function portNarrativeOf(context) {
     return context && isObject(context.narrative) ? context.narrative : {};
+  }
+
+  /** T15 fixtures are injected explicitly; production never reads tools/career_ui_fixture_states.json. */
+  function portFixtureOf(context) {
+    const direct = context && (context.portFixture || context.fixtureProps);
+    if (isObject(direct)) return direct;
+    const narrative = portNarrativeOf(context);
+    return isObject(narrative.fixture) ? narrative.fixture : null;
+  }
+
+  function portFixtureAction(context, state, action, fallbackId, components) {
+    const input = isObject(action) ? action : {};
+    const actionId = cleanText(input.id) || fallbackId || '';
+    const label = cleanText(input.label);
+    if (!label) return null;
+    const kind = input.kind === 'primary' ? 'primary' : (input.kind === 'secondary' ? 'secondary' : 'text');
+    const onClick = () => {
+      if (context && typeof context.fixtureAction === 'function') {
+        try { context.fixtureAction(actionId); } catch (err) { /* test stub failure is non-fatal */ }
+      }
+      if (actionId === 'retry' || label === '重试') loadPortData(context, state);
+      return { ok: true };
+    };
+    return {
+      id: actionId || undefined,
+      label: label,
+      kind: kind,
+      variant: input.variant === 'text' ? 'text' : 'border',
+      onClick: onClick,
+    };
+  }
+
+  function portFixtureContent(context, state, fixture, components) {
+    if (!fixture) return null;
+    const content = docOfPort().createElement('div');
+    content.className = 'ac-career-ui__stack';
+    content.id = 'ac-career-ui-port-tabpanel';
+    content.setAttribute('role', 'tabpanel');
+    content.setAttribute('aria-label', '港口内容');
+    content.setAttribute('data-port-tabpanel', state.tab);
+    let hasNode = false;
+
+    const story = isObject(fixture.storyCard) ? fixture.storyCard : null;
+    if (story && typeof components.StoryCard === 'function') {
+      const storyProps = {
+        eyebrow: cleanText(story.eyebrow),
+        title: cleanText(story.title),
+        summary: cleanText(story.summary),
+        state: oneOfFixtureState(story.state),
+        tags: Array.isArray(story.tags) ? story.tags.map(cleanText).filter(Boolean) : [],
+        action: isObject(story.action) ? portFixtureAction(context, state, story.action, '', components) : null,
+      };
+      content.appendChild(components.StoryCard(storyProps));
+      hasNode = true;
+    }
+
+    const letter = isObject(fixture.letterCard) ? fixture.letterCard : null;
+    if (letter && typeof components.LetterCard === 'function') {
+      const letterProps = {
+        title: cleanText(letter.title),
+        paragraphs: Array.isArray(letter.paragraphs) ? letter.paragraphs.map(cleanText).filter(Boolean) : [],
+        sender: cleanText(letter.sender),
+        ambientLabel: cleanText(letter.ambientLabel),
+        state: ['unread', 'read', 'deferred'].indexOf(cleanText(letter.state)) >= 0 ? cleanText(letter.state) : 'read',
+        actions: (Array.isArray(letter.actions) ? letter.actions : []).map((action, index) => portFixtureAction(context, state, action, 'letter-action-' + index, components)).filter(Boolean),
+      };
+      content.appendChild(components.LetterCard(letterProps));
+      hasNode = true;
+    }
+
+    const journal = isObject(fixture.journalTimeline) ? fixture.journalTimeline : null;
+    if (journal && typeof components.JournalTimeline === 'function') {
+      content.appendChild(components.JournalTimeline({
+        state: cleanText(journal.state) === 'filled' ? 'filled' : 'empty',
+        events: [],
+      }));
+      hasNode = true;
+    }
+
+    const secondary = isObject(fixture.secondaryAction) ? fixture.secondaryAction : null;
+    if (secondary && typeof components.SecondaryAction === 'function') {
+      const action = portFixtureAction(context, state, secondary, 'retry', components);
+      if (action) {
+        content.appendChild(components.SecondaryAction(action));
+        hasNode = true;
+      }
+    }
+    return hasNode ? content : null;
+  }
+
+  function oneOfFixtureState(value) {
+    const state = cleanText(value);
+    return ['current', 'no-action', 'completed'].indexOf(state) >= 0 ? state : 'no-action';
   }
 
   function portFindCommission(view, commissionId) {
@@ -765,13 +858,14 @@
     const professions = view && Array.isArray(view.professions) ? view.professions.filter(isObject) : [];
     const accepted = professions.filter((entry) => ['accepted', 'developed', 'completed'].indexOf(cleanText(entry.state).toLowerCase()) >= 0);
     const commissions = view && Array.isArray(view.commissions) ? view.commissions.filter(isObject) : [];
-    const worldRows = commissions.filter((entry) => cleanText(entry.category).toLowerCase() === 'world');
+    const worldRows = commissions.filter((entry) => cleanText(entry.category).toLowerCase() === 'world' && entry.historicalOnly !== true && entry.readOnly !== true);
     if (!accepted.length && !worldRows.length) {
       return [components.WorkCard({ professionId: null, displayName: '', icon: 'check', state: 'empty', commissions: [] })];
     }
     const cards = accepted.map((entry) => {
       const professionId = idText(entry.professionId);
       const rows = commissions.filter((commission) => {
+        if (commission.historicalOnly === true || commission.readOnly === true) return false;
         if (cleanText(commission.category).toLowerCase() === 'world') return false;
         const parent = idText(commission.professionId || commission.parentProfessionId || commission.internalParentProfessionId);
         return !!parent && parent === professionId;
@@ -841,6 +935,9 @@
   function portContentNode(context, state, view, components) {
     const phase = state.phase;
     const stack = docOfPort();
+    const fixture = portFixtureOf(context || state.context);
+    const fixtureContent = fixture ? portFixtureContent(context, state, fixture, components) : null;
+    if (fixtureContent) return fixtureContent;
     const content = stack.createElement('div');
     content.className = 'ac-career-ui__stack';
     content.id = 'ac-career-ui-port-tabpanel';
@@ -935,6 +1032,10 @@
   }
 
   function portShellState(context, state) {
+    const fixture = portFixtureOf(context);
+    const fixtureShell = fixture && isObject(fixture.careerShell) ? fixture.careerShell : null;
+    const fixtureState = fixtureShell ? cleanText(fixtureShell.state) : '';
+    if (['normal', 'scroll', 'loading', 'error'].indexOf(fixtureState) >= 0) return fixtureState;
     const explicit = cleanText(portNarrativeOf(context).state);
     if (explicit === 'loading' || explicit === 'error') return explicit;
     if (state.phase === 'loading') return 'loading';
@@ -943,9 +1044,11 @@
   }
 
   function portShellProps(context, state, view, components) {
+    const fixture = portFixtureOf(context);
+    const fixtureShell = fixture && isObject(fixture.careerShell) ? fixture.careerShell : null;
     return {
       panelKey: 'town',
-      title: PORT_TITLE,
+      title: cleanText(fixtureShell && fixtureShell.title) || PORT_TITLE,
       state: portShellState(context, state),
       size: 'default',
       body: portBody(context, state, view, components),
@@ -2457,10 +2560,8 @@
   function open(ctx) {
     const doc = documentOf();
     if (!doc) return { ok: false, reason: 'ui-unavailable' };
-    if (portComponentsOf(ctx)) return openPortSurface(ctx);
-    ensureStyle(doc);
 
-    /* 幂等：重复 open 复用同一面板，只刷新内容并保持焦点。 */
+    /* 幂等：T11 与 legacy 面板都先复用当前实例，只刷新内容并保持焦点。 */
     if (panel && panel.overlay && panel.overlay.parentNode && panel.doc === doc) {
       try {
         panel.refresh(ctx);
@@ -2471,6 +2572,8 @@
       if (!sheet.contains(doc.activeElement)) safelyFocus(panel.closeBtn || sheet);
       return { ok: true, panel: sheet };
     }
+    if (portComponentsOf(ctx)) return openPortSurface(ctx);
+    ensureStyle(doc);
 
     const built = buildPanel(ctx, true);
     if (!built) return { ok: false, reason: 'ui-unavailable' };
