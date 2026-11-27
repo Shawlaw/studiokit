@@ -1746,6 +1746,7 @@ async function runFullFlow(cdp, browser, newPage, campaign, commissions) {
        避免 claim/quests 尚未写入导致 no-career；收据卡片复用于 phaseReceipt，不重复等待。 */
     const card = await waitReceipt(cdp, run.ticketId);
     requireFeature('RECEIPT ' + label + ' 显示这张单的成功收据', card?.state === 'success' && card.runId === run.ticketId, J(card));
+    const expectedKind = completes ? 'milestone' : 'step';
     const after = await verifyOrderProgress(cdp, label, commissionId, run.ticketId, completes, expectedKind, campaign, commissions);
     if (failedTicket) {
       gate('FAIL 重接后完成同一委托，只有成功票有收据入账',
