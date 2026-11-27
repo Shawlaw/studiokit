@@ -372,7 +372,10 @@ function collectReasonText(root) {
       return;
     }
     if (node.nodeType !== 1) return;
-    Object.keys(node.attributes || {}).forEach((key) => parts.push(node.attributes[key]));
+    Object.keys(node.attributes || {}).forEach((key) => {
+      if (key === 'class' || key === 'style') return;
+      parts.push(node.attributes[key]);
+    });
     node.children.forEach(walk);
   };
   walk(root);
@@ -394,6 +397,10 @@ function main() {
   ].sort());
   check('P-00 accepted profession is real', !!REGISTRY.professions.find((row) => row.professionId === ACCEPTED));
   check('P-00 hidden set excludes accepted world work owners only', HIDDEN.length === 15);
+  const cssOnly = { nodeType: 1, attributes: { class: 'ac-career-town__paused' }, children: [] };
+  const reasonOnly = { nodeType: 3, textContent: 'world-locked' };
+  check('P-00 reason 检测不把 CSS class 当泄漏', domHasReason(cssOnly) === true);
+  check('P-00 reason 检测能发现真实 reason 文本', domHasReason(reasonOnly) === false);
 
   /* P-01 每个未接受职业 × 每个 surface × 三个未接受阶段 */
   const states = [

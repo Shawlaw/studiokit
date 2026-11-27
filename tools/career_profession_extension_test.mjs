@@ -54,6 +54,7 @@ let SIDE;
 let WORLD;
 let BRIDGE_SRC;
 let SW_SRC;
+let ENGINE_SRC;
 let dbSource;
 
 try {
@@ -74,6 +75,7 @@ try {
   WORLD = readJson('world-work.json');
   BRIDGE_SRC = fs.readFileSync(path.join(CAREER, 'bridge.js'), 'utf8');
   SW_SRC = fs.readFileSync(path.join(ROOT, 'apps/arcade/sw.js'), 'utf8');
+  ENGINE_SRC = fs.readFileSync(path.join(ROOT, 'apps/arcade/engine.js'), 'utf8');
   dbSource = fs.readFileSync(path.join(CAREER, 'career-db.js'), 'utf8');
 } catch (err) {
   console.error('ASSEMBLY FAILED: ' + (err && err.stack ? err.stack : String(err)));
@@ -637,10 +639,18 @@ async function main() {
   /* G06 离线资源清单静态断言（不运行 PWA） */
   check('G06 profession-state.js 是 bridge required 依赖', /\{\s*file:\s*'profession-state\.js',\s*global:\s*'professionState',\s*required:\s*true\s*\}/.test(BRIDGE_SRC));
   check('G06 profession-view.js 为同源可加载依赖', /\{\s*file:\s*'profession-view\.js'[\s\S]{0,120}required:\s*false[\s\S]{0,40}lazy:\s*true\s*\}/.test(BRIDGE_SRC));
-  check('G06 SW 同源缓存 profession-state.js', /'\.\/career\/profession-state\.js'/.test(SW_SRC));
-  check('G06 SW 同源缓存 profession-view.js', /'\.\/career\/profession-view\.js'/.test(SW_SRC));
-  check('G06 SW 同源缓存 world-work.json', /'\.\/career\/content\/world-work\.json'/.test(SW_SRC));
-  check('G06 SW 未引入跨域资源', !/https?:\/\//.test(SW_SRC.slice(SW_SRC.indexOf('const CORE_PATHS'), SW_SRC.indexOf('const CORE ='))));
+  const coreMatch = SW_SRC.match(/const CORE_PATHS = \[([\s\S]*?)\];/);
+  const corePaths = coreMatch ? Array.from(coreMatch[1].matchAll(/'([^']+)'/g), (m) => m[1]) : [];
+  const requiredOffline = [
+    './career/profession-state.js', './career/profession-view.js', './career/content/world-work.json',
+    './career/bridge.js', './career/discovery.js', './career/content/registry.json',
+  ];
+  const swVersion = (SW_SRC.match(/const VERSION = '([^']+)'/) || [])[1] || '';
+  const engineVersion = (ENGINE_SRC.match(/const ARCADE_VERSION = '([^']+)'/) || [])[1] || '';
+  check('G06 SW 有可解析的 CORE_PATHS 清单', corePaths.length > 60, String(corePaths.length));
+  check('G06 新增职业资源均在同源 CORE_PATHS', corePaths.length > 0 && requiredOffline.every((id) => corePaths.indexOf(id) >= 0), JSON.stringify(requiredOffline.filter((id) => corePaths.indexOf(id) < 0)));
+  check('G06 SW 清单不含跨域资源', corePaths.length > 0 && corePaths.every((id) => !/^https?:\/\//.test(id)));
+  check('G06 SW 与引擎版本一致', swVersion && swVersion === engineVersion, swVersion + ' / ' + engineVersion);
 
   /* G07 最终快照 */
   eq('G07 registry 原始内容快照仍不变', JSON.stringify(REGISTRY), REAL_SNAPSHOTS.registry);
