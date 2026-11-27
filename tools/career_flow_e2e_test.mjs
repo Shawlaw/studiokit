@@ -72,6 +72,52 @@ const CAREER_PROFESSION_NAMES = (() => {
   const registry = readJson('apps/arcade/career/content/registry.json');
   return (registry.professions || []).map((row) => ({ id: row.professionId, name: row.displayName })).filter((row) => row.id && row.name);
 })();
+/* 0.24 T24 真实浏览器交汇场景的固定事实：职业 A=起源职业，职业 B=五子棋职业。
+   事件 id / 文案 / 人物全部从同源内容读取，不在测试里写死台词或规则。 */
+const CROSSOVER_A_GAME = ORIGIN_GAME;
+const CROSSOVER_A_PROFESSION = ORIGIN_PROFESSION[ORIGIN_GAME];
+const CROSSOVER_B_GAME = 'gomoku';
+const CROSSOVER_B_PROFESSION = ORIGIN_PROFESSION[CROSSOVER_B_GAME];
+const CROSSOVER_B_CLUE = 'CL-gomoku';
+const CROSSOVER_REQUIRED_FLAG = 'C2.research_complete';
+const CROSSOVER_CONTENT = (() => {
+  try {
+    return readJson('apps/arcade/career/content/world-narrative.json');
+  } catch (err) {
+    return null;
+  }
+})();
+const CROSSOVER_EVENT_ID = 'crossover:' + [CROSSOVER_A_PROFESSION, CROSSOVER_B_PROFESSION].sort().join(':');
+const CROSSOVER_PAIR = (() => {
+  const rows = CROSSOVER_CONTENT && Array.isArray(CROSSOVER_CONTENT.crossoverPairs) ? CROSSOVER_CONTENT.crossoverPairs : [];
+  return rows.filter((row) => row && row.eventId === CROSSOVER_EVENT_ID)[0] || null;
+})();
+const CROSSOVER_JOURNAL_ROW = (() => {
+  const rows = CROSSOVER_CONTENT && Array.isArray(CROSSOVER_CONTENT.journalWhitelist) ? CROSSOVER_CONTENT.journalWhitelist : [];
+  return rows.filter((row) => row && row.eventId === CROSSOVER_EVENT_ID)[0] || null;
+})();
+/* route-planner.chapterAlternatives 用同章同机制的 world-narrative 节点文案覆盖内置文案；
+   这里只读内容侧公开文本对，用来证明章节指引确实绑定了真实内容节点（不校验内部 id）。 */
+const WORLD_ALTERNATIVE_TEXT_PAIRS = (() => {
+  const rows = CROSSOVER_CONTENT && Array.isArray(CROSSOVER_CONTENT.alternativeNarratives)
+    ? CROSSOVER_CONTENT.alternativeNarratives : [];
+  return rows.map((row) => ({
+    chapterId: row && row.chapterId ? row.chapterId : null,
+    mechanism: row && row.mechanism ? row.mechanism : null,
+    offer: row && row.texts && typeof row.texts.offer === 'string' ? row.texts.offer : '',
+    next: row && row.texts && typeof row.texts.next === 'string' ? row.texts.next : '',
+  })).filter((row) => row.offer || row.next);
+})();
+/* 内部字段 / 内部 id 的 DOM 泄漏扫描（只用于玩家可见文本，不用于诊断对象）。 */
+const GUIDE_INTERNAL_PATTERNS = [
+  { name: 'narrativeNodeId / nodeId 字段名', re: /narrativeNodeId|\bnodeId\b/i },
+  { name: '内部替代节点 id altn.', re: /altn\./i },
+  { name: '内部事件前缀 crossover:/world:/invitation:/commission:', re: /crossover:|(?:^|\s)(?:world|invitation|commission):/i },
+  { name: '内部字段名 requirement/tokens/anchor/mechanism', re: /\b(?:requirement|tokens|anchor|mechanism|receiptSource|visibleSurfaces|pairId|whitelistLayer|labelMode)\b/i },
+  { name: '章节码 C0.xxx–C5.xxx', re: /(?:^|[^A-Za-z0-9])C[0-5]\.[A-Za-z_]/ },
+  { name: '委托后缀 .T1–.T6', re: /\.[Tt][1-6](?![0-9])/ },
+  { name: '证据 token E-/BP-/MAP-/DEC-', re: /(?:E|BP|MAP|DEC)-(?!7\b)[A-Za-z][A-Za-z0-9._-]*[A-Za-z0-9]/ },
+];
 const TICKET_STORAGE_KEY = 'studiokit:arcade:career:ticket.v1';
 const RECEIPT_CARD = '[data-career-card="receipt"]';
 const ENDING_APPROACH = 'research';
@@ -1578,6 +1624,10 @@ function readPortRecommendation(cdp) {
       const r = node.getBoundingClientRect();
       return { w: Math.round(r.width), h: Math.round(r.height), top: Math.round(r.top), bottom: Math.round(r.bottom) };
     };
+    const alternativeNode = view.story && view.story.alternative && typeof view.story.alternative === 'object'
+      ? view.story.alternative : null;
+    const alternativeTexts = alternativeNode && alternativeNode.texts && typeof alternativeNode.texts === 'object'
+      ? alternativeNode.texts : null;
     return {
       ok: !!(next && next.commissionId && action && action.id === 'port-story-' + next.commissionId && row),
       commissionId: next && next.commissionId || null,
@@ -1585,6 +1635,17 @@ function readPortRecommendation(cdp) {
       projectedTitle: next && next.label || '',
       projectedSummary: row ? (row.summary || row.objectiveText || '') : '',
       projectedCategory: row ? row.category || null : null,
+      /* 0.24 T24：港口「眼下」摘要优先消费真实 story.alternative 公开文案；
+         测试只读同源投影，不复制优先级规则。 */
+      alternative: alternativeTexts ? {
+        nodeId: alternativeNode.narrativeNodeId || null,
+        offer: String(alternativeTexts.offer || ''),
+        progress: String(alternativeTexts.progress || ''),
+        receipt: String(alternativeTexts.receipt || ''),
+        next: String(alternativeTexts.next || ''),
+      } : null,
+      narrativeNext: content ? textOf(content.querySelector('[data-port-narrative-next]')) : '',
+      crossoverNodes: content ? content.querySelectorAll('[data-port-crossover]').length : 0,
       storyState: story ? story.getAttribute('data-story-state') : null,
       storyTitle: story ? textOf(story.querySelector('.ac-career-ui__story-title')) : '',
       storySummary: story ? textOf(story.querySelector('.ac-career-ui__story-summary')) : '',
@@ -1601,6 +1662,19 @@ function readPortRecommendation(cdp) {
       boardText: textOf(panel),
     };
   })()`);
+}
+
+/**
+ * 港口「眼下」StoryCard 摘要的合法来源：真实 careerView({surface:'port'}) 给出的
+ * 委托行摘要（row.summary/objectiveText）优先；无委托摘要时才允许真实投影的
+ * story.alternative.texts（progress/offer）兜底。两者都来自投影 —— 仍然禁止 UI 自造文案。
+ * （T24 修正后摘要与当前 nextAction 同源，见 ui/town.js portStoryProps。）
+ */
+function expectedPortStorySummary(recommendation) {
+  const alternative = recommendation && recommendation.alternative ? recommendation.alternative : null;
+  const fromAlternative = alternative ? (alternative.progress || alternative.offer || '') : '';
+  const fromRow = recommendation && recommendation.projectedSummary ? recommendation.projectedSummary : '';
+  return fromRow || fromAlternative;
 }
 
 /** 「工作」页只列已接受职业 + 一条世界通用工作，且不泄漏未接受职业。 */
@@ -1724,7 +1798,8 @@ async function verifyOriginArrival(cdp, gameId) {
       !!recommendation.actionRect && recommendation.actionRect.h >= 44 &&
       recommendation.actionText === recommendation.nextLabel &&
       recommendation.storyTitle === recommendation.projectedTitle &&
-      recommendation.storySummary === recommendation.projectedSummary &&
+      !!recommendation.storySummary && !!recommendation.projectedSummary &&
+      recommendation.storySummary === expectedPortStorySummary(recommendation) &&
       J(recommendation.tabs) === J(['home', 'work', 'journal']) &&
       recommendation.messages <= 1 && recommendation.clues <= 1,
     J(recommendation));
@@ -2163,11 +2238,13 @@ async function runFullFlow(cdp, browser, newPage, campaign, commissions) {
   let recommendation = await readPortRecommendation(cdp);
   requireFeature('PORT 港口首页提供真实可执行推荐单', recommendation.ok === true && !!recommendation.commissionId, J(recommendation));
   /* 0.22 告示板推荐行（data-town-goal、「你愿意完成」目标句、milestone/step 进展语言）已随告示板移除。
-     0.23 等价（更强）：StoryCard 标题/摘要/动作文案必须逐字等于真实 careerView({surface:'port'})
-     的 nextAction + 委托投影，且动作是 ≥44px 的玩家可点按钮；不自动接单。 */
+     0.23/T24 等价（更强）：StoryCard 标题/摘要/动作文案必须逐字等于真实 careerView({surface:'port'})
+     的 nextAction + 委托投影（或 T24 story.alternative 公开文案），且动作是 ≥44px 的玩家可点按钮；
+     摘要来源见 expectedPortStorySummary（DOM 不得自造文案）；不自动接单。 */
   gate('PORT 推荐卡标题/摘要/动作来自真实 port 投影且为公开文案',
     !!recommendation.storyTitle && recommendation.storyTitle === recommendation.projectedTitle &&
-      !!recommendation.storySummary && recommendation.storySummary === recommendation.projectedSummary &&
+      !!recommendation.storySummary && !!recommendation.projectedSummary &&
+      recommendation.storySummary === expectedPortStorySummary(recommendation) &&
       recommendation.storyState === 'current' && recommendation.actionVisible === true &&
       recommendation.actionDisabled === false && recommendation.actionText === recommendation.nextLabel &&
       !!recommendation.actionRect && recommendation.actionRect.h >= 44 && recommendation.actionRect.w >= 44,
@@ -2367,6 +2444,901 @@ async function runFullFlow(cdp, browser, newPage, campaign, commissions) {
   await verifyFirstArrivalConsumed(cdp);
 }
 
+/* ------------------------------------------------------------------ *
+ * 6b. 0.24 世界叙事真实浏览器场景（独立 Chrome profile、串行）
+ *
+ * 目标（T24 证据，不替代单职业终局场景）：
+ *   ① 真实起源路径接受职业 A，并用真实玩法推进到 C2 旗标；
+ *   ② 未接受 B 时港口「眼下/工作」不出现任何交汇文本或内部 id；
+ *   ③ 用 B 的真实线索入口接受 B，重开后 careerView.story.crossovers 真实出现该对；
+ *   ④ 首次展示经真实 RECORD_STORY_EVENT 落库一次，重开两次不重复渲染/重复写；
+ *   ⑤ 章节指引（港口经历页顶部 / 章节面板）来自公开文案，内部字段不进 DOM；
+ *   ⑥ 经历页人物筛选与 detail 回读（展开/收起后焦点回到原条目）。
+ * ------------------------------------------------------------------ */
+
+function guideInternalHits(text) {
+  const source = String(text || '');
+  return GUIDE_INTERNAL_PATTERNS.filter((pattern) => pattern.re.test(source)).map((pattern) => pattern.name);
+}
+
+/** 只读 careerView 投影（surface 由调用方指定），不写任何库行。 */
+async function readCareerProjection(cdp, surface) {
+  return cdp.evaluate(`(async () => {
+    const api = window.ArcadeCareer;
+    if (!api || typeof api.careerView !== 'function') return { ok: false, reason: 'careerView-missing' };
+    let view = null;
+    try { view = await api.careerView({ surface: ${J(surface)} }); } catch (err) { return { ok: false, reason: 'careerView-threw' }; }
+    if (!view) return { ok: false, reason: 'no-projection' };
+    const story = view.story && typeof view.story === 'object' ? view.story : {};
+    const crossovers = Array.isArray(story.crossovers) ? story.crossovers.map((row) => ({
+      eventId: row && row.eventId ? row.eventId : null,
+      texts: row && row.texts && typeof row.texts === 'object' ? {
+        invite: String(row.texts.invite || ''),
+        body: String(row.texts.body || ''),
+        receipt: String(row.texts.receipt || ''),
+      } : null,
+    })) : [];
+    const alternative = story.alternative && typeof story.alternative === 'object' ? {
+      narrativeNodeId: String(story.alternative.narrativeNodeId || ''),
+      texts: story.alternative.texts && typeof story.alternative.texts === 'object' ? {
+        offer: String(story.alternative.texts.offer || ''),
+        progress: String(story.alternative.texts.progress || ''),
+        receipt: String(story.alternative.texts.receipt || ''),
+        next: String(story.alternative.texts.next || ''),
+      } : null,
+    } : null;
+    return {
+      ok: true,
+      surface: ${J(surface)},
+      professions: (Array.isArray(view.professions) ? view.professions : []).map((row) => ({
+        professionId: row && row.professionId ? row.professionId : null,
+        displayName: row && row.displayName ? row.displayName : '',
+        state: row && row.state ? row.state : null,
+        active: !!(row && row.active === true),
+      })),
+      crossovers: crossovers,
+      alternative: alternative,
+      history: (Array.isArray(story.history) ? story.history : []).map((row) => ({
+        label: String((row && (row.label || row.text)) || ''),
+        kind: row && row.kind ? row.kind : null,
+        at: row && row.at ? row.at : null,
+        professionId: row && row.professionId ? row.professionId : null,
+        person: row && row.person ? row.person : null,
+        detail: row && row.detail && typeof row.detail === 'object' ? {
+          text: String(row.detail.text || ''),
+          person: String(row.detail.person || ''),
+        } : null,
+      })),
+    };
+  })()`);
+}
+
+/** 只读真实 storyEvents（测试页优先公开态快照，缺失回退 db.exportAll）。 */
+async function readStoryEvents(cdp) {
+  return cdp.evaluate(`(async () => {
+    const api = window.ArcadeCareer;
+    const test = window.__arcadeCareerTest;
+    const toRows = (events) => Object.keys(events && typeof events === 'object' ? events : {}).sort().map((eventId) => ({
+      eventId: eventId,
+      at: (events[eventId] && events[eventId].at) || null,
+      source: (events[eventId] && events[eventId].source) || null,
+    }));
+    if (test && typeof test.state === 'function') {
+      const state = test.state();
+      if (state && typeof state === 'object') {
+        return { ok: true, source: 'test-state', events: toRows(state.storyEvents) };
+      }
+    }
+    let db = test && typeof test.db === 'function' ? test.db() : (api && typeof api.db === 'function' ? api.db() : null);
+    if (!db || typeof db.exportAll !== 'function') return { ok: false, reason: 'db-unavailable' };
+    let exported = null;
+    try { exported = await db.exportAll(); } catch (err) { return { ok: false, reason: 'export-threw' }; }
+    if (!exported || exported.ok !== true || !exported.payload) return { ok: false, reason: 'export-failed' };
+    const stateRows = Array.isArray(exported.payload.state) ? exported.payload.state : [];
+    const discovery = stateRows.filter((row) => row && row.key === 'discovery')[0] || null;
+    const value = discovery && discovery.value && typeof discovery.value === 'object' ? discovery.value : {};
+    return { ok: true, source: 'db-export', events: toRows(value.storyEvents) };
+  })()`);
+}
+
+async function waitStoryEvent(cdp, eventId, timeout = 20000) {
+  const deadline = Date.now() + timeout;
+  let last = null;
+  while (Date.now() < deadline) {
+    last = await readStoryEvents(cdp);
+    if (last && last.ok === true && last.events.some((row) => row.eventId === eventId)) return last;
+    await sleep(150);
+  }
+  return last;
+}
+
+/**
+ * 包裹真实 DB 门面的 RECORD_STORY_EVENT 分支，统计真实落库调用与结果（不替换实现）。
+ * UI 侧调用的是 bridge 捕获的 recordWorldNarrativeEvent 引用，因此只能在 DB 层观测。
+ */
+async function watchWorldNarrativeRecords(cdp) {
+  return cdp.evaluate(`(() => {
+    const test = window.__arcadeCareerTest;
+    const api = window.ArcadeCareer;
+    const db = test && typeof test.db === 'function' ? test.db()
+      : (api && typeof api.db === 'function' ? api.db() : null);
+    if (!db || typeof db.applyProfessionEvent !== 'function') return false;
+    if (db.__flowRecordOriginal) return true;
+    const original = db.applyProfessionEvent;
+    db.__flowRecordOriginal = original;
+    db.__flowRecordCalls = [];
+    db.applyProfessionEvent = function (action) {
+      const eventId = action && action.action === 'RECORD_STORY_EVENT' && action.input && action.input.eventId
+        ? action.input.eventId : null;
+      const returned = original.call(db, action);
+      if (eventId) {
+        Promise.resolve(returned).then(
+          (result) => db.__flowRecordCalls.push({ eventId: eventId, action: action.action, result: result }),
+          (err) => db.__flowRecordCalls.push({ eventId: eventId, action: action.action, error: String((err && err.message) || err) })
+        );
+      }
+      return returned;
+    };
+    return true;
+  })()`);
+}
+
+async function readWorldNarrativeRecords(cdp) {
+  return cdp.evaluate(`(() => {
+    const test = window.__arcadeCareerTest;
+    const api = window.ArcadeCareer;
+    const db = test && typeof test.db === 'function' ? test.db()
+      : (api && typeof api.db === 'function' ? api.db() : null);
+    const rows = db && Array.isArray(db.__flowRecordCalls) ? db.__flowRecordCalls : [];
+    return rows.map((row) => ({
+      eventId: row && row.eventId ? row.eventId : null,
+      action: row && row.action ? row.action : null,
+      result: row && row.result ? {
+        ok: row.result.ok === true,
+        duplicate: row.result.duplicate === true,
+        reason: row.result.reason || null,
+      } : null,
+      error: row && row.error ? row.error : null,
+    }));
+  })()`);
+}
+
+/** 港口面板：投影 + 三个 tab 的可见文本 + 真实交汇节点。 */
+async function readPortSurface(cdp) {
+  return cdp.evaluate(`(async () => {
+    const api = window.ArcadeCareer;
+    const panel = document.querySelector('[data-career-panel="town"]');
+    const textOf = (node) => (node && node.textContent ? node.textContent.replace(/\\s+/g, ' ').trim() : '');
+    let view = null;
+    try { view = await api.careerView({ surface: 'port' }); } catch (err) { view = null; }
+    const tabs = panel ? panel.querySelector('[role="tablist"]') : null;
+    const nodes = panel ? Array.from(panel.querySelectorAll('[data-port-crossover]')) : [];
+    return {
+      ok: !!view,
+      selectedTab: tabs ? tabs.getAttribute('data-selected-id') : null,
+      panelText: textOf(panel),
+      homeText: textOf(panel && panel.querySelector('[data-port-tabpanel="home"]')),
+      workText: textOf(panel && panel.querySelector('[data-port-tabpanel="work"]')),
+      journalText: textOf(panel && panel.querySelector('[data-port-tabpanel="journal"]')),
+      crossoverNodes: nodes.length,
+      crossoverTexts: nodes.map((node) => textOf(node)),
+    };
+  })()`);
+}
+
+async function pressPortTab(cdp, tab, label) {
+  await pressVisible(cdp, '[data-career-panel="town"] [role="tablist"] [data-tab=' + J(tab) + ']', label);
+  await cdp.waitFor(`(() => {
+    const tabs = document.querySelector('[data-career-panel="town"] [role="tablist"]');
+    return !!tabs && tabs.getAttribute('data-selected-id') === ${J(tab)};
+  })()`, { timeout: 10000 });
+}
+
+/** 与 pressVisible 相同的真实鼠标点击，但用可见文本定位（筛选组在 <details> 内）。 */
+async function pressVisibleByText(cdp, selector, text, label) {
+  const target = await cdp.waitFor(`(() => {
+    const el = [...document.querySelectorAll(${J(selector)})].find((node) =>
+      (node.innerText || '').indexOf(${J(text)}) >= 0 && !node.disabled && node.getClientRects().length &&
+      getComputedStyle(node).visibility === 'visible');
+    if (!el) return null;
+    el.scrollIntoView({ block: 'center', inline: 'nearest', behavior: 'instant' });
+    const rect = el.getBoundingClientRect();
+    const x = (Math.max(0, rect.left) + Math.min(innerWidth, rect.right)) / 2;
+    const y = (Math.max(0, rect.top) + Math.min(innerHeight, rect.bottom)) / 2;
+    if (!el.contains(document.elementFromPoint(x, y))) return null;
+    return { x, y, text: (el.innerText || '').trim() };
+  })()`, { timeout: 10000 }).catch((err) => { throw new Error(label + ' 不可点击', { cause: err }); });
+  await cdp.send('Input.dispatchMouseEvent', { type: 'mousePressed', x: target.x, y: target.y, button: 'left', clickCount: 1 });
+  await cdp.send('Input.dispatchMouseEvent', { type: 'mouseReleased', x: target.x, y: target.y, button: 'left', clickCount: 1 });
+  return target;
+}
+
+/** 港口装载完成（shell normal + 眼下故事卡）后再取样，避免读到装载期空帧。 */
+async function settlePort(cdp, label) {
+  step('port-settle:' + label);
+  await cdp.waitFor(`(() => {
+    const panel = document.querySelector('[data-career-panel="town"]');
+    const shell = panel && panel.querySelector('.ac-career-ui__panel');
+    return !!shell && shell.getAttribute('data-shell-state') === 'normal';
+  })()`, { timeout: 15000 });
+  await cdp.waitFor(`!!document.querySelector('[data-career-panel="town"] [data-port-tabpanel="home"] [data-story-state]')`, { timeout: 15000 });
+}
+
+async function closePort(cdp, label) {
+  step('port-close:' + label);
+  /* 港口没有公开 closeCareerPanel；真实关闭入口是 UI 模块自身的 close()（与 checkPortTools 同入口）。 */
+  await cdp.evaluate(`(() => {
+    const ui = window.ArcadeCareerUI && window.ArcadeCareerUI.town;
+    if (ui && typeof ui.close === 'function') { try { ui.close(); } catch (err) { /* ignore */ } return true; }
+    if (window.ArcadeCareer && typeof window.ArcadeCareer.closeCareerPanel === 'function') { window.ArcadeCareer.closeCareerPanel(); return true; }
+    return false;
+  })()`);
+  await cdp.waitFor('!document.querySelector(`[data-career-panel="town"]`)', { timeout: 10000 });
+  await sleep(120);
+}
+
+const closeCareerPanelByName = async (cdp, name) => {
+  /* 面板 attr 用 kebab-case，UI 模块全局名是 camelCase（world-state → worldState）。 */
+  const moduleName = name === 'world-state' ? 'worldState'
+    : name === 'clue-surface' ? 'clueSurface' : name;
+  await cdp.evaluate(`(() => {
+    const ui = window.ArcadeCareerUI && window.ArcadeCareerUI[${J(moduleName)}];
+    if (ui && typeof ui.close === 'function') { try { ui.close(); } catch (err) { /* ignore */ } }
+    return true;
+  })()`);
+  await cdp.waitFor(`!document.querySelector('[data-career-panel=${J(name)}]')`, { timeout: 10000 });
+  await sleep(120);
+};
+
+/** 场景步骤 1：真实起源路径接受 A，并用真实玩法推进到 C2。 */
+async function phaseCrossoverIdentityAndChapter(cdp, campaign, commissions) {
+  step('xover:origin-to-town');
+  await runOriginToTown(cdp, CROSSOVER_A_GAME);
+  const identity = await careerIdentitySnapshot(cdp);
+  gate('XOVER 起源路径用真实 acceptProfessionInvitation 接受职业 A 且只建立 A',
+    identity.ok === true && identity.originGameId === CROSSOVER_A_GAME &&
+      identity.activeProfessionId === CROSSOVER_A_PROFESSION &&
+      identity.professions.length === 1 &&
+      identity.professions[0].professionId === CROSSOVER_A_PROFESSION &&
+      identity.professions[0].state === 'accepted' && identity.run === null,
+    J({ identity, expected: CROSSOVER_A_PROFESSION }));
+
+  step('xover:advance-C2');
+  let recommendation = await readPortRecommendation(cdp);
+  requireFeature('XOVER 到港后港口首页给出真实推荐单', recommendation.ok === true && !!recommendation.commissionId, J(recommendation));
+  const progress = [];
+  for (let index = 0; index < WORLD_WORK_ROUTE.length; index += 1) {
+    const expected = WORLD_WORK_ROUTE[index];
+    const commissionId = recommendation.commissionId;
+    const label = 'xover-order-' + (index + 1);
+    const run = await acceptRecommended(cdp, commissionId, label);
+    await driveCommission(cdp, commissionId, label);
+    const card = await waitReceipt(cdp, run.ticketId);
+    requireFeature('XOVER ' + label + ' ' + commissionId + ' 显示本票成功收据',
+      card?.state === 'success' && card.runId === run.ticketId, J(card));
+    const after = await verifyOrderProgress(cdp, label, commissionId, run.ticketId, expected.expectFlags,
+      expected.expectFlags.length ? 'milestone' : 'step', campaign, commissions);
+    progress.push({ commissionId, expectedFlags: expected.expectFlags, current: after.view.currentChapter });
+    await phaseReceipt(cdp, label, expected.expectFlags, card);
+    if (expected.expectFlags.includes(CROSSOVER_REQUIRED_FLAG)) {
+      gate('XOVER 真实玩法推进到 C2（' + CROSSOVER_REQUIRED_FLAG + '）且未触碰终局', true, J(progress));
+      return { recommendation, progress, reached: true };
+    }
+    await cdp.waitFor(`!!document.querySelector('[data-career-panel="town"] [data-port-tabpanel="home"] button[id^="port-story-"]')`, { timeout: 15000 });
+    recommendation = await readPortRecommendation(cdp);
+    requireFeature('XOVER 第 ' + (index + 2) + ' 单推荐仍真实可执行',
+      recommendation.ok === true && !!recommendation.commissionId, J(recommendation));
+  }
+  gate('XOVER 真实玩法推进到 C2（' + CROSSOVER_REQUIRED_FLAG + '）且未触碰终局', false, J(progress));
+  return { progress, reached: false };
+}
+
+/** 场景步骤 2：未接受 B 时港口「眼下/工作/经历」不得出现交汇文本或内部 id。 */
+async function phaseCrossoverHiddenBeforeAccept(cdp) {
+  step('xover:hidden-before-accept');
+  requireFeature('XOVER 交汇内容与白名单行来自同源 world-narrative.json',
+    !!CROSSOVER_PAIR && !!CROSSOVER_JOURNAL_ROW &&
+      CROSSOVER_PAIR.texts && CROSSOVER_PAIR.texts.invite && CROSSOVER_PAIR.texts.body,
+    J({ eventId: CROSSOVER_EVENT_ID, pair: !!CROSSOVER_PAIR, journal: !!CROSSOVER_JOURNAL_ROW }));
+  if (!(await safeHasPort(cdp))) await openPort(cdp, 'xover-hidden-port');
+  await settlePort(cdp, 'xover-hidden-home');
+  const home = await readPortSurface(cdp);
+  const homeProjection = await readCareerProjection(cdp, 'port');
+  await pressPortTab(cdp, 'work', 'xover 工作页');
+  await cdp.waitFor(`!!document.querySelector('[data-career-panel="town"] [data-port-tabpanel="work"] [data-port-profession]')`, { timeout: 15000 });
+  await sleep(150);
+  const work = await readPortSurface(cdp);
+  await pressPortTab(cdp, 'journal', 'xover 经历页');
+  await waitJournalTab(cdp, 'xover-hidden-journal');
+  const journal = await readPortSurface(cdp);
+  await pressPortTab(cdp, 'home', 'xover 回到眼下');
+
+  const pairTexts = [CROSSOVER_PAIR.texts.invite, CROSSOVER_PAIR.texts.body, CROSSOVER_PAIR.texts.receipt, CROSSOVER_PAIR.texts.decline]
+    .filter((text) => typeof text === 'string' && text);
+  const visibleTexts = [home.panelText, work.panelText, journal.panelText].join('\n');
+  const leakedTexts = pairTexts.filter((text) => visibleTexts.indexOf(text) >= 0);
+  const leakedIds = ['crossover:', CROSSOVER_EVENT_ID].filter((needle) => visibleTexts.indexOf(needle) >= 0);
+  const bName = CAREER_PROFESSION_NAMES.filter((row) => row.id === CROSSOVER_B_PROFESSION)[0];
+  const bDisplayName = bName ? bName.name : '';
+  const leakedProfession = [bDisplayName, CROSSOVER_B_PROFESSION].filter((needle) => needle && visibleTexts.indexOf(needle) >= 0);
+  const internalHits = guideInternalHits(visibleTexts);
+
+  gate('XOVER 未接受 B 时 careerView.story 不产出交汇，且只承认已接受 A',
+    homeProjection.ok === true && homeProjection.crossovers.length === 0 &&
+      !homeProjection.professions.some((row) => row.professionId === CROSSOVER_B_PROFESSION) &&
+      homeProjection.professions.some((row) => row.professionId === CROSSOVER_A_PROFESSION),
+    J({ crossovers: homeProjection.crossovers, professions: homeProjection.professions }));
+  gate('XOVER 未接受 B 时港口眼下/工作/经历不出现任何交汇公开文本',
+    leakedTexts.length === 0 && home.crossoverNodes === 0 && work.crossoverNodes === 0 && journal.crossoverNodes === 0,
+    J({ leakedTexts, nodes: { home: home.crossoverNodes, work: work.crossoverNodes, journal: journal.crossoverNodes } }));
+  gate('XOVER 未接受 B 时港口不出现内部事件 id（crossover:）',
+    leakedIds.length === 0 && internalHits.length === 0,
+    J({ leakedIds, internalHits, sample: home.panelText.slice(0, 320) }));
+  gate('XOVER 未接受 B 时港口不泄漏 B 的职业名/内部职业 id',
+    leakedProfession.length === 0,
+    J({ leakedProfession, bDisplayName, accepted: homeProjection.professions.map((row) => row.professionId) }));
+  return { home, work, journal, homeProjection, leakedTexts, leakedIds };
+}
+
+async function safeHasPort(cdp) {
+  return cdp.evaluate('!!document.querySelector(`[data-career-panel="town"]`)');
+}
+
+async function waitJournalTab(cdp, label) {
+  step('journal-wait:' + label);
+  let loaded = true;
+  try {
+    await cdp.waitFor(`(() => {
+      const content = document.querySelector('[data-career-panel="town"] [data-port-tabpanel="journal"]');
+      if (!content) return false;
+      if (content.textContent.indexOf('正在整理港口内容') >= 0) return false;
+      return !!content.querySelector('[data-journal-surface="experience"]') ||
+        !!content.querySelector('[data-timeline-state]') ||
+        content.textContent.indexOf('读不出来') >= 0;
+    })()`, { timeout: 20000 });
+  } catch (err) {
+    loaded = false;
+  }
+  const diag = await cdp.evaluate(`(() => {
+    const content = document.querySelector('[data-career-panel="town"] [data-port-tabpanel="journal"]');
+    return {
+      present: !!content,
+      text: content ? content.textContent.replace(/\\s+/g, ' ').trim().slice(0, 240) : null,
+      surface: !!(content && content.querySelector('[data-journal-surface="experience"]')),
+      timeline: content && content.querySelector('[data-timeline-state]') ? content.querySelector('[data-timeline-state]').getAttribute('data-timeline-state') : null,
+    };
+  })()`);
+  gate('XOVER 港口经历页真实装载 [' + label + ']', loaded === true, J(diag));
+  return loaded;
+}
+
+/** 场景步骤 3：通过 B 的真实线索入口（gomoku 经典对局 → 线索 chip → 信箱邀请）接受 B。 */
+async function phaseAcceptSecondProfession(cdp, label) {
+  step('xover:accept-b');
+  await go(cdp, gameUrl(CROSSOVER_B_GAME), label + '-game');
+  await waitBridge(cdp, label + '-game', true);
+  await configureCommissionCatalog(cdp, label + '-game');
+  await startOverlay(cdp, label + '-play');
+  const played = await cdp.evaluate('window.__arcadeTest.playToEnd()');
+  await cdp.waitFor('!!(window.__arcadeCareerTest.info && window.__arcadeCareerTest.info().finished === true)', { timeout: 30000 });
+  const finish = await cdp.evaluate('window.__arcadeCareerTest.lastFinish()');
+  gate('XOVER B 的真实玩法自然结算并提交 classic finish',
+    !!(finish && finish.input && finish.input.mode === 'classic' && finish.result && finish.result.persisted === true),
+    J({ played, finish: finish && { input: finish.input, result: finish.result } }));
+  const chip = await cdp.waitFor(`(() => {
+    const wrap = document.querySelector('[data-career-clue=${J(CROSSOVER_B_CLUE)}]');
+    const node = wrap && wrap.querySelector('button.ac-career-ui__clue');
+    if (!node || !node.getClientRects().length) return null;
+    const rect = node.getBoundingClientRect();
+    node.focus();
+    return {
+      text: (node.textContent || '').replace(/\\s+/g, ' ').trim(),
+      state: node.getAttribute('data-clue-state'),
+      w: Math.round(rect.width),
+      h: Math.round(rect.height),
+      focused: document.activeElement === node,
+    };
+  })()`, { timeout: 25000 });
+  gate('XOVER 第二职业的线索 chip 来自真实结算且可交互',
+    !!(chip && chip.h >= 44 && chip.w >= 44 && chip.text && chip.focused === true),
+    J(chip));
+  await pressVisible(cdp, `[data-career-clue=${J(CROSSOVER_B_CLUE)}] button.ac-career-ui__clue`, label + ' 线索 chip');
+  await cdp.waitFor(`!!document.querySelector('[data-career-panel="mailbox"]')`, { timeout: 20000 });
+  const invitation = await cdp.waitFor(`(() => {
+    const api = window.ArcadeCareer;
+    const row = api && typeof api.invitationForClue === 'function' ? api.invitationForClue(${J(CROSSOVER_B_CLUE)}) : null;
+    if (!row) return null;
+    return {
+      professionId: row.professionId || null,
+      gameId: row.gameId || null,
+      state: row.state || null,
+      canAccept: row.canAccept === true,
+      firstArrival: row.firstArrival === true,
+    };
+  })()`, { timeout: 20000 });
+  await cdp.waitFor(`(() => {
+    const button = document.querySelector('[data-career-panel="mailbox"] [data-action="accept-invitation"]');
+    return !!button && !button.hidden && !button.disabled && button.getClientRects().length > 0;
+  })()`, { timeout: 20000 });
+  const mailbox = await panelSnapshot(cdp, 'mailbox');
+  gate('XOVER 第二职业的邀请面来自真实线索映射（glimpsed/read，可接受）',
+    !!invitation && invitation.professionId === CROSSOVER_B_PROFESSION && invitation.gameId === CROSSOVER_B_GAME &&
+      invitation.state === 'read' && invitation.canAccept === true && invitation.firstArrival === false &&
+      !!mailbox && mailbox.text.length > 20,
+    J({ invitation, mailbox: mailbox && mailbox.text.slice(0, 320) }));
+  await watchAcceptInvitation(cdp);
+  await pressVisible(cdp, '[data-career-panel="mailbox"] [data-action="accept-invitation"]', label + ' 接受职业 B');
+  const afterAccept = await cdp.waitFor(`(async () => {
+    const api = window.ArcadeCareer;
+    const view = await api.careerView({ surface: 'port' });
+    const rows = view && Array.isArray(view.professions) ? view.professions : [];
+    const target = rows.filter((row) => row && row.professionId === ${J(CROSSOVER_B_PROFESSION)})[0] || null;
+    if (!target || ['accepted', 'developed', 'completed'].indexOf(String(target.state)) < 0) return null;
+    return {
+      professions: rows.map((row) => ({ professionId: row.professionId, state: row.state, active: row.active === true })),
+      run: api.commissionRun || null,
+    };
+  })()`, { timeout: 25000 });
+  const acceptCalls = await readAcceptInvitationCalls(cdp);
+  const acceptedCall = acceptCalls.filter((row) => row.result && row.result.ok === true)[0] || null;
+  gate('XOVER 第二职业通过真实 acceptProfessionInvitation 接受，继承原身份且不自动接单',
+    acceptCalls.length === 1 && !!acceptedCall &&
+      acceptedCall.input.professionId === CROSSOVER_B_PROFESSION &&
+      acceptedCall.input.gameId === CROSSOVER_B_GAME &&
+      acceptedCall.result.created !== true &&
+      afterAccept.run === null && afterAccept.professions.length === 2 &&
+      afterAccept.professions.filter((row) => ['accepted', 'developed', 'completed'].indexOf(String(row.state)) >= 0).length === 2,
+    J({ acceptCalls, afterAccept, invitation }));
+  await closeCareerPanelByName(cdp, 'mailbox');
+  return { invitation, afterAccept, acceptCalls };
+}
+
+/**
+ * 场景步骤 4+5：重开港口 → careerView.story.crossovers 真实出现该对、
+ * 首次展示落库一次；关页重开两次不重复渲染/不重复写。
+ */
+async function phaseCrossoverSurfaceAndRecordOnce(cdp) {
+  step('xover:surface-and-record');
+  await go(cdp, gameUrl('pendulum-tower'), 'xover-reopen-1');
+  await waitBridge(cdp, 'xover-reopen-1', true);
+  await configureCommissionCatalog(cdp, 'xover-reopen-1');
+  const watched = await watchWorldNarrativeRecords(cdp);
+  requireFeature('XOVER 可观测真实落库链路 career-db.applyProfessionEvent/RECORD_STORY_EVENT', watched === true, 'db applyProfessionEvent missing');
+  /* 港口「眼下」首次渲染会立刻落库并把事件标为历史；为保证「打开前投影里有该对」
+     是确定性事实，先打开并关闭一次真实信箱面板（与港口同一条 openCareerUi 预热链，
+     会配置 storyEvidence/campaign 真实事实，但不会渲染港口、也不会写交汇），
+     再用同一 careerView 门面读取 port/journal 两个面。 */
+  const mailboxOpened = await cdp.evaluate(`(async () => {
+    const api = window.ArcadeCareer;
+    if (!api || typeof api.openMailbox !== 'function') return { ok: false, reason: 'openMailbox-missing' };
+    const opened = await api.openMailbox();
+    return { ok: !!(opened && opened.ok !== false) };
+  })()`);
+  requireFeature('XOVER 预热真实面板（信箱）可用', mailboxOpened.ok === true, J(mailboxOpened));
+  await cdp.waitFor(`!!document.querySelector('[data-career-panel="mailbox"]')`, { timeout: 15000 });
+  await closeCareerPanelByName(cdp, 'mailbox');
+  const beforeRender = await cdp.evaluate(`(async () => {
+    const api = window.ArcadeCareer;
+    const pick = (view) => {
+      const rows = view && view.story && Array.isArray(view.story.crossovers) ? view.story.crossovers : [];
+      return rows.map((row) => ({
+        eventId: row && row.eventId ? row.eventId : null,
+        texts: row && row.texts ? {
+          invite: String(row.texts.invite || ''),
+          body: String(row.texts.body || ''),
+          receipt: String(row.texts.receipt || ''),
+        } : null,
+      }));
+    };
+    const portView = await api.careerView({ surface: 'port' });
+    const journalView = await api.careerView({ surface: 'journal' });
+    return { port: pick(portView), journal: pick(journalView) };
+  })()`);
+  const prePortCross = beforeRender.port[0] || null;
+  gate('XOVER 双方接受后 careerView.story.crossovers 真实出现该对（open 面，渲染前只读）',
+    beforeRender.port.length === 1 && !!prePortCross &&
+      prePortCross.eventId === CROSSOVER_EVENT_ID && !!prePortCross.texts &&
+      prePortCross.texts.invite === CROSSOVER_PAIR.texts.invite &&
+      prePortCross.texts.body === CROSSOVER_PAIR.texts.body &&
+      (prePortCross.texts.receipt === (CROSSOVER_PAIR.texts.receipt || '') || !CROSSOVER_PAIR.texts.receipt),
+    J({ beforeRender, expectedEventId: CROSSOVER_EVENT_ID }));
+  gate('XOVER 交汇同时在 journal 面出现（经历白名单面 gate）',
+    beforeRender.journal.length === 1 && beforeRender.journal[0].eventId === CROSSOVER_EVENT_ID,
+    J({ journal: beforeRender.journal }));
+  await openPort(cdp, 'xover-reopen-1');
+  await settlePort(cdp, 'xover-reopen-1');
+  const port = await readPortSurface(cdp);
+  gate('XOVER 港口「眼下」渲染真实交汇 invite/body 公开文案且节点唯一',
+    port.crossoverNodes === 1 &&
+      homeContainsAll(port.homeText, [CROSSOVER_PAIR.texts.invite, CROSSOVER_PAIR.texts.body]) &&
+      homeContainsAll(port.crossoverTexts[0] || '', [CROSSOVER_PAIR.texts.invite, CROSSOVER_PAIR.texts.body]),
+    J({ nodes: port.crossoverNodes, texts: port.crossoverTexts, home: port.homeText.slice(0, 480) }));
+  gate('XOVER 港口 DOM 不渲染交汇内部 id（eventId/pairId/crossover:）',
+    guideInternalHits(port.panelText).length === 0,
+    J({ hits: guideInternalHits(port.panelText), sample: port.panelText.slice(0, 480) }));
+
+  const eventsFirst = await waitStoryEvent(cdp, CROSSOVER_EVENT_ID, 8000);
+  const firstRows = eventsFirst && eventsFirst.ok === true ? eventsFirst.events.filter((row) => row.eventId === CROSSOVER_EVENT_ID) : [];
+  const callsFirst = await readWorldNarrativeRecords(cdp);
+  gate('XOVER 首次展示经真实 RECORD_STORY_EVENT 落库一次（source=world、合法 at）',
+    firstRows.length === 1 && typeof firstRows[0].at === 'string' && /^\d{4}-\d{2}-\d{2}T/.test(firstRows[0].at) &&
+      firstRows[0].source === 'world' &&
+      callsFirst.length === 1 && callsFirst[0].eventId === CROSSOVER_EVENT_ID &&
+      !!callsFirst[0].result && callsFirst[0].result.ok === true && callsFirst[0].result.duplicate === false,
+    J({ events: eventsFirst && eventsFirst.events, calls: callsFirst }));
+  const firstAt = firstRows.length ? firstRows[0].at : null;
+
+  await closePort(cdp, 'xover-reopen-1');
+  await openPort(cdp, 'xover-reopen-2');
+  await settlePort(cdp, 'xover-reopen-2');
+  const second = await readPortSurface(cdp);
+  const secondProjection = await readCareerProjection(cdp, 'port');
+  const secondEvents = await readStoryEvents(cdp);
+  const secondCalls = await readWorldNarrativeRecords(cdp);
+  const secondRows = secondEvents && secondEvents.ok === true ? secondEvents.events.filter((row) => row.eventId === CROSSOVER_EVENT_ID) : [];
+  gate('XOVER 关闭重开港口不再重复渲染交汇（resolver 已按历史事件收口）',
+    second.crossoverNodes === 0 && secondProjection.crossovers.length === 0 &&
+      second.homeText.indexOf(CROSSOVER_PAIR.texts.invite) < 0,
+    J({ nodes: second.crossoverNodes, crossovers: secondProjection.crossovers, home: second.homeText.slice(0, 320) }));
+  gate('XOVER 第二次重开不重复落库（仍一行、at 不变、无新写调用）',
+    secondRows.length === 1 && secondRows[0].at === firstAt &&
+      secondCalls.length === callsFirst.length,
+    J({ events: secondEvents && secondEvents.events, calls: secondCalls.map((row) => row.eventId), firstAt }));
+
+  await go(cdp, gameUrl('pendulum-tower'), 'xover-reopen-3');
+  await waitBridge(cdp, 'xover-reopen-3', true);
+  await configureCommissionCatalog(cdp, 'xover-reopen-3');
+  await openPort(cdp, 'xover-reopen-3');
+  await settlePort(cdp, 'xover-reopen-3');
+  const third = await readPortSurface(cdp);
+  const thirdProjection = await readCareerProjection(cdp, 'port');
+  const thirdEvents = await readStoryEvents(cdp);
+  const thirdRows = thirdEvents && thirdEvents.ok === true ? thirdEvents.events.filter((row) => row.eventId === CROSSOVER_EVENT_ID) : [];
+  gate('XOVER 整页重开后仍只有一条交汇经历、港口不重播、at 不变',
+    third.crossoverNodes === 0 && thirdProjection.crossovers.length === 0 &&
+      thirdRows.length === 1 && thirdRows[0].at === firstAt,
+    J({ nodes: third.crossoverNodes, crossovers: thirdProjection.crossovers, events: thirdEvents && thirdEvents.events, firstAt }));
+  return { firstAt, port, prePortCross };
+}
+
+function homeContainsAll(text, needles) {
+  const source = String(text || '');
+  return needles.filter((needle) => typeof needle === 'string' && needle).every((needle) => source.indexOf(needle) >= 0);
+}
+
+/** 场景步骤 5：章节指引（港口经历页顶部 + 章节面板）与经历页回读。 */
+async function phaseChapterGuideAndJournal(cdp) {
+  step('xover:chapter-guide');
+  if (!(await safeHasPort(cdp))) await openPort(cdp, 'xover-guide-port');
+  await settlePort(cdp, 'xover-guide-port');
+  await pressPortTab(cdp, 'journal', 'xover 章节指引');
+  const loaded = await waitJournalTab(cdp, 'xover-guide');
+  let guide = null;
+  if (loaded) {
+    guide = await cdp.evaluate(`(async () => {
+      const api = window.ArcadeCareer;
+      const panel = document.querySelector('[data-career-panel="town"]');
+      const content = panel ? panel.querySelector('[data-port-tabpanel="journal"]') : null;
+      const textOf = (node) => (node && node.textContent ? node.textContent.replace(/\\s+/g, ' ').trim() : '');
+      const node = content ? content.querySelector('[data-port-chapter-guide]') : null;
+      const facade = api.worldNarrative;
+      let resolved = { ok: false, reason: 'facade-missing', nodes: [], chapterId: null };
+      if (facade && typeof facade.resolveWorldAlternatives === 'function') {
+        const result = facade.resolveWorldAlternatives({});
+        resolved = {
+          ok: !!result,
+          chapterId: result && result.chapterId || null,
+          nodes: result && Array.isArray(result.nodes) ? result.nodes.map((row) => ({
+            narrativeNodeId: row && row.narrativeNodeId ? row.narrativeNodeId : '',
+            texts: row && row.texts ? { offer: String(row.texts.offer || ''), next: String(row.texts.next || '') } : null,
+          })) : [],
+        };
+      }
+      return {
+        present: !!node,
+        text: node ? textOf(node) : '',
+        captions: node ? Array.from(node.querySelectorAll(':scope > .ac-career-ui__caption')).map((item) => textOf(item)) : [],
+        alternativeList: !!(node && node.querySelector('[data-port-chapter-alternatives]')),
+        alternatives: node ? Array.from(node.querySelectorAll('[data-port-chapter-alternatives] li')).map((item) => textOf(item)) : [],
+        resolved: resolved,
+      };
+    })()`);
+  }
+  const guideHits = guide
+    ? guideInternalHits([guide.text, guide.captions.join(' '), guide.alternatives.join(' ')].join('\n'))
+    : ['guide-missing'];
+  /* 每条替代说明的「下一步：X」都必须有公开文案；且至少一条与内容侧 world-narrative
+     节点的 offer+next 成对一致（证明章节指引绑定真实内容，而不是 UI 自造）。 */
+  const guideRows = guide && Array.isArray(guide.alternatives) ? guide.alternatives : [];
+  const guideRowNexts = guideRows.map((row) => {
+    const match = String(row || '').match(/下一步：(.+)$/);
+    return match ? match[1].trim() : '';
+  });
+  const boundGuideRows = guideRows.filter((row, index) => {
+    const next = guideRowNexts[index];
+    if (!next) return false;
+    return WORLD_ALTERNATIVE_TEXT_PAIRS.some((pair) => pair.next === next && !!pair.offer && row.indexOf(pair.offer) >= 0);
+  });
+  gate('XOVER 港口经历页顶部章节指引节点存在且只渲染公开前置/替代说明',
+    !!guide && guide.present === true && !!guide.text && guide.text.length > 0 &&
+      guide.captions.length >= 1 && guideRowNexts.every((next) => !!next) &&
+      boundGuideRows.length >= 1,
+    J({
+      guide: guide && { present: guide.present, text: guide.text.slice(0, 600), captions: guide.captions.map((row) => row.slice(0, 200)), alternatives: guideRows },
+      guideHits,
+      guideRowNexts,
+      boundGuideRows: boundGuideRows.length,
+      contentPairs: WORLD_ALTERNATIVE_TEXT_PAIRS.length,
+    }));
+  gate('XOVER 章节指引不含内部字段（narrativeNodeId/anchor/requirement/tokens/altn./章节码）',
+    guideHits.length === 0,
+    J({ hits: guideHits, sample: guide && guide.text.slice(0, 480) }));
+  if (guide && guide.resolved && guide.resolved.nodes.some((row) => row.narrativeNodeId)) {
+    const ids = guide.resolved.nodes.map((row) => row.narrativeNodeId).filter(Boolean);
+    gate('XOVER 真实 resolver 节点 id 未进入港口 DOM',
+      ids.every((id) => guide.text.indexOf(id) < 0), J({ ids }));
+  }
+
+  step('xover:chapter-panel');
+  await closePort(cdp, 'xover-guide-port');
+  await cdp.evaluate('window.ArcadeCareer.openCampaign()');
+  await waitPanel(cdp, 'world-state', 20000);
+  await cdp.waitFor(`!!document.querySelector('[data-career-panel="world-state"] [data-chapter-id]')`, { timeout: 15000 });
+  const world = await cdp.evaluate(`(() => {
+    const panel = document.querySelector('[data-career-panel="world-state"]');
+    const textOf = (node) => (node && node.textContent ? node.textContent.replace(/\\s+/g, ' ').trim() : '');
+    const rows = Array.from(panel.querySelectorAll('[data-chapter-id]')).map((row) => ({
+      chapterId: row.getAttribute('data-chapter-id'),
+      state: row.getAttribute('data-state'),
+      requirement: textOf(row.querySelector('.ac-career-world__requirement')),
+      completion: textOf(row.querySelector('.ac-career-world__completion')),
+      alternativeCount: (() => {
+        const list = row.querySelector('.ac-career-world__alternatives');
+        return list ? list.getAttribute('data-alternative-count') : null;
+      })(),
+      alternatives: Array.from(row.querySelectorAll('.ac-career-world__alternative')).map((item) => textOf(item)),
+    }));
+    return { text: textOf(panel), rows };
+  })()`);
+  const guidingRows = world.rows.filter((row) => row.requirement || row.completion);
+  const worldHits = guideInternalHits(world.text);
+  gate('XOVER 章节面板章节行显示真实前置/完成说明',
+    guidingRows.length >= 1 && guidingRows.every((row) => (row.requirement || row.completion).length > 0),
+    J({ guidingRows, rows: world.rows.map((row) => ({ chapterId: row.chapterId, state: row.state, alternativeCount: row.alternativeCount })) }));
+  gate('XOVER 章节面板不含内部字段/内部 id', worldHits.length === 0, J({ hits: worldHits, sample: world.text.slice(0, 480) }));
+  /* 同一公开前置文本必须跨两个面板一致（港口经历页顶部 vs 章节面板），证明同源只读。 */
+  if (guide && guidingRows.length) {
+    const worldTexts = guidingRows.flatMap((row) => [row.requirement, row.completion]).filter(Boolean);
+    gate('XOVER 港口经历页顶部的章节说明与章节面板同源一致',
+      worldTexts.some((text) => guide.text.indexOf(text) >= 0),
+      J({ portGuide: guide.text.slice(0, 320), worldTexts }));
+  }
+  await closeCareerPanelByName(cdp, 'world-state');
+
+  step('xover:journal-experience');
+  await openPort(cdp, 'xover-journal-port');
+  await settlePort(cdp, 'xover-journal-port');
+  await pressPortTab(cdp, 'journal', 'xover 经历回读');
+  await waitJournalTab(cdp, 'xover-journal-readback');
+  const journalView = await readCareerProjection(cdp, 'journal');
+  /* 诊断：经历增强模块是否真实挂载/可渲染；不可渲染时港口会静默退回 0.23 时间线。 */
+  const journalDiag = await cdp.evaluate(`(async () => {
+    const ui = window.ArcadeCareerUI || {};
+    const mod = ui.journal;
+    const components = ui.components;
+    const api = window.ArcadeCareer;
+    const out = {
+      module: !!(mod && typeof mod.render === 'function'),
+      components: !!(components && typeof components.JournalTimeline === 'function' && typeof components.SecondaryAction === 'function'),
+      moduleKeys: mod ? Object.keys(mod) : [],
+    };
+    if (!out.module) return out;
+    try {
+      const view = await api.careerView({ surface: 'journal' });
+      const rendered = mod.render({ view: view, components: components });
+      out.render = rendered ? {
+        nodeType: rendered.nodeType,
+        surface: rendered.getAttribute ? rendered.getAttribute('data-journal-surface') : null,
+        entries: rendered.querySelectorAll ? rendered.querySelectorAll('[data-journal-entry]').length : 0,
+        timeline: rendered.querySelector && rendered.querySelector('[data-timeline-state]')
+          ? rendered.querySelector('[data-timeline-state]').getAttribute('data-timeline-state') : null,
+      } : null;
+    } catch (err) {
+      out.error = String((err && err.message) || err);
+      out.stack = String((err && err.stack) || '').slice(0, 500);
+    }
+    return out;
+  })()`);
+  const journal = await cdp.evaluate(`(() => {
+    const panel = document.querySelector('[data-career-panel="town"]');
+    const content = panel ? panel.querySelector('[data-port-tabpanel="journal"]') : null;
+    const textOf = (node) => (node && node.textContent ? node.textContent.replace(/\\s+/g, ' ').trim() : '');
+    if (!content) return null;
+    const surface = content.querySelector('[data-journal-surface="experience"]');
+    const entries = Array.from(content.querySelectorAll('[data-journal-entry]')).map((node) => ({
+      index: node.getAttribute('data-journal-entry'),
+      label: textOf(node.querySelector('.ac-career-ui__timeline-label')),
+      expanded: node.getAttribute('data-journal-expanded'),
+      readToggle: (() => {
+        const toggle = node.querySelector('[data-journal-read]');
+        return toggle ? { index: toggle.getAttribute('data-journal-read'), expanded: toggle.getAttribute('aria-expanded') } : null;
+      })(),
+      hasDetail: !!node.querySelector('[data-journal-readback]'),
+      detailText: textOf(node.querySelector('[data-journal-readback] .ac-career-ui__npc-paragraph')),
+      detailPerson: textOf(node.querySelector('[data-journal-readback-person]')),
+    }));
+    const groups = Array.from(content.querySelectorAll('[data-journal-filter-group]')).map((group) => ({
+      scope: group.getAttribute('data-journal-filter-group'),
+      summary: textOf(group.querySelector('summary')),
+      options: Array.from(group.querySelectorAll('[data-journal-filter]')).map((button) => ({
+        scope: button.getAttribute('data-journal-filter'),
+        text: textOf(button),
+        pressed: button.getAttribute('aria-pressed'),
+      })),
+    }));
+    const timeline = content.querySelector('[data-timeline-state]');
+    return {
+      surface: !!surface,
+      timelineState: timeline ? timeline.getAttribute('data-timeline-state') : null,
+      entries: entries,
+      groups: groups,
+      text: textOf(content),
+    };
+  })()`);
+  const crossoverHistory = journalView.ok === true
+    ? journalView.history.filter((row) => row.label === CROSSOVER_JOURNAL_ROW.label) : [];
+  gate('XOVER 经历页真实投影只有一条交汇经历且带 detail{text,person}',
+    journalView.ok === true && journalView.history.length === 1 &&
+      crossoverHistory.length === 1 &&
+      !!crossoverHistory[0].detail &&
+      crossoverHistory[0].detail.text === CROSSOVER_JOURNAL_ROW.text &&
+      crossoverHistory[0].detail.person === (CROSSOVER_JOURNAL_ROW.person || '') &&
+      crossoverHistory[0].person === CROSSOVER_JOURNAL_ROW.person,
+    J({ history: journalView.ok ? journalView.history : journalView }));
+  gate('XOVER 经历页真实 DOM 渲染该条经历且回读按钮/详情来自投影',
+    !!journal && journal.surface === true && journal.timelineState === 'filled' &&
+      journal.entries.length === 1 && journal.entries[0].label === CROSSOVER_JOURNAL_ROW.label &&
+      journal.entries[0].hasDetail === true && !!journal.entries[0].readToggle &&
+      journal.entries[0].detailText === CROSSOVER_JOURNAL_ROW.text &&
+      (!CROSSOVER_JOURNAL_ROW.person || journal.entries[0].detailPerson === CROSSOVER_JOURNAL_ROW.person),
+    J({ journal, journalDiag }));
+  gate('XOVER 经历页不渲染内部 id/字段（含 eventId/person 原始 token）',
+    !!journal && guideInternalHits(journal.text).length === 0,
+    J({ hits: journal ? guideInternalHits(journal.text) : ['journal-missing'], sample: journal && journal.text.slice(0, 480) }));
+
+  /* 人物筛选：真实白名单 person 出现在筛选组；点击后只留该人物，再复位。 */
+  const personGroup = journal ? journal.groups.filter((group) => group.scope === 'person')[0] || null : null;
+  const personName = CROSSOVER_JOURNAL_ROW.person || '';
+  const personGroupOk = !!personGroup && !!personGroup.options.length &&
+    personGroup.options.every((option) => option.scope === 'person') &&
+    (!personName || personGroup.options.some((option) => option.text.indexOf(personName) >= 0));
+  gate('XOVER 经历页按人物筛选组来自真实白名单 person', personGroupOk, J({ personGroup, personName, journalDiag }));
+  let filtered = null;
+  let reset = null;
+  if (personGroupOk) {
+    await pressVisible(cdp, '[data-journal-filter-group="person"] summary', '人物筛选展开');
+    await sleep(120);
+    await pressVisible(cdp, '[data-journal-filter="person"]', '人物筛选');
+    filtered = await cdp.evaluate(`(() => {
+      const content = document.querySelector('[data-career-panel="town"] [data-port-tabpanel="journal"]');
+      const textOf = (node) => (node && node.textContent ? node.textContent.replace(/\\s+/g, ' ').trim() : '');
+      const items = Array.from(content.querySelectorAll('[data-journal-entry]'));
+      const visible = items.filter((node) => !node.hidden && node.getClientRects().length > 0);
+      const caption = content.querySelector('[data-journal-active-filter]');
+      return {
+        total: items.length,
+        visible: visible.length,
+        visiblePersons: visible.map((node) => textOf(node.querySelector('[data-journal-readback-person]'))),
+        visibleLabels: visible.map((node) => textOf(node.querySelector('.ac-career-ui__timeline-label'))),
+        caption: caption ? { hidden: caption.hidden, text: textOf(caption) } : null,
+        pressed: Array.from(content.querySelectorAll('[data-journal-filter]')).map((button) => ({ scope: button.getAttribute('data-journal-filter'), pressed: button.getAttribute('aria-pressed'), text: textOf(button) })),
+      };
+    })()`);
+    gate('XOVER 经历页人物筛选后只留该人物的经历且状态条可读',
+      !!filtered && filtered.total >= 1 && filtered.visible === 1 &&
+        filtered.caption && filtered.caption.hidden === false &&
+        (!personName || filtered.caption.text === '正在看人物：' + personName) &&
+        filtered.pressed.some((row) => row.scope === 'person' && row.pressed === 'true'),
+      J({ filtered, personName }));
+    await pressVisible(cdp, '[data-journal-reset]', '看全部经历');
+    await sleep(120);
+    reset = await cdp.evaluate(`(() => {
+      const content = document.querySelector('[data-career-panel="town"] [data-port-tabpanel="journal"]');
+      const textOf = (node) => (node && node.textContent ? node.textContent.replace(/\\s+/g, ' ').trim() : '');
+      const items = Array.from(content.querySelectorAll('[data-journal-entry]'));
+      const visible = items.filter((node) => !node.hidden && node.getClientRects().length > 0);
+      const caption = content.querySelector('[data-journal-active-filter]');
+      return {
+        total: items.length,
+        visible: visible.length,
+        captionHidden: caption ? caption.hidden : null,
+        pressed: Array.from(content.querySelectorAll('[data-journal-filter]')).map((button) => button.getAttribute('aria-pressed')),
+      };
+    })()`);
+    gate('XOVER 经历页「看全部经历」复位筛选且不显示总数/百分比',
+      !!reset && reset.visible === reset.total && reset.captionHidden === true &&
+        reset.pressed.every((value) => value === 'false') &&
+        !/[0-9]+\s*\/\s*[0-9]+|%|共有\s*[0-9]+\s*条/.test(journal.text),
+      J({ reset, journalSample: journal.text.slice(0, 320) }));
+  }
+
+  /* 回读：展开后 detail 可见、焦点在原条目；收起后隐藏、焦点仍在原条目。 */
+  let readback = null;
+  const detailEntry = journal && journal.entries.filter((entry) => entry.hasDetail && entry.readToggle)[0];
+  if (detailEntry) {
+    const toggleSelector = '[data-career-panel="town"] [data-port-tabpanel="journal"] [data-journal-read="' + detailEntry.readToggle.index + '"]';
+    await pressVisible(cdp, toggleSelector, '回读这段');
+    await sleep(120);
+    readback = await cdp.evaluate(`(() => {
+      const panel = document.querySelector('[data-career-panel="town"]');
+      const content = panel.querySelector('[data-port-tabpanel="journal"]');
+      const item = content.querySelector('[data-journal-entry="${detailEntry.index}"]');
+      const detail = item.querySelector('[data-journal-readback]');
+      const toggle = item.querySelector('[data-journal-read="${detailEntry.readToggle.index}"]');
+      const textOf = (node) => (node && node.textContent ? node.textContent.replace(/\\s+/g, ' ').trim() : '');
+      return {
+        expanded: item.getAttribute('data-journal-expanded'),
+        detailHidden: detail ? detail.hidden : null,
+        detailVisible: !!(detail && detail.getClientRects().length > 0),
+        detailText: textOf(detail && detail.querySelector('.ac-career-ui__npc-paragraph')),
+        detailPerson: textOf(detail && detail.querySelector('[data-journal-readback-person]')),
+        ariaExpanded: toggle ? toggle.getAttribute('aria-expanded') : null,
+        focusOnToggle: document.activeElement === toggle,
+        activeTag: document.activeElement ? document.activeElement.tagName : null,
+      };
+    })()`);
+    gate('XOVER 经历回读展开后 detail 文本/人物来自真实投影且焦点在原条目',
+      !!readback && readback.detailVisible === true && readback.detailHidden === false &&
+        readback.detailText === CROSSOVER_JOURNAL_ROW.text &&
+        (!CROSSOVER_JOURNAL_ROW.person || readback.detailPerson === CROSSOVER_JOURNAL_ROW.person) &&
+        readback.ariaExpanded === 'true' && readback.expanded === 'true' &&
+        readback.focusOnToggle === true,
+      J({ readback }));
+    await pressVisible(cdp, toggleSelector, '收起回读');
+    await sleep(120);
+    const collapsed = await cdp.evaluate(`(() => {
+      const panel = document.querySelector('[data-career-panel="town"]');
+      const content = panel.querySelector('[data-port-tabpanel="journal"]');
+      const item = content.querySelector('[data-journal-entry="${detailEntry.index}"]');
+      const detail = item.querySelector('[data-journal-readback]');
+      const toggle = item.querySelector('[data-journal-read="${detailEntry.readToggle.index}"]');
+      return {
+        expanded: item.getAttribute('data-journal-expanded'),
+        detailHidden: detail ? detail.hidden : null,
+        ariaExpanded: toggle ? toggle.getAttribute('aria-expanded') : null,
+        focusOnToggle: document.activeElement === toggle,
+      };
+    })()`);
+    gate('XOVER 收起回读后详情隐藏且焦点仍在原条目控件',
+      !!collapsed && collapsed.detailHidden === true && collapsed.expanded === 'false' &&
+        collapsed.ariaExpanded === 'false' && collapsed.focusOnToggle === true,
+      J({ collapsed }));
+  } else {
+    gate('XOVER 经历页存在带 detail 的可回读条目', false, J({ entries: journal && journal.entries }));
+  }
+
+  /* 职业筛选：记录真实内容下的数据源事实（0.24 白名单未声明 professionId；不得伪造数据）。 */
+  const professionGroups = journal ? journal.groups.filter((group) => group.scope === 'profession') : [];
+  const professionRows = journalView.ok === true ? journalView.history.filter((row) => row.professionId) : [];
+  gate('XOVER 经历页按职业筛选：当前真实内容无 professionId 事件（记录为未覆盖缺口）',
+    professionGroups.length === 0 && professionRows.length === 0,
+    J({ professionGroups, professionRows, groups: journal && journal.groups.map((group) => group.scope), note: '契约已支持 professionId，但 world-narrative.journalWhitelist 未声明；邀请类事件也未写入 storyEvents' }));
+  return { guide, world, journal, journalView, filtered, reset, readback };
+}
+
+async function runCrossoverScenario(cdp, campaign, commissions) {
+  requireFeature('XOVER 起源与第二职业内容映射齐备',
+    typeof CROSSOVER_A_PROFESSION === 'string' && typeof CROSSOVER_B_PROFESSION === 'string' && !!CROSSOVER_PAIR,
+    J({ a: CROSSOVER_A_PROFESSION, b: CROSSOVER_B_PROFESSION, eventId: CROSSOVER_EVENT_ID }));
+  await phaseCrossoverIdentityAndChapter(cdp, campaign, commissions);
+  await phaseCrossoverHiddenBeforeAccept(cdp);
+  await phaseAcceptSecondProfession(cdp, 'xover-gomoku');
+  await phaseCrossoverSurfaceAndRecordOnce(cdp);
+  await phaseChapterGuideAndJournal(cdp);
+  await forbiddenTextScan(cdp, 'xover-final');
+  await checkConsole(cdp, 'xover-final');
+}
+
 /* 首到港的消费必须是持久事实：真实接单（任何入口）之后，关页重开、回到起源游戏，
    信件只能「去港口」，不能再重播到港与第一份工作。 */
 async function verifyFirstArrivalConsumed(cdp) {
@@ -2444,6 +3416,7 @@ function usage() {
   node tools/career_flow_e2e_test.mjs --static-only
   node tools/career_flow_e2e_test.mjs
   node tools/career_flow_e2e_test.mjs --memory-origin-only
+  node tools/career_flow_e2e_test.mjs --crossover-only   # 只跑 0.24 交汇场景（独立 Chrome）
 环境变量：CAREER_FLOW_PORT / CAREER_FLOW_CDP / CHROME_PATH / CAREER_FLOW_QA_DIR
 退出码：0 PASS；1 FAIL 或 BLOCKED；2 用法/环境错误`);
 }
@@ -2455,8 +3428,10 @@ async function main() {
     return 0;
   }
   const memoryOriginOnly = args.includes('--memory-origin-only');
-  const unknown = args.filter((arg) => !['--static-only', '--memory-origin-only'].includes(arg));
-  if (unknown.length || (memoryOriginOnly && args.includes('--static-only'))) {
+  const crossoverOnly = args.includes('--crossover-only');
+  const unknown = args.filter((arg) => !['--static-only', '--memory-origin-only', '--crossover-only'].includes(arg));
+  if (unknown.length || (memoryOriginOnly && args.includes('--static-only')) ||
+    (crossoverOnly && (args.includes('--static-only') || memoryOriginOnly))) {
     console.error('参数错误: ' + J(args));
     usage();
     return 2;
@@ -2464,19 +3439,25 @@ async function main() {
   STATIC_ONLY = args.includes('--static-only');
 
   console.log('=== StudioKit career flow gate ===');
-  console.log('mode: ' + (STATIC_ONLY ? 'static-only' : memoryOriginOnly ? 'memory-flip arrival Chrome' : 'full Chrome'));
+  console.log('mode: ' + (STATIC_ONLY ? 'static-only'
+    : memoryOriginOnly ? 'memory-flip arrival Chrome'
+      : crossoverOnly ? '0.24 crossover Chrome'
+        : 'full Chrome'));
   staticContentChecks();
   staticInterfaceChecks();
 
   if (!STATIC_ONLY) {
     const server = await startServer({ root: REPO_ROOT, port: SERVER_PORT });
     try {
-      if (!memoryOriginOnly) {
-        const campaign = readJson('apps/arcade/career/content/campaign.json');
-        const commissions = readJson('apps/arcade/career/content/commissions.json').commissions;
+      const campaign = readJson('apps/arcade/career/content/campaign.json');
+      const commissions = readJson('apps/arcade/career/content/commissions.json').commissions;
+      if (!memoryOriginOnly && !crossoverOnly) {
         await runBrowserScenario('二十一点到研究终局', (cdp, browser, newPage) => runFullFlow(cdp, browser, newPage, campaign, commissions));
       }
-      await runBrowserScenario('记忆翻牌到港', (cdp) => runOriginToTown(cdp, MEMORY_ORIGIN));
+      if (!crossoverOnly) {
+        await runBrowserScenario('记忆翻牌到港', (cdp) => runOriginToTown(cdp, MEMORY_ORIGIN));
+      }
+      await runBrowserScenario('C2 交汇与经历回读', (cdp) => runCrossoverScenario(cdp, campaign, commissions));
       gate('QA 全程 console error 为零', QA.errors.length === 0, J(QA.errors.slice(0, 5)));
     } finally {
       await new Promise((resolve) => server.close(resolve));
