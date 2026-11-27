@@ -207,6 +207,12 @@
     commissionUiSource: null,
     professionViewLoaded: false,
     endingAttach: null,
+    narrativeRegistry: null,
+    narrativeLoaded: false,
+    narrativePromise: null,
+    narrativeByProfessionId: Object.create(null),
+    careerUiStyles: '',
+    careerUiStylesPromise: null,
     careerDataListeners: [],
     endingEvents: [],
     careerArchived: false,
@@ -604,6 +610,9 @@
     routePlanner: { file: 'route-planner.js', global: 'routePlanner' },
     campaign: { file: 'campaign-core.js', global: 'campaign' },
     ending: { file: 'ending-reducer.js', global: 'ending' },
+    components: { file: 'ui/components.js', global: 'ui.components' },
+    harbor: { file: 'ui/harbor.js', global: 'ui.harbor' },
+    invitation: { file: 'ui/invitation.js', global: 'ui.invitation' },
     town: { file: 'ui/town.js', global: 'ui.town' },
     hangar: { file: 'ui/hangar.js', global: 'ui.hangar' },
     receipt: { file: 'ui/receipt.js', global: 'ui.receipt' },
@@ -793,6 +802,44 @@
       });
   }
 
+  function fetchText(url) {
+    if (!url || typeof WINDOW.fetch !== 'function') return Promise.resolve({ ok: false, reason: 'fetch-unavailable' });
+    try {
+      return WINDOW.fetch(url, { cache: 'no-store', credentials: 'same-origin' }).then(function (response) {
+        if (!response || !response.ok) return { ok: false, reason: 'http-' + (response ? response.status : 'unknown') };
+        return response.text().then(function (text) { return { ok: true, text: String(text || '') }; });
+      }).catch(function (err) {
+        return { ok: false, reason: 'fetch-error:' + (err && err.message ? err.message : 'unknown') };
+      });
+    } catch (err) {
+      return Promise.resolve({ ok: false, reason: 'fetch-error:' + (err && err.message ? err.message : 'unknown') });
+    }
+  }
+
+  /** 0.23：同源加载全部叙事 shard；任何缺失只降级为空，不影响经典与 0.22 流程。 */
+  function loadNarrativeContent() {
+    if (internal.narrativeLoaded) return internal.narrativePromise || Promise.resolve(null);
+    internal.narrativeLoaded = true;
+    var pending = fetchJson(contentUrlSafe('narrative-registry.json')).then(function (result) {
+      if (!result.ok || !result.data || !Array.isArray(result.data.shards)) return null;
+      internal.narrativeRegistry = result.data;
+      return Promise.all(result.data.shards.map(function (shard) {
+        if (!shard || typeof shard.url !== 'string') return Promise.resolve(null);
+        return fetchJson(contentUrlSafe(shard.url)).then(function (loaded) { return loaded.ok ? loaded.data : null; }).catch(function () { return null; });
+      }));
+    }).then(function (shards) {
+      (shards || []).forEach(function (shard) {
+        if (!shard || !Array.isArray(shard.entries)) return;
+        shard.entries.forEach(function (entry) {
+          if (entry && typeof entry.professionId === 'string') internal.narrativeByProfessionId[entry.professionId] = entry;
+        });
+      });
+      return internal.narrativeByProfessionId;
+    }).catch(function () { return internal.narrativeByProfessionId; });
+    internal.narrativePromise = pending;
+    return pending;
+  }
+
   /** 按需装载延迟模块（backup.js 等）；缺失只记一次 loadErrors，绝不抛异常。 */
   function ensureLazyModule(name) {
     var def = LAZY_MODULES[name];
@@ -826,6 +873,35 @@
     });
     internal.lazyPending[name] = pending;
     return pending;
+  }
+
+  function ensureCareerUiStyles() {
+    if (internal.careerUiStylesPromise) return internal.careerUiStylesPromise;
+    var urls = [joinUrl(internal.careerDir, 'ui/tokens.css'), joinUrl(internal.careerDir, 'ui/components.css')];
+    internal.careerUiStylesPromise = Promise.all(urls.map(function (url) {
+      return fetchText(url).catch(function () { return { ok: false }; });
+    })).then(function (results) {
+      var css = results.map(function (result) { return result && result.ok ? (result.text || '') : ''; }).join('\n');
+      internal.careerUiStyles = css;
+      var components = readUi('components');
+      if (css && components && typeof components.ensureStyles === 'function') components.ensureStyles(css);
+      return css;
+    });
+    return internal.careerUiStylesPromise;
+  }
+
+  /** 0.23 UI 是 opt-in：加载组件/港口 SVG/同源 CSS，失败时旧 UI 继续工作。 */
+  function ensureCareerUi() {
+    return Promise.all([
+      ensureLazyModule('components'),
+      ensureLazyModule('harbor'),
+      loadCareerContent(),
+      ensureCareerUiStyles(),
+    ]).then(function (values) {
+      return { components: values[0] || null, harbor: values[1] || null };
+    }).catch(function () {
+      return { components: null, harbor: null };
+    });
   }
 
   /** career 已被真实使用（发现线索/打开信箱或偏好）时预热延迟模块；失败静默。 */
@@ -920,6 +996,7 @@
         .catch(function () {});
     }
     var all = Promise.all([
+      loadNarrativeContent(),
       one('commissions.json', 'commissionContent', function (data) {
         return Array.isArray(data.commissions) ? data.commissions : null;
       }),
@@ -1820,7 +1897,12 @@
       }
       return Promise.resolve();
     }
-    return Promise.resolve(careerView({ surface: 'receipt' }))
+    return ensureCareerUi()
+      .then(function () {
+        payload.uiComponents = readUi('components');
+        payload.uiHarbor = readUi('harbor');
+        return careerView({ surface: 'receipt' });
+      })
       .then(function (view) {
         payload.careerView = view || null;
         return show();
@@ -2397,6 +2479,36 @@
     });
   }
 
+  function openInvitation(extra) {
+    return ensureLazyModule('invitation').then(function (mod) {
+      if (!mod || typeof mod.open !== 'function') return { ok: false, reason: 'invitation-unavailable' };
+      return mod.open(uiContext(isObject(extra) ? extra : {}));
+    }).catch(function () { return { ok: false, reason: 'invitation-error' }; });
+  }
+
+  /** 0.23：消息只来自已接受职业的真实叙事卡，硬上限一条；不读取完整 catalog 后自行过滤。 */
+  function attachNarrativeMessages(projection) {
+    if (!projection || !projection.story || !Array.isArray(projection.professions)) return projection;
+    var accepted = Object.create(null);
+    projection.professions.forEach(function (row) { if (row && typeof row.professionId === 'string') accepted[row.professionId] = true; });
+    for (var professionId in internal.narrativeByProfessionId) {
+      if (!accepted[professionId]) continue;
+      var entry = internal.narrativeByProfessionId[professionId];
+      var messages = entry && Array.isArray(entry.storyMessages) ? entry.storyMessages : [];
+      var message = messages.find(function (row) { return row && row.surface === 'arrival'; }) || messages[0];
+      if (!message || !message.label) continue;
+      projection.story.messages = [{
+        messageId: message.messageId || null,
+        professionId: professionId,
+        label: String(message.label),
+        text: typeof message.text === 'string' ? message.text : '',
+        from: typeof message.from === 'string' ? message.from : '',
+      }];
+      break;
+    }
+    return projection;
+  }
+
   /** 世界章节完成后，可接终局也是真实下一步；没有可用终局时保持空，不推荐未解锁内容。 */
   function attachEndingAction(projection) {
     if (!projection || !projection.story) return Promise.resolve(projection);
@@ -2455,7 +2567,7 @@
         if (facts.listing && facts.listing.ok && Array.isArray(facts.listing.commissions)) {
           projection.commissions = clone(facts.listing.commissions);
         }
-        return attachEndingAction(projection);
+        return attachEndingAction(attachNarrativeMessages(projection));
       });
     }).catch(function (err) {
       warnOnce('career-view', err);
@@ -2899,6 +3011,9 @@
       .then(function () {
         if (!clue || typeof clue.clueId !== 'string' || !clue.clueId) return { rendered: false, reason: 'invalid-clue' };
         if (internal.rendered[clue.clueId]) return { rendered: false, reason: 'duplicate' };
+        return ensureCareerUi();
+      })
+      .then(function () {
         var surface = readUi('clueSurface');
         if (!surface || typeof surface.render !== 'function') return { rendered: false, reason: 'ui-missing' };
         return waitForClueHost().then(function (target) {
@@ -2917,6 +3032,9 @@
             placement: target.placement,
             anchor: target.anchor,
             state: clone(state || stateSnapshot()),
+            uiComponents: readUi('components'),
+            uiHarbor: readUi('harbor'),
+            invitationForClue: invitationForClue,
           };
           var returned;
           try {
@@ -3637,8 +3755,13 @@
       professionView: professionViewModule(),
       careerView: careerView,
       invitationForClue: invitationForClue,
+      openInvitation: openInvitation,
       onCareerDataChanged: onCareerDataChanged,
       invalidateCareerData: invalidateCareerData,
+      uiComponents: readUi('components'),
+      uiHarbor: readUi('harbor'),
+      uiStyles: internal.careerUiStyles || '',
+      narrative: { byProfessionId: internal.narrativeByProfessionId },
       careerCatalog: careerCatalog,
       /* 0.20 只读 continuation 查询：告示板可直接 ctx.careerContinuations({careerId})，
          也可经 ctx.commission.continuations；两者是同一只读方法，无新 ctx 字段依赖。 */
@@ -3683,23 +3806,25 @@
         if (isSilentTestOnly()) return uiUnavailable('test-silent');
         if (internal.careerArchived) return uiUnavailable('career-archived');
         warmLazyModules();
-        var mailbox = readUi('mailbox');
-        if (!mailbox) return uiUnavailable('ui-unavailable');
-        var target = typeof mailbox.open === 'function' ? mailbox.open : typeof mailbox.show === 'function' ? mailbox.show : null;
-        if (!target) return uiUnavailable('ui-unavailable');
-        try {
-          var returned = target.call(mailbox, uiContext());
-          addHubReturnLink(returned);
-          if (returned && typeof returned.then === 'function') {
-            Promise.resolve(returned).catch(function (err) {
-              warnOnce('open-mailbox', err);
-            });
+        return ensureCareerUi().then(function () {
+          var mailbox = readUi('mailbox');
+          if (!mailbox) return uiUnavailable('ui-unavailable');
+          var target = typeof mailbox.open === 'function' ? mailbox.open : typeof mailbox.show === 'function' ? mailbox.show : null;
+          if (!target) return uiUnavailable('ui-unavailable');
+          try {
+            var returned = target.call(mailbox, uiContext());
+            addHubReturnLink(returned);
+            if (returned && typeof returned.then === 'function') {
+              Promise.resolve(returned).catch(function (err) {
+                warnOnce('open-mailbox', err);
+              });
+            }
+          } catch (err) {
+            warnOnce('open-mailbox', err);
+            return uiUnavailable('ui-error');
           }
-        } catch (err) {
-          warnOnce('open-mailbox', err);
-          return uiUnavailable('ui-error');
-        }
-        return { ok: true };
+          return { ok: true };
+        });
       },
       uiUnavailable('ui-unavailable')
     )).then(function (result) {
@@ -3970,7 +4095,7 @@
       extraModules.push('storyEvidence');
       extraModules.push('routePlanner');
     }
-    var preloadList = [ensureLazyModule('commission'), ensureLazyModule('alternatives'), loadCareerContent()];
+    var preloadList = [ensureLazyModule('commission'), ensureLazyModule('alternatives'), loadCareerContent(), ensureCareerUi()];
     extraModules.forEach(function (moduleName) {
       preloadList.push(ensureLazyModule(moduleName));
     });
