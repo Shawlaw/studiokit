@@ -133,6 +133,28 @@
   let card = null;
   let actionFailure = null;
   let panelSeq = 0;
+  let unsubscribeCareerChanges = null;
+  const CAREER_CHANGE_REASONS = ['career-imported', 'archived', 'unarchived', 'reset'];
+
+  function subscribeCareerChanges(context, onChange) {
+    const subscribe = typeof context.onCareerDataChanged === 'function'
+      ? context.onCareerDataChanged
+      : isObject(context.api) && typeof context.api.onCareerDataChanged === 'function'
+        ? context.api.onCareerDataChanged : null;
+    if (!subscribe) return null;
+    try {
+      const unsubscribe = subscribe.call(context, onChange);
+      return typeof unsubscribe === 'function' ? unsubscribe : null;
+    } catch (err) {
+      return null;
+    }
+  }
+
+  function unsubscribeCareerPanelChanges() {
+    if (!unsubscribeCareerChanges) return;
+    try { unsubscribeCareerChanges(); } catch (err) { /* ignore */ }
+    unsubscribeCareerChanges = null;
+  }
 
   /* ---------------------------------------------------------------- 通用小工具 */
 
@@ -885,6 +907,7 @@
   function closePanel() {
     const current = panel;
     panel = null;
+    unsubscribeCareerPanelChanges();
     panelSeq += 1;
     if (!current) return false;
     try {
@@ -973,6 +996,13 @@
     };
     current.onKeyDown = (event) => onPanelKeyDown(current, event);
     panel = current;
+    unsubscribeCareerChanges = subscribeCareerChanges(context, (change) => {
+      if (panel !== current) return;
+      const reason = cleanText(change && change.reason);
+      if (CAREER_CHANGE_REASONS.indexOf(reason) < 0) return;
+      closePanel();
+      removeCard();
+    });
 
     closeBtn.addEventListener('click', () => closePanel(), false);
 

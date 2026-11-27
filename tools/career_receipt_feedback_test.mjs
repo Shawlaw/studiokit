@@ -99,36 +99,21 @@ function noInternalTokens(text) {
     && !/commission-[0-9a-f-]{8,}|tx-[0-9a-f-]{8,}/.test(text);
 }
 
-/* 0.22：下一步与经历只从已投影 careerView 进入收据，storyFeedback 仅保留真实结算反馈。 */
-function projectedCareerView(feedback) {
-  if (!feedback || feedback.status === 'unavailable' || feedback.unavailable) return null;
-  const history = (feedback.discovered || []).map((text) => ({ label: text, source: 'commission' }));
-  if (feedback.chapter && feedback.chapter.title) {
-    history.push({ label: '新完成的段落：' + feedback.chapter.title, source: 'commission' });
-  }
+/* 最小真实 careerView 契约：不把未 gate 的 storyFeedback 反推成投影。 */
+function minimalCareerView(storyOverrides = {}) {
   return {
     schemaVersion: 1,
+    originGameId: null,
+    activeProfessionId: null,
     professions: [],
     commissions: [],
-    story: {
-      nextAction: feedback.nextStep
-        ? { kind: feedback.chapter && feedback.chapter.id === 'C4' ? 'ending' : 'commission', label: feedback.nextStep }
-        : null,
-      messages: [],
-      history,
-    },
+    story: Object.assign({ nextAction: null, messages: [], history: [] }, storyOverrides),
     tools: [],
   };
 }
 
 function receiptShow(payload) {
-  const input = { ...payload };
-  if (!input.careerView) {
-    const feedback = input.storyFeedback || (input.result && input.result.storyFeedback);
-    const projected = projectedCareerView(feedback);
-    if (projected) input.careerView = projected;
-  }
-  return receipt.show(input);
+  return receipt.show(payload);
 }
 
 {
@@ -138,6 +123,10 @@ function receiptShow(payload) {
     result: settledResult(),
     reducedMotion: true,
     storyFeedback: storyFeedback('new'),
+    careerView: minimalCareerView({
+      nextAction: { kind: 'commission', label: '去告示板看看「' + C2_TITLE + '」有什么新活儿。' },
+      history: [{ label: '异常航报', source: 'commission' }, { label: '新完成的段落：' + C1_TITLE, source: 'commission' }],
+    }),
     openCampaign() { opened += 1; },
     openMailbox() { opened += 100; },
     api: { openTown() { opened += 1000; } },
@@ -197,6 +186,10 @@ function receiptShow(payload) {
       nextStep: '继续当前这段「' + C2_TITLE + '」，去告示板看看还差哪张单。',
       unavailable: '',
     },
+    careerView: minimalCareerView({
+      nextAction: { kind: 'commission', label: '继续当前这段「' + C2_TITLE + '」，去告示板看看还差哪张单。' },
+      history: [{ label: '工地记录', source: 'commission' }],
+    }),
     openCampaign() { throw new Error('there is no reply to read'); },
     api: { openTown() {} },
   });
@@ -218,7 +211,15 @@ function receiptShow(payload) {
   feedback.chapter = { id: 'C1', title: C1_TITLE };
   feedback.chapterCount = 1;
   feedback.nextStep = '去告示板看看「' + C2_TITLE + '」有什么新活儿。';
-  const card = receiptShow({ result: settledResult(), storyFeedback: feedback, openCampaign() {} });
+  const card = receiptShow({
+    result: settledResult(),
+    storyFeedback: feedback,
+    careerView: minimalCareerView({
+      nextAction: { kind: 'commission', label: '去告示板看看「' + C2_TITLE + '」有什么新活儿。' },
+      history: [{ label: '异常航报', source: 'commission' }, { label: '新完成的段落：' + C1_TITLE, source: 'commission' }],
+    }),
+    openCampaign() {},
+  });
   const text = card.textContent;
   assert(text.includes('新完成的段落：' + C1_TITLE), 'C1 milestone shows completed chapter');
   assert(text.includes('下一步：去告示板看看「' + C2_TITLE + '」'), 'C1 milestone next step is C2');
@@ -234,7 +235,15 @@ function receiptShow(payload) {
   feedback.chapter = { id: 'C2', title: C2_TITLE };
   feedback.chapterCount = 1;
   feedback.nextStep = '去告示板看看「' + C3_TITLE + '」有什么新活儿。';
-  const card = receiptShow({ result: settledResult(), storyFeedback: feedback, openCampaign() {} });
+  const card = receiptShow({
+    result: settledResult(),
+    storyFeedback: feedback,
+    careerView: minimalCareerView({
+      nextAction: { kind: 'commission', label: '去告示板看看「' + C3_TITLE + '」有什么新活儿。' },
+      history: [{ label: '异常航报', source: 'commission' }, { label: '新完成的段落：' + C2_TITLE, source: 'commission' }],
+    }),
+    openCampaign() {},
+  });
   const text = card.textContent;
   assert(text.includes('新完成的段落：' + C2_TITLE), 'C2 milestone shows completed chapter');
   assert(text.includes('下一步：去告示板看看「' + C3_TITLE + '」'), 'C2 milestone next step is C3');
@@ -347,9 +356,14 @@ for (const status of ['new', 'recorded']) {
   let opened = 0;
   function openCampaign() { opened += 1; }
   const ui = { openCampaign, openTown() { throw new Error('ending action must open the campaign'); } };
-  const c4 = receiptShow({ ...ui, result: settledResult(), storyFeedback: {
-    ...storyFeedback('new'), chapter: { id: 'C4', title: titleOf('C4') },
-  } });
+  const c4 = receiptShow({
+    ...ui,
+    result: settledResult(),
+    storyFeedback: {
+      ...storyFeedback('new'), chapter: { id: 'C4', title: titleOf('C4') },
+    },
+    careerView: minimalCareerView({ nextAction: { kind: 'ending', label: '选择终局路线' } }),
+  });
   const board = byText(c4, '回告示板看看');
   const chooseEnding = byText(c4, '选择终局路线');
   assert(board && board.className.includes('--primary'), 'C4 still offers the board as primary');

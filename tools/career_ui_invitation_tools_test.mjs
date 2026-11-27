@@ -41,11 +41,15 @@ check('market 不再扫描全游戏来源', !/GAME_LABELS|sourceGames|registry\.
 check('market 使用通用地点文案', src.market.includes('来路：旧港工作点或材料商店可取得'));
 check('receipt 不再读未 gate 的 storyFeedback.nextStep', !/raw\.nextStep|storyFeedback\.nextStep\)\s*\|\|/.test(src.receipt));
 check('receipt 只从投影读取下一步与经历', /projectedStoryOf/.test(src.receipt) && /story\.history/.test(src.receipt));
-check('settings 导入成功才触发失效', /mode !== 'none' && result\.preserved !== true\) notifyCareerDataChanged\(context, 'import'\)/.test(src.settings));
-check('settings 封存/解冻/重置触发失效',
-  src.settings.includes("notifyCareerDataChanged(context, expectedArchived ? 'archive' : 'unarchive')") &&
-  src.settings.includes("notifyCareerDataChanged(context, 'reset')"));
+check('settings 不重复发布失效事件', !/notifyCareerDataChanged|invalidateCareerData\(/.test(src.settings));
 check('settings 订阅仅在面板关闭时退订', /unsubscribeCareerChanges/.test(src.settings));
+for (const key of ['receipt', 'hangar', 'market', 'workshop']) {
+  check(key + ' 面板订阅数据失效并安全关闭',
+    /subscribeCareerChanges\(/.test(src[key]) &&
+    /career-imported', 'archived', 'unarchived', 'reset'/.test(src[key]) &&
+    /unsubscribeCareerPanelChanges\(\)/.test(src[key]) &&
+    (key === 'receipt' ? /closePanel\(\);/.test(src[key]) : /close\(\);/.test(src[key])));
+}
 check('中心页仍零 bridge 首屏装载', !/script[^>]+career\/bridge\.js/.test(src.index.slice(0, src.index.indexOf('function render()'))));
 check('中心页无生涯视图/默认视图字段', !/data-career-view|hallDefaultView|data-default-view/.test(src.index));
 check('0.22 未引入 prototype 全局 token', !/prototype\/tokens\.css|--gold-light/.test(Object.values(src).join('\n')));
@@ -171,14 +175,44 @@ const textOf = (doc) => doc.body.querySelector('[data-career-panel]')?.textConte
 
 {
   const doc = makeDoc(); const api = loadMailbox(doc);
+  const events = [];
   const ctx = inviteCtx({
-    careerView: () => Promise.resolve({ schemaVersion: 1, originGameId: 'memory-flip', professions: [{ professionId: 'research.archivist', state: 'accepted' }], story: {}, tools: [] }),
+    state: {
+      stage: 'LOCAL', clues: { 'c-letter': { seenAt: '2026-11-27T00:00:00Z' } },
+      firstClueId: 'c-letter', acceptedOriginGameId: 'memory-flip',
+    },
+    invitationForClue: () => ({
+      professionId: 'nature.miner', gameId: 'gold-miner', displayName: '采矿员', state: 'read', canAccept: true,
+    }),
+    careerView: () => Promise.resolve({
+      schemaVersion: 1,
+      originGameId: 'memory-flip',
+      professions: [{ professionId: 'research.archivist', state: 'accepted' }],
+      story: {}, tools: [],
+    }),
     chapter: { role: '首次身份句' },
+    api: {
+      acceptProfessionInvitation(input) {
+        events.push(['accept', input.professionId, input.gameId]);
+        const result = { ok: true, created: false, newlyAccepted: true };
+        events.push(['created', result.created]);
+        return Promise.resolve(result);
+      },
+      commission: { start() { events.push('commission.start'); return { ok: true }; } },
+    },
+    _events: events,
   });
   api.open(ctx); await drain();
   const role = doc.body.querySelector('.ac-career-letter__role');
-  check('第二职业不显示首次身份句', !!role && role.hidden === true, role && role.textContent);
+  check('第二职业(不同 professionId)不显示首次身份句', !!role && role.hidden === true, role && role.textContent);
   check('第二职业仍显示邀请与以后再说', !btn(doc, 'accept-invitation').hidden && !btn(doc, 'defer-invitation').hidden);
+  btn(doc, 'accept-invitation').dispatch('click'); await drain();
+  check('第二职业接受传入新职业与真实 gameId',
+    events.some((e) => Array.isArray(e) && e[0] === 'accept' && e[1] === 'nature.miner' && e[2] === 'gold-miner'), events);
+  check('第二职业接受返回 created:false', events.some((e) => Array.isArray(e) && e[0] === 'created' && e[1] === false), events);
+  check('第二职业接受不调用 commission.start', !events.includes('commission.start'));
+  check('第二职业不重放初始奖励或 C0 序章',
+    !/开张的底钱|序章|C0/.test(textOf(doc)) && textOf(doc).includes('邀请已收下'), textOf(doc));
   api.close();
 }
 

@@ -299,6 +299,38 @@
    * ------------------------------------------------------------------ */
 
   let panel = null;
+  let unsubscribeCareerChanges = null;
+  const CAREER_CHANGE_REASONS = ['career-imported', 'archived', 'unarchived', 'reset'];
+
+  function subscribeCareerChanges(context, onChange) {
+    const subscribe = typeof context.onCareerDataChanged === 'function'
+      ? context.onCareerDataChanged
+      : isObject(context.api) && typeof context.api.onCareerDataChanged === 'function'
+        ? context.api.onCareerDataChanged : null;
+    if (!subscribe) return null;
+    try {
+      const unsubscribe = subscribe.call(context, onChange);
+      return typeof unsubscribe === 'function' ? unsubscribe : null;
+    } catch (err) {
+      return null;
+    }
+  }
+
+  function bindCareerChanges(target, context) {
+    unsubscribeCareerPanelChanges();
+    unsubscribeCareerChanges = subscribeCareerChanges(context, (change) => {
+      if (panel !== target) return;
+      const reason = cleanText(change && change.reason);
+      if (CAREER_CHANGE_REASONS.indexOf(reason) < 0) return;
+      close();
+    });
+  }
+
+  function unsubscribeCareerPanelChanges() {
+    if (!unsubscribeCareerChanges) return;
+    try { unsubscribeCareerChanges(); } catch (err) { /* ignore */ }
+    unsubscribeCareerChanges = null;
+  }
   let craftingLoad = null;
 
   function rootWindow() {
@@ -435,6 +467,7 @@
       careerView: typeof ctx.careerView === 'function' ? ctx.careerView
         : isObject(ctx.api) && typeof ctx.api.careerView === 'function' ? ctx.api.careerView : null,
       announce: typeof ctx.announce === 'function' ? ctx.announce : null,
+      onCareerDataChanged: typeof ctx.onCareerDataChanged === 'function' ? ctx.onCareerDataChanged : null,
     };
   }
 
@@ -1478,6 +1511,7 @@
       if (context.reducedMotion) panel.overlay.classList.add('is-reduced-motion');
       else panel.overlay.classList.remove('is-reduced-motion');
       applyStatus(panel, '', '');
+      bindCareerChanges(panel, context);
       loadData(panel);
       safelyFocus(panel.closeBtn);
       return panel.sheet;
@@ -1488,6 +1522,7 @@
     if (!built) return null;
     panel = built;
     applyStatus(panel, '', '');
+    bindCareerChanges(panel, context);
     loadData(panel);
     safelyFocus(panel.closeBtn);
     return panel.sheet;
@@ -1506,6 +1541,7 @@
     panel.context = context;
     if (context.reducedMotion) panel.overlay.classList.add('is-reduced-motion');
     else panel.overlay.classList.remove('is-reduced-motion');
+    bindCareerChanges(panel, context);
     loadData(panel);
     return panel.sheet;
   }
@@ -1514,6 +1550,7 @@
   function close() {
     const current = panel;
     panel = null;
+    unsubscribeCareerPanelChanges();
     if (!current) return false;
     try {
       current.doc.removeEventListener('keydown', current.onKeyDown, true);

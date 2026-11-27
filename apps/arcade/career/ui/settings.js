@@ -12,8 +12,8 @@
  *     archived?, archiveState?, freezeCareer?(), unfreezeCareer?(), resetAllCareer?(),
  *     onCareerDataChanged?(listener) }
  * 0.21 封存/重置入口按 ctx 方法是否存在渲染；缺失时不显示，旧 bridge 行为零变化。
- * 0.22 导入（非 preserved/mode:none）、封存、解冻、完全重置成功后通知订阅失效；
- * bridge 未提供 onCareerDataChanged 时安全降级，不自行读取职业目录。
+ * 0.22 bridge 在导入（非 preserved/mode:none）、封存、解冻、完全重置成功后统一广播；
+ * settings 不重复发布失效事件，避免已打开面板收到两次刷新/关闭。
  *
  * 约束：
  * - 小面板：开关「街机里的神秘线索」+「清除本机线索记录」；
@@ -100,26 +100,6 @@
     } catch (err) {
       return null;
     }
-  }
-
-  /** 只在成功操作后触发一次失效；发布 API 缺失时安全降级，不自读职业目录。 */
-  function notifyCareerDataChanged(context, reason) {
-    const detail = { source: 'settings', reason: reason };
-    const publishers = [context.invalidateCareerData, context.notifyCareerDataChanged, context.refreshCareerUIs];
-    const api = isObject(context.api) ? context.api : null;
-    if (api) {
-      publishers.push(api.invalidateCareerData, api.notifyCareerDataChanged, api.refreshCareerUIs);
-    }
-    for (let i = 0; i < publishers.length; i += 1) {
-      if (typeof publishers[i] !== 'function') continue;
-      try {
-        publishers[i].call(context, detail);
-        return true;
-      } catch (err) {
-        /* 继续尝试下一个兼容入口 */
-      }
-    }
-    return false;
   }
 
   function documentOf() {
@@ -748,7 +728,6 @@
       const text = detail ? '档案已导入（' + detail + '）。' : IMPORT_OK;
       setArchiveStatus(text);
       announce(text);
-      if (mode !== 'none' && result.preserved !== true) notifyCareerDataChanged(context, 'import');
     }
 
     /* 只有「确认导入」走这里；未确认时不会调用 importCareerLife。 */
@@ -860,7 +839,6 @@
         applyArchivePatch(patch);
         setArchiveActionStatus(okText);
         announce(okText);
-        notifyCareerDataChanged(context, expectedArchived ? 'archive' : 'unarchive');
         if (typeof onSettle === 'function') onSettle();
       };
       if (result && typeof result.then === 'function') {
@@ -944,7 +922,6 @@
         setStatus(STATUS_CLEARED);
         setArchiveActionStatus(STATUS_RESET_ALL_OK);
         announce(STATUS_RESET_ALL_OK);
-        notifyCareerDataChanged(context, 'reset');
       };
       if (result && typeof result.then === 'function') {
         result.then(settle, () => settle({ ok: false }));
