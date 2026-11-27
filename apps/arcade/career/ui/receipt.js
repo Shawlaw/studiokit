@@ -18,9 +18,8 @@
  * - 金额/材料只读 db.readWallet / db.readLedger / db.getClaim 的 DB 行（txId），UI 不自算；
  * - 同一 txId 重复行只渲染一次；同 run 重复 show 只保留一张卡；同 run 重复打开面板显示
  *   db.getClaim(runId) 里的原收据（没有则明确显示空态，不伪造）；
- * - careerId 来源优先级：ctx.careerId → ctx.commissionRun.careerId →
- *   ctx.commission.listAvailable({ensure:true}).careerId → ctx.api.commissionRun；
- *   都没有时显示「还没有可查的账目」并不抛异常；
+ * - careerId 只来自 ctx.careerId / commissionRun.careerId / profile.careerId 或
+ *   ctx.api.commissionRun；没有真实身份时显示「还没有可查的账目」；
  * - DB 不可用 / ctx.api 无 commission 模块：面板显示降级提示，控制台不报 error。
  *
  * 交互与视觉：
@@ -134,6 +133,28 @@
   let card = null;
   let actionFailure = null;
   let panelSeq = 0;
+  let unsubscribeCareerChanges = null;
+  const CAREER_CHANGE_REASONS = ['career-imported', 'career-archived', 'career-unarchived', 'career-reset'];
+
+  function subscribeCareerChanges(context, onChange) {
+    const subscribe = typeof context.onCareerDataChanged === 'function'
+      ? context.onCareerDataChanged
+      : isObject(context.api) && typeof context.api.onCareerDataChanged === 'function'
+        ? context.api.onCareerDataChanged : null;
+    if (!subscribe) return null;
+    try {
+      const unsubscribe = subscribe.call(context, onChange);
+      return typeof unsubscribe === 'function' ? unsubscribe : null;
+    } catch (err) {
+      return null;
+    }
+  }
+
+  function unsubscribeCareerPanelChanges() {
+    if (!unsubscribeCareerChanges) return;
+    try { unsubscribeCareerChanges(); } catch (err) { /* ignore */ }
+    unsubscribeCareerChanges = null;
+  }
 
   /* ---------------------------------------------------------------- 通用小工具 */
 
@@ -290,9 +311,9 @@
   }
 
   /**
-   * careerId 解析（异步，因为 listAvailable 可能返回 Promise）。
-   * 优先级：ctx.careerId → ctx.commissionRun.careerId → commission.listAvailable({ensure:true})
-   *        → ctx.api.commissionRun → ctx.profile.careerId（额外兜底，不改变前三项优先级）。
+   * careerId 只从真实上下文解析；绝不通过列表/ensure 副作用兜底。
+   * 优先级：ctx.careerId → ctx.commissionRun.careerId → ctx.profile.careerId
+   *        → ctx.api.commissionRun。
    */
   function resolveCareerId(context) {
     const ctx = isObject(context) ? context : {};
@@ -302,27 +323,16 @@
       const runId = careerIdOf(ctx.commissionRun);
       if (runId) return Promise.resolve(runId);
     }
-    const fallbackFromApi = () => {
-      const api = isObject(ctx.api) ? ctx.api : null;
-      if (api) {
-        let candidate = api.commissionRun;
-        if (typeof candidate === 'function') candidate = safeCall(candidate, api, []);
-        const id = careerIdOf(candidate);
-        if (id) return id;
-      }
-      const profileId = careerIdOf(ctx.profile);
-      if (profileId) return profileId;
-      return null;
-    };
-    const module = isObject(ctx.commission) ? ctx.commission : null;
-    let pending = null;
-    if (module && typeof module.listAvailable === 'function') {
-      pending = safeCall(module.listAvailable, module, [{ ensure: true }]);
+    const profileId = careerIdOf(ctx.profile);
+    if (profileId) return Promise.resolve(profileId);
+    const api = isObject(ctx.api) ? ctx.api : null;
+    if (api) {
+      let candidate = api.commissionRun;
+      if (typeof candidate === 'function') candidate = safeCall(candidate, api, []);
+      const id = careerIdOf(candidate);
+      if (id) return Promise.resolve(id);
     }
-    return Promise.resolve(pending).then(
-      (out) => careerIdOf(out) || fallbackFromApi(),
-      () => fallbackFromApi()
-    );
+    return Promise.resolve(null);
   }
 
   function readLastRunId(context) {
@@ -506,18 +516,16 @@
     return chars.length > capped ? chars.slice(0, capped).join('') + '…' : text;
   }
 
+  /**
+   * 收据卡只读真实结算反馈；「下一步 / 经历」只能来自 careerView 投影，
+   * 因此这里明确不读取 storyFeedback.nextStep / chapter / chapterCount。
+   */
   function readStoryFeedback(outer, result) {
     const rawValue = isObject(outer.storyFeedback) ? outer.storyFeedback : isObject(result.storyFeedback) ? result.storyFeedback : null;
     if (!isObject(rawValue)) return null;
     const raw = rawValue;
     const status = storyTextOf(raw.status, 24);
     if (status !== 'new' && status !== 'recorded' && status !== 'unavailable') return null;
-    const lines = [];
-    const discovered = Array.isArray(raw.discovered) ? raw.discovered : [];
-    discovered.slice(0, 3).forEach((item) => {
-      const text = storyTextOf(isObject(item) ? item.text : item);
-      if (text && lines.indexOf(text) < 0) lines.push(text);
-    });
     const replies = [];
     const rawReplies = Array.isArray(raw.replies) ? raw.replies : [];
     rawReplies.slice(0, 2).forEach((item) => {
@@ -526,19 +534,37 @@
       const text = storyTextOf(item.text);
       if (name && text) replies.push({ name: name, text: text });
     });
-    const rawChapter = isObject(raw.chapter) ? raw.chapter : null;
-    const chapterId = /^C[0-5]$/.test(storyTextOf(rawChapter && rawChapter.id, 12)) ? storyTextOf(rawChapter.id, 12) : '';
-    /* 只保留玩家语言标题；C1/C2 这类内部章号绝不出现在玩家可见文案。 */
-    const chapterTitle = chapterId ? storyTextOf(rawChapter.title, 160) : '';
     return {
       status: status,
-      lines: lines,
       replies: replies,
-      chapterId: chapterId,
-      chapterTitle: chapterTitle,
-      chapterCount: Math.max(0, Math.floor(Number(raw.chapterCount) || 0)),
-      nextStep: storyTextOf(raw.nextStep),
+      nextStep: '',
+      history: [],
+      endingAction: false,
       unavailable: status === 'unavailable' ? storyTextOf(raw.unavailable) || '剧情这会儿没能记进账。' : '',
+    };
+  }
+
+  /** bridge 注入的已投影结果；字段缺失一律忽略，不回退到未 gate 的章节推导。 */
+  function projectedStoryOf(outer) {
+    const view = isObject(outer.careerView) ? outer.careerView
+      : isObject(outer.projectedCareerView) ? outer.projectedCareerView : null;
+    const story = view && isObject(view.story) ? view.story : null;
+    const direct = isObject(outer.projectedNextAction) ? outer.projectedNextAction : null;
+    const action = story && story.nextAction ? story.nextAction : direct;
+    let nextStep = '';
+    if (typeof action === 'string') nextStep = storyTextOf(action);
+    else if (isObject(action)) nextStep = storyTextOf(action.label || action.text || action.description);
+    const history = [];
+    if (story && Array.isArray(story.history)) {
+      story.history.slice(0, 6).forEach((entry) => {
+        const label = storyTextOf(isObject(entry) ? entry.label || entry.text : entry, 120);
+        if (label && history.indexOf(label) < 0) history.push(label);
+      });
+    }
+    return {
+      nextStep: nextStep,
+      history: history,
+      endingAction: !!(isObject(action) && action.kind === 'ending'),
     };
   }
 
@@ -556,9 +582,9 @@
         ? { id: 'read-epilogue', text: '读后日谈', label: '关闭收据并读后日谈', run: openCampaign }
         : { id: 'choose-ending', text: '回去选终局路线', label: '关闭收据并返回终局选择', run: openCampaign });
     } else if (fields.ok && feedback && feedback.status !== 'unavailable') {
-      if (feedback.chapterId === 'C4' && openCampaign) {
+      if (feedback.endingAction && openCampaign) {
         actions.push({ id: 'choose-ending', text: '选择终局路线', label: '关闭收据并打开终局选择', run: openCampaign });
-      } else if (feedback.chapterTitle || feedback.replies.length) {
+      } else if (feedback.replies.length) {
         const readReply = openCampaign || (typeof outer.openMailbox === 'function' ? () => outer.openMailbox() : null);
         if (readReply) actions.push({ id: 'read-reply', text: CARD_CONTINUE_TEXT, label: CARD_CONTINUE_LABEL, run: readReply });
       }
@@ -881,6 +907,7 @@
   function closePanel() {
     const current = panel;
     panel = null;
+    unsubscribeCareerPanelChanges();
     panelSeq += 1;
     if (!current) return false;
     try {
@@ -969,6 +996,13 @@
     };
     current.onKeyDown = (event) => onPanelKeyDown(current, event);
     panel = current;
+    unsubscribeCareerChanges = subscribeCareerChanges(context, (change) => {
+      if (panel !== current) return;
+      const reason = cleanText(change && change.reason);
+      if (CAREER_CHANGE_REASONS.indexOf(reason) < 0) return;
+      closePanel();
+      removeCard();
+    });
 
     closeBtn.addEventListener('click', () => closePanel(), false);
 
@@ -1014,6 +1048,7 @@
     const current = card;
     card = null;
     if (!current) return false;
+    unsubscribeCareerPanelChanges();
     try {
       if (current.el && current.el.parentNode) current.el.parentNode.removeChild(current.el);
     } catch (err) {
@@ -1035,10 +1070,10 @@
   }
 
   function appendStoryBlock(doc, parent, feedback) {
-    if (!feedback || !(feedback.unavailable || feedback.lines.length || feedback.chapterTitle || feedback.nextStep || feedback.replies.length)) return;
+    if (!feedback || !(feedback.unavailable || feedback.history.length || feedback.nextStep || feedback.replies.length)) return;
     const block = make(doc, 'section', 'ac-career-receipt-story');
     applyStyle(block, { display: 'flex', flexDirection: 'column', gap: '4px' });
-    if (feedback.lines.length || feedback.chapterTitle || feedback.replies.length) {
+    if (feedback.history.length || feedback.replies.length) {
       const heading = make(doc, 'h3', 'ac-career-receipt-story__title', '你这一趟带回了什么？');
       applyStyle(heading, { margin: '2px 0 0', fontSize: '12px', fontWeight: '600' });
       block.appendChild(heading);
@@ -1046,10 +1081,7 @@
     if (feedback.status === 'unavailable') {
       block.appendChild(make(doc, 'p', 'ac-career-status', feedback.unavailable));
     } else {
-      feedback.lines.forEach((text) => block.appendChild(make(doc, 'p', 'ac-career-status', text)));
-      if (feedback.chapterTitle) {
-        block.appendChild(make(doc, 'p', 'ac-career-status', '新完成的段落：' + feedback.chapterTitle));
-      }
+      feedback.history.forEach((text) => block.appendChild(make(doc, 'p', 'ac-career-status', text)));
       feedback.replies.forEach((reply) => {
         block.appendChild(make(doc, 'p', 'ac-career-status', reply.name + '：' + reply.text));
       });
@@ -1230,6 +1262,12 @@
     const result = isObject(outer.result) ? outer.result : outer;
     const fields = readReceiptFields(result, outer);
     const feedback = readStoryFeedback(outer, result);
+    if (feedback) {
+      const projected = projectedStoryOf(outer);
+      feedback.nextStep = projected.nextStep;
+      feedback.history = projected.history;
+      feedback.endingAction = projected.endingAction;
+    }
     const actions = storyActionsOf(fields, feedback, outer);
     closePanel();
     removeCard();
@@ -1243,6 +1281,12 @@
       return null;
     }
     card = { el: el, key: fields.key, fields: fields };
+    unsubscribeCareerChanges = subscribeCareerChanges(outer, (change) => {
+      if (!card || card.el !== el) return;
+      const reason = cleanText(change && change.reason);
+      if (CAREER_CHANGE_REASONS.indexOf(reason) < 0) return;
+      removeCard();
+    });
     return el;
   }
 

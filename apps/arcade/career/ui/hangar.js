@@ -16,7 +16,7 @@
  *     profile, wallet, announce(text), reducedMotion, openTown, openReceipt,
  *     openSettings, rental? }
  * 兼容：ctx.db（或 api.db / window.ArcadeCareer.db）可直接拿到 career-db 模块；
- *       careerId 缺失时用 ctx.commission.listAvailable({ensure:true}) 取；
+ *       careerId 只取 ctx / 已投影上下文；缺失时保持只读，不创建生涯身份；
  *       rental 缺失时租用按钮标注「码头暂未开放」，绝不扣费。
  *
  * 硬约束：
@@ -56,6 +56,7 @@
   const WALLET_CLOSED = '账目暂时打不开：';
   const ITEMS_UNAVAILABLE = '机库暂不可用。';
   const NO_CAREER_NOTICE = '还不能登记：机库里只认得下过港口活计的人。';
+  const TOOL_NOTICE = '这处活计还没引入，机库先只能看看。';
   const NO_CAREER_STATUS = '还不能登记。';
   const BUY_LABEL = '登记这架';
   const BUY_OWNED_LABEL = '已入列';
@@ -285,6 +286,38 @@
    * ------------------------------------------------------------------ */
 
   let panel = null;
+  let unsubscribeCareerChanges = null;
+  const CAREER_CHANGE_REASONS = ['career-imported', 'career-archived', 'career-unarchived', 'career-reset'];
+
+  function subscribeCareerChanges(context, onChange) {
+    const subscribe = typeof context.onCareerDataChanged === 'function'
+      ? context.onCareerDataChanged
+      : isObject(context.api) && typeof context.api.onCareerDataChanged === 'function'
+        ? context.api.onCareerDataChanged : null;
+    if (!subscribe) return null;
+    try {
+      const unsubscribe = subscribe.call(context, onChange);
+      return typeof unsubscribe === 'function' ? unsubscribe : null;
+    } catch (err) {
+      return null;
+    }
+  }
+
+  function bindCareerChanges(target, context) {
+    unsubscribeCareerPanelChanges();
+    unsubscribeCareerChanges = subscribeCareerChanges(context, (change) => {
+      if (panel !== target) return;
+      const reason = cleanText(change && change.reason);
+      if (CAREER_CHANGE_REASONS.indexOf(reason) < 0) return;
+      close();
+    });
+  }
+
+  function unsubscribeCareerPanelChanges() {
+    if (!unsubscribeCareerChanges) return;
+    try { unsubscribeCareerChanges(); } catch (err) { /* ignore */ }
+    unsubscribeCareerChanges = null;
+  }
 
   function rootWindow() {
     try {
@@ -426,7 +459,10 @@
       rental: ctx.rental || null,
       db: ctx.db || null,
       reducedMotion: ctx.reducedMotion === true || prefersReducedMotion(),
+      careerView: typeof ctx.careerView === 'function' ? ctx.careerView
+        : isObject(ctx.api) && typeof ctx.api.careerView === 'function' ? ctx.api.careerView : null,
       announce: typeof ctx.announce === 'function' ? ctx.announce : null,
+      onCareerDataChanged: typeof ctx.onCareerDataChanged === 'function' ? ctx.onCareerDataChanged : null,
     };
   }
 
@@ -696,6 +732,7 @@
   function purchaseBlock(p, ship) {
     const state = p.state;
     if (!state || !state.items) return { code: 'items-unavailable', label: BUY_LABEL, text: ITEMS_UNAVAILABLE };
+    if (!state.toolIntroduced) return { code: 'tool-locked', label: BUY_LABEL, text: TOOL_NOTICE };
     if (ownedShip(state, ship.shipId)) return { code: 'owned', label: BUY_OWNED_LABEL, text: '这架已经在册上了。' };
     if (!state.careerId) return { code: 'no-career', label: NO_CAREER_STATUS.replace('。', ''), text: NO_CAREER_STATUS };
     if (!walletReady(state)) return { code: 'wallet', label: LEDGER_CLOSED.replace('。', ''), text: LEDGER_CLOSED };
@@ -710,6 +747,7 @@
   function equipBlock(p, ship) {
     const state = p.state;
     if (!state || !state.items) return { code: 'items-unavailable', label: EQUIP_LABEL, text: ITEMS_UNAVAILABLE };
+    if (!state.toolIntroduced) return { code: 'tool-locked', label: EQUIP_LABEL, text: TOOL_NOTICE };
     if (currentShipId(state) === ship.shipId) {
       return { code: 'current', label: EQUIP_CURRENT_LABEL, text: '现在用的就是这架。' };
     }
@@ -729,6 +767,7 @@
     const state = p.state;
     if (ship.rental !== true) return null;
     if (!state || !state.items) return { code: 'items-unavailable', label: RENT_LABEL, text: ITEMS_UNAVAILABLE };
+    if (!state.toolIntroduced) return { code: 'tool-locked', label: RENT_LABEL, text: TOOL_NOTICE };
     const method = pickRentMethod(state.rental);
     if (!state.rental || !method) {
       return { code: 'rental-unavailable', label: RENT_CLOSED_LABEL, text: RENT_CLOSED_STATUS };
@@ -793,7 +832,7 @@
    * ------------------------------------------------------------------ */
 
   function emptyState() {
-    return { items: null, careerId: '', wallet: null, walletError: '', rental: null, commissionChecked: false };
+    return { items: null, careerId: '', wallet: null, walletError: '', rental: null, commissionChecked: false, toolIntroduced: false };
   }
 
   function renderAll(p) {
@@ -852,6 +891,11 @@
     const state = p.state || emptyState();
     const el = p.noticeEl;
     if (!el) return;
+    if (!state.toolIntroduced) {
+      el.hidden = false;
+      el.textContent = TOOL_NOTICE;
+      return;
+    }
     if (!state.items) {
       el.hidden = false;
       el.textContent = ITEMS_UNAVAILABLE;
@@ -1019,7 +1063,7 @@
     }
     renderAll(p);
     if (!items) return Promise.resolve();
-    return ensureCareerId(p, token, context, state)
+    return ensureToolIntroduced(p, token, context, state)
       .then(function () {
         if (!isLive(p, token)) return null;
         return readWalletState(p, token, context, state);
@@ -1036,25 +1080,27 @@
       });
   }
 
-  function ensureCareerId(p, token, context, state) {
-    if (state.careerId) return Promise.resolve();
-    const commission = commissionOf(context);
-    if (!commission || typeof commission.listAvailable !== 'function') return Promise.resolve();
+  function ensureToolIntroduced(p, token, context, state) {
+    const reader = typeof context.careerView === 'function'
+      ? context.careerView
+      : isObject(context.api) && typeof context.api.careerView === 'function' ? context.api.careerView : null;
+    if (!reader || !state.careerId) return Promise.resolve();
     let returned = null;
     try {
-      returned = commission.listAvailable({ ensure: true });
+      returned = reader.call(context, { surface: 'tools' });
     } catch (err) {
       return Promise.resolve();
     }
     return Promise.resolve(returned).then(
-      function (result) {
+      function (view) {
         if (!isLive(p, token)) return;
-        state.commissionChecked = true;
-        const careerId = pickCareerId(result);
-        if (careerId) state.careerId = careerId;
+        state.toolIntroduced = !!(isObject(view) && Array.isArray(view.tools)
+          && view.tools.some(function (tool) { return isObject(tool) && tool.toolId === 'hangar'; }));
+        renderAll(p);
       },
       function () {
-        state.commissionChecked = true;
+        state.toolIntroduced = false;
+        renderAll(p);
       }
     );
   }
@@ -1499,6 +1545,7 @@
       if (context.reducedMotion) panel.overlay.classList.add('is-reduced-motion');
       else panel.overlay.classList.remove('is-reduced-motion');
       applyStatus(panel, '', '');
+      bindCareerChanges(panel, context);
       loadData(panel);
       safelyFocus(panel.closeBtn);
       return panel.sheet;
@@ -1509,6 +1556,7 @@
     if (!built) return null;
     panel = built;
     applyStatus(panel, '', '');
+    bindCareerChanges(panel, context);
     loadData(panel);
     safelyFocus(panel.closeBtn);
     return panel.sheet;
@@ -1527,6 +1575,7 @@
     panel.context = context;
     if (context.reducedMotion) panel.overlay.classList.add('is-reduced-motion');
     else panel.overlay.classList.remove('is-reduced-motion');
+    bindCareerChanges(panel, context);
     loadData(panel);
     return panel.sheet;
   }
@@ -1535,6 +1584,7 @@
   function close() {
     const current = panel;
     panel = null;
+    unsubscribeCareerPanelChanges();
     if (!current) return false;
     try {
       current.doc.removeEventListener('keydown', current.onKeyDown, true);
