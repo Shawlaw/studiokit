@@ -147,7 +147,9 @@
     const acceptedResult = isObject(opts.acceptedResult) ? opts.acceptedResult : null;
     const accepted = invitation.state === 'accepted' || !!(acceptedResult && acceptedResult.ok === true);
     const identityBefore = opts.identityBefore === undefined ? established : opts.identityBefore === true;
-    const created = !!(acceptedResult && acceptedResult.ok === true && acceptedResult.created === true && !identityBefore);
+    const createdHere = acceptedResult && acceptedResult.ok === true && acceptedResult.created === true && !identityBefore;
+    const arrivedFromLetter = ctx.firstArrival === true && invitation.state === 'accepted' && established;
+    const created = !!(createdHere || arrivedFromLetter);
     const mode = created || (!established && !(acceptedResult && acceptedResult.created === false)) ? 'freshIntro' : 'existingIntro';
     const narrative = narrativeOf(ctx, invitation);
     const intro = paragraphsOf(narrative[mode]);
@@ -219,12 +221,20 @@
     const doc = state.shellDoc;
     const body = doc.createElement('div');
     body.className = 'ac-career-ui__stack';
-    const scene = harbor(true);
-    if (scene) body.appendChild(scene);
+    const firstArrival = model.mode === 'freshIntro';
+    const title = cleanText(model.narrative.title) || (firstArrival ? '初次到港' : '一封新的邀请');
+    if (firstArrival) {
+      const scene = harbor(true);
+      if (scene) body.appendChild(scene);
+    }
     const location = doc.createElement('p');
     location.className = 'ac-career-ui__caption';
-    location.textContent = cleanText(model.narrative.location) || '折光港 · 旧码头';
+    location.textContent = cleanText(model.narrative.location) || (firstArrival ? '折光港 · 旧码头' : '一封新的回信');
     body.appendChild(location);
+    const heading = doc.createElement('h2');
+    heading.className = 'ac-career-ui__story-title';
+    heading.textContent = title;
+    body.appendChild(heading);
 
     const npcActions = [];
     if (!model.accepted) {
@@ -248,9 +258,7 @@
       paragraphs: model.paragraphs,
       avatar: { kind: 'user' },
       state: model.mode === 'freshIntro' ? 'first' : 'optional',
-      actions: npcActions,
     });
-    annotateActions(npc, npcActions);
     body.appendChild(npc);
     if (status) {
       const note = doc.createElement('p');
@@ -287,7 +295,14 @@
       body.appendChild(story);
     }
 
-    const title = cleanText(model.narrative.title) || (model.mode === 'freshIntro' ? '初次到港' : '一封新的邀请');
+    npcActions.forEach((action) => {
+      const button = action.kind === 'primary'
+        ? components.PrimaryAction(action)
+        : components.SecondaryAction(Object.assign({}, action, { variant: 'text' }));
+      button.setAttribute('data-action', action.id);
+      body.appendChild(button);
+    });
+
     const result = state.shell.render({
       title: title,
       showHeader: false,

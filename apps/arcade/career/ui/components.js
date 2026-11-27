@@ -244,11 +244,11 @@
     const input = isObject(props) ? props : {};
     const doc = documentOf();
     if (!doc) return null;
-    const wrapper = element(doc, 'section', 'ac-career-ui__letter-wrap');
+    const wrapper = element(doc, 'section', 'ac-career-ui__letter-wrap ac-career-ui__stack');
     wrapper.setAttribute('data-letter-state', oneOf(input.state, LETTER_STATES, 'unread'));
     const ambient = cleanText(input.ambientLabel);
     if (ambient) wrapper.appendChild(element(doc, 'p', 'ac-career-ui__caption', ambient));
-    const letter = element(doc, 'article', 'ac-career-ui__letter ac-career-ui__stack ac-career-ui__stack--small');
+    const letter = element(doc, 'article', 'ac-career-ui__letter ac-career-ui__stack');
     letter.appendChild(element(doc, 'h2', 'ac-career-ui__gold-light', cleanText(input.title)));
     const paragraphs = Array.isArray(input.paragraphs) ? input.paragraphs : [];
     paragraphs.forEach((paragraph) => letter.appendChild(element(doc, 'p', 'ac-career-ui__letter-paragraph', cleanText(paragraph))));

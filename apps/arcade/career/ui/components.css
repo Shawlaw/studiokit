@@ -344,10 +344,14 @@ html.ac-career-ui-scroll-lock body {
   text-decoration: underline;
 }
 
+.ac-career-ui__letter-wrap > .ac-career-ui__actions {
+  gap: var(--ac-career-ui-gap);
+}
+
 .ac-career-ui__letter {
   min-width: 0;
   border-radius: var(--ac-career-ui-radius);
-  padding: var(--ac-career-ui-pad);
+  padding: var(--ac-career-ui-space-4);
   background: var(--ac-career-ui-story);
 }
 

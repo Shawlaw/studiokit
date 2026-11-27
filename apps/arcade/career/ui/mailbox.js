@@ -1133,12 +1133,17 @@
   }
 
   function invitationPort(session) {
+    const arrival = {
+      clueId: session.selectedId,
+      returnFocus: session.returnFocus,
+      firstArrival: session.firstArrivalClueId === session.selectedId,
+    };
     close();
     const run = () => {
-      if (typeof session.context.openInvitation === 'function') return session.context.openInvitation({ clueId: session.selectedId, returnFocus: session.returnFocus });
+      if (typeof session.context.openInvitation === 'function') return session.context.openInvitation(arrival);
       const invitationUi = root.ArcadeCareerUI && root.ArcadeCareerUI.invitation;
       if (invitationUi && typeof invitationUi.open === 'function') {
-        const opened = invitationUi.open(Object.assign({}, session.context, { clueId: session.selectedId, returnFocus: session.returnFocus }));
+        const opened = invitationUi.open(Object.assign({}, session.context, arrival));
         if (opened && opened.ok === false) return opened;
         return opened;
       }
@@ -1233,6 +1238,7 @@
         return;
       }
       acceptedInvitations[key] = true;
+      if (value.created === true) session.firstArrivalClueId = invitation.clueId || session.selectedId;
       session.invitation = Object.assign({}, invitation, { state: 'accepted', canAccept: false });
       session.identity = true;
       session.status = '';

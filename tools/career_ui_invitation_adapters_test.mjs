@@ -624,7 +624,10 @@ function narrativeFor(professionId) {
     clueId: p05.bridgeInput.clue.clueId,
     state: { stage: 'LOCAL', clues: { [p05.bridgeInput.clue.clueId]: { openedAt: '2026-11-27T00:00:00Z' } }, acceptedOriginGameId: 'gold-miner' },
     careerId: 'career-existing',
-    narrative: narrativeFor('adventure.relicseeker'),
+    narrative: Object.assign({}, narrativeFor('adventure.relicseeker')['adventure.relicseeker'], {
+      title: p06.props.title,
+      location: p06.props.caption,
+    }),
     invitationForClue() { return { professionId: 'adventure.relicseeker', gameId: 'shadow-leap', displayName: '遗迹探险家', state: 'read', canAccept: true }; },
     careerView: () => Promise.resolve({ schemaVersion: 1, originGameId: 'gold-miner', professions: [{ professionId: 'nature.miner', displayName: '采矿员', state: 'accepted' }], commissions: [], story: {}, tools: [] }),
     acceptProfessionInvitation(input) { events.push(['accept', input.professionId, input.gameId]); return Promise.resolve({ ok: true, created: false, newlyAccepted: true }); },
@@ -652,10 +655,8 @@ function narrativeFor(professionId) {
   check('P06 NPC state is optional', !!panel && !!panel.querySelector('.ac-career-ui__npc') && panel.querySelector('.ac-career-ui__npc').getAttribute('data-npc-state') === 'optional', { panel: !!panel, body: textOf(doc.body) });
   check('P06 existingIntro text is used', textOf(panel).includes('已有的合成语境'));
   check('P06 freshIntro is not replayed', !textOf(panel).includes('首次到港的合成说明'));
-  check('P06 harbor is decorative', !!panel.querySelector('svg.harbor') && panel.querySelector('svg.harbor').getAttribute('aria-hidden') === 'true', {
-    text: textOf(panel),
-    svgs: panel.querySelectorAll('svg').map((node) => ({ tag: node.tagName, cls: node.className, aria: node.getAttribute('aria-hidden') })),
-  });
+  check('P06 shows the invitation heading without repeating the first-arrival harbor',
+    panel.querySelector('.ac-career-ui__story-title').textContent === p06.props.title && !panel.querySelector('svg.harbor'));
   check('P06 no task title/objective/reward', !/委托标题|报酬|职业进度|shadow-leap\.T1/.test(textOf(panel)));
   check('P06 accept/defer actions exist', !!buttonBy(doc, 'accept-invitation') && !!buttonBy(doc, 'defer-invitation'), {
     text: textOf(panel),
@@ -736,6 +737,15 @@ function narrativeFor(professionId) {
     && textOf(panelOf(doc)).includes(p03.props.primaryAction.label)
     && textOf(panelOf(doc)).includes(p03.props.secondaryAction.label), textOf(panelOf(doc)));
   eq('P03 created flag is true', doc.querySelector('.ac-career-ui__panel').getAttribute('data-invitation-created'), 'true');
+  const acceptedContext = Object.assign({}, ctx, {
+    invitationForClue: () => ({ professionId, gameId: 'gold-miner', state: 'accepted' }),
+  });
+  const fromLetter = await ui.invitation.derive(Object.assign({}, acceptedContext, { firstArrival: true }));
+  const reopened = await ui.invitation.derive(acceptedContext);
+  check('P03 first arrival survives the letter handoff and has an authorized first commission',
+    fromLetter.mode === 'freshIntro' && fromLetter.firstCommission?.commissionId === 'gold-miner.T1');
+  check('P03 reopening an accepted invitation does not replay first arrival',
+    reopened.mode === 'existingIntro' && reopened.firstCommission === null);
   const start = buttonBy(doc, 'start-first-commission');
   check('P03 explicit commission action exists', !!start, {
     buttons: panelOf(doc).querySelectorAll('button').map((node) => ({ text: node.textContent, action: node.getAttribute('data-action'), id: node.id })),
