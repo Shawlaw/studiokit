@@ -210,6 +210,7 @@ let npc;
 let items;
 let narrativeRegistry;
 let shards;
+let worldNarrativeContent;
 let professionState;
 let professionView;
 try {
@@ -224,6 +225,7 @@ try {
   items = readJson(CONTENT_REL + '/items.json');
   narrativeRegistry = readJson(CONTENT_REL + '/narrative-registry.json');
   shards = [1, 2, 3, 4].map((index) => readJson(CONTENT_REL + '/narrative-shards/shard-0' + index + '.json'));
+  worldNarrativeContent = readJson(CONTENT_REL + '/world-narrative.json');
   professionState = require(path.join(ROOT, 'apps/arcade/career/profession-state.js'));
   professionView = require(path.join(ROOT, 'apps/arcade/career/profession-view.js'));
 } catch (error) {
@@ -844,6 +846,98 @@ check('真实实现确实只允许 clue/commission/world/story 四种 source（�
   const tokens = match[1].split(',').map((part) => part.trim().replace(/^['"]|['"]$/g, '')).filter(Boolean).sort();
   return deepEqual(tokens, ['clue', 'commission', 'story', 'world']);
 })());
+
+/* ---- T24 加性：经历回读 text/person 契约与真实内容 ---- */
+
+const journalEventSchema = (contract.schemas || {}).journalEvent || {};
+const journalEventProps = journalEventSchema.properties || {};
+const journalEventRequired = journalEventSchema.required || [];
+check('T24 journalEvent 可选 text 字段冻结（8–120 字符）', journalEventProps.text
+  && journalEventProps.text.type === 'string'
+  && journalEventProps.text.minLength === 8
+  && journalEventProps.text.maxLength === 120, JSON.stringify(journalEventProps.text));
+check('T24 journalEvent 可选 person 字段冻结（≤24 字符、真实人名）', journalEventProps.person
+  && journalEventProps.person.type === 'string'
+  && journalEventProps.person.maxLength === 24
+  && typeof journalEventProps.person.pattern === 'string', JSON.stringify(journalEventProps.person));
+check('T24 新字段不进 required（旧内容/旧档仍合法）', journalEventRequired.indexOf('text') < 0
+  && journalEventRequired.indexOf('person') < 0, journalEventRequired.join(','));
+check('T24 契约声明经历回读不落盘、缺失时保持 0.23 行', (() => {
+  const details = (contract.journal || {}).details || {};
+  return details.optional === true
+    && deepEqual(details.textRange, [8, 120])
+    && deepEqual(details.personRange, [2, 24])
+    && details.persisted === false
+    && details.whenMissing === 'omit-detail-and-keep-0.23-row'
+    && details.textKind === 'whitelist-static';
+})() && deepEqual(contract.journal.stateShape.persistedFields, ['at', 'source']));
+check('T24 常量与 schema/planning 数字一致', constants.journalTextMinLength === 8
+  && constants.journalTextMaxLength === 120
+  && constants.journalPersonMaxLength === 24);
+
+const realSignerNames = new Set();
+(chapterOne.origins || []).forEach((origin) => {
+  const from = origin && origin.c0Letter && origin.c0Letter.from;
+  if (typeof from === 'string' && from) realSignerNames.add(from);
+});
+shards.forEach((shard) => {
+  (shard.entries || []).forEach((entry) => {
+    if (typeof entry.npc === 'string' && entry.npc) realSignerNames.add(entry.npc);
+    if (typeof entry.sender === 'string' && entry.sender) realSignerNames.add(entry.sender);
+  });
+});
+(npc.characters || []).forEach((character) => {
+  if (typeof character.name === 'string' && character.name) realSignerNames.add(character.name);
+});
+
+const contentJournalRows = Array.isArray(worldNarrativeContent.journalWhitelist)
+  ? worldNarrativeContent.journalWhitelist : [];
+const t24RowIssues = [];
+const seenTexts = new Set();
+const seenLabels = new Set();
+const moneyRe = /信用点|星币|工钱|奖励|报酬|积分|材料\s*[×x]/;
+const percentRe = /\d+(?:\.\d+)?\s*%|\b\d+\s*\/\s*\d+\b/;
+const chapterCodeRe = /(?:^|[^A-Za-z0-9])C[0-5](?:\.|\b)/;
+const internalTagRe = /\b[A-Z]{1,3}-\d{1,4}\b/;
+const internalEventRe = /\b[a-z][a-z0-9-]*:[A-Za-z0-9]/;
+const expectedRowKeys = ['eventId', 'label', 'labelMode', 'person', 'placeholder', 'sampleKind', 'source', 'surfaces', 'text', 'whitelistLayer'];
+contentJournalRows.forEach((row, index) => {
+  const where = 'content.journal[' + index + ']';
+  const errors = validate(contract, journalEventSchema, row, where);
+  errors.slice(0, 3).forEach((error) => t24RowIssues.push(error));
+  if (!deepEqual(Object.keys(row).sort(), expectedRowKeys.slice().sort())) {
+    t24RowIssues.push(where + ': keys=' + Object.keys(row).sort().join(','));
+  }
+  const text = typeof row.text === 'string' ? row.text : '';
+  const person = typeof row.person === 'string' ? row.person : '';
+  if (text.length < 8 || text.length > 120) t24RowIssues.push(where + ': text-length=' + text.length);
+  if (!person || person.length > 24) t24RowIssues.push(where + ': person-length=' + person.length);
+  if (!realSignerNames.has(person)) t24RowIssues.push(where + ': person-not-signer=' + person);
+  if (moneyRe.test(text)) t24RowIssues.push(where + ': money');
+  if (percentRe.test(text)) t24RowIssues.push(where + ': percent/progress');
+  if (chapterCodeRe.test(text)) t24RowIssues.push(where + ': chapter-code');
+  if (internalTagRe.test(text)) t24RowIssues.push(where + ': internal-tag');
+  if (internalEventRe.test(text)) t24RowIssues.push(where + ': internal-event');
+  ((contract.forbidden || {}).playerTextTokens || []).forEach((token) => {
+    if (text.includes(token)) t24RowIssues.push(where + ': token=' + token);
+  });
+  (contract.forbidden.routeGuideKeywords || []).forEach((word) => {
+    if (text.includes(word)) t24RowIssues.push(where + ': route-guide=' + word);
+  });
+  realDisplayNames.forEach((name) => {
+    if (name && text.includes(name)) t24RowIssues.push(where + ': profession-name=' + name);
+  });
+  if (seenTexts.has(text)) t24RowIssues.push(where + ': duplicate-text');
+  if (seenLabels.has(row.label)) t24RowIssues.push(where + ': duplicate-label');
+  seenTexts.add(text);
+  seenLabels.add(row.label);
+});
+check('T24 17 条白名单全部补齐真实 text/person', contentJournalRows.length === 17, contentJournalRows.length);
+check('T24 白名单行通过 schema、字段闭合、文本卫生与真实签名人', t24RowIssues.length === 0, t24RowIssues.slice(0, 6).join(' | '));
+check('T24 text 与 person 均来自真实内容且非占位（不编造奖励/攻略）', contentJournalRows.every((row) => row.placeholder === false
+  && typeof row.text === 'string' && row.text.length >= 8
+  && typeof row.person === 'string' && realSignerNames.has(row.person)
+  && !/占位/.test(row.text)), contentJournalRows.length + ' rows');
 
 /* ---- 纯逻辑模拟：默认拒绝 + 三层白名单 + 排序 ---- */
 

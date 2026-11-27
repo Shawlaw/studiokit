@@ -75,6 +75,8 @@
   ];
   const RENTAL_LEAD = '阿砾：标准舰可以免费借。';
   const CAMPAIGN_SUBTITLE = '你想继续哪一段？';
+  /* 0.24 T24：章节说明只读公开文本；next 沿用面板既有的「下一步：」说法。 */
+  const GUIDE_NEXT_PREFIX = '下一步：';
   const INTRO_GOAL = '告示板上钉着今天的活，你想先接哪一张？';
   const CLOSE_LABEL = '收起告示板';
   const HANGAR_FAILED = '机库那边灯还亮着，门暂时没开。';
@@ -327,6 +329,35 @@
     '.ac-career-town__intro-line--meta {',
     '  color: var(--ac-career-muted, #93a0c8);',
     '  font-size: 11.5px;',
+    '}',
+    '.ac-career-town__campaign-detail {',
+    '  display: flex;',
+    '  flex-direction: column;',
+    '  gap: 4px;',
+    '  min-width: 0;',
+    '}',
+    '.ac-career-town__chapter-requirement,',
+    '.ac-career-town__chapter-completion,',
+    '.ac-career-town__chapter-offer,',
+    '.ac-career-town__chapter-next {',
+    '  margin: 0;',
+    '  color: var(--ac-career-muted, #93a0c8);',
+    '  font-size: 12px;',
+    '  line-height: 1.7;',
+    '  overflow-wrap: anywhere;',
+    '}',
+    '.ac-career-town__chapter-alternatives {',
+    '  display: flex;',
+    '  flex-direction: column;',
+    '  gap: 4px;',
+    '  min-width: 0;',
+    '  margin: 0;',
+    '  padding: 0;',
+    '  list-style: none;',
+    '}',
+    '.ac-career-town__chapter-alternative {',
+    '  min-width: 0;',
+    '  margin: 0;',
     '}',
     '.ac-career-town__intro-line--role {',
     '  color: var(--ac-career-ink, #eef1ff);',
@@ -1156,6 +1187,88 @@
     return components.JournalTimeline({ state: events.length ? 'filled' : 'empty', events: events });
   }
 
+  /** 当前章节：只读 campaign.state()，与章节面板/告示板同一入口。 */
+  function portCurrentChapterOf(context) {
+    const campaign = context && isObject(context.campaign) ? context.campaign : null;
+    if (!campaign || typeof campaign.state !== 'function') return null;
+    let model = null;
+    try {
+      model = campaign.state({
+        quests: Array.isArray(context.quests) ? context.quests : [],
+        claims: Array.isArray(context.claims) ? context.claims : [],
+        profile: context.profile || null,
+        wallet: context.wallet || null,
+      });
+    } catch (err) {
+      return null;
+    }
+    if (!isObject(model) || model.ok === false || !Array.isArray(model.chapters)) return null;
+    const currentId = isObject(model.currentChapter)
+      ? idText(model.currentChapter.chapterId) : idText(model.currentChapter);
+    return model.chapters.filter(isObject).filter((chapter) => idText(chapter.chapterId) === currentId)[0]
+      || model.chapters.filter(isObject).filter((chapter) => cleanText(chapter.state) === 'active')[0]
+      || null;
+  }
+
+  /**
+   * 0.24 T24：经历页顶部的章节说明。只渲染 campaign-core 的公开前置/完成解释
+   * 与 route-planner 的 alternatives[].texts.{offer,next}；requirement/tokens/
+   * anchor/narrativeNodeId 等内部结构不进入 DOM。无数据时返回 null，不建节点。
+   */
+  function portChapterGuideNode(context) {
+    const current = portCurrentChapterOf(context);
+    if (!current) return null;
+    const prerequisiteText = safePlayerReason(cleanText(current.prerequisite && current.prerequisite.text));
+    const completionText = safePlayerReason(cleanText(current.completion && current.completion.text));
+    const provider = context && typeof context.chapterGuide === 'function' ? context.chapterGuide : null;
+    const rows = [];
+    if (provider) {
+      let guide = null;
+      try {
+        guide = provider({});
+      } catch (err) {
+        guide = null;
+      }
+      if (isObject(guide) && guide.ok === true && Array.isArray(guide.chapters)) {
+        const chapterId = idText(current.chapterId);
+        const chapter = guide.chapters.filter(isObject).filter((row) => idText(row.chapterId) === chapterId)[0];
+        const alternatives = chapter && Array.isArray(chapter.alternatives) ? chapter.alternatives : [];
+        alternatives.forEach((alt) => {
+          if (!isObject(alt) || !isObject(alt.texts)) return;
+          const offer = safePlayerReason(cleanText(alt.texts.offer));
+          const next = safePlayerReason(cleanText(alt.texts.next));
+          if (offer || next) rows.push({ offer: offer, next: next });
+        });
+      }
+    }
+    if (!prerequisiteText && !completionText && !rows.length) return null;
+    const doc = docOfPort();
+    const wrap = doc.createElement('section');
+    wrap.className = 'ac-career-ui__stack ac-career-ui__stack--small';
+    wrap.setAttribute('data-port-chapter-guide', 'true');
+    const push = (className, value) => {
+      if (!value) return;
+      const node = portTextNode(doc, className, value);
+      wrap.appendChild(node);
+    };
+    push('ac-career-ui__caption', prerequisiteText);
+    push('ac-career-ui__caption', completionText);
+    if (rows.length) {
+      const list = doc.createElement('ul');
+      list.className = 'ac-career-ui__stack ac-career-ui__stack--small';
+      list.setAttribute('data-port-chapter-alternatives', 'true');
+      rows.forEach((row) => {
+        const item = doc.createElement('li');
+        item.className = 'ac-career-ui__stack ac-career-ui__stack--small';
+        if (row.offer) item.appendChild(portTextNode(doc, 'ac-career-ui__npc-paragraph', row.offer));
+        if (row.next) item.appendChild(portTextNode(doc, 'ac-career-ui__caption', GUIDE_NEXT_PREFIX + row.next));
+        list.appendChild(item);
+      });
+      wrap.appendChild(list);
+    }
+    return wrap;
+  }
+
   function portContentNode(context, state, view, components) {
     const phase = state.phase;
     const stack = docOfPort();
@@ -1199,6 +1312,9 @@
       return content;
     }
     if (state.tab === 'journal') {
+      /* 0.24 T24：经历页顶部只读章节说明；无数据时不建节点，保持 0.23 结构。 */
+      const chapterGuide = portChapterGuideNode(context);
+      if (chapterGuide) content.appendChild(chapterGuide);
       content.appendChild(portJournalNode(context, view, state, components));
       return content;
     }
@@ -1964,6 +2080,8 @@
     campaignSection.hidden = true;
     const campaignHeading = make('h3', 'ac-career-town__subtitle', CAMPAIGN_SUBTITLE);
     const campaignCurrent = make('p', 'ac-career-town__campaign-current ac-career-town__chapter-note');
+    const campaignDetail = make('div', 'ac-career-town__campaign-detail');
+    campaignDetail.hidden = true;
     const campaignEndings = make('div', 'ac-career-town__campaign-endings');
     campaignSection.appendChild(campaignHeading);
     campaignSection.appendChild(campaignCurrent);
@@ -2202,6 +2320,73 @@
       return { model: model, current: current };
     }
 
+    /**
+     * 0.24 T24：章节替代指引只读消费。bridge 注入 ctx.chapterGuide({}) →
+     * route-planner.chapterAlternatives()；这里只取每章 alternatives[].texts
+     * 的 offer/next，剥掉 requirement/tokens/anchor/narrativeNodeId 等内部结构。
+     * 缺 provider、抛错或坏形状一律返回空映射（与 0.23 同形）。
+     */
+    function chapterGuideMap() {
+      const provider = isObject(liveContext) && typeof liveContext.chapterGuide === 'function'
+        ? liveContext.chapterGuide : null;
+      if (!provider) return Object.create(null);
+      let guide = null;
+      try {
+        guide = provider({});
+      } catch (err) {
+        return Object.create(null);
+      }
+      if (!isObject(guide) || guide.ok !== true || !Array.isArray(guide.chapters)) return Object.create(null);
+      const map = Object.create(null);
+      guide.chapters.forEach((chapter) => {
+        if (!isObject(chapter)) return;
+        const chapterId = idText(chapter.chapterId);
+        if (!chapterId) return;
+        const rows = [];
+        (Array.isArray(chapter.alternatives) ? chapter.alternatives : []).forEach((alt) => {
+          if (!isObject(alt) || !isObject(alt.texts)) return;
+          const offer = cleanText(alt.texts.offer);
+          const next = cleanText(alt.texts.next);
+          if (!offer && !next) return;
+          rows.push({ offer: offer, next: next });
+        });
+        if (rows.length) map[chapterId] = rows;
+      });
+      return map;
+    }
+
+    /**
+     * 当前章的公开说明：campaign-core 的真实前置/完成解释 + 替代指引文案。
+     * 只有真实数据存在才创建节点；无数据时返回空数组，DOM 与 0.23 完全一致。
+     */
+    function chapterDetailNodesOf(current) {
+      const nodes = [];
+      if (!isObject(current)) return nodes;
+      const prerequisiteText = cleanText(isObject(current.prerequisite) ? current.prerequisite.text : '');
+      if (prerequisiteText) {
+        nodes.push(make('p', 'ac-career-town__chapter-requirement', prerequisiteText));
+      }
+      const completionText = cleanText(isObject(current.completion) ? current.completion.text : '');
+      if (completionText) {
+        nodes.push(make('p', 'ac-career-town__chapter-completion', completionText));
+      }
+      const chapterId = idText(current.chapterId);
+      const guide = chapterId ? chapterGuideMap() : Object.create(null);
+      const rows = chapterId && guide[chapterId] ? guide[chapterId] : [];
+      if (rows.length) {
+        const list = make('ul', 'ac-career-town__chapter-alternatives');
+        list.setAttribute('data-town-chapter-alternatives', 'true');
+        rows.forEach((row) => {
+          const item = make('li', 'ac-career-town__chapter-alternative');
+          if (row.offer) item.appendChild(make('p', 'ac-career-town__chapter-offer', row.offer));
+          if (row.next) item.appendChild(make('p', 'ac-career-town__chapter-next', GUIDE_NEXT_PREFIX + row.next));
+          list.appendChild(item);
+        });
+        nodes.push(list);
+      }
+      return nodes;
+    }
+
     function currentGoalText() {
       const view = currentChapterView();
       if (!view || !view.current) return '';
@@ -2319,6 +2504,19 @@
       /* 只显示当前章的戏内标题，不显示 C 码、状态词或后续章节标题。 */
       campaignCurrent.textContent = cleanText(view.current.title) || '旧港来信';
       campaignCurrent.setAttribute('data-town-current', idText(view.current.chapterId));
+      /* 0.24 T24：公开前置/完成解释与替代指引；无数据时不创建任何新节点。 */
+      const detailNodes = chapterDetailNodesOf(view.current);
+      while (campaignDetail.firstChild) campaignDetail.removeChild(campaignDetail.firstChild);
+      detailNodes.forEach((node) => campaignDetail.appendChild(node));
+      if (detailNodes.length) {
+        if (campaignDetail.parentNode !== campaignSection) {
+          campaignSection.insertBefore(campaignDetail, campaignEndings);
+        }
+        campaignDetail.hidden = false;
+      } else {
+        campaignDetail.hidden = true;
+        if (campaignDetail.parentNode) campaignDetail.parentNode.removeChild(campaignDetail);
+      }
       campaignEndings.textContent = '';
       const endings = Array.isArray(view.model.endings) ? view.model.endings : [];
       endings.forEach((ending) => {

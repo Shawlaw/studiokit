@@ -217,6 +217,9 @@ let shards;
 let professionState;
 let professionView;
 let worldNarrative;
+let routePlanner;
+let materialsModule;
+let storyEvidenceModule;
 try {
   contract = readJson(SCHEMA_REL);
   content = readJson(CONTENT_FILE_REL);
@@ -233,6 +236,10 @@ try {
   professionState = require(path.join(ROOT, 'apps/arcade/career/profession-state.js'));
   professionView = require(path.join(ROOT, 'apps/arcade/career/profession-view.js'));
   worldNarrative = require(path.join(ROOT, RESOLVER_REL));
+  /* 0.24 T24：验证 bridge 注入形状能被真实 route-planner 只读消费。 */
+  routePlanner = require(path.join(ROOT, 'apps/arcade/career/route-planner.js'));
+  materialsModule = require(path.join(ROOT, 'apps/arcade/career/materials.js'));
+  storyEvidenceModule = require(path.join(ROOT, 'apps/arcade/career/story-evidence.js'));
 } catch (error) {
   console.error('FAIL 装配失败: ' + (error && error.message ? error.message : String(error)));
   process.exit(2);
@@ -245,6 +252,7 @@ const crossoverSamples = ((contract.samples || {}).crossover) || [];
 const journalSamples = ((contract.samples || {}).journalEvents) || [];
 const alternativesSource = readText('apps/arcade/career/alternatives.js');
 const resolverSource = readText(RESOLVER_REL);
+const bridgeSource = readText('apps/arcade/career/bridge.js');
 
 const realGames = new Map((registry.games || []).map((row) => [row.gameId, row]));
 const realProfessions = new Map((registry.professions || []).map((row) => [row.professionId, row]));
@@ -475,6 +483,78 @@ check('B06 全部玩家文本不是占位样例', [].concat(
   (content.crossoverPairs || []).flatMap((pair) => Object.values(pair.texts || {})),
   (content.journalWhitelist || []).map((entry) => entry.label || ''),
 ).every((text) => !String(text).includes('占位')));
+
+/* ---- 0.24 T24：经历回读 text/person 加性内容 ---- */
+
+const realSignerNames = new Set();
+(chapterOne.origins || []).forEach((origin) => {
+  const from = origin && origin.c0Letter && origin.c0Letter.from;
+  if (typeof from === 'string' && from) realSignerNames.add(from);
+});
+shards.forEach((shard) => {
+  (shard.entries || []).forEach((entry) => {
+    if (typeof entry.npc === 'string' && entry.npc) realSignerNames.add(entry.npc);
+    if (typeof entry.sender === 'string' && entry.sender) realSignerNames.add(entry.sender);
+  });
+});
+(npc.characters || []).forEach((character) => {
+  if (typeof character.name === 'string' && character.name) realSignerNames.add(character.name);
+});
+
+const journalEventSchema = schemas.journalEvent || {};
+const journalEventProps = journalEventSchema.properties || {};
+check('B07 schema 加性冻结 text（≤120）与 person（≤24）且不进 required', journalEventProps.text
+  && journalEventProps.text.maxLength === 120
+  && journalEventProps.text.minLength === 8
+  && journalEventProps.person
+  && journalEventProps.person.maxLength === 24
+  && (journalEventSchema.required || []).indexOf('text') < 0
+  && (journalEventSchema.required || []).indexOf('person') < 0, JSON.stringify(journalEventProps));
+const contentJournalRows = Array.isArray(content.journalWhitelist) ? content.journalWhitelist : [];
+const detailRowIssues = [];
+const detailTexts = new Set();
+contentJournalRows.forEach((row, index) => {
+  const where = 'journal[' + index + ']';
+  if (typeof row.text !== 'string' || row.text.length < 8 || row.text.length > 120) {
+    detailRowIssues.push(where + ':text');
+  }
+  if (typeof row.person !== 'string' || !row.person || row.person.length > 24 || !realSignerNames.has(row.person)) {
+    detailRowIssues.push(where + ':person=' + String(row.person));
+  }
+  const text = typeof row.text === 'string' ? row.text : '';
+  if (/信用点|星币|工钱|奖励|报酬|积分|材料\s*[×x]/.test(text)) detailRowIssues.push(where + ':money');
+  if (/\d+(?:\.\d+)?\s*%|\b\d+\s*\/\s*\d+\b/.test(text)) detailRowIssues.push(where + ':progress');
+  if (/(?:^|[^A-Za-z0-9])C[0-5](?:\.|\b)/.test(text)) detailRowIssues.push(where + ':chapter-code');
+  if (/\b[A-Z]{1,3}-\d{1,4}\b/.test(text) || /\b[a-z][a-z0-9-]*:[A-Za-z0-9]/.test(text)) detailRowIssues.push(where + ':internal-id');
+  realDisplayNames.forEach((name) => {
+    if (name && text.includes(name)) detailRowIssues.push(where + ':profession-name');
+  });
+  if (detailTexts.has(text)) detailRowIssues.push(where + ':duplicate');
+  detailTexts.add(text);
+});
+check('B08 17 条白名单全部带真实 text/person（长度/签名人/卫生/不重复）', contentJournalRows.length === 17
+  && contentJournalRows.every((row) => typeof row.text === 'string' && typeof row.person === 'string')
+  && detailRowIssues.length === 0, detailRowIssues.slice(0, 6).join(' | '));
+check('B09 回读文本不承诺奖励、不写章节码/内部 id/攻略/进度', contentJournalRows.every((row) => !/占位|信用点|星币|工钱|奖励|报酬|积分/.test(row.text)
+  && !/(?:\d+\s*\/\s*\d+|\d+(?:\.\d+)?\s*%)/.test(row.text)
+  && !/(?:^|[^A-Za-z0-9])C[0-5](?:\.|\b)/.test(row.text)
+  && !/第一步|第二步|依次前往|完整路线|必做|必经|唯一解|速通/.test(row.text)));
+check('B10 resolver 接受带 text/person 的真实内容（规整不破坏既有替代节点）', (() => {
+  try {
+    const engineWithDetail = worldNarrative.createWorldNarrative({ content, catalog });
+    const resolved = engineWithDetail.resolveAlternative({ state: allAcceptedState(), context: FULL_CONTEXT });
+    const aggregateWithDetail = worldNarrative.resolveWorldAlternatives({
+      chapterId: 'C4',
+      state: allAcceptedState(),
+      context: FULL_CONTEXT,
+      catalog,
+      content,
+    });
+    return resolved.ok === true && aggregateWithDetail.schemaVersion === 1 && Array.isArray(aggregateWithDetail.nodes);
+  } catch (error) {
+    return false;
+  }
+})());
 
 /* ------------------------------------------------------------------ *
  * C. 覆盖矩阵与去重后的真实 pair
@@ -1372,7 +1452,11 @@ function catalogForView() {
   const publicStoryEventIds = contentJournal.map((entry) => entry.eventId);
   const publicStoryEvents = {};
   contentJournal.forEach((entry) => {
-    publicStoryEvents[entry.eventId] = { label: entry.label };
+    /* 与 bridge careerCatalog() 同形：label 之外加性转发 text/person。 */
+    const row = { label: entry.label };
+    if (typeof entry.text === 'string' && entry.text) row.text = entry.text;
+    if (typeof entry.person === 'string' && entry.person) row.person = entry.person;
+    publicStoryEvents[entry.eventId] = row;
   });
   return {
     games: registry.games,
@@ -1436,6 +1520,130 @@ equal('I06 PUBLIC_STORY_EVENTS 常量未被 0.24 修改', professionView.PUBLIC_
 const unacceptedState = viewStateWithEvents(['invitation:research.lattice'], ['research.archivist']);
 const unacceptedView = professionView.projectCareerView({ state: unacceptedState, catalog: catalogForView(), context: viewContext });
 check('I07 未接受职业的 invitation 事件仍被投影拒绝（0.23 gate 生效）', !unacceptedView.story.history.some((row) => row.label.indexOf('晶格') >= 0 || row.label.indexOf('邀请') >= 0));
+
+/* ---- T24：白名单经 bridge 注入后，真实 projectCareerView 的经历行带 detail ---- */
+
+const allWhitelistIds = contentJournal.map((entry) => entry.eventId);
+const detailView = professionView.projectCareerView({
+  state: viewStateWithEvents(allWhitelistIds),
+  catalog: catalogForView(),
+  context: viewContext,
+});
+check('I08 17 条白名单事件全部进入经历（投影不丢行）', detailView.story.history.length === 17,
+  detailView.story.history.length + '/' + allWhitelistIds.length);
+const detailIssues = [];
+detailView.story.history.forEach((row) => {
+  const declared = contentJournal.find((entry) => entry.label === row.label);
+  if (!declared) {
+    detailIssues.push('unknown-label:' + row.label);
+    return;
+  }
+  if (!row.detail || row.detail.text !== declared.text || row.detail.person !== declared.person) {
+    detailIssues.push(declared.eventId + ':detail');
+  }
+  if (row.person !== declared.person) detailIssues.push(declared.eventId + ':person');
+  if (Object.prototype.hasOwnProperty.call(row, 'eventId')) detailIssues.push(declared.eventId + ':eventId-leak');
+  if (/\d+\.\d+\s*%|\d+\s*\/\s*\d+/.test(row.detail.text)) detailIssues.push(declared.eventId + ':progress');
+});
+check('I09 每条经历行 detail.text/person 来自内容白名单且无内部 eventId', detailIssues.length === 0, detailIssues.slice(0, 6).join(' | '));
+check('I10 回读文本不含金额/奖励/章节码/内部 id', detailView.story.history.every((row) => {
+  const text = row.detail && row.detail.text ? row.detail.text : '';
+  return !/信用点|星币|工钱|奖励|报酬|积分|材料\s*[×x]/.test(text)
+    && !/(?:^|[^A-Za-z0-9])C[0-5](?:\.|\b)/.test(text)
+    && !/\b[A-Z]{1,3}-\d{1,4}\b|\b[a-z][a-z0-9-]*:[A-Za-z0-9]/.test(text);
+}));
+const labelOnlyCatalog = (() => {
+  const out = catalogForView();
+  const labelOnly = {};
+  contentJournal.forEach((entry) => { labelOnly[entry.eventId] = { label: entry.label }; });
+  out.publicStoryEvents = labelOnly;
+  return out;
+})();
+const labelOnlyView = professionView.projectCareerView({
+  state: viewStateWithEvents(allWhitelistIds),
+  catalog: labelOnlyCatalog,
+  context: viewContext,
+});
+check('I11 旧内容（只声明 label）经历行不带 detail，保持 0.23 行为', labelOnlyView.story.history.length === 17
+  && labelOnlyView.story.history.every((row) => !Object.prototype.hasOwnProperty.call(row, 'detail')));
+check('I12 bridge 白名单注入真实转发 text/person（源码核对）', bridgeSource.includes('entry.text = row.text')
+  && bridgeSource.includes('entry.person = row.person')
+  && bridgeSource.includes('catalog.publicStoryEvents = storyEvents'));
+check('I12b bridge 按章注入 resolver 结果且保留 worldNarrative 内容对象（源码核对）',
+  bridgeSource.includes('catalog.worldChapterAlternatives = chapterAlternatives')
+  && bridgeSource.includes("surface: 'route'")
+  && bridgeSource.includes('catalog.worldNarrative = clone(internal.worldNarrativeContent)'));
+check('I12c bridge 为港口/章节面板预热事实并提供 chapterGuide 只读门面（源码核对）',
+  bridgeSource.includes('primeWorldNarrativeFacts')
+  && bridgeSource.includes('function chapterGuideForUi')
+  && bridgeSource.includes('chapterGuide: function'));
+
+/* ---- T24：bridge 注入的 catalog.worldChapterAlternatives 由真实 route-planner 消费 ---- */
+
+const plannerEvidence = (() => {
+  try {
+    materialsModule.configure({ items, commissions: commissionsFile });
+    const created = storyEvidenceModule.createStoryEvidence({});
+    const config = created.configure({ commissions: commissionsFile, items, chapter: chapterOne });
+    return config && config.ok === true ? created : null;
+  } catch (error) {
+    return null;
+  }
+})();
+let injectedPlanner = null;
+if (plannerEvidence) {
+  const planner = routePlanner.create();
+  const configured = planner.configure({
+    commissions: commissionsFile,
+    items,
+    chapter: chapterOne,
+    registry,
+    materials: materialsModule,
+    evidence: plannerEvidence,
+    worldWork,
+    campaign,
+  });
+  if (configured && configured.ok !== false) injectedPlanner = planner;
+}
+check('I13 route-planner 装配成功（T24 注入形状前置）', !!injectedPlanner);
+const injectedNode = {
+  narrativeNodeId: 'altn.C1.world-work.star-raid-t1',
+  mechanism: 'world-work',
+  anchor: { kind: 'commission', refs: ['star-raid.T1'] },
+  npcRef: { kind: 'origin-letter', gameId: 'star-raid' },
+  signatureFrom: 'commission-issuer',
+  available: true,
+  reason: null,
+  receiptSource: 'commission-receipt',
+  texts: {
+    offer: '注入后：港里那张外堤短巡的单子今天又挂在告示板上，谁接都行。',
+    progress: '注入后：这张单已经有人接手，报务室照常记档。',
+    receipt: '注入后：航报交回东堤报务室，值班的人把它收进抽屉。',
+    next: '注入后：回港口眼下看看，或者接下一张真的挂出来的活。',
+  },
+};
+if (injectedPlanner) {
+  const flags = ['C0.port_seen', 'C1.signal_fragment'];
+  const baseGuide = injectedPlanner.chapterAlternatives({ flags });
+  const injectedGuide = injectedPlanner.chapterAlternatives({
+    flags,
+    catalog: { worldChapterAlternatives: { C1: [injectedNode] } },
+  });
+  check('I14 注入按章形状后 present 且 C1 使用注入文案', injectedGuide.ok === true
+    && injectedGuide.worldNarrative === 'present'
+    && injectedGuide.narrativeNodeCount === 1
+    && injectedGuide.chapters[0].alternatives.some((alt) => alt.source === 'world-narrative'
+      && alt.texts.offer === injectedNode.texts.offer), JSON.stringify(injectedGuide.chapters[0].alternatives.map((alt) => alt.source)));
+  check('I15 注入只影响 C1，C2–C5 与缺省完全同形', deepEqual(injectedGuide.chapters.slice(1), baseGuide.chapters.slice(1)));
+  check('I16 未注入时不改变既有 absent 行为', injectedPlanner.chapterAlternatives({ flags, catalog: {} }).worldNarrative === 'absent'
+    && deepEqual(injectedPlanner.chapterAlternatives({ flags, catalog: {} }), baseGuide));
+  const badGuide = injectedPlanner.chapterAlternatives({
+    flags,
+    catalog: { worldChapterAlternatives: { C1: [{ narrativeNodeId: 'altn.bad' }] } },
+  });
+  check('I17 坏节点被丢弃且不抛（不伪造指引）', badGuide.ok === true
+    && badGuide.worldNarrative === 'present' && badGuide.narrativeNodeCount === 0);
+}
 
 /* ------------------------------------------------------------------ *
  * J. 纯函数边界

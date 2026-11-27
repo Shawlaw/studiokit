@@ -338,8 +338,13 @@
   var CROSSOVER_GAME_KEYS = Object.freeze(['professionId', 'gameId']);
   var GRANTS_KEYS = Object.freeze(['credits', 'items', 'evidence', 'flags']);
   var JOURNAL_KEYS = Object.freeze([
-    'sampleKind', 'placeholder', 'eventId', 'source', 'whitelistLayer', 'labelMode', 'label', 'surfaces',
+    'sampleKind', 'placeholder', 'eventId', 'source', 'whitelistLayer', 'labelMode', 'label',
+    /* 0.24 T24 加性：经历回读的可选静态文本与真实人物/签发人；不落盘。 */
+    'text', 'person', 'surfaces',
   ]);
+  var JOURNAL_TEXT_MIN = 8;
+  var JOURNAL_TEXT_MAX = 120;
+  var JOURNAL_PERSON_MAX = 24;
 
   function normalizeGate(raw, forCrossover) {
     if (!isObject(raw)) return null;
@@ -544,7 +549,12 @@
     }
     var namespace = raw.eventId.split(':')[0];
     if (['story', 'world', 'crossover', 'invitation', 'commission'].indexOf(namespace) < 0) return null;
-    return {
+    /* 0.24 T24 加性透传：text/person 只在类型与长度合法时带上；旧内容缺省时行为不变。 */
+    var text = typeof raw.text === 'string' ? raw.text : '';
+    if (hasOwn(raw, 'text') && (text.length < JOURNAL_TEXT_MIN || text.length > JOURNAL_TEXT_MAX)) return null;
+    var person = typeof raw.person === 'string' ? raw.person : '';
+    if (hasOwn(raw, 'person') && (!person || person.length > JOURNAL_PERSON_MAX)) return null;
+    var entry = {
       eventId: raw.eventId,
       source: raw.source,
       whitelistLayer: raw.whitelistLayer,
@@ -552,6 +562,9 @@
       label: label,
       surfaces: surfaces,
     };
+    if (text) entry.text = text;
+    if (person) entry.person = person;
+    return entry;
   }
 
   var CONTENT_KEYS = Object.freeze([

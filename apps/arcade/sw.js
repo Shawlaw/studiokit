@@ -97,6 +97,8 @@ const CORE_PATHS = [
   './career/content/ending-rescue.json',
   './career/content/side-stories.json',
   './career/content/npc.json',
+  /* 0.24：主线替代/交汇/经历白名单的唯一运行时内容，离线也要可回读。 */
+  './career/content/world-narrative.json',
   './challenge/shadow-leap.js',
   './challenge/snowbells.js',
   './challenge/star-raid.js',

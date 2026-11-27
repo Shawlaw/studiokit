@@ -1008,6 +1008,8 @@
       "whitelistLayer": "content",
       "labelMode": "content",
       "label": "航报与频率表在同一盏灯下对上了号",
+      "text": "东堤报务室把旧航报摊在灯下，校准室的人也翻出同一刻的频率对照；两页纸的边角被并排压在镇纸下。",
+      "person": "东堤报务室的值班报务",
       "surfaces": [
         "journal",
         "port",
@@ -1022,6 +1024,8 @@
       "whitelistLayer": "content",
       "labelMode": "content",
       "label": "拓片与旧复印件并排收进同一只夹子",
+      "text": "旧档室的守档人从夹子里抽出复印件，探险的人把崖壁拓片放在旁边；两处缺角的撕口方向一致。",
+      "person": "旧档室的守档人",
       "surfaces": [
         "journal",
         "port",
@@ -1036,6 +1040,8 @@
       "whitelistLayer": "content",
       "labelMode": "content",
       "label": "铁皮压痕与验收单背面的柜号对上了",
+      "text": "拆解场送来一片带压痕的铁皮，塔架管理员翻过验收单；两处压痕落在同一段编号的两端。",
+      "person": "塔架档案柜的管理员",
       "surfaces": [
         "journal",
         "port",
@@ -1050,6 +1056,8 @@
       "whitelistLayer": "content",
       "labelMode": "content",
       "label": "船期与退件单被订在一起留了抄本",
+      "text": "排班房的抄写员把旧船期摊在柜台上，待领格的投递员把退件单压在旁边；改笔都落在同一个码头。",
+      "person": "排班房的抄写员",
       "surfaces": [
         "journal",
         "port",
@@ -1064,6 +1072,8 @@
       "whitelistLayer": "content",
       "labelMode": "content",
       "label": "管井回声与封存柜号指向同一段通道",
+      "text": "老岑带着巡检表下到井口，回声里有半段空响；收货处的值守把封存柜号抄条递过来，两处说的是同一段分支。",
+      "person": "维护处收发箱的老岑",
       "surfaces": [
         "journal",
         "port",
@@ -1078,6 +1088,8 @@
       "whitelistLayer": "content",
       "labelMode": "content",
       "label": "账页与棋谱在同一个街口各留了记认",
+      "text": "账房外柜的人把旧账页推到灯下，棋室看门的人铺开港道棋谱；两处的绕行标记落在同一个街口。",
+      "person": "棋室看门的老陶",
       "surfaces": [
         "journal",
         "port",
@@ -1092,6 +1104,8 @@
       "whitelistLayer": "content",
       "labelMode": "content",
       "label": "残页与存根按缺口形状合进同一只信封",
+      "text": "老陶把棋谱缺页压在灯下，老周从抽屉里取出照片存根；缺口并不整齐，纸张的厚薄和撕开的方向却对得上。",
+      "person": "收货处的老周",
       "surfaces": [
         "journal",
         "port",
@@ -1106,6 +1120,8 @@
       "whitelistLayer": "content",
       "labelMode": "content",
       "label": "两份自然记录在林地那一处并排归档",
+      "text": "标本棚的系绳人把果核细孔记在本上，听音室的守夜人带回雪面刻痕；两页记录都指向同一片少了点什么的山林。",
+      "person": "听音室的守夜人",
       "surfaces": [
         "journal",
         "port",
@@ -1120,6 +1136,8 @@
       "whitelistLayer": "content",
       "labelMode": "content",
       "label": "矿角切面与薄镜纹路留下了一份对照记录",
+      "text": "验货处外窗的收料人把矿角切面翻过来，废料窗值班的瑾把薄镜推到灯下；两处反光的曲率与纹路对得上。",
+      "person": "废料窗值班的瑾",
       "surfaces": [
         "journal",
         "port",
@@ -1134,6 +1152,8 @@
       "whitelistLayer": "content",
       "labelMode": "content",
       "label": "旧街照片与薄镜里的柜号对上了",
+      "text": "老周指出街口的宽度，瑾指出薄镜曲率的拐点；同一个柜号从照片背景和划痕倒影里各出现了一次。",
+      "person": "收货处的老周",
       "surfaces": [
         "journal",
         "port",
@@ -1148,6 +1168,8 @@
       "whitelistLayer": "content",
       "labelMode": "content",
       "label": "外堤短巡的航报在报务室落了档",
+      "text": "外堤短巡的航报交到东堤报务室，值班的人只问了一句外堤的风向，就把它收进抽屉。",
+      "person": "东堤报务室的值班报务",
       "surfaces": [
         "journal",
         "port"
@@ -1161,6 +1183,8 @@
       "whitelistLayer": "content",
       "labelMode": "content",
       "label": "旧机库的旧机签收后又照旧归还",
+      "text": "阿砾把旧机的钥匙从门后木板上取下来，说用完照旧推回原位；归还时签收栏只写了一个时刻。",
+      "person": "阿砾",
       "surfaces": [
         "journal",
         "port"
@@ -1174,6 +1198,8 @@
       "whitelistLayer": "content",
       "labelMode": "content",
       "label": "跑腿单换回的信号匣已经交回港务处",
+      "text": "港务处的跑腿单从账本里划掉，信号匣先点数后落账；收条上只写了取回与交回两栏。",
+      "person": "排班房的抄写员",
       "surfaces": [
         "journal",
         "port"
@@ -1187,6 +1213,8 @@
       "whitelistLayer": "content",
       "labelMode": "content",
       "label": "失落卷轴的工单在旧档室销了案",
+      "text": "失落卷轴的工单交回旧档室，守档人先看封口再看编号，把收据压进档案夹的同一格。",
+      "person": "旧档室的守档人",
       "surfaces": [
         "journal",
         "port"
@@ -1200,6 +1228,8 @@
       "whitelistLayer": "content",
       "labelMode": "content",
       "label": "管井与货位的现场记录合成了同一份结论",
+      "text": "老岑把管井那段空响记进巡检表，收货处值守把货位的抄条附在后面；两本表最终并进同一份结论。",
+      "person": "维护处收发箱的老岑",
       "surfaces": [
         "journal",
         "port"
@@ -1213,6 +1243,8 @@
       "whitelistLayer": "content",
       "labelMode": "content",
       "label": "建材按固定价补进仓库并记了流水",
+      "text": "仓库前的缺料单被划掉建材那一栏，收货处的值守点数落账，把收条夹进当日流水。",
+      "person": "收货处认领架的值守",
       "surfaces": [
         "journal",
         "port"
@@ -1226,6 +1258,8 @@
       "whitelistLayer": "content",
       "labelMode": "content",
       "label": "余波工单在星塔之后照常落档",
+      "text": "星塔的事落定之后，余波工单落在验货处外窗；收料人只问了一句今天港口的风，没再提星塔。",
+      "person": "验货处外窗的收料人",
       "surfaces": [
         "journal",
         "port"

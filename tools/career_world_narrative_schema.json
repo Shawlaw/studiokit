@@ -11,6 +11,20 @@
   "contractTest": "tools/career_world_narrative_contract_test.mjs",
   "contractTestCommand": "node tools/career_world_narrative_contract_test.mjs",
   "purpose": "冻结 0.24 的主线替代路线叙事映射、可选职业交汇触发与历史事件 schema；只产出契约与数据设计，不改 runtime、内容 JSON 与版本链。",
+  "additiveRevisions": [
+    {
+      "task": "T24",
+      "change": "journalEvent 加性可选 text（≤120）/person（≤24）字段；不落盘、不新增 store/key，缺失时经历行与 0.23 完全一致。",
+      "persistedFields": false,
+      "backwardCompatible": true
+    },
+    {
+      "task": "T24",
+      "change": "bridge catalog 加性注入 catalog.worldChapterAlternatives = { C1:[resolver node…], … C5:[…] }；catalog.worldNarrative 仍为原始内容对象。",
+      "persistedFields": false,
+      "backwardCompatible": true
+    }
+  ],
   "sourceOfTruth": [
     "docs/arcade-life/ADR-interfaces.md",
     "docs/arcade-life/ADR-0.23-ui.md",
@@ -92,6 +106,9 @@
     "softEventBudget": 200,
     "labelHanRange": [6, 40],
     "labelMaxLength": 60,
+    "journalTextMinLength": 8,
+    "journalTextMaxLength": 120,
+    "journalPersonMaxLength": 24,
     "maxCrossoversPerCareer": 1,
     "maxSessionEcho": 1
   },
@@ -325,6 +342,8 @@
         "whitelistLayer": { "enum": ["code-frozen", "content", "engine-prefix"] },
         "labelMode": { "enum": ["content", "code-frozen", "commission-title", "profession-name"] },
         "label": { "type": "string", "minLength": 6, "maxLength": 60 },
+        "text": { "type": "string", "minLength": 8, "maxLength": 120 },
+        "person": { "type": "string", "minLength": 2, "maxLength": 24, "pattern": "^[^<>{}:：0-9]+$" },
         "surfaces": { "type": "array", "minItems": 1, "maxItems": 6, "uniqueItems": true, "items": { "enum": ["port", "journal", "receipt", "message", "toast", "deep-link"] } }
       },
       "conditionalRules": [
@@ -483,6 +502,25 @@
       "maxLength": 60,
       "forbiddenContent": ["internal-id", "reason-code", "evidence-token", "commission-tier-suffix", "chapter-code", "percent", "total", "undiscovered-profession-name", "route-guide"],
       "playerVisibleIds": false
+    },
+    "details": {
+      "optional": true,
+      "textRange": [8, 120],
+      "personRange": [2, 24],
+      "textKind": "whitelist-static",
+      "persisted": false,
+      "injectedBy": "bridge careerCatalog.publicStoryEvents",
+      "projectedBy": "profession-view.publicStoryRow -> story.history[].detail{text,person}",
+      "personSource": [
+        "apps/arcade/career/content/narrative-shards/shard-01.json",
+        "apps/arcade/career/content/narrative-shards/shard-02.json",
+        "apps/arcade/career/content/narrative-shards/shard-03.json",
+        "apps/arcade/career/content/narrative-shards/shard-04.json",
+        "apps/arcade/career/content/npc.json",
+        "apps/arcade/career/content/chapter-01.json"
+      ],
+      "forbiddenContent": ["amount", "credits", "percent", "chapter-code", "internal-id", "evidence-token", "reward", "route-guide", "system-pressure", "spoiler"],
+      "whenMissing": "omit-detail-and-keep-0.23-row"
     },
     "ordering": {
       "source": "profession-view.storyHistory",

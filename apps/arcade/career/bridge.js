@@ -226,6 +226,9 @@
     worldNarrativeContent: null,
     worldNarrativeFacts: null,
     worldNarrativeFactsPromise: null,
+    /* 0.24 T24：catalog.worldChapterAlternatives 的按章懒计算缓存与重入守卫。 */
+    worldChapterAlternativesCache: null,
+    chapterAlternativesBuilding: false,
     narrativeWrites: Object.create(null),
     narrativeRecorded: Object.create(null),
   };
@@ -2409,6 +2412,10 @@
       });
       catalog.publicStoryEventIds = storyEventIds;
       catalog.publicStoryEvents = storyEvents;
+      /* 0.24 T24：按章懒计算并注入替代指引（resolver 已经就绪且真实事实快照存在时才有）。
+         catalog.worldNarrative 保持原始内容对象不变；本键只供 route-planner 只读消费。 */
+      var chapterAlternatives = worldChapterAlternativesCatalog();
+      if (chapterAlternatives) catalog.worldChapterAlternatives = chapterAlternatives;
     }
     catalog.tools = [
       { toolId: 'wallet', name: '钱包', introducedOnAccept: true },
@@ -2676,6 +2683,51 @@
     return catalog;
   }
 
+  /**
+   * 0.24 T24：按章懒计算并注入 `catalog.worldChapterAlternatives`。
+   *
+   * 注入形状（ADR-0.24-world §9 增补）：
+   *   catalog.worldChapterAlternatives = { C1:[node…], C2:[…], C3:[…], C4:[…], C5:[…] }
+   * 每个数组是 T22 resolver `resolveWorldAlternatives({chapterId})` 的 `nodes`
+   * （{narrativeNodeId, mechanism, anchor, npcRef, signatureFrom, available, reason,
+   *   texts:{offer,progress,receipt,next}, receiptSource}）。它只服务 route-planner
+   * `chapterAlternatives()` 的公开文案覆盖；`catalog.worldNarrative` 仍是原始内容
+   * 对象（供 resolver 使用），两者并存、互不改写。
+   *
+   * 懒计算条件：内容已加载 + resolver 模块已装载 + 真实事实快照已就绪。缺任一项
+   * 返回 null，catalog 不含该键，route-planner 回落到 0.23 同形内置说明。
+   * 结果按事实快照对象身份缓存；投影/写入后 invalidate 会清空。只读、不写库、不发奖。
+   */
+  function worldChapterAlternativesCatalog() {
+    if (!internal.worldNarrativeContent) return null;
+    /* 重入守卫：resolver 输入里的 catalog 由 careerCatalog() 构造，不能在构造过程中再算一次。 */
+    if (internal.chapterAlternativesBuilding) return null;
+    var facts = internal.worldNarrativeFacts;
+    if (!facts) return null;
+    var mod = rawWorldNarrativeModule();
+    if (!mod || typeof mod.resolveWorldAlternatives !== 'function') return null;
+    if (internal.worldChapterAlternativesCache && internal.worldChapterAlternativesCache.facts === facts) {
+      return clone(internal.worldChapterAlternativesCache.value);
+    }
+    internal.chapterAlternativesBuilding = true;
+    try {
+      var facade = worldNarrativeFacade(mod);
+      if (!facade) return null;
+      var out = {};
+      ['C1', 'C2', 'C3', 'C4', 'C5'].forEach(function (chapterId) {
+        var result = facade.resolveWorldAlternatives({ chapterId: chapterId, surface: 'route' });
+        out[chapterId] = result && Array.isArray(result.nodes) ? clone(result.nodes) : [];
+      });
+      internal.worldChapterAlternativesCache = { facts: facts, value: out };
+      return clone(out);
+    } catch (err) {
+      warnOnce('world-chapter-alternatives', err);
+      return null;
+    } finally {
+      internal.chapterAlternativesBuilding = false;
+    }
+  }
+
   function worldNarrativeTexts(texts, keys) {
     var out = {};
     if (!isObject(texts)) return out;
@@ -2703,17 +2755,20 @@
   function invalidateWorldNarrativeFacts() {
     internal.worldNarrativeFacts = null;
     internal.worldNarrativeFactsPromise = null;
+    internal.worldChapterAlternativesCache = null;
   }
 
   /** 真实旗标/证据/已清委托的只读快照；一次打开内复用，数据变化时失效。 */
-  function ensureWorldNarrativeFacts(cleared) {
+  function ensureWorldNarrativeFacts(cleared, snapshot) {
     if (internal.worldNarrativeFacts) return Promise.resolve(internal.worldNarrativeFacts);
     if (internal.worldNarrativeFactsPromise) return internal.worldNarrativeFactsPromise;
     var clearedList = Array.isArray(cleared) ? cleared.slice() : [];
     var evidence = readGlobal('storyEvidence');
     var campaign = readGlobal('campaign');
-    var pending = Promise.resolve()
-      .then(function () { return loadStorySnapshot(); })
+    var snapshotSource = snapshot
+      ? Promise.resolve(snapshot)
+      : Promise.resolve().then(function () { return loadStorySnapshot(); });
+    var pending = snapshotSource
       .then(function (snapshot) {
         var flags = [];
         var tokens = [];
@@ -2999,6 +3054,50 @@
       resolveSignature: resolveSignature,
       __bridgeFacade: true,
     });
+  }
+
+  /**
+   * 0.24 T24：面板打开前把 resolver 模块与真实事实快照准备好，之后
+   * careerCatalog() 才会带上 catalog.worldChapterAlternatives。任何失败都静默降级
+   * （catalog 不含该键 → route-planner 回落到 0.23 同形内置说明）。
+   */
+  function primeWorldNarrativeFacts(snapshot) {
+    return ensureLazyModule('worldNarrative')
+      .then(function () {
+        return ensureWorldNarrativeFacts([], snapshot || null);
+      })
+      .catch(function () {
+        return null;
+      });
+  }
+
+  /**
+   * 0.24 T24：章节替代指引的只读门面（route-planner.chapterAlternatives 薄封装）。
+   * catalog 使用当前 careerCatalog()（带 worldChapterAlternatives 注入）；真实事实
+   * 取自旗标快照与面板打开时的 quests/claims/wallet。只读、同步、不写库、不发奖。
+   * UI 只消费 chapters[].requirement/completion 与 alternatives[].texts.{offer,next}，
+   * 必须剥掉 requirement/tokens/anchor/narrativeNodeId 等内部结构。
+   */
+  function chapterGuideForUi(snapshot, input) {
+    var planner = readGlobal('routePlanner');
+    if (!planner || typeof planner.chapterAlternatives !== 'function') {
+      return { ok: false, reason: 'route-planner-unavailable', chapters: [] };
+    }
+    var options = isObject(input) ? Object.assign({}, input) : {};
+    if (!options.catalog) options.catalog = careerCatalog();
+    if (!Array.isArray(options.flags)) {
+      var facts = internal.worldNarrativeFacts;
+      options.flags = facts && Array.isArray(facts.flags) ? facts.flags.slice() : [];
+    }
+    if (options.quests === undefined) options.quests = snapshot && Array.isArray(snapshot.quests) ? snapshot.quests : [];
+    if (options.claims === undefined) options.claims = snapshot && Array.isArray(snapshot.claims) ? snapshot.claims : [];
+    if (options.wallet === undefined) options.wallet = snapshot && isObject(snapshot.wallet) ? snapshot.wallet : null;
+    try {
+      return planner.chapterAlternatives(options);
+    } catch (err) {
+      warnOnce('chapter-guide', err);
+      return { ok: false, reason: 'exception', chapters: [] };
+    }
   }
 
   /** 只读投影；模块不可用时返回 null，不编造投影、不创建身份。 */
@@ -4241,6 +4340,8 @@
       uiJournal: readUi('journal'),
       recordWorldNarrativeEvent: recordWorldNarrativeEvent,
       careerCatalog: careerCatalog,
+      /* 0.24 T24：章节替代指引只读门面；无快照的面板只读真实旗标，缺模块时空 chapters。 */
+      chapterGuide: function (input) { return chapterGuideForUi(null, input); },
       /* 0.20 只读 continuation 查询：告示板可直接 ctx.careerContinuations({careerId})，
          也可经 ctx.commission.continuations；两者是同一只读方法，无新 ctx 字段依赖。 */
       careerContinuations: careerContinuations,
@@ -4561,6 +4662,9 @@
     if (name === 'worldState') {
       extraModules.push('campaign');
       extraModules.push('ending');
+      /* 0.24 T24：章节面板要读替代指引；resolver/事实缺失时各自降级为 0.23。 */
+      extraModules.push('routePlanner');
+      extraModules.push('worldNarrative');
     }
     if (name === 'mailbox' || name === 'town') {
       extraModules.push('campaign');
@@ -4593,6 +4697,11 @@
     }).then(function (prepared) {
       if (prepared && prepared.__gateDenied) return prepared;
       return loadStorySnapshot();
+    }).then(function (storySnapshot) {
+      /* 0.24 T24：港口/章节面板打开前预热真实叙事事实，catalog 才会带按章注入。 */
+      if (!storySnapshot || storySnapshot.__gateDenied) return storySnapshot;
+      if (name !== 'town' && name !== 'worldState') return storySnapshot;
+      return primeWorldNarrativeFacts(storySnapshot).then(function () { return storySnapshot; });
     });
     return preload.then(function (storySnapshot) {
       if (storySnapshot && storySnapshot.__gateDenied) return { ok: false, reason: storySnapshot.reason };
@@ -4614,6 +4723,7 @@
             professionView: professionViewModule(),
             careerView: careerView,
             careerCatalog: careerCatalog,
+            chapterGuide: function (input) { return chapterGuideForUi(storySnapshot, input); },
             alternatives: readGlobal('alternatives') || null,
             rental: readGlobal('rental') || null,
             materials: readGlobal('materials') || null,

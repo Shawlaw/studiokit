@@ -27,6 +27,7 @@ const FILES = {
   components: path.join(ROOT, 'apps/arcade/career/ui/components.js'),
   journal: path.join(ROOT, 'apps/arcade/career/ui/journal.js'),
   town: path.join(ROOT, 'apps/arcade/career/ui/town.js'),
+  world: path.join(ROOT, 'apps/arcade/career/ui/world-state.js'),
   componentsCss: path.join(ROOT, 'apps/arcade/career/ui/components.css'),
   tokensCss: path.join(ROOT, 'apps/arcade/career/ui/tokens.css'),
 };
@@ -34,6 +35,7 @@ const SOURCE = {
   components: fs.readFileSync(FILES.components, 'utf8'),
   journal: fs.readFileSync(FILES.journal, 'utf8'),
   town: fs.readFileSync(FILES.town, 'utf8'),
+  world: fs.readFileSync(FILES.world, 'utf8'),
 };
 const CSS = {
   components: fs.readFileSync(FILES.componentsCss, 'utf8'),
@@ -411,7 +413,7 @@ function loadSandbox(options) {
   sandbox.window = sandbox;
   sandbox.globalThis = sandbox;
   vm.createContext(sandbox);
-  const ordered = opts.withJournal === false ? ['components', 'town'] : ['components', 'journal', 'town'];
+  const ordered = opts.withJournal === false ? ['components', 'town', 'world'] : ['components', 'journal', 'town', 'world'];
   ordered.forEach((key) => {
     vm.runInContext(SOURCE[key], sandbox, { filename: path.basename(FILES[key]) });
   });
@@ -816,6 +818,187 @@ await flush();
 check('筛选/回读接入不改其它 tab 结构', !!workRun.doc.querySelector('.ac-career-ui__panel') &&
   !workRun.doc.querySelector('[data-journal-surface]') &&
   byAttr(workRun.doc.documentElement, 'role', 'tab').length === 3);
+
+/* ------------------------------------------------------------------ T24 章节指引 */
+
+const CHAPTER_PREREQUISITE = '前置已经齐了：旧港的来信已送达。';
+const CHAPTER_COMPLETION = '这一段要走完，港口认的是：第一笔真实交割。';
+const GUIDE_OFFER = '港里那几张不分行的活计也记这一段的账：跑一趟外堤短巡，回来把航报交回结算窗。';
+const GUIDE_NEXT = '先回港口眼下看看，或者接下一张真的挂出来的活。';
+const GUIDE_PROGRESS = '告示板上还有没交回的纸，挑一张写得清楚的接。';
+const GUIDE_RECEIPT = '航报交回东堤报务室，值班的人把它收进抽屉。';
+const GUIDE_INTERNAL = 'altn.C1.world-work.star-raid-t1';
+
+function guideFixture() {
+  return {
+    ok: true,
+    worldNarrative: 'present',
+    readOnly: true,
+    chapters: [
+      {
+        chapterId: 'C1',
+        title: '第一封工单',
+        requirement: { flags: ['C0.port_seen'], met: false, text: '不应渲染的内部前置' },
+        alternatives: [
+          {
+            mechanism: 'world-work',
+            narrativeNodeId: GUIDE_INTERNAL,
+            anchor: { kind: 'commission', refs: ['star-raid.T1'] },
+            receiptSource: 'commission-receipt',
+            texts: { offer: GUIDE_OFFER, progress: GUIDE_PROGRESS, receipt: GUIDE_RECEIPT, next: GUIDE_NEXT },
+          },
+        ],
+      },
+      {
+        chapterId: 'C2',
+        title: '谁留下了七号货柜',
+        alternatives: [{ mechanism: 'world-work', texts: { offer: 'C2 专属替代指引不应出现在 C1 章节说明', next: 'C2 的下一步' } }],
+      },
+    ],
+  };
+}
+
+function chapterCampaignModel(withData) {
+  const prerequisite = withData
+    ? { text: CHAPTER_PREREQUISITE, flags: ['C0.port_seen'], tokens: ['C0.port_seen'], met: false }
+    : null;
+  const completion = withData
+    ? { text: CHAPTER_COMPLETION, flag: 'C1.signal_fragment', met: false }
+    : null;
+  return {
+    ok: true,
+    currentChapter: 'C1',
+    chapters: [
+      {
+        chapterId: 'C1',
+        title: '第一封工单',
+        state: 'active',
+        routes: [],
+        mustKnow: [],
+        prerequisite: prerequisite,
+        completion: completion,
+      },
+      { chapterId: 'C2', title: '谁留下了七号货柜', state: 'available', routes: [], mustKnow: [] },
+    ],
+    endings: [],
+  };
+}
+
+async function chapterTownRun(options) {
+  const local = loadSandbox();
+  const trigger = local.doc.createElement('button');
+  local.doc.body.appendChild(trigger);
+  local.doc.activeElement = trigger;
+  const view = baseView([]);
+  const ctx = {
+    uiComponents: local.components,
+    reducedMotion: true,
+    gameId: 'gold-miner',
+    careerView() { return view; },
+    commission: {
+      listAvailable() { return { ok: true, availableIds: [] }; },
+      start() { throw new Error('chapter guide must not start commissions'); },
+      getWallet() { return { ok: true, credits: 0, items: {} }; },
+      continuations() { return { ok: true, runs: [] }; },
+    },
+    campaign: { state() { return chapterCampaignModel(options.withData === true); } },
+    announce() {},
+    onCareerDataChanged() { return () => {}; },
+  };
+  if (typeof options.chapterGuide === 'function') ctx.chapterGuide = options.chapterGuide;
+  local.ui.town.open(ctx);
+  await flush();
+  const tabs = byAttr(local.doc.documentElement, 'role', 'tab').filter((node) => node.getAttribute('data-tab'));
+  if (tabs[2]) tabs[2].click();
+  await flush(8);
+  return local;
+}
+
+const chapterTown = await chapterTownRun({ withData: true, chapterGuide: guideFixture });
+const townGuide = byAttr(chapterTown.doc.documentElement, 'data-port-chapter-guide', 'true')[0];
+const townCampaignText = text(townGuide);
+const townCampaignPayload = domPayload(townGuide);
+check('T24 港口经历页渲染公开前置/完成与替代指引', !!townGuide
+  && townCampaignText.includes(CHAPTER_PREREQUISITE)
+  && townCampaignText.includes(CHAPTER_COMPLETION)
+  && townCampaignText.includes(GUIDE_OFFER)
+  && townCampaignText.includes('下一步：' + GUIDE_NEXT)
+  && !!byAttr(townGuide, 'data-port-chapter-alternatives', 'true')[0]);
+check('T24 港口经历章节说明只渲染当前章替代指引，不显示进度/回执原文', !townCampaignText.includes('C2 专属')
+  && !townCampaignText.includes(GUIDE_PROGRESS)
+  && !townCampaignText.includes(GUIDE_RECEIPT));
+check('T24 港口经历章节说明不泄漏 requirement/tokens/anchor/内部 id', !townCampaignPayload.includes(GUIDE_INTERNAL)
+  && !townCampaignPayload.includes('C0.port_seen')
+  && !townCampaignPayload.includes('star-raid.T1')
+  && !townCampaignPayload.includes('不应渲染的内部前置')
+  && !townCampaignPayload.includes('receiptSource')
+  && !townCampaignPayload.includes('narrativeNodeId')
+  && !townCampaignPayload.includes('mechanism')
+  && !townCampaignPayload.includes('anchor'));
+check('T24 港口经历章节说明不新增计数/进度压力文案', !/\d+\s*\/\s*\d+|%|信用点|星币|奖励|报酬|进度/.test(townCampaignText));
+
+const bareTown = await chapterTownRun({ withData: false });
+check('T24 无数据时港口经历与 0.23 完全一致（不建章节说明节点）', byAttr(bareTown.doc.documentElement, 'data-port-chapter-guide', 'true').length === 0
+  && byAttr(bareTown.doc.documentElement, 'data-port-chapter-alternatives', 'true').length === 0);
+const bareTownAgain = await chapterTownRun({ withData: false });
+check('T24 无数据时港口经历 DOM 稳定且零新增节点', (() => {
+  const bodyOf = (run) => run.doc.querySelector('.ac-career-ui__body');
+  return serialize(bodyOf(bareTown)) === serialize(bodyOf(bareTownAgain));
+})());
+
+async function worldChapterRun(options) {
+  const local = loadSandbox();
+  const campaignState = {
+    hasChapters: true,
+    currentChapter: 'C1',
+    chapters: [
+      {
+        chapterId: 'C1',
+        title: '第一封工单',
+        state: 'active',
+        routes: [],
+        mustKnow: [],
+        prerequisite: options.withData === true ? { text: CHAPTER_PREREQUISITE } : null,
+        completion: options.withData === true ? { text: CHAPTER_COMPLETION } : null,
+      },
+    ],
+    endings: [],
+  };
+  const sheet = local.ui.worldState.render({
+    uiComponents: local.components,
+    reducedMotion: true,
+    state: { stage: 'LOCAL', clues: {} },
+    campaignState: campaignState,
+    chapterGuide: options.chapterGuide,
+    careerView() { return null; },
+    announce() {},
+  });
+  await flush(3);
+  return { local, sheet };
+}
+
+const worldChapter = await worldChapterRun({ withData: true, chapterGuide: guideFixture });
+const worldText = text(worldChapter.sheet);
+const worldPayload = domPayload(worldChapter.sheet);
+check('T24 章节面板渲染公开前置/完成解释与替代指引', worldText.includes(CHAPTER_PREREQUISITE)
+  && worldText.includes(CHAPTER_COMPLETION)
+  && worldText.includes(GUIDE_OFFER)
+  && worldText.includes(GUIDE_NEXT)
+  && byAttr(worldChapter.sheet, 'data-alternative-count', '1').length === 1);
+check('T24 章节面板只渲染公开文本，剥掉 requirement/tokens/anchor/内部 id', !worldPayload.includes(GUIDE_INTERNAL)
+  && !worldPayload.includes('C0.port_seen')
+  && !worldPayload.includes('star-raid.T1')
+  && !worldPayload.includes(GUIDE_PROGRESS)
+  && !worldPayload.includes(GUIDE_RECEIPT)
+  && !worldPayload.includes('C2 专属'));
+check('T24 章节面板不新增计数/进度压力文案', !/\d+\s*\/\s*\d+|%|信用点|星币|奖励|报酬|进度/.test(worldText));
+
+const bareWorld = await worldChapterRun({ withData: false });
+const bareWorldText = text(bareWorld.sheet);
+check('T24 无数据时章节面板零差异（不建前置/完成/替代节点）', all(bareWorld.sheet, (node) => /ac-career-world__(?:requirement|completion|alternatives|alternative-offer|alternative-next)/.test(node.className)).length === 0
+  && !bareWorldText.includes(CHAPTER_PREREQUISITE)
+  && !bareWorldText.includes(CHAPTER_COMPLETION)
+  && !bareWorldText.includes(GUIDE_OFFER));
 
 /* ------------------------------------------------------------------ 320 / 390 结构 */
 

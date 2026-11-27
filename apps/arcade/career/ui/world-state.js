@@ -384,6 +384,29 @@
     '  line-height: 1.7;',
     '  overflow-wrap: anywhere;',
     '}',
+    '.ac-career-world__requirement,',
+    '.ac-career-world__completion,',
+    '.ac-career-world__alternative-offer,',
+    '.ac-career-world__alternative-next {',
+    '  margin: 0;',
+    '  color: var(--ac-career-muted, #93a0c8);',
+    '  font-size: 12px;',
+    '  line-height: 1.7;',
+    '  overflow-wrap: anywhere;',
+    '}',
+    '.ac-career-world__alternatives {',
+    '  display: flex;',
+    '  flex-direction: column;',
+    '  gap: 4px;',
+    '  min-width: 0;',
+    '  margin: 0;',
+    '  padding: 0;',
+    '  list-style: none;',
+    '}',
+    '.ac-career-world__alternative {',
+    '  min-width: 0;',
+    '  margin: 0;',
+    '}',
     '.ac-career-world__facts {',
     '  display: flex;',
     '  flex-direction: column;',
@@ -798,6 +821,9 @@
           mustKnow: arrayOfText(entry.mustKnow),
           body: cleanText(entry.body),
           handoff: cleanText(entry.handoff),
+          /* 0.24 T24：campaign-core 的真实前置/完成解释（缺字段时为空，UI 不建节点）。 */
+          prerequisiteText: cleanText(isObject(entry.prerequisite) ? entry.prerequisite.text : ''),
+          completionText: cleanText(isObject(entry.completion) ? entry.completion.text : ''),
         });
       });
     }
@@ -1172,7 +1198,44 @@
       mustKnow: mustKnow,
       body: cleanText(snapshotChapter && snapshotChapter.body) || cleanText(contentChapter && contentChapter.body),
       handoff: cleanText(snapshotChapter && snapshotChapter.handoff) || cleanText(contentChapter && contentChapter.handoff),
+      prerequisiteText: cleanText(snapshotChapter && snapshotChapter.prerequisiteText),
+      completionText: cleanText(snapshotChapter && snapshotChapter.completionText),
+      alternatives: [],
     };
+  }
+
+  /**
+   * 0.24 T24：章节替代指引只读消费（bridge ctx.chapterGuide → route-planner）。
+   * 只保留每章 alternatives[].texts 的 offer/next；requirement/tokens/anchor/
+   * narrativeNodeId/mechanism 等内部结构永不进入本模型。缺数据返回空映射。
+   */
+  function chapterGuideMap(context) {
+    const provider = isObject(context) && typeof context.chapterGuide === 'function'
+      ? context.chapterGuide : null;
+    if (!provider) return Object.create(null);
+    let guide = null;
+    try {
+      guide = provider({});
+    } catch (err) {
+      return Object.create(null);
+    }
+    if (!isObject(guide) || guide.ok !== true || !isArray(guide.chapters)) return Object.create(null);
+    const map = Object.create(null);
+    guide.chapters.forEach((chapter) => {
+      if (!isObject(chapter)) return;
+      const chapterId = idText(chapter.chapterId);
+      if (!chapterId) return;
+      const rows = [];
+      (isArray(chapter.alternatives) ? chapter.alternatives : []).forEach((alt) => {
+        if (!isObject(alt) || !isObject(alt.texts)) return;
+        const offer = cleanText(alt.texts.offer);
+        const next = cleanText(alt.texts.next);
+        if (!offer && !next) return;
+        rows.push({ offer: offer, next: next });
+      });
+      if (rows.length) map[chapterId] = rows;
+    });
+    return map;
   }
 
   function buildEndings(model, context, snapshot, content, flags, endingChosen) {
@@ -1344,6 +1407,12 @@
           })
         : fileChapter;
       return buildChapter(chapterId, snapshotMap[chapterId], mergedChapter, flags, completed, evidence);
+    });
+    /* 0.24 T24：有公开替代指引时才挂到章模型；无数据时章行与 0.23 完全一致。 */
+    const guideMap = chapterGuideMap(context);
+    chapters.forEach((chapter) => {
+      const rows = guideMap[chapter.chapterId];
+      if (rows && rows.length) chapter.alternatives = rows;
     });
     const model = { chapters: chapters, endings: [], endingChosen: endingChosen, endingVisible: false, epilogue: null, currentChapter: '' };
     model.endings = buildEndings(model, context, snapshot, content, flags, endingChosen);
@@ -1696,6 +1765,23 @@
         item.appendChild(facts);
       }
       if (chapter.hint && chapter.state !== 'locked') item.appendChild(make('p', 'ac-career-world__hint', chapter.hint));
+      /* 0.24 T24：只渲染公开文本；无数据时不创建节点，章节卡片与 0.23 完全一致。 */
+      const prerequisiteText = cleanText(chapter.prerequisiteText);
+      if (prerequisiteText) item.appendChild(make('p', 'ac-career-world__requirement', prerequisiteText));
+      const completionText = cleanText(chapter.completionText);
+      if (completionText) item.appendChild(make('p', 'ac-career-world__completion', completionText));
+      const guideRows = isCurrent && isArray(chapter.alternatives) ? chapter.alternatives : [];
+      if (guideRows.length) {
+        const guide = make('ul', 'ac-career-world__alternatives');
+        guide.setAttribute('data-alternative-count', String(guideRows.length));
+        guideRows.forEach((alt) => {
+          const entry = make('li', 'ac-career-world__alternative');
+          if (alt.offer) entry.appendChild(make('p', 'ac-career-world__alternative-offer', alt.offer));
+          if (alt.next) entry.appendChild(make('p', 'ac-career-world__alternative-next', NEXT_HEADING + '：' + alt.next));
+          guide.appendChild(entry);
+        });
+        item.appendChild(guide);
+      }
       return item;
     }
 

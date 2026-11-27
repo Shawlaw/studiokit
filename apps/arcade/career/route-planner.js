@@ -3709,6 +3709,45 @@
   }
 
   /**
+   * 归一化单个替代叙事节点（resolver 输出与 bridge 按章注入共用同一套校验）。
+   * 只保留公开字段；坏形状按 warning 丢弃，绝不抛。
+   */
+  function normalizeNarrativeNode(node, warnings) {
+    if (!isObject(node)) {
+      warnings.push('world-narrative-node-invalid');
+      return null;
+    }
+    if (typeof node.narrativeNodeId !== 'string' || !node.narrativeNodeId) {
+      warnings.push('world-narrative-node-invalid');
+      return null;
+    }
+    if (NARRATIVE_MECHANISMS.indexOf(node.mechanism) < 0) {
+      warnings.push('world-narrative-node-mechanism:' + String(node.mechanism));
+      return null;
+    }
+    if (NARRATIVE_MECHANISM_RECEIPT[node.mechanism] !== node.receiptSource) {
+      warnings.push('world-narrative-node-receipt:' + String(node.receiptSource));
+      return null;
+    }
+    if (!isObject(node.texts)) {
+      warnings.push('world-narrative-node-texts');
+      return null;
+    }
+    return {
+      narrativeNodeId: node.narrativeNodeId,
+      mechanism: node.mechanism,
+      available: node.available === true,
+      receiptSource: node.receiptSource,
+      texts: {
+        offer: typeof node.texts.offer === 'string' ? node.texts.offer : '',
+        progress: typeof node.texts.progress === 'string' ? node.texts.progress : '',
+        receipt: typeof node.texts.receipt === 'string' ? node.texts.receipt : '',
+        next: typeof node.texts.next === 'string' ? node.texts.next : '',
+      },
+    };
+  }
+
+  /**
    * 归一化 T22 resolver 输出。只保留结构合法的节点；坏形状按 warning 丢弃，
    * 绝不抛、绝不写库。crossovers 不参与本段（交汇只在港口/经历呈现）。
    */
@@ -3747,42 +3786,43 @@
       seen[chapterId] = true;
       var nodes = [];
       output.nodes.forEach(function (node) {
-        if (!isObject(node)) {
-          out.warnings.push('world-narrative-node-invalid');
-          return;
-        }
-        if (typeof node.narrativeNodeId !== 'string' || !node.narrativeNodeId) {
-          out.warnings.push('world-narrative-node-invalid');
-          return;
-        }
-        if (NARRATIVE_MECHANISMS.indexOf(node.mechanism) < 0) {
-          out.warnings.push('world-narrative-node-mechanism:' + String(node.mechanism));
-          return;
-        }
-        if (NARRATIVE_MECHANISM_RECEIPT[node.mechanism] !== node.receiptSource) {
-          out.warnings.push('world-narrative-node-receipt:' + String(node.receiptSource));
-          return;
-        }
-        if (!isObject(node.texts)) {
-          out.warnings.push('world-narrative-node-texts');
-          return;
-        }
-        nodes.push({
-          narrativeNodeId: node.narrativeNodeId,
-          mechanism: node.mechanism,
-          available: node.available === true,
-          receiptSource: node.receiptSource,
-          texts: {
-            offer: typeof node.texts.offer === 'string' ? node.texts.offer : '',
-            progress: typeof node.texts.progress === 'string' ? node.texts.progress : '',
-            receipt: typeof node.texts.receipt === 'string' ? node.texts.receipt : '',
-            next: typeof node.texts.next === 'string' ? node.texts.next : '',
-          },
-        });
+        var normalized = normalizeNarrativeNode(node, out.warnings);
+        if (normalized) nodes.push(normalized);
       });
       out.byChapter[chapterId] = nodes;
       out.nodeCount += nodes.length;
       out.present = true;
+    });
+    return out;
+  }
+
+  /**
+   * 0.24 T24：归一化 bridge 加性注入的按章形状
+   * `catalog.worldChapterAlternatives = { C1:[node…], …, C5:[node…] }`
+   * （也接受 `{ chapters:{ C1:[node…] } }`）。节点校验与 resolver 输出同一套；
+   * 该形状只影响本段公开文案，不改变 plan()/worldWorkPath()/经济面。
+   */
+  function readWorldChapterAlternativesInput(raw) {
+    var out = { present: false, nodeCount: 0, byChapter: makeMap(), warnings: [] };
+    if (!isObject(raw)) return out;
+    var maps = [raw];
+    if (isObject(raw.chapters)) maps.unshift(raw.chapters);
+    var seen = makeMap();
+    maps.forEach(function (map) {
+      NARRATIVE_CHAPTER_ORDER.forEach(function (chapterId) {
+        if (seen[chapterId]) return;
+        var list = map[chapterId];
+        if (!Array.isArray(list)) return;
+        seen[chapterId] = true;
+        var nodes = [];
+        list.forEach(function (node) {
+          var normalized = normalizeNarrativeNode(node, out.warnings);
+          if (normalized) nodes.push(normalized);
+        });
+        out.byChapter[chapterId] = nodes;
+        out.nodeCount += nodes.length;
+        out.present = true;
+      });
     });
     return out;
   }
@@ -4265,7 +4305,13 @@
         return guideFailure(REASONS.unknownProfession, { acceptedProfessionId: acceptedProfessionId });
       }
       var catalog = isObject(options.catalog) ? options.catalog : {};
+      /* 0.24 T24：优先读取 bridge 按章注入的 catalog.worldChapterAlternatives；
+         未注入时退回 T21/T22 的 catalog.worldNarrative resolver 输出形状，行为不变。 */
       var narrative = readWorldNarrativeInput(catalog.worldNarrative);
+      if (!narrative.present || narrative.nodeCount === 0) {
+        var injected = readWorldChapterAlternativesInput(catalog.worldChapterAlternatives);
+        if (injected.present) narrative = injected;
+      }
       var story = narrativeStoryOf(options);
       var chapters = [];
       NARRATIVE_CHAPTER_ORDER.forEach(function (chapterId) {

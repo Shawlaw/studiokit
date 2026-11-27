@@ -395,3 +395,51 @@ schema 文件的 `samples.crossover` 覆盖真实 registry 的 16 个职业各 1
 - 本任务实际运行：`node tools/career_world_narrative_contract_test.mjs`（纯 Node、零依赖、不启浏览器、不写仓库，158/158 通过、退出码 0，重复运行结果一致）、`node --check` 语法检查，以及只读的 `py -3 tools/validate_site.py`（PASS）。未运行 `build_site.py`、arcade smoke、release、full、watch 与任何浏览器/真机路径。
 - 本文所有 `[F]` 断言都可在 §2 引用的文件里逐条核对；所有 `[I]` 断言由 schema 文件与契约测试机械可验；`[U]` 项在 T21–T25 验证前保持 UNVERIFIED。
 - 未 push、未打 tag、未创建 release、未部署；0.23 仍为本地 `GATE_PASSED / RELEASE_READY`（未发布）。
+
+## 9. T24 增补：世界叙事可见化（加性、向后兼容）
+
+本节记录 T24 在**不改变 §1–§8 冻结语义**前提下落地的三处接线；实现与契约测试同源，无新增 store / localStorage key / contentVersion / 版本链。
+
+### 9.1 经历回读 `text` / `person`（加性字段）
+
+- `journalEvent` 增加两个**可选**字段（不进 `required`）：
+  - `text`：`string`，8–120 字符；玩家可见的静态回读文本，不落盘。
+  - `person`：`string`，≤24 字符；真实签名人 / 签发人，取自 0.23 叙事 shard 的 `npc` 或 `chapter-01.json` 的 `c0Letter.from` 或 `npc.json` 角色名。
+- 注入链：`world-narrative.json.journalWhitelist[]` → bridge `careerCatalog().publicStoryEvents[eventId] = {label,text,person}` → `profession-view.publicStoryRow()` 生成 `story.history[].detail{text,person}` → T23 `ui/journal.js` 只读展开。
+- 落盘形状不变：`storyEvents[eventId]` 仍只有 `at` / `source`；旧内容缺 `text/person` 时经历行与 0.23 完全一致（无 `detail`）。
+- resolver 的 `normalizeJournalEntry` 对 `text/person` 只做类型/长度透传，未知键仍然 fail-closed。
+
+### 9.2 `catalog.worldChapterAlternatives`（bridge 按章懒注入）
+
+命名与形状（T24 冻结）：
+
+```json
+{
+  "worldChapterAlternatives": {
+    "C1": [ { "narrativeNodeId": "...", "mechanism": "...", "anchor": {...}, "npcRef": {...},
+              "signatureFrom": "...", "available": true, "reason": null,
+              "texts": { "offer": "...", "progress": "...", "receipt": "...", "next": "..." },
+              "receiptSource": "commission-receipt" } ],
+    "C2": [], "C3": [], "C4": [], "C5": []
+  }
+}
+```
+
+- 每个数组是 T22 `resolveWorldAlternatives({chapterId})` 的 `nodes`，`surface` 固定 `route`；bridge 只在内容、resolver 模块、真实事实快照三者齐备时计算一次并按事实快照身份缓存，任何缺失都**不注入该键**。
+- `catalog.worldNarrative` 保持原始内容对象不变（供 resolver 使用）；两者并存、互不改写。
+- `route-planner.readWorldChapterAlternativesInput()` 接受该形状（也接受 `{chapters:{C1:[...]}}`），节点校验与 resolver 输出同一套；`chapterAlternatives()` 在 `catalog.worldNarrative` 无可用节点时才读它，缺失时与 0.23 逐字节同形。
+- 不写库、不发奖、不新增 reason code；内部 `anchor/npcRef/reason/narrativeNodeId` 只保留在只读结果里，UI 负责剥除。
+
+### 9.3 UI 落点
+
+- `ui/world-state.js` 章节面板：章节行只加性渲染 `chapter.prerequisite.text`、`chapter.completion.text` 与当前章 `guide.chapters[].alternatives[].texts.{offer,next}`；无数据不建节点。
+- `ui/town.js` 港口经历页（journal tab）：顶部只读章节说明复用同一公开字段；`town.js` 旧版 legacy 面板同步保留同一渲染。
+- `ui/town.js` 以及 `ui/world-state.js` 只消费公开文本，`requirement/tokens/anchor/narrativeNodeId/mechanism` 不进入 DOM；不新增总数/百分比/进度压力文案；无数据时 DOM 与 0.23 完全一致。
+- `sw.js` 预缓存清单追加 `./career/content/world-narrative.json`；**不改** `VERSION` / 缓存键（版本链属 T25）。
+
+### 9.4 T24 证据
+
+- `node tools/career_world_narrative_contract_test.mjs`：166/166，含 17 条白名单真实 `text/person` 的 schema / 长度 / 卫生 / 真实签名人断言。
+- `node tools/career_world_narrative_test.mjs`：177/177，含 bridge 同形注入后真实 `projectCareerView` 的 `detail.text/person`、旧内容零 `detail`、注入形状被真实 route-planner 消费。
+- `node tools/career_journal_experience_test.mjs`：59/59，含有数据渲染 / 无数据零差异 / 内部字段不泄漏。
+- 其余必跑纯 Node gate 与 `py -3 tools/validate_site.py` 见交付报告；未启动 Chrome，未 push，未发布。
