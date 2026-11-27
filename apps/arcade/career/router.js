@@ -198,6 +198,55 @@
     return base + CONTENT_DIR + filename;
   }
 
+  function paramsOf(loc) {
+    const params = Object.create(null);
+    const sources = [searchOf(loc), hashOf(loc)];
+    sources.forEach(function (source) {
+      let text = String(source || '');
+      const queryIndex = text.indexOf('?');
+      if (queryIndex >= 0) text = text.slice(queryIndex + 1);
+      else if (text.charAt(0) !== '#') text = text.replace(/^#/, '');
+      else return;
+      text.split('&').forEach(function (pair) {
+        if (!pair) return;
+        const eq = pair.indexOf('=');
+        const key = safeDecode(eq < 0 ? pair : pair.slice(0, eq));
+        const value = safeDecode(eq < 0 ? '' : pair.slice(eq + 1));
+        if (!key || params[key] !== undefined) return;
+        params[key] = value;
+      });
+    });
+    return params;
+  }
+
+  /**
+   * 生涯入口意图归一化。仅解析参数，不读取状态、不创建身份、不导航。
+   * 未知 careerPanel 值保留 rawPanel 供调用方拒绝，绝不回退成任务详情。
+   */
+  function careerEntryRequest(locationLike) {
+    const loc = asLocation(locationLike);
+    const params = paramsOf(loc);
+    const rawPanel = typeof params.careerPanel === 'string' ? params.careerPanel : '';
+    const panelAliases = { work: 'town', journal: 'chapters' };
+    const panel = panelAliases[rawPanel] || rawPanel;
+    const professionId = ['professionId', 'careerProfessionId', 'profession'].reduce(function (found, key) {
+      return found || (typeof params[key] === 'string' ? params[key].trim() : '');
+    }, '');
+    const commissionId = ['commissionId', 'careerCommissionId', 'commission', 'taskId'].reduce(function (found, key) {
+      return found || (typeof params[key] === 'string' ? params[key].trim() : '');
+    }, '');
+    return {
+      panel: ['town', 'mailbox', 'chapters', 'settings'].indexOf(panel) >= 0 ? panel : null,
+      rawPanel: rawPanel,
+      story: params.story === '1',
+      careerLetter: params.careerLetter === '1',
+      professionId: professionId.slice(0, 120),
+      commissionId: commissionId.slice(0, 120),
+      ticketId: typeof params.career === 'string' ? params.career.trim().slice(0, 120) : '',
+      hasCareerEntry: !!(rawPanel || params.story === '1' || params.careerLetter === '1' || professionId || commissionId || params.career),
+    };
+  }
+
   /**
    * 仅 ?careerTest=1 视为生涯测试模式（生产 URL 不得命中）。
    * @param {Location|{search?:string, href?:string}|string} [locationLike]
@@ -244,6 +293,7 @@
     detectGameId,
     careerBase,
     contentUrl,
+    careerEntryRequest,
     isTestMode,
     isHashTest,
   };
