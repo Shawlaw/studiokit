@@ -8,6 +8,12 @@
  *   window.ArcadeCareerUI.town.render(ctx);
  *   window.ArcadeCareerUI.town.close();
  *
+ * 0.24 T23 经历页（只增强 journal tab，不改其它 tab 行为）：
+ *   - 有 window.ArcadeCareerUI.journal 时交给 ui/journal.js 渲染筛选与回读；
+ *     缺失时按 0.23 只读 JournalTimeline 降级；
+ *   - 经历只消费 view.story.history 投影，不读完整目录；
+ *   - 已搁置卡保持折叠；搁置/恢复后焦点留在同一搁置-恢复控件。
+ *
  * 0.22 的统一披露入口（ADR §23.3）：
  *   ctx.careerView({surface:'work'})  → 唯一工作列表来源（已投影的公开字段）
  *   ctx.commission.listAvailable({careerId, ensure:false, surface:'work'})
@@ -573,6 +579,8 @@
       alive: true,
       unsubscribe: null,
       shell: null,
+      shellPanel: null,
+      journalFilter: null,
       context: null,
     };
   }
@@ -581,6 +589,7 @@
     if (!state || !state.alive) return;
     state.alive = false;
     state.seq += 1;
+    state.shellPanel = null;
     if (typeof state.unsubscribe === 'function') {
       try { state.unsubscribe(); } catch (err) { /* ignore */ }
     }
@@ -901,6 +910,32 @@
     return Promise.resolve(result);
   }
 
+  /**
+   * 搁置/恢复后把焦点放回同一控件（data-work-pause 不随状态改变）。
+   * 0.23 的 `state.shell.panel` 并不存在，旧实现在重绘后取不到按钮而丢焦点。
+   */
+  function focusPortWorkToggle(state, professionId) {
+    const id = idText(professionId);
+    if (!state || !state.alive || !id) return;
+    const panel = state.shellPanel
+      || (state.shell && state.shell.record && state.shell.record.panel)
+      || null;
+    if (!panel || typeof panel.querySelector !== 'function') return;
+    let button = null;
+    if (/^[A-Za-z0-9._:-]+$/.test(id)) {
+      try {
+        button = panel.querySelector('[data-work-pause="' + id + '"]');
+      } catch (err) {
+        button = null;
+      }
+    }
+    if (!button && panel.ownerDocument && typeof panel.ownerDocument.getElementById === 'function') {
+      const byId = panel.ownerDocument.getElementById('work-pause-' + id);
+      if (byId && (typeof panel.contains !== 'function' || panel.contains(byId))) button = byId;
+    }
+    if (button && typeof button.focus === 'function') safelyFocus(button);
+  }
+
   function portOverrideStartLabels(card, label, components) {
     const target = cleanText(label);
     if (!target || !card || typeof card.querySelectorAll !== 'function') return;
@@ -948,16 +983,13 @@
         expanded: !!state.expanded[professionId],
         onStart: (commissionId) => startPortCommission(context, commissionId),
         onPause: (targetId, nextPaused) => pausePortProfession(context, targetId, nextPaused).then(() => {
-          if (state.alive && state.shell) {
-            loadPortData(context, state);
-            const focusId = 'work-pause-' + idText(targetId);
-            Promise.resolve().then(() => {
-              const panel = state.shell && state.shell.panel;
-              const button = panel && panel.querySelector ? panel.querySelector('#' + focusId) : null;
-              if (button && typeof button.focus === 'function') button.focus();
-            });
-          }
-          return { ok: true };
+          if (!state.alive) return { ok: false };
+          /* 等投影重绘完成后再回焦：同一 data-work-pause 控件在搁置/恢复两态都存在。 */
+          const pending = loadPortData(context, state);
+          return Promise.resolve(pending).then(() => {
+            focusPortWorkToggle(state, targetId);
+            return { ok: true };
+          });
         }),
       });
       card.setAttribute('data-port-profession', professionId);
@@ -969,6 +1001,9 @@
       if (pauseButton) {
         pauseButton.id = 'work-pause-' + professionId;
         pauseButton.setAttribute('data-work-pause', professionId);
+        pauseButton.setAttribute('data-work-pause-state', paused ? 'paused' : 'active');
+        pauseButton.setAttribute('data-focus-key', 'work-pause-' + professionId);
+        pauseButton.setAttribute('aria-pressed', String(paused));
       }
       const details = card.querySelector('details');
       if (details && typeof details.addEventListener === 'function') {
@@ -1006,7 +1041,33 @@
     return cards;
   }
 
-  function portJournalNode(view, components) {
+  function portJournalApi(context) {
+    const injected = context && context.uiJournal;
+    if (isObject(injected) && typeof injected.render === 'function') return injected;
+    const ui = root.ArcadeCareerUI;
+    if (ui && isObject(ui.journal) && typeof ui.journal.render === 'function') return ui.journal;
+    return null;
+  }
+
+  /** 经历页只消费投影；增强模块缺失时退回 0.23 的只读时间线。 */
+  function portJournalNode(context, view, state, components) {
+    const journal = portJournalApi(context);
+    if (journal) {
+      try {
+        const rendered = journal.render({
+          view: view,
+          components: components,
+          reducedMotion: !!(context && context.reducedMotion),
+          filter: state ? state.journalFilter : null,
+          onFilterChange: (next) => {
+            if (state) state.journalFilter = isObject(next) ? next : null;
+          },
+        });
+        if (rendered && rendered.nodeType === 1) return rendered;
+      } catch (err) {
+        /* 增强模块异常时保留 0.23 只读经历，不阻断港口。 */
+      }
+    }
     const history = view && view.story && Array.isArray(view.story.history) ? view.story.history : [];
     const events = history.filter(isObject).map((row) => ({
       label: cleanText(row.label) || cleanText(row.text),
@@ -1058,7 +1119,7 @@
       return content;
     }
     if (state.tab === 'journal') {
-      content.appendChild(portJournalNode(view, components));
+      content.appendChild(portJournalNode(context, view, state, components));
       return content;
     }
 
@@ -1221,23 +1282,25 @@
   }
 
   function loadPortData(context, state) {
-    if (!state || !state.alive) return;
+    if (!state || !state.alive) return Promise.resolve(false);
     state.context = context || state.context;
     state.seq += 1;
     const seq = state.seq;
     const narrative = portNarrativeOf(state.context);
     state.phase = cleanText(narrative.state) === 'error' ? 'error' : (cleanText(narrative.state) === 'loading' ? 'loading' : 'loading');
     renderPortSurface(state.context, state);
-    if (state.phase === 'error') return;
-    Promise.all(PORT_SURFACES.map((surface) => requestPortCareerView(state.context, surface))).then((views) => {
-      if (!state.alive || seq !== state.seq) return;
+    if (state.phase === 'error') return Promise.resolve(false);
+    return Promise.all(PORT_SURFACES.map((surface) => requestPortCareerView(state.context, surface))).then((views) => {
+      if (!state.alive || seq !== state.seq) return false;
       PORT_SURFACES.forEach((surface, index) => { state.views[surface] = views[index]; });
       state.phase = 'normal';
       renderPortSurface(state.context, state);
+      return true;
     }, () => {
-      if (!state.alive || seq !== state.seq) return;
+      if (!state.alive || seq !== state.seq) return false;
       state.phase = 'error';
       renderPortSurface(state.context, state);
+      return false;
     });
   }
 
@@ -1265,6 +1328,7 @@
     });
     if (!result.ok) return { ok: false, reason: 'ui-unavailable' };
     state.shell = manager;
+    state.shellPanel = result.panel;
     const closeBtn = result.panel.querySelector ? result.panel.querySelector('.ac-career-ui__close') : null;
     current = {
       doc: doc,
