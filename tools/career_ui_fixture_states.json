@@ -9,7 +9,7 @@
     "qaOnly": true,
     "rules": [
       "文本均为私有 QA 合成内容，不得复制到 apps/arcade/career/content 或正式页面。",
-      "所有 ID 必须来自真实 registry / clues / commissions / world-work 映射；未知 ID 视为夹具错误。",
+      "业务映射 ID（clueId/gameId/professionId/commissionId/toolId）必须来自真实 registry / clues / commissions / world-work / bridge catalog 映射；actionId 是 QA stub 名，仅按 ADR 约定注入函数，不是业务映射 ID。未知业务 ID 视为夹具错误。",
       "不复制外部原型包中的示例人物、示例物件、示例任务名或示例分数。",
       "若接入 dev/test 路由，路由必须在正式构建中不可达，且不留页面内调试入口。"
     ]
@@ -20,6 +20,41 @@
     "commissions": "apps/arcade/career/content/commissions.json",
     "worldWork": "apps/arcade/career/content/world-work.json",
     "contentVersion": "0.18.0"
+  },
+  "actionStubConvention": {
+    "actionIdField": "id",
+    "callable": "onClick",
+    "qaOnly": true,
+    "resolver": "qaActionStub(action.id)",
+    "defaultStub": "记录一次调用并返回 { ok: true }",
+    "busyAssertion": "第一次调用未 settle 前重复点击不得再调用 stub",
+    "disabledAssertion": "disabled 动作点击后 stub 调用数必须为 0",
+    "note": "JSON 不序列化函数；T15 QA 工具按 actionId 注入 onClick stub，产品组件仍收到真实函数。"
+  },
+  "toolIdMap": [
+    { "toolId": "wallet", "label": "钱包", "icon": "wallet", "actionId": "openReceipt" },
+    { "toolId": "shop", "label": "商店", "icon": "store", "actionId": "openMarket", "note": "store 只是线性图标名，不是 toolId 或可见标签。" },
+    { "toolId": "workshop", "label": "工作台", "icon": "tool", "actionId": "openWorkshop" },
+    { "toolId": "hangar", "label": "机库", "icon": "tool", "actionId": "openHangar" }
+  ],
+  "toolRenderOrder": ["wallet", "shop", "workshop", "hangar"],
+  "clueDerivation": {
+    "source": "bridge.renderClue({ clue, onOpen, host, placement, anchor, state })",
+    "title": "ambientLabel || title",
+    "teaser": "ambientText || ''",
+    "gameId": "clue.gameId，必须匹配 registry.games",
+    "professionId": "invitationForClue(clueId)?.professionId || registry 中该 game 的唯一 professionId；仅内部，不显示",
+    "iconByFamily": { "record": "mail", "signal": "scroll", "bio": "gem", "industrial": "pick", "route": "chevron" },
+    "iconByState": { "recoverable": "mail" },
+    "actionLabel": { "glimpsed": "仔细看看", "recoverable": "clue.letter.actionLabel || 按地址投递", "read": "查看这封信" },
+    "state": "state.clues[clueId] 与 openedAt 派生 hidden/glimpsed/read；recoverable 另需 !openedAt && !portSeenAt && stage∈{GLIMPSED,CURIOUS} && 存在 openedAt 线索"
+  },
+  "storyMessageProducer": {
+    "contentSource": "apps/arcade/career/content/narrative-shards/shard-01.json ... shard-04.json（T14 独占新增）",
+    "selector": "T12 adapter 选零条或一条；professionId 必须在 view.professions 中",
+    "injection": "lead 串行集成的 bridge.careerView() 在 projectCareerView() 之后注入；多条按时序/ID 取一条，硬上限 1",
+    "consumerShape": ["label", "text", "from", "at"],
+    "forbidden": ["未接受职业", "storyFeedback.nextStep", "NPC/章节目录直读"]
   },
   "registryBindings": {
     "games": [
@@ -95,7 +130,7 @@
   "capture": {
     "prototypePanelSelector": ".panel",
     "productPanelSelector": ".ac-career-ui .ac-career-ui__panel",
-    "productClueSelector": ".ac-career-ui .ac-career-ui__clue",
+    "productClueSelector": ".ac-career-ui__clue, .ac-career-ui .ac-career-ui__clue",
     "panelRegion": "element-only",
     "toleranceCssPx": 4,
     "compareComputedStyles": [
@@ -110,6 +145,79 @@
       "padding",
       "gap"
     ],
+    "referenceInjection": {
+      "mode": "fixture-text-override",
+      "qaOnly": true,
+      "target": "QA-only copy of prototype/index.html + reference.js",
+      "rule": "用同一 fixture 文本覆盖原型硬编码示例后渲染等价状态；reference PNG 仅作构图/几何参考，不与示例文案逐元素比较。",
+      "compare": "归一化 panel 左上角后的已校准元素，不做整图像素阈值",
+      "byFixture": {
+        "P01": [
+          { "selector": ".clue strong", "fixturePath": "props.clueRow.title" },
+          { "selector": ".clue .caption", "fixturePath": "props.clueRow.teaser" },
+          { "selector": ".clue .gold", "fixturePath": "props.clueRow.actionLabel" },
+          { "selector": ".score", "fixturePath": "props.hostResult.scoreText" }
+        ],
+        "P02": [
+          { "selector": "#panel-title", "fixturePath": "props.letterCard.title" },
+          { "selector": ".letter p:nth-of-type(1)", "fixturePath": "props.letterCard.paragraphs[0]" },
+          { "selector": ".letter p:nth-of-type(2)", "fixturePath": "props.letterCard.paragraphs[1]" },
+          { "selector": ".signature", "fixturePath": "props.letterCard.sender" },
+          { "selector": ".primary", "fixturePath": "props.letterCard.actions[0].label" },
+          { "selector": ".text-action", "fixturePath": "props.letterCard.actions[1].label" }
+        ],
+        "P03": [
+          { "selector": "#panel-title", "fixturePath": "props.storyCard.title" },
+          { "selector": ".row.start .gold", "fixturePath": "props.npcDialogue.name" },
+          { "selector": ".row.start p", "fixturePath": "props.npcDialogue.paragraphs[0]" },
+          { "selector": ".primary", "fixturePath": "props.primaryAction.label" },
+          { "selector": ".text-action", "fixturePath": "props.secondaryAction.label" }
+        ],
+        "P04": [
+          { "selector": "#panel-title", "fixturePath": "props.receiptCard.title" },
+          { "selector": ".row.success span", "fixturePath": "props.receiptCard.resultLine" },
+          { "selector": ".kv:nth-of-type(1) span:last-child", "fixturePath": "props.receiptCard.rewards.credits" },
+          { "selector": ".primary", "fixturePath": "props.receiptCard.nextAction.label" },
+          { "selector": ".text-action", "fixturePath": "props.receiptCard.exitAction.label" }
+        ],
+        "P05": [
+          { "selector": ".clue strong", "fixturePath": "props.clueRow.title" },
+          { "selector": ".clue .caption", "fixturePath": "props.clueRow.teaser" },
+          { "selector": ".clue .gold", "fixturePath": "props.clueRow.actionLabel" }
+        ],
+        "P06": [
+          { "selector": "#panel-title", "fixturePath": "props.storyCard.title" },
+          { "selector": ".row.start .gold", "fixturePath": "props.npcDialogue.name" },
+          { "selector": ".primary", "fixturePath": "props.primaryAction.label" },
+          { "selector": ".text-action", "fixturePath": "props.secondaryAction.label" }
+        ],
+        "P07": [
+          { "selector": "#panel-title", "fixturePath": "props.caption" },
+          { "selector": ".surface h2", "fixturePath": "props.storyCard.title" },
+          { "selector": ".surface p", "fixturePath": "props.storyCard.summary" },
+          { "selector": ".clue strong", "fixturePath": "props.clueRow.title" },
+          { "selector": ".tools .tool:nth-child(1)", "fixturePath": "props.toolGrid.tools[0].label" },
+          { "selector": ".tools .tool:nth-child(4)", "fixturePath": "props.toolGrid.tools[3].label" }
+        ],
+        "P08": [
+          { "selector": "#panel-title", "fixturePath": "props.segmentedTabs.tabs[1].label" },
+          { "selector": ".surface .row strong", "fixturePath": "props.workCards[0].displayName" },
+          { "selector": ".surface h3", "fixturePath": "props.workCards[0].commissions[0].title" }
+        ],
+        "P09": [
+          { "selector": "#panel-title", "fixturePath": "props.segmentedTabs.tabs[2].label" },
+          { "selector": ".timeline li:nth-child(1)", "fixturePath": "props.journalTimeline.events[0].label" },
+          { "selector": ".timeline li:last-child", "fixturePath": "props.journalTimeline.events[3].label" }
+        ],
+        "P10": [
+          { "selector": "#panel-title", "fixturePath": "variants[0].careerShell.title" },
+          { "selector": ".surface h3", "fixturePath": "variants[0].storyCard.title" },
+          { "selector": ".primary", "fixturePath": "variants[2].secondaryAction.label" },
+          { "selector": ".letter h2", "fixturePath": "variants[3].letterCard.title" },
+          { "selector": ".letter p:nth-of-type(1)", "fixturePath": "variants[3].letterCard.paragraphs[0]" }
+        ]
+      }
+    },
     "referenceImages": [
       {
         "file": "prototype/reference-letter.png",
@@ -133,13 +241,30 @@
         "gameId": "gold-miner",
         "placement": "result-host"
       },
+      "bridgeInput": {
+        "clue": {
+          "clueId": "CL-gold-miner",
+          "gameId": "gold-miner",
+          "family": "industrial",
+          "title": "合成线索标题甲",
+          "ambientLabel": "合成线索：甲",
+          "ambientText": "结算台上留下一张合成标签。",
+          "letter": { "actionLabel": "仔细看看" }
+        },
+        "state": {
+          "stage": "GLIMPSED",
+          "clues": { "CL-gold-miner": { "seenAt": "2026-11-27T10:00:00.000Z", "openedAt": null } },
+          "professionProgress": { "nature.miner": { "state": "glimpsed" } }
+        },
+        "placement": "result-host"
+      },
       "props": {
         "clueRow": {
           "clueId": "CL-gold-miner",
           "gameId": "gold-miner",
           "professionId": "nature.miner",
           "state": "glimpsed",
-          "icon": "gem",
+          "icon": "pick",
           "title": "合成线索：甲",
           "teaser": "结算台上留下一张合成标签。",
           "actionLabel": "仔细看看",
@@ -207,7 +332,9 @@
           "variant": "dock",
           "viewBox": "0 0 320 112",
           "ariaHidden": true,
-          "src": "local-inline-or-same-origin"
+          "implementation": "T11 career/ui/harbor.js harbor(true)",
+          "template": "prototype/reference.js#L4",
+          "inline": true
         },
         "caption": "折光港 · 旧码头",
         "npcDialogue": {
@@ -284,6 +411,21 @@
       "name": "已有身份的另一个游戏 · 独立线索",
       "surface": "clue",
       "host": { "mode": "normal-browser", "gameId": "shadow-leap" },
+      "bridgeInput": {
+        "clue": {
+          "clueId": "CL-shadow-leap",
+          "gameId": "shadow-leap",
+          "family": "signal",
+          "ambientLabel": "合成线索：乙",
+          "ambientText": "高处带回的合成标记与港口通用印记相同。"
+        },
+        "state": {
+          "stage": "GLIMPSED",
+          "clues": { "CL-shadow-leap": { "seenAt": "2026-11-27T10:30:00.000Z", "openedAt": null } },
+          "professionProgress": { "adventure.relicseeker": { "state": "glimpsed" } }
+        },
+        "placement": "list"
+      },
       "props": {
         "clueRow": {
           "clueId": "CL-shadow-leap",
@@ -293,14 +435,14 @@
           "icon": "scroll",
           "title": "合成线索：乙",
           "teaser": "高处带回的合成标记与港口通用印记相同。",
-          "actionLabel": "查看合成标记",
+          "actionLabel": "仔细看看",
           "placement": "list",
           "reducedMotion": false
         },
         "identityState": { "originGameId": "gold-miner", "hasAcceptedProfession": true }
       },
       "expected": {
-        "visibleTexts": ["合成线索：乙", "查看合成标记"],
+        "visibleTexts": ["合成线索：乙", "仔细看看"],
         "hiddenTexts": ["首次到港", "身份初始化", "已有职业的委托"],
         "focus": "列表中线索行可 Tab 到达；不自动打开信件",
         "noIdentityReplay": true,
@@ -343,12 +485,63 @@
       "name": "港口首页 · 眼下",
       "surface": "port",
       "host": { "mode": "normal-browser", "gameId": "gold-miner" },
+      "bridgeInput": {
+        "clue": {
+          "clueId": "CL-shadow-leap",
+          "gameId": "shadow-leap",
+          "family": "signal",
+          "ambientLabel": "合成回信已到",
+          "ambientText": "此前留下的合成标记有了回邮记录。",
+          "letter": { "actionLabel": "查看回信" }
+        },
+        "state": {
+          "stage": "GLIMPSED",
+          "portSeenAt": null,
+          "clues": {
+            "CL-gold-miner": { "openedAt": "2026-11-27T10:05:00.000Z" },
+            "CL-shadow-leap": { "openedAt": null }
+          }
+        },
+        "placement": "list"
+      },
+      "storyMessage": {
+        "sourceClueId": "CL-shadow-leap",
+        "sourceProfessionId": "adventure.relicseeker",
+        "label": "合成回信已到",
+        "text": "此前留下的合成标记有了回邮记录。",
+        "from": "港口记录员",
+        "at": "2026-11-27T10:30:00.000Z"
+      },
+      "projection": {
+        "professions": [
+          { "professionId": "nature.miner", "displayName": "采矿员", "domain": "nature", "state": "accepted", "paused": false, "active": true },
+          { "professionId": "adventure.relicseeker", "displayName": "遗迹探险家", "domain": "adventure", "state": "accepted", "paused": false, "active": false }
+        ],
+        "story": {
+          "messages": [
+            {
+              "label": "合成回信已到",
+              "text": "此前留下的合成标记有了回邮记录。",
+              "from": "港口记录员",
+              "at": "2026-11-27T10:30:00.000Z"
+            }
+          ]
+        },
+        "tools": [
+          { "toolId": "hangar", "name": "机库" },
+          { "toolId": "shop", "name": "商店" },
+          { "toolId": "wallet", "name": "钱包" },
+          { "toolId": "workshop", "name": "工作台" }
+        ]
+      },
       "props": {
         "harbor": {
           "variant": "port",
           "viewBox": "0 0 320 100",
           "ariaHidden": true,
-          "src": "local-inline-or-same-origin"
+          "implementation": "T11 career/ui/harbor.js harbor(false)",
+          "template": "prototype/reference.js#L4",
+          "inline": true
         },
         "caption": "旧港的灯依然亮着。",
         "segmentedTabs": {
@@ -382,14 +575,15 @@
           "state": "available",
           "label": "已知工具",
           "tools": [
-            { "id": "wallet", "label": "钱包", "icon": "wallet" },
-            { "id": "store", "label": "商店", "icon": "store" },
-            { "id": "workshop", "label": "工作台", "icon": "tool" }
+            { "id": "wallet", "label": "钱包", "icon": "wallet", "actionId": "openReceipt" },
+            { "id": "shop", "label": "商店", "icon": "store", "actionId": "openMarket" },
+            { "id": "workshop", "label": "工作台", "icon": "tool", "actionId": "openWorkshop" },
+            { "id": "hangar", "label": "机库", "icon": "tool", "actionId": "openHangar" }
           ]
         }
       },
       "expected": {
-        "visibleTexts": ["眼下", "工作", "经历", "合成记录的下一步", "合成回信已到", "钱包", "商店", "工作台"],
+        "visibleTexts": ["眼下", "工作", "经历", "合成记录的下一步", "合成回信已到", "钱包", "商店", "工作台", "机库"],
         "hiddenTexts": ["锁位", "职业总数", "未披露职业"],
         "focus": "打开面板聚焦关闭键；选中 tab tabindex=0，左右键切换后聚焦新 tab",
         "maxMessages": 1,
@@ -441,10 +635,15 @@
             "commissions": []
           },
           {
-            "professionId": "",
+            "professionId": null,
             "displayName": "",
             "icon": "check",
             "state": "optional",
+            "adapterOnly": {
+              "internalParentProfessionId": "engineering.structural",
+              "render": false,
+              "note": "仅为 commission-core 授权父职业；不是 WorkCard prop，不进入 DOM。"
+            },
             "commissions": [
               {
                 "commissionId": "pendulum-tower.T1",
