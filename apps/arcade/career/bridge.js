@@ -2363,6 +2363,44 @@
     });
   }
 
+  /** 世界章节完成后，可接终局也是真实下一步；没有可用终局时保持空，不推荐未解锁内容。 */
+  function attachEndingAction(projection) {
+    if (!projection || !projection.story || projection.story.nextAction) return Promise.resolve(projection);
+    if (!internal.commissionLastCareerId) return Promise.resolve(projection);
+    var campaign = readGlobal('campaign');
+    var evidence = readGlobal('storyEvidence');
+    if (!campaign || typeof campaign.endingOptions !== 'function' || !evidence || typeof evidence.storyFlags !== 'function') {
+      return Promise.resolve(projection);
+    }
+    return Promise.resolve(loadStorySnapshot()).then(function (snapshot) {
+      var story = evidence.storyFlags({
+        careerId: internal.commissionLastCareerId,
+        quests: snapshot.quests,
+        claims: snapshot.claims,
+        wallet: snapshot.wallet,
+        profile: snapshot.profile,
+      });
+      var flags = story && Array.isArray(story.allFlags) ? story.allFlags : [];
+      var available = campaign.endingOptions({
+        careerId: internal.commissionLastCareerId,
+        quests: snapshot.quests,
+        claims: snapshot.claims,
+        wallet: snapshot.wallet,
+        profile: snapshot.profile,
+        flags: flags,
+        evidence: flags,
+      }).find(function (ending) { return ending && ending.available === true; });
+      if (available) {
+        projection.story.nextAction = {
+          kind: 'ending',
+          approach: available.approach || null,
+          label: typeof available.title === 'string' && available.title ? available.title : '去看看星塔',
+        };
+      }
+      return projection;
+    }).catch(function () { return projection; });
+  }
+
   /** 只读投影；模块不可用时返回 null，不编造投影、不创建身份。 */
   function careerView(context) {
     return waitReady(READY_TIMEOUT_MS).then(function () {
@@ -2382,7 +2420,7 @@
         if (facts.listing && facts.listing.ok && Array.isArray(facts.listing.commissions)) {
           projection.commissions = clone(facts.listing.commissions);
         }
-        return projection;
+        return attachEndingAction(projection);
       });
     }).catch(function (err) {
       warnOnce('career-view', err);
@@ -2429,6 +2467,14 @@
       })).then(function (result) {
         if (!result || result.ok !== true) return result || { ok: false, reason: 'profession-event-failed' };
         if (result.careerId) internal.commissionLastCareerId = result.careerId;
+        if (result.newlyAccepted === true) {
+          return Promise.resolve(syncCampaignFlags(true)).catch(function () { return null; }).then(function () {
+            return loadDiscoveryStateFromDb();
+          }).then(function () {
+            notifyCareerDataChanged(action.toLowerCase().replace(/_/g, '-'));
+            return result;
+          });
+        }
         return loadDiscoveryStateFromDb().then(function () {
           notifyCareerDataChanged(action.toLowerCase().replace(/_/g, '-'));
           return result;
