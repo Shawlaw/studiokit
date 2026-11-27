@@ -46,7 +46,7 @@ check('settings 订阅仅在面板关闭时退订', /unsubscribeCareerChanges/.t
 for (const key of ['receipt', 'hangar', 'market', 'workshop']) {
   check(key + ' 面板订阅数据失效并安全关闭',
     /subscribeCareerChanges\(/.test(src[key]) &&
-    /career-imported', 'archived', 'unarchived', 'reset'/.test(src[key]) &&
+    /career-imported', 'career-archived', 'career-unarchived', 'career-reset'/.test(src[key]) &&
     /unsubscribeCareerPanelChanges\(\)/.test(src[key]) &&
     (key === 'receipt' ? /closePanel\(\);/.test(src[key]) : /close\(\);/.test(src[key])));
 }
@@ -135,6 +135,12 @@ function loadMailbox(doc) {
   vm.createContext(sandbox); vm.runInContext(src.mailbox, sandbox, { filename: 'mailbox.js' });
   return sandbox.ArcadeCareerUI.mailbox;
 }
+function loadReceipt(doc) {
+  const sandbox = { document: doc, console, Promise, Object, Array, String, Boolean, JSON, Math, Date, RegExp, Error, Number };
+  sandbox.window = sandbox; sandbox.globalThis = sandbox;
+  vm.createContext(sandbox); vm.runInContext(src.receipt, sandbox, { filename: 'receipt.js' });
+  return sandbox.ArcadeCareerUI.receipt;
+}
 const clue = { clueId: 'c-letter', title: '原邀请', ambientText: '一封旧信', letter: { sender: '港务', body: '来信正文', address: '折光港', actionLabel: '按地址投递' } };
 function inviteCtx(overrides = {}) {
   const events = [];
@@ -214,6 +220,25 @@ const textOf = (doc) => doc.body.querySelector('[data-career-panel]')?.textConte
   check('第二职业不重放初始奖励或 C0 序章',
     !/开张的底钱|序章|C0/.test(textOf(doc)) && textOf(doc).includes('邀请已收下'), textOf(doc));
   api.close();
+}
+
+for (const reason of ['career-imported', 'career-archived', 'career-unarchived', 'career-reset']) {
+  const doc = makeDoc();
+  const receipt = loadReceipt(doc);
+  let listener = null;
+  let unsubscribed = 0;
+  const card = receipt.show({
+    result: { ok: true, receipt: { receiptId: 'run-1', credits: 70, items: {}, txIds: ['tx-1'] } },
+    careerView: {
+      schemaVersion: 1, originGameId: null, activeProfessionId: null, professions: [], commissions: [],
+      story: { nextAction: null, messages: [], history: [] }, tools: [],
+    },
+    onCareerDataChanged(fn) { listener = fn; return () => { unsubscribed += 1; }; },
+  });
+  check('show 收据卡订阅数据失效 listener (' + reason + ')', typeof listener === 'function' && !!card.parentNode);
+  listener({ reason });
+  check('show 收据卡在 ' + reason + ' 后安全关闭并退订', !card.parentNode && unsubscribed === 1, unsubscribed);
+  receipt.close();
 }
 
 if (failures.length) {

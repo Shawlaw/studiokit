@@ -300,7 +300,7 @@
 
   let panel = null;
   let unsubscribeCareerChanges = null;
-  const CAREER_CHANGE_REASONS = ['career-imported', 'archived', 'unarchived', 'reset'];
+  const CAREER_CHANGE_REASONS = ['career-imported', 'career-archived', 'career-unarchived', 'career-reset'];
 
   function subscribeCareerChanges(context, onChange) {
     const subscribe = typeof context.onCareerDataChanged === 'function'

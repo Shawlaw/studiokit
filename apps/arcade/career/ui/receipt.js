@@ -134,7 +134,7 @@
   let actionFailure = null;
   let panelSeq = 0;
   let unsubscribeCareerChanges = null;
-  const CAREER_CHANGE_REASONS = ['career-imported', 'archived', 'unarchived', 'reset'];
+  const CAREER_CHANGE_REASONS = ['career-imported', 'career-archived', 'career-unarchived', 'career-reset'];
 
   function subscribeCareerChanges(context, onChange) {
     const subscribe = typeof context.onCareerDataChanged === 'function'
@@ -1048,6 +1048,7 @@
     const current = card;
     card = null;
     if (!current) return false;
+    unsubscribeCareerPanelChanges();
     try {
       if (current.el && current.el.parentNode) current.el.parentNode.removeChild(current.el);
     } catch (err) {
@@ -1280,6 +1281,12 @@
       return null;
     }
     card = { el: el, key: fields.key, fields: fields };
+    unsubscribeCareerChanges = subscribeCareerChanges(outer, (change) => {
+      if (!card || card.el !== el) return;
+      const reason = cleanText(change && change.reason);
+      if (CAREER_CHANGE_REASONS.indexOf(reason) < 0) return;
+      removeCard();
+    });
     return el;
   }
 
