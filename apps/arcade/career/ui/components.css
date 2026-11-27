@@ -20,6 +20,21 @@ html.ac-career-ui-scroll-lock body {
   isolation: isolate;
 }
 
+/* A modal shell owns its own stacking context, so the context itself must sit at
+   the career layer. Otherwise `isolation: isolate` traps the fixed overlay at
+   level 0 and the 0.19 compact game overlay (stage-box z-index 6) paints above it,
+   making the port and the first-arrival panel unhittable on 375×548. */
+.ac-career-ui--layer {
+  position: fixed;
+  inset: 0;
+  z-index: var(--ac-career-ui-layer);
+  pointer-events: none;
+}
+
+.ac-career-ui--layer > .ac-career-ui__overlay {
+  pointer-events: auto;
+}
+
 .ac-career-ui h1,
 .ac-career-ui h2,
 .ac-career-ui h3,

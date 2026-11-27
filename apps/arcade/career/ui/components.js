@@ -771,7 +771,7 @@
     const state = oneOf(input.state, SHELL_STATES, 'normal');
     const size = oneOf(input.size, ['default', 'small'], 'default');
     const title = cleanText(input.title) || '生涯面板';
-    const rootNode = element(doc, 'div', 'ac-career-ui');
+    const rootNode = element(doc, 'div', 'ac-career-ui ac-career-ui--layer');
     rootNode.setAttribute('data-reduced-motion', String(!!input.reducedMotion));
     const overlay = element(doc, 'div', 'ac-career-ui__overlay');
     overlay.setAttribute('data-career-panel', panelKey);

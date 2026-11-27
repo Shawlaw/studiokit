@@ -595,6 +595,12 @@ check('receipt result normal weight and kv-list no flex gap', cssBlock('.ac-care
 check('npc name uses 700 strong weight', cssBlock('.ac-career-ui__npc-name {').includes('var(--ac-career-ui-font-weight-strong)'));
 check('CareerShell showHeader is a frozen optional prop', componentsSrc.includes('showHeader !== false') && componentsSrc.includes("panel.setAttribute('data-show-header'") && componentsSrc.includes("panel.setAttribute('aria-label', title)"));
 check('clue action and signature follow prototype text decoration', !componentsSrc.includes("cleanText(input.actionLabel) + ' ›'") && componentsSrc.includes("'—— ' + sender"));
+/* 0.19 紧凑模式把游戏弹层抬到 stage-box（z-index 6）。modal shell 的 isolate
+   上下文必须整体位于 career layer，否则 panel 在 375×548 上被游戏弹层遮挡。 */
+check('modal shell root owns the career layer so compact overlays cannot cover it',
+  /ac-career-ui ac-career-ui--layer/.test(componentsSrc)
+  && /\.ac-career-ui--layer\s*\{[^}]*position:\s*fixed;[^}]*z-index:\s*var\(--ac-career-ui-layer\)/.test(componentsCss)
+  && /\.ac-career-ui--layer\s*>\s*\.ac-career-ui__overlay\s*\{[^}]*pointer-events:\s*auto/.test(componentsCss));
 
 const viewportWidths = [320, 375, 390, 430, 844, 1280];
 check('viewport width matrix matches panel formula', viewportWidths.every((width) => Math.min(440, width - 24) === Math.min(440, width - 24)) && viewportWidths.every((width) => width - 24 > 0));

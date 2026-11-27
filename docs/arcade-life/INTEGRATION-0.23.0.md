@@ -10,10 +10,12 @@
 | 任务 | 状态 | 证据 |
 |---|---|---|
 | T10 UI 契约与夹具 | PASS（契约层） | `ADR-0.23-ui.md`、P01–P10 fixtures；coverage missing=0；t10-reviewer PASS |
-| T11 共享组件 | PASS（范围） | components 210/210；harbor 逐字一致；t11-reviewer PASS |
-| T12 邀请/回执适配 | PASS（范围） | invitation adapters 109/109；t12-reviewer PASS |
-| T13 港口/工作/经历适配 | PASS（owner） | port/journal 43/43；t13-reviewer PASS |
+| T11 共享组件 | PASS（范围） | components 277/277；harbor 逐字一致；t11-reviewer PASS |
+| T12 邀请/回执适配 | PASS（范围） | invitation adapters 122/122；t12-reviewer PASS |
+| T13 港口/工作/经历适配 | PASS（owner） | port/journal 54/54；t13-reviewer PASS |
 | T14 全职业叙事 | PASS（数据范围） | narrative 612/612；16/16 职业；t14-reviewer PASS |
+| T15 视觉/键盘/离线 | PASS（浏览器，桌面 Chrome） | 13/13 场景、16/16 交互、6/6 离线；几何最大 2 CSS px |
+| T16 真实 E2E 迁移 | IN_PROGRESS | flow/mobile 迁移到 0.23 港口 DOM |
 
 ## 2. 集成事实
 
@@ -21,6 +23,8 @@
 - `careerView` 的 `story.messages` 仅从已接受职业叙事卡取 0/1 条；可用终局优先于普通下一步。
 - 叙事 registry 与四个 shard 为同源可选内容；加载失败不影响经典/0.22 流程。
 - 所有视觉组件限定 `.ac-career-ui`，普通游戏主题与首页入口保持原样。
+- 首次到港用真实 `port` 投影展示第一份工作：`careerView({surface:'letter'})` 不披露委托，所以邀请适配器只在**持久首到港标记**存在时改读 `port`；该标记由 `acceptedOriginGameId` 与 `narrativeCursor.nodeId === 'invitation:<professionId>'` 推导，关页重开仍成立，接受邀请本身仍不接单。
+- 叙事 shard 的作者字段在 bridge 一次性归一为适配器冻结 props（`invitationAction→acceptLabel` 等），正文不改写；缺失标签才用统一 UI 文案。
 
 ## 3. 门禁记录
 
