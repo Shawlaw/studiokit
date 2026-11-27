@@ -27,7 +27,24 @@
 
 ## 3. 门禁记录
 
-本文件将在 T08 补入：冻结 SHA、精确命令、filter、测试数量、耗时、退出码、L2/L3 结果、CI 复用判定、漏测项与发布准备结论。当前不得据局部测试推断版本门禁已通过。
+### 3.1 集成纯逻辑/L1（SHA `52ab52d`）
+
+- 26 个精确 runner 串行执行，全部 exit 0；完整逐项日志在仓库外 `execution/T08-pure-gates.log`。
+- 关键数量：profession-state 431/431、discovery 84/84、profession-discovery 145/145、profession DB 33/33、commission 100/100、profession-view 613/613、world-work 400/400、graph-reachability 1089/1089（48/48 路径）、extension 92/92、privacy 2367/2367、legacy 54/54、UI work/journal 39/39、invitation/tools 55/55、receipt 134/134。
+- `py -3 tools/validate_site.py` PASS；`git diff --check` PASS。
+
+### 3.2 真实 IDB/L2（SHA `52ab52d`）
+
+- `node tools/career_db_test.mjs --only=B`：27/27，exit 0。
+- `node tools/career_backup_test.mjs --only=B`：15/15，exit 0。
+- 测试夹具已同步加载 `profession-state.js`，坏数据/往返断言按 additive 扩展与单调时间语义更新，未降低产品断言。
+
+### 3.3 L3 首轮与修复
+
+- 首轮 `py -3 tools/arcade_run_all_gates.py --profile release`（SHA `52ab52d`）：41 项中 35 PASS / 6 FAIL，571.645s；失败为 `career_ending_reducer`、`career_continuation`、`career_pwa_offline`、`career_96_missions`、`career_mobile`、`career_flow_e2e`。
+- 定位到两类契约迁移问题：旧测试/夹具未先显式接受职业；DB 动作名误写为 `GLIMPSIED` 而真实事件为 `GLIMPSED`。
+- 动作名修复后 `career_pwa_offline` 18/18；profession DB 33/33、extension 92/92。纯 ending/continuation 夹具修复为 35/35、18/18。
+- 96 fixture、mobile、flow 的显式接受流程修复完成后，将冻结新 SHA 并允许一次 release 补跑；首轮 35/41 不能作为新 SHA 的全绿证据。
 
 ## 4. 发布准备
 
