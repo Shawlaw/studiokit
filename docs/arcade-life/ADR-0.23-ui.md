@@ -4,7 +4,7 @@
 - 日期：2026-11-27
 - 分支 / 基线：`feat/arcade-career-023`，基线 `7a78f66`（0.22 `RELEASE_READY`，未发布）
 - 任务：Arcade 0.23 T10。本文只冻结契约；本任务未修改 runtime/CSS/组件/版本链，未运行测试、浏览器、full 或 push。
-- 外部依据：`D:\LocalAgentWorkspace\arcade-career-022-024\spec\02-ui-contract.md`、`spec\03-narrative.md`、`prototype/index.html`、`prototype/tokens.css`、`prototype/reference.js`、`prototype/README.md`、`prototype/reference-letter.png`、`prototype/reference-port.png`、`execution/02-task-board.md`、`execution/T06-ui-plan.md`。
+- 外部依据：0.23 设计基准包（仓库外的 `spec/02-ui-contract.md`、`spec/03-narrative.md`、`prototype/tokens.css` 与两张参考截图、任务板）。该包不进入仓库；本 ADR 只记录落地所需的冻结数值与宿主差异，不复制其示例剧情或演示状态机。
 - 仓库依据：`docs/arcade-life/ADR-interfaces.md` §17、§22、§23；`apps/arcade/career/ui/*`；`apps/arcade/career/bridge.js`；`apps/arcade/career/ui/clue-surface.css`；`apps/arcade/arcade.css`；`apps/arcade/engine.js` 的 0.19 紧凑布局；`apps/arcade/career/content/registry.json`、`clues.json`、`commissions.json`、`world-work.json`。
 
 ## 1. 范围、原则与证据标记

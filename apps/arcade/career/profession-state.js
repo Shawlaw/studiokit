@@ -433,6 +433,25 @@
    * 旧档接受证据回填。只认显式接受集合、真实委托 run/claim/cleared quest；
    * 线索、投递、全局 stage、catalog unlock、游玩次数与推荐均不算接受。
    */
+  /**
+   * 首次到港被真实消费：玩家在到港面板点了第一份工作并成功开局。
+   * 只把叙事游标从 `invitation:<id>` 推进到 `arrival:<id>`，不改职业状态、
+   * 不发奖励、不写故事事件；重复调用是纯 no-op（关页重开不重播首到港）。
+   */
+  function consumeFirstArrival(state, input) {
+    const next = nextState(state);
+    if (!next || !isObject(input) || !validId(input.professionId)) return fail(state, 'bad-profession-id');
+    const progress = progressOf(next, input.professionId);
+    if (!progress || rankOf(progress.state) < rankOf('accepted')) return fail(state, 'not-accepted');
+    if (!isObject(next.narrativeCursor)) next.narrativeCursor = { chapterId: 'C0', nodeId: null };
+    if (next.narrativeCursor.nodeId !== 'invitation:' + input.professionId) {
+      return done(next, { duplicate: true, consumed: false });
+    }
+    next.narrativeCursor.nodeId = 'arrival:' + input.professionId;
+    next.updatedAt = laterTimestamp(next.updatedAt, iso(input.at));
+    return done(next, { duplicate: false, consumed: true });
+  }
+
   function deriveLegacyAcceptance(state, input) {
     const next = nextState(state);
     const opts = isObject(input) ? input : {};
@@ -571,6 +590,7 @@
     markDeveloped,
     markCompleted,
     recordStoryEvent,
+    consumeFirstArrival,
     deriveLegacyAcceptance,
     validate,
   };

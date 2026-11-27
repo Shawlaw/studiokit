@@ -242,6 +242,24 @@ const catalog = {
 
 /* P-05 纯函数、故事事件与边界 */
 {
+  /* 首到港消费：只推进叙事游标，不改状态/故事事件，重复调用纯 no-op。 */
+  const accepted = S.acceptInvitation(S.recordRead(S.initialState(NOW), {
+    catalog, professionId: 'nature.miner', clueId: 'CL-gold-miner', clueOpened: true, at: NOW,
+  }).state, { catalog, professionId: 'nature.miner', gameId: 'gold-miner', at: NOW });
+  eq('P-06a accept writes the invitation cursor', accepted.state.narrativeCursor.nodeId, 'invitation:nature.miner');
+  const consumed = S.consumeFirstArrival(accepted.state, { professionId: 'nature.miner', at: NOW });
+  eq('P-06b consume advances the cursor only', consumed.state.narrativeCursor.nodeId, 'arrival:nature.miner');
+  eq('P-06c consume keeps the profession state', consumed.state.professionProgress['nature.miner'].state, 'accepted');
+  eq('P-06d consume stores no story event', Object.keys(consumed.state.storyEvents || {}).length, 0);
+  const again = S.consumeFirstArrival(consumed.state, { professionId: 'nature.miner', at: NOW });
+  check('P-06e repeat consume is a pure no-op', again.duplicate === true && again.consumed === false && snapshot(again.state) === snapshot(consumed.state));
+  eq('P-06f consume rejects unaccepted professions',
+    S.consumeFirstArrival(S.initialState(NOW), { professionId: 'nature.miner', at: NOW }).reason, 'not-accepted');
+  eq('P-06g consume rejects bad ids', S.consumeFirstArrival(accepted.state, { professionId: 'BAD ID', at: NOW }).reason, 'bad-profession-id');
+  check('P-06h consume keeps the acceptance timestamp', accepted.state.updatedAt === S.consumeFirstArrival(accepted.state, { professionId: 'nature.miner', at: NOW }).state.updatedAt);
+}
+
+{
   const base = S.initialState(NOW);
   const before = snapshot(base);
   const r = S.recordGlimpsed(base, { catalog, professionId: 'nature.miner', gameId: 'gold-miner', at: NOW });

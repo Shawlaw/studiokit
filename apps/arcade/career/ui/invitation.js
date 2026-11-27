@@ -394,6 +394,14 @@
       return { ok: false };
     }
     state.status = '';
+    /* 首到港在这里被真实消费：先持久推进叙事游标，再离开页面。
+       失败不阻塞开局（最多重开时再看到一次到港），但重复点击/重开不再重播。 */
+    const consume = typeof state.context.consumeFirstArrival === 'function'
+      ? state.context.consumeFirstArrival
+      : (isObject(state.context.api) && typeof state.context.api.consumeFirstArrival === 'function' ? state.context.api.consumeFirstArrival : null);
+    if (consume) {
+      try { await consume.call(state.context, { professionId: state.model.invitation.professionId }); } catch (err) { /* 开局优先 */ }
+    }
     renderModel(state, state.model, '');
     const url = cleanText(result.url);
     if (url && root.location && typeof root.location.assign === 'function') root.location.assign(url);

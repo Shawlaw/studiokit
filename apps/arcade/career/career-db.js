@@ -102,6 +102,7 @@
     'MARK_DEVELOPED',
     'MARK_COMPLETED',
     'RECORD_STORY_EVENT',
+    'CONSUME_FIRST_ARRIVAL',
     'MIGRATE_LEGACY',
   ]);
   const PROFESSION_EXTENSION_FIELDS = Object.freeze([
@@ -123,6 +124,7 @@
     MARK_DEVELOPED: 'markDeveloped',
     MARK_COMPLETED: 'markCompleted',
     RECORD_STORY_EVENT: 'recordStoryEvent',
+    CONSUME_FIRST_ARRIVAL: 'consumeFirstArrival',
   });
 
   /* ------------------------------------------------------------------ *

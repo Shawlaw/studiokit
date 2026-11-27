@@ -8,6 +8,7 @@
  * Run: node tools/career_ui_components_test.mjs
  * Exit: 0 = all pass, 1 = at least one failure, 2 = missing input/usage.
  */
+import crypto from 'node:crypto';
 import fs from 'node:fs';
 import path from 'node:path';
 import vm from 'node:vm';
@@ -20,7 +21,6 @@ const REL = {
   css: 'apps/arcade/career/ui/components.css',
   components: 'apps/arcade/career/ui/components.js',
   harbor: 'apps/arcade/career/ui/harbor.js',
-  prototype: path.join(ROOT, '..', 'arcade-career-022-024', 'prototype', 'reference.js'),
 };
 const ABS = Object.fromEntries(Object.entries(REL).map(([key, value]) => [key, path.isAbsolute(value) ? value : path.join(ROOT, value)]));
 
@@ -651,11 +651,17 @@ check('component state enums frozen', JSON.stringify(components.STATES) === JSON
 
 /* ------------------------------ harbor ----------------------------- */
 
-const prototypeLine = fs.readFileSync(ABS.prototype, 'utf8').split(/\r?\n/)[3];
-const referenceHarbor = vm.runInNewContext(prototypeLine + '\n; harbor', {});
-check('prototype harbor reference loaded', typeof referenceHarbor === 'function');
-check('harbor() byte-identical to prototype', harborApi.harbor(false) === referenceHarbor(false));
-check('harbor(true) byte-identical to prototype', harborApi.harbor(true) === referenceHarbor(true));
+/* T11 冻结的 harbor 输出指纹：在原型逐字对齐评审时记录，之后任何字形/坐标漂移
+   都必须显式更新这里，避免测试依赖仓库外的私有原型包。 */
+const HARBOR_FINGERPRINT = Object.freeze({
+  false: '143b11989274a828908d9380b2d0b542cd9520193f1bb045be9d85bc7f1cc7ad',
+  true: '7c50cfb239b94584ae2420cb792cf444ceefd5dd2a291498d706587e64c32fee',
+});
+const fingerprintOf = (svg) => crypto.createHash('sha256').update(svg).digest('hex');
+eq('harbor() matches the frozen T11 reference fingerprint', fingerprintOf(harborApi.harbor(false)), HARBOR_FINGERPRINT.false);
+eq('harbor(true) matches the frozen T11 reference fingerprint', fingerprintOf(harborApi.harbor(true)), HARBOR_FINGERPRINT.true);
+eq('harbor output length is frozen (plain)', harborApi.harbor(false).length, 1990);
+eq('harbor output length is frozen (dock)', harborApi.harbor(true).length, 2209);
 eq('harbor default viewBox', /viewBox="0 0 320 100"/.test(harborApi.harbor()), true);
 eq('harbor dock viewBox', /viewBox="0 0 320 112"/.test(harborApi.harbor(true)), true);
 eq('harbor aria-hidden', /aria-hidden="true"/.test(harborApi.harbor()), true);

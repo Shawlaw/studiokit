@@ -1305,8 +1305,13 @@
         actions.push({ id: 'close-mailbox', label: '回到游戏', kind: 'text', onClick: close });
       } else if (invitation) {
         if (accepted) {
+          /* 首到港只出现一次：已消费（firstArrival=false）的已接受信件直接去港口，
+             不重播首次介绍或第一份工作。 */
+          const arrivalPending = session.firstArrivalClueId === session.selectedId || invitation.firstArrival === true;
           if (townOpenerOf(session.context) || (root.ArcadeCareerUI && root.ArcadeCareerUI.invitation)) {
-            actions.push({ id: 'invitation-port', label: INVITE_PORT_LABEL, kind: 'primary', ariaLabel: INVITE_PORT_ARIA, onClick: () => invitationPort(session) });
+            actions.push(arrivalPending
+              ? { id: 'invitation-port', label: INVITE_PORT_LABEL, kind: 'primary', ariaLabel: INVITE_PORT_ARIA, onClick: () => invitationPort(session) }
+              : { id: 'open-town', label: INVITE_PORT_LABEL, kind: 'primary', ariaLabel: INVITE_PORT_ARIA, onClick: () => openTownComponent(session) });
           }
           actions.push({ id: 'defer-invitation', label: deferLabel, kind: 'text', onClick: close });
         } else if (invitation.canAccept && acceptInvitationFnOf(session.context)) {

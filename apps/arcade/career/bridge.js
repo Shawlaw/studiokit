@@ -2678,6 +2678,14 @@
     });
   }
 
+  /** 首到港已被真实消费（玩家点了第一份工作）：只推进叙事游标，不改状态/奖励。 */
+  function consumeFirstArrival(request) {
+    var input = isObject(request) ? request : {};
+    var professionId = typeof input.professionId === 'string' ? input.professionId : null;
+    if (!professionId) return Promise.resolve({ ok: false, reason: 'missing-profession-id' });
+    return applyProfessionAction('CONSUME_FIRST_ARRIVAL', { professionId: professionId });
+  }
+
   function setActiveProfession(input) {
     var request = isObject(input) ? input : {};
     return applyProfessionAction('SET_ACTIVE', {
@@ -4948,6 +4956,7 @@
     api.onCareerDataChanged = onCareerDataChanged;
     api.invalidateCareerData = invalidateCareerData;
     api.acceptProfessionInvitation = acceptProfessionInvitation;
+    api.consumeFirstArrival = consumeFirstArrival;
     api.setActiveProfession = setActiveProfession;
     api.setProfessionPaused = setProfessionPaused;
     api.careerArchived = false;

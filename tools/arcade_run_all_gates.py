@@ -76,6 +76,10 @@ def gates():
         _gate('career_story_evidence', ['node', 'tools/career_story_evidence_test.mjs']),
         _gate('career_route_planner', ['node', 'tools/career_route_planner_test.mjs']),
         _gate('career_economy_balance', ['node', 'tools/career_economy_balance_test.mjs']),
+        _gate('career_ui_components', ['node', 'tools/career_ui_components_test.mjs']),
+        _gate('career_ui_invitation_adapters', ['node', 'tools/career_ui_invitation_adapters_test.mjs']),
+        _gate('career_ui_port_journal', ['node', 'tools/career_ui_port_journal_test.mjs']),
+        _gate('career_narrative_content', ['node', 'tools/career_narrative_content_test.mjs']),
         _gate('career_crystal_alias', ['node', 'tools/career_crystal_alias_test.mjs'], {
             'CAREER_CRYSTAL_PORT': _env('CAREER_CRYSTAL_PORT', '8991'),
             'CAREER_CRYSTAL_CDP': _env('CAREER_CRYSTAL_CDP', '9591'),

@@ -725,6 +725,7 @@ function narrativeFor(professionId) {
     }),
     acceptProfessionInvitation(input) { events.push(['accept', input.professionId, input.gameId]); accepted = true; return Promise.resolve({ ok: true, created: true, newlyAccepted: true }); },
     commission: { start(input) { events.push(['start', input.commissionId, input.ensure]); return Promise.resolve({ ok: true, url: '#gold-miner' }); } },
+    consumeFirstArrival(input) { events.push(['consume', input.professionId]); return Promise.resolve({ ok: true }); },
     uiComponents: ui.components,
     uiHarbor: ui.harbor,
     announce() {},
@@ -765,6 +766,10 @@ function narrativeFor(professionId) {
   start.click();
   await drain();
   check('P03 explicit start uses ensure:false once', events.some((item) => Array.isArray(item) && item[0] === 'start' && item[1] === 'gold-miner.T1' && item[2] === false));
+  check('P03 first arrival is consumed only after the real start succeeds',
+    events.filter((item) => Array.isArray(item) && item[0] === 'consume').length === 1
+    && events.findIndex((item) => Array.isArray(item) && item[0] === 'start') < events.findIndex((item) => Array.isArray(item) && item[0] === 'consume'),
+    events);
   ui.invitation.close();
 }
 
