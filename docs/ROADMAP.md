@@ -373,6 +373,15 @@ Owner 在 iPhone 主屏 PWA（Cloudflare Pages）复测 0.13.2：星海/2048/俄
 - [x] 双端发布：提交 `b3a8c7e`；Actions run `45007754972` 四 job 全绿；`tools/verify_deploy.py` **41/41** 双端一致；线上实测 CF 无后缀 URL `currentGame=block-drop`、游玩 1.6s 记到 1606ms，诊断页 iframe「计时正常」
 - [ ] 真机复验：iOS 主屏 PWA 更新后「计时自检」应显示计时正常，累计/积分记录时长不再为 0（UNVERIFIED）
 
+## Arcade 0.23.0 本地发布准备批次（2026-11-28，GATE_PASSED / RELEASE_READY，未发布）
+
+- [x] 版本链本地升至 0.23.0 / SW `studiokit-arcade-0.23.0-v1`；设计 / 回滚见 `apps/arcade/DESIGN-0.23.0.md`，UI 契约见 `docs/arcade-life/ADR-0.23-ui.md`，状态见 `docs/arcade-life/INTEGRATION-0.23.0.md`。
+- [x] 折光港统一界面：局部命名空间组件与精确 token、原型一致 harbor SVG、结算线索/字条/首次到港/后续邀请/回执/港口三分栏/工作/经历全部组件化；普通游戏主题不变。
+- [x] 16 个真实职业短叙事 shard；接受邀请不自动接单、首到港真实 `port` 投影给首单、消费后不重播、终局收据保留「读后日谈」；`contentVersion 0.18.0` / IDB v1 / 11 stores / 经典 localStorage key / 玩法数值零改动。
+- [x] 视觉与交互证据：13/13 场景、16/16 键盘交互、6/6 PWA 离线（桌面 Chrome），首航 405/405、移动端 334/334；独立复审与版本门禁结果见 `docs/arcade-life/INTEGRATION-0.23.0.md`。full / 真机 / 真人仍 UNVERIFIED。
+- [ ] Owner 发布授权；未获 `OWNER_AUTHORIZATION: PUBLISH_TO_MAIN` 前不 push / 不打 tag / 不部署。
+- [ ] 发布后证据回填；当前线上最近发布版本仍为 0.21.2（2026-11-26 已双端发布，main `bc50e61`，Actions `45858201941` 全绿，双端 91/91 一致）。
+
 ## Arcade 0.22.0 本地发布准备批次（2026-11-27，GATE_PASSED / RELEASE_READY，未发布）
 
 - [x] 版本链本地升至 0.22.0 / SW `studiokit-arcade-0.22.0-v1`；设计 / 回滚见 `apps/arcade/DESIGN-0.22.0.md`，状态见 `docs/arcade-life/INTEGRATION-0.22.0.md`。
@@ -384,7 +393,7 @@ Owner 在 iPhone 主屏 PWA（Cloudflare Pages）复测 0.13.2：星海/2048/俄
 
 ## Now
 
-当前本地发布准备版本：Arcade 0.22.0 / SW `studiokit-arcade-0.22.0-v1`（GATE_PASSED / RELEASE_READY，未发布；release 41/41，not full；线上仍为 0.21.2）。
+当前本地发布准备版本：Arcade 0.23.0 / SW `studiokit-arcade-0.23.0-v1`（GATE_PASSED / RELEASE_READY，未发布；线上仍为 0.21.2）。
 
 1. **Arcade 0.21.1 真机 / full 收尾**（已双端发布）：release 41/41、96 全量 3792/3792、首航 404/404，main `cbfeef6`，Actions `45840350943` 全绿，双端 90/90 一致；full / 真机 / 真人仍 UNVERIFIED。
 2. **Arcade 0.21.0 真机 / full 收尾**（已双端发布）：release 41/41 与双端 89/89 已完成；full profile、真机 / 真人体验仍 UNVERIFIED，不得把 release 结论冒充 full。
