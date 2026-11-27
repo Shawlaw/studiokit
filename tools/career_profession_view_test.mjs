@@ -201,6 +201,9 @@ catalog.professions.forEach((profession) => {
   eq('PV-02 recommendation prefers active accepted', V.getNextNarrativeAction({
     state, catalog, context: contextFor({ availableIds: [aJob, bJob] }),
   }), { kind: 'commission', commissionId: bJob, label: commissionFor(b).title });
+  eq('PV-02 cleared recommendation yields to uncleared work', V.getNextNarrativeAction({
+    state, catalog, context: contextFor({ availableIds: [aJob, bJob], clearedCommissions: [bJob] }),
+  }), { kind: 'commission', commissionId: aJob, label: commissionFor(a).title });
   eq('PV-02 recommendation unavailable empty', V.getNextNarrativeAction({ state, catalog, context: contextFor() }), null);
   eq('PV-02 recommendation cannot select locked', V.getNextNarrativeAction({
     state, catalog, context: contextFor({ availableIds: ['memory-flip.T2'] }),
