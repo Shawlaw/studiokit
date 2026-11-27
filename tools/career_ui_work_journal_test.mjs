@@ -193,6 +193,17 @@ function all(root, predicate) {
   return out;
 }
 function byAttr(root, name, value) { return all(root, (node) => node.getAttribute(name) === value); }
+function domPayload(root) {
+  let payload = text(root);
+  walk(root, (node) => {
+    Object.keys(node.attrs || {}).forEach((key) => { payload += ' ' + node.attrs[key]; });
+  });
+  return payload;
+}
+function hasFrozenReason(payload) {
+  const lower = payload.toLowerCase();
+  return Object.values(professionView.REASONS).some((code) => lower.includes(code));
+}
 function rowsById(root, id) {
   return all(root, (node) => node.tagName === 'LI' && node.classList.contains('ac-career-town__row') && node.getAttribute('data-commission-id') === id);
 }
@@ -390,6 +401,26 @@ byAttr(townSheet, 'data-town-recommend-start', 'true')[0].emit('click');
 check('town 接单只触发一次且显式 ensure:false',
   calls.start.length === 1 && calls.start[0].commissionId === mainWorkId && calls.start[0].ensure === false &&
   navigated.length === 1);
+
+const reasonCtx = Object.assign({}, townCtx, {
+  campaign: Object.assign({}, townCtx.campaign, {
+    recommend: () => ({ commissionId: mainWorkId, reason: 'world-locked', kind: 'milestone' }),
+  }),
+});
+const reasonSheet = townUi.town.render(reasonCtx);
+await flush();
+check('冻结 reason code 不进入 DOM 文本或任何属性',
+  byAttr(reasonSheet, 'data-town-reason').length === 0 && !hasFrozenReason(domPayload(reasonSheet)),
+  domPayload(reasonSheet));
+check('安全玩家语言 reason 仍可显示',
+  (() => {
+    const safeCtx = Object.assign({}, townCtx, {
+      campaign: Object.assign({}, townCtx.campaign, {
+        recommend: () => ({ commissionId: mainWorkId, reason: '阿砾等这份航报', kind: 'step' }),
+      }),
+    });
+    return text(townUi.town.render(safeCtx)).includes('阿砾等这份航报');
+  })());
 
 const noToolsView = clone(townView);
 noToolsView.tools = [];
