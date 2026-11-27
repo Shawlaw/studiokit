@@ -3054,6 +3054,44 @@ async function main() {
         width + 'px persistent career entry layout failed: ' + JSON.stringify(entryLayout));
     }
     await cdp.send('Emulation.setDeviceMetricsOverride', { width: 390, height: 844, deviceScaleFactor: 1, mobile: true });
+    /* 0.23 的已知工具只对「已接受职业」的世界开放（真实规则），所以这份合成夹具
+       需要一个真实形状的已接受职业；接单/邀请流程本身由 career_flow_e2e 覆盖。 */
+    await cdp.evaluate(`new Promise((resolve, reject) => {
+      const request = indexedDB.open('studiokit:arcade:career');
+      request.onerror = () => reject(request.error);
+      request.onsuccess = () => {
+        const db = request.result;
+        const at = new Date().toISOString();
+        const tx = db.transaction(['state'], 'readwrite');
+        tx.objectStore('state').put({
+          key: 'discovery',
+          schemaVersion: 1,
+          updatedAt: at,
+          value: {
+            schemaVersion: 1,
+            stage: 'ACCEPTED',
+            clues: {},
+            firstSourceGame: 'pendulum-tower',
+            firstDiscoveredGameId: 'pendulum-tower',
+            acceptedOriginGameId: 'pendulum-tower',
+            activeProfessionId: 'engineering.structural',
+            professionVersion: 1,
+            professionProgress: {
+              'engineering.structural': { state: 'accepted', discoveredAt: at, readAt: at, acceptedAt: at }
+            },
+            narrativeCursor: { chapterId: 'C0', nodeId: 'arrival:engineering.structural' },
+            storyEvents: {},
+            guardrails: {},
+            updatedAt: at
+          }
+        });
+        tx.oncomplete = () => { db.close(); resolve(true); };
+        tx.onerror = () => reject(tx.error);
+        tx.onabort = () => reject(tx.error);
+      };
+    })`);
+    await cdp.navigate(base + '/apps/arcade/');
+    await cdp.waitFor('document.querySelector("[data-career-entry]")?.hidden === false');
     const careerHome = await cdp.evaluate('location.href');
     await cdp.evaluate(`(async () => {
       document.documentElement.classList.add('studiokit-shell-standalone');
@@ -3077,10 +3115,13 @@ async function main() {
     await cdp.click('[data-career-entry]');
     await cdp.waitFor('!!document.querySelector("[data-career-panel=town]")');
     assert(await cdp.evaluate('location.href') === careerHome, 'opening town navigated away from the hall');
-    const receiptLabel = await cdp.text('[data-town-action=receipt]');
-    await cdp.click('[data-town-action=receipt]');
+    /* 0.23 港口把钱包入口收敛为「已知道具」栅格：[data-tool="wallet"] 打开既有账本收据。
+       工具来自真实投影，必须等港口装载完成后才出现。 */
+    await cdp.waitFor('!!document.querySelector(\'[data-career-panel=town] [data-tool="wallet"]\')');
+    await cdp.click('[data-tool=wallet]');
     await cdp.waitFor('!!document.querySelector("[data-career-panel=receipt] [data-section=ledger-rows]")');
-    assert((await cdp.text('[data-career-panel=receipt] h2')).trim() === receiptLabel.trim(), 'wallet title differs from its action label');
+    const receiptTitle = (await cdp.text('[data-career-panel=receipt] h2')).trim();
+    assert(receiptTitle.indexOf('钱包') !== -1, 'wallet title lost its wording: ' + receiptTitle);
     await sleep(180);
     assert(await cdp.evaluate('document.elementFromPoint(12, 12).closest("[data-career-panel]")?.dataset.careerPanel') === 'receipt', 'sticky shellbar was above the wallet overlay');
     const receiptBody = '[data-career-panel=receipt] .ac-career-sheet__body';
@@ -3096,7 +3137,7 @@ async function main() {
     assert(await cdp.evaluate('scrollY') === homeScroll, 'wallet scrolling moved the background');
     await cdp.click('[data-career-panel=receipt] .ac-career-close');
     assert(await cdp.evaluate('getComputedStyle(document.documentElement).overflowY') === 'hidden', 'closing the wallet unlocked the background behind town');
-    await cdp.click('[data-career-panel=town] .ac-career-close');
+    await cdp.click('[data-career-panel=town] .ac-career-ui__close');
     assert(await cdp.evaluate(`location.href === ${JSON.stringify(careerHome)} && scrollY === ${homeScroll} && document.activeElement.matches('[data-career-entry]') && getComputedStyle(document.documentElement).overflowY !== 'hidden'`), 'closing town failed to restore the hall, focus or scrolling');
     record('街机厅首页直接打开告示板，钱包标题一致且独立滚动，关闭恢复首页焦点与滚动', true);
 
@@ -3181,11 +3222,34 @@ async function main() {
       };
     })`);
     await mutateLegacy(`tx.objectStore('state').delete('career');
-      tx.objectStore('balances').put({careerId: ${legacyId}, credits: 321, revision: 0});`);
+      tx.objectStore('balances').put({careerId: ${legacyId}, credits: 321, revision: 0});
+      var legacyAt = new Date().toISOString();
+      tx.objectStore('state').put({
+        key: 'discovery', schemaVersion: 1, updatedAt: legacyAt,
+        value: {
+          schemaVersion: 1, stage: 'ACCEPTED', clues: {},
+          firstSourceGame: 'pendulum-tower', firstDiscoveredGameId: 'pendulum-tower',
+          acceptedOriginGameId: 'pendulum-tower', activeProfessionId: 'engineering.structural',
+          professionVersion: 1,
+          professionProgress: { 'engineering.structural': { state: 'accepted', discoveredAt: legacyAt, readAt: legacyAt, acceptedAt: legacyAt } },
+          narrativeCursor: { chapterId: 'C0', nodeId: 'arrival:engineering.structural' },
+          storyEvents: {}, guardrails: {}, updatedAt: legacyAt
+        }
+      });`);
     await cdp.navigate(base + '/apps/arcade/');
     await cdp.waitFor('document.querySelector("[data-career-entry]")?.hidden === false');
     await cdp.click('[data-career-entry]');
-    await cdp.waitFor('document.querySelector("[data-career-panel=town] .ac-career-town__wallet-value")?.textContent.includes("321")');
+    /* 0.23 港口没有旧版余额摘要行：等价（更强）断言为「旧钱包仍可经真实读取路径取到 321，
+       且能在同一页打开真实账本」，同时保留「打开旧档不得回写 career 指针」。 */
+    await cdp.waitFor('!!document.querySelector("[data-career-panel=town] [data-tool=wallet]")');
+    const legacyWallet = await cdp.evaluate(`(async () => {
+      const wallet = await ArcadeCareer.db.readWallet(${legacyId});
+      return wallet && wallet.ok ? { ok: true, credits: wallet.credits } : { ok: false, wallet: wallet && wallet.reason };
+    })()`);
+    assert(legacyWallet.ok && legacyWallet.credits === 321, 'legacy wallet not preserved: ' + JSON.stringify(legacyWallet));
+    await cdp.click('[data-tool=wallet]');
+    await cdp.waitFor('!!document.querySelector("[data-career-panel=receipt] [data-section=ledger-rows]")');
+    await cdp.click('[data-career-panel=receipt] .ac-career-close');
     assert(!(await cdp.evaluate('ArcadeCareer.db.getState("career")')), 'opening legacy career rewrote career pointer');
     await mutateLegacy(`tx.objectStore('profiles').delete(${legacyId});
       tx.objectStore('balances').delete(${legacyId});`);

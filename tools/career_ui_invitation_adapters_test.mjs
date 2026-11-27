@@ -406,6 +406,9 @@ check('invitation adapter reads only gated narrative/view surfaces',
   && readViewBody.includes("'port'")
   && !/'(work|receipt|journal|route|deep-link|tools|shop|crafting|message|clue)'/.test(readViewBody)
   && !/narrative-shards/.test(source.invitation));
+check('mailbox list keeps the real letter title above the ambient scene',
+  /title: titleOf\(clue\),/.test(source.mailbox)
+  && /teaser: cleanText\(clue\.ambientText\) \|\| cleanText\(clue\.ambientLabel\)/.test(source.mailbox));
 check('ClueRow is rendered by T11 component', /components\.ClueRow\(/.test(source.clue) && /ac-career-ui/.test(source.clue));
 check('LetterCard is rendered by T11 component', /components\.LetterCard\(/.test(source.mailbox));
 check('ReceiptCard is rendered by T11 component', /components\.ReceiptCard\(/.test(source.receipt));

@@ -1994,7 +1994,17 @@ async function phaseReceipt(cdp, label, expectedChapterFlags, card) {
     /* 0.23 收据不再渲染 0.22 的「你这一趟带回了什么？」经历块，等价（更强）断言：
        同一 careerView.story.history 必须在港口「经历」页真实可见（空投影则显示空状态）。 */
     await cdp.waitFor(`!!document.querySelector('[data-career-panel="town"] [data-port-tabpanel="home"] [data-story-state]')`, { timeout: 15000 });
+    /* 港口在装载完成时会重建 body；必须在 shell 进入 normal 之后再点 tab，
+       否则真实点击会落在被替换掉的节点上（装载期点击丢失）。 */
+    await cdp.waitFor(`(() => {
+      const panel = document.querySelector('[data-career-panel="town"] .ac-career-ui__panel');
+      return !!panel && panel.getAttribute('data-shell-state') === 'normal';
+    })()`, { timeout: 15000 });
     await pressVisible(cdp, '[data-career-panel="town"] [role="tablist"] [data-tab="journal"]', label + ' 经历页');
+    await cdp.waitFor(`(() => {
+      const tablist = document.querySelector('[data-career-panel="town"] [role="tablist"]');
+      return !!tablist && tablist.getAttribute('data-selected-id') === 'journal';
+    })()`, { timeout: 10000 });
     /* 港口三个 surface 异步装载：必须等「经历」tab 自身渲染完（timeline 或错误态），
        不能用固定 sleep 猜装载时间。 */
     let journalLoaded = true;
