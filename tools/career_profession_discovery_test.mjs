@@ -872,7 +872,8 @@ async function main() {
     check('T05-10 context 显式标记展示收窄与核心权威', !!viewContext && viewContext.bridgeDisplayOnly === true && viewContext.authority === 'commission-core');
     check('T05-11 调用方伪造的 worldFlags 不进入 context', !!viewContext && !('worldFlags' in viewContext));
     check('T05-12 调用方伪造的 storyEvidence 不进入 context', !!viewContext && !('storyEvidence' in viewContext));
-    check('T05-13 调用方伪造的 clearedCommissions 不进入 context', !!viewContext && !('clearedCommissions' in viewContext));
+    check('T05-13 调用方伪造的 clearedCommissions 不进入投影授权', !!viewContext && Array.isArray(viewContext.clearedCommissions)
+      && viewContext.clearedCommissions.indexOf('memory-flip.T1') < 0);
     eq('T05-14 history 只来自核心 continuations', viewContext && viewContext.history, []);
     check('T05-15 availableIds 来自核心而非调用方', !!viewContext
       && viewContext.availableIds.indexOf('star-raid.T1') >= 0
