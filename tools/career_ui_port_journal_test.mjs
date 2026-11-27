@@ -699,6 +699,11 @@ ui.town.close();
 const p10Fixture = FIXTURE_PACK.fixtures.find((fixture) => fixture.id === 'P10');
 check('frozen fixture pack exposes four P10 variants', !!p10Fixture && p10Fixture.variants.length === 4);
 function fixtureVariant(id) { return p10Fixture.variants.find((variant) => variant.id === id); }
+function fourToolIds(panel) {
+  return byAttr(panel, 'data-tool', 'wallet').concat(byAttr(panel, 'data-tool', 'shop'))
+    .concat(byAttr(panel, 'data-tool', 'workshop')).concat(byAttr(panel, 'data-tool', 'hangar'))
+    .map((node) => node.getAttribute('data-tool')).join(',');
+}
 function hiddenTextsAbsent(panel, variant) {
   const visible = text(panel);
   const fixtureText = [
@@ -716,7 +721,7 @@ async function openFixtureVariant(id) {
   const emptyView = { schemaVersion: 1, professions: [], commissions: [], tools: [], story: { nextAction: null, messages: [], history: [] } };
   const ctx = {
     uiComponents: local.components,
-    portFixture: fixtureVariant(id),
+    portFixture: Object.assign({}, p10Fixture, fixtureVariant(id)),
     careerView() { viewCalls += 1; return emptyView; },
     fixtureAction(actionId) { actionCalls.push(actionId); },
   };
@@ -732,6 +737,7 @@ check('P10-empty consumes frozen fixture text and state',
   fixture.expected.visibleTexts.every((term) => text(fixturePanel).includes(term)) && hiddenTextsAbsent(fixturePanel, fixture) &&
   fixturePanel.getAttribute('data-shell-state') === fixture.careerShell.state &&
   byAttr(fixturePanel, 'data-story-state', fixture.storyCard.state).length === 1);
+eq('P10-empty keeps four real tools', fourToolIds(fixturePanel), 'wallet,shop,workshop,hangar');
 variantRun.local.ui.town.close();
 
 variantRun = await openFixtureVariant('P10-loading');
@@ -742,6 +748,7 @@ check('P10-loading consumes frozen fixture text and keeps structure',
   fixture.expected.visibleTexts.every((term) => text(fixturePanel).includes(term)) && hiddenTextsAbsent(fixturePanel, fixture) &&
   fixturePanel.getAttribute('data-shell-state') === fixture.careerShell.state &&
   !!fixturePanel.querySelector('.ac-career-ui__close') && byAttr(fixturePanel, 'role', 'tab').length === 3);
+eq('P10-loading keeps four real tools', fourToolIds(fixturePanel), 'wallet,shop,workshop,hangar');
 variantRun.local.ui.town.close();
 
 variantRun = await openFixtureVariant('P10-error');
@@ -750,6 +757,7 @@ fixturePanel = variantRun.local.doc.querySelector('.ac-career-ui__panel');
 check('P10-error consumes frozen fixture text and retry action',
   fixture.expected.visibleTexts.every((term) => text(fixturePanel).includes(term)) && hiddenTextsAbsent(fixturePanel, fixture) &&
   fixturePanel.getAttribute('data-shell-state') === fixture.careerShell.state);
+eq('P10-error keeps four real tools', fourToolIds(fixturePanel), 'wallet,shop,workshop,hangar');
 const retryButton = find(fixturePanel, (node) => node.localName === 'button' && text(node) === fixture.secondaryAction.label);
 const beforeRetry = variantRun.viewCalls();
 retryButton.click();
@@ -775,6 +783,7 @@ check('P10-longtext consumes frozen LetterCard fixture, not StoryCard/narrative'
   longTextFacts);
 check('P10-longtext body scrolls structurally and exposes T11 text action',
   !!fixturePanel.querySelector('.ac-career-ui__body') && text(fixturePanel).includes(fixture.letterCard.actions[0].label));
+eq('P10-longtext keeps four real tools', fourToolIds(fixturePanel), 'wallet,shop,workshop,hangar');
 variantRun.local.ui.town.close();
 
 /* ------------------------------------------------------------------ tool panels */
