@@ -57,6 +57,7 @@
       displayName: cleanText(raw.displayName),
       sender: cleanText(raw.sender),
       state: state,
+      firstArrival: state === 'accepted' && raw.firstArrival === true,
       canAccept: state === 'read' && raw.canAccept === true,
     };
   }
@@ -74,12 +75,12 @@
     return normalizeInvitation(raw, clueId);
   }
 
-  async function readView(context) {
+  async function readView(context, surface) {
     const reader = typeof context.careerView === 'function'
       ? context.careerView
       : isObject(context.api) && typeof context.api.careerView === 'function' ? context.api.careerView : null;
     if (!reader) return null;
-    try { return await reader.call(context, { surface: 'letter' }); } catch (err) { return null; }
+    try { return await reader.call(context, { surface: surface === 'port' ? 'port' : 'letter' }); } catch (err) { return null; }
   }
 
   function identityEstablished(context, view) {
@@ -142,13 +143,18 @@
     const opts = isObject(options) ? options : {};
     const invitation = normalizeInvitation(opts.invitation, cleanText(ctx.clueId)) || await readInvitation(ctx);
     if (!invitation) return { ok: false, reason: 'invitation-unavailable' };
-    const view = await readView(ctx);
+    /* An accepted first arrival still needs its first work row, and the letter
+       surface is forbidden to disclose commissions. Only the persisted
+       first-arrival marker may widen the read to the port surface. */
+    const wantsFirstArrival = opts.firstArrival === true || ctx.firstArrival === true || invitation.firstArrival === true;
+    const pendingFirstArrival = wantsFirstArrival && invitation.state === 'accepted';
+    const view = await readView(ctx, pendingFirstArrival ? 'port' : 'letter');
     const established = identityEstablished(ctx, view);
     const acceptedResult = isObject(opts.acceptedResult) ? opts.acceptedResult : null;
     const accepted = invitation.state === 'accepted' || !!(acceptedResult && acceptedResult.ok === true);
     const identityBefore = opts.identityBefore === undefined ? established : opts.identityBefore === true;
     const createdHere = acceptedResult && acceptedResult.ok === true && acceptedResult.created === true && !identityBefore;
-    const arrivedFromLetter = ctx.firstArrival === true && invitation.state === 'accepted' && established;
+    const arrivedFromLetter = pendingFirstArrival && established;
     const created = !!(createdHere || arrivedFromLetter);
     const mode = created || (!established && !(acceptedResult && acceptedResult.created === false)) ? 'freshIntro' : 'existingIntro';
     const narrative = narrativeOf(ctx, invitation);

@@ -46,6 +46,16 @@ const ORIGIN_ARRIVAL = {
   [ORIGIN_GAME]: { sender: '阿德', object: '单据', otherSender: '老周', otherObject: '存根' },
   [MEMORY_ORIGIN]: { sender: '老周', object: '存根', otherSender: '阿德', otherObject: '单据' },
 };
+/* 0.23 真实叙事内容：首次到港的文案与首单动作来自内容 shard，测试只读同源数据。 */
+const NARRATIVE_BY_PROFESSION = (() => {
+  const registry = readJson('apps/arcade/career/content/narrative-registry.json');
+  const map = {};
+  for (const shard of registry.shards) {
+    const data = readJson('apps/arcade/career/content/' + shard.url);
+    for (const entry of data.entries || []) map[entry.professionId] = entry;
+  }
+  return map;
+})();
 const TICKET_STORAGE_KEY = 'studiokit:arcade:career:ticket.v1';
 const RECEIPT_CARD = '[data-career-card="receipt"]';
 const RETURN_TO_TOWN = RECEIPT_CARD + ' [data-action="return-to-town"]';
@@ -1401,6 +1411,32 @@ async function phaseSingleDelivery(cdp, gameId) {
   await viewportChecks(cdp, '接受后的信箱', ['[data-career-panel="mailbox"] [data-action="invitation-port"]']);
 
   await pressVisible(cdp, '[data-career-panel="mailbox"] [data-action="invitation-port"]', '接受邀请后去港口');
+  /* 0.23：接受邀请后先进入首次到港叙事面板（P03），第一份工作必须来自真实
+     port 投影，且仍由玩家显式点击；未接受职业/隐藏任务不得出现。 */
+  const arrivalPanel = await waitPanel(cdp, 'arrival', 15000);
+  const arrivalProjection = await cdp.evaluate(`(async () => {
+    const api = window.ArcadeCareer;
+    const view = await api.careerView({ surface: 'port' });
+    const rows = view && Array.isArray(view.commissions) ? view.commissions : [];
+    return {
+      commissions: rows.map((row) => ({ id: row.commissionId, category: row.category, professionId: row.professionId, title: row.title })).slice(0, 8),
+      run: api.commissionRun || null,
+    };
+  })()`);
+  const firstRow = arrivalProjection.commissions.find((row) => row.professionId === invitation.professionId && row.category === 'profession');
+  const firstNarrative = NARRATIVE_BY_PROFESSION[invitation.professionId] || {};
+  const firstStart = await cdp.evaluate(`(() => {
+    const button = document.querySelector('[data-career-panel="arrival"] [data-action="start-first-commission"]');
+    return button ? { text: (button.textContent || '').trim(), visible: button.getClientRects().length > 0 } : null;
+  })()`);
+  gate('ARRIVAL 首次到港在真实 port 投影下给出第一份工作且不自动接单',
+    !!firstRow && !!arrivalPanel && arrivalPanel.text.includes(firstRow.title) &&
+      !!firstStart && firstStart.visible && firstStart.text === firstNarrative.firstActionLabel &&
+      arrivalProjection.run === null,
+    J({ firstRow, firstStart, firstTitle: firstNarrative.firstActionLabel, text: arrivalPanel && arrivalPanel.text.slice(0, 400) }));
+  await pressVisible(cdp, '[data-career-panel="arrival"] [data-action="leave-arrival"]', '暂时离开港口');
+  await cdp.waitFor('!document.querySelector(`[data-career-panel="arrival"]`)', { timeout: 10000 });
+  await cdp.evaluate('window.ArcadeCareer.openTown()');
   const board = await waitPanel(cdp, 'town', 15000);
   gate('TOWN 显式打开港口并在当前页打开告示板，仍未自动接单',
     !!board && await cdp.evaluate('location.href') === before &&

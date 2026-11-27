@@ -396,7 +396,16 @@ check('fixture productionVisible is false', fixture.contentPolicy.productionVisi
 check('fixture P01/P02/P05/P06 use real mapped IDs', ['P01', 'P02', 'P05', 'P06'].every((id) => !!stateOfFixture(id)));
 const runtimeSources = Object.fromEntries(invitationSources.map((key) => [key, source[key].replace(/\/\*[\s\S]*?\*\//g, '')]));
 check('adapters do not read full catalog or storage', invitationSources.every((key) => !/ctx\.commissions|careerCatalog\(|listAvailable\(|localStorage|indexedDB|fetch\(/.test(runtimeSources[key])));
-check('invitation adapter reads only gated narrative/view surfaces', /surface: 'letter'/.test(source.invitation) && !/narrative-shards/.test(source.invitation));
+/* The letter surface may not disclose commissions, so the adapter defaults to it and
+   widens to 'port' only behind the persisted first-arrival marker. */
+const readViewBody = (source.invitation.match(/async function readView\([\s\S]*?\n  \}/) || [''])[0];
+check('invitation adapter reads only gated narrative/view surfaces',
+  /pendingFirstArrival \? 'port' : 'letter'/.test(source.invitation)
+  && readViewBody.length > 0
+  && readViewBody.includes("'letter'")
+  && readViewBody.includes("'port'")
+  && !/'(work|receipt|journal|route|deep-link|tools|shop|crafting|message|clue)'/.test(readViewBody)
+  && !/narrative-shards/.test(source.invitation));
 check('ClueRow is rendered by T11 component', /components\.ClueRow\(/.test(source.clue) && /ac-career-ui/.test(source.clue));
 check('LetterCard is rendered by T11 component', /components\.LetterCard\(/.test(source.mailbox));
 check('ReceiptCard is rendered by T11 component', /components\.ReceiptCard\(/.test(source.receipt));

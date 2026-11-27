@@ -2693,7 +2693,7 @@
     return { ok: true, reason: reason };
   }
 
-  function invitationForClue(clueId) {
+  function invitationForClue(clueId, includeAccepted) {
     try {
       if (internal.careerArchived) return null;
       var clue = findClue(clueId);
@@ -2709,9 +2709,12 @@
         var professionId = professionIds[i];
         var row = state.professionProgress && isObject(state.professionProgress[professionId])
           ? state.professionProgress[professionId] : null;
-        if (!row || ['glimpsed', 'read'].indexOf(row.state) < 0) continue;
+        if (!row) continue;
+        var accepted = ['accepted', 'developed', 'completed'].indexOf(row.state) >= 0;
+        if (!(includeAccepted === true && accepted) && ['glimpsed', 'read'].indexOf(row.state) < 0) continue;
+        var surface = accepted ? 'port' : 'letter';
         var reveal = view && typeof view.canRevealProfession === 'function'
-          ? view.canRevealProfession({ state: state, catalog: catalog, context: { surface: 'letter', gameId: clue.gameId }, professionId: professionId, surface: 'letter' })
+          ? view.canRevealProfession({ state: state, catalog: catalog, context: { surface: surface, gameId: clue.gameId }, professionId: professionId, surface: surface })
           : null;
         if (!reveal || reveal.ok !== true) continue;
         var profession = Array.isArray(catalog.professions)
@@ -2721,7 +2724,9 @@
           professionId: professionId,
           gameId: clue.gameId,
           displayName: profession && profession.displayName ? profession.displayName : '',
-          state: row.state,
+          state: accepted ? 'accepted' : row.state,
+          firstArrival: row.state === 'accepted' && state.acceptedOriginGameId === clue.gameId
+            && state.narrativeCursor && state.narrativeCursor.nodeId === 'invitation:' + professionId,
           canAccept: row.state === 'read',
         };
       }
@@ -3753,7 +3758,7 @@
       commission: commissionForUi(),
       professionView: professionViewModule(),
       careerView: careerView,
-      invitationForClue: invitationForClue,
+      invitationForClue: function (clueId) { return invitationForClue(clueId, true); },
       openInvitation: openInvitation,
       onCareerDataChanged: onCareerDataChanged,
       invalidateCareerData: invalidateCareerData,

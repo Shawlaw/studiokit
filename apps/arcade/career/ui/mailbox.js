@@ -203,6 +203,7 @@
       gameId: cleanText(raw.gameId),
       displayName: cleanText(raw.displayName),
       state: state,
+      firstArrival: state === 'accepted' && raw.firstArrival === true,
       canAccept: raw.canAccept !== false && state !== 'accepted',
     };
   }
@@ -1136,7 +1137,9 @@
     const arrival = {
       clueId: session.selectedId,
       returnFocus: session.returnFocus,
-      firstArrival: session.firstArrivalClueId === session.selectedId,
+      /* 首次到港以 bridge 的持久标记为准；内存标记只用于刚接受完的同一会话。 */
+      firstArrival: session.firstArrivalClueId === session.selectedId
+        || !!(session.invitation && session.invitation.firstArrival === true),
     };
     close();
     const run = () => {
