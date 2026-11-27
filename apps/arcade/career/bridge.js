@@ -206,6 +206,7 @@
     commissionUiFacade: null,
     commissionUiSource: null,
     professionViewLoaded: false,
+    endingAttach: null,
     careerDataListeners: [],
     endingEvents: [],
     careerArchived: false,
@@ -1248,6 +1249,7 @@
                     gameId: result.commission.gameId,
                     careerId: result.run.careerId,
                   });
+                  internal.endingAttach = { called: true, ok: attached !== false, ticketId: ticketId, at: nowIso() };
                   if (attached === false) {
                     addReason('ending-attach-failed');
                     return false;
@@ -4317,6 +4319,7 @@
           deferredModules: clone(internal.deferredModules) || [],
           cluesEnabled: internal.cluesEnabled,
           clueCount: internal.clues.length,
+          endingAttach: clone(internal.endingAttach),
           careerArchived: internal.careerArchived,
           careerArchiveCareerId: internal.careerArchiveCareerId,
           careerArchivedAt: internal.careerArchivedAt,
