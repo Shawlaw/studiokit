@@ -200,6 +200,57 @@
     };
   }
 
+  /**
+   * 深链 / 旧 URL / 搜索 / 调试入口共用的 fail-closed gate。
+   * 只读 projection 模块，不读取 DOM / DB / 时钟；reason code 仅用于诊断。
+   * 未接受职业既不可进入职业详情，也不能借 commissionId 进入任务详情。
+   */
+  function gateCareerEntry(request, view, state, catalog, context) {
+    const input = isObject(request) ? request : {};
+    const ctx = isObject(context) ? Object.assign({}, context) : {};
+    ctx.surface = 'deep-link';
+    if (typeof input.gameId === 'string' && input.gameId) ctx.gameId = input.gameId;
+    if (!view || typeof view.canRevealProfession !== 'function' || typeof view.canShowCommission !== 'function') {
+      return { ok: false, reason: input.commissionId ? 'not-available' : 'not-discovered' };
+    }
+    if (input.professionId) {
+      let reveal = null;
+      try {
+        reveal = view.canRevealProfession({ state, catalog, context: ctx, professionId: input.professionId, surface: 'deep-link' });
+      } catch (err) {
+        return { ok: false, reason: 'unknown-profession' };
+      }
+      if (!reveal || reveal.ok !== true) {
+        return { ok: false, reason: (reveal && reveal.reason) || 'not-discovered' };
+      }
+      /* 深链任务详情比一般职业披露更严格：只认投影中实际存在的已披露职业。 */
+      if (typeof view.projectCareerView === 'function') {
+        let projection = null;
+        try {
+          projection = view.projectCareerView({ state, catalog, context: ctx });
+        } catch (err) {
+          return { ok: false, reason: 'unknown-profession' };
+        }
+        const visible = projection && Array.isArray(projection.professions)
+          ? projection.professions.some(function (row) { return row && row.professionId === input.professionId; })
+          : false;
+        if (!visible) return { ok: false, reason: 'not-accepted' };
+      }
+    }
+    if (input.commissionId) {
+      let shown = null;
+      try {
+        shown = view.canShowCommission({ state, catalog, context: ctx, commissionId: input.commissionId });
+      } catch (err) {
+        return { ok: false, reason: 'unknown-commission' };
+      }
+      if (!shown || shown.ok !== true) {
+        return { ok: false, reason: (shown && shown.reason) || 'not-available' };
+      }
+    }
+    return { ok: true, reason: null };
+  }
+
   return {
     LOCAL_STAGE,
     MAX_GREETING_CHARS,
@@ -209,5 +260,6 @@
     addressOf,
     canEnterLocal,
     entryForClue,
+    gateCareerEntry,
   };
 });

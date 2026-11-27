@@ -85,6 +85,7 @@
   var DEPENDENCIES = [
     { file: 'router.js', global: 'router', required: true },
     { file: 'registry.js', global: 'registry', required: true },
+    { file: 'profession-state.js', global: 'professionState', required: true },
     { file: 'discovery.js', global: 'discovery', required: true },
     { file: 'career-core.js', global: 'core', required: false },
     { file: 'career-db.js', global: 'db', required: false },
@@ -100,6 +101,7 @@
     { file: 'materials.js', global: 'materials', required: false, lazy: true },
     { file: 'crafting.js', global: 'crafting', required: false, lazy: true },
     { file: 'professions.js', global: 'professions', required: false, lazy: true },
+    { file: 'profession-view.js', global: 'professionView', required: false, lazy: true },
     { file: 'story-evidence.js', global: 'storyEvidence', required: false, lazy: true },
     { file: 'route-planner.js', global: 'routePlanner', required: false, lazy: true },
     { file: 'campaign-core.js', global: 'campaign', required: false, lazy: true },
@@ -191,6 +193,7 @@
     commissionContent: null,
     itemsContent: null,
     chapterContent: null,
+    worldWorkContent: null,
     contentRequested: false,
     contentPromise: null,
     commissionRun: null,
@@ -200,6 +203,9 @@
     commissionActivated: false,
     commissionConfigured: false,
     commissionLastCareerId: null,
+    commissionUiFacade: null,
+    commissionUiSource: null,
+    professionViewLoaded: false,
     endingEvents: [],
     careerArchived: false,
     careerArchiveCareerId: null,
@@ -591,6 +597,7 @@
     materials: { file: 'materials.js', global: 'materials' },
     crafting: { file: 'crafting.js', global: 'crafting' },
     professions: { file: 'professions.js', global: 'professions' },
+    professionView: { file: 'profession-view.js', global: 'professionView' },
     storyEvidence: { file: 'story-evidence.js', global: 'storyEvidence' },
     routePlanner: { file: 'route-planner.js', global: 'routePlanner' },
     campaign: { file: 'campaign-core.js', global: 'campaign' },
@@ -803,9 +810,10 @@
           configureCommissionContent();
         } else if (def.global === 'rental' || def.global === 'alternatives' || def.global === 'combatConfig'
           || def.global === 'materials' || def.global === 'crafting' || def.global === 'professions'
-          || def.global === 'storyEvidence' || def.global === 'routePlanner'
+          || def.global === 'professionView' || def.global === 'storyEvidence' || def.global === 'routePlanner'
           || def.global === 'campaign' || def.global === 'ending') {
           api[def.global] = mod;
+          if (def.global === 'professionView') internal.professionViewLoaded = true;
           configureCareerModules();
         } else if (def.global.indexOf('ui.') === 0) syncUiRefs();
         return mod;
@@ -922,6 +930,9 @@
       one('campaign.json', 'campaignContent', function (data) {
         return data && Array.isArray(data.chapters) ? data : null;
       }),
+      one('world-work.json', 'worldWorkContent', function (data) {
+        return data && Array.isArray(data.commissionIds) && Array.isArray(data.entries) ? data : null;
+      }),
       one('chapter-00.json', 'c00', function (data) { return data && data.chapterId ? data : null; }),
       one('chapter-02.json', 'c02', function (data) { return data && data.chapterId ? data : null; }),
       one('chapter-03.json', 'c03', function (data) { return data && data.chapterId ? data : null; }),
@@ -966,6 +977,9 @@
       chapter: internal.chapterContent || null,
       registry: internal.registryContent || null,
       campaign: internal.campaignContent || null,
+      worldWorkIds: internal.worldWorkContent && Array.isArray(internal.worldWorkContent.commissionIds)
+        ? internal.worldWorkContent.commissionIds.slice() : [],
+      worldWork: internal.worldWorkContent || null,
       chapters: internal.chapterFiles || null,
       sideStories: internal.sideStoriesContent || null,
       npc: internal.npcContent || null,
@@ -1028,6 +1042,9 @@
       var result = mod.configure({
         content: internal.commissionContent,
         arcadeBase: api.gameId ? '../' : internal.base || './',
+        worldWorkIds: internal.worldWorkContent && Array.isArray(internal.worldWorkContent.commissionIds)
+          ? internal.worldWorkContent.commissionIds.slice() : [],
+        worldWork: internal.worldWorkContent || null,
       });
       internal.commissionConfigured = true;
       if (result && result.errors && result.errors.length) {
@@ -1146,10 +1163,22 @@
         }
         configureCommissionContent();
         var stored = readStoredTicket();
-        return Promise.resolve(mod.validateTicket({ ticketId: ticketId, ticket: stored, gameId: api.gameId })).then(function (result) {
+        return Promise.resolve(mod.validateTicket({ ticketId: ticketId, ticket: stored, gameId: api.gameId })).then(async function (result) {
           if (!result || !result.ok || !result.commission || !result.run) {
             addReason('commission-ticket-rejected:' + ((result && result.reason) || 'unknown'));
             return null;
+          }
+          if (typeof result.commission.commissionId !== 'string' || result.commission.commissionId.indexOf('ending.') !== 0) {
+            var gate = await careerEntryGate({
+              commissionId: result.commission.commissionId,
+              gameId: result.commission.gameId || api.gameId || null,
+              activeRuns: [result.run],
+              history: [result.run],
+            });
+            if (!gate || gate.ok !== true) {
+              addReason('commission-ticket-gate-rejected:' + ((gate && gate.reason) || 'unknown'));
+              return null;
+            }
           }
           /* 游戏页已按经典开局（慢启动超时）后，late ticket 不再切换模式，避免一局两套结算。 */
           try {
@@ -1386,7 +1415,13 @@
   function readArchivePhotoCommission(mod, careerId) {
     if (typeof mod.listAvailable !== 'function') return Promise.resolve(null);
     return safeAsync('receipt-follow-up', function () {
-      return Promise.resolve(mod.listAvailable({ careerId: careerId })).then(function (listing) {
+      return Promise.resolve(mod.listAvailable({
+        careerId: careerId,
+        state: currentStateSnapshot(),
+        catalog: careerCatalog(),
+        context: careerContext(null, 'receipt'),
+        ensure: false,
+      })).then(function (listing) {
         if (!listing || listing.ok !== true || !Array.isArray(listing.commissions)) return null;
         return listing.commissions.find(function (row) { return row.commissionId === 'memory-flip.T2'; }) || null;
       });
@@ -1865,12 +1900,6 @@
 
   /* ---------------------------------------------------------------- DB 适配层 */
 
-  function buildStateRecord(state) {
-    var record = clone(state) || {};
-    record.key = STATE_KEY;
-    return record;
-  }
-
   function normalizeDiscoveryRecords(records) {
     if (!records) return [];
     var list = Array.isArray(records) ? records : [records];
@@ -1883,203 +1912,20 @@
     return out;
   }
 
-  function idbWrite(idb, pairs) {
-    return new Promise(function (resolve, reject) {
-      var storeNames = [];
-      pairs.forEach(function (pair) {
-        if (storeNames.indexOf(pair[0]) < 0) storeNames.push(pair[0]);
-      });
-      var names = idb.objectStoreNames;
-      var usable = storeNames.filter(function (name) {
-        if (!names) return true;
-        if (typeof names.contains === 'function') return names.contains(name);
-        try {
-          return Array.prototype.indexOf.call(names, name) >= 0;
-        } catch (err) {
-          return true;
-        }
-      });
-      if (!usable.length) {
-        reject(new Error('idb-stores-missing'));
-        return;
-      }
-      var tx;
-      try {
-        tx = idb.transaction(usable, 'readwrite');
-      } catch (err) {
-        reject(err);
-        return;
-      }
-      var settled = false;
-      tx.oncomplete = function () {
-        if (settled) return;
-        settled = true;
-        resolve({ ok: true, method: 'idb-transaction' });
-      };
-      tx.onerror = function () {
-        if (settled) return;
-        settled = true;
-        reject(tx.error || new Error('idb-error'));
-      };
-      tx.onabort = function () {
-        if (settled) return;
-        settled = true;
-        reject(tx.error || new Error('idb-abort'));
-      };
-      try {
-        pairs.forEach(function (pair) {
-          if (usable.indexOf(pair[0]) < 0) return;
-          tx.objectStore(pair[0]).put(pair[1]);
-        });
-      } catch (err) {
-        try {
-          tx.abort();
-        } catch (abortErr) {
-          /* ignore */
-        }
-        if (!settled) {
-          settled = true;
-          reject(err);
-        }
-      }
-    });
-  }
-
-  function runStrategies(strategies) {
-    if (!strategies.length) return Promise.resolve({ ok: false, error: 'db-api-unsupported' });
-    var index = 0;
-    var lastError = null;
-    function next() {
-      if (index >= strategies.length) return Promise.resolve({ ok: false, error: lastError || 'db-api-unsupported' });
-      var strategy = strategies[index];
-      index += 1;
-      return Promise.resolve()
-        .then(function () {
-          return strategy();
-        })
-        .then(
-          function (result) {
-            if (result && result.ok) return result;
-            lastError = (result && result.error) || 'writer-failed';
-            return next();
-          },
-          function (err) {
-            lastError = err && err.message ? err.message : 'writer-threw';
-            return next();
-          }
-        );
-    }
-    return next();
-  }
-
-  function pairValues(pairs, store) {
-    return pairs.filter(function (pair) { return pair[0] === store; }).map(function (pair) { return pair[1]; });
-  }
-
-  function chainPairs(pairs, handler) {
-    return pairs
-      .reduce(
-        function (chain, pair) {
-          return chain.then(function () {
-            return callMaybeAsync({ fn: handler }, null, [pair[0], pair[1]]).then(function (raw) {
-              var normalized = normalizeWriteResult(raw);
-              if (!normalized.ok) throw new Error(normalized.error || 'writer-failed');
-              return normalized;
-            });
-          });
-        },
-        Promise.resolve()
-      )
-      .then(function () {
-        return { ok: true };
-      });
-  }
-
   /**
-   * 写入发现状态与线索记录。按生涯 DB 模块公开接口逐级探测，全部失败返回 {ok:false}。
-   * 优先 D15-03 career-db 的 putDiscovery(records[]) + saveDiscoveryState(state)（线索行先写、
-   * state 后写，state 是 UI/intro 的门闩；0.15 无线索时只写 state），
-   * 其次组合 API / 通用 put / 原始 IDBDatabase 单事务。
+   * 发现写入只走 career-db 的公共事务 API。任何 career extension 的写入都由
+   * mergeDiscoveryState(action.professionEvents) 或 applyProfessionEvent 完成；
+   * bridge 不再有 raw IDB / 通用 put / 多步写回退。
    */
-  function dbWrite(state, discoveryRecords) {
+  function dbWrite(state, discoveryRecords, action) {
     return Promise.resolve()
       .then(function () {
         var dbModule = readGlobal('db');
-        if (!dbModule) return { ok: false, error: 'db-module-missing' };
-        var records = normalizeDiscoveryRecords(discoveryRecords);
-        var stateRecord = buildStateRecord(state);
-        var pairs = [['state', stateRecord]].concat(
-          records.map(function (record) {
-            return ['discovery', record];
-          })
-        );
-        var strategies = [];
-
-        var generationOptions = { generation: internal.discoveryGeneration || 0 };
-        var stateSave = pickMethod(dbModule, ['saveDiscoveryState', 'saveState', 'putState', 'writeState', 'setState']);
-        var discoverySaveMany = pickMethod(dbModule, ['putDiscovery', 'putDiscoveries', 'saveDiscoveries']);
-        var discoverySaveOne = pickMethod(dbModule, ['saveDiscovery', 'writeDiscovery', 'addDiscovery']);
-        if (stateSave) {
-          strategies.push(function () {
-            var chain = Promise.resolve();
-            if (records.length) {
-              if (discoverySaveMany) {
-                chain = chain.then(function () {
-                  return callMaybeAsync(discoverySaveMany, dbModule, [records, generationOptions]).then(function (raw) {
-                    var normalized = normalizeWriteResult(raw);
-                    if (!normalized.ok) throw new Error(normalized.error || 'discovery-write-failed');
-                  });
-                });
-              } else if (discoverySaveOne) {
-                chain = chain.then(function () {
-                  return records.reduce(function (step, record) {
-                    return step.then(function () {
-                      return callMaybeAsync(discoverySaveOne, dbModule, [record]).then(function (raw) {
-                        var normalized = normalizeWriteResult(raw);
-                        if (!normalized.ok) throw new Error(normalized.error || 'discovery-write-failed');
-                      });
-                    });
-                  }, Promise.resolve());
-                });
-              } else {
-                chain = chain.then(function () {
-                  throw new Error('no-discovery-writer');
-                });
-              }
-            }
-            return chain.then(function () {
-              /* career-db.saveDiscoveryState 期望发现状态本体（DB 层自己包 {key,value}）。 */
-              var payload = stateSave.name === 'saveDiscoveryState' ? state : stateRecord;
-              return callMaybeAsync(stateSave, dbModule, [payload, generationOptions]).then(function (raw) {
-                var normalized = normalizeWriteResult(raw);
-                if (!normalized.ok) throw new Error(normalized.error || 'state-write-failed');
-                return { ok: true, method: 'career-db:' + stateSave.name };
-              });
-            });
-          });
+        if (!dbModule || typeof dbModule.mergeDiscoveryState !== 'function') {
+          return { ok: false, error: 'merge-discovery-api-missing' };
         }
-
-        /* 通用 per-store 写：record 形态带 keyPath 字段。 */
-        var genericWrite = pickMethod(dbModule, ['put', 'set', 'write', 'upsert']);
-        if (genericWrite) {
-          strategies.push(function () {
-            return chainPairs(pairs, function (store, record) {
-              return callMaybeAsync(genericWrite, dbModule, [store, record]);
-            });
-          });
-        }
-
-        /* 原始 IDBDatabase：单事务写入（ADR §7 的原子性要求）。 */
-        var idb = rawIdb(dbModule);
-        if (idb) {
-          strategies.push(function () {
-            return idbWrite(idb, pairs);
-          });
-        }
-
-        return runStrategies(strategies).then(function (result) {
-          if (result && result.ok) internal.dbWriteMethod = result.method || 'module-api';
-          return result;
+        return dbModule.mergeDiscoveryState(state, normalizeDiscoveryRecords(discoveryRecords), {
+          action: action && isObject(action) ? action : { type: 'SAVE_STATE', generation: internal.discoveryGeneration || 0 },
         });
       })
       .catch(function (err) {
@@ -2153,29 +1999,13 @@
   function writeDbStateUnlocked(state, discoveryRecords, action) {
     var actionWithGeneration = action && isObject(action) ? Object.assign({}, action) : null;
     if (actionWithGeneration) actionWithGeneration.generation = internal.discoveryGeneration || 0;
-    /* 多标签/多游戏页并发：优先走 DB 同事务读-合并-写，避免两页都先读旧状态再依次覆盖。
-       无 merge 能力的旧 DB/测试注入仍退回普通写入（空 clues 的显式重置也走普通写入）。 */
+    /* career-db 是唯一落盘 owner；没有事务合并 API 时不得自行拼装多步写入。 */
+
     var dbModule = readGlobal('db');
-    var hasClues = isObject(state) && isObject(state.clues) && Object.keys(state.clues).length > 0;
-    /* 普通保存一律同事务合并；显式清空走 db.resetDiscovery，不能靠空 clues 区分。 */
-    if (dbModule && typeof dbModule.mergeDiscoveryState === 'function') {
-      return Promise.resolve(dbModule.mergeDiscoveryState(state, discoveryRecords, { action: actionWithGeneration })).catch(function () {
-        return { ok: false, error: 'merge-discovery-failed' };
-      });
+    if (!dbModule || typeof dbModule.mergeDiscoveryState !== 'function') {
+      return Promise.resolve({ ok: false, error: 'merge-discovery-api-missing' });
     }
-    return Promise.resolve().then(function () {
-      var getter = dbModule && pickMethod(dbModule, ['getDiscoveryState', 'getState']);
-      if (!getter || !hasClues) return state;
-      return callMaybeAsync(getter, dbModule, []).then(function (raw) {
-        var existing = unwrapRecord(raw);
-        if (!isObject(existing) || !isObject(existing.clues)) return state;
-        var merged = Object.assign({}, state);
-        merged.clues = Object.assign({}, existing.clues, state.clues);
-        return merged;
-      }).catch(function () { return state; });
-    }).then(function (mergedState) {
-      return dbWrite(mergedState, discoveryRecords);
-    });
+    return dbWrite(state, discoveryRecords, actionWithGeneration || { type: 'SAVE_STATE', generation: internal.discoveryGeneration || 0 });
   }
 
   function unwrapRecord(raw) {
@@ -2234,35 +2064,6 @@
             var normalized = normalizeWriteResult(raw);
             var gen = raw && Number.isFinite(Number(raw.generation)) ? Math.floor(Number(raw.generation)) : null;
             return normalized.ok ? { ok: true, method: reset.name, generation: gen } : { ok: false, method: reset.name, error: normalized.error };
-          });
-        }
-        var dbName = dbModule.DB_NAME || dbModule.dbName || dbModule.databaseName || CAREER_DB_NAME;
-        var idbFactory = WINDOW.indexedDB;
-        if (idbFactory && typeof idbFactory.deleteDatabase === 'function') {
-          return new Promise(function (resolve) {
-            var settled = false;
-            function finish(result) {
-              if (settled) return;
-              settled = true;
-              resolve(result);
-            }
-            try {
-              var request = idbFactory.deleteDatabase(dbName);
-              request.onsuccess = function () {
-                finish({ ok: true, method: 'indexedDB.deleteDatabase' });
-              };
-              request.onerror = function () {
-                finish({ ok: false, error: 'delete-error' });
-              };
-              request.onblocked = function () {
-                finish({ ok: false, error: 'delete-blocked' });
-              };
-              setTimeout(function () {
-                finish({ ok: false, error: 'delete-timeout' });
-              }, 3000);
-            } catch (err) {
-              finish({ ok: false, error: 'delete-threw' });
-            }
           });
         }
         return { ok: false, error: 'reset-api-missing' };
@@ -2394,6 +2195,218 @@
       },
       rememberSnapshot(clone(fallbackInitialState()))
     );
+  }
+
+  /**
+   * 0.22 catalog 始终由注册表/真实线索/真实委托拼装，不按展示名或固定 16 推导。
+   * UI 与 gate 共享同一份快照；纯模块不直接读 bridge 内部。
+   */
+  function careerCatalog() {
+    var base = isObject(internal.registryContent) ? clone(internal.registryContent) : null;
+    var catalog = base || { schemaVersion: 1, contentVersion: '', games: [], professions: [], commissions: [] };
+    if (!Array.isArray(catalog.games)) catalog.games = [];
+    if (!Array.isArray(catalog.professions)) catalog.professions = [];
+    catalog.clues = clone(internal.clues) || [];
+    catalog.commissions = internal.commissionContent && Array.isArray(internal.commissionContent.commissions)
+      ? clone(internal.commissionContent.commissions)
+      : Array.isArray(catalog.commissions) ? catalog.commissions : [];
+    return catalog;
+  }
+
+  /** context 的时钟/表面由 bridge 提供，其余字段一律显式、不得由纯模块自行读取存储。 */
+  function careerContext(extra, surface) {
+    var context = isObject(extra) ? Object.assign({}, extra) : {};
+    var state = currentStateSnapshot();
+    var opened = [];
+    var records = isObject(state.clues) ? state.clues : {};
+    Object.keys(records).forEach(function (clueId) {
+      if (isObject(records[clueId]) && records[clueId].openedAt) opened.push(clueId);
+    });
+    if (context.now === undefined) context.now = nowIso();
+    if (context.surface === undefined) context.surface = surface || 'work';
+    if (context.gameId === undefined) context.gameId = api.gameId || null;
+    if (context.openedClueIds === undefined) context.openedClueIds = opened;
+    if (context.knownNpcIds === undefined) context.knownNpcIds = [];
+    if (context.worldFlags === undefined) context.worldFlags = {};
+    if (context.storyEvidence === undefined) context.storyEvidence = [];
+    if (context.clearedCommissions === undefined) context.clearedCommissions = [];
+    if (context.activeRuns === undefined) context.activeRuns = internal.commissionRun ? [clone(internal.commissionRun)] : [];
+    if (context.history === undefined) context.history = [];
+    if (context.walletKnown === undefined) context.walletKnown = !!internal.commissionLastCareerId;
+    if (context.availableIds === undefined) context.availableIds = [];
+    if (context.archived === undefined) context.archived = internal.careerArchived === true;
+    return context;
+  }
+
+  /**
+   * 所有 UI 消费者拿到的是受控门面：只读列表强制 ensure:false 并附带 state/catalog/context；
+   * start 也把当前状态交给 T04 核心 gate，不能靠 UI 过滤绕过披露。
+   */
+  function commissionForUi() {
+    var mod = commissionModule();
+    if (!mod) return null;
+    if (internal.commissionUiSource === mod && internal.commissionUiFacade) return internal.commissionUiFacade;
+    var facade = {};
+    Object.keys(mod).forEach(function (key) {
+      var fn = mod[key];
+      if (typeof fn !== 'function') {
+        facade[key] = fn;
+        return;
+      }
+      facade[key] = function () {
+        var args = Array.prototype.slice.call(arguments);
+        if (key === 'listAvailable' || key === 'start' || key === 'validateTicket') {
+          var input = isObject(args[0]) ? Object.assign({}, args[0]) : {};
+          var surface = typeof input.surface === 'string' ? input.surface : 'work';
+          input.ensure = false;
+          input.state = input.state || currentStateSnapshot();
+          input.catalog = input.catalog || careerCatalog();
+          input.context = careerContext(input.context, surface);
+          if (key === 'listAvailable' && internal.commissionLastCareerId && !input.careerId) {
+            input.careerId = internal.commissionLastCareerId;
+          }
+          args[0] = input;
+        }
+        return fn.apply(mod, args);
+      };
+    });
+    internal.commissionUiSource = mod;
+    internal.commissionUiFacade = facade;
+    return facade;
+  }
+
+  function professionViewModule() {
+    var mod = readGlobal('professionView');
+    if (mod && internal.professionViewLoaded !== true) internal.professionViewLoaded = true;
+    return mod || null;
+  }
+
+  function commissionIdsFromListing(listing) {
+    if (!listing || listing.ok !== true || !Array.isArray(listing.commissions)) return [];
+    return listing.commissions
+      .filter(function (row) { return row && typeof row.commissionId === 'string' && row.unlocked !== false; })
+      .map(function (row) { return row.commissionId; });
+  }
+
+  /** 只读投影；模块不可用时返回 null，不编造投影、不创建身份。 */
+  function careerView(context) {
+    return waitReady(READY_TIMEOUT_MS).then(function () {
+      return ensureLazyModule('professionView');
+    }).then(function () {
+      var view = professionViewModule();
+      if (!view || typeof view.projectCareerView !== 'function') return null;
+      var state = currentStateSnapshot();
+      var catalog = careerCatalog();
+      var projectionContext = careerContext(context, isObject(context) && context.surface ? context.surface : 'work');
+      if (projectionContext.availableIds.length === 0) {
+        return Promise.all([ensureLazyModule('commission'), loadCareerContent()]).then(function () {
+          configureCommissionContent();
+          var mod = commissionModule();
+          if (!mod || typeof mod.listAvailable !== 'function') return null;
+          return Promise.resolve(mod.listAvailable({
+            careerId: internal.commissionLastCareerId || null,
+            state: state,
+            catalog: catalog,
+            context: projectionContext,
+            ensure: false,
+          })).then(function (listing) {
+            projectionContext.availableIds = commissionIdsFromListing(listing);
+            return view.projectCareerView({ state: state, catalog: catalog, context: projectionContext });
+          }).catch(function () {
+            return view.projectCareerView({ state: state, catalog: catalog, context: projectionContext });
+          });
+        });
+      }
+      return view.projectCareerView({ state: state, catalog: catalog, context: projectionContext });
+    }).catch(function (err) {
+      warnOnce('career-view', err);
+      return null;
+    });
+  }
+
+  /** 深链/旧链接/搜索/调试入口的统一只读 gate；模块不可用时 fail closed。 */
+  function careerEntryGate(request) {
+    return waitReady(READY_TIMEOUT_MS).then(function () {
+      return Promise.all([ensureLazyModule('professionView'), loadCareerContent()]);
+    }).then(function () {
+      configureCareerModules();
+      var view = professionViewModule();
+      var router = readGlobal('entryRouter');
+      if (!view || !router || typeof router.gateCareerEntry !== 'function') {
+        return { ok: false, reason: 'profession-view-unavailable' };
+      }
+      var input = isObject(request) ? Object.assign({}, request) : {};
+      input.gameId = input.gameId || api.gameId || null;
+      return router.gateCareerEntry(input, view, currentStateSnapshot(), careerCatalog(), careerContext(input, 'deep-link'));
+    }).catch(function () {
+      return { ok: false, reason: 'gate-failed' };
+    });
+  }
+
+  /** 职业写门面：只允许 career-db.applyProfessionEvent，失败不修改本页状态，成功后重读。 */
+  function applyProfessionAction(action, input) {
+    return waitReady(READY_TIMEOUT_MS).then(function () {
+      if (internal.careerArchived) return { ok: false, reason: 'career-archived' };
+      var db = api.db || readGlobal('db');
+      if (!db || typeof db.applyProfessionEvent !== 'function') {
+        return { ok: false, reason: 'profession-event-api-missing' };
+      }
+      var at = nowIso();
+      var payloadInput = isObject(input) ? Object.assign({}, input) : {};
+      payloadInput.catalog = careerCatalog();
+      return Promise.resolve(db.applyProfessionEvent({
+        action: action,
+        input: payloadInput,
+        generation: internal.discoveryGeneration || 0,
+        now: at,
+      })).then(function (result) {
+        if (!result || result.ok !== true) return result || { ok: false, reason: 'profession-event-failed' };
+        if (result.careerId) internal.commissionLastCareerId = result.careerId;
+        return loadDiscoveryStateFromDb().then(function () {
+          return result;
+        });
+      }).catch(function (err) {
+        warnOnce('profession-event', err);
+        return { ok: false, reason: 'profession-event-error' };
+      });
+    });
+  }
+
+  function acceptProfessionInvitation(input) {
+    var request = isObject(input) ? input : {};
+    var professionId = typeof request.professionId === 'string' ? request.professionId : null;
+    var gameId = typeof request.gameId === 'string' ? request.gameId : null;
+    if (!gameId && professionId) {
+      /* 重复点击可能不带 gameId：只从已持久化状态 + 注册表映射恢复，不猜测新起源。 */
+      var state = currentStateSnapshot();
+      var catalog = careerCatalog();
+      var mapping = Array.isArray(catalog.games)
+        ? catalog.games.filter(function (game) {
+          return game && Array.isArray(game.professions) && game.professions.indexOf(professionId) >= 0;
+        })
+        : [];
+      var origin = mapping.find(function (game) { return game.gameId === state.acceptedOriginGameId; });
+      gameId = origin ? origin.gameId : mapping.length === 1 ? mapping[0].gameId : null;
+    }
+    return applyProfessionAction('ACCEPT_INVITATION', {
+      professionId: professionId,
+      gameId: gameId,
+    });
+  }
+
+  function setActiveProfession(input) {
+    var request = isObject(input) ? input : {};
+    return applyProfessionAction('SET_ACTIVE', {
+      professionId: typeof request.professionId === 'string' ? request.professionId : null,
+    });
+  }
+
+  function setProfessionPaused(input) {
+    var request = isObject(input) ? input : {};
+    return applyProfessionAction('SET_PAUSED', {
+      professionId: typeof request.professionId === 'string' ? request.professionId : null,
+      paused: request.paused === true,
+    });
   }
 
   function cluesSnapshot() {
@@ -2852,7 +2865,10 @@
       var clueConfigs = internal.cluesEnabled ? internal.clues : [];
       var reduced = null;
       try {
-        reduced = discovery.reduce(baseState, { type: 'RUN_ENDED', run: runSummary, at: nowIso() }, { clueConfigs: clueConfigs });
+        reduced = discovery.reduce(baseState, { type: 'RUN_ENDED', run: runSummary, at: nowIso() }, {
+          clueConfigs: clueConfigs,
+          catalog: careerCatalog(),
+        });
       } catch (err) {
         warnOnce('discovery-reduce', err);
         internal.lastFinish.reason = 'reduce-error';
@@ -2917,7 +2933,20 @@
         warnOnce('persist-unavailable', 'db unavailable; clue result kept in memory only');
         return afterPersist(false);
       }
-      return writeDbState(nextState, clue ? clue.discovery || null : null, { type: 'RUN_ENDED', run: runSummary, baseRuns: baseState.runs || {} }).then(function (writeResult) {
+      var discoveryAction = {
+        type: 'RUN_ENDED',
+        run: runSummary,
+        baseRuns: baseState.runs || {},
+        catalog: careerCatalog(),
+        gameId: api.gameId || null,
+        clueId: clue ? clue.clueId : null,
+        clueOpened: false,
+      };
+      if (reduced && reduced.professionEvents) {
+        discoveryAction.professionEvents = reduced.professionEvents;
+        if (reduced.professionEvent) discoveryAction.professionEvent = reduced.professionEvent;
+      }
+      return writeDbState(nextState, clue ? clue.discovery || null : null, discoveryAction).then(function (writeResult) {
         var persisted = !!(writeResult && writeResult.ok);
         if (!persisted) {
           addReason('db-write-failed');
@@ -3104,10 +3133,12 @@
     if (!isObject(state.clues) || !state.clues[id]) return Promise.resolve({ ok: false, reason: 'not-discovered' });
     var discovery = readGlobal('discovery');
     var next = state;
+    var professionEvents = [];
     if (discovery && typeof discovery.reduce === 'function') {
       try {
-        var reduced = discovery.reduce(state, { type: 'CLUE_OPENED', clueId: id, at: nowIso() });
+        var reduced = discovery.reduce(state, { type: 'CLUE_OPENED', clueId: id, at: nowIso() }, { clueConfigs: internal.clues, catalog: careerCatalog() });
         if (reduced && reduced.state) next = reduced.state;
+        if (reduced && Array.isArray(reduced.professionEvents)) professionEvents = reduced.professionEvents;
       } catch (err) {
         warnOnce('open-clue-reduce', err);
         return Promise.resolve({ ok: false, reason: 'reduce-failed' });
@@ -3118,7 +3149,17 @@
       internal.discoveryState = next;
       return Promise.resolve({ ok: true, clueId: id, state: clone(next) });
     }
-    return Promise.resolve(writeDbState(next, null, { type: 'CLUE_OPENED', clueId: id, at: nowIso() })).then(function (writeResult) {
+    var clueAction = {
+      type: 'CLUE_OPENED',
+      clueId: id,
+      gameId: state.clues[id].sourceGame || null,
+      clueOpened: true,
+      catalog: careerCatalog(),
+      at: nowIso(),
+      professionEvents: professionEvents,
+    };
+    if (professionEvents.length) clueAction.professionEvent = professionEvents[0];
+    return Promise.resolve(writeDbState(next, null, clueAction)).then(function (writeResult) {
       if (!writeResult || writeResult.ok !== true) {
         var error = isStaleGenerationResult(writeResult) ? 'stale-generation' : (writeResult && (writeResult.error || writeResult.reason)) || 'write-failed';
         return reloadAfterStaleGeneration().then(function () { return { ok: false, reason: error }; });
@@ -3371,7 +3412,10 @@
       backup: backupFacade(),
       reducedMotion: reducedMotionPreferred(),
       api: api,
-      commission: commissionModule() || null,
+      commission: commissionForUi(),
+      professionView: professionViewModule(),
+      careerView: careerView,
+      careerCatalog: careerCatalog,
       /* 0.20 只读 continuation 查询：告示板可直接 ctx.careerContinuations({careerId})，
          也可经 ctx.commission.continuations；两者是同一只读方法，无新 ctx 字段依赖。 */
       careerContinuations: careerContinuations,
@@ -3507,16 +3551,18 @@
       });
   }
 
-  /** 读信和告示板沿用已确认的身份，或从原档识别身份。只有全新生涯可以走 ensureCareer。 */
+  /** 读信和告示板只沿用已确认身份；全新档返回 identityIssue，绝不 ensureCareer。 */
   function resolveStoryCareer(db) {
     if (internal.commissionLastCareerId) return Promise.resolve({ careerId: internal.commissionLastCareerId });
-    if (typeof db.readHubEntry !== 'function') return Promise.resolve(db.ensureCareer({}));
+    if (!db || typeof db.readHubEntry !== 'function') return Promise.resolve({ issue: 'hub-entry-unavailable' });
     return Promise.resolve(db.readHubEntry()).then(function (entry) {
       if (!entry || !entry.ok) return { issue: 'hub-entry-unavailable' };
       if (entry.archived) return { issue: 'career-archived' };
       if (entry.careerId) return { careerId: entry.careerId };
       if (entry.started) return { issue: entry.issue || 'incomplete-career' };
-      return db.ensureCareer({});
+      return { issue: 'no-career' };
+    }).catch(function () {
+      return { issue: 'hub-entry-unavailable' };
     });
   }
 
@@ -3562,7 +3608,6 @@
       });
     }
     if (careerId) return read(careerId);
-    if (typeof db.ensureCareer !== 'function') return read(null);
     return resolveStoryCareer(db).then(function (career) {
       if (career && career.careerId) {
         internal.commissionLastCareerId = career.careerId;
@@ -3594,7 +3639,7 @@
     if (internal.careerArchived) return Promise.resolve(null);
     var mod = readGlobal('campaign');
     var db = api.db || readGlobal('db');
-    if (!mod || typeof mod.syncFlags !== 'function' || !db || typeof db.ensureCareer !== 'function') return null;
+    if (!mod || typeof mod.syncFlags !== 'function' || !db) return null;
     var gate = mailboxOpened === true ? hasCurrentDiscoveryClue() : Promise.resolve(true);
     try {
       return Promise.resolve(gate)
@@ -3664,6 +3709,16 @@
 
   function openCareerUi(name, extra) {
     if (isSilentTestOnly()) return uiUnavailable('test-silent');
+    var route = readGlobal('router') && typeof readGlobal('router').careerEntryRequest === 'function'
+      ? readGlobal('router').careerEntryRequest(inlineLocation())
+      : { professionId: '', commissionId: '' };
+    var requested = {
+      professionId: isObject(extra) && extra.professionId ? extra.professionId : route.professionId,
+      commissionId: isObject(extra) && extra.commissionId ? extra.commissionId : route.commissionId,
+    };
+    var gateCheck = requested.professionId || requested.commissionId
+      ? careerEntryGate(Object.assign({}, requested, { gameId: api.gameId || null }))
+      : Promise.resolve({ ok: true });
     warmLazyModules();
     /* town/hangar/receipt 都需要 commission-core 与委托目录在 ctx 里可用；机库还需要租机模块，
        商店需要材料模块，制造台需要制造模块。 */
@@ -3692,18 +3747,23 @@
     extraModules.forEach(function (moduleName) {
       preloadList.push(ensureLazyModule(moduleName));
     });
-    var preload = Promise.all(preloadList).then(function () {
+    var preload = gateCheck.then(function (gate) {
+      if (!gate || gate.ok !== true) return { __gateDenied: true, reason: (gate && gate.reason) || 'not-available' };
+      return Promise.all(preloadList);
+    }).then(function (preloaded) {
+      if (preloaded && preloaded.__gateDenied) return preloaded;
       /* 必须在 loadStorySnapshot / UI ctx 之前用真实 commissions/campaign 内容配置
-         storyEvidence 与 campaign；否则 campaign.recommend 因 evidence 模块未配置返回 null。 */
+          storyEvidence 与 campaign；否则 campaign.recommend 因 evidence 模块未配置返回 null。 */
       configureCommissionContent();
       configureCareerModules();
       return configureRentalModule();
-    }).then(function () {
-      if (name !== 'worldState' && name !== 'mailbox' && name !== 'town') return null;
+    }).then(function (prepared) {
+      if (prepared && prepared.__gateDenied) return prepared;
       return loadStorySnapshot();
     });
     return preload.then(function (storySnapshot) {
-      if (name === 'town' && storySnapshot && storySnapshot.identityIssue) return showHubEntryIssue(storySnapshot.identityIssue);
+      if (storySnapshot && storySnapshot.__gateDenied) return { ok: false, reason: storySnapshot.reason };
+      if (storySnapshot && storySnapshot.identityIssue) return showHubEntryIssue(storySnapshot.identityIssue);
       var uiModule = readUi(name);
       if (!uiModule) {
         return ensureLazyModule(name).then(function (loaded) {
@@ -3717,7 +3777,10 @@
           var target = typeof uiModule.open === 'function' ? uiModule.open : typeof uiModule.show === 'function' ? uiModule.show : null;
           if (!target) return uiUnavailable('ui-unavailable');
           var context = uiContext({
-            commission: commissionModule() || null,
+            commission: commissionForUi(),
+            professionView: professionViewModule(),
+            careerView: careerView,
+            careerCatalog: careerCatalog,
             alternatives: readGlobal('alternatives') || null,
             rental: readGlobal('rental') || null,
             materials: readGlobal('materials') || null,
@@ -3774,48 +3837,48 @@
     });
   }
 
-  function openTown() {
+  function openTown(input) {
     return requireCareerWritable().then(function (gate) {
       if (!gate.ok) {
         announceToUser(gate.message);
         return gate;
       }
-      return openCareerUi('town');
+      return openCareerUi('town', input);
     });
   }
 
-  function openHangar() {
+  function openHangar(input) {
     return requireCareerWritable().then(function (gate) {
       if (!gate.ok) return gate;
-      return openCareerUi('hangar');
+      return openCareerUi('hangar', input);
     });
   }
 
-  function openReceipt() {
-    return openCareerUi('receipt');
+  function openReceipt(input) {
+    return openCareerUi('receipt', input);
   }
 
-  function openMarket() {
+  function openMarket(input) {
     return requireCareerWritable().then(function (gate) {
       if (!gate.ok) return gate;
-      return openCareerUi('market');
+      return openCareerUi('market', input);
     });
   }
 
-  function openWorkshop() {
+  function openWorkshop(input) {
     return requireCareerWritable().then(function (gate) {
       if (!gate.ok) return gate;
-      return openCareerUi('workshop');
+      return openCareerUi('workshop', input);
     });
   }
 
-  function openCampaign() {
+  function openCampaign(input) {
     return requireCareerWritable().then(function (gate) {
       if (!gate.ok) {
         announceToUser(gate.message);
         return gate;
       }
-      return openCareerUi('worldState');
+      return openCareerUi('worldState', input);
     });
   }
 
@@ -4101,6 +4164,7 @@
           discovery.evaluateRun({
             state: snapshot,
             clueConfigs: internal.clues,
+            catalog: careerCatalog(),
             runSummary: runSummary,
             hintsEnabled: snapshot.hintsEnabled !== false,
             now: nowIso(),
@@ -4189,7 +4253,11 @@
       function () {
         var clue = typeof clueOrId === 'string' ? findClue(clueOrId) : clueOrId;
         if (!isObject(clue) || typeof clue.clueId !== 'string' || !clue.clueId) return { rendered: false, reason: 'unknown-clue' };
-        return renderClue(clue, currentStateSnapshot());
+        var catalogClue = findClue(clue.clueId);
+        if (!catalogClue || catalogClue.gameId !== clue.gameId) return { rendered: false, reason: 'unknown-clue' };
+        var state = currentStateSnapshot();
+        if (!isObject(state.clues) || !state.clues[clue.clueId]) return { rendered: false, reason: 'not-discovered' };
+        return renderClue(catalogClue, state);
       },
       { rendered: false, reason: 'exception' }
     );
@@ -4370,13 +4438,18 @@
       resolveReady({ available: !!api.available, reason: api.available ? undefined : api.reason });
       /* 中心页「旧港来信」回流入口：?story=1 时自动打开章节面板（仅真实 C0 后才有内容）。 */
       try {
-        var search = WINDOW && WINDOW.location ? WINDOW.location.search || '' : '';
-        var panel = /(?:^|[?&])careerPanel=(town|mailbox|chapters|settings)(?:&|$)/.exec(search);
-        if (panel) {
-          Promise.resolve().then(function () { return openHubCareerPanel(panel[1]); }).catch(function (err) { warnOnce('hub-career-panel', err); });
-        } else if (/(?:^|[?&])careerLetter=1(?:&|$)/.test(search)) {
+        var route = readGlobal('router') && typeof readGlobal('router').careerEntryRequest === 'function'
+          ? readGlobal('router').careerEntryRequest(WINDOW.location)
+          : null;
+        if (route && route.rawPanel) {
+          if (!route.panel) {
+            Promise.resolve().then(function () { return showHubEntryIssue('hub-entry-unavailable'); }).catch(function (err) { warnOnce('hub-career-panel', err); });
+          } else {
+            Promise.resolve().then(function () { return openHubCareerPanel(route.panel); }).catch(function (err) { warnOnce('hub-career-panel', err); });
+          }
+        } else if (route && route.careerLetter) {
           Promise.resolve().then(function () { return openLetterFromHub(); }).catch(function (err) { warnOnce('hub-career-letter', err); });
-        } else if (/(?:^|[?&])story=1(?:&|$)/.test(search)) {
+        } else if (route && route.story) {
           if (internal.careerArchived) announceToUser('生涯已封存。要读旧港来信，请先在生涯设置里解冻。');
           else Promise.resolve().then(function () { return openCampaign(); }).catch(function () {});
         }
@@ -4470,14 +4543,19 @@
     /* 0.20 首封信身份/正文只读入口（与 ctx.originLetter 同函数）。 */
     api.originLetter = originLetter;
     /* 0.16 职业委托（向后兼容扩展）：无 ticket 时 commissionRun=null，行为与 0.15 相同。 */
-    api.commission = null;
+    api.commission = commissionModule() || null;
+    api.professionView = professionViewModule();
+    api.careerView = careerView;
+    api.acceptProfessionInvitation = acceptProfessionInvitation;
+    api.setActiveProfession = setActiveProfession;
+    api.setProfessionPaused = setProfessionPaused;
     api.careerArchived = false;
     /* 0.20 只读 continuation 查询：与 ctx.careerContinuations 同函数；不建 run、不自动导航。 */
     api.careerContinuations = careerContinuations;
     api.commissionRun = null;
     api.items = null;
-    api.alternatives = null;
-    api.rental = null;
+    api.alternatives = readGlobal('alternatives') || null;
+    api.rental = readGlobal('rental') || null;
     api.isCommissionRun = function () {
       return !!internal.commissionRun;
     };
@@ -4489,13 +4567,13 @@
     api.openWorkshop = openWorkshop;
     api.openCampaign = openCampaign;
     api.startEnding = startEnding;
-    api.campaign = null;
-    api.ending = null;
-    api.materials = null;
-    api.crafting = null;
-    api.professions = null;
-    api.storyEvidence = null;
-    api.routePlanner = null;
+    api.campaign = readGlobal('campaign') || null;
+    api.ending = readGlobal('ending') || null;
+    api.materials = readGlobal('materials') || null;
+    api.crafting = readGlobal('crafting') || null;
+    api.professions = readGlobal('professions') || null;
+    api.storyEvidence = readGlobal('storyEvidence') || null;
+    api.routePlanner = readGlobal('routePlanner') || null;
     api.getCommissionLoadout = getCommissionLoadout;
     api.ui = previousUi || (isObject(api.ui) ? api.ui : {});
     /* backup.js（D15-14）异步装载：模块会自行挂到 ArcadeCareer.backup；缺失时为 null。 */
