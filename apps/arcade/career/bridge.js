@@ -2474,6 +2474,13 @@
     });
   }
 
+  function invalidateCareerData(input) {
+    var request = isObject(input) ? input : {};
+    var reason = typeof request.reason === 'string' ? request.reason : 'changed';
+    notifyCareerDataChanged(reason);
+    return { ok: true, reason: reason };
+  }
+
   function invitationForClue(clueId) {
     try {
       if (internal.careerArchived) return null;
@@ -3531,6 +3538,7 @@
       careerView: careerView,
       invitationForClue: invitationForClue,
       onCareerDataChanged: onCareerDataChanged,
+      invalidateCareerData: invalidateCareerData,
       careerCatalog: careerCatalog,
       /* 0.20 只读 continuation 查询：告示板可直接 ctx.careerContinuations({careerId})，
          也可经 ctx.commission.continuations；两者是同一只读方法，无新 ctx 字段依赖。 */
@@ -4667,6 +4675,7 @@
     api.careerView = careerView;
     api.invitationForClue = invitationForClue;
     api.onCareerDataChanged = onCareerDataChanged;
+    api.invalidateCareerData = invalidateCareerData;
     api.acceptProfessionInvitation = acceptProfessionInvitation;
     api.setActiveProfession = setActiveProfession;
     api.setProfessionPaused = setProfessionPaused;
