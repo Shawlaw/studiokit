@@ -122,6 +122,8 @@ const EVIDENCE_TOKENS = sorted(COMMISSIONS.commissions.flatMap((row) => {
   return ((row.reward && row.reward.evidence) || []).slice();
 }));
 const CHAPTER_FILES = [0, 1, 2, 3, 4, 5].map((index) => readJson(`chapter-0${index}.json`));
+const COMMISSIONS_SNAPSHOT = JSON.stringify(COMMISSIONS);
+const WORLD_SNAPSHOT = JSON.stringify(WORLD);
 
 const evidence = STORY_EVIDENCE.createStoryEvidence
   ? STORY_EVIDENCE.createStoryEvidence({})
@@ -269,6 +271,12 @@ let plannerConfig;
     includeWorldWork: true,
   });
   check('C13 plan(includeWorldWork) 暴露只读路径', withPlan.worldWorkPath && withPlan.worldWorkPath.complete === true);
+  const explained = planner.explain(withPlan);
+  check('C14 explain 输出世界路径玩家文案', Array.isArray(explained.worldWorkLines)
+    && explained.worldWorkLines.length === EXPECTED_IDS.length
+    && WORLD.entries.every((entry) => explained.text.indexOf(entry.title) >= 0), JSON.stringify(explained.worldWorkLines || []));
+  check('C15 explain 世界文案不含内部 ID', EXPECTED_IDS.every((id) => explained.text.indexOf(id) < 0)
+    && PROFESSION_IDS.every((id) => explained.text.indexOf(id) < 0));
 }
 
 /* ------------------------------------------------------------------ D campaign-core */
@@ -353,6 +361,147 @@ let campaignConfig;
   const missingEntry = JSON.parse(JSON.stringify(WORLD));
   missingEntry.entries.pop();
   check('E09 缺通用文案被拒绝', plannerWith(missingEntry).config.ok === false);
+}
+
+/* ------------------------------------------------------------------ F 合成 N+1 / 多职业映射 */
+
+{
+  const clone = (value) => JSON.parse(JSON.stringify(value));
+  const future = {
+    commissions: clone(COMMISSIONS.commissions),
+    registry: clone(REGISTRY),
+    chapter: clone(CHAPTER),
+  };
+  function addTier(prefix, gameId, professionId) {
+    for (let tier = 1; tier <= 3; tier += 1) {
+      future.commissions.push({
+        commissionId: `${prefix}.T${tier}`,
+        gameId,
+        professionId,
+        tier,
+        title: `新增工单 ${tier}`,
+        summary: '按告示板上的短活完成一次交差。',
+        objective: { kind: 'pair.match', atLeast: 3 },
+        reward: { credits: 10, items: {}, evidence: [], flags: [] },
+        repeatSalaryCredits: 10,
+        unlock: tier === 1 ? { all: [] } : { all: [{ commissionCleared: `${prefix}.T${tier - 1}` }] },
+        chapterGate: null,
+        risk: 'low',
+        durationHint: '短活',
+      });
+    }
+  }
+  addTier('future-game.scout', 'future-game', 'future.scout');
+  addTier('future-game.guide', 'future-game', 'future.guide');
+  addTier('future-market.broker', 'future-market', 'future.broker');
+  future.registry.games.push(
+    { gameId: 'future-game', displayName: '新增港口', professions: ['future.scout', 'future.guide'], capabilities: [], watch: [] },
+    { gameId: 'future-market', displayName: '新增集市', professions: ['future.broker'], capabilities: [], watch: [] },
+  );
+  future.registry.professions.push(
+    { professionId: 'future.scout', displayName: '新观察员', domain: 'future', capabilities: [] },
+    { professionId: 'future.guide', displayName: '新引导员', domain: 'future', capabilities: [] },
+    { professionId: 'future.broker', displayName: '新中间人', domain: 'future', capabilities: [] },
+  );
+  future.chapter.origins.push(
+    {
+      gameId: 'future-game',
+      professionId: 'future.scout',
+      opening: '新港口的纸上还有潮气。',
+      c0Letter: { from: '新港口值班', body: '一张新纸', address: '新港口' },
+      firstStep: '去新港口的告示板看看。',
+    },
+    {
+      gameId: 'future-market',
+      professionId: 'future.broker',
+      opening: '集市尽头有人递来一张纸。',
+      c0Letter: { from: '新集市值班', body: '一张新纸', address: '新集市' },
+      firstStep: '去新集市的告示板看看。',
+    },
+  );
+
+  const futureEvidence = STORY_EVIDENCE.createStoryEvidence({});
+  const futureEvidenceConfig = futureEvidence.configure({
+    commissions: { contentVersion: '0.18.0', commissions: future.commissions },
+    items: ITEMS,
+    chapter: future.chapter,
+  });
+  check('F01 N+1 证据模块可配置', futureEvidenceConfig.ok === true, JSON.stringify(futureEvidenceConfig.errors || []));
+  const futurePlanner = ROUTE_PLANNER.create();
+  const futureConfig = futurePlanner.configure({
+    commissions: { contentVersion: '0.18.0', commissions: future.commissions },
+    items: ITEMS,
+    chapter: future.chapter,
+    registry: future.registry,
+    evidence: futureEvidence,
+    alternatives: { offers: [] },
+    worldWork: WORLD,
+  });
+  check('F02 N+1 世界工作可配置', futureConfig.ok === true, JSON.stringify(futureConfig.errors || []));
+
+  const oldRealPath = planner.worldWorkPath({
+    originGameId: 'gold-miner',
+    acceptedProfessionId: 'nature.miner',
+    wallet: { credits: 80, items: {} },
+    flags: ['C0.port_seen'],
+  });
+  const oldFuturePath = futurePlanner.worldWorkPath({
+    originGameId: 'gold-miner',
+    acceptedProfessionId: 'nature.miner',
+    wallet: { credits: 80, items: {} },
+    flags: ['C0.port_seen'],
+  });
+  eq('F03 原起源路径不被 N+1 污染', {
+    originCommissionId: oldFuturePath.originCommissionId,
+    plannedWorldCommissionIds: oldFuturePath.plannedWorldCommissionIds,
+    flagsAfter: oldFuturePath.flagsAfter,
+    economy: oldFuturePath.economy,
+  }, {
+    originCommissionId: oldRealPath.originCommissionId,
+    plannedWorldCommissionIds: oldRealPath.plannedWorldCommissionIds,
+    flagsAfter: oldRealPath.flagsAfter,
+    economy: oldRealPath.economy,
+  });
+
+  [
+    { label: '新职业本游戏', gameId: 'future-game', professionId: 'future.scout' },
+    { label: '同游戏第二职业', gameId: 'future-game', professionId: 'future.guide' },
+    { label: '跨游戏 T1', gameId: 'future-game', professionId: 'future.broker' },
+    { label: '新职业 T1 游戏', gameId: 'future-market', professionId: 'future.broker' },
+  ].forEach((item) => {
+    const path = futurePlanner.worldWorkPath({
+      originGameId: item.gameId,
+      acceptedProfessionId: item.professionId,
+      wallet: { credits: 80, items: {} },
+      flags: ['C0.port_seen'],
+    });
+    check(`F04 ${item.label} worldWorkPath complete`, path.ok === true && path.complete === true, JSON.stringify(path.blockers || []));
+    eq(`F05 ${item.label} 排入完整 W5E`, sorted(path.plannedWorldCommissionIds), sorted(EXPECTED_IDS));
+    check(`F06 ${item.label} 无职业泄漏`, hasNoProfessionLeak(
+      worldSteps(path),
+      [...PROFESSION_IDS, ...future.registry.professions.map((row) => row.professionId)],
+      [...DISPLAY_NAMES, ...future.registry.professions.map((row) => row.displayName).filter(Boolean)],
+    ));
+  });
+
+  const realValidate = planner.validate();
+  const futureValidate = futurePlanner.validate();
+  check('F07a N+1 validate ok', futureValidate.ok === true, JSON.stringify((futureValidate.errors || []).slice(0, 5)).slice(0, 800));
+  const realProof = realValidate.worldWorkPathProof;
+  const futureProof = futureValidate.worldWorkPathProof;
+  check('F07 validate 按 (gameId, professionId) 扩展', !!futureProof && !!realProof
+    && futureProof.pairCount > realProof.pairCount
+    && futureProof.failures.length === 0
+    && futureProof.passed === futureProof.pairCount, JSON.stringify(futureProof && {
+      pairCount: futureProof.pairCount,
+      failures: futureProof.failures,
+    }));
+  check('F08 validate 覆盖同游戏第二职业', !!futureProof && Array.isArray(futureProof.pairs)
+    && futureProof.pairs.some((pair) => pair.gameId === 'future-game' && pair.professionId === 'future.guide'));
+  check('F09 validate 覆盖跨游戏 T1', !!futureProof && Array.isArray(futureProof.pairs)
+    && futureProof.pairs.some((pair) => pair.gameId === 'future-game' && pair.professionId === 'future.broker'));
+  eq('F10 真实委托内容快照不变', JSON.stringify(COMMISSIONS), COMMISSIONS_SNAPSHOT);
+  eq('F11 world-work 内容快照不变', JSON.stringify(WORLD), WORLD_SNAPSHOT);
 }
 
 /* ------------------------------------------------------------------ 汇总 */
