@@ -352,9 +352,9 @@ fixture 中的 harbor props 只描述 `variant` 与 `viewBox`；实际 DOM 由 T
 | 任务 | 唯一可写文件 / 目录 | 禁止触碰 | 交付 |
 |---|---|---|---|
 | T10（本任务） | `docs/arcade-life/ADR-0.23-ui.md`、`tools/career_ui_fixture_states.json` | 其他一切文件 | 宿主差异、props/token/夹具/所有权冻结；无测试与浏览器结论 |
-| T11 | 新增 `career/ui/career-ui.css`、`career/ui/components.js`、`career/ui/harbor.js`；共享 token、12 个逻辑组件、原型精确 inline harbor、焦点/滚动/浮层基座 | 现有 adapter 的业务分支、bridge/DB/registry、版本链、游戏页 | `harbor.js` 必须实现 §5.4 的原型精确 SVG，不接受 SVG 文件替代或待决占位；命名空间 CSS 与组件 API，不得写全局选择器 |
-| T12 | `career/ui/clue-surface.js`、`career/ui/mailbox.js`、`career/ui/receipt.js`，以及确需新增的 `career/ui/arrival.js` adapter；P01–P06 | `career-ui.css`、`components.js`、`harbor.*`、bridge、DB、T13 文件 | 结算线索、字条、首次到港、邀请、回执只消费冻结 props 与投影 |
-| T13 | `career/ui/town.js`、`career/ui/world-state.js`，以及确需新增的 `career/ui/journal.js` adapter；P07–P10 | T11/T12 文件、bridge、DB、content JSON | 港口首页 / 工作 / 经历 / 工具 grid 与空、加载、失败、长文状态 |
+| T11 | 新增 `career/ui/tokens.css`、`career/ui/components.css`、`career/ui/components.js`、`career/ui/harbor.js`；共享 token、12 个逻辑组件、原型精确 inline harbor、焦点/滚动/浮层基座 | 现有 adapter 的业务分支、bridge/DB/registry、版本链、游戏页 | `harbor.js` 必须实现 §5.4 的原型精确 SVG，不接受 SVG 文件替代或待决占位；命名空间 CSS 与组件 API，不得写全局选择器 |
+| T12 | `career/ui/clue-surface.js`、`career/ui/mailbox.js`、`career/ui/receipt.js`、`career/ui/invitation.js`，以及新测试；P01–P06 | T11 文件、bridge、DB、T13 文件 | 结算线索、字条、首次到港、邀请、回执只消费冻结 props 与投影 |
+| T13 | `career/ui/town.js`、`career/ui/world-state.js`、`career/ui/market.js`、`career/ui/workshop.js`、`career/ui/hangar.js`、`career/ui/settings.js`、`apps/arcade/index.html`，以及新测试；P07–P10 | T11/T12 文件、bridge、DB、content JSON | 港口首页 / 工作 / 经历 / 工具 grid 与空、加载、失败、长文状态 |
 | T14 | 只新增 `career/content/narrative-shards/shard-01.json` … `shard-04.json`（16 职业按 4 shard，稳定 ID 来自 registry）及 T14 专属测试 | UI、bridge、DB、`registry.json` 公共映射、版本链；不得改已发布 content | 16 个真实职业的完整节拍、已有身份变体与 §3.1 所需的公开 `story.messages` 条目；由 lead 串行合并/注入 |
 | lead（串行） | `career/bridge.js`（loader / uiContext）、`career/registry.js` 与 `career/content/registry.json` 的公共映射、`apps/arcade/sw.js`、版本链、测试与集成分支 | 覆盖 worker 未提交改动 | T11–T14 文件接入顺序、SW 预缓存、版本与门禁 |
 
@@ -373,7 +373,7 @@ T15 只消费本 ADR 与夹具做截图/可访问性验证；发现契约问题�
 
 ## 9. 待决策与未验证
 
-1. `[待 lead]` T11/ T12/ T13 新增文件接入 bridge loader 与 SW 预缓存的具体顺序（第 7 节文件名已冻结，不再是待决项）。
+1. `[已串行集成]` T11/T12/T13 新增文件按第 7 节文件名接入 bridge loader、uiContext 与 SW 预缓存；叙事 shard 经 narrative-registry 同源加载。
 2. `[待 T15 确认]` H4：P01 ClueRow 在宿主结算弹层锚定、原型在面板内；建议保持宿主锚定并只比线索元素本身。
 3. `[已冻结并记录]` H3：宿主打开面板聚焦关闭键，而原型聚焦标题；T15 不把焦点落点差异判为视觉 FAIL，但必须验证键盘可达与关闭回焦。
 4. `[待 T14]` 16 职业真实叙事文案尚未产出；夹具只绑定既有 registry 真实 ID 与合成文本，禁止把夹具文案提升到 `narrative-shards/*.json`。
