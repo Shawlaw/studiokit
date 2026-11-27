@@ -3,6 +3,10 @@
  * Ordinary browser script (non-ESM). The module is inert until a component is called.
  * Contract: docs/arcade-life/ADR-0.23-ui.md §4–§5.
  *
+ *   root .ac-career-ui__overlay[data-career-panel] and a dialog panel. showHeader
+ *   defaults to true; false keeps the accessible title/aria-label but hides the
+ *   visible header and close button (Esc/backdrop/keyboard traps still work).
+ *
  * Public API:
  *   window.ArcadeCareerUI.components.CareerShell(props) -> detached root
  *   window.ArcadeCareerUI.components.CareerShell.create(panelKey) -> {open,render,close}
@@ -228,7 +232,7 @@
     content.appendChild(element(doc, 'strong', 'ac-career-ui__clue-title', cleanText(input.title)));
     const teaser = cleanText(input.teaser);
     if (teaser) content.appendChild(element(doc, 'span', 'ac-career-ui__caption ac-career-ui__clue-teaser', teaser));
-    content.appendChild(element(doc, 'span', 'ac-career-ui__gold ac-career-ui__clue-action', cleanText(input.actionLabel) + ' ›'));
+    content.appendChild(element(doc, 'span', 'ac-career-ui__gold ac-career-ui__clue-action', cleanText(input.actionLabel)));
     button.appendChild(content);
     button.addEventListener('click', () => {
       if (typeof input.onOpen === 'function') input.onOpen(cleanText(input.clueId));
@@ -249,7 +253,7 @@
     const paragraphs = Array.isArray(input.paragraphs) ? input.paragraphs : [];
     paragraphs.forEach((paragraph) => letter.appendChild(element(doc, 'p', 'ac-career-ui__letter-paragraph', cleanText(paragraph))));
     const sender = cleanText(input.sender);
-    if (sender) letter.appendChild(element(doc, 'p', 'ac-career-ui__signature', '—— ' + sender));
+    if (sender) letter.appendChild(element(doc, 'p', 'ac-career-ui__signature', sender));
     wrapper.appendChild(letter);
     const actions = (Array.isArray(input.actions) ? input.actions : []).slice(0, 2);
     if (actions.length) {
@@ -759,16 +763,20 @@
 
     const titleId = 'ac-career-ui-' + panelKey + '-title-' + (++idSequence);
     panel.setAttribute('aria-labelledby', titleId);
+    panel.setAttribute('aria-label', title);
+    panel.setAttribute('data-show-header', String(input.showHeader !== false));
     const descriptionId = cleanText(input.descriptionId);
     if (descriptionId) panel.setAttribute('aria-describedby', descriptionId);
 
     const header = element(doc, 'header', 'ac-career-ui__header');
+    header.hidden = input.showHeader === false;
     const heading = element(doc, size === 'small' ? 'h2' : 'h1', 'ac-career-ui__title', title);
     heading.id = titleId;
     heading.tabIndex = -1;
     header.appendChild(heading);
     const closeButton = element(doc, 'button', 'ac-career-ui__close');
     closeButton.type = 'button';
+    closeButton.hidden = input.showHeader === false;
     closeButton.setAttribute('aria-label', '关闭' + title);
     closeButton.appendChild(icon('x'));
     header.appendChild(closeButton);
@@ -797,11 +805,16 @@
     const input = isObject(ctx) ? ctx : {};
     const state = oneOf(input.state, SHELL_STATES, 'normal');
     const size = oneOf(input.size, ['default', 'small'], 'default');
+    const showHeader = input.showHeader !== false;
     const title = cleanText(input.title) || '生涯面板';
     dom.rootNode.setAttribute('data-reduced-motion', String(!!input.reducedMotion));
     dom.panel.setAttribute('data-shell-state', state);
     dom.panel.setAttribute('data-shell-size', size);
+    dom.panel.setAttribute('data-show-header', String(showHeader));
+    dom.panel.setAttribute('aria-label', title);
     dom.panel.setAttribute('aria-busy', String(state === 'loading'));
+    dom.header.hidden = !showHeader;
+    dom.closeButton.hidden = !showHeader;
     if (dom.heading.tagName !== (size === 'small' ? 'H2' : 'H1')) {
       const heading = element(dom.doc, size === 'small' ? 'h2' : 'h1', 'ac-career-ui__title', title);
       heading.id = dom.titleId;
@@ -818,6 +831,7 @@
 
     const active = dom.doc.activeElement;
     const descriptor = active && dom.body.contains(active) ? focusDescriptor(active) : null;
+    const headerFocusLost = !showHeader && (active === dom.closeButton || active === dom.heading);
     dom.body.replaceChildren();
     appendContent(dom.body, input.body);
     dom.footer.replaceChildren();
@@ -826,7 +840,8 @@
     dom.notice.hidden = state !== 'loading' && state !== 'error';
     dom.notice.className = 'ac-career-ui__shell-notice' + (state === 'error' ? ' ac-career-ui__shell-notice--error' : '');
     dom.notice.textContent = state === 'loading' ? '正在整理这些内容…' : (state === 'error' ? '这里暂时读不到内容，请关闭后重试。' : '');
-    if (descriptor) safelyFocus(restoreDescriptor(dom.panel, descriptor) || dom.closeButton);
+    if (descriptor) safelyFocus(restoreDescriptor(dom.panel, descriptor) || (showHeader ? dom.closeButton : dom.panel));
+    else if (headerFocusLost) safelyFocus(showHeader ? dom.closeButton : dom.panel);
   }
 
   function topManager(doc) {
@@ -902,6 +917,7 @@
       rootNode: dom.rootNode,
       overlay: dom.overlay,
       panel: dom.panel,
+      header: dom.header,
       closeButton: dom.closeButton,
       body: dom.body,
       heading: dom.heading,
@@ -936,7 +952,7 @@
     lockScroll(doc);
     state.stack.push(manager);
     const initialFocus = resolveInitialFocus(input.initialFocus, dom.panel);
-    safelyFocus(initialFocus || dom.closeButton);
+    safelyFocus(initialFocus || (input.showHeader === false ? dom.panel : dom.closeButton));
     return { ok: true, panel: dom.panel };
   }
 

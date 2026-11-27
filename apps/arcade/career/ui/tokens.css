@@ -42,6 +42,8 @@
   --ac-career-ui-font-score-leading: 1.2;
   --ac-career-ui-font-weight-heading: 600;
   --ac-career-ui-font-weight-action: 600;
+  --ac-career-ui-font-weight-strong: 700;
+  --ac-career-ui-font-weight-normal: 400;
   --ac-career-ui-score: #fbbf24;
 
   /* Frozen spacing, geometry and state literals. */
@@ -54,6 +56,14 @@
   --ac-career-ui-action-radius: 8px;
   --ac-career-ui-tabs-radius: 10px;
   --ac-career-ui-tab-radius: 7px;
+  --ac-career-ui-tabs-pad: 3px;
+  --ac-career-ui-tabs-gap: 3px;
+  --ac-career-ui-tools-gap-narrow: 4px;
+  --ac-career-ui-tab-pad-y: 1px;
+  --ac-career-ui-tab-pad-x: 6px;
+  --ac-career-ui-tool-font-size: 12px;
+  --ac-career-ui-tool-pad: 8px;
+  --ac-career-ui-tool-gap: 4px;
   --ac-career-ui-harbor-radius: 6px;
   --ac-career-ui-line-width: 1px;
   --ac-career-ui-touch-size: 44px;

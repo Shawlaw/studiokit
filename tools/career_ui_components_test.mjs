@@ -476,6 +476,12 @@ const tokensCss = fs.readFileSync(ABS.tokens, 'utf8');
 const componentsCss = fs.readFileSync(ABS.css, 'utf8');
 const componentsSrc = fs.readFileSync(ABS.components, 'utf8');
 const harborSrc = fs.readFileSync(ABS.harbor, 'utf8');
+function cssBlock(selector, from = 0) {
+  const start = componentsCss.indexOf(selector, from);
+  if (start < 0) return '';
+  const end = componentsCss.indexOf('}', start);
+  return end < 0 ? '' : componentsCss.slice(start, end + 1);
+}
 
 const exactTokens = {
   '--ac-career-ui-bg': '#171b21',
@@ -552,6 +558,39 @@ check('horizontal overflow guards', /min-width:\s*0/.test(componentsCss) && /ove
 check('three-column tool grid with 8px gap', /grid-template-columns:\s*repeat\(3,\s*minmax\(0,\s*1fr\)\);[\s\S]*?gap:\s*var\(--ac-career-ui-space-2\)/.test(componentsCss));
 check('timeline 1px line and 7px node', /border-left:\s*var\(--ac-career-ui-line-width\)/.test(componentsCss) && /width:\s*var\(--ac-career-ui-timeline-node\)/.test(componentsCss));
 check('animations 140/160ms only', /--ac-career-ui-overlay-duration:\s*140ms/.test(tokensCss) && /--ac-career-ui-sheet-duration:\s*160ms/.test(tokensCss) && /--ac-career-ui-clue-duration:\s*160ms/.test(tokensCss));
+check('T15 token literals from prototype', [
+  '--ac-career-ui-font-weight-strong: 700',
+  '--ac-career-ui-font-weight-normal: 400',
+  '--ac-career-ui-tabs-pad: 3px',
+  '--ac-career-ui-tabs-gap: 3px',
+  '--ac-career-ui-tools-gap-narrow: 4px',
+  '--ac-career-ui-tab-pad-y: 1px',
+  '--ac-career-ui-tab-pad-x: 6px',
+  '--ac-career-ui-tool-font-size: 12px',
+  '--ac-career-ui-tool-pad: 8px',
+  '--ac-career-ui-tool-gap: 4px',
+].every((line) => tokensCss.includes(line)));
+
+const primaryBlock = cssBlock('.ac-career-ui button.ac-career-ui__action--primary {');
+const secondaryBlock = cssBlock('.ac-career-ui button.ac-career-ui__action--secondary {');
+check('primary cascade beats generic button rule', primaryBlock.includes('background: var(--ac-career-ui-gold)') && primaryBlock.includes('color: var(--ac-career-ui-on-gold)'));
+check('secondary cascade keeps 1px border and transparent background', secondaryBlock.includes('border: var(--ac-career-ui-line-width) solid var(--ac-career-ui-secondary-border)') && secondaryBlock.includes('background: transparent'));
+check('action base cascade sets 10px/12px padding and 8px radius', cssBlock('.ac-career-ui button.ac-career-ui__action {').includes('padding: 10px 12px') && cssBlock('.ac-career-ui button.ac-career-ui__action {').includes('border-radius: var(--ac-career-ui-action-radius)'));
+check('LetterCard title h2 is 20px/600/1.35 gold-light', cssBlock('.ac-career-ui__letter h2 {').includes('font-size: var(--ac-career-ui-font-h2-size)') && cssBlock('.ac-career-ui__letter h2 {').includes('font-weight: var(--ac-career-ui-font-weight-heading)') && cssBlock('.ac-career-ui__letter h2 {').includes('line-height: var(--ac-career-ui-font-h2-leading)'));
+const tabBlock = cssBlock('.ac-career-ui button.ac-career-ui__tab {');
+check('tabs container uses 3px pad/gap', cssBlock('.ac-career-ui__tabs {').includes('padding: var(--ac-career-ui-tabs-pad)') && cssBlock('.ac-career-ui__tabs {').includes('gap: var(--ac-career-ui-tabs-gap)'));
+check('tab radius 7px and padding 1px 6px', tabBlock.includes('border-radius: var(--ac-career-ui-tab-radius)') && tabBlock.includes('padding: var(--ac-career-ui-tab-pad-y) var(--ac-career-ui-tab-pad-x)'));
+const toolBlock = cssBlock('.ac-career-ui button.ac-career-ui__tool {');
+check('tool font 12px, padding 8px, internal gap 4px', toolBlock.includes('font-size: var(--ac-career-ui-tool-font-size)') && toolBlock.includes('padding: var(--ac-career-ui-tool-pad)') && toolBlock.includes('gap: var(--ac-career-ui-tool-gap)'));
+check('tool grid narrow gap 4px', cssBlock('.ac-career-ui__tools {', componentsCss.indexOf('@media (max-width: 360px)')).includes('gap: var(--ac-career-ui-tools-gap-narrow)'));
+check('clue title strong 700', cssBlock('.ac-career-ui__clue-title {').includes('font-weight: var(--ac-career-ui-font-weight-strong)'));
+check('result-host has no extra surface/border/padding', !componentsCss.includes('data-placement="result-host"'));
+check('work name/card uses 14px body typography and 8px gap', cssBlock('.ac-career-ui__work-name {').includes('font-size: var(--ac-career-ui-font-body-size)') && cssBlock('.ac-career-ui__work-name {').includes('font-weight: var(--ac-career-ui-font-weight-strong)') && cssBlock('.ac-career-ui__work {').includes('gap: var(--ac-career-ui-space-2)'));
+check('avatar radius is 10px token', cssBlock('.ac-career-ui__avatar {').includes('border-radius: var(--ac-career-ui-radius)'));
+check('receipt result normal weight and kv-list no flex gap', cssBlock('.ac-career-ui__receipt-result {').includes('var(--ac-career-ui-font-weight-normal)') && !cssBlock('.ac-career-ui__kv-list {').includes('gap:'));
+check('npc name uses 700 strong weight', cssBlock('.ac-career-ui__npc-name {').includes('var(--ac-career-ui-font-weight-strong)'));
+check('CareerShell showHeader is a frozen optional prop', componentsSrc.includes('showHeader !== false') && componentsSrc.includes("panel.setAttribute('data-show-header'") && componentsSrc.includes("panel.setAttribute('aria-label', title)"));
+check('clue and signature text have no decorative prefix/suffix', !componentsSrc.includes("cleanText(input.actionLabel) + ' ›'") && !componentsSrc.includes("'—— ' + sender"));
 
 const viewportWidths = [320, 375, 390, 430, 844, 1280];
 check('viewport width matrix matches panel formula', viewportWidths.every((width) => Math.min(440, width - 24) === Math.min(440, width - 24)) && viewportWidths.every((width) => width - 24 > 0));
@@ -705,6 +744,45 @@ check('error state has visible retry text', errorRoot.textContent.includes('请�
 check('shell live region is polite', !!errorRoot.querySelector('[aria-live="polite"]'));
 eq('invalid panel key rejected', components.CareerShell.open({ panelKey: 'not-a-panel', title: 'x', body: bodyNode('x') }).ok, false);
 
+const headless = components.CareerShell.create('receipt');
+const headlessBody = bodyNode('合成无头正文');
+const headlessAction = components.SecondaryAction({ label: '无头动作', onClick() {} });
+headlessBody.appendChild(headlessAction);
+const headlessOpen = headless.open({ title: '合成无头标题', body: headlessBody, showHeader: false });
+const headlessPanel = headlessOpen.panel;
+const headlessHeader = headlessPanel.querySelector('.ac-career-ui__header');
+const headlessClose = headlessPanel.querySelector('.ac-career-ui__close');
+eq('showHeader defaults contract attr false', headlessPanel.getAttribute('data-show-header'), 'false');
+eq('showHeader false hides header', headlessHeader.hidden, true);
+eq('showHeader false hides close', headlessClose.hidden, true);
+eq('showHeader false retains aria-label', headlessPanel.getAttribute('aria-label'), '合成无头标题');
+eq('showHeader false retains labelled title text', doc.getElementById(headlessPanel.getAttribute('aria-labelledby')).textContent, '合成无头标题');
+eq('showHeader false focuses panel without initialFocus', doc.activeElement, headlessPanel);
+check('showHeader false still locks scroll', doc.documentElement.classList.contains('ac-career-ui-scroll-lock'));
+headlessPanel.dispatchEvent({ type: 'keydown', key: 'Tab' });
+eq('showHeader false Tab trap reaches body action', doc.activeElement, headlessAction);
+doc.dispatchEvent({ type: 'keydown', key: 'Escape' });
+eq('showHeader false Escape closes', doc.querySelector('[data-career-panel="receipt"]'), null);
+eq('showHeader false restores return focus', doc.activeElement, trigger);
+
+const headlessInitial = components.CareerShell.create('arrival');
+const initialBody = bodyNode('合成初始焦点正文');
+const initialButton = components.PrimaryAction({ label: '初始动作', onClick() {} });
+initialBody.appendChild(initialButton);
+headlessInitial.open({ title: '合成邀请', body: initialBody, showHeader: false, initialFocus: initialButton });
+eq('showHeader false honors explicit initialFocus', doc.activeElement, initialButton);
+components.CareerShell.close();
+
+const toggled = components.CareerShell.create('settings');
+const toggledOpen = toggled.open({ title: '合成切换标题', body: bodyNode('正文') });
+const toggledPanel = toggledOpen.panel;
+const toggledClose = toggledPanel.querySelector('.ac-career-ui__close');
+toggledClose.focus();
+toggled.render({ title: '合成切换标题', body: bodyNode('正文'), showHeader: false });
+eq('render showHeader false moves focus off hidden close', doc.activeElement, toggledPanel);
+eq('render showHeader false hides header', toggledPanel.querySelector('.ac-career-ui__header').hidden, true);
+components.CareerShell.close();
+
 /* ------------------------------- icons ----------------------------- */
 
 const testIcon = components.icon('gem');
@@ -728,6 +806,7 @@ eq('ClueRow type', clue.getAttribute('type'), 'button');
 eq('ClueRow title text', clue.querySelector('.ac-career-ui__clue-title').textContent, '合成线索标题');
 eq('ClueRow teaser text', clue.querySelector('.ac-career-ui__clue-teaser').textContent, '合成摘要');
 check('ClueRow action text injected', clue.textContent.includes('仔细看看'));
+eq('ClueRow action text exact', clue.querySelector('.ac-career-ui__clue-action').textContent, '仔细看看');
 check('ClueRow does not expose profession id', !clue.textContent.includes('internal.only') && !clue.innerHTML.includes('internal.only'));
 clue.click();
 eq('ClueRow onOpen once', clueCalls, 1);
@@ -741,7 +820,7 @@ const letterRead = components.LetterCard({
 eq('LetterCard state', letterRead.getAttribute('data-letter-state'), 'read');
 eq('LetterCard story background class', !!letterRead.querySelector('.ac-career-ui__letter'), true);
 eq('LetterCard paragraph count', letterRead.querySelectorAll('.ac-career-ui__letter-paragraph').length, 2);
-check('LetterCard signature injected', letterRead.textContent.includes('—— 合成署名'));
+eq('LetterCard signature exact', letterRead.querySelector('.ac-career-ui__signature').textContent, '合成署名');
 eq('LetterCard ambient caption', letterRead.querySelector('.ac-career-ui__caption').textContent, '合成说明');
 
 let resolver = null;
