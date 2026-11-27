@@ -33,6 +33,7 @@ PATHS = [
     'apps/arcade/DESIGN-0.21.2.md',
     'apps/arcade/DESIGN-0.22.0.md',
     'apps/arcade/DESIGN-0.23.0.md',
+    'apps/arcade/DESIGN-0.24.0.md',
     'apps/arcade/career/bridge.js',
     'apps/arcade/career/router.js',
     'apps/arcade/career/registry.js',
