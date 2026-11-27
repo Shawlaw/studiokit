@@ -2220,6 +2220,12 @@
         ? internal.worldWorkContent.commissionIds.slice() : [];
       catalog.worldWork = clone(internal.worldWorkContent);
     }
+    catalog.tools = [
+      { toolId: 'wallet', name: '钱包', introducedOnAccept: true },
+      { toolId: 'shop', name: '商店', introducedOnAccept: true },
+      { toolId: 'workshop', name: '工作台', introducedOnAccept: true },
+      { toolId: 'hangar', name: '机库', introducedOnAccept: true },
+    ];
     return catalog;
   }
 

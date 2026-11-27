@@ -1041,6 +1041,14 @@
       var out = {
         commissionId: commission.commissionId,
         gameId: commission.gameId,
+        gameName: function () {
+          var games = state.catalog && Array.isArray(state.catalog.games) ? state.catalog.games : [];
+          var game = games.find(function (row) { return row && row.gameId === commission.gameId; });
+          return game && typeof game.displayName === 'string' && game.displayName ? game.displayName : commission.gameId;
+        }(),
+        objective: commission.objective && typeof commission.objective.kind === 'string'
+          ? { kind: commission.objective.kind, atLeast: commission.objective.atLeast }
+          : null,
         category: world ? 'world' : 'profession',
         worldWork: world,
         title: world
