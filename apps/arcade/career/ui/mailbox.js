@@ -1012,8 +1012,10 @@
       gameId: cleanText(clue.gameId),
       professionId: null,
       icon: recoverable ? 'mail' : (FAMILY_ICONS[cleanText(clue.family)] || 'gem'),
-      title: cleanText(clue.ambientLabel) || titleOf(clue),
-      teaser: cleanText(clue.ambientText),
+      /* 信箱列表是「信件」清单：标题用真实线索/信件标题（0.22 契约），
+         发件场景（ambientLabel）作为副行，避免玩家看不到是哪封信。 */
+      title: titleOf(clue),
+      teaser: cleanText(clue.ambientText) || cleanText(clue.ambientLabel),
       actionLabel: recoverable ? (cleanText(letter.actionLabel) || '按地址投递') : (opened ? '查看这封信' : '仔细看看'),
       state: clueState,
       placement: 'list',
