@@ -161,13 +161,37 @@
         },
         {
           "fixtureId": "P08",
-          "selector": ".ac-career-ui .ac-career-ui__surface[data-work-card='world']",
-          "note": "世界工作卡由产品侧 ToolGrid/WorkCard 单独断言；原型侧由 create 操作生成同构节点后再比较。"
+          "selector": "[data-adapter-only='internal-parent-profession']",
+          "expected": "absent",
+          "note": "世界工作卡已由 byFixture 的 create/text 操作生成并参与比较；internalParentProfessionId 只是 adapter-only metadata，产品 DOM 必须完全不存在该节点。"
+        },
+        {
+          "fixtureId": "P10-empty",
+          "selector": ".ac-career-ui .ac-career-ui__tool:nth-child(4)",
+          "labelPath": "toolGrid[3].label",
+          "actionIdPath": "toolGrid[3].actionId",
+          "note": "第 4 个 tool 仅产品侧断言，不参与原型比较。"
+        },
+        {
+          "fixtureId": "P10-loading",
+          "selector": ".ac-career-ui .ac-career-ui__tool:nth-child(4)",
+          "labelPath": "toolGrid[3].label",
+          "actionIdPath": "toolGrid[3].actionId",
+          "note": "第 4 个 tool 仅产品侧断言，不参与原型比较。"
+        },
+        {
+          "fixtureId": "P10-error",
+          "selector": ".ac-career-ui .ac-career-ui__tool:nth-child(4)",
+          "labelPath": "toolGrid[3].label",
+          "actionIdPath": "toolGrid[3].actionId",
+          "note": "第 4 个 tool 仅产品侧断言，不参与原型比较。"
         },
         {
           "fixtureId": "P10-longtext",
-          "selector": ".ac-career-ui .ac-career-ui__panel",
-          "note": "QA-only letter-longtext 状态在原型中由 createState 生成，产品侧按同 fixture 长文 props 渲染。"
+          "selector": ".ac-career-ui .ac-career-ui__tool:nth-child(4)",
+          "labelPath": "toolGrid[3].label",
+          "actionIdPath": "toolGrid[3].actionId",
+          "note": "第 4 个 tool 仅产品侧断言，不参与原型比较。"
         }
       ],
       "byFixture": {
@@ -244,6 +268,11 @@
           { "op": "text", "selector": ".clue strong", "fixturePath": "props.clueRow.title" },
           { "op": "text", "selector": ".clue .caption", "fixturePath": "props.clueRow.teaser" },
           { "op": "text", "selector": ".clue .gold", "fixturePath": "props.clueRow.actionLabel" },
+          { "op": "create", "after": ".clue", "node": "message", "createsSelector": "[data-qa-message='story']", "html": "<div class=\"clue-message\" data-qa-message=\"story\"><strong></strong><p class=\"caption\"></p><span class=\"caption\"></span><time class=\"caption\"></time></div>", "note": "原型 home 无 story.messages 节点；创建与产品投影消息同构的可比较节点。" },
+          { "op": "text", "selector": "[data-qa-message='story'] strong", "fixturePath": "storyMessage.label", "productTarget": ".ac-career-ui__message strong" },
+          { "op": "text", "selector": "[data-qa-message='story'] p.caption", "fixturePath": "storyMessage.text", "productTarget": ".ac-career-ui__message p" },
+          { "op": "text", "selector": "[data-qa-message='story'] span.caption", "fixturePath": "storyMessage.from", "productTarget": ".ac-career-ui__message .from" },
+          { "op": "text", "selector": "[data-qa-message='story'] time", "fixturePath": "storyMessage.at", "productTarget": ".ac-career-ui__message time" },
           { "op": "text", "selector": ".tools .tool:nth-child(1)", "fixturePath": "props.toolGrid.tools[0].label" },
           { "op": "text", "selector": ".tools .tool:nth-child(2)", "fixturePath": "props.toolGrid.tools[1].label" },
           { "op": "text", "selector": ".tools .tool:nth-child(3)", "fixturePath": "props.toolGrid.tools[2].label" },
@@ -264,7 +293,7 @@
           { "op": "remove", "selector": ".surface:nth-of-type(2) h3", "reason": "paused 产品卡不显示任务详情。" },
           { "op": "remove", "selector": ".surface:nth-of-type(2) > p.caption:last-of-type", "reason": "paused 产品卡不显示可选说明。" },
           { "op": "text", "selector": ".surface:nth-of-type(2) button.text-action", "fixturePath": "props.actions[1].label" },
-          { "op": "create", "after": ".surface:last-of-type", "node": "world", "html": "<div class=\"surface stack small\" data-qa-card=\"world\"><div class=\"row\"><svg class=\"icon\" aria-hidden=\"true\"></svg><strong class=\"grow\"></strong><span class=\"caption\"></span></div><h3></h3><p class=\"caption\"></p><button class=\"secondary\" type=\"button\"></button></div>" },
+          { "op": "create", "after": ".surface:last-of-type", "node": "world", "createsSelector": "[data-qa-card='world']", "html": "<div class=\"surface stack small\" data-qa-card=\"world\"><div class=\"row\"><svg class=\"icon\" aria-hidden=\"true\"></svg><strong class=\"grow\"></strong><span class=\"caption\"></span></div><h3></h3><p class=\"caption\"></p><button class=\"secondary\" type=\"button\"></button></div>" },
           { "op": "text", "selector": "[data-qa-card='world'] .row strong", "fixturePath": "props.workCards[2].title" },
           { "op": "text", "selector": "[data-qa-card='world'] .row .caption", "fixturePath": "props.workCards[2].statusLabel" },
           { "op": "text", "selector": "[data-qa-card='world'] h3", "fixturePath": "props.workCards[2].commissions[0].title" },
@@ -306,6 +335,7 @@
           { "op": "text", "selector": ".tabs button:nth-child(3)", "fixturePath": "tabs[2].label" },
           { "op": "text", "selector": ".surface h3", "fixturePath": "variants[1].storyCard.title" },
           { "op": "text", "selector": ".surface p", "fixturePath": "variants[1].storyCard.summary" },
+          { "op": "remove", "selector": "button.secondary", "reason": "原型 loading 的「恢复示例」按钮不属于同内容夹具，必须删除。" },
           { "op": "text", "selector": ".tools .tool:nth-child(1)", "fixturePath": "toolGrid[0].label" },
           { "op": "text", "selector": ".tools .tool:nth-child(2)", "fixturePath": "toolGrid[1].label" },
           { "op": "text", "selector": ".tools .tool:nth-child(3)", "fixturePath": "toolGrid[2].label" },
@@ -327,6 +357,7 @@
         ],
         "P10-longtext": [
           { "op": "createState", "stateId": "letter-longtext", "clone": "letter", "qaOnly": true, "reason": "原型 screens 无 letter-longtext；QA 副本新建该状态后注入。" },
+          { "op": "remove", "selector": "button.primary", "reason": "克隆 letter 的「带着矿石去旧港」主按钮不属于长文夹具，必须删除。" },
           { "op": "text", "selector": "#panel-title", "fixturePath": "shellTitle" },
           { "op": "text", "selector": "p.caption", "fixturePath": "variants[3].letterCard.ambientLabel" },
           { "op": "text", "selector": ".letter h2", "fixturePath": "variants[3].letterCard.title" },
@@ -336,6 +367,93 @@
           { "op": "text", "selector": ".signature", "fixturePath": "variants[3].letterCard.sender" },
           { "op": "text", "selector": "button.text-action", "fixturePath": "variants[3].letterCard.actions[0].label" }
         ]
+      },
+      "targets": {
+        "P01": {
+          "prototypeSelectors": [".caption.center:first-of-type", ".score", ".caption.center:nth-of-type(2)", ".clue strong", ".clue .caption", ".clue .gold", "button.primary", "button.text-action"],
+          "productSelectors": [".ac-career-ui__clue__caption", ".ac-career-ui__score", ".ac-career-ui__clue__title", ".ac-career-ui__clue__teaser", ".ac-career-ui__clue__action", ".ac-career-ui__result-replay", ".ac-career-ui__result-exit"],
+          "productFixturePaths": ["props.hostResult.caption", "props.hostResult.scoreText", "props.hostResult.summary", "props.clueRow.title", "props.clueRow.teaser", "props.clueRow.actionLabel", "props.hostResult.primaryActionLabel", "props.hostResult.exitLabel"]
+        },
+        "P02": {
+          "prototypeSelectors": ["p.caption", "#panel-title", ".letter p:nth-of-type(1)", ".letter p:nth-of-type(2)", ".letter p:nth-of-type(3)", ".signature", "button.primary", "button.text-action"],
+          "productSelectors": [".ac-career-ui__letter__ambient", ".ac-career-ui__letter__title", ".ac-career-ui__letter__body p:nth-child(1)", ".ac-career-ui__letter__body p:nth-child(2)", ".ac-career-ui__letter__signature", ".ac-career-ui__primary", ".ac-career-ui__text-action"],
+          "productFixturePaths": ["props.letterCard.ambientLabel", "props.letterCard.title", "props.letterCard.paragraphs[0]", "props.letterCard.paragraphs[1]", "props.letterCard.sender", "props.letterCard.actions[0].label", "props.letterCard.actions[1].label"]
+        },
+        "P03": {
+          "prototypeSelectors": ["p.caption", "#panel-title", ".row.start .gold", ".row.start p:nth-of-type(1)", ".row.start p:nth-of-type(2)", ".stack.small > p.caption:first-of-type", ".stack.small h3", ".stack.small > p.caption:last-of-type", "button.primary", "button.text-action"],
+          "productSelectors": [".ac-career-ui__caption", ".ac-career-ui__panel-title", ".ac-career-ui__npc__name", ".ac-career-ui__npc__body p:nth-child(1)", ".ac-career-ui__npc__body p:nth-child(2)", ".ac-career-ui__story__eyebrow", ".ac-career-ui__story__title", ".ac-career-ui__story__summary", ".ac-career-ui__primary", ".ac-career-ui__text-action"],
+          "productFixturePaths": ["props.caption", "props.storyCard.title", "props.npcDialogue.name", "props.npcDialogue.paragraphs[0]", "props.npcDialogue.paragraphs[1]", "props.storyCard.eyebrow", "props.storyCard.title", "props.storyCard.summary", "props.primaryAction.label", "props.secondaryAction.label"]
+        },
+        "P04": {
+          "prototypeSelectors": ["p.caption", "#panel-title", ".row.success span", ".kv:nth-of-type(1) span:last-child", ".kv:nth-of-type(2) span:last-child", ".kv:nth-of-type(3) span:last-child", ".stack.small strong.gold", ".stack.small p:last-of-type", "button.primary", "button.text-action"],
+          "productSelectors": [".ac-career-ui__receipt__caption", ".ac-career-ui__panel-title", ".ac-career-ui__receipt__result", ".ac-career-ui__receipt__reward", ".ac-career-ui__receipt__identity", ".ac-career-ui__receipt__experience", ".ac-career-ui__npc__name", ".ac-career-ui__npc__body p", ".ac-career-ui__primary", ".ac-career-ui__text-action"],
+          "productFixturePaths": ["props.receiptCard.caption", "props.receiptCard.title", "props.receiptCard.resultLine", "props.receiptCard.rewardText", "props.receiptCard.identityValue", "props.receiptCard.experienceValue", "props.receiptCard.npcReply.name", "props.receiptCard.npcReply.paragraphs[0]", "props.receiptCard.nextAction.label", "props.receiptCard.exitAction.label"]
+        },
+        "P05": {
+          "prototypeSelectors": ["p.caption.center:first-of-type", "#panel-title", ".clue strong", ".clue .caption", ".clue .gold", "button.secondary"],
+          "productSelectors": [".ac-career-ui__clue__caption", ".ac-career-ui__panel-title", ".ac-career-ui__clue__title", ".ac-career-ui__clue__teaser", ".ac-career-ui__clue__action", ".ac-career-ui__secondary"],
+          "productFixturePaths": ["props.hostResult.caption", "props.hostResult.title", "props.clueRow.title", "props.clueRow.teaser", "props.clueRow.actionLabel", "props.hostResult.secondaryActionLabel"]
+        },
+        "P06": {
+          "prototypeSelectors": ["p.caption", "#panel-title", ".row.start .gold", ".row.start p:nth-of-type(1)", "button.primary", "button.text-action"],
+          "productSelectors": [".ac-career-ui__caption", ".ac-career-ui__panel-title", ".ac-career-ui__npc__name", ".ac-career-ui__npc__body p", ".ac-career-ui__primary", ".ac-career-ui__text-action"],
+          "productFixturePaths": ["props.caption", "props.title", "props.npcDialogue.name", "props.npcDialogue.paragraphs[0]", "props.primaryAction.label", "props.secondaryAction.label"]
+        },
+        "P07": {
+          "prototypeSelectors": ["#panel-title", "p.caption", ".tabs button:nth-child(1)", ".tabs button:nth-child(2)", ".tabs button:nth-child(3)", ".surface > p.caption", ".surface h2", ".surface > p:not(.caption)", ".surface button.primary", ".clue strong", ".clue .caption", ".clue .gold", "[data-qa-message='story']", "[data-qa-message='story'] strong", "[data-qa-message='story'] p.caption", "[data-qa-message='story'] span.caption", "[data-qa-message='story'] time", ".tools .tool:nth-child(1)", ".tools .tool:nth-child(2)", ".tools .tool:nth-child(3)", "button.text-action:last-of-type"],
+          "productSelectors": [".ac-career-ui__panel-title", ".ac-career-ui__caption", ".ac-career-ui__tab:nth-child(1)", ".ac-career-ui__tab:nth-child(2)", ".ac-career-ui__tab:nth-child(3)", ".ac-career-ui__story__eyebrow", ".ac-career-ui__story__title", ".ac-career-ui__story__summary", ".ac-career-ui__primary", ".ac-career-ui__clue__title", ".ac-career-ui__clue__teaser", ".ac-career-ui__clue__action", ".ac-career-ui__message", ".ac-career-ui__message strong", ".ac-career-ui__message p", ".ac-career-ui__message .from", ".ac-career-ui__message time", ".ac-career-ui__tool:nth-child(1)", ".ac-career-ui__tool:nth-child(2)", ".ac-career-ui__tool:nth-child(3)", ".ac-career-ui__text-action"],
+          "productFixturePaths": ["props.shellTitle", "props.caption", "props.segmentedTabs.tabs[0].label", "props.segmentedTabs.tabs[1].label", "props.segmentedTabs.tabs[2].label", "props.storyCard.eyebrow", "props.storyCard.title", "props.storyCard.summary", "props.storyCard.action.label", "props.clueRow.title", "props.clueRow.teaser", "props.clueRow.actionLabel", "storyMessage.label", "storyMessage.label", "storyMessage.text", "storyMessage.from", "storyMessage.at", "props.toolGrid.tools[0].label", "props.toolGrid.tools[1].label", "props.toolGrid.tools[2].label", "props.exitLabel"],
+          "excludedFromPrototypeComparison": ["productOnlyAssertions[P07].selector"]
+        },
+        "P08": {
+          "prototypeSelectors": ["#panel-title", "p.caption", ".tabs button:nth-child(1)", ".tabs button:nth-child(2)", ".tabs button:nth-child(3)", ".surface:nth-of-type(1) .row strong", ".surface:nth-of-type(1) .row .caption", ".surface:nth-of-type(1) h3", ".surface:nth-of-type(1) button.secondary", ".surface:nth-of-type(2) .row strong", ".surface:nth-of-type(2) .row .caption", ".surface:nth-of-type(2) h3", ".surface:nth-of-type(2) > p.caption:last-of-type", ".surface:nth-of-type(2) button.text-action", "[data-qa-card='world']", "[data-qa-card='world'] .row strong", "[data-qa-card='world'] .row .caption", "[data-qa-card='world'] h3", "[data-qa-card='world'] > p.caption", "[data-qa-card='world'] button.secondary", "button.text-action:last-of-type"],
+          "productSelectors": [".ac-career-ui__panel-title", ".ac-career-ui__caption", ".ac-career-ui__tab:nth-child(1)", ".ac-career-ui__tab:nth-child(2)", ".ac-career-ui__tab:nth-child(3)", ".ac-career-ui__work__name", ".ac-career-ui__work__status", ".ac-career-ui__work__commission", ".ac-career-ui__work__start", ".ac-career-ui__work__name", ".ac-career-ui__work__status", ".ac-career-ui__work__resume", ".ac-career-ui__work__world", ".ac-career-ui__work__world-name", ".ac-career-ui__work__world-status", ".ac-career-ui__work__world-title", ".ac-career-ui__work__world-summary", ".ac-career-ui__work__world-action", ".ac-career-ui__text-action"],
+          "productFixturePaths": ["props.shellTitle", "props.listCaption", "props.segmentedTabs.tabs[0].label", "props.segmentedTabs.tabs[1].label", "props.segmentedTabs.tabs[2].label", "props.workCards[0].displayName", "props.workCards[0].statusLabel", "props.workCards[0].commissions[0].title", "props.actions[0].label", "props.workCards[1].displayName", "props.workCards[1].statusLabel", "props.actions[1].label", "props.workCards[2].title", "props.workCards[2].statusLabel", "props.workCards[2].commissions[0].title", "props.workCards[2].commissions[0].summary", "props.actions[0].label", "props.exitLabel"],
+          "excludedFromPrototypeComparison": ["internalParentProfessionId metadata; must be absent in DOM"]
+        },
+        "P09": {
+          "prototypeSelectors": ["#panel-title", "p.caption", ".tabs button:nth-child(1)", ".tabs button:nth-child(2)", ".tabs button:nth-child(3)", ".timeline li:nth-child(1)", ".timeline li:nth-child(2)", ".timeline li:nth-child(3)", ".timeline li:nth-child(4)", "p.caption.center", "button.text-action:last-of-type"],
+          "productSelectors": [".ac-career-ui__panel-title", ".ac-career-ui__caption", ".ac-career-ui__tab:nth-child(1)", ".ac-career-ui__tab:nth-child(2)", ".ac-career-ui__tab:nth-child(3)", ".ac-career-ui__timeline li:nth-child(1)", ".ac-career-ui__timeline li:nth-child(2)", ".ac-career-ui__timeline li:nth-child(3)", ".ac-career-ui__timeline li:nth-child(4)", ".ac-career-ui__timeline-footer", ".ac-career-ui__text-action"],
+          "productFixturePaths": ["props.shellTitle", "props.listCaption", "props.segmentedTabs.tabs[0].label", "props.segmentedTabs.tabs[1].label", "props.segmentedTabs.tabs[2].label", "props.journalTimeline.events[0].label", "props.journalTimeline.events[1].label", "props.journalTimeline.events[2].label", "props.journalTimeline.events[3].label", "props.footerText", "props.exitLabel"]
+        },
+        "P10-empty": {
+          "prototypeSelectors": ["#panel-title", "p.caption", ".tabs button:nth-child(1)", ".tabs button:nth-child(2)", ".tabs button:nth-child(3)", ".surface h3", ".surface p", ".tools .tool:nth-child(1)", ".tools .tool:nth-child(2)", ".tools .tool:nth-child(3)", "button.text-action:last-of-type"],
+          "productSelectors": [".ac-career-ui__panel-title", ".ac-career-ui__caption", ".ac-career-ui__tab:nth-child(1)", ".ac-career-ui__tab:nth-child(2)", ".ac-career-ui__tab:nth-child(3)", ".ac-career-ui__story__title", ".ac-career-ui__story__summary", ".ac-career-ui__tool:nth-child(1)", ".ac-career-ui__tool:nth-child(2)", ".ac-career-ui__tool:nth-child(3)", ".ac-career-ui__text-action"],
+          "productFixturePaths": ["shellTitle", "caption", "tabs[0].label", "tabs[1].label", "tabs[2].label", "variants[0].storyCard.title", "variants[0].storyCard.summary", "toolGrid[0].label", "toolGrid[1].label", "toolGrid[2].label", "exitLabel"],
+          "excludedFromPrototypeComparison": ["productOnlyAssertions[P10-empty].selector"]
+        },
+        "P10-loading": {
+          "prototypeSelectors": ["#panel-title", "p.caption", ".tabs button:nth-child(1)", ".tabs button:nth-child(2)", ".tabs button:nth-child(3)", ".surface h3", ".surface p", "button.secondary", ".tools .tool:nth-child(1)", ".tools .tool:nth-child(2)", ".tools .tool:nth-child(3)", "button.text-action:last-of-type"],
+          "productSelectors": [".ac-career-ui__panel-title", ".ac-career-ui__caption", ".ac-career-ui__tab:nth-child(1)", ".ac-career-ui__tab:nth-child(2)", ".ac-career-ui__tab:nth-child(3)", ".ac-career-ui__story__title", ".ac-career-ui__story__summary", ".ac-career-ui__tool:nth-child(1)", ".ac-career-ui__tool:nth-child(2)", ".ac-career-ui__tool:nth-child(3)", ".ac-career-ui__text-action"],
+          "productFixturePaths": ["shellTitle", "caption", "tabs[0].label", "tabs[1].label", "tabs[2].label", "variants[1].storyCard.title", "variants[1].storyCard.summary", "toolGrid[0].label", "toolGrid[1].label", "toolGrid[2].label", "exitLabel"],
+          "excludedFromPrototypeComparison": ["productOnlyAssertions[P10-loading].selector"]
+        },
+        "P10-error": {
+          "prototypeSelectors": ["#panel-title", "p.caption", ".tabs button:nth-child(1)", ".tabs button:nth-child(2)", ".tabs button:nth-child(3)", ".surface h3", ".surface p", ".surface button.primary", ".tools .tool:nth-child(1)", ".tools .tool:nth-child(2)", ".tools .tool:nth-child(3)", "button.text-action:last-of-type"],
+          "productSelectors": [".ac-career-ui__panel-title", ".ac-career-ui__caption", ".ac-career-ui__tab:nth-child(1)", ".ac-career-ui__tab:nth-child(2)", ".ac-career-ui__tab:nth-child(3)", ".ac-career-ui__story__title", ".ac-career-ui__story__summary", ".ac-career-ui__secondary", ".ac-career-ui__tool:nth-child(1)", ".ac-career-ui__tool:nth-child(2)", ".ac-career-ui__tool:nth-child(3)", ".ac-career-ui__text-action"],
+          "productFixturePaths": ["shellTitle", "caption", "tabs[0].label", "tabs[1].label", "tabs[2].label", "variants[2].storyCard.title", "variants[2].storyCard.summary", "variants[2].secondaryAction.label", "toolGrid[0].label", "toolGrid[1].label", "toolGrid[2].label", "exitLabel"],
+          "excludedFromPrototypeComparison": ["productOnlyAssertions[P10-error].selector"]
+        },
+        "P10-longtext": {
+          "prototypeSelectors": ["#panel-title", "p.caption", ".letter h2", ".letter p:nth-of-type(1)", ".letter p:nth-of-type(2)", ".letter p:nth-of-type(3)", ".signature", "button.primary", "button.text-action"],
+          "productSelectors": [".ac-career-ui__panel-title", ".ac-career-ui__letter__ambient", ".ac-career-ui__letter__title", ".ac-career-ui__letter__body p:nth-child(1)", ".ac-career-ui__letter__body p:nth-child(2)", ".ac-career-ui__letter__body p:nth-child(3)", ".ac-career-ui__letter__signature", ".ac-career-ui__text-action"],
+          "productFixturePaths": ["shellTitle", "variants[3].letterCard.ambientLabel", "variants[3].letterCard.title", "variants[3].letterCard.paragraphs[0]", "variants[3].letterCard.paragraphs[1]", "variants[3].letterCard.paragraphs[2]", "variants[3].letterCard.sender", "variants[3].letterCard.actions[0].label"],
+          "excludedFromPrototypeComparison": ["productOnlyAssertions[P10-longtext].selector"]
+        }
+      },
+      "coverageValidator": {
+        "version": 1,
+        "runtime": "static-only (no browser, no full)",
+        "checks": [
+          "byFixture key set must equal P01-P09 + P10-empty/loading/error/longtext",
+          "every targets.<fixture>.prototypeSelectors entry must have a matching text/remove/create op in byFixture.<fixture>",
+          "every targets.<fixture>.productFixturePaths entry must resolve in the fixture and appear in at least one byFixture op",
+          "every fixturePath used by byFixture must resolve",
+          "selectors listed in productOnlyAssertions must not appear in targets[*].prototypeSelectors",
+          "removals required by the review (P02 third paragraph, P10-loading secondary, P10-longtext primary) must exist"
+        ],
+        "reportFields": ["fixtureId", "targetCount", "covered", "missing", "productOnlyExcluded"],
+        "passRule": "missing.length === 0 && unresolvedFixturePaths.length === 0"
       }
     },
     "referenceImages": [

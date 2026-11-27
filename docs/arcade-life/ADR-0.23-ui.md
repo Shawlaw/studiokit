@@ -362,13 +362,14 @@ T15 只消费本 ADR 与夹具做截图/可访问性验证；发现契约问题�
 
 ## 8. 视觉对齐测量方法（目标，非通过结论）
 
-1. **QA DOM fixture + 同视口**：T15 在相同 OS、浏览器与 DPR=1、缩放 100% 下，用同一份 fixture 同时渲染两侧。产品侧消费冻结组件 props；原型侧不是简单文本替换，而是按 `capture.referenceInjection.byFixture`（含 `P01`–`P09`、`P10-empty|loading|error|longtext`）对 QA-only 原型副本执行完整同构规范化：`text` 覆盖真实存在的节点、`remove` 删除未映射的示例节点、`create` 为产品独有的第 4 tool / 世界工作卡 / longText 状态创建等价节点、未映射的旧示例文本不得残留。每张 reference PNG 只作构图/几何参考，不与示例文案逐元素比较。不做整图像素阈值比对。
+1. **QA DOM fixture + 同视口**：T15 在相同 OS、浏览器与 DPR=1、缩放 100% 下，用同一份 fixture 同时渲染两侧。产品侧消费冻结组件 props；原型侧按 `capture.referenceInjection.byFixture`（含 `P01`–`P09`、`P10-empty|loading|error|longtext`）对 QA-only 原型副本执行完整同构规范化：`text` 覆盖真实存在的节点、`remove` 删除未映射的示例节点（P02 第三段、P10-loading「恢复示例」、P10-longtext 克隆主按钮）、`create` 为产品已有的 P07 `story.messages` / P08 世界工作卡 / P10 longText 状态创建同构可比较节点；产品独有第 4 tool 只列入 `productOnlyAssertions`，不参与原型比较。未映射的旧示例文本不得残留。每张 reference PNG 只作构图/几何参考，不与示例文案逐元素比较；不做整图像素阈值比对。
 2. **只比面板区域**：原型抓 `.panel`，产品抓 `.ac-career-ui__panel`；先按 panel 左上角归一化，再比较其间元素相对坐标。P01 只比 ClueRow 元素与其在结算中的相对次序，宿主结算弹层属于游戏样式，不要求与原型一致。
 3. **精确项**：computed `color` / `background-color` / `font-family` / `font-size` / `line-height` / `font-weight` / `border-width` / `border-radius` / `padding` / `gap` 必须与第 5 节一致；几何项（panel 宽、卡片宽、按钮高、icon/avatar 尺寸、harbor 比例、相邻元素左右对齐）目标 `<=4 CSS px`。
 4. **文字换行差异**：若度量相同但行数/换行点不同，记录两侧实际字体 fallback、每行文本、元素宽度与 `scrollHeight`，标为「可解释的换行差异」，不把整行像素差当 FAIL；不得通过改字号、letter-spacing 或牺牲 44px 热区强行对齐。
 5. **短视口**：320×640 与 844×390 只验证 P03/P06/P07/P08/P09/P10-longText 的可读、可滚、可退出和横向零溢出；允许内容因换行产生高度差，但不允许固定高度截断、按钮被裁或页面横向滚动。
 6. **状态断言**：P10 loading 保留骨架且 `aria-busy=true`；error 有可见重试；empty 无占位职业；长文可滚到底部且关闭按钮始终可达。任一明显构图/层级/按钮/断点偏差由 T15 reviewer 判 FAIL。
-7. **证据边界**：本任务未运行截图、浏览器或 full；上述 `<=4px` 是 T15 目标。原型 README 已声明其自身只在 Chromium 做过无溢出/脚本错误检查，未验证目标仓库、真实存档或 PWA（`prototype/README.md:5`），不得据此声称 0.23 已对齐。
+7. **静态覆盖 validator**：截图前先运行纯静态检查，遍历 `referenceInjection.byFixture` 与 `referenceInjection.targets`：每个 byFixture key 必须存在对应 targets；每个 `prototypeSelectors` 必须由同 fixture 的 `text/remove/create` 操作覆盖（`create` 用 `createsSelector` 匹配）；每个 `productFixturePaths` 必须能在 fixture 中解析且被至少一个操作引用；`productOnlyAssertions` 不得出现在 prototype targets；P02/P10-loading/P10-longtext 的必需 remove 必须存在。报告按 fixture 输出 `targets/covered/missing/productOnlyExcluded`，`missingCount=0` 才可进入 T15 截图。本轮已运行该静态检查并通过，但不等于视觉/浏览器通过。
+8. **证据边界**：本任务未运行截图、浏览器或 full；上述 `<=4px` 是 T15 目标。原型 README 已声明其自身只在 Chromium 做过无溢出/脚本错误检查，未验证目标仓库、真实存档或 PWA（`prototype/README.md:5`），不得据此声称 0.23 已对齐。
 
 ## 9. 待决策与未验证
 
