@@ -18,17 +18,23 @@
   'use strict';
   if (typeof module === 'object' && module && module.exports) {
     let core = null;
+    let professionState = null;
     try {
       if (typeof require === 'function') core = require('./career-core.js');
     } catch (err) {
       core = null;
     }
-    module.exports = factory(typeof globalThis !== 'undefined' ? globalThis : this, core, true);
+    try {
+      if (typeof require === 'function') professionState = require('./profession-state.js');
+    } catch (err) {
+      professionState = null;
+    }
+    module.exports = factory(typeof globalThis !== 'undefined' ? globalThis : this, core, professionState, true);
     return;
   }
   root.ArcadeCareer = root.ArcadeCareer || {};
-  root.ArcadeCareer.db = factory(root, null, false);
-})(typeof window !== 'undefined' ? window : globalThis, function (root, nodeCore, isNode) {
+  root.ArcadeCareer.db = factory(root, null, null, false);
+})(typeof window !== 'undefined' ? window : globalThis, function (root, nodeCore, nodeProfessionState, isNode) {
   'use strict';
 
   const DB_NAME = 'studiokit:arcade:career';
@@ -87,6 +93,37 @@
   const CLAIM_STORES = Object.freeze(['claims', 'runs', 'ledgers', 'balances', 'inventory', 'equipment', 'quests']);
   const DEFAULT_CONTENT_VERSION = '0.18.0';
   const ENDING_C5_FLAG = 'C5.star_tower_resolved';
+  const PROFESSION_ACTIONS = Object.freeze([
+    'GLIMPSIED',
+    'READ',
+    'ACCEPT_INVITATION',
+    'SET_ACTIVE',
+    'SET_PAUSED',
+    'MARK_DEVELOPED',
+    'MARK_COMPLETED',
+    'RECORD_STORY_EVENT',
+    'MIGRATE_LEGACY',
+  ]);
+  const PROFESSION_EXTENSION_FIELDS = Object.freeze([
+    'professionVersion',
+    'firstDiscoveredGameId',
+    'acceptedOriginGameId',
+    'activeProfessionId',
+    'narrativeCursor',
+    'storyEvents',
+    'professionProgress',
+    'updatedAt',
+  ]);
+  const PROFESSION_REDUCER_METHOD = Object.freeze({
+    GLIMPSIED: 'recordGlimpsed',
+    READ: 'recordRead',
+    ACCEPT_INVITATION: 'acceptInvitation',
+    SET_ACTIVE: 'setActive',
+    SET_PAUSED: 'setPaused',
+    MARK_DEVELOPED: 'markDeveloped',
+    MARK_COMPLETED: 'markCompleted',
+    RECORD_STORY_EVENT: 'recordStoryEvent',
+  });
 
   /* ------------------------------------------------------------------ *
    * 基础工具（纯 JS，无 IDB）
@@ -96,6 +133,20 @@
     if (nodeCore) return nodeCore;
     if (root && root.ArcadeCareer && root.ArcadeCareer.core) return root.ArcadeCareer.core;
     return null;
+  }
+
+  /** 惰性解析：浏览器脚本装载顺序不固定；未装载时纯旧档路径仍可工作。 */
+  function professionStateApi() {
+    if (nodeProfessionState) return nodeProfessionState;
+    if (root && root.ArcadeCareer && root.ArcadeCareer.professionState) return root.ArcadeCareer.professionState;
+    return null;
+  }
+
+  const ISO_RE = /^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}(?:\.\d{1,9})?(?:Z|[+-]\d{2}:\d{2})$/;
+
+  function validIso(value) {
+    if (typeof value !== 'string' || !ISO_RE.test(value)) return false;
+    return Number.isFinite(Date.parse(value));
   }
 
   function isObject(value) {
@@ -383,6 +434,62 @@
       });
   }
 
+  function futureProfessionState(value) {
+    const state = professionStateApi();
+    if (!state) return false;
+    const version = Number(value && value.professionVersion);
+    return Number.isInteger(version) && version > state.PROFESSION_VERSION;
+  }
+
+  /**
+   * 发现快照的单一扩展合并规则：
+   * - 当前版本只补/规整 profession-state 已知字段，未知 legacy 字段原样保留；
+   * - 任一端为未来版本时，未知扩展按 extensionOf 原样保留，经典 clues/runs 仍可继续演进。
+   */
+  function mergeDiscoveryExtension(base, incoming, at, acceptIncomingExtension) {
+    const acceptIncoming = acceptIncomingExtension !== false;
+    const state = professionStateApi();
+    const source = isObject(incoming) ? jsonClone(incoming) : {};
+    if (!state) return Object.keys(source).length ? source : jsonClone(base || {}) || {};
+    const baseFuture = futureProfessionState(base);
+    const incomingFuture = acceptIncoming && futureProfessionState(source);
+    if (baseFuture || incomingFuture) {
+      const futureSource = baseFuture ? base : source;
+      const preserved = state.extensionOf(futureSource) || {};
+      const out = baseFuture ? source : jsonClone(source) || {};
+      Object.keys(preserved).forEach((field) => {
+        out[field] = jsonClone(preserved[field]);
+      });
+      return out;
+    }
+    const normalizedBase = state.normalizeExtension(isObject(base) ? base : {}, at);
+    const normalizedIncoming = state.normalizeExtension(source, at);
+    const out = source;
+    PROFESSION_EXTENSION_FIELDS.forEach((field) => {
+      if (acceptIncoming && Object.prototype.hasOwnProperty.call(source, field)) out[field] = jsonClone(normalizedIncoming[field]);
+      else out[field] = jsonClone(normalizedBase[field]);
+    });
+    const merged = state.mergeIntoDiscovery(out, out, at) || out;
+    if (merged && isObject(merged) && validIso(at)) merged.updatedAt = at;
+    return merged;
+  }
+
+  function normalizeStoredDiscovery(value, at) {
+    if (!isObject(value)) return null;
+    return mergeDiscoveryExtension(value, value, validIso(value.updatedAt) ? value.updatedAt : at);
+  }
+
+  function replaceDiscoveryExtension(value, extension, at) {
+    const out = isObject(value) ? jsonClone(value) || {} : {};
+    if (isObject(extension)) {
+      Object.keys(extension).forEach((field) => {
+        if (field !== 'updatedAt') out[field] = jsonClone(extension[field]);
+      });
+    }
+    if (validIso(at)) out.updatedAt = at;
+    return out;
+  }
+
   /* ------------------------------------------------------------------ *
    * 发现状态（state / discovery）
    * ------------------------------------------------------------------ */
@@ -394,7 +501,8 @@
           ctx.done(null);
           return;
         }
-        ctx.done(Object.prototype.hasOwnProperty.call(row, 'value') ? row.value : null);
+        const value = Object.prototype.hasOwnProperty.call(row, 'value') ? row.value : null;
+        ctx.done(normalizeStoredDiscovery(value, row.updatedAt));
       });
     }).then((res) => (res.ok ? res.result : null));
   }
@@ -584,7 +692,11 @@
     return txRun(['state'], 'readonly', (ctx) => {
       readDiscoveryGeneration(ctx, (generation) => {
         ctx.bind(ctx.store('state').get(STATE_KEY_DISCOVERY), (row) => {
-          ctx.done({ ok: true, state: row && isObject(row.value) ? row.value : null, generation });
+          ctx.done({
+            ok: true,
+            state: normalizeStoredDiscovery(row && isObject(row.value) ? row.value : null, row && row.updatedAt),
+            generation,
+          });
         });
       });
     }).then((res) => (res.ok ? res.result : failure(res.reason, res.error)));
@@ -617,8 +729,12 @@
     return txRun(['state'], 'readwrite', (ctx) => {
       assertCareerWritable(ctx, 'save-discovery-state');
       requireDiscoveryGeneration(ctx, options, 'save-discovery-state', () => {
-        const row = { key: STATE_KEY_DISCOVERY, schemaVersion: SCHEMA_VERSION, updatedAt: at, value };
-        ctx.bind(ctx.store('state').put(row), () => ctx.done({ ok: true }));
+        ctx.bind(ctx.store('state').get(STATE_KEY_DISCOVERY), (existingRow) => {
+          const existing = existingRow && isObject(existingRow.value) ? existingRow.value : null;
+          const merged = mergeDiscoveryExtension(existing, value, validIso(at) ? at : nowIso(), false);
+          const row = { key: STATE_KEY_DISCOVERY, schemaVersion: SCHEMA_VERSION, updatedAt: at, value: merged };
+          ctx.bind(ctx.store('state').put(row), () => ctx.done({ ok: true }));
+        });
       });
     }).then((res) => (res.ok ? res.result : failure(res.reason, res.error)));
   }
@@ -680,6 +796,52 @@
       });
     });
     return merged;
+  }
+
+  /** T02 冻结形状：professionEvents:[{action,input}] 优先，否则 professionEvent:{action,input}。 */
+  function professionEventsFromAction(action, actionType, at) {
+    if (!isObject(action)) return [];
+    const list = Array.isArray(action.professionEvents)
+      ? action.professionEvents
+      : isObject(action.professionEvent) ? [action.professionEvent] : [];
+    /* 只有真实结算/读信事件才允许驱动职业状态；SAVE_STATE / SET_HINTS / LETTER_FOLLOWED 不得改写。 */
+    if (actionType !== 'RUN_ENDED' && actionType !== 'CLUE_OPENED') return [];
+    return list.map((event) => {
+      if (!isObject(event) || typeof event.action !== 'string') return null;
+      const input = Object.assign({}, isObject(event.input) ? event.input : {});
+      if (input.catalog === undefined) input.catalog = action.catalog;
+      if (input.gameId === undefined) input.gameId = action.gameId;
+      if (input.clueId === undefined) input.clueId = action.clueId;
+      if (input.clueOpened === undefined && actionType === 'CLUE_OPENED') input.clueOpened = true;
+      if (input.at === undefined) input.at = validIso(action.at) ? action.at : at;
+      return { action: event.action, input, at: validIso(input.at) ? input.at : at, state: event.state || event.extension || null };
+    }).filter(Boolean);
+  }
+
+  function applyProfessionClueFacts(value, events, at) {
+    const out = isObject(value) ? value : {};
+    events.forEach((event) => {
+      if (event.action !== 'GLIMPSIED' && event.action !== 'READ') return;
+      const input = event.input || {};
+      const clueId = typeof input.clueId === 'string' ? input.clueId : '';
+      const gameId = typeof input.gameId === 'string' ? input.gameId : '';
+      if (!clueId || !gameId) return;
+      if (!isObject(out.clues)) out.clues = {};
+      const prior = isObject(out.clues[clueId]) ? out.clues[clueId] : {};
+      const row = Object.assign({}, prior, {
+        clueId,
+        sourceGame: prior.sourceGame || gameId,
+        firstSeenRunId: prior.firstSeenRunId || null,
+        seenAt: prior.seenAt || at,
+        openedAt: event.action === 'READ' && input.clueOpened === true ? (prior.openedAt || at) : (prior.openedAt || null),
+        dismissed: prior.dismissed === true,
+        updatedAt: at,
+      });
+      out.clues[clueId] = row;
+      if (!out.firstSourceGame) out.firstSourceGame = gameId;
+      if (!out.firstClueId) out.firstClueId = clueId;
+    });
+    return out;
   }
 
   /**
@@ -747,6 +909,43 @@
             merged.careerSignedAt = existing.careerSignedAt || value.careerSignedAt || null;
             merged.explorerAt = existing.explorerAt || value.explorerAt || null;
           }
+          let professionMeta = null;
+          const events = professionEventsFromAction(action, actionType, at);
+          if (events.length) {
+            const ps = professionStateApi();
+            if (!ps) {
+              ctx.done({ ok: false, reason: 'profession-state-unavailable', generation: currentGeneration });
+              return;
+            }
+            for (let i = 0; i < events.length; i += 1) {
+              const event = events[i];
+              if (event.action !== 'GLIMPSIED' && event.action !== 'READ') {
+                ctx.done({ ok: false, reason: 'bad-profession-action', generation: currentGeneration });
+                return;
+              }
+              let reduced;
+              const method = PROFESSION_REDUCER_METHOD[event.action];
+              if (isObject(event.state) && typeof ps.normalizeExtension === 'function') {
+                const extension = ps.normalizeExtension(event.state, event.at);
+                reduced = { ok: true, state: extension };
+              } else if (method && typeof ps[method] === 'function') {
+                const currentExtension = ps.extensionOf(merged) || ps.initialState(event.at);
+                reduced = ps[method](currentExtension, Object.assign({}, event.input, { at: event.at }));
+              } else {
+                reduced = { ok: false, reason: 'bad-profession-action' };
+              }
+              if (!reduced.ok) {
+                ctx.done({ ok: false, reason: reduced.reason || 'profession-reducer-failed', generation: currentGeneration });
+                return;
+              }
+              merged = replaceDiscoveryExtension(merged, reduced.state, at);
+              if (!professionMeta) professionMeta = {};
+              if (reduced.duplicate === true) professionMeta.duplicate = true;
+              if (reduced.newlyAccepted === true) professionMeta.newlyAccepted = true;
+            }
+            merged = applyProfessionClueFacts(merged, events, at);
+          }
+          merged = mergeDiscoveryExtension(existing || {}, merged, at);
           merged.updatedAt = at;
           const row = { key: STATE_KEY_DISCOVERY, schemaVersion: SCHEMA_VERSION, updatedAt: at, value: merged };
           ctx.bind(stateStore.put(row), () => {
@@ -778,7 +977,9 @@
                 });
               });
             }
-            sequence(tasks, () => ctx.done({ ok: true, value: merged, generation: currentGeneration }));
+            const doneValue = { ok: true, value: merged, generation: currentGeneration };
+            if (professionMeta) Object.keys(professionMeta).forEach((key) => { doneValue[key] = professionMeta[key]; });
+            sequence(tasks, () => ctx.done(doneValue));
           });
         });
       });
@@ -792,15 +993,15 @@
   }
 
   function normalizeDiscoveryRecord(raw, at) {
-    const record = {
-      clueId: raw.clueId,
-      sourceGame: typeof raw.sourceGame === 'string' ? raw.sourceGame : null,
-      firstSeenRunId: typeof raw.firstSeenRunId === 'string' ? raw.firstSeenRunId : null,
-      seenAt: typeof raw.seenAt === 'string' ? raw.seenAt : null,
-      openedAt: typeof raw.openedAt === 'string' ? raw.openedAt : null,
-      dismissed: raw.dismissed === true,
-      updatedAt: typeof raw.updatedAt === 'string' ? raw.updatedAt : at,
-    };
+    /* 未知字段原样保留，避免未来内容/职业扩展在普通发现写入时被裁掉。 */
+    const record = jsonClone(raw) || {};
+    record.clueId = raw.clueId;
+    record.sourceGame = typeof raw.sourceGame === 'string' ? raw.sourceGame : null;
+    record.firstSeenRunId = typeof raw.firstSeenRunId === 'string' ? raw.firstSeenRunId : null;
+    record.seenAt = typeof raw.seenAt === 'string' ? raw.seenAt : null;
+    record.openedAt = typeof raw.openedAt === 'string' ? raw.openedAt : null;
+    record.dismissed = raw.dismissed === true;
+    record.updatedAt = typeof raw.updatedAt === 'string' ? raw.updatedAt : at;
     return record;
   }
 
@@ -851,8 +1052,18 @@
     return txRun(['state'], 'readwrite', (ctx) => {
       assertCareerWritable(ctx, 'save-state');
       requireDiscoveryGeneration(ctx, generationOptions, 'save-state', () => {
-        const row = { key, schemaVersion: SCHEMA_VERSION, updatedAt: at, value };
-        ctx.bind(ctx.store('state').put(row), () => ctx.done({ ok: true }));
+        const write = (finalValue) => {
+          const row = { key, schemaVersion: SCHEMA_VERSION, updatedAt: at, value: finalValue };
+          ctx.bind(ctx.store('state').put(row), () => ctx.done({ ok: true }));
+        };
+        if (key !== STATE_KEY_DISCOVERY) {
+          write(value);
+          return;
+        }
+        ctx.bind(ctx.store('state').get(STATE_KEY_DISCOVERY), (existingRow) => {
+          const existing = existingRow && isObject(existingRow.value) ? existingRow.value : null;
+          write(mergeDiscoveryExtension(existing, value, at, false));
+        });
       });
     }).then((res) => (res.ok ? res.result : failure(res.reason, res.error)));
   }
@@ -871,7 +1082,9 @@
         }
         const value = row.value;
         if (value && typeof value === 'object' && !Array.isArray(value)) {
-          const flat = jsonClone(value) || {};
+          const flat = name === STATE_KEY_DISCOVERY
+            ? normalizeStoredDiscovery(value, row.updatedAt) || {}
+            : jsonClone(value) || {};
           flat.key = name;
           ctx.done(flat);
           return;
@@ -1013,7 +1226,7 @@
     }).then((res) => (res.ok ? Object.assign({ ok: true }, res.result) : failure(res.reason, res.error)));
   }
 
-  function writeInitialCareer(ctx, core, originGameId, at) {
+  function createInitialCareerRecords(ctx, core, originGameId, at, done) {
     let initial;
     try {
       initial = core.initialCareer({ originGameId, now: at });
@@ -1032,11 +1245,11 @@
       updatedAt: at,
       value: { careerId, originGameId: initial.profile.originGameId, createdAt: at },
     };
-    ctx.bind(ctx.store('profiles').add(initial.profile), () => {
-      ctx.bind(ctx.store('balances').add(initial.balance), () => {
-        ctx.bind(ctx.store('ledgers').add(initial.ledger), () => {
+    ctx.bindConstraint(ctx.store('profiles').add(initial.profile), 'write-failed', () => {
+      ctx.bindConstraint(ctx.store('balances').add(initial.balance), 'write-failed', () => {
+        ctx.bindConstraint(ctx.store('ledgers').add(initial.ledger), 'write-failed', () => {
           ctx.bind(ctx.store('state').put(pointer), () => {
-            ctx.done({
+            done({
               ok: true,
               created: true,
               careerId,
@@ -1047,6 +1260,10 @@
         });
       });
     });
+  }
+
+  function writeInitialCareer(ctx, core, originGameId, at) {
+    createInitialCareerRecords(ctx, core, originGameId, at, (created) => ctx.done(created));
   }
 
   function ensureCareer(input) {
@@ -1081,6 +1298,219 @@
         });
       });
     }).then((res) => (res.ok ? res.result : failure(res.reason, res.error)));
+  }
+
+  function readAllRows(ctx, storeName, done) {
+    ctx.bind(ctx.store(storeName).getAll(), (rows) => done(Array.isArray(rows) ? rows : []));
+  }
+
+  function sameProfessionExtension(a, b) {
+    const stable = (value) => {
+      if (Array.isArray(value)) return value.map(stable);
+      if (isObject(value)) {
+        const out = {};
+        Object.keys(value).sort().forEach((key) => {
+          if (key !== 'updatedAt') out[key] = stable(value[key]);
+        });
+        return out;
+      }
+      return value;
+    };
+    return JSON.stringify(stable(a || {})) === JSON.stringify(stable(b || {}));
+  }
+
+  /**
+   * 0.22 唯一职业状态落盘入口。所有守卫、代次、reducer 与身份/扩展写入都在同一 IDB 事务内。
+   * created 只由调用前是否已有合法 career 指针决定；newlyAccepted 只由 reducer 决定。
+   */
+  function applyProfessionEvent(request) {
+    const ps = professionStateApi();
+    const core = coreApi();
+    const options = isObject(request) ? request : {};
+    const action = typeof options.action === 'string' ? options.action : '';
+    if (!ps) return Promise.resolve(failure('profession-state-unavailable'));
+    if (PROFESSION_ACTIONS.indexOf(action) < 0) return Promise.resolve(failure('bad-profession-action'));
+    if (!core) return Promise.resolve(failure('core-unavailable'));
+    const input = isObject(options.input) ? jsonClone(options.input) || {} : {};
+    let at = nowIso();
+    if (options.now !== undefined) {
+      if (!validIso(options.now)) return Promise.resolve(failure('bad-now'));
+      at = options.now;
+    } else if (input.at !== undefined) {
+      if (!validIso(input.at)) return Promise.resolve(failure('bad-at'));
+      at = input.at;
+    }
+    const generation = normalizeDiscoveryGeneration(options);
+    if (generation === null) return Promise.resolve(failure('missing-generation'));
+    const stores = action === 'ACCEPT_INVITATION'
+      ? ['state', 'discovery', 'profiles', 'balances', 'ledgers']
+      : action === 'MIGRATE_LEGACY'
+        ? ['state', 'discovery', 'profiles', 'quests', 'claims', 'runs']
+        : ['state', 'discovery'];
+    return txRun(stores, 'readwrite', (ctx) => {
+      assertCareerWritable(ctx, 'apply-profession-event');
+      requireDiscoveryGeneration(ctx, { generation }, 'apply-profession-event', () => {
+        ctx.bind(ctx.store('state').get(STATE_KEY_CAREER), (pointerRow) => {
+          const pointerValue = pointerRow && isObject(pointerRow.value) ? pointerRow.value : null;
+          if (pointerRow && (!pointerValue || !core.isValidCareerId(pointerValue.careerId))) {
+            ctx.done({ ok: false, reason: 'bad-career-pointer', generation });
+            return;
+          }
+          const careerId = pointerValue ? pointerValue.careerId : null;
+          const checkFormer = (formerRow) => {
+            if (formerRow) {
+              ctx.done({ ok: false, reason: 'career-reset', error: 'apply-profession-event:career-reset', generation });
+              return;
+            }
+            ctx.bind(ctx.store('state').get(STATE_KEY_DISCOVERY), (stateRow) => {
+              const existing = stateRow && isObject(stateRow.value) ? stateRow.value : null;
+              if (futureProfessionState(existing)) {
+                ctx.done({ ok: false, reason: 'future-profession-version', generation });
+                return;
+              }
+              const currentExtension = ps.extensionOf(existing) || ps.initialState(at);
+              const clueId = typeof input.clueId === 'string' && input.clueId ? input.clueId : null;
+              const legacyClue = clueId && existing && isObject(existing.clues) ? existing.clues[clueId] : null;
+              const finish = (reduced, metadata, finalExtension) => {
+                const migrationUnchanged = action === 'MIGRATE_LEGACY' && !!existing && sameProfessionExtension(currentExtension, finalExtension);
+                const duplicate = reduced.duplicate === true || metadata && metadata.duplicate === true || migrationUnchanged;
+                const newlyAccepted = reduced.newlyAccepted === true;
+                const unchanged = duplicate || migrationUnchanged;
+                const response = {
+                  ok: true,
+                  generation,
+                  created: false,
+                  careerId,
+                  newlyAccepted,
+                  duplicate,
+                };
+                if (metadata && Array.isArray(metadata.derived)) response.derived = metadata.derived;
+                if (unchanged) {
+                  ctx.done(response);
+                  return;
+                }
+                const value = replaceDiscoveryExtension(existing, finalExtension, at);
+                if (clueId && (action === 'GLIMPSIED' || action === 'READ')) {
+                  value.clues = isObject(value.clues) ? value.clues : {};
+                  const sourceGame = input.gameId || (legacyClue && legacyClue.sourceGame) || null;
+                  if (sourceGame) {
+                    value.clues[clueId] = Object.assign({}, isObject(value.clues[clueId]) ? value.clues[clueId] : {}, {
+                      clueId,
+                      sourceGame: (value.clues[clueId] && value.clues[clueId].sourceGame) || sourceGame,
+                      seenAt: (value.clues[clueId] && value.clues[clueId].seenAt) || at,
+                      openedAt: action === 'READ' && input.clueOpened === true
+                        ? ((value.clues[clueId] && value.clues[clueId].openedAt) || at)
+                        : ((value.clues[clueId] && value.clues[clueId].openedAt) || null),
+                      updatedAt: at,
+                    });
+                  }
+                }
+                const row = { key: STATE_KEY_DISCOVERY, schemaVersion: SCHEMA_VERSION, updatedAt: at, value };
+                const writeState = (finalCareerId, created) => {
+                  response.careerId = finalCareerId;
+                  response.created = created === true;
+                  ctx.bind(ctx.store('state').put(row), () => ctx.done(response));
+                };
+                const createThenWrite = () => {
+                  createInitialCareerRecords(ctx, core, input.gameId, at, (created) => writeState(created.careerId, true));
+                };
+                if (action === 'ACCEPT_INVITATION' && newlyAccepted && !careerId) {
+                  createThenWrite();
+                  return;
+                }
+                if (clueId && (action === 'GLIMPSIED' || action === 'READ')) {
+                  ctx.bind(ctx.store('discovery').get(clueId), (prior) => {
+                    const priorRow = isObject(prior) ? prior : {};
+                    const sourceGame = input.gameId || legacyClue && legacyClue.sourceGame || priorRow.sourceGame || null;
+                    const record = Object.assign({}, priorRow, {
+                      clueId,
+                      sourceGame,
+                      firstSeenRunId: priorRow.firstSeenRunId || null,
+                      seenAt: priorRow.seenAt || at,
+                      openedAt: action === 'READ' && input.clueOpened === true ? (priorRow.openedAt || at) : (priorRow.openedAt || null),
+                      dismissed: priorRow.dismissed === true,
+                      updatedAt: at,
+                    });
+                    ctx.bind(ctx.store('discovery').put(record), () => writeState(careerId, false));
+                  });
+                  return;
+                }
+                writeState(careerId, false);
+              };
+              const reduceNow = (reducerInput) => {
+                const method = PROFESSION_REDUCER_METHOD[action];
+                if (typeof ps[method] !== 'function') {
+                  ctx.done({ ok: false, reason: 'bad-profession-action', generation });
+                  return;
+                }
+                const reduced = ps[method](currentExtension, Object.assign({}, reducerInput, { at }));
+                if (!reduced.ok) {
+                  ctx.done({ ok: false, reason: reduced.reason, error: reduced.reason, generation });
+                  return;
+                }
+                if (action !== 'RECORD_STORY_EVENT') {
+                  const validation = ps.validate(reduced.state, reducerInput.catalog);
+                  if (!validation.ok) {
+                    ctx.done({ ok: false, reason: validation.reason, error: validation.reason, generation });
+                    return;
+                  }
+                }
+                finish(reduced, {}, reduced.state);
+              };
+              if (action === 'MIGRATE_LEGACY') {
+                readAllRows(ctx, 'profiles', (profiles) => {
+                  readAllRows(ctx, 'quests', (quests) => {
+                    readAllRows(ctx, 'claims', (claims) => {
+                      readAllRows(ctx, 'runs', (runs) => {
+                        const inCareer = (row) => !careerId || !isObject(row) || row.careerId === careerId;
+                        const profileRows = profiles.filter(inCareer);
+                        const records = {
+                          profile: profileRows[0] || null,
+                          quests: quests.filter(inCareer),
+                          claims: claims.filter(inCareer),
+                          runs: runs.filter(inCareer),
+                        };
+                        const migrated = ps.deriveLegacyAcceptance(currentExtension, {
+                          catalog: input.catalog,
+                          records,
+                          now: at,
+                        });
+                        if (!migrated.ok) {
+                          ctx.done({ ok: false, reason: migrated.reason, error: migrated.reason, generation });
+                          return;
+                        }
+                        /* 旧档可能只有 firstSourceGame/clue，没有 professionProgress；完整 validate 会误拒，
+                           迁移只信 deriveLegacyAcceptance 的显式证据，不把发现事实强转成接受事实。 */
+                        finish(migrated, migrated, migrated.state);
+                      });
+                    });
+                  });
+                });
+                return;
+              }
+              if (action === 'READ' && clueId && input.clueOpened !== true) {
+                ctx.bind(ctx.store('discovery').get(clueId), (recordRow) => {
+                  const row = isObject(recordRow) ? recordRow : null;
+                  const opened = !!row && !!row.openedAt || !!legacyClue && !!legacyClue.openedAt;
+                  input.clueOpened = opened;
+                  reduceNow(input);
+                });
+                return;
+              }
+              reduceNow(input);
+            });
+          };
+          if (!careerId) checkFormer(null);
+          else ctx.bind(ctx.store('state').get(formerCareerKey(careerId)), checkFormer);
+        });
+      });
+    }).then((res) => {
+      if (res.ok) {
+        if (res.result && res.result.ok === false) return Object.assign({}, res.result, { generation });
+        return Object.assign({ ok: true }, res.result || {}, { generation });
+      }
+      return Object.assign(failure(res.reason, res.error), { generation });
+    });
   }
 
   /* ------------------------------------------------------------------ *
@@ -3049,6 +3479,7 @@
     getDiscoveryGeneration,
     bumpDiscoveryGeneration,
     getDiscoverySnapshot,
+    applyProfessionEvent,
     /* 0.21 生涯封存 / 完全重置（state 行，不新增 store / key / schema）。 */
     getArchiveState,
     setCareerArchived,
