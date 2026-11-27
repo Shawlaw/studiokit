@@ -42,9 +42,11 @@ const DB_NAME = 'studiokit:arcade:career';
 const ORIGIN_GAME = 'blackjack';
 const ORIGIN_CLUE = 'CL-blackjack';
 const MEMORY_ORIGIN = 'memory-flip';
+/* 0.22 到港回应断言的是旧告示板 [data-town-arrival] 的寄信人/旧物；0.23 该区块已随告示板移除，
+   等价事实由首次到港面板正文（invitation.js 的 freshIntro）承担，用 0.23 内容里的旧物名。 */
 const ORIGIN_ARRIVAL = {
-  [ORIGIN_GAME]: { sender: '阿德', object: '单据', otherSender: '老周', otherObject: '存根' },
-  [MEMORY_ORIGIN]: { sender: '老周', object: '存根', otherSender: '阿德', otherObject: '单据' },
+  [ORIGIN_GAME]: { sender: '阿德', object: '风险单', otherSender: '老周', otherObject: '存根' },
+  [MEMORY_ORIGIN]: { sender: '老周', object: '存根', otherSender: '阿德', otherObject: '风险单' },
 };
 /* 0.23 真实叙事内容：首次到港的文案与首单动作来自内容 shard，测试只读同源数据。 */
 const NARRATIVE_BY_PROFESSION = (() => {
@@ -56,9 +58,22 @@ const NARRATIVE_BY_PROFESSION = (() => {
   }
   return map;
 })();
+/* 起源游戏 → 首个职业：到港叙事面板与港口 story message 都按职业读内容，测试只读同源数据。 */
+const ORIGIN_PROFESSION = (() => {
+  const registry = readJson('apps/arcade/career/content/registry.json');
+  const map = {};
+  (registry.games || []).forEach((game) => {
+    if (game && game.gameId && Array.isArray(game.professions) && game.professions[0]) map[game.gameId] = game.professions[0];
+  });
+  return map;
+})();
+/* 所有职业的公开显示名：用来证明港口工作页不泄漏未接受职业。 */
+const CAREER_PROFESSION_NAMES = (() => {
+  const registry = readJson('apps/arcade/career/content/registry.json');
+  return (registry.professions || []).map((row) => ({ id: row.professionId, name: row.displayName })).filter((row) => row.id && row.name);
+})();
 const TICKET_STORAGE_KEY = 'studiokit:arcade:career:ticket.v1';
 const RECEIPT_CARD = '[data-career-card="receipt"]';
-const RETURN_TO_TOWN = RECEIPT_CARD + ' [data-action="return-to-town"]';
 const ENDING_APPROACH = 'research';
 const ENDING_GAME = 'merge-2048';
 const VIEWPORTS = [
@@ -165,6 +180,8 @@ const QA = {
   tickets: [],
   recommended: [],
   chapterAfter: [],
+  /* 0.23：首次到港面板没有独立到港回应块，面板正文要在关闭前取样，供后续逐游戏断言。 */
+  arrivalText: {},
   errors: [],
 };
 
@@ -369,28 +386,35 @@ function staticContentChecks() {
 /** 接口矩阵：缺失的关键项必须 BLOCKED，不允许静默跳过。 */
 const INTERFACES = [
   {
-    name: 'I01 告示板只读推荐数据属性 [data-town-recommend-id]/[data-town-recommend-kind]',
+    /* 0.23：旧告示板（[data-town-recommend-id]/[data-town-recommend-kind] 等）已被组件化港口
+       P07–P10 取代；真实 DOM 钩子改为「眼下/工作/经历」分段标签、职业工作卡与工具格。 */
+    name: 'I01 港口组件面真实 DOM 钩子 [data-port-tabpanel]/[data-port-profession]/[data-tool]',
     file: 'apps/arcade/career/ui/town.js',
-    needles: ['data-town-recommend-id', 'data-town-recommend-kind'],
+    needles: ['portContentNode', 'data-port-tabpanel', 'data-port-profession', 'ToolGrid'],
     critical: true,
   },
   {
-    name: 'I02 推荐文案区分「能推进这一段 / 能积攒下一步所需」',
+    /* 0.22 的推荐行目标句（data-town-goal）与「能推进这一段 / 能积攒下一步所需」进展语言随告示板移除；
+       0.23 港口首页只渲染 StoryCard + 真实 careerView.story.nextAction，主动作以 port-story-<commissionId> 暴露。
+       等价（更强）：推荐必须来自真实投影，动作是玩家可点的真实按钮，点击走 startPortCommission。 */
+    name: 'I02 港口首页推荐卡绑定 careerView.story.nextAction 且动作可点击',
     file: 'apps/arcade/career/ui/town.js',
-    needles: ['能推进这一段', '能积攒下一步所需'],
+    needles: ['portStoryProps', 'nextAction', 'port-story-', 'startPortCommission'],
     critical: true,
   },
   {
-    name: 'I03 campaign.recommend 纯函数与第二人称 reason（ADR §20.9）',
-    file: 'apps/arcade/career/campaign-core.js',
-    needles: ['function recommend', 'RECOMMEND_ROUTES', '你愿意先接', '吗？'],
+    name: 'I03 港口推荐 nextAction 由 profession-view 从真实 availableIds 派生',
+    file: 'apps/arcade/career/profession-view.js',
+    needles: ['function getNextNarrativeAction', 'availableIds', 'canAcceptCommission'],
     critical: true,
   },
   {
-    name: 'I04 首屏身份/当前章戏内文案 [data-town-intro]/[data-town-current]',
-    file: 'apps/arcade/career/ui/town.js',
-    needles: ['data-town-intro', 'data-town-current'],
-    critical: false,
+    /* 0.22 首屏身份/当前章文案 [data-town-intro]/[data-town-current] 随告示板移除；
+       0.23 到港叙事由 invitation.js 的 arrival 面板承担（harbor + NPCDialogue + 第一单/离开动作）。 */
+    name: 'I04 首次到港面板真实叙事与第一单/离开动作',
+    file: 'apps/arcade/career/ui/invitation.js',
+    needles: ['CareerShell.create(\'arrival\')', 'start-first-commission', 'leave-arrival', 'NPCDialogue'],
+    critical: true,
   },
   {
     /* 0.22 统一披露：收据的下一步与经历只从 careerView.story 投影读取，
@@ -789,18 +813,25 @@ async function receiptSnapshot(cdp) {
   return cdp.evaluate(`(() => {
     const card = document.querySelector('[data-career-card="receipt"]');
     if (!card) return null;
-    const buttons = Array.from(card.querySelectorAll('button')).map((button) => ({
+    /* 0.23 收据改为 popover 根节点 + 组件 ReceiptCard；「下一步」段落挂在与卡同级的
+       popover 根节点上，主按钮则可能是「继续：<下一步>」（data-action="continue"）。
+       两者都只读真实投影，不猜文案。 */
+    const root = card.closest('.ac-career-ui__receipt-popover') || card.parentElement || card;
+    const buttons = Array.from(root.querySelectorAll('button[data-action]')).map((button) => ({
       action: button.getAttribute('data-action'),
-      primary: button.classList.contains('ac-career-btn--primary'),
+      primary: button.classList.contains('ac-career-ui__action--primary') || button.classList.contains('ac-career-btn--primary'),
       text: (button.innerText || '').trim(),
       aria: button.getAttribute('aria-label') || '',
       rect: (() => { const r = button.getBoundingClientRect(); return { w: r.width, h: r.height }; })(),
     }));
+    const nextLine = [...root.querySelectorAll('p')]
+      .find((line) => line.getClientRects().length && /^下一步[：:]/.test(line.innerText.trim()));
+    const continueButton = buttons.filter((button) => button.action === 'continue')[0] || null;
     return {
       state: card.getAttribute('data-state'),
       runId: card.getAttribute('data-run-id'),
       text: card.innerText.trim(),
-      next: [...card.querySelectorAll('p')].find((line) => line.getClientRects().length && /^下一步[：:]/.test(line.innerText.trim()))?.innerText.trim() || '',
+      next: nextLine ? nextLine.innerText.trim() : (continueButton ? continueButton.text : ''),
       storyLines: [...card.querySelectorAll('.ac-career-receipt-story p')]
         .filter((line) => line.getClientRects().length)
         .map((line) => (line.innerText || '').trim()),
@@ -1260,15 +1291,37 @@ async function phaseDiscovery(cdp, gameId) {
   const clueId = gameId === MEMORY_ORIGIN ? 'CL-memory-flip' : ORIGIN_CLUE;
   if (gameId === MEMORY_ORIGIN) await driveMemoryOrigin(cdp);
   else await driveBlackjackOrigin(cdp);
-  const chipSelector = `[data-career-clue=${J(clueId)}]`;
+  /* 0.23 ClueRow 把旧手写 chip（role=button/tabindex=0/aria-label）换成真实 <button>；
+     等价强度：可聚焦（tabIndex>=0 且 focus 命中）、可点（button 未禁用）、≥44px、只出现一枚。 */
+  const chipWrapper = `[data-career-clue=${J(clueId)}]`;
+  const chipSelector = chipWrapper + ' button.ac-career-ui__clue';
   await cdp.waitFor(`!!document.querySelector(${J(chipSelector)})`, { timeout: 12000 });
   const chip = await cdp.evaluate(`(() => {
-    const node = document.querySelector(${J(chipSelector)});
+    const wrapper = document.querySelector(${J(chipWrapper)});
+    const node = wrapper && wrapper.querySelector('button.ac-career-ui__clue');
     if (!node) return null;
     const rect = node.getBoundingClientRect();
-    return { role: node.getAttribute('role'), tabindex: node.getAttribute('tabindex'), label: node.getAttribute('aria-label'), w: Math.round(rect.width), h: Math.round(rect.height), text: (node.textContent || '').trim() };
+    node.focus();
+    return {
+      wrapper: !!wrapper,
+      buttons: wrapper ? wrapper.querySelectorAll('button.ac-career-ui__clue').length : 0,
+      tag: node.tagName,
+      type: node.type,
+      state: node.getAttribute('data-clue-state'),
+      tabIndex: node.tabIndex,
+      disabled: node.disabled,
+      focused: document.activeElement === node,
+      w: Math.round(rect.width),
+      h: Math.round(rect.height),
+      text: (node.textContent || '').replace(/\\s+/g, ' ').trim(),
+    };
   })()`);
-  gate('CLUE ' + gameId + ' 结算卡片阅读流出现可交互线索 chip', !!(chip && chip.role === 'button' && chip.tabindex === '0' && chip.h >= 44 && /信/.test(chip.label || '')), J(chip));
+  gate('CLUE ' + gameId + ' 结算卡片阅读流出现可交互线索 chip',
+    !!(chip && chip.wrapper && chip.buttons === 1 && chip.tag === 'BUTTON' && chip.type === 'button' &&
+      ['glimpsed', 'read', 'recoverable'].indexOf(chip.state) >= 0 &&
+      chip.tabIndex >= 0 && chip.focused === true && chip.disabled === false &&
+      chip.h >= 44 && chip.text.length > 0),
+    J(chip));
   await forbiddenTextScan(cdp, 'origin-settlement-' + gameId);
   await checkConsole(cdp, 'discovery-' + gameId);
 }
@@ -1414,6 +1467,8 @@ async function phaseSingleDelivery(cdp, gameId) {
   /* 0.23：接受邀请后先进入首次到港叙事面板（P03），第一份工作必须来自真实
      port 投影，且仍由玩家显式点击；未接受职业/隐藏任务不得出现。 */
   const arrivalPanel = await waitPanel(cdp, 'arrival', 15000);
+  /* 0.23 到港叙事面板关闭后无法再读，先取样供 verifyOriginArrival 逐游戏断言寄信人/旧物。 */
+  QA.arrivalText[gameId] = arrivalPanel ? arrivalPanel.text : '';
   const arrivalProjection = await cdp.evaluate(`(async () => {
     const api = window.ArcadeCareer;
     const view = await api.careerView({ surface: 'port' });
@@ -1446,130 +1501,369 @@ async function phaseSingleDelivery(cdp, gameId) {
   await cdp.waitFor('!document.querySelector(`[data-career-panel="arrival"]`)', { timeout: 10000 });
   await cdp.evaluate('window.ArcadeCareer.openTown()');
   const board = await waitPanel(cdp, 'town', 15000);
-  gate('TOWN 显式打开港口并在当前页打开告示板，仍未自动接单',
-    !!board && await cdp.evaluate('location.href') === before &&
-      await cdp.evaluate('!window.ArcadeCareer.commissionRun'),
-    J(board && board.text.slice(0, 300)));
+  await cdp.waitFor(`!!document.querySelector('[data-career-panel="town"] [data-port-tabpanel="home"] button[id^="port-story-"]')`, { timeout: 15000 });
+  /* 0.23 港口 P07–P10：首页推荐来自真实 careerView.story.nextAction，分段标签与工具格是
+     portBody 的固定结构；0.22 告示板整块 DOM 已移除，这里直接断言真实组件面。 */
+  const boardState = await cdp.evaluate(`(async () => {
+    const api = window.ArcadeCareer;
+    const view = await api.careerView({ surface: 'port' });
+    const next = view && view.story && view.story.nextAction ? view.story.nextAction : null;
+    const panel = document.querySelector('[data-career-panel="town"]');
+    const button = panel && panel.querySelector('[data-port-tabpanel="home"] button[id^="port-story-"]');
+    return {
+      nextId: next && next.commissionId || null,
+      nextLabel: next && next.label || '',
+      buttonId: button ? button.id : null,
+      buttonText: button ? (button.textContent || '').trim() : '',
+      tabs: panel ? Array.from(panel.querySelectorAll('[role="tablist"] [data-tab]')).map((node) => node.getAttribute('data-tab')) : [],
+      tools: panel ? Array.from(panel.querySelectorAll('[data-tool]')).map((node) => node.getAttribute('data-tool')) : [],
+      messages: panel ? panel.querySelectorAll('[data-port-tabpanel="home"] [data-port-message]').length : 0,
+      run: api.commissionRun || null,
+    };
+  })()`);
+  gate('TOWN 显式打开港口后首页推荐卡/分段标签/工具入口真实渲染，仍未自动接单',
+    !!board && !!boardState.nextId && boardState.buttonId === 'port-story-' + boardState.nextId &&
+      boardState.buttonText === boardState.nextLabel &&
+      J(boardState.tabs) === J(['home', 'work', 'journal']) &&
+      J(boardState.tools) === J(['wallet', 'shop', 'workshop', 'hangar']) &&
+      boardState.messages <= 1 && boardState.run === null &&
+      await cdp.evaluate('location.href') === before,
+    J({ board: board && board.text.slice(0, 240), boardState }));
   await verifyOriginArrival(cdp, gameId);
-  if (gameId === ORIGIN_GAME) await checkOptionalFlight(cdp);
+  if (gameId === ORIGIN_GAME) await checkPortArrivalCompact(cdp);
   await forbiddenTextScan(cdp, 'town-first-' + gameId);
   await checkConsole(cdp, 'delivery-' + gameId);
 }
 
-async function verifyOriginArrival(cdp, gameId) {
-  step('arrival:' + gameId);
-  /* 0.22 到港回应只在身份起源游戏页展示；从统一信箱深链进入的港口页不伪造来源。 */
-  await go(cdp, gameUrl(gameId), 'arrival-origin-' + gameId);
-  await waitBridge(cdp, 'arrival-origin-' + gameId, true);
-  await configureCommissionCatalog(cdp, 'arrival-origin-' + gameId);
+/**
+ * 0.23 港口 P07–P10：打开港口并等首页真实推荐卡完成异步投影。
+ * 旧告示板是一次性同步渲染；港口先 loading 再读 careerView({surface:'port'})，
+ * 因此所有「打开港口」都统一等真实 story 动作出现，避免读到空初始帧。
+ */
+async function openPort(cdp, label, timeout = 15000) {
+  step('port:' + label);
   await cdp.evaluate('window.ArcadeCareer.openTown()');
-  await waitPanel(cdp, 'town', 15000);
-  /* 投影与 reveal 是异步装载：等主卡出现后再读取到港回应，避免读到空初始帧。 */
-  await cdp.waitFor(`!!document.querySelector('[data-career-panel="town"] [data-town-recommend-id]')`, { timeout: 12000 });
-  const arrival = await cdp.evaluate(`(() => {
-    const reply = document.querySelector('[data-career-panel="town"] [data-town-arrival]');
-    return reply?.getClientRects().length ? reply.innerText.trim() : '';
-  })()`);
-  const arrivalView = await cdp.evaluate(`(async () => {
-    const api = window.ArcadeCareer;
-    const view = await api.careerView({ surface: 'port' });
-    return { gameId: api.gameId, originGameId: view && view.originGameId,
-      professions: view && Array.isArray(view.professions) ? view.professions.map((row) => ({ id: row.professionId, state: row.state })) : [],
-      stage: api.state && api.state().stage, portSeenAt: api.state && api.state().portSeenAt };
-  })()`);
-  const expected = ORIGIN_ARRIVAL[gameId];
-  gate('TOWN ' + gameId + ' 到港回应同时写明正确寄信人和旧物',
-    arrival.includes(expected.sender) && arrival.includes(expected.object) &&
-      !arrival.includes(expected.otherSender) && !arrival.includes(expected.otherObject),
-    J({ expected, arrival, arrivalView }));
-  /* 后续首单仍从统一告示板继续；回到测试页并显式打开港口，不接委托。 */
-  await go(cdp, gameUrl('pendulum-tower'), 'arrival-return-' + gameId);
-  await waitBridge(cdp, 'arrival-return-' + gameId, true);
-  await configureCommissionCatalog(cdp, 'arrival-return-' + gameId);
-  await cdp.evaluate('window.ArcadeCareer.openTown()');
-  await waitPanel(cdp, 'town', 15000);
+  await waitPanel(cdp, 'town', timeout);
+  await cdp.waitFor(`!!document.querySelector('[data-career-panel="town"] [data-port-tabpanel="home"] button[id^="port-story-"]')`, { timeout });
 }
 
-async function checkOptionalFlight(cdp) {
-  const summary = '[data-town-flight] > summary';
-  const rental = '[data-town-flight] [data-town-rental]';
-  /* 0.22 通用工作列表不再把 star-raid.T1 硬塞进出航折叠区。 */
-  const patrol = '[data-career-panel="town"] [data-town-action="start"][data-commission-id="star-raid.T1"]';
-  const recommend = '[data-town-recommend-id="pendulum-tower.T1"] [data-town-action="start"]';
-  await cdp.waitFor(`document.querySelector(${J(summary)})?.getClientRects().length &&
-    document.querySelector(${J(recommend)})?.getClientRects().length`, { timeout: 15000 });
-  const viewport = { deviceScaleFactor: 1, mobile: true };
-  await cdp.send('Emulation.setDeviceMetricsOverride', { ...viewport, width: 375, height: 548 });
-  const placement = await cdp.evaluate(`new Promise((resolve) => requestAnimationFrame(() => requestAnimationFrame(() => {
-    const items = ${J([summary, recommend])}.map((selector) => {
-      const el = document.querySelector(selector);
-      const { left, right, top, bottom, width, height } = el.getBoundingClientRect();
-      const hit = document.elementFromPoint(left + width / 2, top + height / 2);
-      return { selector, top, bottom, hit: el.contains(hit), inViewport: left >= 0 && top >= 0 && right <= innerWidth && bottom <= innerHeight };
-    });
-    resolve({ height: innerHeight, items });
-  })))`);
-  gate('TOWN 375×548 首次到港无需滚动即可看到并点到推荐单和出航入口',
-    placement.items.every((item) => item.hit && item.inViewport), J(placement));
-  gate('TOWN 出航默认折叠，租机说明不可见', await cdp.evaluate(`(() => {
-    const flight = document.querySelector('[data-town-flight]');
-    const hint = document.querySelector(${J(rental)});
-    return !flight.open && hint && !hint.checkVisibility({ contentVisibilityAuto: true, visibilityProperty: true });
-  })()`));
-  await pressVisible(cdp, summary, '看看出航');
-  const option = await cdp.waitFor(`(() => {
-    const hint = document.querySelector(${J(rental)});
-    const start = document.querySelector(${J(patrol)});
-    return hint?.getClientRects().length && start?.getClientRects().length && !start.disabled &&
-      { rental: hint.innerText.trim(), button: start.innerText.trim() };
-  })()`, { timeout: 10000 });
-  gate('TOWN 展开出航后有阿砾的免费租机说明和港口通用巡航可接', /阿砾/.test(option.rental) && /免费|不要钱/.test(option.rental), J(option));
-  await pressVisible(cdp, summary, '收起出航并继续默认路线');
-  await cdp.waitFor(`!document.querySelector('[data-town-flight]').open`, { timeout: 5000 });
-  await cdp.send('Emulation.setDeviceMetricsOverride', { ...viewport, width: 390, height: 844 });
-}
-
-function readBoardRecommendation(cdp) {
-  return cdp.evaluate(`(() => {
+/**
+ * 读取港口首页推荐（0.23 真实 DOM + 同源 careerView 交叉验证）。
+ * 0.22 的 [data-town-recommend-id]/[data-town-recommend-kind]/[data-town-recommend-reason]/
+ * [data-town-goal]/[data-town-story-action] 已随告示板移除，不再作为真实 UI 断言。
+ */
+function readPortRecommendation(cdp) {
+  return cdp.evaluate(`(async () => {
     const panel = document.querySelector('[data-career-panel="town"]');
     if (!panel) return { ok: false, reason: 'no-town-panel' };
-    const node = panel.querySelector('[data-town-recommend-id]');
-    if (!node) return { ok: false, reason: 'no-recommend-node', text: (panel.textContent || '').replace(/\\s+/g, ' ').trim().slice(0, 500) };
-    const button = node.querySelector('[data-town-action="start"]');
+    const api = window.ArcadeCareer;
+    const view = await api.careerView({ surface: 'port' });
+    if (!view) return { ok: false, reason: 'no-port-view' };
+    const next = view.story && view.story.nextAction ? view.story.nextAction : null;
+    const rows = Array.isArray(view.commissions) ? view.commissions : [];
+    const row = next && next.commissionId ? rows.filter((item) => item.commissionId === next.commissionId)[0] || null : null;
+    const content = panel.querySelector('[data-port-tabpanel="home"]');
+    const story = content ? content.querySelector('[data-story-state]') : null;
+    const action = story ? story.querySelector('button[id^="port-story-"]') : null;
+    const textOf = (node) => (node && node.textContent ? node.textContent.replace(/\\s+/g, ' ').trim() : '');
+    const rectOf = (node) => {
+      const r = node.getBoundingClientRect();
+      return { w: Math.round(r.width), h: Math.round(r.height), top: Math.round(r.top), bottom: Math.round(r.bottom) };
+    };
     return {
-      ok: !!button,
-      commissionId: node.getAttribute('data-town-recommend-id'),
-      kind: node.getAttribute('data-town-recommend-kind'),
-      reason: node.getAttribute('data-town-recommend-reason') || '',
-      storyAction: node.getAttribute('data-town-story-action') === 'true',
-      goal: node.getAttribute('data-town-goal') || '',
-      text: (node.textContent || '').replace(/\\s+/g, ' ').trim().slice(0, 400),
-      boardText: (panel.textContent || '').replace(/\\s+/g, ' ').trim().slice(0, 900),
-      current: (panel.querySelector('[data-town-current]') || {}).textContent || '',
+      ok: !!(next && next.commissionId && action && action.id === 'port-story-' + next.commissionId && row),
+      commissionId: next && next.commissionId || null,
+      nextLabel: next && next.label || '',
+      projectedTitle: next && next.label || '',
+      projectedSummary: row ? (row.summary || row.objectiveText || '') : '',
+      projectedCategory: row ? row.category || null : null,
+      storyState: story ? story.getAttribute('data-story-state') : null,
+      storyTitle: story ? textOf(story.querySelector('.ac-career-ui__story-title')) : '',
+      storySummary: story ? textOf(story.querySelector('.ac-career-ui__story-summary')) : '',
+      storyText: textOf(story),
+      actionId: action ? action.id : '',
+      actionText: textOf(action),
+      actionRect: action ? rectOf(action) : null,
+      actionVisible: !!action && action.getClientRects().length > 0,
+      actionDisabled: !!action && action.disabled === true,
+      tabs: Array.from(panel.querySelectorAll('[role="tablist"] [data-tab]')).map((node) => node.getAttribute('data-tab')),
+      tools: Array.from(panel.querySelectorAll('[data-tool]')).map((node) => node.getAttribute('data-tool')),
+      messages: content ? content.querySelectorAll('[data-port-message]').length : 0,
+      clues: content ? content.querySelectorAll('button.ac-career-ui__clue').length : 0,
+      boardText: textOf(panel),
     };
   })()`);
 }
 
+/** 「工作」页只列已接受职业 + 一条世界通用工作，且不泄漏未接受职业。 */
+async function checkPortWorkSurface(cdp, label) {
+  await pressVisible(cdp, '[data-career-panel="town"] [role="tablist"] [data-tab="work"]', label + ' 工作页');
+  await cdp.waitFor(`!!document.querySelector('[data-career-panel="town"] [data-port-tabpanel="work"] [data-port-profession]')`, { timeout: 10000 });
+  await sleep(150);
+  const work = await cdp.evaluate(`(async () => {
+    const api = window.ArcadeCareer;
+    const view = await api.careerView({ surface: 'work' });
+    const panel = document.querySelector('[data-career-panel="town"]');
+    const professions = view && Array.isArray(view.professions) ? view.professions : [];
+    const rows = view && Array.isArray(view.commissions) ? view.commissions : [];
+    const textOf = (node) => (node && node.textContent ? node.textContent.replace(/\\s+/g, ' ').trim() : '');
+    const cards = Array.from(panel.querySelectorAll('[data-port-tabpanel="work"] [data-port-profession]')).map((card) => ({
+      professionId: card.getAttribute('data-port-profession'),
+      category: card.getAttribute('data-work-category'),
+      state: card.getAttribute('data-work-state'),
+      text: textOf(card),
+      titles: Array.from(card.querySelectorAll('.ac-career-ui__commission-title')).map((node) => textOf(node)),
+      startButtons: Array.from(card.querySelectorAll('button')).filter((button) => /接下这单/.test(button.textContent || '')).map((button) => {
+        const r = button.getBoundingClientRect();
+        return { text: (button.textContent || '').trim(), w: Math.round(r.width), h: Math.round(r.height), visible: button.getClientRects().length > 0, disabled: button.disabled === true };
+      }),
+    }));
+    const accepted = professions.filter((row) => ['accepted', 'developed', 'completed'].indexOf(String(row.state || '').toLowerCase()) >= 0);
+    return {
+      ok: !!view,
+      cards,
+      acceptedIds: accepted.map((row) => row.professionId),
+      professionIds: professions.map((row) => row.professionId),
+      professionNames: professions.map((row) => row.displayName).filter(Boolean),
+      worldRows: rows.filter((row) => String(row.category || '').toLowerCase() === 'world' && row.historicalOnly !== true && row.readOnly !== true).map((row) => ({ title: row.title, summary: row.summary || row.objectiveText || '' })),
+      professionRows: rows.filter((row) => String(row.category || '').toLowerCase() !== 'world').map((row) => ({ professionId: row.professionId || null, title: row.title })),
+      allProfessionNames: ${J(CAREER_PROFESSION_NAMES.map((row) => row.name))},
+      allProfessionIds: ${J(CAREER_PROFESSION_NAMES.map((row) => row.id))},
+      panelText: textOf(panel),
+      run: api.commissionRun || null,
+    };
+  })()`);
+  const cardIds = work.cards.map((card) => card.professionId).filter((id) => id !== 'world');
+  const worldCards = work.cards.filter((card) => card.category === 'world');
+  const missingAccepted = work.acceptedIds.filter((id) => cardIds.indexOf(id) < 0);
+  const strayProfession = cardIds.filter((id) => work.acceptedIds.indexOf(id) < 0);
+  const titlesForeign = work.cards.filter((card) => card.category !== 'world').filter((card) =>
+    card.titles.some((title) => !work.professionRows.some((row) => row.professionId === card.professionId && row.title === title)));
+  gate('PORT ' + label + ' 工作页只出现已接受职业与一条世界通用工作',
+    work.ok === true && missingAccepted.length === 0 && strayProfession.length === 0 &&
+      worldCards.length === 1 && titlesForeign.length === 0,
+    J({ acceptedIds: work.acceptedIds, cardIds, worldCards: worldCards.length, missingAccepted, strayProfession, titlesForeign: titlesForeign.map((card) => ({ id: card.professionId, titles: card.titles })) }));
+  const unacceptedNames = work.allProfessionNames.filter((name) => work.professionNames.indexOf(name) < 0 && work.panelText.indexOf(name) >= 0);
+  const leakedIds = work.allProfessionIds.filter((id) => work.panelText.indexOf(id) >= 0);
+  gate('PORT ' + label + ' 工作页不泄漏未接受职业名字/内部职业 id',
+    unacceptedNames.length === 0 && leakedIds.length === 0,
+    J({ unacceptedNames, leakedIds, acceptedNames: work.professionNames, panelSample: work.panelText.slice(0, 240) }));
+  const worldCard = worldCards[0] || null;
+  const firstWorld = work.worldRows[0] || null;
+  const acceptedNameInWorld = worldCard ? work.professionNames.filter((name) => worldCard.text.indexOf(name) >= 0) : [];
+  gate('PORT ' + label + ' 世界通用工作使用内容公开文案且与职业解耦',
+    !!(worldCard && firstWorld) && worldCard.text.indexOf(firstWorld.title) >= 0 &&
+      (!firstWorld.summary || worldCard.text.indexOf(firstWorld.summary) >= 0) &&
+      acceptedNameInWorld.length === 0,
+    J({ worldText: worldCard && worldCard.text.slice(0, 260), firstWorld, acceptedNameInWorld }));
+  const worldStart = worldCard && worldCard.startButtons[0] ? worldCard.startButtons[0] : null;
+  gate('PORT ' + label + ' 世界通用工作有真实可接动作且未自动接单',
+    !!(worldStart && worldStart.visible && worldStart.disabled === false && worldStart.h >= 44 && worldStart.w >= 44) && work.run === null,
+    J({ worldStart, run: work.run }));
+}
+
+/** 工具格 [data-tool] 必须真实打开钱包/商店/工作台/机库对应面板（0.22 出航折叠里的机库等价物）。 */
+async function checkPortTools(cdp, label) {
+  const targets = [['wallet', 'receipt'], ['shop', 'market'], ['workshop', 'workshop'], ['hangar', 'hangar']];
+  for (const [tool, panelName] of targets) {
+    const selector = '[data-career-panel="town"] [data-tool=' + J(tool) + ']';
+    const exists = await cdp.evaluate(`(() => {
+      const button = document.querySelector(${J(selector)});
+      if (!button) return null;
+      const r = button.getBoundingClientRect();
+      return { text: (button.textContent || '').trim(), w: Math.round(r.width), h: Math.round(r.height), visible: button.getClientRects().length > 0, disabled: button.disabled === true };
+    })()`);
+    if (!exists) {
+      gate('PORT ' + label + ' 工具入口 ' + tool + ' 真实映射', false, 'missing ' + selector);
+      continue;
+    }
+    await pressVisible(cdp, selector, label + ' 工具 ' + tool);
+    await waitPanel(cdp, panelName, 15000);
+    gate('PORT ' + label + ' 工具入口 ' + tool + ' 真实映射到 ' + panelName + ' 面板',
+      exists.visible && exists.disabled === false && exists.h >= 44 && exists.w >= 44, J({ exists, panelName }));
+    await cdp.evaluate(`(() => {
+      const mod = window.ArcadeCareerUI && window.ArcadeCareerUI[${J(panelName)}];
+      if (mod && typeof mod.close === 'function') { try { mod.close(); } catch (err) { /* ignore */ } }
+      return true;
+    })()`);
+    await cdp.waitFor(`!document.querySelector('[data-career-panel=${J(panelName)}]')`, { timeout: 8000 });
+    await sleep(120);
+  }
+}
+
+async function verifyOriginArrival(cdp, gameId) {
+  step('arrival:' + gameId);
+  /* 0.22 的到港回应是告示板里的 [data-town-arrival]，0.23 已随告示板移除。
+     等价（更强）断言分两层：
+       ①首次到港叙事面板（已取样）必须写明正确寄信人与旧物；
+       ②港口首页的 careerView.story.message（至多一条）必须来自已接受职业内容；
+       ③首页推荐 nextAction 必须在真实 DOM 可见且可点击（不接受静默/预写）；
+       ④工作页只含已接受职业、世界工作用通用文案，工具入口真实映射。 */
+  const expected = ORIGIN_ARRIVAL[gameId];
+  const arrivalText = QA.arrivalText[gameId] || '';
+  gate('ARRIVAL ' + gameId + ' 首次到港叙事同时写明正确寄信人和旧物',
+    arrivalText.includes(expected.sender) && arrivalText.includes(expected.object) &&
+      !arrivalText.includes(expected.otherSender) && !arrivalText.includes(expected.otherObject),
+    J({ expected, arrival: arrivalText.slice(0, 400) }));
+  await go(cdp, gameUrl(gameId), 'arrival-origin-' + gameId);
+  await waitBridge(cdp, 'arrival-origin-' + gameId, true);
+  await configureCommissionCatalog(cdp, 'arrival-origin-' + gameId);
+  await openPort(cdp, 'arrival-origin-' + gameId);
+  const recommendation = await readPortRecommendation(cdp);
+  gate('PORT ' + gameId + ' 港口首页把真实 nextAction 推荐委托渲染为可见可点卡片',
+    recommendation.ok === true && recommendation.storyState === 'current' &&
+      recommendation.actionVisible === true && recommendation.actionDisabled === false &&
+      !!recommendation.actionRect && recommendation.actionRect.h >= 44 &&
+      recommendation.actionText === recommendation.nextLabel &&
+      recommendation.storyTitle === recommendation.projectedTitle &&
+      recommendation.storySummary === recommendation.projectedSummary &&
+      J(recommendation.tabs) === J(['home', 'work', 'journal']) &&
+      recommendation.messages <= 1 && recommendation.clues <= 1,
+    J(recommendation));
+  const narrative = NARRATIVE_BY_PROFESSION[ORIGIN_PROFESSION[gameId]] || {};
+  const storyMessage = (narrative.storyMessages || [])[0] || null;
+  const message = await cdp.evaluate(`(() => {
+    const content = document.querySelector('[data-career-panel="town"] [data-port-tabpanel="home"]');
+    const rows = content ? Array.from(content.querySelectorAll('[data-port-message]')) : [];
+    const label = content ? content.querySelector('[data-port-message-label]') : null;
+    return {
+      count: rows.length,
+      label: label ? (label.textContent || '').trim() : '',
+      text: rows[0] ? (rows[0].textContent || '').replace(/\\s+/g, ' ').trim() : '',
+    };
+  })()`);
+  gate('PORT ' + gameId + ' 首页至多一条真实到港 message，寄信人来自已接受职业内容',
+    message.count <= 1 && !!(storyMessage && storyMessage.label && storyMessage.text && storyMessage.from) &&
+      message.text.indexOf(storyMessage.label) >= 0 && message.text.indexOf(storyMessage.text) >= 0 &&
+      message.text.indexOf(storyMessage.from) >= 0 && message.text.indexOf(expected.sender) >= 0,
+    J({ message, storyMessage, expectedSender: expected.sender }));
+  await checkPortWorkSurface(cdp, gameId);
+  await checkPortTools(cdp, gameId);
+  await forbiddenTextScan(cdp, 'port-town-' + gameId);
+  /* 后续首单仍从统一港口继续；回到测试页并显式打开港口，不接委托。 */
+  await go(cdp, gameUrl('pendulum-tower'), 'arrival-return-' + gameId);
+  await waitBridge(cdp, 'arrival-return-' + gameId, true);
+  await configureCommissionCatalog(cdp, 'arrival-return-' + gameId);
+  await openPort(cdp, 'arrival-return-' + gameId);
+}
+
+async function checkPortArrivalCompact(cdp) {
+  /* 0.22 出航折叠区与租机摘要已随告示板移除（0.23 不存在 [data-town-flight]/[data-town-rental]）。
+     等价/更强断言：375×548 首次到港无需滚动即可看到并点到真实推荐动作（首个严格位置），
+     「工作」页世界通用工作真实可接、可展开其余工作、且不自动接单；
+     机库入口改为工具格的 [data-tool="hangar"]，无需先展开任何折叠区。 */
+  const homeAction = '[data-career-panel="town"] [data-port-tabpanel="home"] button[id^="port-story-"]';
+  await cdp.waitFor(`!!document.querySelector(${J(homeAction)})`, { timeout: 15000 });
+  const viewport = { deviceScaleFactor: 1, mobile: true };
+  await cdp.send('Emulation.setDeviceMetricsOverride', { ...viewport, width: 375, height: 548 });
+  await sleep(220);
+  const placement = await cdp.evaluate(`new Promise((resolve) => requestAnimationFrame(() => requestAnimationFrame(() => {
+    const panel = document.querySelector('[data-career-panel="town"]');
+    const home = panel && panel.querySelector('[data-port-tabpanel="home"] button[id^="port-story-"]');
+    const homeRect = home && home.getBoundingClientRect();
+    const hit = homeRect ? document.elementFromPoint(homeRect.left + homeRect.width / 2, homeRect.top + homeRect.height / 2) : null;
+    const workTab = panel && panel.querySelector('[role="tablist"] [data-tab="work"]');
+    const hangar = panel && panel.querySelector('[data-tool="hangar"]');
+    resolve({
+      height: innerHeight,
+      home: homeRect ? {
+        h: Math.round(homeRect.height), top: Math.round(homeRect.top), bottom: Math.round(homeRect.bottom),
+        hit: home.contains(hit), inViewport: homeRect.top >= 0 && homeRect.bottom <= innerHeight,
+        hitTag: hit ? hit.tagName : null, hitClass: hit ? String(hit.className || '').slice(0, 60) : null,
+      } : null,
+      workTabH: workTab ? Math.round(workTab.getBoundingClientRect().height) : null,
+      hangarH: hangar ? Math.round(hangar.getBoundingClientRect().height) : null,
+    });
+  })))`);
+  gate('PORT 375×548 首次到港无需滚动即可看到并点到推荐单（0.22 出航入口等价为世界工作）',
+    !!(placement.home && placement.home.hit && placement.home.inViewport && placement.home.h >= 44 &&
+      placement.workTabH >= 44 && placement.hangarH >= 44), J(placement));
+  await cdp.send('Emulation.setDeviceMetricsOverride', { ...viewport, width: 390, height: 844 });
+  await sleep(150);
+  await pressVisible(cdp, '[data-career-panel="town"] [role="tablist"] [data-tab="work"]', '工作页');
+  await cdp.waitFor(`!!document.querySelector('[data-career-panel="town"] [data-port-profession="world"]')`, { timeout: 10000 });
+  await sleep(150);
+  const world = await cdp.evaluate(`(() => {
+    const panel = document.querySelector('[data-career-panel="town"]');
+    const card = panel.querySelector('[data-port-profession="world"]');
+    const start = card && Array.from(card.querySelectorAll('button')).filter((button) => /接下这单/.test(button.textContent || ''))[0];
+    const details = card && card.querySelector('details');
+    const r = start ? start.getBoundingClientRect() : null;
+    return {
+      text: (card ? card.textContent : '').replace(/\\s+/g, ' ').trim().slice(0, 240),
+      start: start ? { text: (start.textContent || '').trim(), h: Math.round(r.height), visible: start.getClientRects().length > 0, disabled: start.disabled === true } : null,
+      details: !!details,
+      run: window.ArcadeCareer.commissionRun || null,
+    };
+  })()`);
+  gate('PORT 工作页世界通用工作真实可接（0.22 港口通用巡航等价物）且未自动接单',
+    !!(world && world.start && world.start.visible && world.start.disabled === false && world.start.h >= 44 && world.details && world.run === null),
+    J(world));
+  await pressVisible(cdp, '[data-career-panel="town"] [data-port-profession="world"] summary.ac-career-ui__work-more', '查看其余工作');
+  await sleep(260);
+  const option = await cdp.evaluate(`(() => {
+    const card = document.querySelector('[data-career-panel="town"] [data-port-profession="world"]');
+    const details = card && card.querySelector('details');
+    if (!details) return { open: false, rows: [] };
+    const rows = Array.from(details.querySelectorAll('.ac-career-ui__commission')).filter((node) => node.getClientRects().length).map((node) => {
+      const start = Array.from(node.querySelectorAll('button')).filter((button) => /接下这单/.test(button.textContent || ''))[0];
+      const r = start ? start.getBoundingClientRect() : null;
+      return {
+        title: (node.querySelector('.ac-career-ui__commission-title') || {}).textContent || '',
+        text: (node.textContent || '').replace(/\\s+/g, ' ').trim().slice(0, 200),
+        start: start ? { h: Math.round(r.height), w: Math.round(r.width), visible: start.getClientRects().length > 0, disabled: start.disabled === true } : null,
+      };
+    });
+    return { open: details.open === true, rows, run: window.ArcadeCareer.commissionRun || null };
+  })()`);
+  gate('PORT 世界工作「查看其余工作」展开后出现真实可接的世界委托（不自动接单）',
+    option.open === true && option.rows.length >= 1 &&
+      option.rows.every((row) => !!row.title && !!row.start && row.start.visible && row.start.disabled === false && row.start.h >= 44 && row.start.w >= 44) &&
+      option.run === null,
+    J(option));
+  await pressVisible(cdp, '[data-career-panel="town"] [data-port-profession="world"] summary.ac-career-ui__work-more', '收起其余工作');
+  await cdp.waitFor(`!document.querySelector('[data-career-panel="town"] [data-port-profession="world"] details').open`, { timeout: 5000 });
+  await pressVisible(cdp, '[data-career-panel="town"] [role="tablist"] [data-tab="home"]', '回到眼下');
+  await cdp.waitFor(`!!document.querySelector(${J(homeAction)})`, { timeout: 10000 });
+}
+
 async function acceptRecommended(cdp, commissionId, label, { enableHook = true, resumeTicket = null } = {}) {
   step('accept:' + label);
-  const selector = `[data-career-panel="town"] [data-town-recommend-id=${J(commissionId)}] [data-town-action="start"][data-commission-id=${J(commissionId)}]`;
-  await cdp.waitFor(`(() => {
-    const button = document.querySelector(${J(selector)});
-    return !!button && (!${!!resumeTicket} || button.innerText.trim() === '继续这张单');
-  })()`, { timeout: 15000 });
-  /* 接单按钮 data-commission-id 决定目标 gameId；据此等待精确的游戏页 pathname，
+  /* 0.23 港口首页只有一个真实故事主动作：id=port-story-<commissionId>，点击走
+     startPortCommission → 真实 commission.start。0.22 告示板的「继续这张单」文案、
+     [data-town-action="start"][data-commission-id] 钩子已移除；续单语义改由
+     commission-core 复用 DB live run 的票据断言（下方 ticket 断言）保证，仍然必须玩家显式点击。 */
+  const selector = `[data-career-panel="town"] [id=${J('port-story-' + commissionId)}]`;
+  await cdp.waitFor(`!!document.querySelector(${J(selector)})`, { timeout: 15000 });
+  /* 目标游戏由 commissionId 前缀决定；据此等待精确的游戏页 pathname，
      避免只靠 /games/ 前缀在旧文档或别的游戏页上误命中。 */
   const targetGameId = commissionId.split('.')[0];
   const beforeHref = await cdp.evaluate('location.href');
   const beforeTicket = (beforeHref.match(/[?&]career=([^&#]+)/) || [])[1] || null;
-  const clicked = await cdp.evaluate(`(() => {
+  const clicked = await cdp.evaluate(`(async () => {
     const b = document.querySelector(${J(selector)});
     if (!b) return { ok: false, reason: 'missing' };
-    return { ok: true, commissionId: b.getAttribute('data-commission-id'), text: (b.textContent || '').trim() };
+    const api = window.ArcadeCareer;
+    let view = null;
+    try { if (api && typeof api.careerView === 'function') view = await api.careerView({ surface: 'port' }); } catch (err) { /* ignore */ }
+    const next = view && view.story && view.story.nextAction ? view.story.nextAction : null;
+    const r = b.getBoundingClientRect();
+    return {
+      ok: true,
+      commissionId: b.id.slice('port-story-'.length),
+      nextId: next && next.commissionId || null,
+      nextLabel: next && next.label || '',
+      text: (b.textContent || '').trim(),
+      visible: b.getClientRects().length > 0,
+      disabled: b.disabled === true,
+      h: Math.round(r.height),
+    };
   })()`);
-  const buttonMatches = resumeTicket ? clicked.text === '继续这张单' : clicked.text !== '继续这张单';
-  requireFeature('ACCEPT ' + label + ' 告示板显示对应的接单/继续按钮', clicked.ok && clicked.commissionId === commissionId && buttonMatches, J({ clicked, beforeHref }));
-  await pressVisible(cdp, selector, label + ' 告示板按钮');
+  requireFeature('ACCEPT ' + label + ' 港口故事卡显示真实投影对应的可接委托',
+    clicked.ok && clicked.commissionId === commissionId && clicked.nextId === commissionId &&
+      clicked.visible && clicked.disabled === false && clicked.h >= 44 && clicked.text === clicked.nextLabel,
+    J({ clicked, beforeHref, resumeTicket }));
+  await pressVisible(cdp, selector, label + ' 港口故事卡动作');
   /* 接新单要签新票；首次续单必须保留关闭标签前的原票。 */
   await cdp.waitFor(`(() => {
     var href = location.href;
@@ -1642,14 +1936,13 @@ async function resumeFromNewTab(cdp, run, browser, newPage) {
   await waitPanel(reopened, 'town');
   await waitBridge(reopened, 'resume-home', false);
   await configureCommissionCatalog(reopened, 'resume-home');
-  await reopened.evaluate('window.ArcadeCareer.openTown()');
-  await waitPanel(reopened, 'town');
-  requireFeature('RESUME 告示板在首页打开', await reopened.evaluate('location.href') === homeLocation, homeLocation);
-  requireFeature('RESUME 进入旧港后仍须显式点击续单', await readBrowserTicket(reopened) === null, '打开告示板时不应自动恢复票据');
+  await openPort(reopened, 'resume-home');
+  requireFeature('RESUME 港口在首页打开', await reopened.evaluate('location.href') === homeLocation, homeLocation);
+  requireFeature('RESUME 进入旧港后仍须显式点击续单', await readBrowserTicket(reopened) === null, '打开港口时不应自动恢复票据');
 
   const resumed = await acceptRecommended(reopened, run.commissionId, 'resume-original-order', { resumeTicket: original.ticketId });
   const ticket = await readBrowserTicket(reopened);
-  requireFeature('RESUME 点击「继续这张单」后复用原 ticketId / runId / nonce',
+  requireFeature('RESUME 点击港口故事卡后复用原 ticketId / runId / nonce',
     resumed.ticketId === original.ticketId && ticket?.ticketId === original.ticketId && ticket.runId === original.runId && ticket.nonce === original.nonce,
     J({ original: original.ticketId, resumed: ticket?.ticketId, sameRun: ticket?.runId === original.runId, sameNonce: ticket?.nonce === original.nonce }));
   return reopened;
@@ -1666,35 +1959,102 @@ async function phaseReceipt(cdp, label, expectedChapterFlags, card) {
      统一投影的 nextAction/公开经历确实渲染，不再依赖「新完成的段落」固定文案。 */
   const projection = await receiptProjection(cdp);
   requireFeature('RECEIPT ' + label + ' 真实 careerView 投影可用', projection.ok === true, J(projection));
-  const visibleHistory = (card.storyLines || []).filter((line) => line && line !== card.next);
-  const projectedNextVisible = !!projection.nextLabel && card.next === '下一步：' + projection.nextLabel;
-  const projectedHistoryVisible = projection.history.every((text) => visibleHistory.includes(text));
+  /* 0.23 收据层级：下一步可能是 popover 根节点的「下一步：X」，也可能是组件主按钮
+     「继续：X」；两者都必须逐字等于真实 careerView.story.nextAction。 */
+  const projectedNextVisible = !!projection.nextLabel &&
+    (card.next === '下一步：' + projection.nextLabel || card.next === '继续：' + projection.nextLabel);
   const projectedTextsClean = !FORBIDDEN_PATTERNS.some((pattern) =>
     pattern.re.test([projection.nextLabel].concat(projection.history).join(' ')));
-  gate('RECEIPT ' + label + ' nextAction/经历来自真实投影且不含内部 token',
-    projectedNextVisible && projectedHistoryVisible && projectedTextsClean,
-    J({ next: card.next, projectedNext: projection.nextLabel, visibleHistory, projectedHistory: projection.history,
-      expectedFlags }));
+  gate('RECEIPT ' + label + ' nextAction 来自真实投影且不含内部 token',
+    projectedNextVisible && projectedTextsClean,
+    J({ next: card.next, projectedNext: projection.nextLabel, projectedHistory: projection.history, expectedFlags }));
 
-  const actionId = expectedFlags.includes(CHAPTER_FLAGS.C4) ? 'choose-ending' : 'return-to-town';
-  const panelName = actionId === 'choose-ending' ? 'world-state' : 'town';
-  const action = card.buttons.find((button) => button.action === actionId);
-  const expectedText = actionId === 'return-to-town' ? /回告示板/ : /终局|结局|选/;
-  requireFeature('RECEIPT ' + label + ' 收据显示实际下一步按钮', action && expectedText.test(action.text), J(card.buttons));
+  const action = card.buttons.find((button) => button.action === 'continue' || button.action === 'return-to-town');
+  const panelName = projection.nextKind === 'ending' ? 'world-state' : 'town';
+  /* 0.22 的「回告示板看看 / 选择终局」按钮在 0.23 合并为「继续：<投影下一步>」；
+     仍然只能由玩家点击，且落地面板必须与真实 nextAction.kind 一致（ending→章节页）。 */
+  const actionTextOk = !!action && (action.action === 'continue' ? /^继续[：:]/.test(action.text) : /回告示板/.test(action.text));
+  requireFeature('RECEIPT ' + label + ' 收据显示实际下一步按钮', actionTextOk, J(card.buttons));
   const firstTwoOrders = label === 'order-1' || label === 'order-2';
-  if (firstTwoOrders) gate('RECEIPT ' + label + ' 回告示板为主动作', action.primary, J(action));
+  if (firstTwoOrders) gate('RECEIPT ' + label + ' 下一步为主动作', action.primary, J(action));
   gate('RECEIPT ' + label + ' 下一步按钮热区 ≥44px', action.rect.h >= 44 && action.rect.w >= 44, J(action.rect));
 
   const hrefBefore = await cdp.evaluate('location.href');
   const viewport = { deviceScaleFactor: 1, mobile: true };
   if (firstTwoOrders) await cdp.send('Emulation.setDeviceMetricsOverride', { ...viewport, width: 375, height: 548 });
-  await pressVisible(cdp, `${RECEIPT_CARD} [data-action=${J(actionId)}]`, label + ' 收据下一步');
+  const actionSelector = `${RECEIPT_CARD} [data-action="continue"], ${RECEIPT_CARD} [data-action="return-to-town"]`;
+  await pressVisible(cdp, actionSelector, label + ' 收据下一步');
   await waitPanel(cdp, panelName);
   const hrefAfter = await cdp.evaluate('location.href');
   const viewportLabel = firstTwoOrders ? ' 375×548' : '';
   gate('RECEIPT ' + label + viewportLabel + ' 实际命中按钮并在当前页打开预期面板', hrefAfter === hrefBefore,
     J({ panel: panelName, hrefBefore, hrefAfter }));
   if (firstTwoOrders) await cdp.send('Emulation.setDeviceMetricsOverride', { ...viewport, width: 390, height: 844 });
+  if (panelName === 'town') {
+    /* 0.23 收据不再渲染 0.22 的「你这一趟带回了什么？」经历块，等价（更强）断言：
+       同一 careerView.story.history 必须在港口「经历」页真实可见（空投影则显示空状态）。 */
+    await cdp.waitFor(`!!document.querySelector('[data-career-panel="town"] [data-port-tabpanel="home"] [data-story-state]')`, { timeout: 15000 });
+    await pressVisible(cdp, '[data-career-panel="town"] [role="tablist"] [data-tab="journal"]', label + ' 经历页');
+    /* 港口三个 surface 异步装载：必须等「经历」tab 自身渲染完（timeline 或错误态），
+       不能用固定 sleep 猜装载时间。 */
+    let journalLoaded = true;
+    try {
+      await cdp.waitFor(`(() => {
+        const content = document.querySelector('[data-career-panel="town"] [data-port-tabpanel="journal"]');
+        if (!content) return false;
+        if (content.textContent.indexOf('正在整理港口内容') >= 0) return false;
+        return !!content.querySelector('[data-timeline-state]') || content.textContent.indexOf('读不出来') >= 0;
+      })()`, { timeout: 15000 });
+    } catch (err) {
+      journalLoaded = false;
+      const diag = await cdp.evaluate(`(async () => {
+        const panel = document.querySelector('[data-career-panel="town"]');
+        const shell = panel && panel.querySelector('.ac-career-ui__panel');
+        const tablist = panel && panel.querySelector('[role="tablist"]');
+        const content = panel && panel.querySelector('[data-port-tabpanel="journal"]');
+        const view = await Promise.race([
+          window.ArcadeCareer.careerView({ surface: 'journal' })
+            .then((value) => ({ ok: true, history: value && value.story && Array.isArray(value.story.history) ? value.story.history.length : -1 }))
+            .catch((error) => ({ ok: false, error: String(error) })),
+          new Promise((resolve) => setTimeout(() => resolve({ ok: false, error: 'careerView-5s-timeout' }), 5000)),
+        ]);
+        return {
+          shellState: shell ? shell.getAttribute('data-shell-state') : null,
+          selected: tablist ? tablist.getAttribute('data-selected-id') : null,
+          tabs: tablist ? Array.from(tablist.querySelectorAll('[data-tab]')).map((node) => node.getAttribute('data-tab')) : [],
+          contentText: content ? content.textContent.replace(/\\s+/g, ' ').trim().slice(0, 320) : null,
+          view,
+        };
+      })()`);
+      gate('RECEIPT ' + label + ' 港口「经历」页装载诊断', false, J({ diag, errors: cdp.errors.slice(0, 4) }));
+    }
+    if (journalLoaded) {
+      const journal = await cdp.evaluate(`(async () => {
+      const panel = document.querySelector('[data-career-panel="town"]');
+      const content = panel.querySelector('[data-port-tabpanel="journal"]');
+      const view = await window.ArcadeCareer.careerView({ surface: 'journal' });
+      const history = view && view.story && Array.isArray(view.story.history)
+        ? view.story.history.map((row) => String((row && (row.label || row.text)) || row || '').trim()).filter(Boolean) : [];
+      const labels = Array.from(panel.querySelectorAll('[data-port-tabpanel="journal"] .ac-career-ui__timeline-label'))
+        .map((node) => (node.textContent || '').trim()).filter(Boolean);
+      const timeline = panel.querySelector('[data-port-tabpanel="journal"] [data-timeline-state]');
+      return {
+        labels,
+        history,
+        timelineState: timeline ? timeline.getAttribute('data-timeline-state') : null,
+        text: (content ? content.textContent : '').replace(/\\s+/g, ' ').trim().slice(0, 300),
+        viewOk: !!view,
+      };
+    })()`);
+    gate('RECEIPT ' + label + ' 经历投影在港口「经历」页真实可见',
+      journal.viewOk === true && journal.history.every((text) => journal.labels.indexOf(text) >= 0) &&
+        (journal.history.length ? journal.timelineState === 'filled' : journal.timelineState === 'empty'),
+      J(journal));
+    await pressVisible(cdp, '[data-career-panel="town"] [role="tablist"] [data-tab="home"]', label + ' 回到眼下');
+    }
+  } else {
+    requireFeature('RECEIPT ' + label + ' 终局入口为真实 nextAction.kind=ending', projection.nextKind === 'ending', J(projection));
+  }
   await forbiddenTextScan(cdp, 'after-receipt-' + label);
 }
 
@@ -1707,9 +2067,15 @@ async function failShadowOrder(cdp, commission) {
   requireFeature('FAIL 未达标后出现对应票据的失败收据', card?.state === 'failure' && card.runId === failedRun.ticketId, J(card));
   checkReceiptText(card, 'shadow-leap-failure');
   gate('FAIL 失败收据如实提示未达标', /未|差|不足|没/.test(card.text), J(card.text));
-  const action = await pressVisible(cdp, RETURN_TO_TOWN, '失败收据回告示板');
-  gate('FAIL 点的是失败收据里的回告示板按钮', /回告示板/.test(action.text), J(action.text));
-  await waitPanel(cdp, 'town');
+  /* 0.22 失败收据的「回告示板看看」按钮在 0.23 组件收据里换成「再试一次」+「先收起收据」。
+     等价：玩家仍能从失败收据真实关闭回港口，且不会自动重开委托。 */
+  const retry = card.buttons.find((button) => button.action === 'retry-settlement');
+  const dismiss = card.buttons.find((button) => button.action === 'dismiss-receipt');
+  requireFeature('FAIL 失败收据提供真实重试与收起动作', !!retry && !!dismiss, J(card.buttons));
+  await pressVisible(cdp, RECEIPT_CARD + ' [data-action="dismiss-receipt"]', '收起失败收据');
+  await cdp.waitFor('!document.querySelector(`[data-career-card="receipt"]`)', { timeout: 8000 });
+  requireFeature('FAIL 收起失败收据不自动重开委托', await cdp.evaluate('!window.ArcadeCareer.commissionRun'), 'run should stay null');
+  await openPort(cdp, 'fail-receipt-port');
   return failedRun.ticketId;
 }
 
@@ -1774,19 +2140,21 @@ async function runOriginToTown(cdp, gameId) {
 async function runFullFlow(cdp, browser, newPage, campaign, commissions) {
   await runOriginToTown(cdp, ORIGIN_GAME);
 
-  /* 首单：读取 UI 推荐 → 接单 → 关标签后续单 → 真实职业局 → 收据。 */
-  await cdp.waitFor(`!!document.querySelector('[data-town-recommend-id]')`, { timeout: 15000 });
-  let recommendation = await readBoardRecommendation(cdp);
-  requireFeature('BOARD 告示板首屏提供真实可执行推荐单', recommendation.ok === true && !!recommendation.commissionId, J(recommendation));
-  /* 目标必须真正在卡片里出现且只出现一次：data-town-goal 提供稳定目标文本，
-     「你愿意完成」标签在整段文本中不得重复（防文案回归造成目标重复渲染）。 */
-  const goalLabel = '你愿意完成';
-  const labelOccurrences = recommendation.text.split(goalLabel).length - 1;
-  gate('BOARD 推荐单一行给出游戏名/世界目标/数量/原因/主动作',
-    !!recommendation.text && recommendation.text.length >= 20 && !!recommendation.goal &&
-      recommendation.text.indexOf(goalLabel) >= 0 && labelOccurrences === 1,
-    J({ text: recommendation.text, goal: recommendation.goal, reason: recommendation.reason, labelOccurrences }));
-  gate('BOARD 首单与内容驱动的 W5E 第一单一致', recommendation.commissionId === WORLD_WORK_ROUTE[0].commissionId,
+  /* 首单：读取港口首页真实推荐 → 接单 → 关标签后续单 → 真实职业局 → 收据。 */
+  await cdp.waitFor(`!!document.querySelector('[data-career-panel="town"] [data-port-tabpanel="home"] button[id^="port-story-"]')`, { timeout: 15000 });
+  let recommendation = await readPortRecommendation(cdp);
+  requireFeature('PORT 港口首页提供真实可执行推荐单', recommendation.ok === true && !!recommendation.commissionId, J(recommendation));
+  /* 0.22 告示板推荐行（data-town-goal、「你愿意完成」目标句、milestone/step 进展语言）已随告示板移除。
+     0.23 等价（更强）：StoryCard 标题/摘要/动作文案必须逐字等于真实 careerView({surface:'port'})
+     的 nextAction + 委托投影，且动作是 ≥44px 的玩家可点按钮；不自动接单。 */
+  gate('PORT 推荐卡标题/摘要/动作来自真实 port 投影且为公开文案',
+    !!recommendation.storyTitle && recommendation.storyTitle === recommendation.projectedTitle &&
+      !!recommendation.storySummary && recommendation.storySummary === recommendation.projectedSummary &&
+      recommendation.storyState === 'current' && recommendation.actionVisible === true &&
+      recommendation.actionDisabled === false && recommendation.actionText === recommendation.nextLabel &&
+      !!recommendation.actionRect && recommendation.actionRect.h >= 44 && recommendation.actionRect.w >= 44,
+    J(recommendation));
+  gate('PORT 首单与内容驱动的 W5E 第一单一致', recommendation.commissionId === WORLD_WORK_ROUTE[0].commissionId,
     J({ actual: recommendation.commissionId, expected: WORLD_WORK_ROUTE[0].commissionId }));
   QA.recommended.push(recommendation.commissionId);
 
@@ -1822,13 +2190,23 @@ async function runFullFlow(cdp, browser, newPage, campaign, commissions) {
       Object.values(CHAPTER_FLAGS).includes(flag) && !projectionBefore.flags.has(flag)) || null;
     const boardView = await cdp.evaluate(`(async () => {
       const view = await window.ArcadeCareer.careerView({ surface: 'work' });
-      return { ok: !!view, nextId: view && view.story && view.story.nextAction ? view.story.nextAction.commissionId || null : null };
+      const panel = document.querySelector('[data-career-panel="town"]');
+      const button = panel && panel.querySelector('[data-port-tabpanel="home"] button[id^="port-story-"]');
+      return {
+        ok: !!view,
+        nextId: view && view.story && view.story.nextAction ? view.story.nextAction.commissionId || null : null,
+        buttonId: button ? button.id : '',
+        actionText: button ? (button.textContent || '').trim() : '',
+      };
     })()`);
-    const publicKind = /能推进这一段|能积攒下一步所需|路线进展/.test(recommendation.kind || '');
-    gate('BOARD ' + recommendation.commissionId + ' 主卡来自真实投影且推荐标记为公开进展语言',
+    /* 0.22 的公开进展文案（能推进这一段 / 能积攒下一步所需 / 路线进展）已随告示板移除。
+       0.23 等价（更强）：推荐仍由真实 careerView.story.nextAction 给出，且港口 DOM 的
+       story 动作必须与投影逐字一致 —— DOM 与投影不得分叉，也不得静默换单。 */
+    gate('PORT ' + recommendation.commissionId + ' 主卡来自真实投影且 DOM 动作与投影一致',
       boardView.ok === true && boardView.nextId === recommendation.commissionId &&
-        recommendation.storyAction === true && publicKind,
-      J({ boardView, storyAction: recommendation.storyAction, uiKind: recommendation.kind, completes }));
+        boardView.buttonId === 'port-story-' + recommendation.commissionId &&
+        boardView.actionText === recommendation.nextLabel,
+      J({ boardView, nextLabel: recommendation.nextLabel, completes }));
 
     const commissionId = recommendation.commissionId;
     const label = 'order-' + (index + 1);
@@ -1864,9 +2242,9 @@ async function runFullFlow(cdp, browser, newPage, campaign, commissions) {
     previousChapter = after.view.currentChapter || previousChapter;
 
     if (index < WORLD_WORK_ROUTE.length - 1) {
-      await cdp.waitFor(`!!document.querySelector('[data-town-recommend-id]')`, { timeout: 15000 });
-      recommendation = await readBoardRecommendation(cdp);
-      requireFeature('BOARD 第 ' + (index + 2) + ' 单推荐仍真实可执行', recommendation.ok === true && !!recommendation.commissionId, J(recommendation));
+      await cdp.waitFor(`!!document.querySelector('[data-career-panel="town"] [data-port-tabpanel="home"] button[id^="port-story-"]')`, { timeout: 15000 });
+      recommendation = await readPortRecommendation(cdp);
+      requireFeature('PORT 第 ' + (index + 2) + ' 单推荐仍真实可执行', recommendation.ok === true && !!recommendation.commissionId, J(recommendation));
       QA.recommended.push(recommendation.commissionId);
       expectChapterAdvance(sequence, expected, after, previousChapter);
     }
@@ -1952,15 +2330,21 @@ async function runFullFlow(cdp, browser, newPage, campaign, commissions) {
   gate('C5 章节视图显示已完成与后日常入口', endingView.ok === true && endingView.chapters.some((chapter) => chapter.chapterId === 'C5' && chapter.state === 'complete'), J(endingView));
   const endingCard = await waitReceipt(cdp, endingRun.ticketId);
   checkReceiptText(endingCard, 'ending');
+  /* 终局收据的主动作必须仍是玩家可见的「读后日谈」：点击后在同一页打开真实章节面板，
+     由 world-state 渲染 [data-epilogue]；不做整页导航、不靠预写旗标。 */
   const epilogueAction = endingCard.buttons.find((button) => button.action === 'read-epilogue');
-  requireFeature('C5 终局收据的主动作是读后日谈', epilogueAction?.primary && epilogueAction.text === '读后日谈', J(endingCard.buttons));
+  requireFeature('C5 终局收据的主动作是读后日谈',
+    !!(epilogueAction && epilogueAction.primary && epilogueAction.text === '读后日谈'), J(endingCard.buttons));
   const endingHref = await cdp.evaluate('location.href');
   await pressVisible(cdp, RECEIPT_CARD + ' [data-action="read-epilogue"]', '终局收据读后日谈');
+  await waitPanel(cdp, 'world-state', 15000);
   const epilogue = await cdp.waitFor(`(() => {
     const section = document.querySelector('[data-career-panel="world-state"] [data-epilogue]');
     return section?.getClientRects().length && section.innerText.trim();
   })()`, { timeout: 15000 });
-  gate('C5 读后日谈在当前页打开真实后日谈', /后日谈/.test(epilogue) && epilogue.length > 10 && await cdp.evaluate('location.href') === endingHref, J(epilogue));
+  gate('C5 读后日谈在当前页打开真实后日谈',
+    /后日谈/.test(epilogue) && epilogue.length > 10 && await cdp.evaluate('location.href') === endingHref,
+    J({ epilogue, epilogueAction, buttons: endingCard.buttons }));
   await checkConsole(cdp, 'ending');
 }
 
