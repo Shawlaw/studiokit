@@ -2365,7 +2365,8 @@
 
   /** 世界章节完成后，可接终局也是真实下一步；没有可用终局时保持空，不推荐未解锁内容。 */
   function attachEndingAction(projection) {
-    if (!projection || !projection.story || projection.story.nextAction) return Promise.resolve(projection);
+    if (!projection || !projection.story) return Promise.resolve(projection);
+    if (projection.story.nextAction && projection.story.nextAction.kind === 'ending') return Promise.resolve(projection);
     if (!internal.commissionLastCareerId) return Promise.resolve(projection);
     var campaign = readGlobal('campaign');
     var evidence = readGlobal('storyEvidence');
