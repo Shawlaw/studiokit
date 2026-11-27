@@ -1034,7 +1034,8 @@
       };
     }
 
-    function publicCommission(commission, world) {
+    function publicCommission(commission, world, clearedIds) {
+      var clearedList = Array.isArray(clearedIds) ? clearedIds : [];
       var publicText = world && isObject(state.worldWorkTexts[commission.commissionId])
         ? state.worldWorkTexts[commission.commissionId]
         : {};
@@ -1066,6 +1067,7 @@
         risk: commission.risk,
         startParams: clone(commission.startParams),
         tier: commission.tier,
+        cleared: clearedList.indexOf(commission.commissionId) >= 0,
         unlocked: true,
         historicalOnly: false,
         readOnly: false,
@@ -1553,7 +1555,7 @@
         });
         if (!accepted.ok) return;
         var world = worldCommission(commission);
-        commissions.push(publicCommission(commission, world));
+        commissions.push(publicCommission(commission, world, context.clearedCommissions));
       });
       commissions.sort(function (a, b) {
         if (a.commissionId === b.commissionId) return 0;

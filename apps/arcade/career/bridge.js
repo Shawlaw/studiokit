@@ -2340,6 +2340,9 @@
           ? listing.availableIds.slice()
           : commissionIdsFromListing(listing);
         display.availableIds = ids;
+        display.clearedCommissions = listing && listing.ok && Array.isArray(listing.commissions)
+          ? listing.commissions.filter(function (row) { return row && row.cleared === true && typeof row.commissionId === 'string'; }).map(function (row) { return row.commissionId; })
+          : [];
         display.bridgeCoreAuthority = !!(listing && listing.ok);
         if (listing && typeof listing.careerId === 'string') display.careerId = listing.careerId;
         var continuations = typeof mod.continuations === 'function'
