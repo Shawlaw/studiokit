@@ -8,13 +8,12 @@
  *   window.ArcadeCareerUI.town.render(ctx);
  *   window.ArcadeCareerUI.town.close();
  *
- * 首屏只读消费 bridge 传入的 ctx（ADR §18.7 / §20.9）：
- *   originLetter()                   → null 或 {sourceGame, c0Letter: {from, body, address}}
- *   campaign.state(input)            → 章节状态（只用当前章标题/玩家语言提示）
- *   campaign.recommend(input)        → null 或 {commissionId, goal, reason, kind}
- *   commission.listAvailable(input)  → 真实可接单集合（推荐只允许在其中）
- *   commission.continuations(input)  → 可选；live run（issued/active）集合
- * 任一接口缺失、抛错或返回异常时安全回退旧告示板列表，不阻塞接单。
+ * 0.22 的统一披露入口（ADR §23.3）：
+ *   ctx.careerView({surface:'work'})  → 唯一工作列表来源（已投影的公开字段）
+ *   ctx.commission.listAvailable({careerId, ensure:false, surface:'work'})
+ *                                    → 核心授权集合；只取交集，不反向扩张
+ *   view.story.nextAction             → 眼下主卡
+ * 任一接口缺失、抛错或返回异常时只显示自然空状态，不回退完整目录、不建身份。
  *
  * 约束：
  * - 覆盖当前页面的轻量浮层（position:fixed，可滚动），按钮 + Esc + 点遮罩关闭；
@@ -58,10 +57,10 @@
   const ALT_EMPTY = '港务处今天没有跑腿的活。';
   const ALT_BUY_LABEL = '请他们代办';
   const FREE_LIST_TITLE = '想自由接单？';
+  const PAUSED_LIST_TITLE = '先收着的职业';
   const RECOMMEND_TITLE = '你想先走这条路吗？';
   const RECOMMEND_KIND_TEXT = { milestone: '能推进这一段', step: '能积攒下一步所需' };
   const RECOMMEND_GOAL_TITLE = '你愿意完成';
-  const FIRST_PATROL_ID = 'star-raid.T1';
   const RENTAL_LEAD = '阿砾：标准舰可以免费借。';
   const CAMPAIGN_SUBTITLE = '你想继续哪一段？';
   const INTRO_GOAL = '告示板上钉着今天的活，你想先接哪一张？';
@@ -96,26 +95,6 @@
     'scroll.collected': '找回 {n} 枚卷轴',
     'tower.floor_stable': '稳稳叠到 {n} 层',
     'mineral.returned': '带回 {n} 份矿物',
-  };
-
-  /* 游戏 id → 戏内显示名（与 content/registry.json 的 displayName 一致；registry 不可用时兜底）。 */
-  const GAME_LABELS = {
-    'memory-flip': '记忆翻牌',
-    'merge-2048': '2048 合成',
-    blackjack: '二十一点',
-    gomoku: '五子棋',
-    solitaire: '纸牌接龙',
-    snowbells: '雪铃',
-    'brick-breaker': '砖块计划',
-    'gravity-flip': '重力翻转',
-    'snake-run': '贪吃蛇',
-    'mole-whack': '打地鼠',
-    'block-drop': '俄罗斯方块',
-    'star-raid': '星海突击',
-    'road-rush': '极速车道',
-    'shadow-leap': '影跃',
-    'pendulum-tower': '层塔',
-    'gold-miner': '黄金矿工',
   };
 
   /* 接单失败 reason → 可归因戏内文本（未知原因使用通用兜底，不暴露系统词）。 */
@@ -366,6 +345,13 @@
     '  gap: 8px;',
     '  padding: 0 10px 10px;',
     '}',
+    '.ac-career-town__paused-name {',
+    '  margin: 0;',
+    '  color: var(--ac-career-muted, #93a0c8);',
+    '  font-size: 12px;',
+    '  line-height: 1.7;',
+    '  overflow-wrap: anywhere;',
+    '}',
     '.ac-career-town__row--recommend {',
     '  border-color: var(--ac-career-ink, #eef1ff);',
     '  background: rgba(255, 210, 63, 0.08);',
@@ -577,31 +563,6 @@
     return null;
   }
 
-  /**
-   * commission-core 的内容由调用方注入（ADR §18.1）。bridge 0.16 已会 configure；
-   * 这里再做一次仅内存的幂等兜底（不写 IndexedDB / localStorage）。
-   */
-  function ensureCommissionContent(commission, context) {
-    if (!commission || typeof commission.configure !== 'function') return;
-    const content = context && isObject(context.commissions) ? context.commissions : null;
-    if (!content || !Array.isArray(content.commissions) || !content.commissions.length) return;
-    let ready = 0;
-    if (typeof commission.getCommissions === 'function') {
-      try {
-        const list = commission.getCommissions();
-        ready = Array.isArray(list) ? list.length : 0;
-      } catch (err) {
-        ready = 0;
-      }
-    }
-    if (ready > 0) return;
-    try {
-      commission.configure({ content: content });
-    } catch (err) {
-      /* 内容注入失败时走「告示板暂不可用」降级，不抛错 */
-    }
-  }
-
   function openerOf(context, name) {
     if (context && typeof context[name] === 'function') return context[name];
     if (context && isObject(context.api) && typeof context.api[name] === 'function') return context.api[name];
@@ -648,86 +609,96 @@
     return template ? template.replace('{n}', String(atLeast)) : '';
   }
 
-  /** 从多个真实来源取游戏名；registry 是 window.ArcadeCareer.registry / ctx.registry 的可选实例。 */
-  function gameNameOf(gameId, context) {
-    const id = idText(gameId);
-    if (!id) return '';
-    const bundle = isObject(context) ? context : null;
-    const api = bundle && isObject(bundle.api) ? bundle.api : null;
-    const win = rootWindow();
-    const career = win && isObject(win.ArcadeCareer) ? win.ArcadeCareer : null;
-    const registries = [
-      bundle && bundle.registry,
-      api && api.registry,
-      career && career.registry,
-      win && win.ArcadeCareerRegistry,
-    ];
-    for (let i = 0; i < registries.length; i += 1) {
-      const registry = registries[i];
-      if (!registry) continue;
-      if (typeof registry.getGame === 'function') {
-        try {
-          const game = registry.getGame(id);
-          const name = game && (cleanText(game.displayName) || cleanText(game.name));
-          if (name) return name;
-        } catch (err) {
-          /* 继续回退 */
-        }
-      }
-      if (typeof registry.listGames === 'function') {
-        try {
-          const games = registry.listGames();
-          if (Array.isArray(games)) {
-            for (let j = 0; j < games.length; j += 1) {
-              if (!isObject(games[j])) continue;
-              if (idText(games[j].gameId || games[j].id) !== id) continue;
-              const name = cleanText(games[j].displayName || games[j].name || games[j].title);
-              if (name) return name;
-            }
-          }
-        } catch (err) {
-          /* 继续回退 */
-        }
-      }
-      /* registry 内容对象：games 为数组或以 id 为键的映射。 */
-      const games = registry.games;
-      if (Array.isArray(games)) {
-        for (let j = 0; j < games.length; j += 1) {
-          if (!isObject(games[j])) continue;
-          if (idText(games[j].gameId || games[j].id) !== id) continue;
-          const name = cleanText(games[j].displayName || games[j].name || games[j].title);
-          if (name) return name;
-        }
-      } else if (isObject(games) && isObject(games[id])) {
-        const name = cleanText(games[id].displayName || games[id].name || games[id].title);
-        if (name) return name;
-      }
-    }
-    if (Object.prototype.hasOwnProperty.call(GAME_LABELS, id)) return GAME_LABELS[id];
-    return '';
-  }
-
-  function commissionRowsOf(context) {
-    const bundle = context && isObject(context.commissions) ? context.commissions : null;
-    const raw = bundle && Array.isArray(bundle.commissions) ? bundle.commissions : [];
+  /** 只把投影给出的公开委托字段规整成行；不带 gameId 反查，也不读完整目录。 */
+  function commissionRowsOf(view, materialNames) {
+    const raw = view && Array.isArray(view.commissions) ? view.commissions : [];
+    const names = isObject(materialNames) ? materialNames : Object.create(null);
     const rows = [];
     raw.forEach((entry) => {
       if (!isObject(entry)) return;
       const commissionId = idText(entry.commissionId);
       if (!commissionId) return;
-      const gameId = idText(entry.gameId);
+      const world = cleanText(entry.category).toLowerCase() === 'world';
       rows.push({
         commissionId: commissionId,
-        gameId: gameId,
-        gameName: cleanText(entry.gameName) || gameNameOf(gameId, context),
-        title: cleanText(entry.title) || '未命名的单子',
+        gameId: world ? '' : idText(entry.gameId),
+        /* 世界工作只消费通用 title/summary；游戏名、拥有职业与职业报酬都不进入卡片。 */
+        gameName: world ? '' : cleanText(entry.gameName),
+        title: cleanText(entry.title) || '旧港的一张单子',
         summary: cleanText(entry.summary),
-        issuer: cleanText(entry.issuer),
+        issuer: world ? '' : cleanText(entry.issuer),
         objective: isObject(entry.objective) ? entry.objective : null,
-        rewardText: rewardTextOf(entry.reward, materialNamesOf(context)),
+        rewardText: world ? '' : rewardTextOf(entry.reward, names),
+        category: world ? 'world' : 'profession',
+        professionId: world ? '' : idText(entry.professionId),
       });
     });
     return rows;
+  }
+
+  function emptyCareerView() {
+    return {
+      schemaVersion: 1,
+      originGameId: null,
+      activeProfessionId: null,
+      professions: [],
+      commissions: [],
+      story: { nextAction: null, messages: [], history: [] },
+      tools: [],
+    };
+  }
+
+  function careViewProvider(context) {
+    if (context && typeof context.careerView === 'function') return context.careerView;
+    if (context && isObject(context.api) && typeof context.api.careerView === 'function') return context.api.careerView;
+    return null;
+  }
+
+  /** 只向 bridge 要投影；缺失时返回 null，UI 不自行拼 catalog。 */
+  function requestCareerView(context, surface) {
+    const provider = careViewProvider(context);
+    if (!provider) return null;
+    let result = null;
+    try {
+      result = provider({
+        surface: surface,
+        gameId: idText(context && (context.gameId || (isObject(context.api) ? context.api.gameId : null))) || null,
+      });
+    } catch (err) {
+      return Promise.resolve(null);
+    }
+    if (result && typeof result.then === 'function') {
+      return Promise.resolve(result).then(
+        (value) => isObject(value) ? value : null,
+        () => null
+      );
+    }
+    return isObject(result) ? result : null;
+  }
+
+  function requestAuthorizedIds(commission, careerId) {
+    if (!commission || typeof commission.listAvailable !== 'function') return null;
+    let result = null;
+    try {
+      result = commission.listAvailable({ careerId: careerId, ensure: false, surface: 'work' });
+    } catch (err) {
+      return null;
+    }
+    if (result && typeof result.then === 'function') {
+      return Promise.resolve(result).then(
+        (value) => normalizeUnlocked(value),
+        () => null
+      );
+    }
+    return normalizeUnlocked(result);
+  }
+
+  function firstOriginViewOf(view, context) {
+    if (!isObject(view) || !Array.isArray(view.professions) || view.professions.length !== 1) return false;
+    const origin = idText(view.originGameId);
+    if (!origin) return false;
+    const gameId = idText(context && (context.gameId || (isObject(context.api) ? context.api.gameId : null)));
+    return !gameId || origin === gameId;
   }
 
   function arrivalLineOf(context) {
@@ -940,6 +911,17 @@
     freeDetails.appendChild(freeBody);
     freeBody.appendChild(freeList);
     scope.appendChild(freeDetails);
+    const pausedDetails = make('details', 'ac-career-town__free ac-career-town__paused');
+    pausedDetails.setAttribute('data-town-paused', 'true');
+    pausedDetails.open = false;
+    pausedDetails.hidden = true;
+    pausedDetails.appendChild(make('summary', null, PAUSED_LIST_TITLE));
+    const pausedBody = make('div', 'ac-career-town__free-body');
+    const pausedList = make('ul', 'ac-career-town__list');
+    pausedList.setAttribute('data-town-paused-list', 'true');
+    pausedBody.appendChild(pausedList);
+    pausedDetails.appendChild(pausedBody);
+    scope.appendChild(pausedDetails);
 
     const empty = make('p', 'ac-career-town__empty', LIST_EMPTY);
     empty.hidden = true;
@@ -1035,6 +1017,8 @@
     let requestSeq = 0;
     let alive = true;
     let unlockedSet = null;
+    let projectedView = emptyCareerView();
+    let viewReady = false;
     let continuations = Object.create(null);
     let failedStart = null;
     const startingIds = Object.create(null);
@@ -1244,23 +1228,21 @@
     }
 
     function renderOrigin() {
-      const arrival = arrivalLineOf(liveContext);
+      const firstOrigin = firstOriginViewOf(projectedView, liveContext);
+      const arrival = firstOrigin ? arrivalLineOf(liveContext) : '';
       introGreeting.textContent = arrival;
       introGreeting.hidden = !arrival;
       location.hidden = !!arrival;
-      const role = roleTextOf();
+      const role = firstOrigin ? roleTextOf() : '';
       introRole.textContent = role;
       introRole.hidden = !role;
       introGoal.textContent = '眼下：' + (currentGoalText() || INTRO_GOAL);
     }
 
-    /**
-     * 推荐只消费 ctx.campaign.recommend 与真实 unlockedSet；
-     * 推荐 id 必须在 availableIds 内，不推荐锁定单；接口缺失返回 null 由旧列表兜底。
-     */
-    function recommendedSuggestionOf() {
+    /** campaign 建议只能给主卡补充玩家语言；不能挑选投影外或核心未授权的委托。 */
+    function recommendedSuggestionOf(allowedIds) {
       const campaign = isObject(liveContext && liveContext.campaign) ? liveContext.campaign : null;
-      if (!campaign || typeof campaign.recommend !== 'function' || !unlockedSet) return null;
+      if (!campaign || typeof campaign.recommend !== 'function' || !unlockedSet || !allowedIds.length) return null;
       let suggestion = null;
       try {
         suggestion = campaign.recommend({
@@ -1268,20 +1250,18 @@
           claims: Array.isArray(liveContext.claims) ? liveContext.claims : [],
           profile: liveContext.profile || null,
           wallet: liveContext.wallet || null,
-          availableIds: Object.keys(unlockedSet),
+          availableIds: allowedIds.slice(),
           storyEvidence: liveContext.storyEvidence || null,
         });
       } catch (err) {
         return null;
       }
       if (!isObject(suggestion) || suggestion.ok === false) return null;
-      let id = idText(suggestion.commissionId);
-      if (id && !unlockedSet[id]) id = '';
-      if (!id) return null;
-      const row = commissionRowsOf(liveContext).filter((entry) => entry.commissionId === id)[0] || null;
+      const id = idText(suggestion.commissionId);
+      if (!id || allowedIds.indexOf(id) < 0) return null;
+      const row = commissionRowsOf(projectedView, materialNames)
+        .filter((entry) => entry.commissionId === id)[0] || null;
       if (!row) return null;
-      /* 首屏目标是世界内目标（游戏名 + objective.atLeast 可读数量），
-         不用 campaign.recommend.goal（常为委托标题，会与卡片标题重复）。 */
       const worldGoal = rowGoalText(row);
       const hasObjective = !!(row.objective && numberOrZero(row.objective.atLeast));
       return {
@@ -1346,60 +1326,74 @@
       while (recommendList.firstChild) recommendList.removeChild(recommendList.firstChild);
       while (flightList.firstChild) flightList.removeChild(flightList.firstChild);
       while (freeList.firstChild) freeList.removeChild(freeList.firstChild);
+      while (pausedList.firstChild) pausedList.removeChild(pausedList.firstChild);
 
-      const allRows = commissionRowsOf(liveContext);
-      const boardReady = !!unlockedSet;
-      const suggestion = boardReady ? recommendedSuggestionOf() : null;
+      const boardReady = viewReady && !!unlockedSet;
+      const allRows = boardReady ? commissionRowsOf(projectedView, materialNames) : [];
+      const rows = allRows.filter((row) => unlockedSet[row.commissionId]);
+      const allowedIds = rows.map((row) => row.commissionId);
+      const story = isObject(projectedView.story) ? projectedView.story : {};
+      const next = isObject(story.nextAction) ? story.nextAction : null;
+      const nextId = idText(next && next.commissionId);
+      const suggestion = boardReady ? recommendedSuggestionOf(allowedIds) : null;
 
-      /* 有 live run 的同委托优先作为推荐（仍要求已解锁）。 */
+      /* story.nextAction 是眼下主卡；没有它时才续接进行中的单或采用同集合建议。 */
       let liveId = '';
-      if (boardReady) {
-        for (let i = 0; i < allRows.length; i += 1) {
-          if (continuations[allRows[i].commissionId] && unlockedSet[allRows[i].commissionId]) {
-            liveId = allRows[i].commissionId;
-            break;
-          }
+      for (let i = 0; i < rows.length; i += 1) {
+        if (continuations[rows[i].commissionId]) {
+          liveId = rows[i].commissionId;
+          break;
         }
       }
+      let mainId = nextId && allowedIds.indexOf(nextId) >= 0 ? nextId : '';
+      if (!mainId && liveId) mainId = liveId;
+      if (!mainId && suggestion) mainId = suggestion.row.commissionId;
+      const mainRow = rows.filter((row) => row.commissionId === mainId)[0] || null;
 
-      const mainRow = liveId
-        ? allRows.filter((row) => row.commissionId === liveId)[0]
-        : suggestion ? suggestion.row : null;
-      /* 推荐卡已有当前目标，首航首屏留给收件回话和两个可执行选项。 */
       introGoal.hidden = !!mainRow && !introGreeting.hidden;
       if (mainRow) {
+        const suggestionMatch = !!suggestion && suggestion.row.commissionId === mainRow.commissionId;
         const opts = {
           recommended: true,
           gameName: mainRow.gameName,
-          titleOverride: liveId ? '继续这张单：' + mainRow.title : '眼下先做：' + mainRow.title,
-          goalOverride: suggestion && suggestion.row.commissionId === mainRow.commissionId ? suggestion.goal : '',
-          kindText: suggestion && suggestion.row.commissionId === mainRow.commissionId ? suggestion.kindText : '能积攒下一步所需',
-          reason: suggestion && suggestion.row.commissionId === mainRow.commissionId ? suggestion.reason : '',
+          titleOverride: liveId && mainId === liveId ? '继续这张单：' + mainRow.title : '眼下先做：' + mainRow.title,
+          goalOverride: suggestionMatch ? suggestion.goal : '',
+          kindText: suggestionMatch ? suggestion.kindText : '能积攒下一步所需',
+          reason: suggestionMatch ? suggestion.reason : '',
         };
-        recommendList.appendChild(renderRow(mainRow, boardReady, opts));
+        const item = renderRow(mainRow, boardReady, opts);
+        if (nextId === mainId) item.setAttribute('data-town-story-action', 'true');
+        recommendList.appendChild(item);
         recommendList.hidden = false;
       } else {
         recommendList.hidden = true;
       }
 
-      const patrol = boardReady && unlockedSet[FIRST_PATROL_ID]
-        ? allRows.find((row) => row.commissionId === FIRST_PATROL_ID) : null;
-      const showPatrol = patrol && (!mainRow || mainRow.commissionId !== FIRST_PATROL_ID);
-      if (showPatrol) flightList.appendChild(renderRow(patrol, boardReady, {}));
-      flightList.hidden = !showPatrol;
+      /* 0.22 不再给固定首单或机库特例；出航区只保留真实机库入口。 */
+      flightList.hidden = true;
       hangarBtn.hidden = typeof openerOf(liveContext, 'openHangar') !== 'function';
-      flightDetails.hidden = !patrol && hangarBtn.hidden;
+      flightDetails.hidden = hangarBtn.hidden;
       flightRental.textContent = rentalHintOf();
 
-      const mainId = mainRow ? mainRow.commissionId : '';
-      const rows = boardReady
-        ? allRows.filter((row) => unlockedSet[row.commissionId] && row.commissionId !== mainId && row.commissionId !== FIRST_PATROL_ID)
-        : [];
-      rows.forEach((row) => freeList.appendChild(renderRow(row, boardReady, {})));
-      const hasRows = rows.length > 0;
+      rows.filter((row) => !mainId || row.commissionId !== mainId)
+        .forEach((row) => freeList.appendChild(renderRow(row, boardReady, {})));
+      const hasRows = rows.some((row) => !mainId || row.commissionId !== mainId);
       freeList.hidden = !hasRows;
       freeDetails.hidden = !hasRows;
+
+      /* 已搁置职业只收纳名字，不展示任务或压力提示。 */
+      const paused = viewReady && Array.isArray(projectedView.professions)
+        ? projectedView.professions.filter((entry) => isObject(entry) && entry.paused === true && cleanText(entry.displayName))
+        : [];
+      paused.forEach((entry) => {
+        pausedList.appendChild(make('li', 'ac-career-town__paused-name', cleanText(entry.displayName)));
+      });
+      pausedList.hidden = !paused.length;
+      pausedDetails.hidden = !paused.length;
+
       empty.hidden = hasRows || !boardReady || !!mainRow;
+      if (boardReady && !rows.length) empty.textContent = '告示板上还没有你能接下的单子，先回港口看看吧。';
+      else empty.textContent = LIST_EMPTY;
     }
 
     function loadContinuations(seq) {
@@ -1433,43 +1427,40 @@
       apply(result, !!(result && result.ok === false));
     }
 
-    function loadUnlocks() {
+    function loadBoard() {
       requestSeq += 1;
       const seq = requestSeq;
       const commission = commissionOf(liveContext);
-      if (!commission) {
-        unlockedSet = null;
-        applyUnlocked(null);
-        return;
-      }
-      ensureCommissionContent(commission, liveContext);
-      if (typeof commission.listAvailable !== 'function') {
-        unlockedSet = null;
-        applyUnlocked(null);
-        return;
-      }
-      let result = null;
-      try {
-        result = commission.listAvailable({ careerId: careerIdOf(liveContext), ensure: true });
-      } catch (err) {
-        result = null;
-      }
-      const settle = (value) => {
+      projectedView = emptyCareerView();
+      viewReady = false;
+      unlockedSet = null;
+
+      const coreRequest = requestAuthorizedIds(commission, careerIdOf(liveContext));
+      const viewRequest = requestCareerView(liveContext, 'work');
+      const settle = (values) => {
         if (!isCurrent() || seq !== requestSeq) return;
-        unlockedSet = normalizeUnlocked(value);
-        applyUnlocked(unlockedSet);
+        const authorized = values[0];
+        const view = values[1];
+        viewReady = !!view;
+        projectedView = view || emptyCareerView();
+        unlockedSet = viewReady && authorized ? authorized : null;
+        setNotice(viewReady && authorized ? '' : BOARD_UNAVAILABLE);
+        renderOrigin();
+        renderList();
+        if (viewReady && authorized) renderWallet();
         loadContinuations(seq);
         renderAlternatives();
       };
-      if (result && typeof result.then === 'function') {
-        result.then(settle, () => settle(null));
-        return;
+      if ((coreRequest && typeof coreRequest.then === 'function') ||
+          (viewRequest && typeof viewRequest.then === 'function')) {
+        Promise.all([coreRequest, viewRequest]).then(settle, () => settle([null, null]));
+      } else {
+        settle([coreRequest, viewRequest]);
       }
-      settle(result);
     }
 
     function applyUnlocked(next, initial) {
-      /* initial：先画「暂未开放」占位，不立刻报「暂不可用」，等 listAvailable 结果再决定。 */
+      /* initial：先画「暂未开放」占位，不立刻报「暂不可用」，等双源结果再决定。 */
       setNotice(next || initial ? '' : BOARD_UNAVAILABLE);
       renderList();
       if (next) renderWallet();
@@ -1617,7 +1608,12 @@
       showStatusRetry(null);
       let result = null;
       try {
-        result = commission.start({ commissionId: id, careerId: careerIdOf(liveContext) });
+        result = commission.start({
+          commissionId: id,
+          careerId: careerIdOf(liveContext),
+          ensure: false,
+          surface: 'work',
+        });
       } catch (err) {
         result = { ok: false };
       }
@@ -1701,7 +1697,7 @@
       renderOrigin();
       renderCampaign();
       renderWallet();
-      loadUnlocks();
+      loadBoard();
       return sheet;
     }
 
@@ -1722,7 +1718,7 @@
       renderOrigin();
       renderWallet();
       renderCampaign();
-      loadUnlocks();
+      loadBoard();
     }
 
     return {

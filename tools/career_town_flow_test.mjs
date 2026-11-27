@@ -8,7 +8,9 @@
  *  4. 失败优先结果明确说明，提供一键重接与回告示板；
  *  5. continuations：issued/active 才显示「继续这张单」，ending.* 不当委托，缺接口回退；
  *  6. 异步 getWallet / Promise continuations 不破坏面板；重复 open 不抢焦点；Esc 关闭并归还焦点；
- *  7. 静态样式含 44px 热区、无远程资源/绝对根路径。
+ *  7. 静态样式含 44px 热区、无远程资源/绝对根路径；
+ *  8. 0.22：careerView(work) ∩ listAvailable(ensure:false,surface:work)，
+ *     story.nextAction 主卡、世界通用工作与搁置职业折叠、完整目录零泄漏。
  *
  * 运行：node tools/career_town_flow_test.mjs（不依赖浏览器、不跑其他测试）。
  */
@@ -284,8 +286,36 @@ function loadTown() {
   return { doc, win, town, sandbox };
 }
 
+function projectedViewOf(ids, nextActionId) {
+  const rows = ids.map((id) => {
+    const row = commissionById(id);
+    const game = registryContent.games.filter((entry) => entry.gameId === row.gameId)[0];
+    return {
+      commissionId: row.commissionId,
+      gameId: row.gameId,
+      gameName: game ? game.displayName : '',
+      professionId: row.professionId,
+      category: 'profession',
+      title: row.title,
+      summary: row.summary,
+      issuer: row.issuer,
+      objective: row.objective,
+      reward: row.reward,
+    };
+  });
+  return {
+    schemaVersion: 1,
+    originGameId: 'pendulum-tower',
+    activeProfessionId: 'engineering.structural',
+    professions: [{ professionId: 'engineering.structural', displayName: '建筑工程师', state: 'accepted', paused: false, active: true }],
+    commissions: rows,
+    story: { nextAction: nextActionId ? { kind: 'commission', commissionId: nextActionId, label: commissionById(nextActionId).title } : null, messages: [], history: [] },
+    tools: [],
+  };
+}
+
 function basicCtx(overrides = {}) {
-  const calls = { start: [], continuations: [], recommend: [] };
+  const calls = { start: [], continuations: [], recommend: [], view: [], available: [] };
   const ctx = {
     careerId: 'career-test-1',
     commissions: { commissions: [
@@ -295,6 +325,10 @@ function basicCtx(overrides = {}) {
     ] },
     items: itemsContent,
     registry: { games: registryContent.games },
+    careerView: (input) => {
+      calls.view.push(input);
+      return ctx.__projection || projectedViewOf(['pendulum-tower.T1', 'memory-flip.T1', 'star-raid.T1'], 'pendulum-tower.T1');
+    },
     campaign: {
       state: () => ({
         ok: true,
@@ -313,7 +347,10 @@ function basicCtx(overrides = {}) {
       },
     },
     commission: {
-      listAvailable: () => ({ ok: true, list: ['pendulum-tower.T1', 'memory-flip.T1', 'star-raid.T1'] }),
+      listAvailable: (input) => {
+        calls.available.push(input);
+        return { ok: true, list: ['pendulum-tower.T1', 'memory-flip.T1', 'star-raid.T1'] };
+      },
       getWallet: () => ({ ok: true, credits: 120, items: {} }),
       start: (input) => {
         calls.start.push(input);
@@ -336,6 +373,11 @@ function basicCtx(overrides = {}) {
   return Object.assign(ctx, overrides, { __calls: calls });
 }
 
+function setProjectedNext(ctx, id) {
+  ctx.__projection = projectedViewOf(['pendulum-tower.T1', 'memory-flip.T1', 'star-raid.T1'], id);
+  return ctx;
+}
+
 function all(root, predicate) {
   const out = [];
   walk(root, (node) => { if (predicate(node)) out.push(node); });
@@ -353,6 +395,7 @@ function byClass(root, className) {
 function combinedText(root) {
   return root.textContent.replace(/\s+/g, ' ').trim();
 }
+const textOf = combinedText;
 
 const results = [];
 function check(name, fn) {
@@ -367,6 +410,7 @@ function check(name, fn) {
 check('首屏一个主动作：live run 优先为推荐单，其余单折叠', () => {
   const { win, town } = loadTown();
   const ctx = basicCtx();
+  setProjectedNext(ctx, 'memory-flip.T1');
   const sheet = town.render(ctx);
   const recommend = byAttr(sheet, 'data-town-recommend', 'true')[0];
   assert.ok(recommend.firstChild, 'recommend list should have a row');
@@ -380,7 +424,7 @@ check('首屏一个主动作：live run 优先为推荐单，其余单折叠', (
   const free = byAttr(sheet, 'data-town-free', 'true')[0];
   assert.equal(free.open, false);
   assert.equal(free.hidden, false);
-  assert.equal(byAttr(free, 'data-town-action', 'start').length, 1, '自由接单只剩未推荐的一张');
+  assert.equal(byAttr(free, 'data-town-action', 'start').length, 2, '其余单都在折叠区，不再有星海特例');
   assert.equal(ctx.__calls.recommend[0].availableIds.length, 3);
   assert.ok(!win.navigated);
   return 'recommend=1, free collapsed';
@@ -463,7 +507,7 @@ check('首航 intro 显示章节 role 身份一行，缺失时隐藏', () => {
   const sheet2 = town.render(ctx2);
   const roleLine2 = byAttr(sheet2, 'data-town-role', 'true')[0];
   assert.equal(roleLine2.hidden, true, '缺 role 字段时隐藏');
-  assert.ok(!combinedText(sheet2).includes('自由职业者'), '不写死玩家状态');
+  assert.ok(!byAttr(sheet2, 'data-town-role', 'true')[0].textContent.includes('自由职业者'), '不写死玩家状态');
   return 'role line shown/hidden by data';
 });
 check('身份句优先 chapterZero.role / chapters.C0.role，C1 当前章也能显示', () => {
@@ -568,15 +612,11 @@ check('可选出航默认收起，首次巡航与机库走已有动作', () => {
   assert.equal(hangarOpened, 1);
   const patrolButtons = all(sheet, (node) => node.getAttribute('data-town-action') === 'start'
     && node.getAttribute('data-commission-id') === 'star-raid.T1');
-  assert.equal(patrolButtons.length, 1);
-  const [patrol] = patrolButtons;
-  assert.ok(flight.contains(patrol));
-  patrol.emit('click');
-  assert.equal(ctx.__calls.start[0].commissionId, 'star-raid.T1');
-  assert.match(win.navigated, /ticket=run-test/);
+  assert.equal(patrolButtons.length, 1, '星海单只是其投影工作，不再有出航区特例');
+  assert.ok(!flight.contains(patrolButtons[0]), '出航区不得固定推荐任何职业首单');
   ctx.commission.listAvailable = () => ({ ok: true, list: ['pendulum-tower.T1'] });
   town.render(ctx);
-  assert.equal(byAttr(sheet, 'data-commission-id', 'star-raid.T1').length, 0, '锁定时不提供接单');
+  assert.equal(byAttr(sheet, 'data-commission-id', 'star-raid.T1').length, 0, '核心收紧后星海工作不可接');
   assert.equal(flight.hidden, false, '机库仍可进入');
 });
 
@@ -601,15 +641,15 @@ check('玩家可见文案无 C 码/active/locked/长 token/96 条重复时长', 
   }
   return 'text clean';
 });
-check('推荐缺接口时安全回退旧列表', () => {
+check('主卡缺 campaign.recommend 时仍由 story.nextAction 提供，其余列表不丢', () => {
   const { town } = loadTown();
   const ctx = basicCtx();
   delete ctx.campaign.recommend;
   delete ctx.commission.continuations;
   const sheet = town.render(ctx);
-  assert.equal(byAttr(sheet, 'data-town-recommend', 'true')[0].hidden, true, 'attrs=' + JSON.stringify(byAttr(sheet, 'data-town-recommend', 'true')[0].attrs) + ' children=' + byAttr(sheet, 'data-town-recommend', 'true')[0].childNodes.length);
-  assert.ok(byAttr(sheet.querySelector('[data-town-free]'), 'data-commission-id', 'pendulum-tower.T1').length >= 1);
-  return 'fallback rows ok';
+  assert.equal(byAttr(sheet, 'data-town-recommend-id', 'pendulum-tower.T1').length, 1);
+  assert.ok(byAttr(sheet.querySelector('[data-town-free]'), 'data-commission-id', 'memory-flip.T1').length >= 1);
+  return 'projection fallback rows ok';
 });
 check('推荐 id 不在真实 unlocked 集合时不被采纳', () => {
   const { town } = loadTown();
@@ -620,6 +660,46 @@ check('推荐 id 不在真实 unlocked 集合时不被采纳', () => {
   const rec = byAttr(town.render(ctx), 'data-town-recommend', 'true')[0];
   assert.equal(rec.hidden, true, 'attrs=' + JSON.stringify(rec.attrs) + ' children=' + rec.childNodes.length);
   return 'locked suggestion rejected';
+});
+
+check('T06a：工作列表只取投影与核心授权交集，完整目录不泄漏', () => {
+  const { town } = loadTown();
+  const ctx = basicCtx();
+  ctx.__projection = projectedViewOf(['pendulum-tower.T1', 'memory-flip.T1'], null);
+  ctx.__projection.commissions.push({ commissionId: 'ghost.T1', title: '幽灵单', summary: '不应出现' });
+  ctx.commissions.commissions.push({ commissionId: 'ghost.T1', title: '目录幽灵单' });
+  ctx.commission.listAvailable = (input) => {
+    ctx.__calls.available.push(input);
+    return { ok: true, list: ['pendulum-tower.T1'] };
+  };
+  const sheet = town.render(ctx);
+  assert.equal(byAttr(sheet, 'data-commission-id', 'pendulum-tower.T1').length >= 1, true);
+  assert.equal(byAttr(sheet, 'data-commission-id', 'ghost.T1').length, 0);
+  assert.ok(!combinedText(sheet).includes('幽灵单'));
+  assert.equal(ctx.__calls.view[0].surface, 'work');
+  assert.equal(ctx.__calls.available[0].ensure, false);
+  assert.equal(ctx.__calls.available[0].surface, 'work');
+  return 'projection ∩ core, no full catalog';
+});
+check('T06a：世界工作只显示通用标题/摘要，搁置职业只收纳不催促', () => {
+  const { town } = loadTown();
+  const ctx = basicCtx();
+  ctx.__projection = projectedViewOf([], null);
+  ctx.__projection.commissions.push({
+    commissionId: 'port.letter', category: 'world', gameId: 'star-raid', gameName: '星海突击',
+    professionId: 'adventure.pilot', title: '把信送到码头', summary: '把信交给收货窗口', reward: { credits: 99 },
+  });
+  ctx.__projection.professions.push({ professionId: 'adventure.pilot', displayName: '星际飞行员', state: 'accepted', paused: true, active: false });
+  ctx.commission.listAvailable = () => ({ ok: true, list: ['port.letter'] });
+  const sheet = town.render(ctx);
+  const row = byAttr(sheet, 'data-commission-id', 'port.letter')[0];
+  assert.ok(textOf(row).includes('把信送到码头') && textOf(row).includes('把信交给收货窗口'));
+  assert.ok(!textOf(row).includes('星海突击') && !textOf(row).includes('adventure.pilot'));
+  const paused = byAttr(sheet, 'data-town-paused', 'true')[0];
+  assert.equal(paused.hidden, false);
+  assert.ok(combinedText(paused).includes('星际飞行员'));
+  assert.equal(byAttr(paused, 'data-town-action', 'start').length, 0);
+  return 'world category + paused fold';
 });
 
 check('K-town: Tab/Shift+Tab 仅遍历可见焦点，闭合 details 内的按钮被排除', () => {
@@ -646,6 +726,7 @@ check('K-town: Tab/Shift+Tab 仅遍历可见焦点，闭合 details 内的按钮
 check('稳定推荐接单选择器：唯一、绑定 commissionId、点击走 commission.start', () => {
   const { win, town } = loadTown();
   const ctx = basicCtx();
+  setProjectedNext(ctx, 'memory-flip.T1');
   const sheet = town.render(ctx);
   const starts = byAttr(sheet, 'data-town-recommend-start', 'true');
   assert.equal(starts.length, 1, '只有一个推荐接单按钮');

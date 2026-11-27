@@ -7,7 +7,10 @@
  *   window.ArcadeCareerUI.clueSurface.render({ clue, onOpen, host });
  *   window.ArcadeCareerUI.clueSurface.clear();
  *
- * 约束（docs/arcade-life/ADR-interfaces.md §14 微线索 UI 规则、§17 UI 模块契约）：
+ * 0.22 披露边界（ADR §23.3）：
+ * - bridge 只传入一条已判定的 clue；本模块只消费 clue/onOpen/host；
+ * - 不列举职业或委托，不读取 careerView/catalog，不渲染任务详情或主操作按钮；
+ * - 即使 options 带额外投影/邀请字段，也只保留这一枚低强调线索。
  * - 只在结算安全点出现：不自动弹信件、不自动打开面板、不抢焦点、无声音、无震动；
  * - role="button" + tabindex="0"，点击 / Enter / Space 打开同一封线索；
  * - 热区 ≥44×44px（视觉药丸可小于热区），prefers-reduced-motion 下无动画；
