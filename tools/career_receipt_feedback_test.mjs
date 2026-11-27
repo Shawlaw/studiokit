@@ -588,36 +588,63 @@ function extractStoryHelpers() {
 {
   const start = bridgeSource.indexOf('  function readArchivePhotoCommission(');
   const end = bridgeSource.indexOf('  function withStoryTimeout(', start);
-  const { readArchivePhotoCommission, attachArchiveFollowUp } = vm.runInNewContext(
-    bridgeSource.slice(start, end) + '\n({ readArchivePhotoCommission, attachArchiveFollowUp });',
-    {
-      safeAsync: (_key, action, fallback) => Promise.resolve().then(action).catch(() => fallback),
-      cleanStoryText: (value) => typeof value === 'string' ? value.trim() : '',
-    },
-  );
   const require = createRequire(import.meta.url);
   const loadModule = (name) => require(resolve(root, 'apps/arcade/career', name + '.js'));
   const careerId = 'career-test';
   let quests = [];
+  const acceptedAt = '2026-11-27T00:00:00.000Z';
+  const professionState = loadModule('profession-state');
+  const discoveryState = professionState.initialState(acceptedAt);
+  discoveryState.acceptedOriginGameId = 'memory-flip';
+  discoveryState.activeProfessionId = 'research.archivist';
+  discoveryState.professionProgress['research.archivist'] = {
+    state: 'accepted', paused: false, discoveredAt: acceptedAt, readAt: acceptedAt,
+    acceptedAt: acceptedAt, completedAt: null,
+  };
+  const registry = loadContent('registry.json');
+  const commissionContent = loadContent('commissions.json');
+  const catalog = {
+    schemaVersion: registry.schemaVersion,
+    contentVersion: registry.contentVersion,
+    games: registry.games.map((game) => ({ ...game })),
+    professions: registry.professions.map((profession) => ({ ...profession })),
+    commissions: commissionContent.commissions.map((commission) => ({ ...commission })),
+    clues: loadContent('clues.json').clues.map((clue) => ({ ...clue })),
+    tools: [],
+    worldWorkIds: [],
+  };
   const commission = loadModule('commission-core').createCommissionCore({
     core: loadModule('career-core'),
     db: {
+      getDiscoveryState: async () => discoveryState,
       readQuestState: async () => ({ ok: true, quests }),
       getProfile: async () => ({ careerId }),
     },
   });
-  const content = loadContent('commissions.json');
-  commission.configure({ content });
+  /* bridge 的真实辅助从 DB 快照 + registry catalog + receipt context 重跑 gate。 */
+  const followUpHelpers = vm.runInNewContext(
+    bridgeSource.slice(start, end) + '\n({ readArchivePhotoCommission, attachArchiveFollowUp });',
+    {
+      safeAsync: (_key, action, fallback) => Promise.resolve().then(action).catch(() => fallback),
+      cleanStoryText: (value) => typeof value === 'string' ? value.trim() : '',
+      currentStateSnapshot: () => discoveryState,
+      careerCatalog: () => catalog,
+      careerContext: (_input, surface) => ({ surface: surface || 'receipt', archived: false, walletKnown: true }),
+    },
+  );
+  const readArchivePhotoCommission = followUpHelpers.readArchivePhotoCommission;
+  const attachArchiveFollowUp = followUpHelpers.attachArchiveFollowUp;
+  commission.configure({ content: commissionContent, catalog });
   const before = await readArchivePhotoCommission(commission, careerId);
-  eq(before?.unlocked, false, 'real commission list reports the photo locked before settlement');
+  eq(before, null, 'real commission list keeps the photo locked before settlement');
   const settled = { ok: true, firstClear: true };
   const base = { status: 'new', nextStep: '去告示板看看下一张单。' };
-  const whileLocked = await attachArchiveFollowUp({ ...base }, settled, commission, careerId, !before.unlocked);
+  const whileLocked = await attachArchiveFollowUp({ ...base }, settled, commission, careerId, before === null);
   eq(whileLocked.nextStep, base.nextStep, 'a still-locked commission is not advertised');
   quests = [{ careerId, nodeId: 'memory-flip.T1', status: 'cleared' }];
   const after = await readArchivePhotoCommission(commission, careerId);
   eq(after?.unlocked, true, 'real commission list reports the photo available after first clear');
-  const feedback = await attachArchiveFollowUp({ ...base }, settled, commission, careerId, !before.unlocked);
+  const feedback = await attachArchiveFollowUp({ ...base }, settled, commission, careerId, before === null);
   assert(feedback.nextStep.includes('档案夹已整理好') && feedback.nextStep.includes(after.title), 'receipt names the real follow-up unlocked on this settlement');
   for (const [result, wasLocked] of [
     [settled, false],
