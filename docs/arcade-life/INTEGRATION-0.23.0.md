@@ -11,7 +11,7 @@
 |---|---|---|
 | T10 UI 契约与夹具 | PASS（契约层） | `ADR-0.23-ui.md`、P01–P10 夹具；coverage missing=0、Action ID 0 缺失、hiddenTexts 冲突 0；t10-reviewer PASS |
 | T11 共享组件 | PASS（范围） | components 281/281（含 harbor 指纹、layer、叠层 Esc）；t11-reviewer PASS |
-| T12 邀请 / 回执适配 | PASS（范围） | invitation adapters 126/126；t12-reviewer PASS |
+| T12 邀请 / 回执适配 | PASS（范围） | invitation adapters 127/127；t12-reviewer PASS |
 | T13 港口 / 工作 / 经历适配 | PASS（owner） | port/journal 54/54；t13-reviewer PASS |
 | T14 全职业叙事 | PASS（数据范围） | narrative content 612/612；16/16 职业；t14-reviewer PASS |
 | T15 视觉 / 键盘 / 离线 | PASS（桌面 Chrome） | 13/13 场景、16/16 交互、6/6 PWA 离线；几何差异最大 2 CSS px |
@@ -30,15 +30,15 @@
 
 ## 3. 门禁记录
 
-- 视觉 / 交互 / 离线：`node tools/career_ui_visual_test.mjs --visual` 25.648s 退出 0，13/13 场景通过、16/16 交互通过、76 张截图；`--pwa-only` 3.819s 退出 0，6/6。同内容对照覆盖 1280×800 与 390×844，指定场景额外检查 320×640 与 844×390；**映射元素**几何差异最大 2 CSS px，无横向溢出。panel 高度差（如 P02 +54、P07 −194.89）来自无页头面板与内部滚动，不作为元素错位；完整报告 `execution/qa-023-final/report.json`，QA 源 `career_ui_visual_test.mjs` / `career_ui_visual_fixture.html` 一并归档于仓库外。
-- 真实流程：`node tools/career_flow_e2e_test.mjs` 405/405（真实首航、首到港首单、C1–C5、W5E 顺序、终局读后日谈）；`node tools/career_mobile_016_test.mjs` 334/334（320/375/390/430 紧凑矩阵、44px、三层叠层 Esc）。
-- 纯 Node：components 281/281、invitation adapters 126/126、port/journal 54/54、narrative 612/612、profession state 439/439、privacy 2367/2367、receipt feedback 134/134。
-- 独立复审：`execution/V023-final-review.md` 判定产品候选 PASS，阻断项为发布台账（B1）、门禁注册（B2）、私有路径（M3）、首到港消费（M1）与本记录陈旧（M2）；B1/B2/M1/M2/M3/M4 已在本版收口（门禁新增 6 个 0.23 纯 Node 套件，私有绝对路径与外部原型依赖已删除）。
+- 视觉 / 交互 / 离线：`node tools/career_ui_visual_test.mjs --visual` 25.648s 退出 0，13/13 场景通过、16/16 交互通过、77 张截图；`--pwa-only` 3.819s 退出 0，6/6。同内容对照覆盖 1280×800 与 390×844，指定场景额外检查 320×640 与 844×390；**映射元素**几何差异最大 2 CSS px，无横向溢出。panel 高度差（如 P02 +54、P07 −194.89）来自无页头面板与内部滚动，不作为元素错位；完整报告 `execution/qa-023-final/report.json`，QA 源 `career_ui_visual_test.mjs` / `career_ui_visual_fixture.html` 一并归档于仓库外。
+- 真实流程：`node tools/career_flow_e2e_test.mjs` **410/410**（真实首航、首到港首单、C1–C5、W5E 顺序、终局读后日谈，以及「真实接单后关页重开、信件只余去港口且到港面板不再重播」的首到港消费证据）；`node tools/career_mobile_016_test.mjs` 334/334（320/375/390/430 紧凑矩阵、44px、三层叠层 Esc）。
+- 纯 Node：components 281/281、invitation adapters 127/127、port/journal 54/54、narrative 612/612、profession state 439/439、privacy 2367/2367、receipt feedback 134/134。
+- 独立复审：`execution/V023-final-review.md` 判定产品候选 PASS，阻断项为发布台账（B1）、门禁注册（B2）、私有路径（M3）、首到港消费（M1）与本记录陈旧（M2）；B1/B2/M2/M3/M4 已在收口提交处理（门禁新增 6 个纯 Node 套件、私有绝对路径与外部原型依赖已删除）；M1 的首到港消费在 `bd0a24a` 只覆盖到港面板，复核指出工作页/任何入口开局都不会消费，已改为在 bridge 的真实 `commission.start` 成功路径统一消费，并新增真实浏览器证据（关页重开后信件只余「去港口」，到港面板不再重播）。
 - L3 release profile：见下节（同候选 SHA 只启动一次）。
 
 ## 4. L3 结果
 
-- 冻结 SHA `6218646`：`py -3 tools/arcade_run_all_gates.py --profile release` **47/47 PASS**，3008.288s，`verdict: release passed (not full)`、`fully_passed: false`。release profile 现已包含 6 个 0.23 纯 Node 套件（components / invitation adapters / port journal / narrative content / work journal / invitation tools），CI 的 static job 同样覆盖。
+- 候选冻结 SHA `79301da`（收口提交）：`py -3 tools/arcade_run_all_gates.py --profile release` **47/47 PASS**，3030.957s，`verdict: release passed (not full)`、`fully_passed: false`；同版本更早一次 `6218646` 的 47/47（3008.288s）为未含首到港消费缝修复的中间态，仅作历史记录。release profile 现已包含 6 个 0.23 纯 Node 套件（components / invitation adapters / port journal / narrative content / work journal / invitation tools），CI 的 static job 同样覆盖。
 - 首轮同版本运行 `dd7eb03` 为 44/47（`career_pwa_offline`、`smoke`、`career_flow_e2e`），失败项均为 0.23 界面替换后的真实回归或旧钩子：信箱列表丢失真实信件标题（产品已修）、smoke 仍点旧告示板钱包入口（迁移到 `[data-tool=wallet]` 并改用真实已接受职业夹具）、港口装载完成会重建 body 导致装载期点击丢失（测试等待 shell normal 后再点）。修复后定向复跑全部通过，再以新 SHA 完整重跑一次 L3。
 - 本 SHA 无同 SHA 的线上 CI 或发布证据；`release passed (not full)` 不得写成 full / ALL GATES PASSED。full、真机、真人、线上部署仍为 UNVERIFIED。
 
