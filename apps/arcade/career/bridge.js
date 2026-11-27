@@ -817,6 +817,23 @@
     }
   }
 
+  /**
+   * 0.23：内容 shard 的字段名面向叙事作者，适配器只消费冻结 props。
+   * 这里做一次性归一：内容显式提供的标签优先，缺失时用统一 UI 文案，
+   * 不改变任何叙事正文；0.24 仍可读取原始字段。
+   */
+  function narrativeViewOf(entry) {
+    if (!entry || typeof entry.professionId !== 'string') return null;
+    return Object.assign({}, entry, {
+      location: entry.location || '折光港 · 旧码头',
+      acceptLabel: entry.acceptLabel || entry.invitationAction || '',
+      deferLabel: entry.deferLabel || entry.laterLabel || '',
+      leaveLabel: entry.leaveLabel || entry.exitLabel || '',
+      firstActionLabel: entry.firstActionLabel || '接受这份工作',
+      firstCommissionEyebrow: entry.firstCommissionEyebrow || '你的第一份工作',
+    });
+  }
+
   /** 0.23：同源加载全部叙事 shard；任何缺失只降级为空，不影响经典与 0.22 流程。 */
   function loadNarrativeContent() {
     if (internal.narrativeLoaded) return internal.narrativePromise || Promise.resolve(null);
@@ -832,7 +849,8 @@
       (shards || []).forEach(function (shard) {
         if (!shard || !Array.isArray(shard.entries)) return;
         shard.entries.forEach(function (entry) {
-          if (entry && typeof entry.professionId === 'string') internal.narrativeByProfessionId[entry.professionId] = entry;
+          var view = narrativeViewOf(entry);
+          if (view) internal.narrativeByProfessionId[view.professionId] = view;
         });
       });
       return internal.narrativeByProfessionId;

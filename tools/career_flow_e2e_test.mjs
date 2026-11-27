@@ -1426,14 +1426,22 @@ async function phaseSingleDelivery(cdp, gameId) {
   const firstRow = arrivalProjection.commissions.find((row) => row.professionId === invitation.professionId && row.category === 'profession');
   const firstNarrative = NARRATIVE_BY_PROFESSION[invitation.professionId] || {};
   const firstStart = await cdp.evaluate(`(() => {
-    const button = document.querySelector('[data-career-panel="arrival"] [data-action="start-first-commission"]');
-    return button ? { text: (button.textContent || '').trim(), visible: button.getClientRects().length > 0 } : null;
+    const panel = document.querySelector('[data-career-panel="arrival"]');
+    const button = panel && panel.querySelector('[data-action="start-first-commission"]');
+    const leave = panel && panel.querySelector('[data-action="leave-arrival"]');
+    return {
+      start: button ? { text: (button.textContent || '').trim(), visible: button.getClientRects().length > 0 } : null,
+      leave: leave ? (leave.textContent || '').trim() : null,
+    };
   })()`);
   gate('ARRIVAL 首次到港在真实 port 投影下给出第一份工作且不自动接单',
     !!firstRow && !!arrivalPanel && arrivalPanel.text.includes(firstRow.title) &&
-      !!firstStart && firstStart.visible && firstStart.text === firstNarrative.firstActionLabel &&
+      !!firstStart.start && firstStart.start.visible &&
+      firstStart.start.text === (firstNarrative.firstActionLabel || '接受这份工作') &&
+      firstRow.id === firstNarrative.firstCommissionId &&
+      firstStart.leave === firstNarrative.exitLabel &&
       arrivalProjection.run === null,
-    J({ firstRow, firstStart, firstTitle: firstNarrative.firstActionLabel, text: arrivalPanel && arrivalPanel.text.slice(0, 400) }));
+    J({ firstRow, firstStart, firstCommissionId: firstNarrative.firstCommissionId, exitLabel: firstNarrative.exitLabel, text: arrivalPanel && arrivalPanel.text.slice(0, 400) }));
   await pressVisible(cdp, '[data-career-panel="arrival"] [data-action="leave-arrival"]', '暂时离开港口');
   await cdp.waitFor('!document.querySelector(`[data-career-panel="arrival"]`)', { timeout: 10000 });
   await cdp.evaluate('window.ArcadeCareer.openTown()');
