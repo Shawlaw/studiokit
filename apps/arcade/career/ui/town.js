@@ -62,6 +62,11 @@
   const RECOMMEND_KIND_TEXT = { milestone: '能推进这一段', step: '能积攒下一步所需' };
   const RECOMMEND_GOAL_TITLE = '你愿意完成';
   const DATA_CLOSE_REASONS = ['career-archived', 'career-reset', 'career-imported'];
+  const REASON_CODES = [
+    'not-discovered', 'not-read', 'not-accepted', 'paused', 'wrong-surface',
+    'world-locked', 'story-locked', 'not-available', 'historical-only',
+    'archived', 'unknown-profession', 'unknown-commission', 'future-version',
+  ];
   const RENTAL_LEAD = '阿砾：标准舰可以免费借。';
   const CAMPAIGN_SUBTITLE = '你想继续哪一段？';
   const INTRO_GOAL = '告示板上钉着今天的活，你想先接哪一张？';
@@ -124,6 +129,18 @@
     exception: '告示板那边卡了一下，你想过一会儿再试吗？',
     'career-archived': '生涯已封存。你想先在生涯设置里解冻吗？',
   };
+
+  /** 冻结 reason code 只供诊断；任何代码样式字符串都不进入玩家文案。 */
+  function safePlayerReason(value) {
+    const text = cleanText(value);
+    if (!text) return '';
+    const lower = text.toLowerCase();
+    if (REASON_CODES.some((code) => lower === code || lower.indexOf(code + ':') === 0 || lower.indexOf(code + ' ') === 0)) return '';
+    if (/^[a-z][a-z0-9._-]{4,}$/i.test(text)) return '';
+    if (/\b(?:active|locked|archived)\b/i.test(text)) return '';
+    if (/C[0-5]\.|\b(?:E|BP|MAP|DEC)-|commissionId|professionId|eventId/.test(text)) return '';
+    return text;
+  }
 
   const STYLE_TEXT = [
     '.ac-career-town {',
@@ -1110,7 +1127,6 @@
         if (opts.recommended) item.setAttribute('data-town-recommend-kind', opts.kindText);
         item.setAttribute('data-town-kind', opts.kindText);
       }
-      if (opts.reason) item.setAttribute('data-town-reason', opts.reason);
       if (opts.gameName) item.setAttribute('data-town-game', opts.gameName);
 
       if (opts.recommended) {
@@ -1277,7 +1293,7 @@
       return {
         row: row,
         goal: hasObjective ? worldGoal : (cleanText(suggestion.goal) || worldGoal),
-        reason: cleanText(suggestion.reason),
+        reason: safePlayerReason(suggestion.reason),
         kindText: RECOMMEND_KIND_TEXT[cleanText(suggestion.kind)] || '路线进展',
       };
     }
