@@ -47,7 +47,7 @@
     "iconByFamily": { "record": "mail", "signal": "scroll", "bio": "gem", "industrial": "pick", "route": "chevron" },
     "iconByState": { "recoverable": "mail" },
     "actionLabel": { "glimpsed": "仔细看看", "recoverable": "clue.letter.actionLabel || 按地址投递", "read": "查看这封信" },
-    "state": "state.clues[clueId] 与 openedAt 派生 hidden/glimpsed/read；recoverable 另需 !openedAt && !portSeenAt && stage∈{GLIMPSED,CURIOUS} && 存在 openedAt 线索"
+    "state": "固定优先级：无记录→hidden；openedAt 合法→read；list surface 且 !openedAt && !portSeenAt && stage∈{GLIMPSED,CURIOUS} && 存在 openedAt 线索→recoverable（即使 dismissed:true 也只恢复列表行）；dismissed:true 且非 list→hidden；其余无 openedAt→glimpsed"
   },
   "storyMessageProducer": {
     "contentSource": "apps/arcade/career/content/narrative-shards/shard-01.json ... shard-04.json（T14 独占新增）",
@@ -146,75 +146,195 @@
       "gap"
     ],
     "referenceInjection": {
-      "mode": "fixture-text-override",
+      "mode": "qa-dom-fixture",
       "qaOnly": true,
       "target": "QA-only copy of prototype/index.html + reference.js",
-      "rule": "用同一 fixture 文本覆盖原型硬编码示例后渲染等价状态；reference PNG 仅作构图/几何参考，不与示例文案逐元素比较。",
-      "compare": "归一化 panel 左上角后的已校准元素，不做整图像素阈值",
+      "rule": "按 byFixture 的 text/remove/create/createState 操作规范化原型侧 DOM；未映射的示例文本必须先删除/覆盖，reference PNG 仅作构图/几何参考，不与示例文案逐元素比较。",
+      "coveragePolicy": "每个 fixture/variant 的原型可见文本节点必须有 text 覆盖或 remove 删除；产品独有节点列在 productOnlyAssertions，不参与原型元素几何比较。",
+      "productOnlyAssertions": [
+        {
+          "fixtureId": "P07",
+          "selector": ".ac-career-ui .ac-career-ui__tool:nth-child(4)",
+          "labelPath": "props.toolGrid.tools[3].label",
+          "actionIdPath": "props.toolGrid.tools[3].actionId",
+          "note": "原型只有 3 个 tool；第 4 个 hangar 只在产品侧由 ToolGrid 单独断言，不进入 referenceInjection 几何比较。"
+        },
+        {
+          "fixtureId": "P08",
+          "selector": ".ac-career-ui .ac-career-ui__surface[data-work-card='world']",
+          "note": "世界工作卡由产品侧 ToolGrid/WorkCard 单独断言；原型侧由 create 操作生成同构节点后再比较。"
+        },
+        {
+          "fixtureId": "P10-longtext",
+          "selector": ".ac-career-ui .ac-career-ui__panel",
+          "note": "QA-only letter-longtext 状态在原型中由 createState 生成，产品侧按同 fixture 长文 props 渲染。"
+        }
+      ],
       "byFixture": {
         "P01": [
-          { "selector": ".clue strong", "fixturePath": "props.clueRow.title" },
-          { "selector": ".clue .caption", "fixturePath": "props.clueRow.teaser" },
-          { "selector": ".clue .gold", "fixturePath": "props.clueRow.actionLabel" },
-          { "selector": ".score", "fixturePath": "props.hostResult.scoreText" }
+          { "op": "text", "selector": ".caption.center:first-of-type", "fixturePath": "props.hostResult.caption" },
+          { "op": "text", "selector": ".score", "fixturePath": "props.hostResult.scoreText" },
+          { "op": "text", "selector": ".caption.center:nth-of-type(2)", "fixturePath": "props.hostResult.summary" },
+          { "op": "text", "selector": ".clue strong", "fixturePath": "props.clueRow.title" },
+          { "op": "text", "selector": ".clue .caption", "fixturePath": "props.clueRow.teaser" },
+          { "op": "text", "selector": ".clue .gold", "fixturePath": "props.clueRow.actionLabel" },
+          { "op": "text", "selector": "button.primary", "fixturePath": "props.hostResult.primaryActionLabel" },
+          { "op": "text", "selector": "button.text-action", "fixturePath": "props.hostResult.exitLabel" }
         ],
         "P02": [
-          { "selector": "#panel-title", "fixturePath": "props.letterCard.title" },
-          { "selector": ".letter p:nth-of-type(1)", "fixturePath": "props.letterCard.paragraphs[0]" },
-          { "selector": ".letter p:nth-of-type(2)", "fixturePath": "props.letterCard.paragraphs[1]" },
-          { "selector": ".signature", "fixturePath": "props.letterCard.sender" },
-          { "selector": ".primary", "fixturePath": "props.letterCard.actions[0].label" },
-          { "selector": ".text-action", "fixturePath": "props.letterCard.actions[1].label" }
+          { "op": "text", "selector": "p.caption", "fixturePath": "props.letterCard.ambientLabel" },
+          { "op": "text", "selector": "#panel-title", "fixturePath": "props.letterCard.title" },
+          { "op": "text", "selector": ".letter p:nth-of-type(1)", "fixturePath": "props.letterCard.paragraphs[0]" },
+          { "op": "text", "selector": ".letter p:nth-of-type(2)", "fixturePath": "props.letterCard.paragraphs[1]" },
+          { "op": "remove", "selector": ".letter p:nth-of-type(3)", "reason": "原型第三段示例正文无 fixture 对应，必须先删除。" },
+          { "op": "text", "selector": ".signature", "fixturePath": "props.letterCard.sender" },
+          { "op": "text", "selector": "button.primary", "fixturePath": "props.letterCard.actions[0].label" },
+          { "op": "text", "selector": "button.text-action", "fixturePath": "props.letterCard.actions[1].label" }
         ],
         "P03": [
-          { "selector": "#panel-title", "fixturePath": "props.storyCard.title" },
-          { "selector": ".row.start .gold", "fixturePath": "props.npcDialogue.name" },
-          { "selector": ".row.start p", "fixturePath": "props.npcDialogue.paragraphs[0]" },
-          { "selector": ".primary", "fixturePath": "props.primaryAction.label" },
-          { "selector": ".text-action", "fixturePath": "props.secondaryAction.label" }
+          { "op": "text", "selector": "p.caption", "fixturePath": "props.caption" },
+          { "op": "text", "selector": "#panel-title", "fixturePath": "props.storyCard.title" },
+          { "op": "text", "selector": ".row.start .gold", "fixturePath": "props.npcDialogue.name" },
+          { "op": "text", "selector": ".row.start p:nth-of-type(1)", "fixturePath": "props.npcDialogue.paragraphs[0]" },
+          { "op": "text", "selector": ".row.start p:nth-of-type(2)", "fixturePath": "props.npcDialogue.paragraphs[1]" },
+          { "op": "text", "selector": ".stack.small > p.caption:first-of-type", "fixturePath": "props.storyCard.eyebrow" },
+          { "op": "text", "selector": ".stack.small h3", "fixturePath": "props.storyCard.title" },
+          { "op": "text", "selector": ".stack.small > p.caption:last-of-type", "fixturePath": "props.storyCard.summary" },
+          { "op": "text", "selector": "button.primary", "fixturePath": "props.primaryAction.label" },
+          { "op": "text", "selector": "button.text-action", "fixturePath": "props.secondaryAction.label" }
         ],
         "P04": [
-          { "selector": "#panel-title", "fixturePath": "props.receiptCard.title" },
-          { "selector": ".row.success span", "fixturePath": "props.receiptCard.resultLine" },
-          { "selector": ".kv:nth-of-type(1) span:last-child", "fixturePath": "props.receiptCard.rewards.credits" },
-          { "selector": ".primary", "fixturePath": "props.receiptCard.nextAction.label" },
-          { "selector": ".text-action", "fixturePath": "props.receiptCard.exitAction.label" }
+          { "op": "text", "selector": "p.caption", "fixturePath": "props.receiptCard.caption" },
+          { "op": "text", "selector": "#panel-title", "fixturePath": "props.receiptCard.title" },
+          { "op": "text", "selector": ".row.success span", "fixturePath": "props.receiptCard.resultLine" },
+          { "op": "text", "selector": ".kv:nth-of-type(1) span:last-child", "fixturePath": "props.receiptCard.rewardText" },
+          { "op": "text", "selector": ".kv:nth-of-type(2) span:last-child", "fixturePath": "props.receiptCard.identityValue" },
+          { "op": "text", "selector": ".kv:nth-of-type(3) span:last-child", "fixturePath": "props.receiptCard.experienceValue" },
+          { "op": "text", "selector": ".stack.small strong.gold", "fixturePath": "props.receiptCard.npcReply.name" },
+          { "op": "text", "selector": ".stack.small p:last-of-type", "fixturePath": "props.receiptCard.npcReply.paragraphs[0]" },
+          { "op": "text", "selector": "button.primary", "fixturePath": "props.receiptCard.nextAction.label" },
+          { "op": "text", "selector": "button.text-action", "fixturePath": "props.receiptCard.exitAction.label" }
         ],
         "P05": [
-          { "selector": ".clue strong", "fixturePath": "props.clueRow.title" },
-          { "selector": ".clue .caption", "fixturePath": "props.clueRow.teaser" },
-          { "selector": ".clue .gold", "fixturePath": "props.clueRow.actionLabel" }
+          { "op": "text", "selector": "p.caption.center:first-of-type", "fixturePath": "props.hostResult.caption" },
+          { "op": "text", "selector": "#panel-title", "fixturePath": "props.hostResult.title" },
+          { "op": "text", "selector": ".clue strong", "fixturePath": "props.clueRow.title" },
+          { "op": "text", "selector": ".clue .caption", "fixturePath": "props.clueRow.teaser" },
+          { "op": "text", "selector": ".clue .gold", "fixturePath": "props.clueRow.actionLabel" },
+          { "op": "text", "selector": "button.secondary", "fixturePath": "props.hostResult.secondaryActionLabel" }
         ],
         "P06": [
-          { "selector": "#panel-title", "fixturePath": "props.storyCard.title" },
-          { "selector": ".row.start .gold", "fixturePath": "props.npcDialogue.name" },
-          { "selector": ".primary", "fixturePath": "props.primaryAction.label" },
-          { "selector": ".text-action", "fixturePath": "props.secondaryAction.label" }
+          { "op": "text", "selector": "p.caption", "fixturePath": "props.caption" },
+          { "op": "text", "selector": "#panel-title", "fixturePath": "props.title" },
+          { "op": "text", "selector": ".row.start .gold", "fixturePath": "props.npcDialogue.name" },
+          { "op": "text", "selector": ".row.start p:nth-of-type(1)", "fixturePath": "props.npcDialogue.paragraphs[0]" },
+          { "op": "text", "selector": "button.primary", "fixturePath": "props.primaryAction.label" },
+          { "op": "text", "selector": "button.text-action", "fixturePath": "props.secondaryAction.label" }
         ],
         "P07": [
-          { "selector": "#panel-title", "fixturePath": "props.caption" },
-          { "selector": ".surface h2", "fixturePath": "props.storyCard.title" },
-          { "selector": ".surface p", "fixturePath": "props.storyCard.summary" },
-          { "selector": ".clue strong", "fixturePath": "props.clueRow.title" },
-          { "selector": ".tools .tool:nth-child(1)", "fixturePath": "props.toolGrid.tools[0].label" },
-          { "selector": ".tools .tool:nth-child(4)", "fixturePath": "props.toolGrid.tools[3].label" }
+          { "op": "text", "selector": "#panel-title", "fixturePath": "props.shellTitle", "productTarget": "CareerShell.title", "note": "原型 #panel-title 是折光港；产品标题同源，不能用 caption 覆盖。" },
+          { "op": "text", "selector": "p.caption", "fixturePath": "props.caption" },
+          { "op": "text", "selector": ".tabs button:nth-child(1)", "fixturePath": "props.segmentedTabs.tabs[0].label" },
+          { "op": "text", "selector": ".tabs button:nth-child(2)", "fixturePath": "props.segmentedTabs.tabs[1].label" },
+          { "op": "text", "selector": ".tabs button:nth-child(3)", "fixturePath": "props.segmentedTabs.tabs[2].label" },
+          { "op": "text", "selector": ".surface > p.caption", "fixturePath": "props.storyCard.eyebrow" },
+          { "op": "text", "selector": ".surface h2", "fixturePath": "props.storyCard.title" },
+          { "op": "text", "selector": ".surface > p:not(.caption)", "fixturePath": "props.storyCard.summary" },
+          { "op": "text", "selector": ".surface button.primary", "fixturePath": "props.storyCard.action.label" },
+          { "op": "text", "selector": ".clue strong", "fixturePath": "props.clueRow.title" },
+          { "op": "text", "selector": ".clue .caption", "fixturePath": "props.clueRow.teaser" },
+          { "op": "text", "selector": ".clue .gold", "fixturePath": "props.clueRow.actionLabel" },
+          { "op": "text", "selector": ".tools .tool:nth-child(1)", "fixturePath": "props.toolGrid.tools[0].label" },
+          { "op": "text", "selector": ".tools .tool:nth-child(2)", "fixturePath": "props.toolGrid.tools[1].label" },
+          { "op": "text", "selector": ".tools .tool:nth-child(3)", "fixturePath": "props.toolGrid.tools[2].label" },
+          { "op": "text", "selector": "button.text-action:last-of-type", "fixturePath": "props.exitLabel" }
         ],
         "P08": [
-          { "selector": "#panel-title", "fixturePath": "props.segmentedTabs.tabs[1].label" },
-          { "selector": ".surface .row strong", "fixturePath": "props.workCards[0].displayName" },
-          { "selector": ".surface h3", "fixturePath": "props.workCards[0].commissions[0].title" }
+          { "op": "text", "selector": "#panel-title", "fixturePath": "props.shellTitle" },
+          { "op": "text", "selector": "p.caption", "fixturePath": "props.listCaption" },
+          { "op": "text", "selector": ".tabs button:nth-child(1)", "fixturePath": "props.segmentedTabs.tabs[0].label" },
+          { "op": "text", "selector": ".tabs button:nth-child(2)", "fixturePath": "props.segmentedTabs.tabs[1].label" },
+          { "op": "text", "selector": ".tabs button:nth-child(3)", "fixturePath": "props.segmentedTabs.tabs[2].label" },
+          { "op": "text", "selector": ".surface:nth-of-type(1) .row strong", "fixturePath": "props.workCards[0].displayName" },
+          { "op": "text", "selector": ".surface:nth-of-type(1) .row .caption", "fixturePath": "props.workCards[0].statusLabel" },
+          { "op": "text", "selector": ".surface:nth-of-type(1) h3", "fixturePath": "props.workCards[0].commissions[0].title" },
+          { "op": "text", "selector": ".surface:nth-of-type(1) button.secondary", "fixturePath": "props.actions[0].label" },
+          { "op": "text", "selector": ".surface:nth-of-type(2) .row strong", "fixturePath": "props.workCards[1].displayName" },
+          { "op": "text", "selector": ".surface:nth-of-type(2) .row .caption", "fixturePath": "props.workCards[1].statusLabel" },
+          { "op": "remove", "selector": ".surface:nth-of-type(2) h3", "reason": "paused 产品卡不显示任务详情。" },
+          { "op": "remove", "selector": ".surface:nth-of-type(2) > p.caption:last-of-type", "reason": "paused 产品卡不显示可选说明。" },
+          { "op": "text", "selector": ".surface:nth-of-type(2) button.text-action", "fixturePath": "props.actions[1].label" },
+          { "op": "create", "after": ".surface:last-of-type", "node": "world", "html": "<div class=\"surface stack small\" data-qa-card=\"world\"><div class=\"row\"><svg class=\"icon\" aria-hidden=\"true\"></svg><strong class=\"grow\"></strong><span class=\"caption\"></span></div><h3></h3><p class=\"caption\"></p><button class=\"secondary\" type=\"button\"></button></div>" },
+          { "op": "text", "selector": "[data-qa-card='world'] .row strong", "fixturePath": "props.workCards[2].title" },
+          { "op": "text", "selector": "[data-qa-card='world'] .row .caption", "fixturePath": "props.workCards[2].statusLabel" },
+          { "op": "text", "selector": "[data-qa-card='world'] h3", "fixturePath": "props.workCards[2].commissions[0].title" },
+          { "op": "text", "selector": "[data-qa-card='world'] > p.caption", "fixturePath": "props.workCards[2].commissions[0].summary" },
+          { "op": "text", "selector": "[data-qa-card='world'] button.secondary", "fixturePath": "props.actions[0].label" },
+          { "op": "text", "selector": "button.text-action:last-of-type", "fixturePath": "props.exitLabel" }
         ],
         "P09": [
-          { "selector": "#panel-title", "fixturePath": "props.segmentedTabs.tabs[2].label" },
-          { "selector": ".timeline li:nth-child(1)", "fixturePath": "props.journalTimeline.events[0].label" },
-          { "selector": ".timeline li:last-child", "fixturePath": "props.journalTimeline.events[3].label" }
+          { "op": "text", "selector": "#panel-title", "fixturePath": "props.shellTitle" },
+          { "op": "text", "selector": "p.caption", "fixturePath": "props.listCaption" },
+          { "op": "text", "selector": ".tabs button:nth-child(1)", "fixturePath": "props.segmentedTabs.tabs[0].label" },
+          { "op": "text", "selector": ".tabs button:nth-child(2)", "fixturePath": "props.segmentedTabs.tabs[1].label" },
+          { "op": "text", "selector": ".tabs button:nth-child(3)", "fixturePath": "props.segmentedTabs.tabs[2].label" },
+          { "op": "text", "selector": ".timeline li:nth-child(1)", "fixturePath": "props.journalTimeline.events[0].label" },
+          { "op": "text", "selector": ".timeline li:nth-child(2)", "fixturePath": "props.journalTimeline.events[1].label" },
+          { "op": "text", "selector": ".timeline li:nth-child(3)", "fixturePath": "props.journalTimeline.events[2].label" },
+          { "op": "text", "selector": ".timeline li:nth-child(4)", "fixturePath": "props.journalTimeline.events[3].label" },
+          { "op": "text", "selector": "p.caption.center", "fixturePath": "props.footerText" },
+          { "op": "text", "selector": "button.text-action:last-of-type", "fixturePath": "props.exitLabel" }
         ],
-        "P10": [
-          { "selector": "#panel-title", "fixturePath": "variants[0].careerShell.title" },
-          { "selector": ".surface h3", "fixturePath": "variants[0].storyCard.title" },
-          { "selector": ".primary", "fixturePath": "variants[2].secondaryAction.label" },
-          { "selector": ".letter h2", "fixturePath": "variants[3].letterCard.title" },
-          { "selector": ".letter p:nth-of-type(1)", "fixturePath": "variants[3].letterCard.paragraphs[0]" }
+        "P10-empty": [
+          { "op": "text", "selector": "#panel-title", "fixturePath": "shellTitle" },
+          { "op": "text", "selector": "p.caption", "fixturePath": "caption" },
+          { "op": "text", "selector": ".tabs button:nth-child(1)", "fixturePath": "tabs[0].label" },
+          { "op": "text", "selector": ".tabs button:nth-child(2)", "fixturePath": "tabs[1].label" },
+          { "op": "text", "selector": ".tabs button:nth-child(3)", "fixturePath": "tabs[2].label" },
+          { "op": "text", "selector": ".surface h3", "fixturePath": "variants[0].storyCard.title" },
+          { "op": "text", "selector": ".surface p", "fixturePath": "variants[0].storyCard.summary" },
+          { "op": "text", "selector": ".tools .tool:nth-child(1)", "fixturePath": "toolGrid[0].label" },
+          { "op": "text", "selector": ".tools .tool:nth-child(2)", "fixturePath": "toolGrid[1].label" },
+          { "op": "text", "selector": ".tools .tool:nth-child(3)", "fixturePath": "toolGrid[2].label" },
+          { "op": "text", "selector": "button.text-action:last-of-type", "fixturePath": "exitLabel" }
+        ],
+        "P10-loading": [
+          { "op": "text", "selector": "#panel-title", "fixturePath": "shellTitle" },
+          { "op": "text", "selector": "p.caption", "fixturePath": "caption" },
+          { "op": "text", "selector": ".tabs button:nth-child(1)", "fixturePath": "tabs[0].label" },
+          { "op": "text", "selector": ".tabs button:nth-child(2)", "fixturePath": "tabs[1].label" },
+          { "op": "text", "selector": ".tabs button:nth-child(3)", "fixturePath": "tabs[2].label" },
+          { "op": "text", "selector": ".surface h3", "fixturePath": "variants[1].storyCard.title" },
+          { "op": "text", "selector": ".surface p", "fixturePath": "variants[1].storyCard.summary" },
+          { "op": "text", "selector": ".tools .tool:nth-child(1)", "fixturePath": "toolGrid[0].label" },
+          { "op": "text", "selector": ".tools .tool:nth-child(2)", "fixturePath": "toolGrid[1].label" },
+          { "op": "text", "selector": ".tools .tool:nth-child(3)", "fixturePath": "toolGrid[2].label" },
+          { "op": "text", "selector": "button.text-action:last-of-type", "fixturePath": "exitLabel" }
+        ],
+        "P10-error": [
+          { "op": "text", "selector": "#panel-title", "fixturePath": "shellTitle" },
+          { "op": "text", "selector": "p.caption", "fixturePath": "caption" },
+          { "op": "text", "selector": ".tabs button:nth-child(1)", "fixturePath": "tabs[0].label" },
+          { "op": "text", "selector": ".tabs button:nth-child(2)", "fixturePath": "tabs[1].label" },
+          { "op": "text", "selector": ".tabs button:nth-child(3)", "fixturePath": "tabs[2].label" },
+          { "op": "text", "selector": ".surface h3", "fixturePath": "variants[2].storyCard.title" },
+          { "op": "text", "selector": ".surface p", "fixturePath": "variants[2].storyCard.summary" },
+          { "op": "text", "selector": ".surface button.primary", "fixturePath": "variants[2].secondaryAction.label" },
+          { "op": "text", "selector": ".tools .tool:nth-child(1)", "fixturePath": "toolGrid[0].label" },
+          { "op": "text", "selector": ".tools .tool:nth-child(2)", "fixturePath": "toolGrid[1].label" },
+          { "op": "text", "selector": ".tools .tool:nth-child(3)", "fixturePath": "toolGrid[2].label" },
+          { "op": "text", "selector": "button.text-action:last-of-type", "fixturePath": "exitLabel" }
+        ],
+        "P10-longtext": [
+          { "op": "createState", "stateId": "letter-longtext", "clone": "letter", "qaOnly": true, "reason": "原型 screens 无 letter-longtext；QA 副本新建该状态后注入。" },
+          { "op": "text", "selector": "#panel-title", "fixturePath": "shellTitle" },
+          { "op": "text", "selector": "p.caption", "fixturePath": "variants[3].letterCard.ambientLabel" },
+          { "op": "text", "selector": ".letter h2", "fixturePath": "variants[3].letterCard.title" },
+          { "op": "text", "selector": ".letter p:nth-of-type(1)", "fixturePath": "variants[3].letterCard.paragraphs[0]" },
+          { "op": "text", "selector": ".letter p:nth-of-type(2)", "fixturePath": "variants[3].letterCard.paragraphs[1]" },
+          { "op": "text", "selector": ".letter p:nth-of-type(3)", "fixturePath": "variants[3].letterCard.paragraphs[2]" },
+          { "op": "text", "selector": ".signature", "fixturePath": "variants[3].letterCard.sender" },
+          { "op": "text", "selector": "button.text-action", "fixturePath": "variants[3].letterCard.actions[0].label" }
         ]
       }
     },
@@ -272,8 +392,11 @@
           "reducedMotion": false
         },
         "hostResult": {
+          "caption": "黄金矿工 · 本局结算",
           "scoreText": "1,280",
-          "primaryActionLabel": "再来一局"
+          "summary": "本次合成结算顺利结束",
+          "primaryActionLabel": "再来一局",
+          "exitLabel": "返回街机厅"
         }
       },
       "expected": {
@@ -376,6 +499,7 @@
           "outcome": "success",
           "state": "success",
           "title": "合成交接完成",
+          "caption": "折光港 · 合成交接处",
           "resultLine": "合成交接 · 甲已登记",
           "rewards": {
             "credits": 12,
@@ -383,6 +507,9 @@
             "identity": "在册帮手",
             "experience": "首次合成交接"
           },
+          "rewardText": "工钱 12 · 材料 合成材料 ×1",
+          "identityValue": "在册帮手",
+          "experienceValue": "首次合成交接",
           "npcReply": {
             "name": "港口记录员",
             "state": "return",
@@ -439,7 +566,12 @@
           "placement": "list",
           "reducedMotion": false
         },
-        "identityState": { "originGameId": "gold-miner", "hasAcceptedProfession": true }
+        "identityState": { "originGameId": "gold-miner", "hasAcceptedProfession": true },
+        "hostResult": {
+          "caption": "影跃 · 本局结算",
+          "title": "本次探索结束",
+          "secondaryActionLabel": "继续普通游玩"
+        }
       },
       "expected": {
         "visibleTexts": ["合成线索：乙", "仔细看看"],
@@ -460,6 +592,8 @@
       "surface": "letter",
       "host": { "mode": "normal-browser", "gameId": "shadow-leap" },
       "props": {
+        "caption": "一封新的合成回信",
+        "title": "合成记录的访客",
         "npcDialogue": {
           "name": "港口记录员",
           "state": "optional",
@@ -486,6 +620,8 @@
       "surface": "port",
       "host": { "mode": "normal-browser", "gameId": "gold-miner" },
       "bridgeInput": {
+        "generatedBy": "professionState.mergeIntoDiscovery(initialState(), { professionVersion:1, firstDiscoveredGameId:'gold-miner', acceptedOriginGameId:'gold-miner', activeProfessionId:'nature.miner', professionProgress, storyEvents }, now)",
+        "careerViewContext": { "surface": "port", "gameId": "gold-miner", "archived": false },
         "clue": {
           "clueId": "CL-shadow-leap",
           "gameId": "shadow-leap",
@@ -495,11 +631,21 @@
           "letter": { "actionLabel": "查看回信" }
         },
         "state": {
+          "professionVersion": 1,
           "stage": "GLIMPSED",
+          "firstDiscoveredGameId": "gold-miner",
+          "acceptedOriginGameId": "gold-miner",
+          "activeProfessionId": "nature.miner",
+          "narrativeCursor": { "chapterId": "C0", "nodeId": "story:C0.port_seen" },
+          "storyEvents": { "story:C0.port_seen": { "at": "2026-11-27T10:05:00.000Z", "source": "clue" } },
           "portSeenAt": null,
           "clues": {
-            "CL-gold-miner": { "openedAt": "2026-11-27T10:05:00.000Z" },
-            "CL-shadow-leap": { "openedAt": null }
+            "CL-gold-miner": { "openedAt": "2026-11-27T10:05:00.000Z", "dismissed": false },
+            "CL-shadow-leap": { "openedAt": null, "dismissed": true }
+          },
+          "professionProgress": {
+            "nature.miner": { "state": "accepted", "paused": false, "discoveredAt": "2026-11-27T10:00:00.000Z", "readAt": "2026-11-27T10:05:00.000Z", "acceptedAt": "2026-11-27T10:06:00.000Z", "completedAt": null },
+            "adventure.relicseeker": { "state": "accepted", "paused": false, "discoveredAt": "2026-11-27T10:25:00.000Z", "readAt": "2026-11-27T10:28:00.000Z", "acceptedAt": "2026-11-27T10:29:00.000Z", "completedAt": null }
           }
         },
         "placement": "list"
@@ -544,6 +690,8 @@
           "inline": true
         },
         "caption": "旧港的灯依然亮着。",
+        "shellTitle": "折光港",
+        "exitLabel": "离开港口 · 返回街机厅",
         "segmentedTabs": {
           "label": "港口页面",
           "tabs": [
@@ -600,7 +748,23 @@
       "name": "工作",
       "surface": "work",
       "host": { "mode": "normal-browser", "gameId": "gold-miner" },
+      "projection": {
+        "professions": [
+          { "professionId": "nature.miner", "displayName": "采矿员", "domain": "nature", "state": "accepted", "paused": false, "active": true },
+          { "professionId": "adventure.relicseeker", "displayName": "遗迹探险家", "domain": "adventure", "state": "accepted", "paused": true, "active": false }
+        ],
+        "commissions": [
+          { "commissionId": "gold-miner.T1", "category": "profession", "professionId": "nature.miner", "title": "合成交接 · 甲" },
+          { "commissionId": "shadow-leap.T1", "category": "profession", "professionId": "adventure.relicseeker", "title": "合成探查 · 乙", "readOnly": true },
+          { "commissionId": "pendulum-tower.T1", "category": "world", "professionId": null, "title": "合成短差" }
+        ],
+        "story": { "nextAction": null, "messages": [], "history": [] },
+        "availableIds": ["gold-miner.T1", "pendulum-tower.T1"]
+      },
       "props": {
+        "shellTitle": "折光港",
+        "listCaption": "已经接触的工作",
+        "exitLabel": "离开港口 · 返回街机厅",
         "segmentedTabs": {
           "label": "港口页面",
           "tabs": [
@@ -616,6 +780,7 @@
             "displayName": "采矿员",
             "icon": "pick",
             "state": "active",
+            "statusLabel": "进行中",
             "commissions": [
               {
                 "commissionId": "gold-miner.T1",
@@ -632,6 +797,7 @@
             "displayName": "遗迹探险家",
             "icon": "scroll",
             "state": "paused",
+            "statusLabel": "已搁置",
             "commissions": []
           },
           {
@@ -639,10 +805,12 @@
             "displayName": "",
             "icon": "check",
             "state": "optional",
+            "title": "通用外勤",
+            "statusLabel": "可选",
             "adapterOnly": {
-              "internalParentProfessionId": "engineering.structural",
+              "internalParentProfessionId": "nature.miner",
               "render": false,
-              "note": "仅为 commission-core 授权父职业；不是 WorkCard prop，不进入 DOM。"
+              "note": "P08 已接受职业；仅作 commission-core 世界工作授权，不是 WorkCard prop，不进入 DOM。"
             },
             "commissions": [
               {
@@ -678,6 +846,10 @@
       "surface": "journal",
       "host": { "mode": "normal-browser", "gameId": "gold-miner" },
       "props": {
+        "shellTitle": "折光港",
+        "listCaption": "你的合成经历",
+        "footerText": "这些经历构成了属于你的故事。",
+        "exitLabel": "离开港口 · 返回街机厅",
         "segmentedTabs": {
           "label": "港口页面",
           "tabs": [
@@ -714,6 +886,20 @@
       "name": "空状态 / 加载 / 失败 / 长文本",
       "surface": "port",
       "host": { "mode": "normal-browser", "gameId": "gold-miner" },
+      "shellTitle": "折光港",
+      "caption": "旧港的灯依然亮着。",
+      "tabs": [
+        { "id": "home", "label": "眼下" },
+        { "id": "work", "label": "工作" },
+        { "id": "journal", "label": "经历" }
+      ],
+      "toolGrid": [
+        { "label": "钱包", "icon": "wallet", "actionId": "openReceipt" },
+        { "label": "商店", "icon": "store", "actionId": "openMarket" },
+        { "label": "工作台", "icon": "tool", "actionId": "openWorkshop" },
+        { "label": "机库", "icon": "tool", "actionId": "openHangar" }
+      ],
+      "exitLabel": "离开港口 · 返回街机厅",
       "variants": [
         {
           "id": "P10-empty",

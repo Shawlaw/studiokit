@@ -122,7 +122,7 @@ UI/adapter 不得读 `ctx.commissions`、`careerCatalog()`、`ctx.chapters` 的�
 | `title` | `ambientLabel || title`，保持既有 chip 文案优先级 |
 | `teaser` | `ambientText || ''`；空串时不建摘要节点 |
 | `actionLabel` | `state='glimpsed'` 时为 `仔细看看`；`state='recoverable'` 时取 `letter.actionLabel`（无效则 `按地址投递`）；`state='read'` 时为 `查看这封信` |
-| `state` | `clueId` 不在 `state.clues` → `hidden`（无 DOM）；记录存在且无 `openedAt` → `glimpsed`；有 `openedAt` → `read`；信箱找回且 `openedAt` 缺失、`portSeenAt` 缺失、stage 为 `GLIMPSED/CURIOUS` 且存在已读线索 → `recoverable`（`bridge.js:4582-4584`、`career-db.js:1211-1213`）。`invitationForClue().state` 只能交叉确认 `glimpsed/read`，绝不产出 `recoverable` |
+| `state` | 按固定优先级求值（**recoverable 优先于 glimpsed/read 的展示分支**）：① `clueId` 不在 `state.clues` → `hidden`（无 DOM）；② `openedAt` 为合法 ISO → `read`（`dismissed` 不再改变已读）；③ 信箱找回 surface 且 `openedAt` 缺失、`portSeenAt` 缺失、stage 为 `GLIMPSED/CURIOUS` 且存在已读线索 → `recoverable`，即使 `dismissed:true` 也只恢复列表行、不重弹 chip；④ `dismissed:true` 且非 list surface → `hidden`；⑤ 其余记录存在且无 `openedAt` → `glimpsed`。`invitationForClue().state` 只能交叉确认 `glimpsed/read`，绝不产出 `recoverable`（`bridge.js:4582-4584`、`career-db.js:1211-1213`） |
 | `onOpen` | 直接使用 bridge 传入的同名回调，每次激活只调一次 |
 
 #### `careerView.story.messages` 的生产者
@@ -133,6 +133,7 @@ UI/adapter 不得读 `ctx.commissions`、`careerCatalog()`、`ctx.chapters` 的�
 2. T12 adapter（letter/arrival/receipt）按真实 `invitationForClue`、`state.clues[*].openedAt` 与当前 surface 选择**零条或一条**候选；`read` 未接受职业返回 `null`，候选 `professionId` 必须在 `view.professions` 中。
 3. lead 串行集成的 `bridge.careerView()` 在 `projectCareerView()` 之后、返回 UI 之前注入候选：多条时按合法 `at` 降序、再按 `messageId` 字典序取第一条，硬上限 1；无候选时保持 `[]`。
 4. T13 只消费 `view.story.messages`；`world-state.js:1898-1916` 已支持的 `label/text/from/at` 是唯一公开形状。不得由 UI 直接读取 T14 shard、NPC/章节目录或 `storyFeedback.nextStep` 补写消息。
+5. 夹具中的 `bridgeInput.state` 必须由真实 `professionState.mergeIntoDiscovery/extensionOf` 形状生成，并与夹具 `projection.professions`、`story.messages`、`tools` 自洽；只允许在 fixture 中持久化该快照，不把合成状态写回产品。
 
 ## 4. 冻结组件契约
 
@@ -160,7 +161,7 @@ UI/adapter 不得读 `ctx.commissions`、`careerCatalog()`、`ctx.chapters` 的�
 
 | 项 | 冻结值 |
 |---|---|
-| Props | `clueId:string`, `gameId:string`, `professionId?:string`, `icon:'gem'|'scroll'|'mail'|'pick'|'wallet'|'store'|'tool'|'check'|'x'|'chevron'`, `title:string`, `teaser:string`, `actionLabel:string`, `state:'hidden'|'glimpsed'|'read'|'recoverable'`, `placement:'result-host'|'page-corner'|'list'`, `onOpen(clueId):void`, `reducedMotion:boolean` |
+| Props | `clueId:string`, `gameId:string`, `professionId:string|null`, `icon:'gem'|'scroll'|'mail'|'pick'|'wallet'|'store'|'tool'|'check'|'x'|'chevron'`, `title:string`, `teaser:string`, `actionLabel:string`, `state:'hidden'|'glimpsed'|'read'|'recoverable'`, `placement:'result-host'|'page-corner'|'list'`, `onOpen(clueId):void`, `reducedMotion:boolean` |
 | 输出 / 状态 | 24px 线性金色 icon（stroke 1.6–1.7）、标题、摘要、金色文字动作；`state=hidden` 时节点完全不存在；`result-host/page-corner` 仍 ≥44px 且不遮挡主结果按钮；不显示职业、任务、报酬或 reason code |
 | 键盘 / 焦点 | 原生 button；Enter/Space 激活 `onOpen` 一次；不自动抢焦点、不弹大窗、无声音/震动；列表位置可用 Tab 到达，结算位置位于主按钮之后 |
 | 来源 / 派生 | 唯一来源是 §3.1 的 `renderClue({clue,state,...})` 派生表；`bridge.renderClue` 的完整 clue 与 DiscoveryState 快照先派生为 props 再渲染；职业 ID 只用于内部 gate |
@@ -210,7 +211,7 @@ UI/adapter 不得读 `ctx.commissions`、`careerCatalog()`、`ctx.chapters` 的�
 
 | 项 | 冻结值 |
 |---|---|
-| Props | `professionId:string|null`（职业卡必须是真实 registry ID；世界工作变体必须为 `null`）, `displayName:string`, `icon`, `state:'active'|'optional'|'paused'|'empty'`, `commissions:[{commissionId,category:'world'|'profession',title,summary,gameName?,objectiveText?,rewardText?}]`, `onStart?(commissionId):void`, `onPause?(professionId,paused):void`, `expanded?:boolean`；adapter-only `internalParentProfessionId` 只用于核心授权，不进入组件 props/DOM |
+| Props | `professionId:string|null`（职业卡必须是真实 registry ID 且已接受；世界工作变体必须为 `null`）, `displayName:string`, `icon`, `state:'active'|'optional'|'paused'|'empty'`, `commissions:[{commissionId,category:'world'|'profession',title,summary,gameName?,objectiveText?,rewardText?}]`, `onStart?(commissionId):void`, `onPause?(professionId,paused):void`, `expanded?:boolean`；adapter-only `internalParentProfessionId` 必须是同一 fixture `projection.professions` 中已接受且由 commission-core `availableIds` 授权的真实职业，只用于核心授权，不进入组件 props/DOM |
 | 输出 / 状态 | `.ac-career-ui__surface`，图标 + 名字 + 状态；首条工作可见，其余可展开；paused 折叠且不显示任务详情；`category:'world'` 用 `professionId:null` 的独立卡片，只用通用标题/说明，不显示 gameName、displayName、professionId 或职业报酬；`data-work-state` 精确取值；empty 为自然空态 |
 | 键盘 / 焦点 | 展开用原生 `<details>/<summary>` 或等价 button + `aria-expanded`；接单/搁置为原生按钮；paused 恢复后焦点留在恢复按钮；不渲染未接受职业占位 |
 
@@ -341,7 +342,7 @@ fixture 中的 harbor props 只描述 `variant` 与 `viewBox`；实际 DOM 由 T
 - 所有 `clueId` / `gameId` / `professionId` / `commissionId` 必须来自 `career/content/registry.json`、`clues.json`、`commissions.json`、`world-work.json` 的真实映射；文本一律合成、非剧透，且不在正式页面出现。
 - 夹具不使用外部包中的示例人物、示例物件、示例任务名或示例分数；`productionVisible:false` 是硬标记。T15 若把夹具接到 dev/test 路由，必须在正式构建中不可达，且不留页面内调试入口。
 - 所有 `Action` 的 `id` 即 `actionId`；T15 QA 工具按 `actionId` 注入 `onClick` stub（见 §4.1），用于验证 busy/disabled/重复点击，不改变产品组件。
-- 四条 harbor / ToolGrid / ClueRow / messages 派生规则见 §3.1；夹具里的 `bridgeInput` / `sourceClueId` / `internalParentProfessionId` 都是 QA 元数据，不属于玩家可见 props。
+- 四条 harbor / ToolGrid / ClueRow / messages 派生规则见 §3.1；夹具里的 `bridgeInput` / `sourceClueId` / `internalParentProfessionId` 都是 QA 元数据，不属于玩家可见 props。P07 第 4 个 tool 只在产品侧由 `productOnlyAssertions` 单独断言，原型侧只覆盖前三项；P10 `letter-longtext` 是 QA-only 新建状态，不属于原型 `screens`。
 - 截图矩阵：P01–P09 在 1280×800 与 390×844；P03/P06/P07/P08/P09/P10-longText 另在 320×640 与 844×390 验证；host mode 覆盖普通浏览器、0.19 紧凑模式、PWA standalone（与游戏全屏共存时不改游戏快捷键）。
 
 ## 7. 文件所有权冻结（0.23）
@@ -361,7 +362,7 @@ T15 只消费本 ADR 与夹具做截图/可访问性验证；发现契约问题�
 
 ## 8. 视觉对齐测量方法（目标，非通过结论）
 
-1. **同内容注入 + 同视口**：T15 在相同 OS、浏览器与 DPR=1、缩放 100% 下，用同一份 fixture 文本同时渲染两侧：产品侧消费冻结组件 props；原型侧用 QA-only 测试参考 HTML / 原型副本消费 `capture.referenceInjection.byFixture`，按 `fixturePath → selector` 覆盖 `reference.js:15-27` 的硬编码示例文本与数值后渲染。两张参考 PNG 只用于构图/几何参考，绝不与合成文案直接逐元素比对。不做全图像素阈值比对。
+1. **QA DOM fixture + 同视口**：T15 在相同 OS、浏览器与 DPR=1、缩放 100% 下，用同一份 fixture 同时渲染两侧。产品侧消费冻结组件 props；原型侧不是简单文本替换，而是按 `capture.referenceInjection.byFixture`（含 `P01`–`P09`、`P10-empty|loading|error|longtext`）对 QA-only 原型副本执行完整同构规范化：`text` 覆盖真实存在的节点、`remove` 删除未映射的示例节点、`create` 为产品独有的第 4 tool / 世界工作卡 / longText 状态创建等价节点、未映射的旧示例文本不得残留。每张 reference PNG 只作构图/几何参考，不与示例文案逐元素比较。不做整图像素阈值比对。
 2. **只比面板区域**：原型抓 `.panel`，产品抓 `.ac-career-ui__panel`；先按 panel 左上角归一化，再比较其间元素相对坐标。P01 只比 ClueRow 元素与其在结算中的相对次序，宿主结算弹层属于游戏样式，不要求与原型一致。
 3. **精确项**：computed `color` / `background-color` / `font-family` / `font-size` / `line-height` / `font-weight` / `border-width` / `border-radius` / `padding` / `gap` 必须与第 5 节一致；几何项（panel 宽、卡片宽、按钮高、icon/avatar 尺寸、harbor 比例、相邻元素左右对齐）目标 `<=4 CSS px`。
 4. **文字换行差异**：若度量相同但行数/换行点不同，记录两侧实际字体 fallback、每行文本、元素宽度与 `scrollHeight`，标为「可解释的换行差异」，不把整行像素差当 FAIL；不得通过改字号、letter-spacing 或牺牲 44px 热区强行对齐。
