@@ -79,6 +79,39 @@
   /** campaign-core 只允许补写这两面旗标；C2–C4 归 story-evidence，C5 归 ending-reducer。 */
   var SYNCABLE_FLAGS = Object.freeze([CHAPTER_FLAGS.C0, CHAPTER_FLAGS.C1]);
 
+  /* ------------------------------------------------------------------ *
+   * 前置解释的展示词汇（只用于玩家可读文案，不参与任何求值/判定）
+   * ------------------------------------------------------------------ */
+
+  /** 证据类别的戏内说法（E/MAP/BP/DEC 前缀不进玩家文本）。 */
+  var EVIDENCE_CLASS_NAMES = Object.freeze({
+    E: '现场记录',
+    MAP: '航线图',
+    BP: '研究底稿',
+    DEC: '决定记录',
+  });
+
+  /** 真实里程碑旗标的戏内说法；只描述港口认的那件事，不含职业/游戏/内部记号。 */
+  var MILESTONE_TEXT = Object.freeze({
+    'C0.port_seen': '按信背面的地址把信投递出去',
+    'C1.signal_fragment': '把第一段工单的下文交回港口',
+    'C2.research_complete': '让研究院把上一段信号解译完',
+    'C3.truth_found': '把月影里的时间差对上',
+    'C4.city_power_restored': '让停摆的城市重新通电',
+    'C5.star_tower_resolved': '在三条终局路线里选一条走完',
+    'C1.work_done': '交回一张写着工钱的工单',
+    'C1.flight_done': '自己飞一趟，把航报交回',
+    'C1.storm_done': '把外堤那趟清理的活做完',
+    'C1.foreman': '把验收单交回港务处',
+    'C1.signal': '在代办窗把那只信号匣取回',
+    'C1.records': '在代办窗把旧航路抄回来',
+  });
+
+  /** 由 story-evidence 规则（而不是委托奖励）产出的三个里程碑。 */
+  var EVIDENCE_CHAIN_FLAGS = Object.freeze(['C2.research_complete', 'C3.truth_found', 'C4.city_power_restored']);
+  var WORLD_WORK_HINT = '港里不分行的活计';
+  var PREREQUISITE_MAX_TEXT = 900;
+
   /* 剧情旗标：C<0..5>.<小写稳定名>；结局旗标：ending.<approach>。 */
   var CHAPTER_FLAG_RE = /^C[0-5]\.[a-z0-9][a-z0-9._-]{0,60}$/;
   var ENDING_FLAG_RE = /^ending\.[a-z0-9][a-z0-9._-]{0,39}$/;
@@ -937,6 +970,8 @@
           tier: Number(rawCommission.tier) || 0,
           title: trimText(rawCommission.title, 120),
           unlock: isObject(rawCommission.unlock) ? clone(rawCommission.unlock) : null,
+          /* 只读：真实的章节门槛，仅用于前置解释里的「世界条件」提示，不参与任何判定。 */
+          chapterGate: isFlagToken(trimText(rawCommission.chapterGate, 80)) ? trimText(rawCommission.chapterGate, 80) : null,
           rewardFlags: sortedTokens(reward.flags),
           rewardEvidence: sortedTokens(reward.evidence),
         });
@@ -1717,6 +1752,316 @@
       }
     }
 
+    /* ---------------- 真实前置的文字解释（只读；不参与 gate 判定） ---------------- */
+
+    /**
+     * 玩家可读的前置说明：只用真实内容（章节标题、路线奖励旗标、通用活计标题、
+     * story-evidence 记录类别）与真实要求树；不渲染内部 id/旗标原文/原因码，
+     * 不改变 evalRequirement 的任何判定，也不产生新字段之外的副作用。
+     */
+
+    function quoteName(text) {
+      return '「' + text + '」';
+    }
+
+    function milestoneTextOf(flag) {
+      if (hasOwn(MILESTONE_TEXT, flag)) return MILESTONE_TEXT[flag];
+      for (var i = 0; i < CHAPTER_IDS.length; i += 1) {
+        if (CHAPTER_FLAGS[CHAPTER_IDS[i]] === flag) return '把上一段的结论交回港口';
+      }
+      return '把上一步的结论交回港口';
+    }
+
+    function evidenceClassName(token) {
+      var text = typeof token === 'string' ? token : '';
+      var dash = text.indexOf('-');
+      var prefix = dash > 0 ? text.slice(0, dash) : '';
+      return hasOwn(EVIDENCE_CLASS_NAMES, prefix) ? EVIDENCE_CLASS_NAMES[prefix] : '记录';
+    }
+
+    /** 真实产出该旗标的章节（按内容里的 rewardFlags 反查章节标题）。 */
+    function chapterTitlesForFlag(flag) {
+      var titles = [];
+      state.chapters.forEach(function (chapter) {
+        var hit = false;
+        chapter.routes.forEach(function (route) {
+          if (route.rewardFlags.indexOf(flag) >= 0) hit = true;
+        });
+        if (hit && chapter.title && titles.indexOf(chapter.title) < 0) titles.push(chapter.title);
+      });
+      return titles;
+    }
+
+    /** 真实产出该旗标的世界通用工作（只给通用标题，不给拥有职业）。 */
+    function worldWorkTitlesForFlag(flag) {
+      var titles = [];
+      if (!state.worldWork) return titles;
+      state.commissions.forEach(function (commission) {
+        if (commission.rewardFlags.indexOf(flag) < 0) return;
+        var meta = state.worldWorkIndex ? state.worldWorkIndex[commission.commissionId] : null;
+        if (meta && typeof meta.title === 'string' && meta.title && titles.indexOf(meta.title) < 0) {
+          titles.push(meta.title);
+        }
+      });
+      return titles;
+    }
+
+    function otherCommissionCountForFlag(flag) {
+      var count = 0;
+      state.commissions.forEach(function (commission) {
+        if (commission.rewardFlags.indexOf(flag) < 0) return;
+        var meta = state.worldWorkIndex ? state.worldWorkIndex[commission.commissionId] : null;
+        if (!meta) count += 1;
+      });
+      return count;
+    }
+
+    /** 真实世界条件：有些工单要等这一章旗标落地后才会挂出来（内容里的 chapterGate）。 */
+    function gatedCommissionCount(flag) {
+      var count = 0;
+      state.commissions.forEach(function (commission) {
+        if (commission.chapterGate === flag) count += 1;
+      });
+      return count;
+    }
+
+    /** 世界通用工作的通用标题（只给通用文案，不给拥有职业）。 */
+    function worldWorkTitles() {
+      var titles = [];
+      if (!state.worldWork) return titles;
+      state.worldWorkIds.forEach(function (id) {
+        var meta = state.worldWorkIndex ? state.worldWorkIndex[id] : null;
+        if (meta && typeof meta.title === 'string' && meta.title && titles.indexOf(meta.title) < 0) {
+          titles.push(meta.title);
+        }
+      });
+      return titles;
+    }
+
+    /** 记录链旗标（C2–C4）的取得线索：通用活计带回的现场记录凑齐即可。 */
+    function evidenceChainHint(worldTitles) {
+      var titles = (worldTitles && worldTitles.length ? worldTitles : worldWorkTitles()).slice(0, 3);
+      if (!titles.length) return '把不同活计带回来的现场记录凑齐也能换来这一步';
+      return WORLD_WORK_HINT + '（' + titles.map(quoteName).join('、') + '）带回来的现场记录凑齐也能换来这一步';
+    }
+
+    /** 「怎么拿到这一步」：只引用真实章节与通用活计，不点名任何职业或委托 id。 */
+    function flagObtainHints(flag) {
+      var hints = [];
+      var titles = chapterTitlesForFlag(flag);
+      if (titles.length) hints.push('在' + quoteName(titles[0]) + '那一段任选一条路线走完');
+      var worldTitles = worldWorkTitlesForFlag(flag);
+      if (worldTitles.length) {
+        hints.push(WORLD_WORK_HINT + '（' + worldTitles.slice(0, 3).map(quoteName).join('、') + '）也能带回这一步');
+      }
+      if (otherCommissionCountForFlag(flag) > 0) hints.push('或者交回告示板上写成这一步的工单');
+      if (EVIDENCE_CHAIN_FLAGS.indexOf(flag) >= 0) hints.push(evidenceChainHint(worldTitles));
+      if (gatedCommissionCount(flag) > 0) hints.push('另外，写着下一段结果的工单要等这一步落地才会挂出来');
+      return hints;
+    }
+
+    /** 一组旗标共用的取得线索：同类提示只出现一次，标题去重后统一引用。 */
+    function flagObtainHintsForList(list) {
+      var hints = [];
+      var chapterTitles = [];
+      var worldTitles = [];
+      var generic = 0;
+      var gated = 0;
+      var chainHit = false;
+      list.forEach(function (flag) {
+        chapterTitlesForFlag(flag).forEach(function (title) {
+          if (chapterTitles.indexOf(title) < 0) chapterTitles.push(title);
+        });
+        worldWorkTitlesForFlag(flag).forEach(function (title) {
+          if (worldTitles.indexOf(title) < 0) worldTitles.push(title);
+        });
+        generic += otherCommissionCountForFlag(flag);
+        gated += gatedCommissionCount(flag);
+        if (EVIDENCE_CHAIN_FLAGS.indexOf(flag) >= 0) chainHit = true;
+      });
+      if (chapterTitles.length) hints.push('在' + chapterTitles.map(quoteName).join('、') + '那一段任选一条路线走完');
+      if (worldTitles.length) hints.push(WORLD_WORK_HINT + '（' + worldTitles.slice(0, 3).map(quoteName).join('、') + '）也能带回这一步');
+      if (generic > 0) hints.push('或者交回告示板上写成这一步的工单');
+      if (chainHit) hints.push(evidenceChainHint(worldTitles));
+      if (gated > 0) hints.push('另外，写着下一段结果的工单要等这一步落地才会挂出来');
+      return hints;
+    }
+
+    function explainTokenItem(kind, token, ctx) {
+      var item = { kind: kind, token: token, met: false, text: '' };
+      if (kind === 'flag') {
+        item.met = ctx.flags.has(token);
+        item.text = milestoneTextOf(token);
+        return item;
+      }
+      if (kind === 'commission') {
+        item.met = ctx.cleared.has(token);
+        var meta = state.worldWorkIndex ? state.worldWorkIndex[token] : null;
+        item.text = meta && meta.title ? quoteName(meta.title) : '告示板上那些写着这一步结果的纸';
+        return item;
+      }
+      item.met = ctx.evidence.has(token);
+      item.text = evidenceClassName(token);
+      return item;
+    }
+
+    function explainListGroup(key, list, ctx) {
+      var requirement = {};
+      requirement[key] = list.slice();
+      var mode = key === 'allFlags' || key === 'evidenceAll' ? 'all' : 'any';
+      var kind = key === 'anyCommissions' ? 'commissions' : (key === 'evidenceAll' || key === 'evidenceAny' ? 'evidence' : 'flags');
+      var itemKind = kind === 'commissions' ? 'commission' : (kind === 'evidence' ? 'evidence' : 'flag');
+      var items = list.map(function (token) {
+        return explainTokenItem(itemKind, token, ctx);
+      });
+      var body = '';
+      if (!list.length) {
+        body = mode === 'all' ? '这一段没有额外前置。' : '这一项目前没有可选条目。';
+      } else if (kind === 'flags') {
+        body = (mode === 'all' ? '下面几件都要做到：' : '先做到其中任意一件：')
+          + items.map(function (item) { return quoteName(item.text); }).join('；') + '。';
+        var hints = flagObtainHintsForList(list);
+        if (hints.length) body += '怎么拿到：' + hints.join('；') + '。';
+      } else if (kind === 'commissions') {
+        var worldTitles = [];
+        var worldCount = 0;
+        list.forEach(function (id) {
+          var meta = state.worldWorkIndex ? state.worldWorkIndex[id] : null;
+          if (meta && meta.title) {
+            worldCount += 1;
+            if (worldTitles.indexOf(meta.title) < 0) worldTitles.push(meta.title);
+          }
+        });
+        var parts = [];
+        if (worldTitles.length) {
+          parts.push(WORLD_WORK_HINT + '（' + worldTitles.slice(0, 3).map(quoteName).join('、') + '）');
+        }
+        if (list.length > worldCount) parts.push('告示板上那些写着这一步结果的纸');
+        body = '交回其中任意一张工单即可：' + (parts.length ? parts.join('，或') : '告示板上那些写着这一步结果的纸') + '。';
+      } else {
+        var counts = Object.create(null);
+        var order = [];
+        list.forEach(function (token) {
+          var name = evidenceClassName(token);
+          if (counts[name] === undefined) {
+            counts[name] = 0;
+            order.push(name);
+          }
+          counts[name] += 1;
+        });
+        var names = order.map(function (name) {
+          return mode === 'all' ? counts[name] + ' 份' + name : name;
+        });
+        body = (mode === 'all' ? '还要带回这些记录：' : '带回其中任意一种记录即可：') + names.join('、')
+          + '。来路是告示板上写成这一步的工单，' + WORLD_WORK_HINT + '也会留下这类记录。';
+      }
+      return {
+        key: key,
+        mode: mode,
+        kind: kind,
+        met: evalRequirement(requirement, ctx),
+        requirement: clone(requirement) || {},
+        tokens: list.slice(),
+        items: items,
+        groups: [],
+        body: trimText(body, PREREQUISITE_MAX_TEXT),
+      };
+    }
+
+    function mergeTokenLists(children) {
+      var out = { flags: [], commissions: [], evidence: [] };
+      children.forEach(function (child) {
+        ['flags', 'commissions', 'evidence'].forEach(function (key) {
+          tokenArray(child.tokens ? child.tokens[key] : null).forEach(function (token) {
+            if (out[key].indexOf(token) < 0) out[key].push(token);
+          });
+        });
+      });
+      return out;
+    }
+
+    function explainCompositeGroup(key, value, ctx) {
+      var children = value.map(function (child) {
+        return explainRequirementNode(child, ctx, 1);
+      });
+      var requirement = {};
+      requirement[key] = value.map(function (child) {
+        return clone(child) || {};
+      });
+      var mode = key === 'all' ? 'all' : 'any';
+      var body = (mode === 'all' ? '下面几项都要满足：' : '下面任一项即可：')
+        + children.map(function (child) { return child.body; }).join(' ');
+      return {
+        key: key,
+        mode: mode,
+        kind: 'composite',
+        met: evalRequirement(requirement, ctx),
+        requirement: clone(requirement) || {},
+        tokens: mergeTokenLists(children),
+        items: [],
+        groups: children,
+        body: trimText(body, PREREQUISITE_MAX_TEXT),
+      };
+    }
+
+    function explainRequirementNode(req, ctxInput, depth) {
+      var ctx = ctxInput && ctxInput.flags instanceof Set ? ctxInput : ensureContext(ctxInput);
+      var emptyTokens = { flags: [], commissions: [], evidence: [] };
+      if (!isRequirementObject(req) || !Object.keys(req).length) {
+        return {
+          met: true,
+          empty: true,
+          mode: 'all',
+          kind: 'none',
+          requirement: clone(req) || {},
+          tokens: emptyTokens,
+          items: [],
+          groups: [],
+          body: '这一段没有额外前置。',
+          text: '这一段没有额外前置。',
+        };
+      }
+      var groups = [];
+      var level = depth === undefined ? 0 : depth;
+      if (level <= MAX_REQUIREMENT_DEPTH) {
+        REQUIREMENT_KEYS.forEach(function (key) {
+          if (!hasOwn(req, key)) return;
+          if (REQUIREMENT_NODE_KEYS.indexOf(key) >= 0) {
+            if (!isArray(req[key]) || !req[key].length) return;
+            groups.push(explainCompositeGroup(key, req[key], ctx));
+            return;
+          }
+          groups.push(explainListGroup(key, tokenArray(req[key]), ctx));
+        });
+      }
+      var met = evalRequirement(req, ctx);
+      var body = groups.length
+        ? groups.map(function (group) { return group.body; }).join(' ')
+        : '这一段没有额外前置。';
+      return {
+        met: met,
+        empty: false,
+        mode: 'all',
+        kind: 'composite',
+        requirement: clone(req) || {},
+        tokens: collectRequirementTokens(req, { flags: [], commissions: [], evidence: [] }),
+        items: [],
+        groups: groups,
+        body: trimText(body, PREREQUISITE_MAX_TEXT),
+        text: trimText((met ? '前置已经齐了：' : '还差这些前置：') + body, PREREQUISITE_MAX_TEXT),
+      };
+    }
+
+    /** 本章完成条件（里程碑旗标）的文字解释，供章节视图与终局入口共用。 */
+    function completionExplanation(chapter, ctx, completed) {
+      var flag = chapterFlagOf(chapter.chapterId);
+      if (!flag) return { flag: null, met: completed === true, text: '' };
+      var hints = flagObtainHints(flag);
+      var text = (completed === true ? '这一步已经落下：' : '这一段要走完，港口认的是：') + quoteName(milestoneTextOf(flag)) + '。';
+      if (hints.length) text += '怎么拿到：' + hints.join('；') + '。';
+      return { flag: flag, met: completed === true, text: trimText(text, PREREQUISITE_MAX_TEXT) };
+    }
+
     /* ---------------- 状态推导 ---------------- */
 
     function endingChosenOf(ctx) {
@@ -1794,6 +2139,7 @@
         complete: chapterComplete,
         confirmed: chapterComplete,
         selfReferential: false,
+        prerequisite: explainRequirementNode(route.requires, ctx),
       };
     }
 
@@ -1813,6 +2159,7 @@
           complete: chosen,
           selfReferential: false,
           approach: ending.approach,
+          prerequisite: explainRequirementNode(ending.entry, ctx),
         };
       });
     }
@@ -1838,6 +2185,8 @@
           role: chapter.role || '',
           state: statuses.statuses[index],
           entryMet: evalRequirement(chapter.entry, ctx),
+          prerequisite: explainRequirementNode(chapter.entry, ctx),
+          completion: completionExplanation(chapter, ctx, chapterComplete),
           completionFlag: chapterFlagOf(chapter.chapterId),
           routes: views,
           mustKnow: chapter.mustKnow.slice(),
@@ -1859,6 +2208,7 @@
           chosen: endingChosen === ending.approach,
           entryMet: entryMet,
           requirements: clone(ending.entry) || {},
+          prerequisite: explainRequirementNode(ending.entry, ctx),
           flags: ending.flags.slice(),
         };
       });
