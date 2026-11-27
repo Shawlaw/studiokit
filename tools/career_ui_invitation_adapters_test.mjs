@@ -387,6 +387,7 @@ check('LetterCard is rendered by T11 component', /components\.LetterCard\(/.test
 check('ReceiptCard is rendered by T11 component', /components\.ReceiptCard\(/.test(source.receipt));
 check('no adapter injects copied stylesheet', invitationSources.every((key) => !/<style|\.style\.cssText|appendChild\(style/.test(source[key])));
 check('accept action is the only profession-write path in mailbox', /accept\.call\(session\.context, \{ professionId: invitation\.professionId, gameId: invitation\.gameId \}\)/.test(source.mailbox) && !/applyProfessionEvent|\.acceptProfessionInvitation\(/.test(source.mailbox));
+check('mailbox awaits openClue and subscribes to projection changes', /await Promise\.resolve\(session\.context\.openClue\(clueId\)\)/.test(source.mailbox) && /subscribeComponentChanges\(session\)/.test(source.mailbox) && /COMPONENT_DESTRUCTIVE_REASONS/.test(source.mailbox));
 check('receipt projection never reads storyFeedback.nextStep', !/raw\.nextStep/.test(source.receipt) && /projectedStoryOf\(outer\)/.test(source.receipt));
 
 /* ------------------------------------------------------------------ *
@@ -447,22 +448,32 @@ check('receipt projection never reads storyFeedback.nextStep', !/raw\.nextStep/.
 
 function invitationContext(doc, overrides = {}) {
   const events = [];
+  const p02 = stateOfFixture('P02').props.letterCard;
+  const listeners = [];
+  let unsubscribeCount = 0;
   const ctx = {
     state: { stage: 'LOCAL', clues: { 'CL-gold-miner': { seenAt: '2026-11-27T00:00:00Z' } }, firstClueId: 'CL-gold-miner' },
-    letterTitle: '合成来信 · 甲',
-    clues: [{ clueId: 'CL-gold-miner', title: '合成线索标题甲', ambientLabel: '结算夹页中的合成字条', letter: {
-      sender: '港口记录员',
-      body: '这张合成字条上只有一条港口通用回邮地址。\n如果你愿意，可以把它带回码头记录处，听一段合成说明。',
+    letterTitle: p02.title,
+    clues: [{ clueId: 'CL-gold-miner', title: p02.title, ambientLabel: p02.ambientLabel, letter: {
+      sender: p02.sender,
+      body: p02.paragraphs.join('\n'),
       address: '折光港',
       actionLabel: '按地址投递',
     } }],
+    narrative: { 'nature.miner': { acceptLabel: p02.actions[0].label, deferLabel: p02.actions[1].label } },
     announce() {},
     invitationForClue() { return { professionId: 'nature.miner', gameId: 'gold-miner', displayName: '采矿员', state: 'read', canAccept: true }; },
     careerView: () => Promise.resolve({ schemaVersion: 1, professions: [], commissions: [], story: {}, tools: [] }),
-    openClue() {},
+    openClue(id) { events.push(['openClue', id]); return Promise.resolve({ ok: true }); },
+    onCareerDataChanged(listener) {
+      listeners.push(listener);
+      return () => { unsubscribeCount += 1; };
+    },
     acceptProfessionInvitation(input) { events.push(['accept', input.professionId, input.gameId]); return Promise.resolve({ ok: true, created: false }); },
     commission: { start() { events.push('commission.start'); return { ok: true }; } },
     _events: events,
+    _listeners: listeners,
+    get unsubscribeCount() { return unsubscribeCount; },
     ...overrides,
   };
   return ctx;
@@ -472,17 +483,30 @@ function invitationContext(doc, overrides = {}) {
   const doc = makeDocument();
   const ui = loadUi(doc);
   const p02 = stateOfFixture('P02').props.letterCard;
-  const ctx = invitationContext(doc);
+  const openedClues = [];
+  let settleOpenClue = null;
+  const ctx = invitationContext(doc, {
+    openClue(id) { openedClues.push(id); return new Promise((resolve) => { settleOpenClue = resolve; }); },
+  });
   ui.mailbox.open(ctx);
+  await drain();
+  eq('P02 mailbox awaits real openClue (no premature action)', openedClues.join(','), 'CL-gold-miner');
+  check('P02 pending openClue exposes no guessed action', !buttonBy(doc, 'accept-invitation') && !buttonBy(doc, 'send-to-port') && !buttonBy(doc, 'deliver-letter'));
+  settleOpenClue({ ok: true });
   await drain();
   const card = doc.querySelector('.ac-career-ui__letter');
   check('P02 LetterCard is present', !!card && !!panelOf(doc));
   eq('P02 letter state', card.parentNode.getAttribute('data-letter-state'), 'unread');
-  eq('P02 title', card.querySelector('h2').textContent, p02.title);
-  eq('P02 paragraph count', card.querySelectorAll('.ac-career-ui__letter-paragraph').length, 2);
-  eq('P02 signature', card.querySelector('.ac-career-ui__signature').textContent, '—— ' + p02.sender);
-  check('P02 two invitation actions exist', !!buttonBy(doc, 'accept-invitation') && !!buttonBy(doc, 'defer-invitation'));
+  eq('P02 title comes from fixture', card.querySelector('h2').textContent, p02.title);
+  eq('P02 ambient comes from fixture', card.parentNode.querySelector('.ac-career-ui__caption').textContent, p02.ambientLabel);
+  eq('P02 paragraphs come from fixture', JSON.stringify(card.querySelectorAll('.ac-career-ui__letter-paragraph').map((node) => node.textContent)), JSON.stringify(p02.paragraphs));
+  eq('P02 signature comes from fixture', card.querySelector('.ac-career-ui__signature').textContent, '—— ' + p02.sender);
+  eq('P02 accept label comes from fixture', buttonBy(doc, 'accept-invitation').textContent, p02.actions[0].label);
+  eq('P02 defer label comes from fixture', buttonBy(doc, 'defer-invitation').textContent, p02.actions[1].label);
   check('P02 no task fields', !/委托目标|奖励|职业等级|gold-miner\.T1/.test(textOf(panelOf(doc))));
+  ctx._listeners[0]({ reason: 'changed' });
+  await drain();
+  check('P02 onCareerDataChanged refreshes without losing invitation', !!buttonBy(doc, 'accept-invitation') && !/委托目标|报酬/.test(textOf(panelOf(doc))));
   buttonBy(doc, 'accept-invitation').click();
   await drain();
   eq('P02 accept calls controlled facade once', ctx._events.filter((item) => Array.isArray(item) && item[0] === 'accept').length, 1);
@@ -491,6 +515,57 @@ function invitationContext(doc, overrides = {}) {
   buttonBy(doc, 'accept-invitation')?.click();
   await drain();
   eq('P02 repeated accept remains no-op', ctx._events.filter((item) => Array.isArray(item) && item[0] === 'accept').length, 1);
+  ctx._listeners[0]({ reason: 'career-archived' });
+  check('P02 destructive career event closes panel', panelOf(doc) === null);
+  eq('P02 destructive close unsubscribes once', ctx.unsubscribeCount, 1);
+  ui.mailbox.close();
+}
+
+/* ------------------------------------------------------------------ *
+ * M1 — user-initiated clue selection awaits openClue before showing actions.
+ * ------------------------------------------------------------------ */
+
+{
+  const doc = makeDocument();
+  const ui = loadUi(doc);
+  const secondClueId = 'CL-shadow-leap';
+  const opened = [];
+  let settleSecond = null;
+  const ctx = {
+    state: { stage: 'LOCAL', firstClueId: 'CL-gold-miner', clues: {
+      'CL-gold-miner': { seenAt: '2026-11-27T00:00:00Z', openedAt: '2026-11-27T00:00:00Z' },
+      [secondClueId]: { seenAt: '2026-11-27T01:00:00Z' },
+    } },
+    clueId: 'CL-gold-miner',
+    clues: [
+      { clueId: 'CL-gold-miner', title: '第一封', letter: { sender: '甲', body: '第一封正文' } },
+      { clueId: secondClueId, title: '第二封', letter: { sender: '乙', body: '第二封正文' } },
+    ],
+    openClue(id) {
+      opened.push(id);
+      if (id === secondClueId) return new Promise((resolve) => { settleSecond = resolve; });
+      return Promise.resolve({ ok: true });
+    },
+    invitationForClue(id) {
+      return id === secondClueId
+        ? { professionId: 'adventure.relicseeker', gameId: 'shadow-leap', state: 'read', canAccept: true }
+        : null;
+    },
+    careerView: () => Promise.resolve({ professions: [], commissions: [], story: {}, tools: [] }),
+    acceptProfessionInvitation() { return Promise.resolve({ ok: true, created: false }); },
+    announce() {},
+  };
+  ui.mailbox.open(ctx);
+  await drain();
+  eq('M1 initial bridge-selected clue does not repeat openClue', opened.length, 0);
+  const row = doc.querySelector('[data-clue-id="' + secondClueId + '"]');
+  row.click();
+  await drain();
+  eq('M1 selected clue calls openClue once', opened.join(','), secondClueId);
+  check('M1 pending selection shows no guessed action', !buttonBy(doc, 'accept-invitation') && !buttonBy(doc, 'deliver-letter') && !buttonBy(doc, 'send-to-port'));
+  settleSecond({ ok: true });
+  await drain();
+  check('M1 invitation appears only after openClue settles', !!buttonBy(doc, 'accept-invitation') && !!buttonBy(doc, 'defer-invitation'), textOf(panelOf(doc)));
   ui.mailbox.close();
 }
 
@@ -589,9 +664,11 @@ function narrativeFor(professionId) {
         npcName: p03.props.npcDialogue.name,
         freshIntro: p03.props.npcDialogue.paragraphs,
         existingIntro: ['已有身份时的另一段合成说明。'],
-        firstCommissionId: 'gold-miner.T1',
+        firstCommissionId: p03.commissionId,
+        firstCommissionEyebrow: p03.props.storyCard.eyebrow,
         acceptLabel: '接受这份邀请',
         deferLabel: '以后再说',
+        leaveLabel: p03.props.secondaryAction.label,
         firstActionLabel: p03.props.primaryAction.label,
       },
     },
@@ -624,6 +701,10 @@ function narrativeFor(professionId) {
   eq('P03 first accept is controlled once', events.filter((item) => Array.isArray(item) && item[0] === 'accept').length, 1);
   check('P03 accept does not auto-start commission', !events.some((item) => Array.isArray(item) && item[0] === 'start'));
   check('P03 projected first commission appears after success', textOf(panelOf(doc)).includes(p03.props.storyCard.title));
+  check('P03 eyebrow/action/leave labels come from fixture',
+    textOf(panelOf(doc)).includes(p03.props.storyCard.eyebrow)
+    && textOf(panelOf(doc)).includes(p03.props.primaryAction.label)
+    && textOf(panelOf(doc)).includes(p03.props.secondaryAction.label), textOf(panelOf(doc)));
   eq('P03 created flag is true', doc.querySelector('.ac-career-ui__panel').getAttribute('data-invitation-created'), 'true');
   const start = buttonBy(doc, 'start-first-commission');
   check('P03 explicit commission action exists', !!start, {
@@ -636,32 +717,98 @@ function narrativeFor(professionId) {
 }
 
 /* ------------------------------------------------------------------ *
+ * M3 — firstCommissionId is a profession/category gate, not a preference.
+ * ------------------------------------------------------------------ */
+
+async function deriveFirstCommission(rows, wanted) {
+  const doc = makeDocument();
+  const ui = loadUi(doc);
+  const ctx = {
+    clueId: 'CL-gold-miner',
+    careerId: 'career-existing',
+    state: { acceptedOriginGameId: 'gold-miner' },
+    narrative: { 'nature.miner': { firstCommissionId: wanted } },
+    invitationForClue() { return { professionId: 'nature.miner', gameId: 'gold-miner', displayName: '采矿员', state: 'read', canAccept: true }; },
+    careerView: () => Promise.resolve({
+      schemaVersion: 1, originGameId: 'gold-miner',
+      professions: [{ professionId: 'nature.miner', displayName: '采矿员', state: 'accepted' }],
+      commissions: rows, story: { nextAction: null, messages: [], history: [] }, tools: [],
+    }),
+    uiComponents: ui.components,
+    uiHarbor: ui.harbor,
+  };
+  const derived = await ui.invitation.derive(ctx, {
+    acceptedResult: { ok: true, created: true, newlyAccepted: true },
+    identityBefore: false,
+  });
+  return derived;
+}
+
+{
+  const valid = { commissionId: 'gold-miner.T1', professionId: 'nature.miner', category: 'profession', title: '合成交接 · 甲' };
+  const cases = [
+    ['M3 cross-profession mismatch is rejected', [{ ...valid, professionId: 'adventure.relicseeker', commissionId: 'shadow-leap.T1' }]],
+    ['M3 world work mismatch is rejected', [{ commissionId: 'pendulum-tower.T1', professionId: null, category: 'world', title: '通用工作' }]],
+    ['M3 readOnly row is rejected', [{ ...valid, readOnly: true }]],
+    ['M3 historicalOnly row is rejected', [{ ...valid, historicalOnly: true }]],
+    ['M3 explicit id does not fall back to another profession row', [valid, { ...valid, professionId: 'adventure.relicseeker', commissionId: 'shadow-leap.T1' }]],
+  ];
+  for (const [name, rows] of cases) {
+    const derived = await deriveFirstCommission(rows, 'shadow-leap.T1');
+    check(name, derived.ok === true && derived.firstCommission === null, derived.firstCommission);
+  }
+  const matched = await deriveFirstCommission([valid], 'gold-miner.T1');
+  eq('M3 matching profession commission remains startable', matched.firstCommission && matched.firstCommission.commissionId, 'gold-miner.T1');
+  check('M3 adapter source gates profession/category/readonly', /cleanText\(row\.professionId\) === cleanText\(invitation\.professionId\)/.test(source.invitation)
+    && /cleanText\(row\.category\) === 'profession'/.test(source.invitation)
+    && /row\.readOnly !== true/.test(source.invitation) && /row\.historicalOnly !== true/.test(source.invitation));
+}
+
+/* ------------------------------------------------------------------ *
  * P04 — receipt uses real result/receipt and careerView projection only.
  * ------------------------------------------------------------------ */
 
 function receiptPayload(overrides = {}) {
-  const p04 = stateOfFixture('P04');
+  const p04 = stateOfFixture('P04').props.receiptCard;
+  const material = p04.rewards.materials[0];
+  const commissionTitle = p04.resultLine.replace(/已登记$/, '');
   return {
     result: {
       ok: true,
       commissionId: 'gold-miner.T1',
       professionId: 'nature.miner',
-      receipt: { receiptId: 'commission-1', credits: p04.props.receiptCard.rewards.credits, items: { alloy: 1 }, txIds: ['tx-1'], commissionId: 'gold-miner.T1' },
+      receipt: {
+        receiptId: 'commission-1',
+        credits: p04.rewards.credits,
+        items: { 'fixture-material': material.count },
+        txIds: ['tx-1'],
+        commissionId: 'gold-miner.T1',
+      },
+    },
+    items: { materials: [{ itemId: 'fixture-material', name: material.name }] },
+    receiptPresentation: {
+      title: p04.title,
+      resultLine: p04.resultLine,
+      exitLabel: p04.exitAction.label,
     },
     careerView: {
       schemaVersion: 1,
       originGameId: 'gold-miner',
       activeProfessionId: 'nature.miner',
-      professions: [{ professionId: 'nature.miner', displayName: '在册帮手', state: 'accepted', paused: false, active: true }],
-      commissions: [{ commissionId: 'gold-miner.T1', professionId: 'nature.miner', category: 'profession', title: '合成交接 · 甲' }],
+      professions: [{ professionId: 'nature.miner', displayName: p04.rewards.identity, state: 'accepted', paused: false, active: true }],
+      commissions: [{ commissionId: 'gold-miner.T1', professionId: 'nature.miner', category: 'profession', title: commissionTitle }],
       story: {
-        nextAction: { kind: 'commission', commissionId: 'gold-miner.T1', label: '听听港口的下一步' },
+        nextAction: { kind: 'commission', commissionId: 'gold-miner.T1', label: p04.nextAction.label },
         messages: [],
-        history: [{ commissionId: 'gold-miner.T1', label: '首次合成交接', at: '2026-11-27', source: 'commission' }],
+        history: [{ commissionId: 'gold-miner.T1', label: p04.rewards.experience, at: '2026-11-27', source: 'commission' }],
       },
       tools: [],
     },
-    storyFeedback: { status: 'new', replies: [{ name: '港口记录员', text: '合成记录已经归档。' }], nextStep: 'UNTRUSTED_FEEDBACK_STEP' },
+    storyFeedback: {
+      status: 'new',
+      replies: [{ name: p04.npcReply.name, text: p04.npcReply.paragraphs[0] }],
+      nextStep: 'UNTRUSTED_FEEDBACK_STEP',
+    },
     openTown() { (overrides.events || []).push('openTown'); return { ok: true }; },
     ...overrides,
   };
@@ -671,17 +818,20 @@ function receiptPayload(overrides = {}) {
   const doc = makeDocument();
   const ui = loadUi(doc);
   const events = [];
+  const p04 = stateOfFixture('P04').props.receiptCard;
   const payload = receiptPayload({ events });
   const card = ui.receipt.show(payload);
   check('P04 ReceiptCard component is used', !!card && card.className.includes('ac-career-ui__receipt') && card.getAttribute('role') === 'status');
-  eq('P04 success state', card.getAttribute('data-receipt-state'), 'success');
-  check('P04 real credits/materials shown', textOf(card).includes('12') && textOf(card).includes('合金'));
-  check('P04 projected identity/experience shown', textOf(card).includes('在册帮手') && textOf(card).includes('首次合成交接'));
-  check('P04 NPC reply shown', textOf(card).includes('港口记录员') && textOf(card).includes('合成记录已经归档。'), textOf(card));
-  check('P04 next step only from careerView', textOf(doc.body).includes('下一步：听听港口的下一步') && !textOf(doc.body).includes('UNTRUSTED_FEEDBACK_STEP'));
+  eq('P04 success state', card.getAttribute('data-receipt-state'), p04.state);
+  check('P04 fixture title/resultLine shown', textOf(card).includes(p04.title) && textOf(card).includes(p04.resultLine));
+  check('P04 real credits/materials shown', textOf(card).includes(String(p04.rewards.credits)) && textOf(card).includes(p04.rewards.materials[0].name));
+  check('P04 projected identity/experience shown', textOf(card).includes(p04.rewards.identity) && textOf(card).includes(p04.rewards.experience));
+  check('P04 NPC reply shown', textOf(card).includes(p04.npcReply.name) && textOf(card).includes(p04.npcReply.paragraphs[0]), textOf(card));
+  check('P04 next step only from careerView', textOf(doc.body).includes('下一步：' + p04.nextAction.label) && !textOf(doc.body).includes('UNTRUSTED_FEEDBACK_STEP'));
+  check('P04 exit label comes from fixture', textOf(card).includes(p04.exitAction.label));
   check('P04 no run/tx/reason leak', !/commission-1|tx-1|runId|txId|reason/.test(textOf(card)));
   const next = buttonBy(doc, 'continue');
-  check('P04 projected continue action exists', !!next && next.textContent.includes('听听港口的下一步'));
+  check('P04 projected continue action exists', !!next && next.textContent.includes(p04.nextAction.label));
   next.click();
   await drain();
   eq('P04 continue opens town once', events.filter((item) => item === 'openTown').length, 1);

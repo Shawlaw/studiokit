@@ -1319,9 +1319,10 @@
     } else if (town) {
       actions.push(Object.assign({ id: 'return-to-town', label: CARD_TOWN_TEXT }, invoked(town)));
     }
+    const presentation = isObject(outer.receiptPresentation) ? outer.receiptPresentation : null;
     actions.push({
       id: 'dismiss-receipt',
-      label: fields.ok ? '今天先到这里' : '先收起收据',
+      label: cleanText(presentation && presentation.exitLabel) || (fields.ok ? '今天先到这里' : '先收起收据'),
       kind: actions.length ? 'text' : 'primary',
       onClick: () => { removeCard(); return { ok: true }; },
     });
@@ -1361,11 +1362,14 @@
     }
 
     const reply = feedback && feedback.replies.length ? feedback.replies[0] : null;
+    /* Optional projected/fixture presentation copy; rewards and next step never
+       come from here. Without it the adapter keeps honest generic wording. */
+    const presentation = isObject(outer.receiptPresentation) ? outer.receiptPresentation : null;
     const card = components.ReceiptCard({
       outcome: fields.ok ? 'success' : 'failure',
       state: fields.duplicate && fields.ok ? 'no-duplicate-reward' : (fields.ok ? 'success' : 'failure'),
-      title: fields.ok ? CARD_SUCCESS_TITLE : CARD_FAILURE_TITLE,
-      resultLine: resultLineOf(fields, projection),
+      title: cleanText(presentation && presentation.title) || (fields.ok ? CARD_SUCCESS_TITLE : CARD_FAILURE_TITLE),
+      resultLine: fields.duplicate ? DUPLICATE_NOTE : (cleanText(presentation && presentation.resultLine) || resultLineOf(fields, projection)),
       rewards: fields.ok && !fields.duplicate ? projectedRewards(fields, projection, outer) : undefined,
       npcReply: reply ? { name: reply.name, paragraphs: [reply.text], state: 'return' } : undefined,
       nextAction: null,

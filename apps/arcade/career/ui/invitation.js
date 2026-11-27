@@ -115,15 +115,25 @@
     return null;
   }
 
+  function isFirstCommissionFor(row, invitation) {
+    return isObject(row)
+      && cleanText(row.professionId) === cleanText(invitation.professionId)
+      && cleanText(row.category) === 'profession'
+      && row.readOnly !== true
+      && row.historicalOnly !== true;
+  }
+
   function projectedCommission(view, invitation, narrative) {
     if (!isObject(view) || !Array.isArray(view.commissions)) return null;
     const wanted = cleanText(narrative.firstCommissionId);
-    const rows = view.commissions.filter((row) => isObject(row) && row.readOnly !== true && row.historicalOnly !== true);
+    const rows = view.commissions.filter((row) => isFirstCommissionFor(row, invitation));
     if (wanted) {
-      const exact = rows.find((row) => row.commissionId === wanted);
-      if (exact) return exact;
+      /* An explicit firstCommissionId is a gate, not a preference: a mismatch
+         from another profession, world work or a read-only row must not start. */
+      const exact = rows.find((row) => cleanText(row.commissionId) === wanted);
+      return exact || null;
     }
-    return rows.find((row) => row.professionId === invitation.professionId && row.category === 'profession') || null;
+    return rows[0] || null;
   }
 
   /** Pure, async projection used by the adapter and its Node/VM gate. */
@@ -228,9 +238,9 @@
       }
       npcActions.push({ id: 'defer-invitation', label: cleanText(model.narrative.deferLabel) || '以后再说', kind: 'text', onClick: close });
     } else if (model.firstCommission) {
-      npcActions.push({ id: 'leave-arrival', label: '暂时离开港口', kind: 'text', onClick: close });
+      npcActions.push({ id: 'leave-arrival', label: cleanText(model.narrative.leaveLabel) || '暂时离开港口', kind: 'text', onClick: close });
     } else {
-      npcActions.push({ id: 'leave-arrival', label: '离开港口', kind: 'primary', onClick: close });
+      npcActions.push({ id: 'leave-arrival', label: cleanText(model.narrative.leaveLabel) || '离开港口', kind: 'primary', onClick: close });
     }
 
     const npc = components.NPCDialogue({
@@ -267,7 +277,7 @@
         onClick: () => startFirstCommission(state, commission.commissionId),
       };
       const story = components.StoryCard({
-        eyebrow: '你的第一份工作',
+        eyebrow: cleanText(model.narrative.firstCommissionEyebrow) || '你的第一份工作',
         title: cleanText(commission.title),
         summary: cleanText(commission.summary) || cleanText(commission.objectiveText),
         state: 'current',
@@ -347,7 +357,7 @@
   }
 
   async function startFirstCommission(state, commissionId) {
-    if (state.busy || !commissionId) return { ok: false };
+    if (state.busy || !commissionId || !state.model || !isFirstCommissionFor(state.model.firstCommission, state.model.invitation)) return { ok: false };
     const start = startCallOf(state.context);
     if (!start) {
       state.status = '这份工作暂时接不了，你可以稍后再来。';

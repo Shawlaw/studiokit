@@ -976,6 +976,8 @@
 
   let componentShell = null;
   let componentSession = null;
+  let componentUnsubscribe = null;
+  const COMPONENT_DESTRUCTIVE_REASONS = ['career-imported', 'career-archived', 'career-unarchived', 'career-reset'];
   const FAMILY_ICONS = { record: 'mail', signal: 'scroll', bio: 'gem', industrial: 'pick', route: 'chevron' };
 
   function componentsOf(context) {
@@ -989,6 +991,10 @@
     componentSession = null;
     componentShell = null;
     if (current) current.token += 1;
+    if (componentUnsubscribe) {
+      try { componentUnsubscribe(); } catch (err) { /* ignore */ }
+      componentUnsubscribe = null;
+    }
     const closed = !!(shell && shell.close());
     return closeLegacy() || closed;
   }
@@ -1069,6 +1075,20 @@
     return !!firstId && firstId === clueId;
   }
 
+  function invitationNarrativeOf(session) {
+    let raw = session.context.narrative;
+    if (typeof raw === 'function') {
+      try { raw = raw(session.invitation, session.context); } catch (err) { raw = null; }
+    }
+    if (!isObject(raw)) return {};
+    const invitation = session.invitation || {};
+    const keyed = isObject(raw.byProfessionId) && isObject(raw.byProfessionId[invitation.professionId])
+      ? raw.byProfessionId[invitation.professionId]
+      : isObject(raw[invitation.professionId]) ? raw[invitation.professionId] : null;
+    if (keyed) return keyed;
+    return raw.professionId && raw.professionId !== invitation.professionId ? {} : raw;
+  }
+
   function setComponentStatus(session, text) {
     session.status = cleanText(text);
     renderComponent(session);
@@ -1078,6 +1098,38 @@
   function announceComponent(session, text) {
     if (typeof session.context.announce !== 'function') return;
     try { session.context.announce(text); } catch (err) { /* ignore */ }
+  }
+
+  async function refreshComponentProjection(session) {
+    if (componentSession !== session || !session.ready || session.openingClue) return;
+    const token = ++session.projectionToken;
+    await Promise.all([
+      loadComponentIdentity(session),
+      session.selectedId ? loadComponentInvitation(session, session.selectedId) : Promise.resolve(null),
+    ]);
+    if (token !== session.projectionToken || componentSession !== session) return;
+    renderComponent(session);
+  }
+
+  function subscribeComponentChanges(session) {
+    const subscribe = typeof session.context.onCareerDataChanged === 'function'
+      ? session.context.onCareerDataChanged
+      : isObject(session.context.api) && typeof session.context.api.onCareerDataChanged === 'function' ? session.context.api.onCareerDataChanged : null;
+    if (!subscribe) return null;
+    try {
+      const unsubscribe = subscribe.call(session.context, (change) => {
+        if (componentSession !== session) return;
+        const reason = cleanText(change && change.reason);
+        if (COMPONENT_DESTRUCTIVE_REASONS.indexOf(reason) >= 0) {
+          close();
+          return;
+        }
+        if (reason === 'accept-invitation' || reason === 'set-active' || reason === 'set-paused' || reason === 'changed') {
+          refreshComponentProjection(session);
+        }
+      });
+      return typeof unsubscribe === 'function' ? unsubscribe : null;
+    } catch (err) { return null; }
   }
 
   function invitationPort(session) {
@@ -1233,8 +1285,13 @@
       const accepted = acceptedInvitationOf(invitation);
       const firstFlight = isFirstFlightClue(session, session.selectedId);
       const delivered = !!followedClues[session.selectedId];
+      const labels = invitationNarrativeOf(session);
+      const acceptLabel = cleanText(labels.acceptLabel) || ACCEPT_LABEL;
+      const deferLabel = cleanText(labels.deferLabel) || DEFER_LABEL;
       const actions = [];
-      if (session.notice) {
+      if (session.openingClue) {
+        /* openClue has not settled: show the letter only, never a guessed action. */
+      } else if (session.notice) {
         actions.push({ id: 'open-town', label: '去港口看看', kind: 'primary', onClick: () => openTownComponent(session) });
         actions.push({ id: 'close-mailbox', label: '回到游戏', kind: 'text', onClick: close });
       } else if (invitation) {
@@ -1242,12 +1299,12 @@
           if (townOpenerOf(session.context) || (root.ArcadeCareerUI && root.ArcadeCareerUI.invitation)) {
             actions.push({ id: 'invitation-port', label: INVITE_PORT_LABEL, kind: 'primary', ariaLabel: INVITE_PORT_ARIA, onClick: () => invitationPort(session) });
           }
-          actions.push({ id: 'defer-invitation', label: '以后再说', kind: 'text', onClick: close });
+          actions.push({ id: 'defer-invitation', label: deferLabel, kind: 'text', onClick: close });
         } else if (invitation.canAccept && acceptInvitationFnOf(session.context)) {
-          actions.push({ id: 'accept-invitation', label: ACCEPT_LABEL, kind: 'primary', disabled: !!pendingInvitations[invitationKeyOf(invitation)], onClick: () => acceptComponent(session) });
-          actions.push({ id: 'defer-invitation', label: DEFER_LABEL, kind: 'text', onClick: close });
+          actions.push({ id: 'accept-invitation', label: acceptLabel, kind: 'primary', disabled: !!pendingInvitations[invitationKeyOf(invitation)], onClick: () => acceptComponent(session) });
+          actions.push({ id: 'defer-invitation', label: deferLabel, kind: 'text', onClick: close });
         } else {
-          actions.push({ id: 'defer-invitation', label: DEFER_LABEL, kind: 'primary', onClick: close });
+          actions.push({ id: 'defer-invitation', label: deferLabel, kind: 'primary', onClick: close });
         }
       } else if (firstFlight) {
         actions.push({ id: 'send-to-port', label: FIRST_READ_LABEL, ariaLabel: FIRST_READ_LABEL, kind: 'primary', busy: !!pendingFirstFlight[session.selectedId], onClick: () => deliverComponent(session, true) });
@@ -1300,26 +1357,36 @@
     if (result && result.panel) result.panel.setAttribute('data-mailbox-view', session.notice ? 'notice' : 'mailbox');
   }
 
-  function selectComponentClue(session, clueId, userInitiated) {
+  async function selectComponentClue(session, clueId, userInitiated) {
     if (!clueId || session.ids.indexOf(clueId) < 0) return;
+    const token = ++session.clueToken;
     session.selectedId = clueId;
     session.notice = false;
     session.status = '';
     session.invitation = null;
+    session.openingClue = typeof session.context.openClue === 'function';
     renderComponent(session);
-    if (typeof session.context.openClue === 'function') {
-      try { session.context.openClue(clueId); } catch (err) { /* reading remains available */ }
+    if (session.openingClue) {
+      try { await Promise.resolve(session.context.openClue(clueId)); }
+      catch (err) { /* reading remains available even if persistence reported failure */ }
     }
+    if (token !== session.clueToken || componentSession !== session || session.selectedId !== clueId) return;
+    session.openingClue = false;
+    await loadComponentInvitation(session, clueId, token);
     if (userInitiated) announceComponent(session, '翻到「' + titleOf(session.content[clueId]) + '」。');
-    loadComponentInvitation(session, clueId);
   }
 
-  async function loadComponentInvitation(session, clueId) {
+  async function loadComponentInvitation(session, clueId, clueToken) {
     const token = ++session.invitationToken;
-    let invitation = null;
-    try { invitation = invitationOf(session.context, clueId); } catch (err) { invitation = null; }
-    invitation = await Promise.resolve(invitation);
+    const reader = invitationReaderOf(session.context);
+    let raw = null;
+    if (reader && clueId) {
+      try { raw = await Promise.resolve(reader.call(session.context, clueId)); }
+      catch (err) { raw = null; }
+    }
+    const invitation = normalizeInvitation(raw, clueId);
     if (token !== session.invitationToken || componentSession !== session || session.selectedId !== clueId) return;
+    if (typeof clueToken === 'number' && clueToken !== session.clueToken) return;
     session.invitation = invitation;
     if (session.ready) renderComponent(session);
   }
@@ -1362,7 +1429,10 @@
       status: '',
       ready: !ids.length,
       token: 1,
+      clueToken: 0,
+      projectionToken: 0,
       invitationToken: 0,
+      openingClue: !!(selectedId && typeof context.openClue === 'function' && selectedId !== bridgeSelected),
       returnFocus: context.returnFocus || (doc.activeElement && typeof doc.activeElement.focus === 'function' ? doc.activeElement : null),
     };
     componentShell = shell;
@@ -1381,12 +1451,19 @@
       return null;
     }
     renderComponent(session);
-    if (selectedId && typeof context.openClue === 'function' && selectedId !== bridgeSelected) {
-      try { context.openClue(selectedId); } catch (err) { /* ignore */ }
-    }
+    componentUnsubscribe = subscribeComponentChanges(session);
+    const initiallyOpening = session.openingClue;
     Promise.all([
       loadComponentIdentity(session),
-      selectedId ? loadComponentInvitation(session, selectedId) : Promise.resolve(null),
+      (async () => {
+        if (initiallyOpening) {
+          try { await Promise.resolve(context.openClue(selectedId)); }
+          catch (err) { /* reading remains available even if persistence reported failure */ }
+        }
+        if (componentSession !== session || session.selectedId !== selectedId) return;
+        session.openingClue = false;
+        if (selectedId) await loadComponentInvitation(session, selectedId, 0);
+      })(),
     ]).then(() => {
       if (componentSession !== session) return;
       session.ready = true;
