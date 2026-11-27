@@ -1093,7 +1093,8 @@
     return Promise.resolve(returned).then(
       function (view) {
         if (!isLive(p, token)) return;
-        state.toolIntroduced = !!(isObject(view) && Array.isArray(view.tools) && view.tools.length > 0);
+        state.toolIntroduced = !!(isObject(view) && Array.isArray(view.tools)
+          && view.tools.some(function (tool) { return isObject(tool) && tool.toolId === 'workshop'; }));
         renderAll(p);
       },
       function () {

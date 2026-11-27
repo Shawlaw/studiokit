@@ -50,6 +50,34 @@ check('中心页仍零 bridge 首屏装载', !/script[^>]+career\/bridge\.js/.te
 check('中心页无生涯视图/默认视图字段', !/data-career-view|hallDefaultView|data-default-view/.test(src.index));
 check('0.22 未引入 prototype 全局 token', !/prototype\/tokens\.css|--gold-light/.test(Object.values(src).join('\n')));
 
+/* ---------------- 工具投影逐项 gate ---------------- */
+function loadToolGate(source, view) {
+  const start = source.indexOf('  function ensureToolIntroduced(');
+  const end = source.indexOf('\n  function readWalletState(', start);
+  if (start < 0 || end < 0) throw new Error('ensureToolIntroduced helper not found');
+  const sandbox = {
+    Promise,
+    isObject: (value) => !!value && typeof value === 'object' && !Array.isArray(value),
+    isLive: () => true,
+    renderAll() {},
+  };
+  vm.createContext(sandbox);
+  vm.runInContext(source.slice(start, end) + '\nthis.helper = ensureToolIntroduced;', sandbox, { filename: 'tool-gate' });
+  const state = { careerId: 'career-test', toolIntroduced: false };
+  const context = { careerView: () => view };
+  return sandbox.helper({}, 1, context, state).then(() => state.toolIntroduced);
+}
+const allTools = { tools: [{ toolId: 'wallet' }, { toolId: 'shop' }, { toolId: 'workshop' }, { toolId: 'hangar' }] };
+const shopOnly = { tools: [{ toolId: 'shop' }] };
+const emptyTools = { tools: [] };
+for (const [key, toolId] of [['hangar', 'hangar'], ['market', 'shop'], ['workshop', 'workshop']]) {
+  check(toolId + ' 投影含自身时解锁', await loadToolGate(src[key], allTools) === true);
+  check('只有 shop 时 ' + toolId + (toolId === 'shop' ? ' 可操作' : ' 保持锁定'),
+    await loadToolGate(src[key], shopOnly) === (toolId === 'shop'));
+  check(toolId + ' 空工具列表保持锁定', await loadToolGate(src[key], emptyTools) === false);
+  check(toolId + ' 空投影保持锁定', await loadToolGate(src[key], null) === false);
+}
+
 /* ---------------- mailbox 行为（最小 DOM 桩） ---------------- */
 class Node {
   constructor(tag, doc) {
