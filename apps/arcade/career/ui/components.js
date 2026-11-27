@@ -253,7 +253,7 @@
     const paragraphs = Array.isArray(input.paragraphs) ? input.paragraphs : [];
     paragraphs.forEach((paragraph) => letter.appendChild(element(doc, 'p', 'ac-career-ui__letter-paragraph', cleanText(paragraph))));
     const sender = cleanText(input.sender);
-    if (sender) letter.appendChild(element(doc, 'p', 'ac-career-ui__signature', sender));
+    if (sender) letter.appendChild(element(doc, 'p', 'ac-career-ui__signature', '—— ' + sender));
     wrapper.appendChild(letter);
     const actions = (Array.isArray(input.actions) ? input.actions : []).slice(0, 2);
     if (actions.length) {

@@ -590,7 +590,7 @@ check('avatar radius is 10px token', cssBlock('.ac-career-ui__avatar {').include
 check('receipt result normal weight and kv-list no flex gap', cssBlock('.ac-career-ui__receipt-result {').includes('var(--ac-career-ui-font-weight-normal)') && !cssBlock('.ac-career-ui__kv-list {').includes('gap:'));
 check('npc name uses 700 strong weight', cssBlock('.ac-career-ui__npc-name {').includes('var(--ac-career-ui-font-weight-strong)'));
 check('CareerShell showHeader is a frozen optional prop', componentsSrc.includes('showHeader !== false') && componentsSrc.includes("panel.setAttribute('data-show-header'") && componentsSrc.includes("panel.setAttribute('aria-label', title)"));
-check('clue and signature text have no decorative prefix/suffix', !componentsSrc.includes("cleanText(input.actionLabel) + ' ›'") && !componentsSrc.includes("'—— ' + sender"));
+check('clue action and signature follow prototype text decoration', !componentsSrc.includes("cleanText(input.actionLabel) + ' ›'") && componentsSrc.includes("'—— ' + sender"));
 
 const viewportWidths = [320, 375, 390, 430, 844, 1280];
 check('viewport width matrix matches panel formula', viewportWidths.every((width) => Math.min(440, width - 24) === Math.min(440, width - 24)) && viewportWidths.every((width) => width - 24 > 0));
@@ -820,7 +820,7 @@ const letterRead = components.LetterCard({
 eq('LetterCard state', letterRead.getAttribute('data-letter-state'), 'read');
 eq('LetterCard story background class', !!letterRead.querySelector('.ac-career-ui__letter'), true);
 eq('LetterCard paragraph count', letterRead.querySelectorAll('.ac-career-ui__letter-paragraph').length, 2);
-eq('LetterCard signature exact', letterRead.querySelector('.ac-career-ui__signature').textContent, '合成署名');
+eq('LetterCard signature exact', letterRead.querySelector('.ac-career-ui__signature').textContent, '—— 合成署名');
 eq('LetterCard ambient caption', letterRead.querySelector('.ac-career-ui__caption').textContent, '合成说明');
 
 let resolver = null;
