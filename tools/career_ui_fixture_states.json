@@ -1,0 +1,612 @@
+{
+  "schemaVersion": 1,
+  "fixturePack": "arcade-0.23-career-ui",
+  "status": "frozen-for-T15",
+  "contentPolicy": {
+    "syntheticOnly": true,
+    "spoilerFree": true,
+    "productionVisible": false,
+    "qaOnly": true,
+    "rules": [
+      "文本均为私有 QA 合成内容，不得复制到 apps/arcade/career/content 或正式页面。",
+      "所有 ID 必须来自真实 registry / clues / commissions / world-work 映射；未知 ID 视为夹具错误。",
+      "不复制外部原型包中的示例人物、示例物件、示例任务名或示例分数。",
+      "若接入 dev/test 路由，路由必须在正式构建中不可达，且不留页面内调试入口。"
+    ]
+  },
+  "sources": {
+    "registry": "apps/arcade/career/content/registry.json",
+    "clues": "apps/arcade/career/content/clues.json",
+    "commissions": "apps/arcade/career/content/commissions.json",
+    "worldWork": "apps/arcade/career/content/world-work.json",
+    "contentVersion": "0.18.0"
+  },
+  "registryBindings": {
+    "games": [
+      {
+        "gameId": "gold-miner",
+        "displayName": "黄金矿工",
+        "professionIds": ["nature.miner"],
+        "clueId": "CL-gold-miner",
+        "commissionIds": ["gold-miner.T1"]
+      },
+      {
+        "gameId": "shadow-leap",
+        "displayName": "影跃",
+        "professionIds": ["adventure.relicseeker"],
+        "clueId": "CL-shadow-leap",
+        "commissionIds": ["shadow-leap.T1"]
+      },
+      {
+        "gameId": "pendulum-tower",
+        "displayName": "层塔",
+        "professionIds": ["engineering.structural"],
+        "clueId": "CL-pendulum-tower",
+        "commissionIds": ["pendulum-tower.T1"]
+      }
+    ],
+    "professions": [
+      {
+        "professionId": "nature.miner",
+        "displayName": "采矿员",
+        "domain": "nature"
+      },
+      {
+        "professionId": "adventure.relicseeker",
+        "displayName": "遗迹探险家",
+        "domain": "adventure"
+      },
+      {
+        "professionId": "engineering.structural",
+        "displayName": "建筑工程师",
+        "domain": "engineering"
+      }
+    ],
+    "worldWorkCommissionIds": ["pendulum-tower.T1"]
+  },
+  "viewports": {
+    "1280x800": { "width": 1280, "height": 800, "deviceScaleFactor": 1 },
+    "390x844": { "width": 390, "height": 844, "deviceScaleFactor": 1 },
+    "320x640": { "width": 320, "height": 640, "deviceScaleFactor": 1 },
+    "844x390": { "width": 844, "height": 390, "deviceScaleFactor": 1 }
+  },
+  "hostModes": [
+    {
+      "id": "normal-browser",
+      "selector": "html:not(.studiokit-shell-standalone) body.arcade-body",
+      "note": "普通标签页；16 款游戏保留各自 --ac-accent，career 使用局部金色 token。"
+    },
+    {
+      "id": "compact-019",
+      "media": "(max-width: 620px) and (max-height: 700px)",
+      "note": "0.19 矮视口紧凑模式；career 面板独立内部滚动，不复用 .game-page .overlay 底部弹层规则。"
+    },
+    {
+      "id": "pwa-standalone",
+      "selector": "html.studiokit-shell-standalone body.arcade-body",
+      "note": "PWA 独立窗口；safe-area 由 career 面板自行处理，不覆盖 shellbar 或 --ac-thumb-lift。"
+    },
+    {
+      "id": "immersive-game",
+      "selector": "body.arcade-immersive",
+      "note": "仅在需要与游戏全屏共存时验证；career 面板不修改游戏方向锁与快捷键。"
+    }
+  ],
+  "capture": {
+    "prototypePanelSelector": ".panel",
+    "productPanelSelector": ".ac-career-ui .ac-career-ui__panel",
+    "productClueSelector": ".ac-career-ui .ac-career-ui__clue",
+    "panelRegion": "element-only",
+    "toleranceCssPx": 4,
+    "compareComputedStyles": [
+      "color",
+      "background-color",
+      "font-family",
+      "font-size",
+      "line-height",
+      "font-weight",
+      "border-width",
+      "border-radius",
+      "padding",
+      "gap"
+    ],
+    "referenceImages": [
+      {
+        "file": "prototype/reference-letter.png",
+        "size": "440x452",
+        "sha256Prefix": "d6124bb6"
+      },
+      {
+        "file": "prototype/reference-port.png",
+        "size": "440x733",
+        "sha256Prefix": "0a558b86"
+      }
+    ]
+  },
+  "fixtures": [
+    {
+      "id": "P01",
+      "name": "普通结算 · 线索轻提示",
+      "surface": "clue",
+      "host": {
+        "mode": "normal-browser",
+        "gameId": "gold-miner",
+        "placement": "result-host"
+      },
+      "props": {
+        "clueRow": {
+          "clueId": "CL-gold-miner",
+          "gameId": "gold-miner",
+          "professionId": "nature.miner",
+          "state": "glimpsed",
+          "icon": "gem",
+          "title": "合成线索：甲",
+          "teaser": "结算台上留下一张合成标签。",
+          "actionLabel": "仔细看看",
+          "placement": "result-host",
+          "reducedMotion": false
+        },
+        "hostResult": {
+          "scoreText": "1,280",
+          "primaryActionLabel": "再来一局"
+        }
+      },
+      "expected": {
+        "visibleTexts": ["1,280", "再来一局", "合成线索：甲", "仔细看看"],
+        "hiddenTexts": ["任务标题", "报酬", "身份"],
+        "focus": "无自动焦点；Tab 顺序中结算主按钮先于线索",
+        "noDuplicateChip": true,
+        "note": "未触发线索时本 fixture 整块 ClueRow 不存在；不抢主按钮。"
+      },
+      "capture": {
+        "viewports": ["390x844", "1280x800"],
+        "regions": ["productClueSelector"],
+        "prototypeState": "settle"
+      }
+    },
+    {
+      "id": "P02",
+      "name": "字条",
+      "surface": "letter",
+      "host": { "mode": "normal-browser", "gameId": "gold-miner" },
+      "props": {
+        "letterCard": {
+          "title": "合成来信 · 甲",
+          "ambientLabel": "结算夹页中的合成字条",
+          "paragraphs": [
+            "这张合成字条上只有一条港口通用回邮地址。",
+            "如果你愿意，可以把它带回码头记录处，听一段合成说明。"
+          ],
+          "sender": "港口记录员",
+          "state": "unread",
+          "actions": [
+            { "id": "accept-invitation", "label": "收下这封邀请", "kind": "primary" },
+            { "id": "defer-invitation", "label": "先收起来，以后再说", "kind": "text" }
+          ]
+        }
+      },
+      "expected": {
+        "visibleTexts": ["合成来信 · 甲", "港口记录员", "收下这封邀请", "先收起来，以后再说"],
+        "hiddenTexts": ["委托目标", "奖励", "职业等级"],
+        "focus": "打开面板聚焦关闭键；动作按钮可 Tab 到达",
+        "note": "金色标题、两段正文、右签名；接受邀请与以后再说是两个独立动作。"
+      },
+      "capture": {
+        "viewports": ["390x844", "1280x800"],
+        "regions": ["productPanelSelector"],
+        "prototypeState": "letter"
+      }
+    },
+    {
+      "id": "P03",
+      "name": "首次到港",
+      "surface": "arrival",
+      "host": { "mode": "normal-browser", "gameId": "gold-miner" },
+      "props": {
+        "harbor": {
+          "variant": "dock",
+          "viewBox": "0 0 320 112",
+          "ariaHidden": true,
+          "src": "local-inline-or-same-origin"
+        },
+        "caption": "折光港 · 旧码头",
+        "npcDialogue": {
+          "name": "港口记录员",
+          "state": "first",
+          "paragraphs": [
+            "这里先记下你带来的合成字条，再给你一张合成委托的回执。",
+            "等你办完这一段，我们再查看后面的合成记录。"
+          ]
+        },
+        "storyCard": {
+          "eyebrow": "你的第一桩合成委托",
+          "title": "合成交接 · 甲",
+          "summary": "按合成说明完成一次通用交接，然后把回执带回来。",
+          "state": "current"
+        },
+        "primaryAction": { "label": "收下这桩合成委托", "kind": "primary" },
+        "secondaryAction": { "label": "暂时离开港口", "kind": "text" }
+      },
+      "expected": {
+        "visibleTexts": ["折光港 · 旧码头", "港口记录员", "合成交接 · 甲", "收下这桩合成委托", "暂时离开港口"],
+        "hiddenTexts": ["示例剧情", "示例奖励"],
+        "focus": "打开面板聚焦关闭键；首任务动作是面板内第一个 primary",
+        "note": "SVG 装饰 aria-hidden，文字独立于插画；真实产品不得跳过实际游玩直接生成回执。"
+      },
+      "capture": {
+        "viewports": ["390x844", "1280x800", "320x640", "844x390"],
+        "regions": ["productPanelSelector"],
+        "prototypeState": "arrival"
+      }
+    },
+    {
+      "id": "P04",
+      "name": "工作回执",
+      "surface": "receipt",
+      "host": { "mode": "normal-browser", "gameId": "gold-miner" },
+      "props": {
+        "receiptCard": {
+          "outcome": "success",
+          "state": "success",
+          "title": "合成交接完成",
+          "resultLine": "合成交接 · 甲已登记",
+          "rewards": {
+            "credits": 12,
+            "materials": [{ "name": "合成材料", "count": 1 }],
+            "identity": "在册帮手",
+            "experience": "首次合成交接"
+          },
+          "npcReply": {
+            "name": "港口记录员",
+            "state": "return",
+            "paragraphs": ["合成记录已经归档。下一次可以按同样的通用流程再走一趟。"]
+          },
+          "nextAction": { "label": "听听港口的下一步", "kind": "primary" },
+          "exitAction": { "label": "今天先到这里", "kind": "text" }
+        },
+        "commissionId": "gold-miner.T1"
+      },
+      "expected": {
+        "visibleTexts": ["合成交接完成", "工钱 12", "合成材料 ×1", "在册帮手", "首次合成交接", "今天先到这里"],
+        "hiddenTexts": ["txId", "runId", "reason code"],
+        "focus": "非 modal 卡不抢焦点；继续与离开为原生按钮",
+        "duplicateReward": false,
+        "note": "报酬/身份/经历只来自真实结算结果；下一步只来自投影。"
+      },
+      "capture": {
+        "viewports": ["390x844", "1280x800"],
+        "regions": ["productPanelSelector"],
+        "prototypeState": "receipt"
+      }
+    },
+    {
+      "id": "P05",
+      "name": "已有身份的另一个游戏 · 独立线索",
+      "surface": "clue",
+      "host": { "mode": "normal-browser", "gameId": "shadow-leap" },
+      "props": {
+        "clueRow": {
+          "clueId": "CL-shadow-leap",
+          "gameId": "shadow-leap",
+          "professionId": "adventure.relicseeker",
+          "state": "glimpsed",
+          "icon": "scroll",
+          "title": "合成线索：乙",
+          "teaser": "高处带回的合成标记与港口通用印记相同。",
+          "actionLabel": "查看合成标记",
+          "placement": "list",
+          "reducedMotion": false
+        },
+        "identityState": { "originGameId": "gold-miner", "hasAcceptedProfession": true }
+      },
+      "expected": {
+        "visibleTexts": ["合成线索：乙", "查看合成标记"],
+        "hiddenTexts": ["首次到港", "身份初始化", "已有职业的委托"],
+        "focus": "列表中线索行可 Tab 到达；不自动打开信件",
+        "noIdentityReplay": true,
+        "note": "第二个职业只显示自己的线索与邀请；不重复身份句。"
+      },
+      "capture": {
+        "viewports": ["390x844", "1280x800"],
+        "regions": ["productPanelSelector"],
+        "prototypeState": "second"
+      }
+    },
+    {
+      "id": "P06",
+      "name": "后续邀请",
+      "surface": "letter",
+      "host": { "mode": "normal-browser", "gameId": "shadow-leap" },
+      "props": {
+        "npcDialogue": {
+          "name": "港口记录员",
+          "state": "optional",
+          "paragraphs": ["你带来的合成标记已经有回邮记录；是否继续由你自己决定。"]
+        },
+        "primaryAction": { "label": "认识这位合成记录人", "kind": "primary" },
+        "secondaryAction": { "label": "先放着，不着急", "kind": "text" }
+      },
+      "expected": {
+        "visibleTexts": ["港口记录员", "认识这位合成记录人", "先放着，不着急"],
+        "hiddenTexts": ["委托标题", "报酬", "职业进度"],
+        "focus": "打开面板聚焦关闭键；重复点击接受 invitation 为 no-op",
+        "note": "明确可选；接受只建立职业上下文，不接单。"
+      },
+      "capture": {
+        "viewports": ["390x844", "1280x800", "320x640", "844x390"],
+        "regions": ["productPanelSelector"],
+        "prototypeState": "invite"
+      }
+    },
+    {
+      "id": "P07",
+      "name": "港口首页 · 眼下",
+      "surface": "port",
+      "host": { "mode": "normal-browser", "gameId": "gold-miner" },
+      "props": {
+        "harbor": {
+          "variant": "port",
+          "viewBox": "0 0 320 100",
+          "ariaHidden": true,
+          "src": "local-inline-or-same-origin"
+        },
+        "caption": "旧港的灯依然亮着。",
+        "segmentedTabs": {
+          "label": "港口页面",
+          "tabs": [
+            { "id": "home", "label": "眼下" },
+            { "id": "work", "label": "工作" },
+            { "id": "journal", "label": "经历" }
+          ],
+          "selectedId": "home"
+        },
+        "storyCard": {
+          "eyebrow": "正在发生的故事",
+          "title": "合成记录的下一步",
+          "summary": "港口记录员留下了新的合成说明，可以去码头听一听。",
+          "state": "current",
+          "action": { "label": "继续这段故事", "kind": "primary" }
+        },
+        "clueRow": {
+          "clueId": "CL-shadow-leap",
+          "gameId": "shadow-leap",
+          "professionId": "adventure.relicseeker",
+          "state": "recoverable",
+          "icon": "mail",
+          "title": "合成回信已到",
+          "teaser": "此前留下的合成标记有了回邮记录。",
+          "actionLabel": "查看回信",
+          "placement": "list"
+        },
+        "toolGrid": {
+          "state": "available",
+          "label": "已知工具",
+          "tools": [
+            { "id": "wallet", "label": "钱包", "icon": "wallet" },
+            { "id": "store", "label": "商店", "icon": "store" },
+            { "id": "workshop", "label": "工作台", "icon": "tool" }
+          ]
+        }
+      },
+      "expected": {
+        "visibleTexts": ["眼下", "工作", "经历", "合成记录的下一步", "合成回信已到", "钱包", "商店", "工作台"],
+        "hiddenTexts": ["锁位", "职业总数", "未披露职业"],
+        "focus": "打开面板聚焦关闭键；选中 tab tabindex=0，左右键切换后聚焦新 tab",
+        "maxMessages": 1,
+        "note": "三分栏等分；320px 工具文字允许换行。"
+      },
+      "capture": {
+        "viewports": ["390x844", "1280x800", "320x640", "844x390"],
+        "regions": ["productPanelSelector"],
+        "prototypeState": "home"
+      }
+    },
+    {
+      "id": "P08",
+      "name": "工作",
+      "surface": "work",
+      "host": { "mode": "normal-browser", "gameId": "gold-miner" },
+      "props": {
+        "segmentedTabs": {
+          "label": "港口页面",
+          "tabs": [
+            { "id": "home", "label": "眼下" },
+            { "id": "work", "label": "工作" },
+            { "id": "journal", "label": "经历" }
+          ],
+          "selectedId": "work"
+        },
+        "workCards": [
+          {
+            "professionId": "nature.miner",
+            "displayName": "采矿员",
+            "icon": "pick",
+            "state": "active",
+            "commissions": [
+              {
+                "commissionId": "gold-miner.T1",
+                "category": "profession",
+                "title": "合成交接 · 甲",
+                "summary": "完成一次通用交接。",
+                "objectiveText": "完成 1 次合成交接",
+                "rewardText": "工钱 12 · 材料 合成材料 ×1"
+              }
+            ]
+          },
+          {
+            "professionId": "adventure.relicseeker",
+            "displayName": "遗迹探险家",
+            "icon": "scroll",
+            "state": "paused",
+            "commissions": []
+          },
+          {
+            "professionId": "",
+            "displayName": "",
+            "icon": "check",
+            "state": "optional",
+            "commissions": [
+              {
+                "commissionId": "pendulum-tower.T1",
+                "category": "world",
+                "title": "合成短差",
+                "summary": "到指定地点完成一次通用核验。"
+              }
+            ]
+          }
+        ],
+        "actions": [
+          { "id": "start", "label": "继续之前接受的工作", "kind": "secondary" },
+          { "id": "resume", "label": "恢复这段经历", "kind": "text" }
+        ]
+      },
+      "expected": {
+        "visibleTexts": ["工作", "采矿员", "合成交接 · 甲", "遗迹探险家", "合成短差", "恢复这段经历"],
+        "hiddenTexts": ["未接受职业的任务", "世界工作的游戏来源", "职业报酬"],
+        "focus": "paused 卡片折叠；恢复后焦点留在恢复按钮",
+        "worldWorkGeneric": true,
+        "note": "只显示已接受职业；世界工作只以通用类别披露。"
+      },
+      "capture": {
+        "viewports": ["390x844", "1280x800", "320x640", "844x390"],
+        "regions": ["productPanelSelector"],
+        "prototypeState": "work"
+      }
+    },
+    {
+      "id": "P09",
+      "name": "经历",
+      "surface": "journal",
+      "host": { "mode": "normal-browser", "gameId": "gold-miner" },
+      "props": {
+        "segmentedTabs": {
+          "label": "港口页面",
+          "tabs": [
+            { "id": "home", "label": "眼下" },
+            { "id": "work", "label": "工作" },
+            { "id": "journal", "label": "经历" }
+          ],
+          "selectedId": "journal"
+        },
+        "journalTimeline": {
+          "state": "filled",
+          "events": [
+            { "label": "在普通结算里留下一张合成线索", "at": "2026-11-27T10:00:00.000Z", "source": "clue" },
+            { "label": "第一次到港口记录处，收下一桩合成委托", "at": "2026-11-27T10:05:00.000Z", "source": "port" },
+            { "label": "完成合成交接并记下一段经历", "at": "2026-11-27T10:20:00.000Z", "source": "commission" },
+            { "label": "留下第二张合成线索，收到可选邀请", "at": "2026-11-27T10:30:00.000Z", "source": "clue" }
+          ]
+        }
+      },
+      "expected": {
+        "visibleTexts": ["经历", "2026-11-27", "在普通结算里留下一张合成线索", "完成合成交接并记下一段经历"],
+        "hiddenTexts": ["总数", "百分比", "锁定项", "eventId"],
+        "focus": "非交互；DOM 顺序即读屏顺序",
+        "note": "竖线与节点按真实事件顺序，无总进度。"
+      },
+      "capture": {
+        "viewports": ["390x844", "1280x800", "320x640", "844x390"],
+        "regions": ["productPanelSelector"],
+        "prototypeState": "journal"
+      }
+    },
+    {
+      "id": "P10",
+      "name": "空状态 / 加载 / 失败 / 长文本",
+      "surface": "port",
+      "host": { "mode": "normal-browser", "gameId": "gold-miner" },
+      "variants": [
+        {
+          "id": "P10-empty",
+          "careerShell": { "state": "normal", "size": "default", "title": "折光港" },
+          "storyCard": {
+            "state": "no-action",
+            "title": "今天港口很安静",
+            "summary": "你可以继续之前的生活，也可以回街机厅玩几局。"
+          },
+          "journalTimeline": { "state": "empty" },
+          "expected": {
+            "visibleTexts": ["今天港口很安静"],
+            "hiddenTexts": ["占位职业", "未发生事件", "总数"],
+            "focus": "关闭键与退出按钮可达",
+            "note": "空状态自然语言，不显示全职业锁位。"
+          },
+          "capture": {
+            "viewports": ["390x844", "1280x800"],
+            "regions": ["productPanelSelector"],
+            "prototypeState": "empty"
+          }
+        },
+        {
+          "id": "P10-loading",
+          "careerShell": { "state": "loading", "size": "default", "title": "折光港", "ariaBusy": true },
+          "storyCard": {
+            "state": "no-action",
+            "title": "正在整理港口的消息…",
+            "summary": "请稍候，已保存的经历不会丢失。"
+          },
+          "expected": {
+            "visibleTexts": ["正在整理港口的消息…"],
+            "hiddenTexts": ["旧职业", "全量列表"],
+            "focus": "骨架保留标题、关闭键与面板结构",
+            "note": "加载先出框架，不闪烁旧职业或全量列表。"
+          },
+          "capture": {
+            "viewports": ["390x844", "1280x800"],
+            "regions": ["productPanelSelector"],
+            "prototypeState": "loading"
+          }
+        },
+        {
+          "id": "P10-error",
+          "careerShell": { "state": "error", "size": "default", "title": "折光港" },
+          "storyCard": {
+            "state": "no-action",
+            "title": "暂时无法读取港口记录",
+            "summary": "你的游玩不受影响，可以重试或返回街机厅。"
+          },
+          "secondaryAction": { "label": "重试", "kind": "secondary" },
+          "expected": {
+            "visibleTexts": ["暂时无法读取港口记录", "重试"],
+            "hiddenTexts": ["reason code", "未知数据"],
+            "focus": "重试按钮可 Tab 到达，点击后只重试一次",
+            "note": "失败可重试；不显示未加载内容。"
+          },
+          "capture": {
+            "viewports": ["390x844", "1280x800"],
+            "regions": ["productPanelSelector"],
+            "prototypeState": "error"
+          }
+        },
+        {
+          "id": "P10-longtext",
+          "careerShell": { "state": "normal", "size": "default", "title": "折光港" },
+          "letterCard": {
+            "title": "一段很长的合成说明",
+            "ambientLabel": "长文本滚动夹具",
+            "paragraphs": [
+              "这是一段用于验证长文本自然换行的合成说明。它不包含真实剧情，也不会出现在正式页面；每一句都刻意接近普通信件段落长度，便于检查标题、正文和右签名在窄屏下的相对位置。",
+              "第二段继续检查面板内部滚动、关闭键可达和底部安全区。文本应当按容器宽度自然换行，不使用固定高度截断，不出现横向滚动；在 320×640 与 844×390 下仍可滚到底部。",
+              "第三段用于确认加载失败后重开不会残留旧职业名称，也不会把测试文本误写入正式内容目录；它只是私有 QA 夹具，退出面板后不应留下任何可见节点。"
+            ],
+            "sender": "港口记录员",
+            "state": "read",
+            "actions": [{ "id": "close-letter", "label": "收起这封信", "kind": "text" }]
+          },
+          "expected": {
+            "visibleTexts": ["一段很长的合成说明", "收起这封信"],
+            "hiddenTexts": ["示例剧情", "正式内容"],
+            "focus": "正文可滚到底部，关闭键始终可达",
+            "fixedPanelHeight": false,
+            "note": "换行差异按 ADR §8 记录，不用像素阈值判 FAIL。"
+          },
+          "capture": {
+            "viewports": ["390x844", "1280x800", "320x640", "844x390"],
+            "regions": ["productPanelSelector"],
+            "prototypeState": "letter-longtext"
+          }
+        }
+      ]
+    }
+  ]
+}
