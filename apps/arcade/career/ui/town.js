@@ -886,10 +886,12 @@
     const commission = commissionOf(context);
     const alternative = portAlternativeTexts(story);
     const title = cleanText(narrative.storyTitle) || cleanText(next && next.label) || cleanText(row && row.title);
+    /* 摘要必须与当前动作同源：替代路线说明只在没有真实委托摘要时兜底，
+       避免出现「动作是外堤清障、摘要却讲另一单」的错位文案。 */
     const summary = cleanText(narrative.storySummary)
-      || (alternative && (alternative.progress || alternative.offer))
       || cleanText(row && row.summary)
-      || cleanText(row && row.objectiveText);
+      || cleanText(row && row.objectiveText)
+      || (alternative && (alternative.progress || alternative.offer));
     const action = nextId && (!commission || typeof commission.start !== 'function')
       ? null
       : (nextId ? {

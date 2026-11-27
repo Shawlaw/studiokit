@@ -2906,9 +2906,14 @@
     }
     var pending = Promise.resolve()
       .then(function () {
+        var at = nowIso();
         return dbModule.applyProfessionEvent({
           action: 'RECORD_STORY_EVENT',
-          input: { eventId: eventId, source: 'world', at: nowIso() },
+          input: { eventId: eventId, source: 'world', at: at },
+          /* 与 applyProfessionAction 同一口径：缺 generation 会被 DB 直接拒绝
+             （missing-generation），导致交汇永远落不了库、每次重开都重播。 */
+          generation: internal.discoveryGeneration || 0,
+          now: at,
         });
       })
       .then(function (result) {

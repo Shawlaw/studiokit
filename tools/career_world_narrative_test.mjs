@@ -1578,6 +1578,13 @@ check('I12c bridge 为港口/章节面板预热事实并提供 chapterGuide 只�
   && bridgeSource.includes('function chapterGuideForUi')
   && bridgeSource.includes('chapterGuide: function'));
 
+/* 交汇落库必须与 applyProfessionAction 同口径带 generation：缺它会 missing-generation，
+   导致每次重开港口都重播、经历页永远没有该条目。 */
+check('I12d 交汇落库带 generation 与统一时钟（源码核对）',
+  /generation: internal\.discoveryGeneration \|\| 0/.test(bridgeSource)
+  && /action: 'RECORD_STORY_EVENT'/.test(bridgeSource)
+  && /now: at,/.test(bridgeSource));
+
 /* ---- T24：bridge 注入的 catalog.worldChapterAlternatives 由真实 route-planner 消费 ---- */
 
 const plannerEvidence = (() => {
