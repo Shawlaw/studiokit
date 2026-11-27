@@ -592,8 +592,8 @@
           "summary": "按合成说明完成一次通用交接，然后把回执带回来。",
           "state": "current"
         },
-        "primaryAction": { "label": "收下这桩合成委托", "kind": "primary" },
-        "secondaryAction": { "label": "暂时离开港口", "kind": "text" }
+        "primaryAction": { "id": "accept-commission", "label": "收下这桩合成委托", "kind": "primary" },
+        "secondaryAction": { "id": "leave-port", "label": "暂时离开港口", "kind": "text" }
       },
       "expected": {
         "visibleTexts": ["折光港 · 旧码头", "港口记录员", "合成交接 · 甲", "收下这桩合成委托", "暂时离开港口"],
@@ -633,8 +633,8 @@
             "state": "return",
             "paragraphs": ["合成记录已经归档。下一次可以按同样的通用流程再走一趟。"]
           },
-          "nextAction": { "label": "听听港口的下一步", "kind": "primary" },
-          "exitAction": { "label": "今天先到这里", "kind": "text" }
+          "nextAction": { "id": "continue-story", "label": "听听港口的下一步", "kind": "primary" },
+          "exitAction": { "id": "end-for-today", "label": "今天先到这里", "kind": "text" }
         },
         "commissionId": "gold-miner.T1"
       },
@@ -717,8 +717,8 @@
           "state": "optional",
           "paragraphs": ["你带来的合成标记已经有回邮记录；是否继续由你自己决定。"]
         },
-        "primaryAction": { "label": "认识这位合成记录人", "kind": "primary" },
-        "secondaryAction": { "label": "先放着，不着急", "kind": "text" }
+        "primaryAction": { "id": "accept-invitation", "label": "认识这位合成记录人", "kind": "primary" },
+        "secondaryAction": { "id": "defer-invitation", "label": "先放着，不着急", "kind": "text" }
       },
       "expected": {
         "visibleTexts": ["港口记录员", "认识这位合成记录人", "先放着，不着急"],
@@ -824,7 +824,7 @@
           "title": "合成记录的下一步",
           "summary": "港口记录员留下了新的合成说明，可以去码头听一听。",
           "state": "current",
-          "action": { "label": "继续这段故事", "kind": "primary" }
+          "action": { "id": "continue-story", "label": "继续这段故事", "kind": "primary" }
         },
         "clueRow": {
           "clueId": "CL-shadow-leap",
@@ -1068,7 +1068,7 @@
             "title": "暂时无法读取港口记录",
             "summary": "你的游玩不受影响，可以重试或返回街机厅。"
           },
-          "secondaryAction": { "label": "重试", "kind": "secondary" },
+          "secondaryAction": { "id": "retry-load", "label": "重试", "kind": "secondary" },
           "expected": {
             "visibleTexts": ["暂时无法读取港口记录", "重试"],
             "hiddenTexts": ["reason code", "未知数据"],
@@ -1098,7 +1098,7 @@
           },
           "expected": {
             "visibleTexts": ["一段很长的合成说明", "收起这封信"],
-            "hiddenTexts": ["示例剧情", "正式内容"],
+            "hiddenTexts": ["示例剧情", "系统检测到"],
             "focus": "正文可滚到底部，关闭键始终可达",
             "fixedPanelHeight": false,
             "note": "换行差异按 ADR §8 记录，不用像素阈值判 FAIL。"
