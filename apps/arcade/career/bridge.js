@@ -1226,14 +1226,26 @@
                 configureCareerModules();
                 var endingModule = readGlobal('ending');
                 if (endingModule && typeof endingModule.attach === 'function') {
-                  endingModule.attach({
+                  var endingTicket = isObject(stored) && stored.ticketId === ticketId ? stored : {
                     ticketId: ticketId,
-                    ticket: stored,
+                    runId: result.run && result.run.runId ? result.run.runId : ticketId,
+                    commissionId: result.commission.commissionId,
+                    gameId: result.commission.gameId,
+                    careerId: result.run.careerId,
+                    mode: 'commission',
+                  };
+                  var attached = endingModule.attach({
+                    ticketId: ticketId,
+                    ticket: endingTicket,
                     run: result.run,
                     commissionId: result.commission.commissionId,
                     gameId: result.commission.gameId,
                     careerId: result.run.careerId,
                   });
+                  if (attached === false) {
+                    addReason('ending-attach-failed');
+                    return false;
+                  }
                 }
                 var mainModule = commissionModule();
                 if (mainModule && typeof mainModule.adoptRun === 'function') {
