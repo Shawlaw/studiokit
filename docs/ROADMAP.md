@@ -373,6 +373,17 @@ Owner 在 iPhone 主屏 PWA（Cloudflare Pages）复测 0.13.2：星海/2048/俄
 - [x] 双端发布：提交 `b3a8c7e`；Actions run `45007754972` 四 job 全绿；`tools/verify_deploy.py` **41/41** 双端一致；线上实测 CF 无后缀 URL `currentGame=block-drop`、游玩 1.6s 记到 1606ms，诊断页 iframe「计时正常」
 - [ ] 真机复验：iOS 主屏 PWA 更新后「计时自检」应显示计时正常，累计/积分记录时长不再为 0（UNVERIFIED）
 
+## Arcade 0.24.0 本地发布准备批次（2026-11-28，待 L3，未发布）
+
+- [x] 版本链本地升至 0.24.0 / SW `studiokit-arcade-0.24.0-v1`；设计 / 回滚见 `apps/arcade/DESIGN-0.24.0.md`，契约见 `docs/arcade-life/ADR-0.24-world.md`，状态见 `docs/arcade-life/INTEGRATION-0.24.0.md`。
+- [x] 世界主线替代路线叙事合理化：C1–C5 替代机制只引用真实委托 / 代办 / 材料 / 证据，`requiresSpecificProfession` 恒 false，收据只在真实结算行存在时渲染；章节、路线与终局入口补充真实前置与完成解释。
+- [x] 可选职业交汇：双方都已主动接受才产出（16 条职业声明折叠 10 个事件），同一对只保留一个 owner、只写一次，`effects: []` / `grants` 全零；未接受一侧零透露，不进主线候选、推荐或待办。
+- [x] 经历筛选与静态回读：17 条白名单，按真实人物 / 已接受职业筛选，无总数、无内部 id；`storyEvents` 落盘仍只有 `at` / `source`，旧档只追加、不迁移。
+- [x] 冻结边界：不新增 IDB store / localStorage key / Schema，`contentVersion 0.18.0` / `professionVersion 1` / IDB v1 / 11 stores / 经典玩法数值零改动。
+- [x] 本轮纯 Node 与静态证据：contract 166/166、world 179/179、journal 59/59、route 214/214、economy 47/47、world-work 400/400、route narrative 80/80；`validate_site.py` / `check_readme_links.py` PASS。
+- [ ] L3：release / full 门禁与浏览器、真机、真人体感仍 UNVERIFIED，留给 lead 的 L3（不写 GATE_PASSED / ALL GATES PASSED）。
+- [ ] Owner 发布授权；未获 `OWNER_AUTHORIZATION: PUBLISH_TO_MAIN` 前不 push / 不打 tag / 不部署。线上最近发布版本仍为 0.21.2（2026-11-26 已双端发布，main `bc50e61`，Actions `45858201941` 全绿，双端 91/91 一致）。
+
 ## Arcade 0.23.0 本地发布准备批次（2026-11-28，GATE_PASSED / RELEASE_READY，未发布）
 
 - [x] 版本链本地升至 0.23.0 / SW `studiokit-arcade-0.23.0-v1`；设计 / 回滚见 `apps/arcade/DESIGN-0.23.0.md`，UI 契约见 `docs/arcade-life/ADR-0.23-ui.md`，状态见 `docs/arcade-life/INTEGRATION-0.23.0.md`。
@@ -393,17 +404,19 @@ Owner 在 iPhone 主屏 PWA（Cloudflare Pages）复测 0.13.2：星海/2048/俄
 
 ## Now
 
-当前本地发布准备版本：Arcade 0.23.0 / SW `studiokit-arcade-0.23.0-v1`（GATE_PASSED / RELEASE_READY，未发布；线上仍为 0.21.2）。
+当前本地发布准备版本：Arcade 0.24.0 / SW `studiokit-arcade-0.24.0-v1`（本地发布准备，未发布；门禁状态待 L3（lead）；线上仍为 0.21.2）。
 
-1. **Arcade 0.21.1 真机 / full 收尾**（已双端发布）：release 41/41、96 全量 3792/3792、首航 404/404，main `cbfeef6`，Actions `45840350943` 全绿，双端 90/90 一致；full / 真机 / 真人仍 UNVERIFIED。
-2. **Arcade 0.21.0 真机 / full 收尾**（已双端发布）：release 41/41 与双端 89/89 已完成；full profile、真机 / 真人体验仍 UNVERIFIED，不得把 release 结论冒充 full。
-3. **Arcade 0.19.0 真机试玩**（已双端发布，手感待裁决）：按「走路 / 地铁站立 / 等车坐着」三种场景试 16 款游戏，重点裁决半屏方向锁、挡板相对拖动、上滑影冲、恢复门与结算防抖的首版取值，以及紧凑模式在真机标签页里的实际高度。
-4. **Arcade 0.13.0 真机试玩**：已双端发布（见上一节）；剩余真机试玩（星币节奏/能量取舍/核弹稀缺度/主题可感知度）。
-5. **Arcade 0.10.0 真机试玩**：重点验证三款棋牌的点按精度（320px 五子棋/接龙）、五子棋 AI 难度是否合适、挑战修复后的手感（砖块拖动发球、层塔对齐提示、矿工最后一钩、影跃累计计时文案）。
-6. **挑战内容密度**：俄罗斯方块 C04 重复、2048 C05 一步可解、影跃参考通关过短等内容问题需要改设计源 + 生成器 + 参考解，另行排期；本轮只修判定/提示/续档/计分。
-7. **Arcade 0.8.0/0.9 设计差量试玩**：按 `docs/archive/0.8.0-PLAYTEST.md` 与 `docs/archive/arcade-0.9-PLAYTEST.md` 在真机做两轮试玩并裁决 5 项设计差量；真机未验证前不宣称通过。
-8. **数值反馈**：收集道具次数、自然收尾目标与休息提醒时长的真实反馈，再决定是否微调。
-9. **双端发布维护**：观察 GitHub Pages 与 Cloudflare Pages 版本一致性；需要时再绑定自定义域名或调整缓存策略。
+1. **Arcade 0.24.0 L3 与真机 / 真人收尾**（本地发布准备，未发布）：本轮只做纯 Node 与静态证据；release / full、浏览器、真机、真人与线上部署仍 UNVERIFIED，留给 lead 的 L3，不写 GATE_PASSED / ALL GATES PASSED。
+2. **Arcade 0.23.0 真机 / full 收尾**（本地发布准备，未发布）：其 L3 为 47/47 `release passed (not full)`；full / 真机 / 真人仍 UNVERIFIED。
+3. **Arcade 0.21.1 真机 / full 收尾**（已双端发布）：release 41/41、96 全量 3792/3792、首航 404/404，main `cbfeef6`，Actions `45840350943` 全绿，双端 90/90 一致；full / 真机 / 真人仍 UNVERIFIED。
+4. **Arcade 0.21.0 真机 / full 收尾**（已双端发布）：release 41/41 与双端 89/89 已完成；full profile、真机 / 真人体验仍 UNVERIFIED，不得把 release 结论冒充 full。
+5. **Arcade 0.19.0 真机试玩**（已双端发布，手感待裁决）：按「走路 / 地铁站立 / 等车坐着」三种场景试 16 款游戏，重点裁决半屏方向锁、挡板相对拖动、上滑影冲、恢复门与结算防抖的首版取值，以及紧凑模式在真机标签页里的实际高度。
+6. **Arcade 0.13.0 真机试玩**：已双端发布（见上一节）；剩余真机试玩（星币节奏/能量取舍/核弹稀缺度/主题可感知度）。
+7. **Arcade 0.10.0 真机试玩**：重点验证三款棋牌的点按精度（320px 五子棋/接龙）、五子棋 AI 难度是否合适、挑战修复后的手感（砖块拖动发球、层塔对齐提示、矿工最后一钩、影跃累计计时文案）。
+8. **挑战内容密度**：俄罗斯方块 C04 重复、2048 C05 一步可解、影跃参考通关过短等内容问题需要改设计源 + 生成器 + 参考解，另行排期；本轮只修判定/提示/续档/计分。
+9. **Arcade 0.8.0/0.9 设计差量试玩**：按 `docs/archive/0.8.0-PLAYTEST.md` 与 `docs/archive/arcade-0.9-PLAYTEST.md` 在真机做两轮试玩并裁决 5 项设计差量；真机未验证前不宣称通过。
+10. **数值反馈**：收集道具次数、自然收尾目标与休息提醒时长的真实反馈，再决定是否微调。
+11. **双端发布维护**：观察 GitHub Pages 与 Cloudflare Pages 版本一致性；需要时再绑定自定义域名或调整缓存策略。
 
 ## Next
 

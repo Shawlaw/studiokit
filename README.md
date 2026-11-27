@@ -32,12 +32,12 @@
 
 ## 工具一览
 
-以下三个工具均已双端发布、注册表状态为 `available`；Rounded Image 仅为规划项，**尚未实现**。Arcade 当前本地发布准备版本为 **0.23.0** / SW `studiokit-arcade-0.23.0-v1`（本地发布准备，未发布）：折光港统一生涯界面、16 职业短叙事与组件化线索/字条/到港/回执/港口；不改既有存储与玩法基线。0.22.0 为上一版 GATE_PASSED（release 41/41，not full）。线上最近发布版本仍为 **0.21.2**（2026-11-26 已双端发布，main `bc50e61`，Actions `45858201941` 全绿，双端 91/91 一致；旧港生涯入口改为首页直接弹窗、钱包标题统一、弹窗滚动层级修复、游戏标题栏留白，实测见 [`INTEGRATION-0.21.2.md`](docs/arcade-life/INTEGRATION-0.21.2.md)）；本轮状态见 [`INTEGRATION-0.23.0.md`](docs/arcade-life/INTEGRATION-0.23.0.md)。
+以下三个工具均已双端发布、注册表状态为 `available`；Rounded Image 仅为规划项，**尚未实现**。Arcade 当前本地发布准备版本为 **0.24.0** / SW `studiokit-arcade-0.24.0-v1`（本地发布准备，未发布）：世界主线替代路线叙事合理化、双方接受的可选职业交汇、经历筛选与回读、章节前置解释；不改既有存储与玩法基线。0.23.0 为上一版 GATE_PASSED（release 47/47，not full）。线上最近发布版本仍为 **0.21.2**（2026-11-26 已双端发布，main `bc50e61`，Actions `45858201941` 全绿，双端 91/91 一致；旧港生涯入口改为首页直接弹窗、钱包标题统一、弹窗滚动层级修复、游戏标题栏留白，实测见 [`INTEGRATION-0.21.2.md`](docs/arcade-life/INTEGRATION-0.21.2.md)）；本轮状态见 [`INTEGRATION-0.24.0.md`](docs/arcade-life/INTEGRATION-0.24.0.md)。
 
 | 工具 | 版本 | 状态 | 入口 | 一句话说明 |
 | --- | --- | --- | --- | --- |
 | ◎ **Badge Studio** | `2.2.1` | `available` | [`apps/badge-studio/`](apps/badge-studio/) | 同心圆徽章工作台：弧形文字排版、多方案并排对比、透明 PNG / SVG 导出 |
-| 🕹 **街机厅 Arcade** | `0.23.0`（本地发布准备，未发布） | `available` | [`apps/arcade/`](apps/arcade/) | 16 款竖屏小游戏（13 款带 6 关挑战 + 三款平和棋牌），支持全屏、暂停、本地续玩、分享与离线预载；本轮统一折光港生涯界面并补齐 16 职业短叙事；线上最近发布仍为 0.21.2（已双端发布） |
+| 🕹 **街机厅 Arcade** | `0.24.0`（本地发布准备，未发布） | `available` | [`apps/arcade/`](apps/arcade/) | 16 款竖屏小游戏（13 款带 6 关挑战 + 三款平和棋牌），支持全屏、暂停、本地续玩、分享与离线预载；本轮把世界主线替代路线写成可信叙事、加入双方接受的可选职业交汇与经历筛选 / 回读；线上最近发布仍为 0.21.2（已双端发布） |
 | 🍽 **Venue Compare** | `0.2.0` | `available` | [`apps/restaurant-compare/`](apps/restaurant-compare/) | 餐厅考察对比：地图标注 + 横向对比表 + 外部链接备注，导出可转发的独立 HTML |
 | ▧ **Rounded Image** | — | `planned` | — | 预留给图片圆角工具，原始规格待恢复或重新定义；**当前没有实现** |
 
@@ -238,7 +238,8 @@ Cloudflare 侧项目为 `studiokit`（Production branch `main`），所需 Secre
 | [`docs/archive/`](docs/archive/README.md) | 已完成周期的过程记录（并行契约、独立评审、试玩包）归档；不再更新 |
 | [`docs/badge-studio-upstream-readme.md`](docs/badge-studio-upstream-readme.md) | Badge Studio 上游 v2.2.0 说明原文存档（当前集成版本以 `BASELINE.md` 为准） |
 | [`apps/<tool>/README.md`](apps/) | 各工具的产品文档（功能、数据模型、边界、测试） |
-| [`apps/arcade/DESIGN-*.md`](apps/arcade/) | Arcade 逐版设计与回滚说明（`DESIGN-0.4.0` … `DESIGN-0.22.0`，其中 0.22.0 为本地发布准备设计、未发布） |
+| [`apps/arcade/DESIGN-*.md`](apps/arcade/) | Arcade 逐版设计与回滚说明（`DESIGN-0.4.0` … `DESIGN-0.24.0`，其中 0.23.0 / 0.24.0 为本地发布准备设计、未发布） |
+| [`docs/arcade-life/INTEGRATION-0.24.0.md`](docs/arcade-life/INTEGRATION-0.24.0.md) | 0.24.0 状态：本地发布准备，未发布（门禁状态待 L3；台账与未验证项见该文件） |
 | [`docs/arcade-life/INTEGRATION-0.21.md`](docs/arcade-life/INTEGRATION-0.21.md) | 0.21.0 集成、分层门禁与双端发布证据 |
 | [`docs/arcade-life/INTEGRATION-0.21.2.md`](docs/arcade-life/INTEGRATION-0.21.2.md) | 0.21.2 发布前实测与发布后证据（线上最近发布版本） |
 | [`docs/arcade-life/INTEGRATION-0.23.0.md`](docs/arcade-life/INTEGRATION-0.23.0.md) | 0.23.0 状态：本地发布准备，未发布（门禁结论见该文件） |

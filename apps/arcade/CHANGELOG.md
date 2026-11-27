@@ -1,5 +1,15 @@
 # Arcade Changelog
 
+## 0.24.0 — 2026-11-28（本地发布准备，未发布）
+
+- 世界主线替代路线：C1–C5 的替代机制（世界通用工作 / 本职业委托 / 明码代办 / 免费租机 / 商店材料 / 证据组合）改写为戏内成立的故事行动；只引用真实委托、代办 offer、材料与证据 token，不新增委托、不发奖励、不改变主线唯一解。
+- 章节前置 / 完成解释：章节、路线与终局入口用既有真实 token 生成公开解释文字；章节面板与港口经历页只渲染公开文案，`requirement` / `tokens` / `anchor` 等内部结构不进 DOM，无数据不建节点。
+- 可选职业交汇：只有**双方都已主动接受**的职业对才产出叙事与可选回执（16 条职业声明折叠为 10 个事件）；同一对只保留一个 owner、事件只写一次，重复触发是 no-op；`effects: []`、`grants` 全零，不发货币 / 材料 / 证据 / 旗标，不进主线候选、推荐集合、工作栏或待办。
+- 经历筛选与回读：17 条白名单（10 交汇 + 7 世界替代）在投影时解析为玩家可见文案，可按真实人物 / 已接受职业筛选；点击只展开静态回读文本，无总数 / 百分比 / 内部 id；`storyEvents` 落盘形状仍只有 `at` / `source`，旧档只追加、不迁移。
+- bridge 按需加载 `career/world-narrative.js` 与同源 `content/world-narrative.json`，缺失时保留 0.23 降级；SW 预缓存追加 `world-narrative.js`、`ui/journal.js`、`content/world-narrative.json`。
+- 版本链 0.24.0 / SW `studiokit-arcade-0.24.0-v1`；不新增 IndexedDB store / localStorage key / Schema，`contentVersion 0.18.0` / IDB v1 / 11 stores / 经典玩法数值零改动。
+- 状态：本地发布准备，未发布；门禁状态待 L3（lead）。本轮只做纯 Node 与静态校验，未启动 Chrome、未跑 release / full / watch、未 push；不写 PUBLISHED / ALL GATES PASSED。设计 / 回滚见 [`DESIGN-0.24.0.md`](DESIGN-0.24.0.md)，契约见 [`ADR-0.24-world.md`](../../docs/arcade-life/ADR-0.24-world.md)，验证口径见 [`INTEGRATION-0.24.0.md`](../../docs/arcade-life/INTEGRATION-0.24.0.md)。线上最近发布版本仍为 0.21.2（已双端发布，见下文）。
+
 ## 0.23.0 — 2026-11-28（本地发布准备，未发布）
 
 - 折光港统一生涯界面：`.ac-career-ui` 局部命名空间下的 12 个共享组件、精确 token、原型一致的内联港口 SVG；普通 16 款游戏保持各自主题，不引入全局样式覆盖。
