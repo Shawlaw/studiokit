@@ -994,6 +994,20 @@
       if (!mod || typeof mod.configure !== 'function') return;
       try {
         mod.configure(payload);
+        if (name === 'ending' && internal.commissionRun
+          && typeof internal.commissionRun.commissionId === 'string'
+          && internal.commissionRun.commissionId.indexOf('ending.') === 0
+          && typeof mod.attach === 'function') {
+          var activeEnding = internal.commissionRun;
+          mod.attach({
+            ticketId: activeEnding.ticketId,
+            ticket: Object.assign({}, activeEnding, { mode: 'commission' }),
+            run: activeEnding,
+            commissionId: activeEnding.commissionId,
+            gameId: activeEnding.gameId,
+            careerId: activeEnding.careerId,
+          });
+        }
       } catch (err) {
         warnOnce('career-module-configure:' + name, err);
       }
