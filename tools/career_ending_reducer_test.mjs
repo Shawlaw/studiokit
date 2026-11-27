@@ -10,7 +10,8 @@
  *   apps/arcade/career/content/{ending-combat,ending-research,ending-rescue,campaign,commissions}.json，
  * require 真实 career-core / registry / commission-core / ending-reducer；
  * DB 用内存假实现（语义对齐 career-db 的公开方法：readQuestState/putQuests/getClaim/
- * readLedger/getRun/getProfile/settleAndClaim...），另有一个「假 commission」用于
+ * readLedger/getRun/getProfile/settleAndClaim...），职业披露状态由真实 profession-state
+ * 从 glimpsed→read→accept 推演并写入 discovery 快照；另有一个「假 commission」用于
  * 结算收据守卫（economy-violation / receipt-missing-flag）。
  * ticket 存储用内存假 sessionStorage。
  *
@@ -38,6 +39,9 @@ const PATHS = {
   endingRescue: path.join(REPO_ROOT, 'apps', 'arcade', 'career', 'content', 'ending-rescue.json'),
   campaign: path.join(REPO_ROOT, 'apps', 'arcade', 'career', 'content', 'campaign.json'),
   commissions: path.join(REPO_ROOT, 'apps', 'arcade', 'career', 'content', 'commissions.json'),
+  professionState: path.join(REPO_ROOT, 'apps', 'arcade', 'career', 'profession-state.js'),
+  registry: path.join(REPO_ROOT, 'apps', 'arcade', 'career', 'content', 'registry.json'),
+  clues: path.join(REPO_ROOT, 'apps', 'arcade', 'career', 'content', 'clues.json'),
 };
 
 const NOW = '2026-11-23T10:00:00.000Z';
@@ -98,6 +102,34 @@ function sorted(values) {
   return Array.from(new Set(values.map((item) => String(item)))).sort();
 }
 
+/**
+ * 0.22 职业 gate 夹具：不直接写 `state:'accepted'`，而是用真实 profession-state
+ * 按 glimpsed → read → accept 推演，且必须使用 registry/clues 的真实映射。
+ */
+function discoveredStateFor(professionIds) {
+  const ids = Array.isArray(professionIds) ? professionIds.slice() : [];
+  let state = ProfessionModule.initialState(NOW);
+  ids.forEach((professionId, index) => {
+    const game = CATALOG.games.find((row) => Array.isArray(row.professions) && row.professions.indexOf(professionId) >= 0);
+    assert(!!game && typeof game.clueRef === 'string' && game.clueRef, 'fixture 缺少职业对应真实游戏/线索：' + professionId);
+    const clueId = game.clueRef;
+    const stamps = [0, 1, 2].map((step) => new Date(Date.parse(NOW) + (index * 3 + step) * 60000).toISOString());
+    const steps = [
+      ['glimpsed', () => ProfessionModule.recordGlimpsed(state, { professionId, gameId: game.gameId, clueId, catalog: CATALOG, at: stamps[0] })],
+      ['read', () => ProfessionModule.recordRead(state, { professionId, gameId: game.gameId, clueId, catalog: CATALOG, at: stamps[1] })],
+      ['accepted', () => ProfessionModule.acceptInvitation(state, { professionId, gameId: game.gameId, clueId, catalog: CATALOG, at: stamps[2] })],
+    ];
+    steps.forEach(([label, apply]) => {
+      const result = apply();
+      assert(result.ok === true, 'fixture profession-state ' + label + ' 失败：' + (result && result.reason));
+      state = result.state;
+    });
+  });
+  const validated = ProfessionModule.validate(state, CATALOG);
+  assert(validated.ok === true, 'fixture discovery 快照校验失败：' + (validated && validated.reason));
+  return state;
+}
+
 /* ------------------------------------------------------------------ *
  * 夹具：内存假 career-db（对齐真实公开方法语义）
  * ------------------------------------------------------------------ */
@@ -148,6 +180,7 @@ function createFakeDb(options) {
     throws: {},
     initialFlags: Array.isArray(opts.initialFlags) ? opts.initialFlags.slice() : DEFAULT_FLAGS.slice(),
     initialCredits: typeof opts.initialCredits === 'number' ? opts.initialCredits : 80,
+    discovery: discoveredStateFor(Array.isArray(opts.acceptedProfessionIds) ? opts.acceptedProfessionIds : ['engineering.structural', 'adventure.pilot']),
   };
   FAILURE_KEYS.forEach((key) => {
     state.failures[key] = Number(opts.failures && opts.failures[key]) || 0;
@@ -212,9 +245,20 @@ function createFakeDb(options) {
 
   async function getState(key) {
     log('getState', key);
+    if (key === 'discovery') return { key: 'discovery', value: clone(state.discovery) };
     if (key !== 'career') return null;
     if (!state.careerId) return null;
     return { key: 'career', careerId: state.careerId, originGameId: null, updatedAt: NOW };
+  }
+
+  async function getDiscoveryState() {
+    log('getDiscoveryState', null);
+    return clone(state.discovery);
+  }
+
+  async function getArchiveState() {
+    log('getArchiveState', null);
+    return { ok: true, archived: false, careerId: state.careerId, archivedAt: null };
   }
 
   async function readQuestState(careerId) {
@@ -442,6 +486,8 @@ function createFakeDb(options) {
     ensureCareer,
     getProfile,
     getState,
+    getDiscoveryState,
+    getArchiveState,
     readQuestState,
     putQuests,
     readWallet,
@@ -551,6 +597,8 @@ function createFakeCommission(options) {
 let EndingModule = null;
 let CommissionModule = null;
 let CareerCore = null;
+let ProfessionModule = null;
+let CATALOG = null;
 let CAMPAIGN = null;
 let ENDING_COMBAT = null;
 let ENDING_RESEARCH = null;
@@ -566,6 +614,16 @@ function assembly() {
   EndingModule = require(PATHS.endingReducer);
   CommissionModule = require(PATHS.commissionCore);
   CareerCore = require(PATHS.careerCore);
+  ProfessionModule = require(PATHS.professionState);
+  const registry = loadJson(PATHS.registry);
+  const clues = loadJson(PATHS.clues);
+  CATALOG = {
+    games: registry.games,
+    professions: registry.professions,
+    commissions: [],
+    clues: clues.clues,
+    worldWorkIds: [],
+  };
   CAMPAIGN = loadJson(PATHS.campaign);
   ENDING_COMBAT = loadJson(PATHS.endingCombat);
   ENDING_RESEARCH = loadJson(PATHS.endingResearch);
@@ -575,6 +633,10 @@ function assembly() {
   if (!EndingModule || typeof EndingModule.createEndingReducer !== 'function') throw new Error('ending-reducer 缺少 createEndingReducer');
   if (!CommissionModule || typeof CommissionModule.createCommissionCore !== 'function') throw new Error('commission-core 缺少 createCommissionCore');
   if (COMMISSIONS.length !== 96) throw new Error('commissions.json 不是 96 条：' + COMMISSIONS.length);
+  if (CATALOG.professions.length !== 16 || CATALOG.games.length !== 16) throw new Error('registry 职业/游戏映射异常');
+  if (!CATALOG.games.every((row) => Array.isArray(row.professions) && row.professions.length > 0 && typeof row.clueRef === 'string')) {
+    throw new Error('registry 缺少职业/线索映射');
+  }
 }
 
 function defaultEndings() {
@@ -589,6 +651,7 @@ async function scenario(options) {
     initialCredits: opts.initialCredits,
     failures: opts.failures,
     throws: opts.throws,
+    acceptedProfessionIds: opts.acceptedProfessionIds,
   });
   const created = await db.ensureCareer({ originGameId: 'star-raid' });
   const careerId = created.careerId;
@@ -908,6 +971,21 @@ async function groupStart() {
     const third = await profileThrow.reducer.startEnding({ approach: 'combat', careerId: profileThrow.careerId });
     eq(third.reason, 'db-read-failed', 'getProfile 抛异常结构化');
     return 'db-read-failed';
+  });
+
+  await check('B8 已注册终局免职业 gate：零已接受职业仍可启动，普通委托不可绕过', async () => {
+    const s = await scenario({ acceptedProfessionIds: [] });
+    const ending = await s.reducer.startEnding({ approach: 'combat', careerId: s.careerId });
+    eq(ending.ok, true, 'ending start ok');
+    eq(s.db.count('createRun'), 1, '终局只建 1 个 run');
+
+    const board = CommissionModule.createCommissionCore({ db: s.db, storage: createFakeStorage() });
+    eq(board.configure({ content: COMMISSIONS, catalog: CATALOG }).ok, true, '真实 96 目录配置');
+    const blocked = await board.start({ careerId: s.careerId, commissionId: 'pendulum-tower.T1' });
+    eq(blocked.ok, false, '普通委托不可绕过职业 gate');
+    eq(blocked.reason, 'not-discovered', 'reason');
+    eq(s.db.count('createRun'), 1, '普通委托零新增 run');
+    return 'ending bypass / normal not-discovered';
   });
 }
 
@@ -1253,14 +1331,16 @@ async function groupIsolationAndEconomy() {
     const boardDb = createFakeDb({});
     await boardDb.ensureCareer({});
     const board = CommissionModule.createCommissionCore({ db: boardDb, storage: createFakeStorage() });
-    const boardConfig = board.configure(COMMISSIONS);
+    const boardConfig = board.configure({ content: COMMISSIONS, catalog: CATALOG });
     eq(boardConfig.ok, true, 'board configure');
     eq(board.getCommissions().length, 96, 'board 96 行');
     eq(board.getCommission('ending.combat'), null, 'board 无 ending.combat');
     const available = await board.listAvailable({ careerId: boardDb.state.careerId });
     eq(available.ok, true, 'listAvailable ok');
-    eq(available.commissions.length, 96, '96 行可见');
+    eq(available.commissions.length, 2, '只披露两个已接受职业的真实可接单');
+    eq(available.availableIds, ['pendulum-tower.T1', 'star-raid.T1'], '可见集合');
     eq(available.commissions.filter((row) => row.commissionId.indexOf('ending.') === 0).length, 0, '无 ending 行');
+    assert(available.commissions.every((row) => ['engineering.structural', 'adventure.pilot'].indexOf(row.professionId) >= 0), '不泄漏未接受职业');
 
     const reducer = EndingModule.createEndingReducer({ db: boardDb, storage: createFakeStorage(), now: () => NOW });
     const config = reducer.configure({ endings: defaultEndings(), campaign: clone(CAMPAIGN), db: boardDb });
@@ -1275,11 +1355,18 @@ async function groupIsolationAndEconomy() {
   await check('D3 结局之后自由职业与挑战不受限：普通委托照常接单/结算/发钱', async () => {
     const { s } = await resolveEnding('combat');
     const board = CommissionModule.createCommissionCore({ db: s.db, storage: createFakeStorage() });
-    eq(board.configure(COMMISSIONS).ok, true, 'board configure');
+    eq(board.configure({ content: COMMISSIONS, catalog: CATALOG }).ok, true, 'board configure');
     const available = await board.listAvailable({ careerId: s.careerId });
-    eq(available.commissions.length, 96, '96 行仍可见');
+    eq(available.commissions.length, 2, '结局后仍只披露两个已接受职业的真实可接单');
+    eq(available.commissions.filter((row) => row.commissionId.indexOf('ending.') === 0).length, 0, '普通列表无 ending 行');
     const t1 = available.commissions.find((row) => row.commissionId === 'pendulum-tower.T1');
+    assert(!!t1, '已接受职业首单可见');
     eq(t1.unlocked, true, 'T1 可接');
+    const createRunsBefore = s.db.count('createRun');
+    const blocked = await board.start({ careerId: s.careerId, commissionId: 'merge-2048.T1' });
+    eq(blocked.ok, false, '未接受职业普通委托不可绕过 gate');
+    eq(blocked.reason, 'not-discovered', 'blocked reason');
+    eq(s.db.count('createRun'), createRunsBefore, 'gate 拒绝零建 run');
     const started = await board.start({ careerId: s.careerId, commissionId: 'pendulum-tower.T1' });
     eq(started.ok, true, '普通委托可接');
     for (let index = 0; index < 4; index += 1) {
