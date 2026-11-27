@@ -884,8 +884,6 @@
     })).then(function (results) {
       var css = results.map(function (result) { return result && result.ok ? (result.text || '') : ''; }).join('\n');
       internal.careerUiStyles = css;
-      var components = readUi('components');
-      if (css && components && typeof components.ensureStyles === 'function') components.ensureStyles(css);
       return css;
     });
     return internal.careerUiStylesPromise;
@@ -899,7 +897,9 @@
       loadCareerContent(),
       ensureCareerUiStyles(),
     ]).then(function (values) {
-      return { components: values[0] || null, harbor: values[1] || null };
+      var components = values[0];
+      if (values[3] && components && typeof components.ensureStyles === 'function') components.ensureStyles(values[3]);
+      return { components: components || null, harbor: values[1] || null };
     }).catch(function () {
       return { components: null, harbor: null };
     });
@@ -3008,17 +3008,15 @@
   }
 
   function renderClue(clue, state) {
-    return Promise.resolve()
-      .then(function () {
-        if (!clue || typeof clue.clueId !== 'string' || !clue.clueId) return { rendered: false, reason: 'invalid-clue' };
-        if (internal.rendered[clue.clueId]) return { rendered: false, reason: 'duplicate' };
-        return ensureCareerUi();
-      })
+    if (!clue || typeof clue.clueId !== 'string' || !clue.clueId) return Promise.resolve({ rendered: false, reason: 'invalid-clue' });
+    if (internal.rendered[clue.clueId]) return Promise.resolve({ rendered: false, reason: 'duplicate' });
+    return ensureCareerUi()
       .then(function () {
         var surface = readUi('clueSurface');
         if (!surface || typeof surface.render !== 'function') return { rendered: false, reason: 'ui-missing' };
         return waitForClueHost().then(function (target) {
           if (!target) return { rendered: false, reason: 'no-host' };
+          if (internal.rendered[clue.clueId]) return { rendered: false, reason: 'duplicate' };
           internal.rendered[clue.clueId] = true;
           var options = {
             clue: clone(clue),
