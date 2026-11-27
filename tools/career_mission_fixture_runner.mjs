@@ -10,6 +10,10 @@
  * - `--self-test`：无 fixture 也验证 runner 自身（schema/事件目录/fixture 形状/退出码语义/缺口报告）。
  * - `--run=<gameId|all>`：通用 Chrome harness，驱动每个 tier 的 success / failure /
  *   suspend / receipt-claim-idempotent 通用证据；fixture 只负责把真实游戏状态驱动到目标附近。
+ * - 0.22 接单契约：startCommission 之前必须通过真实 DB 事务链 GLIMPSED→READ 制造发现/已读
+ *   事实，再调用 bridge.acceptProfessionInvitation 显式接受该委托的拥有职业；不得直接写
+ *   professionProgress.accepted 绕过邀请流程。世界工作虽允许任一已接受职业承接，本 fixture
+ *   仍按内容声明的原拥有职业接受。
  * - `--skip-static`：只对 `--run` 有效；父进程已跑过 96 static 时跳过子进程里重复的
  *   content schema / fixture 形状静态校验。仍读取真实内容与 fixture、仍跑全部真实 E2E 与
  *   隔离证据，并打印 `SKIP-STATIC` 标记供父进程核对；不跳过任何 tier 证据、不改退出码语义。
@@ -190,6 +194,9 @@ function loadContentBundle() {
   if (!registry.ok) errors.push(registry.error);
   const items = readJsonFile(path.join(CONTENT_DIR, 'items.json'), 'content/items.json');
   if (!items.ok) errors.push(items.error);
+  /* 0.22 邀请链需要真实 clue→game→profession 映射；只读取内容，不写任何生产文件。 */
+  const clues = readJsonFile(path.join(CONTENT_DIR, 'clues.json'), 'content/clues.json');
+  if (!clues.ok) errors.push(clues.error);
 
   const options = {};
   if (registry.ok && isObject(registry.value)) {
@@ -213,6 +220,7 @@ function loadContentBundle() {
     commissions: commissions.ok ? commissions.value : null,
     registry: registry.ok ? registry.value : null,
     items: items.ok ? items.value : null,
+    clues: clues.ok ? clues.value : null,
     options,
   };
 }
@@ -241,6 +249,44 @@ function buildContentIndex(commissions) {
     index[commission.gameId][commission.tier] = commission;
   });
   return index;
+}
+
+/**
+ * 0.22 邀请链的只读 catalog：与 bridge.careerCatalog() 同源（registry / clues / commissions），
+ * 传给 DB 事务让 GLIMPSED/READ 只接受真实映射，不靠展示名或硬编码职业。
+ */
+function buildCareerCatalog(bundle) {
+  const registry = isObject(bundle && bundle.registry) ? bundle.registry : {};
+  const commissions = isObject(bundle && bundle.commissions) ? bundle.commissions : {};
+  const clues = isObject(bundle && bundle.clues) ? bundle.clues : {};
+  return {
+    schemaVersion: Number(registry.schemaVersion) || 1,
+    contentVersion: typeof registry.contentVersion === 'string' ? registry.contentVersion : '',
+    games: Array.isArray(registry.games) ? registry.games : [],
+    professions: Array.isArray(registry.professions) ? registry.professions : [],
+    commissions: Array.isArray(commissions.commissions) ? commissions.commissions : [],
+    clues: Array.isArray(clues.clues) ? clues.clues : [],
+  };
+}
+
+/**
+ * 解析委托的原拥有职业与真实线索。世界工作可由任一已接受职业承接，但本 fixture 仍按
+ * commission.professionId（内容声明的拥有职业）走完整邀请链。
+ */
+function professionAcceptanceInput(commission, bundle) {
+  const professionId = isObject(commission) && typeof commission.professionId === 'string' ? commission.professionId : null;
+  const gameId = isObject(commission) && typeof commission.gameId === 'string' ? commission.gameId : null;
+  if (!professionId || !gameId) return { ok: false, reason: 'commission-owner-missing' };
+  const catalog = buildCareerCatalog(bundle);
+  const game = catalog.games.find((row) => isObject(row) && row.gameId === gameId);
+  if (!game || !Array.isArray(game.professions) || game.professions.indexOf(professionId) < 0) {
+    return { ok: false, reason: 'profession-game-mismatch', detail: gameId + ' / ' + professionId };
+  }
+  const clue = catalog.clues.find((row) => isObject(row) && row.gameId === gameId
+    && (typeof row.professionId !== 'string' || row.professionId === professionId));
+  const clueId = clue && typeof clue.clueId === 'string' ? clue.clueId : (typeof game.clueRef === 'string' ? game.clueRef : null);
+  if (!clueId) return { ok: false, reason: 'clue-missing', detail: gameId };
+  return { ok: true, professionId, gameId, clueId, catalog };
 }
 
 function fixtureRelPath(gameId) {
@@ -414,23 +460,43 @@ const STATE_EXPR = `(() => {
   };
 })()`;
 
-const ENSURE_COMMISSION_EXPR = `(async () => {
-  const api = window.ArcadeCareer;
-  if (!api) return { ok: false, reason: 'no-bridge' };
-  const ready = () => !!(api.commission && typeof api.commission.start === 'function');
-  if (ready()) return { ok: true, via: 'preloaded' };
-  const warm = async (fn) => {
-    if (typeof fn !== 'function') return;
-    try { await fn.call(api); } catch (e) { /* UI 缺内容时失败不影响模块装载 */ }
-  };
-  await warm(api.openTown);
-  if (ready()) return { ok: true, via: 'openTown' };
-  await warm(api.openReceipt);
-  if (ready()) return { ok: true, via: 'openReceipt' };
-  await warm(api.openTown);
-  if (ready()) return { ok: true, via: 'openTown-retry' };
-  return { ok: false, reason: 'commission-module-unavailable' };
-})()`;
+function ensureCommissionExpr(catalog) {
+  return `(async () => {
+    const api = window.ArcadeCareer;
+    if (!api) return { ok: false, reason: 'no-bridge' };
+    const ready = () => !!(api.commission && typeof api.commission.start === 'function');
+    let via = 'preloaded';
+    if (!ready()) {
+      const warm = async (fn) => {
+        if (typeof fn !== 'function') return false;
+        try { await fn.call(api); } catch (e) { /* UI 缺内容时失败不影响模块装载 */ }
+        return ready();
+      };
+      if (await warm(api.openTown)) via = 'openTown';
+      else if (await warm(api.openReceipt)) via = 'openReceipt';
+      else if (await warm(api.openTown)) via = 'openTown-retry';
+      else return { ok: false, reason: 'commission-module-unavailable' };
+    }
+    /* 0.22：commission-core 的授权 catalog 来自显式 configure；测试 harness 用同源真实内容补齐，
+       不靠 UI 过滤或调用方传入的 availableIds 绕过 gate。 */
+    try {
+      const configured = api.commission.configure({ catalog: ${q(catalog)} });
+      if (configured && configured.ok === false) return { ok: false, reason: 'catalog-configure-failed', detail: configured.reason || null };
+    } catch (e) {
+      return { ok: false, reason: 'catalog-configure-threw', detail: String(e && e.message ? e.message : e) };
+    }
+    try {
+      await api.careerView({ surface: 'work' });
+    } catch (e) {
+      return { ok: false, reason: 'career-view-threw', detail: String(e && e.message ? e.message : e) };
+    }
+    const professionView = window.ArcadeCareerProfessionView || api.professionView || null;
+    if (!professionView || typeof professionView.canAcceptCommission !== 'function') {
+      return { ok: false, reason: 'profession-view-unavailable' };
+    }
+    return { ok: true, via: via, catalogConfigured: true, professionViewReady: true };
+  })()`;
+}
 
 const CLOSE_UI_EXPR = `(() => {
   try {
@@ -464,6 +530,70 @@ function ensureCareerExpr(gameId) {
     try { r = await db.ensureCareer({ originGameId: ${q(gameId)} }); } catch (e) { return { ok: false, reason: 'ensure-career-threw' }; }
     if (!r || !r.ok || typeof r.careerId !== 'string') return { ok: false, reason: (r && r.reason) || 'ensure-career-failed' };
     return { ok: true, careerId: r.careerId, created: r.created === true };
+  })()`;
+}
+
+/**
+ * 0.22 受控邀请链：真实 DB 事务 GLIMPSED→READ 制造发现/已读事实，再通过公开 bridge 门面
+ * acceptProfessionInvitation 显式接受职业。绝不直接写 professionProgress.accepted。
+ */
+function acceptProfessionExpr(input) {
+  return `(async () => {
+    const api = window.ArcadeCareer;
+    if (!api || typeof api.acceptProfessionInvitation !== 'function') return { ok: false, reason: 'invitation-api-unavailable' };
+    const t = window.__arcadeCareerTest;
+    const db = t && typeof t.db === 'function' ? t.db() : null;
+    if (!db || typeof db.getDiscoveryGeneration !== 'function' || typeof db.applyProfessionEvent !== 'function') {
+      return { ok: false, reason: 'profession-event-api-unavailable' };
+    }
+    const catalog = ${q(input.catalog)};
+    const professionId = ${q(input.professionId)};
+    const gameId = ${q(input.gameId)};
+    const clueId = ${q(input.clueId)};
+    let generation = null;
+    try {
+      const gen = await db.getDiscoveryGeneration();
+      if (!gen || gen.ok !== true || !Number.isInteger(gen.generation)) return { ok: false, reason: 'generation-unavailable', detail: gen && gen.reason ? gen.reason : null };
+      generation = gen.generation;
+    } catch (e) { return { ok: false, reason: 'generation-threw', detail: String(e && e.message ? e.message : e) }; }
+    let glimpsed = null;
+    try {
+      glimpsed = await db.applyProfessionEvent({
+        action: 'GLIMPSED',
+        input: { professionId: professionId, gameId: gameId, clueId: clueId, catalog: catalog },
+        generation: generation,
+        now: new Date().toISOString(),
+      });
+    } catch (e) { return { ok: false, reason: 'glimpse-threw', detail: String(e && e.message ? e.message : e) }; }
+    if (!glimpsed || glimpsed.ok !== true) return { ok: false, reason: 'glimpse-failed', detail: glimpsed && (glimpsed.reason || glimpsed.error) ? (glimpsed.reason || glimpsed.error) : null };
+    let read = null;
+    try {
+      read = await db.applyProfessionEvent({
+        action: 'READ',
+        input: { professionId: professionId, gameId: gameId, clueId: clueId, clueOpened: true, catalog: catalog },
+        generation: Number.isInteger(glimpsed.generation) ? glimpsed.generation : generation,
+        now: new Date().toISOString(),
+      });
+    } catch (e) { return { ok: false, reason: 'read-threw', detail: String(e && e.message ? e.message : e) }; }
+    if (!read || read.ok !== true) return { ok: false, reason: 'read-failed', detail: read && (read.reason || read.error) ? (read.reason || read.error) : null };
+    let accepted = null;
+    try { accepted = await api.acceptProfessionInvitation({ professionId: professionId, gameId: gameId }); }
+    catch (e) { return { ok: false, reason: 'accept-threw', detail: String(e && e.message ? e.message : e) }; }
+    if (!accepted || accepted.ok !== true) return { ok: false, reason: 'accept-failed', detail: accepted && (accepted.reason || accepted.error) ? (accepted.reason || accepted.error) : null };
+    const state = typeof api.state === 'function' ? api.state() : null;
+    const progress = state && state.professionProgress && typeof state.professionProgress === 'object' ? state.professionProgress[professionId] : null;
+    if (!progress || ['accepted', 'developed', 'completed'].indexOf(progress.state) < 0) {
+      return { ok: false, reason: 'profession-not-accepted', detail: progress ? progress.state : null };
+    }
+    return {
+      ok: true,
+      careerId: accepted.careerId || read.careerId || glimpsed.careerId || null,
+      professionId: professionId,
+      gameId: gameId,
+      clueId: clueId,
+      newlyAccepted: accepted.newlyAccepted === true,
+      duplicate: accepted.duplicate === true,
+    };
   })()`;
 }
 
@@ -609,6 +739,7 @@ class MissionHarness {
     this.cdpPort = opts.cdpPort;
     this.chromePath = opts.chromePath || undefined;
     this.artifactsDir = opts.artifactsDir;
+    this.contentBundle = opts.contentBundle || null;
     this.baseUrl = 'http://127.0.0.1:' + this.port;
     this.server = null;
     this.chrome = null;
@@ -756,6 +887,15 @@ class MissionHarness {
     return isObject(res.value) ? res.value : { ok: false, reason: 'ensure-career-invalid' };
   }
 
+  /** 0.22：以真实邀请链接受委托的拥有职业；返回已接受职业所属 careerId。 */
+  async acceptOwningProfession(commission) {
+    const input = professionAcceptanceInput(commission, this.contentBundle);
+    if (!input.ok) return input;
+    const res = await this.evaluate(acceptProfessionExpr(input), 'accept-profession');
+    if (!res.ok) return res;
+    return isObject(res.value) ? res.value : { ok: false, reason: 'accept-profession-invalid' };
+  }
+
   async clearTicket() {
     const res = await this.evaluate(CLEAR_TICKET_EXPR, 'clear-ticket');
     return res.ok ? res.value : { ok: false, reason: res.reason, detail: res.detail };
@@ -804,7 +944,7 @@ class MissionHarness {
   }
 
   async ensureCommissionModule() {
-    const res = await this.evaluate(ENSURE_COMMISSION_EXPR, 'ensure-commission');
+    const res = await this.evaluate(ensureCommissionExpr(buildCareerCatalog(this.contentBundle)), 'ensure-commission');
     if (!res.ok) return res;
     const value = isObject(res.value) ? res.value : { ok: false, reason: 'commission-module-invalid' };
     await this.evaluate(CLOSE_UI_EXPR, 'close-ui');
@@ -1177,9 +1317,10 @@ function createSession(h, gameId, tier, commission, careerId) {
  * ------------------------------------------------------------------ */
 
 /**
- * 每个证据开始前：放弃上一趟未结算 run、清 sessionStorage ticket、打开目标游戏普通页、确保生涯。
+ * 每个证据开始前：放弃上一趟未结算 run、清 sessionStorage ticket、打开目标游戏普通页、
+ * 通过真实 GLIMPSED→READ→acceptProfessionInvitation 链接受本委托的拥有职业。
  */
-async function prepareFreshRun(h, gameId) {
+async function prepareFreshRun(h, gameId, commission) {
   const before = await h.readState();
   if (before.ok && isObject(before.state) && isObject(before.state.commissionRun) && typeof before.state.commissionRun.ticketId === 'string') {
     await h.abandon(before.state.commissionRun.ticketId);
@@ -1187,10 +1328,19 @@ async function prepareFreshRun(h, gameId) {
   await h.clearTicket();
   const opened = await h.ensurePlainPage(gameId);
   if (!opened.ok) return opened;
-  const career = await h.ensureCareer(gameId);
-  if (!career.ok) return career;
+  const accepted = await h.acceptOwningProfession(commission);
+  if (!accepted.ok) return { ok: false, reason: 'profession-accept-failed', detail: accepted.reason || null, accepted };
+  if (typeof accepted.careerId !== 'string' || !accepted.careerId) {
+    return { ok: false, reason: 'career-id-missing', detail: 'acceptProfessionInvitation 未返回 careerId' };
+  }
   await h.clearTicket();
-  return { ok: true, careerId: career.careerId, created: career.created === true };
+  return {
+    ok: true,
+    careerId: accepted.careerId,
+    created: accepted.newlyAccepted === true,
+    professionId: accepted.professionId,
+    accepted: accepted.duplicate === true ? 'duplicate' : 'new',
+  };
 }
 
 /** 归一化 fixture 返回的 events 声明（对象 kind→次数 或 [{kind,payload}]）。 */
@@ -1292,7 +1442,7 @@ async function runSuccessEvidence(h, gameId, tier, fixture, commission, options)
     checks.add('success.handler', false, 'fixture.tiers[' + tier + '].success 不是函数');
     return { checks: checks.list, diagnostics };
   }
-  const prepared = await prepareFreshRun(h, gameId);
+  const prepared = await prepareFreshRun(h, gameId, commission);
   if (!prepared.ok) {
     checks.add('success.prepare', false, prepared.reason || 'prepare-failed');
     return { checks: checks.list, diagnostics };
@@ -1423,7 +1573,7 @@ async function runFailureEvidence(h, gameId, tier, fixture, commission, options)
     checks.add('failure.handler', false, 'fixture.tiers[' + tier + '].failure 不是函数');
     return { checks: checks.list, diagnostics };
   }
-  const prepared = await prepareFreshRun(h, gameId);
+  const prepared = await prepareFreshRun(h, gameId, commission);
   if (!prepared.ok) {
     checks.add('failure.prepare', false, prepared.reason || 'prepare-failed');
     return { checks: checks.list, diagnostics };
@@ -1497,7 +1647,7 @@ async function runFailureEvidence(h, gameId, tier, fixture, commission, options)
 async function runSuspendEvidence(h, gameId, tier, commission) {
   const checks = createCheckList();
   const diagnostics = { evidence: 'suspend', gameId, tier, steps: {} };
-  const prepared = await prepareFreshRun(h, gameId);
+  const prepared = await prepareFreshRun(h, gameId, commission);
   if (!prepared.ok) {
     checks.add('suspend.prepare', false, prepared.reason || 'prepare-failed');
     return { checks: checks.list, diagnostics };
@@ -1674,13 +1824,13 @@ async function runMode(options) {
    * 子进程如果不带此开关则维持原行为（完整静态校验），兼容既有调用。
    */
   const skipStatic = options.skipStatic === true;
+  if (!bundle || bundle.ok !== true || !bundle.commissions) {
+    console.error('FAIL   内容 bundle 不可读：' + ((bundle && bundle.errors) || ['content-unavailable']).join('; '));
+    return EXIT_FAIL;
+  }
   let contentResult;
   if (skipStatic) {
     console.log('SKIP-STATIC content schema / fixture shape 由父进程 96 --static 承担');
-    if (!bundle || !bundle.commissions) {
-      console.error('FAIL   内容不可读（--skip-static 不能替代内容装载）');
-      return EXIT_FAIL;
-    }
     contentResult = { ok: true, errors: [], warnings: [], counts: { games: GAMES.length, tiers: TIERS.length, total: GAMES.length * TIERS.length } };
     console.log('PASS  content-schema  ' + (GAMES.length * TIERS.length) + '/' + (GAMES.length * TIERS.length) +
       '  games=' + GAMES.length + '  tiers=' + TIERS.length + ' (parent-static-trust)');
@@ -1755,6 +1905,7 @@ async function runMode(options) {
     cdpPort: cdpPort,
     chromePath: process.env.CHROME_PATH || undefined,
     artifactsDir,
+    contentBundle: bundle,
   });
   let tierPass = 0;
   let tierFail = 0;
@@ -1891,6 +2042,23 @@ async function runSelfTest() {
   /* 3) 真实内容 96 条 */
   const bundle = loadContentBundle();
   record('content.load', bundle.ok === true, (bundle.errors || []).join('; '));
+  const worldCommission = bundle.commissions && Array.isArray(bundle.commissions.commissions)
+    ? bundle.commissions.commissions.find((row) => row && row.commissionId === 'star-raid.T1') : null;
+  const worldOwner = professionAcceptanceInput(worldCommission, bundle);
+  record(
+    'runner.world-work-owner',
+    worldOwner.ok === true && worldOwner.professionId === 'adventure.pilot' && worldOwner.gameId === 'star-raid',
+    'star-raid.T1 仍按内容拥有职业 adventure.pilot 接受'
+  );
+  const invitationExpr = acceptProfessionExpr(worldOwner);
+  record(
+    'runner.invitation-chain',
+    /action:\s*'GLIMPSED'/.test(invitationExpr)
+      && /action:\s*'READ'/.test(invitationExpr)
+      && /acceptProfessionInvitation/.test(invitationExpr)
+      && !/professionProgress\[[^\]]+\]\s*=/.test(invitationExpr),
+    'GLIMPSED→READ→acceptProfessionInvitation，不直接写 accepted'
+  );
   const contentResult = validateLoadedContent(bundle);
   record('content.schema-96', contentResult.ok === true && contentResult.counts.total === 96 && contentResult.counts.games === 16 && contentResult.counts.tiers === 6, 'counts=' + sortedJson(contentResult.counts));
   record('content.warnings-non-blocking', contentResult.ok === true, '内容告警不影响 ok（warnings=' + contentResult.warnings.length + '）');
