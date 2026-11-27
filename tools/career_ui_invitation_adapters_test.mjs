@@ -417,6 +417,9 @@ check('T12 shells pass showHeader:false where T15 requires it',
   && (source.invitation.match(/showHeader: false/g) || []).length >= 4);
 check('P01 adapter wrapper has no copied surface styling', /wrapper\.className = 'ac-career-ui';/.test(source.clue) && !/wrapper\.className = [^;]*ac-career-ui__surface/.test(source.clue));
 check('P04 passes work reward text derived from settled rewards to ReceiptCard', /workText: workRewardTextOf\(allRewards, presentation\)/.test(source.receipt));
+/* 0.22 后日谈入口必须留在组件收据里，而不是被下一单委托顶掉。 */
+check('P04 ending receipt keeps read-epilogue before routine work',
+  /fields\.ending && campaign/.test(source.receipt) && /id: 'read-epilogue', label: '读后日谈'/.test(source.receipt));
 check('receipt projection never reads storyFeedback.nextStep', !/raw\.nextStep/.test(source.receipt) && /projectedStoryOf\(outer\)/.test(source.receipt));
 
 /* ------------------------------------------------------------------ *
@@ -904,6 +907,30 @@ function receiptPayload(overrides = {}) {
     receipts: doc.querySelectorAll('.ac-career-ui__receipt').length,
     body: textOf(doc.body),
   });
+}
+
+{
+  /* 0.22 终局收据的「读后日谈」入口不能在 0.23 组件收据里丢失：
+     结算结果是终局时，主动作必须是读后日谈，而不是下一单职业委托。 */
+  const doc = makeDocument();
+  const ui = loadUi(doc);
+  const events = [];
+  const payload = receiptPayload({
+    events,
+    result: Object.assign({}, receiptPayload().result, {
+      approach: 'research',
+      commissionId: 'ending.research',
+      flags: ['C5.star_tower_resolved', 'ending.research'],
+    }),
+    openCampaign() { events.push('openCampaign'); return { ok: true }; },
+  });
+  const endingCard = ui.receipt.show(payload);
+  const epilogue = buttonBy(doc, 'read-epilogue');
+  check('P04 ending receipt keeps the read-epilogue action', !!epilogue && epilogue.textContent.includes('读后日谈') && !buttonBy(doc, 'continue'),
+    { buttons: endingCard.querySelectorAll('button').map((node) => ({ id: node.getAttribute('data-action'), text: node.textContent })) });
+  epilogue.click();
+  await drain();
+  eq('P04 read-epilogue opens the campaign panel once', events.filter((item) => item === 'openCampaign').length, 1);
 }
 
 {

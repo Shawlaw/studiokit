@@ -1277,17 +1277,23 @@
       },
     });
     if (fields.ok) {
-      const projected = projection.action;
-      let opener = null;
-      if (projected && projected.kind === 'ending') opener = campaign;
-      else if (projected && projected.kind === 'letter') opener = mailbox || campaign || town;
-      else if (projected) opener = town || campaign || mailbox;
-      if (projected && opener) {
-        actions.push(Object.assign({
-          id: 'continue', label: '继续：' + storyTextOf(projected.label, 48),
-        }, invoked(opener)));
-      } else if (town) {
-        actions.push(Object.assign({ id: 'return-to-town', label: CARD_TOWN_TEXT }, invoked(town)));
+      /* 终局收据在 0.22 提供「读后日谈」入口；组件路径必须保留同一玩家动作，
+         不能被下一单职业委托顶掉后日谈。 */
+      if (fields.ending && campaign) {
+        actions.push(Object.assign({ id: 'read-epilogue', label: '读后日谈' }, invoked(campaign)));
+      } else {
+        const projected = projection.action;
+        let opener = null;
+        if (projected && projected.kind === 'ending') opener = campaign;
+        else if (projected && projected.kind === 'letter') opener = mailbox || campaign || town;
+        else if (projected) opener = town || campaign || mailbox;
+        if (projected && opener) {
+          actions.push(Object.assign({
+            id: 'continue', label: '继续：' + storyTextOf(projected.label, 48),
+          }, invoked(opener)));
+        } else if (town) {
+          actions.push(Object.assign({ id: 'return-to-town', label: CARD_TOWN_TEXT }, invoked(town)));
+        }
       }
     } else if (retry) {
       actions.push({
