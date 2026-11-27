@@ -329,10 +329,8 @@ html.ac-career-ui-scroll-lock body {
   animation: ac-career-ui-clue-in var(--ac-career-ui-clue-duration) ease-out both;
 }
 
-.ac-career-ui__clue-content {
-  display: flex;
-  flex-direction: column;
-  gap: var(--ac-career-ui-space-1);
+.ac-career-ui__clue-teaser {
+  display: block;
 }
 
 .ac-career-ui__clue-title {
