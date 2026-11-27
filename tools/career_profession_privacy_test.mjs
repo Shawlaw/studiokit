@@ -363,10 +363,27 @@ function domHasForbidden(root) {
     }),
   };
 }
+function collectReasonText(root) {
+  const parts = [];
+  const walk = (node) => {
+    if (!node) return;
+    if (node.nodeType === 3) {
+      parts.push(node.textContent);
+      return;
+    }
+    if (node.nodeType !== 1) return;
+    Object.keys(node.attributes || {}).forEach((key) => parts.push(node.attributes[key]));
+    node.children.forEach(walk);
+  };
+  walk(root);
+  return parts.join('\n').toLowerCase();
+}
 function domHasReason(root) {
-  const info = collectDom(root);
-  const lower = info.text.toLowerCase();
-  return !REASON_TEXT.some((reason) => lower.indexOf(reason) >= 0);
+  const text = collectReasonText(root);
+  return !REASON_TEXT.some((reason) => {
+    const re = new RegExp('(^|[^a-z-])' + reason.replace(/[.*+?^${}()|[\]\\]/g, '\\$&') + '([^a-z-]|$)');
+    return re.test(text);
+  });
 }
 
 function main() {
