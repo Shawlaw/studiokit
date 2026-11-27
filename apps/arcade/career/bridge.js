@@ -3011,7 +3011,7 @@
       var clue = reduced && reduced.clue ? reduced.clue : null;
       internal.discoveryState = nextState;
 
-      function finalizeResult(persisted) {
+      function finalizeResult(persisted, writeError) {
         var result = null;
         if (clue) {
           result = {
@@ -3020,6 +3020,7 @@
             clue: clue.clue,
             state: clone(nextState),
             persisted: !!persisted,
+            writeError: persisted ? null : (typeof writeError === 'string' ? writeError : null),
           };
         }
         internal.finishedResult = result;
@@ -3028,8 +3029,8 @@
         return result;
       }
 
-      function afterPersist(persisted) {
-        var result = finalizeResult(persisted);
+      function afterPersist(persisted, writeError) {
+        var result = finalizeResult(persisted, writeError);
         if (!persisted) {
           /* DB 写失败/不可用：返回 clue 结果但绝不渲染（fail-open）。 */
           return result;
@@ -3064,7 +3065,7 @@
       if (!internal.dbUsable) {
         addReason('db-unavailable');
         warnOnce('persist-unavailable', 'db unavailable; clue result kept in memory only');
-        return afterPersist(false);
+        return afterPersist(false, 'db-unavailable');
       }
       var discoveryAction = {
         type: 'RUN_ENDED',
@@ -3085,7 +3086,7 @@
           addReason('db-write-failed');
           warnOnce('db-write', (writeResult && writeResult.error) || 'write-failed');
           if (isStaleGenerationResult(writeResult)) {
-            return reloadAfterStaleGeneration().then(function () { return afterPersist(false); });
+            return reloadAfterStaleGeneration().then(function () { return afterPersist(false, 'stale-generation'); });
           }
         } else if (isObject(writeResult.value)) {
           /* 页面采用事务合并后的结果（保留其它标签的已读时间/线索并集）。 */
@@ -3093,7 +3094,7 @@
           internal.discoveryState = normalizedApplied;
           nextState = normalizedApplied;
         }
-        return afterPersist(persisted);
+        return afterPersist(persisted, writeResult && (writeResult.error || writeResult.reason));
       });
     });
   }

@@ -286,7 +286,7 @@ function inputFor(professionId, gameId, extra) {
 async function makeReadable(ctx, professionId, gameId, clueId) {
   const g = await ctx.db.getDiscoveryGeneration();
   const glimpsed = await ctx.db.applyProfessionEvent({
-    action: 'GLIMPSIED',
+    action: 'GLIMPSED',
     input: inputFor(professionId, gameId, { clueId }),
     generation: g.generation,
     now: NOW,
@@ -355,9 +355,9 @@ await check('T03-01 DB 常量 / 11 stores / contentVersion / API 冻结', async 
   return 'IDB v1 / 11 stores / contentVersion 0.18.0';
 });
 
-await check('T03-02 GLIMPSIED 只写职业扩展与真实 clue，不建立身份', async () => {
+await check('T03-02 GLIMPSED 只写职业扩展与真实 clue，不建立身份', async () => {
   const ctx = await freshDb();
-  const result = await ctx.db.applyProfessionEvent({ action: 'GLIMPSIED', input: inputFor(P, G, { clueId: 'CL-' + G }), generation: 0, now: NOW });
+  const result = await ctx.db.applyProfessionEvent({ action: 'GLIMPSED', input: inputFor(P, G, { clueId: 'CL-' + G }), generation: 0, now: NOW });
   assert(result.ok && result.created === false && result.newlyAccepted === false, JSON.stringify(result));
   const state = await readState(ctx.db);
   eq(state.professionProgress[P].state, 'glimpsed');
@@ -378,7 +378,7 @@ await check('T03-03 READ 必须有真实 opened 证据；CLUE_OPENED 后可读�
   const ctx = await freshDb();
   const denied = await ctx.db.applyProfessionEvent({ action: 'READ', input: { professionId: P, clueId: 'CL-' + G, catalog }, generation: 0, now: LATER });
   assert(!denied.ok && denied.reason === 'not-discovered', JSON.stringify(denied));
-  const before = await ctx.db.applyProfessionEvent({ action: 'GLIMPSIED', input: inputFor(P, G, { clueId: 'CL-' + G }), generation: 0, now: NOW });
+  const before = await ctx.db.applyProfessionEvent({ action: 'GLIMPSED', input: inputFor(P, G, { clueId: 'CL-' + G }), generation: 0, now: NOW });
   const opened = await ctx.db.mergeDiscoveryState({ clues: {} }, [], { action: { type: 'CLUE_OPENED', clueId: 'CL-' + G, generation: 0 } });
   assert(opened.ok, JSON.stringify(opened));
   const read = await ctx.db.applyProfessionEvent({ action: 'READ', input: { professionId: P, clueId: 'CL-' + G, catalog }, generation: 0, now: LATER });
@@ -532,8 +532,8 @@ await check('T03-12 mergeDiscoveryState 按 professionEvents 数组同事务归�
       type: 'RUN_ENDED',
       generation: 0,
       professionEvents: [
-        { action: 'GLIMPSIED', input: inputFor(P, G, { clueId: 'CL-' + G }) },
-        { action: 'GLIMPSIED', input: inputFor(P2, G2, { clueId: 'CL-' + G2 }) },
+        { action: 'GLIMPSED', input: inputFor(P, G, { clueId: 'CL-' + G }) },
+        { action: 'GLIMPSED', input: inputFor(P2, G2, { clueId: 'CL-' + G2 }) },
       ],
     },
   });
@@ -877,7 +877,7 @@ await check('T03-18 合成 N+1 职业可持久化，不依赖固定职业数组'
   const id = 'service.courier';
   const game = 'virtual-courier';
   const g = await ctx.db.getDiscoveryGeneration();
-  const glimpse = await ctx.db.applyProfessionEvent({ action: 'GLIMPSIED', input: { professionId: id, gameId: game, clueId: 'CL-' + game, catalog: extended }, generation: g.generation, now: NOW });
+  const glimpse = await ctx.db.applyProfessionEvent({ action: 'GLIMPSED', input: { professionId: id, gameId: game, clueId: 'CL-' + game, catalog: extended }, generation: g.generation, now: NOW });
   assert(glimpse.ok, JSON.stringify(glimpse));
   await ctx.db.mergeDiscoveryState({ clues: {} }, [], { action: { type: 'CLUE_OPENED', clueId: 'CL-' + game, generation: g.generation } });
   const read = await ctx.db.applyProfessionEvent({ action: 'READ', input: { professionId: id, clueId: 'CL-' + game, catalog: extended }, generation: g.generation, now: NOW });
@@ -899,7 +899,7 @@ await check('T03-19 原始 event.state / event.extension 伪造职业状态被�
       action: Object.assign({
         type: 'RUN_ENDED',
         generation: 0,
-        professionEvents: [{ action: 'GLIMPSIED', input: inputFor(P, G, { clueId: 'CL-' + G }), ...payload }],
+        professionEvents: [{ action: 'GLIMPSED', input: inputFor(P, G, { clueId: 'CL-' + G }), ...payload }],
       }),
     });
     assert(!result.ok && result.reason === 'bad-profession-state', JSON.stringify(result));

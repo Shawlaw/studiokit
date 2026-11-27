@@ -385,7 +385,7 @@ async function apply(db, action, input, now) {
   return result;
 }
 async function dbReadable(db, professionId, gameId, clueId) {
-  await apply(db, 'GLIMPSIED', dbInput(professionId, gameId, clueId), NOW);
+  await apply(db, 'GLIMPSED', dbInput(professionId, gameId, clueId), NOW);
   const generation = await db.getDiscoveryGeneration();
   const opened = await db.mergeDiscoveryState({ clues: {} }, [], {
     action: { type: 'CLUE_OPENED', clueId, generation: generation.generation },

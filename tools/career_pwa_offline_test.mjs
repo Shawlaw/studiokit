@@ -264,12 +264,13 @@ const DISCOVERY_SRC = String.raw`(async () => {
   return {
     accepted: [first, second],
     eventCountBeforeFinish: beforeFinish,
-    settled: settled ? { clueId: settled.clueId, reason: settled.reason, persisted: settled.persisted, stateHasClue: !!(settled.state && settled.state.clues && settled.state.clues['CL-memory-flip']) } : null,
+    settled: settled ? { clueId: settled.clueId, reason: settled.reason, persisted: settled.persisted, writeError: settled.writeError || null, stateHasClue: !!(settled.state && settled.state.clues && settled.state.clues['CL-memory-flip']) } : null,
     stateClues: Object.keys(state.clues || {}),
     lastClueId: state.lastClueId,
     stage: state.stage,
     dbWriteMethod: info.dbWriteMethod,
     dbUsable: info.dbUsable,
+    lastFinish: typeof C.__arcadeCareerTest?.lastFinish === 'function' ? C.__arcadeCareerTest.lastFinish() : null,
     stateLoadedFromDb: info.stateLoadedFromDb,
     eventCount: info.eventCount,
     finishReason: info.finishCount
@@ -652,7 +653,7 @@ async function main() {
       assert(run.eventCountBeforeFinish === 2, '结算前事件缓冲应为 2，实际 ' + run.eventCountBeforeFinish);
       assert(run.settled && run.settled.clueId === CLUE_ID, 'finish 未产出 ' + CLUE_ID + '：' + detail(run.settled));
       assert(run.settled.reason === 'event', '线索触发原因应为 event（真实事件），实际 ' + JSON.stringify(run.settled.reason));
-      assert(run.settled.persisted === true, '线索未写库（persisted=false）: ' + detail(run.settled));
+      assert(run.settled.persisted === true, '线索未写库（persisted=false）: ' + detail({ settled: run.settled, dbWriteMethod: run.dbWriteMethod, dbUsable: run.dbUsable }));
       assert(run.stateClues.indexOf(CLUE_ID) !== -1, 'bridge 状态缺线索: ' + detail(run.stateClues));
       assert(run.eventCount === 0, '结算后事件缓冲应清空，实际 ' + run.eventCount);
 

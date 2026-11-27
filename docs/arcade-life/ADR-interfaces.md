@@ -985,7 +985,7 @@ export async function cleanup(ctx) {}
 
 ```js
 applyProfessionEvent({
-  action: 'GLIMPSIED' | 'READ' | 'ACCEPT_INVITATION' | 'SET_ACTIVE' | 'SET_PAUSED'
+  action: 'GLIMPSED' | 'READ' | 'ACCEPT_INVITATION' | 'SET_ACTIVE' | 'SET_PAUSED'
         | 'MARK_DEVELOPED' | 'MARK_COMPLETED' | 'RECORD_STORY_EVENT' | 'MIGRATE_LEGACY',
   input: { professionId, gameId, clueId, paused, eventId, source, at, catalog, records },
   generation,
@@ -994,8 +994,8 @@ applyProfessionEvent({
 ```
 
 - `newlyAccepted` 由纯 reducer 表示“本职业首次接受”；`created` 只由 DB 根据 identity 指针判断“本次是否创建唯一身份”，第二职业首次接受时 `created:false`。二者不得混用。
-- 写入前必须在同一事务内执行 `assertCareerWritable`，并使用现有 `generation` 守卫；失败时整事务回滚，bridge 不得显示成功。action → store 作用域：`GLIMPSIED/READ/SET_PAUSED/RECORD_STORY_EVENT` 用 `state/discovery`；`SET_ACTIVE` 用 `state/discovery`；`ACCEPT_INVITATION` 首次建立身份时用 `state/discovery/profiles/balances/ledgers`，已有身份只用 `state/discovery`；`MARK_DEVELOPED/MARK_COMPLETED/MIGRATE_LEGACY` 用 `state/discovery`（迁移只读既有 quest/claim/run/store 快照）。同一事务内用调用方 `now` 同时写 reducer 与 row `updatedAt`，禁止事务外拼装半状态。
-- `GLIMPSIED` / `READ` 由线索事实驱动，与既有 `mergeDiscoveryState` 的线索写入合并为同一事务或由 DB 在同一事务内派生；`ACCEPT_INVITATION` 在首次接受时把 `ensureCareer({originGameId: gameId})` 的身份/指针/余额/初始流水与扩展字段放在同一事务中。`created:true` 仅在本次真正建立唯一身份时出现；已有身份返回 `created:false` 且绝不重跑初始化或发初始奖励。
+- 写入前必须在同一事务内执行 `assertCareerWritable`，并使用现有 `generation` 守卫；失败时整事务回滚，bridge 不得显示成功。action → store 作用域：`GLIMPSED/READ/SET_PAUSED/RECORD_STORY_EVENT` 用 `state/discovery`；`SET_ACTIVE` 用 `state/discovery`；`ACCEPT_INVITATION` 首次建立身份时用 `state/discovery/profiles/balances/ledgers`，已有身份只用 `state/discovery`；`MARK_DEVELOPED/MARK_COMPLETED/MIGRATE_LEGACY` 用 `state/discovery`（迁移只读既有 quest/claim/run/store 快照）。同一事务内用调用方 `now` 同时写 reducer 与 row `updatedAt`，禁止事务外拼装半状态。
+- `GLIMPSED` / `READ` 由线索事实驱动，与既有 `mergeDiscoveryState` 的线索写入合并为同一事务或由 DB 在同一事务内派生；`ACCEPT_INVITATION` 在首次接受时把 `ensureCareer({originGameId: gameId})` 的身份/指针/余额/初始流水与扩展字段放在同一事务中。`created:true` 仅在本次真正建立唯一身份时出现；已有身份返回 `created:false` 且绝不重跑初始化或发初始奖励。
 - 接受邀请只建立故事上下文并把该职业设为当前职业，**不创建 run、不签下首份委托**；接受委托仍走既有 `commission.start` 独立动作。
 - `MIGRATE_LEGACY` 只从显式接受集合（有 `acceptedAt[id]` 才参与时间排序）、已完成/已接委托的 `quests`（仅明确 accepted/active/issued/cleared/completed 状态）、有效 `claims`、真实 `runs`（含 `profile.originGameId` 作为已有身份起源证据）回填职业接受证据；线索、全局 stage、catalog unlock、游玩次数、推荐、未读信件、`profile.updatedAt` 和未知时间戳都不算接受证据。身份已有但起源不可证时保留 `originGameId:null`/legacy 状态，按最早**合法时间**的可证实事件恢复；无证据不捏造。没有明确 `activeProfessionId` 证据时保持 `null`，由玩家选择，禁止按职业 ID 字典序自动指派。不补发奖励。
 - 封存、完全重置、replace 导入、退役 ID、多标签代次与失败零写入继续遵守 §22；备份仍复用 `careerLife` 既有 11 个 store，不增加顶层字段。

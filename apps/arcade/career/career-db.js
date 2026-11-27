@@ -94,7 +94,7 @@
   const DEFAULT_CONTENT_VERSION = '0.18.0';
   const ENDING_C5_FLAG = 'C5.star_tower_resolved';
   const PROFESSION_ACTIONS = Object.freeze([
-    'GLIMPSIED',
+    'GLIMPSED',
     'READ',
     'ACCEPT_INVITATION',
     'SET_ACTIVE',
@@ -115,7 +115,7 @@
     'updatedAt',
   ]);
   const PROFESSION_REDUCER_METHOD = Object.freeze({
-    GLIMPSIED: 'recordGlimpsed',
+    GLIMPSED: 'recordGlimpsed',
     READ: 'recordRead',
     ACCEPT_INVITATION: 'acceptInvitation',
     SET_ACTIVE: 'setActive',
@@ -849,7 +849,7 @@
   function applyProfessionClueFacts(value, events, at) {
     const out = isObject(value) ? value : {};
     events.forEach((event) => {
-      if (event.action !== 'GLIMPSIED' && event.action !== 'READ') return;
+      if (event.action !== 'GLIMPSED' && event.action !== 'READ') return;
       const input = event.input || {};
       const clueId = typeof input.clueId === 'string' ? input.clueId : '';
       const gameId = typeof input.gameId === 'string' ? input.gameId : '';
@@ -951,13 +951,13 @@
                 ctx.done({ ok: false, reason: 'bad-profession-state', generation: currentGeneration });
                 return;
               }
-              if (event.action !== 'GLIMPSIED' && event.action !== 'READ') {
-                ctx.done({ ok: false, reason: 'bad-profession-action', generation: currentGeneration });
+              if (event.action !== 'GLIMPSED' && event.action !== 'READ') {
+                ctx.done({ ok: false, reason: 'bad-profession-action', generation: currentGeneration, error: 'bad-profession-action:' + JSON.stringify(event.action) + ':' + typeof event.action });
                 return;
               }
               const method = PROFESSION_REDUCER_METHOD[event.action];
               if (!method || typeof ps[method] !== 'function') {
-                ctx.done({ ok: false, reason: 'bad-profession-action', generation: currentGeneration });
+                ctx.done({ ok: false, reason: 'bad-profession-action', generation: currentGeneration, error: 'bad-profession-action:' + event.action + ':' + method + ':' + typeof ps[method] });
                 return;
               }
               const currentExtension = ps.extensionOf(merged) || ps.initialState(event.at);
@@ -1422,7 +1422,7 @@
                   return;
                 }
                 const value = replaceDiscoveryExtension(existing, finalExtension, at);
-                if (clueId && (action === 'GLIMPSIED' || action === 'READ')) {
+                if (clueId && (action === 'GLIMPSED' || action === 'READ')) {
                   value.clues = isObject(value.clues) ? value.clues : {};
                   const sourceGame = input.gameId || (legacyClue && legacyClue.sourceGame) || null;
                   if (sourceGame) {
@@ -1452,7 +1452,7 @@
                   createThenWrite();
                   return;
                 }
-                if (clueId && (action === 'GLIMPSIED' || action === 'READ')) {
+                if (clueId && (action === 'GLIMPSED' || action === 'READ')) {
                   ctx.bind(ctx.store('discovery').get(clueId), (prior) => {
                     const priorRow = isObject(prior) ? prior : {};
                     const sourceGame = input.gameId || legacyClue && legacyClue.sourceGame || priorRow.sourceGame || null;
