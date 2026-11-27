@@ -1,6 +1,6 @@
 # Arcade 0.22.0 集成与验证
 
-- 状态：LOCAL_VERIFIED / 待最终门禁与独立 review 收口（未完成前不得写 RELEASE_READY 或 PUBLISHED）
+- 状态：RELEASE_READY（本地发布准备完成；未获 `PUBLISH_TO_MAIN`，未发布）
 - 设计 / 回滚：[`DESIGN-0.22.0.md`](../../apps/arcade/DESIGN-0.22.0.md)
 - 基线与版本：`68529dd` → 本分支本地提交；Arcade `0.22.0`，SW `studiokit-arcade-0.22.0-v1`
 - 冻结边界：IDB `studiokit:arcade:career` v1 / 11 stores；`contentVersion 0.18.0`；经典 localStorage key 与玩法数值零改动。
@@ -44,7 +44,9 @@
 - 首轮 `py -3 tools/arcade_run_all_gates.py --profile release`（SHA `52ab52d`）：41 项中 35 PASS / 6 FAIL，571.645s；失败为 `career_ending_reducer`、`career_continuation`、`career_pwa_offline`、`career_96_missions`、`career_mobile`、`career_flow_e2e`。
 - 定位到两类契约迁移问题：旧测试/夹具未先显式接受职业；DB 动作名误写为 `GLIMPSIED` 而真实事件为 `GLIMPSED`。
 - 动作名修复后 `career_pwa_offline` 18/18；profession DB 33/33、extension 92/92。纯 ending/continuation 夹具修复为 35/35、18/18。
-- 96 fixture、mobile、flow 的显式接受流程修复完成后，将冻结新 SHA 并允许一次 release 补跑；首轮 35/41 不能作为新 SHA 的全绿证据。
+- 96 fixture 代表样本通过（static 34/34、2 games、12 tiers、runner 474/474）；移动端 330/330；首航全流程 376/376。
+- 第二次 release 门禁冻结 SHA `28d4b2373b3e9510148de5773df6361b774667aa`：`py -3 tools/arcade_run_all_gates.py --profile release` **41/41 PASS**，2838.147s，`verdict: release passed (not full)`，日志在仓库外 `execution/T08-release-gate-2.log`。首轮失败项均通过；`fully_passed=false`，不宣称 full 或 ALL GATES PASSED。
+- 本 SHA 没有同 SHA 的线上 CI/双端发布证据；CI 仍只覆盖 static，release 为本机真实 Chrome 串行结果。未运行 full、真机或线上部署。
 
 ## 4. 发布准备
 
