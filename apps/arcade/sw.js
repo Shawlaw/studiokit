@@ -16,7 +16,7 @@
  *   页面通过 arcade-sw-version 查询当前 SW 版本；不再让已安装 PWA 静默停留在旧版本。
  * - 不使用任何远程资源、分析或第三方 API（AGENTS.md 约束 4）。
  */
-const VERSION = '0.22.0';
+const VERSION = '0.23.0';
 const CACHE_PREFIX = 'studiokit-arcade-';
 const CACHE_NAME = `${CACHE_PREFIX}${VERSION}-v1`;
 /* 预载迁移见 carryPreloadedGames()：继承旧缓存的游戏清单，重新联网取当前版本页面。 */
