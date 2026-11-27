@@ -1643,7 +1643,7 @@
       var context = { surface: 'port' };
       if (worldCommission(commission)) {
         return gateCatalog.professions.some(function (profession) {
-          return isObject(profession) && stableId(profession.professionId)
+          return isObject(profession) && typeof profession.professionId === 'string' && profession.professionId
             && view.canRevealProfession({ state: stateRead.state, catalog: gateCatalog, context: context, professionId: profession.professionId }).ok;
         });
       }
