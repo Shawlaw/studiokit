@@ -24,6 +24,8 @@ const REPO_ROOT = path.resolve(HERE, '..');
 const COMMISSION_CORE = path.join(REPO_ROOT, 'apps', 'arcade', 'career', 'commission-core.js');
 const CAREER_CORE = path.join(REPO_ROOT, 'apps', 'arcade', 'career', 'career-core.js');
 const COMMISSIONS_JSON = path.join(REPO_ROOT, 'apps', 'arcade', 'career', 'content', 'commissions.json');
+const REGISTRY_JSON = path.join(REPO_ROOT, 'apps', 'arcade', 'career', 'content', 'registry.json');
+const CLUES_JSON = path.join(REPO_ROOT, 'apps', 'arcade', 'career', 'content', 'clues.json');
 
 const require = createRequire(import.meta.url);
 const NOW = '2026-11-23T01:00:00.000Z';
@@ -94,6 +96,49 @@ function createFakeDb(options) {
 
   function log(name, payload) {
     state.calls.push({ name, payload: payload === undefined ? null : clone(payload) });
+  }
+
+  /* 0.22 默认夹具已有真实身份与两个已接受职业；无需 ensureCareer 隐式建身份。 */
+  const acceptedIds = Array.isArray(opts.acceptedProfessionIds)
+    ? opts.acceptedProfessionIds.slice()
+    : ['engineering.structural', 'adventure.pilot'];
+  state.discovery = {
+    professionVersion: 1,
+    firstDiscoveredGameId: 'pendulum-tower',
+    acceptedOriginGameId: 'pendulum-tower',
+    activeProfessionId: acceptedIds[0] || null,
+    narrativeCursor: { chapterId: 'C0', nodeId: null },
+    storyEvents: {},
+    professionProgress: {},
+  };
+  acceptedIds.forEach((id) => {
+    state.discovery.professionProgress[id] = {
+      state: 'accepted',
+      paused: false,
+      discoveredAt: NOW,
+      readAt: NOW,
+      acceptedAt: NOW,
+      completedAt: null,
+    };
+  });
+  if (opts.withCareer !== false) {
+    const careerId = 'career-test-1';
+    state.careerId = careerId;
+    state.profiles[careerId] = {
+      careerId,
+      schemaVersion: 1,
+      rulesetVersion: 1,
+      capabilities: [],
+      flags: state.initialFlags.slice(),
+      evidence: [],
+      settings: { hintsEnabled: true },
+    };
+    state.balances[careerId] = { careerId, credits: 80, revision: 1 };
+  }
+
+  async function getDiscoveryState() {
+    log('getDiscoveryState', null);
+    return clone(state.discovery);
   }
 
   function failure(reason) {
@@ -318,6 +363,7 @@ function createFakeDb(options) {
     ensureCareer,
     getProfile,
     getState,
+    getDiscoveryState,
     readQuestState,
     putQuests,
     readWallet,
@@ -359,6 +405,8 @@ function createFakeStorage() {
 let CommissionModule = null;
 let careerCore = null;
 let commissionsContent = null;
+let allCommissionsContent = null;
+let gateCatalog = null;
 
 const FIXTURE_COMMISSIONS = {
   "contentVersion": "0.18.0",
@@ -531,8 +579,25 @@ function assembly() {
   /* 0.16 生命周期金样：真实内容 0.17 已扩到 96 条，这里固定使用 0.16 四条目，
      真实 96 条 schema/目标由 commission-schema 与 career_96_missions_test 覆盖。 */
   commissionsContent = JSON.parse(JSON.stringify(FIXTURE_COMMISSIONS));
+  allCommissionsContent = JSON.parse(fs.readFileSync(COMMISSIONS_JSON, 'utf8'));
+  if (!allCommissionsContent || !Array.isArray(allCommissionsContent.commissions) || allCommissionsContent.commissions.length !== 96) {
+    throw new Error('真实委托目录异常');
+  }
   if (!commissionsContent || !Array.isArray(commissionsContent.commissions) || commissionsContent.commissions.length !== 4) {
     throw new Error('0.16 合成内容异常');
+  }
+  /* 0.22：职业 ID / 游戏映射来自真实 registry，委托详情由上面的生命周期夹具注入。 */
+  const registry = JSON.parse(fs.readFileSync(REGISTRY_JSON, 'utf8'));
+  const clues = JSON.parse(fs.readFileSync(CLUES_JSON, 'utf8'));
+  gateCatalog = {
+    games: registry.games,
+    professions: registry.professions,
+    commissions: commissionsContent.commissions,
+    clues: clues.clues,
+    worldWorkIds: [],
+  };
+  if (gateCatalog.professions.length !== 16 || gateCatalog.games.length !== 16) {
+    throw new Error('registry 职业/游戏映射异常');
   }
 }
 
@@ -547,8 +612,14 @@ function scenario(overrides) {
     storage,
   });
   if (opts.content !== false) {
-    const configured = core.configure({ content: opts.contentContent || commissionsContent });
+    const configured = core.configure({
+      content: opts.contentContent || commissionsContent,
+      catalog: opts.catalog || gateCatalog,
+      worldWorkIds: opts.worldWorkIds || [],
+    });
     if (!configured.ok) throw new Error('configure 失败：' + JSON.stringify(configured.errors));
+  } else if (opts.catalog) {
+    core.configure({ catalog: opts.catalog, worldWorkIds: opts.worldWorkIds || [] });
   }
   return { db, storage, core };
 }
@@ -618,7 +689,7 @@ async function groupA() {
         Object.assign({}, base, { commissionId: 'bad.T3', objective: { kind: 'tower.floor_stable', atLeast: 1, context: { level: { gte: 1 } } } }),
       ]),
     };
-    const { core } = scenario({ content: false });
+    const { core } = scenario({ content: false, catalog: gateCatalog });
     const result = core.configure({ content: broken });
     eq(result.count, 4, '保留合法条目数');
     assert(result.ok === false, 'ok 应为 false（有 errors）');
@@ -632,7 +703,7 @@ async function groupA() {
   });
 
   await check('A3 非法内容（null / 字符串）结构化失败且不抛', async () => {
-    const { core } = scenario({ content: false });
+    const { core } = scenario({ content: false, catalog: gateCatalog });
     const nullResult = core.configure({ content: null });
     assert(nullResult.ok === false, 'null 应失败');
     assert(nullResult.errors.indexOf('content-missing') >= 0, 'null errors：' + JSON.stringify(nullResult.errors));
@@ -648,7 +719,7 @@ async function groupA() {
   await check('A4 内容版本跨 major（0.15.0）→ usable=false 且 listAvailable 拒绝', async () => {
     const badVersion = clone(commissionsContent);
     badVersion.contentVersion = '0.15.0';
-    const { core, db } = scenario({ content: false });
+    const { core, db } = scenario({ content: false, catalog: gateCatalog });
     const configured = core.configure({ content: badVersion });
     assert(configured.ok === false, 'ok 应 false');
     assert(configured.usable === false, 'usable 应 false');
@@ -663,7 +734,7 @@ async function groupA() {
   await check('A5 同 major 补丁版本（0.18.9）可正常使用', async () => {
     const patched = clone(commissionsContent);
     patched.contentVersion = '0.18.9';
-    const { core } = scenario({ content: false });
+    const { core } = scenario({ content: false, catalog: gateCatalog });
     const configured = core.configure({ content: patched });
     assert(configured.ok === true, 'ok 应 true：' + JSON.stringify(configured.errors));
     eq(configured.count, 4, 'count');
@@ -686,60 +757,58 @@ async function groupA() {
  * ------------------------------------------------------------------ */
 
 async function groupB() {
-  await check('B1 未接生涯 ensure:false → careerId=null、4 条候选、零 DB 调用', async () => {
-    const { core, db } = scenario();
+  await check('B1 无身份 ensure:false → no-career、空集合、零写入', async () => {
+    const { core, db } = scenario({ dbOptions: { withCareer: false } });
     const result = await core.listAvailable({ ensure: false });
-    assert(result.ok === true, 'ok 应 true');
+    assert(result.ok === false, 'ok 应 false');
+    eq(result.reason, 'no-career', 'reason');
     eq(result.careerId, null, 'careerId');
-    eq(result.commissions.length, 4, 'candidates');
+    eq(result.commissions.length, 0, 'candidates');
     eq(db.count('ensureCareer'), 0, 'ensureCareer 调用');
     eq(db.count('createRun'), 0, 'createRun 调用');
-    eq(db.state.calls.length, 0, '不应有任何 DB 调用');
-    return 'no-write';
+    return 'no-career/no-write';
   });
 
-  await check('B2 ensure:true → 创建生涯（初始 80 信用点）', async () => {
+  await check('B2 ensure:true 不再创建生涯；已有身份也只读返回 created:false', async () => {
+    const none = scenario({ dbOptions: { withCareer: false } });
+    const refused = await none.core.listAvailable({ ensure: true });
+    eq(refused.reason, 'no-career', '无身份必须结构化失败');
+    eq(none.db.count('ensureCareer'), 0, '不得隐式 ensureCareer');
     const { core, db } = scenario();
     const result = await core.listAvailable({ ensure: true });
     assert(result.ok === true, 'ok 应 true');
     assert(typeof result.careerId === 'string' && result.careerId.length > 0, 'careerId');
-    eq(result.created, true, 'created');
-    eq(db.state.balances[result.careerId].credits, 80, '初始信用点');
-    eq(db.count('ensureCareer'), 1, 'ensureCareer 调用');
-    return 'careerId=' + result.careerId + ', credits=80';
+    eq(result.created, false, 'created');
+    eq(db.state.balances[result.careerId].credits, 80, '既有信用点不变');
+    eq(db.count('ensureCareer'), 0, 'ensureCareer 调用');
+    return 'read-only career';
   });
 
-  await check('B3 unlock 空谓词可接；C1 flag 未满足的 T2 锁定', async () => {
+  await check('B3 仅返回已接受职业且前置成立的可接单；锁定单不进入列表', async () => {
     const { core } = scenario();
     const result = await core.listAvailable({ ensure: true });
+    eq(result.availableIds, ['pendulum-tower.T1', 'star-raid.T1'], '可接集合');
     const byId = {};
     result.commissions.forEach((item) => {
       byId[item.commissionId] = item;
     });
-    eq(byId['pendulum-tower.T1'].unlocked, true, 'PT.T1');
-    eq(byId['star-raid.T1'].unlocked, true, 'star.T1');
-    eq(byId['pendulum-tower.T2'].unlocked, false, 'PT.T2');
-    eq(byId['star-raid.T2'].unlocked, false, 'star.T2');
+    eq(byId['pendulum-tower.T2'], undefined, 'PT.T2 不应泄露');
+    eq(byId['star-raid.T2'], undefined, 'star.T2 不应泄露');
     assert(byId['pendulum-tower.T1'].title && byId['pendulum-tower.T1'].summary && byId['pendulum-tower.T1'].issuer, '列表字段缺失');
     assert(byId['pendulum-tower.T1'].reward && byId['pendulum-tower.T1'].reward.credits === 70, 'reward');
     assert(typeof byId['pendulum-tower.T1'].durationHint === 'string', 'durationHint');
     assert(typeof byId['pendulum-tower.T1'].risk === 'string', 'risk');
-    return '2 unlocked / 2 locked';
+    return '2 available / 2 withheld';
   });
 
-  await check('B4 已有 chapterFlag（profile.flags）→ T2 解锁', async () => {
+  await check('B4 已有 chapterFlag（profile.flags）→ T2 成为可接单', async () => {
     const { core } = scenario({ dbOptions: { initialFlags: ['C1.work_done'] } });
     const result = await core.listAvailable({ ensure: true });
-    const byId = {};
-    result.commissions.forEach((item) => {
-      byId[item.commissionId] = item;
-    });
-    eq(byId['pendulum-tower.T2'].unlocked, true, 'PT.T2');
-    eq(byId['star-raid.T2'].unlocked, false, 'star.T2 仍锁');
+    eq(result.availableIds, ['pendulum-tower.T1', 'pendulum-tower.T2', 'star-raid.T1'], 'flag 后集合');
     return 'flag 生效';
   });
 
-  await check('B5 commissionCleared 谓词：完成 T1 后解锁自定义委托', async () => {
+  await check('B5 commissionCleared 谓词：完成 T1 后自定义单才进入可接集合', async () => {
     const custom = clone(commissionsContent);
     custom.commissions = custom.commissions.concat([
       {
@@ -759,21 +828,13 @@ async function groupB() {
     ]);
     const { core } = scenario({ contentContent: custom });
     const before = await core.listAvailable({ ensure: true });
-    const beforeById = {};
-    before.commissions.forEach((item) => {
-      beforeById[item.commissionId] = item;
-    });
-    eq(beforeById['pendulum-tower.X1'].unlocked, false, '完成前应锁定');
+    assert(before.availableIds.indexOf('pendulum-tower.X1') < 0, '完成前应锁定');
     const ticketId = await startTicket(core, 'pendulum-tower.T1');
     towerEvents(4, ticketId, core);
     const settled = await core.settle({ ticketId, outcome: 'won', stats: {} });
     assert(settled.ok === true, '首单应结算成功');
     const after = await core.listAvailable({ ensure: true });
-    const afterById = {};
-    after.commissions.forEach((item) => {
-      afterById[item.commissionId] = item;
-    });
-    eq(afterById['pendulum-tower.X1'].unlocked, true, '完成后应解锁');
+    assert(after.availableIds.indexOf('pendulum-tower.X1') >= 0, '完成后应可接');
     return 'quest cleared 生效';
   });
 }
@@ -864,7 +925,7 @@ async function groupC() {
     const { core, db } = scenario();
     const result = await core.start({ commissionId: 'pendulum-tower.T2' });
     assert(result.ok === false, 'ok 应 false');
-    eq(result.reason, 'locked', 'reason');
+    eq(result.reason, 'story-locked', 'reason');
     eq(db.count('createRun'), 0, '不应 createRun');
     return 'locked';
   });
@@ -891,7 +952,7 @@ async function groupC() {
   });
 
   await check('C9 无内容注入时 start/listAvailable → content-unavailable', async () => {
-    const { core } = scenario({ content: false });
+    const { core } = scenario({ content: false, catalog: gateCatalog });
     const started = await core.start({ commissionId: 'pendulum-tower.T1' });
     eq(started.reason, 'content-unavailable', 'start reason');
     const listed = await core.listAvailable({ ensure: true });
@@ -991,7 +1052,7 @@ async function groupD() {
     const db = createFakeDb();
     const opener = scenario({ db, storage: createFakeStorage() });
     const started = await opener.core.start({ commissionId: 'star-raid.T2', careerId: null });
-    assert(started.ok === false && started.reason === 'locked', 'T2 应锁定：' + JSON.stringify(started));
+    assert(started.ok === false && started.reason === 'story-locked', 'T2 应锁定：' + JSON.stringify(started));
     const t1 = await opener.core.start({ commissionId: 'star-raid.T1' });
     bossEvent(opener.core, t1.ticketId, { level: 1 });
     assert((await opener.core.settle({ ticketId: t1.ticketId, outcome: 'won', stats: {} })).ok === true, 'T1 settle');
@@ -1104,7 +1165,7 @@ async function groupE() {
     const custom = JSON.parse(JSON.stringify(commissionsContent));
     const t1 = custom.commissions.find((item) => item.commissionId === 'pendulum-tower.T1');
     t1.objective = { kind: 'tower.floor_stable', atLeast: 401 };
-    const { core } = scenario({ content: false });
+    const { core } = scenario({ content: false, catalog: gateCatalog });
     const configured = core.configure({ content: custom });
     assert(configured.ok === true, 'configure');
     const ticketId = await startTicket(core, 'pendulum-tower.T1');
@@ -1121,7 +1182,7 @@ async function groupE() {
     const t1 = custom.commissions.find((item) => item.commissionId === 'pendulum-tower.T1');
     t1.objective = { kind: 'boss.defeated', atLeast: 1, context: { theme: 'storm' } };
     t1.gameId = 'star-raid';
-    const { core } = scenario({ content: false });
+    const { core } = scenario({ content: false, catalog: gateCatalog });
     assert(core.configure({ content: custom }).ok === true, 'configure');
     const ticketId = await startTicket(core, 'pendulum-tower.T1');
     for (let i = 0; i < 401; i += 1) {
@@ -1139,7 +1200,7 @@ async function groupE() {
     const custom = JSON.parse(JSON.stringify(commissionsContent));
     const t1 = custom.commissions.find((item) => item.commissionId === 'pendulum-tower.T1');
     t1.objective = { kind: 'tile.created', atLeast: 1, minValue: { field: 'value', value: 1024 } };
-    const { core } = scenario({ content: false });
+    const { core } = scenario({ content: false, catalog: gateCatalog });
     assert(core.configure({ content: custom }).ok === true, 'configure');
     const ticketId = await startTicket(core, 'pendulum-tower.T1');
     for (let index = 1; index <= 450; index += 1) {
@@ -1549,21 +1610,178 @@ async function groupI() {
     return 'reset ok';
   });
 
-  await check('I6 getWallet：只读、careerId 缺省走生涯指针、无生涯时结构化失败', async () => {
+  await check('I6 getWallet/listAvailable：只读、careerId 缺省走生涯指针、无生涯时结构化失败', async () => {
+    const none = scenario({ dbOptions: { withCareer: false } });
+    const missing = await none.core.getWallet({});
+    eq(missing.ok, false, 'no career ok');
+    eq(missing.reason, 'no-career', 'reason');
+    eq(none.db.count('ensureCareer'), 0, '不应创建生涯');
     const { core, db } = scenario();
-    const none = await core.getWallet({});
-    eq(none.ok, false, 'no career ok');
-    eq(none.reason, 'no-career', 'reason');
-    eq(db.count('ensureCareer'), 0, '不应创建生涯');
     const listed = await core.listAvailable({ ensure: true });
+    assert(listed.ok === true, 'listAvailable ok');
     const pointerWallet = await core.getWallet({});
     eq(pointerWallet.ok, true, '指针路径 ok');
     eq(pointerWallet.careerId, listed.careerId, 'careerId');
     eq(pointerWallet.credits, 80, 'credits');
-    eq(db.count('ensureCareer'), 1, 'ensureCareer 只调用 1 次');
+    eq(db.count('ensureCareer'), 0, '始终不 ensureCareer');
     const explicit = await core.getWallet({ careerId: listed.careerId });
     eq(explicit.credits, 80, '显式 careerId');
     return 'read-only wallet';
+  });
+}
+
+/* ------------------------------------------------------------------ *
+ * J. 0.22 职业 gate / 世界通用工作 / 全职业参数化
+ * ------------------------------------------------------------------ */
+
+async function groupJ() {
+  await check('J1 真实 96 委托：零已接受职业时 UI 可接集合为空', async () => {
+    const { core, db } = scenario({
+      contentContent: allCommissionsContent,
+      dbOptions: { acceptedProfessionIds: [] },
+    });
+    const result = await core.listAvailable({ ensure: true });
+    assert(result.ok === true, 'ok：' + JSON.stringify(result));
+    eq(result.commissions, [], '不得返回全部 96 条');
+    eq(result.availableIds, [], 'availableIds');
+    eq(db.count('ensureCareer'), 0, 'ensureCareer');
+    return '0/96 exposed';
+  });
+
+  for (const profession of gateCatalog.professions) {
+    await check('J2 ' + profession.professionId + ' 仅返回本职业真实可接单', async () => {
+      const id = profession.professionId;
+      const { core } = scenario({
+        contentContent: allCommissionsContent,
+        dbOptions: { acceptedProfessionIds: [id] },
+      });
+      const result = await core.listAvailable({ ensure: true });
+      assert(result.ok === true, 'ok：' + JSON.stringify(result));
+      assert(result.commissions.length > 0, '本职业至少首单可接');
+      assert(result.commissions.every((row) => row.professionId === id), '不得混入其他职业');
+      const game = gateCatalog.games.find((row) => row.professions.indexOf(id) >= 0);
+      assert(result.availableIds.indexOf(game.gameId + '.T1') >= 0, '首单应在集合内');
+      const hiddenIds = gateCatalog.professions.filter((row) => row.professionId !== id).map((row) => row.professionId);
+      assert(hiddenIds.every((hidden) => JSON.stringify(result).indexOf(hidden) < 0), '输出泄漏其他职业 ID');
+      return result.availableIds.length + ' available';
+    });
+  }
+
+  await check('J3 直接 start 绕过未接受职业：拒绝且零 run/零 ensure', async () => {
+    const { core, db } = scenario({ dbOptions: { acceptedProfessionIds: [] } });
+    const result = await core.start({ commissionId: 'pendulum-tower.T1' });
+    eq(result.ok, false, 'ok');
+    eq(result.reason, 'not-discovered', 'reason');
+    eq(db.count('createRun'), 0, 'createRun');
+    eq(db.count('ensureCareer'), 0, 'ensureCareer');
+    return 'gate rejected';
+  });
+
+  await check('J4 已读未接受 start/list 均不显示或接受任务', async () => {
+    const { core, db } = scenario({ dbOptions: { acceptedProfessionIds: [] } });
+    db.state.discovery.professionProgress['engineering.structural'] = {
+      state: 'read', paused: false, discoveredAt: NOW, readAt: NOW, acceptedAt: null, completedAt: null,
+    };
+    const listed = await core.listAvailable({ ensure: true });
+    eq(listed.availableIds, [], 'list');
+    const started = await core.start({ commissionId: 'pendulum-tower.T1' });
+    eq(started.reason, 'not-accepted', 'start reason');
+    eq(db.count('createRun'), 0, 'createRun');
+    return 'read != accepted';
+  });
+
+  await check('J5 真实历史只读：不自动变为可接', async () => {
+    const { core, db } = scenario({ dbOptions: { acceptedProfessionIds: [] } });
+    const history = [{ commissionId: 'pendulum-tower.T1', status: 'claimed', claimedAt: NOW }];
+    const listed = await core.listAvailable({ ensure: true, context: { surface: 'journal', history } });
+    eq(listed.availableIds, [], '历史不进可接集合');
+    const started = await core.start({ commissionId: 'pendulum-tower.T1', context: { surface: 'journal', history } });
+    eq(started.reason, 'historical-only', 'start reason');
+    eq(db.count('createRun'), 0, 'createRun');
+    return 'history read-only';
+  });
+
+  await check('J6 搁置职业不接单；其他已接受职业与世界主线不受影响', async () => {
+    const { core, db } = scenario({ dbOptions: { acceptedProfessionIds: ['engineering.structural'] } });
+    db.state.discovery.professionProgress['engineering.structural'].paused = true;
+    const listed = await core.listAvailable({ ensure: true });
+    eq(listed.availableIds, [], 'paused profession list');
+    const started = await core.start({ commissionId: 'pendulum-tower.T1' });
+    eq(started.reason, 'paused', 'start reason');
+    eq(db.count('createRun'), 0, 'createRun');
+    return 'paused gate';
+  });
+
+  await check('J7 start surface gate：shop 不披露任务详情', async () => {
+    const { core, db } = scenario();
+    const result = await core.start({ commissionId: 'pendulum-tower.T1', context: { surface: 'shop' } });
+    eq(result.reason, 'wrong-surface', 'reason');
+    eq(db.count('createRun'), 0, 'createRun');
+    return 'wrong-surface';
+  });
+
+  await check('J8 worldWorkIds：任一已接受职业可接、剥离拥有职业、paused 不阻塞', async () => {
+    const { core, db } = scenario({
+      dbOptions: { acceptedProfessionIds: ['engineering.structural'] },
+      worldWorkIds: ['star-raid.T1'],
+    });
+    db.state.discovery.professionProgress['engineering.structural'].paused = true;
+    const listed = await core.listAvailable({ ensure: true });
+    eq(listed.availableIds, ['star-raid.T1'], 'world work available');
+    const world = listed.commissions[0];
+    eq(world.category, 'world', 'category');
+    eq(world.professionId, undefined, 'owner id stripped');
+    eq(world.issuer, '旧港', 'generic issuer');
+    const started = await core.start({ commissionId: 'star-raid.T1' });
+    assert(started.ok === true, 'world start：' + JSON.stringify(started));
+    eq(db.count('createRun'), 1, 'createRun');
+    return 'world category only';
+  });
+
+  await check('J9 worldWorkIds 无已接受职业时不可见；非法注入结构化失败', async () => {
+    const none = scenario({ dbOptions: { acceptedProfessionIds: [] }, worldWorkIds: ['star-raid.T1'] });
+    const listed = await none.core.listAvailable({ ensure: true });
+    eq(listed.availableIds, [], 'no accepted profession');
+    const configured = none.core.configure({ worldWorkIds: 'star-raid.T1' });
+    assert(configured.ok === false && configured.errors.indexOf('world-work-ids-invalid') >= 0, JSON.stringify(configured));
+    return 'fail closed';
+  });
+
+  await check('J10 合成第 17 职业无需改全局状态机即可发现/接受/接单', async () => {
+    const extended = clone(gateCatalog);
+    const id = 'service.courier';
+    extended.professions.push({ professionId: id, displayName: '合成信使', domain: 'service', capabilities: [] });
+    extended.games.push({ gameId: 'virtual-courier', displayName: '虚拟信使', professions: [id], capabilities: [] });
+    const custom = clone(commissionsContent);
+    custom.commissions = [{
+      commissionId: 'virtual-courier.T1', gameId: 'virtual-courier', professionId: id, tier: 1,
+      title: '合成第一单', summary: '把合成包裹送到指定地点。', issuer: '合成驿站',
+      objective: { kind: 'courier.delivered', atLeast: 1, context: {} },
+      reward: { credits: 1, items: {}, evidence: [], flags: [] }, repeatSalaryCredits: 1,
+      unlock: { all: [] }, risk: 'low', durationHint: '一会儿',
+    }];
+    const { core } = scenario({
+      contentContent: custom,
+      catalog: extended,
+      dbOptions: { acceptedProfessionIds: [id] },
+    });
+    const listed = await core.listAvailable({ ensure: true });
+    eq(listed.availableIds, ['virtual-courier.T1'], 'N+1 list');
+    const started = await core.start({ commissionId: 'virtual-courier.T1' });
+    assert(started.ok === true, 'N+1 start：' + JSON.stringify(started));
+    return 'N+1 accepted';
+  });
+
+  await check('J11 JSON 导入往返后首渲染仍只返回已接受职业集合', async () => {
+    const { core, db } = scenario({
+      contentContent: allCommissionsContent,
+      dbOptions: { acceptedProfessionIds: ['nature.miner'] },
+    });
+    db.state.discovery = JSON.parse(JSON.stringify(db.state.discovery));
+    const result = await core.listAvailable({ ensure: true });
+    assert(result.ok === true && result.availableIds.indexOf('gold-miner.T1') >= 0, JSON.stringify(result));
+    assert(result.commissions.every((row) => row.professionId === 'nature.miner'), 'import 后不得泄露其他职业');
+    return 'import first render';
   });
 }
 
@@ -1589,6 +1807,7 @@ async function main() {
   await groupG();
   await groupH();
   await groupI();
+  await groupJ();
 
   const failed = failures.length;
   console.log('');
