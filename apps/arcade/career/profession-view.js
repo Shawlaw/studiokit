@@ -491,6 +491,47 @@
     return hasOwn(allow, eventId) ? { allowed: true, label: allow[eventId] } : { allowed: false, label: '' };
   }
 
+  /**
+   * 0.24 加性投影：内容白名单若显式声明 text/person/professionId，才追加到经历行。
+   * 未声明（或旧内容）时返回与 0.23 完全相同的行 —— 不改 label 来源、不改排序与上限。
+   */
+  function publicDeclaredStoryEvent(catalog, eventId) {
+    if (!isObject(catalog.publicStoryEvents)) return null;
+    var declared = catalog.publicStoryEvents[eventId];
+    return isObject(declared) ? declared : null;
+  }
+
+  function declaredStoryDetail(declared) {
+    if (!isObject(declared)) return null;
+    var source = isObject(declared.detail) ? declared.detail : declared;
+    var text = typeof source.text === 'string' ? source.text
+      : (typeof source.body === 'string' ? source.body : '');
+    if (!text) return null;
+    var person = typeof source.person === 'string' && source.person ? source.person
+      : (typeof declared.person === 'string' && declared.person ? declared.person : '');
+    var detail = { text: text };
+    if (person) detail.person = person;
+    return detail;
+  }
+
+  function publicStoryRow(state, catalog, info, at, source, eventId) {
+    var out = {
+      kind: 'story',
+      label: info.label || '港口里发生的一件事',
+      at: at,
+      source: source,
+    };
+    var declared = publicDeclaredStoryEvent(catalog, eventId);
+    if (!declared) return out;
+    if (typeof declared.person === 'string' && declared.person) out.person = declared.person;
+    if (stableId(declared.professionId) && acceptedProfessionIds(state, catalog).indexOf(declared.professionId) >= 0) {
+      out.professionId = declared.professionId;
+    }
+    var detail = declaredStoryDetail(declared);
+    if (detail) out.detail = detail;
+    return out;
+  }
+
   function safeStoryEvent(state, catalog, context, eventId, row) {
     if (typeof eventId !== 'string' || !isObject(row)) return null;
     var source = typeof row.source === 'string' ? row.source : '';
@@ -535,12 +576,7 @@
     }
     var info = publicStoryEventInfo(catalog, context, eventId);
     if (!info.allowed) return null;
-    return {
-      kind: 'story',
-      label: info.label || '港口里发生的一件事',
-      at: at,
-      source: source,
-    };
+    return publicStoryRow(state, catalog, info, at, source, eventId);
   }
 
   function storyHistory(state, catalog, context) {

@@ -770,6 +770,82 @@
     return view.commissions.filter((row) => isObject(row) && idText(row.commissionId) === id)[0] || null;
   }
 
+  /** 0.24：眼下只消费 resolver 已剥离内幕的公开文案；缺失时返回 null，0.23 路径不变。 */
+  function portAlternativeTexts(story) {
+    const node = isObject(story) && isObject(story.alternative) ? story.alternative : null;
+    const texts = node && isObject(node.texts) ? node.texts : null;
+    if (!texts) return null;
+    const pick = (value) => safePlayerReason(cleanText(value));
+    const out = {
+      offer: pick(texts.offer),
+      progress: pick(texts.progress),
+      receipt: pick(texts.receipt),
+      next: pick(texts.next),
+    };
+    return out.offer || out.progress || out.receipt || out.next ? out : null;
+  }
+
+  function portAlternativeNextNode(stack, story) {
+    const alternative = portAlternativeTexts(story);
+    if (!alternative || !alternative.next) return null;
+    const node = portTextNode(stack, 'ac-career-ui__caption', alternative.next);
+    node.setAttribute('data-port-narrative-next', 'true');
+    return node;
+  }
+
+  /**
+   * 0.24 交汇：只在港口面渲染 resolver 给出的 texts（invite/body/receipt），
+   * 内部 eventId 只用于落库回调，不进 DOM 文本；clue/letter/shop/crafting/tools 不渲染。
+   */
+  function portCrossoverData(story) {
+    const rows = isObject(story) && Array.isArray(story.crossovers)
+      ? story.crossovers.filter(isObject) : [];
+    const node = rows[0];
+    if (!node) return null;
+    const texts = isObject(node.texts) ? node.texts : {};
+    const pick = (value) => safePlayerReason(cleanText(value));
+    const out = {
+      narrativeEventId: idText(node.eventId),
+      invite: pick(texts.invite),
+      body: pick(texts.body),
+      receipt: pick(texts.receipt),
+    };
+    return out.invite || out.body || out.receipt ? out : null;
+  }
+
+  function portCrossoverNode(stack, crossover) {
+    const wrap = stack.createElement('div');
+    wrap.className = 'ac-career-ui__stack ac-career-ui__stack--small';
+    wrap.setAttribute('data-port-crossover', 'true');
+    if (crossover.invite) {
+      wrap.appendChild(portTextNode(stack, 'ac-career-ui__caption ac-career-ui__gold', crossover.invite));
+    }
+    if (crossover.body) {
+      wrap.appendChild(portTextNode(stack, 'ac-career-ui__npc-paragraph', crossover.body));
+    }
+    if (crossover.receipt) {
+      wrap.appendChild(portTextNode(stack, 'ac-career-ui__caption', crossover.receipt));
+    }
+    return wrap;
+  }
+
+  /** 首次展示成功后交给 bridge 的薄封装落库；缺失/失败都静默，不阻断港口渲染。 */
+  function portRecordCrossover(context, crossover) {
+    if (!crossover || !crossover.narrativeEventId) return;
+    const record = context && typeof context.recordWorldNarrativeEvent === 'function'
+      ? context.recordWorldNarrativeEvent
+      : (context && isObject(context.api) && typeof context.api.recordWorldNarrativeEvent === 'function'
+        ? context.api.recordWorldNarrativeEvent
+        : null);
+    if (typeof record !== 'function') return;
+    try {
+      const pending = record({ eventId: crossover.narrativeEventId, source: 'world' });
+      if (pending && typeof pending.catch === 'function') pending.catch(() => {});
+    } catch (err) {
+      /* 落库失败保持港口可读；下一次真实展示会重试（事务内幂等）。 */
+    }
+  }
+
   function portStoryProps(context, view) {
     const narrative = portNarrativeOf(context);
     const story = view && isObject(view.story) ? view.story : {};
@@ -777,8 +853,12 @@
     const nextId = idText(next && next.commissionId);
     const row = portFindCommission(view, nextId);
     const commission = commissionOf(context);
+    const alternative = portAlternativeTexts(story);
     const title = cleanText(narrative.storyTitle) || cleanText(next && next.label) || cleanText(row && row.title);
-    const summary = cleanText(narrative.storySummary) || cleanText(row && row.summary) || cleanText(row && row.objectiveText);
+    const summary = cleanText(narrative.storySummary)
+      || (alternative && (alternative.progress || alternative.offer))
+      || cleanText(row && row.summary)
+      || cleanText(row && row.objectiveText);
     const action = nextId && (!commission || typeof commission.start !== 'function')
       ? null
       : (nextId ? {
@@ -1124,6 +1204,14 @@
     }
 
     content.appendChild(components.StoryCard(portStoryProps(context, view)));
+    const story = isObject(view) && isObject(view.story) ? view.story : {};
+    const alternativeNext = portAlternativeNextNode(stack, story);
+    if (alternativeNext) content.appendChild(alternativeNext);
+    const crossover = portCrossoverData(story);
+    if (crossover) {
+      content.appendChild(portCrossoverNode(stack, crossover));
+      portRecordCrossover(context, crossover);
+    }
     const message = portMessageNode(stack, view);
     if (message) content.appendChild(message);
     const clue = components.ClueRow && portClueProps(context);

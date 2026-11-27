@@ -106,6 +106,8 @@
     { file: 'route-planner.js', global: 'routePlanner', required: false, lazy: true },
     { file: 'campaign-core.js', global: 'campaign', required: false, lazy: true },
     { file: 'ending-reducer.js', global: 'ending', required: false, lazy: true },
+    /* 0.24 世界叙事 resolver 与经历增强：按需装载，缺失时 0.23 路径完全可用。 */
+    { file: 'world-narrative.js', global: 'worldNarrative', required: false, lazy: true },
     { file: 'ui/clue-surface.js', global: 'ui.clueSurface', required: false },
     { file: 'ui/mailbox.js', global: 'ui.mailbox', required: false },
     { file: 'ui/settings.js', global: 'ui.settings', required: false },
@@ -115,6 +117,7 @@
     { file: 'ui/market.js', global: 'ui.market', required: false, lazy: true },
     { file: 'ui/workshop.js', global: 'ui.workshop', required: false, lazy: true },
     { file: 'ui/world-state.js', global: 'ui.worldState', required: false, lazy: true },
+    { file: 'ui/journal.js', global: 'ui.journal', required: false, lazy: true },
   ];
 
   var OVERLAY_ANCHOR_SELECTORS = [
@@ -219,6 +222,12 @@
     careerArchived: false,
     careerArchiveCareerId: null,
     careerArchivedAt: null,
+    /* 0.24 世界叙事：内容/事实/写入去重全部只在内存；模块或内容缺失时整段降级为 null。 */
+    worldNarrativeContent: null,
+    worldNarrativeFacts: null,
+    worldNarrativeFactsPromise: null,
+    narrativeWrites: Object.create(null),
+    narrativeRecorded: Object.create(null),
   };
 
   /* ---------------------------------------------------------------- 基础工具 */
@@ -552,7 +561,7 @@
   }
 
   function syncUiRefs() {
-    ['clueSurface', 'mailbox', 'settings'].forEach(function (name) {
+    ['clueSurface', 'mailbox', 'settings', 'journal'].forEach(function (name) {
       readGlobal('ui.' + name);
     });
   }
@@ -611,6 +620,9 @@
     routePlanner: { file: 'route-planner.js', global: 'routePlanner' },
     campaign: { file: 'campaign-core.js', global: 'campaign' },
     ending: { file: 'ending-reducer.js', global: 'ending' },
+    /* 0.24：world-narrative.js 自己挂 window.ArcadeCareer.worldNarrative 与
+       window.ArcadeCareerWorldNarrative；bridge 只用它建只读门面。 */
+    worldNarrative: { file: 'world-narrative.js', global: 'worldNarrative' },
     components: { file: 'ui/components.js', global: 'ui.components' },
     harbor: { file: 'ui/harbor.js', global: 'ui.harbor' },
     invitation: { file: 'ui/invitation.js', global: 'ui.invitation' },
@@ -620,6 +632,7 @@
     market: { file: 'ui/market.js', global: 'ui.market' },
     workshop: { file: 'ui/workshop.js', global: 'ui.workshop' },
     worldState: { file: 'ui/world-state.js', global: 'ui.worldState' },
+    journal: { file: 'ui/journal.js', global: 'ui.journal' },
   };
 
   function loadDependency(dep) {
@@ -864,7 +877,11 @@
     var def = LAZY_MODULES[name];
     if (!def) return Promise.resolve(null);
     var existing = readGlobal(def.global);
-    if (existing) return Promise.resolve(existing);
+    if (existing) {
+      /* 预载路径也要包成只读门面，避免调用方拿到未绑定 state/catalog 的裸模块。 */
+      if (def.global === 'worldNarrative') return Promise.resolve(worldNarrativeFacade(existing));
+      return Promise.resolve(existing);
+    }
     if (internal.lazyPending[name]) return internal.lazyPending[name];
     var url = joinUrl(internal.careerDir, def.file);
     if (!url) return Promise.resolve(null);
@@ -879,8 +896,8 @@
         } else if (def.global === 'rental' || def.global === 'alternatives' || def.global === 'combatConfig'
           || def.global === 'materials' || def.global === 'crafting' || def.global === 'professions'
           || def.global === 'professionView' || def.global === 'storyEvidence' || def.global === 'routePlanner'
-          || def.global === 'campaign' || def.global === 'ending') {
-          api[def.global] = mod;
+          || def.global === 'campaign' || def.global === 'ending' || def.global === 'worldNarrative') {
+          api[def.global] = def.global === 'worldNarrative' ? worldNarrativeFacade(mod) : mod;
           if (def.global === 'professionView') internal.professionViewLoaded = true;
           configureCareerModules();
         } else if (def.global.indexOf('ui.') === 0) syncUiRefs();
@@ -1030,6 +1047,13 @@
       }),
       one('world-work.json', 'worldWorkContent', function (data) {
         return data && Array.isArray(data.commissionIds) && Array.isArray(data.entries) ? data : null;
+      }),
+      /* 0.24 世界叙事内容（T20 schema 冻结）：缺失/坏档只让交汇与替代叙事降级为空。 */
+      one('world-narrative.json', 'worldNarrativeContent', function (data) {
+        return data && data.schemaVersion === 1
+          && Array.isArray(data.alternativeNarratives)
+          && Array.isArray(data.crossoverPairs)
+          && Array.isArray(data.journalWhitelist) ? data : null;
       }),
       one('chapter-00.json', 'c00', function (data) { return data && data.chapterId ? data : null; }),
       one('chapter-02.json', 'c02', function (data) { return data && data.chapterId ? data : null; }),
@@ -2364,6 +2388,28 @@
         ? internal.worldWorkContent.commissionIds.slice() : [];
       catalog.worldWork = clone(internal.worldWorkContent);
     }
+    /* 0.24：world-narrative.json 是交汇/替代叙事/经历白名单的唯一运行时来源。
+       只做只读投影：内容对象给 resolver，白名单拆成 publicStoryEventIds 与
+       {eventId -> {label,text,person,professionId}}。不改 profession-view 冻结常量。 */
+    if (internal.worldNarrativeContent) {
+      catalog.worldNarrative = clone(internal.worldNarrativeContent);
+      var storyEventIds = Array.isArray(catalog.publicStoryEventIds) ? catalog.publicStoryEventIds.slice() : [];
+      var storyEvents = isObject(catalog.publicStoryEvents) ? clone(catalog.publicStoryEvents) : {};
+      var whitelist = Array.isArray(internal.worldNarrativeContent.journalWhitelist)
+        ? internal.worldNarrativeContent.journalWhitelist : [];
+      whitelist.forEach(function (row) {
+        if (!isObject(row) || typeof row.eventId !== 'string' || !row.eventId) return;
+        if (storyEventIds.indexOf(row.eventId) < 0) storyEventIds.push(row.eventId);
+        var entry = isObject(storyEvents[row.eventId]) ? storyEvents[row.eventId] : {};
+        if (typeof row.label === 'string' && row.label) entry.label = row.label;
+        if (typeof row.text === 'string' && row.text) entry.text = row.text;
+        if (typeof row.person === 'string' && row.person) entry.person = row.person;
+        if (typeof row.professionId === 'string' && row.professionId) entry.professionId = row.professionId;
+        if (Object.keys(entry).length) storyEvents[row.eventId] = entry;
+      });
+      catalog.publicStoryEventIds = storyEventIds;
+      catalog.publicStoryEvents = storyEvents;
+    }
     catalog.tools = [
       { toolId: 'wallet', name: '钱包', introducedOnAccept: true },
       { toolId: 'shop', name: '商店', introducedOnAccept: true },
@@ -2567,6 +2613,366 @@
     }).catch(function () { return projection; });
   }
 
+  /* ---------------------------------------------------------------- *
+   * 0.24 世界叙事（T22 resolver / T21 章节替代 / T23 经历）
+   *
+   * 只做三件只读的事：
+   *   1) careerCatalog() 带上 world-narrative.json 内容与经历白名单（见 careerCatalog）；
+   *   2) 给 careerView 投影加性附加 story.alternative / story.crossovers —— 只保留
+   *      节点自己的 texts，剥掉 anchor / npcRef / gate / reason 等内部结构；
+   *   3) recordWorldNarrativeEvent 薄封装：复用 career-db.applyProfessionEvent 的
+   *      RECORD_STORY_EVENT，只在首次展示成功后写一次，不新增 store/key。
+   * 模块 / 内容 / DB 任一步缺失时整段降级：投影不带新增字段、不写库、0.23 行为不变。
+   * ---------------------------------------------------------------- */
+
+  function rawWorldNarrativeModule() {
+    var mirror = WINDOW && WINDOW.ArcadeCareerWorldNarrative;
+    if (mirror && typeof mirror === 'object' && typeof mirror.createWorldNarrative === 'function') return mirror;
+    var current = api.worldNarrative;
+    if (current && typeof current === 'object' && current.__bridgeFacade !== true
+      && typeof current.createWorldNarrative === 'function') return current;
+    return null;
+  }
+
+  function worldNarrativeModule() {
+    return rawWorldNarrativeModule();
+  }
+
+  /** resolver 输入用的 catalog：在统一 catalog 上补 resolver 需要的真实内容分区（只读拷贝）。 */
+  function worldNarrativeCatalog() {
+    var catalog = careerCatalog();
+    if (internal.itemsContent) catalog.items = clone(internal.itemsContent);
+    if (internal.npcContent) catalog.npc = clone(internal.npcContent);
+    if (internal.chapterContent) catalog.chapterOne = clone(internal.chapterContent);
+    if (internal.campaignContent) catalog.campaign = clone(internal.campaignContent);
+    return catalog;
+  }
+
+  function worldNarrativeTexts(texts, keys) {
+    var out = {};
+    if (!isObject(texts)) return out;
+    keys.forEach(function (key) {
+      if (typeof texts[key] === 'string' && texts[key]) out[key] = texts[key];
+    });
+    return out;
+  }
+
+  function publicAlternativeView(result) {
+    var node = result && result.ok === true && isObject(result.node) ? result.node : null;
+    if (!node || typeof node.narrativeNodeId !== 'string' || !node.narrativeNodeId) return null;
+    var texts = worldNarrativeTexts(node.texts, ['offer', 'progress', 'receipt', 'next']);
+    if (!Object.keys(texts).length) return null;
+    return { narrativeNodeId: node.narrativeNodeId, texts: texts };
+  }
+
+  function publicCrossoverView(node) {
+    if (!isObject(node) || typeof node.eventId !== 'string' || !node.eventId) return null;
+    var texts = worldNarrativeTexts(node.texts, ['invite', 'body', 'receipt', 'decline']);
+    if (!Object.keys(texts).length) return null;
+    return { eventId: node.eventId, texts: texts };
+  }
+
+  function invalidateWorldNarrativeFacts() {
+    internal.worldNarrativeFacts = null;
+    internal.worldNarrativeFactsPromise = null;
+  }
+
+  /** 真实旗标/证据/已清委托的只读快照；一次打开内复用，数据变化时失效。 */
+  function ensureWorldNarrativeFacts(cleared) {
+    if (internal.worldNarrativeFacts) return Promise.resolve(internal.worldNarrativeFacts);
+    if (internal.worldNarrativeFactsPromise) return internal.worldNarrativeFactsPromise;
+    var clearedList = Array.isArray(cleared) ? cleared.slice() : [];
+    var evidence = readGlobal('storyEvidence');
+    var campaign = readGlobal('campaign');
+    var pending = Promise.resolve()
+      .then(function () { return loadStorySnapshot(); })
+      .then(function (snapshot) {
+        var flags = [];
+        var tokens = [];
+        var chapterId = null;
+        var snapshotInput = {
+          careerId: snapshot && snapshot.careerId ? snapshot.careerId : null,
+          quests: snapshot && Array.isArray(snapshot.quests) ? snapshot.quests : [],
+          claims: snapshot && Array.isArray(snapshot.claims) ? snapshot.claims : [],
+          wallet: snapshot && isObject(snapshot.wallet) ? snapshot.wallet : null,
+          profile: snapshot && isObject(snapshot.profile) ? snapshot.profile : null,
+        };
+        if (snapshot && !snapshot.identityIssue && evidence && typeof evidence.storyFlags === 'function') {
+          try {
+            var story = evidence.storyFlags(snapshotInput);
+            if (story && story.ok === true) {
+              flags = Array.isArray(story.allFlags) ? story.allFlags.slice() : [];
+              tokens = Array.isArray(story.tokens) ? story.tokens.slice() : [];
+            }
+          } catch (err) {
+            warnOnce('world-narrative-flags', err);
+          }
+        }
+        /* 章节到达用 campaign-core 的真实推导（C0.port_seen 等不在 story-evidence 旗标里），
+           不新增 context 键，也不写任何状态。 */
+        if (snapshot && !snapshot.identityIssue && campaign && typeof campaign.state === 'function') {
+          try {
+            var camp = campaign.state(snapshotInput);
+            if (camp && camp.ok === true) {
+              (Array.isArray(camp.flags) ? camp.flags : []).forEach(function (flag) {
+                if (flags.indexOf(flag) < 0) flags.push(flag);
+              });
+              (Array.isArray(camp.cleared) ? camp.cleared : []).forEach(function (id) {
+                if (clearedList.indexOf(id) < 0) clearedList.push(id);
+              });
+              if (typeof camp.currentChapter === 'string' && /^C[1-5]$/.test(camp.currentChapter)) {
+                chapterId = camp.currentChapter;
+              }
+            }
+          } catch (err) {
+            warnOnce('world-narrative-campaign', err);
+          }
+        }
+        var facts = {
+          flags: flags,
+          evidence: tokens,
+          cleared: clearedList,
+          careerId: snapshot && snapshot.careerId ? snapshot.careerId : null,
+          chapterId: chapterId,
+        };
+        internal.worldNarrativeFacts = facts;
+        internal.worldNarrativeFactsPromise = null;
+        return facts;
+      })
+      .catch(function (err) {
+        warnOnce('world-narrative-facts', err);
+        var fallback = { flags: [], evidence: [], cleared: clearedList, careerId: null, chapterId: null };
+        internal.worldNarrativeFacts = fallback;
+        internal.worldNarrativeFactsPromise = null;
+        return fallback;
+      });
+    internal.worldNarrativeFactsPromise = pending;
+    return pending;
+  }
+
+  /* 当前章节只由真实旗标推导（与 world-narrative 冻结章节旗标一致），不新增 context 键。 */
+  var NARRATIVE_CHAPTER_FLAGS = {
+    C1: ['C0.port_seen'],
+    C2: ['C1.signal_fragment'],
+    C3: ['C2.research_complete'],
+    C4: ['C3.truth_found'],
+    C5: ['C4.city_power_restored'],
+  };
+
+  function narrativeChapterId(flags) {
+    var known = Array.isArray(flags) ? flags : [];
+    var reached = null;
+    ['C1', 'C2', 'C3', 'C4', 'C5'].forEach(function (chapterId) {
+      var required = NARRATIVE_CHAPTER_FLAGS[chapterId] || [];
+      var ok = required.length > 0 && required.every(function (flag) { return known.indexOf(flag) >= 0; });
+      if (ok) reached = chapterId;
+    });
+    return reached;
+  }
+
+  function narrativeResolverInput(surface, facts) {
+    var input = {
+      surface: surface,
+      state: currentStateSnapshot(),
+      catalog: worldNarrativeCatalog(),
+      flags: facts.flags,
+      cleared: facts.cleared,
+      evidence: facts.evidence,
+      context: {
+        surface: surface,
+        archived: internal.careerArchived === true,
+        worldFlags: facts.flags,
+        clearedCommissions: facts.cleared,
+        storyEvidence: facts.evidence,
+      },
+    };
+    var chapterId = facts.chapterId && /^C[1-5]$/.test(facts.chapterId)
+      ? facts.chapterId : narrativeChapterId(facts.flags);
+    if (chapterId) input.chapterId = chapterId;
+    return input;
+  }
+
+  function buildWorldNarrativeEngine(mod) {
+    if (!mod || typeof mod.createWorldNarrative !== 'function' || !internal.worldNarrativeContent) return null;
+    try {
+      return mod.createWorldNarrative({
+        content: internal.worldNarrativeContent,
+        catalog: worldNarrativeCatalog(),
+      });
+    } catch (err) {
+      warnOnce('world-narrative-engine', err);
+      return null;
+    }
+  }
+
+  /**
+   * 交汇首次展示成功后由 UI 回调；写一次、duplicate 视为成功、不重放。
+   * 只在 ok===true 后刷新 discovery 快照；失败保持可重试（事务内幂等）。
+   */
+  function recordWorldNarrativeEvent(input) {
+    var request = isObject(input) ? input : {};
+    var eventId = typeof input === 'string' ? input : (typeof request.eventId === 'string' ? request.eventId : '');
+    if (!eventId) return Promise.resolve({ ok: false, reason: 'invalid-event-id' });
+    if (internal.careerArchived) return Promise.resolve({ ok: false, reason: 'archived' });
+    /* 同一会话只写一次；duplicate 也视为成功，不重放、不重复弹。 */
+    if (internal.narrativeRecorded[eventId]) return Promise.resolve({ ok: true, duplicate: true });
+    if (internal.narrativeWrites[eventId]) return internal.narrativeWrites[eventId];
+    var dbModule = api.db || readGlobal('db');
+    if (!dbModule || typeof dbModule.applyProfessionEvent !== 'function') {
+      return Promise.resolve({ ok: false, reason: 'db-unavailable' });
+    }
+    var pending = Promise.resolve()
+      .then(function () {
+        return dbModule.applyProfessionEvent({
+          action: 'RECORD_STORY_EVENT',
+          input: { eventId: eventId, source: 'world', at: nowIso() },
+        });
+      })
+      .then(function (result) {
+        if (!result || result.ok !== true) return result || { ok: false, reason: 'write-failed' };
+        internal.narrativeRecorded[eventId] = true;
+        invalidateWorldNarrativeFacts();
+        /* 重读 discovery：下一次投影不再把已落库事件当首次（duplicate 同样只放行一次）。 */
+        return loadDiscoveryStateFromDb()
+          .then(function () { return result; })
+          .catch(function () { return result; });
+      })
+      .catch(function (err) {
+        warnOnce('record-world-narrative', err);
+        return { ok: false, reason: 'write-error' };
+      })
+      .then(function (result) {
+        delete internal.narrativeWrites[eventId];
+        return result;
+      });
+    internal.narrativeWrites[eventId] = pending;
+    return pending;
+  }
+
+  /** 把 resolver 的公开文案加性附加到 careerView.story；不动既有字段、排序与上限。 */
+  function attachWorldNarrative(projection, surface, facts) {
+    if (!projection || !projection.story) return Promise.resolve(projection);
+    /* 交汇只允许 port/journal 两个真实经历面；clue/letter/shop/crafting/tools 永不附加。 */
+    if (surface !== 'port' && surface !== 'journal') return Promise.resolve(projection);
+    if (internal.careerArchived || !internal.worldNarrativeContent) return Promise.resolve(projection);
+    return ensureLazyModule('worldNarrative').then(function () {
+      var engine = buildWorldNarrativeEngine(worldNarrativeModule());
+      if (!engine) return projection;
+      var cleared = facts && facts.context && Array.isArray(facts.context.clearedCommissions)
+        ? facts.context.clearedCommissions : [];
+      return ensureWorldNarrativeFacts(cleared).then(function (narrativeFacts) {
+        var input = narrativeResolverInput(surface, narrativeFacts);
+        try {
+          var view = publicAlternativeView(engine.resolveAlternative(input));
+          if (view) projection.story.alternative = view;
+        } catch (err) {
+          warnOnce('world-narrative-alternative', err);
+        }
+        try {
+          var listed = engine.listCrossovers(input);
+          var rows = listed && listed.ok === true && Array.isArray(listed.nodes)
+            ? listed.nodes.map(publicCrossoverView).filter(Boolean) : [];
+          /* 每次投影最多一条交汇回显；落库后 resolver 不再产出，故不会重放。 */
+          if (rows.length) projection.story.crossovers = rows.slice(0, 1);
+        } catch (err) {
+          warnOnce('world-narrative-crossover', err);
+        }
+        return projection;
+      });
+    }).catch(function () { return projection; });
+  }
+
+  /**
+   * 只读门面（ADR-0.24 §3.3 / §7.2）：调用方拿到的不是裸模块，而是自动绑定
+   * state/catalog/真实事实的只读方法。任何缺失都返回结构化空结果，绝不写库。
+   */
+  function worldNarrativeFacade(source) {
+    var mod = source && typeof source === 'object' && typeof source.createWorldNarrative === 'function'
+      ? source : rawWorldNarrativeModule();
+    if (!mod) return null;
+    if (mod.__bridgeFacade === true) return mod;
+    function engineNow() {
+      return buildWorldNarrativeEngine(mod);
+    }
+    function facadeInput(input) {
+      var extra = isObject(input) ? input : {};
+      var facts = internal.worldNarrativeFacts || { flags: [], evidence: [], cleared: [] };
+      var merged = Object.assign({}, extra);
+      if (merged.state === undefined) merged.state = currentStateSnapshot();
+      if (merged.catalog === undefined) merged.catalog = worldNarrativeCatalog();
+      if (merged.flags === undefined && merged.worldFlags === undefined) merged.flags = facts.flags;
+      if (merged.evidence === undefined && merged.storyEvidence === undefined) merged.evidence = facts.evidence;
+      if (merged.cleared === undefined && merged.clearedCommissions === undefined) merged.cleared = facts.cleared;
+      if (merged.chapterId === undefined && facts.chapterId) merged.chapterId = facts.chapterId;
+      merged.context = Object.assign({
+        archived: internal.careerArchived === true,
+        worldFlags: facts.flags,
+        clearedCommissions: facts.cleared,
+        storyEvidence: facts.evidence,
+      }, isObject(extra.context) ? extra.context : {});
+      return merged;
+    }
+    function resolveCrossover(input) {
+      var engine = engineNow();
+      if (!engine) return { ok: false, node: null, reason: 'not-available' };
+      try {
+        return engine.resolveCrossover(facadeInput(input));
+      } catch (err) {
+        warnOnce('world-narrative-facade', err);
+        return { ok: false, node: null, reason: 'not-available' };
+      }
+    }
+    function resolveAlternative(input) {
+      var engine = engineNow();
+      if (!engine) return { ok: false, node: null, reason: 'not-available' };
+      try {
+        return engine.resolveAlternative(facadeInput(input));
+      } catch (err) {
+        warnOnce('world-narrative-facade', err);
+        return { ok: false, node: null, reason: 'not-available' };
+      }
+    }
+    function listCrossovers(input) {
+      var engine = engineNow();
+      if (!engine) return { ok: false, nodes: [], reason: 'not-available' };
+      try {
+        return engine.listCrossovers(facadeInput(input));
+      } catch (err) {
+        warnOnce('world-narrative-facade', err);
+        return { ok: false, nodes: [], reason: 'not-available' };
+      }
+    }
+    function resolveWorldAlternatives(input) {
+      var empty = { schemaVersion: 1, chapterId: null, nodes: [], crossovers: [] };
+      if (typeof mod.resolveWorldAlternatives !== 'function' || !internal.worldNarrativeContent) return empty;
+      var merged = facadeInput(input);
+      merged.content = internal.worldNarrativeContent;
+      try {
+        return mod.resolveWorldAlternatives(merged);
+      } catch (err) {
+        warnOnce('world-narrative-facade', err);
+        return empty;
+      }
+    }
+    function resolveSignature(input) {
+      if (typeof mod.resolveSignature !== 'function') return { ok: false, signer: null, reason: 'not-available' };
+      try {
+        return mod.resolveSignature(facadeInput(input));
+      } catch (err) {
+        warnOnce('world-narrative-facade', err);
+        return { ok: false, signer: null, reason: 'not-available' };
+      }
+    }
+    return Object.freeze({
+      resolveCrossover: resolveCrossover,
+      resolveAlternative: resolveAlternative,
+      listCrossovers: listCrossovers,
+      resolveWorldAlternatives: resolveWorldAlternatives,
+      resolveSignature: resolveSignature,
+      __bridgeFacade: true,
+    });
+  }
+
   /** 只读投影；模块不可用时返回 null，不编造投影、不创建身份。 */
   function careerView(context) {
     return waitReady(READY_TIMEOUT_MS).then(function () {
@@ -2586,7 +2992,10 @@
         if (facts.listing && facts.listing.ok && Array.isArray(facts.listing.commissions)) {
           projection.commissions = clone(facts.listing.commissions);
         }
-        return attachEndingAction(attachNarrativeMessages(projection));
+        return attachEndingAction(attachNarrativeMessages(projection)).then(function (attached) {
+          /* 0.24：只给港口/经历面附加公开文案；失败时原投影照常返回。 */
+          return attachWorldNarrative(attached, surface, facts);
+        });
       });
     }).catch(function (err) {
       warnOnce('career-view', err);
@@ -2702,6 +3111,13 @@
   }
 
   function notifyCareerDataChanged(reason) {
+    /* 0.24：封存/解冻/导入/重置/结算后真实事实已变，下一投影重新推导世界叙事。 */
+    invalidateWorldNarrativeFacts();
+    var changeReason = typeof reason === 'string' ? reason : 'changed';
+    /* 重置/导入后 DB 里的经历事实已被整体替换，允许按新快照重新判定首次展示。 */
+    if (changeReason === 'career-reset' || changeReason === 'career-imported') {
+      internal.narrativeRecorded = Object.create(null);
+    }
     internal.careerDataListeners.slice().forEach(function (listener) {
       try {
         var result = listener({ reason: typeof reason === 'string' ? reason : 'changed', at: nowIso() });
@@ -3792,6 +4208,10 @@
       uiHarbor: readUi('harbor'),
       uiStyles: internal.careerUiStyles || '',
       narrative: { byProfessionId: internal.narrativeByProfessionId },
+      /* 0.24 世界叙事只读门面：港口/经历只读消费；模块/内容缺失时为 null，0.23 路径不变。 */
+      worldNarrative: worldNarrativeFacade(),
+      uiJournal: readUi('journal'),
+      recordWorldNarrativeEvent: recordWorldNarrativeEvent,
       careerCatalog: careerCatalog,
       /* 0.20 只读 continuation 查询：告示板可直接 ctx.careerContinuations({careerId})，
          也可经 ctx.commission.continuations；两者是同一只读方法，无新 ctx 字段依赖。 */
@@ -4124,6 +4544,9 @@
     if (name === 'town') {
       extraModules.push('storyEvidence');
       extraModules.push('routePlanner');
+      /* 0.24：港口打开前确保经历增强与叙事 resolver 已就绪；缺失时两者各自降级为 0.23。 */
+      extraModules.push('journal');
+      extraModules.push('worldNarrative');
     }
     var preloadList = [ensureLazyModule('commission'), ensureLazyModule('alternatives'), loadCareerContent(), ensureCareerUi()];
     extraModules.forEach(function (moduleName) {
@@ -4951,6 +5374,9 @@
     /* 0.16 职业委托（向后兼容扩展）：无 ticket 时 commissionRun=null，行为与 0.15 相同。 */
     api.commission = commissionModule() || null;
     api.professionView = professionViewModule();
+    /* 0.24 只读世界叙事门面；模块未装载时为 null（调用方按缺失降级）。 */
+    api.worldNarrative = worldNarrativeFacade();
+    api.recordWorldNarrativeEvent = recordWorldNarrativeEvent;
     api.careerView = careerView;
     api.invitationForClue = invitationForClue;
     api.onCareerDataChanged = onCareerDataChanged;
