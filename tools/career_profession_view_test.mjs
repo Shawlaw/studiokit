@@ -232,15 +232,18 @@ catalog.professions.forEach((profession) => {
   const tier2 = catalog.commissions.find((row) => row.professionId === id && /\.T2$/.test(row.commissionId));
   eq('PV-03 accepted locked story', show(state, tier2.commissionId), { ok: false, reason: 'story-locked' });
   const active = [{ commissionId: tier2.commissionId, status: 'active', runId: 'run-1' }];
-  eq('PV-03 accepted active history survives lock', show(state, tier2.commissionId, contextFor({ surface: 'journal', activeRuns: active })), { ok: true, reason: 'historical-only', historicalOnly: true });
-  eq('PV-03 active history still not new acceptance', accept(state, tier2.commissionId, contextFor({ surface: 'journal', activeRuns: active, availableIds: [tier2.commissionId] })), { ok: false, reason: 'historical-only' });
+  eq('PV-03 active run keeps read-only explanation in projection', show(state, tier2.commissionId, contextFor({ surface: 'journal', activeRuns: active })), { ok: true, reason: 'historical-only', historicalOnly: true });
+  eq('PV-03 projection alone never authorizes new acceptance', accept(state, tier2.commissionId, contextFor({ surface: 'journal', activeRuns: active, availableIds: [tier2.commissionId] })), { ok: false, reason: 'historical-only' });
 }
 
 /* P-04 世界通用工作：任一已接受职业可承接，paused 不阻塞世界主线，不暴露拥有职业 */
 {
   const ownerJob = commissionFor('adventure.pilot');
   const worldCatalog = clone(catalog);
-  worldCatalog.worldWorkIds = [ownerJob.commissionId];
+  worldCatalog.worldWork = {
+    commissionIds: [ownerJob.commissionId],
+    works: [{ commissionId: ownerJob.commissionId, title: '旧港通用巡逻', summary: '沿旧航道完成一次通用巡查。' }],
+  };
   const accepted = acceptedState('nature.miner');
   const paused = pausedState(accepted, 'nature.miner');
   const context = contextFor({ availableIds: [ownerJob.commissionId] });
@@ -248,9 +251,12 @@ catalog.professions.forEach((profession) => {
   eq('PV-04 world work visible while profession paused', shown, { ok: true });
   const visible = V.getVisibleCommissions({ state: paused, catalog: worldCatalog, context });
   eq('PV-04 world work projected', visible.map((row) => row.commissionId), [ownerJob.commissionId]);
-  check('PV-04 world category', visible[0].category === 'world');
+  check('PV-04 world category', visible[0].category === 'world' && visible[0].worldWork === true);
   check('PV-04 world owner id stripped', !Object.prototype.hasOwnProperty.call(visible[0], 'professionId'));
   check('PV-04 world owner name absent', snapshot(visible[0]).indexOf('星际飞行员') < 0);
+  eq('PV-04 world generic title', visible[0].title, '旧港通用巡逻');
+  eq('PV-04 world generic summary', visible[0].summary, '沿旧航道完成一次通用巡查。');
+  check('PV-04 owner title/summary withheld', snapshot(visible[0]).indexOf(ownerJob.title) < 0 && snapshot(visible[0]).indexOf(ownerJob.summary) < 0);
   eq('PV-04 world work no accepted profession', V.canShowCommission({
     state: S.initialState(NOW), catalog: worldCatalog, context, commissionId: ownerJob.commissionId,
   }), { ok: false, reason: 'not-accepted' });
@@ -290,9 +296,16 @@ catalog.professions.forEach((profession) => {
   state = S.recordGlimpsed(state, { catalog, professionId: hiddenId, gameId: gameFor(hiddenId).gameId, at: NOW }).state;
   state = S.recordRead(state, { catalog, professionId: hiddenId, at: NOW }).state;
   state = S.recordStoryEvent(state, { eventId: 'invitation:' + hiddenId, source: 'clue', at: NOW }).state;
+  state = S.recordStoryEvent(state, { eventId: 'commission:' + commissionFor(hiddenId).commissionId, source: 'commission', at: NOW }).state;
+  state = S.recordStoryEvent(state, { eventId: 'story:' + hiddenId + '.secret', source: 'story', at: NOW }).state;
+  state = S.recordStoryEvent(state, { eventId: 'invitation:' + acceptedId, source: 'clue', at: NOW }).state;
+  state = S.recordStoryEvent(state, { eventId: 'commission:' + commissionFor(acceptedId).commissionId, source: 'commission', at: NOW }).state;
   state = S.recordStoryEvent(state, { eventId: 'story:world_arrival', source: 'world', at: NOW }).state;
+  state = S.recordStoryEvent(state, { eventId: 'tech:debug_trace', source: 'system', at: NOW }).state;
   const imported = JSON.parse(JSON.stringify(state));
   const withTools = clone(catalog);
+  withTools.publicStoryEventIds = ['story:world_arrival'];
+  withTools.publicStoryEvents = { 'story:world_arrival': { label: '旧港重新亮起' } };
   withTools.tools = [
     { toolId: 'tool.accepted', name: '已引入工具', professionId: acceptedId },
     { toolId: 'tool.hidden', name: '未引入工具', professionId: hiddenId },
@@ -310,9 +323,13 @@ catalog.professions.forEach((profession) => {
   eq('PV-06 input context untouched', snapshot(context), beforeContext);
   eq('PV-06 tools only introduced', first.tools.map((row) => row.toolId), ['tool.accepted', 'tool.world']);
   check('PV-06 hidden invitation not in story', snapshot(first.story.history).indexOf(hiddenId) < 0);
+  check('PV-06 hidden commission/story events not in projection', snapshot(first).indexOf(commissionFor(hiddenId).commissionId) < 0);
+  check('PV-06 technical event not in projection', snapshot(first).indexOf('tech:debug_trace') < 0);
   check('PV-06 hidden profession absent after import', snapshot(first).indexOf(hiddenId) < 0);
-  check('PV-06 accepted invitation safe', first.story.history.some((row) => row.eventId.indexOf(acceptedId) >= 0) === false);
-  eq('PV-06 real world story retained', first.story.history.map((row) => row.eventId), ['story:world_arrival']);
+  check('PV-06 public history uses player labels', first.story.history.some((row) => row.label === '旧港重新亮起'));
+  check('PV-06 accepted invitation uses player label', first.story.history.some((row) => row.kind === 'invitation' && row.professionId === acceptedId));
+  check('PV-06 accepted commission event is visible', first.story.history.some((row) => row.kind === 'commission' && row.commissionId === commissionFor(acceptedId).commissionId));
+  check('PV-06 no raw internal eventId emitted', first.story.history.every((row) => !Object.prototype.hasOwnProperty.call(row, 'eventId')));
   const source = fs.readFileSync(VIEW_PATH, 'utf8');
   const forbidden = [/\bDate\s*\(/, /\blocalStorage\s*[.[]/, /\bindexedDB\b/, /\bdocument\s*\./, /\bfetch\s*\(/];
   check('PV-06 no DOM/DB/clock/network', forbidden.every((pattern) => !pattern.test(source)));

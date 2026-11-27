@@ -90,6 +90,7 @@ function createFakeDb(options) {
     claims: {},
     inventory: {},
     calls: [],
+    archived: opts.archived === true,
     failures: Object.assign({ ensureCareer: 0, createRun: 0, updateRun: 0, settleAndClaim: 0 }, opts.failures || {}),
     initialFlags: Array.isArray(opts.initialFlags) ? opts.initialFlags.slice() : [],
   };
@@ -139,6 +140,26 @@ function createFakeDb(options) {
   async function getDiscoveryState() {
     log('getDiscoveryState', null);
     return clone(state.discovery);
+  }
+
+  async function getArchiveState() {
+    log('getArchiveState', null);
+    return { ok: true, archived: state.archived, careerId: state.archived ? state.careerId : null, archivedAt: null };
+  }
+
+  async function listRuns(input) {
+    log('listRuns', input);
+    const options = input || {};
+    return {
+      ok: true,
+      runs: Object.values(state.runs).filter((row) => {
+        if (options.careerId && row.careerId !== options.careerId) return false;
+        if (options.commissionId && row.commissionId !== options.commissionId) return false;
+        if (options.mode && row.mode !== options.mode) return false;
+        if (Array.isArray(options.statuses) && options.statuses.indexOf(row.status) < 0) return false;
+        return true;
+      }).map((row) => clone(row)),
+    };
   }
 
   function failure(reason) {
@@ -364,6 +385,8 @@ function createFakeDb(options) {
     getProfile,
     getState,
     getDiscoveryState,
+    getArchiveState,
+    listRuns,
     readQuestState,
     putQuests,
     readWallet,
@@ -1786,6 +1809,195 @@ async function groupJ() {
 }
 
 /* ------------------------------------------------------------------ *
+ * K. Reviewer 修复回归：权威 live run / DB 真源 / world-work / 终局 / 失败就绪
+ * ------------------------------------------------------------------ */
+
+async function groupK() {
+  function seedRun(db, commissionId, status, patch) {
+    const patchRow = patch || {};
+    const generatedId = patchRow.runId || ('run-seeded-' + (Object.keys(db.state.runs).length + 1));
+    const row = Object.assign({
+      runId: generatedId,
+      ticketId: generatedId,
+      careerId: db.state.careerId,
+      gameId: 'pendulum-tower',
+      mode: 'commission',
+      sourceMode: 'commission',
+      commissionId,
+      nonce: 'a'.repeat(32),
+      startParams: {},
+      seed: 'seed-seeded',
+      status,
+      issuedAt: NOW,
+      rulesetVersion: 1,
+      contentVersion: '0.18.0',
+      schemaVersion: 1,
+      attempt: 1,
+      commissionSnapshot: {},
+    }, patch || {});
+    db.state.runs[row.runId] = row;
+    return row;
+  }
+
+  await check('K1 DB live run 优先：story lock + 职业暂停仍复用原 ticket', async () => {
+    const { core, db } = scenario({ dbOptions: { acceptedProfessionIds: ['engineering.structural'] } });
+    const run = seedRun(db, 'pendulum-tower.T2', 'active');
+    db.state.discovery.professionProgress['engineering.structural'].paused = true;
+    const result = await core.start({ commissionId: 'pendulum-tower.T2' });
+    assert(result.ok === true && result.reused === true, JSON.stringify(result));
+    eq(result.ticketId, run.runId, '原 ticket');
+    eq(result.ticket.nonce, run.nonce, '原 nonce');
+    eq(result.via, 'db-live-run', 'DB 权威来源');
+    eq(db.count('createRun'), 0, '不得新建 run');
+    return 'live run resumed';
+  });
+
+  await check('K2 live run 必须逐字段匹配 careerId/commissionId/mode/status', async () => {
+    const { core, db } = scenario({ dbOptions: { acceptedProfessionIds: ['engineering.structural'] } });
+    seedRun(db, 'pendulum-tower.T2', 'claimed');
+    seedRun(db, 'star-raid.T2', 'active');
+    seedRun(db, 'pendulum-tower.T2', 'active', {
+      runId: 'run-wrong-career', ticketId: 'run-wrong-career', careerId: 'career-other',
+    });
+    seedRun(db, 'pendulum-tower.T2', 'active', {
+      runId: 'run-wrong-mode', ticketId: 'run-wrong-mode', mode: 'campaign',
+    });
+    const result = await core.start({ commissionId: 'pendulum-tower.T2', context: { surface: 'journal' } });
+    assert(result.ok === false, '伪造/不匹配 run 不得复用');
+    eq(result.reason, 'story-locked', '未命中 live run，执行新接单 gate');
+    eq(db.count('createRun'), 0, '不得新建 run');
+    return 'strict DB match';
+  });
+
+  await check('K3 伪造 context.activeRuns 不得授权新 run', async () => {
+    const { core, db } = scenario({ dbOptions: { acceptedProfessionIds: ['engineering.structural'] } });
+    const result = await core.start({
+      commissionId: 'pendulum-tower.T2',
+      context: { surface: 'journal', activeRuns: [{ commissionId: 'pendulum-tower.T2', status: 'active', runId: 'forged' }] },
+    });
+    assert(result.ok === false && ['historical-only', 'story-locked'].indexOf(result.reason) >= 0, '调用方活动记录不能升格为 DB live run：' + JSON.stringify(result));
+    eq(db.count('createRun'), 0, 'createRun');
+    return 'forged history rejected';
+  });
+
+  await check('K4 调用方伪造 state/catalog 不能覆盖 DB 未接受真源', async () => {
+    const { core, db } = scenario({ dbOptions: { acceptedProfessionIds: [] } });
+    const forgedState = clone(db.state.discovery);
+    forgedState.professionProgress['engineering.structural'] = {
+      state: 'accepted', paused: false, discoveredAt: NOW, readAt: NOW, acceptedAt: NOW, completedAt: null,
+    };
+    const forgedCatalog = clone(gateCatalog);
+    forgedCatalog.commissions = commissionsContent.commissions;
+    const listed = await core.listAvailable({ ensure: true, state: forgedState, catalog: forgedCatalog });
+    eq(listed.availableIds, [], 'list 必须忽略伪造输入');
+    const started = await core.start({ commissionId: 'pendulum-tower.T1', state: forgedState, catalog: forgedCatalog });
+    eq(started.reason, 'not-discovered', 'start 必须忽略伪造输入');
+    eq(db.count('createRun'), 0, 'createRun');
+    return 'DB authority enforced';
+  });
+
+  await check('K5 核心 future-version 直接回归：list/start 均拒绝', async () => {
+    const { core, db } = scenario();
+    db.state.discovery.professionVersion = 2;
+    const listed = await core.listAvailable({ ensure: true });
+    eq(listed.reason, 'future-version', 'list reason');
+    eq(listed.commissions, [], 'list empty');
+    const started = await core.start({ commissionId: 'pendulum-tower.T1' });
+    eq(started.reason, 'future-version', 'start reason');
+    eq(db.count('createRun'), 0, 'createRun');
+    return 'future fail closed';
+  });
+
+  await check('K6 核心 archived 直接回归：list/start 均拒绝', async () => {
+    const { core, db } = scenario({ dbOptions: { archived: true } });
+    const listed = await core.listAvailable({ ensure: true });
+    eq(listed.reason, 'archived', 'list reason');
+    const started = await core.start({ commissionId: 'pendulum-tower.T1' });
+    eq(started.reason, 'archived', 'start reason');
+    eq(db.count('createRun'), 0, 'createRun');
+    return 'archive fail closed';
+  });
+
+  await check('K7 已注册 ending.combat：C4 + 零职业可接；缺 C4 拒绝；ending.fake 不豁免', async () => {
+    const endingRow = (id) => ({
+      commissionId: id, gameId: 'star-raid', professionId: 'ending', tier: 5,
+      title: '合成终局', summary: '合成终局说明。', issuer: '旧港',
+      objective: { kind: 'boss.defeated', atLeast: 1, context: { theme: 'mothership' } },
+      startParams: { startLevel: 6, themeId: 'mothership' },
+      reward: { credits: 0, items: {}, evidence: [], flags: ['C5.star_tower_resolved', id] },
+      repeatSalaryCredits: 0, unlock: { all: [{ kind: 'chapterFlag', value: 'C4.city_power_restored' }] },
+      risk: 'high', durationHint: '终局',
+    });
+    const content = clone(commissionsContent);
+    content.commissions = content.commissions.concat([endingRow('ending.combat'), endingRow('ending.fake')]);
+    const catalog = clone(gateCatalog);
+    catalog.professions.push({ professionId: 'ending', displayName: '内部终局', domain: 'ending', capabilities: [] });
+    const ready = scenario({
+      contentContent: content,
+      catalog,
+      dbOptions: { acceptedProfessionIds: [], initialFlags: ['C4.city_power_restored'] },
+    });
+    const started = await ready.core.start({ commissionId: 'ending.combat' });
+    assert(started.ok === true, 'ending.combat：' + JSON.stringify(started));
+    eq(ready.db.count('createRun'), 1, 'ending.combat run');
+    const fake = await ready.core.start({ commissionId: 'ending.fake' });
+    eq(fake.ok, false, 'ending.fake 不得豁免');
+    eq(fake.reason, 'not-discovered', 'ending.fake reason');
+    const locked = scenario({ contentContent: content, catalog, dbOptions: { acceptedProfessionIds: [] } });
+    const refused = await locked.core.start({ commissionId: 'ending.combat' });
+    eq(refused.reason, 'locked', '缺 C4 拒绝');
+    return 'registered ending only';
+  });
+
+  await check('K8 catalog.worldWork 真实形状：通用 ID/文案生效且剥离拥有职业任务', async () => {
+    const catalog = clone(gateCatalog);
+    catalog.worldWork = {
+      commissionIds: ['star-raid.T1'],
+      works: [{ commissionId: 'star-raid.T1', title: '旧港通用巡逻', summary: '沿旧航道完成一次通用巡查。' }],
+    };
+    const { core } = scenario({
+      contentContent: commissionsContent,
+      catalog,
+      dbOptions: { acceptedProfessionIds: ['engineering.structural'] },
+    });
+    const listed = await core.listAvailable({ ensure: true });
+    eq(listed.availableIds, ['pendulum-tower.T1', 'star-raid.T1'], '返回本职业首单与世界工作');
+    const world = listed.commissions.find((row) => row.commissionId === 'star-raid.T1');
+    assert(!!world, '世界工作应可接');
+    eq(world.category, 'world', 'category');
+    eq(world.worldWork, true, 'worldWork');
+    eq(world.title, '旧港通用巡逻', '通用标题');
+    eq(world.summary, '沿旧航道完成一次通用巡查。', '通用说明');
+    eq(world.professionId, undefined, 'owner id');
+    const owner = commissionsContent.commissions.find((row) => row.commissionId === 'star-raid.T1');
+    assert(JSON.stringify(world).indexOf(owner.title) < 0 && JSON.stringify(world).indexOf(owner.summary) < 0, 'owner title/summary withheld');
+    return 'world-work.json shape';
+  });
+
+  await check('K10 调用方伪造 worldFlags/storyEvidence 不能绕过核心 story/world gate', async () => {
+    const { core, db } = scenario({ dbOptions: { acceptedProfessionIds: ['engineering.structural'] } });
+    const result = await core.start({
+      commissionId: 'pendulum-tower.T2',
+      context: { worldFlags: ['C1.work_done'], storyEvidence: ['E-C1-site'], clearedCommissions: ['pendulum-tower.T1'] },
+    });
+    eq(result.reason, 'story-locked', '伪造旗标不得解锁');
+    eq(db.count('createRun'), 0, 'createRun');
+    return 'context authority enforced';
+  });
+
+  await check('K9 仅配置 catalog 不得被误判 ready；configure 失败不创建身份', async () => {
+    const { core, db } = scenario({ content: false, dbOptions: { withCareer: false } });
+    const configured = core.configure({ catalog: gateCatalog });
+    eq(configured.ok, false, 'ok');
+    eq(configured.usable, false, 'usable');
+    eq(configured.contentReady, false, 'contentReady');
+    eq(configured.reason, 'content-not-configured', 'reason');
+    eq(db.count('ensureCareer'), 0, 'ensureCareer');
+    return 'configure readiness explicit';
+  });
+}
+
+/* ------------------------------------------------------------------ *
  * 主流程
  * ------------------------------------------------------------------ */
 
@@ -1808,6 +2020,7 @@ async function main() {
   await groupH();
   await groupI();
   await groupJ();
+  await groupK();
 
   const failed = failures.length;
   console.log('');

@@ -39,6 +39,11 @@
   /* 未接受职业的真实历史只在经历/收据/消息/路线/港口/深链中只读解释。 */
   var HISTORY_SURFACES = ['port', 'journal', 'receipt', 'message', 'route', 'toast', 'deep-link'];
   var INVITATION_SURFACES = ['clue', 'letter'];
+  /* 只有这些玩家叙事事件允许进入经历；其余 namespace:name 一律视为内部事件。 */
+  var PUBLIC_STORY_EVENTS = Object.freeze({
+    'story:C0.port_seen': '旧港的来信已送达',
+  });
+  var STORY_EVENT_SOURCES = ['clue', 'commission', 'world', 'story'];
   var REASONS = Object.freeze({
     notDiscovered: 'not-discovered',
     notRead: 'not-read',
@@ -77,6 +82,10 @@
     return typeof value === 'string' && /^[A-Za-z0-9][A-Za-z0-9._-]{0,119}$/.test(value);
   }
 
+  function stableEventId(value) {
+    return typeof value === 'string' && /^[a-z][a-z0-9-]*:[A-Za-z0-9][A-Za-z0-9._:-]{0,119}$/.test(value);
+  }
+
   function hasOwn(object, key) {
     return Object.prototype.hasOwnProperty.call(object, key);
   }
@@ -104,6 +113,9 @@
       clues: arrayOf(catalog.clues),
       tools: arrayOf(catalog.tools),
       worldWorkIds: worldWorkIdsOf(catalog, null),
+      worldWork: isObject(catalog.worldWork) ? clone(catalog.worldWork) : {},
+      publicStoryEventIds: arrayOf(catalog.publicStoryEventIds),
+      publicStoryEvents: isObject(catalog.publicStoryEvents) ? clone(catalog.publicStoryEvents) : {},
     };
   }
 
@@ -350,17 +362,39 @@
     return pass();
   }
 
+  function worldPublicText(catalog, commissionId) {
+    var worldWork = isObject(catalog.worldWork) ? catalog.worldWork : {};
+    var text = null;
+    arrayOf(worldWork.works).concat(arrayOf(worldWork.commissions), arrayOf(worldWork.entries)).forEach(function (row) {
+      if (isObject(row) && row.commissionId === commissionId) text = row;
+    });
+    ['byId', 'entries', 'texts'].forEach(function (key) {
+      var rows = worldWork[key];
+      if (isObject(rows) && isObject(rows[commissionId])) text = rows[commissionId];
+    });
+    return isObject(text) ? text : {};
+  }
+
   function publicCommission(catalog, context, commission, shown) {
     var world = isWorldCommission(catalog, context, commission);
     var historicalOnly = shown.historicalOnly === true;
+    var publicText = world ? worldPublicText(catalog, commission.commissionId) : {};
     var out = {
       commissionId: commission.commissionId,
       gameId: typeof commission.gameId === 'string' ? commission.gameId : null,
       category: world ? 'world' : 'profession',
-      title: typeof commission.title === 'string' ? commission.title : commission.commissionId,
-      summary: typeof commission.summary === 'string' ? commission.summary : '',
+      worldWork: world,
+      title: world
+        ? (typeof publicText.title === 'string' && publicText.title ? publicText.title : '旧港通用工作')
+        : (typeof commission.title === 'string' ? commission.title : commission.commissionId),
+      summary: world
+        ? (typeof publicText.summary === 'string' && publicText.summary ? publicText.summary
+          : typeof publicText.description === 'string' && publicText.description ? publicText.description : '这是一项旧港通用工作，当前生涯可直接承接。')
+        : (typeof commission.summary === 'string' ? commission.summary : ''),
       issuer: world ? '旧港' : (typeof commission.issuer === 'string' ? commission.issuer : ''),
-      reward: isObject(commission.reward) ? clone(commission.reward) : { credits: 0, items: {}, evidence: [], flags: [] },
+      reward: world
+        ? { credits: 0, items: {}, evidence: [], flags: [] }
+        : (isObject(commission.reward) ? clone(commission.reward) : { credits: 0, items: {}, evidence: [], flags: [] }),
       repeatSalaryCredits: Number.isFinite(Number(commission.repeatSalaryCredits)) ? Math.max(0, Math.floor(Number(commission.repeatSalaryCredits))) : 0,
       durationHint: typeof commission.durationHint === 'string' ? commission.durationHint : '',
       risk: typeof commission.risk === 'string' ? commission.risk : 'low',
@@ -436,33 +470,93 @@
     };
   }
 
-  function safeStoryEvent(state, catalog, eventId, row) {
+  function publicStoryEventInfo(catalog, context, eventId) {
+    var allow = Object.create(null);
+    Object.keys(PUBLIC_STORY_EVENTS).forEach(function (id) { allow[id] = PUBLIC_STORY_EVENTS[id]; });
+    catalog.publicStoryEventIds.forEach(function (id) {
+      if (stableEventId(id)) allow[id] = '';
+    });
+    arrayOf(context.publicStoryEventIds).forEach(function (id) {
+      if (stableEventId(id)) allow[id] = '';
+    });
+    var declared = isObject(catalog.publicStoryEvents) ? catalog.publicStoryEvents : {};
+    var labelMap = isObject(context.publicStoryLabels) ? context.publicStoryLabels : {};
+    Object.keys(allow).forEach(function (id) {
+      var row = declared[id];
+      if (isObject(row) && typeof row.label === 'string' && row.label) allow[id] = row.label;
+      else if (typeof row === 'string' && row) allow[id] = row;
+      if (typeof labelMap[id] === 'string' && labelMap[id]) allow[id] = labelMap[id];
+    });
+    return hasOwn(allow, eventId) ? { allowed: true, label: allow[eventId] } : { allowed: false, label: '' };
+  }
+
+  function safeStoryEvent(state, catalog, context, eventId, row) {
     if (typeof eventId !== 'string' || !isObject(row)) return null;
+    var source = typeof row.source === 'string' ? row.source : '';
+    if (source && STORY_EVENT_SOURCES.indexOf(source) < 0) return null;
+    var at = typeof row.at === 'string' ? row.at : null;
+    var storyContext = Object.assign({}, context, { surface: 'journal' });
     if (eventId.indexOf('invitation:') === 0) {
       var professionId = eventId.slice('invitation:'.length);
-      if (!isAccepted(progressOf(state, professionId)) || !professionOf(catalog, professionId)) return null;
+      var revealed = canRevealProfession({
+        state: state,
+        catalog: catalog,
+        context: storyContext,
+        professionId: professionId,
+      });
+      if (!revealed.ok) return null;
+      var profession = professionOf(catalog, professionId);
+      return {
+        kind: 'invitation',
+        professionId: professionId,
+        label: '已接受「' + (profession && typeof profession.displayName === 'string' ? profession.displayName : professionId) + '」的邀请',
+        at: at,
+        source: source,
+      };
     }
-    var source = typeof row.source === 'string' ? row.source : '';
-    if (source && ['clue', 'commission', 'world', 'story'].indexOf(source) < 0) return null;
+    if (eventId.indexOf('commission:') === 0) {
+      var commissionId = eventId.slice('commission:'.length);
+      var shown = canShowCommission({
+        state: state,
+        catalog: catalog,
+        context: storyContext,
+        commissionId: commissionId,
+      });
+      if (!shown.ok) return null;
+      var commission = commissionOf(catalog, commissionId);
+      return {
+        kind: 'commission',
+        commissionId: commissionId,
+        label: commission && typeof commission.title === 'string' ? commission.title : commissionId,
+        at: at,
+        source: source,
+      };
+    }
+    var info = publicStoryEventInfo(catalog, context, eventId);
+    if (!info.allowed) return null;
     return {
-      eventId: eventId,
-      at: typeof row.at === 'string' ? row.at : null,
+      kind: 'story',
+      label: info.label || '港口里发生的一件事',
+      at: at,
       source: source,
     };
   }
 
-  function storyHistory(state, catalog) {
+  function storyHistory(state, catalog, context) {
     var events = isObject(state.storyEvents) ? state.storyEvents : {};
     var out = [];
     Object.keys(events).sort().forEach(function (eventId) {
-      var row = safeStoryEvent(state, catalog, eventId, events[eventId]);
+      var row = safeStoryEvent(state, catalog, context, eventId, events[eventId]);
       if (row) out.push(row);
     });
     out.sort(function (a, b) {
       var left = a.at || '';
       var right = b.at || '';
       if (left !== right) return left < right ? -1 : 1;
-      return a.eventId < b.eventId ? -1 : a.eventId > b.eventId ? 1 : 0;
+      var leftLabel = a.label || '';
+      var rightLabel = b.label || '';
+      if (leftLabel !== rightLabel) return leftLabel < rightLabel ? -1 : 1;
+      return a.kind < b.kind ? -1 : a.kind > b.kind ? 1 : 0;
     });
     return out;
   }
@@ -495,7 +589,7 @@
     if (!accepted.length) {
       /* 无已接受职业时仍允许真实历史只读投影，但绝不推测起源/当前职业。 */
       out.commissions = getVisibleCommissions({ state: state, catalog: catalog, context: context });
-      out.story.history = storyHistory(state, catalog);
+      out.story.history = storyHistory(state, catalog, context);
       return out;
     }
     if (stableId(state.acceptedOriginGameId) && catalog.games.some(function (game) {
@@ -516,7 +610,7 @@
     });
     out.commissions = getVisibleCommissions({ state: state, catalog: catalog, context: context });
     out.story.nextAction = getNextNarrativeAction({ state: state, catalog: catalog, context: context });
-    out.story.history = storyHistory(state, catalog);
+    out.story.history = storyHistory(state, catalog, context);
     out.tools = catalog.tools.filter(function (tool) {
       return toolIntroduced(state, catalog, context, tool);
     }).map(function (tool) {
@@ -536,6 +630,7 @@
     PROFESSION_VERSION: PROFESSION_VERSION,
     STATES: Object.freeze(['undiscovered', 'glimpsed', 'read', 'accepted', 'developed', 'completed']),
     SURFACES: Object.freeze(SURFACES.slice()),
+    PUBLIC_STORY_EVENTS: PUBLIC_STORY_EVENTS,
     REASONS: REASONS,
     projectCareerView: projectCareerView,
     canRevealProfession: canRevealProfession,
