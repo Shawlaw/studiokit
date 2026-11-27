@@ -521,6 +521,12 @@ check('journal.js 只消费投影：不读目录/存储/网络，不写业务状
   !/careerCatalog\s*\(|commissions\.json|world-narrative|localStorage|indexedDB|fetch\s*\(|XMLHttpRequest/i.test(codeOnly(SOURCE.journal)) &&
   !/applyProfessionEvent|recordStoryEvent|listAvailable|commission\.start|getState\s*\(/i.test(codeOnly(SOURCE.journal)) &&
   !/storyEvents/i.test(codeOnly(SOURCE.journal)));
+/* 真实 DOM 的 children 是 HTMLCollection（无 forEach）；纯 Node 夹具是数组，
+   必须显式归一，否则港口会静默退回 0.23 时间线（真浏览器回归）。 */
+check('journal.js 把时间线 children 归一为数组（HTMLCollection 兼容）',
+  /Array\.isArray\(timeline\.children\)/.test(codeOnly(SOURCE.journal))
+  && /Array\.prototype\.slice\.call\(timeline\.children\)/.test(codeOnly(SOURCE.journal)));
+
 check('journal.js 不注入样式、不新增全局选择器',
   !/<style|createElement\(\s*['"]style|insertRule|document\.head|document\.body/i.test(codeOnly(SOURCE.journal)) &&
   !/\.style\.(?:setProperty|cssText)|setAttribute\(\s*['"]style/i.test(codeOnly(SOURCE.journal)) &&
