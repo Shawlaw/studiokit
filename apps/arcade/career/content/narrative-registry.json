@@ -1,0 +1,211 @@
+{
+  "schemaVersion": 1,
+  "contentVersion": "0.18.0",
+  "registryId": "career-narrative-0.18.0",
+  "shards": [
+    {
+      "shardId": "career-narrative-shard-01",
+      "url": "narrative-shards/shard-01.json",
+      "professionIds": [
+        "research.archivist",
+        "research.lattice",
+        "intel.risk",
+        "intel.tactics"
+      ]
+    },
+    {
+      "shardId": "career-narrative-shard-02",
+      "url": "narrative-shards/shard-02.json",
+      "professionIds": [
+        "engineering.dispatcher",
+        "nature.snowscout",
+        "engineering.demolition",
+        "research.gravity"
+      ]
+    },
+    {
+      "shardId": "career-narrative-shard-03",
+      "url": "narrative-shards/shard-03.json",
+      "professionIds": [
+        "nature.ecologist",
+        "engineering.maintenance",
+        "engineering.warehouse",
+        "adventure.pilot"
+      ]
+    },
+    {
+      "shardId": "career-narrative-shard-04",
+      "url": "narrative-shards/shard-04.json",
+      "professionIds": [
+        "engineering.driver",
+        "adventure.relicseeker",
+        "engineering.structural",
+        "nature.miner"
+      ]
+    }
+  ],
+  "professionIds": [
+    "research.archivist",
+    "research.lattice",
+    "research.gravity",
+    "intel.risk",
+    "intel.tactics",
+    "engineering.dispatcher",
+    "engineering.demolition",
+    "engineering.maintenance",
+    "engineering.warehouse",
+    "engineering.driver",
+    "engineering.structural",
+    "nature.snowscout",
+    "nature.ecologist",
+    "nature.miner",
+    "adventure.pilot",
+    "adventure.relicseeker"
+  ],
+  "entries": [
+    {
+      "narrativeId": "career-narrative.memory-flip",
+      "gameId": "memory-flip",
+      "professionId": "research.archivist",
+      "shardId": "career-narrative-shard-01",
+      "messageIds": [
+        "message.memory-flip.arrival.v1"
+      ]
+    },
+    {
+      "narrativeId": "career-narrative.merge-2048",
+      "gameId": "merge-2048",
+      "professionId": "research.lattice",
+      "shardId": "career-narrative-shard-01",
+      "messageIds": [
+        "message.merge-2048.arrival.v1"
+      ]
+    },
+    {
+      "narrativeId": "career-narrative.blackjack",
+      "gameId": "blackjack",
+      "professionId": "intel.risk",
+      "shardId": "career-narrative-shard-01",
+      "messageIds": [
+        "message.blackjack.arrival.v1"
+      ]
+    },
+    {
+      "narrativeId": "career-narrative.gomoku",
+      "gameId": "gomoku",
+      "professionId": "intel.tactics",
+      "shardId": "career-narrative-shard-01",
+      "messageIds": [
+        "message.gomoku.arrival.v1"
+      ]
+    },
+    {
+      "narrativeId": "career-narrative.solitaire",
+      "gameId": "solitaire",
+      "professionId": "engineering.dispatcher",
+      "shardId": "career-narrative-shard-02",
+      "messageIds": [
+        "message.solitaire.arrival.v1"
+      ]
+    },
+    {
+      "narrativeId": "career-narrative.snowbells",
+      "gameId": "snowbells",
+      "professionId": "nature.snowscout",
+      "shardId": "career-narrative-shard-02",
+      "messageIds": [
+        "message.snowbells.arrival.v1"
+      ]
+    },
+    {
+      "narrativeId": "career-narrative.brick-breaker",
+      "gameId": "brick-breaker",
+      "professionId": "engineering.demolition",
+      "shardId": "career-narrative-shard-02",
+      "messageIds": [
+        "message.brick-breaker.arrival.v1"
+      ]
+    },
+    {
+      "narrativeId": "career-narrative.gravity-flip",
+      "gameId": "gravity-flip",
+      "professionId": "research.gravity",
+      "shardId": "career-narrative-shard-02",
+      "messageIds": [
+        "message.gravity-flip.arrival.v1"
+      ]
+    },
+    {
+      "narrativeId": "career-narrative.snake-run",
+      "gameId": "snake-run",
+      "professionId": "nature.ecologist",
+      "shardId": "career-narrative-shard-03",
+      "messageIds": [
+        "message.snake-run.arrival.v1"
+      ]
+    },
+    {
+      "narrativeId": "career-narrative.mole-whack",
+      "gameId": "mole-whack",
+      "professionId": "engineering.maintenance",
+      "shardId": "career-narrative-shard-03",
+      "messageIds": [
+        "message.mole-whack.arrival.v1"
+      ]
+    },
+    {
+      "narrativeId": "career-narrative.block-drop",
+      "gameId": "block-drop",
+      "professionId": "engineering.warehouse",
+      "shardId": "career-narrative-shard-03",
+      "messageIds": [
+        "message.block-drop.arrival.v1"
+      ]
+    },
+    {
+      "narrativeId": "career-narrative.star-raid",
+      "gameId": "star-raid",
+      "professionId": "adventure.pilot",
+      "shardId": "career-narrative-shard-03",
+      "messageIds": [
+        "message.star-raid.arrival.v1"
+      ]
+    },
+    {
+      "narrativeId": "career-narrative.road-rush",
+      "gameId": "road-rush",
+      "professionId": "engineering.driver",
+      "shardId": "career-narrative-shard-04",
+      "messageIds": [
+        "message.road-rush.arrival.v1"
+      ]
+    },
+    {
+      "narrativeId": "career-narrative.shadow-leap",
+      "gameId": "shadow-leap",
+      "professionId": "adventure.relicseeker",
+      "shardId": "career-narrative-shard-04",
+      "messageIds": [
+        "message.shadow-leap.arrival.v1"
+      ]
+    },
+    {
+      "narrativeId": "career-narrative.pendulum-tower",
+      "gameId": "pendulum-tower",
+      "professionId": "engineering.structural",
+      "shardId": "career-narrative-shard-04",
+      "messageIds": [
+        "message.pendulum-tower.arrival.v1"
+      ]
+    },
+    {
+      "narrativeId": "career-narrative.gold-miner",
+      "gameId": "gold-miner",
+      "professionId": "nature.miner",
+      "shardId": "career-narrative-shard-04",
+      "messageIds": [
+        "message.gold-miner.arrival.v1"
+      ]
+    }
+  ]
+}

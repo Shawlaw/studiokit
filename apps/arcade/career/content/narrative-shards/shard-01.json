@@ -1,0 +1,317 @@
+{
+  "schemaVersion": 1,
+  "contentVersion": "0.18.0",
+  "shardId": "career-narrative-shard-01",
+  "professionIds": [
+    "research.archivist",
+    "research.lattice",
+    "intel.risk",
+    "intel.tactics"
+  ],
+  "entries": [
+    {
+      "narrativeId": "career-narrative.memory-flip",
+      "gameId": "memory-flip",
+      "professionId": "research.archivist",
+      "sourceClueId": "CL-memory-flip",
+      "trigger": {
+        "clueId": "CL-memory-flip",
+        "kind": "pair.match",
+        "atLeast": 2
+      },
+      "settlementFacts": {
+        "commissionId": "memory-flip.T1",
+        "tier": 1,
+        "objective": {
+          "kind": "pair.match",
+          "atLeast": 3
+        },
+        "reward": {
+          "credits": 70,
+          "items": {},
+          "evidence": [],
+          "flags": []
+        },
+        "unlock": {
+          "all": []
+        },
+        "chapterGate": null
+      },
+      "clueTitle": "牌背存根指向旧抽屉",
+      "clueTeaser": "半张送货存根粘在牌背，收货处说旧港留着抽屉。",
+      "icon": "mail",
+      "readTitle": "把存根送回收货处",
+      "readBody": [
+        "最后一张牌翻开时，半张送货存根还粘在牌背。",
+        "收货处夜班把它收进旧码头的抽屉，等你去照地址送回。"
+      ],
+      "sender": "旧港收货处夜班",
+      "npc": "收货处的老周",
+      "npcSourceGameId": "memory-flip",
+      "invitationAction": "核对牌背送货存根",
+      "laterLabel": "让存根先留在牌堆旁",
+      "freshIntro": [
+        "你随最后一对牌翻开旧港的送货存根，按地址把半张纸送到旧码头。收货处的老周认出了柜号P-07，也认出了你投递的时间。",
+        "他把旧街照片和告示板方向交给你，让你先选一张做得成的活，不必立刻登记。"
+      ],
+      "existingIntro": "折光港的旧码头你还记得，收货处抽屉也仍在原处。老周拿出一张旧街照片，说这次只缺有人把存根编号和柜号对上；你可以听完再决定是否接活。",
+      "firstCommissionId": "memory-flip.T1",
+      "firstActionHint": "你愿意先完成三组有效配对，让老周核对存根吗？",
+      "firstReceipt": "三组配对对上，工钱当场结清。老周把存根缺角与旧街照片并排，问你还记得P-07曾被画在哪个街口。",
+      "nextAction": "看看差一张的照片能否补上",
+      "exitLabel": "把照片留在抽屉",
+      "pauseLine": "老周会把抽屉留着，等你下次再来核对。",
+      "returnLine": "你回到收货处，老周先递上那张没补全的旧街照片。",
+      "completedLine": "存根编号和旧照片终于能读在同一行了。",
+      "mainlineConnection": "P-07的旧编号与航报里的异常信号相连，可交给北环研究院比对。",
+      "optionalCrossover": {
+        "releaseVersion": "0.24",
+        "requiredProfessionIds": [
+          "research.archivist",
+          "research.lattice"
+        ],
+        "acceptanceRule": "双方均已主动接受",
+        "text": "若晶格研究员与档案分析员都已接受，瑾可以用薄镜划痕和老周的旧街照片互证柜号位置，只补一段共同回忆。"
+      },
+      "storyMessages": [
+        {
+          "messageId": "message.memory-flip.arrival.v1",
+          "professionId": "research.archivist",
+          "surface": "arrival",
+          "label": "收货处抽屉",
+          "text": "老周把P-07的旧街照片推到你面前：先看照片，还是先看告示板？",
+          "from": "收货处的老周"
+        }
+      ]
+    },
+    {
+      "narrativeId": "career-narrative.merge-2048",
+      "gameId": "merge-2048",
+      "professionId": "research.lattice",
+      "sourceClueId": "CL-merge-2048",
+      "trigger": {
+        "clueId": "CL-merge-2048",
+        "kind": "tile.merged",
+        "atLeast": 2
+      },
+      "settlementFacts": {
+        "commissionId": "merge-2048.T1",
+        "tier": 1,
+        "objective": {
+          "kind": "tile.created",
+          "atLeast": 1,
+          "minValue": {
+            "field": "value",
+            "value": 32
+          }
+        },
+        "reward": {
+          "credits": 70,
+          "items": {},
+          "evidence": [],
+          "flags": []
+        },
+        "unlock": {
+          "all": []
+        },
+        "chapterGate": null
+      },
+      "clueTitle": "格缝薄镜回到废料窗",
+      "clueTeaser": "薄镜不是晶格室的料，划痕却指向旧货柜的观察窗。",
+      "icon": "scroll",
+      "readTitle": "薄镜上的除名划痕",
+      "readBody": [
+        "数字散尽，格缝里那片薄镜先亮了一下。",
+        "废料窗值班的瑾说，登记本划掉了它，却没留签名，想请你照划痕送回去。"
+      ],
+      "sender": "晶格室废料窗",
+      "npc": "废料窗值班的瑾",
+      "npcSourceGameId": "merge-2048",
+      "invitationAction": "查看薄镜除名划痕",
+      "laterLabel": "把薄镜留在窗台边角",
+      "freshIntro": [
+        "你带着格缝里的薄镜到北环晶格室，瑾在登记本上找到了那道没有签名的划痕。它原本配过一只旧货柜的观察窗，柜号是P-07。",
+        "瑾给你留了一片边角料，建议你先去街口看告示板，把眼前的活做成第一份记录。"
+      ],
+      "existingIntro": "北环的废料窗你还认得，不必再登记一次。瑾只把薄镜推近灯光，说旧货柜的观察窗规格与P-07对得上；听不听，都由你。",
+      "firstCommissionId": "merge-2048.T1",
+      "firstActionHint": "你愿意先合出一个数值32的格子，让瑾看薄镜能否对齐吗？",
+      "firstReceipt": "数值32的格子合成了，瑾按薄镜透光重画了格线。她说边角料背后还有一道旧签名，问你想不想查是谁划掉了登记。",
+      "nextAction": "对照边角料上的旧签名",
+      "exitLabel": "把边角料夹回登记本",
+      "pauseLine": "瑾会把薄镜和登记本留在窗台，等你再来。",
+      "returnLine": "你再站到废料窗前，瑾先放下笔，把边角料翻到有划痕的一面。",
+      "completedLine": "薄镜、格线和旧货柜的尺寸终于对上了。",
+      "mainlineConnection": "P-07与航报里的旧号同源，薄镜可作研究院比对晶格读数的另一件实证。",
+      "optionalCrossover": {
+        "releaseVersion": "0.24",
+        "requiredProfessionIds": [
+          "research.archivist",
+          "research.lattice"
+        ],
+        "acceptanceRule": "双方均已主动接受",
+        "text": "若档案分析员与晶格研究员都已接受，可用老周照片的街口宽度对照瑾的薄镜曲率，确认同一只货柜，而不改写主线证据。"
+      },
+      "storyMessages": [
+        {
+          "messageId": "message.merge-2048.arrival.v1",
+          "professionId": "research.lattice",
+          "surface": "arrival",
+          "label": "晶格室废料窗",
+          "text": "瑾将薄镜偏到灯下：你想先看划痕，还是先看边角料？",
+          "from": "废料窗值班的瑾"
+        }
+      ]
+    },
+    {
+      "narrativeId": "career-narrative.blackjack",
+      "gameId": "blackjack",
+      "professionId": "intel.risk",
+      "sourceClueId": "CL-blackjack",
+      "trigger": {
+        "clueId": "CL-blackjack",
+        "kind": "hand.settled",
+        "atLeast": 2
+      },
+      "settlementFacts": {
+        "commissionId": "blackjack.T1",
+        "tier": 1,
+        "objective": {
+          "kind": "hand.settled",
+          "atLeast": 6
+        },
+        "reward": {
+          "credits": 70,
+          "items": {},
+          "evidence": [],
+          "flags": []
+        },
+        "unlock": {
+          "all": []
+        },
+        "chapterGate": null
+      },
+      "clueTitle": "风险单背面有旧街地址",
+      "clueTeaser": "磨白的签名下压着旧街地址，账房替落款人留着一格。",
+      "icon": "mail",
+      "readTitle": "没人来领的风险单",
+      "readBody": [
+        "牌桌收了，磨白签名的风险单还压在桌角。",
+        "账房外柜的阿德没有写退回，他把单据收进那一格，请你转交到旧港。"
+      ],
+      "sender": "账房外柜",
+      "npc": "账房外柜的阿德",
+      "npcSourceGameId": "blackjack",
+      "invitationAction": "辨认风险单磨白签名",
+      "laterLabel": "把单据留在账房外柜",
+      "freshIntro": [
+        "你替账房把没人来领的风险单送回折光港，阿德认出了落款人的笔迹。那人最后站在旧街照片前，照片背面写着P-07。",
+        "阿德抄下你的投递时间，建议你先在告示板接一张明码的活，把工钱和可疑旧账分开算。"
+      ],
+      "existingIntro": "账房外柜的格子还在，阿德却不重讲你是谁。他翻出那张旧街照片，说磨白签名与P-07的账页同出一手；你可以先看，再决定是否跟单。",
+      "firstCommissionId": "blackjack.T1",
+      "firstActionHint": "你愿意先打完六手评估，让阿德把结果和旧账分开看吗？",
+      "firstReceipt": "六手评估结清，阿德在单据边缘添了你的核验时间。他说照片里的街口被改过账，问你要不要查那次改账是谁批的。",
+      "nextAction": "核对旧账照片的改批处",
+      "exitLabel": "把风险单放回外柜",
+      "pauseLine": "阿德会替你压好单据，等你下次来核。",
+      "returnLine": "你回到外柜，阿德先把旧账照片翻到有折痕的一面。",
+      "completedLine": "六手评估和旧账的出入终于写成了同一张说明。",
+      "mainlineConnection": "P-07的账页改动与旧调度系统有关，核实笔迹能给异常信号补上可信来源。",
+      "optionalCrossover": {
+        "releaseVersion": "0.24",
+        "requiredProfessionIds": [
+          "intel.risk",
+          "intel.tactics"
+        ],
+        "acceptanceRule": "双方均已主动接受",
+        "text": "若风险分析师与战术规划师都已接受，可把旧账里的绕行标记和老陶棋谱的港道线叠在一起，看看同一街口为何被两次改线。"
+      },
+      "storyMessages": [
+        {
+          "messageId": "message.blackjack.arrival.v1",
+          "professionId": "intel.risk",
+          "surface": "arrival",
+          "label": "账房外柜",
+          "text": "阿德把风险单和照片分开：你想先核签名，还是先看照片？",
+          "from": "账房外柜的阿德"
+        }
+      ]
+    },
+    {
+      "narrativeId": "career-narrative.gomoku",
+      "gameId": "gomoku",
+      "professionId": "intel.tactics",
+      "sourceClueId": "CL-gomoku",
+      "trigger": {
+        "clueId": "CL-gomoku",
+        "kind": "stone.placed",
+        "atLeast": 4
+      },
+      "settlementFacts": {
+        "commissionId": "gomoku.T1",
+        "tier": 1,
+        "objective": {
+          "kind": "move.legal",
+          "atLeast": 8
+        },
+        "reward": {
+          "credits": 70,
+          "items": {},
+          "evidence": [],
+          "flags": []
+        },
+        "unlock": {
+          "all": []
+        },
+        "chapterGate": null
+      },
+      "clueTitle": "棋谱中线画成旧港道",
+      "clueTeaser": "旧谱页的中线被改成港道，棋室门口的信箱正等着它。",
+      "icon": "mail",
+      "readTitle": "下到一半的港道棋谱",
+      "readBody": [
+        "棋盘边多出一角旧谱，中线被画成旧港的一条水道。",
+        "对坐的棋友被港口叫走，看门的老陶把谱子收进信箱，请你送回去。"
+      ],
+      "sender": "对坐的棋友",
+      "npc": "棋室看门的老陶",
+      "npcSourceGameId": "gomoku",
+      "invitationAction": "沿棋谱中线复原港道",
+      "laterLabel": "把棋谱夹在棋盘边",
+      "freshIntro": [
+        "你循着棋谱里的港道线把旧谱送到旧港棋室，老陶替缺席的棋友补记了最后几手。他核到柜号P-07，也把半张旧街照片留在门房。",
+        "他建议你先去告示板找会看布局的活，不用勉强续完这盘棋。"
+      ],
+      "existingIntro": "旧港棋室的门你还找得到，老陶也不会把你当成新来的棋友。他只指着谱背新增的柜号，说旧街照片缺了另半张；你可以先听，不必续局。",
+      "firstCommissionId": "gomoku.T1",
+      "firstActionHint": "你愿意先完成八手合法落子，让老陶看这条港道从哪里分岔吗？",
+      "firstReceipt": "八手落子正常收局，老陶用谱背空白画下两道分岔。他说另半张照片在旧档室，问你想先查街口，还是先看柜号。",
+      "nextAction": "找旧档室的另半张照片",
+      "exitLabel": "把棋谱留在门口信箱",
+      "pauseLine": "老陶会把谱子夹好，等你回来接着看。",
+      "returnLine": "你回到棋室，老陶先指着谱背的两道分岔，等你选一边。",
+      "completedLine": "棋谱上的港道终于和旧街照片走到了同一处。",
+      "mainlineConnection": "P-07在旧港照片与航报抄件中重复出现，棋谱分岔可替研究院排除一条错误推断。",
+      "optionalCrossover": {
+        "releaseVersion": "0.24",
+        "requiredProfessionIds": [
+          "intel.tactics",
+          "research.archivist"
+        ],
+        "acceptanceRule": "双方均已主动接受",
+        "text": "若战术规划师与档案分析员都已接受，可以把棋谱缺页的撕口和老周存根的缺角拼合，确认照片曾从哪一页抽走。"
+      },
+      "storyMessages": [
+        {
+          "messageId": "message.gomoku.arrival.v1",
+          "professionId": "intel.tactics",
+          "surface": "arrival",
+          "label": "棋室门口信箱",
+          "text": "老陶把谱子翻到背面：你想先看港道分岔，还是先看柜号？",
+          "from": "棋室看门的老陶"
+        }
+      ]
+    }
+  ]
+}
