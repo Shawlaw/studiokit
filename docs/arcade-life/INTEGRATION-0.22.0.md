@@ -16,8 +16,8 @@
 | T04 投影/核心 gate | PASS（范围） | commission 100/100；profession-view 613/613 |
 | T05 世界工作/路线 | PASS（范围） | world-work 400/400；route 214/214；campaign 54/54；graph 1089/1089，48/48 |
 | T06a 工作/经历 UI | PASS（范围） | UI work/journal 37/37；town flow 26/26；recommend preload 15/15 |
-| T06b 邀请/工具 UI | 待终审 | invitation/tools、mailbox、receipt、passive |
-| T07 扩展/隐私/旧档测试 | 待复跑 | extension、privacy、legacy 三个新增测试 |
+| T06b 邀请/工具 UI | PASS（范围） | 316/316；t06b-reviewer PASS |
+| T07 扩展/隐私/旧档测试 | PASS（纯 Node 范围） | 2546/2546；t07-reviewer PASS |
 
 ## 2. 共享接口冻结
 
