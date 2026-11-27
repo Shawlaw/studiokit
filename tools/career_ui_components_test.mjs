@@ -744,6 +744,34 @@ check('scroll lock remains while lower panel open', doc.documentElement.classLis
 doc.dispatchEvent({ type: 'keydown', key: 'Escape' });
 check('scroll unlocks after last panel', !doc.documentElement.classList.contains('ac-career-ui-scroll-lock'));
 
+{
+  /* 0.22 legacy overlay（receipt）用同一 data-career-panel 约定但不属于组件 stack。
+     town→hangar→receipt 时 Esc 必须交给最上层 receipt，组件 shell 不能抢键。 */
+  const sharedDoc = doc;
+  const previousActive = sharedDoc.activeElement;
+  const legacyTrigger = sharedDoc.createElement('button');
+  sharedDoc.body.appendChild(legacyTrigger);
+  legacyTrigger.focus();
+  const town = components.CareerShell.create('town');
+  town.open({ title: '港口', body: bodyNode('港口正文') });
+  const hangar = components.CareerShell.create('hangar');
+  hangar.open({ title: '机库', body: bodyNode('机库正文') });
+  const legacy = sharedDoc.createElement('div');
+  legacy.setAttribute('data-career-panel', 'receipt');
+  sharedDoc.body.appendChild(legacy);
+  sharedDoc.dispatchEvent({ type: 'keydown', key: 'Escape' });
+  check('Esc with a legacy receipt above does not close the component shell',
+    sharedDoc.querySelector('[data-career-panel="hangar"]') !== null && sharedDoc.querySelector('[data-career-panel="town"]') !== null,
+    { panels: sharedDoc.querySelectorAll('[data-career-panel]').length });
+  legacy.remove();
+  sharedDoc.dispatchEvent({ type: 'keydown', key: 'Escape' });
+  check('Esc closes the component shell again once it is topmost',
+    sharedDoc.querySelector('[data-career-panel="hangar"]') === null && sharedDoc.querySelector('[data-career-panel="town"]') !== null);
+  town.close();
+  legacyTrigger.remove();
+  if (previousActive && typeof previousActive.focus === 'function') previousActive.focus();
+}
+
 const loadingRoot = components.CareerShell({ panelKey: 'receipt', title: '合成回执', state: 'loading', body: bodyNode('结构仍在') });
 const loadingPanel = loadingRoot.querySelector('[role="dialog"]');
 eq('loading shell state', loadingPanel.getAttribute('data-shell-state'), 'loading');

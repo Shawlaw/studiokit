@@ -876,9 +876,25 @@
     return null;
   }
 
+  /**
+   * 旧面板（receipt/mailbox 的 0.22 overlay）不是组件 shell，但同样带
+   * `[data-career-panel]` 且用 document capture 处理 Esc。只有本 shell 的 overlay
+   * 是文档中最后一个 career 面板时，它才是真正的顶层；否则把按键让给上层，
+   * 避免 town→hangar→receipt 时 Esc 关掉中间层。
+   */
+  function isTopCareerPanel(record) {
+    const doc = record.doc;
+    if (!doc || typeof doc.querySelectorAll !== 'function') return true;
+    const panels = Array.from(doc.querySelectorAll('[data-career-panel]'));
+    if (!panels.length) return true;
+    const overlay = record.rootNode && record.rootNode.querySelector ? record.rootNode.querySelector('.ac-career-ui__overlay') : null;
+    return panels[panels.length - 1] === overlay;
+  }
+
   function onShellKeyDown(manager, event) {
     const record = manager.record;
     if (!record || !event || topManager(record.doc) !== manager) return;
+    if (!isTopCareerPanel(record)) return;
     const key = event.key || '';
     const code = typeof event.keyCode === 'number' ? event.keyCode : 0;
     if (key === 'Escape' || key === 'Esc' || code === 27) {
