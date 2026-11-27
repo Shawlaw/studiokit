@@ -61,6 +61,7 @@
   const RECOMMEND_TITLE = '你想先走这条路吗？';
   const RECOMMEND_KIND_TEXT = { milestone: '能推进这一段', step: '能积攒下一步所需' };
   const RECOMMEND_GOAL_TITLE = '你愿意完成';
+  const DATA_CLOSE_REASONS = ['career-archived', 'career-reset', 'career-imported'];
   const RENTAL_LEAD = '阿砾：标准舰可以免费借。';
   const CAMPAIGN_SUBTITLE = '你想继续哪一段？';
   const INTRO_GOAL = '告示板上钉着今天的活，你想先接哪一张？';
@@ -627,7 +628,7 @@
         title: cleanText(entry.title) || '旧港的一张单子',
         summary: cleanText(entry.summary),
         issuer: world ? '' : cleanText(entry.issuer),
-        objective: isObject(entry.objective) ? entry.objective : null,
+        objective: world ? null : (isObject(entry.objective) ? entry.objective : null),
         rewardText: world ? '' : rewardTextOf(entry.reward, names),
         category: world ? 'world' : 'profession',
         professionId: world ? '' : idText(entry.professionId),
@@ -697,8 +698,16 @@
     if (!isObject(view) || !Array.isArray(view.professions) || view.professions.length !== 1) return false;
     const origin = idText(view.originGameId);
     if (!origin) return false;
+    const state = cleanText(view.professions[0].state).toLowerCase();
+    if (state !== 'accepted' && state !== 'developed' && state !== 'completed') return false;
     const gameId = idText(context && (context.gameId || (isObject(context.api) ? context.api.gameId : null)));
     return !gameId || origin === gameId;
+  }
+
+  function viewHasTool(view, toolId) {
+    if (!isObject(view) || !Array.isArray(view.tools)) return false;
+    const id = idText(toolId);
+    return view.tools.some((tool) => isObject(tool) && idText(tool.toolId) === id);
   }
 
   function arrivalLineOf(context) {
@@ -1019,6 +1028,7 @@
     let unlockedSet = null;
     let projectedView = emptyCareerView();
     let viewReady = false;
+    let unsubscribeCareer = null;
     let continuations = Object.create(null);
     let failedStart = null;
     const startingIds = Object.create(null);
@@ -1371,9 +1381,18 @@
 
       /* 0.22 不再给固定首单或机库特例；出航区只保留真实机库入口。 */
       flightList.hidden = true;
-      hangarBtn.hidden = typeof openerOf(liveContext, 'openHangar') !== 'function';
+      hangarBtn.hidden = !viewHasTool(projectedView, 'hangar') ||
+        typeof openerOf(liveContext, 'openHangar') !== 'function';
       flightDetails.hidden = hangarBtn.hidden;
       flightRental.textContent = rentalHintOf();
+
+      receiptBtn.hidden = !viewHasTool(projectedView, 'wallet') ||
+        typeof openerOf(liveContext, 'openReceipt') !== 'function';
+      marketBtn.hidden = !viewHasTool(projectedView, 'shop') ||
+        typeof openerOf(liveContext, 'openMarket') !== 'function';
+      workshopBtn.hidden = !viewHasTool(projectedView, 'workshop') ||
+        typeof openerOf(liveContext, 'openWorkshop') !== 'function';
+      more.hidden = marketBtn.hidden && workshopBtn.hidden;
 
       rows.filter((row) => !mainId || row.commissionId !== mainId)
         .forEach((row) => freeList.appendChild(renderRow(row, boardReady, {})));
@@ -1685,6 +1704,39 @@
       }
     }
 
+    function closeThisPanel() {
+      if (mounted) close();
+      else destroy();
+    }
+
+    function onCareerDataChangedEvent(event) {
+      if (!alive || !isCurrent()) return;
+      const reason = cleanText(event && event.reason).toLowerCase();
+      if (DATA_CLOSE_REASONS.indexOf(reason) >= 0) {
+        closeThisPanel();
+        return;
+      }
+      refresh(liveContext);
+    }
+
+    function subscribeCareerData(context2) {
+      if (typeof unsubscribeCareer === 'function') {
+        try { unsubscribeCareer(); } catch (err) { /* ignore */ }
+      }
+      unsubscribeCareer = null;
+      const provider = context2 && typeof context2.onCareerDataChanged === 'function'
+        ? context2.onCareerDataChanged
+        : (context2 && isObject(context2.api) && typeof context2.api.onCareerDataChanged === 'function'
+          ? context2.api.onCareerDataChanged : null);
+      if (!provider) return;
+      try {
+        const unsubscribe = provider(onCareerDataChangedEvent);
+        if (typeof unsubscribe === 'function') unsubscribeCareer = unsubscribe;
+      } catch (err) {
+        unsubscribeCareer = null;
+      }
+    }
+
     function refresh(next) {
       if (!isCurrent()) return sheet;
       const context2 = isObject(next) ? next : {};
@@ -1692,11 +1744,16 @@
       else overlay.classList.remove('is-reduced-motion');
       liveContext = context2;
       materialNames = materialNamesOf(context2);
+      projectedView = emptyCareerView();
+      viewReady = false;
+      unlockedSet = null;
       setStatus('');
       showStatusRetry(null);
+      renderList();
       renderOrigin();
       renderCampaign();
       renderWallet();
+      subscribeCareerData(context2);
       loadBoard();
       return sheet;
     }
@@ -1704,6 +1761,10 @@
     function destroy() {
       alive = false;
       requestSeq += 1;
+      if (typeof unsubscribeCareer === 'function') {
+        try { unsubscribeCareer(); } catch (err) { /* ignore */ }
+        unsubscribeCareer = null;
+      }
     }
 
     townView.addEventListener('click', onClick, false);
@@ -1718,6 +1779,7 @@
       renderOrigin();
       renderWallet();
       renderCampaign();
+      subscribeCareerData(liveContext);
       loadBoard();
     }
 

@@ -78,6 +78,7 @@
   const STATUS_NAVIGATING = '已经登记，正在去星塔。';
   const ANNOUNCE_CHAPTERS_EXPANDED = '更早的信已经展开。';
   const ANNOUNCE_CHAPTERS_COLLAPSED = '更早的信已经收起。';
+  const DATA_CLOSE_REASONS = ['career-archived', 'career-reset', 'career-imported'];
   const STAGE_RANK = { DORMANT: 0, GLIMPSED: 1, CURIOUS: 2, LOCAL: 3, RESIDENT: 4, EXPLORER: 5 };
   const CHAPTER_ORDER = ['C0', 'C1', 'C2', 'C3', 'C4', 'C5'];
   const CHAPTER_FLAG = {
@@ -1254,6 +1255,8 @@
     if (!isObject(view) || !isArray(view.professions) || view.professions.length !== 1) return false;
     const origin = idText(view.originGameId);
     if (!origin) return false;
+    const state = cleanText(view.professions[0] && view.professions[0].state).toLowerCase();
+    if (state !== 'accepted' && state !== 'developed' && state !== 'completed') return false;
     const gameId = idText(isObject(context) ? (context.gameId || (isObject(context.api) ? context.api.gameId : null)) : null);
     return !gameId || origin === gameId;
   }
@@ -1411,8 +1414,8 @@
     return null;
   }
 
-  /** 来源首信：优先 ctx.chapter.origins 中按当前来源游戏匹配，其次首条。 */
-  function originLetterOf(context, chapters) {
+  /** 首次到港只按已接受起源挑来源首信；不读 firstSourceGame / 线索发现顺序。 */
+  function originLetterOf(context, chapters, originGameId) {
     const c = isObject(context) ? context : {};
     let origins = [];
     const candidates = [c.chapter, isObject(c.chapters) ? c.chapters.C1 : null, isObject(c.content) ? c.content.chapter : null];
@@ -1424,26 +1427,12 @@
       }
     }
     if (!origins.length) return null;
-    let sourceGame = cleanText(c.state && c.state.firstSourceGame);
-    if (!sourceGame && isObject(c.state) && isObject(c.state.clues)) {
-      const clueIds = Object.keys(c.state.clues);
-      for (let i = 0; i < clueIds.length; i += 1) {
-        const row = c.state.clues[clueIds[i]];
-        if (isObject(row) && cleanText(row.sourceGame)) { sourceGame = cleanText(row.sourceGame); break; }
-      }
-    }
-    if (!sourceGame && typeof c.originIntro === 'function') {
-      try {
-        const intro = c.originIntro();
-        if (isObject(intro)) sourceGame = cleanText(intro.sourceGame);
-      } catch (err) { /* 忽略 */ }
-    }
+    const acceptedOrigin = idText(originGameId) || idText(c.state && c.state.acceptedOriginGameId);
+    if (!acceptedOrigin) return null;
     let chosen = null;
     origins.forEach((entry) => {
-      if (!isObject(entry)) return;
-      if (!chosen && cleanText(entry.gameId) === sourceGame) chosen = entry;
+      if (isObject(entry) && cleanText(entry.gameId) === acceptedOrigin) chosen = entry;
     });
-    if (!chosen) chosen = origins[0];
     return isObject(chosen) && isObject(chosen.c0Letter) ? chosen : null;
   }
 
@@ -1525,6 +1514,8 @@
     let projectedReady = false;
     let projectionSeq = 0;
     let projectionHosts = null;
+    let unsubscribeCareer = null;
+    let alive = true;
     const previousFocus = doc.activeElement && typeof doc.activeElement.focus === 'function' ? doc.activeElement : null;
 
     function make(tag, className, text) {
@@ -1672,7 +1663,7 @@
       if (!c0 || (c0.state !== 'active' && c0.state !== 'available')) return null;
       const c0File = isObject(liveContext.chapters) ? liveContext.chapters.C0 : null;
       const arrival = isObject(c0File && c0File.arrival) ? c0File.arrival : null;
-      const origin = originLetterOf(liveContext, isObject(liveContext.chapters) ? liveContext.chapters : {});
+      const origin = originLetterOf(liveContext, isObject(liveContext.chapters) ? liveContext.chapters : {}, idText(projectedView.originGameId));
       const letter = origin ? origin.c0Letter : null;
       const sender = cleanText(letter && letter.from) || cleanText(arrival && arrival.from) || '旧港 · 收货窗口';
       const body = cleanText(letter && letter.body) || cleanText(arrival && arrival.body);
@@ -1974,6 +1965,39 @@
       });
     }
 
+    function closeThisPanel() {
+      if (mounted) close();
+      else destroy();
+    }
+
+    function onCareerDataChangedEvent(event) {
+      if (!alive) return;
+      const reason = cleanText(event && event.reason).toLowerCase();
+      if (DATA_CLOSE_REASONS.indexOf(reason) >= 0) {
+        closeThisPanel();
+        return;
+      }
+      refresh(liveContext);
+    }
+
+    function subscribeCareerData(context2) {
+      if (typeof unsubscribeCareer === 'function') {
+        try { unsubscribeCareer(); } catch (err) { /* ignore */ }
+      }
+      unsubscribeCareer = null;
+      const provider = context2 && typeof context2.onCareerDataChanged === 'function'
+        ? context2.onCareerDataChanged
+        : (context2 && isObject(context2.api) && typeof context2.api.onCareerDataChanged === 'function'
+          ? context2.api.onCareerDataChanged : null);
+      if (!provider) return;
+      try {
+        const unsubscribe = provider(onCareerDataChangedEvent);
+        if (typeof unsubscribe === 'function') unsubscribeCareer = unsubscribe;
+      } catch (err) {
+        unsubscribeCareer = null;
+      }
+    }
+
     function paint() {
       projectionSeq += 1;
       projectedView = null;
@@ -2068,12 +2092,14 @@
     }
 
     function start() {
+      subscribeCareerData(liveContext);
       paint();
     }
 
     function refresh(next) {
       liveContext = isObject(next) ? next : liveContext;
       setStatus('');
+      subscribeCareerData(liveContext);
       paint();
       if (mounted) {
         const active = doc.activeElement;
@@ -2083,7 +2109,12 @@
     }
 
     function destroy() {
+      alive = false;
       view.textContent = '';
+      if (typeof unsubscribeCareer === 'function') {
+        try { unsubscribeCareer(); } catch (err) { /* ignore */ }
+        unsubscribeCareer = null;
+      }
     }
 
     return {

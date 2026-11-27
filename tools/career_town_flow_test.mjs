@@ -310,7 +310,12 @@ function projectedViewOf(ids, nextActionId) {
     professions: [{ professionId: 'engineering.structural', displayName: '建筑工程师', state: 'accepted', paused: false, active: true }],
     commissions: rows,
     story: { nextAction: nextActionId ? { kind: 'commission', commissionId: nextActionId, label: commissionById(nextActionId).title } : null, messages: [], history: [] },
-    tools: [],
+    tools: [
+      { toolId: 'wallet', name: '钱包' },
+      { toolId: 'shop', name: '商店' },
+      { toolId: 'workshop', name: '工作台' },
+      { toolId: 'hangar', name: '机库' },
+    ],
   };
 }
 
@@ -325,6 +330,10 @@ function basicCtx(overrides = {}) {
     ] },
     items: itemsContent,
     registry: { games: registryContent.games },
+    openHangar: () => {},
+    openReceipt: () => {},
+    openMarket: () => {},
+    openWorkshop: () => {},
     careerView: (input) => {
       calls.view.push(input);
       return ctx.__projection || projectedViewOf(['pendulum-tower.T1', 'memory-flip.T1', 'star-raid.T1'], 'pendulum-tower.T1');
