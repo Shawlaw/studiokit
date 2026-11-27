@@ -564,6 +564,31 @@
     return cleanText(value).replace(/\s+/g, '');
   }
 
+  /** 0.23 T13：仅在 bridge 显式注入 T11 组件时切换；缺失时保留 0.18 面板。 */
+  function worldComponentsOf(context) {
+    const direct = context && context.uiComponents;
+    if (direct === true && root.ArcadeCareerUI && isObject(root.ArcadeCareerUI.components)) return root.ArcadeCareerUI.components;
+    if (!isObject(direct)) return null;
+    const required = ['CareerShell', 'JournalTimeline', 'NPCDialogue', 'StoryCard', 'icon'];
+    return required.every((name) => typeof direct[name] === 'function') ? direct : null;
+  }
+
+  function worldShellManager(context, panelKey, body, onClose) {
+    const components = worldComponentsOf(context);
+    if (!components || typeof components.CareerShell.create !== 'function') return null;
+    const manager = components.CareerShell.create(panelKey);
+    const result = manager.open({
+      panelKey: panelKey,
+      title: PANEL_LABEL,
+      state: 'normal',
+      size: 'default',
+      body: body,
+      reducedMotion: !!context.reducedMotion,
+      onClose: onClose,
+    });
+    return result.ok ? { manager: manager, panel: result.panel } : null;
+  }
+
   function arrayOfText(value) {
     if (!isArray(value)) return [];
     const out = [];
@@ -1525,27 +1550,6 @@
       return node;
     }
 
-    const overlay = make('div', OVERLAY_CLASS);
-    overlay.setAttribute('data-career-panel', PANEL_KEY);
-    if (liveReduced) overlay.classList.add('is-reduced-motion');
-
-    const sheet = make('div', SHEET_CLASS);
-    sheet.setAttribute('role', 'dialog');
-    sheet.setAttribute('aria-modal', 'true');
-    sheet.setAttribute('aria-labelledby', TITLE_ID);
-    sheet.setAttribute('aria-describedby', DESC_ID);
-    sheet.setAttribute('tabindex', '-1');
-
-    const head = make('div', 'ac-career-sheet__head');
-    const heading = make('h2', 'ac-career-sheet__title', PANEL_LABEL);
-    heading.id = TITLE_ID;
-    const closeBtn = make('button', 'ac-career-icon-btn ac-career-close', '×');
-    closeBtn.type = 'button';
-    closeBtn.setAttribute('aria-label', CLOSE_LABEL);
-    head.appendChild(heading);
-    head.appendChild(closeBtn);
-
-    const body = make('div', 'ac-career-sheet__body');
     const where = make('p', 'ac-career-world__where', WHERE_TEXT);
     where.id = DESC_ID;
     const view = make('div', 'ac-career-world__view');
@@ -1553,18 +1557,58 @@
     const statusLine = make('p', 'ac-career-status');
     statusLine.hidden = true;
 
+    const body = make('div', 'ac-career-ui__body');
     body.appendChild(where);
     body.appendChild(view);
     body.appendChild(statusLine);
-    sheet.appendChild(head);
-    sheet.appendChild(body);
-    overlay.appendChild(sheet);
 
     const liveRegion = make('div', 'ac-career-sr-only');
     liveRegion.setAttribute('role', 'status');
     liveRegion.setAttribute('aria-live', 'polite');
     liveRegion.setAttribute('aria-atomic', 'true');
-    overlay.appendChild(liveRegion);
+
+    let shellMount = null;
+    let overlay = null;
+    let sheet = null;
+    let closeBtn = null;
+    let p = null;
+    if (worldComponentsOf(context) && mounted) {
+      shellMount = worldShellManager(context, PANEL_KEY, body, () => {
+        if (p && p.worldShell) {
+          if (typeof p.destroy === 'function') p.destroy();
+          if (panel === p) panel = null;
+        }
+      });
+      if (!shellMount) return null;
+      sheet = shellMount.panel;
+      overlay = sheet.parentNode;
+      closeBtn = sheet.querySelector ? sheet.querySelector('.ac-career-ui__close') : null;
+      overlay.appendChild(liveRegion);
+    } else {
+      overlay = make('div', OVERLAY_CLASS);
+      overlay.setAttribute('data-career-panel', PANEL_KEY);
+      if (liveReduced) overlay.classList.add('is-reduced-motion');
+
+      sheet = make('div', SHEET_CLASS);
+      sheet.setAttribute('role', 'dialog');
+      sheet.setAttribute('aria-modal', 'true');
+      sheet.setAttribute('aria-labelledby', TITLE_ID);
+      sheet.setAttribute('aria-describedby', DESC_ID);
+      sheet.setAttribute('tabindex', '-1');
+
+      const head = make('div', 'ac-career-sheet__head');
+      const heading = make('h2', 'ac-career-sheet__title', PANEL_LABEL);
+      heading.id = TITLE_ID;
+      closeBtn = make('button', 'ac-career-icon-btn ac-career-close', '×');
+      closeBtn.type = 'button';
+      closeBtn.setAttribute('aria-label', CLOSE_LABEL);
+      head.appendChild(heading);
+      head.appendChild(closeBtn);
+      sheet.appendChild(head);
+      sheet.appendChild(body);
+      overlay.appendChild(sheet);
+      overlay.appendChild(liveRegion);
+    }
 
     function announce(text) {
       const value = cleanText(text);
@@ -1906,6 +1950,16 @@
       if (!rows.length) return null;
       const section = make('section', 'ac-career-world__section ac-career-world__projected-messages');
       section.appendChild(make('h3', 'ac-career-world__heading', MESSAGES_HEADING));
+      const components = worldComponentsOf(liveContext);
+      if (components && typeof components.NPCDialogue === 'function') {
+        const row = rows[0];
+        section.appendChild(components.NPCDialogue({
+          name: row.from || '港口消息',
+          paragraphs: [row.text || '港里有一句回话。'],
+          state: 'optional',
+        }));
+        return section;
+      }
       rows.forEach((row) => {
         const item = make('div', 'ac-career-world__journal-item');
         if (row.from) item.appendChild(make('p', 'ac-career-world__journal-label', row.from));
@@ -1926,6 +1980,14 @@
           at: publicTimeText(row && row.at),
         }))
         .filter((row) => row.label);
+      const components = worldComponentsOf(liveContext);
+      if (components && typeof components.JournalTimeline === 'function') {
+        section.appendChild(components.JournalTimeline({
+          state: rows.length ? 'filled' : 'empty',
+          events: rows,
+        }));
+        return section;
+      }
       if (!rows.length) {
         section.appendChild(make('p', 'ac-career-world__journal-empty', JOURNAL_EMPTY));
         return section;
@@ -2117,7 +2179,7 @@
       }
     }
 
-    return {
+    p = {
       doc: doc,
       overlay: overlay,
       sheet: sheet,
@@ -2129,15 +2191,21 @@
       destroy: destroy,
       announce: announce,
       setStatus: setStatus,
+      worldShell: shellMount && shellMount.manager,
       buildModel: function () { return buildModel(liveContext); },
     };
+    return p;
   }
 
   /** 关闭旧港来信面板并把焦点还给打开前的元素（可重复调用）。 */
   function close() {
     const current = panel;
-    panel = null;
     if (!current) return false;
+    if (current.worldShell) {
+      current.worldShell.close();
+      return true;
+    }
+    panel = null;
     try {
       current.doc.removeEventListener('keydown', current.onKeyDown, true);
     } catch (err) {
@@ -2177,11 +2245,13 @@
 
     const built = buildPanel(ctx, true);
     if (!built) return null;
-    if (!doc.body) return null;
-    try {
-      doc.body.appendChild(built.overlay);
-    } catch (err) {
-      return null;
+    if (!built.worldShell) {
+      if (!doc.body) return null;
+      try {
+        doc.body.appendChild(built.overlay);
+      } catch (err) {
+        return null;
+      }
     }
 
     function onKeyDown(event) {
@@ -2222,33 +2292,35 @@
       }
     }
 
-    /* 点遮罩关闭：必须在遮罩上按下并抬起，面板内拖动/选字不会误关。 */
-    let pressedBackdrop = false;
-    built.overlay.addEventListener(
-      'pointerdown',
-      function (event) {
-        pressedBackdrop = !!(event && event.target === built.overlay);
-      },
-      false
-    );
-    built.overlay.addEventListener(
-      'pointercancel',
-      function () {
-        pressedBackdrop = false;
-      },
-      false
-    );
-    built.overlay.addEventListener(
-      'click',
-      function (event) {
-        const onBackdrop = !!(event && event.target === built.overlay) && pressedBackdrop;
-        pressedBackdrop = false;
-        if (onBackdrop) close();
-      },
-      false
-    );
-    built.closeBtn.addEventListener('click', function () { close(); }, false);
-    doc.addEventListener('keydown', onKeyDown, true);
+    if (!built.worldShell) {
+      /* 点遮罩关闭：必须在遮罩上按下并抬起，面板内拖动/选字不会误关。 */
+      let pressedBackdrop = false;
+      built.overlay.addEventListener(
+        'pointerdown',
+        function (event) {
+          pressedBackdrop = !!(event && event.target === built.overlay);
+        },
+        false
+      );
+      built.overlay.addEventListener(
+        'pointercancel',
+        function () {
+          pressedBackdrop = false;
+        },
+        false
+      );
+      built.overlay.addEventListener(
+        'click',
+        function (event) {
+          const onBackdrop = !!(event && event.target === built.overlay) && pressedBackdrop;
+          pressedBackdrop = false;
+          if (onBackdrop) close();
+        },
+        false
+      );
+      built.closeBtn.addEventListener('click', function () { close(); }, false);
+      doc.addEventListener('keydown', onKeyDown, true);
+    }
 
     panel = {
       doc: doc,
@@ -2258,6 +2330,7 @@
       onKeyDown: onKeyDown,
       refresh: built.refresh,
       destroy: built.destroy,
+      worldShell: built.worldShell,
     };
     built.start();
     safelyFocus(built.closeBtn);

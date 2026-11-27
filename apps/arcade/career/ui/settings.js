@@ -143,9 +143,32 @@
     }
   }
 
+  /** 0.23 T13：bridge 注入 T11 组件时使用共享浮层；失效订阅保持到关闭才退订。 */
+  function settingsComponentsOf(context) {
+    const direct = context && context.uiComponents;
+    if (direct === true && root.ArcadeCareerUI && isObject(root.ArcadeCareerUI.components)) return root.ArcadeCareerUI.components;
+    if (!isObject(direct)) return null;
+    return !!direct.CareerShell && typeof direct.CareerShell.create === 'function' ? direct : null;
+  }
+
+  function settingsActionButton(context, label, primary, attrs) {
+    const components = settingsComponentsOf(context);
+    if (!components || typeof components.PrimaryAction !== 'function') return null;
+    const button = primary
+      ? components.PrimaryAction({ label: label, onClick: undefined })
+      : components.SecondaryAction({ label: label, variant: 'border', onClick: undefined });
+    if (attrs) Object.keys(attrs).forEach((key) => button.setAttribute(key, String(attrs[key])));
+    return button;
+  }
+
   /** 关闭设置浮层并把焦点还给打开前的元素（可重复调用）。 */
   function close() {
     const current = panel;
+    if (!current) return false;
+    if (current.settingsShell) {
+      current.settingsShell.close();
+      return true;
+    }
     panel = null;
     if (unsubscribeCareerChanges) {
       try { unsubscribeCareerChanges(); } catch (err) { /* ignore */ }
@@ -196,27 +219,17 @@
       return node;
     }
 
-    const overlay = make('div', OVERLAY_CLASS);
-    overlay.setAttribute('data-career-panel', 'settings');
-    /* ctx.reducedMotion 与系统偏好双保险：由 bridge 传入的偏好直接关掉动画。 */
-    if (context.reducedMotion) overlay.classList.add('is-reduced-motion');
+    function actionButton(label, className, attrs) {
+      const primary = /ac-career-btn--primary|ac-career-btn--danger/.test(className || '');
+      const button = settingsActionButton(context, label, primary, attrs || {});
+      if (button) return button;
+      const legacy = make('button', className, label);
+      legacy.type = 'button';
+      if (attrs) Object.keys(attrs).forEach((key) => legacy.setAttribute(key, String(attrs[key])));
+      return legacy;
+    }
 
-    const sheet = make('div', SHEET_CLASS);
-    sheet.setAttribute('role', 'dialog');
-    sheet.setAttribute('aria-modal', 'true');
-    sheet.setAttribute('aria-labelledby', TITLE_ID);
-    sheet.setAttribute('tabindex', '-1');
-
-    const head = make('div', 'ac-career-sheet__head');
-    const heading = make('h2', 'ac-career-sheet__title', PANEL_LABEL);
-    heading.id = TITLE_ID;
-    const closeBtn = make('button', 'ac-career-icon-btn ac-career-close', '×');
-    closeBtn.type = 'button';
-    closeBtn.setAttribute('aria-label', '收起设置');
-    head.appendChild(heading);
-    head.appendChild(closeBtn);
-
-    const body = make('div', 'ac-career-sheet__body');
+    const body = make('div', settingsComponentsOf(context) ? 'ac-career-ui__stack' : 'ac-career-sheet__body');
 
     const switchRow = make('div', 'ac-career-setting');
     const switchBtn = make('button', 'ac-career-switch');
@@ -240,8 +253,8 @@
     switchRow.appendChild(switchDesc);
 
     const dangerRow = make('div', 'ac-career-setting ac-career-setting--danger');
-    const resetBtn = make('button', 'ac-career-btn ac-career-btn--ghost', RESET_LABEL);
-    resetBtn.type = 'button';
+    let resetBtn = null;
+    resetBtn = actionButton(RESET_LABEL, 'ac-career-btn ac-career-btn--ghost', {});
 
     const confirmBox = make('div', 'ac-career-confirm');
     confirmBox.hidden = true;
@@ -278,12 +291,8 @@
       archiveRow = make('div', 'ac-career-setting ac-career-setting--archive');
       const archiveTitle = make('h3', 'ac-career-setting__title', ARCHIVE_TITLE);
       const archiveDesc = make('p', 'ac-career-switch__desc', ARCHIVE_DESC);
-      exportBtn = make('button', 'ac-career-btn ac-career-btn--ghost', EXPORT_LABEL);
-      exportBtn.type = 'button';
-      exportBtn.setAttribute('data-action', 'export-career-life');
-      importBtn = make('button', 'ac-career-btn ac-career-btn--ghost', IMPORT_LABEL);
-      importBtn.type = 'button';
-      importBtn.setAttribute('data-action', 'import-career-life');
+      exportBtn = actionButton(EXPORT_LABEL, 'ac-career-btn ac-career-btn--ghost', { 'data-action': 'export-career-life' });
+      importBtn = actionButton(IMPORT_LABEL, 'ac-career-btn ac-career-btn--ghost', { 'data-action': 'import-career-life' });
       const archiveActions = make('div', 'ac-career-confirm__actions');
       archiveActions.appendChild(exportBtn);
       archiveActions.appendChild(importBtn);
@@ -343,21 +352,15 @@
       careerArchiveRow.appendChild(make('p', 'ac-career-switch__desc', CAREER_ARCHIVE_DESC));
       const actions = make('div', 'ac-career-confirm__actions');
       if (canFreeze) {
-        freezeBtn = make('button', 'ac-career-btn ac-career-btn--ghost', FREEZE_LABEL);
-        freezeBtn.type = 'button';
-        freezeBtn.setAttribute('data-action', 'freeze-career');
+        freezeBtn = actionButton(FREEZE_LABEL, 'ac-career-btn ac-career-btn--ghost', { 'data-action': 'freeze-career' });
         actions.appendChild(freezeBtn);
       }
       if (canUnfreeze) {
-        unfreezeBtn = make('button', 'ac-career-btn ac-career-btn--ghost', UNFREEZE_LABEL);
-        unfreezeBtn.type = 'button';
-        unfreezeBtn.setAttribute('data-action', 'unfreeze-career');
+        unfreezeBtn = actionButton(UNFREEZE_LABEL, 'ac-career-btn ac-career-btn--ghost', { 'data-action': 'unfreeze-career' });
         actions.appendChild(unfreezeBtn);
       }
       if (canResetAll) {
-        resetAllBtn = make('button', 'ac-career-btn ac-career-btn--danger', RESET_ALL_LABEL);
-        resetAllBtn.type = 'button';
-        resetAllBtn.setAttribute('data-action', 'reset-all-career');
+        resetAllBtn = actionButton(RESET_ALL_LABEL, 'ac-career-btn ac-career-btn--danger', { 'data-action': 'reset-all-career' });
         actions.appendChild(resetAllBtn);
       }
       careerArchiveRow.appendChild(actions);
@@ -411,21 +414,66 @@
     body.appendChild(dangerRow);
     if (archiveRow) body.appendChild(archiveRow);
     if (careerArchiveRow) body.appendChild(careerArchiveRow);
-    sheet.appendChild(head);
-    sheet.appendChild(body);
-    overlay.appendChild(sheet);
-
     const liveRegion = make('div', 'ac-career-sr-only');
     liveRegion.setAttribute('role', 'status');
     liveRegion.setAttribute('aria-live', 'polite');
     liveRegion.setAttribute('aria-atomic', 'true');
-    overlay.appendChild(liveRegion);
 
-    if (!doc.body) return null;
-    try {
-      doc.body.appendChild(overlay);
-    } catch (err) {
-      return null;
+    let shellMount = null;
+    let overlay = null;
+    let sheet = null;
+    let closeBtn = null;
+    if (settingsComponentsOf(context)) {
+      const components = settingsComponentsOf(context);
+      const manager = components.CareerShell.create('settings');
+      const result = manager.open({
+        panelKey: 'settings',
+        title: PANEL_LABEL,
+        state: 'normal',
+        size: 'small',
+        body: body,
+        reducedMotion: !!context.reducedMotion,
+        onClose: () => {
+          if (panel && panel.settingsShell === manager) {
+            if (unsubscribeCareerChanges) {
+              try { unsubscribeCareerChanges(); } catch (err) { /* ignore */ }
+              unsubscribeCareerChanges = null;
+            }
+            panel = null;
+          }
+        },
+      });
+      if (!result.ok) return null;
+      shellMount = manager;
+      sheet = result.panel;
+      overlay = sheet.parentNode;
+      closeBtn = sheet.querySelector ? sheet.querySelector('.ac-career-ui__close') : null;
+      overlay.appendChild(liveRegion);
+    } else {
+      overlay = make('div', OVERLAY_CLASS);
+      overlay.setAttribute('data-career-panel', 'settings');
+      if (context.reducedMotion) overlay.classList.add('is-reduced-motion');
+
+      sheet = make('div', SHEET_CLASS);
+      sheet.setAttribute('role', 'dialog');
+      sheet.setAttribute('aria-modal', 'true');
+      sheet.setAttribute('aria-labelledby', TITLE_ID);
+      sheet.setAttribute('tabindex', '-1');
+
+      const head = make('div', 'ac-career-sheet__head');
+      const heading = make('h2', 'ac-career-sheet__title', PANEL_LABEL);
+      heading.id = TITLE_ID;
+      closeBtn = make('button', 'ac-career-icon-btn ac-career-close', '×');
+      closeBtn.type = 'button';
+      closeBtn.setAttribute('aria-label', '收起设置');
+      head.appendChild(heading);
+      head.appendChild(closeBtn);
+      sheet.appendChild(head);
+      sheet.appendChild(body);
+      overlay.appendChild(sheet);
+      overlay.appendChild(liveRegion);
+      if (!doc.body) return null;
+      try { doc.body.appendChild(overlay); } catch (err) { return null; }
     }
 
     function announce(text) {
@@ -961,18 +1009,17 @@
       }, false);
     }
 
-    let pressedBackdrop = false;
-    overlay.addEventListener('pointerdown', (event) => {
-      pressedBackdrop = !!(event && event.target === overlay);
-    }, false);
-    overlay.addEventListener('pointercancel', () => {
-      pressedBackdrop = false;
-    }, false);
-    overlay.addEventListener('click', (event) => {
-      const onBackdrop = !!(event && event.target === overlay) && pressedBackdrop;
-      pressedBackdrop = false;
-      if (onBackdrop) close();
-    }, false);
+    if (!shellMount) {
+      let pressedBackdrop = false;
+      overlay.addEventListener('pointerdown', (event) => { pressedBackdrop = !!(event && event.target === overlay); }, false);
+      overlay.addEventListener('pointercancel', () => { pressedBackdrop = false; }, false);
+      overlay.addEventListener('click', (event) => {
+        const onBackdrop = !!(event && event.target === overlay) && pressedBackdrop;
+        pressedBackdrop = false;
+        if (onBackdrop) close();
+      }, false);
+      doc.addEventListener('keydown', onKeyDown, true);
+    }
 
     function onKeyDown(event) {
       if (!event) return;
@@ -1007,8 +1054,6 @@
       }
     }
 
-    doc.addEventListener('keydown', onKeyDown, true);
-
     /* bridge.setHintsEnabled() 完成后会调用 settings.apply(...)（可选钩子）：只同步 UI，不写存储。 */
     function applyPatch(patch) {
       const data = isObject(patch) ? patch : {};
@@ -1032,6 +1077,7 @@
       previousFocus: previousFocus,
       onKeyDown: onKeyDown,
       apply: applyPatch,
+      settingsShell: shellMount,
     };
     unsubscribeCareerChanges = subscribeCareerChanges(context);
     return sheet;
