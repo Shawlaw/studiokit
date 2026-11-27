@@ -118,6 +118,7 @@ html.ac-career-ui-scroll-lock body {
   place-items: center;
   width: 44px;
   height: 44px;
+  margin: -8px -8px -8px auto;
   padding: 10px;
   border: 0;
   border-radius: var(--ac-career-ui-action-radius);
@@ -218,6 +219,12 @@ html.ac-career-ui-scroll-lock body {
 
 .ac-career-ui__danger {
   color: var(--ac-career-ui-danger);
+}
+
+.ac-career-ui__line {
+  border: 0;
+  border-top: var(--ac-career-ui-line-width) solid var(--ac-career-ui-border);
+  margin: 0;
 }
 
 .ac-career-ui__surface {
@@ -472,6 +479,7 @@ html.ac-career-ui-scroll-lock body {
   min-width: 0;
 }
 
+.ac-career-ui__story-work-title,
 .ac-career-ui__commission-title {
   color: var(--ac-career-ui-ink);
   font-size: var(--ac-career-ui-font-h3-size);
@@ -531,24 +539,26 @@ html.ac-career-ui-scroll-lock body {
 }
 
 .ac-career-ui__timeline {
-  display: flex;
-  flex-direction: column;
-  gap: var(--ac-career-ui-space-3);
   margin: 0;
-  padding: 0 0 0 var(--ac-career-ui-space-6);
-  border-left: var(--ac-career-ui-line-width) solid var(--ac-career-ui-timeline-line);
+  padding: 0 0 0 var(--ac-career-ui-space-3);
   list-style: none;
 }
 
 .ac-career-ui__timeline-item {
   position: relative;
   min-width: 0;
+  padding: 0 0 14px 17px;
+  border-left: var(--ac-career-ui-line-width) solid var(--ac-career-ui-timeline-line);
+}
+
+.ac-career-ui__timeline-item:last-child {
+  padding-bottom: 0;
 }
 
 .ac-career-ui__timeline-item::before {
   position: absolute;
-  top: 7px;
-  left: -24px;
+  top: 8px;
+  left: -4px;
   width: var(--ac-career-ui-timeline-node);
   height: var(--ac-career-ui-timeline-node);
   border-radius: 50%;
@@ -575,12 +585,12 @@ html.ac-career-ui-scroll-lock body {
   gap: var(--ac-career-ui-tool-gap);
   width: 100%;
   min-width: 0;
-  min-height: 64px;
+  min-height: 44px;
   padding: var(--ac-career-ui-tool-pad);
   border: 0;
   border-radius: var(--ac-career-ui-action-radius);
   background: var(--ac-career-ui-tool-bg);
-  color: var(--ac-career-ui-gold);
+  color: var(--ac-career-ui-ink);
   font-size: var(--ac-career-ui-tool-font-size);
   line-height: var(--ac-career-ui-font-body-leading);
   text-align: center;
@@ -588,6 +598,10 @@ html.ac-career-ui-scroll-lock body {
 
 .ac-career-ui button.ac-career-ui__tool:hover {
   background: var(--ac-career-ui-tool-hover-bg);
+}
+
+.ac-career-ui__tool .ac-career-ui__icon {
+  color: var(--ac-career-ui-gold);
 }
 
 .ac-career-ui__tool-label {

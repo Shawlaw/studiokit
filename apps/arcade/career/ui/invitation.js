@@ -173,13 +173,6 @@
     try { context.announce(text); } catch (err) { /* visible state remains authoritative */ }
   }
 
-  function annotateActions(node, actions) {
-    const buttons = node.querySelectorAll('button');
-    actions.forEach((input, index) => {
-      if (buttons[index] && input.id) buttons[index].setAttribute('data-action', input.id);
-    });
-  }
-
   function close() {
     manager.token += 1;
     if (manager.unsubscribe) {
@@ -284,15 +277,17 @@
         disabled: state.busy,
         onClick: () => startFirstCommission(state, commission.commissionId),
       };
-      const story = components.StoryCard({
+      const divider = doc.createElement('hr');
+      divider.className = 'ac-career-ui__line';
+      body.appendChild(divider);
+      body.appendChild(components.StoryCard({
         eyebrow: cleanText(model.narrative.firstCommissionEyebrow) || '你的第一份工作',
         title: cleanText(commission.title),
         summary: cleanText(commission.summary) || cleanText(commission.objectiveText),
+        variant: 'work',
         state: 'current',
-        action: storyAction,
-      });
-      annotateActions(story, [storyAction]);
-      body.appendChild(story);
+      }));
+      npcActions.unshift(storyAction);
     }
 
     npcActions.forEach((action) => {

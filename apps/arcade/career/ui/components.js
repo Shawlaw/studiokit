@@ -306,7 +306,8 @@
     const doc = documentOf();
     if (!doc) return null;
     const state = oneOf(input.state, STORY_STATES, 'current');
-    const card = element(doc, 'article', 'ac-career-ui__surface ac-career-ui__stack ac-career-ui__stack--small');
+    const work = input.variant === 'work';
+    const card = element(doc, 'article', (work ? '' : 'ac-career-ui__surface ') + 'ac-career-ui__stack ac-career-ui__stack--small');
     card.setAttribute('data-story-state', state);
     const eyebrow = cleanText(input.eyebrow);
     if (eyebrow) card.appendChild(element(doc, 'p', 'ac-career-ui__caption', eyebrow));
@@ -316,8 +317,8 @@
       tags.forEach((tag) => tagRow.appendChild(element(doc, 'span', 'ac-career-ui__tag', tag)));
       card.appendChild(tagRow);
     }
-    card.appendChild(element(doc, 'h2', 'ac-career-ui__story-title', cleanText(input.title)));
-    card.appendChild(element(doc, 'p', 'ac-career-ui__story-summary', cleanText(input.summary)));
+    card.appendChild(element(doc, work ? 'h3' : 'h2', work ? 'ac-career-ui__story-work-title' : 'ac-career-ui__story-title', cleanText(input.title)));
+    card.appendChild(element(doc, 'p', work ? 'ac-career-ui__story-summary ac-career-ui__caption' : 'ac-career-ui__story-summary', cleanText(input.summary)));
     if (state === 'current' && isObject(input.action)) card.appendChild(renderAction(input.action));
     return card;
   }
