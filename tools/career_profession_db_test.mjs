@@ -226,12 +226,16 @@ function createFakeIndexedDB() {
   return { open, _databases: databases };
 }
 
-function loadDb(fakeIdb, coreOverride) {
+function loadDb(fakeIdb, coreOverride, withProfessionState) {
+  const includeProfessionState = withProfessionState !== false;
   const sandbox = {
     module: { exports: {} },
     require: (name) => {
       if (name === './career-core.js') return coreOverride || core;
-      if (name === './profession-state.js') return professionState;
+      if (name === './profession-state.js') {
+        if (!includeProfessionState) throw new Error('profession-state-not-loaded');
+        return professionState;
+      }
       throw new Error('unexpected require:' + name);
     },
     indexedDB: fakeIdb,
@@ -242,9 +246,9 @@ function loadDb(fakeIdb, coreOverride) {
   vm.runInContext(dbSource, sandbox, { filename: 'career-db.js' });
   return sandbox.module.exports;
 }
-async function freshDb(coreOverride) {
+async function freshDb(coreOverride, withProfessionState) {
   const fakeIdb = createFakeIndexedDB();
-  const db = loadDb(fakeIdb, coreOverride);
+  const db = loadDb(fakeIdb, coreOverride, withProfessionState);
   const opened = await db.open();
   assert(opened.ok, 'open fake IDB: ' + JSON.stringify(opened));
   return { fakeIdb, db };
@@ -261,6 +265,11 @@ async function readState(db) {
   const snapshot = await db.getDiscoverySnapshot();
   assert(snapshot.ok, JSON.stringify(snapshot));
   return snapshot.state;
+}
+async function readStateRow(db) {
+  const exported = await db.exportAll();
+  assert(exported.ok, JSON.stringify(exported));
+  return exported.payload.state.find((row) => row.key === 'discovery') || null;
 }
 async function assets(db) {
   const exported = await db.exportAll();
@@ -556,33 +565,42 @@ await check('T03-13 SAVE_STATE 不采纳调用方任意职业改写，SET_HINTS/
 
 await check('T03-14 future professionVersion 读取/普通发现原样保留，直接职业写入拒绝', async () => {
   const ctx = await freshDb();
+  const FUTURE_AT = '2099-01-01T00:00:00.000Z';
   const future = {
     professionVersion: 9,
     acceptedOriginGameId: G,
     activeProfessionId: P,
     futureOnly: { nested: [1, 2, 3] },
     professionProgress: { [P]: { state: 'accepted', futureProgress: true } },
-    storyEvents: { 'story:future': { at: NOW, source: 'future' } },
-    updatedAt: NOW,
+    storyEvents: { 'story:future': { at: FUTURE_AT, source: 'future' } },
+    updatedAt: FUTURE_AT,
   };
   seedRow(ctx.fakeIdb, ctx.db, 'state', discoveryRow(Object.assign({ stage: 'GLIMPSED', clues: {}, runs: {} }, future)));
   const read = await readState(ctx.db);
   eq(read.professionVersion, 9);
   eq(read.futureOnly, future.futureOnly);
+  eq(read.updatedAt, FUTURE_AT);
   const saved = await ctx.db.saveState({ key: 'discovery', generation: 0, stage: 'EXPLORER', clues: {}, professionVersion: 1, acceptedOriginGameId: null });
   assert(saved.ok, JSON.stringify(saved));
   const afterSave = await readState(ctx.db);
   eq(afterSave.professionVersion, 9);
   eq(afterSave.futureOnly, future.futureOnly);
   eq(afterSave.stage, 'EXPLORER');
+  eq(afterSave.updatedAt, FUTURE_AT);
+  eq((await readStateRow(ctx.db)).updatedAt, FUTURE_AT);
   const merged = await ctx.db.mergeDiscoveryState({ clues: {}, runs: {} }, [], { action: { type: 'RUN_ENDED', generation: 0, run: { gameId: G }, baseRuns: {} } });
   assert(merged.ok, JSON.stringify(merged));
   const afterMerge = await readState(ctx.db);
   eq(afterMerge.professionVersion, 9);
   eq(afterMerge.futureOnly, future.futureOnly);
+  eq(afterMerge.updatedAt, FUTURE_AT);
+  eq((await readStateRow(ctx.db)).updatedAt, FUTURE_AT);
+  const saved2 = await ctx.db.saveDiscoveryState({ stage: 'EXPLORER', clues: {} }, { generation: 0 });
+  assert(saved2.ok, JSON.stringify(saved2));
+  eq((await readStateRow(ctx.db)).updatedAt, FUTURE_AT);
   const rejected = await ctx.db.applyProfessionEvent({ action: 'SET_ACTIVE', input: { professionId: P, catalog }, generation: 0, now: LATER });
   assert(!rejected.ok && rejected.reason === 'future-profession-version', JSON.stringify(rejected));
-  return 'future fields byte-preserved / legacy clues still evolve / write rejected';
+  return 'future fields + ISO updatedAt monotonic / legacy clues evolve / write rejected';
 });
 
 await check('T03-15 backup 当前 professionVersion 扩展往返且无新增顶层字段', async () => {
@@ -861,6 +879,74 @@ await check('T03-18 合成 N+1 职业可持久化，不依赖固定职业数组'
   assert(accepted.ok && accepted.created === true, JSON.stringify(accepted));
   eq((await readState(ctx.db)).professionProgress[id].state, 'accepted');
   return 'N+1 accepted with one identity';
+});
+
+await check('T03-19 原始 event.state / event.extension 伪造职业状态被拒绝且零写入', async () => {
+  const payloads = [
+    { state: { professionVersion: 1, acceptedOriginGameId: G2, activeProfessionId: P2, professionProgress: { [P]: { state: 'accepted', acceptedAt: NOW } } } },
+    { extension: { professionVersion: 9, acceptedOriginGameId: G2, professionProgress: { [P]: { state: 'accepted' } } } },
+  ];
+  for (const payload of payloads) {
+    const ctx = await freshDb();
+    const result = await ctx.db.mergeDiscoveryState({ clues: {}, runs: {} }, [], {
+      action: Object.assign({
+        type: 'RUN_ENDED',
+        generation: 0,
+        professionEvents: [{ action: 'GLIMPSIED', input: inputFor(P, G, { clueId: 'CL-' + G }), ...payload }],
+      }),
+    });
+    assert(!result.ok && result.reason === 'bad-profession-state', JSON.stringify(result));
+    eq(await readState(ctx.db), null);
+  }
+  return 'raw extension injection rejected / reducer-only';
+});
+
+await check('T03-20 未注入 professionState 时 SAVE_STATE 不擦 base 扩展', async () => {
+  const ctx = await freshDb(undefined, false);
+  seedRow(ctx.fakeIdb, ctx.db, 'state', discoveryRow({
+    stage: 'GLIMPSED',
+    clues: { ['CL-' + G]: { sourceGame: G, openedAt: NOW } },
+    runs: {},
+    professionVersion: 1,
+    acceptedOriginGameId: G,
+    activeProfessionId: P,
+    professionProgress: { [P]: { state: 'accepted', acceptedAt: NOW } },
+    storyEvents: { 'story:C0.port_seen': { at: NOW, source: 'clue' } },
+    updatedAt: NOW,
+  }));
+  const saved = await ctx.db.saveState({ key: 'discovery', generation: 0, stage: 'EXPLORER', clues: {} });
+  assert(saved.ok, JSON.stringify(saved));
+  const state = await readState(ctx.db);
+  eq(state.acceptedOriginGameId, G);
+  eq(state.activeProfessionId, P);
+  eq(state.professionProgress, { [P]: { state: 'accepted', acceptedAt: NOW } });
+  eq(state.storyEvents, { 'story:C0.port_seen': { at: NOW, source: 'clue' } });
+  eq(state.stage, 'EXPLORER');
+  const viaSaveDiscovery = await ctx.db.saveDiscoveryState({ stage: 'LOCAL', clues: {} }, { generation: 0 });
+  assert(viaSaveDiscovery.ok, JSON.stringify(viaSaveDiscovery));
+  eq((await readState(ctx.db)).acceptedOriginGameId, G);
+  return 'fallback merge preserves base / no source clobber';
+});
+
+await check('T03-21 重复 ACCEPT 仍校验 catalog/gameId/clue 映射', async () => {
+  const ctx = await freshDb();
+  await makeReadable(ctx, P, G, 'CL-' + G);
+  const accepted = await ctx.db.applyProfessionEvent({ action: 'ACCEPT_INVITATION', input: inputFor(P, G), generation: 0, now: NOW });
+  assert(accepted.ok && accepted.created === true, JSON.stringify(accepted));
+  const before = await readState(ctx.db);
+  const cases = [
+    { professionId: P, gameId: G2, catalog },
+    { professionId: P, gameId: G },
+    { professionId: P, gameId: G, clueId: 'CL-' + G2, catalog },
+  ];
+  for (const input of cases) {
+    const result = await ctx.db.applyProfessionEvent({ action: 'ACCEPT_INVITATION', input, generation: 0, now: LATER });
+    assert(!result.ok, '重复接受应拒绝非法映射: ' + JSON.stringify(result));
+    eq(await readState(ctx.db), before);
+  }
+  const valid = await ctx.db.applyProfessionEvent({ action: 'ACCEPT_INVITATION', input: inputFor(P, G), generation: 0, now: LATER });
+  assert(valid.ok && valid.duplicate === true, JSON.stringify(valid));
+  return 'duplicate still validated / valid duplicate remains no-op';
 });
 
 console.log('\n' + passed + '/' + total + ' checks passed');

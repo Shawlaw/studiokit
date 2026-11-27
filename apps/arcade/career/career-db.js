@@ -149,6 +149,13 @@
     return Number.isFinite(Date.parse(value));
   }
 
+  /** 合法 ISO 单调合并；任一非法时保留可用的合法值。 */
+  function laterIso(current, candidate) {
+    if (!validIso(current)) return validIso(candidate) ? candidate : current || null;
+    if (!validIso(candidate)) return current;
+    return Date.parse(candidate) > Date.parse(current) ? candidate : current;
+  }
+
   function isObject(value) {
     return !!value && typeof value === 'object' && !Array.isArray(value);
   }
@@ -450,7 +457,20 @@
     const acceptIncoming = acceptIncomingExtension !== false;
     const state = professionStateApi();
     const source = isObject(incoming) ? jsonClone(incoming) : {};
-    if (!state) return Object.keys(source).length ? source : jsonClone(base || {}) || {};
+    if (!state) {
+      const out = jsonClone(base || {}) || {};
+      Object.keys(source).forEach((field) => {
+        if (acceptIncoming || PROFESSION_EXTENSION_FIELDS.indexOf(field) < 0) out[field] = jsonClone(source[field]);
+      });
+      if (!acceptIncoming) {
+        PROFESSION_EXTENSION_FIELDS.forEach((field) => {
+          if (Object.prototype.hasOwnProperty.call(base || {}, field)) out[field] = jsonClone(base[field]);
+          else delete out[field];
+        });
+      }
+      out.updatedAt = laterIso(out.updatedAt, at);
+      return out;
+    }
     const baseFuture = futureProfessionState(base);
     const incomingFuture = acceptIncoming && futureProfessionState(source);
     if (baseFuture || incomingFuture) {
@@ -460,6 +480,7 @@
       Object.keys(preserved).forEach((field) => {
         out[field] = jsonClone(preserved[field]);
       });
+      out.updatedAt = laterIso(laterIso(preserved.updatedAt, out.updatedAt), at);
       return out;
     }
     const normalizedBase = state.normalizeExtension(isObject(base) ? base : {}, at);
@@ -470,7 +491,7 @@
       else out[field] = jsonClone(normalizedBase[field]);
     });
     const merged = state.mergeIntoDiscovery(out, out, at) || out;
-    if (merged && isObject(merged) && validIso(at)) merged.updatedAt = at;
+    if (merged && isObject(merged)) merged.updatedAt = laterIso(laterIso(base && base.updatedAt, source.updatedAt), at);
     return merged;
   }
 
@@ -486,7 +507,7 @@
         if (field !== 'updatedAt') out[field] = jsonClone(extension[field]);
       });
     }
-    if (validIso(at)) out.updatedAt = at;
+    if (validIso(at)) out.updatedAt = laterIso(out.updatedAt, at);
     return out;
   }
 
@@ -732,7 +753,9 @@
         ctx.bind(ctx.store('state').get(STATE_KEY_DISCOVERY), (existingRow) => {
           const existing = existingRow && isObject(existingRow.value) ? existingRow.value : null;
           const merged = mergeDiscoveryExtension(existing, value, validIso(at) ? at : nowIso(), false);
-          const row = { key: STATE_KEY_DISCOVERY, schemaVersion: SCHEMA_VERSION, updatedAt: at, value: merged };
+          const rowUpdatedAt = laterIso(existingRow && existingRow.updatedAt, merged.updatedAt);
+          if (isObject(merged)) merged.updatedAt = rowUpdatedAt;
+          const row = { key: STATE_KEY_DISCOVERY, schemaVersion: SCHEMA_VERSION, updatedAt: rowUpdatedAt, value: merged };
           ctx.bind(ctx.store('state').put(row), () => ctx.done({ ok: true }));
         });
       });
@@ -814,7 +837,12 @@
       if (input.clueId === undefined) input.clueId = action.clueId;
       if (input.clueOpened === undefined && actionType === 'CLUE_OPENED') input.clueOpened = true;
       if (input.at === undefined) input.at = validIso(action.at) ? action.at : at;
-      return { action: event.action, input, at: validIso(input.at) ? input.at : at, state: event.state || event.extension || null };
+      return {
+        action: event.action,
+        input,
+        at: validIso(input.at) ? input.at : at,
+        rawState: Object.prototype.hasOwnProperty.call(event, 'state') || Object.prototype.hasOwnProperty.call(event, 'extension'),
+      };
     }).filter(Boolean);
   }
 
@@ -835,7 +863,7 @@
         seenAt: prior.seenAt || at,
         openedAt: event.action === 'READ' && input.clueOpened === true ? (prior.openedAt || at) : (prior.openedAt || null),
         dismissed: prior.dismissed === true,
-        updatedAt: at,
+        updatedAt: laterIso(prior.updatedAt, at),
       });
       out.clues[clueId] = row;
       if (!out.firstSourceGame) out.firstSourceGame = gameId;
@@ -919,21 +947,21 @@
             }
             for (let i = 0; i < events.length; i += 1) {
               const event = events[i];
+              if (event.rawState) {
+                ctx.done({ ok: false, reason: 'bad-profession-state', generation: currentGeneration });
+                return;
+              }
               if (event.action !== 'GLIMPSIED' && event.action !== 'READ') {
                 ctx.done({ ok: false, reason: 'bad-profession-action', generation: currentGeneration });
                 return;
               }
-              let reduced;
               const method = PROFESSION_REDUCER_METHOD[event.action];
-              if (isObject(event.state) && typeof ps.normalizeExtension === 'function') {
-                const extension = ps.normalizeExtension(event.state, event.at);
-                reduced = { ok: true, state: extension };
-              } else if (method && typeof ps[method] === 'function') {
-                const currentExtension = ps.extensionOf(merged) || ps.initialState(event.at);
-                reduced = ps[method](currentExtension, Object.assign({}, event.input, { at: event.at }));
-              } else {
-                reduced = { ok: false, reason: 'bad-profession-action' };
+              if (!method || typeof ps[method] !== 'function') {
+                ctx.done({ ok: false, reason: 'bad-profession-action', generation: currentGeneration });
+                return;
               }
+              const currentExtension = ps.extensionOf(merged) || ps.initialState(event.at);
+              const reduced = ps[method](currentExtension, Object.assign({}, event.input, { at: event.at }));
               if (!reduced.ok) {
                 ctx.done({ ok: false, reason: reduced.reason || 'profession-reducer-failed', generation: currentGeneration });
                 return;
@@ -946,8 +974,9 @@
             merged = applyProfessionClueFacts(merged, events, at);
           }
           merged = mergeDiscoveryExtension(existing || {}, merged, at);
-          merged.updatedAt = at;
-          const row = { key: STATE_KEY_DISCOVERY, schemaVersion: SCHEMA_VERSION, updatedAt: at, value: merged };
+          const rowUpdatedAt = laterIso(existingRow && existingRow.updatedAt, merged.updatedAt);
+          if (isObject(merged)) merged.updatedAt = rowUpdatedAt;
+          const row = { key: STATE_KEY_DISCOVERY, schemaVersion: SCHEMA_VERSION, updatedAt: rowUpdatedAt, value: merged };
           ctx.bind(stateStore.put(row), () => {
             const store = ctx.store('discovery');
             const tasks = records.map((record) => (next) => {
@@ -962,7 +991,7 @@
                 mergedRecord.seenAt = prior && prior.seenAt && copy.seenAt
                   ? (String(prior.seenAt) < String(copy.seenAt) ? prior.seenAt : copy.seenAt)
                   : ((prior && prior.seenAt) || copy.seenAt || null);
-                mergedRecord.updatedAt = typeof copy.updatedAt === 'string' ? copy.updatedAt : at;
+                mergedRecord.updatedAt = laterIso(mergedRecord.updatedAt, typeof copy.updatedAt === 'string' ? copy.updatedAt : at);
                 ctx.bind(store.put(mergedRecord), next);
               });
             });
@@ -971,7 +1000,7 @@
                 ctx.bind(store.get(action.clueId), (recordRow) => {
                   const mergedRecord = Object.assign({ clueId: action.clueId }, isObject(recordRow) ? recordRow : {}, {
                     openedAt: (isObject(recordRow) && recordRow.openedAt) || (action.at && String(action.at)) || at,
-                    updatedAt: at,
+                    updatedAt: laterIso(isObject(recordRow) && recordRow.updatedAt, at),
                   });
                   ctx.bind(store.put(mergedRecord), next);
                 });
@@ -1052,8 +1081,8 @@
     return txRun(['state'], 'readwrite', (ctx) => {
       assertCareerWritable(ctx, 'save-state');
       requireDiscoveryGeneration(ctx, generationOptions, 'save-state', () => {
-        const write = (finalValue) => {
-          const row = { key, schemaVersion: SCHEMA_VERSION, updatedAt: at, value: finalValue };
+        const write = (finalValue, updatedAt) => {
+          const row = { key, schemaVersion: SCHEMA_VERSION, updatedAt: updatedAt || at, value: finalValue };
           ctx.bind(ctx.store('state').put(row), () => ctx.done({ ok: true }));
         };
         if (key !== STATE_KEY_DISCOVERY) {
@@ -1062,7 +1091,10 @@
         }
         ctx.bind(ctx.store('state').get(STATE_KEY_DISCOVERY), (existingRow) => {
           const existing = existingRow && isObject(existingRow.value) ? existingRow.value : null;
-          write(mergeDiscoveryExtension(existing, value, at, false));
+          const merged = mergeDiscoveryExtension(existing, value, at, false);
+          const rowUpdatedAt = laterIso(existingRow && existingRow.updatedAt, merged.updatedAt);
+          if (isObject(merged)) merged.updatedAt = rowUpdatedAt;
+          write(merged, rowUpdatedAt);
         });
       });
     }).then((res) => (res.ok ? res.result : failure(res.reason, res.error)));
@@ -1405,7 +1437,9 @@
                     });
                   }
                 }
-                const row = { key: STATE_KEY_DISCOVERY, schemaVersion: SCHEMA_VERSION, updatedAt: at, value };
+                const rowUpdatedAt = laterIso(stateRow && stateRow.updatedAt, value.updatedAt);
+                if (isObject(value)) value.updatedAt = rowUpdatedAt;
+                const row = { key: STATE_KEY_DISCOVERY, schemaVersion: SCHEMA_VERSION, updatedAt: rowUpdatedAt, value };
                 const writeState = (finalCareerId, created) => {
                   response.careerId = finalCareerId;
                   response.created = created === true;
@@ -1429,7 +1463,7 @@
                       seenAt: priorRow.seenAt || at,
                       openedAt: action === 'READ' && input.clueOpened === true ? (priorRow.openedAt || at) : (priorRow.openedAt || null),
                       dismissed: priorRow.dismissed === true,
-                      updatedAt: at,
+                      updatedAt: laterIso(priorRow.updatedAt, at),
                     });
                     ctx.bind(ctx.store('discovery').put(record), () => writeState(careerId, false));
                   });
@@ -1442,6 +1476,19 @@
                 if (typeof ps[method] !== 'function') {
                   ctx.done({ ok: false, reason: 'bad-profession-action', generation });
                   return;
+                }
+                if (action === 'ACCEPT_INVITATION') {
+                  if (typeof reducerInput.gameId !== 'string' || !reducerInput.gameId) {
+                    ctx.done({ ok: false, reason: 'missing-game-id', error: 'missing-game-id', generation });
+                    return;
+                  }
+                  /* acceptInvitation 的 duplicate 分支先于 mappingError；DB 先用同一 reducer 的
+                     recordGlimpsed 做无副作用映射探针，确保重复调用也不能绕过 catalog/game/clue。 */
+                  const mappingProbe = ps.recordGlimpsed(currentExtension, Object.assign({}, reducerInput, { at }));
+                  if (!mappingProbe.ok) {
+                    ctx.done({ ok: false, reason: mappingProbe.reason, error: mappingProbe.reason, generation });
+                    return;
+                  }
                 }
                 const reduced = ps[method](currentExtension, Object.assign({}, reducerInput, { at }));
                 if (!reduced.ok) {
