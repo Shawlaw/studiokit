@@ -1222,22 +1222,28 @@
             var endingLoads = [ensureLazyModule('ending'), loadCareerContent()];
             if (result.commission.gameId === 'star-raid') endingLoads.push(ensureLazyModule('combatConfig'));
             return Promise.all(endingLoads)
-              .then(function () {
+              .then(async function () {
                 configureCareerModules();
                 var endingModule = readGlobal('ending');
                 if (endingModule && typeof endingModule.attach === 'function') {
-                  var endingTicket = isObject(stored) && stored.ticketId === ticketId ? stored : {
+                  var db = api.db || readGlobal('db');
+                  var fullRun = result.run;
+                  if (db && typeof db.getRun === 'function') {
+                    var authoritative = await db.getRun(ticketId);
+                    if (authoritative && authoritative.ok !== false) fullRun = authoritative;
+                  }
+                  var endingTicket = isObject(stored) && stored.ticketId === ticketId ? stored : Object.assign({}, fullRun, {
                     ticketId: ticketId,
-                    runId: result.run && result.run.runId ? result.run.runId : ticketId,
+                    runId: fullRun && fullRun.runId ? fullRun.runId : ticketId,
                     commissionId: result.commission.commissionId,
                     gameId: result.commission.gameId,
                     careerId: result.run.careerId,
                     mode: 'commission',
-                  };
+                  });
                   var attached = endingModule.attach({
                     ticketId: ticketId,
                     ticket: endingTicket,
-                    run: result.run,
+                    run: fullRun,
                     commissionId: result.commission.commissionId,
                     gameId: result.commission.gameId,
                     careerId: result.run.careerId,
