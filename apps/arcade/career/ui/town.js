@@ -470,6 +470,612 @@
     return cleanText(value).replace(/\s+/g, '');
   }
 
+  /* ------------------------------------------------------------------ *
+   * 0.23 T13 — component-backed port surface.
+   * The legacy 0.18–0.22 panel stays intact for hosts without the frozen
+   * component injection. When bridge supplies ctx.uiComponents (or true with
+   * the global T11 namespace), this surface renders P07–P10 through T11.
+   * ------------------------------------------------------------------ */
+
+  const PORT_TITLE = '折光港';
+  const PORT_TABS = [
+    { id: 'home', label: '眼下' },
+    { id: 'work', label: '工作' },
+    { id: 'journal', label: '经历' },
+  ];
+  const PORT_SURFACES = ['port', 'work', 'journal'];
+  const PORT_CAPTION = '港口还开着，你可以慢慢看看。';
+  const PORT_EMPTY_TITLE = '港口暂时没有新的安排';
+  const PORT_EMPTY_SUMMARY = '你保存的经历还在，随时可以从这里继续。';
+  const PORT_LOADING_TITLE = '正在整理港口内容';
+  const PORT_LOADING_SUMMARY = '请稍候，已经保存的内容不会丢失。';
+  const PORT_ERROR_TITLE = '港口记录暂时读不出来';
+  const PORT_ERROR_SUMMARY = '你的游玩不受影响，可以再试一次。';
+  const PORT_EXIT_LABEL = '离开港口';
+  const PORT_RETRY_LABEL = '重试';
+  const PORT_TOOL_FALLBACK = { wallet: '钱包', shop: '商店', workshop: '工作台', hangar: '机库' };
+  const PORT_TOOL_ICON = { wallet: 'wallet', shop: 'store', workshop: 'tool', hangar: 'tool' };
+  const PORT_CLUE_FAMILY_ICON = { record: 'mail', signal: 'scroll', bio: 'gem', industrial: 'pick', route: 'chevron' };
+
+  function portComponentsOf(context) {
+    const direct = context && context.uiComponents;
+    if (direct === true && root.ArcadeCareerUI && isObject(root.ArcadeCareerUI.components)) return root.ArcadeCareerUI.components;
+    if (!isObject(direct)) return null;
+    const required = ['CareerShell', 'StoryCard', 'SegmentedTabs', 'WorkCard', 'JournalTimeline', 'ToolGrid', 'SecondaryAction'];
+    return required.every((name) => typeof direct[name] === 'function') ? direct : null;
+  }
+
+  function portRootWindow() {
+    return typeof window !== 'undefined' && window ? window : null;
+  }
+
+  function portApiOf(context) {
+    return context && isObject(context.api) ? context.api : {};
+  }
+
+  function portOpenMethod(context, name) {
+    if (context && typeof context[name] === 'function') return context[name];
+    const api = portApiOf(context);
+    return typeof api[name] === 'function' ? api[name] : null;
+  }
+
+  function portHarborNode(context, doc) {
+    const source = context && context.uiHarbor;
+    let rendered = null;
+    if (typeof source === 'function') {
+      try { rendered = source(false); } catch (err) { rendered = null; }
+    } else if (source && typeof source === 'object' && typeof source.render === 'function') {
+      try { rendered = source.render(false); } catch (err) { rendered = null; }
+    }
+    if (typeof rendered === 'string' && rendered.trim()) {
+      try {
+        const template = doc.createElement('template');
+        template.innerHTML = rendered;
+        rendered = template.content && template.content.firstChild ? template.content.firstChild : null;
+      } catch (err) {
+        rendered = null;
+      }
+    }
+    return rendered && typeof rendered.nodeType === 'number' ? rendered : null;
+  }
+
+  function portTextNode(doc, className, text) {
+    const node = doc.createElement('p');
+    if (className) node.className = className;
+    node.textContent = text || '';
+    return node;
+  }
+
+  function requestPortCareerView(context, surface) {
+    const provider = typeof context === 'object' && context && typeof context.careerView === 'function'
+      ? context.careerView
+      : portOpenMethod(context, 'careerView');
+    if (typeof provider !== 'function') return Promise.resolve(null);
+    let result = null;
+    try {
+      result = provider({ surface: surface });
+    } catch (err) {
+      return Promise.resolve(null);
+    }
+    return Promise.resolve(result).then(
+      (value) => isObject(value) ? value : null,
+      () => null
+    );
+  }
+
+  function createPortState() {
+    return {
+      views: Object.create(null),
+      tab: 'home',
+      expanded: Object.create(null),
+      phase: 'normal',
+      seq: 0,
+      alive: true,
+      unsubscribe: null,
+      shell: null,
+      context: null,
+    };
+  }
+
+  function destroyPortState(state) {
+    if (!state || !state.alive) return;
+    state.alive = false;
+    state.seq += 1;
+    if (typeof state.unsubscribe === 'function') {
+      try { state.unsubscribe(); } catch (err) { /* ignore */ }
+    }
+    state.unsubscribe = null;
+  }
+
+  function portViewOf(state) {
+    if (!state) return null;
+    if (state.tab === 'work') return state.views.work || null;
+    if (state.tab === 'journal') return state.views.journal || null;
+    return state.views.port || null;
+  }
+
+  function portNarrativeOf(context) {
+    return context && isObject(context.narrative) ? context.narrative : {};
+  }
+
+  function portFindCommission(view, commissionId) {
+    const id = idText(commissionId);
+    if (!id || !view || !Array.isArray(view.commissions)) return null;
+    return view.commissions.filter((row) => isObject(row) && idText(row.commissionId) === id)[0] || null;
+  }
+
+  function portStoryProps(context, view) {
+    const narrative = portNarrativeOf(context);
+    const story = view && isObject(view.story) ? view.story : {};
+    const next = isObject(story.nextAction) ? story.nextAction : null;
+    const nextId = idText(next && next.commissionId);
+    const row = portFindCommission(view, nextId);
+    const commission = commissionOf(context);
+    const title = cleanText(narrative.storyTitle) || cleanText(next && next.label) || cleanText(row && row.title);
+    const summary = cleanText(narrative.storySummary) || cleanText(row && row.summary) || cleanText(row && row.objectiveText);
+    const action = nextId && (!commission || typeof commission.start !== 'function')
+      ? null
+      : (nextId ? {
+          id: 'port-story-' + nextId,
+          label: cleanText(next && next.label) || '继续这段故事',
+          kind: 'primary',
+          onClick: () => startPortCommission(context, nextId),
+        } : null);
+    return {
+      eyebrow: cleanText(narrative.storyEyebrow) || '正在发生的故事',
+      title: safePlayerReason(title) || PORT_EMPTY_TITLE,
+      summary: safePlayerReason(summary) || PORT_EMPTY_SUMMARY,
+      state: nextId ? 'current' : 'no-action',
+      tags: [],
+      action: action,
+    };
+  }
+
+  function portMessageNode(doc, view, components) {
+    const messages = view && view.story && Array.isArray(view.story.messages) ? view.story.messages : [];
+    const row = messages.filter(isObject).slice(0, 1)[0];
+    if (!row) return null;
+    const label = cleanText(row.label) || cleanText(row.text);
+    if (!label) return null;
+    const wrapper = doc.createElement('div');
+    wrapper.className = 'ac-career-ui__row ac-career-ui__port-message';
+    wrapper.setAttribute('data-port-message', 'true');
+    wrapper.appendChild(components.icon && components.icon('mail'));
+    const content = doc.createElement('div');
+    content.className = 'ac-career-ui__grow ac-career-ui__stack ac-career-ui__stack--small';
+    const from = cleanText(row.from);
+    if (from) content.appendChild(portTextNode(doc, 'ac-career-ui__caption ac-career-ui__gold', from));
+    content.appendChild(portTextNode(doc, 'ac-career-ui__caption', safePlayerReason(label)));
+    const text = cleanText(row.text);
+    if (text && text !== label) content.appendChild(portTextNode(doc, 'ac-career-ui__caption', safePlayerReason(text)));
+    const at = cleanText(row.at);
+    const date = at && typeof components.formatIsoDate === 'function' ? components.formatIsoDate(at) : '';
+    if (date) {
+      const time = doc.createElement('time');
+      time.className = 'ac-career-ui__caption';
+      time.textContent = date;
+      content.appendChild(time);
+    }
+    wrapper.appendChild(content);
+    return wrapper;
+  }
+
+  function portClueProps(context) {
+    const narrative = portNarrativeOf(context);
+    const input = context && (context.portClue || context.recoverableClue) ? (context.portClue || context.recoverableClue) : narrative.clue;
+    if (!isObject(input)) return null;
+    const clue = isObject(input.clue) ? input.clue : input;
+    const clueId = idText(clue.clueId || input.clueId);
+    if (!clueId) return null;
+    const snapshot = isObject(input.state) ? input.state : (isObject(context.state) ? context.state : {});
+    const record = isObject(snapshot.clues) ? snapshot.clues[clueId] : null;
+    let state = cleanText(input.state);
+    if (['hidden', 'glimpsed', 'read', 'recoverable'].indexOf(state) < 0) {
+      if (!record) state = 'hidden';
+      else if (record.openedAt) state = 'read';
+      else {
+        const stage = cleanText(snapshot.stage).toUpperCase();
+        const hasRead = Object.keys(snapshot.clues).some((key) => !!(snapshot.clues[key] && snapshot.clues[key].openedAt));
+        state = !record.portSeenAt && (stage === 'GLIMPSED' || stage === 'CURIOUS') && hasRead ? 'recoverable' : 'glimpsed';
+      }
+    }
+    if (state === 'hidden') return null;
+    const title = cleanText(clue.ambientLabel) || cleanText(clue.title);
+    if (!title) return null;
+    const actionLabel = state === 'glimpsed'
+      ? '仔细看看'
+      : (state === 'read' ? '查看这封信' : (cleanText(clue.letter && clue.letter.actionLabel) || '按地址投递'));
+    let onOpen = typeof input.onOpen === 'function' ? input.onOpen : portOpenMethod(context, 'openClue');
+    if (typeof onOpen !== 'function') onOpen = portOpenMethod(context, 'onOpenClue');
+    const invitation = typeof context.invitationForClue === 'function' ? context.invitationForClue(clueId) : null;
+    return {
+      clueId: clueId,
+      gameId: idText(clue.gameId),
+      professionId: invitation && idText(invitation.professionId),
+      icon: state === 'recoverable' ? 'mail' : (PORT_CLUE_FAMILY_ICON[cleanText(clue.family)] || 'gem'),
+      title: title,
+      teaser: cleanText(clue.ambientText),
+      actionLabel: actionLabel,
+      state: state,
+      placement: 'list',
+      reducedMotion: !!context.reducedMotion,
+      onOpen: typeof onOpen === 'function' ? onOpen : undefined,
+    };
+  }
+
+  function portToolItems(context, view) {
+    const tools = view && Array.isArray(view.tools) ? view.tools : [];
+    const out = [];
+    Object.keys(PORT_TOOL_FALLBACK).forEach((id) => {
+      const tool = tools.filter((entry) => isObject(entry) && idText(entry.toolId) === id)[0];
+      if (!tool) return;
+      const openerName = id === 'wallet' ? 'openReceipt' : (id === 'shop' ? 'openMarket' : (id === 'workshop' ? 'openWorkshop' : 'openHangar'));
+      out.push({
+        id: id,
+        label: cleanText(tool.name) || PORT_TOOL_FALLBACK[id],
+        icon: PORT_TOOL_ICON[id],
+        onClick: () => {
+          const opener = portOpenMethod(context, openerName);
+          if (typeof opener === 'function') {
+            try { opener(); } catch (err) { /* ignore */ }
+          } else if (typeof context.announce === 'function') {
+            context.announce(PORT_TOOL_FALLBACK[id] + '暂时打不开。');
+          }
+        },
+      });
+    });
+    return out;
+  }
+
+  function startPortCommission(context, commissionId) {
+    const id = idText(commissionId);
+    if (!id) return Promise.resolve({ ok: false });
+    const commission = commissionOf(context);
+    if (!commission || typeof commission.start !== 'function') return Promise.resolve({ ok: false });
+    let result = null;
+    try {
+      result = commission.start({ commissionId: id, careerId: careerIdOf(context), ensure: false, surface: 'work' });
+    } catch (err) {
+      result = { ok: false };
+    }
+    return Promise.resolve(result).then((value) => {
+      const url = safeNavUrl(value && isObject(value) ? value.url : '');
+      if (url && portRootWindow() && portRootWindow().location && typeof portRootWindow().location.assign === 'function') {
+        try { portRootWindow().location.assign(url); } catch (err) { /* navigation unavailable in test host */ }
+      }
+      return value;
+    }, () => ({ ok: false }));
+  }
+
+  function pausePortProfession(context, professionId, paused) {
+    const id = idText(professionId);
+    if (!id) return Promise.resolve({ ok: false });
+    const fn = portOpenMethod(context, 'setProfessionPaused');
+    if (typeof fn !== 'function') return Promise.resolve({ ok: false });
+    let result = null;
+    try {
+      result = fn({ professionId: id, paused: !!paused });
+    } catch (err) {
+      result = { ok: false };
+    }
+    return Promise.resolve(result);
+  }
+
+  function portWorkCards(context, view, state, components) {
+    const professions = view && Array.isArray(view.professions) ? view.professions.filter(isObject) : [];
+    const accepted = professions.filter((entry) => ['accepted', 'developed', 'completed'].indexOf(cleanText(entry.state).toLowerCase()) >= 0);
+    const commissions = view && Array.isArray(view.commissions) ? view.commissions.filter(isObject) : [];
+    const worldRows = commissions.filter((entry) => cleanText(entry.category).toLowerCase() === 'world');
+    if (!accepted.length && !worldRows.length) {
+      return [components.WorkCard({ professionId: null, displayName: '', icon: 'check', state: 'empty', commissions: [] })];
+    }
+    const cards = accepted.map((entry) => {
+      const professionId = idText(entry.professionId);
+      const rows = commissions.filter((commission) => {
+        if (cleanText(commission.category).toLowerCase() === 'world') return false;
+        const parent = idText(commission.professionId || commission.parentProfessionId || commission.internalParentProfessionId);
+        return !!parent && parent === professionId;
+      });
+      const paused = entry.paused === true;
+      const card = components.WorkCard({
+        professionId: professionId,
+        displayName: cleanText(entry.displayName),
+        icon: cleanText(entry.domain) === 'nature' ? 'pick' : (cleanText(entry.domain) === 'adventure' ? 'scroll' : 'gem'),
+        state: paused ? 'paused' : (rows.length ? 'active' : 'optional'),
+        commissions: paused ? [] : rows,
+        expanded: !!state.expanded[professionId],
+        onStart: (commissionId) => startPortCommission(context, commissionId),
+        onPause: (targetId, nextPaused) => pausePortProfession(context, targetId, nextPaused).then(() => {
+          if (state.alive && state.shell) {
+            loadPortData(context, state);
+            const focusId = 'work-pause-' + idText(targetId);
+            Promise.resolve().then(() => {
+              const panel = state.shell && state.shell.panel;
+              const button = panel && panel.querySelector ? panel.querySelector('#' + focusId) : null;
+              if (button && typeof button.focus === 'function') button.focus();
+            });
+          }
+          return { ok: true };
+        }),
+      });
+      card.setAttribute('data-port-profession', professionId);
+      const buttons = card.querySelectorAll ? Array.prototype.slice.call(card.querySelectorAll('button')) : [];
+      const pauseButton = buttons.filter((button) => {
+        const label = cleanText(button.textContent);
+        return label === '暂时搁置' || label === '恢复这段经历';
+      })[0];
+      if (pauseButton) {
+        pauseButton.id = 'work-pause-' + professionId;
+        pauseButton.setAttribute('data-work-pause', professionId);
+      }
+      const details = card.querySelector('details');
+      if (details && typeof details.addEventListener === 'function') {
+        details.addEventListener('toggle', () => { state.expanded[professionId] = !!details.open; });
+      }
+      return card;
+    });
+    if (worldRows.length) {
+      const worldCard = components.WorkCard({
+        professionId: null,
+        displayName: '',
+        icon: 'check',
+        state: 'optional',
+        commissions: worldRows,
+        onStart: (commissionId) => startPortCommission(context, commissionId),
+      });
+      worldCard.setAttribute('data-port-profession', 'world');
+      cards.push(worldCard);
+    }
+    return cards;
+  }
+
+  function portJournalNode(view, components) {
+    const history = view && view.story && Array.isArray(view.story.history) ? view.story.history : [];
+    const events = history.filter(isObject).map((row) => ({
+      label: cleanText(row.label) || cleanText(row.text),
+      at: cleanText(row.at),
+    })).filter((row) => row.label);
+    return components.JournalTimeline({ state: events.length ? 'filled' : 'empty', events: events });
+  }
+
+  function portContentNode(context, state, view, components) {
+    const phase = state.phase;
+    const stack = docOfPort();
+    const content = stack.createElement('div');
+    content.className = 'ac-career-ui__stack';
+    content.id = 'ac-career-ui-port-tabpanel';
+    content.setAttribute('role', 'tabpanel');
+    content.setAttribute('aria-label', '港口内容');
+    content.setAttribute('data-port-tabpanel', state.tab);
+
+    if (phase === 'loading') {
+      content.appendChild(components.StoryCard({
+        eyebrow: '港口记录',
+        title: PORT_LOADING_TITLE,
+        summary: PORT_LOADING_SUMMARY,
+        state: 'no-action',
+      }));
+      return content;
+    }
+    if (phase === 'error') {
+      content.appendChild(components.StoryCard({
+        eyebrow: '港口记录',
+        title: PORT_ERROR_TITLE,
+        summary: PORT_ERROR_SUMMARY,
+        state: 'no-action',
+      }));
+      content.appendChild(components.SecondaryAction({
+        id: 'port-retry',
+        label: PORT_RETRY_LABEL,
+        kind: 'secondary',
+        variant: 'border',
+        onClick: () => { loadPortData(state.context, state); return { ok: true }; },
+      }));
+      return content;
+    }
+
+    if (state.tab === 'work') {
+      portWorkCards(context, view, state, components).forEach((card) => content.appendChild(card));
+      return content;
+    }
+    if (state.tab === 'journal') {
+      content.appendChild(portJournalNode(view, components));
+      return content;
+    }
+
+    content.appendChild(components.StoryCard(portStoryProps(context, view)));
+    const message = portMessageNode(stack, view, components);
+    if (message) content.appendChild(message);
+    const clue = components.ClueRow && portClueProps(context);
+    if (clue) content.appendChild(components.ClueRow(clue));
+    return content;
+  }
+
+  function docOfPort() {
+    return documentOf() || { createElement(tag) { return { tagName: String(tag).toUpperCase(), className: '', textContent: '', childNodes: [], children: [], appendChild(node) { this.childNodes.push(node); this.children.push(node); return node; }, setAttribute() {} }; } };
+  }
+
+  function portBody(context, state, view, components) {
+    const doc = docOfPort();
+    const body = doc.createElement('div');
+    body.className = 'ac-career-ui__stack';
+    const harbor = portHarborNode(context, doc);
+    if (harbor) body.appendChild(harbor);
+    body.appendChild(portTextNode(doc, 'ac-career-ui__caption', cleanText(portNarrativeOf(context).caption) || PORT_CAPTION));
+    body.appendChild(components.SegmentedTabs({
+      tabs: PORT_TABS,
+      selectedId: state.tab,
+      label: '港口页面',
+      controlsId: 'ac-career-ui-port-tabpanel',
+      onSelect: (id) => {
+        if (PORT_TABS.every((tab) => tab.id !== id)) return;
+        state.tab = id;
+        renderPortSurface(state.context, state);
+      },
+    }));
+    body.appendChild(portContentNode(context, state, view, components));
+    const tools = portToolItems(context, (state.views && state.views.port) || view);
+    if (tools.length) {
+      body.appendChild(components.ToolGrid({ tools: tools, state: 'available', label: '已知工具' }));
+    }
+    const footer = doc.createElement('footer');
+    footer.className = 'ac-career-ui__footer';
+    footer.appendChild(components.SecondaryAction({
+      id: 'port-exit',
+      label: PORT_EXIT_LABEL,
+      kind: 'text',
+      variant: 'text',
+      onClick: () => {
+        if (state.shell) state.shell.close();
+        else if (typeof context.closePort === 'function') context.closePort();
+      },
+    }));
+    body.appendChild(footer);
+    return body;
+  }
+
+  function portShellState(context, state) {
+    const explicit = cleanText(portNarrativeOf(context).state);
+    if (explicit === 'loading' || explicit === 'error') return explicit;
+    if (state.phase === 'loading') return 'loading';
+    if (state.phase === 'error') return 'error';
+    return 'normal';
+  }
+
+  function portShellProps(context, state, view, components) {
+    return {
+      panelKey: 'town',
+      title: PORT_TITLE,
+      state: portShellState(context, state),
+      size: 'default',
+      body: portBody(context, state, view, components),
+      reducedMotion: !!context.reducedMotion,
+    };
+  }
+
+  function renderPortSurface(context, state) {
+    if (!state || !state.alive) return null;
+    const components = portComponentsOf(context || state.context);
+    if (!components) return null;
+    state.context = context || state.context;
+    const view = portViewOf(state);
+    const props = portShellProps(state.context, state, view, components);
+    if (state.shell && typeof state.shell.render === 'function') return state.shell.render(props);
+    if (state.detached) return components.CareerShell(props);
+    return null;
+  }
+
+  function subscribePortChanges(context, state) {
+    if (typeof state.unsubscribe === 'function') {
+      try { state.unsubscribe(); } catch (err) { /* ignore */ }
+    }
+    state.unsubscribe = null;
+    const provider = typeof context.onCareerDataChanged === 'function'
+      ? context.onCareerDataChanged
+      : portOpenMethod(context, 'onCareerDataChanged');
+    if (typeof provider !== 'function') return;
+    try {
+      const unsubscribe = provider((event) => {
+        if (!state.alive) return;
+        const reason = cleanText(event && event.reason).toLowerCase();
+        if (['career-archived', 'career-reset', 'career-imported'].indexOf(reason) >= 0) {
+          if (state.shell) state.shell.close();
+          else destroyPortState(state);
+          return;
+        }
+        loadPortData(state.context, state);
+      });
+      if (typeof unsubscribe === 'function') state.unsubscribe = unsubscribe;
+    } catch (err) {
+      state.unsubscribe = null;
+    }
+  }
+
+  function loadPortData(context, state) {
+    if (!state || !state.alive) return;
+    state.context = context || state.context;
+    state.seq += 1;
+    const seq = state.seq;
+    const narrative = portNarrativeOf(state.context);
+    state.phase = cleanText(narrative.state) === 'error' ? 'error' : (cleanText(narrative.state) === 'loading' ? 'loading' : 'loading');
+    renderPortSurface(state.context, state);
+    if (state.phase === 'error') return;
+    Promise.all(PORT_SURFACES.map((surface) => requestPortCareerView(state.context, surface))).then((views) => {
+      if (!state.alive || seq !== state.seq) return;
+      PORT_SURFACES.forEach((surface, index) => { state.views[surface] = views[index]; });
+      state.phase = 'normal';
+      renderPortSurface(state.context, state);
+    }, () => {
+      if (!state.alive || seq !== state.seq) return;
+      state.phase = 'error';
+      renderPortSurface(state.context, state);
+    });
+  }
+
+  function openPortSurface(ctx) {
+    const doc = documentOf();
+    const components = portComponentsOf(ctx);
+    if (!doc || !components) return { ok: false, reason: 'ui-unavailable' };
+    const state = createPortState();
+    state.context = ctx;
+    let current = null;
+    const manager = components.CareerShell.create('town');
+    const result = manager.open({
+      panelKey: 'town',
+      title: PORT_TITLE,
+      state: 'loading',
+      size: 'default',
+      body: portBody(ctx, state, null, components),
+      reducedMotion: !!ctx.reducedMotion,
+      onClose: () => {
+        if (current && current.portState === state) {
+          destroyPortState(state);
+          panel = null;
+        }
+      },
+    });
+    if (!result.ok) return { ok: false, reason: 'ui-unavailable' };
+    state.shell = manager;
+    const closeBtn = result.panel.querySelector ? result.panel.querySelector('.ac-career-ui__close') : null;
+    current = {
+      doc: doc,
+      overlay: result.panel.parentNode,
+      sheet: result.panel,
+      closeBtn: closeBtn,
+      portState: state,
+      portShell: manager,
+      refresh: (next) => { subscribePortChanges(next || ctx, state); loadPortData(next || ctx, state); },
+      destroy: () => destroyPortState(state),
+    };
+    panel = current;
+    subscribePortChanges(ctx, state);
+    loadPortData(ctx, state);
+    return { ok: true, panel: result.panel };
+  }
+
+  function renderPortDetached(ctx) {
+    const doc = documentOf();
+    const components = portComponentsOf(ctx);
+    if (!doc || !components) return null;
+    const state = createPortState();
+    state.context = ctx;
+    state.detached = true;
+    state.phase = cleanText(portNarrativeOf(ctx).state) === 'error' ? 'error' : 'normal';
+    return components.CareerShell(portShellProps(ctx, state, null, components));
+  }
+
+  root.ArcadeCareerUI = root.ArcadeCareerUI && typeof root.ArcadeCareerUI === 'object' ? root.ArcadeCareerUI : {};
+  root.ArcadeCareerUI.portSurface = {
+    componentsOf: portComponentsOf,
+    createState: createPortState,
+    body: portBody,
+    requestView: requestPortCareerView,
+    shellProps: portShellProps,
+    render: renderPortSurface,
+    load: loadPortData,
+    startCommission: startPortCommission,
+  };
+
   function numberOrZero(value) {
     const num = Number(value);
     return Number.isFinite(num) && num > 0 ? Math.floor(num) : 0;
@@ -1818,8 +2424,12 @@
   /** 关闭告示板并把焦点还给打开前的元素（可重复调用）。 */
   function close() {
     const current = panel;
-    panel = null;
     if (!current) return false;
+    if (current.portShell) {
+      current.portShell.close();
+      return true;
+    }
+    panel = null;
     if (typeof current.destroy === 'function') current.destroy();
     try {
       current.doc.removeEventListener('keydown', current.onKeyDown, true);
@@ -1847,6 +2457,7 @@
   function open(ctx) {
     const doc = documentOf();
     if (!doc) return { ok: false, reason: 'ui-unavailable' };
+    if (portComponentsOf(ctx)) return openPortSurface(ctx);
     ensureStyle(doc);
 
     /* 幂等：重复 open 复用同一面板，只刷新内容并保持焦点。 */
@@ -1959,6 +2570,7 @@
       }
       return panel.sheet;
     }
+    if (portComponentsOf(ctx)) return renderPortDetached(ctx);
     ensureStyle(doc);
     const built = buildPanel(ctx, false);
     if (!built) return null;
