@@ -86,8 +86,59 @@ const RENTAL_KEY = 'studiokit:arcade:career:rental.v1';
 const DB_NAME = 'studiokit:arcade:career';
 const ACCEPT_INVITATION_SELECTOR = '[data-career-panel="mailbox"] [data-action="accept-invitation"]';
 const INVITATION_PORT_SELECTOR = '[data-career-panel="mailbox"] [data-action="invitation-port"]';
+/* 0.23：接受邀请后先出现 [data-career-panel="arrival"] 首次到港面板，再到港叙事由 content 驱动。 */
+const ARRIVAL_LEAVE_SELECTOR = '[data-career-panel="arrival"] [data-action="leave-arrival"]';
+/* 0.23 组件面板（港口/机库/信箱/设置/章节）用 .ac-career-ui__panel；收据仍是旧 .ac-career-sheet。 */
+function shellSelectorOf(id) {
+  return `[data-career-panel="${id}"] .ac-career-ui__panel, [data-career-panel="${id}"] .ac-career-sheet`;
+}
+function closeSelectorOf(id) {
+  return `[data-career-panel="${id}"] .ac-career-ui__close, [data-career-panel="${id}"] .ac-career-close`;
+}
+/* 0.23 信箱按原型隐藏页头关闭按钮，改用内容里的「回到游戏」（data-action=close-mailbox）收起；
+   其余面板仍是页头关闭按钮。矩阵/PWA 断言「存在一个可见且 ≥44 的真实收起控件」。 */
+function dismissalSelectorsOf(id) {
+  const list = [`[data-career-panel="${id}"] .ac-career-ui__close`, `[data-career-panel="${id}"] .ac-career-close`];
+  if (id === 'mailbox') {
+    /* 0.23 信箱按状态把「收起」做成内容动作：已接受邀请时是「把验收单留在档案柜」
+       （defer-invitation），notice 时是「回到游戏」（close-mailbox）；两者都是 close()。 */
+    list.push('[data-career-panel="mailbox"] [data-action="close-mailbox"]');
+    list.push('[data-career-panel="mailbox"] [data-action="defer-invitation"]');
+    list.push('[data-career-panel="mailbox"] [data-action="defer-letter"]');
+  }
+  return list;
+}
 
+async function visibleDismissal(page, id) {
+  return page.evaluate(`(() => {
+    const selectors = ${JSON.stringify(dismissalSelectorsOf(id))};
+    for (const selector of selectors) {
+      const node = document.querySelector(selector);
+      if (!node || node.hidden || !node.getClientRects().length) continue;
+      const r = node.getBoundingClientRect();
+      return { selector, w: Math.round(r.width), h: Math.round(r.height), text: ((node.getAttribute('aria-label') || node.textContent || '')).replace(/\\s+/g, ' ').trim().slice(0, 24) };
+    }
+    return null;
+  })()`);
+}
+
+/** 0.23 真实叙事内容：到港文案/邀请按钮文案由 content shard 驱动，测试只读同源数据。 */
 const readJsonRel = (rel) => JSON.parse(fs.readFileSync(path.join(REPO_ROOT, rel), 'utf8'));
+const NARRATIVE_BY_PROFESSION = (() => {
+  const registry = readJsonRel('apps/arcade/career/content/narrative-registry.json');
+  const map = {};
+  for (const shard of registry.shards) {
+    const data = readJsonRel('apps/arcade/career/content/' + shard.url);
+    for (const entry of data.entries || []) map[entry.professionId] = entry;
+  }
+  return map;
+})();
+/* 0.23 首次到港面板只有在「本次接受建身份」时展示；工程职业首单来自世界通用工作内容。 */
+const PENDULUM_PROFESSION = NARRATIVE_BY_PROFESSION['engineering.structural'] || {};
+/* 0.23 组件信箱在邀请投影就绪后可直接接受（无需先投递），stage 停在 CURIOUS；
+   若走首航投递路径才会推进到 LOCAL。两者都已是真实读信后的状态。 */
+const EARLY_READING_STAGES = ['CURIOUS', 'LOCAL'];
+
 const CAREER_CATALOG_FIXTURE = (() => {
   const registry = readJsonRel('apps/arcade/career/content/registry.json');
   const worldWork = readJsonRel('apps/arcade/career/content/world-work.json');
@@ -359,6 +410,18 @@ async function openPanel(page, id, { waitMs = 900 } = {}) {
   for (let attempt = 0; attempt < 8; attempt += 1) {
     try {
       await page.waitFor(`!!document.querySelector('[data-career-panel="${id}"]')`, { timeout: 2000 });
+      /* 0.23 港口/信箱是异步投影组件：打开后要等真实内容渲染完再量尺寸/点关闭，
+         不能只靠固定 waitMs 猜装载时间。 */
+      if (id === 'town') {
+        await page.waitFor(`(() => {
+          const content = document.querySelector('[data-career-panel="town"] [data-port-tabpanel]');
+          if (!content) return false;
+          if (content.textContent.indexOf('正在整理港口内容') >= 0) return false;
+          return !!content.querySelector('[data-story-state], [data-timeline-state]');
+        })()`, { timeout: 10000 });
+      } else if (id === 'mailbox') {
+        await page.waitFor(`!!document.querySelector('[data-career-panel="mailbox"] [data-view="mailbox"]')`, { timeout: 8000 });
+      }
       await sleep(waitMs);
       return { ok: true, result };
     } catch (err) {
@@ -379,8 +442,8 @@ function panelMetricsExpr(id) {
     const ov = doc.querySelector('[data-career-panel="${id}"]');
     const viewport = { w: innerWidth, h: innerHeight };
     if (!ov) return { open: false, viewport };
-    const sheet = ov.querySelector('.ac-career-sheet');
-    const body = sheet ? sheet.querySelector('.ac-career-sheet__body') : null;
+    const sheet = ov.querySelector('.ac-career-ui__panel') || ov.querySelector('.ac-career-sheet');
+    const body = sheet ? (sheet.querySelector('[data-shell-body]') || sheet.querySelector('.ac-career-sheet__body')) : null;
     const rectOf = (node) => {
       const r = node.getBoundingClientRect();
       return [r.left, r.top, r.right, r.bottom].map((v) => Math.round(v * 10) / 10);
@@ -444,8 +507,8 @@ function scrollToEndExpr(id) {
   return `(() => {
     const ov = document.querySelector('[data-career-panel="${id}"]');
     if (!ov) return { open: false };
-    const sheet = ov.querySelector('.ac-career-sheet');
-    const body = sheet ? sheet.querySelector('.ac-career-sheet__body') : null;
+    const sheet = ov.querySelector('.ac-career-ui__panel') || ov.querySelector('.ac-career-sheet');
+    const body = sheet ? (sheet.querySelector('[data-shell-body]') || sheet.querySelector('.ac-career-sheet__body')) : null;
     if (!body) return { open: true, scrollable: false, reason: 'no-body' };
     const before = body.scrollTop;
     const max = Math.max(0, body.scrollHeight - body.clientHeight);
@@ -641,62 +704,52 @@ async function phaseEntry(page) {
   await page.evaluate(`(() => { const b = document.createElement('button'); b.id = 'd1613-trigger'; b.textContent = 'T'; b.style.cssText = 'position:fixed;left:2px;bottom:2px;z-index:9999'; document.body.appendChild(b); b.focus(); return true; })()`);
   const opened = await openPanel(page, 'mailbox', { waitMs: 500 });
   record('ENTRY 信箱可从 bridge 打开', opened.ok, JSON.stringify(opened.result));
+  await page.waitFor(`(() => {
+    const panel = document.querySelector('[data-career-panel="mailbox"]');
+    return !!panel && (!!panel.querySelector('[data-action="send-to-port"]') || !!panel.querySelector('[data-action="accept-invitation"]'));
+  })()`, { timeout: 10000 });
 
-  const sendSelector = '[data-career-panel="mailbox"] [aria-label="送去折光港"]';
+  /* 0.23 信箱是组件化卡片：首读主按钮可能是首航「送去折光港」，也可能在邀请投影
+     先装载后直接是内容驱动的接受动作。两者都是 0.23 合法首读；共同强度：
+     只有一个可见主动作、不自动开港口、不建身份、旧去港口按钮不出现。 */
   const firstRead = await page.evaluate(`(() => {
     const panel = document.querySelector('[data-career-panel="mailbox"]');
     if (!panel) return null;
-    const items = Array.from(panel.querySelectorAll('[data-clue-id]')).map((n) => n.getAttribute('data-clue-id'));
-    const sendButtons = Array.from(panel.querySelectorAll('[aria-label="送去折光港"]'));
-    const sendBtn = sendButtons[0] || null;
-    const legacyTown = panel.querySelector('[data-action="open-town"]');
-    const r = sendBtn ? sendBtn.getBoundingClientRect() : null;
-    const style = sendBtn ? getComputedStyle(sendBtn) : null;
+    const visible = (node) => !!node && !node.hidden && node.getClientRects().length > 0;
+    const send = panel.querySelector('[data-action="send-to-port"]');
+    const accept = panel.querySelector('[data-action="accept-invitation"]');
+    const town = panel.querySelector('[data-action="open-town"]');
+    const primary = Array.from(panel.querySelectorAll('button')).filter(visible)
+      .filter((node) => node.getAttribute('data-action-kind') === 'primary' || node.classList.contains('ac-career-btn--primary'));
+    const pick = visible(send) ? send : (visible(accept) ? accept : null);
+    const rect = pick ? pick.getBoundingClientRect() : null;
     return {
-      items,
-      sendCount: sendButtons.length,
-      legacyHidden: !!legacyTown && legacyTown.hidden === true,
-      send: sendBtn ? {
-        hidden: sendBtn.hidden,
-        disabled: sendBtn.disabled,
-        text: (sendBtn.textContent || '').trim(),
-        aria: sendBtn.getAttribute('aria-label'),
-        primary: sendBtn.classList.contains('ac-career-btn--primary'),
-        visible: !sendBtn.hidden && !sendBtn.disabled && sendBtn.getClientRects().length > 0 && !!style && style.display !== 'none' && style.visibility !== 'hidden',
-        rect: r ? [r.left, r.top, r.right, r.bottom].map((v) => Math.round(v)) : null,
-        w: r ? Math.round(r.width) : 0,
-        h: r ? Math.round(r.height) : 0,
+      items: Array.from(panel.querySelectorAll('[data-clue-id]')).map((node) => node.getAttribute('data-clue-id')),
+      action: pick ? {
+        kind: pick === send ? 'send-to-port' : 'accept-invitation',
+        text: (pick.textContent || '').trim(),
+        aria: pick.getAttribute('aria-label'),
+        primary: pick.getAttribute('data-action-kind') === 'primary' || pick.classList.contains('ac-career-btn--primary'),
+        w: rect ? Math.round(rect.width) : 0,
+        h: rect ? Math.round(rect.height) : 0,
+        visible: !pick.hidden && !pick.disabled && pick.getClientRects().length > 0,
       } : null,
+      visiblePrimary: primary.length,
+      townVisible: visible(town),
+      townAbsent: !town,
     };
   })()`);
+  const firstReadLabel = firstRead && firstRead.action
+    ? (firstRead.action.kind === 'send-to-port' ? '送去折光港' : (PENDULUM_PROFESSION.invitationAction || '接受这份邀请'))
+    : '';
   record(
-    'ENTRY 首读只有「送去折光港」一个主按钮且可见可点（≥44），旧去港口入口隐藏',
-    !!(firstRead && firstRead.items.length && firstRead.sendCount === 1 && firstRead.legacyHidden && firstRead.send &&
-      firstRead.send.hidden === false && firstRead.send.disabled === false && firstRead.send.visible && firstRead.send.primary &&
-      firstRead.send.aria === '送去折光港' && firstRead.send.text === '送去折光港' &&
-      firstRead.send.w >= 44 && firstRead.send.h >= 44),
-    det(['letter=' + JSON.stringify(firstRead && firstRead.items), 'send=' + JSON.stringify(firstRead && firstRead.send), 'legacyHidden=' + !!(firstRead && firstRead.legacyHidden)])
+    'ENTRY 首读只有一个可见主动作（首航投递或内容驱动接受邀请）且不自动开港口',
+    !!(firstRead && firstRead.items.length && firstRead.action && firstRead.action.primary && firstRead.action.visible &&
+      firstRead.visiblePrimary === 1 && firstRead.townVisible === false && firstRead.action.text === firstReadLabel &&
+      firstRead.action.w >= 44 && firstRead.action.h >= 44),
+    det(['letter=' + JSON.stringify(firstRead && firstRead.items), 'first=' + JSON.stringify(firstRead)])
   );
-  const sendIndex = await page.evaluate(`(() => {
-    const panel = document.querySelector('[data-career-panel="mailbox"]');
-    const btn = panel && panel.querySelector('[aria-label="送去折光港"]');
-    const address = panel && panel.querySelector('[data-view="mailbox"] .ac-career-letter__address');
-    if (!btn || !address) return null;
-    const btnRect = btn.getBoundingClientRect();
-    const addrRect = address.getBoundingClientRect();
-    return {
-      afterAddress: btnRect.top >= addrRect.bottom - 1,
-      inLegacyPort: !!btn.closest('.ac-career-mailbox__port'),
-      btnTop: Math.round(btnRect.top),
-      addressBottom: Math.round(addrRect.bottom),
-    };
-  })()`);
-  record(
-    'ENTRY 首读主按钮位于信件地址区块之后且不在旧去港口入口内',
-    !!(sendIndex && sendIndex.afterAddress && !sendIndex.inLegacyPort),
-    JSON.stringify(sendIndex)
-  );
-
+  const sendSelector = '[data-career-panel="mailbox"] [data-action="send-to-port"]';
   const beforeDelivery = await page.evaluate(careerIdentityExpr());
   record(
     'ENTRY 真实线索/读信后仍无生涯身份与职业 run',
@@ -704,38 +757,51 @@ async function phaseEntry(page) {
       beforeDelivery.run === null && beforeDelivery.hasCareerParam === false),
     JSON.stringify(beforeDelivery)
   );
-
-  await touchClick(page, sendSelector);
-  await page.waitFor(`(() => {
-    const b = document.querySelector(${JSON.stringify(ACCEPT_INVITATION_SELECTOR)});
-    return !!b && !b.hidden && !b.disabled && b.getClientRects().length > 0;
-  })()`, { timeout: 8000 });
+  if (firstRead && firstRead.action && firstRead.action.kind === 'send-to-port') {
+    await touchClick(page, sendSelector);
+    await page.waitFor(`(() => {
+      const b = document.querySelector(${JSON.stringify(ACCEPT_INVITATION_SELECTOR)});
+      return !!b && !b.hidden && !b.disabled && b.getClientRects().length > 0;
+    })()`, { timeout: 8000 });
+  }
+  const firstActionPlacement = await page.evaluate(`(() => {
+    const panel = document.querySelector('[data-career-panel="mailbox"]');
+    const accept = panel && panel.querySelector('[data-action="accept-invitation"]');
+    const address = panel && panel.querySelector('.ac-career-letter__address');
+    if (!accept || !address) return null;
+    const a = accept.getBoundingClientRect();
+    const b = address.getBoundingClientRect();
+    return { afterAddress: a.top >= b.bottom - 1, inOldPortRow: !!accept.closest('.ac-career-mailbox__port') };
+  })()`);
+  record(
+    'ENTRY 首读主按钮位于信件地址区块之后且不在旧去港口入口内',
+    !!(firstActionPlacement && firstActionPlacement.afterAddress && !firstActionPlacement.inOldPortRow),
+    JSON.stringify(firstActionPlacement)
+  );
+  /* 0.23 邀请小面的两个动作文案由 content shard 驱动（0.22 的固定「接受这份邀请/以后再说」
+     已换成逐职业 invitationAction/laterLabel）；行为不变：只出现接受/以后再说，不自动建身份。 */
   const invitationState = await page.evaluate(`(() => {
     const panel = document.querySelector('[data-career-panel="mailbox"]');
     const accept = panel && panel.querySelector('[data-action="accept-invitation"]');
     const defer = panel && panel.querySelector('[data-action="defer-invitation"]');
-    const legacyTown = panel && panel.querySelector('[data-action="open-town"]');
-    const rectOf = (node) => {
-      if (!node) return null;
-      const r = node.getBoundingClientRect();
-      return { w: Math.round(r.width), h: Math.round(r.height) };
-    };
+    const town = panel && panel.querySelector('[data-action="open-town"]');
+    const rectOf = (node) => { if (!node) return null; const r = node.getBoundingClientRect(); return { w: Math.round(r.width), h: Math.round(r.height) }; };
     return {
       accept: accept ? { text: (accept.textContent || '').trim(), rect: rectOf(accept) } : null,
       defer: defer ? { text: (defer.textContent || '').trim() } : null,
-      legacyTownHidden: !legacyTown || legacyTown.hidden === true,
+      townVisible: !!town && !town.hidden && town.getClientRects().length > 0,
       town: !!document.querySelector('[data-career-panel="town"]'),
     };
   })()`);
   record(
-    'ENTRY 投递只出现「接受邀请 / 以后再说」，不自动开港口、不建身份（按钮 ≥44）',
-    !!(invitationState && invitationState.accept && invitationState.accept.text === '接受这份邀请' &&
+    'ENTRY 邀请只出现「接受/以后再说」且不自动开港口、不建身份（按钮 ≥44）',
+    !!(invitationState && invitationState.accept &&
+      invitationState.accept.text === (PENDULUM_PROFESSION.invitationAction || '接受这份邀请') &&
       invitationState.accept.rect.w >= 44 && invitationState.accept.rect.h >= 44 &&
-      invitationState.defer && invitationState.defer.text === '以后再说' &&
-      invitationState.legacyTownHidden && invitationState.town === false),
+      invitationState.defer && invitationState.defer.text === (PENDULUM_PROFESSION.laterLabel || '以后再说') &&
+      invitationState.townVisible === false && invitationState.town === false),
     JSON.stringify(invitationState)
   );
-
   const invitation = await page.evaluate(`window.ArcadeCareer.invitationForClue('CL-pendulum-tower')`);
   record(
     'ENTRY 邀请小面来自真实线索与注册表映射',
@@ -764,97 +830,159 @@ async function phaseEntry(page) {
     det(['call=' + JSON.stringify(acceptCalls), 'identity=' + JSON.stringify(afterAccept), 'touch=' + JSON.stringify(acceptHit)])
   );
 
+  /* 0.23：接受后先进入 [data-career-panel="arrival"] 首次到港面板（P03），不直接塞告示板。 */
   const portHit = await touchClick(page, INVITATION_PORT_SELECTOR);
-  await sleep(800);
-  const afterSend = await page.evaluate(`(() => {
-    const state = window.ArcadeCareer.state();
+  await page.waitFor(`!!document.querySelector('[data-career-panel="arrival"]')`, { timeout: 10000 });
+  await sleep(700);
+  const arrival = await page.evaluate(`(() => {
+    const panel = document.querySelector('[data-career-panel="arrival"]');
+    if (!panel) return null;
+    const dialog = panel.querySelector('.ac-career-ui__panel') || panel;
+    const leave = panel.querySelector('[data-action="leave-arrival"]');
+    const start = panel.querySelector('[data-action="start-first-commission"]');
+    const harbor = panel.querySelector('svg.harbor');
+    const npc = panel.querySelector('[data-npc-state]');
+    const r = leave ? leave.getBoundingClientRect() : null;
     return {
+      mode: dialog.getAttribute('data-invitation-mode'),
+      created: dialog.getAttribute('data-invitation-created'),
+      harbor: !!harbor,
+      npcState: npc ? npc.getAttribute('data-npc-state') : null,
+      leave: leave ? { text: (leave.textContent || '').trim(), w: Math.round(r.width), h: Math.round(r.height), visible: leave.getClientRects().length > 0 } : null,
+      startFirst: !!start,
       town: !!document.querySelector('[data-career-panel="town"]'),
       mailbox: !!document.querySelector('[data-career-panel="mailbox"]'),
-      stage: state && state.stage,
       panels: Array.from(document.querySelectorAll('[data-career-panel]')).map((node) => node.getAttribute('data-career-panel')),
+      run: window.ArcadeCareer.commissionRun || null,
+      stage: window.ArcadeCareer.state().stage,
     };
   })()`);
   record(
-    'ENTRY 触控「去港口看看」打开告示板、信箱收起（接委托仍待显式点击，按钮 ≥44）',
-    !!(afterSend && afterSend.stage === 'LOCAL' && afterSend.town && !afterSend.mailbox &&
-      afterSend.panels.length === 1 && afterSend.panels[0] === 'town' && portHit.w >= 44 && portHit.h >= 44),
-    det(['state=' + JSON.stringify(afterSend), 'touch=' + JSON.stringify(portHit)])
+    'ENTRY 触控「去港口看看」打开 0.23 首次到港叙事面板（P03）、信箱收起、不自动接单',
+    !!(arrival && arrival.mode === 'freshIntro' && arrival.created === 'true' && arrival.harbor && arrival.npcState === 'first' &&
+      arrival.leave && arrival.leave.visible && arrival.leave.text === (PENDULUM_PROFESSION.exitLabel || '暂时离开港口') &&
+      arrival.leave.w >= 44 && arrival.leave.h >= 44 && arrival.startFirst === false &&
+      arrival.town === false && arrival.mailbox === false && JSON.stringify(arrival.panels) === '["arrival"]' &&
+      arrival.run === null && EARLY_READING_STAGES.indexOf(arrival.stage) >= 0 && portHit.w >= 44 && portHit.h >= 44),
+    det(['state=' + JSON.stringify(arrival), 'touch=' + JSON.stringify(portHit)])
+  );
+  await touchClick(page, ARRIVAL_LEAVE_SELECTOR);
+  await page.waitFor(`!document.querySelector('[data-career-panel="arrival"]')`, { timeout: 8000 });
+  const afterArrival = await page.evaluate(`(() => ({ panels: Array.from(document.querySelectorAll('[data-career-panel]')).map((node) => node.getAttribute('data-career-panel')), stage: window.ArcadeCareer.state().stage }))()`);
+  record(
+    'ENTRY 离开到港面板后无残留面板且阅读阶段保持',
+    !!(afterArrival && afterArrival.panels.length === 0 && EARLY_READING_STAGES.indexOf(afterArrival.stage) >= 0),
+    JSON.stringify(afterArrival)
   );
 
-  await esc(page);
-  const afterSendTownEsc = await page.evaluate(`(() => {
-    const state = window.ArcadeCareer.state();
+  /* 到港面板之后必须显式打开港口（0.23 不自动开）；E 组同一路径。 */
+  await page.evaluate(`(() => { const b = document.getElementById('d1613-trigger'); if (b) b.focus(); return window.ArcadeCareer.openTown(); })()`);
+  await page.waitFor(`!!document.querySelector('[data-career-panel="town"] [data-port-tabpanel="home"] button[id^="port-story-"]')`, { timeout: 15000 });
+  const portFacts = await page.evaluate(`(() => {
+    const panel = document.querySelector('[data-career-panel="town"]');
+    const story = panel.querySelector('[data-port-tabpanel="home"] button[id^="port-story-"]');
     return {
+      storyId: story ? story.id : null,
+      tabs: Array.from(panel.querySelectorAll('[role="tablist"] [data-tab]')).map((node) => node.getAttribute('data-tab')),
+      tools: Array.from(panel.querySelectorAll('[data-tool]')).map((node) => node.getAttribute('data-tool')),
+      stage: window.ArcadeCareer.state().stage,
       panels: Array.from(document.querySelectorAll('[data-career-panel]')).map((node) => node.getAttribute('data-career-panel')),
-      stage: state && state.stage,
     };
   })()`);
   record(
-    'ENTRY 首读告示板 Esc 后无残留面板且 LOCAL 状态保持',
-    !!afterSendTownEsc && afterSendTownEsc.panels.length === 0 && afterSendTownEsc.stage === 'LOCAL',
-    JSON.stringify(afterSendTownEsc)
+    'ENTRY 显式打开港口：真实 story 推荐、三标签与工具格渲染（0.22 告示板钩子已移除）',
+    !!(portFacts && portFacts.storyId && portFacts.storyId.indexOf('port-story-') === 0 &&
+      JSON.stringify(portFacts.tabs) === '["home","work","journal"]' &&
+      JSON.stringify(portFacts.tools) === '["wallet","shop","workshop","hangar"]' &&
+      JSON.stringify(portFacts.panels) === '["town"]' && EARLY_READING_STAGES.indexOf(portFacts.stage) >= 0),
+    JSON.stringify(portFacts)
   );
+  await esc(page);
+  const afterPortEsc = await page.evaluate(`(() => ({ panels: document.querySelectorAll('[data-career-panel]').length, focus: document.activeElement && document.activeElement.id, stage: window.ArcadeCareer.state().stage }))()`);
+  record('ENTRY 港口 Esc 关闭并归还焦点（不困在面板）', afterPortEsc.panels === 0 && afterPortEsc.focus === 'd1613-trigger' && EARLY_READING_STAGES.indexOf(afterPortEsc.stage) >= 0, JSON.stringify(afterPortEsc));
 
-  /* 重新打开信箱 → 旧港入口 → 告示板；接受后邀请小面让位给常态去港口入口。 */
+  /* 身份建立后信箱旧港入口仍在：0.23 仍经首次到港适配器，不直接塞告示板。 */
   await page.evaluate(`(() => { const b = document.getElementById('d1613-trigger'); if (b) b.focus(); return true; })()`);
   await openPanel(page, 'mailbox', { waitMs: 400 });
-  const legacyPortSelector = await page.evaluate(`(() => {
+  const reentryPort = await page.evaluate(`(() => {
     const panel = document.querySelector('[data-career-panel="mailbox"]');
     const visible = (node) => !!node && !node.hidden && node.getClientRects().length > 0;
-    if (visible(panel && panel.querySelector('[data-action="invitation-port"]'))) return '[data-career-panel="mailbox"] [data-action="invitation-port"]';
-    if (visible(panel && panel.querySelector('[data-action="open-town"]'))) return '[data-career-panel="mailbox"] [data-action="open-town"]';
-    return null;
+    const invitationPort = panel && panel.querySelector('[data-action="invitation-port"]');
+    const oldTown = panel && panel.querySelector('[data-action="open-town"]');
+    const r = invitationPort ? invitationPort.getBoundingClientRect() : null;
+    return {
+      visible: visible(invitationPort),
+      text: invitationPort ? (invitationPort.textContent || '').trim() : null,
+      w: r ? Math.round(r.width) : 0,
+      h: r ? Math.round(r.height) : 0,
+      oldTownVisible: visible(oldTown),
+    };
   })()`);
-  record('ENTRY 首次身份建立后旧港入口仍在信箱可点', !!legacyPortSelector, 'selector=' + String(legacyPortSelector));
-  await touchClick(page, legacyPortSelector || '[data-career-panel="mailbox"] [data-action="open-town"]');
-  await sleep(800);
+  record(
+    'ENTRY 首次身份建立后旧港入口仍在信箱可点（0.23 先回到港面板）',
+    !!(reentryPort && reentryPort.visible && !reentryPort.oldTownVisible && reentryPort.w >= 44 && reentryPort.h >= 44),
+    JSON.stringify(reentryPort)
+  );
+  await touchClick(page, INVITATION_PORT_SELECTOR);
+  await page.waitFor(`!!document.querySelector('[data-career-panel="arrival"]')`, { timeout: 10000 });
+  await sleep(500);
+  const reentryArrival = await page.evaluate(`(() => {
+    const panel = document.querySelector('[data-career-panel="arrival"]');
+    const dialog = panel ? (panel.querySelector('.ac-career-ui__panel') || panel) : null;
+    return {
+      panels: Array.from(document.querySelectorAll('[data-career-panel]')).map((node) => node.getAttribute('data-career-panel')),
+      mode: dialog ? dialog.getAttribute('data-invitation-mode') : null,
+      leave: !!document.querySelector('[data-career-panel="arrival"] [data-action="leave-arrival"]'),
+      town: !!document.querySelector('[data-career-panel="town"]'),
+      mailbox: !!document.querySelector('[data-career-panel="mailbox"]'),
+    };
+  })()`);
+  record(
+    'ENTRY 身份建立后旧港入口再次打开真实到港面板（不直接塞告示板）',
+    !!(reentryArrival && JSON.stringify(reentryArrival.panels) === '["arrival"]' && !!reentryArrival.mode && reentryArrival.leave &&
+      reentryArrival.town === false && reentryArrival.mailbox === false),
+    JSON.stringify(reentryArrival)
+  );
+  await touchClick(page, ARRIVAL_LEAVE_SELECTOR);
+  await page.waitFor(`!document.querySelector('[data-career-panel="arrival"]')`, { timeout: 8000 });
+  await page.evaluate(`(() => { const b = document.getElementById('d1613-trigger'); if (b) b.focus(); return window.ArcadeCareer.openTown(); })()`);
+  await page.waitFor(`!!document.querySelector('[data-career-panel="town"] [data-port-tabpanel="home"] button[id^="port-story-"]')`, { timeout: 15000 });
+  await sleep(300);
   const townOpen = await page.evaluate(`(() => {
     const town = document.querySelector('[data-career-panel="town"]');
     const mailbox = document.querySelector('[data-career-panel="mailbox"]');
-    if (!town) return { town: false, mailbox: !!mailbox };
-    const actions = Array.from(town.querySelectorAll('[data-town-action]')).map((node) => {
+    const tools = Array.from((town || document).querySelectorAll('[data-tool]')).map((node) => {
       const r = node.getBoundingClientRect();
-      return { action: node.getAttribute('data-town-action'), text: (node.textContent || '').trim(), hidden: node.hidden, w: Math.round(r.width), h: Math.round(r.height), rect: [r.left, r.top, r.right, r.bottom].map((v) => Math.round(v)) };
+      return { tool: node.getAttribute('data-tool'), text: (node.textContent || '').trim(), w: Math.round(r.width), h: Math.round(r.height), visible: node.getClientRects().length > 0 };
     });
-    return { town: true, mailbox: !!mailbox, actions };
+    return { town: !!town, mailbox: !!mailbox, tools };
   })()`);
-  record('ENTRY 去港口后信箱收起、告示板打开（触控）', !!(townOpen.town && !townOpen.mailbox), JSON.stringify({ town: townOpen.town, mailbox: townOpen.mailbox }));
-  const townActions = townOpen.actions || [];
-  const receiptBtn = townActions.find((item) => item.action === 'receipt');
-  const settingsBtn = townActions.find((item) => item.action === 'settings');
-  const flightSummary = await page.evaluate(`(() => {
-    const node = document.querySelector('[data-career-panel="town"] [data-town-flight] > summary');
-    if (!node) return null;
-    const r = node.getBoundingClientRect();
-    return { text: node.textContent.trim(), w: Math.round(r.width), h: Math.round(r.height) };
-  })()`);
+  record('ENTRY 去港口后信箱收起、港口打开（触控）', !!(townOpen.town && !townOpen.mailbox), JSON.stringify({ town: townOpen.town, mailbox: townOpen.mailbox }));
+  /* 0.22 的「看看出航」折叠区与钱包/线索提示行已移除；0.23 等价：工具格四个入口
+     始终可见（机库无需先展开出航），且都 ≥44。 */
   record(
-    'ENTRY 告示板可见「看看出航」/ 钱包与收据 / 线索提示且 ≥44',
-    !!flightSummary && !!receiptBtn && !!settingsBtn && [flightSummary, receiptBtn, settingsBtn].every((item) => item.w >= 44 && item.h >= 44),
-    JSON.stringify({ flightSummary, townActions })
+    'ENTRY 港口工具格 钱包/商店/工作台/机库 可见且 ≥44（0.22 出航入口等价）',
+    !!(townOpen.tools.length === 4 && ['wallet', 'shop', 'workshop', 'hangar'].every((id) =>
+      townOpen.tools.some((item) => item.tool === id && item.visible && item.w >= 44 && item.h >= 44))),
+    JSON.stringify(townOpen.tools)
   );
-  await mouseClick(page, '[data-career-panel="town"] [data-town-flight] > summary');
-  await sleep(120);
-  const hangarBtn = await page.evaluate(`(() => {
-    const node = document.querySelector('[data-career-panel="town"] [data-town-action="hangar"]');
-    if (!node) return null;
-    const r = node.getBoundingClientRect();
-    return { hidden: node.hidden, w: Math.round(r.width), h: Math.round(r.height) };
-  })()`);
-  record('ENTRY 展开「看看出航」后机库入口可见且 ≥44', !!hangarBtn && !hangarBtn.hidden && hangarBtn.w >= 44 && hangarBtn.h >= 44, JSON.stringify(hangarBtn));
 
-  /* 机库入口 → 叠层关闭后回告示板 */
-  await mouseClick(page, '[data-career-panel="town"] [data-town-action="hangar"]');
-  await sleep(800);
+  /* 工具格机库入口 → 叠层关闭后回港口 */
+  await mouseClick(page, '[data-career-panel="town"] [data-tool="hangar"]');
+  await page.waitFor(`!!document.querySelector('[data-career-panel="hangar"]')`, { timeout: 10000 });
+  await sleep(600);
   const layered = await page.evaluate(`(() => Array.from(document.querySelectorAll('[data-career-panel]')).map((node) => node.getAttribute('data-career-panel')))()`);
-  record('ENTRY 告示板「去机库」打开机库（叠层）', Array.isArray(layered) && layered.indexOf('town') >= 0 && layered.indexOf('hangar') >= 0, JSON.stringify(layered));
+  record('ENTRY 港口「机库」工具打开机库（叠层）', Array.isArray(layered) && layered.indexOf('town') >= 0 && layered.indexOf('hangar') >= 0, JSON.stringify(layered));
   await esc(page);
-  const afterTopEsc = await page.evaluate(`(() => Array.from(document.querySelectorAll('[data-career-panel]')).map((node) => node.getAttribute('data-career-panel')))()`);
-  record('ENTRY 机库 Esc 后回告示板（未一键双关）', JSON.stringify(afterTopEsc) === '["town"]', JSON.stringify(afterTopEsc));
+  const afterTopEsc = await page.evaluate(`(() => ({
+    panels: Array.from(document.querySelectorAll('[data-career-panel]')).map((node) => node.getAttribute('data-career-panel')),
+    focusTool: document.activeElement ? document.activeElement.getAttribute('data-tool') : null,
+  }))()`);
+  record('ENTRY 机库 Esc 后回港口（未一键双关）', JSON.stringify(afterTopEsc.panels) === '["town"]', JSON.stringify(afterTopEsc));
+  record('ENTRY 机库关闭后焦点回到港口「机库」工具', afterTopEsc.focusTool === 'hangar', JSON.stringify(afterTopEsc));
   await esc(page);
   const afterTownEsc = await page.evaluate(`(() => ({ panels: document.querySelectorAll('[data-career-panel]').length, focus: document.activeElement && document.activeElement.id }))()`);
-  record('ENTRY 告示板 Esc 关闭并归还焦点（不困在面板）', afterTownEsc.panels === 0 && afterTownEsc.focus === 'd1613-trigger', JSON.stringify(afterTownEsc));
+  record('ENTRY 港口 Esc 关闭并归还焦点（不困在面板）', afterTownEsc.panels === 0 && afterTownEsc.focus === 'd1613-trigger', JSON.stringify(afterTownEsc));
   await clearErrors(page, 'ENTRY');
 }
 
@@ -934,21 +1062,15 @@ async function phaseMatrix(page) {
           'bodyRect=' + fmtRect(scroll && scroll.bodyRect),
         ])
       );
-      const closeBtn = await page.evaluate(`(() => {
-        const ov = document.querySelector('[data-career-panel="${id}"]');
-        const btn = ov && ov.querySelector('.ac-career-close');
-        if (!btn) return null;
-        const r = btn.getBoundingClientRect();
-        return { visible: btn.getClientRects().length > 0, w: Math.round(r.width), h: Math.round(r.height), rect: [r.left, r.top, r.right, r.bottom].map((v) => Math.round(v)) };
-      })()`);
+      const closeBtn = await visibleDismissal(page, id);
       record(
-        tag + ' 关闭按钮可见且 ≥44',
-        !!(closeBtn && closeBtn.visible && closeBtn.w >= 44 && closeBtn.h >= 44),
+        tag + ' 关闭/返回控件可见且 ≥44',
+        !!(closeBtn && closeBtn.w >= 44 && closeBtn.h >= 44),
         det([ctxText, 'close=' + JSON.stringify(closeBtn)])
       );
       let closed = false;
       try {
-        await mouseClick(page, `[data-career-panel="${id}"] .ac-career-close`);
+        await mouseClick(page, closeBtn ? closeBtn.selector : closeSelectorOf(id));
         await sleep(320);
         closed = !(await panelPresent(page, id));
       } catch (err) {
@@ -961,13 +1083,13 @@ async function phaseMatrix(page) {
       await page.evaluate(`(() => { const ov = document.querySelector('[data-career-panel="${id}"]'); if (ov) ov.remove(); return true; })()`);
       if (width === 390 && (id === 'town' || id === 'hangar' || id === 'mailbox')) {
         await openPanel(page, id, { waitMs: 900 });
-        await page.evaluate(`(() => { const body = document.querySelector('[data-career-panel="${id}"] .ac-career-sheet__body'); if (body) body.scrollTop = 0; return true; })()`);
+        await page.evaluate(`(() => { const ov = document.querySelector('[data-career-panel="${id}"]'); const body = ov && (ov.querySelector('[data-shell-body]') || ov.querySelector('.ac-career-sheet__body')); if (body) body.scrollTop = 0; return true; })()`);
         await shot(page, `D16-13-390-${id}.png`);
         await closeAllPanels(page);
       }
       if (width === 320 && (id === 'town' || id === 'hangar')) {
         await openPanel(page, id, { waitMs: 1000 });
-        await page.evaluate(`(() => { const body = document.querySelector('[data-career-panel="${id}"] .ac-career-sheet__body'); if (body) body.scrollTop = 0; return true; })()`);
+        await page.evaluate(`(() => { const ov = document.querySelector('[data-career-panel="${id}"]'); const body = ov && (ov.querySelector('[data-shell-body]') || ov.querySelector('.ac-career-sheet__body')); if (body) body.scrollTop = 0; return true; })()`);
         await shot(page, `D16-13-320-${id}.png`);
         await closeAllPanels(page);
       }
@@ -988,7 +1110,7 @@ async function phaseKeyboard(page) {
       continue;
     }
     const focusableCount = await page.evaluate(`(() => {
-      const sheet = document.querySelector('[data-career-panel="${id}"] .ac-career-sheet');
+      const sheet = document.querySelector('[data-career-panel="${id}"] .ac-career-ui__panel') || document.querySelector('[data-career-panel="${id}"] .ac-career-sheet');
       if (!sheet) return 0;
       return Array.from(sheet.querySelectorAll('button, [href], input, select, textarea, [tabindex]:not([tabindex="-1"])')).filter((node) => {
         if (node.disabled || node.hidden) return false;
@@ -1000,7 +1122,7 @@ async function phaseKeyboard(page) {
     for (let i = 0; i < focusableCount + 2; i += 1) {
       await tab(page);
       const inside = await page.evaluate(`(() => {
-        const sheet = document.querySelector('[data-career-panel="${id}"] .ac-career-sheet');
+        const sheet = document.querySelector('[data-career-panel="${id}"] .ac-career-ui__panel') || document.querySelector('[data-career-panel="${id}"] .ac-career-sheet');
         const active = document.activeElement;
         return { inSheet: !!(sheet && active && sheet.contains(active)), tag: active && active.tagName, label: active ? ((active.getAttribute && active.getAttribute('aria-label')) || active.textContent || '').replace(/\\s+/g, ' ').trim().slice(0, 24) : null };
       })()`);
@@ -1012,7 +1134,7 @@ async function phaseKeyboard(page) {
     record(tag + ' Tab 不逃离最上层 panel', escaped === null, 'panel=' + id + (escaped ? ' escaped=' + JSON.stringify(escaped) : ' focusables=' + focusableCount));
     await tab(page, true);
     const shiftInside = await page.evaluate(`(() => {
-      const sheet = document.querySelector('[data-career-panel="${id}"] .ac-career-sheet');
+      const sheet = document.querySelector('[data-career-panel="${id}"] .ac-career-ui__panel') || document.querySelector('[data-career-panel="${id}"] .ac-career-sheet');
       const active = document.activeElement;
       return !!(sheet && active && sheet.contains(active));
     })()`);
@@ -1025,12 +1147,14 @@ async function phaseKeyboard(page) {
     await closeAllPanels(page);
   }
 
-  /* 叠层（任务卡必需）：town → hangar，Esc 只关最上层 hangar */
+  /* 叠层（任务卡必需）：town → hangar，Esc 只关最上层 hangar。
+     0.23 港口机库入口是工具格 [data-tool="hangar"]（0.22 的「看看出航」折叠区已移除）。 */
   await closeAllPanels(page);
   await page.evaluate(`(() => { const b = document.getElementById('d1613-trigger'); if (b) b.focus(); return window.ArcadeCareer.openTown(); })()`);
   await page.waitFor(`!!document.querySelector('[data-career-panel="town"]')`, { timeout: 6000 });
+  await page.waitFor(`!!document.querySelector('[data-career-panel="town"] [data-tool="hangar"]')`, { timeout: 10000 });
   await sleep(700);
-  await mouseClick(page, '[data-career-panel="town"] [data-town-action="hangar"]');
+  await mouseClick(page, '[data-career-panel="town"] [data-tool="hangar"]');
   await page.waitFor(`!!document.querySelector('[data-career-panel="hangar"]')`, { timeout: 6000 });
   await sleep(700);
   const stack2Before = await page.evaluate(`(() => Array.from(document.querySelectorAll('[data-career-panel]')).map((node) => node.getAttribute('data-career-panel')))()`);
@@ -1039,17 +1163,17 @@ async function phaseKeyboard(page) {
   await sleep(280);
   const stack2After = await page.evaluate(`(() => ({
     panels: Array.from(document.querySelectorAll('[data-career-panel]')).map((node) => node.getAttribute('data-career-panel')),
-    focusLabel: document.activeElement ? ((document.activeElement.getAttribute && document.activeElement.getAttribute('data-town-action')) || document.activeElement.textContent || '').replace(/\\s+/g, ' ').trim().slice(0, 16) : null,
+    focusLabel: document.activeElement ? ((document.activeElement.getAttribute && (document.activeElement.getAttribute('data-tool') || document.activeElement.getAttribute('data-town-action'))) || document.activeElement.textContent || '').replace(/\\s+/g, ' ').trim().slice(0, 16) : null,
   }))()`);
   record('K-STACK 叠层 town→hangar：Esc 只关最上层 hangar', JSON.stringify(stack2After.panels) === '["town"]', JSON.stringify(stack2After));
-  record('K-STACK hangar 关闭后焦点回到告示板「去机库」', stack2After.focusLabel === 'hangar', 'focus=' + JSON.stringify(stack2After.focusLabel));
+  record('K-STACK hangar 关闭后焦点回到港口「机库」工具', stack2After.focusLabel === 'hangar', 'focus=' + JSON.stringify(stack2After.focusLabel));
   await closeAllPanels(page);
 
   /* 附加：三层叠加 town→hangar→receipt，Esc 也只能关最上层（任务卡外扩展观察） */
   await page.evaluate(`(() => { const b = document.getElementById('d1613-trigger'); if (b) b.focus(); return window.ArcadeCareer.openTown(); })()`);
-  await page.waitFor(`!!document.querySelector('[data-career-panel="town"]')`, { timeout: 6000 });
+  await page.waitFor(`!!document.querySelector('[data-career-panel="town"] [data-tool="hangar"]')`, { timeout: 10000 });
   await sleep(700);
-  await mouseClick(page, '[data-career-panel="town"] [data-town-action="hangar"]');
+  await mouseClick(page, '[data-career-panel="town"] [data-tool="hangar"]');
   await page.waitFor(`!!document.querySelector('[data-career-panel="hangar"]')`, { timeout: 6000 });
   await sleep(700);
   await page.evaluate(`(async () => { try { await window.ArcadeCareer.openReceipt(); } catch (err) { /* ignore */ } return true; })()`);
@@ -1084,7 +1208,7 @@ async function phaseReducedMotion(page) {
     }
     const styles = await page.evaluate(`(() => {
       const ov = document.querySelector('[data-career-panel="${id}"]');
-      const sheet = ov && ov.querySelector('.ac-career-sheet');
+      const sheet = ov && (ov.querySelector('.ac-career-ui__panel') || ov.querySelector('.ac-career-sheet'));
       const button = ov && ov.querySelector('button');
       const ovStyle = ov ? getComputedStyle(ov) : null;
       const shStyle = sheet ? getComputedStyle(sheet) : null;
@@ -1164,7 +1288,7 @@ async function phaseTouch(page) {
     det(['touch=' + JSON.stringify(buy), 'status=' + JSON.stringify(buyState.status), 'walletBefore=' + JSON.stringify(walletBeforeBuy), 'walletAfter=' + JSON.stringify(buyState.wallet), 'credits=' + buyState.credits, 'owned=' + buyState.owned])
   );
 
-  const close = await touchClick(page, '[data-career-panel="hangar"] .ac-career-close');
+  const close = await touchClick(page, closeSelectorOf('hangar'));
   await sleep(350);
   record('TOUCH 关闭（收起机库）触控命中', !(await panelPresent(page, 'hangar')), 'touch=' + JSON.stringify(close));
 
@@ -1194,16 +1318,35 @@ async function phaseTouch(page) {
     JSON.stringify(boardFacts)
   );
   await openPanel(page, 'town', { waitMs: 1000 });
+  await page.waitFor(`!!document.querySelector('[data-career-panel="town"] [data-port-tabpanel="home"] button[id^="port-story-"]')`, { timeout: 15000 });
   const beforeUrl = await page.evaluate('location.href');
-  const recommendedStart = '[data-career-panel="town"] [data-town-recommend-id] [data-town-action="start"]';
-  const fallbackStart = '[data-career-panel="town"] [data-town-action="start"][data-commission-id="pendulum-tower.T1"]';
-  const hasRecommended = await page.evaluate(`!!document.querySelector(${JSON.stringify(recommendedStart)})`);
-  const startSelector = hasRecommended ? recommendedStart : fallbackStart;
-  const clickedCommission = await page.evaluate(`(() => {
-    const el = document.querySelector(${JSON.stringify(startSelector)});
-    return (el && el.getAttribute('data-commission-id')) || 'pendulum-tower.T1';
+  /* 0.23 港口首页推荐卡：真实 careerView.story.nextAction 以 id=port-story-<commissionId>
+     的按钮呈现。0.22 的 [data-town-recommend-id]/[data-town-action="start"] 已随告示板移除。 */
+  const recommendedStart = '[data-career-panel="town"] [data-port-tabpanel="home"] button[id^="port-story-"]';
+  const boardProjection = await page.evaluate(`(async () => {
+    const view = await window.ArcadeCareer.careerView({ surface: 'port' });
+    const next = view && view.story && view.story.nextAction ? view.story.nextAction : null;
+    const button = document.querySelector('[data-career-panel="town"] [data-port-tabpanel="home"] button[id^="port-story-"]');
+    const r = button ? button.getBoundingClientRect() : null;
+    return {
+      nextId: next && next.commissionId || null,
+      nextLabel: next && next.label || '',
+      buttonId: button ? button.id : null,
+      buttonText: button ? (button.textContent || '').trim() : '',
+      w: r ? Math.round(r.width) : 0,
+      h: r ? Math.round(r.height) : 0,
+      visible: !!button && button.getClientRects().length > 0,
+    };
   })()`);
-  const start = await touchClick(page, startSelector);
+  const clickedCommission = boardProjection.nextId || 'pendulum-tower.T1';
+  record(
+    'TOUCH 港口首页推荐卡来自真实 nextAction 且按钮 ≥44',
+    !!(boardProjection.nextId && boardProjection.buttonId === 'port-story-' + boardProjection.nextId &&
+      boardProjection.buttonText === boardProjection.nextLabel && boardProjection.visible &&
+      boardProjection.w >= 44 && boardProjection.h >= 44),
+    JSON.stringify(boardProjection)
+  );
+  const start = await touchClick(page, recommendedStart);
   const navigated = await waitForNavigation(page, beforeUrl, 12000);
   await waitBridge(page);
   await sleep(500);
@@ -1383,7 +1526,14 @@ async function phasePwa(base) {
         continue;
       }
       const m = await pwa.evaluate(panelMetricsExpr(id));
-      const pad = await pwa.evaluate(`(() => { const ov = document.querySelector('[data-career-panel="${id}"]'); return { top: getComputedStyle(ov).paddingTop, bottom: getComputedStyle(ov).paddingBottom, left: getComputedStyle(ov).paddingLeft, right: getComputedStyle(ov).paddingRight }; })()`);
+      /* 0.22 旧浮层用 padding-bottom 预留安全区；0.23 组件浮层改用 inset: env(...)，
+         等价强度：浮层在底部实际预留至少 env(safe-area-inset-bottom)=34px。 */
+      const pad = await pwa.evaluate(`(() => {
+        const ov = document.querySelector('[data-career-panel="${id}"]');
+        const cs = ov ? getComputedStyle(ov) : null;
+        return { top: cs ? cs.paddingTop : null, bottom: cs ? cs.paddingBottom : null, left: cs ? cs.paddingLeft : null, right: cs ? cs.paddingRight : null, insetTop: cs ? cs.top : null, insetBottom: cs ? cs.bottom : null };
+      })()`);
+      const reservedBottom = Math.max(parseFloat(pad.bottom) || 0, parseFloat(pad.insetBottom) || 0);
       const ctxText = `width=${vw} panel=${id} safe=[47,34]`;
       record(
         tag + ' 面板不被顶部裁切（sheet.top ≥ safe-area-top）',
@@ -1401,9 +1551,9 @@ async function phasePwa(base) {
         det([ctxText, 'sheet=' + fmtRect(m.sheetRect)])
       );
       record(
-        tag + ' env(safe-area-inset-bottom) 生效（overlay padding-bottom≥46）',
-        parseFloat(pad.bottom) >= 45.5,
-        det([ctxText, 'padding=' + JSON.stringify(pad)])
+        tag + ' env(safe-area-inset-bottom) 生效（0.22 padding / 0.23 inset ≥34）',
+        reservedBottom >= safeBottom - 0.5,
+        det([ctxText, 'padding=' + JSON.stringify(pad), 'reservedBottom=' + reservedBottom])
       );
       record(
         tag + ' 无横向溢出',
@@ -1414,7 +1564,8 @@ async function phasePwa(base) {
       record(tag + ' 按钮 ≥44', small.length === 0, det([ctxText, 'offenders=' + JSON.stringify(small.slice(0, 4))]));
       let closed = false;
       try {
-        await touchClick(pwa, `[data-career-panel="${id}"] .ac-career-close`);
+        const dismissal = await visibleDismissal(pwa, id);
+        await touchClick(pwa, dismissal ? dismissal.selector : closeSelectorOf(id));
         await sleep(320);
         closed = !(await panelPresent(pwa, id));
       } catch (err) {
@@ -1423,7 +1574,7 @@ async function phasePwa(base) {
       record(tag + ' 触控关闭按钮可点', closed, det([ctxText, 'closed=' + closed]));
       if (id === 'town' || id === 'hangar') {
         await openPanel(pwa, id, { waitMs: 900 });
-        await pwa.evaluate(`(() => { const body = document.querySelector('[data-career-panel="${id}"] .ac-career-sheet__body'); if (body) body.scrollTop = 0; return true; })()`);
+        await pwa.evaluate(`(() => { const ov = document.querySelector('[data-career-panel="${id}"]'); const body = ov && (ov.querySelector('[data-shell-body]') || ov.querySelector('.ac-career-sheet__body')); if (body) body.scrollTop = 0; return true; })()`);
         await shot(pwa, `D16-13-390-pwa-${id}.png`);
         await closeAllPanels(pwa);
       }
