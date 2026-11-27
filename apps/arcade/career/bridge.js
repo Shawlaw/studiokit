@@ -1758,34 +1758,43 @@
       announce: announceToUser,
       reducedMotion: reducedMotionPreferred(),
       professionView: professionViewModule(),
-      careerView: function (extra) {
-        return careerView(Object.assign({ surface: 'receipt' }, isObject(extra) ? extra : {}));
-      },
+      careerView: null,
       storyFeedback: storyFeedbackForUi(feedback),
       openTown: openTown,
       openCampaign: openCampaign,
       openMailbox: openMailbox,
     };
-    var receiptUi = readUi('receipt');
-    if (!receiptUi || typeof receiptUi.show !== 'function') {
-      /* receipt.js 是 lazy 依赖：玩家本局没开过钱包时也要在结算后加载并展示收据。 */
-      ensureLazyModule('receipt')
-        .then(function (loaded) {
-          if (!loaded || typeof loaded.show !== 'function') return;
-          try {
-            loaded.show(payload);
-          } catch (err) {
-            warnOnce('commission-receipt-ui', err);
-          }
-        })
-        .catch(function () {});
-      return;
+    function show() {
+      var receiptUi = readUi('receipt');
+      if (!receiptUi || typeof receiptUi.show !== 'function') {
+        /* receipt.js 是 lazy 依赖：玩家本局没开过钱包时也要在结算后加载并展示收据。 */
+        return ensureLazyModule('receipt')
+          .then(function (loaded) {
+            if (!loaded || typeof loaded.show !== 'function') return;
+            try {
+              loaded.show(payload);
+            } catch (err) {
+              warnOnce('commission-receipt-ui', err);
+            }
+          })
+          .catch(function () {});
+      }
+      try {
+        receiptUi.show(payload);
+      } catch (err) {
+        warnOnce('commission-receipt-ui', err);
+      }
+      return Promise.resolve();
     }
-    try {
-      receiptUi.show(payload);
-    } catch (err) {
-      warnOnce('commission-receipt-ui', err);
-    }
+    return Promise.resolve(careerView({ surface: 'receipt' }))
+      .then(function (view) {
+        payload.careerView = view || null;
+        return show();
+      })
+      .catch(function () {
+        payload.careerView = null;
+        return show();
+      });
   }
 
   function pickMethod(target, names) {
