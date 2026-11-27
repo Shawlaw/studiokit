@@ -17,6 +17,10 @@
  * 运行：node tools/career_continuation_test.mjs
  * 退出码：0 全部通过；1 有失败；2 装配失败（模块/内容读取失败）。
  * 零 npm 依赖；不启动 Chrome、不写仓库文件。
+ *
+ * 0.22：fake DB 的 discovery 快照由真实 profession-state 从 glimpsed→read→accept
+ * 推演并注入真实 registry/clues 映射；普通委托的 start gate 不再靠伪造状态绕过，
+ * live run 复用一律先经 DB（listRuns + getRun）权威校验。
  */
 import fs from 'node:fs';
 import path from 'node:path';
@@ -30,8 +34,11 @@ const CAREER_DIR = path.join(REPO_ROOT, 'apps', 'arcade', 'career');
 const COMMISSION_CORE = path.join(CAREER_DIR, 'commission-core.js');
 const CAREER_CORE = path.join(CAREER_DIR, 'career-core.js');
 const CAREER_DB = path.join(CAREER_DIR, 'career-db.js');
+const PROFESSION_STATE = path.join(CAREER_DIR, 'profession-state.js');
 const BRIDGE_JS = path.join(CAREER_DIR, 'bridge.js');
 const CONTENT_JSON = path.join(CAREER_DIR, 'content', 'commissions.json');
+const REGISTRY_JSON = path.join(CAREER_DIR, 'content', 'registry.json');
+const CLUES_JSON = path.join(CAREER_DIR, 'content', 'clues.json');
 
 const require = createRequire(import.meta.url);
 const NOW = '2026-11-26T02:00:00.000Z';
@@ -79,6 +86,34 @@ function clone(value) {
   return value === undefined ? value : JSON.parse(JSON.stringify(value));
 }
 
+/**
+ * 0.22 职业 gate 夹具：用真实 profession-state 按 glimpsed → read → accept
+ * 推演 discovery 快照；职业/游戏/线索映射全部来自真实 registry/clues。
+ */
+function discoveredStateFor(professionIds) {
+  const ids = Array.isArray(professionIds) ? professionIds.slice() : [];
+  let state = professionState.initialState(NOW);
+  ids.forEach((professionId, index) => {
+    const game = gateCatalog.games.find((row) => Array.isArray(row.professions) && row.professions.indexOf(professionId) >= 0);
+    assert(!!game && typeof game.clueRef === 'string' && game.clueRef, 'fixture 缺少职业对应真实游戏/线索：' + professionId);
+    const clueId = game.clueRef;
+    const stamps = [0, 1, 2].map((step) => new Date(Date.parse(NOW) + (index * 3 + step) * 60000).toISOString());
+    const steps = [
+      ['glimpsed', () => professionState.recordGlimpsed(state, { professionId, gameId: game.gameId, clueId, catalog: gateCatalog, at: stamps[0] })],
+      ['read', () => professionState.recordRead(state, { professionId, gameId: game.gameId, clueId, catalog: gateCatalog, at: stamps[1] })],
+      ['accepted', () => professionState.acceptInvitation(state, { professionId, gameId: game.gameId, clueId, catalog: gateCatalog, at: stamps[2] })],
+    ];
+    steps.forEach(([label, apply]) => {
+      const result = apply();
+      assert(result.ok === true, 'fixture profession-state ' + label + ' 失败：' + (result && result.reason));
+      state = result.state;
+    });
+  });
+  const validated = professionState.validate(state, gateCatalog);
+  assert(validated.ok === true, 'fixture discovery 快照校验失败：' + (validated && validated.reason));
+  return state;
+}
+
 /* ------------------------------------------------------------------ *
  * 夹具：内存假 career-db（语义对齐真实公开方法；不启动 Chrome）
  * ------------------------------------------------------------------ */
@@ -94,6 +129,9 @@ function createFakeDb(options) {
     quests: [],
     calls: [],
     atomic: opts.atomic !== false,
+    discovery: discoveredStateFor(Array.isArray(opts.acceptedProfessionIds)
+      ? opts.acceptedProfessionIds
+      : ['research.archivist', 'research.lattice']),
   };
   function log(name, payload) {
     state.calls.push({ name, payload: payload === undefined ? null : clone(payload) });
@@ -135,8 +173,17 @@ function createFakeDb(options) {
   }
   async function getState(key) {
     log('getState', key);
+    if (key === 'discovery') return { key: 'discovery', value: clone(state.discovery) };
     if (key !== 'career') return null;
     return state.careerId ? { key: 'career', value: { careerId: state.careerId } } : null;
+  }
+  async function getDiscoveryState() {
+    log('getDiscoveryState', null);
+    return clone(state.discovery);
+  }
+  async function getArchiveState() {
+    log('getArchiveState', null);
+    return { ok: true, archived: false, careerId: state.careerId, archivedAt: null };
   }
   async function readQuestState(careerId) {
     log('readQuestState', careerId);
@@ -233,6 +280,8 @@ function createFakeDb(options) {
     ensureCareer,
     getProfile,
     getState,
+    getDiscoveryState,
+    getArchiveState,
     readQuestState,
     readWallet,
     getClaim,
@@ -266,15 +315,29 @@ function createFakeStorage() {
 
 let CommissionModule = null;
 let careerCore = null;
+let professionState = null;
+let gateCatalog = null;
 let content = null;
 
 function assembly() {
   CommissionModule = require(COMMISSION_CORE);
   careerCore = require(CAREER_CORE);
+  professionState = require(PROFESSION_STATE);
   content = JSON.parse(fs.readFileSync(CONTENT_JSON, 'utf8'));
+  const registry = JSON.parse(fs.readFileSync(REGISTRY_JSON, 'utf8'));
+  const clues = JSON.parse(fs.readFileSync(CLUES_JSON, 'utf8'));
+  gateCatalog = {
+    games: registry.games,
+    professions: registry.professions,
+    commissions: [],
+    clues: clues.clues,
+    worldWorkIds: [],
+  };
   assert(CommissionModule && typeof CommissionModule.createCommissionCore === 'function', 'commission-core 未导出 createCommissionCore');
   assert(careerCore && typeof careerCore.isValidCareerId === 'function', 'career-core 不可用');
+  assert(professionState && typeof professionState.acceptInvitation === 'function', 'profession-state 不可用');
   assert(content.commissions.length > 0, 'commissions.json 为空');
+  assert(gateCatalog.professions.length === 16 && gateCatalog.games.length === 16, 'registry 职业/游戏映射异常');
   return content;
 }
 
@@ -283,7 +346,7 @@ function scenario(options) {
   const db = opts.db || createFakeDb(opts.dbOptions);
   const storage = opts.storage === null ? null : opts.storage || createFakeStorage();
   const core = CommissionModule.createCommissionCore({ db, core: careerCore, now: () => NOW, storage });
-  const configured = core.configure({ content: opts.content || content });
+  const configured = core.configure({ content: opts.content || content, catalog: opts.catalog || gateCatalog });
   assert(configured.ok, 'configure 失败: ' + JSON.stringify(configured.errors));
   return { db, storage, core };
 }
@@ -417,6 +480,32 @@ async function cc02() {
     eq(result.reason, 'connection-lost', 'reason 透传');
     eq(result.runs, [], 'no runs');
     return 'ok:false reason=connection-lost（UI 不会误判空列表）';
+  });
+
+  await check('CC-02e stored ticket 无 DB live run 不得复用：先回 DB 校验再签新票', async () => {
+    const storage = createFakeStorage();
+    storage.setItem(TICKET_KEY, JSON.stringify({
+      schemaVersion: 1,
+      ticketId: 'commission-ghost',
+      runId: 'commission-ghost',
+      careerId: CAREER_ID,
+      commissionId: 'memory-flip.T1',
+      gameId: 'memory-flip',
+      nonce: NONCE_A,
+      issuedAt: NOW,
+    }));
+    const db = createFakeDb({ careerId: CAREER_ID, runs: [] });
+    const { core } = scenario({ db, storage });
+    db.resetLog();
+    const started = await core.start({ commissionId: 'memory-flip.T1', careerId: CAREER_ID });
+    eq(started.ok, true, 'start ok');
+    assert(started.ticketId !== 'commission-ghost', '不得复用无 DB run 的存储票');
+    eq(started.reused, undefined, '不是复用');
+    assert(db.count('getRun') >= 1, '存储票必须回 DB 校验');
+    eq(db.count('createRun'), 1, '签新票');
+    const stored = JSON.parse(storage.getItem(TICKET_KEY));
+    eq(stored.ticketId, started.ticketId, '存储票被新权威票覆盖');
+    return 'ghost stored ticket -> new authoritative run';
   });
 
   await check('CC-02b 并发兜底：createRun 返回 duplicate live run 时复用原票', async () => {
