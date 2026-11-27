@@ -18,7 +18,7 @@
  * 兼容：ctx.db（或 api.db / window.ArcadeCareer.db）可直接拿到 career-db 模块；
  *       materials 取用顺序 ctx.materials → api.materials →
  *       window.ArcadeCareer.materials → window.ArcadeCareerMaterials；
- *       careerId 缺失时用 ctx.commission.listAvailable({ensure:true}) 取。
+ *       careerId 只取 ctx / 已投影上下文；缺失时保持只读，不创建生涯身份；
  *
  * 数据与价格来源（D17-19 materials.js 定稿）：
  *   materials.listMaterials() -> [{ itemId, name, buyPrice, sellPrice, aliases, sources }]
@@ -78,8 +78,8 @@
   const HELD_LABEL = '仓里';
   const BUY_PRICE_LABEL = '买价';
   const SELL_PRICE_LABEL = '卖价';
-  const SOURCE_LABEL = '来路：';
-  const SOURCE_JOIN = ' · ';
+  const SOURCE_LABEL = '来路：旧港工作点或材料商店可取得';
+  const TOOL_NOTICE = '这处活计还没引入，商店先只能看看。';
 
   const BUY_ONE_LABEL = '买 1';
   const BUY_FIVE_LABEL = '买 5';
@@ -146,26 +146,6 @@
     'no-buy-plan': '价目牌还没挂出来。',
     'no-sell-plan': '价目牌还没挂出来。',
     'chunk-guard': '这一趟分得太碎，先停手。',
-  };
-
-  /* 游戏 id → 戏内显示名（与 content/registry.json 的 displayName 一致；只在 registry 不可用时兜底）。 */
-  const GAME_LABELS = {
-    'memory-flip': '记忆翻牌',
-    'merge-2048': '2048 合成',
-    blackjack: '二十一点',
-    gomoku: '五子棋',
-    solitaire: '纸牌接龙',
-    snowbells: '雪铃',
-    'brick-breaker': '砖块计划',
-    'gravity-flip': '重力翻转',
-    'snake-run': '贪吃蛇',
-    'mole-whack': '打地鼠',
-    'block-drop': '俄罗斯方块',
-    'star-raid': '星海突击',
-    'road-rush': '极速车道',
-    'shadow-leap': '影跃',
-    'pendulum-tower': '层塔',
-    'gold-miner': '黄金矿工',
   };
 
   const STYLE_TEXT = [
@@ -487,6 +467,8 @@
       wallet: isObject(ctx.wallet) ? ctx.wallet : null,
       commission: ctx.commission || null,
       reducedMotion: ctx.reducedMotion === true || prefersReducedMotion(),
+      careerView: typeof ctx.careerView === 'function' ? ctx.careerView
+        : isObject(ctx.api) && typeof ctx.api.careerView === 'function' ? ctx.api.careerView : null,
       announce: typeof ctx.announce === 'function' ? ctx.announce : null,
     };
   }
@@ -632,104 +614,12 @@
     return map;
   }
 
-  function gameLabel(gameId, context) {
-    const id = cleanText(gameId);
-    if (!id) return '';
-    const win = rootWindow();
-    const registries = [
-      context && context.raw && context.raw.registry,
-      context && context.api && context.api.registry,
-      win && win.ArcadeCareer && win.ArcadeCareer.registry,
-      win && win.ArcadeCareerRegistry,
-    ];
-    for (let i = 0; i < registries.length; i += 1) {
-      const registry = registries[i];
-      if (registry && typeof registry.getGame === 'function') {
-        try {
-          const game = registry.getGame(id);
-          const name = game && (cleanText(game.displayName) || cleanText(game.name));
-          if (name) return name;
-        } catch (err) {
-          /* 继续回退 */
-        }
-      }
-      if (Array.isArray(registry)) {
-        for (let j = 0; j < registry.length; j += 1) {
-          if (registry[j] && registry[j].gameId === id) {
-            const name = cleanText(registry[j].displayName) || cleanText(registry[j].name);
-            if (name) return name;
-          }
-        }
-      }
-    }
-    if (Object.prototype.hasOwnProperty.call(GAME_LABELS, id)) return GAME_LABELS[id];
-    return '';
+  function sourceHintOf() {
+    /* 只披露通用地点，不枚举 materials 的全游戏来源，也不读取 registry。 */
+    return SOURCE_LABEL;
   }
 
-  function sourceHintOf(entry, materials, itemId, aliases, context) {
-    const direct = [
-      entry && entry.sourceHint,
-      entry && entry.sourceText,
-      entry && entry.originHint,
-      entry && entry.from,
-    ];
-    for (let i = 0; i < direct.length; i += 1) {
-      const text = cleanText(direct[i]);
-      if (text) return text;
-    }
-    const gameIds = [];
-    function collect(value) {
-      if (!value) return;
-      if (typeof value === 'string') {
-        gameIds.push(value);
-        return;
-      }
-      if (Array.isArray(value)) {
-        value.forEach(collect);
-        return;
-      }
-      if (isObject(value)) {
-        if (typeof value.gameId === 'string') gameIds.push(value.gameId);
-        if (typeof value.id === 'string' && !value.gameId) gameIds.push(value.id);
-      }
-    }
-    collect(entry && entry.sources);
-    collect(entry && entry.source);
-    collect(entry && entry.sourceGames);
-    collect(entry && entry.games);
-    if (!gameIds.length && materials) {
-      const maps = [materials.sources, materials.sourceGames, materials.sourceHints, materials.origins];
-      for (let i = 0; i < maps.length; i += 1) {
-        const bag = maps[i];
-        if (!isObject(bag)) continue;
-        collect(bag[itemId]);
-        aliases.forEach(function (alias) {
-          collect(bag[alias]);
-        });
-      }
-      if (!gameIds.length && typeof materials.sourcesFor === 'function') {
-        try {
-          const found = materials.sourcesFor(itemId);
-          collect(found);
-        } catch (err) {
-          /* ignore */
-        }
-      }
-    }
-    if (!gameIds.length) return '';
-    const seen = {};
-    const labels = [];
-    gameIds.forEach(function (gameId) {
-      const label = gameLabel(gameId, context);
-      if (!label || seen[label]) return;
-      seen[label] = true;
-      labels.push(label);
-    });
-    if (!labels.length) return '';
-    return SOURCE_LABEL + labels.join(SOURCE_JOIN);
-  }
-
-  function normalizeMaterialEntry(entry, index, aliasMap, materials, context) {
+  function normalizeMaterialEntry(entry, index, aliasMap) {
     if (!isObject(entry)) return null;
     const itemId = cleanText(entry.itemId || entry.id || entry.materialId || entry.key);
     if (!itemId || !/^[A-Za-z0-9][A-Za-z0-9._-]{0,119}$/.test(itemId)) return null;
@@ -1078,6 +968,7 @@
       itemsContent: null,
       aliasMap: {},
       contentVersion: VERSION,
+      toolIntroduced: false,
     };
   }
 
@@ -1135,7 +1026,8 @@
     const el = p.noticeEl;
     if (!el) return;
     let text = '';
-    if (!state.materials) text = MATERIALS_UNAVAILABLE;
+    if (!state.toolIntroduced) text = TOOL_NOTICE;
+    else if (!state.materials) text = MATERIALS_UNAVAILABLE;
     else if (!state.careerId) text = NO_CAREER_NOTICE;
     else if (!canTrade(state)) text = LEDGER_CLOSED;
     else if (!walletReady(state) && state.walletError) text = WALLET_CLOSED + (describeReason(state.walletError) || '');
@@ -1162,6 +1054,7 @@
   function actionBlock(p, material, action, count) {
     const state = p.state || emptyState();
     if (!state.materials) return { code: 'materials-unavailable', text: MATERIALS_UNAVAILABLE };
+    if (!state.toolIntroduced) return { code: 'tool-locked', text: TOOL_NOTICE };
     if (!state.careerId) return { code: 'no-career', text: NO_CAREER_STATUS };
     if (!canTrade(state)) return { code: 'db', text: LEDGER_CLOSED };
     if (!walletReady(state)) return { code: 'wallet', text: WALLET_CLOSED };
@@ -1322,7 +1215,7 @@
         }
         renderAll(p);
         if (!state.materials) return null;
-        return ensureCareerId(p, token, context, state);
+        return ensureToolIntroduced(p, token, context, state);
       })
       .then(function () {
         if (!isLive(p, token)) return null;
@@ -1342,24 +1235,26 @@
       });
   }
 
-  function ensureCareerId(p, token, context, state) {
-    if (state.careerId) return Promise.resolve();
-    const commission = commissionOf(context);
-    if (!commission || typeof commission.listAvailable !== 'function') return Promise.resolve();
+  function ensureToolIntroduced(p, token, context, state) {
+    const reader = typeof context.careerView === 'function'
+      ? context.careerView
+      : isObject(context.api) && typeof context.api.careerView === 'function' ? context.api.careerView : null;
+    if (!reader || !state.careerId) return Promise.resolve();
     let returned = null;
     try {
-      returned = commission.listAvailable({ ensure: true });
+      returned = reader.call(context, { surface: 'shop' });
     } catch (err) {
       return Promise.resolve();
     }
     return Promise.resolve(returned).then(
-      function (result) {
+      function (view) {
         if (!isLive(p, token)) return;
-        const careerId = pickCareerId(result);
-        if (careerId) state.careerId = careerId;
+        state.toolIntroduced = !!(isObject(view) && Array.isArray(view.tools) && view.tools.length > 0);
+        renderAll(p);
       },
       function () {
-        /* 认不出人就保持只读 */
+        state.toolIntroduced = false;
+        renderAll(p);
       }
     );
   }

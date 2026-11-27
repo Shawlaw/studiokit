@@ -7,8 +7,10 @@
  *   window.ArcadeCareerUI.mailbox.open(ctx);
  *   window.ArcadeCareerUI.mailbox.close();
  *
- * ctx（bridge 构造，见 docs/arcade-life/ADR-interfaces.md §17）：
- *   { state, clues, openClue(clueId), followLetter(), announce(text), ... }
+ * ctx（bridge 构造，见 docs/arcade-life/ADR-interfaces.md §17 / §23）：
+ *   { state, clues, openClue(clueId), followLetter(), announce(text),
+ *     invitationForClue?(clueId), acceptProfessionInvitation?(input),
+ *     careerView?(context), ... }
  *
  * 约束：
  * - 覆盖当前页面的轻量浮层（position:fixed，可滚动），按钮 + Esc + 点遮罩关闭；
@@ -48,6 +50,14 @@
   const TOWN_FAILED_TEXT = '港口那边没应声，你想过一会儿再试吗？';
   const FIRST_READ_LABEL = '送去折光港';
   const SEND_TO_PORT_DATA_ACTION = 'send-to-port';
+
+  /* 0.22：邀请只暴露原信与两个动作；任务标题/目标/报酬从不在此读取。 */
+  const ACCEPT_LABEL = '接受这份邀请';
+  const DEFER_LABEL = '以后再说';
+  const ACCEPT_FAILED_TEXT = '这封邀请这会儿没能收下，你想再试一次吗？';
+  const INVITE_ACCEPTED = '邀请已收下。';
+  const INVITE_PORT_LABEL = '去港口看看';
+  const INVITE_PORT_ARIA = '邀请已收下，去港口看看';
   const STAGE_RANK = { DORMANT: 0, GLIMPSED: 1, CURIOUS: 2, LOCAL: 3, RESIDENT: 4, EXPLORER: 5 };
 
   /* 本页会话内的投递记录：关闭面板后再打开仍能看到「已投递」。 */
@@ -57,6 +67,9 @@
   /* 去港口失败时重开信箱的可见提示（一次性）。 */
   let pendingTownStatus = '';
   let panel = null;
+  /* 本页会话内已接受的邀请：重复点击只做 no-op，不接委托。 */
+  const acceptedInvitations = Object.create(null);
+  const pendingInvitations = Object.create(null);
 
   function documentOf() {
     return typeof document !== 'undefined' && document && typeof document.createElement === 'function' ? document : null;
@@ -162,6 +175,63 @@
     if (!context) return null;
     if (typeof context.openCampaign === 'function') return context.openCampaign;
     if (isObject(context.api) && typeof context.api.openCampaign === 'function') return context.api.openCampaign;
+    return null;
+  }
+
+  /** 单个邀请对象只能来自 bridge 已 gate 的显式小面；缺失时安全降级，不读完整 catalog。 */
+  function invitationReaderOf(context) {
+    if (!context) return null;
+    if (typeof context.invitationForClue === 'function') return context.invitationForClue;
+    if (isObject(context.api) && typeof context.api.invitationForClue === 'function') return context.api.invitationForClue;
+    return null;
+  }
+
+  function normalizeInvitation(raw, clueId) {
+    if (!isObject(raw)) return null;
+    const professionId = cleanText(raw.professionId);
+    if (!professionId) return null;
+    const state = cleanText(raw.state).toLowerCase();
+    if (state !== 'read' && state !== 'glimpsed' && state !== 'accepted') return null;
+    return {
+      clueId: clueId,
+      professionId: professionId,
+      gameId: cleanText(raw.gameId),
+      displayName: cleanText(raw.displayName),
+      state: state,
+      canAccept: raw.canAccept !== false && state !== 'accepted',
+    };
+  }
+
+  function invitationOf(context, clueId) {
+    const reader = invitationReaderOf(context);
+    if (!reader || !clueId) return null;
+    let raw = null;
+    try {
+      raw = reader.call(context, clueId);
+    } catch (err) {
+      return null;
+    }
+    return normalizeInvitation(raw, clueId);
+  }
+
+  function invitationKeyOf(invitation) {
+    if (!invitation) return '';
+    return (invitation.professionId || '') + ':' + (invitation.clueId || '');
+  }
+
+  function acceptedInvitationOf(invitation) {
+    if (!invitation) return false;
+    if (invitation.state === 'accepted') return true;
+    const key = invitationKeyOf(invitation);
+    return !!(key && acceptedInvitations[key]);
+  }
+
+  function acceptInvitationFnOf(context) {
+    if (!context) return null;
+    if (typeof context.acceptProfessionInvitation === 'function') return context.acceptProfessionInvitation;
+    if (isObject(context.api) && typeof context.api.acceptProfessionInvitation === 'function') {
+      return context.api.acceptProfessionInvitation;
+    }
     return null;
   }
 
@@ -294,6 +364,25 @@
     const followBtn = make('button', 'ac-career-btn', FOLLOW_FALLBACK);
     followBtn.type = 'button';
     letterActions.appendChild(followBtn);
+    const acceptBtn = make('button', 'ac-career-btn ac-career-btn--primary', ACCEPT_LABEL);
+    acceptBtn.type = 'button';
+    acceptBtn.setAttribute('data-action', 'accept-invitation');
+    acceptBtn.hidden = true;
+    letterActions.appendChild(acceptBtn);
+    const deferBtn = make('button', 'ac-career-btn ac-career-btn--ghost', DEFER_LABEL);
+    deferBtn.type = 'button';
+    deferBtn.setAttribute('data-action', 'defer-invitation');
+    deferBtn.hidden = true;
+    letterActions.appendChild(deferBtn);
+    const acceptedNote = make('p', 'ac-career-mailbox__invite-status', INVITE_ACCEPTED);
+    acceptedNote.hidden = true;
+    letterActions.appendChild(acceptedNote);
+    const invitePortBtn = make('button', 'ac-career-btn ac-career-btn--ghost', INVITE_PORT_LABEL);
+    invitePortBtn.type = 'button';
+    invitePortBtn.setAttribute('data-action', 'invitation-port');
+    invitePortBtn.setAttribute('aria-label', INVITE_PORT_ARIA);
+    invitePortBtn.hidden = true;
+    letterActions.appendChild(invitePortBtn);
     /* D16-01 最小入口：只有 bridge 提供去港口动作时才出现；不改动上面的投递按钮。 */
     const townBtn = make('button', 'ac-career-btn ac-career-btn--primary', TOWN_LABEL);
     townBtn.type = 'button';
@@ -453,6 +542,12 @@
 
     const itemNodes = Object.create(null);
     let selectedId = '';
+    let activeInvitation = null;
+    let identityEstablished = !!cleanText(context.careerId)
+      || !!(isObject(context.state) && cleanText(context.state.acceptedOriginGameId));
+    let invitationToken = 0;
+    let identityToken = 0;
+    let inviteBusy = false;
 
     /**
      * 首封来信的身份与阶段判定（不看门闩）：已发现、未投递、阶段未越过 CURIOUS、
@@ -483,6 +578,72 @@
       node.hidden = !value;
     }
 
+    function projectionIsCurrent(current) {
+      return current === invitationToken && !!panel && panel.overlay === overlay;
+    }
+
+    function identityIsCurrent(token) {
+      return token === identityToken && !!panel && panel.overlay === overlay;
+    }
+
+    /** 身份是否已建立只认投影；投影缺失时仅用 ctx 已有 careerId，不读目录。 */
+    function loadIdentity() {
+      const reader = typeof context.careerView === 'function' ? context.careerView
+        : isObject(context.api) && typeof context.api.careerView === 'function' ? context.api.careerView : null;
+      if (!reader) {
+        identityEstablished = !!cleanText(context.careerId);
+        return;
+      }
+      const token = ++identityToken;
+      let returned = null;
+      try {
+        returned = reader.call(context, { surface: 'letter' });
+      } catch (err) {
+        return;
+      }
+      Promise.resolve(returned).then((view) => {
+        if (!identityIsCurrent(token)) return;
+        identityEstablished = !!(isObject(view) && (!!cleanText(view.originGameId)
+          || (Array.isArray(view.professions) && view.professions.length > 0))) || !!cleanText(context.careerId);
+        updateOriginLine();
+        refreshSelection();
+      }, () => {});
+    }
+
+    function updateOriginLine() {
+      const originText = originTextOf(context);
+      originLine.hidden = !originText || identityEstablished || !!activeInvitation;
+    }
+
+    /** 只取 bridge 判定后的单条邀请；没有小面时保持普通读信路径。 */
+    function loadInvitation() {
+      const clueId = selectedId;
+      const token = ++invitationToken;
+      activeInvitation = null;
+      const reader = invitationReaderOf(context);
+      if (!reader || !clueId) {
+        refreshSelection();
+        return;
+      }
+      let returned = null;
+      try {
+        returned = reader.call(context, clueId);
+      } catch (err) {
+        returned = null;
+      }
+      Promise.resolve(returned).then((raw) => {
+        if (!projectionIsCurrent(token) || selectedId !== clueId) return;
+        activeInvitation = normalizeInvitation(raw, clueId);
+        updateOriginLine();
+        refreshSelection();
+      }, () => {});
+    }
+
+    function refreshProjection() {
+      loadIdentity();
+      loadInvitation();
+    }
+
     function refreshSelection() {
       Object.keys(itemNodes).forEach((clueId) => {
         itemNodes[clueId].setAttribute('aria-current', clueId === selectedId ? 'true' : 'false');
@@ -493,7 +654,7 @@
       setField(letterAmbient, clue ? clue.ambientText : '');
       /* 身份句只在首封未投递信出现；缺省内容/回看/已投递保持隐藏。 */
       const firstFlight = isFirstFlightClue(selectedId);
-      setField(letterRole, firstFlight ? roleOf(context) : '');
+      setField(letterRole, firstFlight && !identityEstablished && !activeInvitation ? roleOf(context) : '');
       setField(letterSender, letterContent.sender);
       setField(letterBody, letterContent.body);
       setField(letterAddress, letterContent.address);
@@ -519,6 +680,21 @@
         followBtn.removeAttribute('aria-busy');
       }
       updateTownEntry();
+      const invitation = activeInvitation;
+      const accepted = acceptedInvitationOf(invitation);
+      followBtn.hidden = !!invitation;
+      acceptBtn.hidden = !invitation || accepted || !invitation.canAccept || !acceptInvitationFnOf(context);
+      deferBtn.hidden = !invitation || accepted;
+      acceptedNote.hidden = !invitation || !accepted;
+      invitePortBtn.hidden = !invitation || !accepted || !townOpenerOf(context);
+      if (invitation) {
+        townBtn.hidden = true;
+        campaignBtn.hidden = true;
+      }
+      const key = invitation ? invitationKeyOf(invitation) : '';
+      acceptBtn.disabled = inviteBusy || !!(key && pendingInvitations[key]);
+      if (inviteBusy) acceptBtn.setAttribute('aria-busy', 'true');
+      else acceptBtn.removeAttribute('aria-busy');
     }
 
     function selectClue(clueId, userInitiated) {
@@ -526,6 +702,7 @@
       if (!id || !itemNodes[id]) return;
       selectedId = id;
       refreshSelection();
+      loadInvitation();
       if (typeof context.openClue === 'function') {
         try {
           context.openClue(id);
@@ -651,6 +828,70 @@
       settle(result);
     }
 
+    function acceptInvitation() {
+      const invitation = activeInvitation;
+      if (!invitation || acceptedInvitationOf(invitation) || !invitation.canAccept || inviteBusy) return;
+      const key = invitationKeyOf(invitation);
+      if (pendingInvitations[key]) return;
+      const accept = acceptInvitationFnOf(context);
+      if (!accept || !invitation.gameId) {
+        setStatus(ACCEPT_FAILED_TEXT);
+        announce(ACCEPT_FAILED_TEXT);
+        return;
+      }
+      const activePanel = panel;
+      inviteBusy = true;
+      pendingInvitations[key] = true;
+      acceptBtn.disabled = true;
+      acceptBtn.setAttribute('aria-busy', 'true');
+      let result = null;
+      try {
+        result = accept.call(context, { professionId: invitation.professionId, gameId: invitation.gameId });
+      } catch (err) {
+        result = { ok: false };
+      }
+      const settle = (value) => {
+        delete pendingInvitations[key];
+        inviteBusy = false;
+        const succeeded = isObject(value) && value.ok === true;
+        if (succeeded) acceptedInvitations[key] = true;
+        if (panel !== activePanel) return;
+        if (!succeeded) {
+          setStatus(ACCEPT_FAILED_TEXT);
+          announce(ACCEPT_FAILED_TEXT);
+          refreshSelection();
+          return;
+        }
+        activeInvitation = Object.assign({}, invitation, { state: 'accepted', canAccept: false });
+        identityEstablished = true;
+        setStatus('');
+        updateOriginLine();
+        refreshSelection();
+        announce(INVITE_ACCEPTED);
+      };
+      if (result && typeof result.then === 'function') {
+        result.then(settle, () => settle({ ok: false }));
+        return;
+      }
+      settle(result);
+    }
+
+    function deferInvitation() {
+      if (!activeInvitation || acceptedInvitationOf(activeInvitation)) return;
+      close();
+    }
+
+    acceptBtn.addEventListener('click', acceptInvitation, false);
+    deferBtn.addEventListener('click', deferInvitation, false);
+    invitePortBtn.addEventListener('click', () => {
+      const opener = townOpenerOf(context);
+      if (typeof opener !== 'function') return;
+      close();
+      let result = null;
+      try { result = opener(); } catch (err) { result = { ok: false }; }
+      if (result && typeof result.then === 'function') result.catch(() => {});
+    }, false);
+
     followBtn.addEventListener('click', follow, false);
     closeBtn.addEventListener('click', () => close(), false);
     backBtn.addEventListener('click', () => close(), false);
@@ -722,6 +963,7 @@
       previousFocus: previousFocus,
       onKeyDown: onKeyDown,
     };
+    refreshProjection();
     return sheet;
   }
 

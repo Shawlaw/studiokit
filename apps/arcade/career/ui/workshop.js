@@ -15,7 +15,7 @@
  *   { state, api, crafting, items, commission, commissionRun, commissions,
  *     announce(text), reducedMotion, openTown, openHangar, openReceipt }
  * 兼容：ctx.db（或 api.db / window.ArcadeCareer.db）可直接拿到 career-db 模块；
- *       careerId 缺失时用 ctx.commission.listAvailable({ensure:true}) 取；
+ *       careerId 只取 ctx / 已投影上下文；缺失时保持只读，不创建生涯身份；
  *       ctx.crafting 缺失时按 bridge 已装载的 careerDir 惰性注入同源 crafting.js
  *       （只装载本地静态模块，不访问网络；见证据 DEVIATIONS D-3）。
  *
@@ -55,6 +55,7 @@
   const CRAFTING_MISSING = '制造台还没通电。';
   const LEDGER_CLOSED = '账房还没开门。';
   const NO_CAREER_NOTICE = '还不能上工：制造台只认得下过港口活计的人。';
+  const TOOL_NOTICE = '这处活计还没引入，制造台先只能看看。';
   const NO_CAREER_STATUS = '还不能上工。';
   const BUSY_LABEL = '还在造，稍等。';
 
@@ -431,6 +432,8 @@
       crafting: ctx.crafting || null,
       db: ctx.db || null,
       reducedMotion: ctx.reducedMotion === true || prefersReducedMotion(),
+      careerView: typeof ctx.careerView === 'function' ? ctx.careerView
+        : isObject(ctx.api) && typeof ctx.api.careerView === 'function' ? ctx.api.careerView : null,
       announce: typeof ctx.announce === 'function' ? ctx.announce : null,
     };
   }
@@ -805,6 +808,7 @@
       walletError: '',
       recipes: [],
       commissionChecked: false,
+      toolIntroduced: false,
     };
   }
 
@@ -859,6 +863,11 @@
     const state = p.state || emptyState();
     const el = p.noticeEl;
     if (!el) return;
+    if (!state.toolIntroduced) {
+      el.hidden = false;
+      el.textContent = TOOL_NOTICE;
+      return;
+    }
     if (!state.items) {
       el.hidden = false;
       el.textContent = ITEMS_UNAVAILABLE;
@@ -915,6 +924,7 @@
   function craftBlock(p, recipe, plan) {
     const state = p.state;
     if (recipe.owned === true) return { disabled: true, label: OWNED_LABEL, code: 'owned' };
+    if (!state.toolIntroduced) return { disabled: true, label: CRAFT_LABEL, code: 'tool-locked' };
     if (!state.crafting) return { disabled: true, label: POWER_BUTTON_LABEL, code: 'crafting-missing' };
     if (!state.careerId) return { disabled: true, label: NO_CAREER_BUTTON_LABEL, code: 'no-career' };
     if (!walletReady(state)) return { disabled: true, label: LEDGER_BUTTON_LABEL, code: 'wallet' };
@@ -1038,7 +1048,7 @@
       .then(function () {
         if (!isLive(p, token)) return null;
         renderAll(p);
-        return ensureCareerId(p, token, context, state);
+        return ensureToolIntroduced(p, token, context, state);
       })
       .then(function () {
         if (!isLive(p, token)) return null;
@@ -1069,25 +1079,26 @@
     });
   }
 
-  function ensureCareerId(p, token, context, state) {
-    if (state.careerId) return Promise.resolve();
-    const commission = commissionOf(context);
-    if (!commission || typeof commission.listAvailable !== 'function') return Promise.resolve();
+  function ensureToolIntroduced(p, token, context, state) {
+    const reader = typeof context.careerView === 'function'
+      ? context.careerView
+      : isObject(context.api) && typeof context.api.careerView === 'function' ? context.api.careerView : null;
+    if (!reader || !state.careerId) return Promise.resolve();
     let returned = null;
     try {
-      returned = commission.listAvailable({ ensure: true });
+      returned = reader.call(context, { surface: 'crafting' });
     } catch (err) {
       return Promise.resolve();
     }
     return Promise.resolve(returned).then(
-      function (result) {
+      function (view) {
         if (!isLive(p, token)) return;
-        state.commissionChecked = true;
-        const careerId = pickCareerId(result);
-        if (careerId) state.careerId = careerId;
+        state.toolIntroduced = !!(isObject(view) && Array.isArray(view.tools) && view.tools.length > 0);
+        renderAll(p);
       },
       function () {
-        state.commissionChecked = true;
+        state.toolIntroduced = false;
+        renderAll(p);
       }
     );
   }

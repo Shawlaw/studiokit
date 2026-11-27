@@ -99,10 +99,42 @@ function noInternalTokens(text) {
     && !/commission-[0-9a-f-]{8,}|tx-[0-9a-f-]{8,}/.test(text);
 }
 
+/* 0.22：下一步与经历只从已投影 careerView 进入收据，storyFeedback 仅保留真实结算反馈。 */
+function projectedCareerView(feedback) {
+  if (!feedback || feedback.status === 'unavailable' || feedback.unavailable) return null;
+  const history = (feedback.discovered || []).map((text) => ({ label: text, source: 'commission' }));
+  if (feedback.chapter && feedback.chapter.title) {
+    history.push({ label: '新完成的段落：' + feedback.chapter.title, source: 'commission' });
+  }
+  return {
+    schemaVersion: 1,
+    professions: [],
+    commissions: [],
+    story: {
+      nextAction: feedback.nextStep
+        ? { kind: feedback.chapter && feedback.chapter.id === 'C4' ? 'ending' : 'commission', label: feedback.nextStep }
+        : null,
+      messages: [],
+      history,
+    },
+    tools: [],
+  };
+}
+
+function receiptShow(payload) {
+  const input = { ...payload };
+  if (!input.careerView) {
+    const feedback = input.storyFeedback || (input.result && input.result.storyFeedback);
+    const projected = projectedCareerView(feedback);
+    if (projected) input.careerView = projected;
+  }
+  return receipt.show(input);
+}
+
 {
   uiContext.document = createDocument();
   let opened = 0;
-  const card = receipt.show({
+  const card = receiptShow({
     result: settledResult(),
     reducedMotion: true,
     storyFeedback: storyFeedback('new'),
@@ -137,7 +169,7 @@ function noInternalTokens(text) {
   let opened = 0;
   const feedback = storyFeedback('unavailable');
   feedback.unavailable = '工钱已结，剧情这会儿没能记进账。';
-  const card = receipt.show({ result: settledResult(), storyFeedback: feedback, openCampaign() { opened += 1; }, api: { openTown() { opened += 1; } } });
+  const card = receiptShow({ result: settledResult(), storyFeedback: feedback, openCampaign() { opened += 1; }, api: { openTown() { opened += 1; } } });
   const text = card.textContent;
   assert(text.includes('工钱已结，剧情这会儿没能记进账。'), 'failure feedback explicit');
   assert(!text.includes('新完成的段落'), 'failure never claims chapter progress');
@@ -154,7 +186,7 @@ function noInternalTokens(text) {
 /* 中间单（step）：只有线索/下一步，绝不冒充章节完成；下一步指向当前章自身，不跳 handoff。 */
 {
   uiContext.document = createDocument();
-  const card = receipt.show({
+  const card = receiptShow({
     result: settledResult(),
     storyFeedback: {
       status: 'new',
@@ -186,7 +218,7 @@ function noInternalTokens(text) {
   feedback.chapter = { id: 'C1', title: C1_TITLE };
   feedback.chapterCount = 1;
   feedback.nextStep = '去告示板看看「' + C2_TITLE + '」有什么新活儿。';
-  const card = receipt.show({ result: settledResult(), storyFeedback: feedback, openCampaign() {} });
+  const card = receiptShow({ result: settledResult(), storyFeedback: feedback, openCampaign() {} });
   const text = card.textContent;
   assert(text.includes('新完成的段落：' + C1_TITLE), 'C1 milestone shows completed chapter');
   assert(text.includes('下一步：去告示板看看「' + C2_TITLE + '」'), 'C1 milestone next step is C2');
@@ -202,7 +234,7 @@ function noInternalTokens(text) {
   feedback.chapter = { id: 'C2', title: C2_TITLE };
   feedback.chapterCount = 1;
   feedback.nextStep = '去告示板看看「' + C3_TITLE + '」有什么新活儿。';
-  const card = receipt.show({ result: settledResult(), storyFeedback: feedback, openCampaign() {} });
+  const card = receiptShow({ result: settledResult(), storyFeedback: feedback, openCampaign() {} });
   const text = card.textContent;
   assert(text.includes('新完成的段落：' + C2_TITLE), 'C2 milestone shows completed chapter');
   assert(text.includes('下一步：去告示板看看「' + C3_TITLE + '」'), 'C2 milestone next step is C3');
@@ -213,7 +245,7 @@ function noInternalTokens(text) {
 {
   uiContext.document = createDocument();
   let opened = 0;
-  const card = receipt.show({ result: { ok: false, reason: 'objective-not-met' }, openTown() { opened += 1; } });
+  const card = receiptShow({ result: { ok: false, reason: 'objective-not-met' }, openTown() { opened += 1; } });
   const text = card.textContent;
   assert(text.includes('这趟活儿没干成'), 'failed settlement shows honest work result');
   assert(!text.includes('工钱已结'), 'failure does not claim pay settled');
@@ -227,8 +259,8 @@ function noInternalTokens(text) {
 
 {
   uiContext.document = createDocument();
-  const first = receipt.show({ result: settledResult(), storyFeedback: storyFeedback('recorded'), openCampaign() {} });
-  const second = receipt.show({ result: settledResult(), storyFeedback: storyFeedback('recorded'), openCampaign() {} });
+  const first = receiptShow({ result: settledResult(), storyFeedback: storyFeedback('recorded'), openCampaign() {} });
+  const second = receiptShow({ result: settledResult(), storyFeedback: storyFeedback('recorded'), openCampaign() {} });
   assert(second, 'resend produces a card');
   eq(uiContext.document.body.children.length, 1, 'only one receipt card remains');
   assert(!first.parentNode, 'old card removed');
@@ -240,7 +272,7 @@ function noInternalTokens(text) {
   uiContext.document = createDocument();
   let invoked = 0;
   const announcements = [];
-  const card = receipt.show({
+  const card = receiptShow({
     result: settledResult(),
     storyFeedback: storyFeedback('new'),
     announce(text) { announcements.push(text); },
@@ -272,7 +304,7 @@ function noInternalTokens(text) {
 /* 异步动作返回 ok:false：同样给提示 + 重试（openTown/openCampaign 结构化失败）。 */
 {
   uiContext.document = createDocument();
-  const card = receipt.show({
+  const card = receiptShow({
     result: settledResult(),
     storyFeedback: storyFeedback('new'),
     api: { openTown() { return Promise.resolve({ ok: false, reason: 'ui-unavailable' }); } },
@@ -288,7 +320,7 @@ function noInternalTokens(text) {
 /* Esc / 44px / 焦点：收据卡仍保留键盘出口与最小热区（结构级断言）。 */
 {
   uiContext.document = createDocument();
-  const card = receipt.show({ result: settledResult(), storyFeedback: storyFeedback('new'), openCampaign() {} });
+  const card = receiptShow({ result: settledResult(), storyFeedback: storyFeedback('new'), openCampaign() {} });
   const exitButtons = buttons(card);
   assert(exitButtons.length >= 2, 'close + advance buttons both present');
   assert(exitButtons.every((btn) => btn.getAttribute('aria-label')), 'all buttons labelled');
@@ -299,7 +331,7 @@ function noInternalTokens(text) {
 
 for (const status of ['new', 'recorded']) {
   uiContext.document = createDocument();
-  const card = receipt.show({
+  const card = receiptShow({
     result: settledResult(),
     storyFeedback: { status, discovered: [], replies: [], nextStep: '回告示板接下一单。' },
     openTown() {},
@@ -315,7 +347,7 @@ for (const status of ['new', 'recorded']) {
   let opened = 0;
   function openCampaign() { opened += 1; }
   const ui = { openCampaign, openTown() { throw new Error('ending action must open the campaign'); } };
-  const c4 = receipt.show({ ...ui, result: settledResult(), storyFeedback: {
+  const c4 = receiptShow({ ...ui, result: settledResult(), storyFeedback: {
     ...storyFeedback('new'), chapter: { id: 'C4', title: titleOf('C4') },
   } });
   const board = byText(c4, '回告示板看看');
@@ -326,7 +358,7 @@ for (const status of ['new', 'recorded']) {
   eq(opened, 1, 'C4 opens the three-ending campaign panel');
   assert(!c4.parentNode, 'C4 action closes the receipt');
 
-  const ending = receipt.show({ ...ui, result: { ok: true, approach: 'research', receipt: { commissionId: 'ending.research' } },
+  const ending = receiptShow({ ...ui, result: { ok: true, approach: 'research', receipt: { commissionId: 'ending.research' } },
     storyFeedback: storyFeedback('unavailable'),
   });
   const epilogue = byText(ending, '读后日谈');
@@ -335,7 +367,7 @@ for (const status of ['new', 'recorded']) {
   click(epilogue);
   eq(opened, 2, 'epilogue action opens the campaign panel');
 
-  const retry = receipt.show({ ...ui, result: { ok: false, approach: 'research', reason: 'objective-not-met' } });
+  const retry = receiptShow({ ...ui, result: { ok: false, approach: 'research', reason: 'objective-not-met' } });
   assert(!byText(retry, '读后日谈'), 'failed ending does not offer an epilogue');
   click(byText(retry, '回去选终局路线'));
   eq(opened, 3, 'failed ending returns to the ending choices');
