@@ -292,9 +292,16 @@ async function makeReadable(ctx, professionId, gameId, clueId) {
     now: NOW,
   });
   assert(glimpsed.ok && glimpsed.newlyAccepted === false && glimpsed.created === false, JSON.stringify(glimpsed));
-  const opened = await ctx.db.mergeDiscoveryState({ stage: 'GLIMPSED', clues: {} }, [], {
-    action: { type: 'CLUE_OPENED', clueId, generation: g.generation },
-  });
+  /* 夹具固定证据时间；mergeDiscoveryState 的墙钟写会触发真实单调时间语义，不应参与固定时刻断言。 */
+  const opened = await ctx.db.putDiscovery({
+    clueId,
+    sourceGame: gameId,
+    firstSeenRunId: null,
+    seenAt: NOW,
+    openedAt: NOW,
+    dismissed: false,
+    updatedAt: NOW,
+  }, { generation: g.generation });
   assert(opened.ok, JSON.stringify(opened));
   const read = await ctx.db.applyProfessionEvent({
     action: 'READ',
