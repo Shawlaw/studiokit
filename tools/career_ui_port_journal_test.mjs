@@ -592,6 +592,98 @@ check('P09 timeline is ordered, public-only, and has no total or eventId',
   !!timeline && timeline.children.length === 2 && text(timeline).includes('合成事件一') &&
   !text(doc.body).includes('secret:event') && !/总数|百分比|\d+%/.test(text(doc.body)));
 
+/* T15 frozen-fixture DOM assertions */
+
+async function openPortFixture(fixtureId) {
+  const fixture = FIXTURE_PACK.fixtures.find((entry) => entry.id === fixtureId);
+  const local = harness();
+  const projection = fixture.projection || {
+    professions: [], commissions: [], tools: [],
+    story: { nextAction: null, messages: [], history: [] },
+  };
+  const view = Object.assign({}, projection, {
+    story: Object.assign({}, projection.story, {
+      history: fixture.props && fixture.props.journalTimeline ? fixture.props.journalTimeline.events : [],
+    }),
+  });
+  const ctx = {
+    uiComponents: local.components,
+    portFixture: fixture,
+    careerView() { return view; },
+    fixtureAction() {},
+  };
+  local.ui.town.open(ctx);
+  await settle();
+  return { fixture, local };
+}
+
+const p07FixtureRun = await openPortFixture('P07');
+const p07Panel = p07FixtureRun.local.doc.querySelector('.ac-career-ui__panel');
+eq('P07 fixture renders exactly one recoverable clue', byAttr(p07Panel, 'data-clue-state', 'recoverable').length, 1);
+eq('P07 fixture renders exactly one structured story message', byAttr(p07Panel, 'data-port-message', 'true').length, 1);
+const messageNode = byAttr(p07Panel, 'data-port-message', 'true')[0];
+const p07MessageFacts = {
+  strong: !!messageNode.querySelector('strong'),
+  p: !!messageNode.querySelector('p'),
+  from: !!messageNode.querySelector('.ac-career-ui__message__from'),
+  time: !!messageNode.querySelector('time'),
+  timeText: messageNode.querySelector('time') && text(messageNode.querySelector('time')),
+  expectedTime: p07FixtureRun.fixture.storyMessage.at,
+  icon: !!messageNode.querySelector('.ac-career-ui__icon'),
+};
+check('P07 story message is text, not a second clue row',
+  p07MessageFacts.strong && p07MessageFacts.p && p07MessageFacts.from && p07MessageFacts.time &&
+  p07MessageFacts.timeText === p07MessageFacts.expectedTime && !p07MessageFacts.icon,
+  p07MessageFacts);
+eq('P07 fixture keeps four real tools', byAttr(p07Panel, 'data-tool', 'wallet').concat(byAttr(p07Panel, 'data-tool', 'shop'))
+  .concat(byAttr(p07Panel, 'data-tool', 'workshop')).concat(byAttr(p07Panel, 'data-tool', 'hangar')).length, 4);
+p07FixtureRun.local.ui.town.close();
+
+const p08FixtureRun = await openPortFixture('P08');
+const p08Tabs = byAttr(p08FixtureRun.local.doc.documentElement, 'role', 'tab').filter((node) => node.getAttribute('data-tab'));
+p08Tabs[1].click();
+await settle();
+const p08Panel = p08FixtureRun.local.doc.querySelector('.ac-career-ui__panel');
+const worldCardOnFixture = byAttr(p08Panel, 'data-work-category', 'world')[0];
+const worldCommissionTitle = worldCardOnFixture.querySelector('.ac-career-ui__commission-title');
+const worldStartButton = find(worldCardOnFixture, (node) => node.localName === 'button' && node.getAttribute('data-action-kind') === 'secondary');
+const p08WorldFacts = {
+  title: worldCommissionTitle && text(worldCommissionTitle),
+  expectedTitle: p08FixtureRun.fixture.props.workCards[2].commissions[0].title,
+  name: worldCardOnFixture.querySelector('.ac-career-ui__work-name') && text(worldCardOnFixture.querySelector('.ac-career-ui__work-name')),
+  expectedName: p08FixtureRun.fixture.props.workCards[2].title,
+  action: worldStartButton && text(worldStartButton),
+  expectedAction: p08FixtureRun.fixture.props.actions[0].label,
+  leak: text(worldCardOnFixture).includes('SECRET_GAME'),
+};
+check('P08 world card renders generic h3 title and fixture action label',
+  p08WorldFacts.title === p08WorldFacts.expectedTitle && p08WorldFacts.name === p08WorldFacts.expectedName &&
+  p08WorldFacts.action === p08WorldFacts.expectedAction && !p08WorldFacts.leak,
+  p08WorldFacts);
+check('P08 list caption from fixture is visible', text(p08Panel).includes(p08FixtureRun.fixture.props.listCaption));
+p08FixtureRun.local.ui.town.close();
+
+const p09FixtureRun = await openPortFixture('P09');
+const p09Tabs = byAttr(p09FixtureRun.local.doc.documentElement, 'role', 'tab').filter((node) => node.getAttribute('data-tab'));
+p09Tabs[2].click();
+await settle();
+const p09Panel = p09FixtureRun.local.doc.querySelector('.ac-career-ui__panel');
+const p09Timeline = find(p09Panel, (node) => node.localName === 'ol' && node.classList.contains('ac-career-ui__timeline'));
+const p09Facts = {
+  timeline: !!p09Timeline,
+  parentClass: p09Timeline && p09Timeline.parentNode && p09Timeline.parentNode.className,
+  grandparentRole: p09Timeline && p09Timeline.parentNode && p09Timeline.parentNode.parentNode && p09Timeline.parentNode.parentNode.getAttribute('role'),
+  count: p09Timeline && p09Timeline.children.length,
+  expectedCount: p09FixtureRun.fixture.props.journalTimeline.events.length,
+  labels: p09FixtureRun.fixture.props.journalTimeline.events.map((event) => text(p09Timeline || '' ).includes(event.label)),
+  footer: text(p09Panel).includes(p09FixtureRun.fixture.props.footerText),
+};
+check('P09 timeline uses only the component wrapper under a direct tabpanel',
+  p09Facts.timeline && p09Facts.parentClass === 'ac-career-ui__journal' && p09Facts.grandparentRole === 'tabpanel' &&
+  p09Facts.count === p09Facts.expectedCount && p09Facts.labels.every(Boolean) && p09Facts.footer,
+  p09Facts);
+p09FixtureRun.local.ui.town.close();
+
 /* subscriptions and close */
 check('port keeps exactly one active invalidation subscription after repeat open', listeners.length === 2 && unsubscribed === 1);
 listeners[1]({ reason: 'accept-invitation' });

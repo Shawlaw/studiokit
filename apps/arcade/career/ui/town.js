@@ -601,9 +601,13 @@
   /** T15 fixtures are injected explicitly; production never reads tools/career_ui_fixture_states.json. */
   function portFixtureOf(context) {
     const direct = context && (context.portFixture || context.fixtureProps);
-    if (isObject(direct)) return direct;
-    const narrative = portNarrativeOf(context);
-    return isObject(narrative.fixture) ? narrative.fixture : null;
+    let source = isObject(direct) ? direct : null;
+    if (!source) {
+      const narrative = portNarrativeOf(context);
+      source = isObject(narrative.fixture) ? narrative.fixture : null;
+    }
+    if (!source) return null;
+    return isObject(source.props) ? Object.assign({}, source, source.props) : source;
   }
 
   function portFixtureAction(context, state, action, fallbackId, components) {
@@ -626,6 +630,40 @@
       variant: input.variant === 'text' ? 'text' : 'border',
       onClick: onClick,
     };
+  }
+
+  function portFixtureMessageNode(doc, message) {
+    const row = isObject(message) ? message : null;
+    if (!row) return null;
+    const label = cleanText(row.label);
+    if (!label) return null;
+    const wrap = doc.createElement('div');
+    wrap.className = 'ac-career-ui__row ac-career-ui__message';
+    wrap.setAttribute('data-port-message', 'true');
+    const content = doc.createElement('div');
+    content.className = 'ac-career-ui__grow ac-career-ui__stack ac-career-ui__stack--small';
+    const labelNode = doc.createElement('strong');
+    labelNode.className = 'ac-career-ui__caption ac-career-ui__gold';
+    labelNode.textContent = label;
+    labelNode.setAttribute('data-port-message-label', 'true');
+    content.appendChild(labelNode);
+    const body = cleanText(row.text);
+    if (body) content.appendChild(portTextNode(doc, 'ac-career-ui__caption', body));
+    const from = cleanText(row.from);
+    if (from) {
+      const sender = portTextNode(doc, 'ac-career-ui__caption', from);
+      sender.className += ' ac-career-ui__message__from';
+      content.appendChild(sender);
+    }
+    const at = cleanText(row.at);
+    if (at) {
+      const time = doc.createElement('time');
+      time.className = 'ac-career-ui__caption ac-career-ui__message__time';
+      time.textContent = at;
+      content.appendChild(time);
+    }
+    wrap.appendChild(content);
+    return wrap;
   }
 
   function portFixtureContent(context, state, fixture, components) {
@@ -666,12 +704,35 @@
       hasNode = true;
     }
 
+    const clue = isObject(fixture.clueRow) && typeof components.ClueRow === 'function' ? fixture.clueRow : null;
+    if (clue && ['hidden', 'glimpsed', 'read', 'recoverable'].indexOf(cleanText(clue.state)) >= 0 && cleanText(clue.state) !== 'hidden') {
+      const onOpen = typeof context.fixtureAction === 'function'
+        ? () => context.fixtureAction('clue:' + cleanText(clue.clueId))
+        : undefined;
+      content.appendChild(components.ClueRow(Object.assign({}, clue, { onOpen: onOpen })));
+      hasNode = true;
+    }
+
+    const messageSource = fixture.storyMessage
+      || (isObject(fixture.story) && Array.isArray(fixture.story.messages) ? fixture.story.messages.slice(0, 1)[0] : null);
+    const message = portFixtureMessageNode(docOfPort(), messageSource);
+    if (message) {
+      content.appendChild(message);
+      hasNode = true;
+    }
+
     const journal = isObject(fixture.journalTimeline) ? fixture.journalTimeline : null;
     if (journal && typeof components.JournalTimeline === 'function') {
       content.appendChild(components.JournalTimeline({
         state: cleanText(journal.state) === 'filled' ? 'filled' : 'empty',
-        events: [],
+        events: Array.isArray(journal.events) ? journal.events : [],
       }));
+      hasNode = true;
+    }
+    const footerText = cleanText(fixture.footerText);
+    if (footerText) {
+      const footerCaption = portTextNode(docOfPort(), 'ac-career-ui__caption ac-career-ui__timeline-footer', footerText);
+      content.appendChild(footerCaption);
       hasNode = true;
     }
 
@@ -724,33 +785,16 @@
     };
   }
 
-  function portMessageNode(doc, view, components) {
+  function portMessageNode(doc, view) {
     const messages = view && view.story && Array.isArray(view.story.messages) ? view.story.messages : [];
     const row = messages.filter(isObject).slice(0, 1)[0];
     if (!row) return null;
-    const label = cleanText(row.label) || cleanText(row.text);
-    if (!label) return null;
-    const wrapper = doc.createElement('div');
-    wrapper.className = 'ac-career-ui__row ac-career-ui__port-message';
-    wrapper.setAttribute('data-port-message', 'true');
-    wrapper.appendChild(components.icon && components.icon('mail'));
-    const content = doc.createElement('div');
-    content.className = 'ac-career-ui__grow ac-career-ui__stack ac-career-ui__stack--small';
-    const from = cleanText(row.from);
-    if (from) content.appendChild(portTextNode(doc, 'ac-career-ui__caption ac-career-ui__gold', from));
-    content.appendChild(portTextNode(doc, 'ac-career-ui__caption', safePlayerReason(label)));
-    const text = cleanText(row.text);
-    if (text && text !== label) content.appendChild(portTextNode(doc, 'ac-career-ui__caption', safePlayerReason(text)));
-    const at = cleanText(row.at);
-    const date = at && typeof components.formatIsoDate === 'function' ? components.formatIsoDate(at) : '';
-    if (date) {
-      const time = doc.createElement('time');
-      time.className = 'ac-career-ui__caption';
-      time.textContent = date;
-      content.appendChild(time);
-    }
-    wrapper.appendChild(content);
-    return wrapper;
+    return portFixtureMessageNode(doc, {
+      label: safePlayerReason(cleanText(row.label) || cleanText(row.text)),
+      text: safePlayerReason(cleanText(row.text)),
+      from: safePlayerReason(cleanText(row.from)),
+      at: cleanText(row.at),
+    });
   }
 
   function portClueProps(context) {
@@ -854,11 +898,32 @@
     return Promise.resolve(result);
   }
 
+  function portOverrideStartLabels(card, label, components) {
+    const target = cleanText(label);
+    if (!target || !card || typeof card.querySelectorAll !== 'function') return;
+    Array.prototype.slice.call(card.querySelectorAll('button')).forEach((button) => {
+      if (cleanText(button.textContent).indexOf('接下这单') < 0) return;
+      const paint = () => {
+        const busy = button.getAttribute('aria-busy') === 'true';
+        button.textContent = target + (busy ? '（处理中）' : (button.disabled ? '（暂不可用）' : ''));
+      };
+      paint();
+      ['pointerenter', 'pointerleave', 'focus', 'blur', 'pointerdown', 'pointerup', 'click'].forEach((type) => {
+        button.addEventListener(type, paint, false);
+      });
+      button.setAttribute('data-port-action-label', target);
+    });
+  }
+
   function portWorkCards(context, view, state, components) {
     const professions = view && Array.isArray(view.professions) ? view.professions.filter(isObject) : [];
     const accepted = professions.filter((entry) => ['accepted', 'developed', 'completed'].indexOf(cleanText(entry.state).toLowerCase()) >= 0);
     const commissions = view && Array.isArray(view.commissions) ? view.commissions.filter(isObject) : [];
     const worldRows = commissions.filter((entry) => cleanText(entry.category).toLowerCase() === 'world' && entry.historicalOnly !== true && entry.readOnly !== true);
+    const fixture = portFixtureOf(context);
+    const fixtureCards = fixture && Array.isArray(fixture.workCards) ? fixture.workCards : [];
+    const fixtureActions = fixture && Array.isArray(fixture.actions) ? fixture.actions : [];
+    const startLabel = cleanText(fixtureActions[0] && fixtureActions[0].label);
     if (!accepted.length && !worldRows.length) {
       return [components.WorkCard({ professionId: null, displayName: '', icon: 'check', state: 'empty', commissions: [] })];
     }
@@ -906,18 +971,33 @@
       if (details && typeof details.addEventListener === 'function') {
         details.addEventListener('toggle', () => { state.expanded[professionId] = !!details.open; });
       }
+      portOverrideStartLabels(card, startLabel, components);
       return card;
     });
     if (worldRows.length) {
+      const fixtureCard = fixtureCards.filter((entry) => isObject(entry) && entry.professionId === null)[0] || null;
+      const fixtureCommission = fixtureCard && Array.isArray(fixtureCard.commissions) ? fixtureCard.commissions.filter(isObject)[0] : null;
       const worldCard = components.WorkCard({
         professionId: null,
-        displayName: '',
+        displayName: cleanText(fixtureCard && fixtureCard.title),
         icon: 'check',
         state: 'optional',
         commissions: worldRows,
         onStart: (commissionId) => startPortCommission(context, commissionId),
       });
       worldCard.setAttribute('data-port-profession', 'world');
+      const doc = docOfPort();
+      const nameNode = worldCard.querySelector('.ac-career-ui__work-name');
+      if (nameNode && cleanText(fixtureCard && fixtureCard.title)) nameNode.textContent = cleanText(fixtureCard.title);
+      const list = worldCard.querySelector('.ac-career-ui__work-list');
+      const commissionTitle = cleanText(fixtureCommission && fixtureCommission.title) || cleanText(worldRows[0] && worldRows[0].title);
+      if (list && commissionTitle && !worldCard.querySelector('.ac-career-ui__commission-title')) {
+        const heading = doc.createElement('h3');
+        heading.className = 'ac-career-ui__commission-title';
+        heading.textContent = commissionTitle;
+        list.insertBefore(heading, list.firstChild);
+      }
+      portOverrideStartLabels(worldCard, startLabel, components);
       cards.push(worldCard);
     }
     return cards;
@@ -981,7 +1061,7 @@
     }
 
     content.appendChild(components.StoryCard(portStoryProps(context, view)));
-    const message = portMessageNode(stack, view, components);
+    const message = portMessageNode(stack, view);
     if (message) content.appendChild(message);
     const clue = components.ClueRow && portClueProps(context);
     if (clue) content.appendChild(components.ClueRow(clue));
@@ -992,13 +1072,39 @@
     return documentOf() || { createElement(tag) { return { tagName: String(tag).toUpperCase(), className: '', textContent: '', childNodes: [], children: [], appendChild(node) { this.childNodes.push(node); this.children.push(node); return node; }, setAttribute() {} }; } };
   }
 
+  function portFixtureToolItems(context, fixture) {
+    const source = fixture && Array.isArray(fixture.toolGrid) ? fixture.toolGrid : [];
+    return Object.keys(PORT_TOOL_FALLBACK).map((id) => {
+      const tool = source.filter((entry) => isObject(entry) && cleanText(entry.id) === id)[0];
+      if (!tool) return null;
+      const openerName = id === 'wallet' ? 'openReceipt' : (id === 'shop' ? 'openMarket' : (id === 'workshop' ? 'openWorkshop' : 'openHangar'));
+      return {
+        id: id,
+        label: cleanText(tool.label) || PORT_TOOL_FALLBACK[id],
+        icon: PORT_TOOL_ICON[id],
+        onClick: () => {
+          const opener = portOpenMethod(context, openerName);
+          if (typeof opener === 'function') {
+            try { opener(); } catch (err) { /* ignore */ }
+          } else if (typeof context.fixtureAction === 'function') {
+            context.fixtureAction(cleanText(tool.actionId) || id);
+          }
+        },
+      };
+    }).filter(Boolean);
+  }
+
   function portBody(context, state, view, components) {
     const doc = docOfPort();
     const body = doc.createElement('div');
     body.className = 'ac-career-ui__stack';
     const harbor = portHarborNode(context, doc);
     if (harbor) body.appendChild(harbor);
-    body.appendChild(portTextNode(doc, 'ac-career-ui__caption', cleanText(portNarrativeOf(context).caption) || PORT_CAPTION));
+    const fixture = portFixtureOf(context);
+    const caption = fixture && cleanText(fixture.caption);
+    body.appendChild(portTextNode(doc, 'ac-career-ui__caption', caption || cleanText(portNarrativeOf(context).caption) || PORT_CAPTION));
+    const listCaption = fixture && cleanText(fixture.listCaption);
+    if (listCaption) body.appendChild(portTextNode(doc, 'ac-career-ui__caption', listCaption));
     body.appendChild(components.SegmentedTabs({
       tabs: PORT_TABS,
       selectedId: state.tab,
@@ -1011,15 +1117,16 @@
       },
     }));
     body.appendChild(portContentNode(context, state, view, components));
-    const tools = portToolItems(context, (state.views && state.views.port) || view);
+    const fixtureTools = fixture ? portFixtureToolItems(context, fixture) : [];
+    const tools = fixtureTools.length ? fixtureTools : portToolItems(context, (state.views && state.views.port) || view);
     if (tools.length) {
-      body.appendChild(components.ToolGrid({ tools: tools, state: 'available', label: '已知工具' }));
+      body.appendChild(components.ToolGrid({ tools: tools, state: 'available', label: (fixture && cleanText(fixture.toolGrid && fixture.toolGrid.label)) || '已知工具' }));
     }
     const footer = doc.createElement('footer');
     footer.className = 'ac-career-ui__footer';
     footer.appendChild(components.SecondaryAction({
       id: 'port-exit',
-      label: PORT_EXIT_LABEL,
+      label: (fixture && cleanText(fixture.exitLabel)) || PORT_EXIT_LABEL,
       kind: 'text',
       variant: 'text',
       onClick: () => {
