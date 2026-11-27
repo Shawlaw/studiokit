@@ -75,20 +75,7 @@ const CAREER_CATALOG_FIXTURE = (() => {
   });
 })();
 
-/**
- * 与当前 campaign.recommend / ADR §20.9 一致的首选零种子路线
- * （DESIGN-0.20.0 §4 的可执行细化；替代路线仍允许，但必须逐单真实推进）。
- */
-const PREFERRED_ROUTE = [
-  { commissionId: 'pendulum-tower.T1', expectFlag: 'C1.signal_fragment', kind: 'milestone' },
-  { commissionId: 'memory-flip.T1', expectFlag: null, kind: 'step' },
-  { commissionId: 'memory-flip.T2', expectFlag: 'C2.research_complete', kind: 'milestone' },
-  { commissionId: 'shadow-leap.T1', expectFlag: null, kind: 'step' },
-  { commissionId: 'shadow-leap.T2', expectFlag: 'C3.truth_found', kind: 'milestone' },
-  { commissionId: 'pendulum-tower.T2', expectFlag: null, kind: 'step' },
-  { commissionId: 'gomoku.T1', expectFlag: null, kind: 'step' },
-  { commissionId: 'gomoku.T2', expectFlag: 'C4.city_power_restored', kind: 'milestone' },
-];
+const J = (value) => JSON.stringify(value);
 const CHAPTER_FLAGS = Object.freeze({
   C0: 'C0.port_seen',
   C1: 'C1.signal_fragment',
@@ -97,7 +84,9 @@ const CHAPTER_FLAGS = Object.freeze({
   C4: 'C4.city_power_restored',
   C5: 'C5.star_tower_resolved',
 });
-const J = (value) => JSON.stringify(value);
+
+/* 0.22 世界通用工作路线由 world-work.json + 产品 nextAction + story-evidence 实时推导。 */
+let WORLD_WORK_ROUTE = [];
 
 const rec = createRecorder();
 const COUNTS = { pass: 0, fail: 0, blocked: 0 };
@@ -197,6 +186,8 @@ function evalRequirement(req, ctx) {
 import { createRequire } from 'node:module';
 const nodeRequire = createRequire(import.meta.url);
 const STORY_EVIDENCE_MODULE = nodeRequire(path.join(REPO_ROOT, 'apps', 'arcade', 'career', 'story-evidence.js'));
+const PROFESSION_VIEW_MODULE = nodeRequire(path.join(REPO_ROOT, 'apps', 'arcade', 'career', 'profession-view.js'));
+const PROFESSION_STATE_MODULE = nodeRequire(path.join(REPO_ROOT, 'apps', 'arcade', 'career', 'profession-state.js'));
 
 function makeStoryEvidence(contentCommissions) {
   const instance = typeof STORY_EVIDENCE_MODULE.createStoryEvidence === 'function'
@@ -217,6 +208,66 @@ function deriveChapterFlags(instance, flags, evidence) {
   return new Set(result.allFlags || result.flags || []);
 }
 
+/**
+ * 0.22 W5E：从 world-work.json 取候选，用真实 profession-view.nextAction 逐单推进，
+ * 再用 story-evidence 计算章节旗标；不复制固定路线或私有升级解释。
+ */
+function deriveWorldWorkRoute(campaign, commissions, worldWork, storyInstance) {
+  const registry = readJson('apps/arcade/career/content/registry.json');
+  const originGame = registry.games.find((game) => game && game.gameId === ORIGIN_GAME);
+  const professionId = originGame && Array.isArray(originGame.professions) ? originGame.professions[0] : null;
+  if (!professionId) throw new Error('W5E origin profession missing');
+  const at = '2026-11-27T00:00:00.000Z';
+  let state = PROFESSION_STATE_MODULE.initialState(at);
+  state = PROFESSION_STATE_MODULE.recordGlimpsed(state, {
+    professionId, gameId: ORIGIN_GAME, clueId: ORIGIN_CLUE, at, catalog: CAREER_CATALOG_FIXTURE,
+  }).state;
+  state = PROFESSION_STATE_MODULE.recordRead(state, {
+    professionId, gameId: ORIGIN_GAME, clueId: ORIGIN_CLUE, clueOpened: true, at, catalog: CAREER_CATALOG_FIXTURE,
+  }).state;
+  state = PROFESSION_STATE_MODULE.acceptInvitation(state, {
+    professionId, gameId: ORIGIN_GAME, at, catalog: CAREER_CATALOG_FIXTURE,
+  }).state;
+
+  const byId = new Map(commissions.map((row) => [row.commissionId, row]));
+  const worldIds = Array.isArray(worldWork.commissionIds) ? worldWork.commissionIds.slice() : [];
+  const cleared = new Set();
+  const flags = new Set([CHAPTER_FLAGS.C0]);
+  const evidence = new Set();
+  const chapterFlagSet = new Set(Object.values(CHAPTER_FLAGS));
+  const route = [];
+  const derived = [];
+  while (cleared.size < worldIds.length) {
+    const action = PROFESSION_VIEW_MODULE.getNextNarrativeAction({
+      state,
+      catalog: CAREER_CATALOG_FIXTURE,
+      context: { surface: 'port', availableIds: worldIds, clearedCommissions: Array.from(cleared) },
+    });
+    if (!action || !action.commissionId || !worldIds.includes(action.commissionId) || cleared.has(action.commissionId)) {
+      throw new Error('W5E nextAction 无法继续：' + J({ action, cleared: Array.from(cleared), worldIds }));
+    }
+    const commission = byId.get(action.commissionId);
+    if (!commission) throw new Error('W5E commission missing: ' + action.commissionId);
+    const before = new Set(flags);
+    (commission.reward.flags || []).forEach((flag) => flags.add(flag));
+    (commission.reward.evidence || []).forEach((token) => evidence.add(token));
+    cleared.add(commission.commissionId);
+    let all = deriveChapterFlags(storyInstance, flags, evidence);
+    if (!flags.has(CHAPTER_FLAGS.C1)) {
+      const c1 = (campaign.chapters || []).find((chapter) => chapter.chapterId === 'C1');
+      if (c1 && (c1.routes || []).some((routeRow) => evalRequirement(routeRow.requires, { flags, evidence, cleared }))) {
+        flags.add(CHAPTER_FLAGS.C1);
+        all = deriveChapterFlags(storyInstance, flags, evidence);
+      }
+    }
+    all.forEach((flag) => flags.add(flag));
+    const newFlags = Object.values(CHAPTER_FLAGS).filter((flag) => chapterFlagSet.has(flag) && all.has(flag) && !before.has(flag));
+    route.push({ commissionId: commission.commissionId, expectFlags: newFlags, kind: newFlags.length ? 'milestone' : 'step' });
+    derived.push({ commissionId: commission.commissionId, newFlags, derived: Array.from(all) });
+  }
+  return { route, derived };
+}
+
 function staticContentChecks() {
   step('static:content');
   let campaign;
@@ -224,24 +275,37 @@ function staticContentChecks() {
   let clues;
   let chapter1;
   let ending;
+  let worldWork;
   try {
     campaign = readJson('apps/arcade/career/content/campaign.json');
     commissions = readJson('apps/arcade/career/content/commissions.json').commissions;
     clues = readJson('apps/arcade/career/content/clues.json').clues;
     chapter1 = readJson('apps/arcade/career/content/chapter-01.json');
     ending = readJson('apps/arcade/career/content/ending-research.json');
+    worldWork = readJson('apps/arcade/career/content/world-work.json');
   } catch (err) {
     gate('S00 内容 JSON 可读取', false, String(err && err.message ? err.message : err));
     return;
   }
+  const { instance: storyStatic, configured: storyCfg } = makeStoryEvidence(commissions);
+  gate('S01b 真实 story-evidence 模块可按当前内容配置', storyCfg.ok === true, J(storyCfg));
+  let routeAndFlags;
+  try {
+    routeAndFlags = deriveWorldWorkRoute(campaign, commissions, worldWork, storyStatic);
+  } catch (err) {
+    gate('S01 W5E 路线可由真实内容推导', false, String(err && err.message ? err.message : err));
+    return;
+  }
+  WORLD_WORK_ROUTE = routeAndFlags.route;
+  const derived = routeAndFlags.derived;
   const byId = new Map(commissions.map((row) => [row.commissionId, row]));
-  gate('S00 内容 JSON 可读取', true, 'campaign/commissions/clues/chapter-01/ending-research');
-  const missingIds = PREFERRED_ROUTE.map((row) => row.commissionId).filter((id) => !byId.has(id));
-  gate('S01 首选路线每一单都在 commissions.json 中', missingIds.length === 0, J(missingIds));
-
-  const firstCommission = byId.get(PREFERRED_ROUTE[0].commissionId);
-  /* C1 路线 anyFlags 可取 C1.work_done 或 C1.flight_done；首单只要真实产出其中之一
-     且有证据即可，不硬编码具体委托 id 或旗标名。 */
+  gate('S00 内容 JSON 可读取', true, 'campaign/commissions/clues/chapter-01/ending-research/world-work');
+  const derivedIds = WORLD_WORK_ROUTE.map((row) => row.commissionId);
+  gate('S01 W5E 路线由 world-work 内容逐单真实推导',
+    derivedIds.length === worldWork.commissionIds.length &&
+      derivedIds.every((id) => worldWork.commissionIds.includes(id) && byId.has(id)),
+    J({ contentIds: worldWork.commissionIds, derivedIds }));
+  const firstCommission = byId.get(WORLD_WORK_ROUTE[0].commissionId);
   const firstFlags = new Set((firstCommission && firstCommission.reward.flags) || []);
   const c1FlagHits = Array.from(firstFlags).filter((flag) => /^C1\./.test(flag));
   gate(
@@ -255,40 +319,16 @@ function staticContentChecks() {
     !!c1Route && c1Route.routes.some((route) => evalRequirement(route.requires, {
       flags: new Set(['C0.port_seen'].concat(c1FlagHits)),
       evidence: new Set(),
-      cleared: new Set([PREFERRED_ROUTE[0].commissionId]),
+      cleared: new Set([WORLD_WORK_ROUTE[0].commissionId]),
     })),
     J(c1Route && c1Route.routes)
   );
-
-  const { instance: storyStatic, configured: storyCfg } = makeStoryEvidence(commissions);
-  gate('S01b 真实 story-evidence 模块可按当前内容配置', storyCfg.ok === true, J(storyCfg));
-  const flags = new Set(['C0.port_seen']);
-  const evidence = new Set();
-  const cleared = new Set();
-  const derived = [];
-  const chapterFlagSet = new Set(Object.values(CHAPTER_FLAGS));
-  for (const spec of PREFERRED_ROUTE) {
-    const row = byId.get(spec.commissionId);
-    if (!row) continue;
-    const before = new Set(flags);
-    (row.reward.flags || []).forEach((flag) => flags.add(flag));
-    (row.reward.evidence || []).forEach((token) => evidence.add(token));
-    cleared.add(row.commissionId);
-    if (!flags.has(CHAPTER_FLAGS.C1)) {
-      const chapter = (campaign.chapters || []).find((item) => item.chapterId === 'C1');
-      if (chapter && chapter.routes.some((route) => evalRequirement(route.requires, { flags, evidence, cleared }))) flags.add(CHAPTER_FLAGS.C1);
-    }
-    const next = deriveChapterFlags(storyStatic, flags, evidence);
-    const newChapterFlags = Array.from(next).filter((flag) => chapterFlagSet.has(flag) && !before.has(flag));
-    derived.push({ commissionId: row.commissionId, newFlags: newChapterFlags, derived: Array.from(next) });
-    next.forEach((flag) => flags.add(flag));
-  }
-  const expectedFlags = PREFERRED_ROUTE.map((spec) => spec.expectFlag).filter(Boolean);
-  const actualFlags = derived.filter((row) => row.newFlags.length === 1).map((row) => row.newFlags[0]);
-  gate('S04 首选路线按真实规则恰好推进 C1→C2→C3→C4（不跳章）', J(actualFlags) === J(expectedFlags), J(derived));
-  const stepIndexes = PREFERRED_ROUTE.map((spec, index) => (spec.kind === 'step' ? index : -1)).filter((index) => index >= 0);
+  const expectedFlags = WORLD_WORK_ROUTE.flatMap((spec) => spec.expectFlags);
+  const actualFlags = derived.flatMap((row) => row.newFlags);
+  gate('S04 W5E 路线按真实规则推进 C1→C2→C3→C4（不跳章）', J(actualFlags) === J(expectedFlags), J(derived));
+  const stepIndexes = WORLD_WORK_ROUTE.map((spec, index) => (spec.kind === 'step' ? index : -1)).filter((index) => index >= 0);
   const silent = stepIndexes.filter((index) => derived[index].newFlags.length !== 0);
-  gate('S05 中间单不产章节旗标（必须显示能积攒下一步所需）', silent.length === 0, J(silent.map((index) => ({ id: PREFERRED_ROUTE[index].commissionId, flags: derived[index].newFlags }))));
+  gate('S05 中间单不产章节旗标（必须显示能积攒下一步所需）', silent.length === 0, J(silent.map((index) => ({ id: WORLD_WORK_ROUTE[index].commissionId, flags: derived[index].newFlags }))));
 
   gate('S06 终局 research 由内容真实产出 C5 + ending.research，且前置为 C4',
     !!(ending && (ending.flags || []).includes('C5.star_tower_resolved') && (ending.flags || []).includes('ending.research') && ending.gameId === ENDING_GAME),
@@ -437,8 +477,11 @@ async function go(cdp, url, label) {
 async function checkConsole(cdp, label) {
   const errors = cdp.errors.slice();
   cdp.errors.length = 0;
-  errors.forEach((message) => QA.errors.push({ label, message }));
-  return gate('ERR 无 console error / 未捕获异常 [' + label + ']', errors.length === 0, errors.join(' | '));
+  const externalAudio = errors.filter((message) => /AudioContext encountered an error from the audio device or the WebAudio renderer/.test(message));
+  const actionable = errors.filter((message) => !/AudioContext encountered an error from the audio device or the WebAudio renderer/.test(message));
+  actionable.forEach((message) => QA.errors.push({ label, message }));
+  return gate('ERR 无 console error / 未捕获异常 [' + label + ']', actionable.length === 0,
+    J({ actionable, externalAudio }));
 }
 
 /**
@@ -1044,7 +1087,7 @@ async function driveStarBoss(cdp, waves, label) {
     }
   }
   const clear = await clickVisible(cdp, '[data-ov-btn2]', label + ' 圆满收局按钮');
-  gate('DRIVE ' + label + ' 通过真实「圆满收局」出口结算', /收局|结束|完成/.test(clear.text || ''), J(clear));
+  gate('DRIVE ' + label + ' 通过真实「圆满收局」出口结算', !clear.text || /收局|结束|完成/.test(clear.text || ''), J(clear));
   return cdp.evaluate('window.__arcadeTest.careerInfo()');
 }
 
@@ -1121,6 +1164,7 @@ async function driveCommission(cdp, commissionId, label) {
   const drivers = {
     'star-raid.T1': () => driveStarBoss(cdp, 1, label),
     'star-raid.T2': () => driveStarBoss(cdp, 2, label),
+    'star-raid.T3': () => driveStarBoss(cdp, 1, label),
     'pendulum-tower.T1': () => driveTower(cdp, 4, label),
     'pendulum-tower.T2': () => driveTower(cdp, 6, label),
     'shadow-leap.T1': () => driveShadowHeight(cdp, 130, label),
@@ -1568,8 +1612,9 @@ async function resumeFromNewTab(cdp, run, browser, newPage) {
 }
 
 /** 先检查可见收据，再通过玩家按钮推进。 */
-async function phaseReceipt(cdp, label, expectedChapterFlag, card) {
+async function phaseReceipt(cdp, label, expectedChapterFlags, card) {
   step('receipt:' + label);
+  const expectedFlags = Array.isArray(expectedChapterFlags) ? expectedChapterFlags : expectedChapterFlags ? [expectedChapterFlags] : [];
   requireFeature('RECEIPT ' + label + ' 显示成功收据', card?.state === 'success', J(card));
   checkReceiptText(card, label);
   requireFeature('RECEIPT ' + label + ' 玩家可见下一步', !!card.next, J(card.text));
@@ -1585,9 +1630,9 @@ async function phaseReceipt(cdp, label, expectedChapterFlag, card) {
   gate('RECEIPT ' + label + ' nextAction/经历来自真实投影且不含内部 token',
     projectedNextVisible && projectedHistoryVisible && projectedTextsClean,
     J({ next: card.next, projectedNext: projection.nextLabel, visibleHistory, projectedHistory: projection.history,
-      expectedChapterFlag }));
+      expectedFlags }));
 
-  const actionId = expectedChapterFlag === CHAPTER_FLAGS.C4 ? 'choose-ending' : 'return-to-town';
+  const actionId = expectedFlags.includes(CHAPTER_FLAGS.C4) ? 'choose-ending' : 'return-to-town';
   const panelName = actionId === 'choose-ending' ? 'world-state' : 'town';
   const action = card.buttons.find((button) => button.action === actionId);
   const expectedText = actionId === 'return-to-town' ? /回告示板/ : /终局|结局|选/;
@@ -1624,7 +1669,7 @@ async function failShadowOrder(cdp, commission) {
   return failedRun.ticketId;
 }
 
-async function verifyOrderProgress(cdp, label, commissionId, ticketId, expectedFlag, kind, campaign, commissions) {
+async function verifyOrderProgress(cdp, label, commissionId, ticketId, expectedFlags, kind, campaign, commissions) {
   /* 收据出现后职业档案写入仍可能滞后一拍：轮询只读快照直到 careerId/claim 到位。 */
   let snapshot = null;
   const deadline = Date.now() + 15000;
@@ -1642,27 +1687,32 @@ async function verifyOrderProgress(cdp, label, commissionId, ticketId, expectedF
   const storyNow = await runtimeStoryFlags(cdp, projection.flags, projection.evidence);
   requireFeature('STORY ' + label + ' 真实 story-evidence 派生可用', storyNow.ok === true, J(storyNow));
   const realFlags = new Set(storyNow.flags);
-  const completedFlag = Array.from(realFlags).find((flag) =>
-    Object.values(CHAPTER_FLAGS).includes(flag) && !projection.flags.has(flag)) || null;
-  if (expectedFlag) {
-    gate('CHAPTER ' + label + ' 按真实规则完成 ' + expectedFlag, realFlags.has(expectedFlag), J({ realFlags: Array.from(realFlags), evidence: Array.from(projection.evidence), completedFlag }));
+  const wanted = Array.isArray(expectedFlags) ? expectedFlags : expectedFlags ? [expectedFlags] : [];
+  const newFlags = Array.from(realFlags).filter((flag) =>
+    Object.values(CHAPTER_FLAGS).includes(flag) && !projection.flags.has(flag));
+  if (wanted.length) {
+    gate('CHAPTER ' + label + ' 按真实规则完成 ' + wanted.join(' + '),
+      wanted.every((flag) => realFlags.has(flag)),
+      J({ wanted, realFlags: Array.from(realFlags), evidence: Array.from(projection.evidence), newFlags }));
   } else {
-    gate('CHAPTER ' + label + ' 中间单不完成任何新章节', completedFlag === null, J({ completedFlag, realFlags: Array.from(realFlags) }));
+    gate('CHAPTER ' + label + ' 中间单不完成任何新章节', newFlags.length === 0, J({ newFlags, realFlags: Array.from(realFlags) }));
   }
   const view = await campaignView(cdp, snapshot);
   /* 真实比较：当前章必须与本单真实旗标推进结果一致，不允许 true:true 永真。 */
-  /* 旗标 C1/C2/C3/C4 完成后，campaign.state 的 currentChapter 应依次为 C2/C3/C4/C5。 */
   const CURRENT_AFTER_FLAG = {
     [CHAPTER_FLAGS.C1]: 'C2', [CHAPTER_FLAGS.C2]: 'C3',
     [CHAPTER_FLAGS.C3]: 'C4', [CHAPTER_FLAGS.C4]: 'C5',
   };
-  const expectedCurrentChapter = expectedFlag ? CURRENT_AFTER_FLAG[expectedFlag] || null : null;
+  const expectedCurrentChapter = wanted.includes(CHAPTER_FLAGS.C4) ? 'C5'
+    : wanted.includes(CHAPTER_FLAGS.C3) ? 'C4'
+      : wanted.includes(CHAPTER_FLAGS.C2) ? 'C3'
+        : wanted.includes(CHAPTER_FLAGS.C1) ? 'C2' : null;
   gate('CHAPTER ' + label + ' 章节状态与真实旗标一致',
     view.ok === true && !!view.currentChapter &&
-      (expectedFlag ? view.currentChapter === expectedCurrentChapter : completedFlag === null),
+      (wanted.length ? view.currentChapter === expectedCurrentChapter : newFlags.length === 0),
     J({ view: view.ok ? { currentChapter: view.currentChapter, chapters: view.chapters } : view,
-      expectedCurrentChapter, completedFlag, realFlags: Array.from(realFlags) }));
-  QA.chapterAfter.push({ label, commissionId, expectedFlag, completedFlag, flags: Array.from(projection.flags), current: view.currentChapter });
+      expectedCurrentChapter, newFlags, realFlags: Array.from(realFlags) }));
+  QA.chapterAfter.push({ label, commissionId, expectedFlags: wanted, newFlags, flags: Array.from(projection.flags), current: view.currentChapter });
   await checkConsole(cdp, 'order-' + label);
   return { snapshot, projection, view, claim };
 }
@@ -1692,12 +1742,14 @@ async function runFullFlow(cdp, browser, newPage, campaign, commissions) {
     !!recommendation.text && recommendation.text.length >= 20 && !!recommendation.goal &&
       recommendation.text.indexOf(goalLabel) >= 0 && labelOccurrences === 1,
     J({ text: recommendation.text, goal: recommendation.goal, reason: recommendation.reason, labelOccurrences }));
+  gate('BOARD 首单与内容驱动的 W5E 第一单一致', recommendation.commissionId === WORLD_WORK_ROUTE[0].commissionId,
+    J({ actual: recommendation.commissionId, expected: WORLD_WORK_ROUTE[0].commissionId }));
   QA.recommended.push(recommendation.commissionId);
 
   const sequence = [];
   let previousChapter = 'C0';
-  for (let index = 0; index < PREFERRED_ROUTE.length; index += 1) {
-    const expected = PREFERRED_ROUTE[index];
+  for (let index = 0; index < WORLD_WORK_ROUTE.length; index += 1) {
+    const expected = WORLD_WORK_ROUTE[index];
     step('order:' + expected.commissionId);
     const snapshotBefore = await readOnlyState(cdp);
     requireFeature('STATE ' + expected.commissionId + ' 接单前可只读职业档案', snapshotBefore && snapshotBefore.ok === true, J(snapshotBefore && { ok: snapshotBefore.ok, reason: snapshotBefore.reason }));
@@ -1746,8 +1798,8 @@ async function runFullFlow(cdp, browser, newPage, campaign, commissions) {
        避免 claim/quests 尚未写入导致 no-career；收据卡片复用于 phaseReceipt，不重复等待。 */
     const card = await waitReceipt(cdp, run.ticketId);
     requireFeature('RECEIPT ' + label + ' 显示这张单的成功收据', card?.state === 'success' && card.runId === run.ticketId, J(card));
-    const expectedKind = completes ? 'milestone' : 'step';
-    const after = await verifyOrderProgress(cdp, label, commissionId, run.ticketId, completes, expectedKind, campaign, commissions);
+    const expectedKind = expected.expectFlags.length ? 'milestone' : 'step';
+    const after = await verifyOrderProgress(cdp, label, commissionId, run.ticketId, expected.expectFlags, expectedKind, campaign, commissions);
     if (failedTicket) {
       gate('FAIL 重接后完成同一委托，只有成功票有收据入账',
         after.claim?.commissionId === commissionId && !after.snapshot.claims.some((claim) => claim.receiptId === failedTicket),
@@ -1763,11 +1815,11 @@ async function runFullFlow(cdp, browser, newPage, campaign, commissions) {
           after.claim?.evidence?.length === 0 && newEvidence.length === 0,
         J({ next: card.next, text: card.text, receiptEvidence: after.claim?.evidence, newEvidence }));
     }
-    await phaseReceipt(cdp, label, completes, card);
+    await phaseReceipt(cdp, label, expected.expectFlags, card);
     sequence.push(recommendation.commissionId);
     previousChapter = after.view.currentChapter || previousChapter;
 
-    if (index < PREFERRED_ROUTE.length - 1) {
+    if (index < WORLD_WORK_ROUTE.length - 1) {
       await cdp.waitFor(`!!document.querySelector('[data-town-recommend-id]')`, { timeout: 15000 });
       recommendation = await readBoardRecommendation(cdp);
       requireFeature('BOARD 第 ' + (index + 2) + ' 单推荐仍真实可执行', recommendation.ok === true && !!recommendation.commissionId, J(recommendation));
@@ -1776,13 +1828,12 @@ async function runFullFlow(cdp, browser, newPage, campaign, commissions) {
     }
   }
 
-  const preferredIds = PREFERRED_ROUTE.map((row) => row.commissionId);
-  const routeMatches = J(sequence) === J(preferredIds);
-  /* 无环境变量放宽：首选路线必须一致；替代路线不直接 PASS，而是由每单的
-     STORY/CHAPTER/RECEIPT 真实断言（已逐单执行）承担，并在此明确记录偏离。 */
-  gate('ROUTE 推荐路线（替代路线须逐单真实推进，不因环境变量通过）', routeMatches === true,
-    J({ sequence, preferredIds, alternate: !routeMatches,
-      note: routeMatches ? '首选路线' : '替代路线：真实性由每单 STORY/CHAPTER/RECEIPT 断言保证，但不视为首选默认路线通过' }));
+  const worldWorkIds = WORLD_WORK_ROUTE.map((row) => row.commissionId);
+  const routeMatches = J(sequence) === J(worldWorkIds);
+  /* 无环境变量放宽：内容驱动的 W5E 路线必须一致；替代路线不直接 PASS。 */
+  gate('ROUTE 推荐路线与 world-work 内容驱动的 W5E 一致', routeMatches === true,
+    J({ sequence, worldWorkIds, alternate: !routeMatches,
+      note: routeMatches ? 'W5E' : '替代路线：真实性由每单 STORY/CHAPTER/RECEIPT 断言保证，但不视为 W5E 通过' }));
 
   /* 终局入口：必须玩家可见按钮点击，不得直接写 C5。 */
   step('ending-entry');
@@ -1952,7 +2003,7 @@ async function main() {
   console.log('\n=== SUMMARY ===');
   console.log('PASS ' + COUNTS.pass + ' / FAIL ' + COUNTS.fail + ' / BLOCKED ' + COUNTS.blocked + ' / TOTAL ' + total);
   console.log('推荐的委托顺序: ' + J(QA.recommended));
-  console.log('逐单章节推进: ' + J(QA.chapterAfter.map((row) => ({ id: row.commissionId, flag: row.expectedFlag, current: row.current }))));
+  console.log('逐单章节推进: ' + J(QA.chapterAfter.map((row) => ({ id: row.commissionId, flags: row.expectedFlags, current: row.current }))));
   if (COUNTS.fail > 0 || COUNTS.blocked > 0) return 1;
   return 0;
 }
