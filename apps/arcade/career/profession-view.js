@@ -564,6 +564,7 @@
   function toolIntroduced(state, catalog, context, tool) {
     if (!isObject(tool) || !stableId(tool.toolId)) return false;
     if (tokens(context, 'knownToolIds').indexOf(tool.toolId) >= 0) return true;
+    if (tool.introducedOnAccept === true && acceptedProfessionIds(state, catalog).length > 0) return true;
     var owner = tool.professionId || tool.introducedByProfessionId || null;
     if (owner && professionOf(catalog, owner)) return isAccepted(progressOf(state, owner));
     var flags = [tool.worldFlag, tool.requiredFlag, tool.unlockFlag].filter(function (value) { return stableId(value); });

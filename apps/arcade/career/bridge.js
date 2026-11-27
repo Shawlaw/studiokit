@@ -206,6 +206,7 @@
     commissionUiFacade: null,
     commissionUiSource: null,
     professionViewLoaded: false,
+    careerDataListeners: [],
     endingEvents: [],
     careerArchived: false,
     careerArchiveCareerId: null,
@@ -1756,6 +1757,10 @@
       careerId: internal.commissionLastCareerId || null,
       announce: announceToUser,
       reducedMotion: reducedMotionPreferred(),
+      professionView: professionViewModule(),
+      careerView: function (extra) {
+        return careerView(Object.assign({ surface: 'receipt' }, isObject(extra) ? extra : {}));
+      },
       storyFeedback: storyFeedbackForUi(feedback),
       openTown: openTown,
       openCampaign: openCampaign,
@@ -2215,6 +2220,12 @@
         ? internal.worldWorkContent.commissionIds.slice() : [];
       catalog.worldWork = clone(internal.worldWorkContent);
     }
+    catalog.tools = [
+      { toolId: 'wallet', name: '钱包', introducedOnAccept: true },
+      { toolId: 'shop', name: '商店', introducedOnAccept: true },
+      { toolId: 'workshop', name: '工作台', introducedOnAccept: true },
+      { toolId: 'hangar', name: '机库', introducedOnAccept: true },
+    ];
     return catalog;
   }
 
@@ -2407,6 +2418,7 @@
         if (!result || result.ok !== true) return result || { ok: false, reason: 'profession-event-failed' };
         if (result.careerId) internal.commissionLastCareerId = result.careerId;
         return loadDiscoveryStateFromDb().then(function () {
+          notifyCareerDataChanged(action.toLowerCase().replace(/_/g, '-'));
           return result;
         });
       }).catch(function (err) {
@@ -2447,6 +2459,70 @@
     return applyProfessionAction('SET_ACTIVE', {
       professionId: typeof request.professionId === 'string' ? request.professionId : null,
     });
+  }
+
+  function onCareerDataChanged(listener) {
+    if (typeof listener !== 'function') return function () {};
+    internal.careerDataListeners.push(listener);
+    return function () {
+      internal.careerDataListeners = internal.careerDataListeners.filter(function (item) { return item !== listener; });
+    };
+  }
+
+  function notifyCareerDataChanged(reason) {
+    internal.careerDataListeners.slice().forEach(function (listener) {
+      try {
+        var result = listener({ reason: typeof reason === 'string' ? reason : 'changed', at: nowIso() });
+        if (result && typeof result.catch === 'function') result.catch(function () {});
+      } catch (err) {
+        warnOnce('career-data-listener', err);
+      }
+    });
+  }
+
+  function invalidateCareerData(input) {
+    var request = isObject(input) ? input : {};
+    var reason = typeof request.reason === 'string' ? request.reason : 'changed';
+    notifyCareerDataChanged(reason);
+    return { ok: true, reason: reason };
+  }
+
+  function invitationForClue(clueId) {
+    try {
+      if (internal.careerArchived) return null;
+      var clue = findClue(clueId);
+      if (!clue || !clue.gameId) return null;
+      var catalog = careerCatalog();
+      var game = Array.isArray(catalog.games)
+        ? catalog.games.find(function (row) { return row && row.gameId === clue.gameId; })
+        : null;
+      var state = currentStateSnapshot();
+      var view = professionViewModule();
+      var professionIds = game && Array.isArray(game.professions) ? game.professions.slice() : [];
+      for (var i = 0; i < professionIds.length; i += 1) {
+        var professionId = professionIds[i];
+        var row = state.professionProgress && isObject(state.professionProgress[professionId])
+          ? state.professionProgress[professionId] : null;
+        if (!row || ['glimpsed', 'read'].indexOf(row.state) < 0) continue;
+        var reveal = view && typeof view.canRevealProfession === 'function'
+          ? view.canRevealProfession({ state: state, catalog: catalog, context: { surface: 'letter', gameId: clue.gameId }, professionId: professionId, surface: 'letter' })
+          : null;
+        if (!reveal || reveal.ok !== true) continue;
+        var profession = Array.isArray(catalog.professions)
+          ? catalog.professions.find(function (item) { return item && item.professionId === professionId; })
+          : null;
+        return {
+          professionId: professionId,
+          gameId: clue.gameId,
+          displayName: profession && profession.displayName ? profession.displayName : '',
+          state: row.state,
+          canAccept: row.state === 'read',
+        };
+      }
+      return null;
+    } catch (err) {
+      return null;
+    }
   }
 
   function setProfessionPaused(input) {
@@ -3381,6 +3457,7 @@
         internal.seq = 0;
         var surface = readUi('clueSurface');
         if (surface && typeof surface.clear === 'function') surface.clear();
+        notifyCareerDataChanged('career-archived');
         return { ok: true, archived: true, careerId: result.careerId || null, generation: result.generation };
       });
     }, { ok: false, reason: 'exception' });
@@ -3394,6 +3471,7 @@
         if (!result || result.ok !== true) return result || { ok: false, reason: 'archive-failed' };
         applyArchiveSnapshot({ archived: false, careerId: result.careerId || null, archivedAt: null });
         return loadDiscoveryStateFromDb().then(function () {
+          notifyCareerDataChanged('career-unarchived');
           return { ok: true, archived: false, careerId: result.careerId || null, generation: result.generation };
         });
       });
@@ -3425,6 +3503,7 @@
         internal.discoveryState = discovery && typeof discovery.initialState === 'function' ? discovery.initialState() : fallbackInitialState();
         var surface = readUi('clueSurface');
         if (surface && typeof surface.clear === 'function') surface.clear();
+        notifyCareerDataChanged('career-reset');
         return { ok: true, generation: result.generation };
       });
     }, { ok: false, reason: 'exception' });
@@ -3463,6 +3542,9 @@
       commission: commissionForUi(),
       professionView: professionViewModule(),
       careerView: careerView,
+      invitationForClue: invitationForClue,
+      onCareerDataChanged: onCareerDataChanged,
+      invalidateCareerData: invalidateCareerData,
       careerCatalog: careerCatalog,
       /* 0.20 只读 continuation 查询：告示板可直接 ctx.careerContinuations({careerId})，
          也可经 ctx.commission.continuations；两者是同一只读方法，无新 ctx 字段依赖。 */
@@ -3738,7 +3820,10 @@
           : Promise.resolve();
         return syncCareer
           .then(function () { return loadDiscoveryStateFromDb(); })
-          .then(function () { return result; });
+          .then(function () {
+            notifyCareerDataChanged('career-imported');
+            return result;
+          });
       });
     };
     api.__bridgeFacade = true;
@@ -4594,6 +4679,9 @@
     api.commission = commissionModule() || null;
     api.professionView = professionViewModule();
     api.careerView = careerView;
+    api.invitationForClue = invitationForClue;
+    api.onCareerDataChanged = onCareerDataChanged;
+    api.invalidateCareerData = invalidateCareerData;
     api.acceptProfessionInvitation = acceptProfessionInvitation;
     api.setActiveProfession = setActiveProfession;
     api.setProfessionPaused = setProfessionPaused;

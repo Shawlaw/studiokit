@@ -598,6 +598,10 @@
       evidenceProducers: Object.create(null),
       evidence: new Set(),
       evidenceConfigured: false,
+      worldWork: null,
+      worldWorkIds: [],
+      worldWorkSet: Object.create(null),
+      worldWorkIndex: Object.create(null),
       chapterFiles: Object.create(null),
       contentErrors: [],
       contentWarnings: [],
@@ -621,6 +625,10 @@
       state.evidenceProducers = Object.create(null);
       state.evidence = new Set();
       state.evidenceConfigured = false;
+      state.worldWork = null;
+      state.worldWorkIds = [];
+      state.worldWorkSet = Object.create(null);
+      state.worldWorkIndex = Object.create(null);
       state.chapterFiles = Object.create(null);
       state.contentErrors = [];
       state.contentWarnings = [];
@@ -953,6 +961,79 @@
       return new Set(tokens);
     }
 
+    function normalizeWorldWork(raw, errors, warnings) {
+      if (raw === undefined || raw === null) return null;
+      if (!isObject(raw)) {
+        errors.push(errorItem('world-work-invalid', 'worldWork 必须是对象。'));
+        return null;
+      }
+      if (!isArray(raw.commissionIds)) {
+        errors.push(errorItem('world-work-ids-missing', 'worldWork.commissionIds 必须是数组。'));
+        return null;
+      }
+      if (!isArray(raw.entries)) {
+        errors.push(errorItem('world-work-entries-missing', 'worldWork.entries 必须是数组。'));
+        return null;
+      }
+      var ids = [];
+      var idSet = Object.create(null);
+      raw.commissionIds.forEach(function (value) {
+        var id = trimText(value, 120);
+        if (!STABLE_ID_RE.test(id)) {
+          errors.push(errorItem('world-work-id-invalid', '世界工作 ID 形状非法。', { commissionId: id || null }));
+          return;
+        }
+        if (idSet[id]) {
+          errors.push(errorItem('world-work-id-duplicate', '世界工作 ID 重复。', { commissionId: id }));
+          return;
+        }
+        if (!state.commissionIndex[id]) {
+          errors.push(errorItem('world-work-id-unknown', '世界工作 ID 不在委托目录里。', { commissionId: id }));
+          return;
+        }
+        idSet[id] = true;
+        ids.push(id);
+      });
+      var entries = [];
+      var byId = Object.create(null);
+      raw.entries.forEach(function (entry) {
+        if (!isObject(entry)) {
+          errors.push(errorItem('world-work-entry-invalid', '世界工作条目必须是对象。'));
+          return;
+        }
+        var id = trimText(entry.commissionId, 120);
+        if (!STABLE_ID_RE.test(id) || !idSet[id]) {
+          errors.push(errorItem('world-work-entry-unknown', '世界工作条目引用未知 ID。', { commissionId: id || null }));
+          return;
+        }
+        if (byId[id]) {
+          errors.push(errorItem('world-work-entry-duplicate', '世界工作条目重复。', { commissionId: id }));
+          return;
+        }
+        var title = trimText(entry.title, 120);
+        var summary = trimText(entry.summary, 240);
+        if (!title || !summary) {
+          errors.push(errorItem('world-work-entry-text-missing', '世界工作缺少通用标题或说明。', { commissionId: id }));
+          return;
+        }
+        var normalized = { commissionId: id, title: title, summary: summary };
+        entries.push(normalized);
+        byId[id] = normalized;
+      });
+      ids.forEach(function (id) {
+        if (!byId[id]) errors.push(errorItem('world-work-entry-missing', '世界工作 ID 缺少通用文案。', { commissionId: id }));
+      });
+      return {
+        contentVersion: trimText(raw.contentVersion, 32) || null,
+        schemaVersion: Number.isFinite(Number(raw.schemaVersion)) && Math.floor(Number(raw.schemaVersion)) >= 1
+          ? Math.floor(Number(raw.schemaVersion))
+          : 1,
+        commissionIds: ids.slice(),
+        entries: entries.slice(),
+        byId: byId,
+      };
+    }
+
     function buildIndexes() {
       state.chapterIndex = Object.create(null);
       state.chapters.forEach(function (chapter) {
@@ -1084,11 +1165,19 @@
           errors.push(errorItem('chapter-count-invalid', '章节数超过上限。', { chapterCount: state.chapters.length }));
         }
         buildIndexes();
+        state.worldWork = normalizeWorldWork(options.worldWork, errors, warnings);
+        if (state.worldWork) {
+          state.worldWorkIds = state.worldWork.commissionIds.slice();
+          state.worldWorkIds.forEach(function (id) {
+            state.worldWorkSet[id] = true;
+            state.worldWorkIndex[id] = state.worldWork.byId[id];
+          });
+        }
         var report = validateContent();
         state.contentErrors = errors.concat(report.errors);
         state.contentWarnings = warnings.concat(report.warnings);
         state.configured = true;
-        return {
+        var result = {
           ok: state.contentErrors.length === 0,
           chapterCount: state.chapters.length,
           endingCount: state.endings.length,
@@ -1101,6 +1190,8 @@
           version: MODULE_VERSION,
           signature: state.signature,
         };
+        if (state.worldWork) result.worldWorkCount = state.worldWorkIds.length;
+        return result;
       } catch (err) {
         reset();
         return {
@@ -1535,7 +1626,7 @@
       return { errors: errors, warnings: warnings };
     }
 
-    function validate() {
+    function validate(input) {
       if (!state.configured) {
         return {
           ok: false,
@@ -1553,13 +1644,47 @@
       }
       try {
         var report = validateContent();
+        var worldProof = null;
+        if (state.worldWork) {
+          var proofModule = recommendedEvidenceModule(input);
+          if (!proofModule) {
+            report.errors.push(errorItem('world-work-evidence-unavailable', '世界工作路径校验需要注入 storyEvidence 模块。'));
+          } else {
+            var origins = originsOf();
+            var failures = [];
+            var passed = 0;
+            origins.forEach(function (originId) {
+              state.endings.forEach(function (ending) {
+                var path = worldWorkPath({
+                  originGameId: originId,
+                  approach: ending.approach,
+                  acceptedProfessionId: null,
+                  flags: ['C0.port_seen'],
+                  storyEvidence: proofModule,
+                });
+                if (path.ok && path.complete) passed += 1;
+                else failures.push(originId + '/' + ending.approach + ':' + (path.reason || 'incomplete'));
+              });
+            });
+            worldProof = {
+              originCount: origins.length,
+              endingCount: state.endings.length,
+              total: origins.length * state.endings.length,
+              passed: passed,
+              failures: failures.slice(),
+            };
+            if (passed !== worldProof.total) {
+              report.errors.push(errorItem('world-work-path-unreachable', '世界通用工作未能让全部起源到达全部终局。', { passed: passed, total: worldProof.total }));
+            }
+          }
+        }
         var alternatives = {};
         state.chapters.forEach(function (chapter) {
           alternatives[chapter.chapterId] = chapter.chapterId === FINALE_CHAPTER
             ? state.endings.length
             : productiveRoutes(chapter).length;
         });
-        return {
+        var result = {
           ok: report.errors.length === 0,
           configured: true,
           errors: clone(report.errors) || [],
@@ -1573,6 +1698,8 @@
           signature: state.signature,
           version: MODULE_VERSION,
         };
+        if (worldProof) result.worldWorkPathProof = worldProof;
+        return result;
       } catch (err) {
         return {
           ok: false,
@@ -2109,6 +2236,147 @@
       };
     }
 
+    function worldWorkFailure(reason, extra) {
+      var out = {
+        ok: false,
+        reason: reason,
+        complete: false,
+        originGameId: null,
+        acceptedProfessionId: null,
+        steps: [],
+        worldCommissionIds: [],
+        flagsAfter: [],
+        evidence: [],
+        endings: [],
+        blockers: [],
+      };
+      if (isObject(extra)) {
+        Object.keys(extra).forEach(function (key) { out[key] = extra[key]; });
+      }
+      if (!out.blockers.length) out.blockers.push({ kind: reason, id: reason, reason: reason });
+      return out;
+    }
+
+    /** 从世界通用工作真实 reward 投影 C0→C4，并检查三终局入口。 */
+    function worldWorkPath(input) {
+      try {
+        if (!state.configured) return worldWorkFailure(REASONS.notConfigured);
+        if (!state.worldWork) return worldWorkFailure('world-work-not-configured');
+        var options = isObject(input) ? input : {};
+        var originGameId = typeof options.originGameId === 'string' ? options.originGameId : '';
+        if (!originGameId || originsOf().indexOf(originGameId) < 0) {
+          return worldWorkFailure(REASONS.badInput, { originGameId: originGameId || null });
+        }
+        var evidenceModule = recommendedEvidenceModule(options);
+        if (!evidenceModule || !isFunction(evidenceModule.storyFlags)) {
+          return worldWorkFailure('world-work-evidence-unavailable', { originGameId: originGameId });
+        }
+        var ctx = contextFrom({
+          flags: options.flags,
+          evidence: options.evidence,
+          cleared: options.cleared,
+          quests: options.quests,
+          claims: options.claims,
+          profile: options.profile,
+          wallet: options.wallet,
+        });
+        ctx.flags.add(CHAPTER_FLAGS.C0);
+        var steps = [];
+        var blockers = [];
+        state.worldWorkIds.forEach(function (id) {
+          var commission = state.commissionIndex[id];
+          if (!commission) {
+            blockers.push({ kind: 'world-work-missing', id: id, reason: 'world-work-missing', commissionId: id });
+            return;
+          }
+          if (ctx.cleared.has(id)) return;
+          if (!evalRequirement(commission.unlock || { all: [] }, ctx)) {
+            blockers.push({ kind: 'world-locked', id: id, reason: 'world-unlock-not-met', commissionId: id });
+            return;
+          }
+          var meta = state.worldWorkIndex[id];
+          steps.push({
+            kind: 'commission',
+            category: 'world',
+            id: id,
+            commissionId: id,
+            gameId: commission.gameId,
+            tier: commission.tier,
+            title: meta.title,
+            summary: meta.summary,
+            reason: meta.summary,
+            optional: false,
+            missing: [],
+          });
+          ctx.cleared.add(id);
+          addTokens(ctx.flags, commission.rewardFlags);
+          addTokens(ctx.evidence, commission.rewardEvidence);
+          var chapterC1 = state.chapterIndex.C1;
+          if (chapterC1 && !ctx.flags.has(CHAPTER_FLAGS.C1)
+              && evalRequirement(chapterC1.entry, ctx) && firstMetRoute(chapterC1, ctx)) {
+            ctx.flags.add(CHAPTER_FLAGS.C1);
+          }
+        });
+
+        var story;
+        try {
+          story = evidenceModule.storyFlags({
+            flags: Array.from(ctx.flags),
+            evidence: Array.from(ctx.evidence),
+          });
+        } catch (err) {
+          story = null;
+        }
+        if (!isObject(story) || story.ok !== true) {
+          blockers.push({ kind: 'evidence-unavailable', id: 'evidence-unavailable', reason: 'evidence-unavailable' });
+        } else {
+          addTokens(ctx.flags, story.flags);
+          addTokens(ctx.flags, story.allFlags);
+        }
+
+        var chapters = [];
+        ['C2', 'C3', 'C4'].forEach(function (chapterId) {
+          var chapter = state.chapterIndex[chapterId];
+          var flag = chapterFlagOf(chapterId);
+          chapters.push({
+            chapterId: chapterId,
+            complete: !!chapter && !!flag && ctx.flags.has(flag),
+            entryMet: !!chapter && evalRequirement(chapter.entry, ctx),
+          });
+        });
+        var endings = state.endings.map(function (ending) {
+          return {
+            approach: ending.approach,
+            available: evalRequirement(ending.entry, ctx),
+          };
+        });
+        var requestedApproach = typeof options.approach === 'string' ? options.approach : null;
+        var requestedEnding = requestedApproach
+          ? endings.filter(function (ending) { return ending.approach === requestedApproach; })[0] || null
+          : null;
+        var complete = blockers.length === 0
+          && chapters.every(function (chapter) { return chapter.complete; })
+          && endings.every(function (ending) { return ending.available; })
+          && (!requestedApproach || (requestedEnding && requestedEnding.available));
+        return {
+          ok: true,
+          reason: null,
+          complete: complete,
+          originGameId: originGameId,
+          acceptedProfessionId: typeof options.acceptedProfessionId === 'string' ? options.acceptedProfessionId : null,
+          steps: steps,
+          worldCommissionIds: state.worldWorkIds.slice(),
+          flagsAfter: sortedTokens(Array.from(ctx.flags)),
+          evidence: sortedTokens(Array.from(ctx.evidence)),
+          chapters: chapters,
+          endings: endings,
+          blockers: blockers,
+        };
+      } catch (err) {
+        return worldWorkFailure(REASONS.exception, { error: errorText(err) });
+      }
+    }
+
     function projectedContext(ctx, commission) {
       return {
         flags: new Set(Array.from(ctx.flags).concat(commission.rewardFlags)),
@@ -2379,7 +2647,7 @@
           var routeSpec = RECOMMEND_ROUTES.filter(function (item) {
             return item.chapterId === chapterId;
           })[0];
-          var prefer = routeSpec ? routeSpec.prefer : [];
+          var prefer = state.worldWork ? state.worldWorkIds.concat(routeSpec ? routeSpec.prefer : []) : (routeSpec ? routeSpec.prefer : []);
           var fallbacks = routeSpec ? routeSpec.alternatives : [];
           var candidates = [];
           var seenCandidates = Object.create(null);
@@ -2447,12 +2715,20 @@
 
           var picked = candidates[0];
           var pickedCommission = state.commissionIndex[picked.id];
-          return {
+          var worldMeta = state.worldWorkIndex[picked.id] || null;
+          var recommendation = {
             commissionId: picked.id,
-            goal: pickedCommission.title,
-            reason: recommendationReason(chapterId, pickedCommission, picked.milestone),
+            goal: worldMeta ? worldMeta.title : pickedCommission.title,
+            reason: worldMeta
+              ? '你愿意先接「' + worldMeta.title + '」吗？' + worldMeta.summary
+              : recommendationReason(chapterId, pickedCommission, picked.milestone),
             kind: picked.milestone ? 'milestone' : 'step',
           };
+          if (worldMeta) {
+            recommendation.category = 'world';
+            recommendation.description = worldMeta.summary;
+          }
+          return recommendation;
         }
         return null;
       } catch (err) {
@@ -2477,7 +2753,7 @@
     }
 
     function configuration() {
-      return {
+      var report = {
         configured: state.configured,
         contentVersion: state.contentVersion,
         chapterCount: state.chapters.length,
@@ -2490,6 +2766,8 @@
         version: MODULE_VERSION,
         settings: clone(settings) || {},
       };
+      if (state.worldWork) report.worldWorkCount = state.worldWorkIds.length;
+      return report;
     }
 
     var api = {
@@ -2511,6 +2789,7 @@
         return state.configured === true;
       },
       state: stateFn,
+      worldWorkPath: worldWorkPath,
       recommend: recommend,
       routeRequirementsMet: routeRequirementsMet,
       contextFrom: contextFrom,
