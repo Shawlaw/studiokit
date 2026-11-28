@@ -1,6 +1,6 @@
 # Arcade 0.24.0 集成与验证
 
-- 状态：**GATE_PASSED / RELEASE_READY（本地发布准备，未发布）**；未获 `OWNER_AUTHORIZATION: PUBLISH_TO_MAIN`，未 push、未打 tag、未部署。2026-11-28 复查修正后的候选 SHA 为 `4f2d271`，release 51/51，见 §6；§3–§4 的数字对应修正前的提交，只作历史记录。
+- 候选 `4f2d271` 复查修正后通过 release 51/51，见 §6。§3–§4 记录修正前的验证。累计发布采用 PR 验证与双端部署，见 §5。
 - 修正前门禁状态：GATE_PASSED / RELEASE_READY（本地发布准备，未发布）。L3 release profile 在 `c5712e5` 通过 51/51；浏览器证据为 flow 624/624、mobile 334/334、smoke 119/119；独立复审 PASS（无 Blocker / 无 Major）。不写 PUBLISHED / ALL GATES PASSED，full / 真机 / 真人 / 线上仍 UNVERIFIED。
 - 设计 / 回滚：[`DESIGN-0.24.0.md`](../../apps/arcade/DESIGN-0.24.0.md)；数据 / 叙事契约：[`ADR-0.24-world.md`](ADR-0.24-world.md)（T20 冻结，T24 增补 §9）、[`tools/career_world_narrative_schema.json`](../../tools/career_world_narrative_schema.json)
 - 基线：0.23.0 候选 `79301da`（GATE_PASSED / RELEASE_READY，本地发布准备，未发布；其 L3 为 47/47 `release passed (not full)`，见 [`INTEGRATION-0.23.0.md`](INTEGRATION-0.23.0.md)）；0.24 开发分支自 `cf81f12` 起基于该候选。版本链 0.24.0，SW `studiokit-arcade-0.24.0-v1`。
@@ -58,9 +58,9 @@
 
 ## 5. 发布准备
 
-- 未获 `OWNER_AUTHORIZATION: PUBLISH_TO_MAIN`；不 push main、不打 tag、不创建 Release、不部署。
+- 本次经 Owner 授权，将 0.22、0.23 的改进随 0.24 通过同一个 PR 累计发布。PR 的构建与静态检查通过后合并；合并触发双端生产部署。部署状态以 [GitHub Actions](https://github.com/Shawlaw/studiokit/actions/workflows/deploy.yml?query=branch%3Amain) 对合并提交的结果为准。
 - 正式发布需双目标同 SHA 通过 workflow 与 `verify_deploy.py`；一次授权覆盖两端。
-- 发布前至少需要：L3 release profile 通过、版本链复核（engine / sw / index / registry / validate_site / verify_deploy 一致）、`git grep` 复核 0.23.0 只余历史文档。
+- 发布前补测：在同一 Chrome 配置和项目站点路径下，由 `68529dd` 的 0.21.2 实际制品切换到 0.24.0。合成旧档的身份、钱包、待续委托、章节标记和经典进度均保留，旧版预载的游戏升级后仍能离线打开。
 
 ## 6. 复查修正（2026-11-28）
 
@@ -82,4 +82,4 @@
 - **浏览器预检（`9247b06`）**：`career_archive_lifecycle_e2e_test` 61/61、`career_mobile_016_test` 334/334、`arcade_smoke` 119/119（完整 release 门禁会再跑一次）。
 - **视觉夹具对照未重跑**：信箱的后续邀请块与港口的恢复动作是复用已冻结组件的新组合，不在 13 个夹具状态内。
 - **L3 release profile（候选冻结 SHA `4f2d271bdc87ba993ef071cf6a405b167b15b3e9`）**：`py -3 tools/arcade_run_all_gates.py --profile release` **51/51 PASS**，2900.348s，`verdict: release passed (not full)`、`fully_passed: false`；门禁内的真实流程 645/645。本版本只启动了一次 release 门禁。日志在仓库外 `execution/review-024-release-gate.log`。门禁之后只有文档提交。
-- full、真机、真人、线上部署仍 UNVERIFIED；`release passed (not full)` 不得写成 full 或 ALL GATES PASSED。
+- full、真机与真人仍未验证；线上部署证据单独见 §5。

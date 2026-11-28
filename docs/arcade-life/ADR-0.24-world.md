@@ -4,7 +4,7 @@
 - 文件：`docs/arcade-life/ADR-0.24-world.md`（本 ADR 的唯一路径；`ADR-interfaces.md` 的 §24 由 lead 在 T25 追加）
 - 日期：2026-11-28
 - 分支 / 基线：`feat/arcade-career-024`，基线 `79301da`（0.23.0 收口 `GATE_PASSED / RELEASE_READY`，release 47/47 not full；未发布、未 push）
-- 版本链（T25 收口）：Arcade 0.24.0；状态与门禁结论以 [`INTEGRATION-0.24.0.md`](INTEGRATION-0.24.0.md) 为准（本地发布准备，未发布，门禁状态待 L3）。
+- 版本链（T25 收口）：Arcade 0.24.0；状态与门禁结论以 [`INTEGRATION-0.24.0.md`](INTEGRATION-0.24.0.md) 为准。
 - 任务：Arcade 0.24 T20。**本文只产出契约与数据设计**：未修改 runtime、内容 JSON、bridge loader、版本链；未运行浏览器、release、full、watch；未 push。
 - 本任务新增且只新增三个文件：本 ADR、`tools/career_world_narrative_schema.json`、`tools/career_world_narrative_contract_test.mjs`。**未追加** `ADR-interfaces.md` §24，也未登记 gate（§24 与 gate 注册属 lead/T25 串行收口）。
 - 外部依据（仓库外，不进入仓库）：0.24 设计基准包的 `spec/00-product-contract.md`、`spec/01-state-contract.md`、`spec/03-narrative.md`、`execution/02-task-board.md` 的 T20–T24 行。本文只落地可执行的契约，不复制其示例剧情、示例人物或演示状态机。

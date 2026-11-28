@@ -1,6 +1,6 @@
 # Arcade 0.24.0 — 世界主线替代路线、可选职业交汇与经历回读
 
-- 状态：**本地发布准备，未发布**（门禁状态待 L3（lead）；未获 `OWNER_AUTHORIZATION: PUBLISH_TO_MAIN`，未 push、未打 tag、未部署）
+- 门禁：候选 `4f2d271` 通过 release 51/51。累计发布的验证与部署记录见下方集成文档。
 - 版本链：0.24.0；SW 缓存键 `studiokit-arcade-0.24.0-v1`
 - 基线：0.23.0 候选 `79301da`（GATE_PASSED / RELEASE_READY，本地发布准备，未发布）；0.24 开发分支自 `cf81f12` 起基于该候选
 - 契约：`docs/arcade-life/ADR-0.24-world.md`（T20 冻结，T24 增补 §9）；机器可读 `tools/career_world_narrative_schema.json`
@@ -92,9 +92,10 @@
 
 - **不新增 store / key**：IDB `studiokit:arcade:career` v1 / 11 stores 不变；经典 localStorage key 不变；`storyEvents` 仍写在既有 `state/discovery` 行。
 - **内容版本**：`contentVersion` 仍 `0.18.0`（新内容文件自带 `contentVersion:'0.18.0'` 与 `schemaVersion:1`）；`professionVersion` 仍 1；`rulesetVersion` 不变；不新增 reason code。
-- **旧档只追加**：0.24 不重写任何既有 `storyEvents` 行、不补 `label`、不为旧档猜测新增事件；未知 namespace / 未知 eventId 保留并隐藏（任何读取路径都不删除）；坏扩展字段按既有 `normalizeExtension` 修复；上限沿用 `MAX_STORY_EVENTS = 256`（不修改 `profession-state.js`）。
+- **旧档只追加**：0.24 不重写任何既有 `storyEvents` 行、不补 `label`、不为旧档猜测新增事件；未知 namespace / 未知 eventId 保留并隐藏（任何读取路径都不删除）；坏扩展字段按既有 `normalizeExtension` 修复；上限沿用 `MAX_STORY_EVENTS = 256`，优先保留已记录的交汇事件。
 - **封存 / 导入 / 重置 / 备份**沿用既有语义：`storyEvents` 随 `state/discovery` 行整体处理，不新增迁移步骤。
-- **回滚**：删除 `career/content/world-narrative.json`、`career/world-narrative.js`、`career/ui/journal.js` 并回退 bridge / profession-view / route-planner / campaign-core / town / world-state 的加性接线即回到 0.23 行为；已写入的 `storyEvents` 行只是惰性字符串，0.23 读不到白名单时只隐藏、不破坏旧档。回滚须同时把版本链与 SW 缓存键归回 0.23.0，并在发布前先停发布、保留导出、验证合成档。
+- **生产回退**：本次从线上 0.21.2（合并前 `main` 为 `68529dd`）跳到累计版 0.24.0。需要回退时，先保留生涯导出，再通过新的回退 PR 恢复上一线上版本的运行内容。发布回退时使用递增的修复版本，并同步引擎、入口、注册表和 SW 缓存版本，让已安装的 PWA 能检测并切换到回退制品。部署前用合成档验证旧档可读、钱包与委托保留、预载游戏可离线打开。
+- 0.23.0 是开发基线。仅撤回 0.24 的叙事增量时可对照 0.23，此时 0.24 写入的 `storyEvents` 保留在现有存档中。
 
 ## 8. 证据边界
 
@@ -107,4 +108,4 @@
 - `node tools/career_legacy_baseline_test.mjs` **78/78**（版本链一致性）、`node tools/career_profession_extension_test.mjs` **92/92**（`sw.js VERSION === engine ARCADE_VERSION`）
 - `py -3 tools/validate_site.py` PASS、`py -3 tools/check_readme_links.py` PASS、`git diff --check` PASS
 
-浏览器、release、full、真机、真人与线上部署仍未验证（UNVERIFIED），留给 lead 的 L3；本文不写 GATE_PASSED、不写 ALL GATES PASSED、不写发布成功。完整台账与未验证项见 [`INTEGRATION-0.24.0.md`](../../docs/arcade-life/INTEGRATION-0.24.0.md)。
+上述数字记录设计阶段。后续浏览器、release 门禁与部署使用独立证据。完整台账与未验证项见 [`INTEGRATION-0.24.0.md`](../../docs/arcade-life/INTEGRATION-0.24.0.md)。

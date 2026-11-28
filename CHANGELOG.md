@@ -4,13 +4,13 @@ StudioKit 门户本身没有独立的 semver；以下按仓库里程碑与工具
 
 > 说明：Arcade `0.11.2`–`0.14.0` 的条目于 2026-11-22 依据 [`apps/arcade/CHANGELOG.md`](apps/arcade/CHANGELOG.md) 补齐（本文件当时落后于工具版本），逐条数值与证据以工具 CHANGELOG 与对应 `DESIGN-*.md` 为准。
 
-## Arcade 0.24.0 — 2026-11-28（本地发布准备，未发布）
+## Arcade 0.24.0 — 2026-11-28
 
 - 世界主线替代路线：把 C1–C5 已有的替代机制写成戏内成立的故事行动，只引用真实委托 / 代办 / 材料 / 证据，不新增委托与奖励、不改主线唯一解；章节、路线与终局入口补充真实前置与完成条件的公开解释。
 - 可选职业交汇：双方都已主动接受才产出叙事与可选回执（16 条职业声明折叠为 10 个事件），同一对只保留一个 owner、只写一次，`effects: []` / `grants` 全零，不发货币、材料、证据或旗标。
 - 经历筛选与回读：17 条白名单在投影时解析为可见文案，可按真实人物 / 已接受职业筛选，点击只展开静态回读；`storyEvents` 落盘形状仍只有 `at` / `source`，旧档只追加、不迁移。
 - 版本链 0.24.0 / SW `studiokit-arcade-0.24.0-v1`；不新增 IndexedDB store / localStorage key / Schema，`contentVersion 0.18.0` / IDB v1 / 11 stores / 经典玩法数值零改动。
-- 状态：本地发布准备，未发布；门禁状态待 L3（lead），未获发布授权、未 push、未跑 release / full；不写 PUBLISHED / ALL GATES PASSED。设计见 [`DESIGN-0.24.0.md`](apps/arcade/DESIGN-0.24.0.md)，契约见 [`ADR-0.24-world.md`](docs/arcade-life/ADR-0.24-world.md)，验证口径见 [`INTEGRATION-0.24.0.md`](docs/arcade-life/INTEGRATION-0.24.0.md)。线上最近发布版本仍为 0.21.2（已双端发布，见下文）。
+- 累计发布包含 0.22.0 与 0.23.0 的改进；候选通过 release 51/51（not full）。设计见 [`DESIGN-0.24.0.md`](apps/arcade/DESIGN-0.24.0.md)，契约见 [`ADR-0.24-world.md`](docs/arcade-life/ADR-0.24-world.md)，验证口径见 [`INTEGRATION-0.24.0.md`](docs/arcade-life/INTEGRATION-0.24.0.md)。本次升级的线上基线为 0.21.2（见下文）。
 
 ## Arcade 0.23.0 — 2026-11-28（本地发布准备，未发布）
 

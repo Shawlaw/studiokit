@@ -1,6 +1,6 @@
 # Arcade Changelog
 
-## 0.24.0 — 2026-11-28（本地发布准备，未发布）
+## 0.24.0 — 2026-11-28
 
 - 世界主线替代路线：C1–C5 的替代机制（世界通用工作 / 本职业委托 / 明码代办 / 免费租机 / 商店材料 / 证据组合）改写为戏内成立的故事行动；只引用真实委托、代办 offer、材料与证据 token，不新增委托、不发奖励、不改变主线唯一解。
 - 章节前置 / 完成解释：章节、路线与终局入口用既有真实 token 生成公开解释文字；章节面板与港口经历页只渲染公开文案，`requirement` / `tokens` / `anchor` 等内部结构不进 DOM，无数据不建节点。
@@ -9,7 +9,7 @@
 - bridge 按需加载 `career/world-narrative.js` 与同源 `content/world-narrative.json`，缺失时保留 0.23 降级；SW 预缓存追加 `world-narrative.js`、`ui/journal.js`、`content/world-narrative.json`。
 - 版本链 0.24.0 / SW `studiokit-arcade-0.24.0-v1`；不新增 IndexedDB store / localStorage key / Schema，`contentVersion 0.18.0` / IDB v1 / 11 stores / 经典玩法数值零改动。
 - 2026-11-28 复查修正：交汇只在按当前事实复核并成功写入、回读确认后才显示，写入被拒或未提交时港口与经历保持不变；交汇经历带两位参与职业，「按职业筛选」在真实数据下可用；世界替代经历改为从真实已清记录只读推导（不落盘），其中 6 条可达，免费租机一条仍无写入方；职业专属委托的替代叙事只向该职业公开；并带入 0.23 的六项复查修复（首到港归属与首单、旧档迁移入口、后续邀请、首到港恢复）。契约见 [`ADR-0.24-world.md`](../../docs/arcade-life/ADR-0.24-world.md) §10。
-- 状态：GATE_PASSED / RELEASE_READY（本地发布准备，未发布；候选 `4f2d271` release 51/51，`release passed (not full)`，门禁内真实流程 645/645）。修正前在 `c5712e5` 亦为 51/51、flow 624/624、mobile 334/334、smoke 119/119。未 push、未跑 full，不写 PUBLISHED / ALL GATES PASSED。设计 / 回滚见 [`DESIGN-0.24.0.md`](DESIGN-0.24.0.md)，契约见 [`ADR-0.24-world.md`](../../docs/arcade-life/ADR-0.24-world.md)，验证口径见 [`INTEGRATION-0.24.0.md`](../../docs/arcade-life/INTEGRATION-0.24.0.md)。线上最近发布版本仍为 0.21.2（已双端发布，见下文）。
+- 累计发布包含 0.22.0 与 0.23.0 的改进。候选 `4f2d271` 通过 release 51/51（not full），其中浏览器流程 645/645。设计 / 回滚见 [`DESIGN-0.24.0.md`](DESIGN-0.24.0.md)，契约见 [`ADR-0.24-world.md`](../../docs/arcade-life/ADR-0.24-world.md)，验证口径见 [`INTEGRATION-0.24.0.md`](../../docs/arcade-life/INTEGRATION-0.24.0.md)。本次升级的线上基线为 0.21.2（见下文）。
 
 ## 0.23.0 — 2026-11-28（本地发布准备，未发布）
 
