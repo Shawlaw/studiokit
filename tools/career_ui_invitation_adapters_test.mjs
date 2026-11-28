@@ -882,8 +882,77 @@ async function deriveFirstCommission(rows, wanted) {
 }
 
 /* ------------------------------------------------------------------ *
- * P04 — receipt uses real result/receipt and careerView projection only.
+ * P06 — the real mailbox entry for an established identity: the follow-up
+ * invitation is explained by the invited profession's real person before the
+ * optional accept action. Uses the real clue and the real narrative shard.
  * ------------------------------------------------------------------ */
+
+{
+  const careerDir = path.join(ROOT, 'apps/arcade/career');
+  const content = (name) => JSON.parse(fs.readFileSync(path.join(careerDir, 'content', name), 'utf8'));
+  const narrative = Object.fromEntries(content('narrative-registry.json').shards
+    .flatMap((shard) => content(shard.url.replace('./', '')).entries)
+    .map((entry) => [entry.professionId, entry]));
+  const relicseeker = narrative['adventure.relicseeker'];
+  const letter = content('clues.json').clues.find((clue) => clue.clueId === 'CL-shadow-leap').letter.body;
+  const doc = makeDocument();
+  const ui = loadUi(doc);
+  const events = [];
+  const established = {
+    careerId: 'career-existing',
+    state: { stage: 'LOCAL', firstClueId: 'CL-gold-miner', acceptedOriginGameId: 'gold-miner', clues: {
+      'CL-gold-miner': { seenAt: '2026-11-27T00:00:00Z', openedAt: '2026-11-27T00:00:00Z' },
+      'CL-shadow-leap': { seenAt: '2026-11-27T01:00:00Z' },
+    } },
+    clueId: 'CL-shadow-leap',
+    clues: content('clues.json').clues,
+    narrative,
+    invitationForClue: () => ({ professionId: 'adventure.relicseeker', gameId: 'shadow-leap', displayName: '遗迹探险家', state: 'read', canAccept: true }),
+    careerView: () => Promise.resolve({ schemaVersion: 1, originGameId: 'gold-miner', professions: [{ professionId: 'nature.miner', displayName: '采矿员', state: 'accepted' }], commissions: [], story: {}, tools: [] }),
+    openClue() { return Promise.resolve({ ok: true }); },
+    acceptProfessionInvitation(input) { events.push(['accept', input.professionId, input.gameId]); return Promise.resolve({ ok: true, created: false, newlyAccepted: true }); },
+    commission: { start() { events.push('commission.start'); return { ok: true }; } },
+    openTown() { events.push('openTown'); return { ok: true }; },
+    announce() {},
+  };
+  const followUpOf = () => panelOf(doc)?.querySelector('[data-mailbox-invitation="follow-up"]') || null;
+  ui.mailbox.open(established);
+  await drain();
+  const followUp = followUpOf();
+  check('P06 real mailbox shows an optional follow-up invitation for an established identity',
+    !!followUp && followUp.getAttribute('data-npc-state') === 'optional', followUp && textOf(followUp));
+  check('P06 the invited profession\'s real person explains the new relation without assuming acquaintance',
+    textOf(followUp?.querySelector('.ac-career-ui__npc-name')) === relicseeker.npc && textOf(followUp).includes(relicseeker.existingIntro)
+      && !/你还认得|认得你|你送过/.test(relicseeker.existingIntro), textOf(followUp));
+  check('P06 the real letter stays above it and the prologue is not replayed',
+    textOf(panelOf(doc)).includes(letter) && !textOf(panelOf(doc)).includes(relicseeker.freshIntro[0]));
+  const accept = buttonBy(doc, 'accept-invitation');
+  const defer = buttonBy(doc, 'defer-invitation');
+  check('P06 accept/defer follow the explanation and no first work is offered',
+    !!accept && !!defer && followUp.contains(accept) && followUp.contains(defer) && !buttonBy(doc, 'start-first-commission'));
+  accept?.click();
+  await drain();
+  eq('P06 accept goes through the controlled facade exactly once', events.filter((item) => Array.isArray(item) && item[0] === 'accept').length, 1);
+  check('P06 an established identity is neither re-registered nor signed into work',
+    events.some((item) => Array.isArray(item) && item[0] === 'accept' && item[1] === 'adventure.relicseeker' && item[2] === 'shadow-leap')
+      && !events.includes('commission.start') && textOf(panelOf(doc)).includes('邀请已收下'));
+  check('P06 an accepted invitation is no longer offered again', followUpOf() === null && !!buttonBy(doc, 'open-town'));
+  ui.mailbox.close();
+
+  /* A player without an identity keeps the P02 letter with its own accept action. */
+  const freshDoc = makeDocument();
+  const freshUi = loadUi(freshDoc);
+  freshUi.mailbox.open(Object.assign({}, established, {
+    careerId: '',
+    state: Object.assign({}, established.state, { acceptedOriginGameId: undefined }),
+    clueId: 'CL-shadow-leap',
+    careerView: () => Promise.resolve({ schemaVersion: 1, professions: [], commissions: [], story: {}, tools: [] }),
+  }));
+  await drain();
+  check('P02 a player without an identity still accepts from the letter itself',
+    !panelOf(freshDoc).querySelector('[data-mailbox-invitation="follow-up"]') && !!buttonBy(freshDoc, 'accept-invitation'));
+  freshUi.mailbox.close();
+}
 
 function receiptPayload(overrides = {}) {
   const p04 = stateOfFixture('P04').props.receiptCard;

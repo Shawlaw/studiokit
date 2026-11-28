@@ -1092,6 +1092,21 @@
     return raw.professionId && raw.professionId !== invitation.professionId ? {} : raw;
   }
 
+  /**
+   * P06 后续邀请：已有身份读另一职业的邀请时，由该职业的真实人物在信下说明新关系。
+   * 只用叙事卡已有的 existingIntro 与 npc；内容缺失时保持原有的信件内邀请动作。
+   */
+  function followUpInvitationOf(session, labels) {
+    const text = isObject(labels) && typeof labels.existingIntro === 'string' ? cleanText(labels.existingIntro) : '';
+    if (!text) return null;
+    const invitation = session.invitation || {};
+    const sentences = text.match(/[^。！？]+[。！？]?/g) || [];
+    return {
+      name: cleanText(labels.npc) || cleanText(invitation.displayName) || cleanText(labels.sender),
+      paragraphs: sentences.map(cleanText).filter(Boolean).slice(0, 3),
+    };
+  }
+
   function setComponentStatus(session, text) {
     session.status = cleanText(text);
     renderComponent(session);
@@ -1299,6 +1314,10 @@
       const labels = invitationNarrativeOf(session);
       const acceptLabel = cleanText(labels.acceptLabel) || ACCEPT_LABEL;
       const deferLabel = cleanText(labels.deferLabel) || DEFER_LABEL;
+      /* 已有身份：邀请动作跟在该职业人物的后续说明之后，而不是直接挂在字条上。 */
+      const followUp = !session.notice && !session.openingClue && invitation && !accepted
+        && invitation.canAccept && acceptInvitationFnOf(session.context)
+        && session.identity === true ? followUpInvitationOf(session, labels) : null;
       const actions = [];
       if (session.openingClue) {
         /* openClue has not settled: show the letter only, never a guessed action. */
@@ -1341,11 +1360,23 @@
         sender: session.notice ? '' : cleanText(letterContent.sender),
         ambientLabel: session.notice ? '' : cleanText(clue.ambientLabel || clue.ambientText),
         state: session.notice ? 'read' : (cleanText(state.clues && state.clues[session.selectedId] && state.clues[session.selectedId].openedAt) ? 'read' : 'unread'),
-        actions: actions,
+        actions: followUp ? [] : actions,
       });
       decorateLetter(card, clue, session);
       annotateActions(card);
       body.appendChild(card);
+      if (followUp) {
+        const intro = components.NPCDialogue({
+          name: followUp.name,
+          paragraphs: followUp.paragraphs,
+          avatar: { kind: 'user' },
+          state: 'optional',
+          actions: actions,
+        });
+        intro.setAttribute('data-mailbox-invitation', 'follow-up');
+        annotateActions(intro);
+        body.appendChild(intro);
+      }
       if (accepted) {
         const note = doc.createElement('p');
         note.className = 'ac-career-ui__caption ac-career-mailbox__invite-status';
