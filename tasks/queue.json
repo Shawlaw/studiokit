@@ -2500,6 +2500,25 @@
         "只做纯文本 / 静态校验与纯 Node 复跑（不启动 Chrome）：git diff --check、validate_site.py、check_readme_links.py、queue.json 解析通过；不写 DONE / PUBLISHED / ALL GATES PASSED，release / full / 真机 / 真人 / 线上留给 lead 的 L3"
       ],
       "evidence": "版本链：engine.js ARCADE_VERSION、sw.js VERSION、apps/arcade/index.html data-hall-version、shared/tool-registry.json version、tools/validate_site.py 四处断言与 tools/verify_deploy.py PATHS 统一为 0.24.0 / SW studiokit-arcade-0.24.0-v1；8 个含版本字面量的测试（arcade_smoke / arcade_pwa_update / arcade_calm_games / arcade_interaction / arcade_zen_scores / career_discovery_accessibility / career_passive_entry / career_pwa_offline）只改字面量（arcade_pwa_update 的模拟新版本 0.23.1 → 0.24.1），断言逻辑未改；verify_deploy PATHS 追加 world-narrative.js / content/world-narrative.json / ui/journal.js / DESIGN-0.24.0.md。纯 Node 复跑（HEAD，exit 0）：career_world_narrative_contract 166/166、career_world_narrative 179/179、career_journal_experience 59/59、career_world_route_narrative 80/80、career_route_planner 214/214、career_economy_balance 47/47、career_world_work 400/400；career_legacy_baseline 78/78（版本链一致性）与 career_profession_extension 92/92（SW==engine）；历史时点复跑 T20 158/158（202d116）、T22 163/163（b54fc4a）、T23 49/49（e581fae），T21 80/80 与同轮 214/214、400/400、47/47、158/158、54/54 出自 7164c4c 记录。静态校验：py -3 tools/validate_site.py PASS、py -3 tools/check_readme_links.py PASS、queue.json 与 tool-registry.json JSON 解析 PASS、node --check engine.js/sw.js PASS、git diff --check PASS。文档：新增 apps/arcade/DESIGN-0.24.0.md、docs/arcade-life/INTEGRATION-0.24.0.md；ADR-0.24-world.md 只在头部补一句与最终版本号一致的状态行（契约正文未改，且不含 SW 缓存名以满足契约测试）。未启动 Chrome，未跑 release / full / watch，未 push、未打 tag、未部署；线上最近发布仍为 0.21.2。 L3 release profile 51/51（2964.331s，release passed (not full)）与独立复审 PASS 后由 lead 收口为 GATE_PASSED / RELEASE_READY（本地发布准备，未发布）。"
+    },
+    {
+      "id": "T150",
+      "title": "Arcade 0.24.0 复查修正：交汇写入与展示、经历职业关联、世界替代经历推导 / 修复与文档同步",
+      "kind": "agent",
+      "status": "REVIEW_FIXED",
+      "dependsOn": [
+        "T147"
+      ],
+      "ownerAuthorizationRequired": false,
+      "acceptance": [
+        "按原始契约复查候选并只修复可复现的问题；不新增 IndexedDB store / localStorage key / Schema，contentVersion 0.18.0、professionVersion 1、IDB v1 / 11 stores、经典玩法数值零改动",
+        "交汇只在按当前事实复核并成功写入、回读确认后显示；写入被拒或事务未提交时港口与经历不变，可重试；双标签竞争只展示一次",
+        "交汇经历带两位参与职业且只在双方已接受时出现；导入的经历行不能替代接受事实；按职业筛选可用",
+        "世界替代经历只从真实已清记录只读推导，不落盘；职业专属委托的替代叙事只向该职业公开",
+        "带入 0.23 的六项复查修复并解决冲突",
+        "状态如实：release 门禁需在新 SHA 重跑后才恢复 GATE_PASSED；不写 DONE / PUBLISHED / ALL GATES PASSED"
+      ],
+      "evidence": "证据与门禁结论见 docs/arcade-life/INTEGRATION-0.24.0.md §6 与 docs/arcade-life/ADR-0.24-world.md §10。提交 eeb4939、8c1083e 及挑入的 0e777bd、a2a4bfa、ad6e1c0、ef13733、95c593e、68a4de4、bc67c96；交汇浏览器场景 255/255、完整流程 645/645。本地提交，未 push、未发布。"
     }
   ]
 }

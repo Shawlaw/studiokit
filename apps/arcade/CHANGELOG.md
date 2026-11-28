@@ -8,7 +8,8 @@
 - 经历筛选与回读：17 条白名单（10 交汇 + 7 世界替代）在投影时解析为玩家可见文案，可按真实人物 / 已接受职业筛选；点击只展开静态回读文本，无总数 / 百分比 / 内部 id；`storyEvents` 落盘形状仍只有 `at` / `source`，旧档只追加、不迁移。
 - bridge 按需加载 `career/world-narrative.js` 与同源 `content/world-narrative.json`，缺失时保留 0.23 降级；SW 预缓存追加 `world-narrative.js`、`ui/journal.js`、`content/world-narrative.json`。
 - 版本链 0.24.0 / SW `studiokit-arcade-0.24.0-v1`；不新增 IndexedDB store / localStorage key / Schema，`contentVersion 0.18.0` / IDB v1 / 11 stores / 经典玩法数值零改动。
-- 状态：本地发布准备，未发布；门禁状态待 L3（lead）。本轮只做纯 Node 与静态校验，未启动 Chrome、未跑 release / full / watch、未 push；不写 PUBLISHED / ALL GATES PASSED。设计 / 回滚见 [`DESIGN-0.24.0.md`](DESIGN-0.24.0.md)，契约见 [`ADR-0.24-world.md`](../../docs/arcade-life/ADR-0.24-world.md)，验证口径见 [`INTEGRATION-0.24.0.md`](../../docs/arcade-life/INTEGRATION-0.24.0.md)。线上最近发布版本仍为 0.21.2（已双端发布，见下文）。
+- 2026-11-28 复查修正：交汇只在按当前事实复核并成功写入、回读确认后才显示，写入被拒或未提交时港口与经历保持不变；交汇经历带两位参与职业，「按职业筛选」在真实数据下可用；世界替代经历改为从真实已清记录只读推导（不落盘），其中 6 条可达，免费租机一条仍无写入方；职业专属委托的替代叙事只向该职业公开；并带入 0.23 的六项复查修复（首到港归属与首单、旧档迁移入口、后续邀请、首到港恢复）。契约见 [`ADR-0.24-world.md`](../../docs/arcade-life/ADR-0.24-world.md) §10。
+- 状态：本地发布准备，未发布。修正前在 `c5712e5` 通过 release 51/51（`release passed (not full)`），浏览器 flow 624/624、mobile 334/334、smoke 119/119；修正后代码已变化，真实流程 645/645，release 门禁结论以集成记录 §6 为准。未 push、未跑 full，不写 PUBLISHED / ALL GATES PASSED。设计 / 回滚见 [`DESIGN-0.24.0.md`](DESIGN-0.24.0.md)，契约见 [`ADR-0.24-world.md`](../../docs/arcade-life/ADR-0.24-world.md)，验证口径见 [`INTEGRATION-0.24.0.md`](../../docs/arcade-life/INTEGRATION-0.24.0.md)。线上最近发布版本仍为 0.21.2（已双端发布，见下文）。
 
 ## 0.23.0 — 2026-11-28（本地发布准备，未发布）
 
