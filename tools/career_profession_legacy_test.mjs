@@ -361,6 +361,45 @@ async function migrate(ctx, now) {
   });
 }
 
+async function bootBridge(ctx, search = '') {
+  const base = 'http://localhost/apps/arcade/career/';
+  const location = new URL('../games/gold-miner.html' + search, base);
+  const document = {
+    currentScript: { src: base + 'bridge.js' },
+    readyState: 'complete',
+    documentElement: { style: {} },
+    body: { appendChild() {} },
+    addEventListener() {},
+    querySelector() { return null; },
+    querySelectorAll() { return []; },
+    createElement(tag) { return { tag, style: {}, setAttribute() {}, appendChild() {} }; },
+  };
+  const sandbox = {
+    document, location, URL, URLSearchParams, setTimeout, clearTimeout, queueMicrotask,
+    indexedDB: ctx.fakeIdb,
+    ArcadeCareer: { db: ctx.db },
+    addEventListener() {},
+    console: { warn() {}, log() {}, error() {} },
+    async fetch(url) {
+      const name = new URL(url).pathname.split('/content/')[1];
+      const file = name && path.join(CONTENT, name);
+      if (!file || !fs.existsSync(file)) return { ok: false, status: 404 };
+      return { ok: true, json: () => JSON.parse(fs.readFileSync(file, 'utf8')) };
+    },
+  };
+  sandbox.window = sandbox;
+  vm.createContext(sandbox);
+  const load = (name) => vm.runInContext(fs.readFileSync(path.join(CAREER, name), 'utf8'), sandbox, { filename: name });
+  document.head = { appendChild(node) {
+    if (node.tag === 'script') load(node.src.slice(base.length));
+    queueMicrotask(() => node.onload?.());
+  } };
+  load('backup.js');
+  load('bridge.js');
+  await sandbox.ArcadeCareer.ready;
+  return sandbox.ArcadeCareer;
+}
+
 async function main() {
   eq('L00 DB constants', {
     name: (await freshDb()).db.DB_NAME,
@@ -374,20 +413,7 @@ async function main() {
     const before = await invariants(ctx.db);
     const result = await migrate(ctx);
     check('L01 新档迁移 ok 且不建身份', result.ok && result.created === false && result.newlyAccepted === false, JSON.stringify(result));
-    const newState = await stateOf(ctx.db);
-    eq('L01 新档无接受事实', {
-      professionVersion: newState.professionVersion,
-      acceptedOriginGameId: newState.acceptedOriginGameId,
-      activeProfessionId: newState.activeProfessionId,
-      professionProgress: newState.professionProgress,
-      storyEvents: newState.storyEvents,
-    }, {
-      professionVersion: 1,
-      acceptedOriginGameId: null,
-      activeProfessionId: null,
-      professionProgress: {},
-      storyEvents: {},
-    });
+    eq('L01 新档不写入发现状态', await stateRowOf(ctx.db), null);
     eqInvariants('L01', before, await invariants(ctx.db));
   }
 
@@ -425,7 +451,8 @@ async function main() {
     const result = await migrate(ctx);
     check('L03 仅线索迁移 ok', result.ok, JSON.stringify(result));
     const state = await stateOf(ctx.db);
-    eq('L03 不把线索当接受', state.professionProgress, {});
+    eq('L03 线索只恢复已读，不视为接受', state.professionProgress[P]?.state, 'read');
+    eq('L03 不从游玩次数、catalog 或 stage 推断其他职业', Object.keys(state.professionProgress), [P]);
     eq('L03 origin 不猜', state.acceptedOriginGameId, null);
     eq('L03 发现事实保留', state.firstDiscoveredGameId, G);
     eq('L03 线索正文保留', state.clues['CL-' + G].openedAt, NOW);
@@ -596,6 +623,87 @@ async function main() {
     const state = await stateOf(ctx.db);
     eq('L11 未来版本字段只读保留', state.professionVersion, 7);
     eq('L11 未来未知字段保留', state.futureOnly, { keep: true });
+  }
+
+  /* Normal browser bridge boot and backup facade over the real DB, with only the host emulated. */
+  {
+    const empty = await migrationFixture({ profile: false, pointer: false });
+    const bridge = await bootBridge(empty);
+    check('B01 新档正常启动且不写迁移', bridge.available && !await stateRowOf(empty.db));
+
+    const fixture = await migrationFixture({
+      state: {
+        stage: 'EXPLORER', firstSourceGame: G2, firstClueId: 'CL-' + G2,
+        clues: { ['CL-' + G2]: { sourceGame: G2, openedAt: NOW } },
+        runs: { 'star-raid': { eligibleRuns: 99 } },
+      },
+      rows: {
+        runs: [
+          { runId: 'run-legacy-live', ticketId: 'run-legacy-live', careerId: 'career-legacy', gameId: G, mode: 'commission',
+            commissionId: C1, status: 'issued', issuedAt: NOW, nonce: 'abcdef0123456789', contentVersion: '0.18.0', rulesetVersion: 1 },
+          { runId: 'run-unrelated', careerId: 'career-other', commissionId: 'star-raid.T1', issuedAt: NOW },
+          { runId: 'run-classic', careerId: 'career-legacy', commissionId: 'star-raid.T1', mode: 'classic', issuedAt: NOW },
+          { runId: 'run-mismatched-game', careerId: 'career-legacy', commissionId: 'star-raid.T1', gameId: G, mode: 'commission', issuedAt: NOW },
+        ],
+        balances: [{ careerId: 'career-legacy', credits: 80, revision: 0, createdAt: NOW, updatedAt: NOW }],
+      },
+    });
+    const before = await exported(fixture.db);
+    const migrated = await bootBridge(fixture, '?career=run-legacy-live');
+    const player = migrated.state();
+    check('B02 旧档正常启动恢复历史委托的已接受职业与真实起源', migrated.available && player.acceptedOriginGameId === G
+      && player.professionProgress[P]?.state === 'accepted', JSON.stringify({ player, info: migrated.info() }));
+    eq('B02 旧票通过实际开局 gate', migrated.commissionRun?.commissionId, C1);
+    eq('B02 其他身份、经典模式或游戏错配记录不能恢复职业', Object.keys(player.professionProgress).sort(), [P, P2].sort());
+    eq('B02 已读线索不等于接受', player.professionProgress[P2]?.state, 'read');
+    const after = await exported(fixture.db);
+    for (const store of ['profiles', 'balances', 'ledgers', 'claims', 'inventory', 'equipment', 'quests']) {
+      eq('B02 原样保留 ' + store, after[store], before[store]);
+    }
+    const selected = await stateRowOf(fixture.db);
+    await bootBridge(fixture);
+    eq('B03 旧档再次启动不重写', await stateRowOf(fixture.db), selected);
+  }
+
+  {
+    const fixture = await migrationFixture({ pointer: false, rows: {
+      quests: [{ careerId: 'career-legacy', nodeId: 'story:C0.port_seen', status: 'cleared' }],
+      claims: [{ careerId: 'career-legacy', runId: 'run-legacy', commissionId: C1, claimedAt: NOW }],
+      balances: [{ careerId: 'career-legacy', credits: 80, revision: 0, createdAt: NOW, updatedAt: NOW }],
+    } });
+    const bridge = await bootBridge(fixture);
+    const archive = await exported(fixture.db);
+    check('B03 无指针旧档恢复已验证的唯一身份，不创建第二身份', bridge.state().professionProgress[P]?.state === 'accepted'
+      && archive.state.find((row) => row.key === 'career')?.value.careerId === 'career-legacy' && archive.profiles.length === 1);
+  }
+
+  {
+    const fixture = await migrationFixture({ profile: false, pointer: false });
+    const bridge = await bootBridge(fixture);
+    const imported = await bridge.backup.importCareerLife(JSON.stringify(payloadWithState([
+      pointerRow('career-imported'),
+      discoveryRow({ stage: 'CURIOUS', clues: { ['CL-' + G]: { clueId: 'CL-' + G, sourceGame: G, seenAt: NOW, openedAt: NOW } } }),
+    ], profileRow('career-imported'))), { mode: 'replace' });
+    const saved = await exported(fixture.db);
+    check('B04 旧备份经真实导入门面后立刻恢复线索并保留原身份', imported.ok && imported.mode === 'replace'
+      && bridge.state().professionProgress[P]?.state === 'read' && bridge.state().acceptedOriginGameId === null
+      && saved.profiles.length === 1 && saved.profiles[0].careerId === 'career-imported' && saved.ledgers.length === 1,
+    JSON.stringify({ imported, player: bridge.state() }));
+  }
+
+  {
+    const fixture = await migrationFixture({ rows: {
+      claims: [{ runId: 'run-old', careerId: 'career-legacy', commissionId: C1, claimedAt: NOW }],
+    } });
+    await fixture.db.setCareerArchived(true, { now: NOW });
+    const bridge = await bootBridge(fixture);
+    eq('B05 封存旧档启动不写扩展', await stateRowOf(fixture.db), null);
+    storeDef(fixture, 'state').failPutKey = 'discovery';
+    await bridge.unfreezeCareer();
+    eq('B05 解冻后迁移失败不留部分状态', await stateRowOf(fixture.db), null);
+    storeDef(fixture, 'state').failPutKey = null;
+    const retried = await bootBridge(fixture);
+    eq('B05 正常重开允许迁移重试', retried.state().professionProgress[P]?.state, 'accepted');
   }
 
   let failed = 0;

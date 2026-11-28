@@ -438,10 +438,6 @@
   }
 
   /**
-   * 旧档接受证据回填。只认显式接受集合、真实委托 run/claim/cleared quest；
-   * 线索、投递、全局 stage、catalog unlock、游玩次数与推荐均不算接受。
-   */
-  /**
    * 首次到港被真实消费：玩家在到港面板点了第一份工作并成功开局。
    * 只把叙事游标从 `invitation:<id>` 推进到 `arrival:<id>`，不改职业状态、
    * 不发奖励、不写故事事件；重复调用是纯 no-op（关页重开不重播首到港）。
@@ -460,8 +456,9 @@
     return done(next, { duplicate: false, consumed: true });
   }
 
+  /** 旧档的线索可恢复已遇见和已读状态。职业接受只认显式接受、委托 run/claim/quest。 */
   function deriveLegacyAcceptance(state, input) {
-    const next = nextState(state);
+    let next = nextState(state);
     const opts = isObject(input) ? input : {};
     if (!next) return { ok: false, reason: 'bad-state', state: state, derived: [] };
     if (professionVersionOf(next) > PROFESSION_VERSION) {
@@ -470,10 +467,38 @@
     const parts = catalogParts(opts.catalog);
     const map = commissionProfessionMap(parts.commissions);
     const records = isObject(opts.records) ? opts.records : {};
+    const savedClues = isObject(records.clues) ? records.clues : {};
+    const clueTime = (fact) => fact && (iso(fact.seenAt) || iso(fact.openedAt)) || '';
+    const sortedClueIds = Object.keys(savedClues).sort((a, b) => {
+      const left = clueTime(savedClues[a]);
+      const right = clueTime(savedClues[b]);
+      if (!left || !right) return Number(!!right) - Number(!!left) || a.localeCompare(b);
+      return left.localeCompare(right) || a.localeCompare(b);
+    });
+    sortedClueIds.forEach((clueId) => {
+      const fact = savedClues[clueId];
+      if (!isObject(fact)) return;
+      const clue = parts.clues.find((entry) => entry && entry.clueId === clueId);
+      const game = clue && parts.games.find((entry) => entry && entry.gameId === clue.gameId && entry.gameId === fact.sourceGame);
+      if (!game) return;
+      const openedAt = iso(fact.openedAt);
+      const seenAt = iso(fact.seenAt) || openedAt;
+      const ids = clue.professionId ? [clue.professionId] : arrayOf(game.professions);
+      ids.forEach((professionId) => {
+        const event = { professionId, gameId: game.gameId, clueId, catalog: opts.catalog, at: seenAt };
+        const glimpsed = recordGlimpsed(next, event);
+        if (!glimpsed.ok) return;
+        next = glimpsed.state;
+        if (openedAt) {
+          const read = recordRead(next, Object.assign({}, event, { at: openedAt, clueOpened: true }));
+          if (read.ok) next = read.state;
+        }
+      });
+    });
     const profile = isObject(records.profile) ? records.profile : null;
     const evidence = Object.create(null);
     const add = (professionId, at, source) => {
-      if (!validId(professionId)) return;
+      if (!validId(professionId) || !parts.professions.some((row) => row && row.professionId === professionId)) return;
       const stamp = iso(at);
       const priorAt = evidence[professionId] ? iso(evidence[professionId].at) : '';
       if (!evidence[professionId] || (!priorAt && stamp) || (stamp && stamp < priorAt)) {
@@ -498,9 +523,10 @@
       if (map[id]) add(map[id], evidenceAt(row), 'claim');
     });
     arrayOf(records.runs).forEach((row) => {
-      if (!isObject(row)) return;
-      const id = validId(row.commissionId) ? row.commissionId : '';
-      if (map[id]) add(map[id], evidenceAt(row), 'run');
+      if (!isObject(row) || (row.mode && row.mode !== 'commission')) return;
+      const commission = parts.commissions.find((entry) => entry && entry.commissionId === row.commissionId);
+      if (!commission || (row.gameId && commission.gameId && row.gameId !== commission.gameId)) return;
+      add(commission.professionId, evidenceAt(row), 'run');
     });
     const ids = Object.keys(evidence).sort();
     const derived = [];
@@ -516,7 +542,8 @@
       next.professionProgress[professionId] = row;
     });
     if (!next.acceptedOriginGameId) {
-      const fromProfile = profile && validGameId(profile.originGameId) ? profile.originGameId : null;
+      const fromProfile = profile && validGameId(profile.originGameId)
+        && parts.games.some((game) => game && game.gameId === profile.originGameId) ? profile.originGameId : null;
       if (fromProfile) next.acceptedOriginGameId = fromProfile;
       else {
         /* 只按合法且可证实的时间排序；时间未知时不捏造起源。 */

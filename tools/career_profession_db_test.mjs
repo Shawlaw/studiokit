@@ -692,12 +692,9 @@ await check('MIG-01 新档：无证据不捏造接受/起源/身份', async () =
   const before = await assets(ctx.db);
   const result = await migrate(ctx);
   assert(result.ok && result.created === false && result.newlyAccepted === false, JSON.stringify(result));
-  const state = await readState(ctx.db);
-  eq(state.acceptedOriginGameId, null);
-  eq(state.activeProfessionId, null);
-  eq(state.professionProgress, {});
+  eq(await readState(ctx.db), null);
   eq(await assets(ctx.db), before);
-  return 'new / no evidence / no identity';
+  return 'new / no evidence / no state write';
 });
 
 await check('MIG-02 旧未发现：保留已有身份，不重发初始资产', async () => {
@@ -721,7 +718,8 @@ await check('MIG-03 旧仅线索/catalog unlock/游玩次数/profile.updatedAt �
   const result = await migrate(ctx);
   assert(result.ok, JSON.stringify(result));
   const state = await readState(ctx.db);
-  eq(state.professionProgress, {});
+  eq(Object.keys(state.professionProgress), [P]);
+  eq(state.professionProgress[P].state, 'read');
   eq(state.acceptedOriginGameId, null);
   eq(state.firstDiscoveredGameId, G);
   eq(state.clues['CL-' + G].openedAt, NOW);

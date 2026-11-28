@@ -711,14 +711,31 @@
     }).then((res) => (res.ok ? res.result : failure(res.reason, res.error)));
   }
 
-  function getDiscoverySnapshot() {
-    return txRun(['state'], 'readonly', (ctx) => {
+  function getDiscoverySnapshot(options) {
+    const includeLegacyMigration = options && options.includeLegacyMigration === true;
+    return txRun(includeLegacyMigration ? ['state', 'quests'] : ['state'], 'readonly', (ctx) => {
+      const stateStore = ctx.store('state');
       readDiscoveryGeneration(ctx, (generation) => {
-        ctx.bind(ctx.store('state').get(STATE_KEY_DISCOVERY), (row) => {
-          ctx.done({
-            ok: true,
-            state: normalizeStoredDiscovery(row && isObject(row.value) ? row.value : null, row && row.updatedAt),
-            generation,
+        ctx.bind(stateStore.get(STATE_KEY_DISCOVERY), (row) => {
+          const raw = row && isObject(row.value) ? row.value : null;
+          const result = { ok: true, state: normalizeStoredDiscovery(raw, row && row.updatedAt), generation };
+          /* Normalize adds the current version to the snapshot even for older disk rows. */
+          if (!includeLegacyMigration || (raw && raw.professionVersion !== undefined)) {
+            ctx.done(result);
+            return;
+          }
+          if (raw && isObject(raw.clues) && Object.keys(raw.clues).length) {
+            ctx.done(Object.assign(result, { legacyProfessionMigrationPending: true }));
+            return;
+          }
+          ctx.bind(stateStore.get(STATE_KEY_CAREER), (pointer) => {
+            if (pointer) {
+              ctx.done(Object.assign(result, { legacyProfessionMigrationPending: true }));
+              return;
+            }
+            ctx.bind(ctx.store('quests').getAll(), (quests) => {
+              ctx.done(Object.assign(result, { legacyProfessionMigrationPending: legacyStoryCareerIds(quests, coreApi()).size > 0 }));
+            });
           });
         });
       });
@@ -1132,6 +1149,15 @@
    * 生涯身份 / 初始钱包
    * ------------------------------------------------------------------ */
 
+  function legacyStoryCareerIds(quests, core) {
+    const rows = core && Array.isArray(quests) ? quests : [];
+    return new Set(rows.filter((row) =>
+      row && core.isValidCareerId(row.careerId) &&
+      (row.nodeId === 'story:C0.port_seen' || row.nodeId === 'C0.port_seen') &&
+      (row.status === undefined || row.status === 'cleared')
+    ).map((row) => row.careerId));
+  }
+
   /** 首页与告示板深链共用的只读探针。已有库才打开，整次判定使用同一事务快照。 */
   async function readHubEntry() {
     const core = coreApi();
@@ -1178,11 +1204,7 @@
 
         function findLegacyIdentity() {
           read(quests.getAll(), (rows) => {
-            const ids = new Set(rows.filter((row) =>
-              row && core.isValidCareerId(row.careerId) &&
-              (row.nodeId === 'story:C0.port_seen' || row.nodeId === 'C0.port_seen') &&
-              (row.status === undefined || row.status === 'cleared')
-            ).map((row) => row.careerId));
+            const ids = legacyStoryCareerIds(rows, core);
             const activeIds = [];
             let pending = ids.size;
             for (const id of ids) {
@@ -1353,6 +1375,22 @@
     return JSON.stringify(stable(a || {})) === JSON.stringify(stable(b || {}));
   }
 
+  function findCompleteLegacyProfile(ctx, core, quests, profiles, done) {
+    const survivingIds = [];
+    const stateStore = ctx.store('state');
+    const checkIds = Array.from(legacyStoryCareerIds(quests, core), (id) => (next) => {
+      ctx.bind(stateStore.get(formerCareerKey(id)), (former) => {
+        if (!former) survivingIds.push(id);
+        next();
+      });
+    });
+    sequence(checkIds, () => {
+      const profile = survivingIds.length === 1 && profiles.find((row) => row && row.careerId === survivingIds[0]);
+      if (!profile) return done(null);
+      ctx.bind(ctx.store('balances').get(profile.careerId), (balance) => done(balance ? profile : null));
+    });
+  }
+
   /**
    * 0.22 唯一职业状态落盘入口。所有守卫、代次、reducer 与身份/扩展写入都在同一 IDB 事务内。
    * created 只由调用前是否已有合法 career 指针决定；newlyAccepted 只由 reducer 决定。
@@ -1379,7 +1417,7 @@
     const stores = action === 'ACCEPT_INVITATION'
       ? ['state', 'discovery', 'profiles', 'balances', 'ledgers']
       : action === 'MIGRATE_LEGACY'
-        ? ['state', 'discovery', 'profiles', 'quests', 'claims', 'runs']
+        ? ['state', 'discovery', 'profiles', 'balances', 'quests', 'claims', 'runs']
         : ['state', 'discovery'];
     return txRun(stores, 'readwrite', (ctx) => {
       assertCareerWritable(ctx, 'apply-profession-event');
@@ -1402,11 +1440,18 @@
                 ctx.done({ ok: false, reason: 'future-profession-version', generation });
                 return;
               }
+              if (action === 'MIGRATE_LEGACY' && input.onlyUnversioned === true && existing && existing.professionVersion !== undefined) {
+                ctx.done({ ok: true, duplicate: true, generation, careerId });
+                return;
+              }
               const currentExtension = ps.extensionOf(existing) || ps.initialState(at);
               const clueId = typeof input.clueId === 'string' && input.clueId ? input.clueId : null;
               const legacyClue = clueId && existing && isObject(existing.clues) ? existing.clues[clueId] : null;
               const finish = (reduced, metadata, finalExtension) => {
-                const migrationUnchanged = action === 'MIGRATE_LEGACY' && !!existing && sameProfessionExtension(currentExtension, finalExtension);
+                const recoveredProfile = metadata && metadata.recoveredProfile;
+                const needsLegacyMarker = metadata && metadata.legacyProfile && (!existing || existing.professionVersion === undefined);
+                const migrationUnchanged = action === 'MIGRATE_LEGACY' && !recoveredProfile && !needsLegacyMarker
+                  && sameProfessionExtension(currentExtension, finalExtension);
                 const duplicate = reduced.duplicate === true || metadata && metadata.duplicate === true || migrationUnchanged;
                 const newlyAccepted = reduced.newlyAccepted === true;
                 const unchanged = duplicate || migrationUnchanged;
@@ -1452,6 +1497,15 @@
                 };
                 if (action === 'ACCEPT_INVITATION' && newlyAccepted && !careerId) {
                   createThenWrite();
+                  return;
+                }
+                if (recoveredProfile) {
+                  const recoveredId = recoveredProfile.careerId;
+                  ctx.bind(ctx.store('state').put({
+                    key: STATE_KEY_CAREER, schemaVersion: SCHEMA_VERSION, updatedAt: at,
+                    value: { careerId: recoveredId, originGameId: finalExtension.acceptedOriginGameId,
+                      createdAt: validIso(recoveredProfile.createdAt) ? recoveredProfile.createdAt : at },
+                  }), () => writeState(recoveredId, false));
                   return;
                 }
                 if (clueId && (action === 'GLIMPSED' || action === 'READ')) {
@@ -1511,26 +1565,28 @@
                   readAllRows(ctx, 'quests', (quests) => {
                     readAllRows(ctx, 'claims', (claims) => {
                       readAllRows(ctx, 'runs', (runs) => {
-                        const inCareer = (row) => !careerId || !isObject(row) || row.careerId === careerId;
-                        const profileRows = profiles.filter(inCareer);
-                        const records = {
-                          profile: profileRows[0] || null,
-                          quests: quests.filter(inCareer),
-                          claims: claims.filter(inCareer),
-                          runs: runs.filter(inCareer),
+                        const restore = (profile) => {
+                          const inCareer = (row) => !!profile && isObject(row) && row.careerId === profile.careerId;
+                          const records = {
+                            clues: existing && existing.clues,
+                            profile,
+                            quests: quests.filter(inCareer),
+                            claims: claims.filter(inCareer),
+                            runs: runs.filter(inCareer),
+                          };
+                          const migrated = ps.deriveLegacyAcceptance(currentExtension, { catalog: input.catalog, records, now: at });
+                          if (!migrated.ok) {
+                            ctx.done({ ok: false, reason: migrated.reason, generation });
+                            return;
+                          }
+                          finish(migrated, {
+                            derived: migrated.derived,
+                            legacyProfile: profile,
+                            recoveredProfile: !careerId && profile,
+                          }, migrated.state);
                         };
-                        const migrated = ps.deriveLegacyAcceptance(currentExtension, {
-                          catalog: input.catalog,
-                          records,
-                          now: at,
-                        });
-                        if (!migrated.ok) {
-                          ctx.done({ ok: false, reason: migrated.reason, error: migrated.reason, generation });
-                          return;
-                        }
-                        /* 旧档可能只有 firstSourceGame/clue，没有 professionProgress；完整 validate 会误拒，
-                           迁移只信 deriveLegacyAcceptance 的显式证据，不把发现事实强转成接受事实。 */
-                        finish(migrated, migrated, migrated.state);
+                        if (careerId) restore(profiles.find((row) => row && row.careerId === careerId) || null);
+                        else findCompleteLegacyProfile(ctx, core, quests, profiles, restore);
                       });
                     });
                   });

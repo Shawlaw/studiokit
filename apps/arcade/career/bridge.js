@@ -2258,6 +2258,30 @@
     });
   }
 
+  function loadDiscoverySnapshot(db, retryOnStale) {
+    return Promise.resolve(db.getDiscoverySnapshot({ includeLegacyMigration: !internal.careerArchived })).then(function (snapshot) {
+      if (!snapshot || snapshot.legacyProfessionMigrationPending !== true || internal.careerArchived
+          || !internal.registryInstance || typeof db.applyProfessionEvent !== 'function') return snapshot;
+      return loadCareerContent().then(function () {
+        var catalog = careerCatalog();
+        if (!catalog.commissions.length || !internal.cluesEnabled) return snapshot;
+        return Promise.resolve(db.applyProfessionEvent({
+          action: 'MIGRATE_LEGACY',
+          input: { catalog: catalog, onlyUnversioned: true },
+          generation: snapshot.generation,
+          now: nowIso(),
+        })).then(function (result) {
+          if (retryOnStale && isStaleGenerationResult(result)) return loadDiscoverySnapshot(db, false);
+          if (result && (result.ok || isStaleGenerationResult(result))) return db.getDiscoverySnapshot();
+          return snapshot;
+        });
+      }).catch(function (err) {
+        warnOnce('profession-migration', err);
+        return snapshot;
+      });
+    });
+  }
+
   function loadDiscoveryStateFromDbUnlocked() {
     var discovery = readGlobal('discovery');
     if (internal.hashTest && !internal.testMode) {
@@ -2281,7 +2305,7 @@
     var dbModule = readGlobal('db');
     if (dbModule && typeof dbModule.getDiscoverySnapshot === 'function') {
       return Promise.resolve()
-        .then(function () { return dbModule.getDiscoverySnapshot(); })
+        .then(function () { return loadDiscoverySnapshot(dbModule, true); })
         .then(function (snapshot) {
           if (!snapshot || snapshot.ok !== true) return readDbStateRecord().then(function (record) {
             internal.discoveryState = discovery.normalizeState(record || null);
