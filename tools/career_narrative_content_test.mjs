@@ -195,7 +195,9 @@ entries.forEach((entry) => {
   check(prefix + 'firstReceipt 为 20–60 汉字', hasHanRange(entry.firstReceipt, 20, 60), hanCount(entry.firstReceipt));
   check(prefix + '首邀请为动词+对象', INVITATION_VERBS.test(entry.invitationAction) && hanCount(entry.invitationAction) >= 4, entry.invitationAction);
   check(prefix + '回执包含人物反馈与新问题', /问|吗？|还是/.test(entry.firstReceipt) && /[。！？]/.test(entry.firstReceipt), entry.firstReceipt);
+  /* existingIntro 只会在该职业尚未接受时读到：人物不能把玩家当成旧相识，也不能假定玩家来过这里。 */
   check(prefix + 'freshIntro/existingIntro 不假设新人相识', entry.freshIntro.join('').includes('你') && entry.existingIntro.includes('你') && !/第一次见你|刚认识你|初次见面/.test(entry.existingIntro), entry.existingIntro);
+  check(prefix + 'existingIntro 不假定玩家已认识该职业人物或来过其处所', !/(?<!不)认得你|你还认得|记得你|认出了你|知道你|你送过|你送来|你找得到/.test(entry.existingIntro), entry.existingIntro);
   check(prefix + 'pause/return/completed 文案齐全且不重复', [entry.pauseLine, entry.returnLine, entry.completedLine].every((text) => typeof text === 'string' && hanCount(text) >= 8) && unique([entry.pauseLine, entry.returnLine, entry.completedLine]));
   check(prefix + 'mainlineConnection 连接真实旧港事实', hanCount(entry.mainlineConnection) >= 20 && /P-07|航报|异常信号|旧调度/.test(entry.mainlineConnection), entry.mainlineConnection);
 
