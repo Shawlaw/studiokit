@@ -1015,7 +1015,7 @@
     if (record.rootNode.parentNode) record.rootNode.parentNode.removeChild(record.rootNode);
     manager.record = null;
     unlockScroll(record.doc);
-    if (wasTop && target && target.isConnected) safelyFocus(target);
+    if (wasTop && target && target.isConnected && isVisible(target)) safelyFocus(target);
     if (manager.ctx && typeof manager.ctx.onClose === 'function') {
       try { manager.ctx.onClose(); } catch (_) { /* close remains complete */ }
     }

@@ -194,7 +194,7 @@
       <p class="hall-career-settings" data-career-settings-entry hidden>
         <a href="games/pendulum-tower.html?careerPanel=settings" data-career-settings-label aria-haspopup="dialog">生涯设置</a>
       </p>
-      <span>v<span data-hall-version>0.24.0</span></span>
+      <span>v<span data-hall-version>0.24.1</span></span>
     </footer>
 
     <dialog class="ac-dialog" data-install-dialog aria-labelledby="install-title">
@@ -946,16 +946,18 @@
       function hideUpdateBanner() {
         if (dom.updateBanner) dom.updateBanner.hidden = true;
       }
-      async function checkForUpdateOnOpen() {
+      async function checkForUpdateOnOpen(event) {
         if (!dom.updateBanner || !A.Offline.supported || document.hidden) return;
-        /* 主动打开或恢复首页时核对线上版本；频繁切后台不重复请求。 */
+        /* 主动打开或恢复首页时核对线上版本；频繁切后台不重复请求。
+           同一页面内已点「稍后」时不重复打扰，重新打开首页仍会提示。 */
         const now = Date.now();
-        if (autoUpdateCheck || now - lastAutoUpdateCheck < 60000) return;
+        const reopened = !event || event.type === 'pageshow';
+        if (autoUpdateCheck || (!reopened && now - lastAutoUpdateCheck < 60000)) return;
         lastAutoUpdateCheck = now;
         autoUpdateCheck = Promise.resolve()
           .then(() => A.Offline.checkForUpdate())
           .then((result) => {
-            if (result?.updateFound) showUpdateBanner(result.version);
+            if (result?.updateFound && (reopened || !updateDismissed)) showUpdateBanner(result.version);
           }, () => {
             /* 自动检查失败保持安静；联网后可手动重试。 */
           })
@@ -1009,8 +1011,8 @@
         });
         checkForUpdateOnOpen();
         window.addEventListener('pageshow', checkForUpdateOnOpen);
-        document.addEventListener('visibilitychange', () => {
-          if (!document.hidden) checkForUpdateOnOpen();
+        document.addEventListener('visibilitychange', (event) => {
+          if (!document.hidden) checkForUpdateOnOpen(event);
         });
       }
 

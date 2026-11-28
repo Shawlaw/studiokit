@@ -827,6 +827,19 @@ eq('render showHeader false moves focus off hidden close', doc.activeElement, to
 eq('render showHeader false hides header', toggledPanel.querySelector('.ac-career-ui__header').hidden, true);
 components.CareerShell.close();
 
+{
+  const hiddenTrigger = doc.createElement('button');
+  let hiddenFocusCalls = 0;
+  hiddenTrigger.focus = () => { hiddenFocusCalls += 1; };
+  doc.body.appendChild(hiddenTrigger);
+  const hiddenFocusShell = components.CareerShell.create('settings');
+  hiddenFocusShell.open({ title: '重置后设置', body: bodyNode('正文'), returnFocus: hiddenTrigger });
+  hiddenTrigger.hidden = true;
+  hiddenFocusShell.close();
+  eq('close does not focus a trigger hidden by career reset', hiddenFocusCalls, 0);
+  hiddenTrigger.remove();
+}
+
 /* ------------------------------- icons ----------------------------- */
 
 const testIcon = components.icon('gem');

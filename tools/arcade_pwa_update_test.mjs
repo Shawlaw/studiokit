@@ -1,6 +1,6 @@
 #!/usr/bin/env node
 /**
- * Arcade 0.24.0 门禁：PWA 更新检测（最新版本号 / SW 主动广播）+ iPhone 独立窗口顶部安全区布局。
+ * Arcade 0.24.1 门禁：PWA 更新检测（最新版本号 / SW 主动广播）+ iPhone 独立窗口顶部安全区布局。
  *
  * 覆盖：
  * - PU-00 未声明 viewport-fit=cover / black-translucent（iOS 顶缘模糊根因防护）
@@ -10,8 +10,8 @@
  * - PU-04 独立窗口 + 顶部安全区：深色不透明 shellbar 贴顶，游戏顶栏独立合成层
  * - PU-05 普通标签页无安全区空白，游戏返回键 ≥44px
  * - PU-06 真实发布新版本的完整链路（临时副本服务器，改 sw.js VERSION 模拟发版）：
- *   检查更新返回最新版本 0.24.1（不是已安装的 0.24.0）→ 新 SW 主动广播
- *   arcade-sw-update-ready(0.24.1) → 横幅文案含两个版本 → 新 SW 接管后页面未刷新时
+ *   检查更新返回最新版本 0.24.2（不是已安装的 0.24.1）→ 新 SW 主动广播
+ *   arcade-sw-update-ready(0.24.2) → 横幅文案含两个版本 → 新 SW 接管后页面未刷新时
  *   仍判为「有更新」→ 按钮提示含新版本号。
  * - PU-07 线上版本读取失败时不谎报「已是最新」：按钮提示「检查更新失败」。
  * - PU-08 新 SW 已由其他页面激活后，再次打开旧首页无需点击即显示更新横幅。
@@ -95,7 +95,7 @@ async function main() {
         version: window.Arcade && Arcade.version
       };
     })()`);
-    assert(ui.version === '0.24.0', 'Arcade version=' + ui.version);
+    assert(ui.version === '0.24.1', 'Arcade version=' + ui.version);
     assert(ui.hasCheck && ui.checkVisible, '检查更新按钮缺失或不可见: ' + JSON.stringify(ui));
     assert(ui.hasBanner && ui.bannerHidden, '更新横幅初始应隐藏: ' + JSON.stringify(ui));
     assert(ui.api.length === 4, 'A.Offline update API 不完整: ' + JSON.stringify(ui.api));
@@ -106,17 +106,17 @@ async function main() {
     assert(inSync && inSync.supported === true && inSync.checked === true, 'checkForUpdate 结果异常: ' + JSON.stringify(inSync));
     // 核心回归：版本一致时返回「线上版本」，不是页面已安装版本以外的乱值；且不得报有更新。
     assert(inSync.updateFound === false, '版本一致却报有更新: ' + JSON.stringify(inSync));
-    assert(inSync.version === '0.24.0', 'checkForUpdate.version 应为线上版本 0.24.0: ' + JSON.stringify(inSync));
-    assert(inSync.latestVersion === '0.24.0', 'latestVersion 应为 0.24.0: ' + JSON.stringify(inSync));
-    assert(inSync.pageVersion === '0.24.0', 'pageVersion 应为 0.24.0: ' + JSON.stringify(inSync));
+    assert(inSync.version === '0.24.1', 'checkForUpdate.version 应为线上版本 0.24.1: ' + JSON.stringify(inSync));
+    assert(inSync.latestVersion === '0.24.1', 'latestVersion 应为 0.24.1: ' + JSON.stringify(inSync));
+    assert(inSync.pageVersion === '0.24.1', 'pageVersion 应为 0.24.1: ' + JSON.stringify(inSync));
     const swVersion = await cdp.evaluate(`Arcade.Offline.swVersion()`);
-    assert(typeof swVersion === 'string' && swVersion.indexOf('0.24.0') !== -1, 'swVersion 未返回 0.24.0: ' + JSON.stringify(swVersion));
+    assert(typeof swVersion === 'string' && swVersion.indexOf('0.24.1') !== -1, 'swVersion 未返回 0.24.1: ' + JSON.stringify(swVersion));
     record('PU-02 checkForUpdate 返回线上版本、版本一致时不误报更新 + SW 版本握手', true);
 
     /* ---------- PU-03 模拟新版本通知，更新横幅出现且可关闭 ----------
        直接派发 SW → 页面 的 message 事件（与真实 SW 激活后通知一致）。 */
     await cdp.evaluate(`(() => {
-      const event = new MessageEvent('message', { data: { type: 'arcade-sw-update-ready', version: '0.24.1' } });
+      const event = new MessageEvent('message', { data: { type: 'arcade-sw-update-ready', version: '0.24.2' } });
       navigator.serviceWorker.dispatchEvent(event);
     })()`);
     await sleep(200);
@@ -125,7 +125,7 @@ async function main() {
       return { hidden: b.hidden, text: document.querySelector('[data-update-text]').textContent };
     })()`);
     assert(shown.hidden === false, '更新横幅未正确显示: ' + JSON.stringify(shown));
-    assert(shown.text.indexOf('0.24.1') !== -1 && shown.text.indexOf('当前 v0.24.0') !== -1,
+    assert(shown.text.indexOf('0.24.2') !== -1 && shown.text.indexOf('当前 v0.24.1') !== -1,
       '横幅应同时显示新版本与当前版本: ' + JSON.stringify(shown));
     await cdp.click('[data-update-dismiss]');
     await sleep(120);
@@ -222,9 +222,9 @@ async function main() {
     await cdp.waitFor('!!(window.Arcade && Arcade.Offline && navigator.serviceWorker.controller)', { timeout: 20000 });
     await sleep(300);
     const before = await cdp.evaluate(`Arcade.Offline.checkForUpdate()`);
-    assert(before.updateFound === false && before.version === '0.24.0', '副本站点初始版本应为 0.24.0 且无更新: ' + JSON.stringify(before));
+    assert(before.updateFound === false && before.version === '0.24.1', '副本站点初始版本应为 0.24.1 且无更新: ' + JSON.stringify(before));
 
-    // 收集 SW → 页面消息与 controllerchange；再模拟「线上发布 0.24.1」。
+    // 收集 SW → 页面消息与 controllerchange；再模拟「线上发布 0.24.2」。
     await cdp.evaluate(`(() => {
       window.__swMsgs = [];
       window.__swChanges = 0;
@@ -232,45 +232,45 @@ async function main() {
       navigator.serviceWorker.addEventListener('controllerchange', () => { window.__swChanges += 1; });
       return true;
     })()`);
-    publishTempVersion(tempRoot, '0.24.0', '0.24.1');
+    publishTempVersion(tempRoot, '0.24.1', '0.24.2');
 
     const after = await cdp.evaluate(`Arcade.Offline.checkForUpdate()`);
     assert(after.supported === true && after.checked === true, '新版本检查失败: ' + JSON.stringify(after));
-    assert(after.updateFound === true, '发布 0.24.1 后未判为有更新: ' + JSON.stringify(after));
-    // 核心回归：必须返回线上最新版本，不能是页面已安装的 0.24.0。
-    assert(after.version === '0.24.1', 'checkForUpdate.version 应为新版本 0.24.1: ' + JSON.stringify(after));
-    assert(after.latestVersion === '0.24.1', 'latestVersion 应为 0.24.1: ' + JSON.stringify(after));
-    assert(after.installedVersion === '0.24.0', 'installedVersion 应为 0.24.0: ' + JSON.stringify(after));
-    assert(after.pageVersion === '0.24.0', 'pageVersion 应为 0.24.0: ' + JSON.stringify(after));
+    assert(after.updateFound === true, '发布 0.24.2 后未判为有更新: ' + JSON.stringify(after));
+    // 核心回归：必须返回线上最新版本，不能是页面已安装的 0.24.1。
+    assert(after.version === '0.24.2', 'checkForUpdate.version 应为新版本 0.24.2: ' + JSON.stringify(after));
+    assert(after.latestVersion === '0.24.2', 'latestVersion 应为 0.24.2: ' + JSON.stringify(after));
+    assert(after.installedVersion === '0.24.1', 'installedVersion 应为 0.24.1: ' + JSON.stringify(after));
+    assert(after.pageVersion === '0.24.1', 'pageVersion 应为 0.24.1: ' + JSON.stringify(after));
     assert(after.updateReason === 'published', 'updateReason 应为 published: ' + JSON.stringify(after));
 
     // SW 激活后必须主动广播新版本（0.13.1 及以前的 firstActivation 判断永不触发）。
-    await cdp.waitFor(`window.__swMsgs.some((m) => m && m.type === 'arcade-sw-update-ready' && m.version === '0.24.1')`, { timeout: 15000 });
+    await cdp.waitFor(`window.__swMsgs.some((m) => m && m.type === 'arcade-sw-update-ready' && m.version === '0.24.2')`, { timeout: 15000 });
     const broadcast = await cdp.evaluate(`window.__swMsgs.filter((m) => m && m.type === 'arcade-sw-update-ready').map((m) => m.version)`);
-    assert(broadcast.indexOf('0.24.1') !== -1, 'SW 未广播新版本: ' + JSON.stringify(broadcast));
+    assert(broadcast.indexOf('0.24.2') !== -1, 'SW 未广播新版本: ' + JSON.stringify(broadcast));
     assert(await cdp.evaluate('window.__swChanges') >= 1, '新 SW 未接管页面（controllerchange 未触发）');
 
     const banner = await cdp.evaluate(`(() => {
       const b = document.querySelector('[data-update-banner]');
       return { hidden: b.hidden, text: document.querySelector('[data-update-text]').textContent };
     })()`);
-    assert(banner.hidden === false && banner.text.indexOf('0.24.1') !== -1 && banner.text.indexOf('当前 v0.24.0') !== -1,
+    assert(banner.hidden === false && banner.text.indexOf('0.24.2') !== -1 && banner.text.indexOf('当前 v0.24.1') !== -1,
       '更新横幅应显示最新版本与当前版本: ' + JSON.stringify(banner));
 
     const newSwVersion = await cdp.evaluate(`Arcade.Offline.swVersion()`);
-    assert(newSwVersion === '0.24.1', '新 SW 接管后 swVersion 应为 0.24.1: ' + JSON.stringify(newSwVersion));
+    assert(newSwVersion === '0.24.2', '新 SW 接管后 swVersion 应为 0.24.2: ' + JSON.stringify(newSwVersion));
 
-    // 新 SW 已接管但页面仍是 0.24.0：仍应提示「有更新（刷新页面）」而不是「已是最新」。
+    // 新 SW 已接管但页面仍是 0.24.1：仍应提示「有更新（刷新页面）」而不是「已是最新」。
     const stalePage = await cdp.evaluate(`Arcade.Offline.checkForUpdate()`);
-    assert(stalePage.updateFound === true && stalePage.version === '0.24.1',
-      '新 SW 接管后页面未刷新时仍应提示 0.24.1 可用: ' + JSON.stringify(stalePage));
+    assert(stalePage.updateFound === true && stalePage.version === '0.24.2',
+      '新 SW 接管后页面未刷新时仍应提示 0.24.2 可用: ' + JSON.stringify(stalePage));
 
     // 按钮路径的提示文案必须带新版本号与当前版本。
     await cdp.click('.hall-app > summary');
     await cdp.click('[data-update-check]');
-    await cdp.waitFor(`(() => { const t = document.querySelector('.ac-toast'); return !!t && t.textContent.indexOf('0.24.1') !== -1; })()`, { timeout: 15000 });
+    await cdp.waitFor(`(() => { const t = document.querySelector('.ac-toast'); return !!t && t.textContent.indexOf('0.24.2') !== -1; })()`, { timeout: 15000 });
     const toast = await cdp.evaluate(`document.querySelector('.ac-toast').textContent`);
-    assert(toast.indexOf('发现新版本 v0.24.1') !== -1 && toast.indexOf('当前 v0.24.0') !== -1,
+    assert(toast.indexOf('发现新版本 v0.24.2') !== -1 && toast.indexOf('当前 v0.24.1') !== -1,
       '检查更新按钮提示应显示新版本与当前版本: ' + JSON.stringify(toast));
     record('PU-06 真实发版链路：返回线上最新版本 + SW 主动广播 + 横幅/提示双版本 + 刷新前后均判有更新', true);
 
@@ -281,15 +281,31 @@ async function main() {
     await cdp.waitFor('!!(window.Arcade && Arcade.Offline && navigator.serviceWorker.controller)', { timeout: 20000 });
     await cdp.waitFor(`(() => {
       const banner = document.querySelector('[data-update-banner]');
-      return !!banner && !banner.hidden && document.querySelector('[data-update-text]').textContent.indexOf('0.24.1') !== -1;
+      return !!banner && !banner.hidden && document.querySelector('[data-update-text]').textContent.indexOf('0.24.2') !== -1;
     })()`, { timeout: 15000 });
     const automatic = await cdp.evaluate(`(() => {
       const text = document.querySelector('[data-update-text]').textContent;
       const sw = document.querySelector('[data-hall-version]').textContent;
       return { text, sw };
     })()`);
-    assert(automatic.text.indexOf('当前 v0.24.0') !== -1, '自动横幅缺少当前版本: ' + JSON.stringify(automatic));
+    assert(automatic.text.indexOf('当前 v0.24.1') !== -1, '自动横幅缺少当前版本: ' + JSON.stringify(automatic));
+    assert(automatic.sw.trim() === '0.24.1', '自动提示场景的页面版本不对: ' + JSON.stringify(automatic));
+    assert(await cdp.evaluate('Arcade.Offline.swVersion()') === '0.24.2', 'PU-08 场景必须由新 SW 激活');
     record('PU-08 再次打开旧首页自动显示更新横幅，无需手动检查', true);
+
+    await cdp.click('[data-update-dismiss]');
+    await cdp.evaluate(`(() => {
+      const originalNow = Date.now;
+      Date.now = () => originalNow() + 61000;
+      document.dispatchEvent(new Event('visibilitychange'));
+      Date.now = originalNow;
+      return true;
+    })()`);
+    await sleep(500);
+    assert(await cdp.evaluate(`document.querySelector('[data-update-banner]').hidden`), '同一页面点稍后后恢复可见又重复提示');
+    await cdp.evaluate(`window.dispatchEvent(new PageTransitionEvent('pageshow', { persisted: false }))`);
+    await cdp.waitFor(`!document.querySelector('[data-update-banner]').hidden`, { timeout: 15000 });
+    record('PU-08c 同一页面稍后不重复提示，重新打开首页仍自动提示', true);
 
     /* ---------- PU-07 线上版本读取失败：不得谎报「已是最新」 ----------
        回到与 SW 完全同步的主站点（0.13.2），只拦截页面读取 sw.js 的请求，
