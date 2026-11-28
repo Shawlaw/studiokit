@@ -13,6 +13,7 @@
  *     source?: string,               // 只作诊断，不渲染
  *     person?: string|null,          // 真实人物显示名，仅用于筛选（可选）
  *     professionId?: string|null,    // 已接受职业的内部 id，仅用于筛选（可选）
+ *     professionIds?: string[],      // 交汇中实际参与的已接受职业
  *     detail?: {                     // 白名单静态回读文本（可选）
  *       text: string,
  *       person?: string|null
@@ -174,15 +175,12 @@
         dropped.push({ index: index, reason: 'unsafe-label' });
         return;
       }
-      var professionId = null;
-      var rawProfessionId = idText(row.professionId);
-      if (rawProfessionId) {
-        if (!Object.prototype.hasOwnProperty.call(professionNames, rawProfessionId)) {
-          /* 投影里出现未接受职业的关联：整行不进入经历，筛选器也不出现该职业。 */
-          dropped.push({ index: index, reason: 'unaccepted-profession' });
-          return;
-        }
-        professionId = rawProfessionId;
+      var professionIds = Array.isArray(row.professionIds) ? row.professionIds.slice() : [];
+      var professionId = idText(row.professionId);
+      if (professionId && professionIds.indexOf(professionId) < 0) professionIds.push(professionId);
+      if (professionIds.some(function (id) { return !idText(id) || !professionNames[id]; })) {
+        dropped.push({ index: index, reason: 'unaccepted-profession' });
+        return;
       }
       var detail = safeDetail(row.detail);
       if (row.detail && !detail) dropped.push({ index: index, reason: 'unsafe-detail' });
@@ -192,8 +190,9 @@
         label: label,
         at: cleanText(row.at),
         source: cleanText(row.source),
-        professionId: professionId,
+        professionId: professionId || null,
         professionName: professionId ? professionNames[professionId] : '',
+        professionIds: professionIds,
         person: person,
         detail: detail,
       });
@@ -203,10 +202,10 @@
     var professionOptions = [];
     entries.forEach(function (entry) {
       if (entry.person && persons.indexOf(entry.person) < 0) persons.push(entry.person);
-      if (entry.professionId) {
-        var seen = professionOptions.some(function (row) { return row.id === entry.professionId; });
-        if (!seen) professionOptions.push({ id: entry.professionId, label: entry.professionName });
-      }
+      entry.professionIds.forEach(function (id) {
+        var seen = professionOptions.some(function (row) { return row.id === id; });
+        if (!seen) professionOptions.push({ id: id, label: professionNames[id] });
+      });
     });
 
     return {
@@ -235,7 +234,7 @@
   function matches(entry, filter) {
     if (!filter || filter.scope === 'all') return true;
     if (filter.scope === 'person') return entry.person === filter.value;
-    if (filter.scope === 'profession') return entry.professionId === filter.value;
+    if (filter.scope === 'profession') return entry.professionIds.indexOf(filter.value) >= 0;
     return true;
   }
 

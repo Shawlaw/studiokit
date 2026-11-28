@@ -158,6 +158,15 @@
     return out;
   }
 
+  function trimStoryEvents(events) {
+    const keys = Object.keys(events).sort();
+    if (keys.length <= MAX_STORY_EVENTS) return;
+    const isCrossover = (id) => id.startsWith('crossover:') && events[id].source === 'world';
+    // A recorded crossover also prevents replay after reload.
+    const evictionOrder = keys.filter((id) => !isCrossover(id)).concat(keys.filter(isCrossover));
+    evictionOrder.slice(0, keys.length - MAX_STORY_EVENTS).forEach((id) => { delete events[id]; });
+  }
+
   function normalizeExtension(raw, now) {
     const base = initialState(now);
     if (!isObject(raw)) return base;
@@ -180,8 +189,7 @@
         if (!validEventId(eventId) || !isObject(row)) return;
         base.storyEvents[eventId] = { at: iso(row.at) || null, source: typeof row.source === 'string' ? row.source.slice(0, 120) : '' };
       });
-      const keys = Object.keys(base.storyEvents).sort();
-      while (keys.length > MAX_STORY_EVENTS) delete base.storyEvents[keys.shift()];
+      trimStoryEvents(base.storyEvents);
     }
     if (isObject(raw.professionProgress)) {
       Object.keys(raw.professionProgress).forEach((professionId) => {
@@ -364,12 +372,12 @@
       at: iso(input.at) || null,
       source: typeof input.source === 'string' ? input.source.slice(0, 120) : '',
     };
-    if (Object.keys(next.storyEvents).length > MAX_STORY_EVENTS) {
-      const keys = Object.keys(next.storyEvents).sort();
-      while (keys.length > MAX_STORY_EVENTS) delete next.storyEvents[keys.shift()];
-    }
+    trimStoryEvents(next.storyEvents);
+    if (!next.storyEvents[input.eventId]) return fail(state, 'story-event-capacity');
     if (!isObject(next.narrativeCursor)) next.narrativeCursor = { chapterId: 'C0', nodeId: null };
-    next.narrativeCursor.nodeId = input.eventId;
+    if (!input.eventId.startsWith('crossover:') && !input.eventId.startsWith('world:')) {
+      next.narrativeCursor.nodeId = input.eventId;
+    }
     next.updatedAt = laterTimestamp(next.updatedAt, iso(input.at));
     return done(next, { duplicate: false });
   }

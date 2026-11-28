@@ -612,6 +612,8 @@
       shell: null,
       shellPanel: null,
       journalFilter: null,
+      crossoverAttempted: false,
+      crossover: null,
       context: null,
     };
   }
@@ -860,21 +862,29 @@
     return wrap;
   }
 
-  /** 首次展示成功后交给 bridge 的薄封装落库；缺失/失败都静默，不阻断港口渲染。 */
-  function portRecordCrossover(context, crossover) {
-    if (!crossover || !crossover.narrativeEventId) return;
-    const record = context && typeof context.recordWorldNarrativeEvent === 'function'
-      ? context.recordWorldNarrativeEvent
-      : (context && isObject(context.api) && typeof context.api.recordWorldNarrativeEvent === 'function'
-        ? context.api.recordWorldNarrativeEvent
-        : null);
-    if (typeof record !== 'function') return;
-    try {
-      const pending = record({ eventId: crossover.narrativeEventId, source: 'world' });
-      if (pending && typeof pending.catch === 'function') pending.catch(() => {});
-    } catch (err) {
-      /* 落库失败保持港口可读；下一次真实展示会重试（事务内幂等）。 */
-    }
+  function presentPortCrossover(context, state, view) {
+    if (state.tab !== 'home' || state.phase !== 'normal' || state.crossoverAttempted) return;
+    const crossover = portCrossoverData(view && view.story);
+    const record = portOpenMethod(context, 'recordWorldNarrativeEvent');
+    if (!crossover || !crossover.narrativeEventId || typeof record !== 'function') return;
+    state.crossoverAttempted = true;
+    const seq = state.seq;
+    /* 只有成功写入的面板展示交汇，另一标签得到 duplicate 后只刷新经历。 */
+    Promise.resolve().then(() => {
+      if (!state.alive || state.seq !== seq || state.tab !== 'home') return null;
+      return record({ eventId: crossover.narrativeEventId });
+    }).then((result) => {
+      if (!result || !result.ok || !state.alive || state.seq !== seq) return;
+      if (result.duplicate !== true) {
+        state.crossover = crossover;
+        if (state.tab === 'home') renderPortSurface(context, state);
+      }
+      return requestPortCareerView(context, 'journal').then((journal) => {
+        if (!journal || !state.alive || state.seq !== seq) return;
+        state.views.journal = journal;
+        if (state.tab === 'journal') renderPortSurface(context, state);
+      });
+    }).catch(() => { /* 下次打开可重试，失败不会展示未落库的交汇。 */ });
   }
 
   function portStoryProps(context, view) {
@@ -891,7 +901,7 @@
     const summary = cleanText(narrative.storySummary)
       || cleanText(row && row.summary)
       || cleanText(row && row.objectiveText)
-      || (alternative && (alternative.progress || alternative.offer));
+      || (alternative && alternative.offer);
     const action = nextId && (!commission || typeof commission.start !== 'function')
       ? null
       : (nextId ? {
@@ -1325,11 +1335,7 @@
     const story = isObject(view) && isObject(view.story) ? view.story : {};
     const alternativeNext = portAlternativeNextNode(stack, story);
     if (alternativeNext) content.appendChild(alternativeNext);
-    const crossover = portCrossoverData(story);
-    if (crossover) {
-      content.appendChild(portCrossoverNode(stack, crossover));
-      portRecordCrossover(context, crossover);
-    }
+    if (state.crossover) content.appendChild(portCrossoverNode(stack, state.crossover));
     const message = portMessageNode(stack, view);
     if (message) content.appendChild(message);
     const clue = components.ClueRow && portClueProps(context);
@@ -1456,7 +1462,11 @@
     state.context = context || state.context;
     const view = portViewOf(state);
     const props = portShellProps(state.context, state, view, components);
-    if (state.shell && typeof state.shell.render === 'function') return state.shell.render(props);
+    if (state.shell && typeof state.shell.render === 'function') {
+      const result = state.shell.render(props);
+      presentPortCrossover(state.context, state, view);
+      return result;
+    }
     if (state.detached) return components.CareerShell(props);
     return null;
   }

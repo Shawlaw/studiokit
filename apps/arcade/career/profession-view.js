@@ -576,6 +576,21 @@
     }
     var info = publicStoryEventInfo(catalog, context, eventId);
     if (!info.allowed) return null;
+    var declared = publicDeclaredStoryEvent(catalog, eventId);
+    if (declared && ((Array.isArray(declared.surfaces) && declared.surfaces.indexOf(context.surface) < 0)
+      || (declared.source && declared.source !== source)
+      || (declared.professionId && acceptedProfessionIds(state, catalog).indexOf(declared.professionId) < 0))) return null;
+    if (eventId.indexOf('crossover:') === 0) {
+      var participants = eventId.slice('crossover:'.length).split(':');
+      var accepted = acceptedProfessionIds(state, catalog);
+      /* An imported history row does not prove that either invitation was accepted. */
+      if (['port', 'journal', 'message', 'receipt', 'toast', 'deep-link'].indexOf(context.surface) < 0
+        || source !== 'world' || participants.length !== 2 || participants[0] >= participants[1]
+        || !participants.every(function (id) { return accepted.indexOf(id) >= 0; })) return null;
+      var crossover = publicStoryRow(state, catalog, info, at, source, eventId);
+      crossover.professionIds = participants;
+      return crossover;
+    }
     return publicStoryRow(state, catalog, info, at, source, eventId);
   }
 

@@ -168,9 +168,9 @@
         "requiresEvidenceAny": []
       },
       "texts": {
-        "offer": "两份现场记录被摊在同一张桌上，一份写着管井，一份写着货位，说的都是同一处断电。",
+        "offer": "档案室想把管井和货位的现场记录放在一起核对，看看断电前这两处各发生了什么。",
         "progress": "还缺的那一类记录，港里已经有人知道该去哪一间屋子找。",
-        "receipt": "两份记录在档案室合成同一份结论，港口后来恢复供电时用的就是这一份。",
+        "receipt": "管井和货位的两份现场记录都进了档案室，封套上分别写着地点和经手人。",
         "next": "回港口看主线下一步，记录只是记录。"
       },
       "receiptSource": "evidence-grant"
@@ -1193,7 +1193,7 @@
     {
       "sampleKind": "journalEvent",
       "placeholder": false,
-      "eventId": "world:C2.errand.alt.courier",
+      "eventId": "world:C2.errand.alt-courier",
       "source": "commission",
       "whitelistLayer": "content",
       "labelMode": "content",
@@ -1227,8 +1227,8 @@
       "source": "world",
       "whitelistLayer": "content",
       "labelMode": "content",
-      "label": "管井与货位的现场记录合成了同一份结论",
-      "text": "老岑把管井那段空响记进巡检表，收货处值守把货位的抄条附在后面；两本表最终并进同一份结论。",
+      "label": "管井与货位的现场记录都已归档",
+      "text": "老岑把管井那段空响记进巡检表，收货处值守也交来货位的抄条。档案室收下了两份记录。",
       "person": "维护处收发箱的老岑",
       "surfaces": [
         "journal",

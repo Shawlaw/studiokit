@@ -1134,9 +1134,9 @@
       return { ok: true, reason: null };
     }
     if (node.mechanism === 'profession-commission') {
-      if (index.commissionById) {
-        if (!index.commissionById.has(refs[0])) return { ok: false, reason: REASONS.unknownCommission };
-        if (index.worldWorkIds.has(refs[0])) return { ok: false, reason: REASONS.unknownCommission };
+      var commission = index.commissionById && index.commissionById.get(refs[0]);
+      if (!commission || !stableId(commission.professionId) || index.worldWorkIds.has(refs[0])) {
+        return { ok: false, reason: REASONS.unknownCommission };
       }
       return { ok: true, reason: null };
     }
@@ -1170,6 +1170,10 @@
     if (!gateSatisfied(node.gate, ctx)) return { available: false, reason: REASONS.worldLocked };
     var ready = mechanismReady(node, index);
     if (!ready.ok) return { available: false, reason: ready.reason };
+    if (node.mechanism === 'profession-commission') {
+      var owner = index.commissionById.get(node.anchor.refs[0]).professionId;
+      if (!isProfessionAccepted(ctx, owner)) return { available: false, reason: REASONS.notAccepted };
+    }
     return { available: true, reason: null };
   }
 
@@ -1313,6 +1317,65 @@
     }
   }
 
+  /**
+   * 从当前生涯的真实已清记录推导「已经发生」的替代经历（ADR §9 增补，只读、不落盘）。
+   * 每条都必须同时满足：节点在当前事实下可达，且有带合法时间的真实记录
+   * （委托/代办/证据走 quests 行，商店材料走采购流水）。免费租机不留持久记录，不在此推导。
+   * 返回 [{eventId, at, source}]；是否进入经历仍由内容白名单与投影 gate 决定。
+   */
+  function isoTime(value) {
+    return typeof value === 'string' && /^\d{4}-\d{2}-\d{2}T/.test(value) && Number.isFinite(Date.parse(value));
+  }
+
+  function deriveJournalEvents(input) {
+    try {
+      var options = isObject(input) ? input : {};
+      var catalog = isObject(options.catalog) ? options.catalog : {};
+      var content = options.content !== undefined ? options.content : catalog.worldNarrative;
+      var engine = buildEngine(content, catalog);
+      var ctx = normalizeContext(input);
+      /* 内容不可用时 normalizeContent 已把 alternatives 清空，这里自然不产出任何经历。 */
+      if (hardFailure(ctx) || ALTERNATIVE_SURFACES.indexOf(ctx.surface) < 0) return [];
+      var records = isObject(options.records) ? options.records : {};
+      var quests = arrayOf(records.quests);
+      var purchases = arrayOf(records.purchases);
+      var clearedAt = function (kind, nodeId) {
+        for (var i = 0; i < quests.length; i += 1) {
+          var row = quests[i];
+          if (isObject(row) && row.kind === kind && row.nodeId === nodeId && row.status === 'cleared' && isoTime(row.clearedAt)) {
+            return row.clearedAt;
+          }
+        }
+        return null;
+      };
+      var out = [];
+      engine.alternatives.forEach(function (node) {
+        if (!evaluateAlternative(node, ctx, engine.index).available) return;
+        var refs = arrayOf(node.anchor && node.anchor.refs);
+        var at = null;
+        var source = 'world';
+        if (node.anchor.kind === 'commission') {
+          at = clearedAt('commission', refs[0]);
+        } else if (node.mechanism === 'errand') {
+          at = clearedAt('alternative', refs[0]);
+          source = 'commission';
+        } else if (node.mechanism === 'evidence-pair') {
+          var times = refs.map(function (token) { return clearedAt('evidence', 'evidence:' + token); });
+          at = times.every(isoTime) ? times.slice().sort().pop() : null;
+        } else if (node.mechanism === 'market-material') {
+          at = (purchases.filter(function (row) {
+            return isObject(row) && row.itemId === refs[0] && isoTime(row.at);
+          })[0] || {}).at || null;
+        }
+        if (!isoTime(at)) return;
+        out.push({ eventId: 'world:' + node.narrativeNodeId.slice('altn.'.length), at: at, source: source });
+      });
+      return out;
+    } catch (err) {
+      return [];
+    }
+  }
+
   /* 落款只读解引用：从真实内容读人名，绝不由叙事文本手写。 */
   function resolveSignature(input) {
     try {
@@ -1376,6 +1439,7 @@
     eventIdForProfessionPair: eventIdForProfessionPair,
     createWorldNarrative: createWorldNarrative,
     resolveWorldAlternatives: resolveWorldAlternatives,
+    deriveJournalEvents: deriveJournalEvents,
     resolveSignature: resolveSignature,
   });
 });

@@ -833,9 +833,9 @@ check('迁移只追加且不新增 store/key', journal.migration.mode === 'appen
   && journal.migration.newKey === false
   && journal.migration.unknownNamespace === 'preserve-invisible'
   && journal.migration.futureProfessionVersion === 'read-only-empty-view', JSON.stringify(journal.migration));
-check('上限 256 且淘汰为 key 字典序（与真实实现一致）', journal.limits.maxStoryEvents === 256
+check('上限 256 且按 key 顺序优先淘汰非交汇记录', journal.limits.maxStoryEvents === 256
   && constants.maxStoryEvents === 256
-  && journal.limits.eviction === 'lexicographic-key-ascending'
+  && journal.limits.eviction === 'lexicographic-key-ascending-crossover-last'
   && journal.limits.capOwner === 'profession-state.recordStoryEvent'
   && journal.limits.evictionDoesNotAffectFacts === true
   && journal.limits.softBudget < journal.limits.maxStoryEvents, JSON.stringify(journal.limits));
@@ -943,7 +943,7 @@ check('T24 text 与 person 均来自真实内容且非占位（不编造奖励/�
 
 const codeFrozen = professionView.PUBLIC_STORY_EVENTS;
 const contentWhitelist = {
-  'world:C2.errand.alt.courier': '占位标签甲',
+  'world:C2.errand.alt-courier': '占位标签甲',
   'crossover:research.archivist:research.lattice': '占位标签乙',
 };
 const acceptedCommissionIds = new Set(['memory-flip.T2']);
@@ -985,7 +985,7 @@ function simulateJournal(input) {
 }
 const journalFixture = [
   { eventId: 'story:C0.port_seen', source: 'clue', at: '2026-01-02T00:00:00.000Z' },
-  { eventId: 'world:C2.errand.alt.courier', source: 'commission', at: '2026-01-03T00:00:00.000Z' },
+  { eventId: 'world:C2.errand.alt-courier', source: 'commission', at: '2026-01-03T00:00:00.000Z' },
   { eventId: 'crossover:research.archivist:research.lattice', source: 'world', at: '2026-01-01T00:00:00.000Z' },
   { eventId: 'invitation:research.archivist', source: 'story', at: '2026-01-04T00:00:00.000Z' },
   { eventId: 'invitation:research.lattice', source: 'story', at: '2026-01-05T00:00:00.000Z' },
@@ -996,7 +996,7 @@ const journalFixture = [
 const journalRows = simulateJournal({ events: journalFixture, surface: 'journal' });
 const visibleIds = journalRows.map((row) => row.eventId);
 check('代码冻结事件可见（story:C0.port_seen）', visibleIds.includes('story:C0.port_seen'));
-check('内容白名单事件可见（world / crossover）', visibleIds.includes('world:C2.errand.alt.courier') && visibleIds.includes('crossover:research.archivist:research.lattice'));
+check('内容白名单事件可见（world / crossover）', visibleIds.includes('world:C2.errand.alt-courier') && visibleIds.includes('crossover:research.archivist:research.lattice'));
 check('未接受职业的 invitation 事件不显示', !visibleIds.includes('invitation:research.lattice'));
 check('已接受职业的 invitation 事件显示', visibleIds.includes('invitation:research.archivist'));
 check('未公开的 commission 事件不显示、已可见的显示', !visibleIds.includes('commission:gold-miner.T2') && visibleIds.includes('commission:memory-flip.T2'));
@@ -1005,11 +1005,24 @@ check('可见结果不做 DOM 占位（没有 hidden 标记）', journalRows.eve
 check('经历排序为 at 升序（DOM 顺序即真实顺序）', deepEqual(visibleIds, [
   'crossover:research.archivist:research.lattice',
   'story:C0.port_seen',
-  'world:C2.errand.alt.courier',
+  'world:C2.errand.alt-courier',
   'invitation:research.archivist',
   'commission:memory-flip.T2',
 ]), visibleIds.join(','));
 check('经历不在 work/shop/crafting/tools 面渲染', ['work', 'shop', 'crafting', 'tools'].every((surface) => simulateJournal({ events: journalFixture, surface }).length === 0));
+/* 经历 ID 由「world: + 节点 ID 去掉 altn.」推导：每条替代节点都必须有同 ID 的白名单行，source 与机制一致。 */
+{
+  const journalIdOf = (node) => 'world:' + node.narrativeNodeId.slice('altn.'.length);
+  const nodes = worldNarrativeContent.alternativeNarratives || [];
+  const broken = nodes.map((node) => {
+    const entry = contentJournalRows.find((row) => row.eventId === journalIdOf(node));
+    return entry && entry.source === (node.mechanism === 'errand' ? 'commission' : 'world') ? null : node.narrativeNodeId + ':' + (entry ? entry.source : 'missing');
+  }).filter(Boolean);
+  check('每条替代节点都有同 ID 的经历白名单行且 source 与机制一致（代办=commission，其余=world）', nodes.length > 0 && broken.length === 0, broken.join(' | '));
+  check('经历白名单的 world:* 行都对应一条替代节点（无孤儿行）', contentJournalRows
+    .filter((row) => row.eventId.indexOf('world:') === 0)
+    .every((row) => nodes.some((node) => journalIdOf(node) === row.eventId)));
+}
 check('经历事件 source 全部 ∈ 冻结四值', journalSamples.every((sample) => constants.journalSources.includes(sample.source)));
 check('经历样例覆盖全部四种 source', deepEqual(Array.from(new Set(journalSamples.map((sample) => sample.source))).sort(), ['clue', 'commission', 'story', 'world']));
 check('经历样例覆盖三层白名单', deepEqual(Array.from(new Set(journalSamples.map((sample) => sample.whitelistLayer))).sort(), ['code-frozen', 'content', 'engine-prefix']));

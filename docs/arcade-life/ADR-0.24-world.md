@@ -221,7 +221,7 @@ maxShowsPerCareer: 1
 
 1. 唯一写入路径：`career-db.applyProfessionEvent({action:'RECORD_STORY_EVENT', input:{eventId, source:'world', at}})`，同一事务内 `assertCareerWritable` + `generation` 守卫；不新开写口。
 2. 重复写入：`profession-state.recordStoryEvent` 返回 `{ok:true, duplicate:true}`，**不改** `at`、不改文案、不重放消息；调用方把 duplicate 视为成功（不显示第二次回执）。
-3. `narrativeCursor.nodeId` 被设置为该 eventId 是幂等的（同值覆盖），不产生游标抖动。
+3. 交汇写入保留 `narrativeCursor`。首到港仍只由玩家成功接下起源职业委托或世界工作消费。
 4. 失败：事务回滚、UI 不显示成功；重试安全（幂等）。
 5. 跨标签：写成功后重新读快照再渲染；另一标签的 `onCareerDataChanged` 只触发一次重投影，不重复写。
 
@@ -279,7 +279,7 @@ schema 文件的 `samples.crossover` 覆盖真实 registry 的 16 个职业各 1
 
 `[I]` 命名空间白名单是**闭集**：未列出的 namespace 既不写入也不显示，但**必须保留**（不删除、不改写）。示例 id：
 
-- `world:C2.errand.alt.courier`（代办 → `source:'commission'`）
+- `world:C2.errand.alt-courier`（代办 → `source:'commission'`）
 - `crossover:research.archivist:research.lattice`（交汇 → `source:'world'`）
 - `commission:memory-flip.T2`（引擎前缀 → `source:'commission'`）
 
@@ -329,11 +329,9 @@ schema 文件的 `samples.crossover` 覆盖真实 registry 的 16 个职业各 1
 
 ### 5.7 上限与淘汰 `[I]`
 
-- 全局上限沿用 `MAX_STORY_EVENTS = 256`（`profession-state.js:39`），由 `recordStoryEvent` 在超限时按 **key 字典序升序**淘汰最早者。
-- `[I]` 软预算 `200`：写入方必须按 eventId 去重；同一事件重试不得占用新槽位。
-- `[I]` 淘汰是**表现层**的：删掉的只是"经历"里的一行；职业接受状态、委托结算、章节旗标、钱包等真实事实不受影响。淘汰 `crossover:` 行不会撤销任何东西，也不会让它可再次"首次"触发。
-- `[I]` 当前命名空间字典序：`commission:` < `crossover:` < `invitation:` < `story:` < `world:`，因此达到上限时 `commission:` 类（引擎只读前缀）最先被淘汰，其次是 `crossover:`。这是既有实现的直接结果，不额外调参；写入方按软预算控制总量即可。
-- 上限/淘汰属既有实现，0.24 **不修改** `profession-state.js`；若 T23 需要不同策略，必须先改本 ADR。
+- 全局上限沿用 `MAX_STORY_EVENTS = 256`。规整旧档和追加记录共用同一规则，优先按 key 字典序淘汰普通记录，最后才处理 `source:'world'` 的交汇记录。
+- 软预算为 `200`。每个 eventId 只占一个槽位，当前内容最多有十个交汇，旧档接近上限时仍可保留这些记录作为跨页去重凭据。若导入数据已占满优先保留槽位且新事件无法保存，写入返回失败，港口可在下次打开重试。
+- 淘汰只作用于经历，保留职业接受、委托结算、章节旗标与钱包等事实。
 
 ## 6. 0.24 与 0.23 的兼容边界（冻结）
 
@@ -444,3 +442,32 @@ schema 文件的 `samples.crossover` 覆盖真实 registry 的 16 个职业各 1
 - `node tools/career_world_narrative_test.mjs`：177/177，含 bridge 同形注入后真实 `projectCareerView` 的 `detail.text/person`、旧内容零 `detail`、注入形状被真实 route-planner 消费。
 - `node tools/career_journal_experience_test.mjs`：59/59，含有数据渲染 / 无数据零差异 / 内部字段不泄漏。
 - 其余必跑纯 Node gate 与 `py -3 tools/validate_site.py` 见交付报告；未启动 Chrome，未 push，未发布。
+
+## 10. 复查修正（0.24.0 候选，2026-11-28）
+
+本节记录候选复审确认的缺口及其修正。§1–§9 的冻结语义不变，只把原先没有写入方、或写入方没有校验的地方补齐。
+
+### 10.1 交汇写入与展示（修订 §4.5）
+
+- `bridge.recordWorldNarrativeEvent()` 只接受 `crossover:` 事件，写入前用同一 resolver 与当前真实事实复核该对仍然可披露，并沿用发起时的 `discovery-generation`；封存、代次变化或复核不通过都不写。
+- 写入后必须重读并确认该行已在 `storyEvents` 里，才向调用方返回成功。UI 只在成功后渲染交汇；数据库拒绝或事务未提交时港口不显示、经历不增加，下次打开可重试。
+- 两个标签页同时打开港口时，先提交的面板展示一次，后提交的拿到 duplicate 后只刷新经历。成功写入或拿到 duplicate 后，同一港口实例的经历页会重新读取。
+- 港口「眼下」只在已有章节时附加替代指引；`texts.progress` 不再作为「下一步」提示渲染。
+
+### 10.2 经历行与两位参与职业（修订 §5.3、§9.1）
+
+- `crossover:<a>:<b>` 的经历行带 `professionIds:[a,b]`，只在两位职业都已接受、`source` 为 `world`、且 `a < b` 时进入 `port/journal/message/receipt/toast/deep-link`。导入的经历行不能替代任何一方的接受事实。
+- `ui/journal.js` 的「按职业筛选」按 `professionIds` 匹配：筛任意一位参与职业都保留同一条交汇。
+- 白名单行若声明 `surfaces`、`source` 或 `professionId`，投影按声明收紧；未声明时与 0.23 / §9.1 一致。bridge 原样转发这三个字段，职业委托类经历的职业关联取自正式委托目录。
+
+### 10.3 替代经历从真实记录推导（`world:*` 写入方）
+
+- `world-narrative.deriveJournalEvents({state, catalog, context, records})` 是只读纯函数：节点在当前事实下可达，且有带合法时间的真实记录时才产出 `{eventId, at, source}`。委托与世界通用工作读 `quests` 的 `commission` 行，代办读 `alternative` 行（`source:'commission'`），证据组合要求各证据都已清并取较晚时间，商店材料读该材料最早一次真实采购流水。
+- 经历 ID 统一为 `world:` + 替代节点 ID 去掉 `altn.`。代办一条的白名单 ID 原写作 `world:C2.errand.alt.courier`，与节点 `altn.C2.errand.alt-courier` 不一致，已改为 `world:C2.errand.alt-courier`；契约测试断言每条替代节点都有同 ID 的白名单行。
+- bridge 只在 `journal` 面调用它，结果只进入当次投影：不改写、不落盘任何 `storyEvents` 行，是否显示仍由内容白名单与投影 gate 决定。结算后真实事实缓存失效，下一次投影重读。
+- 免费租机不留任何持久记录，`world:C1.rental.old-wing` 仍没有写入方，保持不可达；不为它新增结算写入。
+
+### 10.4 上限与叙事游标（修订 §4.5 第 3 条、§5.7）
+
+- 交汇与世界经历的写入不再改写 `narrativeCursor`，首次到港仍只由真实接单消费。
+- 规整旧档与追加记录共用同一淘汰规则：先按 key 字典序淘汰普通记录，`source:'world'` 的交汇记录最后处理；保留槽位已满且新事件无法保存时写入返回失败，由调用方重试。schema 的 `cursorEffect` / `eviction` 常量同步更新。

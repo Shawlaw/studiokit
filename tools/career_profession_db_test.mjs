@@ -956,6 +956,28 @@ await check('T03-21 重复 ACCEPT 仍校验 catalog/gameId/clue 映射', async (
   return 'duplicate still validated / valid duplicate remains no-op';
 });
 
+await check('T03-22 readLedger 默认按时间倒序；firstMarketPurchaseOf 只取该材料最早一次真实采购', async () => {
+  const { fakeIdb, db } = await freshDb();
+  const careerId = 'career-ledger-1';
+  const at = (minute) => '2026-11-27T01:' + String(minute).padStart(2, '0') + ':00.000Z';
+  const row = (txId, minute, extra) => Object.assign({
+    txId, schemaVersion: 1, kind: 'purchase', careerId, purchaseId: 'market-buy:' + careerId + ':building:s:' + minute,
+    step: 1, credits: -10, cost: { credits: 10 }, items: { building: 2 }, equipment: {}, balanceAfter: { credits: 90 }, at: at(minute),
+    rulesetVersion: 1, contentVersion: '0.18.0', receipt: { receiptId: txId, items: { building: 2 } },
+  }, extra || {});
+  seedRow(fakeIdb, db, 'ledgers', row('tx:c', 30));
+  seedRow(fakeIdb, db, 'ledgers', row('tx:a', 10));
+  seedRow(fakeIdb, db, 'ledgers', row('tx:b', 20, { purchaseId: 'market-buy:' + careerId + ':alloy:s:20', items: { alloy: 1 }, receipt: { receiptId: 'tx:b', items: { alloy: 1 } } }));
+  seedRow(fakeIdb, db, 'ledgers', row('tx:other', 5, { careerId: 'career-ledger-2' }));
+  const all = await db.readLedger(careerId, 10);
+  eq(all.rows.map((entry) => entry.txId), ['tx:c', 'tx:b', 'tx:a'], 'default order');
+  const firstBuilding = await db.readLedger(careerId, 1, { firstMarketPurchaseOf: 'building' });
+  eq(firstBuilding.rows.map((entry) => entry.txId), ['tx:a'], 'earliest building purchase only');
+  const ignored = await db.readLedger(careerId, 1, { firstMarketPurchaseOf: 'not a token' });
+  eq(ignored.rows.map((entry) => entry.txId), ['tx:c'], 'invalid option keeps the default');
+  return firstBuilding.rows[0].at;
+});
+
 console.log('\n' + passed + '/' + total + ' checks passed');
 if (failures.length) {
   console.log('FAILURES:');

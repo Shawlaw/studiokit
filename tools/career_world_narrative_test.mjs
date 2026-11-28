@@ -649,14 +649,14 @@ check('C17 经历白名单 eventId 唯一', unique(contentJournal.map((entry) =>
 check('C18 经历白名单 = 10 条交汇事件 + 7 条替代路线事件', deepEqual(contentJournal.map((entry) => entry.eventId).sort(), contentPairs.map((pair) => pair.eventId).concat([
   'world:C1.world-work.star-raid-t1',
   'world:C1.rental.old-wing',
-  'world:C2.errand.alt.courier',
+  'world:C2.errand.alt-courier',
   'world:C3.profession-commission.shadow-leap-t2',
   'world:C4.evidence-pair.mole-whack-block-drop',
   'world:C4.market-material.building',
   'world:C5.profession-commission.gold-miner-t6',
 ]).sort()));
 check('C19 交汇白名单 source 全为 world', contentJournal.filter((entry) => entry.eventId.indexOf('crossover:') === 0).every((entry) => entry.source === 'world'));
-check('C20 代办替代事件 source 为 commission（对齐 ADR 示例）', (contentJournal.find((entry) => entry.eventId === 'world:C2.errand.alt.courier') || {}).source === 'commission');
+check('C20 代办替代事件 source 为 commission（对齐 ADR 示例）', (contentJournal.find((entry) => entry.eventId === 'world:C2.errand.alt-courier') || {}).source === 'commission');
 
 /* ------------------------------------------------------------------ *
  * D. 真实锚点与经济边界
@@ -1021,6 +1021,15 @@ check('F18 已持久化的交汇事件不再产出（historical-only），重复
   && recordedList.nodes.every((node) => node.eventId !== recordedPairId)
   && firstRecord.ok === true && secondRecord.ok === true && secondRecord.duplicate === true
   && secondRecord.state.storyEvents[recordedPairId].at === '2026-11-28T00:00:00.000Z');
+const filledHistory = bothAcceptedState('research.archivist', 'research.lattice');
+filledHistory.narrativeCursor = { chapterId: 'C0', nodeId: 'invitation:research.archivist' };
+for (let i = 0; i < 256; i += 1) filledHistory.storyEvents['world:test-' + i] = { at: null, source: 'world' };
+const capWrite = professionState.recordStoryEvent(filledHistory, { eventId: recordedPairId, source: 'world', at: '2026-11-28T00:00:00.000Z' });
+const capReload = professionState.normalizeExtension(capWrite.state);
+check('F18a 满额旧档仍能持久去重，交汇不会消费未开始的首次到港', capWrite.ok &&
+  Object.keys(capReload.storyEvents).length === 256 && !!capReload.storyEvents[recordedPairId] &&
+  capReload.narrativeCursor.nodeId === filledHistory.narrativeCursor.nodeId &&
+  engine.resolveCrossover({ state: capReload, context: recordedContext, eventId: recordedPairId }).reason === 'historical-only');
 
 /* 输出隔离：调用方改写返回值不影响后续解析 */
 const isolationContext = Object.assign({}, FULL_CONTEXT, { acceptedProfessionIds: ['research.archivist', 'research.lattice'] });
@@ -1285,7 +1294,7 @@ contentAlternatives.forEach((node) => {
 });
 check('H03 替代叙事 gate 的 flags/commissions/evidence 缺失时不产出（world-locked）', altGateFailures.length === 0, altGateFailures.slice(0, 5).join(' | '));
 
-/* 「不需要特定职业」：任一单一已接受职业都能看到全部 7 条替代叙事 */
+/* 通用路线对每个起源开放，职业专属委托在其职业接受前不披露。 */
 const specificProfessionFailures = [];
 contentAlternatives.forEach((node) => {
   realProfessionIds.forEach((professionId) => {
@@ -1300,10 +1309,14 @@ contentAlternatives.forEach((node) => {
       }),
       narrativeNodeId: node.narrativeNodeId,
     });
-    if (!(result.ok === true && result.node)) specificProfessionFailures.push(node.narrativeNodeId + '/' + professionId);
+    const owner = node.mechanism === 'profession-commission' ? realCommissions.get(node.anchor.refs[0]).professionId : null;
+    const visible = !owner || owner === professionId;
+    if (!result.ok || (visible ? !result.node : result.node !== null || result.reason !== 'not-accepted')) {
+      specificProfessionFailures.push(node.narrativeNodeId + '/' + professionId);
+    }
   });
 });
-check('H04 替代叙事不需要特定职业：16 个真实职业各自单独接受时 7 条全部可达（112 组合）', specificProfessionFailures.length === 0, specificProfessionFailures.slice(0, 5).join(' | '));
+check('H04 五种通用机制向所有起源开放，职业委托仅向其已接受职业公开（112 组合）', specificProfessionFailures.length === 0, specificProfessionFailures.slice(0, 5).join(' | '));
 
 const noProfessionFailures = contentAlternatives.filter((node) => {
   const result = engine.resolveAlternative({
@@ -1452,10 +1465,12 @@ function catalogForView() {
   const publicStoryEventIds = contentJournal.map((entry) => entry.eventId);
   const publicStoryEvents = {};
   contentJournal.forEach((entry) => {
-    /* 与 bridge careerCatalog() 同形：label 之外加性转发 text/person。 */
+    /* 与 bridge careerCatalog() 同形：label 之外加性转发 text/person/surfaces/source。 */
     const row = { label: entry.label };
     if (typeof entry.text === 'string' && entry.text) row.text = entry.text;
     if (typeof entry.person === 'string' && entry.person) row.person = entry.person;
+    if (Array.isArray(entry.surfaces)) row.surfaces = entry.surfaces.slice();
+    if (typeof entry.source === 'string') row.source = entry.source;
     publicStoryEvents[entry.eventId] = row;
   });
   return {
@@ -1472,7 +1487,9 @@ function viewStateWithEvents(eventIds, acceptedIds) {
   const state = makeState((acceptedIds || realProfessionIds).map((professionId) => ({ professionId })));
   state.storyEvents = {};
   eventIds.forEach((eventId, index) => {
-    state.storyEvents[eventId] = { at: '2026-11-28T00:00:0' + index + '.000Z', source: 'world' };
+    /* 白名单事件用内容声明的真实来源；其余（交汇/代码冻结）按世界写入。 */
+    const declared = contentJournal.find((entry) => entry.eventId === eventId);
+    state.storyEvents[eventId] = { at: '2026-11-28T00:00:0' + index + '.000Z', source: declared ? declared.source : 'world' };
   });
   return state;
 }
@@ -1483,7 +1500,7 @@ const viewContext = {
   storyEvidence: realEvidenceTyped.slice(),
   archived: false,
 };
-const journalEventIds = ['crossover:research.archivist:research.lattice', 'world:C2.errand.alt.courier'];
+const journalEventIds = ['crossover:research.archivist:research.lattice', 'world:C2.errand.alt-courier'];
 const view = professionView.projectCareerView({
   state: viewStateWithEvents(journalEventIds),
   catalog: catalogForView(),
@@ -1520,6 +1537,15 @@ equal('I06 PUBLIC_STORY_EVENTS 常量未被 0.24 修改', professionView.PUBLIC_
 const unacceptedState = viewStateWithEvents(['invitation:research.lattice'], ['research.archivist']);
 const unacceptedView = professionView.projectCareerView({ state: unacceptedState, catalog: catalogForView(), context: viewContext });
 check('I07 未接受职业的 invitation 事件仍被投影拒绝（0.23 gate 生效）', !unacceptedView.story.history.some((row) => row.label.indexOf('晶格') >= 0 || row.label.indexOf('邀请') >= 0));
+check('I07a 导入的交汇事件不能替代另一职业的接受事实', professionView.projectCareerView({
+  state: viewStateWithEvents([journalEventIds[0]], ['research.archivist']),
+  catalog: catalogForView(), context: viewContext,
+}).story.history.length === 0);
+check('I07b 合法交汇在经历里关联两位参与职业', deepEqual(view.story.history.find((row) => row.professionIds).professionIds,
+  ['research.archivist', 'research.lattice']));
+check('I07c 交汇历史不进入非交汇面', ['letter', 'clue', 'work', 'route', 'shop', 'crafting', 'tools'].every((surface) =>
+  professionView.projectCareerView({ state: viewStateWithEvents([journalEventIds[0]]), catalog: catalogForView(),
+    context: { ...viewContext, surface } }).story.history.length === 0));
 
 /* ---- T24：白名单经 bridge 注入后，真实 projectCareerView 的经历行带 detail ---- */
 
@@ -1566,9 +1592,38 @@ const labelOnlyView = professionView.projectCareerView({
 });
 check('I11 旧内容（只声明 label）经历行不带 detail，保持 0.23 行为', labelOnlyView.story.history.length === 17
   && labelOnlyView.story.history.every((row) => !Object.prototype.hasOwnProperty.call(row, 'detail')));
-check('I12 bridge 白名单注入真实转发 text/person（源码核对）', bridgeSource.includes('entry.text = row.text')
+/* 白名单声明的可见面 / source / 职业关联由投影执行：声明了才收紧，未声明保持 0.23 行为。 */
+const labelsOf = (projection) => projection.story.history.map((row) => row.label).sort();
+const patrolId = 'world:C1.world-work.star-raid-t1';
+check('I11b 内容声明的可见面被执行：世界经历进港口与经历，不进消息面',
+  labelsOf(professionView.projectCareerView({ state: viewStateWithEvents([patrolId]), catalog: catalogForView(), context: { ...viewContext, surface: 'port' } })).length === 1
+  && labelsOf(professionView.projectCareerView({ state: viewStateWithEvents([patrolId]), catalog: catalogForView(), context: viewContext })).length === 1
+  && professionView.projectCareerView({ state: viewStateWithEvents([patrolId]), catalog: catalogForView(), context: { ...viewContext, surface: 'message' } }).story.history.length === 0);
+const errandId = 'world:C2.errand.alt-courier';
+const errandRows = (source) => labelsOf(professionView.projectCareerView({
+  state: { ...viewStateWithEvents([]), storyEvents: { [errandId]: { at: '2026-11-28T00:00:00.000Z', source } } },
+  catalog: catalogForView(), context: viewContext,
+}));
+check('I11c 内容声明的 source 被执行：代办经历只认真实的 commission 来源', errandRows('world').length === 0 && errandRows('commission').length === 1);
+const ownerCatalog = catalogForView();
+ownerCatalog.publicStoryEvents['world:C3.profession-commission.shadow-leap-t2'].professionId = 'adventure.relicseeker';
+const ownerRow = (acceptedIds) => professionView.projectCareerView({
+  state: viewStateWithEvents(['world:C3.profession-commission.shadow-leap-t2'], acceptedIds), catalog: ownerCatalog, context: viewContext,
+}).story.history[0] || null;
+check('I11d 内容声明的职业关联只在对应职业已接受时进入经历', ownerRow(['nature.miner']) === null
+  && ownerRow(realProfessionIds) && ownerRow(realProfessionIds).professionId === 'adventure.relicseeker');
+check('I12 bridge 白名单注入真实转发 text/person/surfaces/source（源码核对）', bridgeSource.includes('entry.text = row.text')
   && bridgeSource.includes('entry.person = row.person')
+  && bridgeSource.includes('entry.surfaces = row.surfaces.slice()')
+  && bridgeSource.includes('entry.source = row.source')
   && bridgeSource.includes('catalog.publicStoryEvents = storyEvents'));
+check('I12a 经历面只从真实记录合成只读经历行，不改写也不落盘（源码核对）', (() => {
+  const start = bridgeSource.indexOf('function worldJournalState(');
+  const body = bridgeSource.slice(start, bridgeSource.indexOf('function recordWorldNarrativeEvent('));
+  return start > 0 && body.includes('deriveJournalEvents(') && body.includes('firstMarketPurchaseOf')
+    && body.includes('facts.quests') && !/applyProfessionEvent|RECORD_STORY_EVENT/.test(body)
+    && /surface === 'journal' \? worldJournalState\(/.test(bridgeSource);
+})());
 check('I12b bridge 按章注入 resolver 结果且保留 worldNarrative 内容对象（源码核对）',
   bridgeSource.includes('catalog.worldChapterAlternatives = chapterAlternatives')
   && bridgeSource.includes("surface: 'route'")
@@ -1578,12 +1633,12 @@ check('I12c bridge 为港口/章节面板预热事实并提供 chapterGuide 只�
   && bridgeSource.includes('function chapterGuideForUi')
   && bridgeSource.includes('chapterGuide: function'));
 
-/* 交汇落库必须与 applyProfessionAction 同口径带 generation：缺它会 missing-generation，
-   导致每次重开港口都重播、经历页永远没有该条目。 */
-check('I12d 交汇落库带 generation 与统一时钟（源码核对）',
-  /generation: internal\.discoveryGeneration \|\| 0/.test(bridgeSource)
-  && /action: 'RECORD_STORY_EVENT'/.test(bridgeSource)
-  && /now: at,/.test(bridgeSource));
+const recordCrossover = bridgeSource.slice(bridgeSource.indexOf('function recordWorldNarrativeEvent('),
+  bridgeSource.indexOf('function attachWorldNarrative('));
+check('I12d 交汇重新校验披露条件并使用发起时的代次与时钟',
+  recordCrossover.includes('engine.resolveCrossover(')
+  && recordCrossover.includes('var generation = internal.discoveryGeneration || 0;')
+  && /action: 'RECORD_STORY_EVENT',[\s\S]*generation: generation,[\s\S]*now: at,/.test(recordCrossover));
 
 /* ---- T24：bridge 注入的 catalog.worldChapterAlternatives 由真实 route-planner 消费 ---- */
 
@@ -1765,6 +1820,82 @@ check('K08 存档形状仍只有 at/source（不新增持久字段）', (() => {
   const row = result.state.storyEvents['crossover:research.archivist:research.lattice'];
   return deepEqual(Object.keys(row).sort(), ['at', 'source']);
 })());
+
+/* ------------------------------------------------------------------ *
+ * L. 经历推导：只从真实已清记录合成已发生的替代经历（只读、不落盘）
+ * ------------------------------------------------------------------ */
+
+const T0 = '2026-11-20T01:00:00.000Z';
+const T1 = '2026-11-21T02:00:00.000Z';
+const T2 = '2026-11-22T03:00:00.000Z';
+const evidencePairNode = contentAlternatives.find((node) => node.mechanism === 'evidence-pair');
+const fullRecords = {
+  quests: [
+    { kind: 'commission', nodeId: 'star-raid.T1', status: 'cleared', clearedAt: T0 },
+    { kind: 'alternative', nodeId: 'alt.courier', status: 'cleared', clearedAt: T1 },
+    { kind: 'commission', nodeId: 'shadow-leap.T2', status: 'cleared', clearedAt: T2 },
+    { kind: 'evidence', nodeId: 'evidence:' + evidencePairNode.anchor.refs[0], status: 'cleared', clearedAt: T0 },
+    { kind: 'evidence', nodeId: 'evidence:' + evidencePairNode.anchor.refs[1], status: 'cleared', clearedAt: T1 },
+  ],
+  purchases: [{ itemId: 'building', at: T2 }],
+};
+const derive = (records, state, context) => worldNarrative.deriveJournalEvents({
+  state: state || allAcceptedState(), catalog, content, records, context: context || withContext({ surface: 'journal' }),
+});
+const byEventId = (rows) => rows.slice().sort((left, right) => (left.eventId < right.eventId ? -1 : left.eventId > right.eventId ? 1 : 0));
+const idsOf = (records, state, context) => derive(records, state, context).map((row) => row.eventId).sort();
+const POST_DAILY = 'world:C5.profession-commission.gold-miner-t6';
+/* 终局后的余波工单要等星塔旗标；其余五条在完整事实下可达。 */
+const worldJournalIds = contentJournal.map((entry) => entry.eventId)
+  .filter((eventId) => eventId.indexOf('world:') === 0 && eventId.indexOf('rental') < 0 && eventId !== POST_DAILY).sort();
+const derivedFull = byEventId(derive(fullRecords));
+function same(name, actual, expected) {
+  check(name, deepEqual(actual, expected), JSON.stringify({ actual, expected }).slice(0, 700));
+}
+same('L01 有真实记录的替代经历被推导出来，免费租机（无持久记录）不推导', derivedFull.map((row) => row.eventId), worldJournalIds);
+same('L02 每条的时间与 source 来自真实记录（代办为 commission，证据组合取较晚一条）', derivedFull, byEventId([
+  { eventId: 'world:' + evidencePairNode.narrativeNodeId.slice(5), at: T1, source: 'world' },
+  { eventId: 'world:C2.errand.alt-courier', at: T1, source: 'commission' },
+  { eventId: 'world:C4.market-material.building', at: T2, source: 'world' },
+  { eventId: 'world:C3.profession-commission.shadow-leap-t2', at: T2, source: 'world' },
+  { eventId: 'world:C1.world-work.star-raid-t1', at: T0, source: 'world' },
+]));
+const PATROL = 'world:C1.world-work.star-raid-t1';
+const ERRAND = 'world:C2.errand.alt-courier';
+const SCROLL = 'world:C3.profession-commission.shadow-leap-t2';
+const RECORDS = 'world:' + evidencePairNode.narrativeNodeId.slice(5);
+same('L03 记录未结算（非 cleared）→ 不推导', idsOf({
+  quests: ['star-raid.T1', 'alt.courier', 'shadow-leap.T2'].map((nodeId) => ({ kind: 'commission', nodeId, status: 'issued', clearedAt: T0 })),
+  purchases: [],
+}), []);
+same('L04 证据只到一半 → 没有证据组合经历，其余不受影响', idsOf({ quests: fullRecords.quests.slice(0, 4), purchases: fullRecords.purchases }),
+  [PATROL, ERRAND, SCROLL, 'world:C4.market-material.building']);
+same('L05 采购时间不合法 → 不推导材料经历', idsOf({ quests: fullRecords.quests, purchases: [{ itemId: 'building', at: '昨天' }] }),
+  [PATROL, ERRAND, SCROLL, RECORDS]);
+same('L06 没有任何记录 → 空', idsOf({ quests: [], purchases: [] }), []);
+same('L07 记录都在但章节未到 → 只推导已到章节的经历（不提前披露）',
+  idsOf(fullRecords, allAcceptedState(), withContext({ worldFlags: chapterFlagsBefore('C3') })), [PATROL, ERRAND]);
+same('L08 职业委托只在其职业已接受时推导，通用路线不受影响',
+  idsOf(fullRecords, bothAcceptedState('nature.miner', 'research.archivist')), [PATROL, ERRAND, RECORDS, 'world:C4.market-material.building']);
+check('L09 封存/未来版本/无内容/非经历面 → 空', [
+  idsOf(fullRecords, allAcceptedState(), withContext({ archived: true })),
+  idsOf(fullRecords, allAcceptedState(), withContext({ surface: 'clue' })),
+  idsOf(fullRecords, makeState([], { professionVersion: 2 })),
+  worldNarrative.deriveJournalEvents({ state: allAcceptedState(), catalog: {}, records: fullRecords }),
+].every((rows) => deepEqual(rows, [])));
+check('L10 推导不修改传入状态与记录（纯函数）', (() => {
+  const state = allAcceptedState();
+  const before = JSON.stringify({ state, records: fullRecords });
+  derive(fullRecords, state);
+  return JSON.stringify({ state, records: fullRecords }) === before && Object.keys(state.storyEvents).length === 0;
+})());
+same('L11 星塔落定且工单已清后，终局后的余波工单才进入经历',
+  idsOf({ quests: fullRecords.quests.concat([{ kind: 'commission', nodeId: 'gold-miner.T6', status: 'cleared', clearedAt: T2 }]), purchases: [] },
+    allAcceptedState(), withContext({ worldFlags: allRealFlags.concat(['C5.star_tower_resolved']) })), [PATROL, ERRAND, SCROLL, RECORDS, POST_DAILY]);
+check('L12 推导出的每条都在内容经历白名单里、source 一致且面向经历页', derivedFull.every((row) => {
+  const entry = contentJournal.find((candidate) => candidate.eventId === row.eventId);
+  return !!entry && entry.source === row.source && entry.surfaces.indexOf('journal') >= 0;
+}));
 
 /* ------------------------------------------------------------------ *
  * 结果汇总（供人工报告用的覆盖矩阵）

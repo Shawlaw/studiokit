@@ -454,7 +454,7 @@
       "recorder": "career-db.applyProfessionEvent",
       "action": "RECORD_STORY_EVENT",
       "duplicateResult": { "duplicate": true, "rewrite": false },
-      "cursorEffect": "set-once-idempotent"
+      "cursorEffect": "preserve"
     },
     "renderLevel": {
       "maxShowsPerCareer": 1,
@@ -544,7 +544,7 @@
     "limits": {
       "maxStoryEvents": 256,
       "capOwner": "profession-state.recordStoryEvent",
-      "eviction": "lexicographic-key-ascending",
+      "eviction": "lexicographic-key-ascending-crossover-last",
       "softBudget": 200,
       "evictionDoesNotAffectFacts": true,
       "writersMustDedupeByEventId": true
@@ -1425,7 +1425,7 @@
       {
         "sampleKind": "journalEvent",
         "placeholder": true,
-        "eventId": "world:C2.errand.alt.courier",
+        "eventId": "world:C2.errand.alt-courier",
         "source": "commission",
         "whitelistLayer": "content",
         "labelMode": "content",

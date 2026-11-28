@@ -2774,16 +2774,24 @@
   }
 
   /** ADR §18.5：最近流水（钱包/收据 UI 只读展示；按 careerId 过滤，最多 limit 条）。 */
-  function readLedger(careerId, limit) {
+  function readLedger(careerId, limit, options) {
     const core = coreApi();
     if (!core) return Promise.resolve({ ok: false, reason: 'core-unavailable', rows: [] });
     if (!core.isValidCareerId(careerId)) return Promise.resolve({ ok: false, reason: 'bad-career-id', rows: [] });
     const max = core.clampInt(limit, 1, 100, 30);
+    const marketItem = isObject(options) && core.isToken(options.firstMarketPurchaseOf) ? options.firstMarketPurchaseOf : null;
+    const marketPrefix = marketItem ? 'market-buy:' + careerId + ':' + marketItem + ':' : null;
     return txRun(['ledgers'], 'readonly', (ctx) => {
       ctx.bind(ctx.store('ledgers').getAll(), (rows) => {
         const list = (Array.isArray(rows) ? rows : [])
-          .filter((row) => row && row.careerId === careerId)
-          .sort((a, b) => String(b.at || b.clearedAt || '').localeCompare(String(a.at || a.clearedAt || '')))
+          .filter((row) => row && row.careerId === careerId && (!marketItem || (
+            row.kind === 'purchase' && typeof row.purchaseId === 'string' && row.purchaseId.startsWith(marketPrefix)
+            && isObject(row.receipt) && isObject(row.receipt.items) && row.receipt.items[marketItem] > 0
+          )))
+          .sort((a, b) => {
+            const order = String(b.at || b.clearedAt || '').localeCompare(String(a.at || a.clearedAt || ''));
+            return marketItem ? -order : order;
+          })
           .slice(0, max)
           .map((row) => {
             const out = {

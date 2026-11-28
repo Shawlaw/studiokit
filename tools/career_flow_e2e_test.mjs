@@ -92,9 +92,13 @@ const CROSSOVER_PAIR = (() => {
   const rows = CROSSOVER_CONTENT && Array.isArray(CROSSOVER_CONTENT.crossoverPairs) ? CROSSOVER_CONTENT.crossoverPairs : [];
   return rows.filter((row) => row && row.eventId === CROSSOVER_EVENT_ID)[0] || null;
 })();
-const CROSSOVER_JOURNAL_ROW = (() => {
-  const rows = CROSSOVER_CONTENT && Array.isArray(CROSSOVER_CONTENT.journalWhitelist) ? CROSSOVER_CONTENT.journalWhitelist : [];
-  return rows.filter((row) => row && row.eventId === CROSSOVER_EVENT_ID)[0] || null;
+const JOURNAL_ROWS = CROSSOVER_CONTENT?.journalWhitelist || [];
+const CROSSOVER_JOURNAL_ROW = JOURNAL_ROWS.find((row) => row.eventId === CROSSOVER_EVENT_ID) || null;
+const PATROL_JOURNAL_ROW = JOURNAL_ROWS.find((row) => row.eventId === 'world:C1.world-work.star-raid-t1') || null;
+/* 外堤短巡的真实委托 ID 从同一内容的替代节点锚点读取，不在测试里写死。 */
+const PATROL_COMMISSION = (() => {
+  const node = (CROSSOVER_CONTENT?.alternativeNarratives || []).find((row) => row && row.narrativeNodeId === 'altn.C1.world-work.star-raid-t1');
+  return node && node.anchor && Array.isArray(node.anchor.refs) ? node.anchor.refs[0] : null;
 })();
 /* route-planner.chapterAlternatives 用同章同机制的 world-narrative 节点文案覆盖内置文案；
    这里只读内容侧公开文本对，用来证明章节指引确实绑定了真实内容节点（不校验内部 id）。 */
@@ -2503,6 +2507,7 @@ async function readCareerProjection(cdp, surface) {
         kind: row && row.kind ? row.kind : null,
         at: row && row.at ? row.at : null,
         professionId: row && row.professionId ? row.professionId : null,
+        professionIds: Array.isArray(row && row.professionIds) ? row.professionIds : [],
         person: row && row.person ? row.person : null,
         detail: row && row.detail && typeof row.detail === 'object' ? {
           text: String(row.detail.text || ''),
@@ -2570,7 +2575,9 @@ async function watchWorldNarrativeRecords(cdp) {
     db.applyProfessionEvent = function (action) {
       const eventId = action && action.action === 'RECORD_STORY_EVENT' && action.input && action.input.eventId
         ? action.input.eventId : null;
-      const returned = original.call(db, action);
+      const run = () => original.call(db, eventId && db.__flowRejectRecord
+        ? { ...action, generation: undefined } : action);
+      const returned = eventId && db.__flowRecordHold ? db.__flowRecordHold.then(run) : run();
       if (eventId) {
         Promise.resolve(returned).then(
           (result) => db.__flowRecordCalls.push({ eventId: eventId, action: action.action, result: result }),
@@ -2704,6 +2711,9 @@ async function phaseCrossoverIdentityAndChapter(cdp, campaign, commissions) {
     J({ identity, expected: CROSSOVER_A_PROFESSION }));
 
   step('xover:advance-C2');
+  const initialJournal = await readCareerProjection(cdp, 'journal');
+  gate('XOVER 未结算的外堤短巡不会预写经历', initialJournal.ok &&
+    !initialJournal.history.some((row) => row.label === PATROL_JOURNAL_ROW.label));
   let recommendation = await readPortRecommendation(cdp);
   requireFeature('XOVER 到港后港口首页给出真实推荐单', recommendation.ok === true && !!recommendation.commissionId, J(recommendation));
   const progress = [];
@@ -2719,6 +2729,19 @@ async function phaseCrossoverIdentityAndChapter(cdp, campaign, commissions) {
     const after = await verifyOrderProgress(cdp, label, commissionId, run.ticketId, expected.expectFlags,
       expected.expectFlags.length ? 'milestone' : 'step', campaign, commissions);
     progress.push({ commissionId, expectedFlags: expected.expectFlags, current: after.view.currentChapter });
+    if (commissionId === PATROL_COMMISSION) {
+      /* 替代经历只由真实结算记录推导：经历页出现该条，storyEvents 不新增任何行。 */
+      const settledJournal = await readCareerProjection(cdp, 'journal');
+      const settledEvents = await readStoryEvents(cdp);
+      const patrol = settledJournal.ok === true
+        ? settledJournal.history.filter((row) => row.label === PATROL_JOURNAL_ROW.label) : [];
+      gate('XOVER 外堤短巡真实结算后进入经历（带内容回读文案），且不为它写入 storyEvents',
+        patrol.length === 1 && !!patrol[0].detail && patrol[0].detail.text === PATROL_JOURNAL_ROW.text &&
+          /^\d{4}-\d{2}-\d{2}T/.test(patrol[0].at || '') &&
+          !!settledEvents && settledEvents.ok === true &&
+          !(settledEvents.events || []).some((row) => row.eventId === 'world:C1.world-work.star-raid-t1'),
+        J({ patrol, events: settledEvents && settledEvents.events }));
+    }
     await phaseReceipt(cdp, label, expected.expectFlags, card);
     if (expected.expectFlags.includes(CROSSOVER_REQUIRED_FLAG)) {
       gate('XOVER 真实玩法推进到 C2（' + CROSSOVER_REQUIRED_FLAG + '）且未触碰终局', true, J(progress));
@@ -2897,7 +2920,7 @@ async function phaseAcceptSecondProfession(cdp, label) {
  * 场景步骤 4+5：重开港口 → careerView.story.crossovers 真实出现该对、
  * 首次展示落库一次；关页重开两次不重复渲染/不重复写。
  */
-async function phaseCrossoverSurfaceAndRecordOnce(cdp) {
+async function phaseCrossoverSurfaceAndRecordOnce(cdp, newPage) {
   step('xover:surface-and-record');
   await go(cdp, gameUrl('pendulum-tower'), 'xover-reopen-1');
   await waitBridge(cdp, 'xover-reopen-1', true);
@@ -2945,8 +2968,38 @@ async function phaseCrossoverSurfaceAndRecordOnce(cdp) {
   gate('XOVER 交汇同时在 journal 面出现（经历白名单面 gate）',
     beforeRender.journal.length === 1 && beforeRender.journal[0].eventId === CROSSOVER_EVENT_ID,
     J({ journal: beforeRender.journal }));
+  const rejected = await cdp.evaluate(`ArcadeCareer.recordWorldNarrativeEvent({eventId:'world:unknown'})`);
+  gate('XOVER 写入门面拒绝未登记的事件', rejected && rejected.ok === false);
+  await cdp.evaluate(`window.__arcadeCareerTest.db().__flowRejectRecord = true`);
+  await openPort(cdp, 'xover-rejected-write');
+  await cdp.waitFor(`window.__arcadeCareerTest.db().__flowRecordCalls.some(row => row.result?.ok === false)`, { timeout: 8000 });
+  const rejectedPort = await readPortSurface(cdp);
+  const rejectedJournal = await readCareerProjection(cdp, 'journal');
+  gate('XOVER DB 拒绝写入时港口不显示交汇且经历不增加', rejectedPort.crossoverNodes === 0 &&
+    !rejectedJournal.history.some((row) => row.label === CROSSOVER_JOURNAL_ROW.label));
+  await closePort(cdp, 'xover-rejected-write');
+  await cdp.evaluate(`(() => {
+    const db = window.__arcadeCareerTest.db();
+    db.__flowRejectRecord = false;
+    db.__flowRecordCalls.length = 0;
+  })()`);
+
+  const otherTab = await newPage();
+  await go(otherTab, gameUrl('pendulum-tower'), 'xover-other-tab');
+  await waitBridge(otherTab, 'xover-other-tab', true);
+  await configureCommissionCatalog(otherTab, 'xover-other-tab');
+  await watchWorldNarrativeRecords(otherTab);
+  await otherTab.evaluate(`(() => {
+    const db = window.__arcadeCareerTest.db();
+    db.__flowRecordHold = new Promise(resolve => { db.__flowReleaseRecord = resolve; });
+  })()`);
+  await openPort(otherTab, 'xover-other-tab');
+  const heldPort = await readPortSurface(otherTab);
+  gate('XOVER 事务未提交时另一标签不显示交汇', heldPort.crossoverNodes === 0);
+
   await openPort(cdp, 'xover-reopen-1');
   await settlePort(cdp, 'xover-reopen-1');
+  await cdp.waitFor(`!!document.querySelector('[data-career-panel="town"] [data-port-crossover]')`, { timeout: 8000 });
   const port = await readPortSurface(cdp);
   gate('XOVER 港口「眼下」渲染真实交汇 invite/body 公开文案且节点唯一',
     port.crossoverNodes === 1 &&
@@ -2967,6 +3020,20 @@ async function phaseCrossoverSurfaceAndRecordOnce(cdp) {
       !!callsFirst[0].result && callsFirst[0].result.ok === true && callsFirst[0].result.duplicate === false,
     J({ events: eventsFirst && eventsFirst.events, calls: callsFirst }));
   const firstAt = firstRows.length ? firstRows[0].at : null;
+  await otherTab.evaluate(`window.__arcadeCareerTest.db().__flowReleaseRecord()`);
+  await otherTab.waitFor(`window.__arcadeCareerTest.db().__flowRecordCalls.length === 1`, { timeout: 8000 });
+  const otherCalls = await readWorldNarrativeRecords(otherTab);
+  const otherPort = await readPortSurface(otherTab);
+  gate('XOVER 两标签竞争时先提交的面板显示一次，重复提交的面板不显示',
+    otherCalls[0]?.result?.duplicate === true && otherPort.crossoverNodes === 0, J(otherCalls));
+  otherTab.close();
+
+  await pressVisible(cdp, '[data-career-panel="town"] [data-tab="journal"]', '交汇后切到经历');
+  const journalEntry = await cdp.waitFor(`(() => {
+    const rows = document.querySelectorAll('[data-port-tabpanel="journal"] [data-journal-entry]');
+    return Array.from(rows).some((row) => row.textContent.includes(${J(CROSSOVER_JOURNAL_ROW.label)}));
+  })()`, { timeout: 8000 });
+  gate('XOVER 新交汇写入后同一港口切到经历立即可见', journalEntry === true);
 
   await closePort(cdp, 'xover-reopen-1');
   await openPort(cdp, 'xover-reopen-2');
@@ -3187,20 +3254,29 @@ async function phaseChapterGuideAndJournal(cdp) {
   })()`);
   const crossoverHistory = journalView.ok === true
     ? journalView.history.filter((row) => row.label === CROSSOVER_JOURNAL_ROW.label) : [];
+  const patrolHistory = journalView.ok === true
+    ? journalView.history.filter((row) => row.label === PATROL_JOURNAL_ROW.label) : [];
   gate('XOVER 经历页真实投影只有一条交汇经历且带 detail{text,person}',
-    journalView.ok === true && journalView.history.length === 1 &&
+    journalView.ok === true && journalView.history.length === 2 &&
       crossoverHistory.length === 1 &&
       !!crossoverHistory[0].detail &&
       crossoverHistory[0].detail.text === CROSSOVER_JOURNAL_ROW.text &&
       crossoverHistory[0].detail.person === (CROSSOVER_JOURNAL_ROW.person || '') &&
       crossoverHistory[0].person === CROSSOVER_JOURNAL_ROW.person,
     J({ history: journalView.ok ? journalView.history : journalView }));
+  gate('XOVER 外堤短巡的替代经历由真实结算推导，带内容回读文案与真实人物',
+    patrolHistory.length === 1 && !!patrolHistory[0].detail &&
+      patrolHistory[0].detail.text === PATROL_JOURNAL_ROW.text &&
+      patrolHistory[0].person === PATROL_JOURNAL_ROW.person,
+    J({ patrolHistory }));
+  const crossoverEntry = journal && Array.isArray(journal.entries)
+    ? journal.entries.filter((entry) => entry.label === CROSSOVER_JOURNAL_ROW.label)[0] : null;
   gate('XOVER 经历页真实 DOM 渲染该条经历且回读按钮/详情来自投影',
     !!journal && journal.surface === true && journal.timelineState === 'filled' &&
-      journal.entries.length === 1 && journal.entries[0].label === CROSSOVER_JOURNAL_ROW.label &&
-      journal.entries[0].hasDetail === true && !!journal.entries[0].readToggle &&
-      journal.entries[0].detailText === CROSSOVER_JOURNAL_ROW.text &&
-      (!CROSSOVER_JOURNAL_ROW.person || journal.entries[0].detailPerson === CROSSOVER_JOURNAL_ROW.person),
+      journal.entries.length === 2 && !!crossoverEntry &&
+      crossoverEntry.hasDetail === true && !!crossoverEntry.readToggle &&
+      crossoverEntry.detailText === CROSSOVER_JOURNAL_ROW.text &&
+      (!CROSSOVER_JOURNAL_ROW.person || crossoverEntry.detailPerson === CROSSOVER_JOURNAL_ROW.person),
     J({ journal, journalDiag }));
   gate('XOVER 经历页不渲染内部 id/字段（含 eventId/person 原始 token）',
     !!journal && guideInternalHits(journal.text).length === 0,
@@ -3218,7 +3294,9 @@ async function phaseChapterGuideAndJournal(cdp) {
   if (personGroupOk) {
     await pressVisible(cdp, '[data-journal-filter-group="person"] summary', '人物筛选展开');
     await sleep(120);
-    await pressVisible(cdp, '[data-journal-filter="person"]', '人物筛选');
+    /* 人物选项按真实出现顺序排列：点交汇寄信人所在的那一项。 */
+    const personIndex = Math.max(0, personGroup.options.findIndex((option) => !personName || option.text.indexOf(personName) >= 0));
+    await pressVisible(cdp, '[data-journal-filter-group="person"] [data-journal-filter="person"]:nth-of-type(' + (personIndex + 1) + ')', '人物筛选');
     filtered = await cdp.evaluate(`(() => {
       const content = document.querySelector('[data-career-panel="town"] [data-port-tabpanel="journal"]');
       const textOf = (node) => (node && node.textContent ? node.textContent.replace(/\\s+/g, ' ').trim() : '');
@@ -3236,6 +3314,7 @@ async function phaseChapterGuideAndJournal(cdp) {
     })()`);
     gate('XOVER 经历页人物筛选后只留该人物的经历且状态条可读',
       !!filtered && filtered.total >= 1 && filtered.visible === 1 &&
+        J(filtered.visibleLabels) === J([CROSSOVER_JOURNAL_ROW.label]) &&
         filtered.caption && filtered.caption.hidden === false &&
         (!personName || filtered.caption.text === '正在看人物：' + personName) &&
         filtered.pressed.some((row) => row.scope === 'person' && row.pressed === 'true'),
@@ -3264,7 +3343,12 @@ async function phaseChapterGuideAndJournal(cdp) {
 
   /* 回读：展开后 detail 可见、焦点在原条目；收起后隐藏、焦点仍在原条目。 */
   let readback = null;
-  const detailEntry = journal && journal.entries.filter((entry) => entry.hasDetail && entry.readToggle)[0];
+  const detailEntry = journal && Array.isArray(journal.entries)
+    ? journal.entries.filter((entry) => entry.label === CROSSOVER_JOURNAL_ROW.label && entry.hasDetail && entry.readToggle)[0] : null;
+  const patrolEntry = journal && Array.isArray(journal.entries)
+    ? journal.entries.filter((entry) => entry.label === PATROL_JOURNAL_ROW.label)[0] : null;
+  gate('XOVER 外堤短巡经历在经历页可回读，文案与人物来自内容', !!patrolEntry && patrolEntry.hasDetail === true &&
+    patrolEntry.detailText === PATROL_JOURNAL_ROW.text && patrolEntry.detailPerson === PATROL_JOURNAL_ROW.person, J({ patrolEntry }));
   if (detailEntry) {
     const toggleSelector = '[data-career-panel="town"] [data-port-tabpanel="journal"] [data-journal-read="' + detailEntry.readToggle.index + '"]';
     await pressVisible(cdp, toggleSelector, '回读这段');
@@ -3317,23 +3401,38 @@ async function phaseChapterGuideAndJournal(cdp) {
     gate('XOVER 经历页存在带 detail 的可回读条目', false, J({ entries: journal && journal.entries }));
   }
 
-  /* 职业筛选：记录真实内容下的数据源事实（0.24 白名单未声明 professionId；不得伪造数据）。 */
-  const professionGroups = journal ? journal.groups.filter((group) => group.scope === 'profession') : [];
-  const professionRows = journalView.ok === true ? journalView.history.filter((row) => row.professionId) : [];
-  gate('XOVER 经历页按职业筛选：当前真实内容无 professionId 事件（记录为未覆盖缺口）',
-    professionGroups.length === 0 && professionRows.length === 0,
-    J({ professionGroups, professionRows, groups: journal && journal.groups.map((group) => group.scope), note: '契约已支持 professionId，但 world-narrative.journalWhitelist 未声明；邀请类事件也未写入 storyEvents' }));
+  const participants = [CROSSOVER_A_PROFESSION, CROSSOVER_B_PROFESSION].sort();
+  const professionGroup = journal && journal.groups.find((group) => group.scope === 'profession');
+  const professionNames = journalView.professions.filter((row) => participants.includes(row.professionId))
+    .map((row) => '职业 · ' + row.displayName).sort();
+  requireFeature('XOVER 职业筛选只列出真实参与交汇的两个已接受职业',
+    crossoverHistory.length === 1 && J(crossoverHistory[0].professionIds) === J(participants) &&
+    !!professionGroup && J(professionGroup.options.map((option) => option.text).sort()) === J(professionNames),
+    J({ professionGroup, professionNames, crossoverHistory }));
+  const groupSelector = '[data-journal-filter-group="profession"]';
+  await pressVisible(cdp, groupSelector + ' summary', '职业筛选展开');
+  for (let i = 1; i <= 2; i += 1) {
+    const selector = groupSelector + ' [data-journal-filter="profession"]:nth-of-type(' + i + ')';
+    await pressVisible(cdp, selector, '交汇参与职业 ' + i);
+    const selection = await cdp.evaluate(`(() => {
+      const active = document.querySelector(${J(selector)});
+      const rows = document.querySelectorAll('[data-port-tabpanel="journal"] [data-journal-entry]:not([hidden])');
+      return active?.getAttribute('aria-pressed') === 'true' && Array.from(rows).some((row) =>
+        row.textContent.includes(${J(CROSSOVER_JOURNAL_ROW.label)}));
+    })()`);
+    gate('XOVER 筛选任一参与职业均保留同一交汇经历 [' + i + ']', selection === true);
+  }
   return { guide, world, journal, journalView, filtered, reset, readback };
 }
 
-async function runCrossoverScenario(cdp, campaign, commissions) {
+async function runCrossoverScenario(cdp, newPage, campaign, commissions) {
   requireFeature('XOVER 起源与第二职业内容映射齐备',
     typeof CROSSOVER_A_PROFESSION === 'string' && typeof CROSSOVER_B_PROFESSION === 'string' && !!CROSSOVER_PAIR,
     J({ a: CROSSOVER_A_PROFESSION, b: CROSSOVER_B_PROFESSION, eventId: CROSSOVER_EVENT_ID }));
   await phaseCrossoverIdentityAndChapter(cdp, campaign, commissions);
   await phaseCrossoverHiddenBeforeAccept(cdp);
   await phaseAcceptSecondProfession(cdp, 'xover-gomoku');
-  await phaseCrossoverSurfaceAndRecordOnce(cdp);
+  await phaseCrossoverSurfaceAndRecordOnce(cdp, newPage);
   await phaseChapterGuideAndJournal(cdp);
   await forbiddenTextScan(cdp, 'xover-final');
   await checkConsole(cdp, 'xover-final');
@@ -3457,7 +3556,7 @@ async function main() {
       if (!crossoverOnly) {
         await runBrowserScenario('记忆翻牌到港', (cdp) => runOriginToTown(cdp, MEMORY_ORIGIN));
       }
-      await runBrowserScenario('C2 交汇与经历回读', (cdp) => runCrossoverScenario(cdp, campaign, commissions));
+      await runBrowserScenario('C2 交汇与经历回读', (cdp, browser, newPage) => runCrossoverScenario(cdp, newPage, campaign, commissions));
       gate('QA 全程 console error 为零', QA.errors.length === 0, J(QA.errors.slice(0, 5)));
     } finally {
       await new Promise((resolve) => server.close(resolve));
