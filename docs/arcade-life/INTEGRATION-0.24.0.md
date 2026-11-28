@@ -75,8 +75,10 @@
 | 职业专属委托的替代叙事对所有已接受职业可见 | 该机制只在委托所属职业已接受时产出；其余五种机制对每个起源开放 | `eeb4939` | narrative H04（112 组合） |
 | 交汇写入会改写叙事游标；经历接近上限时交汇记录可能被先淘汰，重开后再次首次触发 | 交汇与世界经历写入不改游标；淘汰先处理普通记录、最后处理交汇记录 | `eeb4939` | state 439/439、narrative F18a |
 | 0.23 的六项修复（首到港归属与首单、旧档迁移入口、后续邀请、首到港恢复）未进入 0.24 | 逐个挑入并解决 bridge / 港口的冲突 | `0e777bd`、`a2a4bfa`、`ad6e1c0`、`ef13733`、`95c593e`、`68a4de4`、`bc67c96` | discovery 157/157、adapters 143/143、narrative content 628/628、legacy 73/73、port/journal 58/58 |
+| 三个既有门禁的预期与修复后的行为不一致：封存往返与冒烟的旧档夹具（同 0.22 §5）；移动端测试把「层塔起源的到港面板没有首单动作」这一缺陷写成了预期（同 0.23 §6） | 旧档种子真实落盘并先正常启动一次再逐字节比对；冒烟只禁止产生另一个身份；移动端改为断言第一份工作出现在到港面板且未自动接单 | `c41df95`、`9247b06` | archive lifecycle 61/61、mobile 334/334、smoke 119/119 |
 
 - **浏览器（`8c1083e`）**：`node tools/career_flow_e2e_test.mjs --crossover-only` **255/255**，57.8s；`node tools/career_flow_e2e_test.mjs` **645/645**，150.1s（原 624，新增 21 条：外堤短巡经历、职业筛选、经历页即时刷新、写入被拒 / 未提交 / 双标签、已有身份的后续邀请、离开后回到初次到港）。日志在仓库外 `execution/review-024-crossover-final.log`、`review-024-flow.log`。
 - **纯 Node（`8c1083e`）**：narrative contract 168/168、narrative 200/200、journal/experience 60/60、privacy 2367/2367、profession view 614/614、state 439/439、profession DB 34/34、world route narrative 80/80、route planner 214/214、port/journal 58/58、legacy baseline 78/78、extension 92/92、discovery 157/157、economy balance 47/47、world work 400/400、campaign core 54/54、invitation adapters 143/143、invitation tools 55/55、narrative content 628/628、legacy 73/73、components 281/281、work journal 39/39；`py -3 tools/validate_site.py` 与 `py -3 tools/check_readme_links.py` PASS。
+- **浏览器预检（`9247b06`）**：`career_archive_lifecycle_e2e_test` 61/61、`career_mobile_016_test` 334/334、`arcade_smoke` 119/119（完整 release 门禁会再跑一次）。
 - **视觉夹具对照未重跑**：信箱的后续邀请块与港口的恢复动作是复用已冻结组件的新组合，不在 13 个夹具状态内。
 - **L3 release profile**：待在新 SHA 重跑，结果在本节更新前不得引用 §4 的 51/51。
