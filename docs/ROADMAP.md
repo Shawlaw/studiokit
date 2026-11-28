@@ -373,7 +373,7 @@ Owner 在 iPhone 主屏 PWA（Cloudflare Pages）复测 0.13.2：星海/2048/俄
 - [x] 双端发布：提交 `b3a8c7e`；Actions run `45007754972` 四 job 全绿；`tools/verify_deploy.py` **41/41** 双端一致；线上实测 CF 无后缀 URL `currentGame=block-drop`、游玩 1.6s 记到 1606ms，诊断页 iframe「计时正常」
 - [ ] 真机复验：iOS 主屏 PWA 更新后「计时自检」应显示计时正常，累计/积分记录时长不再为 0（UNVERIFIED）
 
-## Arcade 0.24.0 本地发布准备批次（2026-11-28，待 L3，未发布）
+## Arcade 0.24.0 本地发布准备批次（2026-11-28，GATE_PASSED / RELEASE_READY，未发布）
 
 - [x] 版本链本地升至 0.24.0 / SW `studiokit-arcade-0.24.0-v1`；设计 / 回滚见 `apps/arcade/DESIGN-0.24.0.md`，契约见 `docs/arcade-life/ADR-0.24-world.md`，状态见 `docs/arcade-life/INTEGRATION-0.24.0.md`。
 - [x] 世界主线替代路线叙事合理化：C1–C5 替代机制只引用真实委托 / 代办 / 材料 / 证据，`requiresSpecificProfession` 恒 false，收据只在真实结算行存在时渲染；章节、路线与终局入口补充真实前置与完成解释。
@@ -404,7 +404,7 @@ Owner 在 iPhone 主屏 PWA（Cloudflare Pages）复测 0.13.2：星海/2048/俄
 
 ## Now
 
-当前本地发布准备版本：Arcade 0.24.0 / SW `studiokit-arcade-0.24.0-v1`（本地发布准备，未发布；门禁状态待 L3（lead）；线上仍为 0.21.2）。
+当前本地发布准备版本：Arcade 0.24.0 / SW `studiokit-arcade-0.24.0-v1`（GATE_PASSED / RELEASE_READY，本地发布准备，未发布；release 51/51，not full；线上仍为 0.21.2）。
 
 1. **Arcade 0.24.0 L3 与真机 / 真人收尾**（本地发布准备，未发布）：本轮只做纯 Node 与静态证据；release / full、浏览器、真机、真人与线上部署仍 UNVERIFIED，留给 lead 的 L3，不写 GATE_PASSED / ALL GATES PASSED。
 2. **Arcade 0.23.0 真机 / full 收尾**（本地发布准备，未发布）：其 L3 为 47/47 `release passed (not full)`；full / 真机 / 真人仍 UNVERIFIED。
