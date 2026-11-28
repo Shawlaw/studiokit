@@ -3,8 +3,9 @@
  * Arcade 0.23 T12 — pure Node/VM adapter gate for P01–P06.
  *
  * Runs the real T11 components and the real T12 adapters in a minimal DOM stub.
- * No browser, server, build, watch, full gate, fetch or IndexedDB. All story text
- * comes from the frozen QA fixture; production content and catalogs are never read.
+ * No browser, server, build, watch, full gate, fetch or IndexedDB. The core
+ * adapter checks use the frozen QA fixture. The world-work check uses the actual
+ * narrative shards and the actual port projection.
  *
  * Run: node tools/career_ui_invitation_adapters_test.mjs
  * Exit: 0 = all pass, 1 = failures, 2 = missing input.
@@ -12,6 +13,7 @@
 import fs from 'node:fs';
 import path from 'node:path';
 import vm from 'node:vm';
+import { createRequire } from 'node:module';
 import { fileURLToPath } from 'node:url';
 
 const HERE = path.dirname(fileURLToPath(import.meta.url));
@@ -777,7 +779,7 @@ function narrativeFor(professionId) {
 }
 
 /* ------------------------------------------------------------------ *
- * M3 — firstCommissionId is a profession/category gate, not a preference.
+ * M3 — firstCommissionId limits selection to authorized port rows.
  * ------------------------------------------------------------------ */
 
 async function deriveFirstCommission(rows, wanted) {
@@ -808,9 +810,11 @@ async function deriveFirstCommission(rows, wanted) {
   const valid = { commissionId: 'gold-miner.T1', professionId: 'nature.miner', category: 'profession', title: '合成交接 · 甲' };
   const cases = [
     ['M3 cross-profession mismatch is rejected', [{ ...valid, professionId: 'adventure.relicseeker', commissionId: 'shadow-leap.T1' }]],
-    ['M3 world work mismatch is rejected', [{ commissionId: 'pendulum-tower.T1', professionId: null, category: 'world', title: '通用工作' }]],
-    ['M3 readOnly row is rejected', [{ ...valid, readOnly: true }]],
-    ['M3 historicalOnly row is rejected', [{ ...valid, historicalOnly: true }]],
+    ['M3 exact world work from another game is rejected', [{ commissionId: 'shadow-leap.T1', gameId: 'shadow-leap', category: 'world' }]],
+    ['M3 exact world work assigned to another profession is rejected', [{ commissionId: 'shadow-leap.T1', gameId: 'gold-miner', professionId: 'adventure.relicseeker', category: 'world' }]],
+    ['M3 readOnly row is rejected', [{ ...valid, commissionId: 'shadow-leap.T1', readOnly: true }]],
+    ['M3 historicalOnly row is rejected', [{ ...valid, commissionId: 'shadow-leap.T1', historicalOnly: true }]],
+    ['M3 locked row is rejected', [{ ...valid, commissionId: 'shadow-leap.T1', unlocked: false }]],
     ['M3 explicit id does not fall back to another profession row', [valid, { ...valid, professionId: 'adventure.relicseeker', commissionId: 'shadow-leap.T1' }]],
   ];
   for (const [name, rows] of cases) {
@@ -819,9 +823,62 @@ async function deriveFirstCommission(rows, wanted) {
   }
   const matched = await deriveFirstCommission([valid], 'gold-miner.T1');
   eq('M3 matching profession commission remains startable', matched.firstCommission && matched.firstCommission.commissionId, 'gold-miner.T1');
-  check('M3 adapter source gates profession/category/readonly', /cleanText\(row\.professionId\) === cleanText\(invitation\.professionId\)/.test(source.invitation)
-    && /cleanText\(row\.category\) === 'profession'/.test(source.invitation)
-    && /row\.readOnly !== true/.test(source.invitation) && /row\.historicalOnly !== true/.test(source.invitation));
+  const world = { commissionId: 'gold-miner.T1', gameId: 'gold-miner', category: 'world' };
+  const missingExplicitId = await deriveFirstCommission([world], '');
+  eq('M3 world work cannot substitute for a missing explicit first commission', missingExplicitId.firstCommission, null);
+}
+
+{
+  const require = createRequire(import.meta.url);
+  const careerDir = path.join(ROOT, 'apps/arcade/career');
+  const content = (name) => JSON.parse(fs.readFileSync(path.join(careerDir, 'content', name), 'utf8'));
+  const professionView = require(path.join(careerDir, 'profession-view.js'));
+  const catalog = Object.assign(content('registry.json'), {
+    commissions: content('commissions.json').commissions,
+    clues: content('clues.json').clues,
+    worldWork: content('world-work.json'),
+  });
+  const worlds = [
+    ['star-raid', 'narrative-shards/shard-03.json'],
+    ['pendulum-tower', 'narrative-shards/shard-04.json'],
+  ];
+  for (const [gameId, shard] of worlds) {
+    const narrative = content(shard).entries.find((entry) => entry.gameId === gameId);
+    const { professionId, firstCommissionId } = narrative;
+    const state = {
+      professionVersion: 1,
+      acceptedOriginGameId: gameId,
+      activeProfessionId: professionId,
+      professionProgress: { [professionId]: { state: 'accepted' } },
+    };
+    const doc = makeDocument();
+    const ui = loadUi(doc);
+    const starts = [];
+    const ctx = {
+      clueId: 'CL-' + gameId,
+      state,
+      narrative,
+      invitationForClue: () => ({ gameId, professionId, state: 'accepted', firstArrival: true }),
+      careerView: ({ surface }) => professionView.projectCareerView({
+        state, catalog, context: { surface, availableIds: [firstCommissionId] },
+      }),
+      commission: { start(input) { starts.push(input.commissionId); return { ok: true }; } },
+    };
+    const model = await ui.invitation.derive(ctx);
+    const worldText = catalog.worldWork.entries.find((entry) => entry.commissionId === firstCommissionId);
+    check('P03 ' + gameId + ' uses the real public world-work projection',
+      model.firstCommission?.commissionId === firstCommissionId && model.firstCommission.category === 'world'
+      && model.firstCommission.professionId === undefined && model.firstCommission.title === worldText.title);
+    ui.invitation.open(ctx);
+    await drain();
+    const start = buttonBy(doc, 'start-first-commission');
+    check('P03 ' + gameId + ' renders projected work before any signing',
+      !!start && textOf(panelOf(doc)).includes(worldText.title) && starts.length === 0);
+    start?.click();
+    await drain();
+    eq('P03 ' + gameId + ' signs the projected first work on explicit click', starts.join(','), firstCommissionId);
+    ui.invitation.close();
+  }
 }
 
 /* ------------------------------------------------------------------ *

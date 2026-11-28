@@ -116,25 +116,22 @@
     return null;
   }
 
-  function isFirstCommissionFor(row, invitation) {
-    return isObject(row)
-      && cleanText(row.professionId) === cleanText(invitation.professionId)
-      && cleanText(row.category) === 'profession'
-      && row.readOnly !== true
-      && row.historicalOnly !== true;
+  function isFirstCommissionFor(row, invitation, wanted) {
+    if (!isObject(row) || row.unlocked === false || row.readOnly === true || row.historicalOnly === true) return false;
+    if (wanted && cleanText(row.commissionId) !== wanted) return false;
+    if (cleanText(row.category) === 'profession') {
+      return cleanText(row.professionId) === cleanText(invitation.professionId);
+    }
+    /* The same game's explicit first commission can have a world-work projection.
+       Keep its projected public copy and never substitute an unrelated world job. */
+    return !!wanted && cleanText(row.category) === 'world'
+      && !cleanText(row.professionId) && cleanText(row.gameId) === cleanText(invitation.gameId);
   }
 
   function projectedCommission(view, invitation, narrative) {
     if (!isObject(view) || !Array.isArray(view.commissions)) return null;
     const wanted = cleanText(narrative.firstCommissionId);
-    const rows = view.commissions.filter((row) => isFirstCommissionFor(row, invitation));
-    if (wanted) {
-      /* An explicit firstCommissionId is a gate, not a preference: a mismatch
-         from another profession, world work or a read-only row must not start. */
-      const exact = rows.find((row) => cleanText(row.commissionId) === wanted);
-      return exact || null;
-    }
-    return rows[0] || null;
+    return view.commissions.find((row) => isFirstCommissionFor(row, invitation, wanted)) || null;
   }
 
   /** Pure, async projection used by the adapter and its Node/VM gate. */
@@ -374,7 +371,9 @@
   }
 
   async function startFirstCommission(state, commissionId) {
-    if (state.busy || !commissionId || !state.model || !isFirstCommissionFor(state.model.firstCommission, state.model.invitation)) return { ok: false };
+    const model = state.model;
+    if (state.busy || !commissionId || !model || !model.firstCommission || model.firstCommission.commissionId !== commissionId) return { ok: false };
+    if (!isFirstCommissionFor(model.firstCommission, model.invitation, cleanText(model.narrative.firstCommissionId))) return { ok: false };
     const start = startCallOf(state.context);
     if (!start) {
       state.status = '这份工作暂时接不了，你可以稍后再来。';
