@@ -15,7 +15,7 @@
  *   { state, api, crafting, items, commission, commissionRun, commissions,
  *     announce(text), reducedMotion, openTown, openHangar, openReceipt }
  * 兼容：ctx.db（或 api.db / window.ArcadeCareer.db）可直接拿到 career-db 模块；
- *       careerId 缺失时用 ctx.commission.listAvailable({ensure:true}) 取；
+ *       careerId 只取 ctx / 已投影上下文；缺失时保持只读，不创建生涯身份；
  *       ctx.crafting 缺失时按 bridge 已装载的 careerDir 惰性注入同源 crafting.js
  *       （只装载本地静态模块，不访问网络；见证据 DEVIATIONS D-3）。
  *
@@ -55,6 +55,7 @@
   const CRAFTING_MISSING = '制造台还没通电。';
   const LEDGER_CLOSED = '账房还没开门。';
   const NO_CAREER_NOTICE = '还不能上工：制造台只认得下过港口活计的人。';
+  const TOOL_NOTICE = '这处活计还没引入，制造台先只能看看。';
   const NO_CAREER_STATUS = '还不能上工。';
   const BUSY_LABEL = '还在造，稍等。';
 
@@ -298,6 +299,38 @@
    * ------------------------------------------------------------------ */
 
   let panel = null;
+  let unsubscribeCareerChanges = null;
+  const CAREER_CHANGE_REASONS = ['career-imported', 'career-archived', 'career-unarchived', 'career-reset'];
+
+  function subscribeCareerChanges(context, onChange) {
+    const subscribe = typeof context.onCareerDataChanged === 'function'
+      ? context.onCareerDataChanged
+      : isObject(context.api) && typeof context.api.onCareerDataChanged === 'function'
+        ? context.api.onCareerDataChanged : null;
+    if (!subscribe) return null;
+    try {
+      const unsubscribe = subscribe.call(context, onChange);
+      return typeof unsubscribe === 'function' ? unsubscribe : null;
+    } catch (err) {
+      return null;
+    }
+  }
+
+  function bindCareerChanges(target, context) {
+    unsubscribeCareerPanelChanges();
+    unsubscribeCareerChanges = subscribeCareerChanges(context, (change) => {
+      if (panel !== target) return;
+      const reason = cleanText(change && change.reason);
+      if (CAREER_CHANGE_REASONS.indexOf(reason) < 0) return;
+      close();
+    });
+  }
+
+  function unsubscribeCareerPanelChanges() {
+    if (!unsubscribeCareerChanges) return;
+    try { unsubscribeCareerChanges(); } catch (err) { /* ignore */ }
+    unsubscribeCareerChanges = null;
+  }
   let craftingLoad = null;
 
   function rootWindow() {
@@ -351,6 +384,33 @@
       /* 视作未开启 */
     }
     return false;
+  }
+
+  /** 0.23 T13：bridge 注入 T11 组件时使用共享浮层与按钮；缺失则保留旧面板。 */
+  function toolComponentsOf(context) {
+    const direct = context && context.uiComponents;
+    if (direct === true && root.ArcadeCareerUI && isObject(root.ArcadeCareerUI.components)) return root.ArcadeCareerUI.components;
+    if (!isObject(direct)) return null;
+    const required = ['CareerShell', 'PrimaryAction', 'SecondaryAction'];
+    return required.every((name) => typeof direct[name] === 'function') ? direct : null;
+  }
+
+  function toolActionButton(context, label, primary, attrs, disabled) {
+    const components = toolComponentsOf(context);
+    if (!components) return null;
+    const props = { label: label, disabled: !!disabled, onClick: undefined, id: attrs && attrs.id ? String(attrs.id) : undefined };
+    const button = primary ? components.PrimaryAction(props)
+      : components.SecondaryAction(Object.assign({}, props, { variant: attrs && attrs.variant === 'text' ? 'text' : 'border' }));
+    if (attrs) Object.keys(attrs).forEach((key) => { if (key !== 'id' && key !== 'variant') button.setAttribute(key, String(attrs[key])); });
+    return button;
+  }
+
+  function mountToolShell(context, panelKey, body, title, onClose, size) {
+    const components = toolComponentsOf(context);
+    if (!components || typeof components.CareerShell.create !== 'function') return null;
+    const manager = components.CareerShell.create(panelKey);
+    const result = manager.open({ panelKey: panelKey, title: title, state: 'normal', size: size || 'default', body: body, reducedMotion: !!context.reducedMotion, onClose: onClose });
+    return result.ok ? { manager: manager, panel: result.panel } : null;
   }
 
   function make(doc, tag, className, textValue) {
@@ -431,7 +491,15 @@
       crafting: ctx.crafting || null,
       db: ctx.db || null,
       reducedMotion: ctx.reducedMotion === true || prefersReducedMotion(),
+      careerView: typeof ctx.careerView === 'function' ? ctx.careerView
+        : isObject(ctx.api) && typeof ctx.api.careerView === 'function' ? ctx.api.careerView : null,
       announce: typeof ctx.announce === 'function' ? ctx.announce : null,
+      onCareerDataChanged: typeof ctx.onCareerDataChanged === 'function' ? ctx.onCareerDataChanged : null,
+      uiComponents: ctx.uiComponents,
+      uiHarbor: ctx.uiHarbor,
+      narrative: ctx.narrative,
+      portClue: ctx.portClue,
+      recoverableClue: ctx.recoverableClue,
     };
   }
 
@@ -805,6 +873,7 @@
       walletError: '',
       recipes: [],
       commissionChecked: false,
+      toolIntroduced: false,
     };
   }
 
@@ -859,6 +928,11 @@
     const state = p.state || emptyState();
     const el = p.noticeEl;
     if (!el) return;
+    if (!state.toolIntroduced) {
+      el.hidden = false;
+      el.textContent = TOOL_NOTICE;
+      return;
+    }
     if (!state.items) {
       el.hidden = false;
       el.textContent = ITEMS_UNAVAILABLE;
@@ -915,6 +989,7 @@
   function craftBlock(p, recipe, plan) {
     const state = p.state;
     if (recipe.owned === true) return { disabled: true, label: OWNED_LABEL, code: 'owned' };
+    if (!state.toolIntroduced) return { disabled: true, label: CRAFT_LABEL, code: 'tool-locked' };
     if (!state.crafting) return { disabled: true, label: POWER_BUTTON_LABEL, code: 'crafting-missing' };
     if (!state.careerId) return { disabled: true, label: NO_CAREER_BUTTON_LABEL, code: 'no-career' };
     if (!walletReady(state)) return { disabled: true, label: LEDGER_BUTTON_LABEL, code: 'wallet' };
@@ -994,16 +1069,20 @@
     if (short) row.appendChild(make(doc, 'p', 'ac-career-workshop__shortfall', short));
 
     const block = craftBlock(p, recipe, plan);
-    const button = make(doc, 'button', block.disabled ? 'ac-career-btn' : 'ac-career-btn ac-career-btn--primary', block.label);
-    button.type = 'button';
-    button.setAttribute('data-action', 'craft');
-    button.setAttribute('data-module-id', recipe.moduleId);
-    button.setAttribute('data-level', String(recipe.level));
-    if (block.code) button.setAttribute('data-block', block.code);
-    if (block.disabled) {
-      button.disabled = true;
-      button.setAttribute('aria-disabled', 'true');
+    const attrs = { 'data-action': 'craft', 'data-module-id': recipe.moduleId, 'data-level': String(recipe.level) };
+    if (block.code) attrs['data-block'] = block.code;
+    const button = toolActionButton(p.context, block.label, !block.disabled, attrs, !!block.disabled);
+    if (!button) {
+      const legacy = make(doc, 'button', block.disabled ? 'ac-career-btn' : 'ac-career-btn ac-career-btn--primary', block.label);
+      legacy.type = 'button';
+      Object.keys(attrs).forEach((key) => legacy.setAttribute(key, attrs[key]));
+      if (block.disabled) {
+        legacy.disabled = true;
+        legacy.setAttribute('aria-disabled', 'true');
+      }
+      return legacy;
     }
+    if (block.disabled) button.setAttribute('aria-disabled', 'true');
     row.appendChild(button);
     return row;
   }
@@ -1038,7 +1117,7 @@
       .then(function () {
         if (!isLive(p, token)) return null;
         renderAll(p);
-        return ensureCareerId(p, token, context, state);
+        return ensureToolIntroduced(p, token, context, state);
       })
       .then(function () {
         if (!isLive(p, token)) return null;
@@ -1069,25 +1148,27 @@
     });
   }
 
-  function ensureCareerId(p, token, context, state) {
-    if (state.careerId) return Promise.resolve();
-    const commission = commissionOf(context);
-    if (!commission || typeof commission.listAvailable !== 'function') return Promise.resolve();
+  function ensureToolIntroduced(p, token, context, state) {
+    const reader = typeof context.careerView === 'function'
+      ? context.careerView
+      : isObject(context.api) && typeof context.api.careerView === 'function' ? context.api.careerView : null;
+    if (!reader || !state.careerId) return Promise.resolve();
     let returned = null;
     try {
-      returned = commission.listAvailable({ ensure: true });
+      returned = reader.call(context, { surface: 'crafting' });
     } catch (err) {
       return Promise.resolve();
     }
     return Promise.resolve(returned).then(
-      function (result) {
+      function (view) {
         if (!isLive(p, token)) return;
-        state.commissionChecked = true;
-        const careerId = pickCareerId(result);
-        if (careerId) state.careerId = careerId;
+        state.toolIntroduced = !!(isObject(view) && Array.isArray(view.tools)
+          && view.tools.some(function (tool) { return isObject(tool) && tool.toolId === 'workshop'; }));
+        renderAll(p);
       },
       function () {
-        state.commissionChecked = true;
+        state.toolIntroduced = false;
+        renderAll(p);
       }
     );
   }
@@ -1302,29 +1383,7 @@
   function buildPanel(doc, context) {
     const previousFocus = doc.activeElement && typeof doc.activeElement.focus === 'function' ? doc.activeElement : null;
 
-    const overlay = make(doc, 'div', OVERLAY_CLASS);
-    overlay.setAttribute('data-career-panel', 'workshop');
-    overlay.setAttribute('data-workshop', '1');
-    if (context.reducedMotion) overlay.classList.add('is-reduced-motion');
-
-    const sheet = make(doc, 'div', SHEET_CLASS);
-    sheet.setAttribute('role', 'dialog');
-    sheet.setAttribute('aria-modal', 'true');
-    sheet.setAttribute('aria-labelledby', TITLE_ID);
-    sheet.setAttribute('aria-describedby', LEDE_ID);
-    sheet.setAttribute('tabindex', '-1');
-    sheet.setAttribute('data-workshop-sheet', '1');
-
-    const head = make(doc, 'div', 'ac-career-sheet__head');
-    const heading = make(doc, 'h2', 'ac-career-sheet__title', PANEL_TITLE);
-    heading.id = TITLE_ID;
-    const closeBtn = make(doc, 'button', 'ac-career-icon-btn ac-career-close', '×');
-    closeBtn.type = 'button';
-    closeBtn.setAttribute('aria-label', CLOSE_LABEL);
-    head.appendChild(heading);
-    head.appendChild(closeBtn);
-
-    const body = make(doc, 'div', 'ac-career-sheet__body');
+    const body = make(doc, 'div', toolComponentsOf(context) ? 'ac-career-ui__stack' : 'ac-career-sheet__body');
     const wrap = make(doc, 'div', 'ac-career-workshop');
     const lede = make(doc, 'p', 'ac-career-workshop__lede', PANEL_LEDE);
     lede.id = LEDE_ID;
@@ -1342,24 +1401,61 @@
     wrap.appendChild(listEl);
     wrap.appendChild(statusEl);
     body.appendChild(wrap);
-    sheet.appendChild(head);
-    sheet.appendChild(body);
 
     const liveEl = make(doc, 'div', 'ac-career-sr-only');
     liveEl.setAttribute('role', 'status');
     liveEl.setAttribute('aria-live', 'polite');
     liveEl.setAttribute('aria-atomic', 'true');
 
-    overlay.appendChild(sheet);
-    overlay.appendChild(liveEl);
-    if (!doc.body) return null;
-    try {
-      doc.body.appendChild(overlay);
-    } catch (err) {
-      return null;
+    let p = null;
+    let shellMount = null;
+    let overlay = null;
+    let sheet = null;
+    let closeBtn = null;
+    if (toolComponentsOf(context)) {
+      shellMount = mountToolShell(context, 'workshop', body, PANEL_TITLE, () => {
+        if (p && p.toolShell) {
+          unsubscribeCareerPanelChanges();
+          if (typeof p.destroy === 'function') p.destroy();
+          if (panel === p) panel = null;
+        }
+      });
+      if (!shellMount) return null;
+      sheet = shellMount.panel;
+      overlay = sheet.parentNode;
+      closeBtn = sheet.querySelector ? sheet.querySelector('.ac-career-ui__close') : null;
+      overlay.appendChild(liveEl);
+    } else {
+      overlay = make(doc, 'div', OVERLAY_CLASS);
+      overlay.setAttribute('data-career-panel', 'workshop');
+      overlay.setAttribute('data-workshop', '1');
+      if (context.reducedMotion) overlay.classList.add('is-reduced-motion');
+
+      sheet = make(doc, 'div', SHEET_CLASS);
+      sheet.setAttribute('role', 'dialog');
+      sheet.setAttribute('aria-modal', 'true');
+      sheet.setAttribute('aria-labelledby', TITLE_ID);
+      sheet.setAttribute('aria-describedby', LEDE_ID);
+      sheet.setAttribute('tabindex', '-1');
+      sheet.setAttribute('data-workshop-sheet', '1');
+
+      const head = make(doc, 'div', 'ac-career-sheet__head');
+      const heading = make(doc, 'h2', 'ac-career-sheet__title', PANEL_TITLE);
+      heading.id = TITLE_ID;
+      closeBtn = make(doc, 'button', 'ac-career-icon-btn ac-career-close', '×');
+      closeBtn.type = 'button';
+      closeBtn.setAttribute('aria-label', CLOSE_LABEL);
+      head.appendChild(heading);
+      head.appendChild(closeBtn);
+      sheet.appendChild(head);
+      sheet.appendChild(body);
+      overlay.appendChild(sheet);
+      overlay.appendChild(liveEl);
+      if (!doc.body) return null;
+      try { doc.body.appendChild(overlay); } catch (err) { return null; }
     }
 
-    const p = {
+    p = {
       doc: doc,
       overlay: overlay,
       sheet: sheet,
@@ -1378,6 +1474,7 @@
       pending: '',
       statusText: '',
       statusCode: '',
+      toolShell: shellMount && shellMount.manager,
     };
 
     function onKeyDown(event) {
@@ -1417,37 +1514,19 @@
     }
     p.onKeyDown = onKeyDown;
 
-    let pressedBackdrop = false;
-    overlay.addEventListener(
-      'pointerdown',
-      function (event) {
-        pressedBackdrop = !!(event && event.target === overlay);
-      },
-      false
-    );
-    overlay.addEventListener(
-      'pointercancel',
-      function () {
-        pressedBackdrop = false;
-      },
-      false
-    );
-    overlay.addEventListener(
-      'click',
-      function (event) {
+    if (!p.toolShell) {
+      let pressedBackdrop = false;
+      overlay.addEventListener('pointerdown', function (event) { pressedBackdrop = !!(event && event.target === overlay); }, false);
+      overlay.addEventListener('pointercancel', function () { pressedBackdrop = false; }, false);
+      overlay.addEventListener('click', function (event) {
         const onBackdrop = !!(event && event.target === overlay) && pressedBackdrop;
         pressedBackdrop = false;
         if (onBackdrop) close();
-      },
-      false
-    );
-    closeBtn.addEventListener('click', function () {
-      close();
-    }, false);
-    listEl.addEventListener('click', function (event) {
-      onListClick(p, event);
-    }, false);
-    doc.addEventListener('keydown', onKeyDown, true);
+      }, false);
+      closeBtn.addEventListener('click', function () { close(); }, false);
+      doc.addEventListener('keydown', onKeyDown, true);
+    }
+    listEl.addEventListener('click', function (event) { onListClick(p, event); }, false);
 
     return p;
   }
@@ -1466,6 +1545,7 @@
       if (context.reducedMotion) panel.overlay.classList.add('is-reduced-motion');
       else panel.overlay.classList.remove('is-reduced-motion');
       applyStatus(panel, '', '');
+      bindCareerChanges(panel, context);
       loadData(panel);
       safelyFocus(panel.closeBtn);
       return panel.sheet;
@@ -1476,6 +1556,7 @@
     if (!built) return null;
     panel = built;
     applyStatus(panel, '', '');
+    bindCareerChanges(panel, context);
     loadData(panel);
     safelyFocus(panel.closeBtn);
     return panel.sheet;
@@ -1494,6 +1575,7 @@
     panel.context = context;
     if (context.reducedMotion) panel.overlay.classList.add('is-reduced-motion');
     else panel.overlay.classList.remove('is-reduced-motion');
+    bindCareerChanges(panel, context);
     loadData(panel);
     return panel.sheet;
   }
@@ -1501,7 +1583,13 @@
   /** 关闭制造台并把焦点还给打开前的元素（可重复调用）。 */
   function close() {
     const current = panel;
+    if (!current) return false;
+    if (current.toolShell) {
+      current.toolShell.close();
+      return true;
+    }
     panel = null;
+    unsubscribeCareerPanelChanges();
     if (!current) return false;
     try {
       current.doc.removeEventListener('keydown', current.onKeyDown, true);

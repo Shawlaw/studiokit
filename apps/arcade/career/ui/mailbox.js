@@ -7,8 +7,15 @@
  *   window.ArcadeCareerUI.mailbox.open(ctx);
  *   window.ArcadeCareerUI.mailbox.close();
  *
- * ctx（bridge 构造，见 docs/arcade-life/ADR-interfaces.md §17）：
- *   { state, clues, openClue(clueId), followLetter(), announce(text), ... }
+ * ctx（bridge 构造，见 docs/arcade-life/ADR-interfaces.md §17 / §23）：
+ *   { state, clues, openClue(clueId), followLetter(), announce(text),
+ *     invitationForClue?(clueId), acceptProfessionInvitation?(input),
+ *     careerView?(context), uiComponents?, letterTitle?, openInvitation?, ... }
+ *
+ * 0.23 bridge request: inject uiComponents and openInvitation(ctx) (the shared
+ * arrival adapter), plus the projected letterTitle for LetterCard. Either
+ * uiComponents or the global T11 component module is required for the new card
+ * path; without both the legacy host path remains safe.
  *
  * 约束：
  * - 覆盖当前页面的轻量浮层（position:fixed，可滚动），按钮 + Esc + 点遮罩关闭；
@@ -48,6 +55,14 @@
   const TOWN_FAILED_TEXT = '港口那边没应声，你想过一会儿再试吗？';
   const FIRST_READ_LABEL = '送去折光港';
   const SEND_TO_PORT_DATA_ACTION = 'send-to-port';
+
+  /* 0.22：邀请只暴露原信与两个动作；任务标题/目标/报酬从不在此读取。 */
+  const ACCEPT_LABEL = '接受这份邀请';
+  const DEFER_LABEL = '以后再说';
+  const ACCEPT_FAILED_TEXT = '这封邀请这会儿没能收下，你想再试一次吗？';
+  const INVITE_ACCEPTED = '邀请已收下。';
+  const INVITE_PORT_LABEL = '去港口看看';
+  const INVITE_PORT_ARIA = '邀请已收下，去港口看看';
   const STAGE_RANK = { DORMANT: 0, GLIMPSED: 1, CURIOUS: 2, LOCAL: 3, RESIDENT: 4, EXPLORER: 5 };
 
   /* 本页会话内的投递记录：关闭面板后再打开仍能看到「已投递」。 */
@@ -57,6 +72,9 @@
   /* 去港口失败时重开信箱的可见提示（一次性）。 */
   let pendingTownStatus = '';
   let panel = null;
+  /* 本页会话内已接受的邀请：重复点击只做 no-op，不接委托。 */
+  const acceptedInvitations = Object.create(null);
+  const pendingInvitations = Object.create(null);
 
   function documentOf() {
     return typeof document !== 'undefined' && document && typeof document.createElement === 'function' ? document : null;
@@ -165,6 +183,64 @@
     return null;
   }
 
+  /** 单个邀请对象只能来自 bridge 已 gate 的显式小面；缺失时安全降级，不读完整 catalog。 */
+  function invitationReaderOf(context) {
+    if (!context) return null;
+    if (typeof context.invitationForClue === 'function') return context.invitationForClue;
+    if (isObject(context.api) && typeof context.api.invitationForClue === 'function') return context.api.invitationForClue;
+    return null;
+  }
+
+  function normalizeInvitation(raw, clueId) {
+    if (!isObject(raw)) return null;
+    const professionId = cleanText(raw.professionId);
+    if (!professionId) return null;
+    const state = cleanText(raw.state).toLowerCase();
+    if (state !== 'read' && state !== 'glimpsed' && state !== 'accepted') return null;
+    return {
+      clueId: clueId,
+      professionId: professionId,
+      gameId: cleanText(raw.gameId),
+      displayName: cleanText(raw.displayName),
+      state: state,
+      firstArrival: state === 'accepted' && raw.firstArrival === true,
+      canAccept: raw.canAccept !== false && state !== 'accepted',
+    };
+  }
+
+  function invitationOf(context, clueId) {
+    const reader = invitationReaderOf(context);
+    if (!reader || !clueId) return null;
+    let raw = null;
+    try {
+      raw = reader.call(context, clueId);
+    } catch (err) {
+      return null;
+    }
+    return normalizeInvitation(raw, clueId);
+  }
+
+  function invitationKeyOf(invitation) {
+    if (!invitation) return '';
+    return (invitation.professionId || '') + ':' + (invitation.clueId || '');
+  }
+
+  function acceptedInvitationOf(invitation) {
+    if (!invitation) return false;
+    if (invitation.state === 'accepted') return true;
+    const key = invitationKeyOf(invitation);
+    return !!(key && acceptedInvitations[key]);
+  }
+
+  function acceptInvitationFnOf(context) {
+    if (!context) return null;
+    if (typeof context.acceptProfessionInvitation === 'function') return context.acceptProfessionInvitation;
+    if (isObject(context.api) && typeof context.api.acceptProfessionInvitation === 'function') {
+      return context.api.acceptProfessionInvitation;
+    }
+    return null;
+  }
+
   /**
    * 身份句（戏内语言，可选内容字段）。bridge 当前 uiContext 传 chapter=chapter-01
    * （不含 C0 角色），chapters.C0 为 C0 章节映射；两者都不含时返回空串并隐藏。
@@ -197,7 +273,7 @@
   }
 
   /** 关闭当前信箱浮层并把焦点还给打开前的元素（可重复调用）。 */
-  function close() {
+  function closeLegacy() {
     const current = panel;
     panel = null;
     if (!current) return false;
@@ -224,7 +300,7 @@
    * @param {object} [ctx] bridge 上下文（缺失字段按空处理，不抛异常）
    * @returns {Element|null} 面板元素；无 DOM 或挂载失败时返回 null
    */
-  function open(ctx) {
+  function openLegacy(ctx) {
     const doc = documentOf();
     if (!doc) return null;
     const context = isObject(ctx) ? ctx : {};
@@ -294,6 +370,25 @@
     const followBtn = make('button', 'ac-career-btn', FOLLOW_FALLBACK);
     followBtn.type = 'button';
     letterActions.appendChild(followBtn);
+    const acceptBtn = make('button', 'ac-career-btn ac-career-btn--primary', ACCEPT_LABEL);
+    acceptBtn.type = 'button';
+    acceptBtn.setAttribute('data-action', 'accept-invitation');
+    acceptBtn.hidden = true;
+    letterActions.appendChild(acceptBtn);
+    const deferBtn = make('button', 'ac-career-btn ac-career-btn--ghost', DEFER_LABEL);
+    deferBtn.type = 'button';
+    deferBtn.setAttribute('data-action', 'defer-invitation');
+    deferBtn.hidden = true;
+    letterActions.appendChild(deferBtn);
+    const acceptedNote = make('p', 'ac-career-mailbox__invite-status', INVITE_ACCEPTED);
+    acceptedNote.hidden = true;
+    letterActions.appendChild(acceptedNote);
+    const invitePortBtn = make('button', 'ac-career-btn ac-career-btn--ghost', INVITE_PORT_LABEL);
+    invitePortBtn.type = 'button';
+    invitePortBtn.setAttribute('data-action', 'invitation-port');
+    invitePortBtn.setAttribute('aria-label', INVITE_PORT_ARIA);
+    invitePortBtn.hidden = true;
+    letterActions.appendChild(invitePortBtn);
     /* D16-01 最小入口：只有 bridge 提供去港口动作时才出现；不改动上面的投递按钮。 */
     const townBtn = make('button', 'ac-career-btn ac-career-btn--primary', TOWN_LABEL);
     townBtn.type = 'button';
@@ -453,6 +548,12 @@
 
     const itemNodes = Object.create(null);
     let selectedId = '';
+    let activeInvitation = null;
+    let identityEstablished = !!cleanText(context.careerId)
+      || !!(isObject(context.state) && cleanText(context.state.acceptedOriginGameId));
+    let invitationToken = 0;
+    let identityToken = 0;
+    let inviteBusy = false;
 
     /**
      * 首封来信的身份与阶段判定（不看门闩）：已发现、未投递、阶段未越过 CURIOUS、
@@ -483,6 +584,72 @@
       node.hidden = !value;
     }
 
+    function projectionIsCurrent(current) {
+      return current === invitationToken && !!panel && panel.overlay === overlay;
+    }
+
+    function identityIsCurrent(token) {
+      return token === identityToken && !!panel && panel.overlay === overlay;
+    }
+
+    /** 身份是否已建立只认投影；投影缺失时仅用 ctx 已有 careerId，不读目录。 */
+    function loadIdentity() {
+      const reader = typeof context.careerView === 'function' ? context.careerView
+        : isObject(context.api) && typeof context.api.careerView === 'function' ? context.api.careerView : null;
+      if (!reader) {
+        identityEstablished = !!cleanText(context.careerId);
+        return;
+      }
+      const token = ++identityToken;
+      let returned = null;
+      try {
+        returned = reader.call(context, { surface: 'letter' });
+      } catch (err) {
+        return;
+      }
+      Promise.resolve(returned).then((view) => {
+        if (!identityIsCurrent(token)) return;
+        identityEstablished = !!(isObject(view) && (!!cleanText(view.originGameId)
+          || (Array.isArray(view.professions) && view.professions.length > 0))) || !!cleanText(context.careerId);
+        updateOriginLine();
+        refreshSelection();
+      }, () => {});
+    }
+
+    function updateOriginLine() {
+      const originText = originTextOf(context);
+      originLine.hidden = !originText || identityEstablished || !!activeInvitation;
+    }
+
+    /** 只取 bridge 判定后的单条邀请；没有小面时保持普通读信路径。 */
+    function loadInvitation() {
+      const clueId = selectedId;
+      const token = ++invitationToken;
+      activeInvitation = null;
+      const reader = invitationReaderOf(context);
+      if (!reader || !clueId) {
+        refreshSelection();
+        return;
+      }
+      let returned = null;
+      try {
+        returned = reader.call(context, clueId);
+      } catch (err) {
+        returned = null;
+      }
+      Promise.resolve(returned).then((raw) => {
+        if (!projectionIsCurrent(token) || selectedId !== clueId) return;
+        activeInvitation = normalizeInvitation(raw, clueId);
+        updateOriginLine();
+        refreshSelection();
+      }, () => {});
+    }
+
+    function refreshProjection() {
+      loadIdentity();
+      loadInvitation();
+    }
+
     function refreshSelection() {
       Object.keys(itemNodes).forEach((clueId) => {
         itemNodes[clueId].setAttribute('aria-current', clueId === selectedId ? 'true' : 'false');
@@ -493,7 +660,7 @@
       setField(letterAmbient, clue ? clue.ambientText : '');
       /* 身份句只在首封未投递信出现；缺省内容/回看/已投递保持隐藏。 */
       const firstFlight = isFirstFlightClue(selectedId);
-      setField(letterRole, firstFlight ? roleOf(context) : '');
+      setField(letterRole, firstFlight && !identityEstablished && !activeInvitation ? roleOf(context) : '');
       setField(letterSender, letterContent.sender);
       setField(letterBody, letterContent.body);
       setField(letterAddress, letterContent.address);
@@ -519,6 +686,21 @@
         followBtn.removeAttribute('aria-busy');
       }
       updateTownEntry();
+      const invitation = activeInvitation;
+      const accepted = acceptedInvitationOf(invitation);
+      followBtn.hidden = !!invitation;
+      acceptBtn.hidden = !invitation || accepted || !invitation.canAccept || !acceptInvitationFnOf(context);
+      deferBtn.hidden = !invitation || accepted;
+      acceptedNote.hidden = !invitation || !accepted;
+      invitePortBtn.hidden = !invitation || !accepted || !townOpenerOf(context);
+      if (invitation) {
+        townBtn.hidden = true;
+        campaignBtn.hidden = true;
+      }
+      const key = invitation ? invitationKeyOf(invitation) : '';
+      acceptBtn.disabled = inviteBusy || !!(key && pendingInvitations[key]);
+      if (inviteBusy) acceptBtn.setAttribute('aria-busy', 'true');
+      else acceptBtn.removeAttribute('aria-busy');
     }
 
     function selectClue(clueId, userInitiated) {
@@ -526,6 +708,7 @@
       if (!id || !itemNodes[id]) return;
       selectedId = id;
       refreshSelection();
+      loadInvitation();
       if (typeof context.openClue === 'function') {
         try {
           context.openClue(id);
@@ -651,6 +834,70 @@
       settle(result);
     }
 
+    function acceptInvitation() {
+      const invitation = activeInvitation;
+      if (!invitation || acceptedInvitationOf(invitation) || !invitation.canAccept || inviteBusy) return;
+      const key = invitationKeyOf(invitation);
+      if (pendingInvitations[key]) return;
+      const accept = acceptInvitationFnOf(context);
+      if (!accept || !invitation.gameId) {
+        setStatus(ACCEPT_FAILED_TEXT);
+        announce(ACCEPT_FAILED_TEXT);
+        return;
+      }
+      const activePanel = panel;
+      inviteBusy = true;
+      pendingInvitations[key] = true;
+      acceptBtn.disabled = true;
+      acceptBtn.setAttribute('aria-busy', 'true');
+      let result = null;
+      try {
+        result = accept.call(context, { professionId: invitation.professionId, gameId: invitation.gameId });
+      } catch (err) {
+        result = { ok: false };
+      }
+      const settle = (value) => {
+        delete pendingInvitations[key];
+        inviteBusy = false;
+        const succeeded = isObject(value) && value.ok === true;
+        if (succeeded) acceptedInvitations[key] = true;
+        if (panel !== activePanel) return;
+        if (!succeeded) {
+          setStatus(ACCEPT_FAILED_TEXT);
+          announce(ACCEPT_FAILED_TEXT);
+          refreshSelection();
+          return;
+        }
+        activeInvitation = Object.assign({}, invitation, { state: 'accepted', canAccept: false });
+        identityEstablished = true;
+        setStatus('');
+        updateOriginLine();
+        refreshSelection();
+        announce(INVITE_ACCEPTED);
+      };
+      if (result && typeof result.then === 'function') {
+        result.then(settle, () => settle({ ok: false }));
+        return;
+      }
+      settle(result);
+    }
+
+    function deferInvitation() {
+      if (!activeInvitation || acceptedInvitationOf(activeInvitation)) return;
+      close();
+    }
+
+    acceptBtn.addEventListener('click', acceptInvitation, false);
+    deferBtn.addEventListener('click', deferInvitation, false);
+    invitePortBtn.addEventListener('click', () => {
+      const opener = townOpenerOf(context);
+      if (typeof opener !== 'function') return;
+      close();
+      let result = null;
+      try { result = opener(); } catch (err) { result = { ok: false }; }
+      if (result && typeof result.then === 'function') result.catch(() => {});
+    }, false);
+
     followBtn.addEventListener('click', follow, false);
     closeBtn.addEventListener('click', () => close(), false);
     backBtn.addEventListener('click', () => close(), false);
@@ -722,11 +969,569 @@
       previousFocus: previousFocus,
       onKeyDown: onKeyDown,
     };
+    refreshProjection();
     return sheet;
+  }
+
+  /* ---------------------------------------------------------------- 0.23 T12 */
+
+  let componentShell = null;
+  let componentSession = null;
+  let componentUnsubscribe = null;
+  const COMPONENT_DESTRUCTIVE_REASONS = ['career-imported', 'career-archived', 'career-unarchived', 'career-reset'];
+  const FAMILY_ICONS = { record: 'mail', signal: 'scroll', bio: 'gem', industrial: 'pick', route: 'chevron' };
+
+  function componentsOf(context) {
+    if (isObject(context) && isObject(context.uiComponents) && typeof context.uiComponents.CareerShell === 'function') return context.uiComponents;
+    return root.ArcadeCareerUI && root.ArcadeCareerUI.components;
+  }
+
+  function close() {
+    const current = componentSession;
+    const shell = componentShell;
+    componentSession = null;
+    componentShell = null;
+    if (current) current.token += 1;
+    if (componentUnsubscribe) {
+      try { componentUnsubscribe(); } catch (err) { /* ignore */ }
+      componentUnsubscribe = null;
+    }
+    const closed = !!(shell && shell.close());
+    return closeLegacy() || closed;
+  }
+
+  function listPropsOf(clue, state, record) {
+    const opened = !!cleanText(record.openedAt);
+    const hasRead = Object.keys(state.clues || {}).some((id) => id !== clue.clueId && !!(state.clues[id] && cleanText(state.clues[id].openedAt)));
+    const stage = cleanText(state.stage).toUpperCase();
+    const recoverable = !opened && !cleanText(state.portSeenAt) && (stage === 'GLIMPSED' || stage === 'CURIOUS') && hasRead;
+    const clueState = recoverable ? 'recoverable' : (opened ? 'read' : 'glimpsed');
+    const letter = letterOf(clue);
+    return {
+      clueId: cleanText(clue.clueId),
+      gameId: cleanText(clue.gameId),
+      professionId: null,
+      icon: recoverable ? 'mail' : (FAMILY_ICONS[cleanText(clue.family)] || 'gem'),
+      /* 信箱列表是「信件」清单：标题用真实线索/信件标题（0.22 契约），
+         发件场景（ambientLabel）作为副行，避免玩家看不到是哪封信。 */
+      title: titleOf(clue),
+      teaser: cleanText(clue.ambientText) || cleanText(clue.ambientLabel),
+      actionLabel: recoverable ? (cleanText(letter.actionLabel) || '按地址投递') : (opened ? '查看这封信' : '仔细看看'),
+      state: clueState,
+      placement: 'list',
+      reducedMotion: !!componentSession.context.reducedMotion,
+    };
+  }
+
+  function letterParagraphs(value) {
+    const text = typeof value === 'string' ? value : '';
+    const rows = text.split(/\r?\n+/).map(cleanText).filter(Boolean);
+    return rows.length ? rows : (text ? [cleanText(text)] : []);
+  }
+
+  function decorateLetter(card, clue, session) {
+    const doc = session.doc;
+    const article = card.querySelector('.ac-career-ui__letter');
+    const title = card.querySelector('.ac-career-ui__letter h2');
+    const paragraphs = card.querySelectorAll('.ac-career-ui__letter-paragraph');
+    const signature = card.querySelector('.ac-career-ui__signature');
+    const ambient = card.querySelector('.ac-career-ui__caption');
+    if (title) title.classList.add('ac-career-letter__title');
+    if (ambient) ambient.classList.add('ac-career-letter__ambient');
+    if (paragraphs[0]) paragraphs[0].classList.add('ac-career-letter__body');
+    if (signature) signature.classList.add('ac-career-letter__sender');
+
+    /* Compatibility metadata only; the visible node is still LetterCard's signature. */
+    if (article && signature) {
+      const address = doc.createElement('p');
+      address.className = 'ac-career-ui__caption ac-career-letter__address';
+      address.textContent = cleanText(letterOf(clue).address);
+      address.hidden = !address.textContent;
+      article.insertBefore(address, signature);
+    }
+    if (article) {
+      const role = doc.createElement('p');
+      role.className = 'ac-career-ui__caption ac-career-letter__role';
+      const first = isFirstFlightClue(session, session.selectedId);
+      role.textContent = first && !session.identity && !session.invitation ? cleanText(session.context.identityLine) : '';
+      role.hidden = !role.textContent;
+      article.insertBefore(role, article.children[0] || null);
+    }
+  }
+
+  function annotateActions(card) {
+    card.querySelectorAll('button').forEach((button) => {
+      const id = cleanText(button.id);
+      if (id) button.setAttribute('data-action', id);
+    });
+  }
+
+  function isFirstFlightClue(session, clueId) {
+    if (!clueId || followedClues[clueId]) return false;
+    if (typeof session.context.followLetter !== 'function' || !townOpenerOf(session.context)) return false;
+    const state = isObject(session.context.state) ? session.context.state : null;
+    if (!state) return false;
+    const stage = cleanText(state.stage).toUpperCase();
+    const rank = STAGE_RANK[stage] === undefined ? 0 : STAGE_RANK[stage];
+    if (rank >= STAGE_RANK.LOCAL) return false;
+    const firstId = cleanText(state.firstClueId) || session.ids[0];
+    return !!firstId && firstId === clueId;
+  }
+
+  function invitationNarrativeOf(session) {
+    let raw = session.context.narrative;
+    if (typeof raw === 'function') {
+      try { raw = raw(session.invitation, session.context); } catch (err) { raw = null; }
+    }
+    if (!isObject(raw)) return {};
+    const invitation = session.invitation || {};
+    const keyed = isObject(raw.byProfessionId) && isObject(raw.byProfessionId[invitation.professionId])
+      ? raw.byProfessionId[invitation.professionId]
+      : isObject(raw[invitation.professionId]) ? raw[invitation.professionId] : null;
+    if (keyed) return keyed;
+    return raw.professionId && raw.professionId !== invitation.professionId ? {} : raw;
+  }
+
+  /**
+   * P06 后续邀请：已有身份读另一职业的邀请时，由该职业的真实人物在信下说明新关系。
+   * 只用叙事卡已有的 existingIntro 与 npc；内容缺失时保持原有的信件内邀请动作。
+   */
+  function followUpInvitationOf(session, labels) {
+    const text = isObject(labels) && typeof labels.existingIntro === 'string' ? cleanText(labels.existingIntro) : '';
+    if (!text) return null;
+    const invitation = session.invitation || {};
+    const sentences = text.match(/[^。！？]+[。！？]?/g) || [];
+    return {
+      name: cleanText(labels.npc) || cleanText(invitation.displayName) || cleanText(labels.sender),
+      paragraphs: sentences.map(cleanText).filter(Boolean).slice(0, 3),
+    };
+  }
+
+  function setComponentStatus(session, text) {
+    session.status = cleanText(text);
+    renderComponent(session);
+    if (session.status) announceComponent(session, session.status);
+  }
+
+  function announceComponent(session, text) {
+    if (typeof session.context.announce !== 'function') return;
+    try { session.context.announce(text); } catch (err) { /* ignore */ }
+  }
+
+  async function refreshComponentProjection(session) {
+    if (componentSession !== session || !session.ready || session.openingClue) return;
+    const token = ++session.projectionToken;
+    await Promise.all([
+      loadComponentIdentity(session),
+      session.selectedId ? loadComponentInvitation(session, session.selectedId) : Promise.resolve(null),
+    ]);
+    if (token !== session.projectionToken || componentSession !== session) return;
+    renderComponent(session);
+  }
+
+  function subscribeComponentChanges(session) {
+    const subscribe = typeof session.context.onCareerDataChanged === 'function'
+      ? session.context.onCareerDataChanged
+      : isObject(session.context.api) && typeof session.context.api.onCareerDataChanged === 'function' ? session.context.api.onCareerDataChanged : null;
+    if (!subscribe) return null;
+    try {
+      const unsubscribe = subscribe.call(session.context, (change) => {
+        if (componentSession !== session) return;
+        const reason = cleanText(change && change.reason);
+        if (COMPONENT_DESTRUCTIVE_REASONS.indexOf(reason) >= 0) {
+          close();
+          return;
+        }
+        if (reason === 'accept-invitation' || reason === 'set-active' || reason === 'set-paused' || reason === 'changed') {
+          refreshComponentProjection(session);
+        }
+      });
+      return typeof unsubscribe === 'function' ? unsubscribe : null;
+    } catch (err) { return null; }
+  }
+
+  function invitationPort(session) {
+    const arrival = {
+      clueId: session.selectedId,
+      returnFocus: session.returnFocus,
+      /* 首次到港以 bridge 的持久标记为准；内存标记只用于刚接受完的同一会话。 */
+      firstArrival: session.firstArrivalClueId === session.selectedId
+        || !!(session.invitation && session.invitation.firstArrival === true),
+    };
+    close();
+    const run = () => {
+      if (typeof session.context.openInvitation === 'function') return session.context.openInvitation(arrival);
+      const invitationUi = root.ArcadeCareerUI && root.ArcadeCareerUI.invitation;
+      if (invitationUi && typeof invitationUi.open === 'function') {
+        const opened = invitationUi.open(Object.assign({}, session.context, arrival));
+        if (opened && opened.ok === false) return opened;
+        return opened;
+      }
+      return townOpenerOf(session.context) ? townOpenerOf(session.context)() : { ok: false };
+    };
+    let result = null;
+    try { result = run(); } catch (err) { result = { ok: false }; }
+    const settle = (value) => {
+      if (value && value.ok === false) {
+        pendingTownStatus = '港口那边没应声，你想过一会儿再试吗？';
+        openComponent(session.context);
+      }
+    };
+    if (result && typeof result.then === 'function') Promise.resolve(result).then(settle, () => settle({ ok: false }));
+    else settle(result);
+    return result;
+  }
+
+  function openTownComponent(session) {
+    close();
+    const opener = townOpenerOf(session.context);
+    if (!opener) return { ok: false };
+    let result = null;
+    try { result = opener(); } catch (err) { result = { ok: false }; }
+    const settle = (value) => {
+      if (value && value.ok === false) {
+        pendingTownStatus = '港口那边没应声，你想过一会儿再试吗？';
+        openComponent(session.context);
+      }
+    };
+    if (result && typeof result.then === 'function') Promise.resolve(result).then(settle, () => settle({ ok: false }));
+    else settle(result);
+    return result;
+  }
+
+  function deliverComponent(session, openTownAfter) {
+    const clueId = session.selectedId;
+    if (!clueId || pendingFirstFlight[clueId]) return { ok: false };
+    if (followedClues[clueId]) {
+      session.notice = true;
+      renderComponent(session);
+      return { ok: true };
+    }
+    if (typeof session.context.followLetter !== 'function') {
+      setComponentStatus(session, SEND_FAILED_TEXT);
+      return { ok: false };
+    }
+    const token = session.token;
+    if (openTownAfter) pendingFirstFlight[clueId] = true;
+    renderComponent(session);
+    let result = null;
+    try { result = session.context.followLetter(); } catch (err) { result = { ok: false }; }
+    const settle = (value) => {
+      if (openTownAfter) delete pendingFirstFlight[clueId];
+      if (token !== session.token || componentSession !== session) return;
+      const failed = openTownAfter
+        ? !(isObject(value) && value.ok === true && value.persisted !== false)
+        : !!(value && isObject(value) && value.ok === false);
+      if (failed) {
+        setComponentStatus(session, SEND_FAILED_TEXT);
+        return;
+      }
+      followedClues[clueId] = true;
+      session.status = '';
+      session.notice = true;
+      renderComponent(session);
+      if (openTownAfter) openTownComponent(session);
+    };
+    if (result && typeof result.then === 'function') return Promise.resolve(result).then(settle, () => settle({ ok: false }));
+    settle(result);
+    return result;
+  }
+
+  function acceptComponent(session) {
+    const invitation = session.invitation;
+    const key = invitationKeyOf(invitation);
+    const accept = acceptInvitationFnOf(session.context);
+    if (!invitation || acceptedInvitationOf(invitation) || !invitation.canAccept || !accept || !invitation.gameId || pendingInvitations[key]) {
+      return { ok: false };
+    }
+    const token = session.token;
+    pendingInvitations[key] = true;
+    renderComponent(session);
+    let result = null;
+    try { result = accept.call(session.context, { professionId: invitation.professionId, gameId: invitation.gameId }); }
+    catch (err) { result = { ok: false }; }
+    const settle = (value) => {
+      delete pendingInvitations[key];
+      if (token !== session.token || componentSession !== session) return;
+      if (!isObject(value) || value.ok !== true) {
+        setComponentStatus(session, ACCEPT_FAILED_TEXT);
+        return;
+      }
+      acceptedInvitations[key] = true;
+      if (value.created === true) session.firstArrivalClueId = invitation.clueId || session.selectedId;
+      session.invitation = Object.assign({}, invitation, { state: 'accepted', canAccept: false });
+      session.identity = true;
+      session.status = '';
+      renderComponent(session);
+      announceComponent(session, INVITE_ACCEPTED);
+    };
+    if (result && typeof result.then === 'function') return Promise.resolve(result).then(settle, () => settle({ ok: false }));
+    settle(result);
+    return result;
+  }
+
+  function renderComponent(session) {
+    if (componentSession !== session || !componentShell || !session.ready) return;
+    const components = componentsOf(session.context);
+    const doc = session.doc;
+    const body = doc.createElement('div');
+    body.className = 'ac-career-ui__stack';
+    const state = isObject(session.context.state) ? session.context.state : { clues: {} };
+    const clue = session.content[session.selectedId] || null;
+
+    if (session.ids.length) {
+      const list = doc.createElement('div');
+      list.className = 'ac-career-ui__stack ac-career-ui__stack--small';
+      list.setAttribute('data-view', 'mailbox');
+      list.setAttribute('role', 'list');
+      session.ids.forEach((clueId) => {
+        const rowClue = session.content[clueId];
+        if (!rowClue) return;
+        const record = state.clues && state.clues[clueId] ? state.clues[clueId] : {};
+        const row = components.ClueRow(Object.assign({}, listPropsOf(rowClue, state, record), {
+          onOpen(id) { selectComponentClue(session, id, true); },
+        }));
+        if (!row) return;
+        row.setAttribute('data-clue-id', clueId);
+        row.setAttribute('role', 'listitem');
+        row.setAttribute('aria-current', String(clueId === session.selectedId));
+        list.appendChild(row);
+      });
+      body.appendChild(list);
+    } else {
+      const empty = doc.createElement('p');
+      empty.className = 'ac-career-ui__muted';
+      empty.textContent = EMPTY_TEXT;
+      body.appendChild(empty);
+    }
+
+    if (clue) {
+      const letterContent = letterOf(clue);
+      const invitation = session.invitation;
+      const accepted = acceptedInvitationOf(invitation);
+      const firstFlight = isFirstFlightClue(session, session.selectedId);
+      const delivered = !!followedClues[session.selectedId];
+      const labels = invitationNarrativeOf(session);
+      const acceptLabel = cleanText(labels.acceptLabel) || ACCEPT_LABEL;
+      const deferLabel = cleanText(labels.deferLabel) || DEFER_LABEL;
+      /* 已有身份：邀请动作跟在该职业人物的后续说明之后，而不是直接挂在字条上。 */
+      const followUp = !session.notice && !session.openingClue && invitation && !accepted
+        && invitation.canAccept && acceptInvitationFnOf(session.context)
+        && session.identity === true ? followUpInvitationOf(session, labels) : null;
+      const actions = [];
+      if (session.openingClue) {
+        /* openClue has not settled: show the letter only, never a guessed action. */
+      } else if (session.notice) {
+        actions.push({ id: 'open-town', label: '去港口看看', kind: 'primary', onClick: () => openTownComponent(session) });
+        actions.push({ id: 'close-mailbox', label: '回到游戏', kind: 'text', onClick: close });
+      } else if (invitation) {
+        if (accepted) {
+          /* 首到港只出现一次：已消费（firstArrival=false）的已接受信件直接去港口，
+             不重播首次介绍或第一份工作。 */
+          const arrivalPending = session.firstArrivalClueId === session.selectedId || invitation.firstArrival === true;
+          if (townOpenerOf(session.context) || (root.ArcadeCareerUI && root.ArcadeCareerUI.invitation)) {
+            actions.push(arrivalPending
+              ? { id: 'invitation-port', label: INVITE_PORT_LABEL, kind: 'primary', ariaLabel: INVITE_PORT_ARIA, onClick: () => invitationPort(session) }
+              : { id: 'open-town', label: INVITE_PORT_LABEL, kind: 'primary', ariaLabel: INVITE_PORT_ARIA, onClick: () => openTownComponent(session) });
+          }
+          actions.push({ id: 'defer-invitation', label: deferLabel, kind: 'text', onClick: close });
+        } else if (invitation.canAccept && acceptInvitationFnOf(session.context)) {
+          actions.push({ id: 'accept-invitation', label: acceptLabel, kind: 'primary', disabled: !!pendingInvitations[invitationKeyOf(invitation)], onClick: () => acceptComponent(session) });
+          actions.push({ id: 'defer-invitation', label: deferLabel, kind: 'text', onClick: close });
+        } else {
+          actions.push({ id: 'defer-invitation', label: deferLabel, kind: 'primary', onClick: close });
+        }
+      } else if (firstFlight) {
+        actions.push({ id: 'send-to-port', label: FIRST_READ_LABEL, ariaLabel: FIRST_READ_LABEL, kind: 'primary', busy: !!pendingFirstFlight[session.selectedId], onClick: () => deliverComponent(session, true) });
+        actions.push({ id: 'defer-letter', label: '以后再说', kind: 'text', onClick: close });
+      } else if (townEntryAllowed(session.context) || delivered) {
+        actions.push({ id: 'open-town', label: delivered ? FOLLOW_AGAIN : TOWN_LABEL, kind: 'primary', onClick: () => openTownComponent(session) });
+        actions.push(campaignOpenerOf(session.context)
+          ? { id: 'open-campaign', label: CAMPAIGN_LABEL, kind: 'text', onClick: () => { close(); return campaignOpenerOf(session.context)(); } }
+          : { id: 'defer-letter', label: '以后再说', kind: 'text', onClick: close });
+      } else {
+        actions.push({ id: 'deliver-letter', label: cleanText(letterContent.actionLabel) || FOLLOW_FALLBACK, kind: 'primary', onClick: () => deliverComponent(session, false) });
+        actions.push({ id: 'defer-letter', label: '以后再说', kind: 'text', onClick: close });
+      }
+
+      const card = components.LetterCard({
+        title: session.notice ? NOTICE_TITLE : (cleanText(session.context.letterTitle) || titleOf(clue)),
+        paragraphs: session.notice ? NOTICE_LINES : letterParagraphs(letterContent.body),
+        sender: session.notice ? '' : cleanText(letterContent.sender),
+        ambientLabel: session.notice ? '' : cleanText(clue.ambientLabel || clue.ambientText),
+        state: session.notice ? 'read' : (cleanText(state.clues && state.clues[session.selectedId] && state.clues[session.selectedId].openedAt) ? 'read' : 'unread'),
+        actions: followUp ? [] : actions,
+      });
+      decorateLetter(card, clue, session);
+      annotateActions(card);
+      body.appendChild(card);
+      if (followUp) {
+        const intro = components.NPCDialogue({
+          name: followUp.name,
+          paragraphs: followUp.paragraphs,
+          avatar: { kind: 'user' },
+          state: 'optional',
+          actions: actions,
+        });
+        intro.setAttribute('data-mailbox-invitation', 'follow-up');
+        annotateActions(intro);
+        body.appendChild(intro);
+      }
+      if (accepted) {
+        const note = doc.createElement('p');
+        note.className = 'ac-career-ui__caption ac-career-mailbox__invite-status';
+        note.textContent = INVITE_ACCEPTED;
+        body.appendChild(note);
+      }
+    }
+    if (session.status || pendingTownStatus) {
+      const status = doc.createElement('p');
+      status.className = 'ac-career-ui__caption ac-career-status';
+      status.setAttribute('role', 'status');
+      status.setAttribute('aria-live', 'polite');
+      status.textContent = session.status || pendingTownStatus;
+      body.appendChild(status);
+      pendingTownStatus = '';
+    }
+    const result = componentShell.render({
+      title: PANEL_LABEL,
+      showHeader: false,
+      state: 'normal',
+      body: body,
+      reducedMotion: !!session.context.reducedMotion,
+      returnFocus: session.returnFocus || null,
+      onClose: close,
+    });
+    if (result && result.panel) result.panel.setAttribute('data-mailbox-view', session.notice ? 'notice' : 'mailbox');
+  }
+
+  async function selectComponentClue(session, clueId, userInitiated) {
+    if (!clueId || session.ids.indexOf(clueId) < 0) return;
+    const token = ++session.clueToken;
+    session.selectedId = clueId;
+    session.notice = false;
+    session.status = '';
+    session.invitation = null;
+    session.openingClue = typeof session.context.openClue === 'function';
+    renderComponent(session);
+    if (session.openingClue) {
+      try { await Promise.resolve(session.context.openClue(clueId)); }
+      catch (err) { /* reading remains available even if persistence reported failure */ }
+    }
+    if (token !== session.clueToken || componentSession !== session || session.selectedId !== clueId) return;
+    session.openingClue = false;
+    await loadComponentInvitation(session, clueId, token);
+    if (userInitiated) announceComponent(session, '翻到「' + titleOf(session.content[clueId]) + '」。');
+  }
+
+  async function loadComponentInvitation(session, clueId, clueToken) {
+    const token = ++session.invitationToken;
+    const reader = invitationReaderOf(session.context);
+    let raw = null;
+    if (reader && clueId) {
+      try { raw = await Promise.resolve(reader.call(session.context, clueId)); }
+      catch (err) { raw = null; }
+    }
+    const invitation = normalizeInvitation(raw, clueId);
+    if (token !== session.invitationToken || componentSession !== session || session.selectedId !== clueId) return;
+    if (typeof clueToken === 'number' && clueToken !== session.clueToken) return;
+    session.invitation = invitation;
+    if (session.ready) renderComponent(session);
+  }
+
+  async function loadComponentIdentity(session) {
+    const reader = typeof session.context.careerView === 'function'
+      ? session.context.careerView
+      : isObject(session.context.api) && typeof session.context.api.careerView === 'function' ? session.context.api.careerView : null;
+    if (!reader) return;
+    let view = null;
+    try { view = await reader.call(session.context, { surface: 'letter' }); } catch (err) { return; }
+    if (componentSession !== session) return;
+    session.identity = !!cleanText(session.context.careerId)
+      || !!(isObject(view) && (!!cleanText(view.originGameId) || (Array.isArray(view.professions) && view.professions.length > 0)))
+      || !!(isObject(session.context.state) && cleanText(session.context.state.acceptedOriginGameId));
+    if (session.ready) renderComponent(session);
+  }
+
+  function openComponent(ctx) {
+    const components = componentsOf(ctx);
+    const doc = documentOf();
+    if (!components || !doc || !doc.body) return null;
+    close();
+    const context = isObject(ctx) ? ctx : {};
+    const content = clueListOf(context);
+    const ids = discoveredIds(context);
+    const bridgeSelected = cleanText(context.clueId) || cleanText(context.clue && context.clue.clueId);
+    const preferred = bridgeSelected || cleanText(context.state && context.state.lastClueId);
+    const selectedId = ids.indexOf(preferred) >= 0 ? preferred : ids[ids.length - 1];
+    const shell = components.CareerShell.create('mailbox');
+    const session = {
+      doc: doc,
+      context: context,
+      content: content,
+      ids: ids,
+      selectedId: selectedId || '',
+      identity: !!cleanText(context.careerId) || !!(isObject(context.state) && cleanText(context.state.acceptedOriginGameId)),
+      invitation: null,
+      notice: false,
+      status: '',
+      ready: !ids.length,
+      token: 1,
+      clueToken: 0,
+      projectionToken: 0,
+      invitationToken: 0,
+      openingClue: !!(selectedId && typeof context.openClue === 'function' && selectedId !== bridgeSelected),
+      returnFocus: context.returnFocus || (doc.activeElement && typeof doc.activeElement.focus === 'function' ? doc.activeElement : null),
+    };
+    componentShell = shell;
+    componentSession = session;
+    const opened = shell.open({
+      title: PANEL_LABEL,
+      showHeader: false,
+      state: ids.length ? 'loading' : 'normal',
+      body: null,
+      reducedMotion: !!context.reducedMotion,
+      returnFocus: session.returnFocus,
+      onClose: close,
+    });
+    if (!opened || !opened.ok) {
+      componentShell = null;
+      componentSession = null;
+      return null;
+    }
+    renderComponent(session);
+    componentUnsubscribe = subscribeComponentChanges(session);
+    const initiallyOpening = session.openingClue;
+    Promise.all([
+      loadComponentIdentity(session),
+      (async () => {
+        if (initiallyOpening) {
+          try { await Promise.resolve(context.openClue(selectedId)); }
+          catch (err) { /* reading remains available even if persistence reported failure */ }
+        }
+        if (componentSession !== session || session.selectedId !== selectedId) return;
+        session.openingClue = false;
+        if (selectedId) await loadComponentInvitation(session, selectedId, 0);
+      })(),
+    ]).then(() => {
+      if (componentSession !== session) return;
+      session.ready = true;
+      renderComponent(session);
+    });
+    return opened;
+  }
+
+  function open(ctx) {
+    return componentsOf(ctx) ? openComponent(ctx) : openLegacy(ctx);
+  }
+
+  function render(ctx) {
+    return componentShell ? openComponent(ctx) : open(ctx);
   }
 
   const api = {
     open: open,
+    render: render,
     close: close,
   };
 

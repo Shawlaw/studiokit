@@ -623,6 +623,13 @@
         checkOptionalId(row.value.careerId, path + '.value.careerId', ctx);
         checkOptionalTimestamp(row.value.archivedAt, path + '.value.archivedAt', ctx);
       }
+      /* 0.22 professionVersion 是 discovery 行内的扩展字段，不新增顶层字段；未来版本原样保留。 */
+      if (row.key === 'discovery' && isObject(row.value) && Object.prototype.hasOwnProperty.call(row.value, 'professionVersion')) {
+        const version = row.value.professionVersion;
+        if (!isInteger(version) || version < 1) {
+          pushIssue(ctx, 'bad-value', path + '.value.professionVersion', 'professionVersion must be a positive integer: ' + preview(version));
+        }
+      }
       checkOptionalTimestamp(row.updatedAt, path + '.updatedAt', ctx);
     }
   }

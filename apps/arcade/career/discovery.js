@@ -13,13 +13,22 @@
 (function (root, factory) {
   'use strict';
   if (typeof module === 'object' && module && module.exports) {
-    module.exports = factory();
+    module.exports = factory(root);
     return;
   }
   root.ArcadeCareer = root.ArcadeCareer || {};
-  root.ArcadeCareer.discovery = factory();
-})(typeof window !== 'undefined' ? window : globalThis, function () {
+  root.ArcadeCareer.discovery = factory(root);
+})(typeof window !== 'undefined' ? window : globalThis, function (root) {
   'use strict';
+
+  var nodeProfessionState = null;
+  if (typeof module === 'object' && module && module.exports) {
+    nodeProfessionState = require('./profession-state.js');
+  }
+
+  function professionStateModule() {
+    return nodeProfessionState || (root && root.ArcadeCareer && root.ArcadeCareer.professionState) || null;
+  }
 
   const SCHEMA_VERSION = 1;
   const STATE_STORE_KEY = 'discovery';
@@ -54,10 +63,25 @@
     return rank(a) >= rank(b) ? a : b;
   }
 
+  function mergeProfessionExtension(state, raw, now) {
+    const professionState = professionStateModule();
+    if (!professionState || typeof professionState.mergeIntoDiscovery !== 'function') return state;
+    const extension = typeof professionState.extensionOf === 'function' ? professionState.extensionOf(raw) : null;
+    const merged = professionState.mergeIntoDiscovery(state, raw, now);
+    /* T01 的 merge 对未来版本保守返回 base；读取路径仍须原样保留未知扩展，
+       不降级、不猜测。写回与 gate 由 DB / profession-view 另行拒绝。 */
+    if (extension && Number(extension.professionVersion) > Number(professionState.PROFESSION_VERSION)) {
+      Object.keys(extension).forEach(function (key) {
+        merged[key] = extension[key];
+      });
+    }
+    return merged;
+  }
+
   /** 空状态。hintsEnabled 默认 true（不显眼、可关闭）。 */
   function initialState(now) {
     const at = typeof now === 'string' ? now : new Date().toISOString();
-    return {
+    const start = {
       schemaVersion: SCHEMA_VERSION,
       stage: 'DORMANT',
       firstSourceGame: null,
@@ -70,6 +94,7 @@
       clues: {},
       runs: {},
     };
+    return mergeProfessionExtension(start, null, at);
   }
 
   /** 修复/兼容持久化快照：未知字段忽略，坏字段回落默认，不抛异常。 */
@@ -120,7 +145,59 @@
       const first = Object.keys(out.clues)[0];
       if (first) out.firstSourceGame = out.clues[first].sourceGame;
     }
-    return out;
+    return mergeProfessionExtension(out, raw, now);
+  }
+
+  function catalogOf(deps) {
+    return deps && typeof deps.catalog === 'object' && deps.catalog ? deps.catalog : null;
+  }
+
+  /** 职业 ID 只来自 registry 的 game.professions；线索可显式缩窄到单一职业。 */
+  function professionIdsFor(gameId, clue, catalog) {
+    if (!catalog || !Array.isArray(catalog.games) || !Array.isArray(catalog.professions)) return [];
+    const game = catalog.games.find(function (row) {
+      return row && row.gameId === gameId;
+    });
+    if (!game || !Array.isArray(game.professions)) return [];
+    const known = Object.create(null);
+    catalog.professions.forEach(function (row) {
+      if (row && typeof row.professionId === 'string') known[row.professionId] = true;
+    });
+    const mapped = clue && typeof clue.professionId === 'string' && clue.professionId
+      ? [clue.professionId]
+      : game.professions;
+    return mapped.filter(function (professionId, index, list) {
+      return typeof professionId === 'string' && known[professionId] && list.indexOf(professionId) === index;
+    });
+  }
+
+  /**
+   * 真实发现/读信事件驱动纯 reducer。任一映射失败则本批职业事件全部不采用，
+   * 但既有 discovery 事实仍保留；错误由结构化 professionError 返回，不猜测。
+   */
+  function applyProfessionEvents(state, action, input, catalog) {
+    const professionState = professionStateModule();
+    if (!professionState) return { state: state, professionEvents: [], professionError: 'profession-state-unavailable' };
+    if (!catalog) return { state: state, professionEvents: [], professionError: 'missing-catalog' };
+    const ids = professionIdsFor(input.gameId, input.clue, catalog);
+    if (!ids.length) return { state: state, professionEvents: [], professionError: 'profession-game-mismatch' };
+    const reducer = action === 'READ' ? professionState.recordRead : professionState.recordGlimpsed;
+    if (typeof reducer !== 'function') return { state: state, professionEvents: [], professionError: 'profession-state-unavailable' };
+    let candidate = state;
+    const events = [];
+    for (let i = 0; i < ids.length; i += 1) {
+      const event = {
+        action: action,
+        input: Object.assign({}, input, { professionId: ids[i], catalog: catalog }),
+      };
+      const result = reducer(candidate, event.input);
+      if (!result || result.ok !== true) {
+        return { state: state, professionEvents: [], professionError: (result && result.reason) || 'profession-event-failed' };
+      }
+      candidate = result.state;
+      events.push(event);
+    }
+    return { state: candidate, professionEvents: events, professionError: null };
   }
 
   /** 线索内容包校验；单个坏线索被忽略并记录错误，不影响其余线索。 */
@@ -235,7 +312,7 @@
     const gameId = run.gameId;
     const baseRuns = state.runs[gameId] || { eligibleRuns: 0, lastRunId: null, lastRunAt: null };
     const eligibleRuns = baseRuns.eligibleRuns + 1;
-    const nextState = clone(state);
+    let nextState = clone(state);
     nextState.runs[gameId] = {
       eligibleRuns,
       lastRunId: typeof run.runId === 'string' ? run.runId : baseRuns.lastRunId,
@@ -281,12 +358,23 @@
     if (!nextState.firstClueId) nextState.firstClueId = clue.clueId;
     if (!nextState.firstSourceGame) nextState.firstSourceGame = gameId;
     nextState.stage = newerStage(nextState.stage, 'GLIMPSED');
+    const profession = applyProfessionEvents(nextState, 'GLIMPSED', {
+      professionId: null,
+      gameId: gameId,
+      clueId: clue.clueId,
+      clue: clue,
+      at: nextState.updatedAt,
+    }, catalogOf(input));
+    nextState = profession.state;
     return {
       clueId: clue.clueId,
       reason: found.reason,
       clue,
       nextState,
       discovery,
+      professionEvent: profession.professionEvents[0] || null,
+      professionEvents: profession.professionEvents,
+      professionError: profession.professionError,
     };
   }
 
@@ -306,6 +394,7 @@
           clueConfigs,
           runSummary: act.run,
           hintsEnabled: base.hintsEnabled,
+          catalog: catalogOf(deps),
           now,
         });
         if (!result) {
@@ -317,6 +406,9 @@
           state: result.nextState,
           clue: { clueId: result.clueId, reason: result.reason, clue: result.clue, discovery: result.discovery },
           transition: { from: base.stage, to: result.nextState.stage },
+          professionEvent: result.professionEvent,
+          professionEvents: result.professionEvents,
+          professionError: result.professionError,
         };
       }
       case 'CLUE_OPENED': {
@@ -325,11 +417,42 @@
         if (!record) {
           return { state: base, transition: null, invalid: 'unknown-clue' };
         }
-        const next = clone(base);
+        let next = clone(base);
         next.clues[clueId].openedAt = next.clues[clueId].openedAt || now;
         next.stage = newerStage(next.stage, 'CURIOUS');
         next.updatedAt = now;
-        return { state: next, transition: { from: base.stage, to: next.stage } };
+        const clueConfig = clueConfigs.find(function (candidate) {
+          return candidate && candidate.clueId === clueId;
+        }) || null;
+        const catalog = catalogOf(deps);
+        const catalogClue = catalog && Array.isArray(catalog.clues)
+          ? catalog.clues.find(function (candidate) { return candidate && candidate.clueId === clueId; }) || null
+          : null;
+        const contentClue = clueConfig || catalogClue;
+        const sourceGame = record.sourceGame;
+        let profession = { state: next, professionEvents: [], professionError: null };
+        if (!contentClue) {
+          profession.professionError = 'unknown-clue';
+        } else if (contentClue.gameId !== sourceGame) {
+          profession.professionError = 'clue-game-mismatch';
+        } else {
+          profession = applyProfessionEvents(next, 'READ', {
+            professionId: null,
+            gameId: sourceGame,
+            clueId: clueId,
+            clue: contentClue,
+            clueOpened: true,
+            at: now,
+          }, catalog);
+          next = profession.state;
+        }
+        return {
+          state: next,
+          transition: { from: base.stage, to: next.stage },
+          professionEvent: profession.professionEvents[0] || null,
+          professionEvents: profession.professionEvents,
+          professionError: profession.professionError,
+        };
       }
       case 'LETTER_FOLLOWED': {
         const next = clone(base);

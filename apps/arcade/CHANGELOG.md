@@ -1,5 +1,32 @@
 # Arcade Changelog
 
+## 0.24.0 — 2026-11-28
+
+- 世界主线替代路线：C1–C5 的替代机制（世界通用工作 / 本职业委托 / 明码代办 / 免费租机 / 商店材料 / 证据组合）改写为戏内成立的故事行动；只引用真实委托、代办 offer、材料与证据 token，不新增委托、不发奖励、不改变主线唯一解。
+- 章节前置 / 完成解释：章节、路线与终局入口用既有真实 token 生成公开解释文字；章节面板与港口经历页只渲染公开文案，`requirement` / `tokens` / `anchor` 等内部结构不进 DOM，无数据不建节点。
+- 可选职业交汇：只有**双方都已主动接受**的职业对才产出叙事与可选回执（16 条职业声明折叠为 10 个事件）；同一对只保留一个 owner、事件只写一次，重复触发是 no-op；`effects: []`、`grants` 全零，不发货币 / 材料 / 证据 / 旗标，不进主线候选、推荐集合、工作栏或待办。
+- 经历筛选与回读：17 条白名单（10 交汇 + 7 世界替代）在投影时解析为玩家可见文案，可按真实人物 / 已接受职业筛选；点击只展开静态回读文本，无总数 / 百分比 / 内部 id；`storyEvents` 落盘形状仍只有 `at` / `source`，旧档只追加、不迁移。
+- bridge 按需加载 `career/world-narrative.js` 与同源 `content/world-narrative.json`，缺失时保留 0.23 降级；SW 预缓存追加 `world-narrative.js`、`ui/journal.js`、`content/world-narrative.json`。
+- 版本链 0.24.0 / SW `studiokit-arcade-0.24.0-v1`；不新增 IndexedDB store / localStorage key / Schema，`contentVersion 0.18.0` / IDB v1 / 11 stores / 经典玩法数值零改动。
+- 2026-11-28 复查修正：交汇只在按当前事实复核并成功写入、回读确认后才显示，写入被拒或未提交时港口与经历保持不变；交汇经历带两位参与职业，「按职业筛选」在真实数据下可用；世界替代经历改为从真实已清记录只读推导（不落盘），其中 6 条可达，免费租机一条仍无写入方；职业专属委托的替代叙事只向该职业公开；并带入 0.23 的六项复查修复（首到港归属与首单、旧档迁移入口、后续邀请、首到港恢复）。契约见 [`ADR-0.24-world.md`](../../docs/arcade-life/ADR-0.24-world.md) §10。
+- 累计发布包含 0.22.0 与 0.23.0 的改进。候选 `4f2d271` 通过 release 51/51（not full），其中浏览器流程 645/645。设计 / 回滚见 [`DESIGN-0.24.0.md`](DESIGN-0.24.0.md)，契约见 [`ADR-0.24-world.md`](../../docs/arcade-life/ADR-0.24-world.md)，验证口径见 [`INTEGRATION-0.24.0.md`](../../docs/arcade-life/INTEGRATION-0.24.0.md)。本次升级的线上基线为 0.21.2（见下文）。
+
+## 0.23.0 — 2026-11-28（本地发布准备，未发布）
+
+- 折光港统一生涯界面：`.ac-career-ui` 局部命名空间下的 12 个共享组件、精确 token、原型一致的内联港口 SVG；普通 16 款游戏保持各自主题，不引入全局样式覆盖。
+- 结算线索、字条、首次到港、后续邀请与结算收据改为组件化适配：接受邀请与接下工作分离，未接受职业不出现在工作/经历/消息，收据只信真实结算与投影。
+- 港口首页三分栏（眼下/工作/经历）、工作卡、经历时间线与四个真实工具入口；世界通用工作以通用文案呈现并与具体职业解耦。
+- 16 个真实职业各有一份短叙事卡（首次到港与已有身份两套介绍、首单、回执、搁置/返回与 0.24 可选交汇条件）；消息只从已接受职业取 0 或 1 条。
+- 版本链 0.23.0 / SW `studiokit-arcade-0.23.0-v1`；不新增 IndexedDB store / localStorage key / Schema，`contentVersion 0.18.0` / IDB v1 / 11 stores / 经典玩法数值零改动。
+- 状态：本地发布准备，未获 `OWNER_AUTHORIZATION: PUBLISH_TO_MAIN`，未 push、未发布，不写 PUBLISHED；门禁结论以 [`INTEGRATION-0.23.0.md`](../../docs/arcade-life/INTEGRATION-0.23.0.md) 为准。设计 / 回滚见 [`DESIGN-0.23.0.md`](DESIGN-0.23.0.md)，UI 契约见 [`ADR-0.23-ui.md`](../../docs/arcade-life/ADR-0.23-ui.md)。线上最近发布版本仍为 0.21.2（已双端发布，见下一节）。
+
+## 0.22.0 — 2026-11-27（GATE_PASSED / RELEASE_READY，本地发布准备，未发布）
+
+- 完善职业独立发现与统一披露：各职业保持平行、被动的发现方式，玩家可见内容由统一口径裁决；不新增职业、委托总量、章节或终局。
+- 新增世界通用工作界面：以通用文案呈现，与具体职业解耦，不暴露玩家已拥有的职业；沿用既有委托与奖励，不克隆内容。
+- 版本链 0.22.0 / SW `studiokit-arcade-0.22.0-v1`；不新增 IndexedDB store / localStorage key / Schema，`contentVersion 0.18.0` / IDB v1 / 11 stores / 经典玩法数值零改动。
+- 状态：GATE_PASSED / RELEASE_READY（本地发布准备，未发布；release 41/41，not full）；未获 `OWNER_AUTHORIZATION: PUBLISH_TO_MAIN`，未 push、未发布，不写 PUBLISHED。设计 / 回滚见 [`DESIGN-0.22.0.md`](DESIGN-0.22.0.md)，验证口径见 [`INTEGRATION-0.22.0.md`](../../docs/arcade-life/INTEGRATION-0.22.0.md)。线上最近发布版本仍为 0.21.2（已双端发布，见下一节）。
+
 ## 0.21.2 — 2026-11-26（已双端发布）
 
 - 「旧港生涯 / 回折光港看看」改为在中心页直接打开告示板弹窗，不再先跳层塔游戏页；点击后按需加载生涯桥接，关闭后回到原滚动位置与入口焦点。

@@ -1,0 +1,1269 @@
+{
+  "schemaVersion": 1,
+  "contentVersion": "0.18.0",
+  "releaseVersion": "0.24",
+  "alternativeNarratives": [
+    {
+      "sampleKind": "alternativeNarrativeNode",
+      "placeholder": false,
+      "narrativeNodeId": "altn.C1.world-work.star-raid-t1",
+      "chapterId": "C1",
+      "mechanism": "world-work",
+      "anchor": {
+        "kind": "commission",
+        "refs": [
+          "star-raid.T1"
+        ]
+      },
+      "npcRef": {
+        "kind": "origin-letter",
+        "gameId": "star-raid"
+      },
+      "signatureFrom": "commission-issuer",
+      "gate": {
+        "requiresAcceptedProfession": true,
+        "requiresSpecificProfession": false,
+        "requiresFlagsAny": [],
+        "requiresFlagsAll": [],
+        "requiresCommissionsAll": [],
+        "requiresEvidenceAny": []
+      },
+      "texts": {
+        "offer": "告示板上那张外堤短巡的单子没有署名，只写着沿途把异常航报带回来。",
+        "progress": "报务室的人说这趟短巡已经有人接手，姓名栏空着也照常记档。",
+        "receipt": "航报交到东堤报务室，值班的人只问了一句外堤的风向，就把单子收进抽屉。",
+        "next": "先回港口眼下看看，或者接下一张真的挂出来的活。"
+      },
+      "receiptSource": "commission-receipt"
+    },
+    {
+      "sampleKind": "alternativeNarrativeNode",
+      "placeholder": false,
+      "narrativeNodeId": "altn.C1.rental.old-wing",
+      "chapterId": "C1",
+      "mechanism": "rental",
+      "anchor": {
+        "kind": "ship",
+        "refs": [
+          "old-wing"
+        ]
+      },
+      "npcRef": {
+        "kind": "origin-letter",
+        "gameId": "star-raid"
+      },
+      "signatureFrom": "origin-letter",
+      "gate": {
+        "requiresAcceptedProfession": true,
+        "requiresSpecificProfession": false,
+        "requiresFlagsAny": [],
+        "requiresFlagsAll": [],
+        "requiresCommissionsAll": [],
+        "requiresEvidenceAny": []
+      },
+      "texts": {
+        "offer": "东堤的旧机库还留着一架旧机，港务处的规矩是谁签谁用，用完照旧归还。",
+        "progress": "旧机今天还在库里，钥匙挂在门后的木板上，没有谁在等。",
+        "receipt": "护航单落档之后，旧机被擦干净推回原位，签收栏只写了一个归还时刻。",
+        "next": "用完就回港，告示板上还有别的活。"
+      },
+      "receiptSource": "commission-receipt"
+    },
+    {
+      "sampleKind": "alternativeNarrativeNode",
+      "placeholder": false,
+      "narrativeNodeId": "altn.C2.errand.alt-courier",
+      "chapterId": "C2",
+      "mechanism": "errand",
+      "anchor": {
+        "kind": "offer",
+        "refs": [
+          "alt.courier"
+        ]
+      },
+      "npcRef": {
+        "kind": "origin-letter",
+        "gameId": "gold-miner"
+      },
+      "signatureFrom": "offer-issuer",
+      "gate": {
+        "requiresAcceptedProfession": true,
+        "requiresSpecificProfession": false,
+        "requiresFlagsAny": [
+          "C1.signal_fragment"
+        ],
+        "requiresFlagsAll": [],
+        "requiresCommissionsAll": [],
+        "requiresEvidenceAny": []
+      },
+      "texts": {
+        "offer": "港务处把一只信号匣的交接收条压在账本里，说这趟短差一直空着，谁有空谁去。",
+        "progress": "跑腿单已经划到一半，取匣的码头今天是空的，交接双方都还在等回音。",
+        "receipt": "信号匣放回港务处时，值班的人先点数后落账，收条上只写了取回与交回两栏。",
+        "next": "回港口看一眼眼下的事，别为这趟短差改道。"
+      },
+      "receiptSource": "alternative-purchase"
+    },
+    {
+      "sampleKind": "alternativeNarrativeNode",
+      "placeholder": false,
+      "narrativeNodeId": "altn.C3.profession-commission.shadow-leap-t2",
+      "chapterId": "C3",
+      "mechanism": "profession-commission",
+      "anchor": {
+        "kind": "commission",
+        "refs": [
+          "shadow-leap.T2"
+        ]
+      },
+      "npcRef": {
+        "kind": "origin-letter",
+        "gameId": "shadow-leap"
+      },
+      "signatureFrom": "commission-issuer",
+      "gate": {
+        "requiresAcceptedProfession": true,
+        "requiresSpecificProfession": false,
+        "requiresFlagsAny": [],
+        "requiresFlagsAll": [
+          "C2.research_complete"
+        ],
+        "requiresCommissionsAll": [],
+        "requiresEvidenceAny": []
+      },
+      "texts": {
+        "offer": "旧档室把一张失落卷轴的工单夹进你的档里，说这张单子挂了很久，一直没人来取。",
+        "progress": "卷轴的下落还挂在旧档室的白板上，注明只等一个真去把它带回来的人。",
+        "receipt": "卷轴交回旧档室时，守档人先看封口再看编号，把收据压进档案夹的同一格。",
+        "next": "下一步看港口眼下的推荐，不必再回旧档室。"
+      },
+      "receiptSource": "commission-receipt"
+    },
+    {
+      "sampleKind": "alternativeNarrativeNode",
+      "placeholder": false,
+      "narrativeNodeId": "altn.C4.evidence-pair.mole-whack-block-drop",
+      "chapterId": "C4",
+      "mechanism": "evidence-pair",
+      "anchor": {
+        "kind": "evidencePair",
+        "refs": [
+          "E-mole-whack.T3",
+          "E-block-drop.T3"
+        ]
+      },
+      "npcRef": {
+        "kind": "origin-letter",
+        "gameId": "mole-whack"
+      },
+      "signatureFrom": "origin-letter",
+      "gate": {
+        "requiresAcceptedProfession": true,
+        "requiresSpecificProfession": false,
+        "requiresFlagsAny": [],
+        "requiresFlagsAll": [
+          "C3.truth_found"
+        ],
+        "requiresCommissionsAll": [],
+        "requiresEvidenceAny": []
+      },
+      "texts": {
+        "offer": "档案室想把管井和货位的现场记录放在一起核对，看看断电前这两处各发生了什么。",
+        "progress": "还缺的那一类记录，港里已经有人知道该去哪一间屋子找。",
+        "receipt": "管井和货位的两份现场记录都进了档案室，封套上分别写着地点和经手人。",
+        "next": "回港口看主线下一步，记录只是记录。"
+      },
+      "receiptSource": "evidence-grant"
+    },
+    {
+      "sampleKind": "alternativeNarrativeNode",
+      "placeholder": false,
+      "narrativeNodeId": "altn.C4.market-material.building",
+      "chapterId": "C4",
+      "mechanism": "market-material",
+      "anchor": {
+        "kind": "item",
+        "refs": [
+          "building"
+        ]
+      },
+      "npcRef": {
+        "kind": "origin-letter",
+        "gameId": "pendulum-tower"
+      },
+      "signatureFrom": "origin-letter",
+      "gate": {
+        "requiresAcceptedProfession": true,
+        "requiresSpecificProfession": false,
+        "requiresFlagsAny": [
+          "C3.truth_found"
+        ],
+        "requiresFlagsAll": [],
+        "requiresCommissionsAll": [],
+        "requiresEvidenceAny": []
+      },
+      "texts": {
+        "offer": "仓库前贴着缺料的单子，建材那一栏被划了又写，写着港里现在最缺这一类。",
+        "progress": "采买登记走的是商店固定价，账上记多少就是多少，没有别的入口。",
+        "receipt": "建材进库时点数落账，仓库值守把收条夹进当日流水，没有额外说明。",
+        "next": "缺料补上就回主线，不必囤积。"
+      },
+      "receiptSource": "purchase-ledger"
+    },
+    {
+      "sampleKind": "alternativeNarrativeNode",
+      "placeholder": false,
+      "narrativeNodeId": "altn.C5.profession-commission.gold-miner-t6",
+      "chapterId": "C5",
+      "mechanism": "profession-commission",
+      "anchor": {
+        "kind": "commission",
+        "refs": [
+          "gold-miner.T6"
+        ]
+      },
+      "npcRef": {
+        "kind": "origin-letter",
+        "gameId": "gold-miner"
+      },
+      "signatureFrom": "commission-issuer",
+      "gate": {
+        "requiresAcceptedProfession": true,
+        "requiresSpecificProfession": false,
+        "requiresFlagsAny": [],
+        "requiresFlagsAll": [
+          "C5.star_tower_resolved"
+        ],
+        "requiresCommissionsAll": [],
+        "requiresEvidenceAny": []
+      },
+      "texts": {
+        "offer": "星塔的事落定之后，告示板上又多了一张余波工单，还是验货处外窗收料的人托的。",
+        "progress": "工单不急，谁接谁做，港口恢复之后照常排班。",
+        "receipt": "工单落档时收料的人只问了一句今天港口的风，没再提星塔。",
+        "next": "回港口眼下，允许就此离开。"
+      },
+      "receiptSource": "commission-receipt"
+    }
+  ],
+  "crossoverPairs": [
+    {
+      "sampleKind": "crossoverPair",
+      "placeholder": false,
+      "contentOwnerProfessionId": "adventure.pilot",
+      "eventId": "crossover:adventure.pilot:research.gravity",
+      "pairId": "crossover:adventure.pilot:research.gravity",
+      "professionIds": [
+        "adventure.pilot",
+        "research.gravity"
+      ],
+      "anchor": {
+        "professionGames": [
+          {
+            "professionId": "adventure.pilot",
+            "gameId": "star-raid"
+          },
+          {
+            "professionId": "research.gravity",
+            "gameId": "gravity-flip"
+          }
+        ],
+        "chapterIds": [
+          "C3"
+        ],
+        "npcRefs": [
+          {
+            "kind": "origin-letter",
+            "gameId": "star-raid"
+          },
+          {
+            "kind": "origin-letter",
+            "gameId": "gravity-flip"
+          }
+        ]
+      },
+      "gate": {
+        "professionGate": "both-accepted",
+        "acceptedStates": [
+          "accepted",
+          "developed",
+          "completed"
+        ],
+        "pausedBlocks": false,
+        "requiresFlagsAny": [
+          "C3.truth_found"
+        ],
+        "requiresFlagsAll": [],
+        "requiresCommissionsAll": [],
+        "requiresEvidenceAny": []
+      },
+      "texts": {
+        "invite": "东堤报务室压着一份旧航报，校准室的交接班也留了一份频率对照，两页的日期只差一天。",
+        "body": "你把航报带到校准室。交接班的人指着对照表说，那一刻仪器没有断电，只是读数归零；你说你在同一刻听见杂音断了一拍。两个人都没有急着下结论，只把两页纸并排压在灯下。",
+        "receipt": "航报与对照表被夹进同一只旧夹子，报务室和校准室各留了一半。",
+        "decline": "这次先不对照，两页纸各自回架，谁也没有被催。"
+      },
+      "visibleSurfaces": [
+        "port",
+        "journal",
+        "message",
+        "receipt"
+      ],
+      "effects": [],
+      "grants": {
+        "credits": 0,
+        "items": {},
+        "evidence": [],
+        "flags": []
+      },
+      "touchesMainline": false,
+      "affectsIdentity": false,
+      "maxShowsPerCareer": 1,
+      "activeTextOwner": true
+    },
+    {
+      "sampleKind": "crossoverPair",
+      "placeholder": false,
+      "contentOwnerProfessionId": "adventure.relicseeker",
+      "eventId": "crossover:adventure.relicseeker:research.archivist",
+      "pairId": "crossover:adventure.relicseeker:research.archivist",
+      "professionIds": [
+        "adventure.relicseeker",
+        "research.archivist"
+      ],
+      "anchor": {
+        "professionGames": [
+          {
+            "professionId": "adventure.relicseeker",
+            "gameId": "shadow-leap"
+          },
+          {
+            "professionId": "research.archivist",
+            "gameId": "memory-flip"
+          }
+        ],
+        "chapterIds": [
+          "C3"
+        ],
+        "npcRefs": [
+          {
+            "kind": "origin-letter",
+            "gameId": "shadow-leap"
+          },
+          {
+            "kind": "origin-letter",
+            "gameId": "memory-flip"
+          }
+        ]
+      },
+      "gate": {
+        "professionGate": "both-accepted",
+        "acceptedStates": [
+          "accepted",
+          "developed",
+          "completed"
+        ],
+        "pausedBlocks": false,
+        "requiresFlagsAny": [
+          "C3.truth_found"
+        ],
+        "requiresFlagsAll": [],
+        "requiresCommissionsAll": [],
+        "requiresEvidenceAny": []
+      },
+      "texts": {
+        "invite": "旧档室把一只夹子摊在你面前，说前几天有人翻过同一页；崖壁拓回来的纸，边缘少了一块。",
+        "body": "你把拓片放在桌上，守档人从夹子里抽出一张旧复印件。两处缺口并不吻合，撕口起毛的方向却一致。他说这张复印件到港时就缺角，你说拓片是一张一张从原刻痕上压下来的。两个人把纸推到同一盏灯下，谁也没有替对方把话补完。",
+        "receipt": "拓片与复印件进了同一只夹子，旧档室登记了一条并存的去向。",
+        "decline": "这次先不谈，拓片与复印件各回原处，抽屉照旧锁上。"
+      },
+      "visibleSurfaces": [
+        "port",
+        "journal",
+        "message",
+        "receipt"
+      ],
+      "effects": [],
+      "grants": {
+        "credits": 0,
+        "items": {},
+        "evidence": [],
+        "flags": []
+      },
+      "touchesMainline": false,
+      "affectsIdentity": false,
+      "maxShowsPerCareer": 1,
+      "activeTextOwner": true
+    },
+    {
+      "sampleKind": "crossoverPair",
+      "placeholder": false,
+      "contentOwnerProfessionId": "engineering.demolition",
+      "eventId": "crossover:engineering.demolition:engineering.structural",
+      "pairId": "crossover:engineering.demolition:engineering.structural",
+      "professionIds": [
+        "engineering.demolition",
+        "engineering.structural"
+      ],
+      "anchor": {
+        "professionGames": [
+          {
+            "professionId": "engineering.demolition",
+            "gameId": "brick-breaker"
+          },
+          {
+            "professionId": "engineering.structural",
+            "gameId": "pendulum-tower"
+          }
+        ],
+        "chapterIds": [
+          "C4"
+        ],
+        "npcRefs": [
+          {
+            "kind": "origin-letter",
+            "gameId": "brick-breaker"
+          },
+          {
+            "kind": "origin-letter",
+            "gameId": "pendulum-tower"
+          }
+        ]
+      },
+      "gate": {
+        "professionGate": "both-accepted",
+        "acceptedStates": [
+          "accepted",
+          "developed",
+          "completed"
+        ],
+        "pausedBlocks": false,
+        "requiresFlagsAny": [
+          "C4.city_power_restored"
+        ],
+        "requiresFlagsAll": [],
+        "requiresCommissionsAll": [],
+        "requiresEvidenceAny": [
+          "E-mole-whack.T3"
+        ]
+      },
+      "texts": {
+        "invite": "拆解场送来一片带压痕的铁皮，塔架那边寄来一张验收单，背面印着一串认不全的柜号。",
+        "body": "门房把铁皮搁在门板上，管理员把验收单翻过来。两处压痕深浅不同，却落在同一段编号的两端。一个人说这是吊装前就有的，另一个说这是拆解时才露出来的。他们都没有改口，只把两样东西并排放在同一张工作台上。",
+        "receipt": "铁皮与验收单一起收进塔架档案柜，编号后面添了一行并列的旧签。",
+        "decline": "图纸先合上，两人各自去忙手上的活，谁都没有被扣进度。"
+      },
+      "visibleSurfaces": [
+        "port",
+        "journal",
+        "message",
+        "receipt",
+        "toast"
+      ],
+      "effects": [],
+      "grants": {
+        "credits": 0,
+        "items": {},
+        "evidence": [],
+        "flags": []
+      },
+      "touchesMainline": false,
+      "affectsIdentity": false,
+      "maxShowsPerCareer": 1,
+      "activeTextOwner": true
+    },
+    {
+      "sampleKind": "crossoverPair",
+      "placeholder": false,
+      "contentOwnerProfessionId": "engineering.dispatcher",
+      "eventId": "crossover:engineering.dispatcher:engineering.driver",
+      "pairId": "crossover:engineering.dispatcher:engineering.driver",
+      "professionIds": [
+        "engineering.dispatcher",
+        "engineering.driver"
+      ],
+      "anchor": {
+        "professionGames": [
+          {
+            "professionId": "engineering.dispatcher",
+            "gameId": "solitaire"
+          },
+          {
+            "professionId": "engineering.driver",
+            "gameId": "road-rush"
+          }
+        ],
+        "chapterIds": [
+          "C1"
+        ],
+        "npcRefs": [
+          {
+            "kind": "origin-letter",
+            "gameId": "solitaire"
+          },
+          {
+            "kind": "origin-letter",
+            "gameId": "road-rush"
+          }
+        ]
+      },
+      "gate": {
+        "professionGate": "both-accepted",
+        "acceptedStates": [
+          "accepted",
+          "developed",
+          "completed"
+        ],
+        "pausedBlocks": false,
+        "requiresFlagsAny": [
+          "C1.signal_fragment"
+        ],
+        "requiresFlagsAll": [],
+        "requiresCommissionsAll": [],
+        "requiresEvidenceAny": []
+      },
+      "texts": {
+        "invite": "排班房翻出一张旧船期，待领格那边也留着一张改过地址的退件单，两张纸的日期只差一天。",
+        "body": "抄写员把船期摊在柜台上，投递员把退件单压在旁边。路线被改过两次，船期被划掉一次，改笔的地方都落在同一个码头。一个人记得那天的交接班，另一个记得那批退件为什么没有出港。两个人说到同一处便停住，没有谁去补最后一笔。",
+        "receipt": "两张纸被订在一起，排班房与待领格各留了一份抄本。",
+        "decline": "这回先不合表，两人各自回岗，港口照常发船。"
+      },
+      "visibleSurfaces": [
+        "port",
+        "journal",
+        "message",
+        "receipt",
+        "toast",
+        "deep-link"
+      ],
+      "effects": [],
+      "grants": {
+        "credits": 0,
+        "items": {},
+        "evidence": [],
+        "flags": []
+      },
+      "touchesMainline": false,
+      "affectsIdentity": false,
+      "maxShowsPerCareer": 1,
+      "activeTextOwner": true
+    },
+    {
+      "sampleKind": "crossoverPair",
+      "placeholder": false,
+      "contentOwnerProfessionId": "engineering.maintenance",
+      "eventId": "crossover:engineering.maintenance:engineering.warehouse",
+      "pairId": "crossover:engineering.maintenance:engineering.warehouse",
+      "professionIds": [
+        "engineering.maintenance",
+        "engineering.warehouse"
+      ],
+      "anchor": {
+        "professionGames": [
+          {
+            "professionId": "engineering.maintenance",
+            "gameId": "mole-whack"
+          },
+          {
+            "professionId": "engineering.warehouse",
+            "gameId": "block-drop"
+          }
+        ],
+        "chapterIds": [
+          "C4"
+        ],
+        "npcRefs": [
+          {
+            "kind": "origin-letter",
+            "gameId": "mole-whack"
+          },
+          {
+            "kind": "origin-letter",
+            "gameId": "block-drop"
+          }
+        ]
+      },
+      "gate": {
+        "professionGate": "both-accepted",
+        "acceptedStates": [
+          "accepted",
+          "developed",
+          "completed"
+        ],
+        "pausedBlocks": false,
+        "requiresFlagsAny": [
+          "C4.city_power_restored"
+        ],
+        "requiresFlagsAll": [],
+        "requiresCommissionsAll": [],
+        "requiresEvidenceAny": []
+      },
+      "texts": {
+        "invite": "维护处的收发箱里多了一段管井回声，收货处的认领架上也多了一张封存柜号的抄条。",
+        "body": "你跟着两个当班的人下到井口。回声里有半段空响，抄条上恰好有一格长期空着。他们把编号对了一遍，说的是同一段分支通道。谁也没有立刻动那格货位，只约好今晚各自把巡检表补齐。",
+        "receipt": "两本巡检表在井口交接，空着的那一格被画了一个表示存疑的圈。",
+        "decline": "这次先各自巡检，那格还空着，没有人被记成欠账。"
+      },
+      "visibleSurfaces": [
+        "port",
+        "journal",
+        "message",
+        "receipt"
+      ],
+      "effects": [],
+      "grants": {
+        "credits": 0,
+        "items": {},
+        "evidence": [],
+        "flags": []
+      },
+      "touchesMainline": false,
+      "affectsIdentity": false,
+      "maxShowsPerCareer": 1,
+      "activeTextOwner": true
+    },
+    {
+      "sampleKind": "crossoverPair",
+      "placeholder": false,
+      "contentOwnerProfessionId": "intel.risk",
+      "eventId": "crossover:intel.risk:intel.tactics",
+      "pairId": "crossover:intel.risk:intel.tactics",
+      "professionIds": [
+        "intel.risk",
+        "intel.tactics"
+      ],
+      "anchor": {
+        "professionGames": [
+          {
+            "professionId": "intel.risk",
+            "gameId": "blackjack"
+          },
+          {
+            "professionId": "intel.tactics",
+            "gameId": "gomoku"
+          }
+        ],
+        "chapterIds": [
+          "C1",
+          "C2"
+        ],
+        "npcRefs": [
+          {
+            "kind": "origin-letter",
+            "gameId": "blackjack"
+          },
+          {
+            "kind": "origin-letter",
+            "gameId": "gomoku"
+          }
+        ]
+      },
+      "gate": {
+        "professionGate": "both-accepted",
+        "acceptedStates": [
+          "accepted",
+          "developed",
+          "completed"
+        ],
+        "pausedBlocks": false,
+        "requiresFlagsAny": [
+          "C1.signal_fragment"
+        ],
+        "requiresFlagsAll": [],
+        "requiresCommissionsAll": [],
+        "requiresEvidenceAny": []
+      },
+      "texts": {
+        "invite": "账房推来一页旧账，棋室捎来一张画着港道的棋谱，两处的绕行标记落在同一个街口。",
+        "body": "外柜的人习惯先算代价，看门的人习惯先算余地。他们把账页与棋谱叠在一起，发现同一条线被改过两次，一次改了时间，一次改了方向。谁也没有问对方为什么留底，只各自在自己的纸上添了一个只有自己看得懂的记认。",
+        "receipt": "账页与棋谱没有合订，只在街口那一处各留了相同的符号。",
+        "decline": "把这次碰面往后放，两人各自收好纸页，港口照旧运转。"
+      },
+      "visibleSurfaces": [
+        "port",
+        "journal",
+        "message",
+        "receipt"
+      ],
+      "effects": [],
+      "grants": {
+        "credits": 0,
+        "items": {},
+        "evidence": [],
+        "flags": []
+      },
+      "touchesMainline": false,
+      "affectsIdentity": false,
+      "maxShowsPerCareer": 1,
+      "activeTextOwner": true
+    },
+    {
+      "sampleKind": "crossoverPair",
+      "placeholder": false,
+      "contentOwnerProfessionId": "intel.tactics",
+      "eventId": "crossover:intel.tactics:research.archivist",
+      "pairId": "crossover:intel.tactics:research.archivist",
+      "professionIds": [
+        "intel.tactics",
+        "research.archivist"
+      ],
+      "anchor": {
+        "professionGames": [
+          {
+            "professionId": "intel.tactics",
+            "gameId": "gomoku"
+          },
+          {
+            "professionId": "research.archivist",
+            "gameId": "memory-flip"
+          }
+        ],
+        "chapterIds": [
+          "C2"
+        ],
+        "npcRefs": [
+          {
+            "kind": "origin-letter",
+            "gameId": "gomoku"
+          },
+          {
+            "kind": "origin-letter",
+            "gameId": "memory-flip"
+          }
+        ]
+      },
+      "gate": {
+        "professionGate": "both-accepted",
+        "acceptedStates": [
+          "accepted",
+          "developed",
+          "completed"
+        ],
+        "pausedBlocks": false,
+        "requiresFlagsAny": [
+          "C2.research_complete"
+        ],
+        "requiresFlagsAll": [],
+        "requiresCommissionsAll": [],
+        "requiresEvidenceAny": []
+      },
+      "texts": {
+        "invite": "棋室缺了一页旧棋谱，档案室一张照片的存根也缺了角，两处撕口都被留了下来。",
+        "body": "看门的人把残页压在灯下，管档案的人把存根摊在另一侧。缺口并不整齐，纸张的厚薄和撕开的方向却对得上。一个人说这页是被人抽走的，另一个说抽屉从来没有换过锁。两个人相对看了一会儿，把两样东西按缺口的形状对在一起。",
+        "receipt": "残页与存根被收进同一只信封，两处都没有补写新的说明。",
+        "decline": "这次先各自回去，没人因为这件事被标成待办。"
+      },
+      "visibleSurfaces": [
+        "port",
+        "journal",
+        "message",
+        "receipt",
+        "deep-link"
+      ],
+      "effects": [],
+      "grants": {
+        "credits": 0,
+        "items": {},
+        "evidence": [],
+        "flags": []
+      },
+      "touchesMainline": false,
+      "affectsIdentity": false,
+      "maxShowsPerCareer": 1,
+      "activeTextOwner": true
+    },
+    {
+      "sampleKind": "crossoverPair",
+      "placeholder": false,
+      "contentOwnerProfessionId": "nature.ecologist",
+      "eventId": "crossover:nature.ecologist:nature.snowscout",
+      "pairId": "crossover:nature.ecologist:nature.snowscout",
+      "professionIds": [
+        "nature.ecologist",
+        "nature.snowscout"
+      ],
+      "anchor": {
+        "professionGames": [
+          {
+            "professionId": "nature.ecologist",
+            "gameId": "snake-run"
+          },
+          {
+            "professionId": "nature.snowscout",
+            "gameId": "snowbells"
+          }
+        ],
+        "chapterIds": [
+          "C2"
+        ],
+        "npcRefs": [
+          {
+            "kind": "origin-letter",
+            "gameId": "snake-run"
+          },
+          {
+            "kind": "origin-letter",
+            "gameId": "snowbells"
+          }
+        ]
+      },
+      "gate": {
+        "professionGate": "both-accepted",
+        "acceptedStates": [
+          "accepted",
+          "developed",
+          "completed"
+        ],
+        "pausedBlocks": false,
+        "requiresFlagsAny": [
+          "C2.research_complete"
+        ],
+        "requiresFlagsAll": [],
+        "requiresCommissionsAll": [],
+        "requiresEvidenceAny": []
+      },
+      "texts": {
+        "invite": "标本棚记下的果核细孔，与听音室记下的雪面刻痕，被放在同一张桌上。",
+        "body": "采集的人说那批样本来自同一只旧货柜，守夜的人说那串刻痕的间距在同一个夜里变过。两页记录用的不是同一种记号，却都指向同一片少了点什么的山林。他们各自留下半句判断，没有谁替对方把结论补完。",
+        "receipt": "两页记录被并排归档，林地那一处只多了一行中性批注。",
+        "decline": "这次先不比对，两份记录各自归架，没有人被点名。"
+      },
+      "visibleSurfaces": [
+        "port",
+        "journal",
+        "message",
+        "receipt"
+      ],
+      "effects": [],
+      "grants": {
+        "credits": 0,
+        "items": {},
+        "evidence": [],
+        "flags": []
+      },
+      "touchesMainline": false,
+      "affectsIdentity": false,
+      "maxShowsPerCareer": 1,
+      "activeTextOwner": true
+    },
+    {
+      "sampleKind": "crossoverPair",
+      "placeholder": false,
+      "contentOwnerProfessionId": "nature.miner",
+      "eventId": "crossover:nature.miner:research.lattice",
+      "pairId": "crossover:nature.miner:research.lattice",
+      "professionIds": [
+        "nature.miner",
+        "research.lattice"
+      ],
+      "anchor": {
+        "professionGames": [
+          {
+            "professionId": "nature.miner",
+            "gameId": "gold-miner"
+          },
+          {
+            "professionId": "research.lattice",
+            "gameId": "merge-2048"
+          }
+        ],
+        "chapterIds": [
+          "C2"
+        ],
+        "npcRefs": [
+          {
+            "kind": "origin-letter",
+            "gameId": "gold-miner"
+          },
+          {
+            "kind": "origin-letter",
+            "gameId": "merge-2048"
+          }
+        ]
+      },
+      "gate": {
+        "professionGate": "both-accepted",
+        "acceptedStates": [
+          "accepted",
+          "developed",
+          "completed"
+        ],
+        "pausedBlocks": false,
+        "requiresFlagsAny": [
+          "C2.research_complete"
+        ],
+        "requiresFlagsAll": [],
+        "requiresCommissionsAll": [
+          "gold-miner.T1"
+        ],
+        "requiresEvidenceAny": []
+      },
+      "texts": {
+        "invite": "矿角切下来的那一片料被送到废料窗，值班的人翻过来看了一眼，说这切面在本地不常见。",
+        "body": "收料的人只说得出它不属于本地料，废料窗的人说在另一处见过同一种切面反光。他们把样本并排放到薄镜下，曲率与纹路对得上，却都不属于自己熟悉的那一批。两个人决定先留一份对照记录，不急着认定它从哪里来。",
+        "receipt": "样本被登记成两份并列的来历存疑条目，废料窗收走其中一半。",
+        "decline": "这次先各自收好样本，港口里没人被记成拖延。"
+      },
+      "visibleSurfaces": [
+        "port",
+        "journal",
+        "message",
+        "receipt"
+      ],
+      "effects": [],
+      "grants": {
+        "credits": 0,
+        "items": {},
+        "evidence": [],
+        "flags": []
+      },
+      "touchesMainline": false,
+      "affectsIdentity": false,
+      "maxShowsPerCareer": 1,
+      "activeTextOwner": true
+    },
+    {
+      "sampleKind": "crossoverPair",
+      "placeholder": false,
+      "contentOwnerProfessionId": "research.archivist",
+      "eventId": "crossover:research.archivist:research.lattice",
+      "pairId": "crossover:research.archivist:research.lattice",
+      "professionIds": [
+        "research.archivist",
+        "research.lattice"
+      ],
+      "anchor": {
+        "professionGames": [
+          {
+            "professionId": "research.archivist",
+            "gameId": "memory-flip"
+          },
+          {
+            "professionId": "research.lattice",
+            "gameId": "merge-2048"
+          }
+        ],
+        "chapterIds": [
+          "C2"
+        ],
+        "npcRefs": [
+          {
+            "kind": "origin-letter",
+            "gameId": "memory-flip"
+          },
+          {
+            "kind": "origin-letter",
+            "gameId": "merge-2048"
+          }
+        ]
+      },
+      "gate": {
+        "professionGate": "both-accepted",
+        "acceptedStates": [
+          "accepted",
+          "developed",
+          "completed"
+        ],
+        "pausedBlocks": false,
+        "requiresFlagsAny": [
+          "C2.research_complete"
+        ],
+        "requiresFlagsAll": [],
+        "requiresCommissionsAll": [],
+        "requiresEvidenceAny": []
+      },
+      "texts": {
+        "invite": "收货处把一张旧街照片摆在柜台上，废料窗也送来一片带划痕的薄镜，两样东西都说同一只货柜。",
+        "body": "管照片的人指出街口的宽度，管薄镜的人指出曲率的拐点。两张纸并排之后，同一个柜号从两处出现，一个在照片的背景里，一个在划痕的倒影里。他们没有把结论写进档案，只约好下次各自再核对一次。",
+        "receipt": "照片与薄镜被收进同一只抽屉，两处都留了可以再找到的位置。",
+        "decline": "这次先各自收好，旧街照片与薄镜都放回原处。"
+      },
+      "visibleSurfaces": [
+        "port",
+        "journal",
+        "message",
+        "receipt",
+        "toast",
+        "deep-link"
+      ],
+      "effects": [],
+      "grants": {
+        "credits": 0,
+        "items": {},
+        "evidence": [],
+        "flags": []
+      },
+      "touchesMainline": false,
+      "affectsIdentity": false,
+      "maxShowsPerCareer": 1,
+      "activeTextOwner": true
+    }
+  ],
+  "journalWhitelist": [
+    {
+      "sampleKind": "journalEvent",
+      "placeholder": false,
+      "eventId": "crossover:adventure.pilot:research.gravity",
+      "source": "world",
+      "whitelistLayer": "content",
+      "labelMode": "content",
+      "label": "航报与频率表在同一盏灯下对上了号",
+      "text": "东堤报务室把旧航报摊在灯下，校准室的人也翻出同一刻的频率对照；两页纸的边角被并排压在镇纸下。",
+      "person": "东堤报务室的值班报务",
+      "surfaces": [
+        "journal",
+        "port",
+        "receipt"
+      ]
+    },
+    {
+      "sampleKind": "journalEvent",
+      "placeholder": false,
+      "eventId": "crossover:adventure.relicseeker:research.archivist",
+      "source": "world",
+      "whitelistLayer": "content",
+      "labelMode": "content",
+      "label": "拓片与旧复印件并排收进同一只夹子",
+      "text": "旧档室的守档人从夹子里抽出复印件，探险的人把崖壁拓片放在旁边；两处缺角的撕口方向一致。",
+      "person": "旧档室的守档人",
+      "surfaces": [
+        "journal",
+        "port",
+        "receipt"
+      ]
+    },
+    {
+      "sampleKind": "journalEvent",
+      "placeholder": false,
+      "eventId": "crossover:engineering.demolition:engineering.structural",
+      "source": "world",
+      "whitelistLayer": "content",
+      "labelMode": "content",
+      "label": "铁皮压痕与验收单背面的柜号对上了",
+      "text": "拆解场送来一片带压痕的铁皮，塔架管理员翻过验收单；两处压痕落在同一段编号的两端。",
+      "person": "塔架档案柜的管理员",
+      "surfaces": [
+        "journal",
+        "port",
+        "receipt"
+      ]
+    },
+    {
+      "sampleKind": "journalEvent",
+      "placeholder": false,
+      "eventId": "crossover:engineering.dispatcher:engineering.driver",
+      "source": "world",
+      "whitelistLayer": "content",
+      "labelMode": "content",
+      "label": "船期与退件单被订在一起留了抄本",
+      "text": "排班房的抄写员把旧船期摊在柜台上，待领格的投递员把退件单压在旁边；改笔都落在同一个码头。",
+      "person": "排班房的抄写员",
+      "surfaces": [
+        "journal",
+        "port",
+        "receipt"
+      ]
+    },
+    {
+      "sampleKind": "journalEvent",
+      "placeholder": false,
+      "eventId": "crossover:engineering.maintenance:engineering.warehouse",
+      "source": "world",
+      "whitelistLayer": "content",
+      "labelMode": "content",
+      "label": "管井回声与封存柜号指向同一段通道",
+      "text": "老岑带着巡检表下到井口，回声里有半段空响；收货处的值守把封存柜号抄条递过来，两处说的是同一段分支。",
+      "person": "维护处收发箱的老岑",
+      "surfaces": [
+        "journal",
+        "port",
+        "receipt"
+      ]
+    },
+    {
+      "sampleKind": "journalEvent",
+      "placeholder": false,
+      "eventId": "crossover:intel.risk:intel.tactics",
+      "source": "world",
+      "whitelistLayer": "content",
+      "labelMode": "content",
+      "label": "账页与棋谱在同一个街口各留了记认",
+      "text": "账房外柜的人把旧账页推到灯下，棋室看门的人铺开港道棋谱；两处的绕行标记落在同一个街口。",
+      "person": "棋室看门的老陶",
+      "surfaces": [
+        "journal",
+        "port",
+        "receipt"
+      ]
+    },
+    {
+      "sampleKind": "journalEvent",
+      "placeholder": false,
+      "eventId": "crossover:intel.tactics:research.archivist",
+      "source": "world",
+      "whitelistLayer": "content",
+      "labelMode": "content",
+      "label": "残页与存根按缺口形状合进同一只信封",
+      "text": "老陶把棋谱缺页压在灯下，老周从抽屉里取出照片存根；缺口并不整齐，纸张的厚薄和撕开的方向却对得上。",
+      "person": "收货处的老周",
+      "surfaces": [
+        "journal",
+        "port",
+        "receipt"
+      ]
+    },
+    {
+      "sampleKind": "journalEvent",
+      "placeholder": false,
+      "eventId": "crossover:nature.ecologist:nature.snowscout",
+      "source": "world",
+      "whitelistLayer": "content",
+      "labelMode": "content",
+      "label": "两份自然记录在林地那一处并排归档",
+      "text": "标本棚的系绳人把果核细孔记在本上，听音室的守夜人带回雪面刻痕；两页记录都指向同一片少了点什么的山林。",
+      "person": "听音室的守夜人",
+      "surfaces": [
+        "journal",
+        "port",
+        "receipt"
+      ]
+    },
+    {
+      "sampleKind": "journalEvent",
+      "placeholder": false,
+      "eventId": "crossover:nature.miner:research.lattice",
+      "source": "world",
+      "whitelistLayer": "content",
+      "labelMode": "content",
+      "label": "矿角切面与薄镜纹路留下了一份对照记录",
+      "text": "验货处外窗的收料人把矿角切面翻过来，废料窗值班的瑾把薄镜推到灯下；两处反光的曲率与纹路对得上。",
+      "person": "废料窗值班的瑾",
+      "surfaces": [
+        "journal",
+        "port",
+        "receipt"
+      ]
+    },
+    {
+      "sampleKind": "journalEvent",
+      "placeholder": false,
+      "eventId": "crossover:research.archivist:research.lattice",
+      "source": "world",
+      "whitelistLayer": "content",
+      "labelMode": "content",
+      "label": "旧街照片与薄镜里的柜号对上了",
+      "text": "老周指出街口的宽度，瑾指出薄镜曲率的拐点；同一个柜号从照片背景和划痕倒影里各出现了一次。",
+      "person": "收货处的老周",
+      "surfaces": [
+        "journal",
+        "port",
+        "receipt"
+      ]
+    },
+    {
+      "sampleKind": "journalEvent",
+      "placeholder": false,
+      "eventId": "world:C1.world-work.star-raid-t1",
+      "source": "world",
+      "whitelistLayer": "content",
+      "labelMode": "content",
+      "label": "外堤短巡的航报在报务室落了档",
+      "text": "外堤短巡的航报交到东堤报务室，值班的人只问了一句外堤的风向，就把它收进抽屉。",
+      "person": "东堤报务室的值班报务",
+      "surfaces": [
+        "journal",
+        "port"
+      ]
+    },
+    {
+      "sampleKind": "journalEvent",
+      "placeholder": false,
+      "eventId": "world:C1.rental.old-wing",
+      "source": "world",
+      "whitelistLayer": "content",
+      "labelMode": "content",
+      "label": "旧机库的旧机签收后又照旧归还",
+      "text": "阿砾把旧机的钥匙从门后木板上取下来，说用完照旧推回原位；归还时签收栏只写了一个时刻。",
+      "person": "阿砾",
+      "surfaces": [
+        "journal",
+        "port"
+      ]
+    },
+    {
+      "sampleKind": "journalEvent",
+      "placeholder": false,
+      "eventId": "world:C2.errand.alt-courier",
+      "source": "commission",
+      "whitelistLayer": "content",
+      "labelMode": "content",
+      "label": "跑腿单换回的信号匣已经交回港务处",
+      "text": "港务处的跑腿单从账本里划掉，信号匣先点数后落账；收条上只写了取回与交回两栏。",
+      "person": "排班房的抄写员",
+      "surfaces": [
+        "journal",
+        "port"
+      ]
+    },
+    {
+      "sampleKind": "journalEvent",
+      "placeholder": false,
+      "eventId": "world:C3.profession-commission.shadow-leap-t2",
+      "source": "world",
+      "whitelistLayer": "content",
+      "labelMode": "content",
+      "label": "失落卷轴的工单在旧档室销了案",
+      "text": "失落卷轴的工单交回旧档室，守档人先看封口再看编号，把收据压进档案夹的同一格。",
+      "person": "旧档室的守档人",
+      "surfaces": [
+        "journal",
+        "port"
+      ]
+    },
+    {
+      "sampleKind": "journalEvent",
+      "placeholder": false,
+      "eventId": "world:C4.evidence-pair.mole-whack-block-drop",
+      "source": "world",
+      "whitelistLayer": "content",
+      "labelMode": "content",
+      "label": "管井与货位的现场记录都已归档",
+      "text": "老岑把管井那段空响记进巡检表，收货处值守也交来货位的抄条。档案室收下了两份记录。",
+      "person": "维护处收发箱的老岑",
+      "surfaces": [
+        "journal",
+        "port"
+      ]
+    },
+    {
+      "sampleKind": "journalEvent",
+      "placeholder": false,
+      "eventId": "world:C4.market-material.building",
+      "source": "world",
+      "whitelistLayer": "content",
+      "labelMode": "content",
+      "label": "建材按固定价补进仓库并记了流水",
+      "text": "仓库前的缺料单被划掉建材那一栏，收货处的值守点数落账，把收条夹进当日流水。",
+      "person": "收货处认领架的值守",
+      "surfaces": [
+        "journal",
+        "port"
+      ]
+    },
+    {
+      "sampleKind": "journalEvent",
+      "placeholder": false,
+      "eventId": "world:C5.profession-commission.gold-miner-t6",
+      "source": "world",
+      "whitelistLayer": "content",
+      "labelMode": "content",
+      "label": "余波工单在星塔之后照常落档",
+      "text": "星塔的事落定之后，余波工单落在验货处外窗；收料人只问了一句今天港口的风，没再提星塔。",
+      "person": "验货处外窗的收料人",
+      "surfaces": [
+        "journal",
+        "port"
+      ]
+    }
+  ]
+}

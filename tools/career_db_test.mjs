@@ -24,6 +24,7 @@ const ARTIFACTS = path.join(REPO_ROOT, 'test-artifacts');
 const VIEWPORT = { width: 420, height: 900 };
 const DB_NAME = 'studiokit:arcade:career';
 const CAREER_CORE = path.join(REPO_ROOT, 'apps', 'arcade', 'career', 'career-core.js');
+const PROFESSION_STATE = path.join(REPO_ROOT, 'apps', 'arcade', 'career', 'profession-state.js');
 const CAREER_DB = path.join(REPO_ROOT, 'apps', 'arcade', 'career', 'career-db.js');
 
 let SERVER_PORT = 0;
@@ -69,7 +70,7 @@ function sameJson(a, b) {
 async function injectModules(cdp) {
   return cdp.evaluate(`(async () => {
     const base = new URL('career/', location.href).href;
-    for (const file of ['career-core.js', 'career-db.js']) {
+    for (const file of ['profession-state.js', 'career-core.js', 'career-db.js']) {
       const response = await fetch(base + file, { cache: 'no-store' });
       if (!response.ok) throw new Error('fetch ' + file + ' -> ' + response.status);
       const source = await response.text();
@@ -78,6 +79,7 @@ async function injectModules(cdp) {
     }
     return {
       core: !!(window.ArcadeCareer && window.ArcadeCareer.core),
+      professionState: !!(window.ArcadeCareer && window.ArcadeCareer.professionState),
       db: !!(window.ArcadeCareer && window.ArcadeCareer.db),
       url: location.href,
     };
@@ -510,10 +512,25 @@ async function runChromeChecks(cdp) {
        const put = await db.putDiscovery([{ clueId: 'CL-gomoku', sourceGame: 'gomoku', firstSeenRunId: null, seenAt: '2026-11-22T00:00:00.000Z', openedAt: null, dismissed: false }], { generation: 0 });
        const listed = await db.listDiscovery();
        const second = await db.getDiscoveryState();
-       return { saved, equal: JSON.stringify(readBack) === JSON.stringify(state), put, listed: listed.map((row) => row.clueId).sort(), stable: JSON.stringify(second) === JSON.stringify(state) };`,
+       const coreOf = (value) => {
+         if (!value || typeof value !== 'object') return value;
+         const out = Object.assign({}, value);
+         ['updatedAt', 'professionVersion', 'firstDiscoveredGameId', 'acceptedOriginGameId', 'activeProfessionId', 'narrativeCursor', 'storyEvents', 'professionProgress'].forEach((key) => delete out[key]);
+         return out;
+       };
+       return {
+          saved,
+          equal: JSON.stringify(coreOf(readBack)) === JSON.stringify(coreOf(state)),
+          hasProfessionVersion: readBack && readBack.professionVersion === 1,
+          hasProgress: !!(readBack && readBack.professionProgress && typeof readBack.professionProgress === 'object'),
+          put,
+          listed: listed.map((row) => row.clueId).sort(),
+          stable: JSON.stringify(coreOf(second)) === JSON.stringify(coreOf(readBack)),
+        };`,
     );
     assert(roundTrip.saved.ok, 'save 失败：' + JSON.stringify(roundTrip.saved));
-    assert(roundTrip.equal, 'state 往返不一致');
+    assert(roundTrip.equal, 'state 核心字段往返不一致');
+    assert(roundTrip.hasProfessionVersion && roundTrip.hasProgress, '职业扩展字段未随发现状态保留');
     assert(roundTrip.put.ok && roundTrip.put.count === 1, 'putDiscovery=' + JSON.stringify(roundTrip.put));
     assert(sameJson(roundTrip.listed, ['CL-gomoku']), 'listDiscovery=' + JSON.stringify(roundTrip.listed));
     assert(roundTrip.stable, 'putDiscovery 改写了 state');
@@ -533,9 +550,9 @@ async function runChromeChecks(cdp) {
        out.push(await db.putDiscovery([{ clueId: 'bad id' }]));
        return { out, a, b, c, putInvalid: out[3] };`,
     );
-    assert(bad.out[0].ok && bad.a === 'garbage-string', '坏数据 save/get 不一致：' + JSON.stringify(bad));
-    assert(bad.out[1].ok && bad.b === null, 'null 往返失败：' + JSON.stringify(bad.b));
-    assert(bad.out[2].ok && bad.c && bad.c.broken, '对象往返失败');
+    assert(bad.out[0].ok && bad.a && typeof bad.a === 'object' && bad.a.professionVersion === 1, '坏字符串被规整为结构化发现状态：' + JSON.stringify(bad));
+    assert(bad.out[1].ok && bad.b && typeof bad.b === 'object' && bad.b.professionVersion === 1, 'null 被规整为空职业扩展快照：' + JSON.stringify(bad.b));
+    assert(bad.out[2].ok && bad.c && bad.c.broken && bad.c.professionVersion === 1, '对象坏字段被保留且扩展已补齐');
     assert(bad.putInvalid.ok === false, '非法 clueId 未拒绝：' + JSON.stringify(bad.putInvalid));
     const reset = await pageEval(
       cdp,

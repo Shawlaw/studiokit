@@ -943,3 +943,116 @@ export async function cleanup(ctx) {}
 
 - `tools/career_archive_test.mjs`：纯 Node + VM 内存 IDB 桩，覆盖 API 形状、封存往返与数据保留、11 stores 完全重置与经典键零触碰、事务内 guard 零半提交、备份标记往返/replace 以文件为准/旧档兼容、settings 确认门与失败提示、静态边界。不启动 Chrome。
 - 既有 `career_db_test.mjs` / `career_backup_test.mjs` 的 A 组（Node-only）继续全通过。
+
+## 23. 0.22 独立职业披露与平行起源（冻结，向后兼容）
+
+本节冻结 0.22 的最小状态、事务、投影与文件所有权。它只增补既有 `state['discovery']` 快照内的字段，**不新增 IndexedDB store、IDB 版本、localStorage key，也不改 `contentVersion`（仍 `0.18.0`）与 `rulesetVersion`。0.15–0.21 的接口、封存守卫、经典隔离和奖励规则全部继续有效。职业 ID 的唯一权威来源是 `content/registry.json` 的 `professions[]`，职业与游戏的映射来自 `games[].professions[]`，不得从展示名、游戏数量或固定数组推导。
+
+### 23.1 状态单一真源与纯 reducer
+
+现有 `state['discovery'].value` 中的 `stage / clues / runs / firstSourceGame / firstClueId / portSeenAt / careerSignedAt / hintsEnabled` 仍是发现事实的真相；只追加以下扩展字段（全部可缺省，旧档读到的缺省值是 `undiscovered`）：
+
+```json
+{
+  "professionVersion": 1,
+  "firstDiscoveredGameId": "gold-miner | null",
+  "acceptedOriginGameId": "gold-miner | null",
+  "activeProfessionId": "nature.miner | null",
+  "narrativeCursor": { "chapterId": "C0", "nodeId": "story:C0.port_seen | null" },
+  "storyEvents": { "story:C0.port_seen": { "at": "ISO", "source": "clue | commission | world" } },
+  "professionProgress": {
+    "nature.miner": {
+      "state": "undiscovered | glimpsed | read | accepted | developed | completed",
+      "paused": false,
+      "discoveredAt": null, "readAt": null, "acceptedAt": null, "completedAt": null
+    }
+  }
+}
+```
+
+- `professionVersion` 与纯 reducer 的 `PROFESSION_VERSION = 1` 对齐：缺字段按 1 读取；小于 1 走迁移；**大于 1 只读保留未知字段，不回写、不降级、不把新字段强转成旧语义**。读到未来档时披露 gate 按未披露处理，经典游玩不受影响。
+- `firstDiscoveredGameId` 是事实（首次线索），可能与 `acceptedOriginGameId` 不同；后者只在玩家**首次主动接受邀请**时写入，一经确定不得因推荐、读取后续线索或接受其他职业而改变。`activeProfessionId` 是玩家选择，可被另一已接受职业替换。
+- `paused` 与发现状态正交；搁置不回退状态、不撤销历史、不阻塞世界主线。
+- `storyEvents` 的 key 必须是 `namespace:name`（如 `story:C0.port_seen`），去重且按稳定时间持久化；上限 256 条，达到上限按 key 字典序淘汰最早者。技术日志不作为玩家经历。
+- `apps/arcade/career/profession-state.js` 是唯一纯 reducer：`initialState / normalizeExtension / mergeIntoDiscovery / extensionOf / recordGlimpsed / recordRead / acceptInvitation / setActive / setPaused / markDeveloped / markCompleted / recordStoryEvent / deriveLegacyAcceptance / validate`。它不读 DOM、DB、时钟或随机数，输入对象不被修改；坏快照只修复扩展字段，不猜测接受事实。
+- `recordGlimpsed` / `recordRead` / `acceptInvitation` 必须显式提供 catalog，并校验 `games[].professions[]` 与 `clues[].gameId → game.professions` 映射，错配返回结构化失败；不得用展示名或全局 stage 代替。`recordRead` 还要求已有 `glimpsed` 证据或调用方提供真实 `clueOpened:true`。`acceptInvitation` 要求该职业至少为 `read`，首次接受必须给出合法且映射匹配的 `gameId`；重复接受返回 `duplicate:true`/`newlyAccepted:false` 且状态、当前职业、游标、时间与资产全部不变；切换当前职业只能显式调用 `setActive`。直接 `setActive` 未接受职业必须失败。
+- 所有时间证据必须是合法 ISO-8601；坏字符串不是证据，不能升级状态或参与起源排序。`storyEvents` 重复 key 必须返回 `duplicate:true` 且不改正文/时间/游标；超过 256 条按 key 字典序淘汰最早者。
+- **持久化往返强制约束**：`discovery.js.normalizeState()` 与 `career-db.js.mergeDiscoveryState()` 必须调用 `professionState.mergeIntoDiscovery/extensionOf` 合并扩展字段；`bridge.currentStateSnapshot()` 读到的扩展必须与行内扩展一致。任何 `RUN_ENDED`、`CLUE_OPENED`、`SAVE_STATE`、封存/解冻/导入后都不得擦除 `acceptedOriginGameId`、`professionProgress` 或 `storyEvents`。T02/T03 必须各自提交跨模块往返 L1，纯模块测试不能代替该证据。
+
+### 23.2 事务边界与 DB ownership
+
+`career-db.js` 是职业状态的唯一落盘 owner；bridge 与 UI 不得自行 `put` 扩展字段。新增单一入口：
+
+```js
+applyProfessionEvent({
+  action: 'GLIMPSED' | 'READ' | 'ACCEPT_INVITATION' | 'SET_ACTIVE' | 'SET_PAUSED'
+        | 'MARK_DEVELOPED' | 'MARK_COMPLETED' | 'RECORD_STORY_EVENT' | 'MIGRATE_LEGACY',
+  input: { professionId, gameId, clueId, paused, eventId, source, at, catalog, records },
+  generation,
+  now
+}) -> Promise<{ ok, duplicate?, newlyAccepted?, created?, careerId?, generation, reason?, error? }>
+```
+
+- `newlyAccepted` 由纯 reducer 表示“本职业首次接受”；`created` 只由 DB 根据 identity 指针判断“本次是否创建唯一身份”，第二职业首次接受时 `created:false`。二者不得混用。
+- 写入前必须在同一事务内执行 `assertCareerWritable`，并使用现有 `generation` 守卫；失败时整事务回滚，bridge 不得显示成功。action → store 作用域：`GLIMPSED/READ/SET_PAUSED/RECORD_STORY_EVENT` 用 `state/discovery`；`SET_ACTIVE` 用 `state/discovery`；`ACCEPT_INVITATION` 首次建立身份时用 `state/discovery/profiles/balances/ledgers`，已有身份只用 `state/discovery`；`MARK_DEVELOPED/MARK_COMPLETED/MIGRATE_LEGACY` 用 `state/discovery`（迁移只读既有 quest/claim/run/store 快照）。同一事务内用调用方 `now` 同时写 reducer 与 row `updatedAt`，禁止事务外拼装半状态。
+- `GLIMPSED` / `READ` 由线索事实驱动，与既有 `mergeDiscoveryState` 的线索写入合并为同一事务或由 DB 在同一事务内派生；`ACCEPT_INVITATION` 在首次接受时把 `ensureCareer({originGameId: gameId})` 的身份/指针/余额/初始流水与扩展字段放在同一事务中。`created:true` 仅在本次真正建立唯一身份时出现；已有身份返回 `created:false` 且绝不重跑初始化或发初始奖励。
+- 接受邀请只建立故事上下文并把该职业设为当前职业，**不创建 run、不签下首份委托**；接受委托仍走既有 `commission.start` 独立动作。
+- `MIGRATE_LEGACY` 只从显式接受集合（有 `acceptedAt[id]` 才参与时间排序）、已完成/已接委托的 `quests`（仅明确 accepted/active/issued/cleared/completed 状态）、有效 `claims`、真实 `runs`（含 `profile.originGameId` 作为已有身份起源证据）回填职业接受证据；线索、全局 stage、catalog unlock、游玩次数、推荐、未读信件、`profile.updatedAt` 和未知时间戳都不算接受证据。身份已有但起源不可证时保留 `originGameId:null`/legacy 状态，按最早**合法时间**的可证实事件恢复；无证据不捏造。没有明确 `activeProfessionId` 证据时保持 `null`，由玩家选择，禁止按职业 ID 字典序自动指派。不补发奖励。
+- 封存、完全重置、replace 导入、退役 ID、多标签代次与失败零写入继续遵守 §22；备份仍复用 `careerLife` 既有 11 个 store，不增加顶层字段。
+
+### 23.3 统一披露策略（纯函数）
+
+新增 `career/profession-view.js`（UMD，纯函数，无 DOM/DB/时钟）：
+
+```js
+canRevealProfession({ state, catalog, context, professionId, surface }) -> { ok, reason }
+canShowCommission({ state, catalog, context, commissionId }) -> { ok, reason }
+canAcceptCommission({ state, catalog, context, commissionId }) -> { ok, reason }
+getVisibleCommissions({ state, catalog, context }) -> Array<commission>
+getNextNarrativeAction({ state, catalog, context }) -> null | { kind, commissionId?, label }
+projectCareerView({ state, catalog, context }) -> {
+  schemaVersion: 1,
+  originGameId, activeProfessionId,
+  professions: [/* 仅披露职业，不含隐藏 ID */],
+  commissions: [/* 仅可见/真实历史 */],
+  story: { nextAction, messages: [], history: [] },
+  tools: [/* 仅已引入工具 */]
+}
+```
+
+- `surface` 取值：`clue | letter | port | work | journal | receipt | message | route | toast | deep-link | shop | crafting | tools`。`context` 显式包含：`now, surface, gameId, openedClueIds, knownNpcIds, worldFlags, storyEvidence, clearedCommissions, activeRuns, history, walletKnown, availableIds, archived`。函数不得自行读取全局、存储或系统时钟。
+- 状态语义保持分离：`world unlocked != discovered != accepted != visible != actionable`。委托可见需职业已接受且故事/世界条件允许，**或**存在真实历史记录（历史只读、解释，不自动变为可接）；可接受还需原 `commission-core` 全部前置校验。`availableIds` 必须来自真实可接集合，推荐不可绕过 gate。
+- reason code 冻结为 `not-discovered / not-read / not-accepted / paused / wrong-surface / world-locked / story-locked / not-available / historical-only / archived / unknown-profession / unknown-commission / future-version`。码只供测试和诊断，不得进入玩家文案；测试不得用未列举的临时码断言行为。
+- 世界通用工作与职业工作的类别必须分离：T05 新增只读 `content/world-work.json`（`commissionIds[]`、通用戏内标题/说明），T04 的 `commission-core` 对这些 ID 允许任一已接受职业承接，但只以世界类别披露，不显示拥有职业名/邀请/进度；其余委托仍属于已接受职业。任何主线路线不得以未接受职业为唯一前置，三终局只检查 C4 世界条件，不要求特定职业。
+- `projectCareerView` 只返回允许进入玩家 DOM 的数据：未发现/已读未接受的职业与任务不出现在数组里，也不以 `display:none` 占位；reason code 只供测试/诊断，不渲染给玩家。
+- 所有入口（首页、结算、信箱找回、告示板、收据、人物/章节、市场/制造、材料来源、经历、路由推荐、toast、无障碍文本、空状态、导入后首渲染、旧链接与深链）必须调用同一投影或在核心入口执行同一 gate；仅隐藏 DOM 节点不合格。
+
+### 23.4 bridge 接口与入口语义
+
+`bridge.js` 暴露只读投影与受控写门面（都经 §23.2 的 DB 事务）：
+
+```js
+ArcadeCareer.professionView        // profession-view 模块
+ArcadeCareer.careerView(context)   // 基于当前 state/catalog 的只读投影
+ArcadeCareer.acceptProfessionInvitation({ professionId, gameId })
+ArcadeCareer.setActiveProfession({ professionId })
+ArcadeCareer.setProfessionPaused({ professionId, paused })
+```
+
+- `resolveStoryCareer()` 不再对全新档调用 `ensureCareer({})`；无身份时返回 `identityIssue`，剧情/告示板只能只读展示或提示，不得提前建立生涯身份。身份建立后，读信与港口沿用既有 careerId。
+- 首次接受后即使立即关闭港口，重新打开仍从持久化扩展字段恢复引入阶段；失败事务不留下半初始化状态。
+- 端口深链、`?careerPanel=*`、`?story=1`、`?careerLetter=1` 均先跑投影 gate；未知职业/未接受职业无法借 URL、搜索、调试面板或推荐进入任务详情。
+
+### 23.5 文件所有权（0.22）
+
+| 任务 | 唯一可写文件/目录 | 禁止触碰 |
+|---|---|---|
+| T01 | `docs/arcade-life/ADR-interfaces.md`、`career/profession-state.js`、`tools/career_profession_state_test.mjs` | 其他运行时 |
+| T02 | `career/bridge.js`、`career/discovery.js`、`career/entry-router.js`、`career/router.js`、16 个游戏页的生涯适配锚点、T02 专属测试 | `career-db.js`、`profession-view.js`、UI 模块 |
+| T03 | `career/career-db.js`、`career/backup.js`、T03 专属测试 | bridge、UI、内容 JSON |
+| T04 | `career/profession-view.js`、`career/commission-core.js`、T04 专属测试 | DB、bridge、UI、内容 JSON |
+| T05 | `career/route-planner.js`、`career/campaign-core.js`、`career/content/world-work.json`、T05 专属测试 | 其他模块的独占面 |
+| T06 | `career/ui/*`、`apps/arcade/index.html`、`apps/arcade/arcade.css` 中 career 局部规则、T06 专属测试 | bridge、DB、纯模块 |
+| 主 Agent | 分支/合并、版本号、SW、README/CHANGELOG、TASKS/queue、发布门禁 | 不覆盖 worker 未提交改动 |
+
+不同 worker 必须各用独立 worktree/分支；跨面改动通过主 Agent 以接口变更请求串行交接，不允许多人同时改同一共享文件或版本号。

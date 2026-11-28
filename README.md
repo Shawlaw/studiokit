@@ -32,12 +32,12 @@
 
 ## 工具一览
 
-以下三个工具均已双端发布、注册表状态为 `available`；Rounded Image 仅为规划项，**尚未实现**。Arcade 线上为 **0.21.2**（2026-11-26 已双端发布，main `bc50e61`，Actions `45858201941` 全绿，双端 91/91 一致）：旧港生涯入口改为首页直接弹窗、钱包标题统一、生涯弹窗滚动层级修复、游戏标题栏留白。版本链 0.21.2 / SW `studiokit-arcade-0.21.2-v1`，实测见 [`INTEGRATION-0.21.2.md`](docs/arcade-life/INTEGRATION-0.21.2.md)。
+以下三个工具均已双端发布、注册表状态为 `available`；Rounded Image 仅为规划项，**尚未实现**。Arcade 当前本地发布准备版本为 **0.24.0** / SW `studiokit-arcade-0.24.0-v1`（本地发布准备，未发布）：世界主线替代路线叙事合理化、双方接受的可选职业交汇、经历筛选与回读、章节前置解释；不改既有存储与玩法基线。0.23.0 为上一版 GATE_PASSED（release 47/47，not full）。线上最近发布版本仍为 **0.21.2**（2026-11-26 已双端发布，main `bc50e61`，Actions `45858201941` 全绿，双端 91/91 一致；旧港生涯入口改为首页直接弹窗、钱包标题统一、弹窗滚动层级修复、游戏标题栏留白，实测见 [`INTEGRATION-0.21.2.md`](docs/arcade-life/INTEGRATION-0.21.2.md)）；本轮状态见 [`INTEGRATION-0.24.0.md`](docs/arcade-life/INTEGRATION-0.24.0.md)。
 
 | 工具 | 版本 | 状态 | 入口 | 一句话说明 |
 | --- | --- | --- | --- | --- |
 | ◎ **Badge Studio** | `2.2.1` | `available` | [`apps/badge-studio/`](apps/badge-studio/) | 同心圆徽章工作台：弧形文字排版、多方案并排对比、透明 PNG / SVG 导出 |
-| 🕹 **街机厅 Arcade** | `0.21.2` | `available` | [`apps/arcade/](apps/arcade/) | 16 款竖屏小游戏（13 款带 6 关挑战 + 三款平和棋牌），支持全屏、暂停、本地续玩、分享与离线预载；0.21.2 修复旧港首页弹窗、钱包标题、弹窗滚动层级与游戏标题栏留白（已双端发布） |
+| 🕹 **街机厅 Arcade** | `0.24.0`（本地发布准备，未发布） | `available` | [`apps/arcade/`](apps/arcade/) | 16 款竖屏小游戏（13 款带 6 关挑战 + 三款平和棋牌），支持全屏、暂停、本地续玩、分享与离线预载；本轮把世界主线替代路线写成可信叙事、加入双方接受的可选职业交汇与经历筛选 / 回读；线上最近发布仍为 0.21.2（已双端发布） |
 | 🍽 **Venue Compare** | `0.2.0` | `available` | [`apps/restaurant-compare/`](apps/restaurant-compare/) | 餐厅考察对比：地图标注 + 横向对比表 + 外部链接备注，导出可转发的独立 HTML |
 | ▧ **Rounded Image** | — | `planned` | — | 预留给图片圆角工具，原始规格待恢复或重新定义；**当前没有实现** |
 
@@ -183,7 +183,7 @@ py -3 tools/check_readme_links.py
 
 1. 推送到 `main`（或手动 `workflow_dispatch`）后，[`.github/workflows/deploy.yml`](.github/workflows/deploy.yml) 执行一次校验/构建，把**同一份** `dist/` 并行部署到 GitHub Pages 与 Cloudflare Pages。
 2. Actions 中应有四个 job 成功：`Validate and build`、`Deploy GitHub Pages`、`Deploy Cloudflare Pages`、`Verify both deployments`。
-3. 末尾的 `Verify both deployments` 会跑 [`tools/verify_deploy.py`](tools/verify_deploy.py)，对固定的 **41 个部署文件**做逐文件 SHA-256 比对，并核对 Arcade `engine.js` / `sw.js` / 注册表版本、Badge Studio 与 Venue Compare 版本一致。它是一份关键的部署清单，不是全站逐文件清单。
+3. 末尾的 `Verify both deployments` 会跑 [`tools/verify_deploy.py`](tools/verify_deploy.py)，对固定的 **95 个部署文件**（以该脚本的 `PATHS` 清单为准）做逐文件 SHA-256 比对，并核对 Arcade `engine.js` / `sw.js` / 注册表版本、Badge Studio 与 Venue Compare 版本一致。它是一份关键的部署清单，不是全站逐文件清单。
 4. 需要在本机复核时：`py -3 tools/verify_deploy.py --base https://shawlaw.github.io/studiokit/ --base https://studiokit.pages.dev/`。
 
 Cloudflare 侧项目为 `studiokit`（Production branch `main`），所需 Secrets 为 `CLOUDFLARE_API_TOKEN` / `CLOUDFLARE_ACCOUNT_ID`，Variable 为 `CF_PAGES_URL`。Pull Request 只跑校验与构建，不触发部署。
@@ -238,9 +238,12 @@ Cloudflare 侧项目为 `studiokit`（Production branch `main`），所需 Secre
 | [`docs/archive/`](docs/archive/README.md) | 已完成周期的过程记录（并行契约、独立评审、试玩包）归档；不再更新 |
 | [`docs/badge-studio-upstream-readme.md`](docs/badge-studio-upstream-readme.md) | Badge Studio 上游 v2.2.0 说明原文存档（当前集成版本以 `BASELINE.md` 为准） |
 | [`apps/<tool>/README.md`](apps/) | 各工具的产品文档（功能、数据模型、边界、测试） |
-| [`apps/arcade/DESIGN-*.md`](apps/arcade/) | Arcade 逐版设计与回滚说明（`DESIGN-0.4.0` … `DESIGN-0.21.2`，其中 0.21.2 为本轮发布） |
+| [`apps/arcade/DESIGN-*.md`](apps/arcade/) | Arcade 逐版设计与回滚说明（`DESIGN-0.4.0` … `DESIGN-0.24.0`，其中 0.23.0 / 0.24.0 为本地发布准备设计、未发布） |
+| [`docs/arcade-life/INTEGRATION-0.24.0.md`](docs/arcade-life/INTEGRATION-0.24.0.md) | 0.24.0 状态：GATE_PASSED / RELEASE_READY（本地发布准备，未发布；2026-11-28 复查修正后候选 `4f2d271` release 51/51，not full；台账与未验证项见该文件 §6） |
 | [`docs/arcade-life/INTEGRATION-0.21.md`](docs/arcade-life/INTEGRATION-0.21.md) | 0.21.0 集成、分层门禁与双端发布证据 |
-| [`docs/arcade-life/INTEGRATION-0.21.2.md`](docs/arcade-life/INTEGRATION-0.21.2.md) | 0.21.2 发布前实测与发布后证据 |
+| [`docs/arcade-life/INTEGRATION-0.21.2.md`](docs/arcade-life/INTEGRATION-0.21.2.md) | 0.21.2 发布前实测与发布后证据（线上最近发布版本） |
+| [`docs/arcade-life/INTEGRATION-0.23.0.md`](docs/arcade-life/INTEGRATION-0.23.0.md) | 0.23.0 状态：GATE_PASSED / RELEASE_READY（本地发布准备，未发布；2026-11-28 复查修正后候选 `01219c2` release 47/47，not full；门禁结论见该文件 §6） |
+| [`docs/arcade-life/INTEGRATION-0.22.0.md`](docs/arcade-life/INTEGRATION-0.22.0.md) | 0.22.0 状态：GATE_PASSED / RELEASE_READY（本地发布准备，未发布；2026-11-28 复查修正后候选 `d4cc41a` release 41/41，not full） |
 
 ## 已知边界
 

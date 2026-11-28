@@ -1,8 +1,8 @@
 /*!
  * StudioKit Arcade Life — 委托生命周期（0.16，D16-02）
  *
- * 职责：委托目录规范化、可接委托列表、ticket 签发/校验、本页事件缓冲、
- * 目标判定编排、奖励计划编排、结算/放弃/恢复（docs/arcade-life/ADR-interfaces.md §7/§8/§18）。
+ * 职责：委托目录规范化、已接受职业的可接委托列表、ticket 签发/校验、本页事件缓冲、
+ * 目标判定编排、奖励计划编排、结算/放弃/恢复（docs/arcade-life/ADR-interfaces.md §7/§8/§18/§23）。
  *
  * 边界（不得越界）：
  * - 纯 UMD：浏览器挂 window.ArcadeCareerCommission（并镜像 window.ArcadeCareer.commission，
@@ -66,6 +66,10 @@
   var LIVE_STATUS = ['issued', 'active'];
   var SETTLED_STATUS = ['claimed', 'settled', 'claiming'];
   var FAILED_STATUS = ['failed', 'abandoned', 'cancelled', 'expired'];
+  /* 只有 ADR §20 的三条已注册终局可免职业 gate；前缀本身不是授权凭据。 */
+  var ENDING_IDS = Object.freeze(['ending.combat', 'ending.research', 'ending.rescue']);
+  var WORLD_WORK_TITLE = '旧港通用工作';
+  var WORLD_WORK_SUMMARY = '这是一项旧港通用工作，当前生涯可直接承接。';
 
   var RISK_VALUES = ['low', 'medium', 'high'];
 
@@ -92,6 +96,9 @@
     planFailed: 'plan-failed',
     claimFailed: 'claim-failed',
     careerUnavailable: 'career-unavailable',
+    noCareer: 'no-career',
+    catalogUnavailable: 'catalog-unavailable',
+    careerStateUnavailable: 'career-state-unavailable',
     updateFailed: 'update-failed',
     exception: 'exception',
   });
@@ -494,6 +501,8 @@
       commissionId: commissionId,
       gameId: raw.gameId,
       professionId: raw.professionId,
+      category: raw.category === 'world' || raw.worldWork === true ? 'world' : 'profession',
+      worldWork: raw.category === 'world' || raw.worldWork === true,
       tier: tierOf(raw, commissionId),
       title: title,
       summary: summary,
@@ -582,11 +591,17 @@
     var arcadeBase = '../';
 
     var nodeCore = null;
+    var nodeProfessionView = null;
     if (isNode && typeof require === 'function') {
       try {
         nodeCore = require('./career-core.js');
       } catch (err) {
         nodeCore = null;
+      }
+      try {
+        nodeProfessionView = require('./profession-view.js');
+      } catch (err) {
+        nodeProfessionView = null;
       }
     }
 
@@ -594,6 +609,9 @@
       content: null,
       contentErrors: [],
       contentWarnings: [],
+      catalog: null,
+      worldWorkIds: [],
+      worldWorkTexts: Object.create(null),
       runs: Object.create(null),
       currentTicketId: null,
       lastResult: null,
@@ -849,29 +867,223 @@
       }
     }
 
-    async function resolveCareer(input, ensureWanted) {
+    function isRegisteredEnding(commissionId) {
+      return ENDING_IDS.indexOf(commissionId) >= 0 && !!findCommission(commissionId);
+    }
+
+    function resolveProfessionView() {
+      if (nodeProfessionView) return nodeProfessionView;
+      if (root && root.ArcadeCareer && root.ArcadeCareer.professionView) return root.ArcadeCareer.professionView;
+      if (root && root.ArcadeCareerProfessionView) return root.ArcadeCareerProfessionView;
+      return null;
+    }
+
+    async function resolveCareer(input) {
       var core = resolveCore();
       var db = resolveDb();
       var requested = input && isRunIdSafe(input.careerId) ? input.careerId : null;
-      if (!requested && ensureWanted) {
-        if (!db) return { ok: false, reason: REASONS.dbUnavailable, careerId: null };
-        var originGameId = input && typeof input.originGameId === 'string' ? input.originGameId : null;
-        var ensured = null;
+      if (!requested && db && isFunction(db.getState)) {
         try {
-          ensured = await db.ensureCareer({ originGameId: originGameId, now: nowIso() });
+          var pointer = await db.getState('career');
+          var pointerId = pointer && isObject(pointer.value) ? pointer.value.careerId : pointer && pointer.careerId;
+          if (isRunIdSafe(pointerId)) requested = pointerId;
         } catch (err) {
-          ensured = null;
+          requested = null;
         }
-        if (!ensured || !ensured.ok || !core || !core.isValidCareerId(ensured.careerId)) {
-          return { ok: false, reason: (ensured && ensured.reason) || REASONS.careerUnavailable, careerId: null };
-        }
-        requested = ensured.careerId;
-        var createdCtx = await readCareerContext(requested);
-        createdCtx.created = ensured.created === true;
-        return Object.assign({ ok: true }, createdCtx);
       }
+      /* 0.22：核心永不隐式 ensureCareer；身份只能由显式接受邀请事务建立。 */
+      if (!requested) return { ok: false, reason: REASONS.noCareer, careerId: null };
+      if (!db) return { ok: false, reason: REASONS.dbUnavailable, careerId: null };
       var context = await readCareerContext(requested);
       return Object.assign({ ok: true, created: false }, context);
+    }
+
+    /** 核心授权真源只来自 career-db；opts.state 只能供纯 UI 投影，绝不参与写门面。 */
+    async function readProfessionState() {
+      var db = resolveDb();
+      if (!db) return { ok: false, reason: REASONS.careerStateUnavailable };
+      try {
+        if (isFunction(db.getDiscoveryState)) {
+          var state = await db.getDiscoveryState();
+          if (isObject(state)) return { ok: true, state: state };
+        }
+        if (isFunction(db.getState)) {
+          var row = await db.getState('discovery');
+          var value = row && isObject(row.value) ? row.value : row;
+          if (isObject(value) && value.key !== 'discovery') return { ok: true, state: value };
+        }
+        if (isFunction(db.getDiscoverySnapshot)) {
+          var snapshot = await db.getDiscoverySnapshot();
+          if (isObject(snapshot) && snapshot.state) return { ok: true, state: snapshot.state };
+        }
+      } catch (err) {
+        return { ok: false, reason: REASONS.careerStateUnavailable };
+      }
+      return { ok: false, reason: REASONS.careerStateUnavailable };
+    }
+
+    /** 职业 ID 与 gameId 映射只来自 configure 注入的 registry catalog。 */
+    function readCatalog() {
+      return isObject(state.catalog) ? state.catalog : null;
+    }
+
+    async function readCareerGuard(careerId, context) {
+      if (isObject(context) && context.archived === true) return { ok: false, reason: 'archived' };
+      var db = resolveDb();
+      if (!db) return { ok: false, reason: REASONS.dbUnavailable };
+      try {
+        if (isFunction(db.getArchiveState)) {
+          var archive = await db.getArchiveState();
+          if (archive && archive.ok === false) return { ok: false, reason: 'db-unavailable' };
+          if (archive && archive.archived === true) return { ok: false, reason: 'archived' };
+        }
+        if (isFunction(db.getState)) {
+          var retired = await db.getState('former-career:' + careerId);
+          if (retired) return { ok: false, reason: 'career-reset' };
+        }
+      } catch (err) {
+        return { ok: false, reason: REASONS.dbUnavailable };
+      }
+      return { ok: true };
+    }
+
+    function worldCommission(commission) {
+      if (!isObject(commission)) return false;
+      return state.worldWorkIds.indexOf(commission.commissionId) >= 0
+        || commission.category === 'world'
+        || commission.worldWork === true;
+    }
+
+    function setValuesToArray(set) {
+      if (!set || typeof set.forEach !== 'function') return [];
+      var out = [];
+      set.forEach(function (value) { out.push(value); });
+      return out;
+    }
+
+    function trustedContext(input) {
+      var source = isObject(input) ? input : {};
+      /* surface/history 只能收窄展示；story/world 事实必须由 DB profile/quests/wallet 推导。 */
+      return {
+        surface: typeof source.surface === 'string' ? source.surface : 'work',
+        archived: source.archived === true,
+        history: source.history,
+      };
+    }
+
+    function projectionContext(career, context) {
+      var source = isObject(context) ? context : {};
+      var base = isObject(career.context) ? career.context : {};
+      var flags = setValuesToArray(base.flags).concat(tokensOf(source.worldFlags));
+      var evidence = setValuesToArray(base.evidence).concat(tokensOf(source.storyEvidence));
+      var cleared = setValuesToArray(base.cleared).concat(tokensOf(source.clearedCommissions));
+      var wallet = isObject(career.wallet) ? career.wallet : {};
+      return Object.assign({}, source, {
+        surface: typeof source.surface === 'string' && source.surface ? source.surface : 'work',
+        worldFlags: uniqueTokens(flags),
+        storyEvidence: uniqueTokens(evidence),
+        clearedCommissions: uniqueTokens(cleared),
+        capabilities: uniqueTokens(setValuesToArray(base.capabilities).concat(tokensOf(source.capabilities))),
+        walletKnown: source.walletKnown === true || !!career.wallet,
+        wallet: {
+          credits: Number.isFinite(Number(wallet.credits)) ? Number(wallet.credits) : 0,
+          items: isObject(wallet.items) ? clone(wallet.items) : {},
+        },
+        worldWorkIds: state.worldWorkIds.slice(),
+      });
+    }
+
+    function tokensOf(value) {
+      var out = [];
+      if (Array.isArray(value)) {
+        value.forEach(function (item) { if (typeof item === 'string') out.push(item); });
+      } else if (isObject(value)) {
+        Object.keys(value).forEach(function (item) { if (value[item] === true) out.push(item); });
+      }
+      return out;
+    }
+
+    function uniqueTokens(list) {
+      var out = [];
+      list.forEach(function (item) {
+        if (typeof item === 'string' && out.indexOf(item) < 0) out.push(item);
+      });
+      return out;
+    }
+
+    function storyContextForUnlock(career, context) {
+      var source = isObject(context) ? context : {};
+      var base = isObject(career.context) ? career.context : {};
+      var flags = new Set(setValuesToArray(base.flags).concat(tokensOf(source.worldFlags)));
+      var evidence = new Set(setValuesToArray(base.evidence).concat(tokensOf(source.storyEvidence)));
+      var cleared = new Set(setValuesToArray(base.cleared).concat(tokensOf(source.clearedCommissions)));
+      var capabilities = new Set(setValuesToArray(base.capabilities).concat(tokensOf(source.capabilities)));
+      var items = new Map();
+      if (base.items && typeof base.items.forEach === 'function') {
+        base.items.forEach(function (value, key) { items.set(key, value); });
+      }
+      if (isObject(source.items)) Object.keys(source.items).forEach(function (key) { items.set(key, source.items[key]); });
+      var wallet = isObject(career.wallet) ? career.wallet : {};
+      return {
+        flags: flags,
+        evidence: evidence,
+        cleared: cleared,
+        capabilities: capabilities,
+        items: items,
+        credits: Number.isFinite(Number(wallet.credits)) ? Number(wallet.credits) : 0,
+      };
+    }
+
+    function publicCommission(commission, world, clearedIds) {
+      var clearedList = Array.isArray(clearedIds) ? clearedIds : [];
+      var publicText = world && isObject(state.worldWorkTexts[commission.commissionId])
+        ? state.worldWorkTexts[commission.commissionId]
+        : {};
+      var out = {
+        commissionId: commission.commissionId,
+        gameId: commission.gameId,
+        gameName: function () {
+          var games = state.catalog && Array.isArray(state.catalog.games) ? state.catalog.games : [];
+          var game = games.find(function (row) { return row && row.gameId === commission.gameId; });
+          return game && typeof game.displayName === 'string' && game.displayName ? game.displayName : commission.gameId;
+        }(),
+        objective: commission.objective && typeof commission.objective.kind === 'string'
+          ? { kind: commission.objective.kind, atLeast: commission.objective.atLeast }
+          : null,
+        category: world ? 'world' : 'profession',
+        worldWork: world,
+        title: world
+          ? (typeof publicText.title === 'string' && publicText.title ? publicText.title : WORLD_WORK_TITLE)
+          : commission.title,
+        summary: world
+          ? (typeof publicText.summary === 'string' && publicText.summary ? publicText.summary : WORLD_WORK_SUMMARY)
+          : commission.summary,
+        issuer: world ? '旧港' : commission.issuer,
+        reward: world
+          ? { credits: commission.reward && Number.isFinite(Number(commission.reward.credits)) ? Number(commission.reward.credits) : 0, items: {}, evidence: [], flags: [] }
+          : clone(commission.reward),
+        repeatSalaryCredits: commission.repeatSalaryCredits,
+        durationHint: commission.durationHint,
+        risk: commission.risk,
+        startParams: clone(commission.startParams),
+        tier: commission.tier,
+        cleared: clearedList.indexOf(commission.commissionId) >= 0,
+        unlocked: true,
+        historicalOnly: false,
+        readOnly: false,
+      };
+      if (!world) out.professionId = commission.professionId;
+      return out;
+    }
+
+    function buildGateCatalog(catalog) {
+      var out = clone(catalog);
+      out.commissions = (ensureContent() ? ensureContent().commissions : []).map(function (row) { return clone(row); });
+      out.worldWorkIds = state.worldWorkIds.slice();
+      out.worldWork = Object.assign({}, isObject(out.worldWork) ? out.worldWork : {}, {
+        commissionIds: state.worldWorkIds.slice(),
+      });
+      return out;
     }
 
     function isRunIdSafe(value) {
@@ -1015,26 +1227,112 @@
 
     /* ---------------- 公开方法：configure ---------------- */
 
+    function collectWorldTexts(raw) {
+      var texts = Object.create(null);
+      if (!isObject(raw)) return texts;
+      var addRow = function (row) {
+        if (!isObject(row)) return;
+        var id = typeof row.commissionId === 'string' ? row.commissionId : typeof row.id === 'string' ? row.id : '';
+        if (!isStableId(id)) return;
+        texts[id] = {
+          title: typeof row.title === 'string' ? row.title : '',
+          summary: typeof row.summary === 'string' ? row.summary : typeof row.description === 'string' ? row.description : '',
+        };
+      };
+      ['works', 'commissions', 'entries', 'list'].forEach(function (key) {
+        if (Array.isArray(raw[key])) raw[key].forEach(addRow);
+      });
+      ['byId', 'entries', 'texts'].forEach(function (key) {
+        if (isObject(raw[key])) Object.keys(raw[key]).forEach(function (id) {
+          addRow(Object.assign({ commissionId: id }, isObject(raw[key][id]) ? raw[key][id] : {}));
+        });
+      });
+      return texts;
+    }
+
+    function configureWorldWork(source) {
+      var candidates = [];
+      var add = function (id) {
+        if (!isStableId(id)) return false;
+        if (candidates.indexOf(id) < 0) candidates.push(id);
+        return true;
+      };
+      var valid = true;
+      var worldWorkSources = [];
+      if (source && isObject(source.catalog) && isObject(source.catalog.worldWork)) worldWorkSources.push(source.catalog.worldWork);
+      if (source && isObject(source.worldWork)) worldWorkSources.push(source.worldWork);
+      worldWorkSources.forEach(function (worldWork) {
+        ['commissionIds', 'ids'].forEach(function (key) {
+          if (worldWork[key] === undefined) return;
+          if (!Array.isArray(worldWork[key])) valid = false;
+          else worldWork[key].forEach(function (id) { if (!add(id)) valid = false; });
+        });
+      });
+      if (source && Object.prototype.hasOwnProperty.call(source, 'worldWorkIds')) {
+        if (!Array.isArray(source.worldWorkIds)) valid = false;
+        else source.worldWorkIds.forEach(function (id) { if (!add(id)) valid = false; });
+      }
+      if (!valid) return { ok: false, ids: [], texts: Object.create(null) };
+      var texts = Object.create(null);
+      worldWorkSources.forEach(function (worldWork) {
+        var collected = collectWorldTexts(worldWork);
+        Object.keys(collected).forEach(function (id) { texts[id] = collected[id]; });
+      });
+      return { ok: true, ids: candidates, texts: texts };
+    }
+
     function configure(input) {
       try {
+        var source = isObject(input) ? input : null;
+        var hasContent = !!source && Object.prototype.hasOwnProperty.call(source, 'content');
         var content = null;
-        if (isObject(input) && Object.prototype.hasOwnProperty.call(input, 'content')) content = input.content;
-        else if (Array.isArray(input) || isObject(input)) content = input;
-        else content = null;
+        var configOnlyKeys = ['worldWorkIds', 'catalog', 'arcadeBase', 'worldWork'];
+        if (hasContent) content = source.content;
+        else if (Array.isArray(input)) content = input;
+        else if (isObject(input) && !hasContent && !configOnlyKeys.some(function (key) { return Object.prototype.hasOwnProperty.call(input, key); })) content = input;
+        else if (input === undefined || input === null) content = null;
+        var hasConfiguration = hasContent || Array.isArray(input) || (isObject(input) && !configOnlyKeys.some(function (key) { return Object.prototype.hasOwnProperty.call(input, key); }));
         var core = resolveCore();
-        if (!core && content !== null && content !== undefined) {
+        if (!core && content !== null && content !== undefined && (hasContent || hasConfiguration)) {
           return { ok: false, contentVersion: CONTENT_VERSION, count: 0, errors: [REASONS.coreUnavailable], warnings: [], usable: false };
         }
-        var normalized = applyContent(content);
-        if (isObject(input) && typeof input.arcadeBase === 'string') arcadeBase = input.arcadeBase;
-        return {
-          ok: normalized.errors.length === 0,
-          contentVersion: normalized.contentVersion,
-          count: normalized.commissions.length,
-          errors: normalized.errors.slice(),
-          warnings: normalized.warnings.slice(),
-          usable: normalized.usable,
+        var normalized = hasConfiguration ? applyContent(content) : null;
+        var configErrors = normalized ? normalized.errors.slice() : state.contentErrors.slice();
+        if (source && Object.prototype.hasOwnProperty.call(source, 'catalog')) {
+          state.catalog = isObject(source.catalog) ? clone(source.catalog) : null;
+          if (!state.catalog) configErrors.push('catalog-invalid');
+        }
+        var hasWorldConfiguration = !!source && ['worldWorkIds', 'worldWork'].some(function (key) {
+          return Object.prototype.hasOwnProperty.call(source, key);
+        }) || !!(source && isObject(source.catalog) && isObject(source.catalog.worldWork));
+        if (hasWorldConfiguration) {
+          var world = configureWorldWork(source);
+          if (!world.ok) configErrors.push('world-work-ids-invalid');
+          else {
+            state.worldWorkIds = world.ids.slice();
+            state.worldWorkTexts = world.texts;
+          }
+        }
+        if (source && typeof source.arcadeBase === 'string') arcadeBase = source.arcadeBase;
+        var configurationOnly = !!source && !hasContent && !hasConfiguration;
+        if (!normalized && !state.content && !configurationOnly) {
+          var empty = applyContent(null);
+          configErrors = configErrors.concat(empty.errors);
+        }
+        var contentState = ensureContent();
+        var contentReady = !!contentState && contentState.usable && configErrors.length === 0;
+        var response = {
+          ok: contentReady,
+          contentVersion: contentState ? contentState.contentVersion : CONTENT_VERSION,
+          count: contentState ? contentState.commissions.length : 0,
+          errors: configErrors,
+          warnings: normalized ? normalized.warnings.slice() : state.contentWarnings.slice(),
+          usable: contentReady,
+          contentReady: contentReady,
+          worldWorkCount: state.worldWorkIds.length,
         };
+        if (!contentReady && configurationOnly && !contentState) response.reason = 'content-not-configured';
+        return response;
       } catch (err) {
         return { ok: false, contentVersion: CONTENT_VERSION, count: 0, errors: [errorText(err)], warnings: [], usable: false };
       }
@@ -1213,31 +1511,62 @@
           errors: state.contentErrors.slice(),
         });
       }
-      var career = await resolveCareer({ careerId: opts.careerId, originGameId: typeof opts.originGameId === 'string' ? opts.originGameId : null }, opts.ensure === true);
-      if (!career.ok) {
+      /* 显式 ensure:true 也不再创建身份；无身份是结构化失败。 */
+      var career = await resolveCareer({ careerId: opts.careerId });
+      if (!career.ok || !career.careerId) {
         return failure(career.reason || REASONS.careerUnavailable, { careerId: null, commissions: [] });
       }
-      var commissions = content.commissions.map(function (commission) {
-        return {
+      var guard = await readCareerGuard(career.careerId, opts.context);
+      if (!guard.ok) return failure(guard.reason, { careerId: career.careerId, commissions: [] });
+      var stateRead = await readProfessionState();
+      if (!stateRead.ok) return failure(stateRead.reason, { careerId: career.careerId, commissions: [] });
+      var catalog = readCatalog();
+      var view = resolveProfessionView();
+      if (!catalog || !view) return failure(REASONS.catalogUnavailable, { careerId: career.careerId, commissions: [] });
+      var gateCatalog = buildGateCatalog(catalog);
+      var context = projectionContext(career, trustedContext(opts.context));
+      if (futureVersionOf(stateRead.state)) {
+        return failure('future-version', { careerId: career.careerId, commissions: [] });
+      }
+
+      var candidateIds = [];
+      content.commissions.forEach(function (commission) {
+        var world = worldCommission(commission);
+        var shown = view.canShowCommission({
+          state: stateRead.state,
+          catalog: gateCatalog,
+          context: context,
           commissionId: commission.commissionId,
-          gameId: commission.gameId,
-          professionId: commission.professionId,
-          title: commission.title,
-          summary: commission.summary,
-          issuer: commission.issuer,
-          reward: clone(commission.reward),
-          repeatSalaryCredits: commission.repeatSalaryCredits,
-          durationHint: commission.durationHint,
-          risk: commission.risk,
-          startParams: clone(commission.startParams),
-          unlocked: isUnlocked(commission, career.context),
-        };
+        });
+        if (!shown.ok || shown.historicalOnly === true) return;
+        /* 原 commission-core 谓词仍逐单重算，availableIds 不能绕过 world/story gate。 */
+        if (!isUnlocked(commission, storyContextForUnlock(career, context))) return;
+        candidateIds.push(commission.commissionId);
+      });
+      context.availableIds = candidateIds.slice();
+      var commissions = [];
+      content.commissions.forEach(function (commission) {
+        if (candidateIds.indexOf(commission.commissionId) < 0) return;
+        var accepted = view.canAcceptCommission({
+          state: stateRead.state,
+          catalog: gateCatalog,
+          context: context,
+          commissionId: commission.commissionId,
+        });
+        if (!accepted.ok) return;
+        var world = worldCommission(commission);
+        commissions.push(publicCommission(commission, world, context.clearedCommissions));
+      });
+      commissions.sort(function (a, b) {
+        if (a.commissionId === b.commissionId) return 0;
+        return a.commissionId < b.commissionId ? -1 : 1;
       });
       return {
         ok: true,
-        careerId: career.careerId || null,
-        created: career.created === true,
+        careerId: career.careerId,
+        created: false,
         commissions: commissions,
+        availableIds: commissions.map(function (commission) { return commission.commissionId; }),
         contentVersion: CONTENT_VERSION,
       };
     }
@@ -1287,6 +1616,51 @@
       };
     }
 
+    async function findAuthoritativeLiveRun(db, careerId, commissionId) {
+      if (!db || !isFunction(db.listRuns)) return null;
+      var listed = null;
+      try {
+        listed = await db.listRuns({ careerId: careerId, statuses: LIVE_STATUS.slice(), mode: MODE, commissionId: commissionId });
+      } catch (err) {
+        return null;
+      }
+      var rows = isObject(listed) && Object.prototype.hasOwnProperty.call(listed, 'ok')
+        ? (listed.ok === true && Array.isArray(listed.runs) ? listed.runs : [])
+        : (Array.isArray(listed) ? listed : []);
+      var live = null;
+      for (var i = 0; i < rows.length; i += 1) {
+        var candidate = rows[i];
+        if (!isObject(candidate) || candidate.careerId !== careerId || candidate.commissionId !== commissionId) continue;
+        if (candidate.mode !== MODE || !isLiveStatus(candidate.status)) continue;
+        var full = await safeGetRun(db, typeof candidate.ticketId === 'string' && candidate.ticketId ? candidate.ticketId : candidate.runId);
+        if (!full || full.careerId !== careerId || full.commissionId !== commissionId || full.mode !== MODE || !isLiveStatus(full.status)) continue;
+        if (!live || (full.status === 'active' && live.status !== 'active')) live = full;
+      }
+      return live;
+    }
+
+    function mayContinueAcceptedRun(stateRead, gateCatalog, view, commission) {
+      if (!view || !stateRead || !stateRead.ok) return false;
+      if (futureVersionOf(stateRead.state)) return false;
+      var context = { surface: 'port' };
+      if (worldCommission(commission)) {
+        return gateCatalog.professions.some(function (profession) {
+          return isObject(profession) && typeof profession.professionId === 'string' && profession.professionId
+            && view.canRevealProfession({ state: stateRead.state, catalog: gateCatalog, context: context, professionId: profession.professionId }).ok;
+        });
+      }
+      return view.canRevealProfession({
+        state: stateRead.state,
+        catalog: gateCatalog,
+        context: context,
+        professionId: commission.professionId,
+      }).ok;
+    }
+
+    function futureVersionOf(state) {
+      return isObject(state) && Number.isInteger(state.professionVersion) && state.professionVersion > 1;
+    }
+
     async function startSafe(input) {
       var opts = isObject(input) ? input : {};
       var core = resolveCore();
@@ -1301,13 +1675,29 @@
       var commission = findCommission(commissionId);
       if (!commission) return failure(REASONS.missingCommission, { commissionId: commissionId });
 
-      var career = await resolveCareer({ careerId: opts.careerId, originGameId: commission.gameId }, true);
+      var career = await resolveCareer({ careerId: opts.careerId });
       if (!career.ok || !career.careerId) return failure(career.reason || REASONS.careerUnavailable);
-      if (!isUnlocked(commission, career.context)) {
-        return failure(REASONS.locked, { commissionId: commissionId, careerId: career.careerId, message: '港口的告示还没换成这一张。' });
+      var guard = await readCareerGuard(career.careerId, opts.context);
+      if (!guard.ok) return failure(guard.reason, { commissionId: commissionId, careerId: career.careerId });
+      var context = projectionContext(career, trustedContext(opts.context));
+      var isEnding = isRegisteredEnding(commissionId);
+      var stateRead = isEnding ? { ok: true, state: null } : await readProfessionState();
+      var catalog = isEnding ? null : readCatalog();
+      var view = isEnding ? null : resolveProfessionView();
+      var gateCatalog = catalog ? buildGateCatalog(catalog) : null;
+
+      /* 冻结语义：已有 live run 是“继续”，先按 DB 权威字段校验并复用原票。
+         只有签票后短期 story/world 前置变化、搁置职业等均不得阻塞既有任务。 */
+      var liveRun = await findAuthoritativeLiveRun(db, career.careerId, commissionId);
+      if (liveRun) {
+        if (!isEnding && !mayContinueAcceptedRun(stateRead, gateCatalog, view, commission)) {
+          return failure('not-accepted', { commissionId: commissionId, careerId: career.careerId });
+        }
+        var recoveredRun = reuseResult(liveRun, commission, career.careerId, 'db-live-run');
+        if (recoveredRun) return recoveredRun;
       }
 
-      /* 幂等路径一：本标签页 sessionStorage ticket 仍在（原行为，先命中先返回）。 */
+      /* 本标签页仍有原票时也必须回 DB 验证 run 字段，不能仅凭 sessionStorage 复用。 */
       var stored = readStoredTicket();
       if (
         stored &&
@@ -1316,41 +1706,44 @@
         stored.careerId === career.careerId &&
         isRunId(stored.ticketId)
       ) {
-        var existingRun = await safeGetRun(db, stored.ticketId);
-        if (existingRun && existingRun.commissionId === commissionId && isLiveStatus(existingRun.status)) {
-          var reused = reuseResult(existingRun, commission, career.careerId, 'stored-ticket');
+        var storedRun = await safeGetRun(db, stored.ticketId);
+        if (
+          storedRun && storedRun.careerId === career.careerId && storedRun.commissionId === commissionId
+          && storedRun.mode === MODE && isLiveStatus(storedRun.status)
+        ) {
+          if (!isEnding && !mayContinueAcceptedRun(stateRead, gateCatalog, view, commission)) {
+            return failure('not-accepted', { commissionId: commissionId, careerId: career.careerId });
+          }
+          var reused = reuseResult(storedRun, commission, career.careerId, 'stored-ticket');
           if (reused) return reused;
         }
       }
 
-      /* 幂等路径二（0.20）：关闭标签页后 ticket 丢失，但 DB 仍有同 career+同委托 live run。
-         只读查到原 run 后复用其 ticketId/nonce；玩家必须显式再次点击「接单」，这里不会自动导航。 */
-      if (isFunction(db.listRuns)) {
-        var listedCandidates = null;
-        try {
-          listedCandidates = await db.listRuns({ careerId: career.careerId, statuses: LIVE_STATUS.slice(), mode: MODE, commissionId: commissionId });
-        } catch (err) {
-          listedCandidates = null;
+      /* 未命中任何权威 live run，才执行新接单的 story/world 与职业 gate。 */
+      if (!isEnding) {
+        if (!stateRead.ok) return failure(stateRead.reason, { commissionId: commissionId, careerId: career.careerId });
+        if (!gateCatalog || !view) return failure(REASONS.catalogUnavailable, { commissionId: commissionId, careerId: career.careerId });
+        var gateOptions = {
+          state: stateRead.state,
+          catalog: gateCatalog,
+          context: context,
+          commissionId: commissionId,
+        };
+        var shown = view.canShowCommission(gateOptions);
+        if (!shown.ok) return failure(shown.reason, { commissionId: commissionId, careerId: career.careerId });
+        if (shown.historicalOnly === true) {
+          return failure('historical-only', { commissionId: commissionId, careerId: career.careerId });
         }
-        /* 新形状 {ok,runs} 与旧 Array 形状都兼容；读失败不在这里伪造成「没有 run」而重建票，
-           交给下面的 createRun 同事务去重兜底（DB 可用时返回 duplicate 原票）。 */
-        var candidates = isObject(listedCandidates) && Object.prototype.hasOwnProperty.call(listedCandidates, 'ok')
-          ? (listedCandidates.ok === true && Array.isArray(listedCandidates.runs) ? listedCandidates.runs : [])
-          : (Array.isArray(listedCandidates) ? listedCandidates : []);
-        var liveRun = null;
-        for (var c = 0; c < candidates.length; c += 1) {
-          var candidate = candidates[c];
-          if (!isObject(candidate) || candidate.mode !== MODE || candidate.commissionId !== commissionId) continue;
-          if (!isLiveStatus(candidate.status)) continue;
-          var full = await safeGetRun(db, typeof candidate.ticketId === 'string' ? candidate.ticketId : candidate.runId);
-          if (full && full.commissionId === commissionId && isLiveStatus(full.status)) {
-            if (!liveRun || (full.status === 'active' && liveRun.status !== 'active')) liveRun = full;
-          }
+        if (!isUnlocked(commission, storyContextForUnlock(career, context))) {
+          return failure(REASONS.locked, { commissionId: commissionId, careerId: career.careerId, message: '港口的告示还没换成这一张。' });
         }
-        if (liveRun) {
-          var recovered = reuseResult(liveRun, commission, career.careerId, 'db-live-run');
-          if (recovered) return recovered;
-        }
+        /* 核心再次执行统一可接受 gate；调用方传入的 availableIds 不作为授权凭据。 */
+        gateOptions.context = Object.assign({}, context, { availableIds: [commissionId] });
+        var accepted = view.canAcceptCommission(gateOptions);
+        if (!accepted.ok) return failure(accepted.reason, { commissionId: commissionId, careerId: career.careerId });
+      } else if (!isUnlocked(commission, storyContextForUnlock(career, context))) {
+        /* 三条已注册终局只检查 C4 世界条件，不要求接受任何特定职业。 */
+        return failure(REASONS.locked, { commissionId: commissionId, careerId: career.careerId, message: '港口的告示还没换成这一张。' });
       }
 
       var runId = isFunction(core.newId) ? core.newId(RUN_PREFIX) : RUN_PREFIX + '-' + hexFallback(24);
@@ -1944,6 +2337,9 @@
         state.content = null;
         state.contentErrors = [];
         state.contentWarnings = [];
+        state.catalog = null;
+        state.worldWorkIds = [];
+        state.worldWorkTexts = Object.create(null);
         state.runs = Object.create(null);
         state.currentTicketId = null;
         state.lastResult = null;

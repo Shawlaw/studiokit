@@ -76,6 +76,12 @@ def gates():
         _gate('career_story_evidence', ['node', 'tools/career_story_evidence_test.mjs']),
         _gate('career_route_planner', ['node', 'tools/career_route_planner_test.mjs']),
         _gate('career_economy_balance', ['node', 'tools/career_economy_balance_test.mjs']),
+        _gate('career_ui_work_journal', ['node', 'tools/career_ui_work_journal_test.mjs']),
+        _gate('career_ui_invitation_tools', ['node', 'tools/career_ui_invitation_tools_test.mjs']),
+        _gate('career_ui_components', ['node', 'tools/career_ui_components_test.mjs']),
+        _gate('career_ui_invitation_adapters', ['node', 'tools/career_ui_invitation_adapters_test.mjs']),
+        _gate('career_ui_port_journal', ['node', 'tools/career_ui_port_journal_test.mjs']),
+        _gate('career_narrative_content', ['node', 'tools/career_narrative_content_test.mjs']),
         _gate('career_crystal_alias', ['node', 'tools/career_crystal_alias_test.mjs'], {
             'CAREER_CRYSTAL_PORT': _env('CAREER_CRYSTAL_PORT', '8991'),
             'CAREER_CRYSTAL_CDP': _env('CAREER_CRYSTAL_CDP', '9591'),
@@ -182,6 +188,11 @@ def gates():
         _gate('career_archive', ['node', 'tools/career_archive_test.mjs']),
         _gate('career_passive_entry', ['node', 'tools/career_passive_entry_test.mjs']),
         _gate('career_narrative_voice', ['node', 'tools/career_narrative_voice_test.mjs']),
+        # 0.24 主线替代叙事 / 世界叙事 resolver / 经历增强新增纯 Node 门禁（无 Chrome、无端口占用）。
+        _gate('career_world_narrative_contract', ['node', 'tools/career_world_narrative_contract_test.mjs']),
+        _gate('career_world_narrative', ['node', 'tools/career_world_narrative_test.mjs']),
+        _gate('career_world_route_narrative', ['node', 'tools/career_world_route_narrative_test.mjs']),
+        _gate('career_journal_experience', ['node', 'tools/career_journal_experience_test.mjs']),
         # 0.20 零种子完整首航：Chrome 长跑门禁，独占 CDP，串行运行时放最后。
         _gate('career_flow_e2e', ['node', 'tools/career_flow_e2e_test.mjs'], {
             'CAREER_FLOW_PORT': _env('CAREER_FLOW_PORT', '9901'),

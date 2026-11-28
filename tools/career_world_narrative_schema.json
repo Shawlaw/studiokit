@@ -1,0 +1,1483 @@
+{
+  "schemaId": "career.world-narrative",
+  "schemaVersion": "1.0.0",
+  "frozenBy": "Arcade 0.24 T20",
+  "frozenAt": "2026-11-28",
+  "releaseVersion": "0.24",
+  "contentVersion": "0.18.0",
+  "status": "FROZEN_FOR_T21_T23",
+  "runtimeBehavior": "none",
+  "adr": "docs/arcade-life/ADR-0.24-world.md",
+  "contractTest": "tools/career_world_narrative_contract_test.mjs",
+  "contractTestCommand": "node tools/career_world_narrative_contract_test.mjs",
+  "purpose": "冻结 0.24 的主线替代路线叙事映射、可选职业交汇触发与历史事件 schema；只产出契约与数据设计，不改 runtime、内容 JSON 与版本链。",
+  "additiveRevisions": [
+    {
+      "task": "T24",
+      "change": "journalEvent 加性可选 text（≤120）/person（≤24）字段；不落盘、不新增 store/key，缺失时经历行与 0.23 完全一致。",
+      "persistedFields": false,
+      "backwardCompatible": true
+    },
+    {
+      "task": "T24",
+      "change": "bridge catalog 加性注入 catalog.worldChapterAlternatives = { C1:[resolver node…], … C5:[…] }；catalog.worldNarrative 仍为原始内容对象。",
+      "persistedFields": false,
+      "backwardCompatible": true
+    }
+  ],
+  "sourceOfTruth": [
+    "docs/arcade-life/ADR-interfaces.md",
+    "docs/arcade-life/ADR-0.23-ui.md",
+    "apps/arcade/career/content/registry.json",
+    "apps/arcade/career/content/clues.json",
+    "apps/arcade/career/content/commissions.json",
+    "apps/arcade/career/content/world-work.json",
+    "apps/arcade/career/content/chapter-01.json",
+    "apps/arcade/career/content/campaign.json",
+    "apps/arcade/career/content/npc.json",
+    "apps/arcade/career/content/items.json",
+    "apps/arcade/career/content/narrative-registry.json",
+    "apps/arcade/career/content/narrative-shards/shard-01.json",
+    "apps/arcade/career/content/narrative-shards/shard-02.json",
+    "apps/arcade/career/content/narrative-shards/shard-03.json",
+    "apps/arcade/career/content/narrative-shards/shard-04.json",
+    "apps/arcade/career/profession-state.js",
+    "apps/arcade/career/profession-view.js",
+    "apps/arcade/career/commission-core.js",
+    "apps/arcade/career/campaign-core.js",
+    "apps/arcade/career/story-evidence.js",
+    "apps/arcade/career/route-planner.js",
+    "apps/arcade/career/alternatives.js",
+    "apps/arcade/career/career-db.js",
+    "apps/arcade/career/bridge.js"
+  ],
+  "contentLayout": {
+    "file": "apps/arcade/career/content/world-narrative.json",
+    "schemaVersion": 1,
+    "contentVersion": "0.18.0",
+    "createInTask": "T21/T22",
+    "loadedBy": "lead（bridge loader 串行接入）",
+    "topLevelKeys": ["schemaVersion", "contentVersion", "releaseVersion", "alternativeNarratives", "crossoverPairs", "journalWhitelist"],
+    "optionalWhenMissing": true
+  },
+  "constants": {
+    "eventIdGrammar": "^[a-z][a-z0-9-]*:[A-Za-z0-9][A-Za-z0-9._:-]{0,119}$",
+    "eventIdMaxLength": 120,
+    "journalSources": ["clue", "commission", "world", "story"],
+    "journalSurfaces": ["port", "journal", "receipt", "message", "toast", "deep-link"],
+    "crossoverSurfaces": ["port", "journal", "message", "receipt", "toast", "deep-link"],
+    "forbiddenCrossoverSurfaces": ["clue", "letter", "shop", "crafting", "tools", "work"],
+    "chapterIds": ["C1", "C2", "C3", "C4", "C5"],
+    "acceptedStates": ["accepted", "developed", "completed"],
+    "mechanisms": ["world-work", "profession-commission", "errand", "rental", "market-material", "evidence-pair"],
+    "mechanismOrder": ["world-work", "profession-commission", "errand", "rental", "market-material", "evidence-pair"],
+    "mechanismAnchorKind": {
+      "world-work": "commission",
+      "profession-commission": "commission",
+      "errand": "offer",
+      "rental": "ship",
+      "market-material": "item",
+      "evidence-pair": "evidencePair"
+    },
+    "mechanismReceiptSource": {
+      "world-work": "commission-receipt",
+      "profession-commission": "commission-receipt",
+      "errand": "alternative-purchase",
+      "rental": "commission-receipt",
+      "market-material": "purchase-ledger",
+      "evidence-pair": "evidence-grant"
+    },
+    "reasonCodes": [
+      "not-discovered",
+      "not-read",
+      "not-accepted",
+      "paused",
+      "wrong-surface",
+      "world-locked",
+      "story-locked",
+      "not-available",
+      "historical-only",
+      "archived",
+      "unknown-profession",
+      "unknown-commission",
+      "future-version"
+    ],
+    "maxStoryEvents": 256,
+    "softEventBudget": 200,
+    "labelHanRange": [6, 40],
+    "labelMaxLength": 60,
+    "journalTextMinLength": 8,
+    "journalTextMaxLength": 120,
+    "journalPersonMaxLength": 24,
+    "maxCrossoversPerCareer": 1,
+    "maxSessionEcho": 1
+  },
+  "compatibility": {
+    "newIdbStores": [],
+    "newIdbVersion": null,
+    "newLocalStorageKeys": [],
+    "contentVersion": "0.18.0",
+    "professionVersion": 1,
+    "rulesetVersion": null,
+    "newReasonCodes": false,
+    "persistedEventFields": ["at", "source"],
+    "oldArchiveRead": "append-only",
+    "degradeWhenContentMissing": true,
+    "versionChainTouchedByT20": false,
+    "releaseVersionChain": "T25 收口，T20 不改"
+  },
+  "forbidden": {
+    "contentKeys": [
+      "reward",
+      "rewards",
+      "credits",
+      "items",
+      "price",
+      "cost",
+      "purchase",
+      "sell",
+      "grant",
+      "grants",
+      "evidence",
+      "flags",
+      "unlock",
+      "wait",
+      "cooldown",
+      "deadline",
+      "percent",
+      "total",
+      "score",
+      "currency"
+    ],
+    "playerTextTokens": [
+      "E-",
+      "BP-",
+      "MAP-",
+      "DEC-",
+      ".T1",
+      ".T2",
+      ".T3",
+      ".T4",
+      ".T5",
+      ".T6",
+      "C1.",
+      "C2.",
+      "C3.",
+      "C4.",
+      "C5.",
+      "not-accepted",
+      "60%",
+      "3/16"
+    ],
+    "routeGuideKeywords": ["第一步", "第二步", "第三步", "依次前往", "完整路线", "路线攻略", "通关攻略", "必做", "必经", "唯一解", "速通"],
+    "privatePathPattern": "(?:^|[^A-Za-z0-9])(?:[A-Za-z]:[\\\\/]|file:/{2}|/Users/|/home/|https?:/{2})"
+  },
+  "variantRules": [
+    { "schema": "npcRef", "field": "kind", "when": "origin-letter", "require": ["gameId"], "forbid": ["characterId"] },
+    { "schema": "npcRef", "field": "kind", "when": "character", "require": ["characterId"], "forbid": ["gameId"] }
+  ],
+  "schemas": {
+    "npcRef": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["kind"],
+      "properties": {
+        "kind": { "enum": ["origin-letter", "character"] },
+        "gameId": { "type": "string", "pattern": "^[a-z0-9][a-z0-9._-]{1,79}$" },
+        "characterId": { "type": "string", "pattern": "^[A-Za-z0-9][A-Za-z0-9._-]{0,39}$" }
+      }
+    },
+    "alternativeGate": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["requiresAcceptedProfession", "requiresSpecificProfession", "requiresFlagsAny", "requiresFlagsAll", "requiresCommissionsAll", "requiresEvidenceAny"],
+      "properties": {
+        "requiresAcceptedProfession": { "const": true },
+        "requiresSpecificProfession": { "const": false },
+        "requiresFlagsAny": { "type": "array", "uniqueItems": true, "maxItems": 8, "items": { "type": "string", "pattern": "^C[1-5][.][a-z0-9][a-z0-9._-]{0,60}$" } },
+        "requiresFlagsAll": { "type": "array", "uniqueItems": true, "maxItems": 8, "items": { "type": "string", "pattern": "^C[1-5][.][a-z0-9][a-z0-9._-]{0,60}$" } },
+        "requiresCommissionsAll": { "type": "array", "uniqueItems": true, "maxItems": 8, "items": { "type": "string", "pattern": "^[A-Za-z0-9][A-Za-z0-9._-]{0,119}$" } },
+        "requiresEvidenceAny": { "type": "array", "uniqueItems": true, "maxItems": 8, "items": { "type": "string", "pattern": "^(E|MAP|BP|DEC)-[A-Za-z0-9][A-Za-z0-9._-]{0,79}$" } }
+      }
+    },
+    "crossoverGate": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["professionGate", "acceptedStates", "pausedBlocks", "requiresFlagsAny", "requiresFlagsAll", "requiresCommissionsAll", "requiresEvidenceAny"],
+      "properties": {
+        "professionGate": { "const": "both-accepted" },
+        "acceptedStates": { "type": "array", "minItems": 3, "maxItems": 3, "uniqueItems": true, "items": { "enum": ["accepted", "developed", "completed"] } },
+        "pausedBlocks": { "const": false },
+        "requiresFlagsAny": { "type": "array", "uniqueItems": true, "maxItems": 8, "items": { "type": "string", "pattern": "^C[1-5][.][a-z0-9][a-z0-9._-]{0,60}$" } },
+        "requiresFlagsAll": { "type": "array", "uniqueItems": true, "maxItems": 8, "items": { "type": "string", "pattern": "^C[1-5][.][a-z0-9][a-z0-9._-]{0,60}$" } },
+        "requiresCommissionsAll": { "type": "array", "uniqueItems": true, "maxItems": 8, "items": { "type": "string", "pattern": "^[A-Za-z0-9][A-Za-z0-9._-]{0,119}$" } },
+        "requiresEvidenceAny": { "type": "array", "uniqueItems": true, "maxItems": 8, "items": { "type": "string", "pattern": "^(E|MAP|BP|DEC)-[A-Za-z0-9][A-Za-z0-9._-]{0,79}$" } }
+      }
+    },
+    "textBlock": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["invite", "body", "receipt", "decline"],
+      "properties": {
+        "invite": { "type": "string", "minLength": 10, "maxLength": 120 },
+        "body": { "type": "string", "minLength": 10, "maxLength": 240 },
+        "receipt": { "type": "string", "minLength": 10, "maxLength": 120 },
+        "decline": { "type": "string", "minLength": 8, "maxLength": 120 }
+      }
+    },
+    "alternativeTextBlock": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["offer", "progress", "receipt", "next"],
+      "properties": {
+        "offer": { "type": "string", "minLength": 10, "maxLength": 120 },
+        "progress": { "type": "string", "minLength": 10, "maxLength": 120 },
+        "receipt": { "type": "string", "minLength": 10, "maxLength": 120 },
+        "next": { "type": "string", "minLength": 6, "maxLength": 80 }
+      }
+    },
+    "crossoverPair": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "sampleKind", "placeholder", "contentOwnerProfessionId", "eventId", "pairId", "professionIds",
+        "anchor", "gate", "texts", "visibleSurfaces", "effects", "grants", "touchesMainline",
+        "affectsIdentity", "maxShowsPerCareer", "activeTextOwner"
+      ],
+      "properties": {
+        "sampleKind": { "const": "crossoverPair" },
+        "placeholder": { "type": "boolean" },
+        "contentOwnerProfessionId": { "type": "string", "pattern": "^[A-Za-z0-9][A-Za-z0-9._-]{0,119}$" },
+        "eventId": { "type": "string", "pattern": "^crossover:[A-Za-z0-9][A-Za-z0-9._:-]{0,119}$" },
+        "pairId": { "type": "string", "pattern": "^crossover:[A-Za-z0-9][A-Za-z0-9._:-]{0,119}$" },
+        "professionIds": { "type": "array", "minItems": 2, "maxItems": 2, "uniqueItems": true, "items": { "type": "string", "pattern": "^[A-Za-z0-9][A-Za-z0-9._-]{0,119}$" } },
+        "anchor": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["professionGames", "chapterIds", "npcRefs"],
+          "properties": {
+            "professionGames": {
+              "type": "array",
+              "minItems": 2,
+              "maxItems": 2,
+              "uniqueItems": true,
+              "items": {
+                "type": "object",
+                "additionalProperties": false,
+                "required": ["professionId", "gameId"],
+                "properties": {
+                  "professionId": { "type": "string", "pattern": "^[A-Za-z0-9][A-Za-z0-9._-]{0,119}$" },
+                  "gameId": { "type": "string", "pattern": "^[a-z0-9][a-z0-9._-]{1,79}$" }
+                }
+              }
+            },
+            "chapterIds": { "type": "array", "minItems": 1, "maxItems": 2, "uniqueItems": true, "items": { "enum": ["C1", "C2", "C3", "C4", "C5"] } },
+            "npcRefs": {
+              "type": "array",
+              "minItems": 1,
+              "maxItems": 2,
+              "items": { "$ref": "#/schemas/npcRef" }
+            }
+          }
+        },
+        "gate": { "$ref": "#/schemas/crossoverGate" },
+        "texts": { "$ref": "#/schemas/textBlock" },
+        "visibleSurfaces": { "type": "array", "minItems": 1, "maxItems": 6, "uniqueItems": true, "items": { "enum": ["port", "journal", "message", "receipt", "toast", "deep-link"] } },
+        "effects": { "type": "array", "maxItems": 0, "items": { "type": "string" } },
+        "grants": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["credits", "items", "evidence", "flags"],
+          "properties": {
+            "credits": { "const": 0 },
+            "items": { "type": "object", "additionalProperties": false },
+            "evidence": { "type": "array", "maxItems": 0, "items": { "type": "string" } },
+            "flags": { "type": "array", "maxItems": 0, "items": { "type": "string" } }
+          }
+        },
+        "touchesMainline": { "const": false },
+        "affectsIdentity": { "const": false },
+        "maxShowsPerCareer": { "const": 1 },
+        "activeTextOwner": { "type": "boolean" }
+      }
+    },
+    "alternativeNarrativeNode": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "sampleKind", "placeholder", "narrativeNodeId", "chapterId", "mechanism", "anchor",
+        "npcRef", "signatureFrom", "gate", "texts", "receiptSource"
+      ],
+      "properties": {
+        "sampleKind": { "const": "alternativeNarrativeNode" },
+        "placeholder": { "type": "boolean" },
+        "narrativeNodeId": { "type": "string", "pattern": "^altn[.]C[1-5][.][a-z0-9-]+([.][a-z0-9-]+)+$" },
+        "chapterId": { "enum": ["C1", "C2", "C3", "C4", "C5"] },
+        "mechanism": { "enum": ["world-work", "profession-commission", "errand", "rental", "market-material", "evidence-pair"] },
+        "anchor": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["kind", "refs"],
+          "properties": {
+            "kind": { "enum": ["commission", "offer", "ship", "item", "evidencePair"] },
+            "refs": { "type": "array", "minItems": 1, "maxItems": 3, "uniqueItems": true, "items": { "type": "string", "pattern": "^[A-Za-z0-9][A-Za-z0-9._-]{0,119}$" } }
+          }
+        },
+        "npcRef": { "$ref": "#/schemas/npcRef" },
+        "signatureFrom": { "enum": ["origin-letter", "commission-issuer", "offer-issuer", "npc-character"] },
+        "gate": { "$ref": "#/schemas/alternativeGate" },
+        "texts": { "$ref": "#/schemas/alternativeTextBlock" },
+        "receiptSource": { "enum": ["commission-receipt", "alternative-purchase", "purchase-ledger", "evidence-grant"] }
+      }
+    },
+    "journalEvent": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["sampleKind", "placeholder", "eventId", "source", "whitelistLayer", "labelMode", "surfaces"],
+      "properties": {
+        "sampleKind": { "const": "journalEvent" },
+        "placeholder": { "type": "boolean" },
+        "eventId": { "type": "string", "pattern": "^[a-z][a-z0-9-]*:[A-Za-z0-9][A-Za-z0-9._:-]{0,119}$" },
+        "source": { "enum": ["clue", "commission", "world", "story"] },
+        "whitelistLayer": { "enum": ["code-frozen", "content", "engine-prefix"] },
+        "labelMode": { "enum": ["content", "code-frozen", "commission-title", "profession-name"] },
+        "label": { "type": "string", "minLength": 6, "maxLength": 60 },
+        "text": { "type": "string", "minLength": 8, "maxLength": 120 },
+        "person": { "type": "string", "minLength": 2, "maxLength": 24, "pattern": "^[^<>{}:：0-9]+$" },
+        "surfaces": { "type": "array", "minItems": 1, "maxItems": 6, "uniqueItems": true, "items": { "enum": ["port", "journal", "receipt", "message", "toast", "deep-link"] } }
+      },
+      "conditionalRules": [
+        { "when": { "labelMode": "content" }, "require": ["label"], "textKind": "placeholder-prefixed" },
+        { "when": { "labelMode": "code-frozen" }, "forbid": ["label"] },
+        { "when": { "labelMode": "commission-title" }, "forbid": ["label"] },
+        { "when": { "labelMode": "profession-name" }, "forbid": ["label"] }
+      ]
+    },
+    "resolverInput": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["chapterId", "state", "catalog", "context"],
+      "properties": {
+        "chapterId": { "enum": ["C1", "C2", "C3", "C4", "C5"] },
+        "state": {
+          "type": "object",
+          "required": ["professionVersion", "professionProgress", "storyEvents"],
+          "properties": {
+            "professionVersion": { "type": "integer", "minimum": 1 },
+            "professionProgress": { "type": "object" },
+            "storyEvents": { "type": "object" }
+          }
+        },
+        "catalog": {
+          "type": "object",
+          "required": ["worldNarrative"],
+          "properties": {
+            "worldNarrative": { "type": "object" }
+          }
+        },
+        "context": {
+          "type": "object",
+          "required": ["surface", "acceptedProfessionIds", "activeProfessionId", "worldFlags", "clearedCommissions", "storyEvidence", "archived"],
+          "properties": {
+            "surface": { "enum": ["clue", "letter", "port", "work", "journal", "receipt", "message", "route", "toast", "deep-link", "shop", "crafting", "tools"] },
+            "acceptedProfessionIds": { "type": "array", "items": { "type": "string" } },
+            "activeProfessionId": { "type": "string" },
+            "worldFlags": { "type": "array", "items": { "type": "string" } },
+            "clearedCommissions": { "type": "array", "items": { "type": "string" } },
+            "storyEvidence": { "type": "array", "items": { "type": "string" } },
+            "archived": { "type": "boolean" }
+          }
+        }
+      }
+    },
+    "resolverOutput": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["schemaVersion", "chapterId", "nodes", "crossovers"],
+      "properties": {
+        "schemaVersion": { "const": 1 },
+        "chapterId": { "enum": ["C1", "C2", "C3", "C4", "C5"] },
+        "nodes": {
+          "type": "array",
+          "maxItems": 16,
+          "items": {
+            "type": "object",
+            "additionalProperties": false,
+            "required": ["narrativeNodeId", "mechanism", "anchor", "npcRef", "signatureFrom", "available", "reason", "texts", "receiptSource"],
+            "properties": {
+              "narrativeNodeId": { "type": "string" },
+              "mechanism": { "enum": ["world-work", "profession-commission", "errand", "rental", "market-material", "evidence-pair"] },
+              "anchor": { "type": "object" },
+              "npcRef": { "type": "object" },
+              "signatureFrom": { "enum": ["origin-letter", "commission-issuer", "offer-issuer", "npc-character"] },
+              "available": { "type": "boolean" },
+              "reason": { "enum": [null, "not-discovered", "not-read", "not-accepted", "paused", "wrong-surface", "world-locked", "story-locked", "not-available", "historical-only", "archived", "unknown-profession", "unknown-commission", "future-version"] },
+              "texts": { "type": "object" },
+              "receiptSource": { "enum": ["commission-receipt", "alternative-purchase", "purchase-ledger", "evidence-grant"] }
+            }
+          }
+        },
+        "crossovers": {
+          "type": "array",
+          "maxItems": 16,
+          "items": {
+            "type": "object",
+            "additionalProperties": false,
+            "required": ["eventId", "pairId", "npcRefs", "texts", "receiptSource", "maxShowsPerCareer"],
+            "properties": {
+              "eventId": { "type": "string" },
+              "pairId": { "type": "string" },
+              "npcRefs": { "type": "array", "items": { "type": "object" } },
+              "texts": { "type": "object" },
+              "receiptSource": { "const": "narrative-event" },
+              "maxShowsPerCareer": { "const": 1 }
+            }
+          }
+        }
+      }
+    }
+  },
+  "dedupe": {
+    "crossoverEventIdTemplate": "crossover:{minProfessionId}:{maxProfessionId}",
+    "sortedBy": "lexicographic-ascending",
+    "pairSeparator": ":",
+    "contentLevel": {
+      "scope": "same-eventId",
+      "winnerRule": [
+        "declaration-owner-equals-minProfessionId",
+        "declaration-owner-professionId-lexicographic-ascending"
+      ],
+      "loserPolicy": "drop-text",
+      "textsMustBeIdenticalWithinPair": true
+    },
+    "stateLevel": {
+      "recorder": "career-db.applyProfessionEvent",
+      "action": "RECORD_STORY_EVENT",
+      "duplicateResult": { "duplicate": true, "rewrite": false },
+      "cursorEffect": "preserve"
+    },
+    "renderLevel": {
+      "maxShowsPerCareer": 1,
+      "sessionEchoMax": 1,
+      "echoSurfaces": ["port", "receipt"]
+    },
+    "crossTab": {
+      "transaction": true,
+      "generationGuard": true,
+      "showOnlyAfterOk": true
+    },
+    "retry": {
+      "policy": "idempotent-retry",
+      "duplicateIsSuccess": true,
+      "partialWriteAllowed": false
+    }
+  },
+  "journal": {
+    "stateShape": {
+      "storage": "state['discovery'].value.storyEvents",
+      "persistedFields": ["at", "source"],
+      "forbiddenPersistedFields": ["label", "text", "title", "professionId", "commissionId", "credits", "items", "percent"],
+      "note": "玩家可见文案不落盘：label 在投影时从内容白名单解析，避免 0.18.0 之外的新持久字段与迁移。"
+    },
+    "namespaces": {
+      "story": { "writable": true, "sources": ["story", "clue"], "labelMode": "code-frozen" },
+      "world": { "writable": true, "sources": ["world", "commission"], "labelMode": "content" },
+      "crossover": { "writable": true, "sources": ["world"], "labelMode": "content" },
+      "invitation": { "writable": false, "sources": ["story"], "labelMode": "profession-name" },
+      "commission": { "writable": false, "sources": ["commission"], "labelMode": "commission-title" }
+    },
+    "visibility": {
+      "whitelistRequired": true,
+      "layers": ["code-frozen", "content-catalog", "content-context"],
+      "codeFrozenEvents": ["story:C0.port_seen"],
+      "enginePrefixes": ["invitation:", "commission:"],
+      "defaultPolicy": "omit",
+      "unacceptedProfessionPolicy": "omit",
+      "unknownNamespacePolicy": "omit-and-preserve",
+      "noDomPlaceholder": true,
+      "reasonCodeInPlayerText": false
+    },
+    "labels": {
+      "hanRange": [6, 40],
+      "maxLength": 60,
+      "forbiddenContent": ["internal-id", "reason-code", "evidence-token", "commission-tier-suffix", "chapter-code", "percent", "total", "undiscovered-profession-name", "route-guide"],
+      "playerVisibleIds": false
+    },
+    "details": {
+      "optional": true,
+      "textRange": [8, 120],
+      "personRange": [2, 24],
+      "textKind": "whitelist-static",
+      "persisted": false,
+      "injectedBy": "bridge careerCatalog.publicStoryEvents",
+      "projectedBy": "profession-view.publicStoryRow -> story.history[].detail{text,person}",
+      "personSource": [
+        "apps/arcade/career/content/narrative-shards/shard-01.json",
+        "apps/arcade/career/content/narrative-shards/shard-02.json",
+        "apps/arcade/career/content/narrative-shards/shard-03.json",
+        "apps/arcade/career/content/narrative-shards/shard-04.json",
+        "apps/arcade/career/content/npc.json",
+        "apps/arcade/career/content/chapter-01.json"
+      ],
+      "forbiddenContent": ["amount", "credits", "percent", "chapter-code", "internal-id", "evidence-token", "reward", "route-guide", "system-pressure", "spoiler"],
+      "whenMissing": "omit-detail-and-keep-0.23-row"
+    },
+    "ordering": {
+      "source": "profession-view.storyHistory",
+      "primary": "at-ascending",
+      "emptyAt": "first",
+      "secondary": "label-lexicographic-ascending",
+      "tertiary": "kind",
+      "domOrderIsRealOrder": true,
+      "totalCountShown": false
+    },
+    "migration": {
+      "mode": "append-only",
+      "missingField": "empty-history",
+      "unknownNamespace": "preserve-invisible",
+      "futureProfessionVersion": "read-only-empty-view",
+      "rewriteExisting": false,
+      "backfillRewards": false,
+      "newStore": false,
+      "newKey": false
+    },
+    "limits": {
+      "maxStoryEvents": 256,
+      "capOwner": "profession-state.recordStoryEvent",
+      "eviction": "lexicographic-key-ascending-crossover-last",
+      "softBudget": 200,
+      "evictionDoesNotAffectFacts": true,
+      "writersMustDedupeByEventId": true
+    }
+  },
+  "resolver": {
+    "module": "apps/arcade/career/world-narrative.js",
+    "namespace": "ArcadeCareer.worldNarrative",
+    "nodeEnv": "UMD（同 profession-view 约定）",
+    "pure": true,
+    "methods": [
+      {
+        "name": "resolveWorldAlternatives",
+        "inputSchema": "resolverInput",
+        "outputSchema": "resolverOutput",
+        "deterministicOrder": ["chapterId", "mechanismOrder", "anchorRefs", "narrativeNodeId"],
+        "noDom": true,
+        "noDb": true,
+        "noClock": true,
+        "noRandom": true,
+        "mutatesInput": false,
+        "throws": false
+      }
+    ],
+    "outputVisibility": {
+      "internalIdsInOutput": true,
+      "internalIdsInPlayerText": false,
+      "adapterMustStrip": ["narrativeNodeId", "pairId", "reason", "anchor"],
+      "hiddenProfessionInOutput": false
+    }
+  },
+  "samples": {
+    "alternativeNarrative": [
+      {
+        "sampleKind": "alternativeNarrativeNode",
+        "placeholder": true,
+        "narrativeNodeId": "altn.C1.world-work.star-raid.t1",
+        "chapterId": "C1",
+        "mechanism": "world-work",
+        "anchor": { "kind": "commission", "refs": ["star-raid.T1"] },
+        "npcRef": { "kind": "character", "characterId": "E-7" },
+        "signatureFrom": "commission-issuer",
+        "gate": {
+          "requiresAcceptedProfession": true,
+          "requiresSpecificProfession": false,
+          "requiresFlagsAny": [],
+          "requiresFlagsAll": ["C1.signal_fragment"],
+          "requiresCommissionsAll": [],
+          "requiresEvidenceAny": []
+        },
+        "texts": {
+          "offer": "占位：世界通用活计的告示文字直接取工作栏真实条目，叙事只补一句为什么今天轮到你。",
+          "progress": "占位：进行中只说这件事在港里已经有人接手，不复述目标数值、不预告报酬。",
+          "receipt": "占位：回执在真实委托结算行存在之后才出现，只写人物反应与下一步，不发额外东西。",
+          "next": "占位：下一步指向同一机制里的另一份真实活计或回到港口眼下。"
+        },
+        "receiptSource": "commission-receipt"
+      },
+      {
+        "sampleKind": "alternativeNarrativeNode",
+        "placeholder": true,
+        "narrativeNodeId": "altn.C1.rental.old-wing",
+        "chapterId": "C1",
+        "mechanism": "rental",
+        "anchor": { "kind": "ship", "refs": ["old-wing"] },
+        "npcRef": { "kind": "origin-letter", "gameId": "star-raid" },
+        "signatureFrom": "origin-letter",
+        "gate": {
+          "requiresAcceptedProfession": true,
+          "requiresSpecificProfession": false,
+          "requiresFlagsAny": [],
+          "requiresFlagsAll": ["C1.signal"],
+          "requiresCommissionsAll": [],
+          "requiresEvidenceAny": []
+        },
+        "texts": {
+          "offer": "占位：把免费租用机写成港务处的旧规矩，叙事不承诺任何装备或货币。",
+          "progress": "占位：只说明这台旧机今天还在库里，谁用谁签字，用完照旧归还。",
+          "receipt": "占位：回执引用真实护航委托的结算事实，不写机型参数、不写战绩数字。",
+          "next": "占位：下一步回到告示板或本职业的第一份工作，不新增独立入口。"
+        },
+        "receiptSource": "commission-receipt"
+      },
+      {
+        "sampleKind": "alternativeNarrativeNode",
+        "placeholder": true,
+        "narrativeNodeId": "altn.C2.errand.alt-courier",
+        "chapterId": "C2",
+        "mechanism": "errand",
+        "anchor": { "kind": "offer", "refs": ["alt.courier"] },
+        "npcRef": { "kind": "origin-letter", "gameId": "gold-miner" },
+        "signatureFrom": "offer-issuer",
+        "gate": {
+          "requiresAcceptedProfession": true,
+          "requiresSpecificProfession": false,
+          "requiresFlagsAny": ["C1.signal_fragment"],
+          "requiresFlagsAll": [],
+          "requiresCommissionsAll": [],
+          "requiresEvidenceAny": []
+        },
+        "texts": {
+          "offer": "占位：代办清单本来就写着明码标价，叙事只补一句为什么这趟差事值得跑。",
+          "progress": "占位：说明这笔代办已经从清单上划掉，费用就是清单上写的那一笔。",
+          "receipt": "占位：回执只复述代办真实落地的事实，价格与扣费不在叙事里重复。",
+          "next": "占位：下一步把玩家送回主线该看的那一处，不催也不加码。"
+        },
+        "receiptSource": "alternative-purchase"
+      },
+      {
+        "sampleKind": "alternativeNarrativeNode",
+        "placeholder": true,
+        "narrativeNodeId": "altn.C3.profession-commission.shadow-leap.t2",
+        "chapterId": "C3",
+        "mechanism": "profession-commission",
+        "anchor": { "kind": "commission", "refs": ["shadow-leap.T2"] },
+        "npcRef": { "kind": "origin-letter", "gameId": "shadow-leap" },
+        "signatureFrom": "commission-issuer",
+        "gate": {
+          "requiresAcceptedProfession": true,
+          "requiresSpecificProfession": false,
+          "requiresFlagsAny": [],
+          "requiresFlagsAll": ["C2.research_complete"],
+          "requiresCommissionsAll": [],
+          "requiresEvidenceAny": []
+        },
+        "texts": {
+          "offer": "占位：本职业工单本来就在告示板上，叙事解释它与当前章节的关联，不新增委托。",
+          "progress": "占位：只写这张工单还在谁手里，不写完成条件之外的额外要求。",
+          "receipt": "占位：回执引用真实收据里的结果与人物回话，不重复奖励明细。",
+          "next": "占位：下一步交给投影里的主线推荐，不硬编码任何后续工单。"
+        },
+        "receiptSource": "commission-receipt"
+      },
+      {
+        "sampleKind": "alternativeNarrativeNode",
+        "placeholder": true,
+        "narrativeNodeId": "altn.C4.evidence-pair.city-power",
+        "chapterId": "C4",
+        "mechanism": "evidence-pair",
+        "anchor": { "kind": "evidencePair", "refs": ["E-mole-whack.T3", "E-block-drop.T3", "BP-merge-2048.T3"] },
+        "npcRef": { "kind": "origin-letter", "gameId": "mole-whack" },
+        "signatureFrom": "origin-letter",
+        "gate": {
+          "requiresAcceptedProfession": true,
+          "requiresSpecificProfession": false,
+          "requiresFlagsAny": [],
+          "requiresFlagsAll": ["C3.truth_found"],
+          "requiresCommissionsAll": [],
+          "requiresEvidenceAny": []
+        },
+        "texts": {
+          "offer": "占位：把两份现场记录与一份底稿说成同一批人各自看过的一角，不列出组合公式。",
+          "progress": "占位：说明还缺哪一类记录时只写戏内说法，不写内部证据前缀或委托编号。",
+          "receipt": "占位：回执在证据真实合成章节条件之后才出现，只写港口因此推进了什么。",
+          "next": "占位：下一步指向章节的下一步，不承诺任何额外奖励。"
+        },
+        "receiptSource": "evidence-grant"
+      },
+      {
+        "sampleKind": "alternativeNarrativeNode",
+        "placeholder": true,
+        "narrativeNodeId": "altn.C4.market-material.shore-supplies",
+        "chapterId": "C4",
+        "mechanism": "market-material",
+        "anchor": { "kind": "item", "refs": ["building"] },
+        "npcRef": { "kind": "origin-letter", "gameId": "pendulum-tower" },
+        "signatureFrom": "origin-letter",
+        "gate": {
+          "requiresAcceptedProfession": true,
+          "requiresSpecificProfession": false,
+          "requiresFlagsAny": ["C3.truth_found"],
+          "requiresFlagsAll": [],
+          "requiresCommissionsAll": [],
+          "requiresEvidenceAny": []
+        },
+        "texts": {
+          "offer": "占位：材料缺口本来就有商店固定价退路，叙事只说港里现在最缺哪一类料。",
+          "progress": "占位：只写采买这件事在账上怎么记，价格仍由商店行给出。",
+          "receipt": "占位：回执引用真实采买流水，不在叙事里复述金额或库存。",
+          "next": "占位：下一步回到主线该看的那一处，不制造收藏压力。"
+        },
+        "receiptSource": "purchase-ledger"
+      },
+      {
+        "sampleKind": "alternativeNarrativeNode",
+        "placeholder": true,
+        "narrativeNodeId": "altn.C5.profession-commission.gold-miner.t6",
+        "chapterId": "C5",
+        "mechanism": "profession-commission",
+        "anchor": { "kind": "commission", "refs": ["gold-miner.T6"] },
+        "npcRef": { "kind": "origin-letter", "gameId": "gold-miner" },
+        "signatureFrom": "commission-issuer",
+        "gate": {
+          "requiresAcceptedProfession": true,
+          "requiresSpecificProfession": false,
+          "requiresFlagsAny": [],
+          "requiresFlagsAll": ["C5.star_tower_resolved"],
+          "requiresCommissionsAll": [],
+          "requiresEvidenceAny": []
+        },
+        "texts": {
+          "offer": "占位：终局之后的工作照旧挂在告示板上，叙事只说港口恢复了什么日常。",
+          "progress": "占位：只写这张工单是谁托的，不重述终局选择与结果。",
+          "receipt": "占位：回执保留后日常口吻，人物只谈眼下这批活，不改写已经发生的结局。",
+          "next": "占位：下一步回到港口眼下，允许玩家就此离开。"
+        },
+        "receiptSource": "commission-receipt"
+      }
+    ],
+    "crossover": [
+      {
+        "sampleKind": "crossoverPair",
+        "placeholder": true,
+        "contentOwnerProfessionId": "research.archivist",
+        "eventId": "crossover:research.archivist:research.lattice",
+        "pairId": "crossover:research.archivist:research.lattice",
+        "professionIds": ["research.archivist", "research.lattice"],
+        "anchor": {
+          "professionGames": [
+            { "professionId": "research.archivist", "gameId": "memory-flip" },
+            { "professionId": "research.lattice", "gameId": "merge-2048" }
+          ],
+          "chapterIds": ["C2"],
+          "npcRefs": [
+            { "kind": "origin-letter", "gameId": "memory-flip" },
+            { "kind": "origin-letter", "gameId": "merge-2048" }
+          ]
+        },
+        "gate": {
+          "professionGate": "both-accepted",
+          "acceptedStates": ["accepted", "developed", "completed"],
+          "pausedBlocks": false,
+          "requiresFlagsAny": ["C2.research_complete"],
+          "requiresFlagsAll": [],
+          "requiresCommissionsAll": [],
+          "requiresEvidenceAny": []
+        },
+        "texts": {
+          "invite": "占位：两个人各自保管过同一批旧记录，港口里有人把两份清单并排放在一起。",
+          "body": "占位：交汇只用双方都已发生的真实结算事实开场，说明他们为什么坐到同一张桌前。",
+          "receipt": "占位：回执只复述这次碰面里已经发生的事与人物反应，不给钱、不给料、不给证据。",
+          "decline": "占位：这次先不碰面时的自然收束，不催、不记欠账、不留待办。"
+        },
+        "visibleSurfaces": ["port", "journal", "message", "receipt", "toast", "deep-link"],
+        "effects": [],
+        "grants": { "credits": 0, "items": {}, "evidence": [], "flags": [] },
+        "touchesMainline": false,
+        "affectsIdentity": false,
+        "maxShowsPerCareer": 1,
+        "activeTextOwner": true
+      },
+      {
+        "sampleKind": "crossoverPair",
+        "placeholder": true,
+        "contentOwnerProfessionId": "research.lattice",
+        "eventId": "crossover:research.archivist:research.lattice",
+        "pairId": "crossover:research.archivist:research.lattice",
+        "professionIds": ["research.archivist", "research.lattice"],
+        "anchor": {
+          "professionGames": [
+            { "professionId": "research.archivist", "gameId": "memory-flip" },
+            { "professionId": "research.lattice", "gameId": "merge-2048" }
+          ],
+          "chapterIds": ["C2"],
+          "npcRefs": [
+            { "kind": "origin-letter", "gameId": "memory-flip" },
+            { "kind": "origin-letter", "gameId": "merge-2048" }
+          ]
+        },
+        "gate": {
+          "professionGate": "both-accepted",
+          "acceptedStates": ["accepted", "developed", "completed"],
+          "pausedBlocks": false,
+          "requiresFlagsAny": ["C2.research_complete"],
+          "requiresFlagsAll": [],
+          "requiresCommissionsAll": [],
+          "requiresEvidenceAny": []
+        },
+        "texts": {
+          "invite": "占位：两个人各自保管过同一批旧记录，港口里有人把两份清单并排放在一起。",
+          "body": "占位：交汇只用双方都已发生的真实结算事实开场，说明他们为什么坐到同一张桌前。",
+          "receipt": "占位：回执只复述这次碰面里已经发生的事与人物反应，不给钱、不给料、不给证据。",
+          "decline": "占位：这次先不碰面时的自然收束，不催、不记欠账、不留待办。"
+        },
+        "visibleSurfaces": ["port", "journal", "message", "receipt", "toast", "deep-link"],
+        "effects": [],
+        "grants": { "credits": 0, "items": {}, "evidence": [], "flags": [] },
+        "touchesMainline": false,
+        "affectsIdentity": false,
+        "maxShowsPerCareer": 1,
+        "activeTextOwner": false
+      },
+      {
+        "sampleKind": "crossoverPair",
+        "placeholder": true,
+        "contentOwnerProfessionId": "intel.risk",
+        "eventId": "crossover:intel.risk:intel.tactics",
+        "pairId": "crossover:intel.risk:intel.tactics",
+        "professionIds": ["intel.risk", "intel.tactics"],
+        "anchor": {
+          "professionGames": [
+            { "professionId": "intel.risk", "gameId": "blackjack" },
+            { "professionId": "intel.tactics", "gameId": "gomoku" }
+          ],
+          "chapterIds": ["C1", "C2"],
+          "npcRefs": [
+            { "kind": "origin-letter", "gameId": "blackjack" },
+            { "kind": "origin-letter", "gameId": "gomoku" }
+          ]
+        },
+        "gate": {
+          "professionGate": "both-accepted",
+          "acceptedStates": ["accepted", "developed", "completed"],
+          "pausedBlocks": false,
+          "requiresFlagsAny": ["C1.signal_fragment"],
+          "requiresFlagsAll": [],
+          "requiresCommissionsAll": [],
+          "requiresEvidenceAny": []
+        },
+        "texts": {
+          "invite": "占位：一个习惯先算代价，一个习惯先算余地；两人都想把手上那张纸留到最后再翻开。",
+          "body": "占位：交汇只引用双方已经拿到手的真实凭据，用两段短对话说明他为什么不急着下结论。",
+          "receipt": "占位：回执写两人这次谈成了什么或没谈成什么，不发任何报酬，也不派新工单。",
+          "decline": "占位：把这次碰面往后放，人物不追问，港口照旧运转。"
+        },
+        "visibleSurfaces": ["port", "journal", "message", "receipt"],
+        "effects": [],
+        "grants": { "credits": 0, "items": {}, "evidence": [], "flags": [] },
+        "touchesMainline": false,
+        "affectsIdentity": false,
+        "maxShowsPerCareer": 1,
+        "activeTextOwner": true
+      },
+      {
+        "sampleKind": "crossoverPair",
+        "placeholder": true,
+        "contentOwnerProfessionId": "intel.tactics",
+        "eventId": "crossover:intel.tactics:research.archivist",
+        "pairId": "crossover:intel.tactics:research.archivist",
+        "professionIds": ["intel.tactics", "research.archivist"],
+        "anchor": {
+          "professionGames": [
+            { "professionId": "intel.tactics", "gameId": "gomoku" },
+            { "professionId": "research.archivist", "gameId": "memory-flip" }
+          ],
+          "chapterIds": ["C2"],
+          "npcRefs": [
+            { "kind": "origin-letter", "gameId": "gomoku" },
+            { "kind": "origin-letter", "gameId": "memory-flip" }
+          ]
+        },
+        "gate": {
+          "professionGate": "both-accepted",
+          "acceptedStates": ["accepted", "developed", "completed"],
+          "pausedBlocks": false,
+          "requiresFlagsAny": ["C2.research_complete"],
+          "requiresFlagsAll": [],
+          "requiresCommissionsAll": [],
+          "requiresEvidenceAny": []
+        },
+        "texts": {
+          "invite": "占位：排过局的人想找当初那份没存档的残局，管档案的人正好记得它被收在哪一格里。",
+          "body": "占位：交汇把两条并行的旧线索摆在一起，只写他们各自愿意拿出哪一部分，不写答案。",
+          "receipt": "占位：回执保留两人各自的判断口径，不合并成唯一结论，也不改主线条件。",
+          "decline": "占位：这次先各自回去，港口里没人因此被标成待办。"
+        },
+        "visibleSurfaces": ["port", "journal", "message", "receipt"],
+        "effects": [],
+        "grants": { "credits": 0, "items": {}, "evidence": [], "flags": [] },
+        "touchesMainline": false,
+        "affectsIdentity": false,
+        "maxShowsPerCareer": 1,
+        "activeTextOwner": true
+      },
+      {
+        "sampleKind": "crossoverPair",
+        "placeholder": true,
+        "contentOwnerProfessionId": "engineering.dispatcher",
+        "eventId": "crossover:engineering.dispatcher:engineering.driver",
+        "pairId": "crossover:engineering.dispatcher:engineering.driver",
+        "professionIds": ["engineering.dispatcher", "engineering.driver"],
+        "anchor": {
+          "professionGames": [
+            { "professionId": "engineering.dispatcher", "gameId": "solitaire" },
+            { "professionId": "engineering.driver", "gameId": "road-rush" }
+          ],
+          "chapterIds": ["C1"],
+          "npcRefs": [
+            { "kind": "origin-letter", "gameId": "solitaire" },
+            { "kind": "origin-letter", "gameId": "road-rush" }
+          ]
+        },
+        "gate": {
+          "professionGate": "both-accepted",
+          "acceptedStates": ["accepted", "developed", "completed"],
+          "pausedBlocks": false,
+          "requiresFlagsAny": ["C1.signal_fragment"],
+          "requiresFlagsAll": [],
+          "requiresCommissionsAll": [],
+          "requiresEvidenceAny": []
+        },
+        "texts": {
+          "invite": "占位：排班的人手上有旧表，跑线的人手上有旧路线单，两张纸的日期只差一天。",
+          "body": "占位：交汇只写两张纸为什么会在同一天被划掉，不写谁对谁错，也不指派立场。",
+          "receipt": "占位：回执由两个人各说一句，内容限定在这次碰面，不发货币也不发材料。",
+          "decline": "占位：这回先不合表，两人各自回岗，港口照常发船。"
+        },
+        "visibleSurfaces": ["port", "journal", "message", "receipt"],
+        "effects": [],
+        "grants": { "credits": 0, "items": {}, "evidence": [], "flags": [] },
+        "touchesMainline": false,
+        "affectsIdentity": false,
+        "maxShowsPerCareer": 1,
+        "activeTextOwner": true
+      },
+      {
+        "sampleKind": "crossoverPair",
+        "placeholder": true,
+        "contentOwnerProfessionId": "nature.snowscout",
+        "eventId": "crossover:nature.ecologist:nature.snowscout",
+        "pairId": "crossover:nature.ecologist:nature.snowscout",
+        "professionIds": ["nature.ecologist", "nature.snowscout"],
+        "anchor": {
+          "professionGames": [
+            { "professionId": "nature.ecologist", "gameId": "snake-run" },
+            { "professionId": "nature.snowscout", "gameId": "snowbells" }
+          ],
+          "chapterIds": ["C2"],
+          "npcRefs": [
+            { "kind": "origin-letter", "gameId": "snake-run" },
+            { "kind": "origin-letter", "gameId": "snowbells" }
+          ]
+        },
+        "gate": {
+          "professionGate": "both-accepted",
+          "acceptedStates": ["accepted", "developed", "completed"],
+          "pausedBlocks": false,
+          "requiresFlagsAny": ["C2.research_complete"],
+          "requiresFlagsAll": [],
+          "requiresCommissionsAll": [],
+          "requiresEvidenceAny": []
+        },
+        "texts": {
+          "invite": "占位：一个在雪线上记声响，一个在林地边记样本；两份记录都说同一处地方少了点什么。",
+          "body": "占位：交汇只比较两份真实记录的差异，不给出结论式解谜，也不预告主线走向。",
+          "receipt": "占位：回执写两人各自留下的那半句，谁也不替谁把话补完。",
+          "decline": "占位：这次先不比对，两份记录各自归架，没有人被点名。"
+        },
+        "visibleSurfaces": ["port", "journal", "message", "receipt"],
+        "effects": [],
+        "grants": { "credits": 0, "items": {}, "evidence": [], "flags": [] },
+        "touchesMainline": false,
+        "affectsIdentity": false,
+        "maxShowsPerCareer": 1,
+        "activeTextOwner": false
+      },
+      {
+        "sampleKind": "crossoverPair",
+        "placeholder": true,
+        "contentOwnerProfessionId": "engineering.demolition",
+        "eventId": "crossover:engineering.demolition:engineering.structural",
+        "pairId": "crossover:engineering.demolition:engineering.structural",
+        "professionIds": ["engineering.demolition", "engineering.structural"],
+        "anchor": {
+          "professionGames": [
+            { "professionId": "engineering.demolition", "gameId": "brick-breaker" },
+            { "professionId": "engineering.structural", "gameId": "pendulum-tower" }
+          ],
+          "chapterIds": ["C4"],
+          "npcRefs": [
+            { "kind": "origin-letter", "gameId": "brick-breaker" },
+            { "kind": "origin-letter", "gameId": "pendulum-tower" }
+          ]
+        },
+        "gate": {
+          "professionGate": "both-accepted",
+          "acceptedStates": ["accepted", "developed", "completed"],
+          "pausedBlocks": false,
+          "requiresFlagsAny": ["C4.city_power_restored"],
+          "requiresFlagsAll": [],
+          "requiresCommissionsAll": [],
+          "requiresEvidenceAny": ["E-mole-whack.T3"]
+        },
+        "texts": {
+          "invite": "占位：拆的人算过哪一段不能动，立的人算过哪一段还能顶；两人都留着同一份旧图。",
+          "body": "占位：交汇只谈那份旧图上被改过的两处，写清楚谁改的、谁没来得及签字。",
+          "receipt": "占位：回执把这句对话停在这里，港口是否因此省下什么由真实结算决定，叙事不预告。",
+          "decline": "占位：图纸先合上，两人各自去忙手上的活，谁都没被扣进度。"
+        },
+        "visibleSurfaces": ["port", "journal", "message", "receipt", "toast"],
+        "effects": [],
+        "grants": { "credits": 0, "items": {}, "evidence": [], "flags": [] },
+        "touchesMainline": false,
+        "affectsIdentity": false,
+        "maxShowsPerCareer": 1,
+        "activeTextOwner": true
+      },
+      {
+        "sampleKind": "crossoverPair",
+        "placeholder": true,
+        "contentOwnerProfessionId": "research.gravity",
+        "eventId": "crossover:adventure.pilot:research.gravity",
+        "pairId": "crossover:adventure.pilot:research.gravity",
+        "professionIds": ["adventure.pilot", "research.gravity"],
+        "anchor": {
+          "professionGames": [
+            { "professionId": "adventure.pilot", "gameId": "star-raid" },
+            { "professionId": "research.gravity", "gameId": "gravity-flip" }
+          ],
+          "chapterIds": ["C3"],
+          "npcRefs": [
+            { "kind": "origin-letter", "gameId": "star-raid" },
+            { "kind": "origin-letter", "gameId": "gravity-flip" }
+          ]
+        },
+        "gate": {
+          "professionGate": "both-accepted",
+          "acceptedStates": ["accepted", "developed", "completed"],
+          "pausedBlocks": false,
+          "requiresFlagsAny": ["C3.truth_found"],
+          "requiresFlagsAll": [],
+          "requiresCommissionsAll": [],
+          "requiresEvidenceAny": []
+        },
+        "texts": {
+          "invite": "占位：飞过那片空域的人记得读数在某一刻归零，做过校准的人记得同一刻仪器没有断电。",
+          "body": "占位：交汇把两份不同的现场说法摆在一起，彼此都承认对方看见了一部分。",
+          "receipt": "占位：回执只记录这次对照，不写结论、不写哪一份记录更可信。",
+          "decline": "占位：这次先不对照，两人各自把记录收回抽屉。"
+        },
+        "visibleSurfaces": ["port", "journal", "message", "receipt"],
+        "effects": [],
+        "grants": { "credits": 0, "items": {}, "evidence": [], "flags": [] },
+        "touchesMainline": false,
+        "affectsIdentity": false,
+        "maxShowsPerCareer": 1,
+        "activeTextOwner": false
+      },
+      {
+        "sampleKind": "crossoverPair",
+        "placeholder": true,
+        "contentOwnerProfessionId": "nature.ecologist",
+        "eventId": "crossover:nature.ecologist:nature.snowscout",
+        "pairId": "crossover:nature.ecologist:nature.snowscout",
+        "professionIds": ["nature.ecologist", "nature.snowscout"],
+        "anchor": {
+          "professionGames": [
+            { "professionId": "nature.ecologist", "gameId": "snake-run" },
+            { "professionId": "nature.snowscout", "gameId": "snowbells" }
+          ],
+          "chapterIds": ["C2"],
+          "npcRefs": [
+            { "kind": "origin-letter", "gameId": "snake-run" },
+            { "kind": "origin-letter", "gameId": "snowbells" }
+          ]
+        },
+        "gate": {
+          "professionGate": "both-accepted",
+          "acceptedStates": ["accepted", "developed", "completed"],
+          "pausedBlocks": false,
+          "requiresFlagsAny": ["C2.research_complete"],
+          "requiresFlagsAll": [],
+          "requiresCommissionsAll": [],
+          "requiresEvidenceAny": []
+        },
+        "texts": {
+          "invite": "占位：一个在雪线上记声响，一个在林地边记样本；两份记录都说同一处地方少了点什么。",
+          "body": "占位：交汇只比较两份真实记录的差异，不给出结论式解谜，也不预告主线走向。",
+          "receipt": "占位：回执写两人各自留下的那半句，谁也不替谁把话补完。",
+          "decline": "占位：这次先不比对，两份记录各自归架，没有人被点名。"
+        },
+        "visibleSurfaces": ["port", "journal", "message", "receipt"],
+        "effects": [],
+        "grants": { "credits": 0, "items": {}, "evidence": [], "flags": [] },
+        "touchesMainline": false,
+        "affectsIdentity": false,
+        "maxShowsPerCareer": 1,
+        "activeTextOwner": true
+      },
+      {
+        "sampleKind": "crossoverPair",
+        "placeholder": true,
+        "contentOwnerProfessionId": "engineering.maintenance",
+        "eventId": "crossover:engineering.maintenance:engineering.warehouse",
+        "pairId": "crossover:engineering.maintenance:engineering.warehouse",
+        "professionIds": ["engineering.maintenance", "engineering.warehouse"],
+        "anchor": {
+          "professionGames": [
+            { "professionId": "engineering.maintenance", "gameId": "mole-whack" },
+            { "professionId": "engineering.warehouse", "gameId": "block-drop" }
+          ],
+          "chapterIds": ["C4"],
+          "npcRefs": [
+            { "kind": "origin-letter", "gameId": "mole-whack" },
+            { "kind": "origin-letter", "gameId": "block-drop" }
+          ]
+        },
+        "gate": {
+          "professionGate": "both-accepted",
+          "acceptedStates": ["accepted", "developed", "completed"],
+          "pausedBlocks": false,
+          "requiresFlagsAny": ["C4.city_power_restored"],
+          "requiresFlagsAll": [],
+          "requiresCommissionsAll": [],
+          "requiresEvidenceAny": []
+        },
+        "texts": {
+          "invite": "占位：下过管井的人知道哪一段是空的，码过货的人知道那一格为什么一直空着。",
+          "body": "占位：交汇只写两人核对的是同一段编号，不写他们怎么改，也不写改完会怎样。",
+          "receipt": "占位：回执留在这次核对上，后续是否推进由真实章节条件决定。",
+          "decline": "占位：这次先各自巡检，那格还空着，没人被记成欠账。"
+        },
+        "visibleSurfaces": ["port", "journal", "message", "receipt"],
+        "effects": [],
+        "grants": { "credits": 0, "items": {}, "evidence": [], "flags": [] },
+        "touchesMainline": false,
+        "affectsIdentity": false,
+        "maxShowsPerCareer": 1,
+        "activeTextOwner": true
+      },
+      {
+        "sampleKind": "crossoverPair",
+        "placeholder": true,
+        "contentOwnerProfessionId": "engineering.warehouse",
+        "eventId": "crossover:engineering.maintenance:engineering.warehouse",
+        "pairId": "crossover:engineering.maintenance:engineering.warehouse",
+        "professionIds": ["engineering.maintenance", "engineering.warehouse"],
+        "anchor": {
+          "professionGames": [
+            { "professionId": "engineering.maintenance", "gameId": "mole-whack" },
+            { "professionId": "engineering.warehouse", "gameId": "block-drop" }
+          ],
+          "chapterIds": ["C4"],
+          "npcRefs": [
+            { "kind": "origin-letter", "gameId": "mole-whack" },
+            { "kind": "origin-letter", "gameId": "block-drop" }
+          ]
+        },
+        "gate": {
+          "professionGate": "both-accepted",
+          "acceptedStates": ["accepted", "developed", "completed"],
+          "pausedBlocks": false,
+          "requiresFlagsAny": ["C4.city_power_restored"],
+          "requiresFlagsAll": [],
+          "requiresCommissionsAll": [],
+          "requiresEvidenceAny": []
+        },
+        "texts": {
+          "invite": "占位：下过管井的人知道哪一段是空的，码过货的人知道那一格为什么一直空着。",
+          "body": "占位：交汇只写两人核对的是同一段编号，不写他们怎么改，也不写改完会怎样。",
+          "receipt": "占位：回执留在这次核对上，后续是否推进由真实章节条件决定。",
+          "decline": "占位：这次先各自巡检，那格还空着，没人被记成欠账。"
+        },
+        "visibleSurfaces": ["port", "journal", "message", "receipt"],
+        "effects": [],
+        "grants": { "credits": 0, "items": {}, "evidence": [], "flags": [] },
+        "touchesMainline": false,
+        "affectsIdentity": false,
+        "maxShowsPerCareer": 1,
+        "activeTextOwner": false
+      },
+      {
+        "sampleKind": "crossoverPair",
+        "placeholder": true,
+        "contentOwnerProfessionId": "adventure.pilot",
+        "eventId": "crossover:adventure.pilot:research.gravity",
+        "pairId": "crossover:adventure.pilot:research.gravity",
+        "professionIds": ["adventure.pilot", "research.gravity"],
+        "anchor": {
+          "professionGames": [
+            { "professionId": "adventure.pilot", "gameId": "star-raid" },
+            { "professionId": "research.gravity", "gameId": "gravity-flip" }
+          ],
+          "chapterIds": ["C3"],
+          "npcRefs": [
+            { "kind": "origin-letter", "gameId": "star-raid" },
+            { "kind": "origin-letter", "gameId": "gravity-flip" }
+          ]
+        },
+        "gate": {
+          "professionGate": "both-accepted",
+          "acceptedStates": ["accepted", "developed", "completed"],
+          "pausedBlocks": false,
+          "requiresFlagsAny": ["C3.truth_found"],
+          "requiresFlagsAll": [],
+          "requiresCommissionsAll": [],
+          "requiresEvidenceAny": []
+        },
+        "texts": {
+          "invite": "占位：飞过那片空域的人记得读数在某一刻归零，做过校准的人记得同一刻仪器没有断电。",
+          "body": "占位：交汇把两份不同的现场说法摆在一起，彼此都承认对方看见了一部分。",
+          "receipt": "占位：回执只记录这次对照，不写结论、不写哪一份记录更可信。",
+          "decline": "占位：这次先不对照，两人各自把记录收回抽屉。"
+        },
+        "visibleSurfaces": ["port", "journal", "message", "receipt"],
+        "effects": [],
+        "grants": { "credits": 0, "items": {}, "evidence": [], "flags": [] },
+        "touchesMainline": false,
+        "affectsIdentity": false,
+        "maxShowsPerCareer": 1,
+        "activeTextOwner": true
+      },
+      {
+        "sampleKind": "crossoverPair",
+        "placeholder": true,
+        "contentOwnerProfessionId": "engineering.driver",
+        "eventId": "crossover:engineering.dispatcher:engineering.driver",
+        "pairId": "crossover:engineering.dispatcher:engineering.driver",
+        "professionIds": ["engineering.dispatcher", "engineering.driver"],
+        "anchor": {
+          "professionGames": [
+            { "professionId": "engineering.dispatcher", "gameId": "solitaire" },
+            { "professionId": "engineering.driver", "gameId": "road-rush" }
+          ],
+          "chapterIds": ["C1"],
+          "npcRefs": [
+            { "kind": "origin-letter", "gameId": "solitaire" },
+            { "kind": "origin-letter", "gameId": "road-rush" }
+          ]
+        },
+        "gate": {
+          "professionGate": "both-accepted",
+          "acceptedStates": ["accepted", "developed", "completed"],
+          "pausedBlocks": false,
+          "requiresFlagsAny": ["C1.signal_fragment"],
+          "requiresFlagsAll": [],
+          "requiresCommissionsAll": [],
+          "requiresEvidenceAny": []
+        },
+        "texts": {
+          "invite": "占位：排班的人手上有旧表，跑线的人手上有旧路线单，两张纸的日期只差一天。",
+          "body": "占位：交汇只写两张纸为什么会在同一天被划掉，不写谁对谁错，也不指派立场。",
+          "receipt": "占位：回执由两个人各说一句，内容限定在这次碰面，不发货币也不发材料。",
+          "decline": "占位：这回先不合表，两人各自回岗，港口照常发船。"
+        },
+        "visibleSurfaces": ["port", "journal", "message", "receipt"],
+        "effects": [],
+        "grants": { "credits": 0, "items": {}, "evidence": [], "flags": [] },
+        "touchesMainline": false,
+        "affectsIdentity": false,
+        "maxShowsPerCareer": 1,
+        "activeTextOwner": false
+      },
+      {
+        "sampleKind": "crossoverPair",
+        "placeholder": true,
+        "contentOwnerProfessionId": "adventure.relicseeker",
+        "eventId": "crossover:adventure.relicseeker:research.archivist",
+        "pairId": "crossover:adventure.relicseeker:research.archivist",
+        "professionIds": ["adventure.relicseeker", "research.archivist"],
+        "anchor": {
+          "professionGames": [
+            { "professionId": "adventure.relicseeker", "gameId": "shadow-leap" },
+            { "professionId": "research.archivist", "gameId": "memory-flip" }
+          ],
+          "chapterIds": ["C3"],
+          "npcRefs": [
+            { "kind": "origin-letter", "gameId": "shadow-leap" },
+            { "kind": "origin-letter", "gameId": "memory-flip" }
+          ]
+        },
+        "gate": {
+          "professionGate": "both-accepted",
+          "acceptedStates": ["accepted", "developed", "completed"],
+          "pausedBlocks": false,
+          "requiresFlagsAny": ["C3.truth_found"],
+          "requiresFlagsAll": [],
+          "requiresCommissionsAll": [],
+          "requiresEvidenceAny": []
+        },
+        "texts": {
+          "invite": "占位：拓片上的字在灯下才显出来，而旧档室那半页复印件一直没人肯承认是同一份。",
+          "body": "占位：交汇写两个人对同一条旧刻痕的不同解释，谁也不被说服，主线条件不变。",
+          "receipt": "占位：回执以人物各留一句收尾，不提供新的可接工作，也不解锁任何章节。",
+          "decline": "占位：这次先不谈，拓片和复印件各回原处。"
+        },
+        "visibleSurfaces": ["port", "journal", "message", "receipt"],
+        "effects": [],
+        "grants": { "credits": 0, "items": {}, "evidence": [], "flags": [] },
+        "touchesMainline": false,
+        "affectsIdentity": false,
+        "maxShowsPerCareer": 1,
+        "activeTextOwner": true
+      },
+      {
+        "sampleKind": "crossoverPair",
+        "placeholder": true,
+        "contentOwnerProfessionId": "engineering.structural",
+        "eventId": "crossover:engineering.demolition:engineering.structural",
+        "pairId": "crossover:engineering.demolition:engineering.structural",
+        "professionIds": ["engineering.demolition", "engineering.structural"],
+        "anchor": {
+          "professionGames": [
+            { "professionId": "engineering.demolition", "gameId": "brick-breaker" },
+            { "professionId": "engineering.structural", "gameId": "pendulum-tower" }
+          ],
+          "chapterIds": ["C4"],
+          "npcRefs": [
+            { "kind": "origin-letter", "gameId": "brick-breaker" },
+            { "kind": "origin-letter", "gameId": "pendulum-tower" }
+          ]
+        },
+        "gate": {
+          "professionGate": "both-accepted",
+          "acceptedStates": ["accepted", "developed", "completed"],
+          "pausedBlocks": false,
+          "requiresFlagsAny": ["C4.city_power_restored"],
+          "requiresFlagsAll": [],
+          "requiresCommissionsAll": [],
+          "requiresEvidenceAny": ["E-mole-whack.T3"]
+        },
+        "texts": {
+          "invite": "占位：拆的人算过哪一段不能动，立的人算过哪一段还能顶；两人都留着同一份旧图。",
+          "body": "占位：交汇只谈那份旧图上被改过的两处，写清楚谁改的、谁没来得及签字。",
+          "receipt": "占位：回执把这句对话停在这里，港口是否因此省下什么由真实结算决定，叙事不预告。",
+          "decline": "占位：图纸先合上，两人各自去忙手上的活，谁都没被扣进度。"
+        },
+        "visibleSurfaces": ["port", "journal", "message", "receipt", "toast"],
+        "effects": [],
+        "grants": { "credits": 0, "items": {}, "evidence": [], "flags": [] },
+        "touchesMainline": false,
+        "affectsIdentity": false,
+        "maxShowsPerCareer": 1,
+        "activeTextOwner": false
+      },
+      {
+        "sampleKind": "crossoverPair",
+        "placeholder": true,
+        "contentOwnerProfessionId": "nature.miner",
+        "eventId": "crossover:nature.miner:research.lattice",
+        "pairId": "crossover:nature.miner:research.lattice",
+        "professionIds": ["nature.miner", "research.lattice"],
+        "anchor": {
+          "professionGames": [
+            { "professionId": "nature.miner", "gameId": "gold-miner" },
+            { "professionId": "research.lattice", "gameId": "merge-2048" }
+          ],
+          "chapterIds": ["C2"],
+          "npcRefs": [
+            { "kind": "origin-letter", "gameId": "gold-miner" },
+            { "kind": "origin-letter", "gameId": "merge-2048" }
+          ]
+        },
+        "gate": {
+          "professionGate": "both-accepted",
+          "acceptedStates": ["accepted", "developed", "completed"],
+          "pausedBlocks": false,
+          "requiresFlagsAny": ["C2.research_complete"],
+          "requiresFlagsAll": [],
+          "requiresCommissionsAll": ["gold-miner.T1"],
+          "requiresEvidenceAny": []
+        },
+        "texts": {
+          "invite": "占位：矿角切下来的那一片不像本地料，有人在另一处见过同一种切面。",
+          "body": "占位：交汇只写两个人各自比对过的那一面，不写结论，也不写成攻略式步骤。",
+          "receipt": "占位：回执限定在人物反应与这次对照，不发材料、不发现金、不推进章节。",
+          "decline": "占位：这次先各自收好样本，港口里没人被记成拖延。"
+        },
+        "visibleSurfaces": ["port", "journal", "message", "receipt"],
+        "effects": [],
+        "grants": { "credits": 0, "items": {}, "evidence": [], "flags": [] },
+        "touchesMainline": false,
+        "affectsIdentity": false,
+        "maxShowsPerCareer": 1,
+        "activeTextOwner": true
+      }
+    ],
+    "journalEvents": [
+      {
+        "sampleKind": "journalEvent",
+        "placeholder": true,
+        "eventId": "story:C0.port_seen",
+        "source": "clue",
+        "whitelistLayer": "code-frozen",
+        "labelMode": "code-frozen",
+        "surfaces": ["journal"]
+      },
+      {
+        "sampleKind": "journalEvent",
+        "placeholder": true,
+        "eventId": "world:C2.errand.alt-courier",
+        "source": "commission",
+        "whitelistLayer": "content",
+        "labelMode": "content",
+        "label": "占位：替人跑的一趟短差在档里留下了记录",
+        "surfaces": ["journal", "port"]
+      },
+      {
+        "sampleKind": "journalEvent",
+        "placeholder": true,
+        "eventId": "crossover:research.archivist:research.lattice",
+        "source": "world",
+        "whitelistLayer": "content",
+        "labelMode": "content",
+        "label": "占位：两个人的旧事在港口里对上了",
+        "surfaces": ["journal", "port", "receipt"]
+      },
+      {
+        "sampleKind": "journalEvent",
+        "placeholder": true,
+        "eventId": "commission:memory-flip.T2",
+        "source": "commission",
+        "whitelistLayer": "engine-prefix",
+        "labelMode": "commission-title",
+        "surfaces": ["journal", "receipt"]
+      },
+      {
+        "sampleKind": "journalEvent",
+        "placeholder": true,
+        "eventId": "invitation:research.archivist",
+        "source": "story",
+        "whitelistLayer": "engine-prefix",
+        "labelMode": "profession-name",
+        "surfaces": ["journal", "port"]
+      }
+    ]
+  },
+  "coverageMatrix": {
+    "professionCount": 16,
+    "crossoverSamples": 16,
+    "distinctCrossoverPairs": 10,
+    "activeTextOwners": 10,
+    "alternativeSamples": 7,
+    "mechanismsCovered": 6,
+    "journalSamples": 5,
+    "journalSourcesCovered": 4,
+    "namespaces": 5,
+    "chapters": 5
+  },
+  "handoff": {
+    "T21": "把替代路线写成可信故事行动：只改 world-work 相关文案/route-planner/campaign-core 与数据，不改本 schema 的字段名与 gate 语义。",
+    "T22": "按本 schema 产出 content/world-narrative.json 与 career/world-narrative.js 纯 resolver；交汇只写数据与纯函数，不碰 UI/DB/bridge。",
+    "T23": "经历/人物反馈呈现：只消费 journal 白名单与投影 history，不新增持久字段、不显示内部 id、不显示总数。",
+    "lead": "bridge loader 串行接入新模块与内容文件；register gate；T25 收口版本链。"
+  }
+}

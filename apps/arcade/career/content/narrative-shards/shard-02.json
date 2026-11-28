@@ -1,0 +1,313 @@
+{
+  "schemaVersion": 1,
+  "contentVersion": "0.18.0",
+  "shardId": "career-narrative-shard-02",
+  "professionIds": [
+    "engineering.dispatcher",
+    "nature.snowscout",
+    "engineering.demolition",
+    "research.gravity"
+  ],
+  "entries": [
+    {
+      "narrativeId": "career-narrative.solitaire",
+      "gameId": "solitaire",
+      "professionId": "engineering.dispatcher",
+      "sourceClueId": "CL-solitaire",
+      "trigger": {
+        "clueId": "CL-solitaire",
+        "kind": "card.moved",
+        "atLeast": 3
+      },
+      "settlementFacts": {
+        "commissionId": "solitaire.T1",
+        "tier": 1,
+        "objective": {
+          "kind": "stock.face_up",
+          "atLeast": 3
+        },
+        "reward": {
+          "credits": 70,
+          "items": {},
+          "evidence": [],
+          "flags": []
+        },
+        "unlock": {
+          "all": []
+        },
+        "chapterGate": null
+      },
+      "clueTitle": "卡背浮出被划掉的船期",
+      "clueTeaser": "牌背小字重新浮出折光港，排班房想知道是谁划掉了航道。",
+      "icon": "mail",
+      "readTitle": "卡背上的旧船期",
+      "readBody": [
+        "翻到一半时，牌背浮出一行极小的船期字。",
+        "抄写员认出那是旧版排班纸，纸背还压着P-07的移箱记录，等你送进东堤排班房。"
+      ],
+      "sender": "排班房抄写员",
+      "npc": "排班房的抄写员",
+      "npcSourceGameId": "solitaire",
+      "invitationAction": "核对卡背旧船期",
+      "laterLabel": "把航单留在牌堆下",
+      "freshIntro": [
+        "你带着卡背航单到东堤排班房，抄写员在旧版纸背找到了P-07的移箱记录。十年前被划掉的航道仍写着折光港，签字缩写没人认得。",
+        "她建议你先接一条还没跑过的护航路，把纸上的船期换成一份真实记录。"
+      ],
+      "existingIntro": "东堤排班房的抄写员是头一回见你，只当你是来问船期的。她抽出P-07的移箱记录，问你要不要查那个签字缩写；你不点头，她不会催你出海。",
+      "firstCommissionId": "solitaire.T1",
+      "firstActionHint": "你愿意先翻开三张有效暗牌，让抄写员核对旧船期吗？",
+      "firstReceipt": "三张暗牌翻开，旧船期的顺序终于能读。抄写员圈出被划掉的折光港航线，问你是否愿意问问护航处还认不认这条老航道。",
+      "nextAction": "向护航处问旧航道",
+      "exitLabel": "把航单夹回排班表",
+      "pauseLine": "抄写员会把旧纸压平，等你下次来对。",
+      "returnLine": "你再打开航道表柜，抄写员已经把划掉的船期描亮了一行。",
+      "completedLine": "旧船期和移箱记录被排成了同一条航线。",
+      "mainlineConnection": "P-07的移箱记录与异常航报指向同一旧调度链，排班房的缩写可帮研究院辨认信号来源。",
+      "optionalCrossover": {
+        "releaseVersion": "0.24",
+        "requiredProfessionIds": [
+          "engineering.dispatcher",
+          "engineering.driver"
+        ],
+        "acceptanceRule": "双方均已主动接受",
+        "text": "若航线调度员与物流司机都已接受，可以把被改来改去的包裹路线和旧船期并排，找出同一个码头为何总被写回。"
+      },
+      "storyMessages": [
+        {
+          "messageId": "message.solitaire.arrival.v1",
+          "professionId": "engineering.dispatcher",
+          "surface": "arrival",
+          "label": "东堤排班房",
+          "text": "抄写员摊开旧排班纸：你想先看船期，还是先看移箱记录？",
+          "from": "排班房的抄写员"
+        }
+      ]
+    },
+    {
+      "narrativeId": "career-narrative.snowbells",
+      "gameId": "snowbells",
+      "professionId": "nature.snowscout",
+      "sourceClueId": "CL-snowbells",
+      "trigger": {
+        "clueId": "CL-snowbells",
+        "kind": "bell.rung",
+        "atLeast": 3
+      },
+      "settlementFacts": {
+        "commissionId": "snowbells.T1",
+        "tier": 1,
+        "objective": {
+          "kind": "bell.unique",
+          "atLeast": 3
+        },
+        "reward": {
+          "credits": 70,
+          "items": {},
+          "evidence": [],
+          "flags": []
+        },
+        "unlock": {
+          "all": []
+        },
+        "chapterGate": null
+      },
+      "clueTitle": "雪面旧刻痕跟着铃音",
+      "clueTeaser": "铃声散后，旧刻痕仍在雪面，听音室说它像失踪货柜的封条。",
+      "icon": "gem",
+      "readTitle": "不是山歌的铃音",
+      "readBody": [
+        "铃声散去，雪面浮出一道很旧的刻痕。",
+        "雪谷巡守把它抄进听音室的收件格，说这调子每逢涨潮响一遍，想请你亲自听。"
+      ],
+      "sender": "雪谷巡守",
+      "npc": "听音室的守夜人",
+      "npcSourceGameId": "snowbells",
+      "invitationAction": "比对铃音刻痕",
+      "laterLabel": "把谱页留在收件格",
+      "freshIntro": [
+        "你带着雪谷巡守抄下的铃音谱到旧港听音室，守夜人认出它来自一只失踪货柜的封条。旧照片上的柜号是P-07，厚谱仍留在雪屋过冬。",
+        "守夜人把照片和薄谱存在收件格，建议你先去旧港告示板挑一件能走动的活。"
+      ],
+      "existingIntro": "旧港听音室的守夜人是头一回同你说话，没有重讲雪谷的路。他只把薄谱摊平，说厚谱和P-07的照片都在原处；你可以先听，再决定要不要跟下去。",
+      "firstCommissionId": "snowbells.T1",
+      "firstActionHint": "你愿意先踩中三个不同铃铛，让守夜人分清封条上的音阶吗？",
+      "firstReceipt": "三个不同铃铛按序响起，守夜人把封条刻痕描回谱页。他说每逢涨潮仍会多响一声，问你要不要等下一次潮来看声音从哪里来。",
+      "nextAction": "等潮时核对多出的一声",
+      "exitLabel": "把谱页挂回收件格",
+      "pauseLine": "守夜人会替你留着钥匙，等你下次来听。",
+      "returnLine": "你再推开听音室，守夜人已经把三只铃按谱页摆好。",
+      "completedLine": "铃音、雪面刻痕和货柜封条终于能对成一谱。",
+      "mainlineConnection": "P-07的封条旧号与航报信号同源，雪谷音阶可给研究院提供不同于仪器的现场记录。",
+      "optionalCrossover": {
+        "releaseVersion": "0.24",
+        "requiredProfessionIds": [
+          "nature.ecologist",
+          "nature.snowscout"
+        ],
+        "acceptanceRule": "双方均已主动接受",
+        "text": "若雪谷探索员与生态采集员都已接受，可把铃音刻痕的间距和果核细孔并排记录，判断旧货柜是否留下过同一批育苗。"
+      },
+      "storyMessages": [
+        {
+          "messageId": "message.snowbells.arrival.v1",
+          "professionId": "nature.snowscout",
+          "surface": "arrival",
+          "label": "听音室收件格",
+          "text": "守夜人把薄谱推近灯下：你想先听三声，还是先看刻痕？",
+          "from": "听音室的守夜人"
+        }
+      ]
+    },
+    {
+      "narrativeId": "career-narrative.brick-breaker",
+      "gameId": "brick-breaker",
+      "professionId": "engineering.demolition",
+      "sourceClueId": "CL-brick-breaker",
+      "trigger": {
+        "clueId": "CL-brick-breaker",
+        "kind": "brick.destroyed",
+        "atLeast": 8
+      },
+      "settlementFacts": {
+        "commissionId": "brick-breaker.T1",
+        "tier": 1,
+        "objective": {
+          "kind": "brick.destroyed",
+          "atLeast": 8
+        },
+        "reward": {
+          "credits": 70,
+          "items": {},
+          "evidence": [],
+          "flags": []
+        },
+        "unlock": {
+          "all": []
+        },
+        "chapterGate": null
+      },
+      "clueTitle": "碎砖里焊着封条扣",
+      "clueTeaser": "整排砖碎开，铁片的编号不属于回收料，门房把它上缴了。",
+      "icon": "pick",
+      "readTitle": "编号不明的铁片",
+      "readBody": [
+        "整排砖碎开，里面焊着一块带编号的铁片。",
+        "拆解班查不出它的出处，门房按规矩上缴，另留一份抄件，请你照地址送过去。"
+      ],
+      "sender": "拆解班领班",
+      "npc": "三号拆解场门房",
+      "npcSourceGameId": "brick-breaker",
+      "invitationAction": "查看铁片封条编号",
+      "laterLabel": "把铁片留在门房抄件架",
+      "freshIntro": [
+        "你带着碎砖里的铁片到西环三号拆解场，门房认出它是旧货柜的封条扣。墙上的旧街照片圈过P-07，铁片则被单独放进上缴袋。",
+        "门房建议你先去告示板问按钟点算的活，把拆解记录换成一份能结钱的工单。"
+      ],
+      "existingIntro": "西环三号拆解场的门房不认得你，上缴袋里的铁片却一直在等人来问。他把旧街照片翻到圈柜号的一面，说P-07的位置已经有人核过；你可以先看，不必动手。",
+      "firstCommissionId": "brick-breaker.T1",
+      "firstActionHint": "你愿意先击碎八块砖，让门房核对回收料里还有没有同编号吗？",
+      "firstReceipt": "八块砖清完，门房从回收料里找出一枚相同压痕。他说照片圈出的位置正在施工，问你要不要从吊装边上看那只柜子原来停在哪里。",
+      "nextAction": "去施工边核对旧柜位置",
+      "exitLabel": "把上缴抄件留在门房",
+      "pauseLine": "门房会把铁片收好，等你下次来问施工边。",
+      "returnLine": "你回到拆解场，门房先指给你看照片里圈出的施工位置。",
+      "completedLine": "铁片编号、回收压痕和旧街位置终于对上了。",
+      "mainlineConnection": "P-07的封条扣与旧调度账同号，施工位置能帮研究院判断异常信号是否来自日常货运。",
+      "optionalCrossover": {
+        "releaseVersion": "0.24",
+        "requiredProfessionIds": [
+          "engineering.demolition",
+          "engineering.structural"
+        ],
+        "acceptanceRule": "双方均已主动接受",
+        "text": "若拆除工程师与建筑工程师都已接受，可把铁片压痕和验收单背面的柜号印记互证，判断封条扣是在拆解时留下，还是吊装前就在。"
+      },
+      "storyMessages": [
+        {
+          "messageId": "message.brick-breaker.arrival.v1",
+          "professionId": "engineering.demolition",
+          "surface": "arrival",
+          "label": "三号拆解场门房",
+          "text": "门房把铁片和照片并排：你想先看编号，还是先看施工位置？",
+          "from": "三号拆解场门房"
+        }
+      ]
+    },
+    {
+      "narrativeId": "career-narrative.gravity-flip",
+      "gameId": "gravity-flip",
+      "professionId": "research.gravity",
+      "sourceClueId": "CL-gravity-flip",
+      "trigger": {
+        "clueId": "CL-gravity-flip",
+        "kind": "gravity.flip",
+        "atLeast": 3
+      },
+      "settlementFacts": {
+        "commissionId": "gravity-flip.T1",
+        "tier": 1,
+        "objective": {
+          "kind": "gravity.flip",
+          "atLeast": 5
+        },
+        "reward": {
+          "credits": 70,
+          "items": {},
+          "evidence": [],
+          "flags": []
+        },
+        "unlock": {
+          "all": []
+        },
+        "chapterGate": null
+      },
+      "clueTitle": "打印条漏出未登记读数",
+      "clueTeaser": "重力归零时，纸条漏出未登记读数，像远处信标在回话。",
+      "icon": "scroll",
+      "readTitle": "不在册的重力读数",
+      "readBody": [
+        "重力归零的一瞬，仪表吐出一截窄纸条。",
+        "校准班说读数混进了远处信标的回话，探头已经留下，请你把纸条送回北环校准室。"
+      ],
+      "sender": "校准班交接",
+      "npc": "校准室的交接班",
+      "npcSourceGameId": "gravity-flip",
+      "invitationAction": "复算打印条读数",
+      "laterLabel": "把纸条夹在交接簿旁",
+      "freshIntro": [
+        "你带着重力打印条到北环校准室，交接班在例行记录里找到了相同的应答频率。它来自旧货柜P-07，而记录间隔最近开始变短。",
+        "交接班建议你先去港区告示板看看缺什么人手，用一件小事把新频率和旧记录分开核对。"
+      ],
+      "existingIntro": "北环校准室的交接班没见过你，也就没有重复实验步骤。他只在旧记录上标出变短的间隔，说探头仍在原处；你可以先看，不必立刻跟着复飞。",
+      "firstCommissionId": "gravity-flip.T1",
+      "firstActionHint": "你愿意先完成五次有效重力翻转，让交接班复算那段频率吗？",
+      "firstReceipt": "五次翻转和收工读数都合格，交接班发现间隔比旧记录短了一拍。他说远处信标还在回话，问你要不要把新读数带去研究院。",
+      "nextAction": "把新读数交给研究院",
+      "exitLabel": "把打印条放回校准簿",
+      "pauseLine": "交接班会替你抄好读数，等你下次来取。",
+      "returnLine": "你再回到校准室，交接班已经把新旧两条记录叠在一起。",
+      "completedLine": "五次翻转的读数终于能解释那段变短的间隔。",
+      "mainlineConnection": "P-07的应答频率与航报异常信号相符，校准记录可作为北环研究院的另一条独立证据。",
+      "optionalCrossover": {
+        "releaseVersion": "0.24",
+        "requiredProfessionIds": [
+          "adventure.pilot",
+          "research.gravity"
+        ],
+        "acceptanceRule": "双方均已主动接受",
+        "text": "若重力实验员与星际飞行员都已接受，可用巡航途中听到的杂音间隔对照校准频率，确认信标是否仍在同一空域。"
+      },
+      "storyMessages": [
+        {
+          "messageId": "message.gravity-flip.arrival.v1",
+          "professionId": "research.gravity",
+          "surface": "arrival",
+          "label": "北环校准室",
+          "text": "交接班摊开两条记录：你想先看变短的间隔，还是先听信标回话？",
+          "from": "校准室的交接班"
+        }
+      ]
+    }
+  ]
+}

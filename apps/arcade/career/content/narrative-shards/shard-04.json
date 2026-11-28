@@ -1,0 +1,325 @@
+{
+  "schemaVersion": 1,
+  "contentVersion": "0.18.0",
+  "shardId": "career-narrative-shard-04",
+  "professionIds": [
+    "engineering.driver",
+    "adventure.relicseeker",
+    "engineering.structural",
+    "nature.miner"
+  ],
+  "entries": [
+    {
+      "narrativeId": "career-narrative.road-rush",
+      "gameId": "road-rush",
+      "professionId": "engineering.driver",
+      "sourceClueId": "CL-road-rush",
+      "trigger": {
+        "clueId": "CL-road-rush",
+        "kind": "overtake",
+        "atLeast": 2
+      },
+      "settlementFacts": {
+        "commissionId": "road-rush.T1",
+        "tier": 1,
+        "objective": {
+          "kind": "distance.reached",
+          "atLeast": 1,
+          "minValue": {
+            "field": "meters",
+            "value": 500
+          }
+        },
+        "reward": {
+          "credits": 70,
+          "items": {},
+          "evidence": [],
+          "flags": []
+        },
+        "unlock": {
+          "all": []
+        },
+        "chapterGate": null
+      },
+      "clueTitle": "被改回旧码头的包裹",
+      "clueTeaser": "后座包裹退过几回，收件地址每次都被同一个笔迹改回来。",
+      "icon": "chevron",
+      "readTitle": "待领格里的同一条路线",
+      "readBody": [
+        "超车时后座滑出一件包裹，收件地址被划掉了。",
+        "夜班投递员说它退过几回，每次都改回旧码头，便把路线单附在信里，等你来认领。"
+      ],
+      "sender": "夜班投递员",
+      "npc": "待领格的夜班投递员",
+      "npcSourceGameId": "road-rush",
+      "invitationAction": "辨认包裹改址笔迹",
+      "laterLabel": "把包裹留在待领格",
+      "freshIntro": [
+        "你到旧码头待领格认领被退的包裹，投递员认出改址的是同一个人的笔迹。旧路线单的终点是P-07，地图上还压着旧街照片。",
+        "投递员说夜班缺人手，建议你先去告示板问按趟结算的活，让这笔退件不占着你的后座。"
+      ],
+      "existingIntro": "旧码头待领格的投递员不认得你，也没讲退件规矩，只把改址笔迹圈出来，说包裹仍按规矩等人来问；你可以先看，不必带走，也不必替谁跑这趟。",
+      "firstCommissionId": "road-rush.T1",
+      "firstActionHint": "你愿意先安全行驶五百米，让投递员核对包裹该在哪一站交接吗？",
+      "firstReceipt": "五百米安全行驶完成，投递员按旧路线单圈出最近的有效交接点。他说改址笔迹还出现在另一张航单上，问你要不要顺路比较。",
+      "nextAction": "比较另一张航单的笔迹",
+      "exitLabel": "把路线单放回待领格",
+      "pauseLine": "投递员会替你看好包裹，等你下次再来。",
+      "returnLine": "你回到待领格，投递员已经把两张航单并排铺开。",
+      "completedLine": "退件路线、改址笔迹和旧街位置终于对上了。",
+      "mainlineConnection": "P-07的旧路线与异常航报共用同一码头，改址记录可帮研究院辨认是谁在维持旧调度链。",
+      "optionalCrossover": {
+        "releaseVersion": "0.24",
+        "requiredProfessionIds": [
+          "engineering.dispatcher",
+          "engineering.driver"
+        ],
+        "acceptanceRule": "双方均已主动接受",
+        "text": "若物流司机与航线调度员都已接受，可把包裹退件的改址笔迹和旧船期缩写对照，确认同一人是否改过货运与航道两份记录。"
+      },
+      "storyMessages": [
+        {
+          "messageId": "message.road-rush.arrival.v1",
+          "professionId": "engineering.driver",
+          "surface": "arrival",
+          "label": "旧码头待领格",
+          "text": "投递员把包裹和路线单分开：你想先看改址，还是先看交接点？",
+          "from": "待领格的夜班投递员"
+        }
+      ]
+    },
+    {
+      "narrativeId": "career-narrative.shadow-leap",
+      "gameId": "shadow-leap",
+      "professionId": "adventure.relicseeker",
+      "sourceClueId": "CL-shadow-leap",
+      "trigger": {
+        "clueId": "CL-shadow-leap",
+        "kind": "height.reached",
+        "atLeast": 30
+      },
+      "settlementFacts": {
+        "commissionId": "shadow-leap.T1",
+        "tier": 1,
+        "objective": {
+          "kind": "height.reached",
+          "atLeast": 1,
+          "minValue": {
+            "field": "meters",
+            "value": 120
+          }
+        },
+        "reward": {
+          "credits": 70,
+          "items": {},
+          "evidence": [],
+          "flags": []
+        },
+        "unlock": {
+          "all": []
+        },
+        "chapterGate": null
+      },
+      "clueTitle": "月光填满背阴面刻符",
+      "clueTeaser": "跃到高处才看见墙刻，旧档室说掌灯后会显出一行柜号。",
+      "icon": "scroll",
+      "readTitle": "背阴处的两张拓片",
+      "readBody": [
+        "跃到高处，月光把背阴面的旧刻符填满。",
+        "拓印的人留下两张拓片，一张在崖壁石缝，一张寄回旧档室，想请你选一处去看。"
+      ],
+      "sender": "拓印的人",
+      "npc": "旧档室的守档人",
+      "npcSourceGameId": "shadow-leap",
+      "invitationAction": "辨认月光下的刻符",
+      "laterLabel": "把拓片留在旧档室",
+      "freshIntro": [
+        "你带着拓片到旧港旧档室，守档人掌灯后才让那行字显出来。行尾是P-07，和旧街照片背面的字一样；崖壁石缝还留着另一张。",
+        "守档人提醒潮水会盖住缝口，建议你先去告示板看看勘探队的活，不用趁黑上山。"
+      ],
+      "existingIntro": "旧港旧档室的守档人是头一回见你，没问是谁托你来的。他只把灯移近柜号，说寄回的那张拓片还在，崖壁那张也没人动；你可以先读，不必应下什么。",
+      "firstCommissionId": "shadow-leap.T1",
+      "firstActionHint": "你愿意先到达一百二十米的探索位置，让守档人比对刻符高度吗？",
+      "firstReceipt": "一百二十米高度达到，守档人按拓片重排了刻符间隙。他说崖壁下潮水将至，问你想先查旧档室的照片，还是等低潮再取另一张。",
+      "nextAction": "等低潮取崖壁拓片",
+      "exitLabel": "把拓片夹回旧档室",
+      "pauseLine": "守档人会替你把灯留着，等你下次来读。",
+      "returnLine": "你回到旧档室，守档人已经把两张拓片的空白处对齐。",
+      "completedLine": "墙刻、拓片和旧街照片终于在同一行字上相遇。",
+      "mainlineConnection": "P-07的刻符与异常信号同源，旧档室拓片可替研究院提供未被现代仪器改写的历史记录。",
+      "optionalCrossover": {
+        "releaseVersion": "0.24",
+        "requiredProfessionIds": [
+          "adventure.relicseeker",
+          "research.archivist"
+        ],
+        "acceptanceRule": "双方均已主动接受",
+        "text": "若遗迹探险家与档案分析员都已接受，可把崖壁拓片的缺口和旧档案夹的撕口拼合，确认刻符曾从哪一份旧记录被抄走。"
+      },
+      "storyMessages": [
+        {
+          "messageId": "message.shadow-leap.arrival.v1",
+          "professionId": "adventure.relicseeker",
+          "surface": "arrival",
+          "label": "旧档室石阶",
+          "text": "守档人把灯移到拓片旁：你想先读柜号，还是先看崖壁那张？",
+          "from": "旧档室的守档人"
+        }
+      ]
+    },
+    {
+      "narrativeId": "career-narrative.pendulum-tower",
+      "gameId": "pendulum-tower",
+      "professionId": "engineering.structural",
+      "sourceClueId": "CL-pendulum-tower",
+      "trigger": {
+        "clueId": "CL-pendulum-tower",
+        "kind": "tower.floor_stable",
+        "atLeast": 2
+      },
+      "settlementFacts": {
+        "commissionId": "pendulum-tower.T1",
+        "tier": 1,
+        "objective": {
+          "kind": "tower.floor_stable",
+          "atLeast": 4
+        },
+        "reward": {
+          "credits": 90,
+          "items": {},
+          "evidence": [
+            "E-C1-site"
+          ],
+          "flags": [
+            "C1.work_done"
+          ]
+        },
+        "unlock": {
+          "all": []
+        },
+        "chapterGate": null
+      },
+      "clueTitle": "验收单背面压出柜号",
+      "clueTeaser": "箱体落稳时滑出半截验收单，背面的P-07不是印章压出来的。",
+      "icon": "pick",
+      "readTitle": "没有盖章的验收单",
+      "readBody": [
+        "箱体落稳，验收单从箱缝里滑出半截。",
+        "验收组不敢签它，因为背面压着一个柜号印记P-07，只能把单子夹进塔架档案，请你核对原件。"
+      ],
+      "sender": "验收组复写联",
+      "npc": "塔架档案柜的管理员",
+      "npcSourceGameId": "pendulum-tower",
+      "invitationAction": "核对验收单压痕",
+      "laterLabel": "把验收单留在档案柜",
+      "freshIntro": [
+        "你到旧码头塔架档案柜核对验收单，管理员认出背面的P-07是压痕，不是印章。最早的受检记录正为这只柜子吊装，后来记录却被抽走。",
+        "管理员把旧街照片留给你看，建议你先去告示板接施工队的活，从吊装边重新看起。"
+      ],
+      "existingIntro": "旧码头塔架档案柜的管理员不认得你，只把没盖章的验收单翻过来，说背面的P-07是压痕，最早的受检记录缺了一页；你可以先看，不必立刻上塔。",
+      "firstCommissionId": "pendulum-tower.T1",
+      "firstActionHint": "你愿意先完成四层稳定塔，让管理员核对验收单上的吊装位置吗？",
+      "firstReceipt": "四层货码稳住了，管理员把验收单压痕与受检记录对齐。他说照片里那只柜仍在雨里，问你要不要从下一处施工吊装边看它的旧位置。",
+      "nextAction": "从吊装边核对旧柜位置",
+      "exitLabel": "把验收单放回档案柜",
+      "pauseLine": "管理员会把受检记录压好，等你下次来查。",
+      "returnLine": "你回到档案柜，管理员已经把验收单和旧街照片摊在同一盏灯下。",
+      "completedLine": "验收单、吊装记录和旧街照片终于能按P-07合读。",
+      "mainlineConnection": "P-07的吊装记录与日常施工相连，塔架档案可帮研究院排除异常信号来自旧系统偶然噪声的可能。",
+      "optionalCrossover": {
+        "releaseVersion": "0.24",
+        "requiredProfessionIds": [
+          "engineering.demolition",
+          "engineering.structural"
+        ],
+        "acceptanceRule": "双方均已主动接受",
+        "text": "若建筑工程师与拆除工程师都已接受，可把验收单压痕与铁片封条扣对照，确认旧货柜是在吊装时开封，还是后来在拆解中露出编号。"
+      },
+      "storyMessages": [
+        {
+          "messageId": "message.pendulum-tower.arrival.v1",
+          "professionId": "engineering.structural",
+          "surface": "arrival",
+          "label": "塔架档案柜",
+          "text": "管理员把验收单翻到背面：你想先看压痕，还是先看最早受检记录？",
+          "from": "塔架档案柜的管理员"
+        }
+      ]
+    },
+    {
+      "narrativeId": "career-narrative.gold-miner",
+      "gameId": "gold-miner",
+      "professionId": "nature.miner",
+      "sourceClueId": "CL-gold-miner",
+      "trigger": {
+        "clueId": "CL-gold-miner",
+        "kind": "mineral.returned",
+        "atLeast": 1
+      },
+      "settlementFacts": {
+        "commissionId": "gold-miner.T1",
+        "tier": 1,
+        "objective": {
+          "kind": "mineral.returned",
+          "atLeast": 2
+        },
+        "reward": {
+          "credits": 75,
+          "items": {},
+          "evidence": [],
+          "flags": []
+        },
+        "unlock": {
+          "all": []
+        },
+        "chapterGate": null
+      },
+      "clueTitle": "矿角刻着别人的半行字",
+      "clueTeaser": "拉上来的矿块一角像切下的壳，刻字写法和旧货柜封条一样。",
+      "icon": "pick",
+      "readTitle": "别磨掉的矿角刻字",
+      "readBody": [
+        "矿块拉上来，一角露出人工刻的齐整笔画。",
+        "矿场记账说那不是矿，是切下来的壳；化验单随件寄到验货处，请你别把字磨掉。"
+      ],
+      "sender": "矿场记账",
+      "npc": "验货处外窗的收料人",
+      "npcSourceGameId": "gold-miner",
+      "invitationAction": "辨认矿角半行刻字",
+      "laterLabel": "把矿块留在验货窗外",
+      "freshIntro": [
+        "你把刻字矿块送到西环验货处，收料人认出矿角是旧货柜切下的壳。旧簿查到P-07，备注只有勿动，后页还夹着旧街照片。",
+        "收料人说矿上缺人手，建议你先去告示板问一份入井勘探的活，别在窗口磨那半行字。"
+      ],
+      "existingIntro": "西环验货处外窗的收料人是头一回见你，只把旧簿翻到P-07那一页，说备注只有勿动两个字；你可以先看，不必取样，也不必现在就应下这桩事。",
+      "firstCommissionId": "gold-miner.T1",
+      "firstActionHint": "你愿意先成功吊回两件矿物，让收料人比较壳屑和矿样的边角吗？",
+      "firstReceipt": "两件矿物吊回，收料人确认壳屑只属于旧封条。他说照片里P-07停过的矿口已经封住，问你要不要查封口是谁记的。",
+      "nextAction": "查旧矿口封存记录",
+      "exitLabel": "把化验单留在验货处",
+      "pauseLine": "收料人会替你把矿角收好，等你下次来问。",
+      "returnLine": "你回到验货处，收料人已经把矿样边角和旧簿放在一起。",
+      "completedLine": "壳屑刻字、矿物边角和旧矿口记录终于能对起来。",
+      "mainlineConnection": "P-07的封条与旧调度账同号，验货记录可帮研究院确认货柜里的东西曾经过哪条货运链。",
+      "optionalCrossover": {
+        "releaseVersion": "0.24",
+        "requiredProfessionIds": [
+          "nature.miner",
+          "research.lattice"
+        ],
+        "acceptanceRule": "双方均已主动接受",
+        "text": "若采矿员与晶格研究员都已接受，可用矿角壳屑的切面反光和瑾的薄镜曲率对照，判断封条是否出自同一批晶格材料。"
+      },
+      "storyMessages": [
+        {
+          "messageId": "message.gold-miner.arrival.v1",
+          "professionId": "nature.miner",
+          "surface": "arrival",
+          "label": "验货处外窗",
+          "text": "收料人把矿角转向灯光：你想先看刻字，还是先看旧簿备注？",
+          "from": "验货处外窗的收料人"
+        }
+      ]
+    }
+  ]
+}

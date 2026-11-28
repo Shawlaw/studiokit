@@ -85,6 +85,7 @@
   var DEPENDENCIES = [
     { file: 'router.js', global: 'router', required: true },
     { file: 'registry.js', global: 'registry', required: true },
+    { file: 'profession-state.js', global: 'professionState', required: true },
     { file: 'discovery.js', global: 'discovery', required: true },
     { file: 'career-core.js', global: 'core', required: false },
     { file: 'career-db.js', global: 'db', required: false },
@@ -100,10 +101,13 @@
     { file: 'materials.js', global: 'materials', required: false, lazy: true },
     { file: 'crafting.js', global: 'crafting', required: false, lazy: true },
     { file: 'professions.js', global: 'professions', required: false, lazy: true },
+    { file: 'profession-view.js', global: 'professionView', required: false, lazy: true },
     { file: 'story-evidence.js', global: 'storyEvidence', required: false, lazy: true },
     { file: 'route-planner.js', global: 'routePlanner', required: false, lazy: true },
     { file: 'campaign-core.js', global: 'campaign', required: false, lazy: true },
     { file: 'ending-reducer.js', global: 'ending', required: false, lazy: true },
+    /* 0.24 世界叙事 resolver 与经历增强：按需装载，缺失时 0.23 路径完全可用。 */
+    { file: 'world-narrative.js', global: 'worldNarrative', required: false, lazy: true },
     { file: 'ui/clue-surface.js', global: 'ui.clueSurface', required: false },
     { file: 'ui/mailbox.js', global: 'ui.mailbox', required: false },
     { file: 'ui/settings.js', global: 'ui.settings', required: false },
@@ -113,6 +117,7 @@
     { file: 'ui/market.js', global: 'ui.market', required: false, lazy: true },
     { file: 'ui/workshop.js', global: 'ui.workshop', required: false, lazy: true },
     { file: 'ui/world-state.js', global: 'ui.worldState', required: false, lazy: true },
+    { file: 'ui/journal.js', global: 'ui.journal', required: false, lazy: true },
   ];
 
   var OVERLAY_ANCHOR_SELECTORS = [
@@ -191,6 +196,7 @@
     commissionContent: null,
     itemsContent: null,
     chapterContent: null,
+    worldWorkContent: null,
     contentRequested: false,
     contentPromise: null,
     commissionRun: null,
@@ -200,10 +206,31 @@
     commissionActivated: false,
     commissionConfigured: false,
     commissionLastCareerId: null,
+    commissionUiFacade: null,
+    commissionUiSource: null,
+    professionViewLoaded: false,
+    endingAttach: null,
+    narrativeRegistry: null,
+    narrativeLoaded: false,
+    narrativePromise: null,
+    narrativeByProfessionId: Object.create(null),
+    careerUiStyles: '',
+    careerUiStylesPromise: null,
+    keyboardGuardInstalled: false,
+    careerDataListeners: [],
     endingEvents: [],
     careerArchived: false,
     careerArchiveCareerId: null,
     careerArchivedAt: null,
+    /* 0.24 世界叙事：内容/事实/写入去重全部只在内存；模块或内容缺失时整段降级为 null。 */
+    worldNarrativeContent: null,
+    worldNarrativeFacts: null,
+    worldNarrativeFactsPromise: null,
+    /* 0.24 T24：catalog.worldChapterAlternatives 的按章懒计算缓存与重入守卫。 */
+    worldChapterAlternativesCache: null,
+    chapterAlternativesBuilding: false,
+    narrativeWrites: Object.create(null),
+    narrativeRecorded: Object.create(null),
   };
 
   /* ---------------------------------------------------------------- 基础工具 */
@@ -537,7 +564,7 @@
   }
 
   function syncUiRefs() {
-    ['clueSurface', 'mailbox', 'settings'].forEach(function (name) {
+    ['clueSurface', 'mailbox', 'settings', 'journal'].forEach(function (name) {
       readGlobal('ui.' + name);
     });
   }
@@ -591,16 +618,24 @@
     materials: { file: 'materials.js', global: 'materials' },
     crafting: { file: 'crafting.js', global: 'crafting' },
     professions: { file: 'professions.js', global: 'professions' },
+    professionView: { file: 'profession-view.js', global: 'professionView' },
     storyEvidence: { file: 'story-evidence.js', global: 'storyEvidence' },
     routePlanner: { file: 'route-planner.js', global: 'routePlanner' },
     campaign: { file: 'campaign-core.js', global: 'campaign' },
     ending: { file: 'ending-reducer.js', global: 'ending' },
+    /* 0.24：world-narrative.js 自己挂 window.ArcadeCareer.worldNarrative 与
+       window.ArcadeCareerWorldNarrative；bridge 只用它建只读门面。 */
+    worldNarrative: { file: 'world-narrative.js', global: 'worldNarrative' },
+    components: { file: 'ui/components.js', global: 'ui.components' },
+    harbor: { file: 'ui/harbor.js', global: 'ui.harbor' },
+    invitation: { file: 'ui/invitation.js', global: 'ui.invitation' },
     town: { file: 'ui/town.js', global: 'ui.town' },
     hangar: { file: 'ui/hangar.js', global: 'ui.hangar' },
     receipt: { file: 'ui/receipt.js', global: 'ui.receipt' },
     market: { file: 'ui/market.js', global: 'ui.market' },
     workshop: { file: 'ui/workshop.js', global: 'ui.workshop' },
     worldState: { file: 'ui/world-state.js', global: 'ui.worldState' },
+    journal: { file: 'ui/journal.js', global: 'ui.journal' },
   };
 
   function loadDependency(dep) {
@@ -784,12 +819,72 @@
       });
   }
 
+  function fetchText(url) {
+    if (!url || typeof WINDOW.fetch !== 'function') return Promise.resolve({ ok: false, reason: 'fetch-unavailable' });
+    try {
+      return WINDOW.fetch(url, { cache: 'no-store', credentials: 'same-origin' }).then(function (response) {
+        if (!response || !response.ok) return { ok: false, reason: 'http-' + (response ? response.status : 'unknown') };
+        return response.text().then(function (text) { return { ok: true, text: String(text || '') }; });
+      }).catch(function (err) {
+        return { ok: false, reason: 'fetch-error:' + (err && err.message ? err.message : 'unknown') };
+      });
+    } catch (err) {
+      return Promise.resolve({ ok: false, reason: 'fetch-error:' + (err && err.message ? err.message : 'unknown') });
+    }
+  }
+
+  /**
+   * 0.23：内容 shard 的字段名面向叙事作者，适配器只消费冻结 props。
+   * 这里做一次性归一：内容显式提供的标签优先，缺失时用统一 UI 文案，
+   * 不改变任何叙事正文；0.24 仍可读取原始字段。
+   */
+  function narrativeViewOf(entry) {
+    if (!entry || typeof entry.professionId !== 'string') return null;
+    return Object.assign({}, entry, {
+      location: entry.location || '折光港 · 旧码头',
+      acceptLabel: entry.acceptLabel || entry.invitationAction || '',
+      deferLabel: entry.deferLabel || entry.laterLabel || '',
+      leaveLabel: entry.leaveLabel || entry.exitLabel || '',
+      firstActionLabel: entry.firstActionLabel || '接受这份工作',
+      firstCommissionEyebrow: entry.firstCommissionEyebrow || '你的第一份工作',
+    });
+  }
+
+  /** 0.23：同源加载全部叙事 shard；任何缺失只降级为空，不影响经典与 0.22 流程。 */
+  function loadNarrativeContent() {
+    if (internal.narrativeLoaded) return internal.narrativePromise || Promise.resolve(null);
+    internal.narrativeLoaded = true;
+    var pending = fetchJson(contentUrlSafe('narrative-registry.json')).then(function (result) {
+      if (!result.ok || !result.data || !Array.isArray(result.data.shards)) return null;
+      internal.narrativeRegistry = result.data;
+      return Promise.all(result.data.shards.map(function (shard) {
+        if (!shard || typeof shard.url !== 'string') return Promise.resolve(null);
+        return fetchJson(contentUrlSafe(shard.url)).then(function (loaded) { return loaded.ok ? loaded.data : null; }).catch(function () { return null; });
+      }));
+    }).then(function (shards) {
+      (shards || []).forEach(function (shard) {
+        if (!shard || !Array.isArray(shard.entries)) return;
+        shard.entries.forEach(function (entry) {
+          var view = narrativeViewOf(entry);
+          if (view) internal.narrativeByProfessionId[view.professionId] = view;
+        });
+      });
+      return internal.narrativeByProfessionId;
+    }).catch(function () { return internal.narrativeByProfessionId; });
+    internal.narrativePromise = pending;
+    return pending;
+  }
+
   /** 按需装载延迟模块（backup.js 等）；缺失只记一次 loadErrors，绝不抛异常。 */
   function ensureLazyModule(name) {
     var def = LAZY_MODULES[name];
     if (!def) return Promise.resolve(null);
     var existing = readGlobal(def.global);
-    if (existing) return Promise.resolve(existing);
+    if (existing) {
+      /* 预载路径也要包成只读门面，避免调用方拿到未绑定 state/catalog 的裸模块。 */
+      if (def.global === 'worldNarrative') return Promise.resolve(worldNarrativeFacade(existing));
+      return Promise.resolve(existing);
+    }
     if (internal.lazyPending[name]) return internal.lazyPending[name];
     var url = joinUrl(internal.careerDir, def.file);
     if (!url) return Promise.resolve(null);
@@ -803,9 +898,10 @@
           configureCommissionContent();
         } else if (def.global === 'rental' || def.global === 'alternatives' || def.global === 'combatConfig'
           || def.global === 'materials' || def.global === 'crafting' || def.global === 'professions'
-          || def.global === 'storyEvidence' || def.global === 'routePlanner'
-          || def.global === 'campaign' || def.global === 'ending') {
-          api[def.global] = mod;
+          || def.global === 'professionView' || def.global === 'storyEvidence' || def.global === 'routePlanner'
+          || def.global === 'campaign' || def.global === 'ending' || def.global === 'worldNarrative') {
+          api[def.global] = def.global === 'worldNarrative' ? worldNarrativeFacade(mod) : mod;
+          if (def.global === 'professionView') internal.professionViewLoaded = true;
           configureCareerModules();
         } else if (def.global.indexOf('ui.') === 0) syncUiRefs();
         return mod;
@@ -816,6 +912,35 @@
     });
     internal.lazyPending[name] = pending;
     return pending;
+  }
+
+  function ensureCareerUiStyles() {
+    if (internal.careerUiStylesPromise) return internal.careerUiStylesPromise;
+    var urls = [joinUrl(internal.careerDir, 'ui/tokens.css'), joinUrl(internal.careerDir, 'ui/components.css')];
+    internal.careerUiStylesPromise = Promise.all(urls.map(function (url) {
+      return fetchText(url).catch(function () { return { ok: false }; });
+    })).then(function (results) {
+      var css = results.map(function (result) { return result && result.ok ? (result.text || '') : ''; }).join('\n');
+      internal.careerUiStyles = css;
+      return css;
+    });
+    return internal.careerUiStylesPromise;
+  }
+
+  /** 0.23 UI 是 opt-in：加载组件/港口 SVG/同源 CSS，失败时旧 UI 继续工作。 */
+  function ensureCareerUi() {
+    return Promise.all([
+      ensureLazyModule('components'),
+      ensureLazyModule('harbor'),
+      loadCareerContent(),
+      ensureCareerUiStyles(),
+    ]).then(function (values) {
+      var components = values[0];
+      if (values[3] && components && typeof components.ensureStyles === 'function') components.ensureStyles(values[3]);
+      return { components: components || null, harbor: values[1] || null };
+    }).catch(function () {
+      return { components: null, harbor: null };
+    });
   }
 
   /** career 已被真实使用（发现线索/打开信箱或偏好）时预热延迟模块；失败静默。 */
@@ -910,6 +1035,7 @@
         .catch(function () {});
     }
     var all = Promise.all([
+      loadNarrativeContent(),
       one('commissions.json', 'commissionContent', function (data) {
         return Array.isArray(data.commissions) ? data.commissions : null;
       }),
@@ -921,6 +1047,16 @@
       }),
       one('campaign.json', 'campaignContent', function (data) {
         return data && Array.isArray(data.chapters) ? data : null;
+      }),
+      one('world-work.json', 'worldWorkContent', function (data) {
+        return data && Array.isArray(data.commissionIds) && Array.isArray(data.entries) ? data : null;
+      }),
+      /* 0.24 世界叙事内容（T20 schema 冻结）：缺失/坏档只让交汇与替代叙事降级为空。 */
+      one('world-narrative.json', 'worldNarrativeContent', function (data) {
+        return data && data.schemaVersion === 1
+          && Array.isArray(data.alternativeNarratives)
+          && Array.isArray(data.crossoverPairs)
+          && Array.isArray(data.journalWhitelist) ? data : null;
       }),
       one('chapter-00.json', 'c00', function (data) { return data && data.chapterId ? data : null; }),
       one('chapter-02.json', 'c02', function (data) { return data && data.chapterId ? data : null; }),
@@ -966,6 +1102,9 @@
       chapter: internal.chapterContent || null,
       registry: internal.registryContent || null,
       campaign: internal.campaignContent || null,
+      worldWorkIds: internal.worldWorkContent && Array.isArray(internal.worldWorkContent.commissionIds)
+        ? internal.worldWorkContent.commissionIds.slice() : [],
+      worldWork: internal.worldWorkContent || null,
       chapters: internal.chapterFiles || null,
       sideStories: internal.sideStoriesContent || null,
       npc: internal.npcContent || null,
@@ -978,6 +1117,20 @@
       if (!mod || typeof mod.configure !== 'function') return;
       try {
         mod.configure(payload);
+        if (name === 'ending' && internal.commissionRun
+          && typeof internal.commissionRun.commissionId === 'string'
+          && internal.commissionRun.commissionId.indexOf('ending.') === 0
+          && typeof mod.attach === 'function') {
+          var activeEnding = internal.commissionRun;
+          mod.attach({
+            ticketId: activeEnding.ticketId,
+            ticket: Object.assign({}, activeEnding, { mode: 'commission' }),
+            run: activeEnding,
+            commissionId: activeEnding.commissionId,
+            gameId: activeEnding.gameId,
+            careerId: activeEnding.careerId,
+          });
+        }
       } catch (err) {
         warnOnce('career-module-configure:' + name, err);
       }
@@ -1028,6 +1181,9 @@
       var result = mod.configure({
         content: internal.commissionContent,
         arcadeBase: api.gameId ? '../' : internal.base || './',
+        worldWorkIds: internal.worldWorkContent && Array.isArray(internal.worldWorkContent.commissionIds)
+          ? internal.worldWorkContent.commissionIds.slice() : [],
+        worldWork: internal.worldWorkContent || null,
       });
       internal.commissionConfigured = true;
       if (result && result.errors && result.errors.length) {
@@ -1146,10 +1302,22 @@
         }
         configureCommissionContent();
         var stored = readStoredTicket();
-        return Promise.resolve(mod.validateTicket({ ticketId: ticketId, ticket: stored, gameId: api.gameId })).then(function (result) {
+        return Promise.resolve(mod.validateTicket({ ticketId: ticketId, ticket: stored, gameId: api.gameId })).then(async function (result) {
           if (!result || !result.ok || !result.commission || !result.run) {
             addReason('commission-ticket-rejected:' + ((result && result.reason) || 'unknown'));
             return null;
+          }
+          if (typeof result.commission.commissionId !== 'string' || result.commission.commissionId.indexOf('ending.') !== 0) {
+            var gate = await careerEntryGate({
+              commissionId: result.commission.commissionId,
+              gameId: result.commission.gameId || api.gameId || null,
+              activeRuns: [result.run],
+              history: [result.run],
+            });
+            if (!gate || gate.ok !== true) {
+              addReason('commission-ticket-gate-rejected:' + ((gate && gate.reason) || 'unknown'));
+              return null;
+            }
           }
           /* 游戏页已按经典开局（慢启动超时）后，late ticket 不再切换模式，避免一局两套结算。 */
           try {
@@ -1192,18 +1360,37 @@
             var endingLoads = [ensureLazyModule('ending'), loadCareerContent()];
             if (result.commission.gameId === 'star-raid') endingLoads.push(ensureLazyModule('combatConfig'));
             return Promise.all(endingLoads)
-              .then(function () {
+              .then(async function () {
                 configureCareerModules();
                 var endingModule = readGlobal('ending');
                 if (endingModule && typeof endingModule.attach === 'function') {
-                  endingModule.attach({
+                  var db = api.db || readGlobal('db');
+                  var fullRun = result.run;
+                  if (db && typeof db.getRun === 'function') {
+                    var authoritative = await db.getRun(ticketId);
+                    if (authoritative && authoritative.ok !== false) fullRun = authoritative;
+                  }
+                  var endingTicket = isObject(stored) && stored.ticketId === ticketId ? stored : Object.assign({}, fullRun, {
                     ticketId: ticketId,
-                    ticket: stored,
-                    run: result.run,
+                    runId: fullRun && fullRun.runId ? fullRun.runId : ticketId,
+                    commissionId: result.commission.commissionId,
+                    gameId: result.commission.gameId,
+                    careerId: result.run.careerId,
+                    mode: 'commission',
+                  });
+                  var attached = endingModule.attach({
+                    ticketId: ticketId,
+                    ticket: endingTicket,
+                    run: fullRun,
                     commissionId: result.commission.commissionId,
                     gameId: result.commission.gameId,
                     careerId: result.run.careerId,
                   });
+                  internal.endingAttach = { called: true, ok: attached !== false, ticketId: ticketId, at: nowIso() };
+                  if (attached === false) {
+                    addReason('ending-attach-failed');
+                    return false;
+                  }
                 }
                 var mainModule = commissionModule();
                 if (mainModule && typeof mainModule.adoptRun === 'function') {
@@ -1364,6 +1551,8 @@
         internal.finished = true;
         internal.finishedResult = normalized;
         /* 0.17：把收据里的剧情证据登记为只读 evidence token（失败不影响结算结果）。 */
+        /* 结算改变了真实已清集合：下一次投影必须重读事实，不能沿用开局前的缓存。 */
+        invalidateWorldNarrativeFacts();
         return withStoryTimeout(storyFeedbackPipeline(normalized, run).then(function (feedback) {
           return attachArchiveFollowUp(feedback, normalized, mod, run.careerId, photoWasLocked);
         }))
@@ -1386,7 +1575,13 @@
   function readArchivePhotoCommission(mod, careerId) {
     if (typeof mod.listAvailable !== 'function') return Promise.resolve(null);
     return safeAsync('receipt-follow-up', function () {
-      return Promise.resolve(mod.listAvailable({ careerId: careerId })).then(function (listing) {
+      return Promise.resolve(mod.listAvailable({
+        careerId: careerId,
+        state: currentStateSnapshot(),
+        catalog: careerCatalog(),
+        context: careerContext(null, 'receipt'),
+        ensure: false,
+      })).then(function (listing) {
         if (!listing || listing.ok !== true || !Array.isArray(listing.commissions)) return null;
         return listing.commissions.find(function (row) { return row.commissionId === 'memory-flip.T2'; }) || null;
       });
@@ -1721,31 +1916,49 @@
       careerId: internal.commissionLastCareerId || null,
       announce: announceToUser,
       reducedMotion: reducedMotionPreferred(),
+      professionView: professionViewModule(),
+      careerView: null,
       storyFeedback: storyFeedbackForUi(feedback),
       openTown: openTown,
       openCampaign: openCampaign,
       openMailbox: openMailbox,
     };
-    var receiptUi = readUi('receipt');
-    if (!receiptUi || typeof receiptUi.show !== 'function') {
-      /* receipt.js 是 lazy 依赖：玩家本局没开过钱包时也要在结算后加载并展示收据。 */
-      ensureLazyModule('receipt')
-        .then(function (loaded) {
-          if (!loaded || typeof loaded.show !== 'function') return;
-          try {
-            loaded.show(payload);
-          } catch (err) {
-            warnOnce('commission-receipt-ui', err);
-          }
-        })
-        .catch(function () {});
-      return;
+    function show() {
+      var receiptUi = readUi('receipt');
+      if (!receiptUi || typeof receiptUi.show !== 'function') {
+        /* receipt.js 是 lazy 依赖：玩家本局没开过钱包时也要在结算后加载并展示收据。 */
+        return ensureLazyModule('receipt')
+          .then(function (loaded) {
+            if (!loaded || typeof loaded.show !== 'function') return;
+            try {
+              loaded.show(payload);
+            } catch (err) {
+              warnOnce('commission-receipt-ui', err);
+            }
+          })
+          .catch(function () {});
+      }
+      try {
+        receiptUi.show(payload);
+      } catch (err) {
+        warnOnce('commission-receipt-ui', err);
+      }
+      return Promise.resolve();
     }
-    try {
-      receiptUi.show(payload);
-    } catch (err) {
-      warnOnce('commission-receipt-ui', err);
-    }
+    return ensureCareerUi()
+      .then(function () {
+        payload.uiComponents = readUi('components');
+        payload.uiHarbor = readUi('harbor');
+        return careerView({ surface: 'receipt' });
+      })
+      .then(function (view) {
+        payload.careerView = view || null;
+        return show();
+      })
+      .catch(function () {
+        payload.careerView = null;
+        return show();
+      });
   }
 
   function pickMethod(target, names) {
@@ -1865,12 +2078,6 @@
 
   /* ---------------------------------------------------------------- DB 适配层 */
 
-  function buildStateRecord(state) {
-    var record = clone(state) || {};
-    record.key = STATE_KEY;
-    return record;
-  }
-
   function normalizeDiscoveryRecords(records) {
     if (!records) return [];
     var list = Array.isArray(records) ? records : [records];
@@ -1883,203 +2090,20 @@
     return out;
   }
 
-  function idbWrite(idb, pairs) {
-    return new Promise(function (resolve, reject) {
-      var storeNames = [];
-      pairs.forEach(function (pair) {
-        if (storeNames.indexOf(pair[0]) < 0) storeNames.push(pair[0]);
-      });
-      var names = idb.objectStoreNames;
-      var usable = storeNames.filter(function (name) {
-        if (!names) return true;
-        if (typeof names.contains === 'function') return names.contains(name);
-        try {
-          return Array.prototype.indexOf.call(names, name) >= 0;
-        } catch (err) {
-          return true;
-        }
-      });
-      if (!usable.length) {
-        reject(new Error('idb-stores-missing'));
-        return;
-      }
-      var tx;
-      try {
-        tx = idb.transaction(usable, 'readwrite');
-      } catch (err) {
-        reject(err);
-        return;
-      }
-      var settled = false;
-      tx.oncomplete = function () {
-        if (settled) return;
-        settled = true;
-        resolve({ ok: true, method: 'idb-transaction' });
-      };
-      tx.onerror = function () {
-        if (settled) return;
-        settled = true;
-        reject(tx.error || new Error('idb-error'));
-      };
-      tx.onabort = function () {
-        if (settled) return;
-        settled = true;
-        reject(tx.error || new Error('idb-abort'));
-      };
-      try {
-        pairs.forEach(function (pair) {
-          if (usable.indexOf(pair[0]) < 0) return;
-          tx.objectStore(pair[0]).put(pair[1]);
-        });
-      } catch (err) {
-        try {
-          tx.abort();
-        } catch (abortErr) {
-          /* ignore */
-        }
-        if (!settled) {
-          settled = true;
-          reject(err);
-        }
-      }
-    });
-  }
-
-  function runStrategies(strategies) {
-    if (!strategies.length) return Promise.resolve({ ok: false, error: 'db-api-unsupported' });
-    var index = 0;
-    var lastError = null;
-    function next() {
-      if (index >= strategies.length) return Promise.resolve({ ok: false, error: lastError || 'db-api-unsupported' });
-      var strategy = strategies[index];
-      index += 1;
-      return Promise.resolve()
-        .then(function () {
-          return strategy();
-        })
-        .then(
-          function (result) {
-            if (result && result.ok) return result;
-            lastError = (result && result.error) || 'writer-failed';
-            return next();
-          },
-          function (err) {
-            lastError = err && err.message ? err.message : 'writer-threw';
-            return next();
-          }
-        );
-    }
-    return next();
-  }
-
-  function pairValues(pairs, store) {
-    return pairs.filter(function (pair) { return pair[0] === store; }).map(function (pair) { return pair[1]; });
-  }
-
-  function chainPairs(pairs, handler) {
-    return pairs
-      .reduce(
-        function (chain, pair) {
-          return chain.then(function () {
-            return callMaybeAsync({ fn: handler }, null, [pair[0], pair[1]]).then(function (raw) {
-              var normalized = normalizeWriteResult(raw);
-              if (!normalized.ok) throw new Error(normalized.error || 'writer-failed');
-              return normalized;
-            });
-          });
-        },
-        Promise.resolve()
-      )
-      .then(function () {
-        return { ok: true };
-      });
-  }
-
   /**
-   * 写入发现状态与线索记录。按生涯 DB 模块公开接口逐级探测，全部失败返回 {ok:false}。
-   * 优先 D15-03 career-db 的 putDiscovery(records[]) + saveDiscoveryState(state)（线索行先写、
-   * state 后写，state 是 UI/intro 的门闩；0.15 无线索时只写 state），
-   * 其次组合 API / 通用 put / 原始 IDBDatabase 单事务。
+   * 发现写入只走 career-db 的公共事务 API。任何 career extension 的写入都由
+   * mergeDiscoveryState(action.professionEvents) 或 applyProfessionEvent 完成；
+   * bridge 不再有 raw IDB / 通用 put / 多步写回退。
    */
-  function dbWrite(state, discoveryRecords) {
+  function dbWrite(state, discoveryRecords, action) {
     return Promise.resolve()
       .then(function () {
         var dbModule = readGlobal('db');
-        if (!dbModule) return { ok: false, error: 'db-module-missing' };
-        var records = normalizeDiscoveryRecords(discoveryRecords);
-        var stateRecord = buildStateRecord(state);
-        var pairs = [['state', stateRecord]].concat(
-          records.map(function (record) {
-            return ['discovery', record];
-          })
-        );
-        var strategies = [];
-
-        var generationOptions = { generation: internal.discoveryGeneration || 0 };
-        var stateSave = pickMethod(dbModule, ['saveDiscoveryState', 'saveState', 'putState', 'writeState', 'setState']);
-        var discoverySaveMany = pickMethod(dbModule, ['putDiscovery', 'putDiscoveries', 'saveDiscoveries']);
-        var discoverySaveOne = pickMethod(dbModule, ['saveDiscovery', 'writeDiscovery', 'addDiscovery']);
-        if (stateSave) {
-          strategies.push(function () {
-            var chain = Promise.resolve();
-            if (records.length) {
-              if (discoverySaveMany) {
-                chain = chain.then(function () {
-                  return callMaybeAsync(discoverySaveMany, dbModule, [records, generationOptions]).then(function (raw) {
-                    var normalized = normalizeWriteResult(raw);
-                    if (!normalized.ok) throw new Error(normalized.error || 'discovery-write-failed');
-                  });
-                });
-              } else if (discoverySaveOne) {
-                chain = chain.then(function () {
-                  return records.reduce(function (step, record) {
-                    return step.then(function () {
-                      return callMaybeAsync(discoverySaveOne, dbModule, [record]).then(function (raw) {
-                        var normalized = normalizeWriteResult(raw);
-                        if (!normalized.ok) throw new Error(normalized.error || 'discovery-write-failed');
-                      });
-                    });
-                  }, Promise.resolve());
-                });
-              } else {
-                chain = chain.then(function () {
-                  throw new Error('no-discovery-writer');
-                });
-              }
-            }
-            return chain.then(function () {
-              /* career-db.saveDiscoveryState 期望发现状态本体（DB 层自己包 {key,value}）。 */
-              var payload = stateSave.name === 'saveDiscoveryState' ? state : stateRecord;
-              return callMaybeAsync(stateSave, dbModule, [payload, generationOptions]).then(function (raw) {
-                var normalized = normalizeWriteResult(raw);
-                if (!normalized.ok) throw new Error(normalized.error || 'state-write-failed');
-                return { ok: true, method: 'career-db:' + stateSave.name };
-              });
-            });
-          });
+        if (!dbModule || typeof dbModule.mergeDiscoveryState !== 'function') {
+          return { ok: false, error: 'merge-discovery-api-missing' };
         }
-
-        /* 通用 per-store 写：record 形态带 keyPath 字段。 */
-        var genericWrite = pickMethod(dbModule, ['put', 'set', 'write', 'upsert']);
-        if (genericWrite) {
-          strategies.push(function () {
-            return chainPairs(pairs, function (store, record) {
-              return callMaybeAsync(genericWrite, dbModule, [store, record]);
-            });
-          });
-        }
-
-        /* 原始 IDBDatabase：单事务写入（ADR §7 的原子性要求）。 */
-        var idb = rawIdb(dbModule);
-        if (idb) {
-          strategies.push(function () {
-            return idbWrite(idb, pairs);
-          });
-        }
-
-        return runStrategies(strategies).then(function (result) {
-          if (result && result.ok) internal.dbWriteMethod = result.method || 'module-api';
-          return result;
+        return dbModule.mergeDiscoveryState(state, normalizeDiscoveryRecords(discoveryRecords), {
+          action: action && isObject(action) ? action : { type: 'SAVE_STATE', generation: internal.discoveryGeneration || 0 },
         });
       })
       .catch(function (err) {
@@ -2153,29 +2177,13 @@
   function writeDbStateUnlocked(state, discoveryRecords, action) {
     var actionWithGeneration = action && isObject(action) ? Object.assign({}, action) : null;
     if (actionWithGeneration) actionWithGeneration.generation = internal.discoveryGeneration || 0;
-    /* 多标签/多游戏页并发：优先走 DB 同事务读-合并-写，避免两页都先读旧状态再依次覆盖。
-       无 merge 能力的旧 DB/测试注入仍退回普通写入（空 clues 的显式重置也走普通写入）。 */
+    /* career-db 是唯一落盘 owner；没有事务合并 API 时不得自行拼装多步写入。 */
+
     var dbModule = readGlobal('db');
-    var hasClues = isObject(state) && isObject(state.clues) && Object.keys(state.clues).length > 0;
-    /* 普通保存一律同事务合并；显式清空走 db.resetDiscovery，不能靠空 clues 区分。 */
-    if (dbModule && typeof dbModule.mergeDiscoveryState === 'function') {
-      return Promise.resolve(dbModule.mergeDiscoveryState(state, discoveryRecords, { action: actionWithGeneration })).catch(function () {
-        return { ok: false, error: 'merge-discovery-failed' };
-      });
+    if (!dbModule || typeof dbModule.mergeDiscoveryState !== 'function') {
+      return Promise.resolve({ ok: false, error: 'merge-discovery-api-missing' });
     }
-    return Promise.resolve().then(function () {
-      var getter = dbModule && pickMethod(dbModule, ['getDiscoveryState', 'getState']);
-      if (!getter || !hasClues) return state;
-      return callMaybeAsync(getter, dbModule, []).then(function (raw) {
-        var existing = unwrapRecord(raw);
-        if (!isObject(existing) || !isObject(existing.clues)) return state;
-        var merged = Object.assign({}, state);
-        merged.clues = Object.assign({}, existing.clues, state.clues);
-        return merged;
-      }).catch(function () { return state; });
-    }).then(function (mergedState) {
-      return dbWrite(mergedState, discoveryRecords);
-    });
+    return dbWrite(state, discoveryRecords, actionWithGeneration || { type: 'SAVE_STATE', generation: internal.discoveryGeneration || 0 });
   }
 
   function unwrapRecord(raw) {
@@ -2236,35 +2244,6 @@
             return normalized.ok ? { ok: true, method: reset.name, generation: gen } : { ok: false, method: reset.name, error: normalized.error };
           });
         }
-        var dbName = dbModule.DB_NAME || dbModule.dbName || dbModule.databaseName || CAREER_DB_NAME;
-        var idbFactory = WINDOW.indexedDB;
-        if (idbFactory && typeof idbFactory.deleteDatabase === 'function') {
-          return new Promise(function (resolve) {
-            var settled = false;
-            function finish(result) {
-              if (settled) return;
-              settled = true;
-              resolve(result);
-            }
-            try {
-              var request = idbFactory.deleteDatabase(dbName);
-              request.onsuccess = function () {
-                finish({ ok: true, method: 'indexedDB.deleteDatabase' });
-              };
-              request.onerror = function () {
-                finish({ ok: false, error: 'delete-error' });
-              };
-              request.onblocked = function () {
-                finish({ ok: false, error: 'delete-blocked' });
-              };
-              setTimeout(function () {
-                finish({ ok: false, error: 'delete-timeout' });
-              }, 3000);
-            } catch (err) {
-              finish({ ok: false, error: 'delete-threw' });
-            }
-          });
-        }
         return { ok: false, error: 'reset-api-missing' };
       })
       .catch(function (err) {
@@ -2276,6 +2255,30 @@
   function loadDiscoveryStateFromDb() {
     return readCareerArchive().then(function () {
       return loadDiscoveryStateFromDbUnlocked();
+    });
+  }
+
+  function loadDiscoverySnapshot(db, retryOnStale) {
+    return Promise.resolve(db.getDiscoverySnapshot({ includeLegacyMigration: !internal.careerArchived })).then(function (snapshot) {
+      if (!snapshot || snapshot.legacyProfessionMigrationPending !== true || internal.careerArchived
+          || !internal.registryInstance || typeof db.applyProfessionEvent !== 'function') return snapshot;
+      return loadCareerContent().then(function () {
+        var catalog = careerCatalog();
+        if (!catalog.commissions.length || !internal.cluesEnabled) return snapshot;
+        return Promise.resolve(db.applyProfessionEvent({
+          action: 'MIGRATE_LEGACY',
+          input: { catalog: catalog, onlyUnversioned: true },
+          generation: snapshot.generation,
+          now: nowIso(),
+        })).then(function (result) {
+          if (retryOnStale && isStaleGenerationResult(result)) return loadDiscoverySnapshot(db, false);
+          if (result && (result.ok || isStaleGenerationResult(result))) return db.getDiscoverySnapshot();
+          return snapshot;
+        });
+      }).catch(function (err) {
+        warnOnce('profession-migration', err);
+        return snapshot;
+      });
     });
   }
 
@@ -2302,7 +2305,7 @@
     var dbModule = readGlobal('db');
     if (dbModule && typeof dbModule.getDiscoverySnapshot === 'function') {
       return Promise.resolve()
-        .then(function () { return dbModule.getDiscoverySnapshot(); })
+        .then(function () { return loadDiscoverySnapshot(dbModule, true); })
         .then(function (snapshot) {
           if (!snapshot || snapshot.ok !== true) return readDbStateRecord().then(function (record) {
             internal.discoveryState = discovery.normalizeState(record || null);
@@ -2394,6 +2397,1053 @@
       },
       rememberSnapshot(clone(fallbackInitialState()))
     );
+  }
+
+  /**
+   * 0.22 catalog 始终由注册表/真实线索/真实委托拼装，不按展示名或固定 16 推导。
+   * UI 与 gate 共享同一份快照；纯模块不直接读 bridge 内部。
+   */
+  function careerCatalog() {
+    var base = isObject(internal.registryContent) ? clone(internal.registryContent) : null;
+    var catalog = base || { schemaVersion: 1, contentVersion: '', games: [], professions: [], commissions: [] };
+    if (!Array.isArray(catalog.games)) catalog.games = [];
+    if (!Array.isArray(catalog.professions)) catalog.professions = [];
+    catalog.clues = clone(internal.clues) || [];
+    catalog.commissions = internal.commissionContent && Array.isArray(internal.commissionContent.commissions)
+      ? clone(internal.commissionContent.commissions)
+      : Array.isArray(catalog.commissions) ? catalog.commissions : [];
+    if (internal.worldWorkContent) {
+      catalog.worldWorkIds = Array.isArray(internal.worldWorkContent.commissionIds)
+        ? internal.worldWorkContent.commissionIds.slice() : [];
+      catalog.worldWork = clone(internal.worldWorkContent);
+    }
+    /* 0.24：world-narrative.json 是交汇/替代叙事/经历白名单的唯一运行时来源。
+       只做只读投影：内容对象给 resolver，白名单拆成 publicStoryEventIds 与
+       {eventId -> {label,text,person,professionId}}。不改 profession-view 冻结常量。 */
+    if (internal.worldNarrativeContent) {
+      catalog.worldNarrative = clone(internal.worldNarrativeContent);
+      var storyEventIds = Array.isArray(catalog.publicStoryEventIds) ? catalog.publicStoryEventIds.slice() : [];
+      var storyEvents = isObject(catalog.publicStoryEvents) ? clone(catalog.publicStoryEvents) : {};
+      var whitelist = Array.isArray(internal.worldNarrativeContent.journalWhitelist)
+        ? internal.worldNarrativeContent.journalWhitelist : [];
+      whitelist.forEach(function (row) {
+        if (!isObject(row) || typeof row.eventId !== 'string' || !row.eventId) return;
+        if (storyEventIds.indexOf(row.eventId) < 0) storyEventIds.push(row.eventId);
+        var entry = isObject(storyEvents[row.eventId]) ? storyEvents[row.eventId] : {};
+        if (typeof row.label === 'string' && row.label) entry.label = row.label;
+        if (typeof row.text === 'string' && row.text) entry.text = row.text;
+        if (typeof row.person === 'string' && row.person) entry.person = row.person;
+        if (Array.isArray(row.surfaces)) entry.surfaces = row.surfaces.slice();
+        if (typeof row.source === 'string') entry.source = row.source;
+        if (typeof row.professionId === 'string' && row.professionId) entry.professionId = row.professionId;
+        if (Object.keys(entry).length) storyEvents[row.eventId] = entry;
+      });
+      (internal.worldNarrativeContent.alternativeNarratives || []).forEach(function (node) {
+        if (!node || node.mechanism !== 'profession-commission' || !node.anchor || !Array.isArray(node.anchor.refs)
+          || typeof node.narrativeNodeId !== 'string') return;
+        var row = storyEvents['world:' + node.narrativeNodeId.slice('altn.'.length)];
+        var commission = catalog.commissions.find(function (entry) { return entry.commissionId === node.anchor.refs[0]; });
+        if (row && commission && commission.professionId) row.professionId = commission.professionId;
+      });
+      catalog.publicStoryEventIds = storyEventIds;
+      catalog.publicStoryEvents = storyEvents;
+      /* 0.24 T24：按章懒计算并注入替代指引（resolver 已经就绪且真实事实快照存在时才有）。
+         catalog.worldNarrative 保持原始内容对象不变；本键只供 route-planner 只读消费。 */
+      var chapterAlternatives = worldChapterAlternativesCatalog();
+      if (chapterAlternatives) catalog.worldChapterAlternatives = chapterAlternatives;
+    }
+    catalog.tools = [
+      { toolId: 'wallet', name: '钱包', introducedOnAccept: true },
+      { toolId: 'shop', name: '商店', introducedOnAccept: true },
+      { toolId: 'workshop', name: '工作台', introducedOnAccept: true },
+      { toolId: 'hangar', name: '机库', introducedOnAccept: true },
+    ];
+    return catalog;
+  }
+
+  /**
+   * bridge 只提供展示收窄，不构造授权事实。世界旗标、故事证据、已清委托、历史与
+   * 可接集合均由 T04 commission-core 从 DB 推导；调用方传入的同名字段一律丢弃。
+   */
+  function careerContext(extra, surface) {
+    var source = isObject(extra) ? extra : {};
+    var state = currentStateSnapshot();
+    var opened = [];
+    var records = isObject(state.clues) ? state.clues : {};
+    Object.keys(records).forEach(function (clueId) {
+      if (isObject(records[clueId]) && records[clueId].openedAt) opened.push(clueId);
+    });
+    var context = {
+      now: typeof source.now === 'string' ? source.now : nowIso(),
+      surface: typeof source.surface === 'string' && source.surface ? source.surface : surface || 'work',
+      gameId: source.gameId !== undefined ? source.gameId : api.gameId || null,
+      openedClueIds: opened,
+      activeRuns: source.activeRuns !== undefined
+        ? clone(source.activeRuns)
+        : (internal.commissionRun ? [clone(internal.commissionRun)] : []),
+      walletKnown: internal.careerArchived !== true && !!internal.commissionLastCareerId,
+      archived: internal.careerArchived === true,
+      bridgeDisplayOnly: true,
+      authority: 'commission-core',
+    };
+    if (typeof source.careerId === 'string') context.careerId = source.careerId;
+    return context;
+  }
+
+  /**
+   * 所有 UI 消费者拿到的是受控门面：只读列表强制 ensure:false 并附带 state/catalog/context；
+   * start 也把当前状态交给 T04 核心 gate，不能靠 UI 过滤绕过披露。
+   */
+  function commissionForUi() {
+    var mod = commissionModule();
+    if (!mod) return null;
+    if (internal.commissionUiSource === mod && internal.commissionUiFacade) return internal.commissionUiFacade;
+    var facade = {};
+    Object.keys(mod).forEach(function (key) {
+      var fn = mod[key];
+      if (typeof fn !== 'function') {
+        facade[key] = fn;
+        return;
+      }
+      facade[key] = function () {
+        var args = Array.prototype.slice.call(arguments);
+        if (key === 'listAvailable' || key === 'start' || key === 'validateTicket') {
+          var input = isObject(args[0]) ? Object.assign({}, args[0]) : {};
+          var surface = typeof input.surface === 'string' ? input.surface : 'work';
+          input.ensure = false;
+          input.state = input.state || currentStateSnapshot();
+          input.catalog = input.catalog || careerCatalog();
+          input.context = careerContext(input.context, surface);
+          if (key === 'listAvailable' && internal.commissionLastCareerId && !input.careerId) {
+            input.careerId = internal.commissionLastCareerId;
+          }
+          args[0] = input;
+        }
+        var returned = fn.apply(mod, args);
+        if (key !== 'start') return returned;
+        return Promise.resolve(returned).then(function (result) {
+          if (!result || result.ok !== true) return result;
+          return consumeFirstArrivalForStart(result.commissionId).then(function () { return result; });
+        });
+      };
+    });
+    internal.commissionUiSource = mod;
+    internal.commissionUiFacade = facade;
+    return facade;
+  }
+
+  /** 起源职业接单或开始世界工作后，消费起源的首次到港；当前职业切换不影响归属。 */
+  function consumeFirstArrivalForStart(commissionId) {
+    if (typeof commissionId !== 'string' || commissionId.indexOf('ending.') === 0) return Promise.resolve(null);
+    var state = currentStateSnapshot();
+    var nodeId = state.narrativeCursor && state.narrativeCursor.nodeId;
+    var invitationPrefix = 'invitation:';
+    if (typeof nodeId !== 'string' || nodeId.indexOf(invitationPrefix) !== 0) return Promise.resolve(null);
+    var professionId = nodeId.slice(invitationPrefix.length);
+    var origin = internal.registryInstance && internal.registryInstance.getGame(state.acceptedOriginGameId);
+    if (!origin || origin.professions.indexOf(professionId) < 0) return Promise.resolve(null);
+
+    /* 签票结果只公开委托 ID，归属从正式目录读取。世界工作不绑定当前职业。 */
+    var commissions = internal.commissionContent && internal.commissionContent.commissions;
+    var commission = Array.isArray(commissions) && commissions.find(function (row) {
+      return row && row.commissionId === commissionId;
+    });
+    if (!commission) return Promise.resolve(null);
+    var worldIds = internal.worldWorkContent && internal.worldWorkContent.commissionIds;
+    var world = Array.isArray(worldIds) && worldIds.indexOf(commissionId) >= 0;
+    if (!world && commission.professionId !== professionId) return Promise.resolve(null);
+    return applyProfessionAction('CONSUME_FIRST_ARRIVAL', { professionId: professionId });
+  }
+
+  function professionViewModule() {
+    var mod = readGlobal('professionView');
+    if (mod && internal.professionViewLoaded !== true) internal.professionViewLoaded = true;
+    return mod || null;
+  }
+
+  function commissionIdsFromListing(listing) {
+    if (!listing || listing.ok !== true || !Array.isArray(listing.commissions)) return [];
+    return listing.commissions
+      .filter(function (row) { return row && typeof row.commissionId === 'string' && row.unlocked !== false; })
+      .map(function (row) { return row.commissionId; });
+  }
+
+  /**
+   * 核心权威事实：只从 commission-core 的 DB-backed listAvailable / continuations 取得。
+   * bridge context 不被允许改写 worldFlags/storyEvidence/clearedCommissions/history；
+   * 返回 context 只携带核心已裁决的 availableIds/history 与展示字段。
+   */
+  function careerCoreFacts(context, surface) {
+    var display = careerContext(context, surface);
+    return Promise.all([ensureLazyModule('commission'), loadCareerContent()]).then(function () {
+      configureCommissionContent();
+      var mod = commissionModule();
+      if (!mod || typeof mod.listAvailable !== 'function') return { listing: null, context: display };
+      var input = {
+        careerId: internal.commissionLastCareerId || null,
+        state: currentStateSnapshot(),
+        catalog: careerCatalog(),
+        context: display,
+        ensure: false,
+      };
+      return Promise.resolve(mod.listAvailable(input)).then(function (listing) {
+        var ids = listing && listing.ok && Array.isArray(listing.availableIds)
+          ? listing.availableIds.slice()
+          : commissionIdsFromListing(listing);
+        display.availableIds = ids;
+        display.clearedCommissions = listing && listing.ok && Array.isArray(listing.commissions)
+          ? listing.commissions.filter(function (row) { return row && row.cleared === true && typeof row.commissionId === 'string'; }).map(function (row) { return row.commissionId; })
+          : [];
+        display.bridgeCoreAuthority = !!(listing && listing.ok);
+        if (listing && typeof listing.careerId === 'string') display.careerId = listing.careerId;
+        var continuations = typeof mod.continuations === 'function'
+          ? Promise.resolve(mod.continuations({ careerId: display.careerId || null })).catch(function () { return null; })
+          : Promise.resolve(null);
+        return continuations.then(function (result) {
+          if (result && result.ok !== true && result.ok !== false) return { listing: listing, context: display };
+          if (result && result.ok === true && Array.isArray(result.runs)) {
+            display.history = clone(result.runs);
+          }
+          return { listing: listing, context: display };
+        });
+      }).catch(function () {
+        display.availableIds = [];
+        display.bridgeCoreAuthority = false;
+        return { listing: null, context: display };
+      });
+    });
+  }
+
+  function openInvitation(extra) {
+    return ensureLazyModule('invitation').then(function (mod) {
+      if (!mod || typeof mod.open !== 'function') return { ok: false, reason: 'invitation-unavailable' };
+      return mod.open(uiContext(isObject(extra) ? extra : {}));
+    }).catch(function () { return { ok: false, reason: 'invitation-error' }; });
+  }
+
+  /** 0.23：消息只来自已接受职业的真实叙事卡，硬上限一条；不读取完整 catalog 后自行过滤。 */
+  function attachNarrativeMessages(projection) {
+    if (!projection || !projection.story || !Array.isArray(projection.professions)) return projection;
+    var accepted = Object.create(null);
+    projection.professions.forEach(function (row) { if (row && typeof row.professionId === 'string') accepted[row.professionId] = true; });
+    for (var professionId in internal.narrativeByProfessionId) {
+      if (!accepted[professionId]) continue;
+      var entry = internal.narrativeByProfessionId[professionId];
+      var messages = entry && Array.isArray(entry.storyMessages) ? entry.storyMessages : [];
+      var message = messages.find(function (row) { return row && row.surface === 'arrival'; }) || messages[0];
+      if (!message || !message.label) continue;
+      projection.story.messages = [{
+        messageId: message.messageId || null,
+        professionId: professionId,
+        label: String(message.label),
+        text: typeof message.text === 'string' ? message.text : '',
+        from: typeof message.from === 'string' ? message.from : '',
+      }];
+      break;
+    }
+    return projection;
+  }
+
+  /** 世界章节完成后，可接终局也是真实下一步；没有可用终局时保持空，不推荐未解锁内容。 */
+  function attachEndingAction(projection) {
+    if (!projection || !projection.story) return Promise.resolve(projection);
+    if (projection.story.nextAction && projection.story.nextAction.kind === 'ending') return Promise.resolve(projection);
+    if (!internal.commissionLastCareerId) return Promise.resolve(projection);
+    var campaign = readGlobal('campaign');
+    var evidence = readGlobal('storyEvidence');
+    if (!campaign || typeof campaign.endingOptions !== 'function' || !evidence || typeof evidence.storyFlags !== 'function') {
+      return Promise.resolve(projection);
+    }
+    return Promise.resolve(loadStorySnapshot()).then(function (snapshot) {
+      var story = evidence.storyFlags({
+        careerId: internal.commissionLastCareerId,
+        quests: snapshot.quests,
+        claims: snapshot.claims,
+        wallet: snapshot.wallet,
+        profile: snapshot.profile,
+      });
+      var flags = story && Array.isArray(story.allFlags) ? story.allFlags : [];
+      var available = campaign.endingOptions({
+        careerId: internal.commissionLastCareerId,
+        quests: snapshot.quests,
+        claims: snapshot.claims,
+        wallet: snapshot.wallet,
+        profile: snapshot.profile,
+        flags: flags,
+        evidence: flags,
+      }).find(function (ending) { return ending && ending.available === true; });
+      if (available) {
+        projection.story.nextAction = {
+          kind: 'ending',
+          approach: available.approach || null,
+          label: typeof available.title === 'string' && available.title ? available.title : '去看看星塔',
+        };
+      }
+      return projection;
+    }).catch(function () { return projection; });
+  }
+
+  /* ---------------------------------------------------------------- *
+   * 0.24 世界叙事（T22 resolver / T21 章节替代 / T23 经历）
+   *
+   * 只做三件只读的事：
+   *   1) careerCatalog() 带上 world-narrative.json 内容与经历白名单（见 careerCatalog）；
+   *   2) 给 careerView 投影加性附加 story.alternative / story.crossovers —— 只保留
+   *      节点自己的 texts，剥掉 anchor / npcRef / gate / reason 等内部结构；
+   *   3) recordWorldNarrativeEvent 薄封装：复用 career-db.applyProfessionEvent 的
+   *      RECORD_STORY_EVENT，只在首次展示成功后写一次，不新增 store/key。
+   * 模块 / 内容 / DB 任一步缺失时整段降级：投影不带新增字段、不写库、0.23 行为不变。
+   * ---------------------------------------------------------------- */
+
+  function rawWorldNarrativeModule() {
+    var mirror = WINDOW && WINDOW.ArcadeCareerWorldNarrative;
+    if (mirror && typeof mirror === 'object' && typeof mirror.createWorldNarrative === 'function') return mirror;
+    var current = api.worldNarrative;
+    if (current && typeof current === 'object' && current.__bridgeFacade !== true
+      && typeof current.createWorldNarrative === 'function') return current;
+    return null;
+  }
+
+  function worldNarrativeModule() {
+    return rawWorldNarrativeModule();
+  }
+
+  /** resolver 输入用的 catalog：在统一 catalog 上补 resolver 需要的真实内容分区（只读拷贝）。 */
+  function worldNarrativeCatalog() {
+    var catalog = careerCatalog();
+    if (internal.itemsContent) catalog.items = clone(internal.itemsContent);
+    if (internal.npcContent) catalog.npc = clone(internal.npcContent);
+    if (internal.chapterContent) catalog.chapterOne = clone(internal.chapterContent);
+    if (internal.campaignContent) catalog.campaign = clone(internal.campaignContent);
+    return catalog;
+  }
+
+  /**
+   * 0.24 T24：按章懒计算并注入 `catalog.worldChapterAlternatives`。
+   *
+   * 注入形状（ADR-0.24-world §9 增补）：
+   *   catalog.worldChapterAlternatives = { C1:[node…], C2:[…], C3:[…], C4:[…], C5:[…] }
+   * 每个数组是 T22 resolver `resolveWorldAlternatives({chapterId})` 的 `nodes`
+   * （{narrativeNodeId, mechanism, anchor, npcRef, signatureFrom, available, reason,
+   *   texts:{offer,progress,receipt,next}, receiptSource}）。它只服务 route-planner
+   * `chapterAlternatives()` 的公开文案覆盖；`catalog.worldNarrative` 仍是原始内容
+   * 对象（供 resolver 使用），两者并存、互不改写。
+   *
+   * 懒计算条件：内容已加载 + resolver 模块已装载 + 真实事实快照已就绪。缺任一项
+   * 返回 null，catalog 不含该键，route-planner 回落到 0.23 同形内置说明。
+   * 结果按事实快照对象身份缓存；投影/写入后 invalidate 会清空。只读、不写库、不发奖。
+   */
+  function worldChapterAlternativesCatalog() {
+    if (!internal.worldNarrativeContent) return null;
+    /* 重入守卫：resolver 输入里的 catalog 由 careerCatalog() 构造，不能在构造过程中再算一次。 */
+    if (internal.chapterAlternativesBuilding) return null;
+    var facts = internal.worldNarrativeFacts;
+    if (!facts) return null;
+    var mod = rawWorldNarrativeModule();
+    if (!mod || typeof mod.resolveWorldAlternatives !== 'function') return null;
+    if (internal.worldChapterAlternativesCache && internal.worldChapterAlternativesCache.facts === facts) {
+      return clone(internal.worldChapterAlternativesCache.value);
+    }
+    internal.chapterAlternativesBuilding = true;
+    try {
+      var facade = worldNarrativeFacade(mod);
+      if (!facade) return null;
+      var out = {};
+      ['C1', 'C2', 'C3', 'C4', 'C5'].forEach(function (chapterId) {
+        var result = facade.resolveWorldAlternatives({ chapterId: chapterId, surface: 'route' });
+        out[chapterId] = result && Array.isArray(result.nodes) ? clone(result.nodes) : [];
+      });
+      internal.worldChapterAlternativesCache = { facts: facts, value: out };
+      return clone(out);
+    } catch (err) {
+      warnOnce('world-chapter-alternatives', err);
+      return null;
+    } finally {
+      internal.chapterAlternativesBuilding = false;
+    }
+  }
+
+  function worldNarrativeTexts(texts, keys) {
+    var out = {};
+    if (!isObject(texts)) return out;
+    keys.forEach(function (key) {
+      if (typeof texts[key] === 'string' && texts[key]) out[key] = texts[key];
+    });
+    return out;
+  }
+
+  function publicAlternativeView(result) {
+    var node = result && result.ok === true && isObject(result.node) ? result.node : null;
+    if (!node || typeof node.narrativeNodeId !== 'string' || !node.narrativeNodeId) return null;
+    var texts = worldNarrativeTexts(node.texts, ['offer', 'progress', 'receipt', 'next']);
+    if (!Object.keys(texts).length) return null;
+    return { narrativeNodeId: node.narrativeNodeId, texts: texts };
+  }
+
+  function publicCrossoverView(node) {
+    if (!isObject(node) || typeof node.eventId !== 'string' || !node.eventId) return null;
+    var texts = worldNarrativeTexts(node.texts, ['invite', 'body', 'receipt', 'decline']);
+    if (!Object.keys(texts).length) return null;
+    return { eventId: node.eventId, texts: texts };
+  }
+
+  function invalidateWorldNarrativeFacts() {
+    internal.worldNarrativeFacts = null;
+    internal.worldNarrativeFactsPromise = null;
+    internal.worldChapterAlternativesCache = null;
+  }
+
+  /** 真实旗标/证据/已清委托的只读快照；一次打开内复用，数据变化时失效。 */
+  function ensureWorldNarrativeFacts(cleared, snapshot) {
+    if (internal.worldNarrativeFacts) return Promise.resolve(internal.worldNarrativeFacts);
+    if (internal.worldNarrativeFactsPromise) return internal.worldNarrativeFactsPromise;
+    var clearedList = Array.isArray(cleared) ? cleared.slice() : [];
+    var evidence = readGlobal('storyEvidence');
+    var campaign = readGlobal('campaign');
+    var snapshotSource = snapshot
+      ? Promise.resolve(snapshot)
+      : Promise.resolve().then(function () { return loadStorySnapshot(); });
+    var pending = snapshotSource
+      .then(function (snapshot) {
+        var flags = [];
+        var tokens = [];
+        var chapterId = null;
+        var snapshotInput = {
+          careerId: snapshot && snapshot.careerId ? snapshot.careerId : null,
+          quests: snapshot && Array.isArray(snapshot.quests) ? snapshot.quests : [],
+          claims: snapshot && Array.isArray(snapshot.claims) ? snapshot.claims : [],
+          wallet: snapshot && isObject(snapshot.wallet) ? snapshot.wallet : null,
+          profile: snapshot && isObject(snapshot.profile) ? snapshot.profile : null,
+        };
+        if (snapshot && !snapshot.identityIssue && evidence && typeof evidence.storyFlags === 'function') {
+          try {
+            var story = evidence.storyFlags(snapshotInput);
+            if (story && story.ok === true) {
+              flags = Array.isArray(story.allFlags) ? story.allFlags.slice() : [];
+              tokens = Array.isArray(story.tokens) ? story.tokens.slice() : [];
+            }
+          } catch (err) {
+            warnOnce('world-narrative-flags', err);
+          }
+        }
+        /* 章节到达用 campaign-core 的真实推导（C0.port_seen 等不在 story-evidence 旗标里），
+           不新增 context 键，也不写任何状态。 */
+        if (snapshot && !snapshot.identityIssue && campaign && typeof campaign.state === 'function') {
+          try {
+            var camp = campaign.state(snapshotInput);
+            if (camp && camp.ok === true) {
+              (Array.isArray(camp.flags) ? camp.flags : []).forEach(function (flag) {
+                if (flags.indexOf(flag) < 0) flags.push(flag);
+              });
+              (Array.isArray(camp.cleared) ? camp.cleared : []).forEach(function (id) {
+                if (clearedList.indexOf(id) < 0) clearedList.push(id);
+              });
+              if (typeof camp.currentChapter === 'string' && /^C[1-5]$/.test(camp.currentChapter)) {
+                chapterId = camp.currentChapter;
+              }
+            }
+          } catch (err) {
+            warnOnce('world-narrative-campaign', err);
+          }
+        }
+        var facts = {
+          flags: flags,
+          evidence: tokens,
+          cleared: clearedList,
+          careerId: snapshot && snapshot.careerId ? snapshot.careerId : null,
+          chapterId: chapterId,
+          quests: snapshotInput.quests,
+        };
+        if (internal.worldNarrativeFactsPromise === pending) {
+          internal.worldNarrativeFacts = facts;
+          internal.worldNarrativeFactsPromise = null;
+        }
+        return facts;
+      })
+      .catch(function (err) {
+        warnOnce('world-narrative-facts', err);
+        var fallback = { flags: [], evidence: [], cleared: clearedList, careerId: null, chapterId: null };
+        if (internal.worldNarrativeFactsPromise === pending) {
+          internal.worldNarrativeFacts = fallback;
+          internal.worldNarrativeFactsPromise = null;
+        }
+        return fallback;
+      });
+    internal.worldNarrativeFactsPromise = pending;
+    return pending;
+  }
+
+  /* 当前章节只由真实旗标推导（与 world-narrative 冻结章节旗标一致），不新增 context 键。 */
+  var NARRATIVE_CHAPTER_FLAGS = {
+    C1: ['C0.port_seen'],
+    C2: ['C1.signal_fragment'],
+    C3: ['C2.research_complete'],
+    C4: ['C3.truth_found'],
+    C5: ['C4.city_power_restored'],
+  };
+
+  function narrativeChapterId(flags) {
+    var known = Array.isArray(flags) ? flags : [];
+    var reached = null;
+    ['C1', 'C2', 'C3', 'C4', 'C5'].forEach(function (chapterId) {
+      var required = NARRATIVE_CHAPTER_FLAGS[chapterId] || [];
+      var ok = required.length > 0 && required.every(function (flag) { return known.indexOf(flag) >= 0; });
+      if (ok) reached = chapterId;
+    });
+    return reached;
+  }
+
+  function narrativeResolverInput(surface, facts) {
+    var input = {
+      surface: surface,
+      state: currentStateSnapshot(),
+      catalog: worldNarrativeCatalog(),
+      flags: facts.flags,
+      cleared: facts.cleared,
+      evidence: facts.evidence,
+      context: {
+        surface: surface,
+        archived: internal.careerArchived === true,
+        worldFlags: facts.flags,
+        clearedCommissions: facts.cleared,
+        storyEvidence: facts.evidence,
+      },
+    };
+    var chapterId = facts.chapterId && /^C[1-5]$/.test(facts.chapterId)
+      ? facts.chapterId : narrativeChapterId(facts.flags);
+    if (chapterId) input.chapterId = chapterId;
+    return input;
+  }
+
+  function buildWorldNarrativeEngine(mod) {
+    if (!mod || typeof mod.createWorldNarrative !== 'function' || !internal.worldNarrativeContent) return null;
+    try {
+      return mod.createWorldNarrative({
+        content: internal.worldNarrativeContent,
+        catalog: worldNarrativeCatalog(),
+      });
+    } catch (err) {
+      warnOnce('world-narrative-engine', err);
+      return null;
+    }
+  }
+
+  /**
+   * 经历面：把当前生涯里真实已清的替代路线合成为只读经历行（ADR-0.24 §9 增补）。
+   * 只读真实记录，不改写、不落盘任何 storyEvents 行；内容白名单与投影 gate 仍决定是否显示。
+   */
+  function worldJournalState(state, cleared) {
+    if (internal.careerArchived || !internal.worldNarrativeContent) return Promise.resolve(state);
+    /* ensureLazyModule 对该模块返回的是只读门面；推导需要原始模块上的纯函数。 */
+    return ensureLazyModule('worldNarrative').then(function () {
+      var mod = rawWorldNarrativeModule();
+      if (!mod || typeof mod.deriveJournalEvents !== 'function') return state;
+      return ensureWorldNarrativeFacts(cleared).then(function (facts) {
+        var db = api.db || readGlobal('db');
+        var materialIds = [];
+        (internal.worldNarrativeContent.alternativeNarratives || []).forEach(function (node) {
+          var itemId = node && node.mechanism === 'market-material' && isObject(node.anchor) && Array.isArray(node.anchor.refs)
+            ? node.anchor.refs[0] : null;
+          if (typeof itemId === 'string' && materialIds.indexOf(itemId) < 0) materialIds.push(itemId);
+        });
+        /* 商店材料只认最早的一次真实采购流水；读不到就不合成这一条。 */
+        var reads = facts.careerId && db && typeof db.readLedger === 'function' ? materialIds.map(function (itemId) {
+          return Promise.resolve(db.readLedger(facts.careerId, 1, { firstMarketPurchaseOf: itemId })).then(function (ledger) {
+            return ledger && ledger.ok && ledger.rows[0] ? [{ itemId: itemId, at: ledger.rows[0].at }] : [];
+          }).catch(function () { return []; });
+        }) : [];
+        return Promise.all(reads).then(function (groups) {
+          var derived = mod.deriveJournalEvents(Object.assign(narrativeResolverInput('journal', facts), {
+            records: { quests: facts.quests, purchases: [].concat.apply([], groups) },
+          }));
+          var allowed = careerCatalog().publicStoryEventIds;
+          var storyEvents = Object.assign({}, state.storyEvents);
+          derived.forEach(function (row) {
+            if (!storyEvents[row.eventId] && allowed.indexOf(row.eventId) >= 0) {
+              storyEvents[row.eventId] = { at: row.at, source: row.source };
+            }
+          });
+          return Object.keys(storyEvents).length === Object.keys(state.storyEvents || {}).length
+            ? state : Object.assign({}, state, { storyEvents: storyEvents });
+        });
+      });
+    }).catch(function (err) {
+      warnOnce('world-journal', err);
+      return state;
+    });
+  }
+
+  /** 交汇只有通过真实事实复核并成功写入后才能展示，失败可重试。 */
+  function recordWorldNarrativeEvent(input) {
+    var request = isObject(input) ? input : {};
+    var eventId = typeof input === 'string' ? input : (typeof request.eventId === 'string' ? request.eventId : '');
+    if (eventId.indexOf('crossover:') !== 0) return Promise.resolve({ ok: false, reason: 'invalid-event-id' });
+    if (internal.careerArchived) return Promise.resolve({ ok: false, reason: 'archived' });
+    var generation = internal.discoveryGeneration || 0;
+    var writeKey = generation + ':' + eventId;
+    var existing = (currentStateSnapshot().storyEvents || {})[eventId];
+    if (internal.narrativeRecorded[writeKey] || (existing && existing.source === 'world')) {
+      return Promise.resolve({ ok: true, duplicate: true });
+    }
+    if (internal.narrativeWrites[writeKey]) {
+      return internal.narrativeWrites[writeKey].then(function (result) {
+        return result.ok ? { ok: true, duplicate: true } : result;
+      });
+    }
+    var dbModule = api.db || readGlobal('db');
+    if (!dbModule || typeof dbModule.applyProfessionEvent !== 'function') {
+      return Promise.resolve({ ok: false, reason: 'db-unavailable' });
+    }
+    var pending = ensureWorldNarrativeFacts()
+      .then(function (facts) {
+        if (internal.careerArchived || generation !== internal.discoveryGeneration) {
+          return { ok: false, reason: 'stale-crossover' };
+        }
+        var engine = buildWorldNarrativeEngine(worldNarrativeModule());
+        var candidate = engine && engine.resolveCrossover(Object.assign(
+          narrativeResolverInput('port', facts), { eventId: eventId }
+        ));
+        if (!candidate || !candidate.ok || !candidate.node || candidate.node.eventId !== eventId) {
+          return { ok: false, reason: 'crossover-unavailable' };
+        }
+        var at = nowIso();
+        return dbModule.applyProfessionEvent({
+          action: 'RECORD_STORY_EVENT',
+          input: { eventId: eventId, source: 'world', at: at },
+          generation: generation,
+          now: at,
+        });
+      })
+      .then(function (result) {
+        if (!result || result.ok !== true) return result || { ok: false, reason: 'write-failed' };
+        if (generation !== internal.discoveryGeneration) return { ok: false, reason: 'stale-crossover' };
+        invalidateWorldNarrativeFacts();
+        /* 重读 discovery：下一次投影不再把已落库事件当首次（duplicate 同样只放行一次）。 */
+        return loadDiscoveryStateFromDb().then(function () {
+          var stored = (currentStateSnapshot().storyEvents || {})[eventId];
+          if (internal.careerArchived || generation !== internal.discoveryGeneration || !stored || stored.source !== 'world') {
+            return { ok: false, reason: 'crossover-reread-failed' };
+          }
+          internal.narrativeRecorded[writeKey] = true;
+          return result;
+        });
+      })
+      .catch(function (err) {
+        warnOnce('record-world-narrative', err);
+        return { ok: false, reason: 'write-error' };
+      })
+      .then(function (result) {
+        delete internal.narrativeWrites[writeKey];
+        return result;
+      });
+    internal.narrativeWrites[writeKey] = pending;
+    return pending;
+  }
+
+  /** 把 resolver 的公开文案加性附加到 careerView.story；不动既有字段、排序与上限。 */
+  function attachWorldNarrative(projection, surface, facts) {
+    if (!projection || !projection.story) return Promise.resolve(projection);
+    /* 交汇只允许 port/journal 两个真实经历面；clue/letter/shop/crafting/tools 永不附加。 */
+    if (surface !== 'port' && surface !== 'journal') return Promise.resolve(projection);
+    if (internal.careerArchived || !internal.worldNarrativeContent) return Promise.resolve(projection);
+    return ensureLazyModule('worldNarrative').then(function () {
+      var engine = buildWorldNarrativeEngine(worldNarrativeModule());
+      if (!engine) return projection;
+      var cleared = facts && facts.context && Array.isArray(facts.context.clearedCommissions)
+        ? facts.context.clearedCommissions : [];
+      return ensureWorldNarrativeFacts(cleared).then(function (narrativeFacts) {
+        var input = narrativeResolverInput(surface, narrativeFacts);
+        try {
+          var view = input.chapterId ? publicAlternativeView(engine.resolveAlternative(input)) : null;
+          if (view) projection.story.alternative = view;
+        } catch (err) {
+          warnOnce('world-narrative-alternative', err);
+        }
+        try {
+          var listed = engine.listCrossovers(input);
+          var rows = listed && listed.ok === true && Array.isArray(listed.nodes)
+            ? listed.nodes.map(publicCrossoverView).filter(Boolean) : [];
+          /* 每次投影最多一条交汇回显；落库后 resolver 不再产出，故不会重放。 */
+          if (rows.length) projection.story.crossovers = rows.slice(0, 1);
+        } catch (err) {
+          warnOnce('world-narrative-crossover', err);
+        }
+        return projection;
+      });
+    }).catch(function () { return projection; });
+  }
+
+  /**
+   * 只读门面（ADR-0.24 §3.3 / §7.2）：调用方拿到的不是裸模块，而是自动绑定
+   * state/catalog/真实事实的只读方法。任何缺失都返回结构化空结果，绝不写库。
+   */
+  function worldNarrativeFacade(source) {
+    var mod = source && typeof source === 'object' && typeof source.createWorldNarrative === 'function'
+      ? source : rawWorldNarrativeModule();
+    if (!mod) return null;
+    if (mod.__bridgeFacade === true) return mod;
+    function engineNow() {
+      return buildWorldNarrativeEngine(mod);
+    }
+    function facadeInput(input) {
+      var extra = isObject(input) ? input : {};
+      var facts = internal.worldNarrativeFacts || { flags: [], evidence: [], cleared: [] };
+      var merged = Object.assign({}, extra);
+      if (merged.state === undefined) merged.state = currentStateSnapshot();
+      if (merged.catalog === undefined) merged.catalog = worldNarrativeCatalog();
+      if (merged.flags === undefined && merged.worldFlags === undefined) merged.flags = facts.flags;
+      if (merged.evidence === undefined && merged.storyEvidence === undefined) merged.evidence = facts.evidence;
+      if (merged.cleared === undefined && merged.clearedCommissions === undefined) merged.cleared = facts.cleared;
+      if (merged.chapterId === undefined && facts.chapterId) merged.chapterId = facts.chapterId;
+      merged.context = Object.assign({
+        archived: internal.careerArchived === true,
+        worldFlags: facts.flags,
+        clearedCommissions: facts.cleared,
+        storyEvidence: facts.evidence,
+      }, isObject(extra.context) ? extra.context : {});
+      return merged;
+    }
+    function resolveCrossover(input) {
+      var engine = engineNow();
+      if (!engine) return { ok: false, node: null, reason: 'not-available' };
+      try {
+        return engine.resolveCrossover(facadeInput(input));
+      } catch (err) {
+        warnOnce('world-narrative-facade', err);
+        return { ok: false, node: null, reason: 'not-available' };
+      }
+    }
+    function resolveAlternative(input) {
+      var engine = engineNow();
+      if (!engine) return { ok: false, node: null, reason: 'not-available' };
+      try {
+        return engine.resolveAlternative(facadeInput(input));
+      } catch (err) {
+        warnOnce('world-narrative-facade', err);
+        return { ok: false, node: null, reason: 'not-available' };
+      }
+    }
+    function listCrossovers(input) {
+      var engine = engineNow();
+      if (!engine) return { ok: false, nodes: [], reason: 'not-available' };
+      try {
+        return engine.listCrossovers(facadeInput(input));
+      } catch (err) {
+        warnOnce('world-narrative-facade', err);
+        return { ok: false, nodes: [], reason: 'not-available' };
+      }
+    }
+    function resolveWorldAlternatives(input) {
+      var empty = { schemaVersion: 1, chapterId: null, nodes: [], crossovers: [] };
+      if (typeof mod.resolveWorldAlternatives !== 'function' || !internal.worldNarrativeContent) return empty;
+      var merged = facadeInput(input);
+      merged.content = internal.worldNarrativeContent;
+      try {
+        return mod.resolveWorldAlternatives(merged);
+      } catch (err) {
+        warnOnce('world-narrative-facade', err);
+        return empty;
+      }
+    }
+    function resolveSignature(input) {
+      if (typeof mod.resolveSignature !== 'function') return { ok: false, signer: null, reason: 'not-available' };
+      try {
+        return mod.resolveSignature(facadeInput(input));
+      } catch (err) {
+        warnOnce('world-narrative-facade', err);
+        return { ok: false, signer: null, reason: 'not-available' };
+      }
+    }
+    return Object.freeze({
+      resolveCrossover: resolveCrossover,
+      resolveAlternative: resolveAlternative,
+      listCrossovers: listCrossovers,
+      resolveWorldAlternatives: resolveWorldAlternatives,
+      resolveSignature: resolveSignature,
+      __bridgeFacade: true,
+    });
+  }
+
+  /**
+   * 0.24 T24：面板打开前把 resolver 模块与真实事实快照准备好，之后
+   * careerCatalog() 才会带上 catalog.worldChapterAlternatives。任何失败都静默降级
+   * （catalog 不含该键 → route-planner 回落到 0.23 同形内置说明）。
+   */
+  function primeWorldNarrativeFacts(snapshot) {
+    return ensureLazyModule('worldNarrative')
+      .then(function () {
+        return ensureWorldNarrativeFacts([], snapshot || null);
+      })
+      .catch(function () {
+        return null;
+      });
+  }
+
+  /**
+   * 0.24 T24：章节替代指引的只读门面（route-planner.chapterAlternatives 薄封装）。
+   * catalog 使用当前 careerCatalog()（带 worldChapterAlternatives 注入）；真实事实
+   * 取自旗标快照与面板打开时的 quests/claims/wallet。只读、同步、不写库、不发奖。
+   * UI 只消费 chapters[].requirement/completion 与 alternatives[].texts.{offer,next}，
+   * 必须剥掉 requirement/tokens/anchor/narrativeNodeId 等内部结构。
+   */
+  function chapterGuideForUi(snapshot, input) {
+    var planner = readGlobal('routePlanner');
+    if (!planner || typeof planner.chapterAlternatives !== 'function') {
+      return { ok: false, reason: 'route-planner-unavailable', chapters: [] };
+    }
+    var options = isObject(input) ? Object.assign({}, input) : {};
+    if (!options.catalog) options.catalog = careerCatalog();
+    if (!Array.isArray(options.flags)) {
+      var facts = internal.worldNarrativeFacts;
+      options.flags = facts && Array.isArray(facts.flags) ? facts.flags.slice() : [];
+    }
+    if (options.quests === undefined) options.quests = snapshot && Array.isArray(snapshot.quests) ? snapshot.quests : [];
+    if (options.claims === undefined) options.claims = snapshot && Array.isArray(snapshot.claims) ? snapshot.claims : [];
+    if (options.wallet === undefined) options.wallet = snapshot && isObject(snapshot.wallet) ? snapshot.wallet : null;
+    try {
+      return planner.chapterAlternatives(options);
+    } catch (err) {
+      warnOnce('chapter-guide', err);
+      return { ok: false, reason: 'exception', chapters: [] };
+    }
+  }
+
+  /**
+   * 首次到港仍在等待玩家接下第一份工作。只认持久游标与起源映射，不读内存标记；
+   * 港口「眼下」据此给出明确的恢复入口，重开港口不会丢失引入阶段。
+   */
+  function pendingFirstArrival() {
+    if (internal.careerArchived) return null;
+    var state = currentStateSnapshot();
+    var nodeId = state && isObject(state.narrativeCursor) ? state.narrativeCursor.nodeId : null;
+    if (typeof nodeId !== 'string' || nodeId.indexOf('invitation:') !== 0) return null;
+    var professionId = nodeId.slice('invitation:'.length);
+    var origin = internal.registryInstance && internal.registryInstance.getGame(state.acceptedOriginGameId);
+    if (!origin || origin.professions.indexOf(professionId) < 0) return null;
+    var clues = Array.isArray(internal.clues) ? internal.clues : [];
+    for (var i = 0; i < clues.length; i += 1) {
+      var clueId = clues[i] && typeof clues[i].clueId === 'string' ? clues[i].clueId : '';
+      var invitation = invitationForClue(clueId, true);
+      if (invitation && invitation.firstArrival === true && invitation.professionId === professionId) {
+        return { professionId: professionId, gameId: state.acceptedOriginGameId, clueId: clueId };
+      }
+    }
+    return null;
+  }
+
+  /** 只读投影；模块不可用时返回 null，不编造投影、不创建身份。 */
+  function careerView(context) {
+    return waitReady(READY_TIMEOUT_MS).then(function () {
+      return ensureLazyModule('professionView');
+    }).then(function () {
+      var view = professionViewModule();
+      if (!view || typeof view.projectCareerView !== 'function') return null;
+      var surface = isObject(context) && context.surface ? context.surface : 'work';
+      return careerCoreFacts(context, surface).then(function (facts) {
+        var state = currentStateSnapshot();
+        var storyState = surface === 'journal' ? worldJournalState(state, facts.context.clearedCommissions) : Promise.resolve(state);
+        return storyState.then(function (snapshot) {
+          var projection = view.projectCareerView({ state: snapshot, catalog: careerCatalog(), context: facts.context });
+          if (!projection) return null;
+          /* 可接/可见集合只认核心裁决，投影模块不得凭空扩大。 */
+          if (facts.listing && facts.listing.ok && Array.isArray(facts.listing.commissions)) {
+            projection.commissions = clone(facts.listing.commissions);
+          }
+          /* 首次到港未被真实接单消费前，只有港口面带恢复所需的线索引用。 */
+          var pending = surface === 'port' ? pendingFirstArrival() : null;
+          if (pending) projection.story.firstArrival = pending;
+          return attachEndingAction(attachNarrativeMessages(projection)).then(function (attached) {
+            return attachWorldNarrative(attached, surface, facts);
+          });
+        });
+      });
+    }).catch(function (err) {
+      warnOnce('career-view', err);
+      return null;
+    });
+  }
+
+  /** 深链/旧链接/搜索/调试入口的统一只读 gate；模块不可用时 fail closed。 */
+  function careerEntryGate(request) {
+    return waitReady(READY_TIMEOUT_MS).then(function () {
+      return Promise.all([ensureLazyModule('professionView'), careerCoreFacts(request, 'deep-link')]);
+    }).then(function (values) {
+      var view = values[0];
+      var facts = values[1];
+      var router = readGlobal('entryRouter');
+      if (!view || !router || typeof router.gateCareerEntry !== 'function') {
+        return { ok: false, reason: 'profession-view-unavailable' };
+      }
+      var input = isObject(request) ? Object.assign({}, request) : {};
+      input.context = facts.context;
+      input.coreAuthoritative = facts.context.bridgeCoreAuthority === true;
+      return router.gateCareerEntry(input, view, currentStateSnapshot(), careerCatalog(), facts.context);
+    }).catch(function () {
+      return { ok: false, reason: 'gate-failed' };
+    });
+  }
+
+  /** 职业写门面：只允许 career-db.applyProfessionEvent，失败不修改本页状态，成功后重读。 */
+  function applyProfessionAction(action, input) {
+    return waitReady(READY_TIMEOUT_MS).then(function () {
+      if (internal.careerArchived) return { ok: false, reason: 'career-archived' };
+      var db = api.db || readGlobal('db');
+      if (!db || typeof db.applyProfessionEvent !== 'function') {
+        return { ok: false, reason: 'profession-event-api-missing' };
+      }
+      var at = nowIso();
+      var payloadInput = isObject(input) ? Object.assign({}, input) : {};
+      payloadInput.catalog = careerCatalog();
+      return Promise.resolve(db.applyProfessionEvent({
+        action: action,
+        input: payloadInput,
+        generation: internal.discoveryGeneration || 0,
+        now: at,
+      })).then(function (result) {
+        if (!result || result.ok !== true) return result || { ok: false, reason: 'profession-event-failed' };
+        if (result.careerId) internal.commissionLastCareerId = result.careerId;
+        if (result.newlyAccepted === true) {
+          return Promise.resolve(syncCampaignFlags(true)).catch(function () { return null; }).then(function () {
+            return loadDiscoveryStateFromDb();
+          }).then(function () {
+            notifyCareerDataChanged(action.toLowerCase().replace(/_/g, '-'));
+            return result;
+          });
+        }
+        return loadDiscoveryStateFromDb().then(function () {
+          notifyCareerDataChanged(action.toLowerCase().replace(/_/g, '-'));
+          return result;
+        });
+      }).catch(function (err) {
+        warnOnce('profession-event', err);
+        return { ok: false, reason: 'profession-event-error' };
+      });
+    });
+  }
+
+  function acceptProfessionInvitation(input) {
+    var request = isObject(input) ? input : {};
+    var professionId = typeof request.professionId === 'string' ? request.professionId : null;
+    var gameId = typeof request.gameId === 'string' ? request.gameId : null;
+    if (!gameId && professionId) {
+      /* 重复点击可能不带 gameId：只从已持久化状态 + 注册表映射恢复，不猜测新起源。 */
+      var state = currentStateSnapshot();
+      var catalog = careerCatalog();
+      var mapping = Array.isArray(catalog.games)
+        ? catalog.games.filter(function (game) {
+          return game && Array.isArray(game.professions) && game.professions.indexOf(professionId) >= 0;
+        })
+        : [];
+      var accepted = state.professionProgress && isObject(state.professionProgress[professionId])
+        ? state.professionProgress[professionId] : null;
+      var duplicate = accepted && ['accepted', 'developed', 'completed'].indexOf(accepted.state) >= 0;
+      var origin = mapping.find(function (game) { return game.gameId === state.acceptedOriginGameId; });
+      /* 重复调用只借映射做探测；起源不得被替换，未接受职业仍必须显式给 gameId。 */
+      gameId = origin ? origin.gameId : duplicate && mapping.length ? mapping[0].gameId : null;
+    }
+    return applyProfessionAction('ACCEPT_INVITATION', {
+      professionId: professionId,
+      gameId: gameId,
+    });
+  }
+
+  /** 首到港已被真实消费（玩家点了第一份工作）：只推进叙事游标，不改状态/奖励。 */
+  function consumeFirstArrival(request) {
+    var input = isObject(request) ? request : {};
+    var professionId = typeof input.professionId === 'string' ? input.professionId : null;
+    if (!professionId) return Promise.resolve({ ok: false, reason: 'missing-profession-id' });
+    return applyProfessionAction('CONSUME_FIRST_ARRIVAL', { professionId: professionId });
+  }
+
+  function setActiveProfession(input) {
+    var request = isObject(input) ? input : {};
+    return applyProfessionAction('SET_ACTIVE', {
+      professionId: typeof request.professionId === 'string' ? request.professionId : null,
+    });
+  }
+
+  function onCareerDataChanged(listener) {
+    if (typeof listener !== 'function') return function () {};
+    internal.careerDataListeners.push(listener);
+    return function () {
+      internal.careerDataListeners = internal.careerDataListeners.filter(function (item) { return item !== listener; });
+    };
+  }
+
+  function notifyCareerDataChanged(reason) {
+    /* 0.24：封存/解冻/导入/重置/结算后真实事实已变，下一投影重新推导世界叙事。 */
+    invalidateWorldNarrativeFacts();
+    var changeReason = typeof reason === 'string' ? reason : 'changed';
+    /* 重置/导入后 DB 里的经历事实已被整体替换，允许按新快照重新判定首次展示。 */
+    if (changeReason === 'career-reset' || changeReason === 'career-imported') {
+      internal.narrativeRecorded = Object.create(null);
+    }
+    internal.careerDataListeners.slice().forEach(function (listener) {
+      try {
+        var result = listener({ reason: typeof reason === 'string' ? reason : 'changed', at: nowIso() });
+        if (result && typeof result.catch === 'function') result.catch(function () {});
+      } catch (err) {
+        warnOnce('career-data-listener', err);
+      }
+    });
+  }
+
+  function invalidateCareerData(input) {
+    var request = isObject(input) ? input : {};
+    var reason = typeof request.reason === 'string' ? request.reason : 'changed';
+    notifyCareerDataChanged(reason);
+    return { ok: true, reason: reason };
+  }
+
+  function invitationForClue(clueId, includeAccepted) {
+    try {
+      if (internal.careerArchived) return null;
+      var clue = findClue(clueId);
+      if (!clue || !clue.gameId) return null;
+      var catalog = careerCatalog();
+      var game = Array.isArray(catalog.games)
+        ? catalog.games.find(function (row) { return row && row.gameId === clue.gameId; })
+        : null;
+      var state = currentStateSnapshot();
+      var view = professionViewModule();
+      var professionIds = game && Array.isArray(game.professions) ? game.professions.slice() : [];
+      for (var i = 0; i < professionIds.length; i += 1) {
+        var professionId = professionIds[i];
+        var row = state.professionProgress && isObject(state.professionProgress[professionId])
+          ? state.professionProgress[professionId] : null;
+        if (!row) continue;
+        var accepted = ['accepted', 'developed', 'completed'].indexOf(row.state) >= 0;
+        if (!(includeAccepted === true && accepted) && ['glimpsed', 'read'].indexOf(row.state) < 0) continue;
+        var surface = accepted ? 'port' : 'letter';
+        var reveal = view && typeof view.canRevealProfession === 'function'
+          ? view.canRevealProfession({ state: state, catalog: catalog, context: { surface: surface, gameId: clue.gameId }, professionId: professionId, surface: surface })
+          : null;
+        if (!reveal || reveal.ok !== true) continue;
+        var profession = Array.isArray(catalog.professions)
+          ? catalog.professions.find(function (item) { return item && item.professionId === professionId; })
+          : null;
+        return {
+          professionId: professionId,
+          gameId: clue.gameId,
+          displayName: profession && profession.displayName ? profession.displayName : '',
+          state: accepted ? 'accepted' : row.state,
+          firstArrival: row.state === 'accepted' && state.acceptedOriginGameId === clue.gameId
+            && state.narrativeCursor && state.narrativeCursor.nodeId === 'invitation:' + professionId,
+          canAccept: row.state === 'read',
+        };
+      }
+      return null;
+    } catch (err) {
+      return null;
+    }
+  }
+
+  function setProfessionPaused(input) {
+    var request = isObject(input) ? input : {};
+    return applyProfessionAction('SET_PAUSED', {
+      professionId: typeof request.professionId === 'string' ? request.professionId : null,
+      paused: request.paused === true,
+    });
   }
 
   function cluesSnapshot() {
@@ -2665,14 +3715,15 @@
   }
 
   function renderClue(clue, state) {
-    return Promise.resolve()
+    if (!clue || typeof clue.clueId !== 'string' || !clue.clueId) return Promise.resolve({ rendered: false, reason: 'invalid-clue' });
+    if (internal.rendered[clue.clueId]) return Promise.resolve({ rendered: false, reason: 'duplicate' });
+    return ensureCareerUi()
       .then(function () {
-        if (!clue || typeof clue.clueId !== 'string' || !clue.clueId) return { rendered: false, reason: 'invalid-clue' };
-        if (internal.rendered[clue.clueId]) return { rendered: false, reason: 'duplicate' };
         var surface = readUi('clueSurface');
         if (!surface || typeof surface.render !== 'function') return { rendered: false, reason: 'ui-missing' };
         return waitForClueHost().then(function (target) {
           if (!target) return { rendered: false, reason: 'no-host' };
+          if (internal.rendered[clue.clueId]) return { rendered: false, reason: 'duplicate' };
           internal.rendered[clue.clueId] = true;
           var options = {
             clue: clone(clue),
@@ -2687,6 +3738,9 @@
             placement: target.placement,
             anchor: target.anchor,
             state: clone(state || stateSnapshot()),
+            uiComponents: readUi('components'),
+            uiHarbor: readUi('harbor'),
+            invitationForClue: invitationForClue,
           };
           var returned;
           try {
@@ -2852,7 +3906,10 @@
       var clueConfigs = internal.cluesEnabled ? internal.clues : [];
       var reduced = null;
       try {
-        reduced = discovery.reduce(baseState, { type: 'RUN_ENDED', run: runSummary, at: nowIso() }, { clueConfigs: clueConfigs });
+        reduced = discovery.reduce(baseState, { type: 'RUN_ENDED', run: runSummary, at: nowIso() }, {
+          clueConfigs: clueConfigs,
+          catalog: careerCatalog(),
+        });
       } catch (err) {
         warnOnce('discovery-reduce', err);
         internal.lastFinish.reason = 'reduce-error';
@@ -2862,7 +3919,7 @@
       var clue = reduced && reduced.clue ? reduced.clue : null;
       internal.discoveryState = nextState;
 
-      function finalizeResult(persisted) {
+      function finalizeResult(persisted, writeError) {
         var result = null;
         if (clue) {
           result = {
@@ -2871,6 +3928,7 @@
             clue: clue.clue,
             state: clone(nextState),
             persisted: !!persisted,
+            writeError: persisted ? null : (typeof writeError === 'string' ? writeError : null),
           };
         }
         internal.finishedResult = result;
@@ -2879,8 +3937,8 @@
         return result;
       }
 
-      function afterPersist(persisted) {
-        var result = finalizeResult(persisted);
+      function afterPersist(persisted, writeError) {
+        var result = finalizeResult(persisted, writeError);
         if (!persisted) {
           /* DB 写失败/不可用：返回 clue 结果但绝不渲染（fail-open）。 */
           return result;
@@ -2915,15 +3973,28 @@
       if (!internal.dbUsable) {
         addReason('db-unavailable');
         warnOnce('persist-unavailable', 'db unavailable; clue result kept in memory only');
-        return afterPersist(false);
+        return afterPersist(false, 'db-unavailable');
       }
-      return writeDbState(nextState, clue ? clue.discovery || null : null, { type: 'RUN_ENDED', run: runSummary, baseRuns: baseState.runs || {} }).then(function (writeResult) {
+      var discoveryAction = {
+        type: 'RUN_ENDED',
+        run: runSummary,
+        baseRuns: baseState.runs || {},
+        catalog: careerCatalog(),
+        gameId: api.gameId || null,
+        clueId: clue ? clue.clueId : null,
+        clueOpened: false,
+      };
+      if (reduced && reduced.professionEvents) {
+        discoveryAction.professionEvents = reduced.professionEvents;
+        if (reduced.professionEvent) discoveryAction.professionEvent = reduced.professionEvent;
+      }
+      return writeDbState(nextState, clue ? clue.discovery || null : null, discoveryAction).then(function (writeResult) {
         var persisted = !!(writeResult && writeResult.ok);
         if (!persisted) {
           addReason('db-write-failed');
           warnOnce('db-write', (writeResult && writeResult.error) || 'write-failed');
           if (isStaleGenerationResult(writeResult)) {
-            return reloadAfterStaleGeneration().then(function () { return afterPersist(false); });
+            return reloadAfterStaleGeneration().then(function () { return afterPersist(false, 'stale-generation'); });
           }
         } else if (isObject(writeResult.value)) {
           /* 页面采用事务合并后的结果（保留其它标签的已读时间/线索并集）。 */
@@ -2931,7 +4002,7 @@
           internal.discoveryState = normalizedApplied;
           nextState = normalizedApplied;
         }
-        return afterPersist(persisted);
+        return afterPersist(persisted, writeResult && (writeResult.error || writeResult.reason));
       });
     });
   }
@@ -3104,10 +4175,12 @@
     if (!isObject(state.clues) || !state.clues[id]) return Promise.resolve({ ok: false, reason: 'not-discovered' });
     var discovery = readGlobal('discovery');
     var next = state;
+    var professionEvents = [];
     if (discovery && typeof discovery.reduce === 'function') {
       try {
-        var reduced = discovery.reduce(state, { type: 'CLUE_OPENED', clueId: id, at: nowIso() });
+        var reduced = discovery.reduce(state, { type: 'CLUE_OPENED', clueId: id, at: nowIso() }, { clueConfigs: internal.clues, catalog: careerCatalog() });
         if (reduced && reduced.state) next = reduced.state;
+        if (reduced && Array.isArray(reduced.professionEvents)) professionEvents = reduced.professionEvents;
       } catch (err) {
         warnOnce('open-clue-reduce', err);
         return Promise.resolve({ ok: false, reason: 'reduce-failed' });
@@ -3118,7 +4191,17 @@
       internal.discoveryState = next;
       return Promise.resolve({ ok: true, clueId: id, state: clone(next) });
     }
-    return Promise.resolve(writeDbState(next, null, { type: 'CLUE_OPENED', clueId: id, at: nowIso() })).then(function (writeResult) {
+    var clueAction = {
+      type: 'CLUE_OPENED',
+      clueId: id,
+      gameId: state.clues[id].sourceGame || null,
+      clueOpened: true,
+      catalog: careerCatalog(),
+      at: nowIso(),
+      professionEvents: professionEvents,
+    };
+    if (professionEvents.length) clueAction.professionEvent = professionEvents[0];
+    return Promise.resolve(writeDbState(next, null, clueAction)).then(function (writeResult) {
       if (!writeResult || writeResult.ok !== true) {
         var error = isStaleGenerationResult(writeResult) ? 'stale-generation' : (writeResult && (writeResult.error || writeResult.reason)) || 'write-failed';
         return reloadAfterStaleGeneration().then(function () { return { ok: false, reason: error }; });
@@ -3292,6 +4375,7 @@
         internal.seq = 0;
         var surface = readUi('clueSurface');
         if (surface && typeof surface.clear === 'function') surface.clear();
+        notifyCareerDataChanged('career-archived');
         return { ok: true, archived: true, careerId: result.careerId || null, generation: result.generation };
       });
     }, { ok: false, reason: 'exception' });
@@ -3305,6 +4389,7 @@
         if (!result || result.ok !== true) return result || { ok: false, reason: 'archive-failed' };
         applyArchiveSnapshot({ archived: false, careerId: result.careerId || null, archivedAt: null });
         return loadDiscoveryStateFromDb().then(function () {
+          notifyCareerDataChanged('career-unarchived');
           return { ok: true, archived: false, careerId: result.careerId || null, generation: result.generation };
         });
       });
@@ -3336,6 +4421,7 @@
         internal.discoveryState = discovery && typeof discovery.initialState === 'function' ? discovery.initialState() : fallbackInitialState();
         var surface = readUi('clueSurface');
         if (surface && typeof surface.clear === 'function') surface.clear();
+        notifyCareerDataChanged('career-reset');
         return { ok: true, generation: result.generation };
       });
     }, { ok: false, reason: 'exception' });
@@ -3371,7 +4457,24 @@
       backup: backupFacade(),
       reducedMotion: reducedMotionPreferred(),
       api: api,
-      commission: commissionModule() || null,
+      commission: commissionForUi(),
+      professionView: professionViewModule(),
+      careerView: careerView,
+      invitationForClue: function (clueId) { return invitationForClue(clueId, true); },
+      openInvitation: openInvitation,
+      onCareerDataChanged: onCareerDataChanged,
+      invalidateCareerData: invalidateCareerData,
+      uiComponents: readUi('components'),
+      uiHarbor: readUi('harbor'),
+      uiStyles: internal.careerUiStyles || '',
+      narrative: { byProfessionId: internal.narrativeByProfessionId },
+      /* 0.24 世界叙事只读门面：港口/经历只读消费；模块/内容缺失时为 null，0.23 路径不变。 */
+      worldNarrative: worldNarrativeFacade(),
+      uiJournal: readUi('journal'),
+      recordWorldNarrativeEvent: recordWorldNarrativeEvent,
+      careerCatalog: careerCatalog,
+      /* 0.24 T24：章节替代指引只读门面；无快照的面板只读真实旗标，缺模块时空 chapters。 */
+      chapterGuide: function (input) { return chapterGuideForUi(null, input); },
       /* 0.20 只读 continuation 查询：告示板可直接 ctx.careerContinuations({careerId})，
          也可经 ctx.commission.continuations；两者是同一只读方法，无新 ctx 字段依赖。 */
       careerContinuations: careerContinuations,
@@ -3415,23 +4518,25 @@
         if (isSilentTestOnly()) return uiUnavailable('test-silent');
         if (internal.careerArchived) return uiUnavailable('career-archived');
         warmLazyModules();
-        var mailbox = readUi('mailbox');
-        if (!mailbox) return uiUnavailable('ui-unavailable');
-        var target = typeof mailbox.open === 'function' ? mailbox.open : typeof mailbox.show === 'function' ? mailbox.show : null;
-        if (!target) return uiUnavailable('ui-unavailable');
-        try {
-          var returned = target.call(mailbox, uiContext());
-          addHubReturnLink(returned);
-          if (returned && typeof returned.then === 'function') {
-            Promise.resolve(returned).catch(function (err) {
-              warnOnce('open-mailbox', err);
-            });
+        return ensureCareerUi().then(function () {
+          var mailbox = readUi('mailbox');
+          if (!mailbox) return uiUnavailable('ui-unavailable');
+          var target = typeof mailbox.open === 'function' ? mailbox.open : typeof mailbox.show === 'function' ? mailbox.show : null;
+          if (!target) return uiUnavailable('ui-unavailable');
+          try {
+            var returned = target.call(mailbox, uiContext());
+            addHubReturnLink(returned);
+            if (returned && typeof returned.then === 'function') {
+              Promise.resolve(returned).catch(function (err) {
+                warnOnce('open-mailbox', err);
+              });
+            }
+          } catch (err) {
+            warnOnce('open-mailbox', err);
+            return uiUnavailable('ui-error');
           }
-        } catch (err) {
-          warnOnce('open-mailbox', err);
-          return uiUnavailable('ui-error');
-        }
-        return { ok: true };
+          return { ok: true };
+        });
       },
       uiUnavailable('ui-unavailable')
     )).then(function (result) {
@@ -3507,16 +4612,18 @@
       });
   }
 
-  /** 读信和告示板沿用已确认的身份，或从原档识别身份。只有全新生涯可以走 ensureCareer。 */
+  /** 读信和告示板只沿用已确认身份；全新档返回 identityIssue，绝不 ensureCareer。 */
   function resolveStoryCareer(db) {
     if (internal.commissionLastCareerId) return Promise.resolve({ careerId: internal.commissionLastCareerId });
-    if (typeof db.readHubEntry !== 'function') return Promise.resolve(db.ensureCareer({}));
+    if (!db || typeof db.readHubEntry !== 'function') return Promise.resolve({ issue: 'hub-entry-unavailable' });
     return Promise.resolve(db.readHubEntry()).then(function (entry) {
       if (!entry || !entry.ok) return { issue: 'hub-entry-unavailable' };
       if (entry.archived) return { issue: 'career-archived' };
       if (entry.careerId) return { careerId: entry.careerId };
       if (entry.started) return { issue: entry.issue || 'incomplete-career' };
-      return db.ensureCareer({});
+      return { issue: 'no-career' };
+    }).catch(function () {
+      return { issue: 'hub-entry-unavailable' };
     });
   }
 
@@ -3562,7 +4669,6 @@
       });
     }
     if (careerId) return read(careerId);
-    if (typeof db.ensureCareer !== 'function') return read(null);
     return resolveStoryCareer(db).then(function (career) {
       if (career && career.careerId) {
         internal.commissionLastCareerId = career.careerId;
@@ -3594,7 +4700,7 @@
     if (internal.careerArchived) return Promise.resolve(null);
     var mod = readGlobal('campaign');
     var db = api.db || readGlobal('db');
-    if (!mod || typeof mod.syncFlags !== 'function' || !db || typeof db.ensureCareer !== 'function') return null;
+    if (!mod || typeof mod.syncFlags !== 'function' || !db) return null;
     var gate = mailboxOpened === true ? hasCurrentDiscoveryClue() : Promise.resolve(true);
     try {
       return Promise.resolve(gate)
@@ -3645,7 +4751,10 @@
           : Promise.resolve();
         return syncCareer
           .then(function () { return loadDiscoveryStateFromDb(); })
-          .then(function () { return result; });
+          .then(function () {
+            notifyCareerDataChanged('career-imported');
+            return result;
+          });
       });
     };
     api.__bridgeFacade = true;
@@ -3664,6 +4773,16 @@
 
   function openCareerUi(name, extra) {
     if (isSilentTestOnly()) return uiUnavailable('test-silent');
+    var route = readGlobal('router') && typeof readGlobal('router').careerEntryRequest === 'function'
+      ? readGlobal('router').careerEntryRequest(inlineLocation())
+      : { professionId: '', commissionId: '' };
+    var requested = {
+      professionId: isObject(extra) && extra.professionId ? extra.professionId : route.professionId,
+      commissionId: isObject(extra) && extra.commissionId ? extra.commissionId : route.commissionId,
+    };
+    var gateCheck = requested.professionId || requested.commissionId
+      ? careerEntryGate(Object.assign({}, requested, { gameId: api.gameId || null }))
+      : Promise.resolve({ ok: true });
     warmLazyModules();
     /* town/hangar/receipt 都需要 commission-core 与委托目录在 ctx 里可用；机库还需要租机模块，
        商店需要材料模块，制造台需要制造模块。 */
@@ -3676,6 +4795,9 @@
     if (name === 'worldState') {
       extraModules.push('campaign');
       extraModules.push('ending');
+      /* 0.24 T24：章节面板要读替代指引；resolver/事实缺失时各自降级为 0.23。 */
+      extraModules.push('routePlanner');
+      extraModules.push('worldNarrative');
     }
     if (name === 'mailbox' || name === 'town') {
       extraModules.push('campaign');
@@ -3687,23 +4809,36 @@
     if (name === 'town') {
       extraModules.push('storyEvidence');
       extraModules.push('routePlanner');
+      /* 0.24：港口打开前确保经历增强与叙事 resolver 已就绪；缺失时两者各自降级为 0.23。 */
+      extraModules.push('journal');
+      extraModules.push('worldNarrative');
     }
-    var preloadList = [ensureLazyModule('commission'), ensureLazyModule('alternatives'), loadCareerContent()];
+    var preloadList = [ensureLazyModule('commission'), ensureLazyModule('alternatives'), loadCareerContent(), ensureCareerUi()];
     extraModules.forEach(function (moduleName) {
       preloadList.push(ensureLazyModule(moduleName));
     });
-    var preload = Promise.all(preloadList).then(function () {
+    var preload = gateCheck.then(function (gate) {
+      if (!gate || gate.ok !== true) return { __gateDenied: true, reason: (gate && gate.reason) || 'not-available' };
+      return Promise.all(preloadList);
+    }).then(function (preloaded) {
+      if (preloaded && preloaded.__gateDenied) return preloaded;
       /* 必须在 loadStorySnapshot / UI ctx 之前用真实 commissions/campaign 内容配置
-         storyEvidence 与 campaign；否则 campaign.recommend 因 evidence 模块未配置返回 null。 */
+          storyEvidence 与 campaign；否则 campaign.recommend 因 evidence 模块未配置返回 null。 */
       configureCommissionContent();
       configureCareerModules();
       return configureRentalModule();
-    }).then(function () {
-      if (name !== 'worldState' && name !== 'mailbox' && name !== 'town') return null;
+    }).then(function (prepared) {
+      if (prepared && prepared.__gateDenied) return prepared;
       return loadStorySnapshot();
+    }).then(function (storySnapshot) {
+      /* 0.24 T24：港口/章节面板打开前预热真实叙事事实，catalog 才会带按章注入。 */
+      if (!storySnapshot || storySnapshot.__gateDenied) return storySnapshot;
+      if (name !== 'town' && name !== 'worldState') return storySnapshot;
+      return primeWorldNarrativeFacts(storySnapshot).then(function () { return storySnapshot; });
     });
     return preload.then(function (storySnapshot) {
-      if (name === 'town' && storySnapshot && storySnapshot.identityIssue) return showHubEntryIssue(storySnapshot.identityIssue);
+      if (storySnapshot && storySnapshot.__gateDenied) return { ok: false, reason: storySnapshot.reason };
+      if (storySnapshot && storySnapshot.identityIssue) return showHubEntryIssue(storySnapshot.identityIssue);
       var uiModule = readUi(name);
       if (!uiModule) {
         return ensureLazyModule(name).then(function (loaded) {
@@ -3717,7 +4852,11 @@
           var target = typeof uiModule.open === 'function' ? uiModule.open : typeof uiModule.show === 'function' ? uiModule.show : null;
           if (!target) return uiUnavailable('ui-unavailable');
           var context = uiContext({
-            commission: commissionModule() || null,
+            commission: commissionForUi(),
+            professionView: professionViewModule(),
+            careerView: careerView,
+            careerCatalog: careerCatalog,
+            chapterGuide: function (input) { return chapterGuideForUi(storySnapshot, input); },
             alternatives: readGlobal('alternatives') || null,
             rental: readGlobal('rental') || null,
             materials: readGlobal('materials') || null,
@@ -3774,48 +4913,48 @@
     });
   }
 
-  function openTown() {
+  function openTown(input) {
     return requireCareerWritable().then(function (gate) {
       if (!gate.ok) {
         announceToUser(gate.message);
         return gate;
       }
-      return openCareerUi('town');
+      return openCareerUi('town', input);
     });
   }
 
-  function openHangar() {
+  function openHangar(input) {
     return requireCareerWritable().then(function (gate) {
       if (!gate.ok) return gate;
-      return openCareerUi('hangar');
+      return openCareerUi('hangar', input);
     });
   }
 
-  function openReceipt() {
-    return openCareerUi('receipt');
+  function openReceipt(input) {
+    return openCareerUi('receipt', input);
   }
 
-  function openMarket() {
+  function openMarket(input) {
     return requireCareerWritable().then(function (gate) {
       if (!gate.ok) return gate;
-      return openCareerUi('market');
+      return openCareerUi('market', input);
     });
   }
 
-  function openWorkshop() {
+  function openWorkshop(input) {
     return requireCareerWritable().then(function (gate) {
       if (!gate.ok) return gate;
-      return openCareerUi('workshop');
+      return openCareerUi('workshop', input);
     });
   }
 
-  function openCampaign() {
+  function openCampaign(input) {
     return requireCareerWritable().then(function (gate) {
       if (!gate.ok) {
         announceToUser(gate.message);
         return gate;
       }
-      return openCareerUi('worldState');
+      return openCareerUi('worldState', input);
     });
   }
 
@@ -4043,6 +5182,7 @@
           deferredModules: clone(internal.deferredModules) || [],
           cluesEnabled: internal.cluesEnabled,
           clueCount: internal.clues.length,
+          endingAttach: clone(internal.endingAttach),
           careerArchived: internal.careerArchived,
           careerArchiveCareerId: internal.careerArchiveCareerId,
           careerArchivedAt: internal.careerArchivedAt,
@@ -4101,6 +5241,7 @@
           discovery.evaluateRun({
             state: snapshot,
             clueConfigs: internal.clues,
+            catalog: careerCatalog(),
             runSummary: runSummary,
             hintsEnabled: snapshot.hintsEnabled !== false,
             now: nowIso(),
@@ -4189,7 +5330,11 @@
       function () {
         var clue = typeof clueOrId === 'string' ? findClue(clueOrId) : clueOrId;
         if (!isObject(clue) || typeof clue.clueId !== 'string' || !clue.clueId) return { rendered: false, reason: 'unknown-clue' };
-        return renderClue(clue, currentStateSnapshot());
+        var catalogClue = findClue(clue.clueId);
+        if (!catalogClue || catalogClue.gameId !== clue.gameId) return { rendered: false, reason: 'unknown-clue' };
+        var state = currentStateSnapshot();
+        if (!isObject(state.clues) || !state.clues[clue.clueId]) return { rendered: false, reason: 'not-discovered' };
+        return renderClue(catalogClue, state);
       },
       { rendered: false, reason: 'exception' }
     );
@@ -4370,13 +5515,18 @@
       resolveReady({ available: !!api.available, reason: api.available ? undefined : api.reason });
       /* 中心页「旧港来信」回流入口：?story=1 时自动打开章节面板（仅真实 C0 后才有内容）。 */
       try {
-        var search = WINDOW && WINDOW.location ? WINDOW.location.search || '' : '';
-        var panel = /(?:^|[?&])careerPanel=(town|mailbox|chapters|settings)(?:&|$)/.exec(search);
-        if (panel) {
-          Promise.resolve().then(function () { return openHubCareerPanel(panel[1]); }).catch(function (err) { warnOnce('hub-career-panel', err); });
-        } else if (/(?:^|[?&])careerLetter=1(?:&|$)/.test(search)) {
+        var route = readGlobal('router') && typeof readGlobal('router').careerEntryRequest === 'function'
+          ? readGlobal('router').careerEntryRequest(WINDOW.location)
+          : null;
+        if (route && route.rawPanel) {
+          if (!route.panel) {
+            Promise.resolve().then(function () { return showHubEntryIssue('hub-entry-unavailable'); }).catch(function (err) { warnOnce('hub-career-panel', err); });
+          } else {
+            Promise.resolve().then(function () { return openHubCareerPanel(route.panel); }).catch(function (err) { warnOnce('hub-career-panel', err); });
+          }
+        } else if (route && route.careerLetter) {
           Promise.resolve().then(function () { return openLetterFromHub(); }).catch(function (err) { warnOnce('hub-career-letter', err); });
-        } else if (/(?:^|[?&])story=1(?:&|$)/.test(search)) {
+        } else if (route && route.story) {
           if (internal.careerArchived) announceToUser('生涯已封存。要读旧港来信，请先在生涯设置里解冻。');
           else Promise.resolve().then(function () { return openCampaign(); }).catch(function () {});
         }
@@ -4386,6 +5536,29 @@
     } catch (err) {
       warnOnce('ready', err);
     }
+  }
+
+  /** 生涯对话打开时必须压住游戏键；守卫先于游戏脚本注册，Tab/Esc 与 tab 内方向键仍交组件处理。 */
+  function installCareerKeyboardGuard() {
+    if (internal.keyboardGuardInstalled || !WINDOW || typeof WINDOW.addEventListener !== 'function') return;
+    internal.keyboardGuardInstalled = true;
+    WINDOW.addEventListener('keydown', function (event) {
+      if (!event || !DOC || typeof DOC.querySelector !== 'function') return;
+      var dialog = DOC.querySelector('.ac-career-ui__panel[role="dialog"]');
+      if (!dialog) return;
+      var key = event.key;
+      if (key === 'Tab' || key === 'Escape') return;
+      var target = event.target;
+      var inTab = target && typeof target.closest === 'function'
+        ? target.closest('[role="tab"], [role="tablist"], [data-career-ui-tabs]')
+        : null;
+      if (inTab) return;
+      try {
+        event.stopImmediatePropagation();
+      } catch (err) {
+        /* ignore */
+      }
+    }, true);
   }
 
   function boot() {
@@ -4470,14 +5643,26 @@
     /* 0.20 首封信身份/正文只读入口（与 ctx.originLetter 同函数）。 */
     api.originLetter = originLetter;
     /* 0.16 职业委托（向后兼容扩展）：无 ticket 时 commissionRun=null，行为与 0.15 相同。 */
-    api.commission = null;
+    api.commission = commissionModule() || null;
+    api.professionView = professionViewModule();
+    /* 0.24 只读世界叙事门面；模块未装载时为 null（调用方按缺失降级）。 */
+    api.worldNarrative = worldNarrativeFacade();
+    api.recordWorldNarrativeEvent = recordWorldNarrativeEvent;
+    api.careerView = careerView;
+    api.invitationForClue = invitationForClue;
+    api.onCareerDataChanged = onCareerDataChanged;
+    api.invalidateCareerData = invalidateCareerData;
+    api.acceptProfessionInvitation = acceptProfessionInvitation;
+    api.consumeFirstArrival = consumeFirstArrival;
+    api.setActiveProfession = setActiveProfession;
+    api.setProfessionPaused = setProfessionPaused;
     api.careerArchived = false;
     /* 0.20 只读 continuation 查询：与 ctx.careerContinuations 同函数；不建 run、不自动导航。 */
     api.careerContinuations = careerContinuations;
     api.commissionRun = null;
     api.items = null;
-    api.alternatives = null;
-    api.rental = null;
+    api.alternatives = readGlobal('alternatives') || null;
+    api.rental = readGlobal('rental') || null;
     api.isCommissionRun = function () {
       return !!internal.commissionRun;
     };
@@ -4489,13 +5674,13 @@
     api.openWorkshop = openWorkshop;
     api.openCampaign = openCampaign;
     api.startEnding = startEnding;
-    api.campaign = null;
-    api.ending = null;
-    api.materials = null;
-    api.crafting = null;
-    api.professions = null;
-    api.storyEvidence = null;
-    api.routePlanner = null;
+    api.campaign = readGlobal('campaign') || null;
+    api.ending = readGlobal('ending') || null;
+    api.materials = readGlobal('materials') || null;
+    api.crafting = readGlobal('crafting') || null;
+    api.professions = readGlobal('professions') || null;
+    api.storyEvidence = readGlobal('storyEvidence') || null;
+    api.routePlanner = readGlobal('routePlanner') || null;
     api.getCommissionLoadout = getCommissionLoadout;
     api.ui = previousUi || (isObject(api.ui) ? api.ui : {});
     /* backup.js（D15-14）异步装载：模块会自行挂到 ArcadeCareer.backup；缺失时为 null。 */
@@ -4561,6 +5746,9 @@
   } catch (err) {
     /* ignore */
   }
+
+  /* 键盘守卫必须在游戏脚本注册 window capture 之前安装；常驻但仅对话打开时生效。 */
+  installCareerKeyboardGuard();
 
   /* 异步启动，不阻塞游戏脚本执行。 */
   Promise.resolve()

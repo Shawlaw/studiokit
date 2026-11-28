@@ -2036,7 +2036,20 @@
           mode: 'commission',
         };
         var run = isObject(options.run) ? options.run : { ticketId: options.ticketId, runId: options.ticketId, commissionId: ticket.commissionId, gameId: ticket.gameId, careerId: ticket.careerId, status: 'active', mode: 'commission' };
-        return state.instance.adoptRun(ticket, run);
+        var adopted = state.instance.adoptRun(ticket, run);
+        if (!adopted) return false;
+        /* 新页面会重置 reducer 的 ticket 索引；从真实 run/commission 恢复 approach 映射，
+           否则 recordEvent/settleEnding 找不到实例，「真实事件已发生」被误判为 observed=0。 */
+        var commissionId = typeof ticket.commissionId === 'string' ? ticket.commissionId
+          : (typeof run.commissionId === 'string' ? run.commissionId : '');
+        var approach = options.approach || (run && run.approach)
+          || (commissionId.indexOf('ending.') === 0 ? commissionId.slice('ending.'.length) : null);
+        var careerId = ticket.careerId || run.careerId || null;
+        if (isApproach(approach) && typeof careerId === 'string' && careerId) {
+          state.tickets[careerId] = { approach: approach, ticketId: options.ticketId, at: nowIso() };
+          state.ticketApproach[options.ticketId] = approach;
+        }
+        return true;
       } catch (err) {
         return false;
       }

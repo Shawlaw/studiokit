@@ -1,0 +1,38 @@
+{
+  "contentVersion": "0.18.0",
+  "schemaVersion": 1,
+  "commissionIds": [
+    "star-raid.T1",
+    "star-raid.T2",
+    "star-raid.T3",
+    "pendulum-tower.T1",
+    "pendulum-tower.T2"
+  ],
+  "entries": [
+    {
+      "commissionId": "star-raid.T1",
+      "title": "外堤短巡",
+      "summary": "替港务处沿外堤跑一趟短差，把路上见到的异常记进航报，回结算窗交差。"
+    },
+    {
+      "commissionId": "star-raid.T2",
+      "title": "外堤清障",
+      "summary": "外堤上散落的杂物和熄了的号灯，顺手清一遍，回来在值班簿上记一笔。"
+    },
+    {
+      "commissionId": "star-raid.T3",
+      "title": "指定空域复航",
+      "summary": "按港务处画的空域走一趟复航，把航线结果交回旧港码头。"
+    },
+    {
+      "commissionId": "pendulum-tower.T1",
+      "title": "旧仓码货",
+      "summary": "旧仓门口那批货要码到四层，稳住了再留一张验收单。"
+    },
+    {
+      "commissionId": "pendulum-tower.T2",
+      "title": "夜班验收",
+      "summary": "夜班接着把货码稳到六层，天亮前把验收记录交回仓务室。"
+    }
+  ]
+}

@@ -45,10 +45,11 @@
   const DEGRADED_TEXT = '港务处还在整理旧信。';
   const GATE_TEXT = '信还没送到旧港。你想先在信箱里把线索信按地址投递吗？';
   const READONLY_TEXT = '没有登记过的生涯，这里只能看，不能签。';
-  const CHAPTERS_HEADING = '港里的六封信';
-  const CHAPTERS_HEADING_OTHER = '港里的信';
+  const CHAPTERS_HEADING = '港里的信';
+  const JOURNAL_HEADING = '经历';
+  const JOURNAL_EMPTY = '还没有可以在这里回读的事。';
+  const MESSAGES_HEADING = '港里的消息';
   const SIDE_HEADING = '可选支线';
-  const REPLIES_HEADING = '港里的回信';
   const RECENT_HEADING = '刚刚记下的';
   const EARLIER_HEADING = '更早的信';
   const EXPAND_LABEL = '展开回顾';
@@ -69,21 +70,15 @@
   const ENDINGS_NOTE = '三条路都能让星塔停下；港口会记住你选择的方式。';
   const CHOSEN_NOTE_PREFIX = '星塔的回响已经落定：';
   const CHOSEN_NOTE_SUFFIX = '。港里按这个结局继续过日子。';
-  const SKIP_LABEL = '跳过回信';
-  const UNSKIP_LABEL = '看看回信';
   const BACK_LABEL = '回到游戏';
   const CLOSE_LABEL = '收起旧港来信';
   const STATUS_FAILED = '星塔那边没应声，你想过一会儿再试吗？';
   const STATUS_READONLY = '这里只能看，不能签字。';
   const STATUS_NO_URL = '已经登记，但从这里找不到去星塔的路。';
   const STATUS_NAVIGATING = '已经登记，正在去星塔。';
-  const ANNOUNCE_REPLIES_HIDDEN = '回信已经收起。';
-  const ANNOUNCE_REPLIES_SHOWN = '回信重新摊开。';
   const ANNOUNCE_CHAPTERS_EXPANDED = '更早的信已经展开。';
   const ANNOUNCE_CHAPTERS_COLLAPSED = '更早的信已经收起。';
-  /* 与 bridge.npcNameOf 一致：揭示前不写内部代号。 */
-  const NPC_ALIAS = { 'E-7': { before: '旧港口的来信', after: 'E-7', revealChapter: 'C2' } };
-
+  const DATA_CLOSE_REASONS = ['career-archived', 'career-reset', 'career-imported'];
   const STAGE_RANK = { DORMANT: 0, GLIMPSED: 1, CURIOUS: 2, LOCAL: 3, RESIDENT: 4, EXPLORER: 5 };
   const CHAPTER_ORDER = ['C0', 'C1', 'C2', 'C3', 'C4', 'C5'];
   const CHAPTER_FLAG = {
@@ -203,6 +198,48 @@
     '  font-size: 12.5px;',
     '  font-weight: 600;',
     '  letter-spacing: 0.04em;',
+    '  overflow-wrap: anywhere;',
+    '}',
+    '.ac-career-world__journal-list {',
+    '  display: flex;',
+    '  flex-direction: column;',
+    '  gap: 6px;',
+    '  min-width: 0;',
+    '  margin: 0;',
+    '  padding: 0 0 0 16px;',
+    '  border-left: 1px solid var(--ac-career-line, #2a3560);',
+    '  list-style: none;',
+    '}',
+    '.ac-career-world__journal-item {',
+    '  position: relative;',
+    '  min-width: 0;',
+    '  padding: 6px 8px;',
+    '  border: 1px solid var(--ac-career-line, #2a3560);',
+    '  border-radius: 10px;',
+    '  background: rgba(11, 16, 32, 0.55);',
+    '}',
+    '.ac-career-world__journal-item::before {',
+    '  content: "";',
+    '  position: absolute;',
+    '  left: -21px;',
+    '  top: 12px;',
+    '  width: 7px;',
+    '  height: 7px;',
+    '  border-radius: 50%;',
+    '  background: #ffd23f;',
+    '}',
+    '.ac-career-world__journal-label {',
+    '  margin: 0;',
+    '  color: var(--ac-career-ink, #eef1ff);',
+    '  font-size: 12px;',
+    '  line-height: 1.6;',
+    '  overflow-wrap: anywhere;',
+    '}',
+    '.ac-career-world__journal-at {',
+    '  margin: 2px 0 0;',
+    '  color: var(--ac-career-muted, #93a0c8);',
+    '  font-size: 11px;',
+    '  line-height: 1.6;',
     '  overflow-wrap: anywhere;',
     '}',
     '.ac-career-world__subheading {',
@@ -346,6 +383,29 @@
     '  font-size: 12px;',
     '  line-height: 1.7;',
     '  overflow-wrap: anywhere;',
+    '}',
+    '.ac-career-world__requirement,',
+    '.ac-career-world__completion,',
+    '.ac-career-world__alternative-offer,',
+    '.ac-career-world__alternative-next {',
+    '  margin: 0;',
+    '  color: var(--ac-career-muted, #93a0c8);',
+    '  font-size: 12px;',
+    '  line-height: 1.7;',
+    '  overflow-wrap: anywhere;',
+    '}',
+    '.ac-career-world__alternatives {',
+    '  display: flex;',
+    '  flex-direction: column;',
+    '  gap: 4px;',
+    '  min-width: 0;',
+    '  margin: 0;',
+    '  padding: 0;',
+    '  list-style: none;',
+    '}',
+    '.ac-career-world__alternative {',
+    '  min-width: 0;',
+    '  margin: 0;',
     '}',
     '.ac-career-world__facts {',
     '  display: flex;',
@@ -525,6 +585,31 @@
 
   function idText(value) {
     return cleanText(value).replace(/\s+/g, '');
+  }
+
+  /** 0.23 T13：仅在 bridge 显式注入 T11 组件时切换；缺失时保留 0.18 面板。 */
+  function worldComponentsOf(context) {
+    const direct = context && context.uiComponents;
+    if (direct === true && root.ArcadeCareerUI && isObject(root.ArcadeCareerUI.components)) return root.ArcadeCareerUI.components;
+    if (!isObject(direct)) return null;
+    const required = ['CareerShell', 'JournalTimeline', 'NPCDialogue', 'StoryCard', 'icon'];
+    return required.every((name) => typeof direct[name] === 'function') ? direct : null;
+  }
+
+  function worldShellManager(context, panelKey, body, onClose) {
+    const components = worldComponentsOf(context);
+    if (!components || typeof components.CareerShell.create !== 'function') return null;
+    const manager = components.CareerShell.create(panelKey);
+    const result = manager.open({
+      panelKey: panelKey,
+      title: PANEL_LABEL,
+      state: 'normal',
+      size: 'default',
+      body: body,
+      reducedMotion: !!context.reducedMotion,
+      onClose: onClose,
+    });
+    return result.ok ? { manager: manager, panel: result.panel } : null;
   }
 
   function arrayOfText(value) {
@@ -736,6 +821,9 @@
           mustKnow: arrayOfText(entry.mustKnow),
           body: cleanText(entry.body),
           handoff: cleanText(entry.handoff),
+          /* 0.24 T24：campaign-core 的真实前置/完成解释（缺字段时为空，UI 不建节点）。 */
+          prerequisiteText: cleanText(isObject(entry.prerequisite) ? entry.prerequisite.text : ''),
+          completionText: cleanText(isObject(entry.completion) ? entry.completion.text : ''),
         });
       });
     }
@@ -1110,7 +1198,44 @@
       mustKnow: mustKnow,
       body: cleanText(snapshotChapter && snapshotChapter.body) || cleanText(contentChapter && contentChapter.body),
       handoff: cleanText(snapshotChapter && snapshotChapter.handoff) || cleanText(contentChapter && contentChapter.handoff),
+      prerequisiteText: cleanText(snapshotChapter && snapshotChapter.prerequisiteText),
+      completionText: cleanText(snapshotChapter && snapshotChapter.completionText),
+      alternatives: [],
     };
+  }
+
+  /**
+   * 0.24 T24：章节替代指引只读消费（bridge ctx.chapterGuide → route-planner）。
+   * 只保留每章 alternatives[].texts 的 offer/next；requirement/tokens/anchor/
+   * narrativeNodeId/mechanism 等内部结构永不进入本模型。缺数据返回空映射。
+   */
+  function chapterGuideMap(context) {
+    const provider = isObject(context) && typeof context.chapterGuide === 'function'
+      ? context.chapterGuide : null;
+    if (!provider) return Object.create(null);
+    let guide = null;
+    try {
+      guide = provider({});
+    } catch (err) {
+      return Object.create(null);
+    }
+    if (!isObject(guide) || guide.ok !== true || !isArray(guide.chapters)) return Object.create(null);
+    const map = Object.create(null);
+    guide.chapters.forEach((chapter) => {
+      if (!isObject(chapter)) return;
+      const chapterId = idText(chapter.chapterId);
+      if (!chapterId) return;
+      const rows = [];
+      (isArray(chapter.alternatives) ? chapter.alternatives : []).forEach((alt) => {
+        if (!isObject(alt) || !isObject(alt.texts)) return;
+        const offer = cleanText(alt.texts.offer);
+        const next = cleanText(alt.texts.next);
+        if (!offer && !next) return;
+        rows.push({ offer: offer, next: next });
+      });
+      if (rows.length) map[chapterId] = rows;
+    });
+    return map;
   }
 
   function buildEndings(model, context, snapshot, content, flags, endingChosen) {
@@ -1176,6 +1301,54 @@
     return null;
   }
 
+  /** 职业、消息与经历只读 bridge 投影；接口缺失时 SAFE DEGRADE 为 null，不翻完整内容目录。 */
+  function requestCareerView(context, surface) {
+    const c = isObject(context) ? context : {};
+    const provider = typeof c.careerView === 'function' ? c.careerView
+      : (isObject(c.api) && typeof c.api.careerView === 'function' ? c.api.careerView : null);
+    if (!provider) return Promise.resolve(null);
+    let result = null;
+    try {
+      result = provider({ surface: surface });
+    } catch (err) {
+      return Promise.resolve(null);
+    }
+    return Promise.resolve(result).then(
+      (value) => isObject(value) ? value : null,
+      () => null
+    );
+  }
+
+  function publicTimeText(value) {
+    const at = typeof value === 'string' ? value : '';
+    if (!at) return '';
+    const match = /^(\d{4})-(\d{2})-(\d{2})/.exec(at);
+    return match ? match[1] + '-' + match[2] + '-' + match[3] : '';
+  }
+
+  function publicRowsOf(value) {
+    return Array.isArray(value) ? value : [];
+  }
+
+  function publicTextOf(row, keys) {
+    if (!isObject(row)) return '';
+    for (let i = 0; i < keys.length; i += 1) {
+      const text = cleanText(row[keys[i]]);
+      if (text) return text;
+    }
+    return '';
+  }
+
+  function firstOriginViewOf(view, context) {
+    if (!isObject(view) || !isArray(view.professions) || view.professions.length !== 1) return false;
+    const origin = idText(view.originGameId);
+    if (!origin) return false;
+    const state = cleanText(view.professions[0] && view.professions[0].state).toLowerCase();
+    if (state !== 'accepted' && state !== 'developed' && state !== 'completed') return false;
+    const gameId = idText(isObject(context) ? (context.gameId || (isObject(context.api) ? context.api.gameId : null)) : null);
+    return !gameId || origin === gameId;
+  }
+
   function buildModel(context) {
     const content = campaignContentOf(context);
     const snapshot = campaignSnapshotOf(context);
@@ -1234,6 +1407,12 @@
           })
         : fileChapter;
       return buildChapter(chapterId, snapshotMap[chapterId], mergedChapter, flags, completed, evidence);
+    });
+    /* 0.24 T24：有公开替代指引时才挂到章模型；无数据时章行与 0.23 完全一致。 */
+    const guideMap = chapterGuideMap(context);
+    chapters.forEach((chapter) => {
+      const rows = guideMap[chapter.chapterId];
+      if (rows && rows.length) chapter.alternatives = rows;
     });
     const model = { chapters: chapters, endings: [], endingChosen: endingChosen, endingVisible: false, epilogue: null, currentChapter: '' };
     model.endings = buildEndings(model, context, snapshot, content, flags, endingChosen);
@@ -1313,21 +1492,7 @@
     return bridge;
   }
 
-  /* ---------------------------------------------------------------- 内容读取（npc / 支线 / 线索） */
-
-  function npcContentOf(context) {
-    const c = isObject(context) ? context : {};
-    const candidates = [
-      c.npc,
-      c.npcContent,
-      isObject(c.content) ? c.content.npc : null,
-      isObject(c.api) ? c.api.npc : null,
-    ];
-    for (let i = 0; i < candidates.length; i += 1) {
-      if (isObject(candidates[i]) && isArray(candidates[i].characters)) return candidates[i];
-    }
-    return null;
-  }
+  /* ---------------------------------------------------------------- 内容读取（支线 / 线索） */
 
   function sideStoriesContentOf(context) {
     const c = isObject(context) ? context : {};
@@ -1343,8 +1508,8 @@
     return null;
   }
 
-  /** 来源首信：优先 ctx.chapter.origins 中按当前来源游戏匹配，其次首条。 */
-  function originLetterOf(context, chapters) {
+  /** 首次到港只按已接受起源挑来源首信；不读 firstSourceGame / 线索发现顺序。 */
+  function originLetterOf(context, chapters, originGameId) {
     const c = isObject(context) ? context : {};
     let origins = [];
     const candidates = [c.chapter, isObject(c.chapters) ? c.chapters.C1 : null, isObject(c.content) ? c.content.chapter : null];
@@ -1356,26 +1521,12 @@
       }
     }
     if (!origins.length) return null;
-    let sourceGame = cleanText(c.state && c.state.firstSourceGame);
-    if (!sourceGame && isObject(c.state) && isObject(c.state.clues)) {
-      const clueIds = Object.keys(c.state.clues);
-      for (let i = 0; i < clueIds.length; i += 1) {
-        const row = c.state.clues[clueIds[i]];
-        if (isObject(row) && cleanText(row.sourceGame)) { sourceGame = cleanText(row.sourceGame); break; }
-      }
-    }
-    if (!sourceGame && typeof c.originIntro === 'function') {
-      try {
-        const intro = c.originIntro();
-        if (isObject(intro)) sourceGame = cleanText(intro.sourceGame);
-      } catch (err) { /* 忽略 */ }
-    }
+    const acceptedOrigin = idText(originGameId) || idText(c.state && c.state.acceptedOriginGameId);
+    if (!acceptedOrigin) return null;
     let chosen = null;
     origins.forEach((entry) => {
-      if (!isObject(entry)) return;
-      if (!chosen && cleanText(entry.gameId) === sourceGame) chosen = entry;
+      if (isObject(entry) && cleanText(entry.gameId) === acceptedOrigin) chosen = entry;
     });
-    if (!chosen) chosen = origins[0];
     return isObject(chosen) && isObject(chosen.c0Letter) ? chosen : null;
   }
 
@@ -1408,44 +1559,6 @@
     /* c.clues 是线索目录（含未发现），不能当作已发现集合。 */
     collect(c.discoveredClues);
     collect(c.clueIds);
-    return out;
-  }
-
-  function repliesOf(model, context) {
-    const npc = npcContentOf(context);
-    if (!npc || !model || !isArray(model.chapters)) return [];
-    const out = [];
-    npc.characters.forEach((character) => {
-      if (!isObject(character)) return;
-      const characterId = idText(character.characterId || character.id);
-      const replies = isArray(character.replies) ? character.replies : [];
-      let chosen = null;
-      replies.forEach((reply) => {
-        if (!isObject(reply)) return;
-        const chapterId = idText(reply.chapterId);
-        const text = cleanText(reply.text);
-        if (!chapterId || !text) return;
-        /* 只显示已达到且对应章已完成的回信；进行中章的答案不提前泄漏。 */
-        if (!isChapterComplete(model.chapters, chapterId)) return;
-        if (!chosen || CHAPTER_ORDER.indexOf(chapterId) > CHAPTER_ORDER.indexOf(chosen.chapterId)) chosen = { chapterId: chapterId, text: text };
-      });
-      if (!chosen) return;
-      let name = cleanText(character.name) || characterId;
-      let role = cleanText(character.role);
-      const alias = NPC_ALIAS[characterId];
-      if (alias) {
-        const revealed = CHAPTER_ORDER.indexOf(chosen.chapterId) >= CHAPTER_ORDER.indexOf(alias.revealChapter);
-        name = revealed ? alias.after : alias.before;
-        role = revealed ? role : '不肯留名的调度员';
-      }
-      out.push({
-        characterId: characterId,
-        name: name,
-        role: role,
-        chapterId: chosen.chapterId,
-        text: chosen.text,
-      });
-    });
     return out;
   }
 
@@ -1489,9 +1602,14 @@
     const context = isObject(ctx) ? ctx : {};
     let liveContext = context;
     let liveReduced = reducedMotionOf(context);
-    let repliesHidden = false;
     let endingPending = false;
     let earlierHidden = true;
+    let projectedView = null;
+    let projectedReady = false;
+    let projectionSeq = 0;
+    let projectionHosts = null;
+    let unsubscribeCareer = null;
+    let alive = true;
     const previousFocus = doc.activeElement && typeof doc.activeElement.focus === 'function' ? doc.activeElement : null;
 
     function make(tag, className, text) {
@@ -1501,27 +1619,6 @@
       return node;
     }
 
-    const overlay = make('div', OVERLAY_CLASS);
-    overlay.setAttribute('data-career-panel', PANEL_KEY);
-    if (liveReduced) overlay.classList.add('is-reduced-motion');
-
-    const sheet = make('div', SHEET_CLASS);
-    sheet.setAttribute('role', 'dialog');
-    sheet.setAttribute('aria-modal', 'true');
-    sheet.setAttribute('aria-labelledby', TITLE_ID);
-    sheet.setAttribute('aria-describedby', DESC_ID);
-    sheet.setAttribute('tabindex', '-1');
-
-    const head = make('div', 'ac-career-sheet__head');
-    const heading = make('h2', 'ac-career-sheet__title', PANEL_LABEL);
-    heading.id = TITLE_ID;
-    const closeBtn = make('button', 'ac-career-icon-btn ac-career-close', '×');
-    closeBtn.type = 'button';
-    closeBtn.setAttribute('aria-label', CLOSE_LABEL);
-    head.appendChild(heading);
-    head.appendChild(closeBtn);
-
-    const body = make('div', 'ac-career-sheet__body');
     const where = make('p', 'ac-career-world__where', WHERE_TEXT);
     where.id = DESC_ID;
     const view = make('div', 'ac-career-world__view');
@@ -1529,18 +1626,58 @@
     const statusLine = make('p', 'ac-career-status');
     statusLine.hidden = true;
 
+    const body = make('div', 'ac-career-ui__body');
     body.appendChild(where);
     body.appendChild(view);
     body.appendChild(statusLine);
-    sheet.appendChild(head);
-    sheet.appendChild(body);
-    overlay.appendChild(sheet);
 
     const liveRegion = make('div', 'ac-career-sr-only');
     liveRegion.setAttribute('role', 'status');
     liveRegion.setAttribute('aria-live', 'polite');
     liveRegion.setAttribute('aria-atomic', 'true');
-    overlay.appendChild(liveRegion);
+
+    let shellMount = null;
+    let overlay = null;
+    let sheet = null;
+    let closeBtn = null;
+    let p = null;
+    if (worldComponentsOf(context) && mounted) {
+      shellMount = worldShellManager(context, PANEL_KEY, body, () => {
+        if (p && p.worldShell) {
+          if (typeof p.destroy === 'function') p.destroy();
+          if (panel === p) panel = null;
+        }
+      });
+      if (!shellMount) return null;
+      sheet = shellMount.panel;
+      overlay = sheet.parentNode;
+      closeBtn = sheet.querySelector ? sheet.querySelector('.ac-career-ui__close') : null;
+      overlay.appendChild(liveRegion);
+    } else {
+      overlay = make('div', OVERLAY_CLASS);
+      overlay.setAttribute('data-career-panel', PANEL_KEY);
+      if (liveReduced) overlay.classList.add('is-reduced-motion');
+
+      sheet = make('div', SHEET_CLASS);
+      sheet.setAttribute('role', 'dialog');
+      sheet.setAttribute('aria-modal', 'true');
+      sheet.setAttribute('aria-labelledby', TITLE_ID);
+      sheet.setAttribute('aria-describedby', DESC_ID);
+      sheet.setAttribute('tabindex', '-1');
+
+      const head = make('div', 'ac-career-sheet__head');
+      const heading = make('h2', 'ac-career-sheet__title', PANEL_LABEL);
+      heading.id = TITLE_ID;
+      closeBtn = make('button', 'ac-career-icon-btn ac-career-close', '×');
+      closeBtn.type = 'button';
+      closeBtn.setAttribute('aria-label', CLOSE_LABEL);
+      head.appendChild(heading);
+      head.appendChild(closeBtn);
+      sheet.appendChild(head);
+      sheet.appendChild(body);
+      overlay.appendChild(sheet);
+      overlay.appendChild(liveRegion);
+    }
 
     function announce(text) {
       const value = cleanText(text);
@@ -1581,6 +1718,7 @@
     }
 
     function chapterRowOf(chapter) {
+      if (!isObject(chapter) || chapter.state === 'locked') return null;
       const item = make('li', 'ac-career-world__chapter');
       item.setAttribute('data-chapter-id', chapter.chapterId);
       item.setAttribute('data-state', chapter.state);
@@ -1591,10 +1729,8 @@
       badge.setAttribute('data-state-label', chapter.state === 'active' ? 'current' : chapter.state === 'complete' ? 'recent' : chapter.state);
       rowHead.appendChild(badge);
       item.appendChild(rowHead);
-      /* 锁定章只显示标题与状态；进行中把 start 作为当前目标显示，progress 只作后续线索。 */
-      if (chapter.state === 'locked') return item;
+      if (chapter.state === 'locked') return null;
       const isCurrent = chapter.state === 'active' || chapter.state === 'available';
-      if (chapter.role) item.appendChild(make('p', 'ac-career-world__role', chapter.role));
       const playerText = chapter.beats[
         chapter.state === 'complete' ? 'complete' : 'start'
       ];
@@ -1629,17 +1765,35 @@
         item.appendChild(facts);
       }
       if (chapter.hint && chapter.state !== 'locked') item.appendChild(make('p', 'ac-career-world__hint', chapter.hint));
+      /* 0.24 T24：只渲染公开文本；无数据时不创建节点，章节卡片与 0.23 完全一致。 */
+      const prerequisiteText = cleanText(chapter.prerequisiteText);
+      if (prerequisiteText) item.appendChild(make('p', 'ac-career-world__requirement', prerequisiteText));
+      const completionText = cleanText(chapter.completionText);
+      if (completionText) item.appendChild(make('p', 'ac-career-world__completion', completionText));
+      const guideRows = isCurrent && isArray(chapter.alternatives) ? chapter.alternatives : [];
+      if (guideRows.length) {
+        const guide = make('ul', 'ac-career-world__alternatives');
+        guide.setAttribute('data-alternative-count', String(guideRows.length));
+        guideRows.forEach((alt) => {
+          const entry = make('li', 'ac-career-world__alternative');
+          if (alt.offer) entry.appendChild(make('p', 'ac-career-world__alternative-offer', alt.offer));
+          if (alt.next) entry.appendChild(make('p', 'ac-career-world__alternative-next', NEXT_HEADING + '：' + alt.next));
+          guide.appendChild(entry);
+        });
+        item.appendChild(guide);
+      }
       return item;
     }
 
-    /** 到港首屏：来源 c0Letter 正文 + 身份句 + 阿砾/港务处指定首单回信。 */
-    function arrivalSectionOf(model) {
+    /** 首次到港只发生在唯一职业且投影确认真实起源时；第二职业不重放身份或序章。 */
+    function arrivalSectionOf(model, view) {
+      if (!firstOriginViewOf(view, liveContext)) return null;
       const c0 = chapterOf(model, 'C0');
       /* 只在到港首屏（C0 待办/进行中）呈现，完成章不再重复倾倒来源信。 */
       if (!c0 || (c0.state !== 'active' && c0.state !== 'available')) return null;
       const c0File = isObject(liveContext.chapters) ? liveContext.chapters.C0 : null;
       const arrival = isObject(c0File && c0File.arrival) ? c0File.arrival : null;
-      const origin = originLetterOf(liveContext, isObject(liveContext.chapters) ? liveContext.chapters : {});
+      const origin = originLetterOf(liveContext, isObject(liveContext.chapters) ? liveContext.chapters : {}, idText(projectedView.originGameId));
       const letter = origin ? origin.c0Letter : null;
       const sender = cleanText(letter && letter.from) || cleanText(arrival && arrival.from) || '旧港 · 收货窗口';
       const body = cleanText(letter && letter.body) || cleanText(arrival && arrival.body);
@@ -1669,28 +1823,28 @@
 
     function chaptersSectionOf(model) {
       const section = make('section', 'ac-career-world__section ac-career-world__chapters-section');
-      section.appendChild(make('h3', 'ac-career-world__heading', model.chapters.length === 6 ? CHAPTERS_HEADING : CHAPTERS_HEADING_OTHER));
-      /* 当前章可为 active 或 available；当前章 + 最近完成章在前，更早的折叠回看。 */
+      section.appendChild(make('h3', 'ac-career-world__heading', CHAPTERS_HEADING));
+      /* 未披露章不建节点；当前章 + 最近完成章在前，更早的折叠回看。 */
+      const visible = model.chapters.filter((chapter) => isObject(chapter) && chapter.state !== 'locked');
       const current =
-        model.chapters.filter((chapter) => chapter.state === 'active').slice(-1)[0] ||
-        model.chapters.filter((chapter) => chapter.state === 'available').slice(-1)[0] ||
+        visible.filter((chapter) => chapter.state === 'active').slice(-1)[0] ||
+        visible.filter((chapter) => chapter.state === 'available').slice(-1)[0] ||
         null;
-      const recentComplete = model.chapters.filter((chapter) => chapter.state === 'complete').slice(-1)[0] || null;
+      const recentComplete = visible.filter((chapter) => chapter.state === 'complete').slice(-1)[0] || null;
       const recentIds = [];
-      model.chapters.forEach((chapter) => {
+      visible.forEach((chapter) => {
         if (chapter === recentComplete || chapter === current) recentIds.push(chapter.chapterId);
       });
-      if (!recentIds.length && model.chapters[0]) recentIds.push(model.chapters[0].chapterId);
+      if (!recentIds.length && visible[0]) recentIds.push(visible[0].chapterId);
       const recentList = make('ul', 'ac-career-world__chapters ac-career-world__recent-list');
-      recentList.setAttribute('data-chapter-count', String(recentIds.length));
       recentIds.forEach((chapterId) => {
-        const chapter = chapterOf(model, chapterId);
+        const chapter = visible.filter((entry) => entry.chapterId === chapterId)[0];
         if (chapter) recentList.appendChild(chapterRowOf(chapter));
       });
       section.appendChild(make('h4', 'ac-career-world__subheading', RECENT_HEADING));
       section.appendChild(recentList);
 
-      const earlier = model.chapters.filter((chapter) => recentIds.indexOf(chapter.chapterId) < 0);
+      const earlier = visible.filter((chapter) => recentIds.indexOf(chapter.chapterId) < 0);
       if (!earlier.length) return section;
       const head = make('div', 'ac-career-world__earlier-head');
       head.appendChild(make('h4', 'ac-career-world__subheading', EARLIER_HEADING));
@@ -1708,9 +1862,11 @@
       head.appendChild(toggle);
       section.appendChild(head);
       const earlierList = make('ul', 'ac-career-world__chapters ac-career-world__earlier-list');
-      earlierList.setAttribute('data-chapter-count', String(earlier.length));
       earlierList.hidden = earlierHidden;
-      earlier.forEach((chapter) => earlierList.appendChild(chapterRowOf(chapter)));
+      earlier.forEach((chapter) => {
+        const row = chapterRowOf(chapter);
+        if (row) earlierList.appendChild(row);
+      });
       section.appendChild(earlierList);
       return section;
     }
@@ -1729,48 +1885,6 @@
         if (family.text) item.appendChild(make('p', 'ac-career-world__side-text', family.text));
         list.appendChild(item);
       });
-      section.appendChild(list);
-      return section;
-    }
-
-    function repliesSectionOf(context2, model) {
-      const replies = repliesOf(model, context2);
-      if (!replies.length) return null;
-      const section = make('section', 'ac-career-world__section ac-career-world__replies-section');
-      section.setAttribute('data-reply-count', String(replies.length));
-      const row = make('div', 'ac-career-world__section-head');
-      row.appendChild(make('h3', 'ac-career-world__heading', REPLIES_HEADING));
-      const skipBtn = make('button', 'ac-career-btn ac-career-btn--ghost ac-career-world__skip', repliesHidden ? UNSKIP_LABEL : SKIP_LABEL);
-      skipBtn.type = 'button';
-      skipBtn.setAttribute('data-action', 'skip-replies');
-      skipBtn.setAttribute('aria-pressed', repliesHidden ? 'true' : 'false');
-      skipBtn.setAttribute('aria-controls', 'ac-career-world-replies');
-      row.appendChild(skipBtn);
-      section.appendChild(row);
-      const list = make('ul', 'ac-career-world__replies');
-      list.id = 'ac-career-world-replies';
-      list.hidden = repliesHidden;
-      replies.forEach((reply) => {
-        const item = make('li', 'ac-career-world__reply');
-        item.setAttribute('data-character-id', reply.characterId);
-        if (reply.chapterId) item.setAttribute('data-chapter-id', reply.chapterId);
-        const name = make('h4', 'ac-career-world__reply-name', reply.name);
-        item.appendChild(name);
-        if (reply.role) item.appendChild(make('p', 'ac-career-world__reply-meta', reply.role));
-        item.appendChild(make('p', 'ac-career-world__reply-text', reply.text));
-        list.appendChild(item);
-      });
-      skipBtn.addEventListener(
-        'click',
-        function () {
-          repliesHidden = !repliesHidden;
-          skipBtn.textContent = repliesHidden ? UNSKIP_LABEL : SKIP_LABEL;
-          skipBtn.setAttribute('aria-pressed', repliesHidden ? 'true' : 'false');
-          list.hidden = repliesHidden;
-          announce(repliesHidden ? ANNOUNCE_REPLIES_HIDDEN : ANNOUNCE_REPLIES_SHOWN);
-        },
-        false
-      );
       section.appendChild(list);
       return section;
     }
@@ -1910,7 +2024,133 @@
       return section;
     }
 
+    /** 投影消息只消费公开 label/text/from/at；无字段就不渲染，不回退 NPC 内容目录。 */
+    function messagesSectionOf(view) {
+      const rows = publicRowsOf(view && view.story && view.story.messages)
+        .map((row) => ({
+          text: publicTextOf(row, ['label', 'text', 'body']),
+          from: publicTextOf(row, ['from', 'name', 'sender']),
+          at: publicTimeText(row && row.at),
+        }))
+        .filter((row) => row.text || row.from);
+      if (!rows.length) return null;
+      const section = make('section', 'ac-career-world__section ac-career-world__projected-messages');
+      section.appendChild(make('h3', 'ac-career-world__heading', MESSAGES_HEADING));
+      const components = worldComponentsOf(liveContext);
+      if (components && typeof components.NPCDialogue === 'function') {
+        const row = rows[0];
+        section.appendChild(components.NPCDialogue({
+          name: row.from || '港口消息',
+          paragraphs: [row.text || '港里有一句回话。'],
+          state: 'optional',
+        }));
+        return section;
+      }
+      rows.forEach((row) => {
+        const item = make('div', 'ac-career-world__journal-item');
+        if (row.from) item.appendChild(make('p', 'ac-career-world__journal-label', row.from));
+        item.appendChild(make('p', 'ac-career-world__journal-label', row.text || '港里有一句回话。'));
+        if (row.at) item.appendChild(make('p', 'ac-career-world__journal-at', row.at));
+        section.appendChild(item);
+      });
+      return section;
+    }
+
+    /** 经历只列 view.story.history 已公开的 label/at；无总数、百分比、内部 eventId。 */
+    function journalSectionOf(view) {
+      const section = make('section', 'ac-career-world__section ac-career-world__journal');
+      section.appendChild(make('h3', 'ac-career-world__heading', JOURNAL_HEADING));
+      const rows = publicRowsOf(view && view.story && view.story.history)
+        .map((row) => ({
+          label: publicTextOf(row, ['label', 'text']),
+          at: publicTimeText(row && row.at),
+        }))
+        .filter((row) => row.label);
+      const components = worldComponentsOf(liveContext);
+      if (components && typeof components.JournalTimeline === 'function') {
+        section.appendChild(components.JournalTimeline({
+          state: rows.length ? 'filled' : 'empty',
+          events: rows,
+        }));
+        return section;
+      }
+      if (!rows.length) {
+        section.appendChild(make('p', 'ac-career-world__journal-empty', JOURNAL_EMPTY));
+        return section;
+      }
+      const list = make('ol', 'ac-career-world__journal-list');
+      rows.forEach((row) => {
+        const item = make('li', 'ac-career-world__journal-item');
+        item.appendChild(make('p', 'ac-career-world__journal-label', row.label));
+        if (row.at) item.appendChild(make('p', 'ac-career-world__journal-at', row.at));
+        list.appendChild(item);
+      });
+      section.appendChild(list);
+      return section;
+    }
+
+    function renderProjectionHost() {
+      if (!projectionHosts || projectionHosts.arrival.parentNode !== view || projectionHosts.journal.parentNode !== view) return;
+      projectionHosts.arrival.textContent = '';
+      projectionHosts.journal.textContent = '';
+      if (!projectedReady || !projectedView) return;
+      const arrival = arrivalSectionOf(buildModel(liveContext), projectedView);
+      if (arrival) projectionHosts.arrival.appendChild(arrival);
+      const messages = messagesSectionOf(projectedView);
+      if (messages) projectionHosts.journal.appendChild(messages);
+      projectionHosts.journal.appendChild(journalSectionOf(projectedView));
+    }
+
+    function loadCareerProjection() {
+      const seq = ++projectionSeq;
+      projectedReady = false;
+      projectedView = null;
+      requestCareerView(liveContext, 'journal').then((view) => {
+        if (seq !== projectionSeq || !view) return;
+        projectedView = view;
+        projectedReady = true;
+        renderProjectionHost();
+      });
+    }
+
+    function closeThisPanel() {
+      if (mounted) close();
+      else destroy();
+    }
+
+    function onCareerDataChangedEvent(event) {
+      if (!alive) return;
+      const reason = cleanText(event && event.reason).toLowerCase();
+      if (DATA_CLOSE_REASONS.indexOf(reason) >= 0) {
+        closeThisPanel();
+        return;
+      }
+      refresh(liveContext);
+    }
+
+    function subscribeCareerData(context2) {
+      if (typeof unsubscribeCareer === 'function') {
+        try { unsubscribeCareer(); } catch (err) { /* ignore */ }
+      }
+      unsubscribeCareer = null;
+      const provider = context2 && typeof context2.onCareerDataChanged === 'function'
+        ? context2.onCareerDataChanged
+        : (context2 && isObject(context2.api) && typeof context2.api.onCareerDataChanged === 'function'
+          ? context2.api.onCareerDataChanged : null);
+      if (!provider) return;
+      try {
+        const unsubscribe = provider(onCareerDataChangedEvent);
+        if (typeof unsubscribe === 'function') unsubscribeCareer = unsubscribe;
+      } catch (err) {
+        unsubscribeCareer = null;
+      }
+    }
+
     function paint() {
+      projectionSeq += 1;
+      projectedView = null;
+      projectedReady = false;
+      projectionHosts = null;
       liveReduced = reducedMotionOf(liveContext);
       if (liveReduced) overlay.classList.add('is-reduced-motion');
       else overlay.classList.remove('is-reduced-motion');
@@ -1936,9 +2176,16 @@
         view.appendChild(footerOf());
         return;
       }
-      const arrival = arrivalSectionOf(model);
-      if (arrival) view.appendChild(arrival);
+      projectionHosts = {
+        arrival: make('div', 'ac-career-world__projected ac-career-world__projected--arrival'),
+        journal: make('div', 'ac-career-world__projected ac-career-world__projected--journal'),
+      };
+      projectionHosts.arrival.setAttribute('data-career-projection', 'arrival');
+      projectionHosts.journal.setAttribute('data-career-projection', 'journal');
+      view.appendChild(projectionHosts.arrival);
       view.appendChild(chaptersSectionOf(model));
+      view.appendChild(projectionHosts.journal);
+      loadCareerProjection();
 
       let chapterRank = 0;
       model.chapters.forEach((chapter) => {
@@ -1946,8 +2193,6 @@
       });
       const side = sideSectionOf(liveContext, chapterRank);
       if (side) view.appendChild(side);
-      const replies = repliesSectionOf(liveContext, model);
-      if (replies) view.appendChild(replies);
 
       const starter = endingStarterOf(liveContext);
       if (!starter) {
@@ -1995,12 +2240,14 @@
     }
 
     function start() {
+      subscribeCareerData(liveContext);
       paint();
     }
 
     function refresh(next) {
       liveContext = isObject(next) ? next : liveContext;
       setStatus('');
+      subscribeCareerData(liveContext);
       paint();
       if (mounted) {
         const active = doc.activeElement;
@@ -2010,10 +2257,15 @@
     }
 
     function destroy() {
+      alive = false;
       view.textContent = '';
+      if (typeof unsubscribeCareer === 'function') {
+        try { unsubscribeCareer(); } catch (err) { /* ignore */ }
+        unsubscribeCareer = null;
+      }
     }
 
-    return {
+    p = {
       doc: doc,
       overlay: overlay,
       sheet: sheet,
@@ -2025,16 +2277,21 @@
       destroy: destroy,
       announce: announce,
       setStatus: setStatus,
-      repliesSectionOf: repliesSectionOf,
+      worldShell: shellMount && shellMount.manager,
       buildModel: function () { return buildModel(liveContext); },
     };
+    return p;
   }
 
   /** 关闭旧港来信面板并把焦点还给打开前的元素（可重复调用）。 */
   function close() {
     const current = panel;
-    panel = null;
     if (!current) return false;
+    if (current.worldShell) {
+      current.worldShell.close();
+      return true;
+    }
+    panel = null;
     try {
       current.doc.removeEventListener('keydown', current.onKeyDown, true);
     } catch (err) {
@@ -2074,11 +2331,13 @@
 
     const built = buildPanel(ctx, true);
     if (!built) return null;
-    if (!doc.body) return null;
-    try {
-      doc.body.appendChild(built.overlay);
-    } catch (err) {
-      return null;
+    if (!built.worldShell) {
+      if (!doc.body) return null;
+      try {
+        doc.body.appendChild(built.overlay);
+      } catch (err) {
+        return null;
+      }
     }
 
     function onKeyDown(event) {
@@ -2119,33 +2378,35 @@
       }
     }
 
-    /* 点遮罩关闭：必须在遮罩上按下并抬起，面板内拖动/选字不会误关。 */
-    let pressedBackdrop = false;
-    built.overlay.addEventListener(
-      'pointerdown',
-      function (event) {
-        pressedBackdrop = !!(event && event.target === built.overlay);
-      },
-      false
-    );
-    built.overlay.addEventListener(
-      'pointercancel',
-      function () {
-        pressedBackdrop = false;
-      },
-      false
-    );
-    built.overlay.addEventListener(
-      'click',
-      function (event) {
-        const onBackdrop = !!(event && event.target === built.overlay) && pressedBackdrop;
-        pressedBackdrop = false;
-        if (onBackdrop) close();
-      },
-      false
-    );
-    built.closeBtn.addEventListener('click', function () { close(); }, false);
-    doc.addEventListener('keydown', onKeyDown, true);
+    if (!built.worldShell) {
+      /* 点遮罩关闭：必须在遮罩上按下并抬起，面板内拖动/选字不会误关。 */
+      let pressedBackdrop = false;
+      built.overlay.addEventListener(
+        'pointerdown',
+        function (event) {
+          pressedBackdrop = !!(event && event.target === built.overlay);
+        },
+        false
+      );
+      built.overlay.addEventListener(
+        'pointercancel',
+        function () {
+          pressedBackdrop = false;
+        },
+        false
+      );
+      built.overlay.addEventListener(
+        'click',
+        function (event) {
+          const onBackdrop = !!(event && event.target === built.overlay) && pressedBackdrop;
+          pressedBackdrop = false;
+          if (onBackdrop) close();
+        },
+        false
+      );
+      built.closeBtn.addEventListener('click', function () { close(); }, false);
+      doc.addEventListener('keydown', onKeyDown, true);
+    }
 
     panel = {
       doc: doc,
@@ -2155,6 +2416,7 @@
       onKeyDown: onKeyDown,
       refresh: built.refresh,
       destroy: built.destroy,
+      worldShell: built.worldShell,
     };
     built.start();
     safelyFocus(built.closeBtn);

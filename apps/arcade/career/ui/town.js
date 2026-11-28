@@ -8,13 +8,18 @@
  *   window.ArcadeCareerUI.town.render(ctx);
  *   window.ArcadeCareerUI.town.close();
  *
- * 首屏只读消费 bridge 传入的 ctx（ADR §18.7 / §20.9）：
- *   originLetter()                   → null 或 {sourceGame, c0Letter: {from, body, address}}
- *   campaign.state(input)            → 章节状态（只用当前章标题/玩家语言提示）
- *   campaign.recommend(input)        → null 或 {commissionId, goal, reason, kind}
- *   commission.listAvailable(input)  → 真实可接单集合（推荐只允许在其中）
- *   commission.continuations(input)  → 可选；live run（issued/active）集合
- * 任一接口缺失、抛错或返回异常时安全回退旧告示板列表，不阻塞接单。
+ * 0.24 T23 经历页（只增强 journal tab，不改其它 tab 行为）：
+ *   - 有 window.ArcadeCareerUI.journal 时交给 ui/journal.js 渲染筛选与回读；
+ *     缺失时按 0.23 只读 JournalTimeline 降级；
+ *   - 经历只消费 view.story.history 投影，不读完整目录；
+ *   - 已搁置卡保持折叠；搁置/恢复后焦点留在同一搁置-恢复控件。
+ *
+ * 0.22 的统一披露入口（ADR §23.3）：
+ *   ctx.careerView({surface:'work'})  → 唯一工作列表来源（已投影的公开字段）
+ *   ctx.commission.listAvailable({careerId, ensure:false, surface:'work'})
+ *                                    → 核心授权集合；只取交集，不反向扩张
+ *   view.story.nextAction             → 眼下主卡
+ * 任一接口缺失、抛错或返回异常时只显示自然空状态，不回退完整目录、不建身份。
  *
  * 约束：
  * - 覆盖当前页面的轻量浮层（position:fixed，可滚动），按钮 + Esc + 点遮罩关闭；
@@ -58,12 +63,20 @@
   const ALT_EMPTY = '港务处今天没有跑腿的活。';
   const ALT_BUY_LABEL = '请他们代办';
   const FREE_LIST_TITLE = '想自由接单？';
+  const PAUSED_LIST_TITLE = '先收着的职业';
   const RECOMMEND_TITLE = '你想先走这条路吗？';
   const RECOMMEND_KIND_TEXT = { milestone: '能推进这一段', step: '能积攒下一步所需' };
   const RECOMMEND_GOAL_TITLE = '你愿意完成';
-  const FIRST_PATROL_ID = 'star-raid.T1';
+  const DATA_CLOSE_REASONS = ['career-archived', 'career-reset', 'career-imported'];
+  const REASON_CODES = [
+    'not-discovered', 'not-read', 'not-accepted', 'paused', 'wrong-surface',
+    'world-locked', 'story-locked', 'not-available', 'historical-only',
+    'archived', 'unknown-profession', 'unknown-commission', 'future-version',
+  ];
   const RENTAL_LEAD = '阿砾：标准舰可以免费借。';
   const CAMPAIGN_SUBTITLE = '你想继续哪一段？';
+  /* 0.24 T24：章节说明只读公开文本；next 沿用面板既有的「下一步：」说法。 */
+  const GUIDE_NEXT_PREFIX = '下一步：';
   const INTRO_GOAL = '告示板上钉着今天的活，你想先接哪一张？';
   const CLOSE_LABEL = '收起告示板';
   const HANGAR_FAILED = '机库那边灯还亮着，门暂时没开。';
@@ -98,26 +111,6 @@
     'mineral.returned': '带回 {n} 份矿物',
   };
 
-  /* 游戏 id → 戏内显示名（与 content/registry.json 的 displayName 一致；registry 不可用时兜底）。 */
-  const GAME_LABELS = {
-    'memory-flip': '记忆翻牌',
-    'merge-2048': '2048 合成',
-    blackjack: '二十一点',
-    gomoku: '五子棋',
-    solitaire: '纸牌接龙',
-    snowbells: '雪铃',
-    'brick-breaker': '砖块计划',
-    'gravity-flip': '重力翻转',
-    'snake-run': '贪吃蛇',
-    'mole-whack': '打地鼠',
-    'block-drop': '俄罗斯方块',
-    'star-raid': '星海突击',
-    'road-rush': '极速车道',
-    'shadow-leap': '影跃',
-    'pendulum-tower': '层塔',
-    'gold-miner': '黄金矿工',
-  };
-
   /* 接单失败 reason → 可归因戏内文本（未知原因使用通用兜底，不暴露系统词）。 */
   const START_FAIL_TEXT = {
     'not-unlocked': '你想接的这张单子还没开放，要不要看看别的？',
@@ -144,6 +137,18 @@
     exception: '告示板那边卡了一下，你想过一会儿再试吗？',
     'career-archived': '生涯已封存。你想先在生涯设置里解冻吗？',
   };
+
+  /** 冻结 reason code 只供诊断；任何代码样式字符串都不进入玩家文案。 */
+  function safePlayerReason(value) {
+    const text = cleanText(value);
+    if (!text) return '';
+    const lower = text.toLowerCase();
+    if (REASON_CODES.some((code) => lower === code || lower.indexOf(code + ':') === 0 || lower.indexOf(code + ' ') === 0)) return '';
+    if (/^[a-z][a-z0-9._-]{4,}$/i.test(text)) return '';
+    if (/\b(?:active|locked|archived)\b/i.test(text)) return '';
+    if (/C[0-5]\.|\b(?:E|BP|MAP|DEC)-|commissionId|professionId|eventId/.test(text)) return '';
+    return text;
+  }
 
   const STYLE_TEXT = [
     '.ac-career-town {',
@@ -325,6 +330,35 @@
     '  color: var(--ac-career-muted, #93a0c8);',
     '  font-size: 11.5px;',
     '}',
+    '.ac-career-town__campaign-detail {',
+    '  display: flex;',
+    '  flex-direction: column;',
+    '  gap: 4px;',
+    '  min-width: 0;',
+    '}',
+    '.ac-career-town__chapter-requirement,',
+    '.ac-career-town__chapter-completion,',
+    '.ac-career-town__chapter-offer,',
+    '.ac-career-town__chapter-next {',
+    '  margin: 0;',
+    '  color: var(--ac-career-muted, #93a0c8);',
+    '  font-size: 12px;',
+    '  line-height: 1.7;',
+    '  overflow-wrap: anywhere;',
+    '}',
+    '.ac-career-town__chapter-alternatives {',
+    '  display: flex;',
+    '  flex-direction: column;',
+    '  gap: 4px;',
+    '  min-width: 0;',
+    '  margin: 0;',
+    '  padding: 0;',
+    '  list-style: none;',
+    '}',
+    '.ac-career-town__chapter-alternative {',
+    '  min-width: 0;',
+    '  margin: 0;',
+    '}',
     '.ac-career-town__intro-line--role {',
     '  color: var(--ac-career-ink, #eef1ff);',
     '  font-weight: 600;',
@@ -365,6 +399,13 @@
     '  flex-direction: column;',
     '  gap: 8px;',
     '  padding: 0 10px 10px;',
+    '}',
+    '.ac-career-town__paused-name {',
+    '  margin: 0;',
+    '  color: var(--ac-career-muted, #93a0c8);',
+    '  font-size: 12px;',
+    '  line-height: 1.7;',
+    '  overflow-wrap: anywhere;',
     '}',
     '.ac-career-town__row--recommend {',
     '  border-color: var(--ac-career-ink, #eef1ff);',
@@ -465,6 +506,1117 @@
   function idText(value) {
     return cleanText(value).replace(/\s+/g, '');
   }
+
+  /* ------------------------------------------------------------------ *
+   * 0.23 T13 — component-backed port surface.
+   * The legacy 0.18–0.22 panel stays intact for hosts without the frozen
+   * component injection. When bridge supplies ctx.uiComponents (or true with
+   * the global T11 namespace), this surface renders P07–P10 through T11.
+   * ------------------------------------------------------------------ */
+
+  const PORT_TITLE = '折光港';
+  const PORT_TABS = [
+    { id: 'home', label: '眼下' },
+    { id: 'work', label: '工作' },
+    { id: 'journal', label: '经历' },
+  ];
+  const PORT_SURFACES = ['port', 'work', 'journal'];
+  const PORT_CAPTION = '港口还开着，你可以慢慢看看。';
+  const PORT_EMPTY_TITLE = '港口暂时没有新的安排';
+  const PORT_EMPTY_SUMMARY = '你保存的经历还在，随时可以从这里继续。';
+  const PORT_LOADING_TITLE = '正在整理港口内容';
+  const PORT_LOADING_SUMMARY = '请稍候，已经保存的内容不会丢失。';
+  const PORT_ERROR_TITLE = '港口记录暂时读不出来';
+  const PORT_ERROR_SUMMARY = '你的游玩不受影响，可以再试一次。';
+  const PORT_EXIT_LABEL = '离开港口';
+  const PORT_RETRY_LABEL = '重试';
+  const PORT_RESUME_ARRIVAL_LABEL = '回到初次到港';
+  const PORT_RESUME_ARRIVAL_ACTION = 'port-resume-arrival';
+  const PORT_TOOL_FALLBACK = { wallet: '钱包', shop: '商店', workshop: '工作台', hangar: '机库' };
+  const PORT_TOOL_ICON = { wallet: 'wallet', shop: 'store', workshop: 'tool', hangar: 'tool' };
+  const PORT_CLUE_FAMILY_ICON = { record: 'mail', signal: 'scroll', bio: 'gem', industrial: 'pick', route: 'chevron' };
+
+  function portComponentsOf(context) {
+    const direct = context && context.uiComponents;
+    if (direct === true && root.ArcadeCareerUI && isObject(root.ArcadeCareerUI.components)) return root.ArcadeCareerUI.components;
+    if (!isObject(direct)) return null;
+    const required = ['CareerShell', 'StoryCard', 'SegmentedTabs', 'WorkCard', 'JournalTimeline', 'ToolGrid', 'ClueRow', 'PrimaryAction', 'SecondaryAction', 'LetterCard', 'icon'];
+    return required.every((name) => typeof direct[name] === 'function') ? direct : null;
+  }
+
+  function portRootWindow() {
+    return typeof window !== 'undefined' && window ? window : null;
+  }
+
+  function portApiOf(context) {
+    return context && isObject(context.api) ? context.api : {};
+  }
+
+  function portOpenMethod(context, name) {
+    if (context && typeof context[name] === 'function') return context[name];
+    const api = portApiOf(context);
+    return typeof api[name] === 'function' ? api[name] : null;
+  }
+
+  function portHarborNode(context, doc) {
+    const source = context && context.uiHarbor;
+    let rendered = null;
+    if (typeof source === 'function') {
+      try { rendered = source(false); } catch (err) { rendered = null; }
+    } else if (source && typeof source === 'object' && typeof source.render === 'function') {
+      try { rendered = source.render(false); } catch (err) { rendered = null; }
+    }
+    if (typeof rendered === 'string' && rendered.trim()) {
+      try {
+        const template = doc.createElement('template');
+        template.innerHTML = rendered;
+        rendered = template.content && template.content.firstChild ? template.content.firstChild : null;
+      } catch (err) {
+        rendered = null;
+      }
+    }
+    return rendered && typeof rendered.nodeType === 'number' ? rendered : null;
+  }
+
+  function portTextNode(doc, className, text) {
+    const node = doc.createElement('p');
+    if (className) node.className = className;
+    node.textContent = text || '';
+    return node;
+  }
+
+  function requestPortCareerView(context, surface) {
+    const provider = typeof context === 'object' && context && typeof context.careerView === 'function'
+      ? context.careerView
+      : portOpenMethod(context, 'careerView');
+    if (typeof provider !== 'function') return Promise.resolve(null);
+    let result = null;
+    try {
+      result = provider({ surface: surface });
+    } catch (err) {
+      return Promise.resolve(null);
+    }
+    return Promise.resolve(result).then(
+      (value) => isObject(value) ? value : null,
+      () => null
+    );
+  }
+
+  function createPortState() {
+    return {
+      views: Object.create(null),
+      tab: 'home',
+      expanded: Object.create(null),
+      phase: 'normal',
+      seq: 0,
+      alive: true,
+      unsubscribe: null,
+      shell: null,
+      shellPanel: null,
+      journalFilter: null,
+      crossoverAttempted: false,
+      crossover: null,
+      context: null,
+    };
+  }
+
+  function destroyPortState(state) {
+    if (!state || !state.alive) return;
+    state.alive = false;
+    state.seq += 1;
+    state.shellPanel = null;
+    if (typeof state.unsubscribe === 'function') {
+      try { state.unsubscribe(); } catch (err) { /* ignore */ }
+    }
+    state.unsubscribe = null;
+  }
+
+  function portViewOf(state) {
+    if (!state) return null;
+    if (state.tab === 'work') return state.views.work || null;
+    if (state.tab === 'journal') return state.views.journal || null;
+    return state.views.port || null;
+  }
+
+  function portNarrativeOf(context) {
+    return context && isObject(context.narrative) ? context.narrative : {};
+  }
+
+  /** T15 fixtures are injected explicitly; production never reads tools/career_ui_fixture_states.json. */
+  function portFixtureOf(context) {
+    const direct = context && (context.portFixture || context.fixtureProps);
+    let source = isObject(direct) ? direct : null;
+    if (!source) {
+      const narrative = portNarrativeOf(context);
+      source = isObject(narrative.fixture) ? narrative.fixture : null;
+    }
+    if (!source) return null;
+    return isObject(source.props) ? Object.assign({}, source, source.props) : source;
+  }
+
+  function portFixtureAction(context, state, action, fallbackId, components) {
+    const input = isObject(action) ? action : {};
+    const actionId = cleanText(input.id) || fallbackId || '';
+    const label = cleanText(input.label);
+    if (!label) return null;
+    const kind = input.kind === 'primary' ? 'primary' : (input.kind === 'secondary' ? 'secondary' : 'text');
+    const onClick = () => {
+      if (context && typeof context.fixtureAction === 'function') {
+        try { context.fixtureAction(actionId); } catch (err) { /* test stub failure is non-fatal */ }
+      }
+      if (actionId === 'retry' || label === '重试') loadPortData(context, state);
+      return { ok: true };
+    };
+    return {
+      id: actionId || undefined,
+      label: label,
+      kind: kind,
+      variant: input.variant === 'text' ? 'text' : 'border',
+      onClick: onClick,
+    };
+  }
+
+  function portFixtureMessageNode(doc, message) {
+    const row = isObject(message) ? message : null;
+    if (!row) return null;
+    const label = cleanText(row.label);
+    if (!label) return null;
+    const wrap = doc.createElement('div');
+    wrap.className = 'ac-career-ui__row ac-career-ui__message';
+    wrap.setAttribute('data-port-message', 'true');
+    const content = doc.createElement('div');
+    content.className = 'ac-career-ui__grow ac-career-ui__stack ac-career-ui__stack--small';
+    const labelNode = doc.createElement('strong');
+    labelNode.className = 'ac-career-ui__caption ac-career-ui__gold';
+    labelNode.textContent = label;
+    labelNode.setAttribute('data-port-message-label', 'true');
+    content.appendChild(labelNode);
+    const body = cleanText(row.text);
+    if (body) content.appendChild(portTextNode(doc, 'ac-career-ui__caption', body));
+    const from = cleanText(row.from);
+    if (from) {
+      const sender = portTextNode(doc, 'ac-career-ui__caption', from);
+      sender.className += ' ac-career-ui__message__from';
+      content.appendChild(sender);
+    }
+    const at = cleanText(row.at);
+    if (at) {
+      const time = doc.createElement('time');
+      time.className = 'ac-career-ui__caption ac-career-ui__message__time';
+      time.textContent = at;
+      content.appendChild(time);
+    }
+    wrap.appendChild(content);
+    return wrap;
+  }
+
+  function portFixtureContent(context, state, fixture, components) {
+    if (!fixture) return null;
+    const content = docOfPort().createElement('div');
+    content.className = 'ac-career-ui__stack';
+    content.id = 'ac-career-ui-port-tabpanel';
+    content.setAttribute('role', 'tabpanel');
+    content.setAttribute('aria-label', '港口内容');
+    content.setAttribute('data-port-tabpanel', state.tab);
+    let hasNode = false;
+
+    const story = isObject(fixture.storyCard) ? fixture.storyCard : null;
+    if (story && typeof components.StoryCard === 'function') {
+      const retry = isObject(fixture.secondaryAction) ? portFixtureAction(context, state, fixture.secondaryAction, 'retry', components) : null;
+      const variant = fixture.id === 'P10-loading' ? 'loading' : (fixture.id === 'P10-error' ? 'error' : (fixture.id === 'P10-empty' ? 'empty' : undefined));
+      const storyProps = {
+        variant: variant,
+        eyebrow: cleanText(story.eyebrow),
+        title: cleanText(story.title),
+        summary: cleanText(story.summary),
+        state: oneOfFixtureState(story.state),
+        tags: Array.isArray(story.tags) ? story.tags.map(cleanText).filter(Boolean) : [],
+        action: variant === 'error' ? retry : (isObject(story.action) ? portFixtureAction(context, state, story.action, '', components) : null),
+      };
+      content.appendChild(components.StoryCard(storyProps));
+      hasNode = true;
+    }
+
+    const letter = isObject(fixture.letterCard) ? fixture.letterCard : null;
+    if (letter && typeof components.LetterCard === 'function') {
+      const letterProps = {
+        title: cleanText(letter.title),
+        paragraphs: Array.isArray(letter.paragraphs) ? letter.paragraphs.map(cleanText).filter(Boolean) : [],
+        sender: cleanText(letter.sender),
+        ambientLabel: cleanText(letter.ambientLabel),
+        state: ['unread', 'read', 'deferred'].indexOf(cleanText(letter.state)) >= 0 ? cleanText(letter.state) : 'read',
+        actions: (Array.isArray(letter.actions) ? letter.actions : []).map((action, index) => portFixtureAction(context, state, action, 'letter-action-' + index, components)).filter(Boolean),
+      };
+      content.appendChild(components.LetterCard(letterProps));
+      hasNode = true;
+    }
+
+    const clue = isObject(fixture.clueRow) && typeof components.ClueRow === 'function' ? fixture.clueRow : null;
+    if (clue && ['hidden', 'glimpsed', 'read', 'recoverable'].indexOf(cleanText(clue.state)) >= 0 && cleanText(clue.state) !== 'hidden') {
+      const onOpen = typeof context.fixtureAction === 'function'
+        ? () => context.fixtureAction('clue:' + cleanText(clue.clueId))
+        : undefined;
+      content.appendChild(components.ClueRow(Object.assign({}, clue, { onOpen: onOpen })));
+      hasNode = true;
+    }
+
+    const messageSource = fixture.storyMessage
+      || (isObject(fixture.story) && Array.isArray(fixture.story.messages) ? fixture.story.messages.slice(0, 1)[0] : null);
+    const message = portFixtureMessageNode(docOfPort(), messageSource);
+    if (message) {
+      content.appendChild(message);
+      hasNode = true;
+    }
+
+    const journal = isObject(fixture.journalTimeline) ? fixture.journalTimeline : null;
+    if (journal && typeof components.JournalTimeline === 'function') {
+      content.appendChild(components.JournalTimeline({
+        state: cleanText(journal.state) === 'filled' ? 'filled' : 'empty',
+        events: Array.isArray(journal.events) ? journal.events : [],
+      }));
+      hasNode = true;
+    }
+    const footerText = cleanText(fixture.footerText);
+    if (footerText) {
+      const footerCaption = portTextNode(docOfPort(), 'ac-career-ui__caption ac-career-ui__timeline-footer', footerText);
+      content.appendChild(footerCaption);
+      hasNode = true;
+    }
+
+    const secondary = isObject(fixture.secondaryAction) ? fixture.secondaryAction : null;
+    if (secondary && !(story && fixture.id === 'P10-error') && typeof components.SecondaryAction === 'function') {
+      const action = portFixtureAction(context, state, secondary, 'retry', components);
+      if (action) {
+        content.appendChild(components.SecondaryAction(action));
+        hasNode = true;
+      }
+    }
+    return hasNode ? content : null;
+  }
+
+  function oneOfFixtureState(value) {
+    const state = cleanText(value);
+    return ['current', 'no-action', 'completed'].indexOf(state) >= 0 ? state : 'no-action';
+  }
+
+  function portFindCommission(view, commissionId) {
+    const id = idText(commissionId);
+    if (!id || !view || !Array.isArray(view.commissions)) return null;
+    return view.commissions.filter((row) => isObject(row) && idText(row.commissionId) === id)[0] || null;
+  }
+
+  /** 0.24：眼下只消费 resolver 已剥离内幕的公开文案；缺失时返回 null，0.23 路径不变。 */
+  function portAlternativeTexts(story) {
+    const node = isObject(story) && isObject(story.alternative) ? story.alternative : null;
+    const texts = node && isObject(node.texts) ? node.texts : null;
+    if (!texts) return null;
+    const pick = (value) => safePlayerReason(cleanText(value));
+    const out = {
+      offer: pick(texts.offer),
+      progress: pick(texts.progress),
+      receipt: pick(texts.receipt),
+      next: pick(texts.next),
+    };
+    return out.offer || out.progress || out.receipt || out.next ? out : null;
+  }
+
+  function portAlternativeNextNode(stack, story) {
+    const alternative = portAlternativeTexts(story);
+    if (!alternative || !alternative.next) return null;
+    const node = portTextNode(stack, 'ac-career-ui__caption', alternative.next);
+    node.setAttribute('data-port-narrative-next', 'true');
+    return node;
+  }
+
+  /**
+   * 0.24 交汇：只在港口面渲染 resolver 给出的 texts（invite/body/receipt），
+   * 内部 eventId 只用于落库回调，不进 DOM 文本；clue/letter/shop/crafting/tools 不渲染。
+   */
+  function portCrossoverData(story) {
+    const rows = isObject(story) && Array.isArray(story.crossovers)
+      ? story.crossovers.filter(isObject) : [];
+    const node = rows[0];
+    if (!node) return null;
+    const texts = isObject(node.texts) ? node.texts : {};
+    const pick = (value) => safePlayerReason(cleanText(value));
+    const out = {
+      narrativeEventId: idText(node.eventId),
+      invite: pick(texts.invite),
+      body: pick(texts.body),
+      receipt: pick(texts.receipt),
+    };
+    return out.invite || out.body || out.receipt ? out : null;
+  }
+
+  function portCrossoverNode(stack, crossover) {
+    const wrap = stack.createElement('div');
+    wrap.className = 'ac-career-ui__stack ac-career-ui__stack--small';
+    wrap.setAttribute('data-port-crossover', 'true');
+    if (crossover.invite) {
+      wrap.appendChild(portTextNode(stack, 'ac-career-ui__caption ac-career-ui__gold', crossover.invite));
+    }
+    if (crossover.body) {
+      wrap.appendChild(portTextNode(stack, 'ac-career-ui__npc-paragraph', crossover.body));
+    }
+    if (crossover.receipt) {
+      wrap.appendChild(portTextNode(stack, 'ac-career-ui__caption', crossover.receipt));
+    }
+    return wrap;
+  }
+
+  function presentPortCrossover(context, state, view) {
+    if (state.tab !== 'home' || state.phase !== 'normal' || state.crossoverAttempted) return;
+    const crossover = portCrossoverData(view && view.story);
+    const record = portOpenMethod(context, 'recordWorldNarrativeEvent');
+    if (!crossover || !crossover.narrativeEventId || typeof record !== 'function') return;
+    state.crossoverAttempted = true;
+    const seq = state.seq;
+    /* 只有成功写入的面板展示交汇，另一标签得到 duplicate 后只刷新经历。 */
+    Promise.resolve().then(() => {
+      if (!state.alive || state.seq !== seq || state.tab !== 'home') return null;
+      return record({ eventId: crossover.narrativeEventId });
+    }).then((result) => {
+      if (!result || !result.ok || !state.alive || state.seq !== seq) return;
+      if (result.duplicate !== true) {
+        state.crossover = crossover;
+        if (state.tab === 'home') renderPortSurface(context, state);
+      }
+      return requestPortCareerView(context, 'journal').then((journal) => {
+        if (!journal || !state.alive || state.seq !== seq) return;
+        state.views.journal = journal;
+        if (state.tab === 'journal') renderPortSurface(context, state);
+      });
+    }).catch(() => { /* 下次打开可重试，失败不会展示未落库的交汇。 */ });
+  }
+
+  function portStoryProps(context, view) {
+    const narrative = portNarrativeOf(context);
+    const story = view && isObject(view.story) ? view.story : {};
+    const next = isObject(story.nextAction) ? story.nextAction : null;
+    const nextId = idText(next && next.commissionId);
+    const row = portFindCommission(view, nextId);
+    const commission = commissionOf(context);
+    const alternative = portAlternativeTexts(story);
+    const title = cleanText(narrative.storyTitle) || cleanText(next && next.label) || cleanText(row && row.title);
+    /* 摘要必须与当前动作同源：替代路线说明只在没有真实委托摘要时兜底，
+       避免出现「动作是外堤清障、摘要却讲另一单」的错位文案。 */
+    const summary = cleanText(narrative.storySummary)
+      || cleanText(row && row.summary)
+      || cleanText(row && row.objectiveText)
+      || (alternative && alternative.offer);
+    const action = nextId && (!commission || typeof commission.start !== 'function')
+      ? null
+      : (nextId ? {
+          id: 'port-story-' + nextId,
+          label: cleanText(next && next.label) || '继续这段故事',
+          kind: 'primary',
+          onClick: () => startPortCommission(context, nextId),
+        } : null);
+    return {
+      eyebrow: cleanText(narrative.storyEyebrow) || '正在发生的故事',
+      title: safePlayerReason(title) || PORT_EMPTY_TITLE,
+      summary: safePlayerReason(summary) || PORT_EMPTY_SUMMARY,
+      state: nextId ? 'current' : 'no-action',
+      tags: [],
+      action: action,
+    };
+  }
+
+  function portMessageNode(doc, view) {
+    const messages = view && view.story && Array.isArray(view.story.messages) ? view.story.messages : [];
+    const row = messages.filter(isObject).slice(0, 1)[0];
+    if (!row) return null;
+    return portFixtureMessageNode(doc, {
+      label: safePlayerReason(cleanText(row.label) || cleanText(row.text)),
+      text: safePlayerReason(cleanText(row.text)),
+      from: safePlayerReason(cleanText(row.from)),
+      at: cleanText(row.at),
+    });
+  }
+
+  function portClueProps(context) {
+    const narrative = portNarrativeOf(context);
+    const input = context && (context.portClue || context.recoverableClue) ? (context.portClue || context.recoverableClue) : narrative.clue;
+    if (!isObject(input)) return null;
+    const clue = isObject(input.clue) ? input.clue : input;
+    const clueId = idText(clue.clueId || input.clueId);
+    if (!clueId) return null;
+    const snapshot = isObject(input.state) ? input.state : (isObject(context.state) ? context.state : {});
+    const record = isObject(snapshot.clues) ? snapshot.clues[clueId] : null;
+    let state = cleanText(input.state);
+    if (['hidden', 'glimpsed', 'read', 'recoverable'].indexOf(state) < 0) {
+      if (!record) state = 'hidden';
+      else if (record.openedAt) state = 'read';
+      else {
+        const stage = cleanText(snapshot.stage).toUpperCase();
+        const hasRead = Object.keys(snapshot.clues).some((key) => !!(snapshot.clues[key] && snapshot.clues[key].openedAt));
+        state = !record.portSeenAt && (stage === 'GLIMPSED' || stage === 'CURIOUS') && hasRead ? 'recoverable' : 'glimpsed';
+      }
+    }
+    if (state === 'hidden') return null;
+    const title = cleanText(clue.ambientLabel) || cleanText(clue.title);
+    if (!title) return null;
+    const actionLabel = state === 'glimpsed'
+      ? '仔细看看'
+      : (state === 'read' ? '查看这封信' : (cleanText(clue.letter && clue.letter.actionLabel) || '按地址投递'));
+    let onOpen = typeof input.onOpen === 'function' ? input.onOpen : portOpenMethod(context, 'openClue');
+    if (typeof onOpen !== 'function') onOpen = portOpenMethod(context, 'onOpenClue');
+    const invitation = typeof context.invitationForClue === 'function' ? context.invitationForClue(clueId) : null;
+    return {
+      clueId: clueId,
+      gameId: idText(clue.gameId),
+      professionId: invitation && idText(invitation.professionId),
+      icon: state === 'recoverable' ? 'mail' : (PORT_CLUE_FAMILY_ICON[cleanText(clue.family)] || 'gem'),
+      title: title,
+      teaser: cleanText(clue.ambientText),
+      actionLabel: actionLabel,
+      state: state,
+      placement: 'list',
+      reducedMotion: !!context.reducedMotion,
+      onOpen: typeof onOpen === 'function' ? onOpen : undefined,
+    };
+  }
+
+  function portToolItems(context, view) {
+    const tools = view && Array.isArray(view.tools) ? view.tools : [];
+    const out = [];
+    Object.keys(PORT_TOOL_FALLBACK).forEach((id) => {
+      const tool = tools.filter((entry) => isObject(entry) && idText(entry.toolId) === id)[0];
+      if (!tool) return;
+      const openerName = id === 'wallet' ? 'openReceipt' : (id === 'shop' ? 'openMarket' : (id === 'workshop' ? 'openWorkshop' : 'openHangar'));
+      out.push({
+        id: id,
+        label: cleanText(tool.name) || PORT_TOOL_FALLBACK[id],
+        icon: PORT_TOOL_ICON[id],
+        onClick: () => {
+          const opener = portOpenMethod(context, openerName);
+          if (typeof opener === 'function') {
+            try { opener(); } catch (err) { /* ignore */ }
+          } else if (typeof context.announce === 'function') {
+            context.announce(PORT_TOOL_FALLBACK[id] + '暂时打不开。');
+          }
+        },
+      });
+    });
+    return out;
+  }
+
+  function startPortCommission(context, commissionId) {
+    const id = idText(commissionId);
+    if (!id) return Promise.resolve({ ok: false });
+    const commission = commissionOf(context);
+    if (!commission || typeof commission.start !== 'function') return Promise.resolve({ ok: false });
+    let result = null;
+    try {
+      result = commission.start({ commissionId: id, careerId: careerIdOf(context), ensure: false, surface: 'work' });
+    } catch (err) {
+      result = { ok: false };
+    }
+    return Promise.resolve(result).then((value) => {
+      const url = safeNavUrl(value && isObject(value) ? value.url : '');
+      if (url && portRootWindow() && portRootWindow().location && typeof portRootWindow().location.assign === 'function') {
+        try { portRootWindow().location.assign(url); } catch (err) { /* navigation unavailable in test host */ }
+      }
+      return value;
+    }, () => ({ ok: false }));
+  }
+
+  function pausePortProfession(context, professionId, paused) {
+    const id = idText(professionId);
+    if (!id) return Promise.resolve({ ok: false });
+    const fn = portOpenMethod(context, 'setProfessionPaused');
+    if (typeof fn !== 'function') return Promise.resolve({ ok: false });
+    let result = null;
+    try {
+      result = fn({ professionId: id, paused: !!paused });
+    } catch (err) {
+      result = { ok: false };
+    }
+    return Promise.resolve(result);
+  }
+
+  /**
+   * 搁置/恢复后把焦点放回同一控件（data-work-pause 不随状态改变）。
+   * 0.23 的 `state.shell.panel` 并不存在，旧实现在重绘后取不到按钮而丢焦点。
+   */
+  function focusPortWorkToggle(state, professionId) {
+    const id = idText(professionId);
+    if (!state || !state.alive || !id) return;
+    const panel = state.shellPanel
+      || (state.shell && state.shell.record && state.shell.record.panel)
+      || null;
+    if (!panel || typeof panel.querySelector !== 'function') return;
+    let button = null;
+    if (/^[A-Za-z0-9._:-]+$/.test(id)) {
+      try {
+        button = panel.querySelector('[data-work-pause="' + id + '"]');
+      } catch (err) {
+        button = null;
+      }
+    }
+    if (!button && panel.ownerDocument && typeof panel.ownerDocument.getElementById === 'function') {
+      const byId = panel.ownerDocument.getElementById('work-pause-' + id);
+      if (byId && (typeof panel.contains !== 'function' || panel.contains(byId))) button = byId;
+    }
+    if (button && typeof button.focus === 'function') safelyFocus(button);
+  }
+
+  function portOverrideStartLabels(card, label, components) {
+    const target = cleanText(label);
+    if (!target || !card || typeof card.querySelectorAll !== 'function') return;
+    Array.prototype.slice.call(card.querySelectorAll('button')).forEach((button) => {
+      if (cleanText(button.textContent).indexOf('接下这单') < 0) return;
+      const paint = () => {
+        const busy = button.getAttribute('aria-busy') === 'true';
+        button.textContent = target + (busy ? '（处理中）' : (button.disabled ? '（暂不可用）' : ''));
+      };
+      paint();
+      ['pointerenter', 'pointerleave', 'focus', 'blur', 'pointerdown', 'pointerup', 'click'].forEach((type) => {
+        button.addEventListener(type, paint, false);
+      });
+      button.setAttribute('data-port-action-label', target);
+    });
+  }
+
+  function portWorkCards(context, view, state, components) {
+    const professions = view && Array.isArray(view.professions) ? view.professions.filter(isObject) : [];
+    const accepted = professions.filter((entry) => ['accepted', 'developed', 'completed'].indexOf(cleanText(entry.state).toLowerCase()) >= 0);
+    const commissions = view && Array.isArray(view.commissions) ? view.commissions.filter(isObject) : [];
+    const worldRows = commissions.filter((entry) => cleanText(entry.category).toLowerCase() === 'world' && entry.historicalOnly !== true && entry.readOnly !== true);
+    const fixture = portFixtureOf(context);
+    const fixtureCards = fixture && Array.isArray(fixture.workCards) ? fixture.workCards : [];
+    const fixtureActions = fixture && Array.isArray(fixture.actions) ? fixture.actions : [];
+    const startLabel = cleanText(fixtureActions[0] && fixtureActions[0].label);
+    if (!accepted.length && !worldRows.length) {
+      return [components.WorkCard({ professionId: null, displayName: '', icon: 'check', state: 'empty', commissions: [] })];
+    }
+    const cards = accepted.map((entry) => {
+      const professionId = idText(entry.professionId);
+      const rows = commissions.filter((commission) => {
+        if (commission.historicalOnly === true || commission.readOnly === true) return false;
+        if (cleanText(commission.category).toLowerCase() === 'world') return false;
+        const parent = idText(commission.professionId || commission.parentProfessionId || commission.internalParentProfessionId);
+        return !!parent && parent === professionId;
+      });
+      const paused = entry.paused === true;
+      const card = components.WorkCard({
+        professionId: professionId,
+        displayName: cleanText(entry.displayName),
+        icon: cleanText(entry.domain) === 'nature' ? 'pick' : (cleanText(entry.domain) === 'adventure' ? 'scroll' : 'gem'),
+        state: paused ? 'paused' : (rows.length ? 'active' : 'optional'),
+        commissions: paused ? [] : rows,
+        expanded: !!state.expanded[professionId],
+        onStart: (commissionId) => startPortCommission(context, commissionId),
+        onPause: (targetId, nextPaused) => pausePortProfession(context, targetId, nextPaused).then(() => {
+          if (!state.alive) return { ok: false };
+          /* 等投影重绘完成后再回焦：同一 data-work-pause 控件在搁置/恢复两态都存在。 */
+          const pending = loadPortData(context, state);
+          return Promise.resolve(pending).then(() => {
+            focusPortWorkToggle(state, targetId);
+            return { ok: true };
+          });
+        }),
+      });
+      card.setAttribute('data-port-profession', professionId);
+      const buttons = card.querySelectorAll ? Array.prototype.slice.call(card.querySelectorAll('button')) : [];
+      const pauseButton = buttons.filter((button) => {
+        const label = cleanText(button.textContent);
+        return label === '暂时搁置' || label === '恢复这段经历';
+      })[0];
+      if (pauseButton) {
+        pauseButton.id = 'work-pause-' + professionId;
+        pauseButton.setAttribute('data-work-pause', professionId);
+        pauseButton.setAttribute('data-work-pause-state', paused ? 'paused' : 'active');
+        pauseButton.setAttribute('data-focus-key', 'work-pause-' + professionId);
+        pauseButton.setAttribute('aria-pressed', String(paused));
+      }
+      const details = card.querySelector('details');
+      if (details && typeof details.addEventListener === 'function') {
+        details.addEventListener('toggle', () => { state.expanded[professionId] = !!details.open; });
+      }
+      portOverrideStartLabels(card, startLabel, components);
+      return card;
+    });
+    if (worldRows.length) {
+      const fixtureCard = fixtureCards.filter((entry) => isObject(entry) && entry.professionId === null)[0] || null;
+      const fixtureCommission = fixtureCard && Array.isArray(fixtureCard.commissions) ? fixtureCard.commissions.filter(isObject)[0] : null;
+      const worldCard = components.WorkCard({
+        professionId: null,
+        displayName: cleanText(fixtureCard && fixtureCard.title),
+        icon: 'check',
+        state: 'optional',
+        commissions: worldRows,
+        onStart: (commissionId) => startPortCommission(context, commissionId),
+      });
+      worldCard.setAttribute('data-port-profession', 'world');
+      const doc = docOfPort();
+      const nameNode = worldCard.querySelector('.ac-career-ui__work-name');
+      if (nameNode && cleanText(fixtureCard && fixtureCard.title)) nameNode.textContent = cleanText(fixtureCard.title);
+      const list = worldCard.querySelector('.ac-career-ui__work-list');
+      const commissionTitle = cleanText(fixtureCommission && fixtureCommission.title) || cleanText(worldRows[0] && worldRows[0].title);
+      if (list && commissionTitle && !worldCard.querySelector('.ac-career-ui__commission-title')) {
+        const heading = doc.createElement('h3');
+        heading.className = 'ac-career-ui__commission-title';
+        heading.textContent = commissionTitle;
+        list.insertBefore(heading, list.firstChild);
+      }
+      portOverrideStartLabels(worldCard, startLabel, components);
+      cards.push(worldCard);
+    }
+    return cards;
+  }
+
+  function portJournalApi(context) {
+    const injected = context && context.uiJournal;
+    if (isObject(injected) && typeof injected.render === 'function') return injected;
+    const ui = root.ArcadeCareerUI;
+    if (ui && isObject(ui.journal) && typeof ui.journal.render === 'function') return ui.journal;
+    return null;
+  }
+
+  /** 经历页只消费投影；增强模块缺失时退回 0.23 的只读时间线。 */
+  function portJournalNode(context, view, state, components) {
+    const journal = portJournalApi(context);
+    if (journal) {
+      try {
+        const rendered = journal.render({
+          view: view,
+          components: components,
+          reducedMotion: !!(context && context.reducedMotion),
+          filter: state ? state.journalFilter : null,
+          onFilterChange: (next) => {
+            if (state) state.journalFilter = isObject(next) ? next : null;
+          },
+        });
+        if (rendered && rendered.nodeType === 1) return rendered;
+      } catch (err) {
+        /* 增强模块异常时保留 0.23 只读经历，不阻断港口。 */
+      }
+    }
+    const history = view && view.story && Array.isArray(view.story.history) ? view.story.history : [];
+    const events = history.filter(isObject).map((row) => ({
+      label: cleanText(row.label) || cleanText(row.text),
+      at: cleanText(row.at),
+    })).filter((row) => row.label);
+    return components.JournalTimeline({ state: events.length ? 'filled' : 'empty', events: events });
+  }
+
+  /** 当前章节：只读 campaign.state()，与章节面板/告示板同一入口。 */
+  function portCurrentChapterOf(context) {
+    const campaign = context && isObject(context.campaign) ? context.campaign : null;
+    if (!campaign || typeof campaign.state !== 'function') return null;
+    let model = null;
+    try {
+      model = campaign.state({
+        quests: Array.isArray(context.quests) ? context.quests : [],
+        claims: Array.isArray(context.claims) ? context.claims : [],
+        profile: context.profile || null,
+        wallet: context.wallet || null,
+      });
+    } catch (err) {
+      return null;
+    }
+    if (!isObject(model) || model.ok === false || !Array.isArray(model.chapters)) return null;
+    const currentId = isObject(model.currentChapter)
+      ? idText(model.currentChapter.chapterId) : idText(model.currentChapter);
+    return model.chapters.filter(isObject).filter((chapter) => idText(chapter.chapterId) === currentId)[0]
+      || model.chapters.filter(isObject).filter((chapter) => cleanText(chapter.state) === 'active')[0]
+      || null;
+  }
+
+  /**
+   * 0.24 T24：经历页顶部的章节说明。只渲染 campaign-core 的公开前置/完成解释
+   * 与 route-planner 的 alternatives[].texts.{offer,next}；requirement/tokens/
+   * anchor/narrativeNodeId 等内部结构不进入 DOM。无数据时返回 null，不建节点。
+   */
+  function portChapterGuideNode(context) {
+    const current = portCurrentChapterOf(context);
+    if (!current) return null;
+    const prerequisiteText = safePlayerReason(cleanText(current.prerequisite && current.prerequisite.text));
+    const completionText = safePlayerReason(cleanText(current.completion && current.completion.text));
+    const provider = context && typeof context.chapterGuide === 'function' ? context.chapterGuide : null;
+    const rows = [];
+    if (provider) {
+      let guide = null;
+      try {
+        guide = provider({});
+      } catch (err) {
+        guide = null;
+      }
+      if (isObject(guide) && guide.ok === true && Array.isArray(guide.chapters)) {
+        const chapterId = idText(current.chapterId);
+        const chapter = guide.chapters.filter(isObject).filter((row) => idText(row.chapterId) === chapterId)[0];
+        const alternatives = chapter && Array.isArray(chapter.alternatives) ? chapter.alternatives : [];
+        alternatives.forEach((alt) => {
+          if (!isObject(alt) || !isObject(alt.texts)) return;
+          const offer = safePlayerReason(cleanText(alt.texts.offer));
+          const next = safePlayerReason(cleanText(alt.texts.next));
+          if (offer || next) rows.push({ offer: offer, next: next });
+        });
+      }
+    }
+    if (!prerequisiteText && !completionText && !rows.length) return null;
+    const doc = docOfPort();
+    const wrap = doc.createElement('section');
+    wrap.className = 'ac-career-ui__stack ac-career-ui__stack--small';
+    wrap.setAttribute('data-port-chapter-guide', 'true');
+    const push = (className, value) => {
+      if (!value) return;
+      const node = portTextNode(doc, className, value);
+      wrap.appendChild(node);
+    };
+    push('ac-career-ui__caption', prerequisiteText);
+    push('ac-career-ui__caption', completionText);
+    if (rows.length) {
+      const list = doc.createElement('ul');
+      list.className = 'ac-career-ui__stack ac-career-ui__stack--small';
+      list.setAttribute('data-port-chapter-alternatives', 'true');
+      rows.forEach((row) => {
+        const item = doc.createElement('li');
+        item.className = 'ac-career-ui__stack ac-career-ui__stack--small';
+        if (row.offer) item.appendChild(portTextNode(doc, 'ac-career-ui__npc-paragraph', row.offer));
+        if (row.next) item.appendChild(portTextNode(doc, 'ac-career-ui__caption', GUIDE_NEXT_PREFIX + row.next));
+        list.appendChild(item);
+      });
+      wrap.appendChild(list);
+    }
+    return wrap;
+  }
+
+  /**
+   * 首次接受后离开港口：在「眼下」给出明确的恢复入口，重开港口不丢引入阶段。
+   * 只消费 bridge 投影的持久待办；是否回去由玩家决定，这里不接单、不改状态。
+   */
+  function portResumeArrivalAction(context, view, components) {
+    const story = view && isObject(view.story) ? view.story : null;
+    const pending = story && isObject(story.firstArrival) ? story.firstArrival : null;
+    const open = portOpenMethod(context, 'openInvitation');
+    if (!pending || !idText(pending.clueId) || !open || typeof components.SecondaryAction !== 'function') return null;
+    const clueId = idText(pending.clueId);
+    const action = components.SecondaryAction({
+      id: PORT_RESUME_ARRIVAL_ACTION,
+      label: PORT_RESUME_ARRIVAL_LABEL,
+      kind: 'text',
+      variant: 'text',
+      onClick: () => {
+        try {
+          const opened = open({ clueId: clueId, firstArrival: true });
+          if (opened && typeof opened.catch === 'function') opened.catch(() => {});
+        } catch (err) {
+          /* 打不开时港口照常可用，下次仍可重试。 */
+        }
+        return { ok: true };
+      },
+    });
+    action.setAttribute('data-action', PORT_RESUME_ARRIVAL_ACTION);
+    return action;
+  }
+
+  function portContentNode(context, state, view, components) {
+    const phase = state.phase;
+    const stack = docOfPort();
+    const fixture = portFixtureOf(context || state.context);
+    const fixtureContent = fixture ? portFixtureContent(context, state, fixture, components) : null;
+    if (fixtureContent) return fixtureContent;
+    const content = stack.createElement('div');
+    content.className = 'ac-career-ui__stack';
+    content.id = 'ac-career-ui-port-tabpanel';
+    content.setAttribute('role', 'tabpanel');
+    content.setAttribute('aria-label', '港口内容');
+    content.setAttribute('data-port-tabpanel', state.tab);
+
+    if (phase === 'loading') {
+      content.appendChild(components.StoryCard({
+        variant: 'loading',
+        title: PORT_LOADING_TITLE,
+        summary: PORT_LOADING_SUMMARY,
+        state: 'no-action',
+      }));
+      return content;
+    }
+    if (phase === 'error') {
+      content.appendChild(components.StoryCard({
+        variant: 'error',
+        title: PORT_ERROR_TITLE,
+        summary: PORT_ERROR_SUMMARY,
+        state: 'no-action',
+        action: {
+          id: 'port-retry',
+          label: PORT_RETRY_LABEL,
+          kind: 'primary',
+          onClick: () => { loadPortData(state.context, state); return { ok: true }; },
+        },
+      }));
+      return content;
+    }
+
+    if (state.tab === 'work') {
+      portWorkCards(context, view, state, components).forEach((card) => content.appendChild(card));
+      return content;
+    }
+    if (state.tab === 'journal') {
+      /* 0.24 T24：经历页顶部只读章节说明；无数据时不建节点，保持 0.23 结构。 */
+      const chapterGuide = portChapterGuideNode(context);
+      if (chapterGuide) content.appendChild(chapterGuide);
+      content.appendChild(portJournalNode(context, view, state, components));
+      return content;
+    }
+
+    content.appendChild(components.StoryCard(portStoryProps(context, view)));
+    const resume = portResumeArrivalAction(context, view, components);
+    if (resume) content.appendChild(resume);
+    const story = isObject(view) && isObject(view.story) ? view.story : {};
+    const alternativeNext = portAlternativeNextNode(stack, story);
+    if (alternativeNext) content.appendChild(alternativeNext);
+    if (state.crossover) content.appendChild(portCrossoverNode(stack, state.crossover));
+    const message = portMessageNode(stack, view);
+    if (message) content.appendChild(message);
+    const clue = components.ClueRow && portClueProps(context);
+    if (clue) content.appendChild(components.ClueRow(clue));
+    return content;
+  }
+
+  function docOfPort() {
+    return documentOf() || { createElement(tag) { return { tagName: String(tag).toUpperCase(), className: '', textContent: '', childNodes: [], children: [], appendChild(node) { this.childNodes.push(node); this.children.push(node); return node; }, setAttribute() {} }; } };
+  }
+
+  function portFixtureToolId(entry) {
+    if (!isObject(entry)) return '';
+    const direct = cleanText(entry.toolId) || cleanText(entry.id);
+    if (Object.prototype.hasOwnProperty.call(PORT_TOOL_FALLBACK, direct)) return direct;
+    const byAction = {
+      openReceipt: 'wallet',
+      openMarket: 'shop',
+      openWorkshop: 'workshop',
+      openHangar: 'hangar',
+    };
+    const actionId = cleanText(entry.actionId);
+    return byAction[actionId] || '';
+  }
+
+  function portFixtureToolItems(context, fixture) {
+    const source = fixture && Array.isArray(fixture.toolGrid) ? fixture.toolGrid : [];
+    return Object.keys(PORT_TOOL_FALLBACK).map((id) => {
+      const tool = source.filter((entry) => isObject(entry) && portFixtureToolId(entry) === id)[0];
+      if (!tool) return null;
+      const openerName = id === 'wallet' ? 'openReceipt' : (id === 'shop' ? 'openMarket' : (id === 'workshop' ? 'openWorkshop' : 'openHangar'));
+      return {
+        id: id,
+        label: cleanText(tool.label) || PORT_TOOL_FALLBACK[id],
+        icon: PORT_TOOL_ICON[id],
+        onClick: () => {
+          const opener = portOpenMethod(context, openerName);
+          if (typeof opener === 'function') {
+            try { opener(); } catch (err) { /* ignore */ }
+          } else if (typeof context.fixtureAction === 'function') {
+            context.fixtureAction(cleanText(tool.actionId) || id);
+          }
+        },
+      };
+    }).filter(Boolean);
+  }
+
+  function portBody(context, state, view, components) {
+    const doc = docOfPort();
+    const body = doc.createElement('div');
+    body.className = 'ac-career-ui__stack';
+    const harbor = portHarborNode(context, doc);
+    if (harbor) body.appendChild(harbor);
+    const fixture = portFixtureOf(context);
+    const caption = fixture && cleanText(fixture.caption);
+    body.appendChild(portTextNode(doc, 'ac-career-ui__caption', caption || cleanText(portNarrativeOf(context).caption) || PORT_CAPTION));
+    const listCaption = fixture && cleanText(fixture.listCaption);
+    body.appendChild(components.SegmentedTabs({
+      tabs: PORT_TABS,
+      selectedId: state.tab,
+      label: '港口页面',
+      controlsId: 'ac-career-ui-port-tabpanel',
+      onSelect: (id) => {
+        if (PORT_TABS.every((tab) => tab.id !== id)) return;
+        state.tab = id;
+        renderPortSurface(state.context, state);
+      },
+    }));
+    const content = portContentNode(context, state, view, components);
+    if (listCaption) content.insertBefore(portTextNode(doc, 'ac-career-ui__caption', listCaption), content.firstChild);
+    body.appendChild(content);
+    const fixtureTools = fixture ? portFixtureToolItems(context, fixture) : [];
+    const tools = fixtureTools.length ? fixtureTools : portToolItems(context, (state.views && state.views.port) || view);
+    if (tools.length) {
+      const divider = doc.createElement('hr');
+      divider.className = 'ac-career-ui__line';
+      body.appendChild(divider);
+      body.appendChild(components.ToolGrid({ tools: tools, state: 'available', label: (fixture && cleanText(fixture.toolGrid && fixture.toolGrid.label)) || '已知工具' }));
+    }
+    const footer = doc.createElement('footer');
+    footer.appendChild(components.SecondaryAction({
+      id: 'port-exit',
+      label: (fixture && cleanText(fixture.exitLabel)) || PORT_EXIT_LABEL,
+      kind: 'text',
+      variant: 'text',
+      onClick: () => {
+        if (state.shell) state.shell.close();
+        else if (typeof context.closePort === 'function') context.closePort();
+      },
+    }));
+    body.appendChild(footer);
+    return body;
+  }
+
+  function portShellState(context, state) {
+    const fixture = portFixtureOf(context);
+    const fixtureShell = fixture && isObject(fixture.careerShell) ? fixture.careerShell : null;
+    const fixtureState = fixtureShell ? cleanText(fixtureShell.state) : '';
+    if (['normal', 'scroll', 'loading', 'error'].indexOf(fixtureState) >= 0) return fixtureState;
+    const explicit = cleanText(portNarrativeOf(context).state);
+    if (explicit === 'loading' || explicit === 'error') return explicit;
+    if (state.phase === 'loading') return 'loading';
+    if (state.phase === 'error') return 'error';
+    return 'normal';
+  }
+
+  function portShellProps(context, state, view, components) {
+    const fixture = portFixtureOf(context);
+    const fixtureShell = fixture && isObject(fixture.careerShell) ? fixture.careerShell : null;
+    return {
+      panelKey: 'town',
+      title: cleanText(fixtureShell && fixtureShell.title) || PORT_TITLE,
+      state: portShellState(context, state),
+      size: 'default',
+      body: portBody(context, state, view, components),
+      reducedMotion: !!context.reducedMotion,
+    };
+  }
+
+  function renderPortSurface(context, state) {
+    if (!state || !state.alive) return null;
+    const components = portComponentsOf(context || state.context);
+    if (!components) return null;
+    state.context = context || state.context;
+    const view = portViewOf(state);
+    const props = portShellProps(state.context, state, view, components);
+    if (state.shell && typeof state.shell.render === 'function') {
+      const result = state.shell.render(props);
+      presentPortCrossover(state.context, state, view);
+      return result;
+    }
+    if (state.detached) return components.CareerShell(props);
+    return null;
+  }
+
+  function subscribePortChanges(context, state) {
+    if (typeof state.unsubscribe === 'function') {
+      try { state.unsubscribe(); } catch (err) { /* ignore */ }
+    }
+    state.unsubscribe = null;
+    const provider = typeof context.onCareerDataChanged === 'function'
+      ? context.onCareerDataChanged
+      : portOpenMethod(context, 'onCareerDataChanged');
+    if (typeof provider !== 'function') return;
+    try {
+      const unsubscribe = provider((event) => {
+        if (!state.alive) return;
+        const reason = cleanText(event && event.reason).toLowerCase();
+        if (['career-archived', 'career-reset', 'career-imported'].indexOf(reason) >= 0) {
+          if (state.shell) state.shell.close();
+          else destroyPortState(state);
+          return;
+        }
+        loadPortData(state.context, state);
+      });
+      if (typeof unsubscribe === 'function') state.unsubscribe = unsubscribe;
+    } catch (err) {
+      state.unsubscribe = null;
+    }
+  }
+
+  function loadPortData(context, state) {
+    if (!state || !state.alive) return Promise.resolve(false);
+    state.context = context || state.context;
+    state.seq += 1;
+    const seq = state.seq;
+    const narrative = portNarrativeOf(state.context);
+    state.phase = cleanText(narrative.state) === 'error' ? 'error' : (cleanText(narrative.state) === 'loading' ? 'loading' : 'loading');
+    renderPortSurface(state.context, state);
+    if (state.phase === 'error') return Promise.resolve(false);
+    return Promise.all(PORT_SURFACES.map((surface) => requestPortCareerView(state.context, surface))).then((views) => {
+      if (!state.alive || seq !== state.seq) return false;
+      PORT_SURFACES.forEach((surface, index) => { state.views[surface] = views[index]; });
+      state.phase = 'normal';
+      renderPortSurface(state.context, state);
+      return true;
+    }, () => {
+      if (!state.alive || seq !== state.seq) return false;
+      state.phase = 'error';
+      renderPortSurface(state.context, state);
+      return false;
+    });
+  }
+
+  function openPortSurface(ctx) {
+    const doc = documentOf();
+    const components = portComponentsOf(ctx);
+    if (!doc || !components) return { ok: false, reason: 'ui-unavailable' };
+    const state = createPortState();
+    state.context = ctx;
+    let current = null;
+    const manager = components.CareerShell.create('town');
+    const result = manager.open({
+      panelKey: 'town',
+      title: PORT_TITLE,
+      state: 'loading',
+      size: 'default',
+      body: portBody(ctx, state, null, components),
+      reducedMotion: !!ctx.reducedMotion,
+      onClose: () => {
+        if (current && current.portState === state) {
+          destroyPortState(state);
+          panel = null;
+        }
+      },
+    });
+    if (!result.ok) return { ok: false, reason: 'ui-unavailable' };
+    state.shell = manager;
+    state.shellPanel = result.panel;
+    const closeBtn = result.panel.querySelector ? result.panel.querySelector('.ac-career-ui__close') : null;
+    current = {
+      doc: doc,
+      overlay: result.panel.parentNode,
+      sheet: result.panel,
+      closeBtn: closeBtn,
+      portState: state,
+      portShell: manager,
+      refresh: (next) => { subscribePortChanges(next || ctx, state); loadPortData(next || ctx, state); },
+      destroy: () => destroyPortState(state),
+    };
+    panel = current;
+    subscribePortChanges(ctx, state);
+    loadPortData(ctx, state);
+    return { ok: true, panel: result.panel };
+  }
+
+  function renderPortDetached(ctx) {
+    const doc = documentOf();
+    const components = portComponentsOf(ctx);
+    if (!doc || !components) return null;
+    const state = createPortState();
+    state.context = ctx;
+    state.detached = true;
+    state.phase = cleanText(portNarrativeOf(ctx).state) === 'error' ? 'error' : 'normal';
+    return components.CareerShell(portShellProps(ctx, state, null, components));
+  }
+
+  root.ArcadeCareerUI = root.ArcadeCareerUI && typeof root.ArcadeCareerUI === 'object' ? root.ArcadeCareerUI : {};
+  root.ArcadeCareerUI.portSurface = {
+    componentsOf: portComponentsOf,
+    createState: createPortState,
+    body: portBody,
+    requestView: requestPortCareerView,
+    shellProps: portShellProps,
+    render: renderPortSurface,
+    load: loadPortData,
+    startCommission: startPortCommission,
+  };
 
   function numberOrZero(value) {
     const num = Number(value);
@@ -577,31 +1729,6 @@
     return null;
   }
 
-  /**
-   * commission-core 的内容由调用方注入（ADR §18.1）。bridge 0.16 已会 configure；
-   * 这里再做一次仅内存的幂等兜底（不写 IndexedDB / localStorage）。
-   */
-  function ensureCommissionContent(commission, context) {
-    if (!commission || typeof commission.configure !== 'function') return;
-    const content = context && isObject(context.commissions) ? context.commissions : null;
-    if (!content || !Array.isArray(content.commissions) || !content.commissions.length) return;
-    let ready = 0;
-    if (typeof commission.getCommissions === 'function') {
-      try {
-        const list = commission.getCommissions();
-        ready = Array.isArray(list) ? list.length : 0;
-      } catch (err) {
-        ready = 0;
-      }
-    }
-    if (ready > 0) return;
-    try {
-      commission.configure({ content: content });
-    } catch (err) {
-      /* 内容注入失败时走「告示板暂不可用」降级，不抛错 */
-    }
-  }
-
   function openerOf(context, name) {
     if (context && typeof context[name] === 'function') return context[name];
     if (context && isObject(context.api) && typeof context.api[name] === 'function') return context.api[name];
@@ -648,86 +1775,104 @@
     return template ? template.replace('{n}', String(atLeast)) : '';
   }
 
-  /** 从多个真实来源取游戏名；registry 是 window.ArcadeCareer.registry / ctx.registry 的可选实例。 */
-  function gameNameOf(gameId, context) {
-    const id = idText(gameId);
-    if (!id) return '';
-    const bundle = isObject(context) ? context : null;
-    const api = bundle && isObject(bundle.api) ? bundle.api : null;
-    const win = rootWindow();
-    const career = win && isObject(win.ArcadeCareer) ? win.ArcadeCareer : null;
-    const registries = [
-      bundle && bundle.registry,
-      api && api.registry,
-      career && career.registry,
-      win && win.ArcadeCareerRegistry,
-    ];
-    for (let i = 0; i < registries.length; i += 1) {
-      const registry = registries[i];
-      if (!registry) continue;
-      if (typeof registry.getGame === 'function') {
-        try {
-          const game = registry.getGame(id);
-          const name = game && (cleanText(game.displayName) || cleanText(game.name));
-          if (name) return name;
-        } catch (err) {
-          /* 继续回退 */
-        }
-      }
-      if (typeof registry.listGames === 'function') {
-        try {
-          const games = registry.listGames();
-          if (Array.isArray(games)) {
-            for (let j = 0; j < games.length; j += 1) {
-              if (!isObject(games[j])) continue;
-              if (idText(games[j].gameId || games[j].id) !== id) continue;
-              const name = cleanText(games[j].displayName || games[j].name || games[j].title);
-              if (name) return name;
-            }
-          }
-        } catch (err) {
-          /* 继续回退 */
-        }
-      }
-      /* registry 内容对象：games 为数组或以 id 为键的映射。 */
-      const games = registry.games;
-      if (Array.isArray(games)) {
-        for (let j = 0; j < games.length; j += 1) {
-          if (!isObject(games[j])) continue;
-          if (idText(games[j].gameId || games[j].id) !== id) continue;
-          const name = cleanText(games[j].displayName || games[j].name || games[j].title);
-          if (name) return name;
-        }
-      } else if (isObject(games) && isObject(games[id])) {
-        const name = cleanText(games[id].displayName || games[id].name || games[id].title);
-        if (name) return name;
-      }
-    }
-    if (Object.prototype.hasOwnProperty.call(GAME_LABELS, id)) return GAME_LABELS[id];
-    return '';
-  }
-
-  function commissionRowsOf(context) {
-    const bundle = context && isObject(context.commissions) ? context.commissions : null;
-    const raw = bundle && Array.isArray(bundle.commissions) ? bundle.commissions : [];
+  /** 只把投影给出的公开委托字段规整成行；不带 gameId 反查，也不读完整目录。 */
+  function commissionRowsOf(view, materialNames) {
+    const raw = view && Array.isArray(view.commissions) ? view.commissions : [];
+    const names = isObject(materialNames) ? materialNames : Object.create(null);
     const rows = [];
     raw.forEach((entry) => {
       if (!isObject(entry)) return;
       const commissionId = idText(entry.commissionId);
       if (!commissionId) return;
-      const gameId = idText(entry.gameId);
+      const world = cleanText(entry.category).toLowerCase() === 'world';
       rows.push({
         commissionId: commissionId,
-        gameId: gameId,
-        gameName: cleanText(entry.gameName) || gameNameOf(gameId, context),
-        title: cleanText(entry.title) || '未命名的单子',
+        gameId: world ? '' : idText(entry.gameId),
+        /* 世界工作只消费通用 title/summary；游戏名、拥有职业与职业报酬都不进入卡片。 */
+        gameName: world ? '' : cleanText(entry.gameName),
+        title: cleanText(entry.title) || '旧港的一张单子',
         summary: cleanText(entry.summary),
-        issuer: cleanText(entry.issuer),
-        objective: isObject(entry.objective) ? entry.objective : null,
-        rewardText: rewardTextOf(entry.reward, materialNamesOf(context)),
+        issuer: world ? '' : cleanText(entry.issuer),
+        objective: world ? null : (isObject(entry.objective) ? entry.objective : null),
+        rewardText: world ? '' : rewardTextOf(entry.reward, names),
+        category: world ? 'world' : 'profession',
+        professionId: world ? '' : idText(entry.professionId),
       });
     });
     return rows;
+  }
+
+  function emptyCareerView() {
+    return {
+      schemaVersion: 1,
+      originGameId: null,
+      activeProfessionId: null,
+      professions: [],
+      commissions: [],
+      story: { nextAction: null, messages: [], history: [] },
+      tools: [],
+    };
+  }
+
+  function careViewProvider(context) {
+    if (context && typeof context.careerView === 'function') return context.careerView;
+    if (context && isObject(context.api) && typeof context.api.careerView === 'function') return context.api.careerView;
+    return null;
+  }
+
+  /** 只向 bridge 要投影；缺失时返回 null，UI 不自行拼 catalog。 */
+  function requestCareerView(context, surface) {
+    const provider = careViewProvider(context);
+    if (!provider) return null;
+    let result = null;
+    try {
+      result = provider({
+        surface: surface,
+        gameId: idText(context && (context.gameId || (isObject(context.api) ? context.api.gameId : null))) || null,
+      });
+    } catch (err) {
+      return Promise.resolve(null);
+    }
+    if (result && typeof result.then === 'function') {
+      return Promise.resolve(result).then(
+        (value) => isObject(value) ? value : null,
+        () => null
+      );
+    }
+    return isObject(result) ? result : null;
+  }
+
+  function requestAuthorizedIds(commission, careerId) {
+    if (!commission || typeof commission.listAvailable !== 'function') return null;
+    let result = null;
+    try {
+      result = commission.listAvailable({ careerId: careerId, ensure: false, surface: 'work' });
+    } catch (err) {
+      return null;
+    }
+    if (result && typeof result.then === 'function') {
+      return Promise.resolve(result).then(
+        (value) => normalizeUnlocked(value),
+        () => null
+      );
+    }
+    return normalizeUnlocked(result);
+  }
+
+  function firstOriginViewOf(view, context) {
+    if (!isObject(view) || !Array.isArray(view.professions) || view.professions.length !== 1) return false;
+    const origin = idText(view.originGameId);
+    if (!origin) return false;
+    const state = cleanText(view.professions[0].state).toLowerCase();
+    if (state !== 'accepted' && state !== 'developed' && state !== 'completed') return false;
+    const gameId = idText(context && (context.gameId || (isObject(context.api) ? context.api.gameId : null)));
+    return !gameId || origin === gameId;
+  }
+
+  function viewHasTool(view, toolId) {
+    if (!isObject(view) || !Array.isArray(view.tools)) return false;
+    const id = idText(toolId);
+    return view.tools.some((tool) => isObject(tool) && idText(tool.toolId) === id);
   }
 
   function arrivalLineOf(context) {
@@ -940,6 +2085,17 @@
     freeDetails.appendChild(freeBody);
     freeBody.appendChild(freeList);
     scope.appendChild(freeDetails);
+    const pausedDetails = make('details', 'ac-career-town__free ac-career-town__paused');
+    pausedDetails.setAttribute('data-town-paused', 'true');
+    pausedDetails.open = false;
+    pausedDetails.hidden = true;
+    pausedDetails.appendChild(make('summary', null, PAUSED_LIST_TITLE));
+    const pausedBody = make('div', 'ac-career-town__free-body');
+    const pausedList = make('ul', 'ac-career-town__list');
+    pausedList.setAttribute('data-town-paused-list', 'true');
+    pausedBody.appendChild(pausedList);
+    pausedDetails.appendChild(pausedBody);
+    scope.appendChild(pausedDetails);
 
     const empty = make('p', 'ac-career-town__empty', LIST_EMPTY);
     empty.hidden = true;
@@ -969,6 +2125,8 @@
     campaignSection.hidden = true;
     const campaignHeading = make('h3', 'ac-career-town__subtitle', CAMPAIGN_SUBTITLE);
     const campaignCurrent = make('p', 'ac-career-town__campaign-current ac-career-town__chapter-note');
+    const campaignDetail = make('div', 'ac-career-town__campaign-detail');
+    campaignDetail.hidden = true;
     const campaignEndings = make('div', 'ac-career-town__campaign-endings');
     campaignSection.appendChild(campaignHeading);
     campaignSection.appendChild(campaignCurrent);
@@ -1035,6 +2193,9 @@
     let requestSeq = 0;
     let alive = true;
     let unlockedSet = null;
+    let projectedView = emptyCareerView();
+    let viewReady = false;
+    let unsubscribeCareer = null;
     let continuations = Object.create(null);
     let failedStart = null;
     const startingIds = Object.create(null);
@@ -1116,7 +2277,6 @@
         if (opts.recommended) item.setAttribute('data-town-recommend-kind', opts.kindText);
         item.setAttribute('data-town-kind', opts.kindText);
       }
-      if (opts.reason) item.setAttribute('data-town-reason', opts.reason);
       if (opts.gameName) item.setAttribute('data-town-game', opts.gameName);
 
       if (opts.recommended) {
@@ -1205,6 +2365,73 @@
       return { model: model, current: current };
     }
 
+    /**
+     * 0.24 T24：章节替代指引只读消费。bridge 注入 ctx.chapterGuide({}) →
+     * route-planner.chapterAlternatives()；这里只取每章 alternatives[].texts
+     * 的 offer/next，剥掉 requirement/tokens/anchor/narrativeNodeId 等内部结构。
+     * 缺 provider、抛错或坏形状一律返回空映射（与 0.23 同形）。
+     */
+    function chapterGuideMap() {
+      const provider = isObject(liveContext) && typeof liveContext.chapterGuide === 'function'
+        ? liveContext.chapterGuide : null;
+      if (!provider) return Object.create(null);
+      let guide = null;
+      try {
+        guide = provider({});
+      } catch (err) {
+        return Object.create(null);
+      }
+      if (!isObject(guide) || guide.ok !== true || !Array.isArray(guide.chapters)) return Object.create(null);
+      const map = Object.create(null);
+      guide.chapters.forEach((chapter) => {
+        if (!isObject(chapter)) return;
+        const chapterId = idText(chapter.chapterId);
+        if (!chapterId) return;
+        const rows = [];
+        (Array.isArray(chapter.alternatives) ? chapter.alternatives : []).forEach((alt) => {
+          if (!isObject(alt) || !isObject(alt.texts)) return;
+          const offer = cleanText(alt.texts.offer);
+          const next = cleanText(alt.texts.next);
+          if (!offer && !next) return;
+          rows.push({ offer: offer, next: next });
+        });
+        if (rows.length) map[chapterId] = rows;
+      });
+      return map;
+    }
+
+    /**
+     * 当前章的公开说明：campaign-core 的真实前置/完成解释 + 替代指引文案。
+     * 只有真实数据存在才创建节点；无数据时返回空数组，DOM 与 0.23 完全一致。
+     */
+    function chapterDetailNodesOf(current) {
+      const nodes = [];
+      if (!isObject(current)) return nodes;
+      const prerequisiteText = cleanText(isObject(current.prerequisite) ? current.prerequisite.text : '');
+      if (prerequisiteText) {
+        nodes.push(make('p', 'ac-career-town__chapter-requirement', prerequisiteText));
+      }
+      const completionText = cleanText(isObject(current.completion) ? current.completion.text : '');
+      if (completionText) {
+        nodes.push(make('p', 'ac-career-town__chapter-completion', completionText));
+      }
+      const chapterId = idText(current.chapterId);
+      const guide = chapterId ? chapterGuideMap() : Object.create(null);
+      const rows = chapterId && guide[chapterId] ? guide[chapterId] : [];
+      if (rows.length) {
+        const list = make('ul', 'ac-career-town__chapter-alternatives');
+        list.setAttribute('data-town-chapter-alternatives', 'true');
+        rows.forEach((row) => {
+          const item = make('li', 'ac-career-town__chapter-alternative');
+          if (row.offer) item.appendChild(make('p', 'ac-career-town__chapter-offer', row.offer));
+          if (row.next) item.appendChild(make('p', 'ac-career-town__chapter-next', GUIDE_NEXT_PREFIX + row.next));
+          list.appendChild(item);
+        });
+        nodes.push(list);
+      }
+      return nodes;
+    }
+
     function currentGoalText() {
       const view = currentChapterView();
       if (!view || !view.current) return '';
@@ -1244,23 +2471,21 @@
     }
 
     function renderOrigin() {
-      const arrival = arrivalLineOf(liveContext);
+      const firstOrigin = firstOriginViewOf(projectedView, liveContext);
+      const arrival = firstOrigin ? arrivalLineOf(liveContext) : '';
       introGreeting.textContent = arrival;
       introGreeting.hidden = !arrival;
       location.hidden = !!arrival;
-      const role = roleTextOf();
+      const role = firstOrigin ? roleTextOf() : '';
       introRole.textContent = role;
       introRole.hidden = !role;
       introGoal.textContent = '眼下：' + (currentGoalText() || INTRO_GOAL);
     }
 
-    /**
-     * 推荐只消费 ctx.campaign.recommend 与真实 unlockedSet；
-     * 推荐 id 必须在 availableIds 内，不推荐锁定单；接口缺失返回 null 由旧列表兜底。
-     */
-    function recommendedSuggestionOf() {
+    /** campaign 建议只能给主卡补充玩家语言；不能挑选投影外或核心未授权的委托。 */
+    function recommendedSuggestionOf(allowedIds) {
       const campaign = isObject(liveContext && liveContext.campaign) ? liveContext.campaign : null;
-      if (!campaign || typeof campaign.recommend !== 'function' || !unlockedSet) return null;
+      if (!campaign || typeof campaign.recommend !== 'function' || !unlockedSet || !allowedIds.length) return null;
       let suggestion = null;
       try {
         suggestion = campaign.recommend({
@@ -1268,26 +2493,24 @@
           claims: Array.isArray(liveContext.claims) ? liveContext.claims : [],
           profile: liveContext.profile || null,
           wallet: liveContext.wallet || null,
-          availableIds: Object.keys(unlockedSet),
+          availableIds: allowedIds.slice(),
           storyEvidence: liveContext.storyEvidence || null,
         });
       } catch (err) {
         return null;
       }
       if (!isObject(suggestion) || suggestion.ok === false) return null;
-      let id = idText(suggestion.commissionId);
-      if (id && !unlockedSet[id]) id = '';
-      if (!id) return null;
-      const row = commissionRowsOf(liveContext).filter((entry) => entry.commissionId === id)[0] || null;
+      const id = idText(suggestion.commissionId);
+      if (!id || allowedIds.indexOf(id) < 0) return null;
+      const row = commissionRowsOf(projectedView, materialNames)
+        .filter((entry) => entry.commissionId === id)[0] || null;
       if (!row) return null;
-      /* 首屏目标是世界内目标（游戏名 + objective.atLeast 可读数量），
-         不用 campaign.recommend.goal（常为委托标题，会与卡片标题重复）。 */
       const worldGoal = rowGoalText(row);
       const hasObjective = !!(row.objective && numberOrZero(row.objective.atLeast));
       return {
         row: row,
         goal: hasObjective ? worldGoal : (cleanText(suggestion.goal) || worldGoal),
-        reason: cleanText(suggestion.reason),
+        reason: safePlayerReason(suggestion.reason),
         kindText: RECOMMEND_KIND_TEXT[cleanText(suggestion.kind)] || '路线进展',
       };
     }
@@ -1326,6 +2549,19 @@
       /* 只显示当前章的戏内标题，不显示 C 码、状态词或后续章节标题。 */
       campaignCurrent.textContent = cleanText(view.current.title) || '旧港来信';
       campaignCurrent.setAttribute('data-town-current', idText(view.current.chapterId));
+      /* 0.24 T24：公开前置/完成解释与替代指引；无数据时不创建任何新节点。 */
+      const detailNodes = chapterDetailNodesOf(view.current);
+      while (campaignDetail.firstChild) campaignDetail.removeChild(campaignDetail.firstChild);
+      detailNodes.forEach((node) => campaignDetail.appendChild(node));
+      if (detailNodes.length) {
+        if (campaignDetail.parentNode !== campaignSection) {
+          campaignSection.insertBefore(campaignDetail, campaignEndings);
+        }
+        campaignDetail.hidden = false;
+      } else {
+        campaignDetail.hidden = true;
+        if (campaignDetail.parentNode) campaignDetail.parentNode.removeChild(campaignDetail);
+      }
       campaignEndings.textContent = '';
       const endings = Array.isArray(view.model.endings) ? view.model.endings : [];
       endings.forEach((ending) => {
@@ -1346,60 +2582,83 @@
       while (recommendList.firstChild) recommendList.removeChild(recommendList.firstChild);
       while (flightList.firstChild) flightList.removeChild(flightList.firstChild);
       while (freeList.firstChild) freeList.removeChild(freeList.firstChild);
+      while (pausedList.firstChild) pausedList.removeChild(pausedList.firstChild);
 
-      const allRows = commissionRowsOf(liveContext);
-      const boardReady = !!unlockedSet;
-      const suggestion = boardReady ? recommendedSuggestionOf() : null;
+      const boardReady = viewReady && !!unlockedSet;
+      const allRows = boardReady ? commissionRowsOf(projectedView, materialNames) : [];
+      const rows = allRows.filter((row) => unlockedSet[row.commissionId]);
+      const allowedIds = rows.map((row) => row.commissionId);
+      const story = isObject(projectedView.story) ? projectedView.story : {};
+      const next = isObject(story.nextAction) ? story.nextAction : null;
+      const nextId = idText(next && next.commissionId);
+      const suggestion = boardReady ? recommendedSuggestionOf(allowedIds) : null;
 
-      /* 有 live run 的同委托优先作为推荐（仍要求已解锁）。 */
+      /* story.nextAction 是眼下主卡；没有它时才续接进行中的单或采用同集合建议。 */
       let liveId = '';
-      if (boardReady) {
-        for (let i = 0; i < allRows.length; i += 1) {
-          if (continuations[allRows[i].commissionId] && unlockedSet[allRows[i].commissionId]) {
-            liveId = allRows[i].commissionId;
-            break;
-          }
+      for (let i = 0; i < rows.length; i += 1) {
+        if (continuations[rows[i].commissionId]) {
+          liveId = rows[i].commissionId;
+          break;
         }
       }
+      let mainId = nextId && allowedIds.indexOf(nextId) >= 0 ? nextId : '';
+      if (!mainId && liveId) mainId = liveId;
+      if (!mainId && suggestion) mainId = suggestion.row.commissionId;
+      const mainRow = rows.filter((row) => row.commissionId === mainId)[0] || null;
 
-      const mainRow = liveId
-        ? allRows.filter((row) => row.commissionId === liveId)[0]
-        : suggestion ? suggestion.row : null;
-      /* 推荐卡已有当前目标，首航首屏留给收件回话和两个可执行选项。 */
       introGoal.hidden = !!mainRow && !introGreeting.hidden;
       if (mainRow) {
+        const suggestionMatch = !!suggestion && suggestion.row.commissionId === mainRow.commissionId;
         const opts = {
           recommended: true,
           gameName: mainRow.gameName,
-          titleOverride: liveId ? '继续这张单：' + mainRow.title : '眼下先做：' + mainRow.title,
-          goalOverride: suggestion && suggestion.row.commissionId === mainRow.commissionId ? suggestion.goal : '',
-          kindText: suggestion && suggestion.row.commissionId === mainRow.commissionId ? suggestion.kindText : '能积攒下一步所需',
-          reason: suggestion && suggestion.row.commissionId === mainRow.commissionId ? suggestion.reason : '',
+          titleOverride: liveId && mainId === liveId ? '继续这张单：' + mainRow.title : '眼下先做：' + mainRow.title,
+          goalOverride: suggestionMatch ? suggestion.goal : '',
+          kindText: suggestionMatch ? suggestion.kindText : '能积攒下一步所需',
+          reason: suggestionMatch ? suggestion.reason : '',
         };
-        recommendList.appendChild(renderRow(mainRow, boardReady, opts));
+        const item = renderRow(mainRow, boardReady, opts);
+        if (nextId === mainId) item.setAttribute('data-town-story-action', 'true');
+        recommendList.appendChild(item);
         recommendList.hidden = false;
       } else {
         recommendList.hidden = true;
       }
 
-      const patrol = boardReady && unlockedSet[FIRST_PATROL_ID]
-        ? allRows.find((row) => row.commissionId === FIRST_PATROL_ID) : null;
-      const showPatrol = patrol && (!mainRow || mainRow.commissionId !== FIRST_PATROL_ID);
-      if (showPatrol) flightList.appendChild(renderRow(patrol, boardReady, {}));
-      flightList.hidden = !showPatrol;
-      hangarBtn.hidden = typeof openerOf(liveContext, 'openHangar') !== 'function';
-      flightDetails.hidden = !patrol && hangarBtn.hidden;
+      /* 0.22 不再给固定首单或机库特例；出航区只保留真实机库入口。 */
+      flightList.hidden = true;
+      hangarBtn.hidden = !viewHasTool(projectedView, 'hangar') ||
+        typeof openerOf(liveContext, 'openHangar') !== 'function';
+      flightDetails.hidden = hangarBtn.hidden;
       flightRental.textContent = rentalHintOf();
 
-      const mainId = mainRow ? mainRow.commissionId : '';
-      const rows = boardReady
-        ? allRows.filter((row) => unlockedSet[row.commissionId] && row.commissionId !== mainId && row.commissionId !== FIRST_PATROL_ID)
-        : [];
-      rows.forEach((row) => freeList.appendChild(renderRow(row, boardReady, {})));
-      const hasRows = rows.length > 0;
+      receiptBtn.hidden = !viewHasTool(projectedView, 'wallet') ||
+        typeof openerOf(liveContext, 'openReceipt') !== 'function';
+      marketBtn.hidden = !viewHasTool(projectedView, 'shop') ||
+        typeof openerOf(liveContext, 'openMarket') !== 'function';
+      workshopBtn.hidden = !viewHasTool(projectedView, 'workshop') ||
+        typeof openerOf(liveContext, 'openWorkshop') !== 'function';
+      more.hidden = marketBtn.hidden && workshopBtn.hidden;
+
+      rows.filter((row) => !mainId || row.commissionId !== mainId)
+        .forEach((row) => freeList.appendChild(renderRow(row, boardReady, {})));
+      const hasRows = rows.some((row) => !mainId || row.commissionId !== mainId);
       freeList.hidden = !hasRows;
       freeDetails.hidden = !hasRows;
+
+      /* 已搁置职业只收纳名字，不展示任务或压力提示。 */
+      const paused = viewReady && Array.isArray(projectedView.professions)
+        ? projectedView.professions.filter((entry) => isObject(entry) && entry.paused === true && cleanText(entry.displayName))
+        : [];
+      paused.forEach((entry) => {
+        pausedList.appendChild(make('li', 'ac-career-town__paused-name', cleanText(entry.displayName)));
+      });
+      pausedList.hidden = !paused.length;
+      pausedDetails.hidden = !paused.length;
+
       empty.hidden = hasRows || !boardReady || !!mainRow;
+      if (boardReady && !rows.length) empty.textContent = '告示板上还没有你能接下的单子，先回港口看看吧。';
+      else empty.textContent = LIST_EMPTY;
     }
 
     function loadContinuations(seq) {
@@ -1433,43 +2692,40 @@
       apply(result, !!(result && result.ok === false));
     }
 
-    function loadUnlocks() {
+    function loadBoard() {
       requestSeq += 1;
       const seq = requestSeq;
       const commission = commissionOf(liveContext);
-      if (!commission) {
-        unlockedSet = null;
-        applyUnlocked(null);
-        return;
-      }
-      ensureCommissionContent(commission, liveContext);
-      if (typeof commission.listAvailable !== 'function') {
-        unlockedSet = null;
-        applyUnlocked(null);
-        return;
-      }
-      let result = null;
-      try {
-        result = commission.listAvailable({ careerId: careerIdOf(liveContext), ensure: true });
-      } catch (err) {
-        result = null;
-      }
-      const settle = (value) => {
+      projectedView = emptyCareerView();
+      viewReady = false;
+      unlockedSet = null;
+
+      const coreRequest = requestAuthorizedIds(commission, careerIdOf(liveContext));
+      const viewRequest = requestCareerView(liveContext, 'work');
+      const settle = (values) => {
         if (!isCurrent() || seq !== requestSeq) return;
-        unlockedSet = normalizeUnlocked(value);
-        applyUnlocked(unlockedSet);
+        const authorized = values[0];
+        const view = values[1];
+        viewReady = !!view;
+        projectedView = view || emptyCareerView();
+        unlockedSet = viewReady && authorized ? authorized : null;
+        setNotice(viewReady && authorized ? '' : BOARD_UNAVAILABLE);
+        renderOrigin();
+        renderList();
+        if (viewReady && authorized) renderWallet();
         loadContinuations(seq);
         renderAlternatives();
       };
-      if (result && typeof result.then === 'function') {
-        result.then(settle, () => settle(null));
-        return;
+      if ((coreRequest && typeof coreRequest.then === 'function') ||
+          (viewRequest && typeof viewRequest.then === 'function')) {
+        Promise.all([coreRequest, viewRequest]).then(settle, () => settle([null, null]));
+      } else {
+        settle([coreRequest, viewRequest]);
       }
-      settle(result);
     }
 
     function applyUnlocked(next, initial) {
-      /* initial：先画「暂未开放」占位，不立刻报「暂不可用」，等 listAvailable 结果再决定。 */
+      /* initial：先画「暂未开放」占位，不立刻报「暂不可用」，等双源结果再决定。 */
       setNotice(next || initial ? '' : BOARD_UNAVAILABLE);
       renderList();
       if (next) renderWallet();
@@ -1617,7 +2873,12 @@
       showStatusRetry(null);
       let result = null;
       try {
-        result = commission.start({ commissionId: id, careerId: careerIdOf(liveContext) });
+        result = commission.start({
+          commissionId: id,
+          careerId: careerIdOf(liveContext),
+          ensure: false,
+          surface: 'work',
+        });
       } catch (err) {
         result = { ok: false };
       }
@@ -1689,6 +2950,39 @@
       }
     }
 
+    function closeThisPanel() {
+      if (mounted) close();
+      else destroy();
+    }
+
+    function onCareerDataChangedEvent(event) {
+      if (!alive || !isCurrent()) return;
+      const reason = cleanText(event && event.reason).toLowerCase();
+      if (DATA_CLOSE_REASONS.indexOf(reason) >= 0) {
+        closeThisPanel();
+        return;
+      }
+      refresh(liveContext);
+    }
+
+    function subscribeCareerData(context2) {
+      if (typeof unsubscribeCareer === 'function') {
+        try { unsubscribeCareer(); } catch (err) { /* ignore */ }
+      }
+      unsubscribeCareer = null;
+      const provider = context2 && typeof context2.onCareerDataChanged === 'function'
+        ? context2.onCareerDataChanged
+        : (context2 && isObject(context2.api) && typeof context2.api.onCareerDataChanged === 'function'
+          ? context2.api.onCareerDataChanged : null);
+      if (!provider) return;
+      try {
+        const unsubscribe = provider(onCareerDataChangedEvent);
+        if (typeof unsubscribe === 'function') unsubscribeCareer = unsubscribe;
+      } catch (err) {
+        unsubscribeCareer = null;
+      }
+    }
+
     function refresh(next) {
       if (!isCurrent()) return sheet;
       const context2 = isObject(next) ? next : {};
@@ -1696,18 +2990,27 @@
       else overlay.classList.remove('is-reduced-motion');
       liveContext = context2;
       materialNames = materialNamesOf(context2);
+      projectedView = emptyCareerView();
+      viewReady = false;
+      unlockedSet = null;
       setStatus('');
       showStatusRetry(null);
+      renderList();
       renderOrigin();
       renderCampaign();
       renderWallet();
-      loadUnlocks();
+      subscribeCareerData(context2);
+      loadBoard();
       return sheet;
     }
 
     function destroy() {
       alive = false;
       requestSeq += 1;
+      if (typeof unsubscribeCareer === 'function') {
+        try { unsubscribeCareer(); } catch (err) { /* ignore */ }
+        unsubscribeCareer = null;
+      }
     }
 
     townView.addEventListener('click', onClick, false);
@@ -1722,7 +3025,8 @@
       renderOrigin();
       renderWallet();
       renderCampaign();
-      loadUnlocks();
+      subscribeCareerData(liveContext);
+      loadBoard();
     }
 
     return {
@@ -1744,8 +3048,12 @@
   /** 关闭告示板并把焦点还给打开前的元素（可重复调用）。 */
   function close() {
     const current = panel;
-    panel = null;
     if (!current) return false;
+    if (current.portShell) {
+      current.portShell.close();
+      return true;
+    }
+    panel = null;
     if (typeof current.destroy === 'function') current.destroy();
     try {
       current.doc.removeEventListener('keydown', current.onKeyDown, true);
@@ -1773,9 +3081,8 @@
   function open(ctx) {
     const doc = documentOf();
     if (!doc) return { ok: false, reason: 'ui-unavailable' };
-    ensureStyle(doc);
 
-    /* 幂等：重复 open 复用同一面板，只刷新内容并保持焦点。 */
+    /* 幂等：T11 与 legacy 面板都先复用当前实例，只刷新内容并保持焦点。 */
     if (panel && panel.overlay && panel.overlay.parentNode && panel.doc === doc) {
       try {
         panel.refresh(ctx);
@@ -1786,6 +3093,8 @@
       if (!sheet.contains(doc.activeElement)) safelyFocus(panel.closeBtn || sheet);
       return { ok: true, panel: sheet };
     }
+    if (portComponentsOf(ctx)) return openPortSurface(ctx);
+    ensureStyle(doc);
 
     const built = buildPanel(ctx, true);
     if (!built) return { ok: false, reason: 'ui-unavailable' };
@@ -1885,6 +3194,7 @@
       }
       return panel.sheet;
     }
+    if (portComponentsOf(ctx)) return renderPortDetached(ctx);
     ensureStyle(doc);
     const built = buildPanel(ctx, false);
     if (!built) return null;

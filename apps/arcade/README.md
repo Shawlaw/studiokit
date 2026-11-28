@@ -1,6 +1,6 @@
 # 街机厅 Arcade
 
-**应用版本 `0.21.2`（2026-11-26 已双端发布，main `bc50e61`，Actions `45858201941` 全绿，双端 91/91 一致）**｜进度 / 局内 / 游玩统计 / 积分记录 / 挑战记录 / 游戏数据 meta 的 Schema 均为 `v1`；0.15 新增独立生涯 IndexedDB（`studiokit:arcade:career` v1，11 stores），不改变既有 localStorage 键；生涯内容 `contentVersion` 仍为 `0.18.0`。0.21.2 修复首页「旧港生涯」入口直接打开告示板弹窗、钱包标题一致性、生涯弹窗滚动层级与游戏标题栏留白。**版本链 0.21.2 / SW `studiokit-arcade-0.21.2-v1`；实测范围见 [`INTEGRATION-0.21.2.md`](../../docs/arcade-life/INTEGRATION-0.21.2.md)**。
+**版本 `0.24.0` / SW `studiokit-arcade-0.24.0-v1`（release 51/51；部署状态见集成记录）**｜本次累计升级的生产基线为 `0.21.2`（2026-11-26 已双端发布，main `bc50e61`，Actions `45858201941` 全绿，双端 91/91 一致；修复首页告示板弹窗、钱包标题、弹窗滚动层级与游戏标题栏留白）｜进度 / 局内 / 游玩统计 / 积分记录 / 挑战记录 / 游戏数据 meta 的 Schema 均为 `v1`；0.15 新增独立生涯 IndexedDB（`studiokit:arcade:career` v1，11 stores），不改变既有 localStorage 键；生涯内容 `contentVersion` 仍为 `0.18.0`。本轮非剧透范围：世界主线替代路线的叙事合理化、双方接受的可选职业交汇、经历筛选与回读、章节前置解释；不新增 key / store / schema、章节、委托、奖励或玩法数值。设计见 [`DESIGN-0.24.0.md`](DESIGN-0.24.0.md)，契约见 [`ADR-0.24-world.md`](../../docs/arcade-life/ADR-0.24-world.md)，本地状态见 [`INTEGRATION-0.24.0.md`](../../docs/arcade-life/INTEGRATION-0.24.0.md)；上一版实测见 [`INTEGRATION-0.23.0.md`](../../docs/arcade-life/INTEGRATION-0.23.0.md)。
 
 16 款竖屏小游戏合集的纯前端实现：加载后完全本地游玩，自带自研轻量物理引擎（重力、AABB 与圆碰撞、单向平台、单摆积分、塔体倾斜力矩），所有游戏由简到难、随时可暂停，并把未完成的局内进度自动保存在本机。支持全屏/沉浸、可安装 PWA、离线预载、游玩统计、积分记录与分享；连续有效游玩 20 分钟只温柔提醒一次，**没有签到、每日奖励、付费抽奖、内购或广告**。
 
@@ -91,6 +91,9 @@
 - **中心页管理**：「惊喜一下」在目录顶部随机打开一款，连续点击会避开上一款。「游玩记录」里的「进度管理」支持清除单款或全部游戏记录，并可导出或导入 JSON 备份。页尾的「安装、离线与分享」提供应用安装、检查更新和离线预载。
 - **生涯入口被动发现 + 身份建立后的常驻内容入口（0.21.1 已双端发布）。** 中心页始终展示经典目录：不再有生涯视图 / 默认视图切换，也不常驻告示板、信箱或章节 CTA。身份建立前，错过旧港来信时只在「继续上次」附近显示一行低强调小字（「旧港有一封来信」/「继续旧港来信」），点开深链显式阅读；未读 / 未投递线索不会自动创建生涯身份。**生涯身份一旦建立（已开生涯或已有章节），目录旁常驻「旧港生涯」入口，点击后在首页直接打开告示板弹窗（不再跳转游戏页），最小热区 44px；封存时隐藏内容入口与来信小字但保留页尾「生涯设置（已封存）」，解冻后恢复，完全重置后内容入口与设置入口一起消失。** 页尾小字入口仅用于封存 / 解冻、重置和档案，不是生涯内容 CTA；C0 之后保留游戏内章节入口与收据回流，经典目录与排序不受影响。设计见 [`DESIGN-0.21.1.md`](DESIGN-0.21.1.md)。
 - **生涯封存 / 解冻与仅生涯完全重置（0.21.0 引入，0.21.1 沿用）。** 设置面板可封存生涯（保留全部数据与 live run，但禁止新线索、接单、继续委托与结算写入，事务内重读 `career-archive` 标记防旧标签绕过）并随时解冻（删除标记、推进代次、恢复原进度）。「完全重置生涯」需二次确认并输入「重置生涯」：单事务清空生涯库 11 个 store 与封存标记，**不触碰经典 progress / runs / playtime / scores / challenge / meta / prefs**，不可撤销，操作前应先导出档案。备份携带封存标记，replace 导入以文件状态为准；详细接口见 ADR §22。
+- **0.24.0**：世界主线替代路线叙事化——C1–C5 的替代机制（世界通用工作 / 本职业委托 / 明码代办 / 免费租机 / 商店材料 / 证据组合）改写为戏内成立的行动，落款与收据只从真实内容与真实结算行读取；章节、路线与终局入口补充真实前置 / 完成解释（章节面板与港口经历页只显示公开文案）。双方都已主动接受才产出可选职业交汇（16 条职业声明折叠 10 个事件，同一对只留一个 owner、只写一次，`effects: []` / `grants` 全零，不发奖励、不改主线、未接受零透露）；经历页可按真实人物 / 已接受职业筛选并静态回读（17 条白名单，无总数 / 内部 id；`storyEvents` 落盘仍只有 `at` / `source`，旧档只追加）。bridge 按需加载 `world-narrative.js` 与同名内容，缺失时保留 0.23 降级。不新增职业 / 委托总量 / 章节 / 终局，不改存储 key / Schema / 内容版本 / 玩法数值。设计与回滚见 [`DESIGN-0.24.0.md`](DESIGN-0.24.0.md)，契约见 [`ADR-0.24-world.md`](../../docs/arcade-life/ADR-0.24-world.md)，状态以 [`INTEGRATION-0.24.0.md`](../../docs/arcade-life/INTEGRATION-0.24.0.md) 为准（release 51/51）。
+- **0.23.0 本地发布准备（未发布）**：折光港统一生涯界面——`.ac-career-ui` 局部命名空间的共享组件与精确 token、原型一致的内联港口 SVG、组件化的结算线索/字条/首次到港/后续邀请/回执/港口三分栏/工作/经历；16 个真实职业各一份短叙事卡（首次到港与已有身份两套介绍、首单、回执、搁置/返回与 0.24 交汇条件）。接受邀请仍不自动接单，首次到港用真实 `port` 投影给出第一份工作，消费后关页重开不重播；终局收据保留「读后日谈」。不新增职业 / 委托总量 / 章节 / 终局，不改存储 key / Schema / 内容版本 / 玩法数值。设计与回滚见 [`DESIGN-0.23.0.md`](DESIGN-0.23.0.md)，UI 契约见 [`ADR-0.23-ui.md`](../../docs/arcade-life/ADR-0.23-ui.md)，状态以 [`INTEGRATION-0.23.0.md`](../../docs/arcade-life/INTEGRATION-0.23.0.md) 为准。
+- **0.22.0 本地发布准备（未发布）**：完善各职业彼此独立的被动发现与统一披露，并新增世界通用工作界面；工作界面以通用文案呈现，与具体职业解耦，不暴露玩家已拥有的职业。不新增职业 / 委托总量 / 章节 / 终局，不改存储 key / Schema / 内容版本 / 玩法数值。设计与回滚见 [`DESIGN-0.22.0.md`](DESIGN-0.22.0.md)，状态以 [`INTEGRATION-0.22.0.md`](../../docs/arcade-life/INTEGRATION-0.22.0.md) 为准。
 
 ## 星海突击（星域远征）
 
@@ -238,7 +241,7 @@ node tools/arcade_09_data.mjs              # 78 关数据校验 / 生成
 node tools/arcade_stage_solver.mjs --stages=docs/arcade/stages-0.8.json  # 影跃 S1–S3 可达性
 ```
 
-0.21.0 起门禁分层口径唯一：`static` 不启动 Chrome（CI 的 L0 job）；`release` 追加关键 Chrome 集但仍**不等于** full；只有 `full` 全绿才可写 `ALL GATES PASSED`。每次运行输出 `PROFILE SUMMARY` 与 JSON（含每项真实墙钟耗时），不得把「没跑」写成「通过」，也不得用 release 结论替代 full。分层设计见 [`tools/README-gates.md`](../../tools/README-gates.md)。各脚本的具体项数随版本演进，**以实际运行输出为准**；历史门禁结果与发布证据记录在 [`CHANGELOG.md`](CHANGELOG.md)。0.21.1 已实跑 static 35/35、`career_passive_entry` 61/61、`arcade_smoke` 117/117（含四档窄屏、封存 / 解冻 / 重置）、mobile 318/318、PWA 18/18、archive lifecycle 60/60；release 41/41、96 全量 3792/3792、首航 404/404；full / 真机未跑，见 [`INTEGRATION-0.21.1.md`](../../docs/arcade-life/INTEGRATION-0.21.1.md)。
+0.21.0 起门禁分层口径唯一：`static` 不启动 Chrome（CI 的 L0 job）；`release` 追加关键 Chrome 集但仍**不等于** full；只有 `full` 全绿才可写 `ALL GATES PASSED`。每次运行输出 `PROFILE SUMMARY` 与 JSON（含每项真实墙钟耗时），不得把「没跑」写成「通过」，也不得用 release 结论替代 full。分层设计见 [`tools/README-gates.md`](../../tools/README-gates.md)。各脚本的具体项数随版本演进，**以实际运行输出为准**；历史门禁结果与发布证据记录在 [`CHANGELOG.md`](CHANGELOG.md)。0.21.1 已实跑 static 35/35、`career_passive_entry` 61/61、`arcade_smoke` 117/117（含四档窄屏、封存 / 解冻 / 重置）、mobile 318/318、PWA 18/18、archive lifecycle 60/60；release 41/41、96 全量 3792/3792、首航 404/404；full / 真机未跑，见 [`INTEGRATION-0.21.1.md`](../../docs/arcade-life/INTEGRATION-0.21.1.md)。0.22.0 本地发布准备状态以 [`INTEGRATION-0.22.0.md`](../../docs/arcade-life/INTEGRATION-0.22.0.md) 为准：GATE_PASSED / RELEASE_READY（本地发布准备，未发布；release 41/41，not full）；full / 真机 / 真人仍 UNVERIFIED。
 
 ## 已知边界
 
@@ -302,6 +305,10 @@ node tools/arcade_stage_solver.mjs --stages=docs/arcade/stages-0.8.json  # 影�
 | 0.20.0 | [`DESIGN-0.20.0.md`](DESIGN-0.20.0.md) | 生涯首航 V2：来信找回 / 一次投递进港 / 真实推荐路线 / 三回报收据 / 继续委托（已双端发布） |
 | 0.21.0 | [`DESIGN-0.21.0.md`](DESIGN-0.21.0.md) | 生涯彻底被动发现 / 选择式叙事 / 二级生涯设置 / 可解冻封存 / 仅生涯完全重置 / static-release-full 分层门禁（已双端发布；验证见 INTEGRATION-0.21） |
 | 0.21.1 | [`DESIGN-0.21.1.md`](DESIGN-0.21.1.md) | 身份建立后常驻「旧港生涯」内容入口，封存隐藏、解冻恢复、完全重置消失；不恢复生涯视图 / 默认视图（已双端发布；验证见 INTEGRATION-0.21.1） |
+| 0.21.2 | [`DESIGN-0.21.2.md`](DESIGN-0.21.2.md) | 首页直接打开告示板弹窗、钱包标题统一、生涯弹窗滚动层级与游戏标题栏留白（已双端发布；验证见 INTEGRATION-0.21.2） |
+| 0.22.0 | [`DESIGN-0.22.0.md`](DESIGN-0.22.0.md) | 本地发布准备：职业独立发现、统一披露与世界通用工作界面（GATE_PASSED / RELEASE_READY，未发布；release 41/41，not full；状态见 INTEGRATION-0.22.0） |
+| 0.23.0 | [`DESIGN-0.23.0.md`](DESIGN-0.23.0.md) | 本地发布准备：折光港统一生涯界面与 16 职业短叙事（GATE_PASSED / RELEASE_READY，未发布；状态见 INTEGRATION-0.23.0；UI 契约见 ADR-0.23-ui） |
+| 0.24.0 | [`DESIGN-0.24.0.md`](DESIGN-0.24.0.md) | 本地发布准备：世界主线替代路线叙事化、双方接受的可选职业交汇、经历筛选与回读、章节前置解释（release 51/51；契约见 ADR-0.24-world，状态见 INTEGRATION-0.24.0） |
 
 ### 回滚要点
 
@@ -309,6 +316,9 @@ node tools/arcade_stage_solver.mjs --stages=docs/arcade/stages-0.8.json  # 影�
 - 涉及新 key 的版本：0.8.1 的 `scores:v1` 与 0.8.0 的 `challenge:v1` 为独立新增键，旧版页面会忽略它们；0.13.0 的机库存在通用 `meta:v1` 内，回滚只需删除该键并还原 `engine.js` / `star-raid.html`。
 - 0.21.0 的 `career-archive` 是既有 `state` store 的一行，旧代码会忽略，封存数据不会因回退而删除；完全重置不可回滚，操作前必须导出档案并二次确认。逐版回滚步骤写在各自的 `DESIGN-*.md` 末尾章节。
 - 0.21.1 只改中心页 HTML / CSS 与对应断言，回退 `242d0a3` 即回到 0.21.0 行为，无需数据迁移；版本链已升 0.21.1，回退时同时归 0.21.0；详见 [`DESIGN-0.21.1.md`](DESIGN-0.21.1.md) 第 6 节。
+- 0.22.0 处于本地发布准备、尚未发布，只在既有生涯状态上追加字段，未新增 key / store / schema；回滚前先导出职业数据、禁止静默降级，并同时把版本链与 SW 缓存键归回线上 0.21.2；详见 [`DESIGN-0.22.0.md`](DESIGN-0.22.0.md) 第 6 节。
+- 0.23.0 仍处于本地发布准备、尚未发布；新增组件 / 叙事文件只追加，旧代码不读取时降级而不丢数据。回滚时先停发布、保留导出，版本链与 SW 缓存键归回 0.22.0；详见 [`DESIGN-0.23.0.md`](DESIGN-0.23.0.md) 第 5 节。
+- 仅撤回 0.24 的增量时，删除 `career/content/world-narrative.json`、`career/world-narrative.js`、`career/ui/journal.js` 并回退 bridge / profession-view / route-planner / campaign-core / town / world-state 的加性接线即回到 0.23；已写入的 `storyEvents` 行只是惰性字符串，0.23 读不到白名单时只隐藏、不破坏旧档。生产回退以本次合并前的 0.21.2 为基线，保留生涯导出，并验证恢复内容与离线缓存切换；详见 [`DESIGN-0.24.0.md`](DESIGN-0.24.0.md) 第 7 节。
 
 ## 在 StudioKit 中的位置
 

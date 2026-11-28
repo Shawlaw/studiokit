@@ -14,13 +14,17 @@
  *   { result: { ok, receipt?, runId?, reason?, duplicate? }, ... }
  *   { ok: true, receipt: { receiptId, credits, items, txIds, ... } }
  *
+ * 0.23 bridge request: inject uiComponents, careerView({surface:'receipt'})
+ * and, for an honest failure retry, retrySettlement() -> real result object.
+ * Only true success / a real receipt updates the card. storyFeedback contributes
+ * status and NPC replies, never the next step.
+ *
  * 数据来源硬规则（ADR §18.7）：
  * - 金额/材料只读 db.readWallet / db.readLedger / db.getClaim 的 DB 行（txId），UI 不自算；
  * - 同一 txId 重复行只渲染一次；同 run 重复 show 只保留一张卡；同 run 重复打开面板显示
  *   db.getClaim(runId) 里的原收据（没有则明确显示空态，不伪造）；
- * - careerId 来源优先级：ctx.careerId → ctx.commissionRun.careerId →
- *   ctx.commission.listAvailable({ensure:true}).careerId → ctx.api.commissionRun；
- *   都没有时显示「还没有可查的账目」并不抛异常；
+ * - careerId 只来自 ctx.careerId / commissionRun.careerId / profile.careerId 或
+ *   ctx.api.commissionRun；没有真实身份时显示「还没有可查的账目」；
  * - DB 不可用 / ctx.api 无 commission 模块：面板显示降级提示，控制台不报 error。
  *
  * 交互与视觉：
@@ -134,6 +138,28 @@
   let card = null;
   let actionFailure = null;
   let panelSeq = 0;
+  let unsubscribeCareerChanges = null;
+  const CAREER_CHANGE_REASONS = ['career-imported', 'career-archived', 'career-unarchived', 'career-reset'];
+
+  function subscribeCareerChanges(context, onChange) {
+    const subscribe = typeof context.onCareerDataChanged === 'function'
+      ? context.onCareerDataChanged
+      : isObject(context.api) && typeof context.api.onCareerDataChanged === 'function'
+        ? context.api.onCareerDataChanged : null;
+    if (!subscribe) return null;
+    try {
+      const unsubscribe = subscribe.call(context, onChange);
+      return typeof unsubscribe === 'function' ? unsubscribe : null;
+    } catch (err) {
+      return null;
+    }
+  }
+
+  function unsubscribeCareerPanelChanges() {
+    if (!unsubscribeCareerChanges) return;
+    try { unsubscribeCareerChanges(); } catch (err) { /* ignore */ }
+    unsubscribeCareerChanges = null;
+  }
 
   /* ---------------------------------------------------------------- 通用小工具 */
 
@@ -290,9 +316,9 @@
   }
 
   /**
-   * careerId 解析（异步，因为 listAvailable 可能返回 Promise）。
-   * 优先级：ctx.careerId → ctx.commissionRun.careerId → commission.listAvailable({ensure:true})
-   *        → ctx.api.commissionRun → ctx.profile.careerId（额外兜底，不改变前三项优先级）。
+   * careerId 只从真实上下文解析；绝不通过列表/ensure 副作用兜底。
+   * 优先级：ctx.careerId → ctx.commissionRun.careerId → ctx.profile.careerId
+   *        → ctx.api.commissionRun。
    */
   function resolveCareerId(context) {
     const ctx = isObject(context) ? context : {};
@@ -302,27 +328,16 @@
       const runId = careerIdOf(ctx.commissionRun);
       if (runId) return Promise.resolve(runId);
     }
-    const fallbackFromApi = () => {
-      const api = isObject(ctx.api) ? ctx.api : null;
-      if (api) {
-        let candidate = api.commissionRun;
-        if (typeof candidate === 'function') candidate = safeCall(candidate, api, []);
-        const id = careerIdOf(candidate);
-        if (id) return id;
-      }
-      const profileId = careerIdOf(ctx.profile);
-      if (profileId) return profileId;
-      return null;
-    };
-    const module = isObject(ctx.commission) ? ctx.commission : null;
-    let pending = null;
-    if (module && typeof module.listAvailable === 'function') {
-      pending = safeCall(module.listAvailable, module, [{ ensure: true }]);
+    const profileId = careerIdOf(ctx.profile);
+    if (profileId) return Promise.resolve(profileId);
+    const api = isObject(ctx.api) ? ctx.api : null;
+    if (api) {
+      let candidate = api.commissionRun;
+      if (typeof candidate === 'function') candidate = safeCall(candidate, api, []);
+      const id = careerIdOf(candidate);
+      if (id) return Promise.resolve(id);
     }
-    return Promise.resolve(pending).then(
-      (out) => careerIdOf(out) || fallbackFromApi(),
-      () => fallbackFromApi()
-    );
+    return Promise.resolve(null);
   }
 
   function readLastRunId(context) {
@@ -485,14 +500,20 @@
     const reason = cleanText(value.reason) || cleanText(value.error) || cleanText(outer.reason);
     const duplicate = value.duplicate === true || (receipt && receipt.duplicate === true);
     const claimedAt = cleanText((receipt && receipt.claimedAt) || value.claimedAt);
+    const commissionId = cleanText((receipt && receipt.commissionId) || value.commissionId);
+    const professionId = cleanText((receipt && receipt.professionId) || value.professionId);
     return {
+      commissionId: commissionId,
+      professionId: professionId,
+      identity: cleanText(value.identity || (receipt && receipt.identity)),
+      experience: cleanText(value.experience || (receipt && receipt.experience)),
+      message: typeof value.message === 'string' ? value.message : '',
       ok: ok,
       ending: /^(combat|research|rescue)$/.test(value.approach) || /^ending\./.test(receipt && receipt.commissionId),
       key: key.slice(0, 120),
       credits: credits,
       items: items,
       reason: reason,
-      message: typeof value.message === 'string' ? value.message : '',
       duplicate: duplicate,
       claimedAt: claimedAt,
     };
@@ -506,18 +527,16 @@
     return chars.length > capped ? chars.slice(0, capped).join('') + '…' : text;
   }
 
+  /**
+   * 收据卡只读真实结算反馈；「下一步 / 经历」只能来自 careerView 投影，
+   * 因此这里明确不读取 storyFeedback.nextStep / chapter / chapterCount。
+   */
   function readStoryFeedback(outer, result) {
     const rawValue = isObject(outer.storyFeedback) ? outer.storyFeedback : isObject(result.storyFeedback) ? result.storyFeedback : null;
     if (!isObject(rawValue)) return null;
     const raw = rawValue;
     const status = storyTextOf(raw.status, 24);
     if (status !== 'new' && status !== 'recorded' && status !== 'unavailable') return null;
-    const lines = [];
-    const discovered = Array.isArray(raw.discovered) ? raw.discovered : [];
-    discovered.slice(0, 3).forEach((item) => {
-      const text = storyTextOf(isObject(item) ? item.text : item);
-      if (text && lines.indexOf(text) < 0) lines.push(text);
-    });
     const replies = [];
     const rawReplies = Array.isArray(raw.replies) ? raw.replies : [];
     rawReplies.slice(0, 2).forEach((item) => {
@@ -526,19 +545,41 @@
       const text = storyTextOf(item.text);
       if (name && text) replies.push({ name: name, text: text });
     });
-    const rawChapter = isObject(raw.chapter) ? raw.chapter : null;
-    const chapterId = /^C[0-5]$/.test(storyTextOf(rawChapter && rawChapter.id, 12)) ? storyTextOf(rawChapter.id, 12) : '';
-    /* 只保留玩家语言标题；C1/C2 这类内部章号绝不出现在玩家可见文案。 */
-    const chapterTitle = chapterId ? storyTextOf(rawChapter.title, 160) : '';
     return {
       status: status,
-      lines: lines,
       replies: replies,
-      chapterId: chapterId,
-      chapterTitle: chapterTitle,
-      chapterCount: Math.max(0, Math.floor(Number(raw.chapterCount) || 0)),
-      nextStep: storyTextOf(raw.nextStep),
+      nextStep: '',
+      history: [],
+      endingAction: false,
       unavailable: status === 'unavailable' ? storyTextOf(raw.unavailable) || '剧情这会儿没能记进账。' : '',
+    };
+  }
+
+  /** bridge 注入的已投影结果；字段缺失一律忽略，不回退到未 gate 的章节推导。 */
+  function projectedStoryOf(outer) {
+    /* Next step comes only from the bridge's projected careerView story. */
+    const view = isObject(outer.careerView) ? outer.careerView : null;
+    const story = view && isObject(view.story) ? view.story : null;
+    const action = story && story.nextAction ? story.nextAction : null;
+    let nextStep = '';
+    if (typeof action === 'string') nextStep = storyTextOf(action);
+    else if (isObject(action)) nextStep = storyTextOf(action.label || action.text || action.description);
+    const history = [];
+    const historyRows = [];
+    if (story && Array.isArray(story.history)) {
+      story.history.slice(0, 6).forEach((entry) => {
+        const label = storyTextOf(isObject(entry) ? entry.label || entry.text : entry, 120);
+        if (label && history.indexOf(label) < 0) history.push(label);
+        if (isObject(entry) && label) historyRows.push(Object.assign({}, entry, { label: label }));
+      });
+    }
+    return {
+      nextStep: nextStep,
+      history: history,
+      historyRows: historyRows,
+      action: isObject(action) ? action : null,
+      view: view,
+      endingAction: !!(isObject(action) && action.kind === 'ending'),
     };
   }
 
@@ -556,9 +597,9 @@
         ? { id: 'read-epilogue', text: '读后日谈', label: '关闭收据并读后日谈', run: openCampaign }
         : { id: 'choose-ending', text: '回去选终局路线', label: '关闭收据并返回终局选择', run: openCampaign });
     } else if (fields.ok && feedback && feedback.status !== 'unavailable') {
-      if (feedback.chapterId === 'C4' && openCampaign) {
+      if (feedback.endingAction && openCampaign) {
         actions.push({ id: 'choose-ending', text: '选择终局路线', label: '关闭收据并打开终局选择', run: openCampaign });
-      } else if (feedback.chapterTitle || feedback.replies.length) {
+      } else if (feedback.replies.length) {
         const readReply = openCampaign || (typeof outer.openMailbox === 'function' ? () => outer.openMailbox() : null);
         if (readReply) actions.push({ id: 'read-reply', text: CARD_CONTINUE_TEXT, label: CARD_CONTINUE_LABEL, run: readReply });
       }
@@ -881,6 +922,7 @@
   function closePanel() {
     const current = panel;
     panel = null;
+    unsubscribeCareerPanelChanges();
     panelSeq += 1;
     if (!current) return false;
     try {
@@ -969,6 +1011,13 @@
     };
     current.onKeyDown = (event) => onPanelKeyDown(current, event);
     panel = current;
+    unsubscribeCareerChanges = subscribeCareerChanges(context, (change) => {
+      if (panel !== current) return;
+      const reason = cleanText(change && change.reason);
+      if (CAREER_CHANGE_REASONS.indexOf(reason) < 0) return;
+      closePanel();
+      removeCard();
+    });
 
     closeBtn.addEventListener('click', () => closePanel(), false);
 
@@ -1014,8 +1063,10 @@
     const current = card;
     card = null;
     if (!current) return false;
+    unsubscribeCareerPanelChanges();
     try {
-      if (current.el && current.el.parentNode) current.el.parentNode.removeChild(current.el);
+      const target = current.root && current.root.parentNode ? current.root : current.el;
+      if (target && target.parentNode) target.parentNode.removeChild(target);
     } catch (err) {
       /* ignore */
     }
@@ -1035,10 +1086,10 @@
   }
 
   function appendStoryBlock(doc, parent, feedback) {
-    if (!feedback || !(feedback.unavailable || feedback.lines.length || feedback.chapterTitle || feedback.nextStep || feedback.replies.length)) return;
+    if (!feedback || !(feedback.unavailable || feedback.history.length || feedback.nextStep || feedback.replies.length)) return;
     const block = make(doc, 'section', 'ac-career-receipt-story');
     applyStyle(block, { display: 'flex', flexDirection: 'column', gap: '4px' });
-    if (feedback.lines.length || feedback.chapterTitle || feedback.replies.length) {
+    if (feedback.history.length || feedback.replies.length) {
       const heading = make(doc, 'h3', 'ac-career-receipt-story__title', '你这一趟带回了什么？');
       applyStyle(heading, { margin: '2px 0 0', fontSize: '12px', fontWeight: '600' });
       block.appendChild(heading);
@@ -1046,10 +1097,7 @@
     if (feedback.status === 'unavailable') {
       block.appendChild(make(doc, 'p', 'ac-career-status', feedback.unavailable));
     } else {
-      feedback.lines.forEach((text) => block.appendChild(make(doc, 'p', 'ac-career-status', text)));
-      if (feedback.chapterTitle) {
-        block.appendChild(make(doc, 'p', 'ac-career-status', '新完成的段落：' + feedback.chapterTitle));
-      }
+      feedback.history.forEach((text) => block.appendChild(make(doc, 'p', 'ac-career-status', text)));
       feedback.replies.forEach((reply) => {
         block.appendChild(make(doc, 'p', 'ac-career-status', reply.name + '：' + reply.text));
       });
@@ -1091,11 +1139,7 @@
   }
 
   function removeActionFailure() {
-    if (!actionFailure) return false;
-    const node = actionFailure;
-    actionFailure = null;
-    try { if (node.parentNode) node.parentNode.removeChild(node); } catch (err) { /* ignore */ }
-    return true;
+    return removeActionFailureNode();
   }
 
   function runAction(action, announce) {
@@ -1106,6 +1150,284 @@
     } catch (err) {
       showActionFailure(() => runAction(action, announce), announce);
     }
+  }
+
+  /* ------------------------- 0.23 T12 ReceiptCard path ------------------------- */
+
+  function componentsOf(context) {
+    if (isObject(context) && isObject(context.uiComponents) && typeof context.uiComponents.ReceiptCard === 'function') return context.uiComponents;
+    return root.ArcadeCareerUI && root.ArcadeCareerUI.components;
+  }
+
+  function removeActionFailureNode() {
+    const current = actionFailure;
+    actionFailure = null;
+    if (!current) return false;
+    const target = current.root && current.root.parentNode ? current.root : (current.el || current);
+    try { if (target && target.parentNode) target.parentNode.removeChild(target); } catch (err) { /* ignore */ }
+    return true;
+  }
+
+  function showComponentActionFailure(components, announce, retry) {
+    const doc = documentOf();
+    if (!doc || !doc.body) return;
+    removeActionFailureNode();
+    const rootNode = doc.createElement('div');
+    rootNode.className = 'ac-career-ui ac-career-action-failure';
+    rootNode.setAttribute('popover', 'manual');
+    const note = doc.createElement('p');
+    note.className = 'ac-career-ui__caption';
+    note.textContent = ACTION_FAILED_TEXT;
+    rootNode.appendChild(note);
+    const retryButton = components.PrimaryAction({
+      id: 'retry-open', label: '再试一次', kind: 'primary', ariaLabel: '再试一次打开',
+      onClick: () => { removeActionFailureNode(); retry(); return { ok: true }; },
+    });
+    retryButton.setAttribute('data-action', 'retry-open');
+    rootNode.appendChild(retryButton);
+    try {
+      doc.body.appendChild(rootNode);
+      if (typeof rootNode.showPopover === 'function') rootNode.showPopover();
+    } catch (err) { /* visible DOM remains mounted */ }
+    actionFailure = { el: note, root: rootNode };
+    if (typeof announce === 'function') {
+      try { announce(ACTION_FAILED_TEXT); } catch (err) { /* ignore */ }
+    }
+  }
+
+  function invokeControlled(components, fn, announce) {
+    if (typeof fn !== 'function') {
+      showComponentActionFailure(components, announce, () => {});
+      return { ok: false };
+    }
+    let outcome = null;
+    try { outcome = fn(); } catch (err) { outcome = { ok: false }; }
+    return Promise.resolve(outcome).then((value) => {
+      if (value && value.ok === false) showComponentActionFailure(components, announce, () => invokeControlled(components, fn, announce));
+      return value || { ok: true };
+    }, () => {
+      showComponentActionFailure(components, announce, () => invokeControlled(components, fn, announce));
+      return { ok: false };
+    });
+  }
+
+  function openerOf(outer, name) {
+    if (isObject(outer.api) && typeof outer.api[name] === 'function') return () => outer.api[name]();
+    return typeof outer[name] === 'function' ? () => outer[name]() : null;
+  }
+
+  function retryOf(outer) {
+    if (typeof outer.retrySettlement === 'function') return () => outer.retrySettlement();
+    if (isObject(outer.api) && typeof outer.api.retrySettlement === 'function') return () => outer.api.retrySettlement();
+    return null;
+  }
+
+  function rewardMaterials(items, outer) {
+    const out = [];
+    if (!isObject(items)) return out;
+    Object.keys(items).forEach((itemId) => {
+      const count = Math.floor(finiteNumber(items[itemId]) === null ? 0 : finiteNumber(items[itemId]));
+      if (count > 0) out.push({ name: materialName(itemId, outer), count: count });
+    });
+    return out;
+  }
+
+  function projectedRewards(fields, projection, outer) {
+    const view = isObject(projection.view) ? projection.view : null;
+    const professions = view && Array.isArray(view.professions) ? view.professions : [];
+    const commissions = view && Array.isArray(view.commissions) ? view.commissions : [];
+    const owner = commissions.find((row) => isObject(row) && row.commissionId === fields.commissionId);
+    const professionId = fields.professionId || (owner && owner.professionId);
+    const profession = professions.find((row) => isObject(row) && row.professionId === professionId);
+    const experienceRow = (projection.historyRows || []).find((row) => row && row.commissionId === fields.commissionId);
+    const rewards = {
+      credits: typeof fields.credits === 'number' ? fields.credits : undefined,
+      materials: rewardMaterials(fields.items, outer),
+    };
+    const identity = fields.identity || cleanText(profession && profession.displayName);
+    const experience = fields.experience || cleanText(experienceRow && experienceRow.label);
+    if (identity) rewards.identity = identity;
+    if (experience) rewards.experience = experience;
+    return rewards;
+  }
+
+  function resultLineOf(fields, projection) {
+    if (fields.duplicate) return DUPLICATE_NOTE;
+    if (!fields.ok) return failureSentenceOf(fields);
+    const message = looksSafeText(fields.message);
+    if (message) return message;
+    const view = isObject(projection.view) ? projection.view : null;
+    const commission = view && Array.isArray(view.commissions)
+      ? view.commissions.find((row) => isObject(row) && row.commissionId === fields.commissionId) : null;
+    const title = cleanText(commission && commission.title);
+    return title ? title + '已登记。' : '这趟活儿已经结清。';
+  }
+
+  function componentActionsOf(fields, projection, feedback, outer, components, announce) {
+    const actions = [];
+    const town = openerOf(outer, 'openTown');
+    const campaign = openerOf(outer, 'openCampaign');
+    const mailbox = openerOf(outer, 'openMailbox');
+    const retry = retryOf(outer);
+    const invoked = (fn) => ({
+      kind: 'primary',
+      onClick: () => {
+        removeCard();
+        return invokeControlled(components, fn, announce);
+      },
+    });
+    if (fields.ok) {
+      /* 终局收据在 0.22 提供「读后日谈」入口；组件路径必须保留同一玩家动作，
+         不能被下一单职业委托顶掉后日谈。 */
+      if (fields.ending && campaign) {
+        actions.push(Object.assign({ id: 'read-epilogue', label: '读后日谈' }, invoked(campaign)));
+      } else {
+        const projected = projection.action;
+        let opener = null;
+        if (projected && projected.kind === 'ending') opener = campaign;
+        else if (projected && projected.kind === 'letter') opener = mailbox || campaign || town;
+        else if (projected) opener = town || campaign || mailbox;
+        if (projected && opener) {
+          actions.push(Object.assign({
+            id: 'continue', label: '继续：' + storyTextOf(projected.label, 48),
+          }, invoked(opener)));
+        } else if (town) {
+          actions.push(Object.assign({ id: 'return-to-town', label: CARD_TOWN_TEXT }, invoked(town)));
+        }
+      }
+    } else if (retry) {
+      actions.push({
+        id: 'retry-settlement',
+        label: '再试一次',
+        kind: 'primary',
+        onClick: () => {
+          let returned = null;
+          try { returned = retry(); } catch (err) { returned = { ok: false }; }
+          return Promise.resolve(returned).then((value) => {
+            const next = value && isObject(value.result) ? value.result : value;
+            if (!isObject(next) || next.ok !== true) {
+              showComponentActionFailure(components, announce, () => {
+                Promise.resolve(retry()).then((again) => {
+                  const result = again && isObject(again.result) ? again.result : again;
+                  if (isObject(result) && result.ok === true) show(Object.assign({}, outer, { result: result, careerView: projection.view }));
+                });
+              });
+              return { ok: false };
+            }
+            show(Object.assign({}, outer, { result: next, careerView: projection.view }));
+            return { ok: true };
+          }, () => {
+            showComponentActionFailure(components, announce, () => retry());
+            return { ok: false };
+          });
+        },
+      });
+    } else if (town) {
+      actions.push(Object.assign({ id: 'return-to-town', label: CARD_TOWN_TEXT }, invoked(town)));
+    }
+    const presentation = isObject(outer.receiptPresentation) ? outer.receiptPresentation : null;
+    actions.push({
+      id: 'dismiss-receipt',
+      label: cleanText(presentation && presentation.exitLabel) || (fields.ok ? '今天先到这里' : '先收起收据'),
+      kind: actions.length ? 'text' : 'primary',
+      onClick: () => { removeCard(); return { ok: true }; },
+    });
+    return actions;
+  }
+
+  function workRewardTextOf(rewards, presentation) {
+    const creditLabel = cleanText(presentation && presentation.creditLabel) || '工钱';
+    const materialLabel = cleanText(presentation && presentation.materialLabel) || '材料';
+    const parts = [];
+    if (typeof rewards.credits === 'number' && Number.isFinite(rewards.credits)) {
+      parts.push(creditLabel + ' ' + String(rewards.credits));
+    }
+    (Array.isArray(rewards.materials) ? rewards.materials : []).forEach((material) => {
+      const count = typeof material.count === 'number' && Number.isFinite(material.count) ? String(material.count) : cleanText(material.count);
+      const name = cleanText(material.name);
+      if (name && count) parts.push(materialLabel + ' ' + name + ' ×' + count);
+    });
+    return parts.join(' · ');
+  }
+
+  function componentActionNode(components, input) {
+    const props = Object.assign({}, input, { busy: false });
+    const button = input.kind === 'primary' ? components.PrimaryAction(props) : components.SecondaryAction(Object.assign({}, props, { variant: 'text' }));
+    if (input.ariaLabel) button.setAttribute('aria-label', input.ariaLabel);
+    if (input.id) button.setAttribute('data-action', input.id);
+    return button;
+  }
+
+  function buildComponentCard(fields, projection, feedback, outer, components) {
+    const doc = documentOf();
+    if (!doc || !doc.body) return null;
+    const reduced = outer.reducedMotion === true || contextReducedMotion(outer);
+    const rootNode = doc.createElement('div');
+    rootNode.className = 'ac-career-ui';
+    rootNode.className += ' ac-career-ui__receipt-popover';
+    rootNode.setAttribute('data-reduced-motion', String(reduced));
+    rootNode.setAttribute('popover', 'manual');
+
+    if (feedback && feedback.status === 'unavailable' && feedback.unavailable) {
+      const note = doc.createElement('p');
+      note.className = 'ac-career-ui__caption';
+      note.textContent = feedback.unavailable;
+      rootNode.appendChild(note);
+    }
+    if (fields.ok && projection.nextStep) {
+      const next = doc.createElement('p');
+      next.className = 'ac-career-ui__caption';
+      next.setAttribute('role', 'status');
+      next.setAttribute('aria-live', 'polite');
+      next.textContent = '下一步：' + projection.nextStep;
+      rootNode.appendChild(next);
+    }
+
+    const reply = feedback && feedback.replies.length ? feedback.replies[0] : null;
+    /* Optional projected/fixture presentation copy; reward numbers and next step
+       never come from here. Without it the adapter keeps honest generic wording. */
+    const presentation = isObject(outer.receiptPresentation) ? outer.receiptPresentation : null;
+    const allRewards = fields.ok && !fields.duplicate ? projectedRewards(fields, projection, outer) : null;
+    const rewards = allRewards ? {
+      workText: workRewardTextOf(allRewards, presentation),
+      workLabel: cleanText(presentation && presentation.workRewardLabel),
+      identity: allRewards.identity,
+      experience: allRewards.experience,
+    } : undefined;
+    const card = components.ReceiptCard({
+      outcome: fields.ok ? 'success' : 'failure',
+      state: fields.duplicate && fields.ok ? 'no-duplicate-reward' : (fields.ok ? 'success' : 'failure'),
+      caption: cleanText(presentation && presentation.caption),
+      title: cleanText(presentation && presentation.title) || (fields.ok ? CARD_SUCCESS_TITLE : CARD_FAILURE_TITLE),
+      resultLine: fields.duplicate ? DUPLICATE_NOTE : (cleanText(presentation && presentation.resultLine) || resultLineOf(fields, projection)),
+      rewards: rewards,
+      npcReply: reply ? { name: reply.name, paragraphs: [reply.text], state: 'return' } : undefined,
+      nextAction: null,
+      exitAction: null,
+    });
+    card.classList.add('ac-career-ui__panel');
+    card.setAttribute('data-career-card', 'receipt');
+    card.setAttribute('data-state', fields.ok ? 'success' : 'failure');
+    if (fields.key) card.setAttribute('data-run-id', fields.key);
+    const actions = componentActionsOf(fields, projection, feedback, outer, components, outer.announce);
+    const actionRow = doc.createElement('div');
+    actionRow.className = 'ac-career-ui__actions';
+    actions.forEach((input) => actionRow.appendChild(componentActionNode(components, input)));
+    card.appendChild(actionRow);
+    rootNode.appendChild(card);
+    card.addEventListener('keydown', (event) => {
+      const key = event && typeof event.key === 'string' ? event.key : '';
+      if (key !== 'Escape' && key !== 'Esc') return;
+      if (event.preventDefault) event.preventDefault();
+      removeCard();
+    });
+    try {
+      doc.body.appendChild(rootNode);
+      if (typeof rootNode.showPopover === 'function') rootNode.showPopover();
+    } catch (err) {
+      /* the mounted DOM remains the readable receipt */
+    }
+    return { root: rootNode, card: card };
   }
 
   function buildCard(doc, fields, reducedMotion, feedback, actions, announce) {
@@ -1223,13 +1545,19 @@
    * @param {object} payload
    * @returns {Element|null}
    */
-  function show(payload) {
+  function showLegacy(payload) {
     const doc = documentOf();
     if (!doc || !doc.body) return null;
     const outer = isObject(payload) ? payload : {};
     const result = isObject(outer.result) ? outer.result : outer;
     const fields = readReceiptFields(result, outer);
     const feedback = readStoryFeedback(outer, result);
+    if (feedback) {
+      const projected = projectedStoryOf(outer);
+      feedback.nextStep = projected.nextStep;
+      feedback.history = projected.history;
+      feedback.endingAction = projected.endingAction;
+    }
     const actions = storyActionsOf(fields, feedback, outer);
     closePanel();
     removeCard();
@@ -1243,7 +1571,41 @@
       return null;
     }
     card = { el: el, key: fields.key, fields: fields };
+    unsubscribeCareerChanges = subscribeCareerChanges(outer, (change) => {
+      if (!card || card.el !== el) return;
+      const reason = cleanText(change && change.reason);
+      if (CAREER_CHANGE_REASONS.indexOf(reason) < 0) return;
+      removeCard();
+    });
     return el;
+  }
+
+  function show(payload) {
+    const doc = documentOf();
+    if (!doc || !doc.body) return null;
+    const outer = isObject(payload) ? payload : {};
+    const components = componentsOf(outer);
+    const result = isObject(outer.result) ? outer.result : (Object.prototype.hasOwnProperty.call(outer, 'ok') || isObject(outer.receipt) ? outer : null);
+    if (!isObject(result)) return null;
+    /* T11 未装载时只保留旧宿主降级；0.23 loader 注入后只用统一 ReceiptCard/token。 */
+    if (!components || typeof components.ReceiptCard !== 'function' || typeof components.PrimaryAction !== 'function') {
+      return showLegacy(payload);
+    }
+    closePanel();
+    removeCard();
+    removeActionFailure();
+    const fields = readReceiptFields(result, outer);
+    const feedback = readStoryFeedback(outer, result);
+    const projection = projectedStoryOf(outer);
+    const built = buildComponentCard(fields, projection, feedback, outer, components);
+    if (!built) return null;
+    card = { el: built.card, root: built.root, key: fields.key, fields: fields };
+    unsubscribeCareerChanges = subscribeCareerChanges(outer, (change) => {
+      if (!card || card.el !== built.card) return;
+      if (CAREER_CHANGE_REASONS.indexOf(cleanText(change && change.reason)) < 0) return;
+      removeCard();
+    });
+    return built.card;
   }
 
   /* ---------------------------------------------------------------- 对外 API */

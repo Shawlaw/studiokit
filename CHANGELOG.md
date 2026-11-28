@@ -4,6 +4,29 @@ StudioKit 门户本身没有独立的 semver；以下按仓库里程碑与工具
 
 > 说明：Arcade `0.11.2`–`0.14.0` 的条目于 2026-11-22 依据 [`apps/arcade/CHANGELOG.md`](apps/arcade/CHANGELOG.md) 补齐（本文件当时落后于工具版本），逐条数值与证据以工具 CHANGELOG 与对应 `DESIGN-*.md` 为准。
 
+## Arcade 0.24.0 — 2026-11-28
+
+- 世界主线替代路线：把 C1–C5 已有的替代机制写成戏内成立的故事行动，只引用真实委托 / 代办 / 材料 / 证据，不新增委托与奖励、不改主线唯一解；章节、路线与终局入口补充真实前置与完成条件的公开解释。
+- 可选职业交汇：双方都已主动接受才产出叙事与可选回执（16 条职业声明折叠为 10 个事件），同一对只保留一个 owner、只写一次，`effects: []` / `grants` 全零，不发货币、材料、证据或旗标。
+- 经历筛选与回读：17 条白名单在投影时解析为可见文案，可按真实人物 / 已接受职业筛选，点击只展开静态回读；`storyEvents` 落盘形状仍只有 `at` / `source`，旧档只追加、不迁移。
+- 版本链 0.24.0 / SW `studiokit-arcade-0.24.0-v1`；不新增 IndexedDB store / localStorage key / Schema，`contentVersion 0.18.0` / IDB v1 / 11 stores / 经典玩法数值零改动。
+- 累计发布包含 0.22.0 与 0.23.0 的改进；候选通过 release 51/51（not full）。设计见 [`DESIGN-0.24.0.md`](apps/arcade/DESIGN-0.24.0.md)，契约见 [`ADR-0.24-world.md`](docs/arcade-life/ADR-0.24-world.md)，验证口径见 [`INTEGRATION-0.24.0.md`](docs/arcade-life/INTEGRATION-0.24.0.md)。本次升级的线上基线为 0.21.2（见下文）。
+
+## Arcade 0.23.0 — 2026-11-28（本地发布准备，未发布）
+
+- 折光港统一生涯界面：`.ac-career-ui` 局部命名空间的共享组件与精确 token、原型一致的内联港口 SVG、结算线索/字条/首次到港/后续邀请/收据/港口三分栏/工作/经历全部组件化；普通游戏保留各自主题。
+- 16 个真实职业各一份短叙事卡（首次到港与已有身份两套介绍、首单、回执、搁置/返回与 0.24 交汇条件）；消息只从已接受职业取 0 或 1 条。
+- 首次到港用真实 `port` 投影给出第一份工作且不自动接单；首到港消费后关页重开不再重播序章；终局收据保留「读后日谈」入口。
+- 版本链 0.23.0 / SW `studiokit-arcade-0.23.0-v1`；不新增 IndexedDB store / localStorage key / Schema，`contentVersion 0.18.0` / IDB v1 / 11 stores / 经典玩法数值零改动。
+- 状态：本地发布准备，未获发布授权、未 push、未发布；门禁结论以 [`INTEGRATION-0.23.0.md`](docs/arcade-life/INTEGRATION-0.23.0.md) 为准。设计见 [`DESIGN-0.23.0.md`](apps/arcade/DESIGN-0.23.0.md)。线上最近发布版本仍为 0.21.2（已双端发布，见下一节）。
+
+## Arcade 0.22.0 — 2026-11-27（GATE_PASSED / RELEASE_READY，本地发布准备，未发布）
+
+- 完善职业独立发现与统一披露：各职业保持平行、被动的发现方式，玩家可见内容由统一口径裁决；不新增职业、委托总量、章节或终局。
+- 新增世界通用工作界面：以通用文案呈现，与具体职业解耦，不暴露玩家已拥有的职业；沿用既有委托与奖励，不克隆内容。
+- 版本链 0.22.0 / SW `studiokit-arcade-0.22.0-v1`；不新增 IndexedDB store / localStorage key / Schema，`contentVersion 0.18.0` / IDB v1 / 11 stores / 经典玩法数值零改动。
+- 状态：GATE_PASSED / RELEASE_READY（本地发布准备，未发布；release 41/41，not full）；未获 `OWNER_AUTHORIZATION: PUBLISH_TO_MAIN`，未 push、未发布，不写 PUBLISHED。设计见 [`DESIGN-0.22.0.md`](apps/arcade/DESIGN-0.22.0.md)，验证口径见 [`INTEGRATION-0.22.0.md`](docs/arcade-life/INTEGRATION-0.22.0.md)。线上最近发布版本仍为 0.21.2（已双端发布，见下一节）。
+
 ## Arcade 0.21.2 — 2026-11-26（已双端发布）
 
 - 「旧港生涯 / 回折光港看看」改为在中心页直接打开告示板弹窗，不再先跳层塔游戏页；关闭后恢复首页位置、焦点与滚动。

@@ -99,13 +99,34 @@ function noInternalTokens(text) {
     && !/commission-[0-9a-f-]{8,}|tx-[0-9a-f-]{8,}/.test(text);
 }
 
+/* 最小真实 careerView 契约：不把未 gate 的 storyFeedback 反推成投影。 */
+function minimalCareerView(storyOverrides = {}) {
+  return {
+    schemaVersion: 1,
+    originGameId: null,
+    activeProfessionId: null,
+    professions: [],
+    commissions: [],
+    story: Object.assign({ nextAction: null, messages: [], history: [] }, storyOverrides),
+    tools: [],
+  };
+}
+
+function receiptShow(payload) {
+  return receipt.show(payload);
+}
+
 {
   uiContext.document = createDocument();
   let opened = 0;
-  const card = receipt.show({
+  const card = receiptShow({
     result: settledResult(),
     reducedMotion: true,
     storyFeedback: storyFeedback('new'),
+    careerView: minimalCareerView({
+      nextAction: { kind: 'commission', label: '去告示板看看「' + C2_TITLE + '」有什么新活儿。' },
+      history: [{ label: '异常航报', source: 'commission' }, { label: '新完成的段落：' + C1_TITLE, source: 'commission' }],
+    }),
     openCampaign() { opened += 1; },
     openMailbox() { opened += 100; },
     api: { openTown() { opened += 1000; } },
@@ -137,7 +158,7 @@ function noInternalTokens(text) {
   let opened = 0;
   const feedback = storyFeedback('unavailable');
   feedback.unavailable = '工钱已结，剧情这会儿没能记进账。';
-  const card = receipt.show({ result: settledResult(), storyFeedback: feedback, openCampaign() { opened += 1; }, api: { openTown() { opened += 1; } } });
+  const card = receiptShow({ result: settledResult(), storyFeedback: feedback, openCampaign() { opened += 1; }, api: { openTown() { opened += 1; } } });
   const text = card.textContent;
   assert(text.includes('工钱已结，剧情这会儿没能记进账。'), 'failure feedback explicit');
   assert(!text.includes('新完成的段落'), 'failure never claims chapter progress');
@@ -154,7 +175,7 @@ function noInternalTokens(text) {
 /* 中间单（step）：只有线索/下一步，绝不冒充章节完成；下一步指向当前章自身，不跳 handoff。 */
 {
   uiContext.document = createDocument();
-  const card = receipt.show({
+  const card = receiptShow({
     result: settledResult(),
     storyFeedback: {
       status: 'new',
@@ -165,6 +186,10 @@ function noInternalTokens(text) {
       nextStep: '继续当前这段「' + C2_TITLE + '」，去告示板看看还差哪张单。',
       unavailable: '',
     },
+    careerView: minimalCareerView({
+      nextAction: { kind: 'commission', label: '继续当前这段「' + C2_TITLE + '」，去告示板看看还差哪张单。' },
+      history: [{ label: '工地记录', source: 'commission' }],
+    }),
     openCampaign() { throw new Error('there is no reply to read'); },
     api: { openTown() {} },
   });
@@ -186,7 +211,15 @@ function noInternalTokens(text) {
   feedback.chapter = { id: 'C1', title: C1_TITLE };
   feedback.chapterCount = 1;
   feedback.nextStep = '去告示板看看「' + C2_TITLE + '」有什么新活儿。';
-  const card = receipt.show({ result: settledResult(), storyFeedback: feedback, openCampaign() {} });
+  const card = receiptShow({
+    result: settledResult(),
+    storyFeedback: feedback,
+    careerView: minimalCareerView({
+      nextAction: { kind: 'commission', label: '去告示板看看「' + C2_TITLE + '」有什么新活儿。' },
+      history: [{ label: '异常航报', source: 'commission' }, { label: '新完成的段落：' + C1_TITLE, source: 'commission' }],
+    }),
+    openCampaign() {},
+  });
   const text = card.textContent;
   assert(text.includes('新完成的段落：' + C1_TITLE), 'C1 milestone shows completed chapter');
   assert(text.includes('下一步：去告示板看看「' + C2_TITLE + '」'), 'C1 milestone next step is C2');
@@ -202,7 +235,15 @@ function noInternalTokens(text) {
   feedback.chapter = { id: 'C2', title: C2_TITLE };
   feedback.chapterCount = 1;
   feedback.nextStep = '去告示板看看「' + C3_TITLE + '」有什么新活儿。';
-  const card = receipt.show({ result: settledResult(), storyFeedback: feedback, openCampaign() {} });
+  const card = receiptShow({
+    result: settledResult(),
+    storyFeedback: feedback,
+    careerView: minimalCareerView({
+      nextAction: { kind: 'commission', label: '去告示板看看「' + C3_TITLE + '」有什么新活儿。' },
+      history: [{ label: '异常航报', source: 'commission' }, { label: '新完成的段落：' + C2_TITLE, source: 'commission' }],
+    }),
+    openCampaign() {},
+  });
   const text = card.textContent;
   assert(text.includes('新完成的段落：' + C2_TITLE), 'C2 milestone shows completed chapter');
   assert(text.includes('下一步：去告示板看看「' + C3_TITLE + '」'), 'C2 milestone next step is C3');
@@ -213,7 +254,7 @@ function noInternalTokens(text) {
 {
   uiContext.document = createDocument();
   let opened = 0;
-  const card = receipt.show({ result: { ok: false, reason: 'objective-not-met' }, openTown() { opened += 1; } });
+  const card = receiptShow({ result: { ok: false, reason: 'objective-not-met' }, openTown() { opened += 1; } });
   const text = card.textContent;
   assert(text.includes('这趟活儿没干成'), 'failed settlement shows honest work result');
   assert(!text.includes('工钱已结'), 'failure does not claim pay settled');
@@ -227,8 +268,8 @@ function noInternalTokens(text) {
 
 {
   uiContext.document = createDocument();
-  const first = receipt.show({ result: settledResult(), storyFeedback: storyFeedback('recorded'), openCampaign() {} });
-  const second = receipt.show({ result: settledResult(), storyFeedback: storyFeedback('recorded'), openCampaign() {} });
+  const first = receiptShow({ result: settledResult(), storyFeedback: storyFeedback('recorded'), openCampaign() {} });
+  const second = receiptShow({ result: settledResult(), storyFeedback: storyFeedback('recorded'), openCampaign() {} });
   assert(second, 'resend produces a card');
   eq(uiContext.document.body.children.length, 1, 'only one receipt card remains');
   assert(!first.parentNode, 'old card removed');
@@ -240,7 +281,7 @@ function noInternalTokens(text) {
   uiContext.document = createDocument();
   let invoked = 0;
   const announcements = [];
-  const card = receipt.show({
+  const card = receiptShow({
     result: settledResult(),
     storyFeedback: storyFeedback('new'),
     announce(text) { announcements.push(text); },
@@ -272,7 +313,7 @@ function noInternalTokens(text) {
 /* 异步动作返回 ok:false：同样给提示 + 重试（openTown/openCampaign 结构化失败）。 */
 {
   uiContext.document = createDocument();
-  const card = receipt.show({
+  const card = receiptShow({
     result: settledResult(),
     storyFeedback: storyFeedback('new'),
     api: { openTown() { return Promise.resolve({ ok: false, reason: 'ui-unavailable' }); } },
@@ -288,7 +329,7 @@ function noInternalTokens(text) {
 /* Esc / 44px / 焦点：收据卡仍保留键盘出口与最小热区（结构级断言）。 */
 {
   uiContext.document = createDocument();
-  const card = receipt.show({ result: settledResult(), storyFeedback: storyFeedback('new'), openCampaign() {} });
+  const card = receiptShow({ result: settledResult(), storyFeedback: storyFeedback('new'), openCampaign() {} });
   const exitButtons = buttons(card);
   assert(exitButtons.length >= 2, 'close + advance buttons both present');
   assert(exitButtons.every((btn) => btn.getAttribute('aria-label')), 'all buttons labelled');
@@ -299,7 +340,7 @@ function noInternalTokens(text) {
 
 for (const status of ['new', 'recorded']) {
   uiContext.document = createDocument();
-  const card = receipt.show({
+  const card = receiptShow({
     result: settledResult(),
     storyFeedback: { status, discovered: [], replies: [], nextStep: '回告示板接下一单。' },
     openTown() {},
@@ -315,9 +356,14 @@ for (const status of ['new', 'recorded']) {
   let opened = 0;
   function openCampaign() { opened += 1; }
   const ui = { openCampaign, openTown() { throw new Error('ending action must open the campaign'); } };
-  const c4 = receipt.show({ ...ui, result: settledResult(), storyFeedback: {
-    ...storyFeedback('new'), chapter: { id: 'C4', title: titleOf('C4') },
-  } });
+  const c4 = receiptShow({
+    ...ui,
+    result: settledResult(),
+    storyFeedback: {
+      ...storyFeedback('new'), chapter: { id: 'C4', title: titleOf('C4') },
+    },
+    careerView: minimalCareerView({ nextAction: { kind: 'ending', label: '选择终局路线' } }),
+  });
   const board = byText(c4, '回告示板看看');
   const chooseEnding = byText(c4, '选择终局路线');
   assert(board && board.className.includes('--primary'), 'C4 still offers the board as primary');
@@ -326,7 +372,7 @@ for (const status of ['new', 'recorded']) {
   eq(opened, 1, 'C4 opens the three-ending campaign panel');
   assert(!c4.parentNode, 'C4 action closes the receipt');
 
-  const ending = receipt.show({ ...ui, result: { ok: true, approach: 'research', receipt: { commissionId: 'ending.research' } },
+  const ending = receiptShow({ ...ui, result: { ok: true, approach: 'research', receipt: { commissionId: 'ending.research' } },
     storyFeedback: storyFeedback('unavailable'),
   });
   const epilogue = byText(ending, '读后日谈');
@@ -335,7 +381,7 @@ for (const status of ['new', 'recorded']) {
   click(epilogue);
   eq(opened, 2, 'epilogue action opens the campaign panel');
 
-  const retry = receipt.show({ ...ui, result: { ok: false, approach: 'research', reason: 'objective-not-met' } });
+  const retry = receiptShow({ ...ui, result: { ok: false, approach: 'research', reason: 'objective-not-met' } });
   assert(!byText(retry, '读后日谈'), 'failed ending does not offer an epilogue');
   click(byText(retry, '回去选终局路线'));
   eq(opened, 3, 'failed ending returns to the ending choices');
@@ -556,36 +602,63 @@ function extractStoryHelpers() {
 {
   const start = bridgeSource.indexOf('  function readArchivePhotoCommission(');
   const end = bridgeSource.indexOf('  function withStoryTimeout(', start);
-  const { readArchivePhotoCommission, attachArchiveFollowUp } = vm.runInNewContext(
-    bridgeSource.slice(start, end) + '\n({ readArchivePhotoCommission, attachArchiveFollowUp });',
-    {
-      safeAsync: (_key, action, fallback) => Promise.resolve().then(action).catch(() => fallback),
-      cleanStoryText: (value) => typeof value === 'string' ? value.trim() : '',
-    },
-  );
   const require = createRequire(import.meta.url);
   const loadModule = (name) => require(resolve(root, 'apps/arcade/career', name + '.js'));
   const careerId = 'career-test';
   let quests = [];
+  const acceptedAt = '2026-11-27T00:00:00.000Z';
+  const professionState = loadModule('profession-state');
+  const discoveryState = professionState.initialState(acceptedAt);
+  discoveryState.acceptedOriginGameId = 'memory-flip';
+  discoveryState.activeProfessionId = 'research.archivist';
+  discoveryState.professionProgress['research.archivist'] = {
+    state: 'accepted', paused: false, discoveredAt: acceptedAt, readAt: acceptedAt,
+    acceptedAt: acceptedAt, completedAt: null,
+  };
+  const registry = loadContent('registry.json');
+  const commissionContent = loadContent('commissions.json');
+  const catalog = {
+    schemaVersion: registry.schemaVersion,
+    contentVersion: registry.contentVersion,
+    games: registry.games.map((game) => ({ ...game })),
+    professions: registry.professions.map((profession) => ({ ...profession })),
+    commissions: commissionContent.commissions.map((commission) => ({ ...commission })),
+    clues: loadContent('clues.json').clues.map((clue) => ({ ...clue })),
+    tools: [],
+    worldWorkIds: [],
+  };
   const commission = loadModule('commission-core').createCommissionCore({
     core: loadModule('career-core'),
     db: {
+      getDiscoveryState: async () => discoveryState,
       readQuestState: async () => ({ ok: true, quests }),
       getProfile: async () => ({ careerId }),
     },
   });
-  const content = loadContent('commissions.json');
-  commission.configure({ content });
+  /* bridge 的真实辅助从 DB 快照 + registry catalog + receipt context 重跑 gate。 */
+  const followUpHelpers = vm.runInNewContext(
+    bridgeSource.slice(start, end) + '\n({ readArchivePhotoCommission, attachArchiveFollowUp });',
+    {
+      safeAsync: (_key, action, fallback) => Promise.resolve().then(action).catch(() => fallback),
+      cleanStoryText: (value) => typeof value === 'string' ? value.trim() : '',
+      currentStateSnapshot: () => discoveryState,
+      careerCatalog: () => catalog,
+      careerContext: (_input, surface) => ({ surface: surface || 'receipt', archived: false, walletKnown: true }),
+    },
+  );
+  const readArchivePhotoCommission = followUpHelpers.readArchivePhotoCommission;
+  const attachArchiveFollowUp = followUpHelpers.attachArchiveFollowUp;
+  commission.configure({ content: commissionContent, catalog });
   const before = await readArchivePhotoCommission(commission, careerId);
-  eq(before?.unlocked, false, 'real commission list reports the photo locked before settlement');
+  eq(before, null, 'real commission list keeps the photo locked before settlement');
   const settled = { ok: true, firstClear: true };
   const base = { status: 'new', nextStep: '去告示板看看下一张单。' };
-  const whileLocked = await attachArchiveFollowUp({ ...base }, settled, commission, careerId, !before.unlocked);
+  const whileLocked = await attachArchiveFollowUp({ ...base }, settled, commission, careerId, before === null);
   eq(whileLocked.nextStep, base.nextStep, 'a still-locked commission is not advertised');
   quests = [{ careerId, nodeId: 'memory-flip.T1', status: 'cleared' }];
   const after = await readArchivePhotoCommission(commission, careerId);
   eq(after?.unlocked, true, 'real commission list reports the photo available after first clear');
-  const feedback = await attachArchiveFollowUp({ ...base }, settled, commission, careerId, !before.unlocked);
+  const feedback = await attachArchiveFollowUp({ ...base }, settled, commission, careerId, before === null);
   assert(feedback.nextStep.includes('档案夹已整理好') && feedback.nextStep.includes(after.title), 'receipt names the real follow-up unlocked on this settlement');
   for (const [result, wasLocked] of [
     [settled, false],

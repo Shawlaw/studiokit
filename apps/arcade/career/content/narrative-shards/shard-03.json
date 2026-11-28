@@ -1,0 +1,320 @@
+{
+  "schemaVersion": 1,
+  "contentVersion": "0.18.0",
+  "shardId": "career-narrative-shard-03",
+  "professionIds": [
+    "nature.ecologist",
+    "engineering.maintenance",
+    "engineering.warehouse",
+    "adventure.pilot"
+  ],
+  "entries": [
+    {
+      "narrativeId": "career-narrative.snake-run",
+      "gameId": "snake-run",
+      "professionId": "nature.ecologist",
+      "sourceClueId": "CL-snake-run",
+      "trigger": {
+        "clueId": "CL-snake-run",
+        "kind": "fruit.eaten",
+        "atLeast": 3
+      },
+      "settlementFacts": {
+        "commissionId": "snake-run.T1",
+        "tier": 1,
+        "objective": {
+          "kind": "fruit.eaten",
+          "atLeast": 5
+        },
+        "reward": {
+          "credits": 70,
+          "items": {},
+          "evidence": [],
+          "flags": []
+        },
+        "unlock": {
+          "all": []
+        },
+        "chapterGate": null
+      },
+      "clueTitle": "果核细孔不是虫眼",
+      "clueTeaser": "最后吞下的果核不是本地树种，七点细孔像有人后来钻的。",
+      "icon": "gem",
+      "readTitle": "七点果核与标本绳",
+      "readBody": [
+        "最后吞下的果实留下七点细孔，果核不是本地树种。",
+        "标本棚的系绳人说孔是后来钻的，育苗可能从旧货柜漏出，请你把核和绳签一起送来。"
+      ],
+      "sender": "标本绳签",
+      "npc": "标本棚的系绳人",
+      "npcSourceGameId": "snake-run",
+      "invitationAction": "测量果核七点细孔",
+      "laterLabel": "把果核系回绳架",
+      "freshIntro": [
+        "你把七点果核送到东堤标本棚，系绳人认出它不是本地树种，孔却是人工钻的。旧档案提过一批从P-07漏出的育苗，棚里给你留了一枚对照样。",
+        "系绳人建议你先去告示板看看谁家收育苗，让这枚核换回一份真实记录。"
+      ],
+      "existingIntro": "东堤标本棚的系绳人是头一回见你，没问你的来历，只递出对照样，说P-07的旧档案还在架上；你可以先比，愿不愿意接这条线都由你。",
+      "firstCommissionId": "snake-run.T1",
+      "firstActionHint": "你愿意先吃到五个果实，让系绳人看看细孔是否总在同一处吗？",
+      "firstReceipt": "五个果实吃完，系绳人把细孔位置逐一记下。他说对照样的孔距与果核一致，问你要不要再找一枚带不同孔序的样本。",
+      "nextAction": "找不同孔序的对照样",
+      "exitLabel": "把绳签挂回标本架",
+      "pauseLine": "系绳人会替你把果核晾好，等你下次来比。",
+      "returnLine": "你再回到标本棚，系绳人已经把对照样放在白布上。",
+      "completedLine": "果核、对照样和旧育苗记录终于能按孔序对齐。",
+      "mainlineConnection": "P-07漏出的育苗与日常货运有关，孔序记录可帮研究院辨认旧货柜还留下过哪些东西。",
+      "optionalCrossover": {
+        "releaseVersion": "0.24",
+        "requiredProfessionIds": [
+          "nature.ecologist",
+          "nature.snowscout"
+        ],
+        "acceptanceRule": "双方均已主动接受",
+        "text": "若生态采集员与雪谷探索员都已接受，可用果核孔序和雪面刻痕的间距互相校准，给同一批旧货柜样本添一份自然记录。"
+      },
+      "storyMessages": [
+        {
+          "messageId": "message.snake-run.arrival.v1",
+          "professionId": "nature.ecologist",
+          "surface": "arrival",
+          "label": "标本接收棚",
+          "text": "系绳人把果核放在白布上：你想先量孔距，还是先看对照样？",
+          "from": "标本棚的系绳人"
+        }
+      ]
+    },
+    {
+      "narrativeId": "career-narrative.mole-whack",
+      "gameId": "mole-whack",
+      "professionId": "engineering.maintenance",
+      "sourceClueId": "CL-mole-whack",
+      "trigger": {
+        "clueId": "CL-mole-whack",
+        "kind": "mole.hit",
+        "atLeast": 5
+      },
+      "settlementFacts": {
+        "commissionId": "mole-whack.T1",
+        "tier": 1,
+        "objective": {
+          "kind": "mole.hit",
+          "atLeast": 8
+        },
+        "reward": {
+          "credits": 70,
+          "items": {},
+          "evidence": [],
+          "flags": []
+        },
+        "unlock": {
+          "all": []
+        },
+        "chapterGate": null
+      },
+      "clueTitle": "地下工单登记了不存在的管井",
+      "clueTeaser": "敲空地面下压着旧工单，图纸没有管井，维护处却收到复写联。",
+      "icon": "pick",
+      "readTitle": "图纸上没有的管井",
+      "readBody": [
+        "敲空的地面下压着一张褪色工单，登记的管井不在图纸上。",
+        "夜班巡检留下复写联，把正联寄到维护处，请你去看有没有人认领。"
+      ],
+      "sender": "夜班巡检",
+      "npc": "维护处收发箱的老岑",
+      "npcSourceGameId": "mole-whack",
+      "invitationAction": "核对管井工单编号",
+      "laterLabel": "把复写联留在维护处",
+      "freshIntro": [
+        "你到西环维护处认领地下工单，老岑确认那条管井确实通着旧码头。老师傅记得有人封过P-07，收发箱旁还钉着旧街照片。",
+        "老岑建议你先去告示板找维护处的人，问问那条管井什么时候开工，不必守在这里等。"
+      ],
+      "existingIntro": "西环维护处的老岑不认得你，复写联却一直在收发箱里等人认领。他把旧街照片转向你，说图纸缺口还在；你可以先看，不必下井。",
+      "firstCommissionId": "mole-whack.T1",
+      "firstActionHint": "你愿意先在四十五秒里正确击中八次，让老岑画出管井回声吗？",
+      "firstReceipt": "八次正确击中连成一线，老岑把回声位置描回工单。他说图纸缺口通向旧码头，问你要不要请施工队来核井口。",
+      "nextAction": "请施工队核井口",
+      "exitLabel": "把工单留在收发箱",
+      "pauseLine": "老岑会替你收好复写联，等你下次来问井口。",
+      "returnLine": "你回到维护处，老岑已经把描过回声的工单钉在箱边。",
+      "completedLine": "管井回声、工单路线和旧码头位置终于对上了。",
+      "mainlineConnection": "P-07的封存位置与地下管井相连，维护记录可帮研究院判断旧信号是否借日常设施传递。",
+      "optionalCrossover": {
+        "releaseVersion": "0.24",
+        "requiredProfessionIds": [
+          "engineering.maintenance",
+          "engineering.warehouse"
+        ],
+        "acceptanceRule": "双方均已主动接受",
+        "text": "若设施维护员与仓储工程师都已接受，可把P-07管井回声和封存柜号并排核对，查清旧货柜是否曾借仓库通道转运。"
+      },
+      "storyMessages": [
+        {
+          "messageId": "message.mole-whack.arrival.v1",
+          "professionId": "engineering.maintenance",
+          "surface": "arrival",
+          "label": "维护处收发箱",
+          "text": "老岑把工单铺在箱盖上：你想先看图纸缺口，还是先听管井回声？",
+          "from": "维护处收发箱的老岑"
+        }
+      ]
+    },
+    {
+      "narrativeId": "career-narrative.block-drop",
+      "gameId": "block-drop",
+      "professionId": "engineering.warehouse",
+      "sourceClueId": "CL-block-drop",
+      "trigger": {
+        "clueId": "CL-block-drop",
+        "kind": "lines.cleared",
+        "atLeast": 2
+      },
+      "settlementFacts": {
+        "commissionId": "block-drop.T1",
+        "tier": 1,
+        "objective": {
+          "kind": "lines.cleared",
+          "atLeast": 2
+        },
+        "reward": {
+          "credits": 70,
+          "items": {},
+          "evidence": [],
+          "flags": []
+        },
+        "unlock": {
+          "all": []
+        },
+        "chapterGate": null
+      },
+      "clueTitle": "封存柜号P-07回到线上",
+      "clueTeaser": "箱体消去后露出木牌，账上封了十年的柜号又回到分拣线。",
+      "icon": "pick",
+      "readTitle": "不该上架的P-07木牌",
+      "readBody": [
+        "一整排箱体消去，底下露出一块写着P-07的木牌。",
+        "分拣线负责人没把它登记进库，只摆在收货处认领架上，等你来认领。"
+      ],
+      "sender": "分拣线负责人",
+      "npc": "收货处认领架的值守",
+      "npcSourceGameId": "block-drop",
+      "invitationAction": "核对P-07封存刻痕",
+      "laterLabel": "把木牌留在认领架",
+      "freshIntro": [
+        "你到旧码头认领架看P-07木牌，值守认出刻痕与封条编号一致。这只柜子在账上封了十年，照片里就停在旧港街口。",
+        "值守请你先收进抽屉，再去街对面告示板挑一张活，别让木牌重新混进分拣线。"
+      ],
+      "existingIntro": "旧码头认领架的值守没见过你，也就没讲封存规矩，只把旧街照片压到P-07木牌旁，问你要不要查它当年停车的准确位置；不查也不碍事。",
+      "firstCommissionId": "block-drop.T1",
+      "firstActionHint": "你愿意先有效消除两行，让值守确认木牌该留在哪一批记录里吗？",
+      "firstReceipt": "两行箱体顺利消除，值守把木牌刻痕与封存账页对齐。他说旧照片还缺一个街角，问你要不要找棋室或旧档室问另半张。",
+      "nextAction": "问旧街照片的另半张",
+      "exitLabel": "把木牌留在收货处抽屉",
+      "pauseLine": "值守会把认领架留一盏灯，等你下次再来。",
+      "returnLine": "你回到认领架，值守已经把封存账页翻到P-07那一行。",
+      "completedLine": "木牌、封存账页和旧街照片终于能按柜号合起来。",
+      "mainlineConnection": "P-07的封存账与异常航报同号，认领记录可帮研究院确认旧货柜仍在日常货运链里。",
+      "optionalCrossover": {
+        "releaseVersion": "0.24",
+        "requiredProfessionIds": [
+          "engineering.maintenance",
+          "engineering.warehouse"
+        ],
+        "acceptanceRule": "双方均已主动接受",
+        "text": "若仓储工程师与设施维护员都已接受，可把木牌封存刻痕和地下管井工单放在同一张仓库图上，确认货柜曾走哪条隐蔽通道。"
+      },
+      "storyMessages": [
+        {
+          "messageId": "message.block-drop.arrival.v1",
+          "professionId": "engineering.warehouse",
+          "surface": "arrival",
+          "label": "收货处认领架",
+          "text": "值守把木牌放回灯下：你想先看封存账，还是先看旧街照片？",
+          "from": "收货处认领架的值守"
+        }
+      ]
+    },
+    {
+      "narrativeId": "career-narrative.star-raid",
+      "gameId": "star-raid",
+      "professionId": "adventure.pilot",
+      "sourceClueId": "CL-star-raid",
+      "trigger": {
+        "clueId": "CL-star-raid",
+        "kind": "enemy.killed",
+        "atLeast": 4
+      },
+      "settlementFacts": {
+        "commissionId": "star-raid.T1",
+        "tier": 1,
+        "objective": {
+          "kind": "boss.defeated",
+          "atLeast": 1,
+          "context": {
+            "level": 1
+          }
+        },
+        "reward": {
+          "credits": 80,
+          "items": {},
+          "evidence": [
+            "E-C1-patrol"
+          ],
+          "flags": [
+            "C1.flight_done"
+          ]
+        },
+        "unlock": {
+          "all": []
+        },
+        "chapterGate": null
+      },
+      "clueTitle": "交火间隙的失联呼叫",
+      "clueTeaser": "频道挤进半句老格式呼叫，报务室每天同一时刻都能听到它。",
+      "icon": "scroll",
+      "readTitle": "留空收件人的电文",
+      "readBody": [
+        "交火间隙，频道挤进一句被削掉一半的呼叫。",
+        "值班报务认出那是失联信标的老格式，收件人一栏留空，想请你到东堤报务室听听原文。"
+      ],
+      "sender": "值班报务",
+      "npc": "东堤报务室的值班报务",
+      "npcSourceGameId": "star-raid",
+      "invitationAction": "比对杂音报头",
+      "laterLabel": "把电文留在留空格",
+      "freshIntro": [
+        "你带着交火杂音到东堤报务室，值班报务保留空格，没有替它写收件人。同一时刻的旧电文曾出现P-07编码，室里还夹着值机人留下的旧街照片。",
+        "报务员说护航处正缺人手，建议你先去告示板问一趟短航，再回来等电文。"
+      ],
+      "existingIntro": "东堤报务室的值班报务是头一回见你，只把收件人留空的电文摊开，说P-07的编码仍在原处；你可以先听原文，不必立刻出航。",
+      "firstCommissionId": "star-raid.T1",
+      "firstActionHint": "你愿意先击败第一阶段Boss，把巡逻星域的航报带回报务室吗？",
+      "firstReceipt": "第一阶段Boss被击破，巡逻航报和工钱一起结清。报务员发现杂音间隔又短了一点，问你要不要回报务室再听一次留空呼号。",
+      "nextAction": "回报务室重听呼号",
+      "exitLabel": "把航报留在报务室",
+      "pauseLine": "报务员会替你留住频道，等你下次回来。",
+      "returnLine": "你回到报务室，值班报务已经把留空呼号倒回同一时刻。",
+      "completedLine": "巡逻航报、杂音报头和旧电文终于能按时间对齐。",
+      "mainlineConnection": "P-07编码与失联信标的旧号相连，首巡航报可为北环研究院提供可验证的现场记录。",
+      "optionalCrossover": {
+        "releaseVersion": "0.24",
+        "requiredProfessionIds": [
+          "adventure.pilot",
+          "research.gravity"
+        ],
+        "acceptanceRule": "双方均已主动接受",
+        "text": "若星际飞行员与重力实验员都已接受，可用巡航杂音的时间间隔和校准频率互证，判断失联信标是否仍在旧空域回话。"
+      },
+      "storyMessages": [
+        {
+          "messageId": "message.star-raid.arrival.v1",
+          "professionId": "adventure.pilot",
+          "surface": "arrival",
+          "label": "东堤报务室",
+          "text": "报务员把留空呼号放慢：你想先听报头，还是先看旧电文？",
+          "from": "东堤报务室的值班报务"
+        }
+      ]
+    }
+  ]
+}

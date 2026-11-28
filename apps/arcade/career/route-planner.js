@@ -404,6 +404,78 @@
    * 内容规整
    * ------------------------------------------------------------------ */
 
+  function readWorldWorkOption(raw, commissionSet, errors, warnings) {
+    if (raw === undefined || raw === null) return null;
+    if (!isObject(raw)) {
+      errors.push('world-work-invalid');
+      return null;
+    }
+    if (!Array.isArray(raw.commissionIds)) {
+      errors.push('world-work-ids-missing');
+      return null;
+    }
+    if (!Array.isArray(raw.entries)) {
+      errors.push('world-work-entries-missing');
+      return null;
+    }
+    var ids = [];
+    var idSet = makeMap();
+    raw.commissionIds.forEach(function (value) {
+      var id = trimText(value, 120);
+      if (!ID_RE.test(id)) {
+        errors.push('world-work-id-invalid');
+        return;
+      }
+      if (idSet[id]) {
+        errors.push('world-work-id-duplicate:' + id);
+        return;
+      }
+      if (!commissionSet[id]) {
+        errors.push('world-work-id-unknown:' + id);
+        return;
+      }
+      idSet[id] = true;
+      ids.push(id);
+    });
+    var entries = [];
+    var index = makeMap();
+    raw.entries.forEach(function (entry) {
+      if (!isObject(entry)) {
+        errors.push('world-work-entry-invalid');
+        return;
+      }
+      var id = trimText(entry.commissionId, 120);
+      if (!ID_RE.test(id) || !idSet[id]) {
+        errors.push('world-work-entry-unknown:' + id);
+        return;
+      }
+      if (index[id]) {
+        errors.push('world-work-entry-duplicate:' + id);
+        return;
+      }
+      var title = trimText(entry.title, 120);
+      var summary = trimText(entry.summary, 240);
+      if (!title || !summary) {
+        errors.push('world-work-entry-text-missing:' + id);
+        return;
+      }
+      var normalized = { commissionId: id, title: title, summary: summary };
+      entries.push(normalized);
+      index[id] = normalized;
+    });
+    ids.forEach(function (id) {
+      if (!index[id]) errors.push('world-work-entry-missing:' + id);
+    });
+    if (entries.length !== ids.length) errors.push('world-work-entry-count');
+    return {
+      contentVersion: trimText(raw.contentVersion, 32) || null,
+      schemaVersion: nonNegInt(raw.schemaVersion, 1),
+      commissionIds: ids.slice(),
+      entries: entries.slice(),
+      byId: index,
+    };
+  }
+
   function buildAliasMap(items, warnings) {
     var alias = makeMap();
     alias.crystal = 'starcrystal';
@@ -699,6 +771,7 @@
       contentVersion: null,
       commissions: [],
       commissionSet: makeMap(),
+      commissionIndex: makeMap(),
       byProfession: makeMap(),
       professionIds: [],
       professionSet: makeMap(),
@@ -706,6 +779,7 @@
       gameIds: [],
       gameSet: makeMap(),
       gameNames: makeMap(),
+      gameProfessions: makeMap(),
       originMap: makeMap(),
       originIds: [],
       chapter: null,
@@ -721,6 +795,11 @@
       tokenIndex: makeMap(),
       alternatives: [],
       evidence: null,
+      worldWork: null,
+      worldWorkIds: [],
+      worldWorkSet: makeMap(),
+      worldWorkIndex: makeMap(),
+      campaign: null,
       warnings: [],
       materialsSource: 'none',
     };
@@ -759,6 +838,7 @@
     next.commissions = accepted;
     accepted.forEach(function (commission) {
       next.commissionSet[commission.commissionId] = true;
+      next.commissionIndex[commission.commissionId] = commission;
       if (!has(next.byProfession, commission.professionId)) next.byProfession[commission.professionId] = [];
       next.byProfession[commission.professionId].push(commission);
       mark(next.gameSet, commission.gameId);
@@ -809,6 +889,13 @@
       if (typeof raw.displayName === 'string' && raw.displayName.trim()) {
         next.gameNames[gameId] = trimText(raw.displayName, 80);
       }
+      var byGame = makeMap();
+      if (Array.isArray(raw.professions)) {
+        raw.professions.forEach(function (professionId) {
+          if (typeof professionId === 'string' && ID_RE.test(professionId)) mark(byGame, professionId);
+        });
+      }
+      next.gameProfessions[gameId] = byGame;
     });
 
     /* ---- 职业目录 = registry ∪ 委托实际引用（不硬编码数量） ---- */
@@ -952,6 +1039,19 @@
         return compareText(a.offerId, b.offerId);
       });
 
+    /* ---- 世界通用工作（只读 overlay，不改变既有委托归属） ---- */
+    next.worldWork = readWorldWorkOption(options.worldWork, next.commissionSet, errors, warnings);
+    if (next.worldWork) {
+      next.worldWorkIds = next.worldWork.commissionIds.slice();
+      next.worldWorkIds.forEach(function (id) {
+        next.worldWorkSet[id] = true;
+        next.worldWorkIndex[id] = next.worldWork.byId[id];
+      });
+    }
+
+    /* ---- 主线章节（可选；只读章节标题/完成旗标/终局入口，供替代叙事取真实内容） ---- */
+    next.campaign = readCampaignOption(options.campaign, warnings);
+
     /* ---- 内容版本（只读展示） ---- */
     var contentVersion = null;
     if (isObject(options.commissions) && typeof options.commissions.contentVersion === 'string') {
@@ -995,6 +1095,7 @@
           materials: input.materials !== undefined ? input.materials : input.content.materials,
           evidence: input.evidence !== undefined ? input.evidence : input.content.evidence,
           alternatives: input.alternatives !== undefined ? input.alternatives : input.content.alternatives,
+          worldWork: input.worldWork !== undefined ? input.worldWork : input.content.worldWork,
           offers: input.offers,
         };
       } else if (isObject(input)) {
@@ -1021,7 +1122,7 @@
         };
       }
       state = next;
-      return {
+      var report = {
         ok: true,
         errors: [],
         warnings: state.warnings.slice(),
@@ -1035,7 +1136,10 @@
         hasEvidence: !!state.evidence,
         offerCount: state.alternatives.length,
         contentVersion: state.contentVersion,
+        campaignCount: campaignInfo().chapterOrder.length,
       };
+      if (state.worldWork) report.worldWorkCount = state.worldWorkIds.length;
+      return report;
     } catch (err) {
       return failure(REASONS.exception, { error: errorText(err), errors: [REASONS.exception], unchanged: true });
     }
@@ -1051,7 +1155,7 @@
   }
 
   function status() {
-    return {
+    var report = {
       moduleVersion: MODULE_VERSION,
       schemaVersion: SCHEMA_VERSION,
       configured: isConfigured(),
@@ -1067,8 +1171,11 @@
       combatGameCount: Object.keys(state.combatGames).length,
       evidence: !!state.evidence,
       offerCount: state.alternatives.length,
+      campaignCount: campaignInfo().chapterOrder.length,
       warnings: state.warnings.slice(),
     };
+    if (state.worldWork) report.worldWorkCount = state.worldWorkIds.length;
+    return report;
   }
 
   function domainOf(professionId) {
@@ -1961,6 +2068,274 @@
   }
 
   /* ------------------------------------------------------------------ *
+   * 世界通用工作路径（只读；不改变原 plan() 的单职业链语义）
+   * ------------------------------------------------------------------ */
+
+  function worldWorkFailure(reason, extra) {
+    var out = {
+      ok: false,
+      reason: reason,
+      complete: false,
+      originGameId: null,
+      acceptedProfessionId: null,
+      originCommissionId: null,
+      steps: [],
+      worldCommissionIds: [],
+      plannedWorldCommissionIds: [],
+      flagsAfter: [],
+      evidence: [],
+      economy: {
+        initialCredits: 0,
+        plannedCredits: 0,
+        plannedItems: {},
+        spentCredits: 0,
+        spentItems: {},
+        repeatSalaryUsed: false,
+        marketRequired: false,
+      },
+      blockers: [],
+    };
+    if (isObject(extra)) {
+      Object.keys(extra).forEach(function (key) { out[key] = extra[key]; });
+    }
+    if (!out.blockers.length) {
+      out.blockers.push({ kind: reason, id: reason, reason: reason, commissionId: null });
+    }
+    return out;
+  }
+
+  function applyChapterSignalFlags(flags) {
+    var chapter = state.chapter;
+    if (!chapter || !Array.isArray(chapter.signals)) return;
+    chapter.signals.forEach(function (signal) {
+      if (!isObject(signal) || typeof signal.flag !== 'string') return;
+      var target = typeof signal.mapsTo === 'string' && FLAG_RE.test(signal.mapsTo) ? signal.mapsTo : signal.flag;
+      if (marked(flags, target)) return;
+      var from = Array.isArray(signal.from) ? signal.from : [];
+      if (from.some(function (flag) { return marked(flags, flag); })) {
+        mark(flags, signal.flag);
+        mark(flags, target);
+      }
+    });
+  }
+
+  function worldWorkStep(commission, meta, order) {
+    return {
+      kind: 'commission',
+      category: 'world',
+      id: commission.commissionId,
+      commissionId: commission.commissionId,
+      tier: commission.tier,
+      gameId: commission.gameId,
+      title: meta.title,
+      summary: meta.summary,
+      reason: meta.summary,
+      optional: false,
+      missing: [],
+      order: order,
+    };
+  }
+
+  function professionStep(commission, order) {
+    return {
+      kind: 'commission',
+      category: 'profession',
+      id: commission.commissionId,
+      commissionId: commission.commissionId,
+      tier: commission.tier,
+      gameId: commission.gameId,
+      title: commission.title,
+      reason: '先把这张属于你当前职业的工单交回，再沿港里的通用活计往下走。',
+      optional: false,
+      missing: [],
+      order: order,
+    };
+  }
+
+  function buildWorldWorkPath(input) {
+    try {
+      if (!isConfigured()) return worldWorkFailure(REASONS.notConfigured);
+      if (!state.worldWork) return worldWorkFailure('world-work-not-configured');
+      var options = isObject(input) ? input : {};
+      var originGameId = typeof options.originGameId === 'string' ? options.originGameId : '';
+      var acceptedProfessionId = typeof options.acceptedProfessionId === 'string'
+        ? options.acceptedProfessionId
+        : (typeof options.professionId === 'string' ? options.professionId : '');
+      if (!originGameId || !has(state.gameSet, originGameId)) {
+        return worldWorkFailure(REASONS.unknownOrigin, { originGameId: originGameId || null });
+      }
+      if (!acceptedProfessionId || !has(state.professionSet, acceptedProfessionId)) {
+        return worldWorkFailure(REASONS.unknownProfession, { acceptedProfessionId: acceptedProfessionId || null });
+      }
+      var origin = state.originMap[originGameId] || null;
+      var ownList = state.byProfession[acceptedProfessionId] || [];
+      var tierOne = ownList.filter(function (commission) { return commission.tier === 1; })
+        .slice().sort(compareCommissionStandard);
+      var originCommission = null;
+      if (typeof options.originCommissionId === 'string') {
+        var requested = state.commissionIndex[options.originCommissionId] || null;
+        if (requested && requested.professionId === acceptedProfessionId && requested.tier === 1) {
+          originCommission = requested;
+        }
+      }
+      if (!originCommission) {
+        for (var oi = 0; oi < tierOne.length; oi += 1) {
+          if (tierOne[oi].gameId === originGameId) {
+            originCommission = tierOne[oi];
+            break;
+          }
+        }
+      }
+      if (!originCommission && tierOne.length) originCommission = tierOne[0];
+      if (!originCommission) return worldWorkFailure('origin-first-commission-missing', {
+        originGameId: originGameId,
+        acceptedProfessionId: acceptedProfessionId,
+      });
+
+      /* 职业↔游戏映射只认 registry.games[].professions[]；同游戏可有多个职业，
+         跨游戏职业的首单也可以不在 originGameId。旧章节映射只作无 registry 时的兜底。 */
+      var registeredForOrigin = state.gameProfessions[originGameId] || null;
+      var registeredForFirst = state.gameProfessions[originCommission.gameId] || null;
+      var allowed = (registeredForOrigin && marked(registeredForOrigin, acceptedProfessionId))
+        || (registeredForFirst && marked(registeredForFirst, acceptedProfessionId))
+        || (!Object.keys(state.gameProfessions).length && !!origin && origin.professionId === acceptedProfessionId);
+      if (!allowed) {
+        return worldWorkFailure('profession-not-registered-for-origin', {
+          originGameId: originGameId,
+          acceptedProfessionId: acceptedProfessionId,
+          originCommissionId: originCommission.commissionId,
+        });
+      }
+
+      var wallet = walletView(options.wallet);
+      var quests = questRowsOf(options.quests);
+      var claims = claimRowsOf(options.claims);
+      var flagsInput = readFlagsInput(options.flags);
+      var cleared = collectCleared(quests, claims);
+      var resolved = makeMap();
+      Object.keys(cleared).forEach(function (id) { mark(resolved, id); });
+      var story = evaluateStory(flagsInput, quests, claims, wallet);
+      var steps = [];
+      var blockers = [];
+      var plannedReceipts = [];
+      var plannedCredits = 0;
+      var plannedItems = {};
+      var rentalAdded = false;
+      var ownsShip = ownsAnyShip(wallet.equipment);
+
+      function refreshStory() {
+        if (!plannedReceipts.length || !activeEvidenceModule()) return;
+        var next = evaluateStory(flagsInput, quests, claims.concat(plannedReceipts), wallet);
+        if (next.evidenceUsed) story = next;
+      }
+
+      function addReward(commission) {
+        plannedCredits += commission.reward.credits;
+        Object.keys(commission.reward.items).forEach(function (itemId) {
+          plannedItems[itemId] = (plannedItems[itemId] || 0) + commission.reward.items[itemId];
+        });
+      }
+
+      if (!marked(cleared, originCommission.commissionId)) {
+        var originUnlock = evaluateUnlock(originCommission, resolved, story.flags);
+        if (!originUnlock.ok) {
+          blockers.push({ kind: 'origin-locked', id: originCommission.commissionId, reason: 'origin-unlock-not-met', commissionId: originCommission.commissionId });
+        } else {
+          steps.push(professionStep(originCommission, steps.length + 1));
+          mark(resolved, originCommission.commissionId);
+          plannedReceipts.push(syntheticReceipt(originCommission));
+          addReward(originCommission);
+          refreshStory();
+        }
+      }
+
+      var worldList = [];
+      state.worldWorkIds.forEach(function (id) {
+        var commission = state.commissionIndex[id];
+        if (commission) worldList.push(commission);
+      });
+      var chain = buildChain(worldList, 'standard');
+      if (!chain.ok) {
+        blockers.push({ kind: 'world-chain-cycle', id: 'world-chain-cycle', reason: 'world-chain-cycle', commissionId: null, missing: chain.cycle.slice() });
+      } else {
+        for (var wi = 0; wi < chain.order.length; wi += 1) {
+          var commission = chain.order[wi];
+          if (marked(resolved, commission.commissionId)) continue;
+          var unlocked = evaluateUnlock(commission, resolved, story.flags);
+          if (!unlocked.ok) {
+            blockers.push({ kind: 'world-locked', id: commission.commissionId, reason: 'world-unlock-not-met', commissionId: commission.commissionId });
+            continue;
+          }
+          if (has(state.combatGames, commission.gameId) && !ownsShip) {
+            if (!state.rentalShip) {
+              blockers.push({ kind: 'world-ship-missing', id: commission.commissionId, reason: 'rental-ship-missing', commissionId: commission.commissionId });
+              continue;
+            }
+            if (!rentalAdded) {
+              steps.push(rentalStep(state.rentalShip, commission.gameId));
+              rentalAdded = true;
+            }
+          }
+          var meta = state.worldWorkIndex[commission.commissionId];
+          steps.push(worldWorkStep(commission, meta, steps.length + 1));
+          mark(resolved, commission.commissionId);
+          plannedReceipts.push(syntheticReceipt(commission));
+          addReward(commission);
+          refreshStory();
+        }
+      }
+
+      applyChapterSignalFlags(story.flags);
+      /* 章节信号表未注入时，仍按冻结的 C1 收据旗标派生唯一里程碑；只读，不写库。 */
+      if (!marked(story.flags, 'C1.signal_fragment')) {
+        var c1Sources = ['C1.work_done', 'C1.flight_done', 'C1.signal', 'C1.records'];
+        if (c1Sources.some(function (flag) { return marked(story.flags, flag); })) {
+          mark(story.flags, 'C1.signal_fragment');
+        }
+      }
+      var evidenceModule = activeEvidenceModule();
+      if (!evidenceModule && !blockers.length) {
+        blockers.push({ kind: 'evidence-unavailable', id: 'evidence-unavailable', reason: 'evidence-unavailable', commissionId: null });
+      }
+      var flagsAfter = mapValues(story.flags);
+      var evidence = mapValues(story.tokens);
+      var complete = blockers.length === 0
+        && marked(story.flags, 'C1.signal_fragment')
+        && marked(story.flags, 'C2.research_complete')
+        && marked(story.flags, 'C3.truth_found')
+        && marked(story.flags, 'C4.city_power_restored');
+      assignStepOrder(steps);
+      return {
+        ok: true,
+        reason: null,
+        complete: complete,
+        originGameId: originGameId,
+        acceptedProfessionId: acceptedProfessionId,
+        originCommissionId: originCommission.commissionId,
+        steps: steps,
+        worldCommissionIds: state.worldWorkIds.slice(),
+        plannedWorldCommissionIds: state.worldWorkIds.filter(function (id) {
+          return marked(resolved, id) && !marked(cleared, id);
+        }),
+        flagsAfter: flagsAfter,
+        evidence: evidence,
+        economy: {
+          initialCredits: wallet.credits,
+          plannedCredits: plannedCredits,
+          plannedItems: plannedItems,
+          spentCredits: 0,
+          spentItems: {},
+          repeatSalaryUsed: false,
+          marketRequired: false,
+        },
+        blockers: blockers,
+      };
+    } catch (err) {
+      return worldWorkFailure(REASONS.exception, { error: errorText(err) });
+    }
+  }
+
+  /* ------------------------------------------------------------------ *
    * 替代路径（工作 / 研究 / 贸易 / 租机 / 代办，至少三种同时存在）
    * ------------------------------------------------------------------ */
 
@@ -2562,7 +2937,7 @@
       var professionGameId = list.length ? list[0].gameId : null;
       var gameDisplayName = professionGameId ? state.gameNames[professionGameId] || professionGameId : null;
 
-      return {
+      var result = {
         ok: true,
         reason: null,
         complete: complete,
@@ -2602,6 +2977,10 @@
         summaryText: summaryText,
         contentVersion: state.contentVersion,
       };
+      if (options.includeWorldWork === true) {
+        result.worldWorkPath = buildWorldWorkPath(Object.assign({}, options, { acceptedProfessionId: professionId }));
+      }
+      return result;
     } catch (err) {
       return failurePlan(REASONS.exception, { error: errorText(err) });
     }
@@ -2736,8 +3115,20 @@
         lines.push('也可以：' + text);
         alternativeLines.push({ kind: alternative.kind, text: text });
       });
+      var worldWorkLines = [];
+      var worldPath = route.worldWorkPath && route.worldWorkPath.ok === true ? route.worldWorkPath : null;
+      if (worldPath && Array.isArray(worldPath.steps) && worldPath.steps.length) {
+        lines.push('港里还有几张不分行的活计：');
+        worldPath.steps.forEach(function (step) {
+          if (!step || step.category !== 'world') return;
+          var text = '通用活计「' + step.title + '」：' + (step.summary || step.reason || '');
+          lines.push(text);
+          worldWorkLines.push(text);
+        });
+        if (!worldPath.complete) lines.push('这些活计还没排齐；先做眼前能接的纸，回头再来看。');
+      }
       if (route.summaryText) lines.push(route.summaryText);
-      return {
+      var explained = {
         ok: true,
         title: title,
         lines: lines,
@@ -2747,6 +3138,8 @@
         summary: route.summaryText || '',
         text: lines.join('\n'),
       };
+      if (worldWorkLines.length) explained.worldWorkLines = worldWorkLines;
+      return explained;
     } catch (err) {
       return {
         ok: false,
@@ -2821,6 +3214,40 @@
       }
     }
     return { origins: origins, professions: professions, plans: plans, okAll: okAll, errors: errors };
+  }
+
+  function worldWorkOriginPairs() {
+    var seen = makeMap();
+    var pairs = [];
+    function add(gameId, professionId) {
+      if (!has(state.gameSet, gameId) || !has(state.professionSet, professionId)) return;
+      var key = gameId + '|' + professionId;
+      if (seen[key]) return;
+      seen[key] = true;
+      pairs.push({ gameId: gameId, professionId: professionId });
+    }
+    Object.keys(state.gameProfessions).forEach(function (gameId) {
+      Object.keys(state.gameProfessions[gameId]).forEach(function (professionId) {
+        add(gameId, professionId);
+      });
+    });
+    state.originIds.forEach(function (gameId) {
+      var origin = state.originMap[gameId] || null;
+      if (origin && origin.professionId) add(gameId, origin.professionId);
+    });
+    state.commissions.forEach(function (commission) {
+      if (commission.tier === 1) add(commission.gameId, commission.professionId);
+    });
+    /* 完整矩阵与 plan() 一致：任一起源配任一已注册职业都要有通用世界路径，
+       具体职业是否允许仍由 registry.games[].professions[] 在路径里校验。 */
+    state.originIds.forEach(function (gameId) {
+      state.professionIds.forEach(function (professionId) { add(gameId, professionId); });
+    });
+    pairs.sort(function (a, b) {
+      var game = compareText(a.gameId, b.gameId);
+      return game !== 0 ? game : compareText(a.professionId, b.professionId);
+    });
+    return pairs;
   }
 
   function validate() {
@@ -3015,7 +3442,77 @@
     }
     addCheck('evidence-module', evidenceCheck, evidenceDetail);
 
-    /* 10. 静态边界：无 DOM/存储/网络/写库/随机/时钟/其它模块 */
+    /* 10. 世界通用工作：内容引用、全起源到 C4、披露与经济边界。 */
+    if (state.worldWork) {
+      var badWorldIds = [];
+      state.worldWorkIds.forEach(function (id) {
+        if (!has(commissionIds, id) || !state.worldWorkIndex[id]) badWorldIds.push(id);
+      });
+      addCheck('world-work-ids-known', badWorldIds.length === 0 && state.worldWorkIds.length > 0,
+        badWorldIds.length ? badWorldIds.join(',') : 'count=' + state.worldWorkIds.length);
+
+      var worldPaths = [];
+      var worldPairs = worldWorkOriginPairs();
+      var badWorldPaths = [];
+      var badWorldLeaks = [];
+      var badWorldEconomy = [];
+      worldPairs.forEach(function (pair) {
+        var pairLabel = pair.gameId + '/' + pair.professionId;
+        var path = buildWorldWorkPath({
+          originGameId: pair.gameId,
+          acceptedProfessionId: pair.professionId,
+          wallet: { credits: 80, items: {} },
+          quests: [],
+          claims: [],
+          flags: ['C0.port_seen'],
+        });
+        worldPaths.push({ originGameId: pair.gameId, professionId: pair.professionId, path: path });
+        if (!path.ok || !path.complete) badWorldPaths.push(pairLabel + ':' + (path.reason || 'incomplete'));
+        var worldSteps = (path.steps || []).filter(function (step) { return step.category === 'world'; });
+        worldSteps.forEach(function (step) {
+          if (Object.prototype.hasOwnProperty.call(step, 'professionId')) badWorldLeaks.push(pairLabel + ':profession-field');
+          var text = (step.title || '') + ' ' + (step.summary || '') + ' ' + (step.reason || '');
+          state.professionIds.forEach(function (id) {
+            var meta = state.professionMeta[id] || {};
+            if (text.indexOf(id) >= 0 || (meta.displayName && text.indexOf(meta.displayName) >= 0)) {
+              badWorldLeaks.push(pairLabel + ':' + id);
+            }
+          });
+        });
+        var expectedCredits = 0;
+        var expectedItems = {};
+        (path.steps || []).forEach(function (step) {
+          if (step.kind !== 'commission') return;
+          var commission = state.commissionIndex[step.commissionId];
+          if (!commission) return;
+          expectedCredits += commission.reward.credits;
+          Object.keys(commission.reward.items).forEach(function (itemId) {
+            expectedItems[itemId] = (expectedItems[itemId] || 0) + commission.reward.items[itemId];
+          });
+        });
+        var economy = path.economy || {};
+        if (economy.plannedCredits !== expectedCredits
+            || JSON.stringify(economy.plannedItems || {}) !== JSON.stringify(expectedItems)
+            || economy.spentCredits !== 0
+            || Object.keys(economy.spentItems || {}).length !== 0
+            || economy.repeatSalaryUsed !== false
+            || economy.marketRequired !== false) {
+          badWorldEconomy.push(pairLabel);
+        }
+      });
+      addCheck('world-work-origin-paths', badWorldPaths.length === 0 && worldPaths.length === worldPairs.length && worldPairs.length > 0,
+        badWorldPaths.length ? badWorldPaths.slice(0, MAX_WALK).join(',') : 'paths=' + worldPaths.length);
+      addCheck('world-work-no-profession-leak', badWorldLeaks.length === 0, badWorldLeaks.slice(0, MAX_WALK).join(','));
+      addCheck('world-work-economy', badWorldEconomy.length === 0, badWorldEconomy.slice(0, MAX_WALK).join(','));
+    }
+
+    /* 10b. 主线替代叙事：逐章指引结构、卫生与经济面（缺 worldNarrative 时同形）。 */
+    if (state.worldWork) {
+      var guideIssues = narrativeGuideIssues();
+      addCheck('narrative-guide', guideIssues.length === 0, guideIssues.slice(0, MAX_WALK).join(','));
+    }
+
+    /* 11. 静态边界：无 DOM/存储/网络/写库/随机/时钟/其它模块 */
     var source = '';
     try {
       source = String(routePlannerFactory);
@@ -3045,7 +3542,7 @@
     var checksPassed = checks.filter(function (item) {
       return item.ok;
     }).length;
-    return {
+    var result = {
       ok: errors.length === 0,
       configured: true,
       contentVersion: state.contentVersion,
@@ -3063,6 +3560,810 @@
       },
       status: status(),
     };
+    if (state.worldWork) {
+      result.worldWorkPathProof = {
+        pairCount: worldPairs.length,
+        pairs: worldPairs.slice(),
+        passed: worldPairs.length - badWorldPaths.length,
+        failures: badWorldPaths.slice(),
+      };
+    }
+    return result;
+  }
+
+  /* ------------------------------------------------------------------ *
+   * 0.24 主线替代叙事：章节替代指引（只读；缺省输入下与 0.23 同形）
+   *
+   * catalog.worldNarrative 接受 T22 纯 resolver 的输出形状：
+   *   { schemaVersion, chapterId, nodes:[{narrativeNodeId, mechanism, anchor, npcRef,
+   *     signatureFrom, available, reason, texts:{offer,progress,receipt,next}, receiptSource}],
+   *     crossovers:[...] }
+   * 也接受输出数组，或 {C1:output,...} / {chapters:{C1:output,...}} 映射。该输入只
+   * 影响本段的公开文案；缺失时给出与 0.23 完全一致的内置替代说明（同一形状、
+   * source 恒为 content）。所有替代方式只引用真实内容（world-work 条目 / 明码代办
+   * offer / 免费租用机 / story-evidence 记录规则），不写库、不发奖励、不新增
+   * reason code，gate 里的 requiresSpecificProfession 恒为 false。
+   * ------------------------------------------------------------------ */
+
+  var NARRATIVE_CHAPTER_ORDER = Object.freeze(['C1', 'C2', 'C3', 'C4', 'C5']);
+  var NARRATIVE_MECHANISMS = Object.freeze([
+    'world-work',
+    'profession-commission',
+    'errand',
+    'rental',
+    'market-material',
+    'evidence-pair',
+  ]);
+  var NARRATIVE_MECHANISM_RECEIPT = Object.freeze({
+    'world-work': 'commission-receipt',
+    'profession-commission': 'commission-receipt',
+    'errand': 'alternative-purchase',
+    'rental': 'commission-receipt',
+    'market-material': 'purchase-ledger',
+    'evidence-pair': 'evidence-grant',
+  });
+  var NARRATIVE_MECHANISM_ANCHOR_KIND = Object.freeze({
+    'world-work': 'commission',
+    'profession-commission': 'commission',
+    'errand': 'offer',
+    'rental': 'ship',
+    'market-material': 'item',
+    'evidence-pair': 'evidencePair',
+  });
+  var NARRATIVE_CHAPTER_FLAGS = Object.freeze({
+    C1: 'C1.signal_fragment',
+    C2: 'C2.research_complete',
+    C3: 'C3.truth_found',
+    C4: 'C4.city_power_restored',
+    C5: 'C5.star_tower_resolved',
+  });
+  var NARRATIVE_FINALE_ENTRY = 'C4.city_power_restored';
+  var NARRATIVE_MAX_TEXT = 240;
+  var NARRATIVE_MAX_REFS = 3;
+
+  var NARRATIVE_CHAPTER_TEXT = Object.freeze({
+    C1: '第一章要的是一笔真实的交割：做一张按钟点结的活、借码头租用机飞一趟，或走一趟明码代办，都算数。',
+    C2: '第二章要的是一份能解译的记录：不同去处带回来的现场记录凑在一起就行。',
+    C3: '第三章要先对上一段的结论，再补一份能对得上的旧记录。',
+    C4: '第四章要的是城市重新通电：靠的是几份不同活计带回来的现场记录。',
+    C5: '终局的门槛只有一件事：先让停摆的城市重新通电；三条终局路线都不问出身。',
+  });
+
+  function emptyCampaignInfo() {
+    return {
+      provided: false,
+      contentVersion: null,
+      chapterIndex: makeMap(),
+      chapterOrder: [],
+      finaleEntryFlags: [],
+      endings: [],
+    };
+  }
+
+  /**
+   * 只读解析 campaign.json：章节完成旗标、章节标题、终局入口旗标与终局标题/说明。
+   * 坏内容只记 warning（不阻断既有规划），因为这一段只服务叙事说明。
+   */
+  function readCampaignOption(raw, warnings) {
+    var out = emptyCampaignInfo();
+    if (raw === undefined || raw === null) return out;
+    if (!isObject(raw) || !Array.isArray(raw.chapters)) {
+      warnings.push('campaign-invalid');
+      return out;
+    }
+    if (typeof raw.contentVersion === 'string') out.contentVersion = raw.contentVersion;
+    raw.chapters.forEach(function (chapter) {
+      if (!isObject(chapter)) return;
+      var chapterId = typeof chapter.chapterId === 'string' ? chapter.chapterId : '';
+      if (NARRATIVE_CHAPTER_ORDER.indexOf(chapterId) < 0) return;
+      if (has(out.chapterIndex, chapterId)) {
+        warnings.push('campaign-chapter-duplicate:' + chapterId);
+        return;
+      }
+      var rewardFlags = [];
+      var routes = Array.isArray(chapter.routes) ? chapter.routes : [];
+      routes.forEach(function (route) {
+        if (!isObject(route)) return;
+        tokenArray(route.rewardFlags).forEach(function (flag) {
+          if (FLAG_RE.test(flag)) rewardFlags.push(flag);
+        });
+      });
+      out.chapterIndex[chapterId] = {
+        chapterId: chapterId,
+        title: typeof chapter.title === 'string' ? trimText(chapter.title, MAX_TITLE) : '',
+        rewardFlags: uniqueSorted(rewardFlags),
+      };
+      out.chapterOrder.push(chapterId);
+    });
+    out.chapterOrder.sort();
+    var finaleEntry = [];
+    var endings = Array.isArray(raw.endings) ? raw.endings : [];
+    endings.forEach(function (ending) {
+      if (!isObject(ending)) return;
+      var approach = typeof ending.approach === 'string' ? ending.approach : '';
+      if (!approach || !/^[a-z][a-z0-9-]{0,39}$/.test(approach)) return;
+      var entry = isObject(ending.entry) ? ending.entry : {};
+      var entryFlags = tokenArray(entry.allFlags).filter(function (flag) {
+        return FLAG_RE.test(flag);
+      });
+      entryFlags.forEach(function (flag) {
+        finaleEntry.push(flag);
+      });
+      out.endings.push({
+        approach: approach,
+        title: typeof ending.title === 'string' ? trimText(ending.title, MAX_TITLE) : '',
+        summary: typeof ending.summary === 'string' ? trimText(ending.summary, MAX_REASON) : '',
+        entryFlags: uniqueSorted(entryFlags),
+      });
+    });
+    out.endings.sort(function (a, b) {
+      return compareText(a.approach, b.approach);
+    });
+    out.finaleEntryFlags = uniqueSorted(finaleEntry);
+    out.provided = out.chapterOrder.length > 0;
+    return out;
+  }
+
+  function campaignInfo() {
+    return isObject(state.campaign) ? state.campaign : emptyCampaignInfo();
+  }
+
+  /**
+   * 归一化单个替代叙事节点（resolver 输出与 bridge 按章注入共用同一套校验）。
+   * 只保留公开字段；坏形状按 warning 丢弃，绝不抛。
+   */
+  function normalizeNarrativeNode(node, warnings) {
+    if (!isObject(node)) {
+      warnings.push('world-narrative-node-invalid');
+      return null;
+    }
+    if (typeof node.narrativeNodeId !== 'string' || !node.narrativeNodeId) {
+      warnings.push('world-narrative-node-invalid');
+      return null;
+    }
+    if (NARRATIVE_MECHANISMS.indexOf(node.mechanism) < 0) {
+      warnings.push('world-narrative-node-mechanism:' + String(node.mechanism));
+      return null;
+    }
+    if (NARRATIVE_MECHANISM_RECEIPT[node.mechanism] !== node.receiptSource) {
+      warnings.push('world-narrative-node-receipt:' + String(node.receiptSource));
+      return null;
+    }
+    if (!isObject(node.texts)) {
+      warnings.push('world-narrative-node-texts');
+      return null;
+    }
+    return {
+      narrativeNodeId: node.narrativeNodeId,
+      mechanism: node.mechanism,
+      available: node.available === true,
+      receiptSource: node.receiptSource,
+      texts: {
+        offer: typeof node.texts.offer === 'string' ? node.texts.offer : '',
+        progress: typeof node.texts.progress === 'string' ? node.texts.progress : '',
+        receipt: typeof node.texts.receipt === 'string' ? node.texts.receipt : '',
+        next: typeof node.texts.next === 'string' ? node.texts.next : '',
+      },
+    };
+  }
+
+  /**
+   * 归一化 T22 resolver 输出。只保留结构合法的节点；坏形状按 warning 丢弃，
+   * 绝不抛、绝不写库。crossovers 不参与本段（交汇只在港口/经历呈现）。
+   */
+  function readWorldNarrativeInput(raw) {
+    var out = { present: false, nodeCount: 0, byChapter: makeMap(), warnings: [] };
+    if (raw === undefined || raw === null) return out;
+    var outputs = [];
+    function accept(value) {
+      if (isObject(value) && Array.isArray(value.nodes)) outputs.push(value);
+    }
+    if (Array.isArray(raw)) {
+      raw.forEach(accept);
+    } else if (isObject(raw) && Array.isArray(raw.nodes)) {
+      accept(raw);
+    } else if (isObject(raw)) {
+      if (isObject(raw.chapters)) {
+        NARRATIVE_CHAPTER_ORDER.forEach(function (chapterId) {
+          accept(raw.chapters[chapterId]);
+        });
+      }
+      NARRATIVE_CHAPTER_ORDER.forEach(function (chapterId) {
+        accept(raw[chapterId]);
+      });
+    }
+    var seen = makeMap();
+    outputs.forEach(function (output) {
+      var chapterId = typeof output.chapterId === 'string' ? output.chapterId : '';
+      if (NARRATIVE_CHAPTER_ORDER.indexOf(chapterId) < 0) {
+        out.warnings.push('world-narrative-chapter-invalid');
+        return;
+      }
+      if (seen[chapterId]) {
+        out.warnings.push('world-narrative-chapter-duplicate:' + chapterId);
+        return;
+      }
+      seen[chapterId] = true;
+      var nodes = [];
+      output.nodes.forEach(function (node) {
+        var normalized = normalizeNarrativeNode(node, out.warnings);
+        if (normalized) nodes.push(normalized);
+      });
+      out.byChapter[chapterId] = nodes;
+      out.nodeCount += nodes.length;
+      out.present = true;
+    });
+    return out;
+  }
+
+  /**
+   * 0.24 T24：归一化 bridge 加性注入的按章形状
+   * `catalog.worldChapterAlternatives = { C1:[node…], …, C5:[node…] }`
+   * （也接受 `{ chapters:{ C1:[node…] } }`）。节点校验与 resolver 输出同一套；
+   * 该形状只影响本段公开文案，不改变 plan()/worldWorkPath()/经济面。
+   */
+  function readWorldChapterAlternativesInput(raw) {
+    var out = { present: false, nodeCount: 0, byChapter: makeMap(), warnings: [] };
+    if (!isObject(raw)) return out;
+    var maps = [raw];
+    if (isObject(raw.chapters)) maps.unshift(raw.chapters);
+    var seen = makeMap();
+    maps.forEach(function (map) {
+      NARRATIVE_CHAPTER_ORDER.forEach(function (chapterId) {
+        if (seen[chapterId]) return;
+        var list = map[chapterId];
+        if (!Array.isArray(list)) return;
+        seen[chapterId] = true;
+        var nodes = [];
+        list.forEach(function (node) {
+          var normalized = normalizeNarrativeNode(node, out.warnings);
+          if (normalized) nodes.push(normalized);
+        });
+        out.byChapter[chapterId] = nodes;
+        out.nodeCount += nodes.length;
+        out.present = true;
+      });
+    });
+    return out;
+  }
+
+  /** 玩家可见文案卫生：未接受职业一律不点名，内部 id/证据前缀/章节码不进文本。 */
+  function narrativeTextBlocked(value) {
+    if (typeof value !== 'string' || !value.trim()) return true;
+    var blocked = false;
+    state.professionIds.forEach(function (professionId) {
+      if (blocked) return;
+      if (value.indexOf(professionId) >= 0) {
+        blocked = true;
+        return;
+      }
+      var meta = state.professionMeta[professionId] || null;
+      var displayName = meta && typeof meta.displayName === 'string' ? meta.displayName : '';
+      if (displayName && displayName !== professionId && value.indexOf(displayName) >= 0) blocked = true;
+    });
+    if (blocked) return true;
+    if (/(^|[^A-Za-z0-9])(E|MAP|BP|DEC)-[A-Za-z0-9]/.test(value)) return true;
+    if (/C[1-5]\.[a-z0-9]/.test(value)) return true;
+    if (/\.T[1-6](?![0-9])/.test(value)) return true;
+    if (forbiddenTextHits(value).length) return true;
+    return false;
+  }
+
+  function narrativeTextsClean(texts) {
+    if (!isObject(texts)) return false;
+    if (narrativeTextBlocked(texts.offer)) return false;
+    if (texts.progress && narrativeTextBlocked(texts.progress)) return false;
+    if (texts.next && narrativeTextBlocked(texts.next)) return false;
+    if (texts.receipt && narrativeTextBlocked(texts.receipt)) return false;
+    return true;
+  }
+
+  function narrativeNodeFor(narrative, chapterId, mechanism) {
+    if (!isObject(narrative) || narrative.present !== true) return null;
+    var list = narrative.byChapter[chapterId] || [];
+    for (var i = 0; i < list.length; i += 1) {
+      var node = list[i];
+      if (!node || node.mechanism !== mechanism || node.available !== true) continue;
+      if (!narrativeTextsClean(node.texts)) continue;
+      return node;
+    }
+    return null;
+  }
+
+  function uniqueInOrder(values) {
+    var seen = makeMap();
+    var out = [];
+    (Array.isArray(values) ? values : []).forEach(function (value) {
+      if (typeof value !== 'string' || !value || seen[value]) return;
+      seen[value] = true;
+      out.push(value);
+    });
+    return out;
+  }
+
+  function tokenClassName(token) {
+    var text = typeof token === 'string' ? token : '';
+    var dash = text.indexOf('-');
+    var prefix = dash > 0 ? text.slice(0, dash) : '';
+    return CLASS_LABELS[prefix] || '记录';
+  }
+
+  /** 把真实缺口（story-evidence 的 missing 条目）翻成戏内说法；不出现 token 原文。 */
+  function missingRecordText(missing) {
+    var parts = [];
+    (Array.isArray(missing) ? missing : []).forEach(function (item) {
+      if (!isObject(item)) return;
+      if (item.kind === 'class' && typeof item.class === 'string') {
+        var name = CLASS_LABELS[item.class] || '记录';
+        var need = toPositiveInt(item.need, toPositiveInt(item.atLeast, 1));
+        parts.push(need + ' 份' + name + (item.distinctGames === true ? '（要来自不同去处）' : ''));
+      } else if (item.kind === 'token' && typeof item.token === 'string') {
+        parts.push('一份' + tokenClassName(item.token));
+      } else if (item.kind === 'game') {
+        parts.push('一处现场的记录');
+      } else if (item.kind === 'flag') {
+        parts.push('上一步的结论');
+      }
+    });
+    if (!parts.length) return '';
+    return parts.join('；');
+  }
+
+  function narrativeStoryOf(options) {
+    var wallet = walletView(options.wallet);
+    var quests = questRowsOf(options.quests);
+    var claims = claimRowsOf(options.claims);
+    var story = evaluateStory(readFlagsInput(options.flags), quests, claims, wallet);
+    applyChapterSignalFlags(story.flags);
+    if (!marked(story.flags, 'C1.signal_fragment')) {
+      var c1Sources = ['C1.work_done', 'C1.flight_done', 'C1.signal', 'C1.records'];
+      for (var i = 0; i < c1Sources.length; i += 1) {
+        if (marked(story.flags, c1Sources[i])) {
+          mark(story.flags, 'C1.signal_fragment');
+          break;
+        }
+      }
+    }
+    return {
+      wallet: wallet,
+      quests: quests,
+      claims: claims,
+      cleared: collectCleared(quests, claims),
+      flags: story.flags,
+      tokens: story.tokens,
+      missingByFlag: isObject(story.missingByFlag) ? story.missingByFlag : null,
+      evidenceUsed: story.evidenceUsed === true,
+    };
+  }
+
+  function narrativeMilestoneOf(chapterId) {
+    return chapterId === 'C5' ? NARRATIVE_FINALE_ENTRY : NARRATIVE_CHAPTER_FLAGS[chapterId];
+  }
+
+  function narrativeMissingFor(story, flag) {
+    if (!isObject(story) || !isObject(story.missingByFlag)) return '';
+    if (!has(story.missingByFlag, flag)) return '';
+    return missingRecordText(story.missingByFlag[flag]);
+  }
+
+  function narrativeRequirementsMet(story, flags) {
+    if (!Array.isArray(flags)) return true;
+    for (var i = 0; i < flags.length; i += 1) {
+      if (!marked(story.flags, flags[i])) return false;
+    }
+    return true;
+  }
+
+  function narrativeChapterRequirementFlags(chapterId) {
+    var campaign = campaignInfo();
+    if (chapterId === 'C5') {
+      if (campaign.finaleEntryFlags.length) return campaign.finaleEntryFlags.slice();
+      return [NARRATIVE_FINALE_ENTRY];
+    }
+    var info = campaign.provided ? campaign.chapterIndex[chapterId] : null;
+    if (info && info.rewardFlags.length) return info.rewardFlags.slice();
+    return [NARRATIVE_CHAPTER_FLAGS[chapterId]];
+  }
+
+  function narrativeChapterTitle(chapterId) {
+    var campaign = campaignInfo();
+    var info = campaign.provided ? campaign.chapterIndex[chapterId] : null;
+    if (info && info.title) return info.title;
+    if (chapterId === 'C1' && isObject(state.chapter) && typeof state.chapter.title === 'string') {
+      return trimText(state.chapter.title, MAX_TITLE);
+    }
+    return '';
+  }
+
+  function narrativePathLabel(pathId) {
+    var chapter = state.chapter;
+    if (!isObject(chapter)) return '';
+    var c1 = isObject(chapter.c1) ? chapter.c1 : null;
+    if (!c1 || !Array.isArray(c1.paths)) return '';
+    for (var i = 0; i < c1.paths.length; i += 1) {
+      var path = c1.paths[i];
+      if (!isObject(path) || path.pathId !== pathId) continue;
+      return typeof path.label === 'string' ? trimText(path.label, MAX_TITLE) : '';
+    }
+    return '';
+  }
+
+  function narrativeBase(mechanism) {
+    return {
+      mechanism: mechanism,
+      requiresAcceptedProfession: true,
+      requiresSpecificProfession: false,
+      anchor: { kind: NARRATIVE_MECHANISM_ANCHOR_KIND[mechanism], refs: [] },
+      receiptSource: NARRATIVE_MECHANISM_RECEIPT[mechanism],
+      available: false,
+      source: 'content',
+      narrativeNodeId: null,
+      label: '',
+      texts: { offer: '', progress: '', receipt: '', next: '' },
+    };
+  }
+
+  function narrativeWorldWorkIds(flagsNeeded) {
+    var ids = [];
+    state.worldWorkIds.forEach(function (id) {
+      var commission = state.commissionIndex[id];
+      if (!commission) return;
+      if (flagsNeeded && flagsNeeded.length) {
+        var hit = false;
+        for (var i = 0; i < flagsNeeded.length; i += 1) {
+          if (commission.reward.flags.indexOf(flagsNeeded[i]) >= 0) {
+            hit = true;
+            break;
+          }
+        }
+        if (!hit) return;
+      }
+      ids.push(id);
+    });
+    return uniqueSorted(ids);
+  }
+
+  function narrativeWorldWorkTitles(ids) {
+    var titles = [];
+    ids.forEach(function (id) {
+      var meta = state.worldWorkIndex[id] || null;
+      var commission = state.commissionIndex[id] || null;
+      var title = meta && typeof meta.title === 'string' && meta.title
+        ? meta.title
+        : commission && commission.title ? commission.title : '';
+      if (title) titles.push(title);
+    });
+    return uniqueInOrder(titles);
+  }
+
+  function narrativeWorldWorkOpen(story, ids) {
+    var open = [];
+    ids.forEach(function (id) {
+      var commission = state.commissionIndex[id];
+      if (!commission || marked(story.cleared, id)) return;
+      var unlocked = evaluateUnlock(commission, story.cleared, story.flags);
+      if (unlocked.ok) open.push(id);
+    });
+    return open;
+  }
+
+  function narrativeEvidenceRefs() {
+    var tokens = [];
+    state.worldWorkIds.forEach(function (id) {
+      var commission = state.commissionIndex[id];
+      if (!commission) return;
+      commission.reward.evidence.forEach(function (token) {
+        tokens.push(token);
+      });
+    });
+    if (!tokens.length) {
+      state.commissions.forEach(function (commission) {
+        commission.reward.evidence.forEach(function (token) {
+          tokens.push(token);
+        });
+      });
+    }
+    return uniqueInOrder(tokens).slice(0, NARRATIVE_MAX_REFS);
+  }
+
+  function quoteList(titles) {
+    return (Array.isArray(titles) ? titles : []).map(function (title) {
+      return '「' + title + '」';
+    }).join('、');
+  }
+
+  function buildWorldWorkAlternative(chapterId, story, requirementMet) {
+    if (!state.worldWork) return null;
+    var alt = narrativeBase('world-work');
+    var flagsNeeded = [];
+    if (chapterId === 'C1') flagsNeeded = ['C1.work_done', 'C1.flight_done', 'C1.storm_done', 'C1.foreman'];
+    var ids = narrativeWorldWorkIds(flagsNeeded);
+    if (!ids.length) ids = state.worldWorkIds.slice();
+    if (!ids.length) return null;
+    alt.anchor.refs = ids.slice();
+    var titles = narrativeWorldWorkTitles(ids);
+    var quoted = quoteList(titles.slice(0, NARRATIVE_MAX_REFS));
+    if (!quoted) quoted = '告示板上那几张纸';
+    var open = narrativeWorldWorkOpen(story, ids);
+    alt.available = open.length > 0 && requirementMet !== true;
+    if (chapterId === 'C1') {
+      alt.label = narrativePathLabel('work') || '港里的通用活计';
+      alt.texts.offer = '港里那几张不分行的活计也记第一章的账：' + quoted
+        + '。做完把航报或验收单交回结算窗，账就记上了。';
+      alt.texts.progress = alt.available
+        ? '告示板上还有没交回的纸，挑一张写得清楚的接。'
+        : (requirementMet === true ? '第一章的账已经记上了。' : '这几张不分行的活计都已经交回过了。');
+      alt.texts.next = '做完活回结算窗交差，收据夹进你的档；下一步从告示板接着走。';
+      return alt;
+    }
+    var milestone = narrativeMilestoneOf(chapterId);
+    var missingText = narrativeMissingFor(story, milestone);
+    alt.label = '港里的通用活计';
+    if (chapterId === 'C5') {
+      alt.texts.offer = '终局之前只剩城市通电这件事；港里不分行的活计带回来的记录也算数：' + quoted
+        + '。凑齐这些记录，城市的电就能接回来。';
+    } else {
+      alt.texts.offer = '港里不分行的活计不看职业，只看带回来的记录：' + quoted
+        + '。这些纸留下的现场记录，正好够把这一段拼出来。';
+    }
+    alt.texts.progress = requirementMet === true
+      ? '这一段已经往下走了，港口记下了这一步。'
+      : (missingText ? '还差：' + missingText + '。' : '还有没交回的活计，先把纸上的活做完。');
+    alt.texts.next = '把活做完，回结算窗口把记录交上去。';
+    return alt;
+  }
+
+  function buildErrandAlternative(story, requirementMet) {
+    var offers = state.alternatives;
+    if (!offers.length) return null;
+    var alt = narrativeBase('errand');
+    alt.anchor.refs = offers.map(function (offer) {
+      return offer.offerId;
+    }).slice(0, NARRATIVE_MAX_REFS);
+    var affordable = offers.filter(function (offer) {
+      if (story.wallet.credits < offer.cost.credits) return false;
+      var enough = true;
+      Object.keys(offer.cost.items).forEach(function (itemId) {
+        if ((story.wallet.items[itemId] || 0) < offer.cost.items[itemId]) enough = false;
+      });
+      return enough;
+    });
+    alt.available = affordable.length > 0 && requirementMet !== true;
+    alt.label = narrativePathLabel('procurement') || '代办窗的明码单';
+    var list = offers.slice(0, NARRATIVE_MAX_REFS).map(function (offer) {
+      var line = '「' + offer.title + '」';
+      if (offer.summary) line += offer.summary;
+      return line;
+    }).join('；');
+    alt.texts.offer = '代办窗的规矩是明码标价、不赊不欠：' + list
+      + '。跑完一趟，第一章的线索就落地了。';
+    alt.texts.progress = alt.available
+      ? '现在手上的工钱够跑这张单子。'
+      : (requirementMet === true ? '第一章的线索已经落地了。' : '先把工钱凑够，代办窗的价目就写在纸角。');
+    alt.texts.next = '跑完回结算窗看一眼，代办只算一次，不重复收。';
+    return alt;
+  }
+
+  function narrativeRentalAlternative(requirementMet) {
+    if (!state.rentalShip) return null;
+    var alt = narrativeBase('rental');
+    alt.anchor.refs = [state.rentalShip.shipId];
+    alt.available = requirementMet !== true;
+    alt.label = narrativePathLabel('rental') || '码头的租用机';
+    alt.texts.offer = '机库那台「' + state.rentalShip.name
+      + '」可以免费借，不用先买机；借来飞一趟，把航报交回港务处，第一章也算走通了。';
+    alt.texts.progress = alt.available
+      ? '借机器只要签个字，用完照旧归还，失手不欠维修债。'
+      : '第一章已经走通了，这台旧机还停在库里。';
+    alt.texts.next = '飞完把航报交回结算窗。';
+    return alt;
+  }
+
+  function buildEvidencePairAlternative(chapterId, story, requirementMet) {
+    if (!activeEvidenceModule()) return null;
+    var milestone = narrativeMilestoneOf(chapterId);
+    var met = marked(story.flags, milestone);
+    var known = isObject(story.missingByFlag) && has(story.missingByFlag, milestone);
+    if (!known && !met) return null;
+    var alt = narrativeBase('evidence-pair');
+    alt.anchor.refs = narrativeEvidenceRefs();
+    if (!alt.anchor.refs.length) return null;
+    alt.available = !met && requirementMet !== true;
+    alt.label = narrativePathLabel('research') || '凑齐现场记录';
+    var missingText = met ? '' : narrativeMissingFor(story, milestone);
+    alt.texts.offer = '现场记录不是一张纸的事：不同来处的记录凑在一起，研究院才能把这一段解译出来；'
+      + '港里的通用活计也会留下这类记录。';
+    alt.texts.progress = met || requirementMet === true
+      ? '记录已经凑齐，这一段已经往下走了。'
+      : (missingText ? '还差：' + missingText + '。' : '再把记录凑一凑，缺哪一类就再带一份回来。');
+    alt.texts.next = '把缺的那类记录带回来，回结算窗口合上。';
+    return alt;
+  }
+
+  function buildFinaleApproaches(story, requirementMet) {
+    var campaign = campaignInfo();
+    if (!campaign.endings.length) return null;
+    var approaches = campaign.endings.map(function (ending) {
+      var chosen = marked(story.flags, 'ending.' + ending.approach);
+      return {
+        approach: ending.approach,
+        title: narrativeTextBlocked(ending.title) ? '' : ending.title,
+        summary: narrativeTextBlocked(ending.summary) ? '' : ending.summary,
+        available: requirementMet === true && !chosen,
+        chosen: chosen,
+        requiresSpecificProfession: false,
+      };
+    });
+    return {
+      text: '三条终局路线都不问出身，只要城市通电就能挑一条走完；走完仍可回港口自由接单。',
+      approaches: approaches,
+    };
+  }
+
+  function buildChapterGuide(chapterId, story, narrative) {
+    var flags = narrativeChapterRequirementFlags(chapterId);
+    var requirementMet = narrativeRequirementsMet(story, flags);
+    var requirementText = NARRATIVE_CHAPTER_TEXT[chapterId] || '这一段先看港口手上的真实记录。';
+    var alternatives = [];
+    var builders = [];
+    if (state.worldWork) {
+      builders.push(function () {
+        return buildWorldWorkAlternative(chapterId, story, requirementMet);
+      });
+    }
+    if (chapterId === 'C1') {
+      builders.push(function () {
+        return buildErrandAlternative(story, requirementMet);
+      });
+      builders.push(function () {
+        return narrativeRentalAlternative(requirementMet);
+      });
+    } else {
+      builders.push(function () {
+        return buildEvidencePairAlternative(chapterId, story, requirementMet);
+      });
+    }
+    builders.forEach(function (build) {
+      var alt = build();
+      if (!alt) return;
+      var node = narrativeNodeFor(narrative, chapterId, alt.mechanism);
+      if (node) {
+        alt.source = 'world-narrative';
+        alt.narrativeNodeId = node.narrativeNodeId;
+        alt.texts = {
+          offer: trimText(node.texts.offer, NARRATIVE_MAX_TEXT),
+          progress: trimText(node.texts.progress, NARRATIVE_MAX_TEXT),
+          receipt: trimText(node.texts.receipt, NARRATIVE_MAX_TEXT),
+          next: trimText(node.texts.next, NARRATIVE_MAX_TEXT),
+        };
+      } else {
+        alt.texts = {
+          offer: trimText(alt.texts.offer, NARRATIVE_MAX_TEXT),
+          progress: trimText(alt.texts.progress, NARRATIVE_MAX_TEXT),
+          receipt: '',
+          next: trimText(alt.texts.next, NARRATIVE_MAX_TEXT),
+        };
+      }
+      alternatives.push(alt);
+    });
+    var chapter = {
+      chapterId: chapterId,
+      title: narrativeChapterTitle(chapterId),
+      requirement: {
+        flags: flags.slice(),
+        met: requirementMet,
+        text: requirementText + (requirementMet ? ' 港口已经记下了这一步。' : ' 眼下还差这一步。'),
+      },
+      alternatives: alternatives,
+      finale: null,
+    };
+    if (chapterId === 'C5') chapter.finale = buildFinaleApproaches(story, requirementMet);
+    return chapter;
+  }
+
+  function guideFailure(reason, extra) {
+    var out = {
+      ok: false,
+      reason: reason,
+      contentVersion: state.contentVersion,
+      readOnly: true,
+      worldNarrative: 'absent',
+      narrativeNodeCount: 0,
+      originGameId: null,
+      acceptedProfessionId: null,
+      chapters: [],
+    };
+    if (isObject(extra)) {
+      Object.keys(extra).forEach(function (key) {
+        out[key] = extra[key];
+      });
+    }
+    return out;
+  }
+
+  /**
+   * 逐章替代指引：C1–C5 每段给出「可用的替代方式 + 为什么在故事上成立」的公开
+   * 文案。只读真实内容与调用方注入的只读上下文；不改变 plan()/worldWorkPath()
+   * 的任何输出，也不产生任何经济写入。
+   *
+   * @param {{catalog?:{worldNarrative?:*}, originGameId?:string,
+   *   acceptedProfessionId?:string, professionId?:string, flags?:*,
+   *   quests?:*, claims?:*, wallet?:*, evidence?:*}} input
+   */
+  function chapterAlternatives(input) {
+    try {
+      if (!isConfigured()) return guideFailure(REASONS.notConfigured);
+      var options = isObject(input) ? input : {};
+      var originGameId = typeof options.originGameId === 'string' ? options.originGameId : '';
+      var acceptedProfessionId = typeof options.acceptedProfessionId === 'string'
+        ? options.acceptedProfessionId
+        : (typeof options.professionId === 'string' ? options.professionId : '');
+      if (originGameId && !has(state.gameSet, originGameId)) {
+        return guideFailure(REASONS.unknownOrigin, { originGameId: originGameId });
+      }
+      if (acceptedProfessionId && !has(state.professionSet, acceptedProfessionId)) {
+        return guideFailure(REASONS.unknownProfession, { acceptedProfessionId: acceptedProfessionId });
+      }
+      var catalog = isObject(options.catalog) ? options.catalog : {};
+      /* 0.24 T24：优先读取 bridge 按章注入的 catalog.worldChapterAlternatives；
+         未注入时退回 T21/T22 的 catalog.worldNarrative resolver 输出形状，行为不变。 */
+      var narrative = readWorldNarrativeInput(catalog.worldNarrative);
+      if (!narrative.present || narrative.nodeCount === 0) {
+        var injected = readWorldChapterAlternativesInput(catalog.worldChapterAlternatives);
+        if (injected.present) narrative = injected;
+      }
+      var story = narrativeStoryOf(options);
+      var chapters = [];
+      NARRATIVE_CHAPTER_ORDER.forEach(function (chapterId) {
+        chapters.push(buildChapterGuide(chapterId, story, narrative));
+      });
+      return {
+        ok: true,
+        reason: null,
+        contentVersion: state.contentVersion,
+        readOnly: true,
+        worldNarrative: narrative.present ? 'present' : 'absent',
+        narrativeNodeCount: narrative.nodeCount,
+        originGameId: originGameId || null,
+        acceptedProfessionId: acceptedProfessionId || null,
+        chapters: chapters,
+      };
+    } catch (err) {
+      return guideFailure(REASONS.exception, { error: errorText(err) });
+    }
+  }
+
+  /** validate 用：替代指引的结构/卫生/经济面自检（只读，不抛）。 */
+  function narrativeGuideIssues() {
+    var issues = [];
+    var guide = chapterAlternatives({});
+    if (!guide || guide.ok !== true) {
+      issues.push('guide-failed:' + (guide && guide.reason ? guide.reason : 'unknown'));
+      return issues;
+    }
+    if (guide.worldNarrative !== 'absent') issues.push('guide-narrative-default');
+    if (guide.chapters.length !== NARRATIVE_CHAPTER_ORDER.length) issues.push('guide-chapter-count');
+    guide.chapters.forEach(function (chapter) {
+      var tag = chapter.chapterId;
+      if (!isObject(chapter.requirement) || !Array.isArray(chapter.requirement.flags)) issues.push(tag + ':requirement');
+      if (!Array.isArray(chapter.alternatives) || !chapter.alternatives.length) issues.push(tag + ':empty');
+      (chapter.alternatives || []).forEach(function (alt) {
+        if (alt.requiresSpecificProfession !== false) issues.push(tag + ':profession-gate');
+        if (alt.requiresAcceptedProfession !== true) issues.push(tag + ':accepted-gate');
+        if (NARRATIVE_MECHANISMS.indexOf(alt.mechanism) < 0) issues.push(tag + ':mechanism');
+        if (NARRATIVE_MECHANISM_RECEIPT[alt.mechanism] !== alt.receiptSource) issues.push(tag + ':receipt');
+        if (!isObject(alt.anchor) || !Array.isArray(alt.anchor.refs) || !alt.anchor.refs.length) issues.push(tag + ':anchor');
+        if (narrativeTextBlocked(alt.label)) issues.push(tag + ':label');
+        if (narrativeTextBlocked(alt.texts && alt.texts.offer)) issues.push(tag + ':offer');
+        if (alt.texts && alt.texts.progress && narrativeTextBlocked(alt.texts.progress)) issues.push(tag + ':progress');
+        if (alt.texts && alt.texts.next && narrativeTextBlocked(alt.texts.next)) issues.push(tag + ':next');
+      });
+    });
+    var serialized = JSON.stringify(guide);
+    if (serialized.indexOf('"credits"') >= 0 || serialized.indexOf('"reward"') >= 0) {
+      issues.push('guide-economy-field');
+    }
+    return issues;
   }
 
   /* ------------------------------------------------------------------ *
@@ -3079,12 +4380,17 @@
     LEVELS: LEVELS,
     THRESHOLDS: THRESHOLDS,
     COMBAT_EVENT_KINDS: COMBAT_EVENT_KINDS,
+    MECHANISMS: NARRATIVE_MECHANISMS,
+    CHAPTER_FLAGS: NARRATIVE_CHAPTER_FLAGS,
+    MECHANISM_RECEIPT_SOURCE: NARRATIVE_MECHANISM_RECEIPT,
     REASONS: REASONS,
     configure: configure,
     reset: reset,
     status: status,
     isConfigured: isConfigured,
     plan: plan,
+    worldWorkPath: buildWorldWorkPath,
+    chapterAlternatives: chapterAlternatives,
     explain: explain,
     validate: validate,
     create: buildInstance,
