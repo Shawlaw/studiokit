@@ -3240,7 +3240,8 @@ async function main() {
     await cdp.waitFor('document.querySelector("[data-career-entry]")?.hidden === false');
     await cdp.click('[data-career-entry]');
     /* 0.23 港口没有旧版余额摘要行：等价（更强）断言为「旧钱包仍可经真实读取路径取到 321，
-       且能在同一页打开真实账本」，同时保留「打开旧档不得回写 career 指针」。 */
+       且能在同一页打开真实账本」。升级后第一次正常打开会把指针修复到唯一幸存的旧身份
+       （同一个 careerId，钱包不变，不重新初始化），这里只禁止产生另一个身份。 */
     await cdp.waitFor('!!document.querySelector("[data-career-panel=town] [data-tool=wallet]")');
     const legacyWallet = await cdp.evaluate(`(async () => {
       const wallet = await ArcadeCareer.db.readWallet(${legacyId});
@@ -3250,16 +3251,20 @@ async function main() {
     await cdp.click('[data-tool=wallet]');
     await cdp.waitFor('!!document.querySelector("[data-career-panel=receipt] [data-section=ledger-rows]")');
     await cdp.click('[data-career-panel=receipt] .ac-career-close');
-    assert(!(await cdp.evaluate('ArcadeCareer.db.getState("career")')), 'opening legacy career rewrote career pointer');
+    const pointerOf = () => cdp.evaluate('ArcadeCareer.db.getState("career")').then((row) => (
+      row && typeof row === 'object' ? (row.value && row.value.careerId) || row.careerId || null : null));
+    const legacyPointer = await pointerOf();
+    assert(!legacyPointer || legacyPointer === legacy.careerId, 'opening legacy career created a different career');
     await mutateLegacy(`tx.objectStore('profiles').delete(${legacyId});
       tx.objectStore('balances').delete(${legacyId});`);
     await cdp.navigate(base + '/apps/arcade/');
     await cdp.waitFor('document.querySelector("[data-career-entry]")?.hidden === false');
     await cdp.click('[data-career-entry]');
     await cdp.waitFor('document.querySelector("[data-career-hub-error=incomplete-career]")?.textContent.includes("档案")');
-    assert(!(await cdp.evaluate('ArcadeCareer.db.getState("career")')), 'opening isolated C0 created a new career');
+    const isolatedPointer = await pointerOf();
+    assert(!isolatedPointer || isolatedPointer === legacy.careerId, 'opening isolated C0 created a new career');
     assert(await cdp.evaluate('location.pathname === "/apps/arcade/" && document.querySelectorAll("[data-hall-grid] a").length >= 16'), 'legacy career error navigated away from the hall');
-    record('旧港入口：缺指针复用原档工钱，孤立 C0 在首页显示修复说明', true);
+    record('旧港入口：缺指针的唯一旧身份由迁移修复指针并复用原档工钱，孤立 C0 在首页显示修复说明且不新建身份', true);
 
     /* ---------- 清理测试产生的本地数据 ---------- */
     await cdp.evaluate(`localStorage.clear()`);

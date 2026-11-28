@@ -92,6 +92,14 @@ async function openTab(url) {
   return page;
 }
 
+/** 同一标签页重新启动 bridge：模拟旧档在升级后的第一次正常打开。 */
+async function reboot(page) {
+  await page.navigate(gameUrl());
+  await page.waitFor('!!(window.ArcadeCareer && window.ArcadeCareer.ready && window.__arcadeCareerTest)', { timeout: 20000 });
+  const ready = await page.evaluate('window.ArcadeCareer.ready.then(function (r) { return { ok: !!(r && r.available), reason: (r && r.reason) || null }; })');
+  assert(ready && ready.ok === true, 'bridge 不可用：' + detail(ready));
+}
+
 function gameUrl(params = {}) {
   const search = new URLSearchParams({ ...params, careerTest: '1' });
   return `${BASE}${GAME_PATH}?${search.toString()}#test`;
@@ -221,31 +229,43 @@ try {
   await scenario('L1', async () => {
     const seeded = await dbEval(tabA, `const ensured = await db.ensureCareer({ originGameId: 'pendulum-tower' });
       if (!ensured.ok) throw new Error('ensureCareer: ' + detail(ensured));
-      window.__lifeCareerId = ensured.careerId;
       const runId = core.newId('run');
       const run = await db.createRun({
         runId, careerId: ensured.careerId, gameId: 'pendulum-tower',
         nonce: 'life-nonce', mode: 'commission', commissionId: 'pendulum-tower.T1', status: 'issued',
       });
       if (!run.ok) throw new Error('createRun: ' + detail(run));
-      window.__lifeRunId = runId;
-      await db.saveDiscoveryState({
+      /* 保存发现状态必须带当前代次；旧档种子必须真的落盘，否则后面的逐字节比对没有意义。 */
+      const generation = await db.getDiscoveryGeneration();
+      const saved = await db.saveDiscoveryState({
         stage: 'CURIOUS', hintsEnabled: true,
         clues: { 'CL-pendulum-tower': { sourceGame: 'pendulum-tower', stage: 'CURIOUS' } },
-      });
+      }, { generation: generation.generation });
+      if (!saved.ok) throw new Error('saveDiscoveryState: ' + detail(saved));
       await db.putQuests(ensured.careerId, [{ nodeId: 'story:C0.port_seen', status: 'active', evidence: [], flags: [] }]);
       const wallet = await db.readWallet(ensured.careerId);
       if (!wallet.ok) throw new Error('readWallet: ' + detail(wallet));
-      /* 让 bridge 内存中的 commissionLastCareerId 指向刚创建的身份：
-         正常职业路径由 commission.start / syncCampaignFlags 设置；本测试直接
-         写 DB，需显式初始化，之后 freezeCareer 才能把 careerId 写进标记。 */
-      await window.ArcadeCareer.openTown && window.ArcadeCareer.openTown();
-      await new Promise((resolve) => setTimeout(resolve, 200));
-      if (window.ArcadeCareerUI && window.ArcadeCareerUI.town && window.ArcadeCareerUI.town.close) window.ArcadeCareerUI.town.close();
       return { careerId: ensured.careerId, runId, credits: wallet.credits };
     `);
     verify('L1-01 真实 IDB 已创建生涯身份 / run / 线索 / 钱包',
       !!seeded.careerId && !!seeded.runId && seeded.credits > 0, detail(seeded));
+
+    /* 旧档在升级后的第一次正常启动会完成一次只追加的迁移。先让页面正常启动一次再取基线，
+       L3 比对的就是「已正常打开过的旧档」在封存往返前后是否逐字节一致。 */
+    await reboot(tabA);
+    await dbEval(tabA, `window.__lifeCareerId = ${q(seeded.careerId)}; window.__lifeRunId = ${q(seeded.runId)};
+      for (let i = 0; i < 50; i += 1) {
+        const snapshot = await db.getDiscoverySnapshot();
+        if (snapshot.ok && snapshot.state && snapshot.state.professionVersion === 1) return true;
+        await new Promise((resolve) => setTimeout(resolve, 100));
+      }
+      return false;`).then((migrated) => verify('L1-01b 旧档经正常启动后带职业扩展（迁移已完成）', migrated === true));
+    /* 让 bridge 内存中的 commissionLastCareerId 指向刚创建的身份：
+       正常职业路径由 commission.start / syncCampaignFlags 设置；本测试直接
+       写 DB，需显式初始化，之后 freezeCareer 才能把 careerId 写进标记。 */
+    await tabA.evaluate('window.ArcadeCareer.openTown && window.ArcadeCareer.openTown()');
+    await new Promise((resolve) => setTimeout(resolve, 200));
+    await tabA.evaluate('window.ArcadeCareerUI && window.ArcadeCareerUI.town && window.ArcadeCareerUI.town.close && window.ArcadeCareerUI.town.close()');
 
     baseline = await snapshot(tabA);
     const gen = await dbEval(tabA, 'return await db.getDiscoveryGeneration();');
