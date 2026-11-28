@@ -239,11 +239,11 @@ Cloudflare 侧项目为 `studiokit`（Production branch `main`），所需 Secre
 | [`docs/badge-studio-upstream-readme.md`](docs/badge-studio-upstream-readme.md) | Badge Studio 上游 v2.2.0 说明原文存档（当前集成版本以 `BASELINE.md` 为准） |
 | [`apps/<tool>/README.md`](apps/) | 各工具的产品文档（功能、数据模型、边界、测试） |
 | [`apps/arcade/DESIGN-*.md`](apps/arcade/) | Arcade 逐版设计与回滚说明（`DESIGN-0.4.0` … `DESIGN-0.24.0`，其中 0.23.0 / 0.24.0 为本地发布准备设计、未发布） |
-| [`docs/arcade-life/INTEGRATION-0.24.0.md`](docs/arcade-life/INTEGRATION-0.24.0.md) | 0.24.0 状态：本地发布准备，未发布；2026-11-28 复查修正后 release 门禁结论以该文件 §6 为准（修正前 `c5712e5` 为 51/51，not full） |
+| [`docs/arcade-life/INTEGRATION-0.24.0.md`](docs/arcade-life/INTEGRATION-0.24.0.md) | 0.24.0 状态：GATE_PASSED / RELEASE_READY（本地发布准备，未发布；2026-11-28 复查修正后候选 `4f2d271` release 51/51，not full；台账与未验证项见该文件 §6） |
 | [`docs/arcade-life/INTEGRATION-0.21.md`](docs/arcade-life/INTEGRATION-0.21.md) | 0.21.0 集成、分层门禁与双端发布证据 |
 | [`docs/arcade-life/INTEGRATION-0.21.2.md`](docs/arcade-life/INTEGRATION-0.21.2.md) | 0.21.2 发布前实测与发布后证据（线上最近发布版本） |
-| [`docs/arcade-life/INTEGRATION-0.23.0.md`](docs/arcade-life/INTEGRATION-0.23.0.md) | 0.23.0 状态：本地发布准备，未发布（门禁结论见该文件） |
-| [`docs/arcade-life/INTEGRATION-0.22.0.md`](docs/arcade-life/INTEGRATION-0.22.0.md) | 0.22.0 状态：GATE_PASSED / RELEASE_READY（本地发布准备，未发布；release 41/41，not full） |
+| [`docs/arcade-life/INTEGRATION-0.23.0.md`](docs/arcade-life/INTEGRATION-0.23.0.md) | 0.23.0 状态：GATE_PASSED / RELEASE_READY（本地发布准备，未发布；2026-11-28 复查修正后候选 `01219c2` release 47/47，not full；门禁结论见该文件 §6） |
+| [`docs/arcade-life/INTEGRATION-0.22.0.md`](docs/arcade-life/INTEGRATION-0.22.0.md) | 0.22.0 状态：GATE_PASSED / RELEASE_READY（本地发布准备，未发布；2026-11-28 复查修正后候选 `d4cc41a` release 41/41，not full） |
 
 ## 已知边界
 

@@ -2505,7 +2505,7 @@
       "id": "T150",
       "title": "Arcade 0.24.0 复查修正：交汇写入与展示、经历职业关联、世界替代经历推导 / 修复与文档同步",
       "kind": "agent",
-      "status": "REVIEW_FIXED",
+      "status": "GATE_PASSED",
       "dependsOn": [
         "T147"
       ],
@@ -2516,9 +2516,9 @@
         "交汇经历带两位参与职业且只在双方已接受时出现；导入的经历行不能替代接受事实；按职业筛选可用",
         "世界替代经历只从真实已清记录只读推导，不落盘；职业专属委托的替代叙事只向该职业公开",
         "带入 0.23 的六项复查修复并解决冲突",
-        "状态如实：release 门禁需在新 SHA 重跑后才恢复 GATE_PASSED；不写 DONE / PUBLISHED / ALL GATES PASSED"
+        "状态如实：release 门禁在新 SHA 通过后写 GATE_PASSED；不写 DONE / PUBLISHED / ALL GATES PASSED"
       ],
-      "evidence": "证据与门禁结论见 docs/arcade-life/INTEGRATION-0.24.0.md §6 与 docs/arcade-life/ADR-0.24-world.md §10。提交 eeb4939、8c1083e 及挑入的 0e777bd、a2a4bfa、ad6e1c0、ef13733、95c593e、68a4de4、bc67c96；交汇浏览器场景 255/255、完整流程 645/645。本地提交，未 push、未发布。"
+      "evidence": "证据与门禁结论见 docs/arcade-life/INTEGRATION-0.24.0.md §6 与 docs/arcade-life/ADR-0.24-world.md §10。候选 4f2d271：py -3 tools/arcade_run_all_gates.py --profile release 51/51，2900.348s，release passed (not full)，门禁内真实流程 645/645。定向：交汇浏览器场景 255/255、archive lifecycle 61/61、mobile 334/334、smoke 119/119、22 个纯 Node 套件。提交 eeb4939、8c1083e、0e777bd、a2a4bfa、ad6e1c0、ef13733、95c593e、68a4de4、bc67c96、c41df95、9247b06。本地提交，未 push、未发布。"
     }
   ]
 }

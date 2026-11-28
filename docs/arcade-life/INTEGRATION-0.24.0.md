@@ -1,6 +1,6 @@
 # Arcade 0.24.0 集成与验证
 
-- 状态：**本地发布准备，未发布**（未获 `OWNER_AUTHORIZATION: PUBLISH_TO_MAIN`，未 push、未打 tag、未部署）。**2026-11-28 复查修正后代码已变化：下文的 51/51 对应旧 SHA `c5712e5`，新 SHA 的 release 门禁结论见 §6。**
+- 状态：**GATE_PASSED / RELEASE_READY（本地发布准备，未发布）**；未获 `OWNER_AUTHORIZATION: PUBLISH_TO_MAIN`，未 push、未打 tag、未部署。2026-11-28 复查修正后的候选 SHA 为 `4f2d271`，release 51/51，见 §6；§3–§4 的数字对应修正前的提交，只作历史记录。
 - 修正前门禁状态：GATE_PASSED / RELEASE_READY（本地发布准备，未发布）。L3 release profile 在 `c5712e5` 通过 51/51；浏览器证据为 flow 624/624、mobile 334/334、smoke 119/119；独立复审 PASS（无 Blocker / 无 Major）。不写 PUBLISHED / ALL GATES PASSED，full / 真机 / 真人 / 线上仍 UNVERIFIED。
 - 设计 / 回滚：[`DESIGN-0.24.0.md`](../../apps/arcade/DESIGN-0.24.0.md)；数据 / 叙事契约：[`ADR-0.24-world.md`](ADR-0.24-world.md)（T20 冻结，T24 增补 §9）、[`tools/career_world_narrative_schema.json`](../../tools/career_world_narrative_schema.json)
 - 基线：0.23.0 候选 `79301da`（GATE_PASSED / RELEASE_READY，本地发布准备，未发布；其 L3 为 47/47 `release passed (not full)`，见 [`INTEGRATION-0.23.0.md`](INTEGRATION-0.23.0.md)）；0.24 开发分支自 `cf81f12` 起基于该候选。版本链 0.24.0，SW `studiokit-arcade-0.24.0-v1`。
@@ -81,4 +81,5 @@
 - **纯 Node（`8c1083e`）**：narrative contract 168/168、narrative 200/200、journal/experience 60/60、privacy 2367/2367、profession view 614/614、state 439/439、profession DB 34/34、world route narrative 80/80、route planner 214/214、port/journal 58/58、legacy baseline 78/78、extension 92/92、discovery 157/157、economy balance 47/47、world work 400/400、campaign core 54/54、invitation adapters 143/143、invitation tools 55/55、narrative content 628/628、legacy 73/73、components 281/281、work journal 39/39；`py -3 tools/validate_site.py` 与 `py -3 tools/check_readme_links.py` PASS。
 - **浏览器预检（`9247b06`）**：`career_archive_lifecycle_e2e_test` 61/61、`career_mobile_016_test` 334/334、`arcade_smoke` 119/119（完整 release 门禁会再跑一次）。
 - **视觉夹具对照未重跑**：信箱的后续邀请块与港口的恢复动作是复用已冻结组件的新组合，不在 13 个夹具状态内。
-- **L3 release profile**：待在新 SHA 重跑，结果在本节更新前不得引用 §4 的 51/51。
+- **L3 release profile（候选冻结 SHA `4f2d271bdc87ba993ef071cf6a405b167b15b3e9`）**：`py -3 tools/arcade_run_all_gates.py --profile release` **51/51 PASS**，2900.348s，`verdict: release passed (not full)`、`fully_passed: false`；门禁内的真实流程 645/645。本版本只启动了一次 release 门禁。日志在仓库外 `execution/review-024-release-gate.log`。门禁之后只有文档提交。
+- full、真机、真人、线上部署仍 UNVERIFIED；`release passed (not full)` 不得写成 full 或 ALL GATES PASSED。
