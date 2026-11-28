@@ -856,6 +856,45 @@ check('import invalidation does not prematurely unsubscribe settings', settingsU
 settingsHarness.ui.settings.close();
 eq('settings unsubscribes exactly once on close', settingsUnsubscribed, 1);
 
+/* 首次到港尚未被真实接单消费：港口「眼下」给出明确的恢复入口，回不回由玩家决定。 */
+{
+  const resumeHarness = harness();
+  const resumeCalls = [];
+  let resumeListener = null;
+  const pendingView = {
+    ...professionView,
+    story: { ...professionView.story, firstArrival: { professionId: 'nature.miner', gameId: 'gold-miner', clueId: 'CL-gold-miner' } },
+  };
+  let currentView = pendingView;
+  const resumeCtx = {
+    uiComponents: resumeHarness.components,
+    uiHarbor: resumeHarness.harbor,
+    reducedMotion: false,
+    careerView() { return currentView; },
+    commission: { listAvailable() { return { ok: true, availableIds: [] }; }, start() { resumeCalls.push('start'); return { ok: true }; } },
+    openInvitation(input) { resumeCalls.push(input); return Promise.resolve({ ok: true }); },
+    onCareerDataChanged(listener) { resumeListener = listener; return () => {}; },
+  };
+  resumeHarness.ui.town.open(resumeCtx);
+  await settle();
+  const resumePanel = () => resumeHarness.doc.querySelector('.ac-career-ui__panel');
+  const resumeButton = () => find(resumePanel(), (node) => node.localName === 'button' && node.getAttribute('data-action') === 'port-resume-arrival');
+  check('a pending first arrival gets one explicit secondary resume action beside the story card',
+    !!resumeButton() && text(resumeButton()) === '回到初次到港' && resumeButton().getAttribute('data-action-kind') === 'secondary'
+    && byAttr(resumePanel(), 'data-action-kind', 'primary').length === 1);
+  check('the resume entry renders no clue or profession id', !text(resumePanel()).includes('CL-gold-miner') && !text(resumePanel()).includes('nature.miner'));
+  resumeButton().click();
+  await settle();
+  check('resume only reopens the real first-arrival introduction and never starts work',
+    resumeCalls.length === 1 && resumeCalls[0].clueId === 'CL-gold-miner' && resumeCalls[0].firstArrival === true
+    && resumeHarness.navigated.length === 0);
+  currentView = professionView;
+  resumeListener({ reason: 'changed' });
+  await settle();
+  check('the resume entry disappears once the first arrival has really been consumed', resumeButton() === null);
+  resumeHarness.ui.town.close();
+}
+
 if (failures.length) {
   console.error('FAILED ' + failures.length + ': ' + failures.join('; '));
   process.exit(1);

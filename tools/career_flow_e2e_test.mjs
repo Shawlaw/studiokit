@@ -1560,6 +1560,34 @@ async function phaseSingleDelivery(cdp, gameId) {
   await cdp.evaluate('window.ArcadeCareer.openTown()');
   const board = await waitPanel(cdp, 'town', 15000);
   await cdp.waitFor(`!!document.querySelector('[data-career-panel="town"] [data-port-tabpanel="home"] button[id^="port-story-"]')`, { timeout: 15000 });
+  /* 首次接受后「暂时离开港口」，从港口入口重开：引入阶段必须有明确的恢复入口，
+     回不回由玩家决定；恢复只重开叙事，不接单。 */
+  const resumeSelector = '[data-career-panel="town"] [data-action="port-resume-arrival"]';
+  await pressVisible(cdp, resumeSelector, '回到初次到港');
+  await cdp.waitFor(`(() => {
+    const panel = document.querySelector('[data-career-panel="arrival"]');
+    return !!panel && panel.getAttribute('data-invitation-mode') === 'freshIntro'
+      && panel.getAttribute('data-invitation-created') === 'true'
+      && !!panel.querySelector('[data-action="start-first-commission"]');
+  })()`, { timeout: 15000 });
+  const resumed = await cdp.evaluate(`(() => {
+    const api = window.ArcadeCareer;
+    const panel = document.querySelector('[data-career-panel="arrival"]');
+    const start = panel.querySelector('[data-action="start-first-commission"]');
+    const invitation = api.invitationForClue(${J(clueId)});
+    return {
+      run: api.commissionRun || null,
+      startVisible: !!start && start.getClientRects().length > 0,
+      firstArrival: invitation && invitation.firstArrival,
+      text: panel.innerText.slice(0, 160),
+    };
+  })()`);
+  gate('ARRIVAL 离开后从港口入口重开可回到初次到港，第一份工作仍由玩家显式点击',
+    resumed.run === null && resumed.startVisible === true && resumed.firstArrival === true, J(resumed));
+  await pressVisible(cdp, '[data-career-panel="arrival"] [data-action="leave-arrival"]', '再次暂时离开港口');
+  await cdp.waitFor('!document.querySelector(`[data-career-panel="arrival"]`)', { timeout: 10000 });
+  await cdp.waitFor(`!!document.querySelector(${J(resumeSelector)})`, { timeout: 10000 });
+  gate('ARRIVAL 尚未接单时离开后港口仍保留恢复入口', await cdp.evaluate('window.ArcadeCareer.commissionRun || null') === null && !!board);
   /* 0.23 港口 P07–P10：首页推荐来自真实 careerView.story.nextAction，分段标签与工具格是
      portBody 的固定结构；0.22 告示板整块 DOM 已移除，这里直接断言真实组件面。 */
   const boardState = await cdp.evaluate(`(async () => {
@@ -3469,6 +3497,20 @@ async function verifyFirstArrivalConsumed(cdp) {
   gate('FIRST-ARRIVAL 重开信件不再重播到港面板',
     actions.arrivalReplayed === false && actions.ids.indexOf('invitation-port') < 0, J(actions));
   await cdp.evaluate('ArcadeCareer.closeCareerPanel && ArcadeCareer.closeCareerPanel()');
+  await sleep(120);
+  /* 真实接单后，港口「眼下」不再提供回到初次到港的入口。 */
+  await cdp.evaluate('window.ArcadeCareer.openTown()');
+  await waitPanel(cdp, 'town', 15000);
+  await cdp.waitFor(`!!document.querySelector('[data-career-panel="town"] [data-port-tabpanel="home"] [data-story-state]')`, { timeout: 15000 });
+  const resumeGone = await cdp.evaluate(`(() => {
+    const panel = document.querySelector('[data-career-panel="town"]');
+    return {
+      resume: panel.querySelectorAll('[data-action="port-resume-arrival"]').length,
+      arrival: !!document.querySelector('[data-career-panel="arrival"]'),
+    };
+  })()`);
+  gate('FIRST-ARRIVAL 真实接单后港口不再提供回到初次到港', resumeGone.resume === 0 && resumeGone.arrival === false, J(resumeGone));
+  await cdp.evaluate('window.ArcadeCareerUI.town.close()');
   await sleep(120);
   await go(cdp, BASE + '/apps/arcade/games/' + ORIGIN_GAME + '.html?careerLetter=1');
   await waitBridge(cdp, 'first-arrival-consumed-tail', false);

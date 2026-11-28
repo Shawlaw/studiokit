@@ -869,6 +869,34 @@ async function main() {
   }
 
   {
+    /* 首次接受后离开港口：重开时只有港口面带恢复引用，真实接单后消失。 */
+    const pendingState = stateWithProgress(acceptedProgress(['nature.miner']), {
+      acceptedOriginGameId: 'gold-miner',
+      activeProfessionId: 'nature.miner',
+      narrativeCursor: { chapterId: 'C0', nodeId: 'invitation:nature.miner' },
+    });
+    const fixture = await freshBridge(pendingState, { careerId: 'career-test-1' }, { startSucceeds: true });
+    const opened = await fixture.bridge.openTown();
+    const town = fixture.store.uiCalls.find(([name]) => name === 'town');
+    if (!opened.ok || !town) throw new Error('town facade unavailable: ' + JSON.stringify(opened));
+    const portView = await fixture.bridge.careerView({ surface: 'port' });
+    eq('ARRIVAL 离开后重开的港口投影带待恢复的首次到港', portView.story.firstArrival,
+      { professionId: 'nature.miner', gameId: 'gold-miner', clueId: 'CL-gold-miner' });
+    const otherSurfaces = {};
+    for (const surface of ['work', 'journal', 'letter', 'clue', 'receipt']) {
+      otherSurfaces[surface] = (await fixture.bridge.careerView({ surface })).story.firstArrival;
+    }
+    eq('ARRIVAL 恢复引用只进港口面', otherSurfaces, { work: undefined, journal: undefined, letter: undefined, clue: undefined, receipt: undefined });
+    eq('ARRIVAL 重开本身不消费首次到港', fixture.bridge.state().narrativeCursor.nodeId, 'invitation:nature.miner');
+    await town[1].commission.start({ commissionId: 'gold-miner.T1' });
+    const afterStart = await fixture.bridge.careerView({ surface: 'port' });
+    eq('ARRIVAL 真实接单后港口不再提供恢复入口',
+      [afterStart.story.firstArrival, fixture.bridge.state().narrativeCursor.nodeId], [undefined, 'arrival:nature.miner']);
+    const reopened = await makeBridge({ store: fixture.store });
+    eq('ARRIVAL 整页重开后恢复入口按持久游标消失', (await reopened.bridge.careerView({ surface: 'port' })).story.firstArrival, undefined);
+  }
+
+  {
     const payload = {
       schemaVersion: 1,
       contentVersion: '0.18.0',

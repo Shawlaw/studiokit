@@ -3206,6 +3206,29 @@
     }
   }
 
+  /**
+   * 首次到港仍在等待玩家接下第一份工作。只认持久游标与起源映射，不读内存标记；
+   * 港口「眼下」据此给出明确的恢复入口，重开港口不会丢失引入阶段。
+   */
+  function pendingFirstArrival() {
+    if (internal.careerArchived) return null;
+    var state = currentStateSnapshot();
+    var nodeId = state && isObject(state.narrativeCursor) ? state.narrativeCursor.nodeId : null;
+    if (typeof nodeId !== 'string' || nodeId.indexOf('invitation:') !== 0) return null;
+    var professionId = nodeId.slice('invitation:'.length);
+    var origin = internal.registryInstance && internal.registryInstance.getGame(state.acceptedOriginGameId);
+    if (!origin || origin.professions.indexOf(professionId) < 0) return null;
+    var clues = Array.isArray(internal.clues) ? internal.clues : [];
+    for (var i = 0; i < clues.length; i += 1) {
+      var clueId = clues[i] && typeof clues[i].clueId === 'string' ? clues[i].clueId : '';
+      var invitation = invitationForClue(clueId, true);
+      if (invitation && invitation.firstArrival === true && invitation.professionId === professionId) {
+        return { professionId: professionId, gameId: state.acceptedOriginGameId, clueId: clueId };
+      }
+    }
+    return null;
+  }
+
   /** 只读投影；模块不可用时返回 null，不编造投影、不创建身份。 */
   function careerView(context) {
     return waitReady(READY_TIMEOUT_MS).then(function () {
@@ -3224,6 +3247,9 @@
           if (facts.listing && facts.listing.ok && Array.isArray(facts.listing.commissions)) {
             projection.commissions = clone(facts.listing.commissions);
           }
+          /* 首次到港未被真实接单消费前，只有港口面带恢复所需的线索引用。 */
+          var pending = surface === 'port' ? pendingFirstArrival() : null;
+          if (pending) projection.story.firstArrival = pending;
           return attachEndingAction(attachNarrativeMessages(projection)).then(function (attached) {
             return attachWorldNarrative(attached, surface, facts);
           });

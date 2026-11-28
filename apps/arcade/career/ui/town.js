@@ -530,6 +530,8 @@
   const PORT_ERROR_SUMMARY = '你的游玩不受影响，可以再试一次。';
   const PORT_EXIT_LABEL = '离开港口';
   const PORT_RETRY_LABEL = '重试';
+  const PORT_RESUME_ARRIVAL_LABEL = '回到初次到港';
+  const PORT_RESUME_ARRIVAL_ACTION = 'port-resume-arrival';
   const PORT_TOOL_FALLBACK = { wallet: '钱包', shop: '商店', workshop: '工作台', hangar: '机库' };
   const PORT_TOOL_ICON = { wallet: 'wallet', shop: 'store', workshop: 'tool', hangar: 'tool' };
   const PORT_CLUE_FAMILY_ICON = { record: 'mail', signal: 'scroll', bio: 'gem', industrial: 'pick', route: 'chevron' };
@@ -1281,6 +1283,35 @@
     return wrap;
   }
 
+  /**
+   * 首次接受后离开港口：在「眼下」给出明确的恢复入口，重开港口不丢引入阶段。
+   * 只消费 bridge 投影的持久待办；是否回去由玩家决定，这里不接单、不改状态。
+   */
+  function portResumeArrivalAction(context, view, components) {
+    const story = view && isObject(view.story) ? view.story : null;
+    const pending = story && isObject(story.firstArrival) ? story.firstArrival : null;
+    const open = portOpenMethod(context, 'openInvitation');
+    if (!pending || !idText(pending.clueId) || !open || typeof components.SecondaryAction !== 'function') return null;
+    const clueId = idText(pending.clueId);
+    const action = components.SecondaryAction({
+      id: PORT_RESUME_ARRIVAL_ACTION,
+      label: PORT_RESUME_ARRIVAL_LABEL,
+      kind: 'text',
+      variant: 'text',
+      onClick: () => {
+        try {
+          const opened = open({ clueId: clueId, firstArrival: true });
+          if (opened && typeof opened.catch === 'function') opened.catch(() => {});
+        } catch (err) {
+          /* 打不开时港口照常可用，下次仍可重试。 */
+        }
+        return { ok: true };
+      },
+    });
+    action.setAttribute('data-action', PORT_RESUME_ARRIVAL_ACTION);
+    return action;
+  }
+
   function portContentNode(context, state, view, components) {
     const phase = state.phase;
     const stack = docOfPort();
@@ -1332,6 +1363,8 @@
     }
 
     content.appendChild(components.StoryCard(portStoryProps(context, view)));
+    const resume = portResumeArrivalAction(context, view, components);
+    if (resume) content.appendChild(resume);
     const story = isObject(view) && isObject(view.story) ? view.story : {};
     const alternativeNext = portAlternativeNextNode(stack, story);
     if (alternativeNext) content.appendChild(alternativeNext);
