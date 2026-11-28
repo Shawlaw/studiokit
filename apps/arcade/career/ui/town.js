@@ -56,7 +56,7 @@
   const START_FAILED = '这次没接上，你想过一会儿再试吗？';
   const HANGAR_LABEL = '去机库';
   const RECEIPT_LABEL = '钱包与收据';
-  const SETTINGS_LABEL = '线索提示';
+  const SETTINGS_LABEL = '生涯设置';
   const MARKET_LABEL = '材料商店';
   const WORKSHOP_LABEL = '制造台';
   const ALT_TITLE = '港务处代办';
@@ -1448,7 +1448,25 @@
       body.appendChild(divider);
       body.appendChild(components.ToolGrid({ tools: tools, state: 'available', label: (fixture && cleanText(fixture.toolGrid && fixture.toolGrid.label)) || '已知工具' }));
     }
-    const footer = doc.createElement('footer');
+    return body;
+  }
+
+  function portFooter(context, state, components) {
+    if (state.footer) return state.footer;
+    const fixture = portFixtureOf(context);
+    const footer = docOfPort().createElement('div');
+    footer.className = 'ac-career-ui__port-footer';
+    const openSettings = portOpenMethod(context, 'openSettings');
+    if (openSettings) {
+      const settings = components.SecondaryAction({
+        id: 'port-settings',
+        label: SETTINGS_LABEL,
+        kind: 'text',
+        variant: 'text',
+        onClick: () => openSettings({ returnFocus: settings }),
+      });
+      footer.appendChild(settings);
+    }
     footer.appendChild(components.SecondaryAction({
       id: 'port-exit',
       label: (fixture && cleanText(fixture.exitLabel)) || PORT_EXIT_LABEL,
@@ -1459,8 +1477,8 @@
         else if (typeof context.closePort === 'function') context.closePort();
       },
     }));
-    body.appendChild(footer);
-    return body;
+    state.footer = footer;
+    return footer;
   }
 
   function portShellState(context, state) {
@@ -1484,6 +1502,7 @@
       state: portShellState(context, state),
       size: 'default',
       body: portBody(context, state, view, components),
+      footer: portFooter(context, state, components),
       reducedMotion: !!context.reducedMotion,
     };
   }
@@ -1567,6 +1586,7 @@
       state: 'loading',
       size: 'default',
       body: portBody(ctx, state, null, components),
+      footer: portFooter(ctx, state, components),
       reducedMotion: !!ctx.reducedMotion,
       onClose: () => {
         if (current && current.portState === state) {

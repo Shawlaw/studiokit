@@ -963,7 +963,7 @@ async function runCareerSession() {
     await cdp.waitFor('!!document.querySelector(\'[data-career-panel="settings"] .ac-career-confirm:not([hidden])\')', { timeout: 5000 });
     const data = await cdp.evaluate(`(() => {
       const panel = document.querySelector('[data-career-panel="settings"]');
-      const confirm = panel.querySelector('.ac-career-confirm');
+      const confirm = panel.querySelector('.ac-career-confirm:not([hidden])');
       return { confirmVisible: !!(confirm && confirm.getBoundingClientRect().height > 0), confirmText: confirm ? confirm.innerText.replace(/\\s+/g, ' ').trim() : '', clues: Object.keys(window.__arcadeCareerTest.state().clues || {}).length, text: panel.innerText.replace(/\\s+/g, ' ').slice(0, 300) };
     })()`);
     assert(data.confirmVisible === true, '未出现可见的二次确认块');
@@ -975,7 +975,7 @@ async function runCareerSession() {
   });
   await check('B33 取消确认不改 discovery', async () => {
     const cancelled = await cdp.evaluate(`(() => {
-      const button = Array.from(document.querySelectorAll('[data-career-panel="settings"] button')).find((node) => (node.innerText || '').trim() === '取消');
+      const button = Array.from(document.querySelectorAll('[data-career-panel="settings"] .ac-career-confirm:not([hidden]) button')).find((node) => (node.innerText || '').trim() === '取消');
       if (!button) return false;
       button.click();
       return true;

@@ -417,9 +417,6 @@ check('ReceiptCard is rendered by T11 component', /components\.ReceiptCard\(/.te
 check('no adapter injects copied stylesheet', invitationSources.every((key) => !/<style|\.style\.cssText|appendChild\(style/.test(source[key])));
 check('accept action is the only profession-write path in mailbox', /accept\.call\(session\.context, \{ professionId: invitation\.professionId, gameId: invitation\.gameId \}\)/.test(source.mailbox) && !/applyProfessionEvent|\.acceptProfessionInvitation\(/.test(source.mailbox));
 check('mailbox awaits openClue and subscribes to projection changes', /await Promise\.resolve\(session\.context\.openClue\(clueId\)\)/.test(source.mailbox) && /subscribeComponentChanges\(session\)/.test(source.mailbox) && /COMPONENT_DESTRUCTIVE_REASONS/.test(source.mailbox));
-check('T12 shells pass showHeader:false where T15 requires it',
-  (source.mailbox.match(/showHeader: false/g) || []).length >= 2
-  && (source.invitation.match(/showHeader: false/g) || []).length >= 4);
 check('P01 adapter wrapper has no copied surface styling', /wrapper\.className = 'ac-career-ui';/.test(source.clue) && !/wrapper\.className = [^;]*ac-career-ui__surface/.test(source.clue));
 check('P04 passes work reward text derived from settled rewards to ReceiptCard', /workText: workRewardTextOf\(allRewards, presentation\)/.test(source.receipt));
 /* 0.22 后日谈入口必须留在组件收据里，而不是被下一单委托顶掉。 */
@@ -536,7 +533,7 @@ function invitationContext(doc, overrides = {}) {
   check('P02 pending openClue exposes no guessed action', !buttonBy(doc, 'accept-invitation') && !buttonBy(doc, 'send-to-port') && !buttonBy(doc, 'deliver-letter'));
   settleOpenClue({ ok: true });
   await drain();
-  check('P02 CareerShell receives showHeader:false on every render', shellProps.length > 0 && shellProps.every((item) => item.ctx.showHeader === false), shellProps);
+  check('P02 CareerShell keeps the shared header visible', shellProps.length > 0 && shellProps.every((item) => item.ctx.showHeader !== false));
   const card = doc.querySelector('.ac-career-ui__letter');
   check('P02 LetterCard is present', !!card && !!panelOf(doc));
   eq('P02 letter state', card.parentNode.getAttribute('data-letter-state'), 'unread');
@@ -659,7 +656,7 @@ function narrativeFor(professionId) {
   const opened = ui.invitation.open(ctx);
   eq('P06 adapter open ok', opened.ok, true);
   await drain();
-  check('P06 CareerShell receives showHeader:false on every render', shellProps.length > 0 && shellProps.every((item) => item.ctx.showHeader === false), shellProps);
+  check('P06 CareerShell keeps the shared header visible', shellProps.length > 0 && shellProps.every((item) => item.ctx.showHeader !== false));
   const panel = panelOf(doc);
   const shellBody = doc.querySelector('.ac-career-ui__body');
   check('P06 shell body was rendered', !!shellBody && shellBody.children.length > 0, {
@@ -673,7 +670,7 @@ function narrativeFor(professionId) {
   check('P06 existingIntro text is used', textOf(panel).includes('已有的合成语境'));
   check('P06 freshIntro is not replayed', !textOf(panel).includes('首次到港的合成说明'));
   check('P06 shows the invitation heading without repeating the first-arrival harbor',
-    panel.querySelector('.ac-career-ui__story-title').textContent === p06.props.title && !panel.querySelector('svg.harbor'));
+    panel.querySelector('.ac-career-ui__header .ac-career-ui__title').textContent === p06.props.title && !panel.querySelector('svg.harbor'));
   check('P06 no task title/objective/reward', !/委托标题|报酬|职业进度|shadow-leap\.T1/.test(textOf(panel)));
   check('P06 accept/defer actions exist', !!buttonBy(doc, 'accept-invitation') && !!buttonBy(doc, 'defer-invitation'), {
     text: textOf(panel),
@@ -740,7 +737,7 @@ function narrativeFor(professionId) {
   check('P03 no commission before identity is accepted', derived.firstCommission === null);
   ui.invitation.open(ctx);
   await drain();
-  check('P03 CareerShell receives showHeader:false on every render', shellProps.length > 0 && shellProps.every((item) => item.ctx.showHeader === false), shellProps);
+  check('P03 CareerShell keeps the shared header visible', shellProps.length > 0 && shellProps.every((item) => item.ctx.showHeader !== false));
   check('P03 harbor + caption are present', !!panelOf(doc).querySelector('svg.harbor') && textOf(panelOf(doc)).includes('折光港 · 旧码头'));
   eq('P03 NPC state first', panelOf(doc).querySelector('.ac-career-ui__npc').getAttribute('data-npc-state'), 'first');
   check('P03 freshIntro paragraphs are used', p03.props.npcDialogue.paragraphs.every((line) => textOf(panelOf(doc)).includes(line)));

@@ -3120,11 +3120,33 @@ async function main() {
     await cdp.waitFor('!!document.querySelector(\'[data-career-panel=town] [data-tool="wallet"]\')');
     await cdp.click('[data-tool=wallet]');
     await cdp.waitFor('!!document.querySelector("[data-career-panel=receipt] [data-section=ledger-rows]")');
-    const receiptTitle = (await cdp.text('[data-career-panel=receipt] h2')).trim();
-    assert(receiptTitle.indexOf('钱包') !== -1, 'wallet title lost its wording: ' + receiptTitle);
+    const receiptTitle = (await cdp.text('[data-career-panel=receipt] .ac-career-ui__title')).trim();
+    assert(receiptTitle === '钱包与收据' && receiptTitle === (await cdp.text('[data-tool=wallet]')).trim(), 'wallet title does not match its entry: ' + receiptTitle);
     await sleep(180);
     assert(await cdp.evaluate('document.elementFromPoint(12, 12).closest("[data-career-panel]")?.dataset.careerPanel') === 'receipt', 'sticky shellbar was above the wallet overlay');
-    const receiptBody = '[data-career-panel=receipt] .ac-career-sheet__body';
+    const receiptBody = '[data-career-panel=receipt] [data-shell-body]';
+    for (const [width, height, mobile] of [[320, 568, true], [375, 667, true], [390, 844, true], [430, 932, true], [1280, 900, false]]) {
+      await cdp.send('Emulation.setDeviceMetricsOverride', { width, height, deviceScaleFactor: 1, mobile });
+      const layout = await cdp.evaluate(`(() => {
+        const body = document.querySelector(${JSON.stringify(receiptBody)});
+        const dialog = body.closest('[role=dialog]');
+        const header = dialog.querySelector('.ac-career-ui__header');
+        const title = header.querySelector('.ac-career-ui__title');
+        const portTitle = document.querySelector('[data-career-panel=town] .ac-career-ui__title');
+        const rect = dialog.getBoundingClientRect();
+        return {
+          inViewport: rect.left >= 0 && rect.right <= innerWidth && rect.top >= 0 && rect.bottom <= innerHeight,
+          sameHeading: ['fontSize', 'fontWeight', 'color'].every(prop => getComputedStyle(title)[prop] === getComputedStyle(portTitle)[prop]),
+          gutter: getComputedStyle(body).scrollbarGutter,
+          clearance: body.getBoundingClientRect().right - body.firstElementChild.getBoundingClientRect().right,
+          scrollable: body.scrollHeight > body.clientHeight,
+          overflow: body.scrollWidth - body.clientWidth,
+        };
+      })()`);
+      assert(layout.inViewport && layout.sameHeading && layout.gutter === 'stable' && layout.clearance >= 16 && layout.scrollable && layout.overflow <= 1,
+        width + 'px wallet layout failed: ' + JSON.stringify(layout));
+    }
+    await cdp.send('Emulation.setDeviceMetricsOverride', { width: 390, height: 844, deviceScaleFactor: 1, mobile: true });
     const receiptPoint = await cdp.evaluate(`(() => {
       const r = document.querySelector(${JSON.stringify(receiptBody)}).getBoundingClientRect();
       return { x: Math.round(r.left + r.width / 2), y: Math.round(r.top + r.height / 2) };
@@ -3135,7 +3157,7 @@ async function main() {
     await cdp.send('Input.dispatchMouseEvent', { type: 'mouseWheel', x: 12, y: 12, deltaX: 0, deltaY: 500 });
     await sleep(150);
     assert(await cdp.evaluate('scrollY') === homeScroll, 'wallet scrolling moved the background');
-    await cdp.click('[data-career-panel=receipt] .ac-career-close');
+    await cdp.click('[data-career-panel=receipt] .ac-career-ui__close');
     assert(await cdp.evaluate('getComputedStyle(document.documentElement).overflowY') === 'hidden', 'closing the wallet unlocked the background behind town');
     await cdp.click('[data-career-panel=town] .ac-career-ui__close');
     assert(await cdp.evaluate(`location.href === ${JSON.stringify(careerHome)} && scrollY === ${homeScroll} && document.activeElement.matches('[data-career-entry]') && getComputedStyle(document.documentElement).overflowY !== 'hidden'`), 'closing town failed to restore the hall, focus or scrolling');
@@ -3171,33 +3193,56 @@ async function main() {
     assert(await cdp.evaluate('!document.querySelector("[data-career-chapters]") && !document.querySelector("[data-career-panel-link]")'), 'chapter CTA leaked into classic home');
     assert(await cdp.evaluate('document.querySelector("[data-sort]").value') === 'name', 'career entry overwrote classic order');
 
-    /* 封存后：来信小字隐藏，页尾生涯设置入口保留并改为「生涯设置（已封存）」。 */
-    await cdp.navigate(base + '/apps/arcade/games/pendulum-tower.html');
-    await cdp.waitFor('window.ArcadeCareer?.available && ArcadeCareer.db');
-    const archived = await cdp.evaluate(`ArcadeCareer.db.setCareerArchived(true, {careerId: ${JSON.stringify(profile.careerId)}, now: "2026-11-26T00:00:00.000Z"})`);
-    assert(archived.ok && archived.archived, 'archive fixture failed: ' + JSON.stringify(archived));
-    await cdp.navigate(base + '/apps/arcade/');
+    /* 封存从港口的设置完成，首页当场更新。 */
+    await cdp.click('[data-career-entry]');
+    await cdp.waitFor('!!document.querySelector("#port-settings")');
+    await cdp.click('#port-settings');
+    const settingsPanel = '[data-career-panel=settings]';
+    await cdp.waitFor(`!!document.querySelector('${settingsPanel} [data-action=freeze-career]')`);
+    assert(await cdp.text(`${settingsPanel} .ac-career-ui__title`) === '生涯设置', 'settings title missing');
+    await cdp.evaluate('ArcadeCareer.invalidateCareerData({reason: "changed"})');
+    await cdp.waitFor('!!document.querySelector("[data-career-panel=town] [data-shell-state=normal]")');
+    await cdp.send('Input.dispatchKeyEvent', { type: 'keyDown', key: 'Escape', code: 'Escape', windowsVirtualKeyCode: 27 });
+    await cdp.send('Input.dispatchKeyEvent', { type: 'keyUp', key: 'Escape', code: 'Escape', windowsVirtualKeyCode: 27 });
+    await cdp.waitFor(`!document.querySelector('${settingsPanel}') && document.activeElement.id === 'port-settings'`);
+    await cdp.click('#port-settings');
+    await cdp.waitFor(`!!document.querySelector('${settingsPanel} [data-action=freeze-career]')`);
+    await cdp.click(`${settingsPanel} [data-action=freeze-career]`);
+    assert(await cdp.evaluate('ArcadeCareer.db.getArchiveState().then(state => state.archived === false)'), 'opening freeze confirmation changed the archive');
+    const clickConfirmation = (label) => cdp.evaluate(`(() => {
+      const button = [...document.querySelectorAll('${settingsPanel} .ac-career-confirm:not([hidden]) button')].find(button => button.textContent === ${JSON.stringify(label)});
+      if (!button) throw new Error('Confirmation button missing');
+      button.click();
+    })()`);
+    await clickConfirmation('确认封存');
     await cdp.waitFor('document.querySelector("[data-career-settings-label]")?.textContent.trim() === "生涯设置（已封存）"');
+    assert(await cdp.evaluate(`!document.querySelector('[data-career-panel=town]') && !!document.querySelector('${settingsPanel} [data-action=unfreeze-career]:not([hidden])')`), 'freeze did not close the port and keep settings available');
     assert(await cdp.evaluate('document.querySelector("[data-letter-entry]").hidden === true'), 'letter hint still visible after archive');
     assert(await cdp.evaluate('document.querySelector("[data-career-entry]").hidden === true'), 'career content entry still visible after archive');
     assert(await cdp.evaluate('document.querySelector("[data-career-settings-entry]").hidden === false'), 'career settings entry missing after archive');
     assert(await cdp.evaluate('document.querySelector("[data-career-settings-label]").getAttribute("href") === "games/pendulum-tower.html?careerPanel=settings"'), 'archived career settings entry href changed');
     assert(await cdp.evaluate('document.querySelector("[data-classic-view]")?.hidden !== true && document.querySelector("[data-sort]").value === "name" && !document.querySelector("[data-career-view]")'), 'archive changed classic catalog, sort or view');
-    /* 解冻后：常驻生涯入口恢复，设置文案恢复。 */
-    await cdp.navigate(base + '/apps/arcade/games/pendulum-tower.html');
-    await cdp.waitFor('window.ArcadeCareer?.available && ArcadeCareer.db');
-    const unfrozen = await cdp.evaluate('ArcadeCareer.db.setCareerArchived(false)');
-    assert(unfrozen.ok && unfrozen.archived === false, 'career unfreeze fixture failed: ' + JSON.stringify(unfrozen));
-    await cdp.navigate(base + '/apps/arcade/');
+    /* 封存后仍可从首页原地打开设置并解冻。 */
+    await cdp.click(`${settingsPanel} .ac-career-ui__close`);
+    const settingsHome = await cdp.evaluate('location.href');
+    await cdp.click('[data-career-settings-label]');
+    await cdp.waitFor(`!!document.querySelector('${settingsPanel} [data-action=unfreeze-career]:not([hidden])')`);
+    assert(await cdp.evaluate('location.href') === settingsHome, 'opening settings navigated away from the hall');
+    await cdp.click(`${settingsPanel} [data-action=unfreeze-career]`);
     await cdp.waitFor('document.querySelector("[data-career-entry]")?.hidden === false && document.querySelector("[data-career-settings-label]")?.textContent.trim() === "生涯设置"');
-    assert(await cdp.evaluate('!!document.querySelector("button[data-career-entry]:not([hidden])")'), 'career entry did not return after unfreeze');
+    assert(await cdp.evaluate('ArcadeCareer.db.getState("career").then(state => state.careerId)') === profile.careerId, 'unfreeze did not preserve the original profile');
 
-    /* 完全重置后：常驻生涯入口与设置入口都消失，经典目录仍可见。 */
-    await cdp.navigate(base + '/apps/arcade/games/pendulum-tower.html');
-    await cdp.waitFor('window.ArcadeCareer?.available && ArcadeCareer.db');
-    const resetCareer = await cdp.evaluate('ArcadeCareer.db.resetAllCareer()');
-    assert(resetCareer.ok, 'career reset fixture failed: ' + JSON.stringify(resetCareer));
-    await cdp.navigate(base + '/apps/arcade/');
+    /* 完全重置要求输入确认词，清除生涯入口并保留经典档案。 */
+    const classicBeforeReset = await cdp.evaluate('Arcade.Prefs.load().hallSort');
+    await cdp.click(`${settingsPanel} [data-action=reset-all-career]`);
+    await clickConfirmation('确认完全重置');
+    assert(await cdp.evaluate('ArcadeCareer.db.getState("career").then(state => !!state?.careerId)'), 'reset proceeded without the confirmation phrase');
+    await cdp.send('Input.insertText', { text: '重置生涯' });
+    await cdp.send('Input.dispatchKeyEvent', { type: 'keyDown', key: 'Enter', code: 'Enter', windowsVirtualKeyCode: 13 });
+    await cdp.send('Input.dispatchKeyEvent', { type: 'keyUp', key: 'Enter', code: 'Enter', windowsVirtualKeyCode: 13 });
+    await cdp.waitFor('document.querySelector("[data-career-settings-entry]")?.hidden === true');
+    await cdp.click(`${settingsPanel} .ac-career-ui__close`);
+    assert(await cdp.evaluate('Arcade.Prefs.load().hallSort') === classicBeforeReset, 'reset changed the classic sort preference');
     await cdp.waitFor('document.querySelector("[data-career-entry]").hidden === true && document.querySelector("[data-career-settings-entry]").hidden === true');
     assert(await cdp.evaluate('document.querySelector("[data-classic-view]")?.hidden !== true && document.querySelectorAll("[data-hall-grid] a").length >= 16'), 'career reset changed classic catalog');
     record('街机厅被动发现：身份建立后常驻旧港生涯入口，封存隐藏内容，完全重置后入口消失；经典目录与排序不变', true);
@@ -3250,7 +3295,7 @@ async function main() {
     assert(legacyWallet.ok && legacyWallet.credits === 321, 'legacy wallet not preserved: ' + JSON.stringify(legacyWallet));
     await cdp.click('[data-tool=wallet]');
     await cdp.waitFor('!!document.querySelector("[data-career-panel=receipt] [data-section=ledger-rows]")');
-    await cdp.click('[data-career-panel=receipt] .ac-career-close');
+    await cdp.click('[data-career-panel=receipt] .ac-career-ui__close');
     const pointerOf = () => cdp.evaluate('ArcadeCareer.db.getState("career")').then((row) => (
       row && typeof row === 'object' ? (row.value && row.value.careerId) || row.careerId || null : null));
     const legacyPointer = await pointerOf();

@@ -211,7 +211,7 @@
     const components = componentsOf(state.context);
     const harbor = harborOf(state.context);
     if (!components || !harbor) {
-      state.shell.render({ title: '旧港邀请', showHeader: false, state: 'error', reducedMotion: !!state.context.reducedMotion, body: null, onClose: close });
+      state.shell.render({ title: '旧港邀请', state: 'error', reducedMotion: !!state.context.reducedMotion, body: null, onClose: close });
       return;
     }
     const doc = state.shellDoc;
@@ -227,10 +227,6 @@
     location.className = 'ac-career-ui__caption';
     location.textContent = cleanText(model.narrative.location) || (firstArrival ? '折光港 · 旧码头' : '一封新的回信');
     body.appendChild(location);
-    const heading = doc.createElement('h2');
-    heading.className = 'ac-career-ui__story-title';
-    heading.textContent = title;
-    body.appendChild(heading);
 
     const npcActions = [];
     if (!model.accepted) {
@@ -303,7 +299,6 @@
 
     const result = state.shell.render({
       title: title,
-      showHeader: false,
       state: 'normal',
       body: body,
       reducedMotion: !!state.context.reducedMotion,
@@ -330,7 +325,7 @@
       const body = doc.createElement('p');
       body.className = 'ac-career-ui__muted';
       body.textContent = '这封邀请暂时读不到，稍后可以从原信再来。';
-      state.shell.render({ title: '旧港邀请', showHeader: false, state: 'error', body: body, reducedMotion: !!state.context.reducedMotion, onClose: close });
+      state.shell.render({ title: '旧港邀请', state: 'error', body: body, reducedMotion: !!state.context.reducedMotion, onClose: close });
       return;
     }
     if (state.identityBefore === null) state.identityBefore = model.identityBefore;
@@ -429,7 +424,6 @@
     manager.context = ctx;
     const opened = shell.open({
       title: '旧港邀请',
-      showHeader: false,
       state: 'loading',
       body: null,
       reducedMotion: !!ctx.reducedMotion,
@@ -443,7 +437,7 @@
     }
     manager.unsubscribe = subscribe(ctx);
     refresh(state, true).catch(() => {
-      if (manager.shell === shell) shell.render({ title: '旧港邀请', showHeader: false, state: 'error', body: null, reducedMotion: !!ctx.reducedMotion, onClose: close });
+      if (manager.shell === shell) shell.render({ title: '旧港邀请', state: 'error', body: null, reducedMotion: !!ctx.reducedMotion, onClose: close });
     });
     return opened;
   }

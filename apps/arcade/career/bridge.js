@@ -2453,9 +2453,9 @@
       if (chapterAlternatives) catalog.worldChapterAlternatives = chapterAlternatives;
     }
     catalog.tools = [
-      { toolId: 'wallet', name: '钱包', introducedOnAccept: true },
-      { toolId: 'shop', name: '商店', introducedOnAccept: true },
-      { toolId: 'workshop', name: '工作台', introducedOnAccept: true },
+      { toolId: 'wallet', name: '钱包与收据', introducedOnAccept: true },
+      { toolId: 'shop', name: '材料商店', introducedOnAccept: true },
+      { toolId: 'workshop', name: '制造台', introducedOnAccept: true },
       { toolId: 'hangar', name: '机库', introducedOnAccept: true },
     ];
     return catalog;
@@ -4553,8 +4553,8 @@
     });
   }
 
-  /** 线索提示偏好入口：信箱角落的「线索提示」调用（settings 面板由 D15-07 实现）。 */
-  function openSettings() {
+  /** 首页与折光港共用生涯设置面板。 */
+  function openSettings(options) {
     return safe(
       'open-settings',
       function () {
@@ -4565,6 +4565,7 @@
         var target = typeof settings.open === 'function' ? settings.open : typeof settings.show === 'function' ? settings.show : null;
         if (!target) return uiUnavailable('ui-unavailable');
         var settingsContext = uiContext({
+          returnFocus: options && options.returnFocus,
           hintsEnabled: currentStateSnapshot().hintsEnabled !== false,
           getCareerArchive: readCareerArchive,
           freezeCareer: freezeCareer,
@@ -4576,6 +4577,7 @@
           settingsContext.archiveState = archive;
           try {
             var returned = target.call(settings, settingsContext);
+            if (!returned) return uiUnavailable('ui-unavailable');
             if (returned && typeof returned.then === 'function') {
               Promise.resolve(returned).catch(function (err) {
                 warnOnce('open-settings', err);
@@ -5552,7 +5554,7 @@
       var inTab = target && typeof target.closest === 'function'
         ? target.closest('[role="tab"], [role="tablist"], [data-career-ui-tabs]')
         : null;
-      if (inTab) return;
+      if (inTab || (key === 'Enter' && target?.matches?.('.ac-career-reset-input'))) return;
       try {
         event.stopImmediatePropagation();
       } catch (err) {

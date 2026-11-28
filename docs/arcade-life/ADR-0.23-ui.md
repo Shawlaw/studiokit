@@ -152,7 +152,7 @@ UI/adapter 不得读 `ctx.commissions`、`careerCatalog()`、`ctx.chapters` 的�
 
 | 项 | 冻结值 |
 |---|---|
-| Props | `title:string`, `descriptionId?:string`, `state:'normal'|'scroll'|'loading'|'error'`, `size?:'default'|'small'`, `showHeader?:boolean`（默认 `true`，字条与邀请使用 `false` 并保留对话框名称）, `body:Node`, `footer?:Node`, `reducedMotion:boolean`, `onClose():void`, `initialFocus?:Element|string`, `returnFocus?:Element|null` |
+| Props | `title:string`, `descriptionId?:string`, `state:'normal'|'scroll'|'loading'|'error'`, `size?:'default'|'small'`, `showHeader?:boolean`（默认 `true`，字条与邀请也显示标题栏与关闭按钮）, `body:Node`, `footer?:Node`, `reducedMotion:boolean`, `onClose():void`, `initialFocus?:Element|string`, `returnFocus?:Element|null` |
 | 输出 / 状态 | 面板宽 `min(440px, 100%)`；窄屏 `calc(100% - 24px)`；面板圆角 16、padding 16（≤360px 按 token 降为 12）；`data-shell-state` 取 `normal|scroll|loading|error`；loading 设 `aria-busy=true` 且保留结构；error 提供可见重试文本；body 独立滚动，`overscroll-behavior:contain` |
 | 键盘 / 焦点 | 打开优先聚焦 `initialFocus`，其次为可见的关闭按钮或对话框本身；标题 `tabindex=-1` 只作程序化焦点；Esc / close / 遮罩关闭；Tab 圈闭；关闭恢复 `returnFocus ?? 打开前元素` |
 | 状态 / 事件 | `onClose` 每次关闭只调用一次；滚动状态变化不改业务状态 |

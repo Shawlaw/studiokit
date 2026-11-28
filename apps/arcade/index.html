@@ -192,7 +192,7 @@
     <footer class="hall-foot">
       <p>离开游戏时会自动保存可续玩的进度。</p>
       <p class="hall-career-settings" data-career-settings-entry hidden>
-        <a href="games/pendulum-tower.html?careerPanel=settings" data-career-settings-label>生涯设置</a>
+        <a href="games/pendulum-tower.html?careerPanel=settings" data-career-settings-label aria-haspopup="dialog">生涯设置</a>
       </p>
       <span>v<span data-hall-version>0.24.0</span></span>
     </footer>
@@ -1111,10 +1111,10 @@
       let hallReadGeneration = 0;
       let openingCareer = false;
 
-      careerEntry.addEventListener('click', async () => {
-        if (careerEntry.hidden || openingCareer) return;
+      async function openHallCareerPanel(panel, trigger) {
+        if (openingCareer) return;
         openingCareer = true;
-        careerEntry.focus({ preventScroll: true });
+        trigger.focus({ preventScroll: true });
         document.querySelector('[data-career-hub-error]')?.remove();
         try {
           if (!window.ArcadeCareer?.openHubCareerPanel) {
@@ -1128,14 +1128,25 @@
               };
               document.head.appendChild(script);
             });
+            window.ArcadeCareer.onCareerDataChanged(refreshHallViews);
           }
-          await window.ArcadeCareer.openHubCareerPanel('town');
+          const result = await window.ArcadeCareer.openHubCareerPanel(panel);
+          if (panel === 'settings' && !result?.ok) throw new Error('Career settings unavailable');
           await refreshHallViews();
         } catch (err) {
-          A.showToast('暂时打不开旧港生涯，请稍后重试。');
+          A.showToast(panel === 'settings' ? '暂时打不开生涯设置，请稍后重试。' : '暂时打不开旧港生涯，请稍后重试。');
         } finally {
           openingCareer = false;
         }
+      }
+
+      careerEntry.addEventListener('click', () => {
+        if (!careerEntry.hidden) openHallCareerPanel('town', careerEntry);
+      });
+      settingsLabel.addEventListener('click', (event) => {
+        if (settingsEntry.hidden || event.defaultPrevented || event.metaKey || event.ctrlKey || event.shiftKey || event.altKey) return;
+        event.preventDefault();
+        openHallCareerPanel('settings', settingsLabel);
       });
 
       async function refreshHallViews() {

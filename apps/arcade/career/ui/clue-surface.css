@@ -24,6 +24,31 @@
   --ac-career-danger: var(--ac-danger, #ff5d5d);
 }
 
+/* Use shell colors for content shared with the older dialogs. */
+.ac-career-ui .ac-career-ui__overlay {
+  --ac-career-panel: var(--ac-career-ui-surface);
+  --ac-career-line: var(--ac-career-ui-border);
+  --ac-career-ink: var(--ac-career-ui-ink);
+  --ac-career-muted: var(--ac-career-ui-muted);
+  --ac-career-accent: var(--ac-career-ui-gold);
+  --ac-career-danger: var(--ac-career-ui-danger);
+}
+
+.ac-career-ui .ac-career-letter,
+.ac-career-ui .ac-career-switch__track {
+  background: var(--ac-career-ui-surface);
+}
+
+.ac-career-ui button.ac-career-switch {
+  border: 1px solid var(--ac-career-ui-border);
+}
+
+.ac-career-ui .ac-career-ui__overlay button.ac-career-btn--danger {
+  border: 1px solid var(--ac-career-ui-danger);
+  color: var(--ac-career-ui-danger);
+  background: transparent;
+}
+
 .ac-career-sheet,
 .ac-career-sheet * {
   box-sizing: border-box;
@@ -245,8 +270,9 @@ body:has(.ac-career-overlay) {
 .ac-career-sheet__body {
   flex: 1 1 auto;
   min-height: 0;
-  padding: 12px 16px max(16px, calc(12px + env(safe-area-inset-bottom, 0px)));
+  padding: 12px 20px max(16px, calc(12px + env(safe-area-inset-bottom, 0px))) 16px;
   overflow-y: auto;
+  scrollbar-gutter: stable;
   overscroll-behavior: contain;
   -webkit-overflow-scrolling: touch;
 }
@@ -666,6 +692,11 @@ body:has(.ac-career-overlay) {
   flex: 1 1 120px;
 }
 
+.ac-career-ui .ac-career-confirm__actions button.ac-career-ui__action {
+  flex: 1 1 auto;
+  width: auto;
+}
+
 /* 隐藏的文件输入：视觉不可见但可被程序点击，且不进入 Tab 顺序。 */
 .ac-career-file-input {
   position: absolute;
@@ -680,7 +711,8 @@ body:has(.ac-career-overlay) {
 }
 
 /* 面板内的状态行（可见文案；读屏播报由 announce() 负责）。 */
-.ac-career-status {
+.ac-career-status,
+.ac-career-archive-status {
   margin: 0;
   color: var(--ac-career-muted);
   font-size: 12px;
@@ -702,7 +734,7 @@ body:has(.ac-career-overlay) {
   }
 
   .ac-career-sheet__body {
-    padding: 10px 12px max(14px, calc(10px + env(safe-area-inset-bottom, 0px)));
+    padding: 10px 20px max(14px, calc(10px + env(safe-area-inset-bottom, 0px))) 12px;
   }
 
   .ac-career-letter {

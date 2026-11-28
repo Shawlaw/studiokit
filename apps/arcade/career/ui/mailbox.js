@@ -1395,7 +1395,6 @@
     }
     const result = componentShell.render({
       title: PANEL_LABEL,
-      showHeader: false,
       state: 'normal',
       body: body,
       reducedMotion: !!session.context.reducedMotion,
@@ -1487,7 +1486,6 @@
     componentSession = session;
     const opened = shell.open({
       title: PANEL_LABEL,
-      showHeader: false,
       state: ids.length ? 'loading' : 'normal',
       body: null,
       reducedMotion: !!context.reducedMotion,

@@ -919,12 +919,17 @@
     }
   }
 
-  function closePanel() {
-    const current = panel;
+  function clearPanelState() {
     panel = null;
     unsubscribeCareerPanelChanges();
     panelSeq += 1;
+  }
+
+  function closePanel() {
+    const current = panel;
     if (!current) return false;
+    if (current.shell) return current.shell.close();
+    clearPanelState();
     try {
       current.doc.removeEventListener('keydown', current.onKeyDown, true);
     } catch (err) {
@@ -960,42 +965,48 @@
 
     const previousFocus = doc.activeElement && typeof doc.activeElement.focus === 'function' ? doc.activeElement : null;
 
-    const overlay = make(doc, 'div', OVERLAY_CLASS);
-    overlay.setAttribute('data-career-panel', 'receipt');
+    const components = componentsOf(context);
+    const shell = components?.CareerShell?.create?.('receipt');
+    let overlay;
+    let sheet;
+    let closeBtn;
+    const body = make(doc, 'div', shell ? '' : 'ac-career-sheet__body');
+    const reducedMotion = contextReducedMotion(context);
+    if (shell) {
+      const opened = shell.open({ title: PANEL_TITLE, body, reducedMotion, onClose: clearPanelState });
+      if (!opened.ok) return null;
+      sheet = opened.panel;
+      overlay = sheet.parentNode;
+    } else {
+      overlay = make(doc, 'div', OVERLAY_CLASS);
+      overlay.setAttribute('data-career-panel', 'receipt');
+      if (reducedMotion) overlay.classList.add('is-reduced-motion');
+      sheet = make(doc, 'div', SHEET_CLASS);
+      sheet.setAttribute('role', 'dialog');
+      sheet.setAttribute('aria-modal', 'true');
+      sheet.setAttribute('aria-labelledby', TITLE_ID);
+      sheet.setAttribute('tabindex', '-1');
+
+      const head = make(doc, 'div', 'ac-career-sheet__head');
+      const heading = make(doc, 'h2', 'ac-career-sheet__title', PANEL_TITLE);
+      heading.id = TITLE_ID;
+      closeBtn = make(doc, 'button', 'ac-career-icon-btn ac-career-close', CLOSE_GLYPH);
+      closeBtn.type = 'button';
+      closeBtn.setAttribute('aria-label', PANEL_CLOSE_LABEL);
+      head.appendChild(heading);
+      head.appendChild(closeBtn);
+      sheet.appendChild(head);
+      sheet.appendChild(body);
+      overlay.appendChild(sheet);
+      try { doc.body.appendChild(overlay); } catch (err) { return null; }
+    }
     overlay.setAttribute('data-state', 'loading');
-    if (contextReducedMotion(context)) overlay.classList.add('is-reduced-motion');
-
-    const sheet = make(doc, 'div', SHEET_CLASS);
-    sheet.setAttribute('role', 'dialog');
-    sheet.setAttribute('aria-modal', 'true');
-    sheet.setAttribute('aria-labelledby', TITLE_ID);
-    sheet.setAttribute('tabindex', '-1');
-
-    const head = make(doc, 'div', 'ac-career-sheet__head');
-    const heading = make(doc, 'h2', 'ac-career-sheet__title', PANEL_TITLE);
-    heading.id = TITLE_ID;
-    const closeBtn = make(doc, 'button', 'ac-career-icon-btn ac-career-close', CLOSE_GLYPH);
-    closeBtn.type = 'button';
-    closeBtn.setAttribute('aria-label', PANEL_CLOSE_LABEL);
-    head.appendChild(heading);
-    head.appendChild(closeBtn);
-
-    const body = make(doc, 'div', 'ac-career-sheet__body');
-    sheet.appendChild(head);
-    sheet.appendChild(body);
-    overlay.appendChild(sheet);
 
     const liveRegion = make(doc, 'div', 'ac-career-sr-only');
     liveRegion.setAttribute('role', 'status');
     liveRegion.setAttribute('aria-live', 'polite');
     liveRegion.setAttribute('aria-atomic', 'true');
     overlay.appendChild(liveRegion);
-
-    try {
-      doc.body.appendChild(overlay);
-    } catch (err) {
-      return null;
-    }
 
     const current = {
       doc: doc,
@@ -1008,6 +1019,7 @@
       seq: ++panelSeq,
       careerId: '',
       onKeyDown: null,
+      shell,
     };
     current.onKeyDown = (event) => onPanelKeyDown(current, event);
     panel = current;
@@ -1019,24 +1031,19 @@
       removeCard();
     });
 
-    closeBtn.addEventListener('click', () => closePanel(), false);
-
-    let pressedBackdrop = false;
-    overlay.addEventListener('pointerdown', (event) => {
-      pressedBackdrop = !!(event && event.target === overlay);
-    }, false);
-    overlay.addEventListener('pointercancel', () => {
-      pressedBackdrop = false;
-    }, false);
-    overlay.addEventListener('click', (event) => {
-      const onBackdrop = !!(event && event.target === overlay) && pressedBackdrop;
-      pressedBackdrop = false;
-      if (onBackdrop) closePanel();
-    }, false);
-
-    doc.addEventListener('keydown', current.onKeyDown, true);
-
-    safelyFocus(closeBtn);
+    if (!shell) {
+      closeBtn.addEventListener('click', () => closePanel(), false);
+      let pressedBackdrop = false;
+      overlay.addEventListener('pointerdown', (event) => { pressedBackdrop = event.target === overlay; });
+      overlay.addEventListener('pointercancel', () => { pressedBackdrop = false; });
+      overlay.addEventListener('click', (event) => {
+        const onBackdrop = event.target === overlay && pressedBackdrop;
+        pressedBackdrop = false;
+        if (onBackdrop) closePanel();
+      });
+      doc.addEventListener('keydown', current.onKeyDown, true);
+      safelyFocus(closeBtn);
+    }
     announceFor(current, PANEL_TITLE + '打开了。');
     loadPanel(current);
     return sheet;

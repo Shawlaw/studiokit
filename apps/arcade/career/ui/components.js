@@ -852,12 +852,14 @@
     else dom.panel.removeAttribute('aria-describedby');
 
     const active = dom.doc.activeElement;
-    const descriptor = active && dom.body.contains(active) ? focusDescriptor(active) : null;
+    const descriptor = active && (dom.body.contains(active) || dom.footer.contains(active)) ? focusDescriptor(active) : null;
     const headerFocusLost = !showHeader && (active === dom.closeButton || active === dom.heading);
     dom.body.replaceChildren();
     appendContent(dom.body, input.body);
-    dom.footer.replaceChildren();
-    appendContent(dom.footer, input.footer);
+    if (!input.footer || dom.footer.firstChild !== input.footer) {
+      dom.footer.replaceChildren();
+      appendContent(dom.footer, input.footer);
+    }
     dom.footer.hidden = !input.footer;
     dom.notice.hidden = state !== 'loading' && state !== 'error';
     dom.notice.className = 'ac-career-ui__shell-notice' + (state === 'error' ? ' ac-career-ui__shell-notice--error' : '');
@@ -877,7 +879,7 @@
   }
 
   /**
-   * 旧面板（receipt/mailbox 的 0.22 overlay）不是组件 shell，但同样带
+   * 旧版降级面板不使用组件 shell，但同样带
    * `[data-career-panel]` 且用 document capture 处理 Esc。只有本 shell 的 overlay
    * 是文档中最后一个 career 面板时，它才是真正的顶层；否则把按键让给上层，
    * 避免 town→hangar→receipt 时 Esc 关掉中间层。
@@ -970,7 +972,9 @@
     manager.panelKey = panelKey;
     manager.ctx = input;
 
-    dom.closeButton.addEventListener('click', () => closeShell(manager));
+    dom.closeButton.addEventListener('click', () => {
+      if (isTopCareerPanel(record)) closeShell(manager);
+    });
     let pressedBackdrop = false;
     dom.overlay.addEventListener('pointerdown', (event) => {
       pressedBackdrop = !!(event && event.target === dom.overlay);
@@ -980,7 +984,7 @@
       const onBackdrop = !!(event && event.target === dom.overlay);
       const view = doc.defaultView;
       const supportsPointer = !!view && typeof view.PointerEvent === 'function';
-      if (onBackdrop && (pressedBackdrop || !supportsPointer)) closeShell(manager);
+      if (onBackdrop && (pressedBackdrop || !supportsPointer) && isTopCareerPanel(record)) closeShell(manager);
       pressedBackdrop = false;
     });
 
@@ -998,15 +1002,20 @@
     const record = manager.record;
     if (!record) return false;
     const state = stateFor(record.doc);
-    if (topManager(record.doc) !== manager) return false;
+    const wasTop = isTopCareerPanel(record);
+    const explicitReturn = manager.ctx.returnFocus;
+    const target = explicitReturn && typeof explicitReturn.nodeType === 'number' ? explicitReturn : record.previousFocus;
     state.stack = state.stack.filter((entry) => entry !== manager);
+    // Archiving or resetting can close the port while its settings remain open.
+    for (const entry of state.stack) {
+      if (record.rootNode.contains(entry.record.previousFocus)) entry.record.previousFocus = target;
+      if (entry.ctx.returnFocus && record.rootNode.contains(entry.ctx.returnFocus)) entry.ctx.returnFocus = target;
+    }
     record.doc.removeEventListener('keydown', record.onKeyDown, true);
     if (record.rootNode.parentNode) record.rootNode.parentNode.removeChild(record.rootNode);
     manager.record = null;
     unlockScroll(record.doc);
-    const explicitReturn = manager.ctx && manager.ctx.returnFocus;
-    const target = explicitReturn && typeof explicitReturn.nodeType === 'number' ? explicitReturn : record.previousFocus;
-    if (target && target.isConnected) safelyFocus(target);
+    if (wasTop && target && target.isConnected) safelyFocus(target);
     if (manager.ctx && typeof manager.ctx.onClose === 'function') {
       try { manager.ctx.onClose(); } catch (_) { /* close remains complete */ }
     }

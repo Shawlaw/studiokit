@@ -580,7 +580,7 @@ await check('CA-07 settings 确认门：封存需二次确认、重置需输入�
   confirmReset.dispatch('click', {});
   await Promise.resolve(); await Promise.resolve();
   assert(calls.indexOf('resetAllCareer') < 0, '短语为空却调用了 resetAllCareer');
-  const status = allNodes(sheet).filter((n) => n.className.indexOf('ac-career-status') >= 0 && !n.hidden).map((n) => n.textContent).join('|');
+  const status = allNodes(sheet).filter((n) => n.className.indexOf('ac-career-archive-status') >= 0 && !n.hidden).map((n) => n.textContent).join('|');
   assert(status.indexOf('重置生涯') >= 0, '短语错误无提示: ' + status);
   input.value = '重置生涯';
   confirmReset.dispatch('click', {});

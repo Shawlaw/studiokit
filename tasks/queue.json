@@ -2519,6 +2519,20 @@
         "状态如实：release 门禁在新 SHA 通过后写 GATE_PASSED；不写 DONE / PUBLISHED / ALL GATES PASSED"
       ],
       "evidence": "证据与门禁结论见 docs/arcade-life/INTEGRATION-0.24.0.md §6 与 docs/arcade-life/ADR-0.24-world.md §10。候选 4f2d271：py -3 tools/arcade_run_all_gates.py --profile release 51/51，2900.348s，release passed (not full)，门禁内真实流程 645/645。定向：交汇浏览器场景 255/255、archive lifecycle 61/61、mobile 334/334、smoke 119/119、22 个纯 Node 套件。提交 eeb4939、8c1083e、0e777bd、a2a4bfa、ad6e1c0、ef13733、95c593e、68a4de4、bc67c96、c41df95、9247b06。本地提交，未 push、未发布。"
+    },
+    {
+      "id": "T151",
+      "title": "Arcade 生涯设置恢复及多层弹窗布局修复",
+      "kind": "agent",
+      "status": "DONE",
+      "dependsOn": [],
+      "ownerAuthorizationRequired": false,
+      "acceptance": [
+        "折光港与街机厅首页可原地打开生涯设置，实测封存、解冻与确认词重置",
+        "三级弹窗统一标题栏与关闭键，滚动条与正文分离，桌面和四档手机宽度布局正常",
+        "重置只清生涯存档，经典存档逐字节一致"
+      ],
+      "evidence": "基于已发布 0.24.0。冒烟 119/119，移动端 335/335，封存生命周期 61/61，静态校验和构建通过。旧版可访问性脚本的线索入口断言和跨标签读信时间一致性断言在 0.24.0 基线亦失败。真机未复测，本地未发布。"
     }
   ]
 }

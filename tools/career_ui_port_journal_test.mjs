@@ -849,7 +849,7 @@ const settingsCtx = {
 settingsHarness.ui.settings.open(settingsCtx);
 const settingsPanel = settingsHarness.doc.querySelector('.ac-career-ui__panel');
 check('settings uses T11 shell and keeps invalidation subscription until close',
-  !!settingsPanel && settingsPanel.getAttribute('data-shell-size') === 'small' &&
+  !!settingsPanel && settingsPanel.getAttribute('data-shell-size') === 'default' &&
   typeof settingsListener === 'function' && settingsUnsubscribed === 0);
 settingsListener({ reason: 'career-imported' });
 check('import invalidation does not prematurely unsubscribe settings', settingsUnsubscribed === 0 && !!settingsPanel);

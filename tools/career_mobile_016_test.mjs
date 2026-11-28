@@ -1185,6 +1185,18 @@ async function phaseKeyboard(page) {
   await sleep(600);
   const stack3Before = await page.evaluate(`(() => Array.from(document.querySelectorAll('[data-career-panel]')).map((node) => node.getAttribute('data-career-panel')))()`);
   record('K-STACK 三层叠加顺序 town→hangar→receipt', JSON.stringify(stack3Before) === '["town","hangar","receipt"]', JSON.stringify(stack3Before));
+  const headings = await page.evaluate(`Array.from(document.querySelectorAll('[data-career-panel]')).map((overlay) => {
+    const dialog = overlay.querySelector('[role=dialog]');
+    const title = dialog.querySelector('.ac-career-ui__header .ac-career-ui__title');
+    return title && {
+      name: title.textContent,
+      labeled: dialog.getAttribute('aria-labelledby') === title.id,
+      style: [getComputedStyle(title).fontSize, getComputedStyle(title).fontWeight, getComputedStyle(title).color],
+    };
+  })`);
+  record('K-STACK 三层共用标题样式，并分别标注折光港、机库和钱包与收据',
+    headings.length === 3 && headings.every((heading, index) => heading?.labeled && heading.name === ['折光港', '机库', '钱包与收据'][index] &&
+      JSON.stringify(heading.style) === JSON.stringify(headings[0].style)), JSON.stringify(headings));
   await esc(page);
   await sleep(300);
   const stack3After = await page.evaluate(`(() => Array.from(document.querySelectorAll('[data-career-panel]')).map((node) => node.getAttribute('data-career-panel')))()`);

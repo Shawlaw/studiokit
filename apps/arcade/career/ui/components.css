@@ -149,10 +149,14 @@ html.ac-career-ui-scroll-lock body {
   flex: 1 1 auto;
   min-height: 0;
   min-width: 0;
-  max-width: 100%;
+  /* The track sits in the panel margin. Padding also clears overlay scrollbars. */
+  margin-inline-end: calc(4px - var(--ac-career-ui-pad));
+  padding-inline-end: 16px;
   overflow-x: hidden;
   overflow-y: auto;
   overscroll-behavior: contain;
+  scrollbar-gutter: stable;
+  scrollbar-width: thin;
   scrollbar-color: var(--ac-career-ui-gold) var(--ac-career-ui-stage);
 }
 
@@ -184,6 +188,16 @@ html.ac-career-ui-scroll-lock body {
   border-top: var(--ac-career-ui-line-width) solid var(--ac-career-ui-border);
   padding-top: var(--ac-career-ui-space-3);
   padding-bottom: env(safe-area-inset-bottom, 0px);
+}
+
+.ac-career-ui__port-footer {
+  display: flex;
+  justify-content: flex-end;
+  gap: var(--ac-career-ui-space-2);
+}
+
+.ac-career-ui__port-footer button.ac-career-ui__action {
+  width: auto;
 }
 
 .ac-career-ui__stack {
