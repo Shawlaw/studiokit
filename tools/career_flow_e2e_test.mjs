@@ -1564,26 +1564,32 @@ async function phaseSingleDelivery(cdp, gameId) {
      回不回由玩家决定；恢复只重开叙事，不接单。 */
   const resumeSelector = '[data-career-panel="town"] [data-action="port-resume-arrival"]';
   await pressVisible(cdp, resumeSelector, '回到初次到港');
-  await cdp.waitFor(`(() => {
-    const panel = document.querySelector('[data-career-panel="arrival"]');
-    return !!panel && panel.getAttribute('data-invitation-mode') === 'freshIntro'
-      && panel.getAttribute('data-invitation-created') === 'true'
-      && !!panel.querySelector('[data-action="start-first-commission"]');
-  })()`, { timeout: 15000 });
-  const resumed = await cdp.evaluate(`(() => {
+  await cdp.waitFor(`!!document.querySelector('[data-career-panel="arrival"] [data-invitation-mode="freshIntro"]' +
+    '[data-invitation-created="true"] [data-action="start-first-commission"]')`, { timeout: 15000 }).catch(async (err) => {
+    gate('ARRIVAL 从港口回到初次到港的诊断', false, J(await cdp.evaluate(`(() => ({
+      panels: Array.from(document.querySelectorAll('[data-career-panel]')).map((node) => ({
+        key: node.getAttribute('data-career-panel'),
+        shell: node.querySelector('.ac-career-ui__panel') && node.querySelector('.ac-career-ui__panel').getAttribute('data-shell-state'),
+        actions: Array.from(node.querySelectorAll('[data-action]')).map((button) => button.getAttribute('data-action')),
+        text: node.innerText.replace(/\\s+/g, ' ').slice(0, 360),
+      })),
+    }))()`)));
+    throw err;
+  });
+  const resumed = await cdp.evaluate(`(async () => {
     const api = window.ArcadeCareer;
     const panel = document.querySelector('[data-career-panel="arrival"]');
     const start = panel.querySelector('[data-action="start-first-commission"]');
-    const invitation = api.invitationForClue(${J(clueId)});
+    const view = await api.careerView({ surface: 'port' });
     return {
       run: api.commissionRun || null,
       startVisible: !!start && start.getClientRects().length > 0,
-      firstArrival: invitation && invitation.firstArrival,
+      pending: view && view.story ? view.story.firstArrival : null,
       text: panel.innerText.slice(0, 160),
     };
   })()`);
   gate('ARRIVAL 离开后从港口入口重开可回到初次到港，第一份工作仍由玩家显式点击',
-    resumed.run === null && resumed.startVisible === true && resumed.firstArrival === true, J(resumed));
+    resumed.run === null && resumed.startVisible === true && !!resumed.pending, J(resumed));
   await pressVisible(cdp, '[data-career-panel="arrival"] [data-action="leave-arrival"]', '再次暂时离开港口');
   await cdp.waitFor('!document.querySelector(`[data-career-panel="arrival"]`)', { timeout: 10000 });
   await cdp.waitFor(`!!document.querySelector(${J(resumeSelector)})`, { timeout: 10000 });
