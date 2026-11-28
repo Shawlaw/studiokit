@@ -6,7 +6,7 @@
       "id": "T153",
       "title": "Arcade 0.24.1 fast-forward 合入 main 并双端发布",
       "kind": "agent",
-      "status": "IN_PROGRESS",
+      "status": "RELEASE_READY",
       "dependsOn": [],
       "ownerAuthorizationRequired": false,
       "acceptance": [
@@ -14,7 +14,7 @@
         "release 门禁通过，fast-forward 合入 main 并推送",
         "Actions 四项成功且双端 verify_deploy 一致"
       ],
-      "evidence": "Owner 明确授权 PUBLISH_TO_MAIN；进行中，结果见 docs/arcade-life/INTEGRATION-0.24.1.md。"
+      "evidence": "Owner 明确授权 PUBLISH_TO_MAIN；候选 bf4877c release 51/51（not full），2895.416s。结果见 docs/arcade-life/INTEGRATION-0.24.1.md。"
     },
     {
       "id": "T001",
