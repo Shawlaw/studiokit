@@ -1620,7 +1620,7 @@ check('I12 bridge 白名单注入真实转发 text/person/surfaces/source（源�
 check('I12a 经历面只从真实记录合成只读经历行，不改写也不落盘（源码核对）', (() => {
   const start = bridgeSource.indexOf('function worldJournalState(');
   const body = bridgeSource.slice(start, bridgeSource.indexOf('function recordWorldNarrativeEvent('));
-  return start > 0 && body.includes('deriveJournalEvents(') && body.includes('firstMarketPurchaseOf')
+  return start > 0 && body.includes('deriveJournalEvents(') && body.includes('rawWorldNarrativeModule()') && body.includes('firstMarketPurchaseOf')
     && body.includes('facts.quests') && !/applyProfessionEvent|RECORD_STORY_EVENT/.test(body)
     && /surface === 'journal' \? worldJournalState\(/.test(bridgeSource);
 })());

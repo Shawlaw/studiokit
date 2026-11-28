@@ -2923,6 +2923,28 @@ async function phaseAcceptSecondProfession(cdp, label) {
       invitation.state === 'read' && invitation.canAccept === true && invitation.firstArrival === false &&
       !!mailbox && mailbox.text.length > 20,
     J({ invitation, mailbox: mailbox && mailbox.text.slice(0, 320) }));
+  /* P06：已有身份读另一职业的邀请，由该职业的真实人物在信下说明新关系（明确可选），
+     接受动作在这段说明之后；不重播首次到港的介绍。 */
+  const secondNarrative = NARRATIVE_BY_PROFESSION[CROSSOVER_B_PROFESSION] || {};
+  const followUp = await cdp.evaluate(`(() => {
+    const textOf = (node) => (node && node.textContent ? node.textContent.replace(/\\s+/g, ' ').trim() : '');
+    const intro = document.querySelector('[data-career-panel="mailbox"] [data-mailbox-invitation="follow-up"]');
+    const accept = intro && intro.querySelector('[data-action="accept-invitation"]');
+    const defer = intro && intro.querySelector('[data-action="defer-invitation"]');
+    return intro ? {
+      state: intro.getAttribute('data-npc-state'),
+      name: textOf(intro.querySelector('.ac-career-ui__npc-name')),
+      text: textOf(intro),
+      acceptInside: !!accept, deferInside: !!defer,
+    } : null;
+  })()`);
+  gate('XOVER 第二职业邀请由该职业真实人物说明新关系，接受/以后再说跟在说明之后',
+    !!followUp && followUp.state === 'optional' && followUp.name === secondNarrative.npc &&
+      !!followUp.text && followUp.text.includes(secondNarrative.existingIntro) &&
+      !followUp.text.includes((secondNarrative.freshIntro || [''])[0]) &&
+      followUp.acceptInside === true && followUp.deferInside === true &&
+      !/你还认得|认得你送|你送过/.test(secondNarrative.existingIntro || ''),
+    J({ followUp, expected: { npc: secondNarrative.npc, existingIntro: secondNarrative.existingIntro } }));
   await watchAcceptInvitation(cdp);
   await pressVisible(cdp, '[data-career-panel="mailbox"] [data-action="accept-invitation"]', label + ' 接受职业 B');
   const afterAccept = await cdp.waitFor(`(async () => {

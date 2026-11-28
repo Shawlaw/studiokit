@@ -2934,7 +2934,9 @@
    */
   function worldJournalState(state, cleared) {
     if (internal.careerArchived || !internal.worldNarrativeContent) return Promise.resolve(state);
-    return ensureLazyModule('worldNarrative').then(function (mod) {
+    /* ensureLazyModule 对该模块返回的是只读门面；推导需要原始模块上的纯函数。 */
+    return ensureLazyModule('worldNarrative').then(function () {
+      var mod = rawWorldNarrativeModule();
       if (!mod || typeof mod.deriveJournalEvents !== 'function') return state;
       return ensureWorldNarrativeFacts(cleared).then(function (facts) {
         var db = api.db || readGlobal('db');
