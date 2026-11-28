@@ -405,6 +405,7 @@ async function makeBridge(options) {
         ACCEPT_INVITATION: 'acceptInvitation',
         SET_ACTIVE: 'setActive',
         SET_PAUSED: 'setPaused',
+        CONSUME_FIRST_ARRIVAL: 'consumeFirstArrival',
       }[payload.action];
       if (!fn) return Promise.resolve({ ok: false, reason: 'unknown-action' });
       const result = professionState[fn](clone(store.discovery), payload.input);
@@ -470,7 +471,11 @@ async function makeBridge(options) {
       });
       return { ok: true, careerId: (input && input.careerId) || null, commissions: visible, availableIds: visible.map((row) => row.commissionId) };
     },
-    start(input) { store.startCalls.push(clone(input)); return { ok: false, reason: 'test-start' }; },
+    start(input) {
+      store.startCalls.push(clone(input));
+      if (opts.startSucceeds === true) return { ok: true, commissionId: input.commissionId };
+      return { ok: false, reason: 'test-start' };
+    },
     validateTicket(input) { store.validateCalls.push(clone(input)); return clone(store.ticketResult) || { ok: false, reason: 'no-ticket-fixture' }; },
     continuations() { return { ok: true, careerId: store.identity ? store.identity.careerId : null, runs: [] }; },
     markActive() { return true; },
@@ -831,6 +836,36 @@ async function main() {
     check('S-02b bridge 无删除数据库回退', !/indexedDB\.deleteDatabase/.test(BRIDGE_SRC));
     check('S-02c 新职业写入只调用 applyProfessionEvent', /applyProfessionEvent\(\{[\s\S]*?action: action/.test(BRIDGE_SRC));
     check('S-02d 内容包仍可读取（页数 > 0）', CONTENT_FILES.length > 0);
+  }
+
+  {
+    const cases = [
+      ['另一已接受职业的专属委托保留首次到港', 'nature.miner', 'memory-flip.T1', true, false],
+      ['切换当前职业后仍消费起源职业首单', 'research.archivist', 'gold-miner.T1', true, true],
+      ['切换当前职业后世界通用工作仍消费起源首次到港', 'research.archivist', 'pendulum-tower.T1', true, true],
+      ['签票失败保留首次到港', 'nature.miner', 'gold-miner.T1', false, false],
+      ['终局保留首次到港', 'nature.miner', 'ending.research', true, false],
+    ];
+    for (const [label, activeProfessionId, commissionId, startSucceeds, consumes] of cases) {
+      const fixture = await freshBridge(stateWithProgress(acceptedProgress(['nature.miner', 'research.archivist']), {
+        acceptedOriginGameId: 'gold-miner',
+        activeProfessionId,
+        narrativeCursor: { chapterId: 'C0', nodeId: 'invitation:nature.miner' },
+      }), { careerId: 'career-test-1' }, { startSucceeds });
+      const opened = await fixture.bridge.openTown();
+      const town = fixture.store.uiCalls.find(([name]) => name === 'town');
+      if (!opened.ok || !town) throw new Error('town facade unavailable: ' + JSON.stringify(opened));
+      const result = await town[1].commission.start({ commissionId });
+      eq('ARRIVAL ' + label, [result.ok, fixture.bridge.state().narrativeCursor.nodeId],
+        [startSucceeds, consumes ? 'arrival:nature.miner' : 'invitation:nature.miner']);
+      if (consumes) {
+        await town[1].commission.start({ commissionId });
+        const reopened = await makeBridge({ store: fixture.store });
+        eq('ARRIVAL 重开保留消费且重复接单不写入 ' + commissionId,
+          [reopened.bridge.state().narrativeCursor.nodeId, fixture.store.applyCalls.map((row) => row.action)],
+          ['arrival:nature.miner', ['CONSUME_FIRST_ARRIVAL']]);
+      }
+    }
   }
 
   {

@@ -2497,12 +2497,9 @@
         }
         var returned = fn.apply(mod, args);
         if (key !== 'start') return returned;
-        /* 真实开局成功即消费首到港（与具体入口无关）；失败/被 gate 拒绝不消费。 */
-        var commission = isObject(args[0]) ? args[0] : {};
         return Promise.resolve(returned).then(function (result) {
           if (!result || result.ok !== true) return result;
-          var started = isObject(result.commission) ? result.commission : commission;
-          return consumeFirstArrivalForStart(started).then(function () { return result; });
+          return consumeFirstArrivalForStart(result.commissionId).then(function () { return result; });
         });
       };
     });
@@ -2511,24 +2508,27 @@
     return facade;
   }
 
-  /**
-   * 玩家真正开始一单（不论入口是到港面板、港口工作页还是告示板）后，
-   * 首到港就算被消费：把叙事游标从 `invitation:<id>` 推进到 `arrival:<id>`。
-   * 只处理「已接受职业仍停在邀请游标」的情况；终局与未接受职业不动。
-   */
-  function consumeFirstArrivalForStart(commission) {
-    try {
-      var state = currentStateSnapshot();
-      var cursor = state && state.narrativeCursor ? state.narrativeCursor : null;
-      var activeId = state && typeof state.activeProfessionId === 'string' ? state.activeProfessionId : null;
-      var professionId = commission && typeof commission.professionId === 'string' ? commission.professionId : activeId;
-      if (!professionId || !cursor || cursor.nodeId !== 'invitation:' + professionId) return Promise.resolve(null);
-      if (commission && commission.category === 'ending') return Promise.resolve(null);
-      if (commission && commission.commissionId && String(commission.commissionId).indexOf('ending.') === 0) return Promise.resolve(null);
-      return applyProfessionAction('CONSUME_FIRST_ARRIVAL', { professionId: professionId }).catch(function () { return null; });
-    } catch (err) {
-      return Promise.resolve(null);
-    }
+  /** 起源职业接单或开始世界工作后，消费起源的首次到港；当前职业切换不影响归属。 */
+  function consumeFirstArrivalForStart(commissionId) {
+    if (typeof commissionId !== 'string' || commissionId.indexOf('ending.') === 0) return Promise.resolve(null);
+    var state = currentStateSnapshot();
+    var nodeId = state.narrativeCursor && state.narrativeCursor.nodeId;
+    var invitationPrefix = 'invitation:';
+    if (typeof nodeId !== 'string' || nodeId.indexOf(invitationPrefix) !== 0) return Promise.resolve(null);
+    var professionId = nodeId.slice(invitationPrefix.length);
+    var origin = internal.registryInstance && internal.registryInstance.getGame(state.acceptedOriginGameId);
+    if (!origin || origin.professions.indexOf(professionId) < 0) return Promise.resolve(null);
+
+    /* 签票结果只公开委托 ID，归属从正式目录读取。世界工作不绑定当前职业。 */
+    var commissions = internal.commissionContent && internal.commissionContent.commissions;
+    var commission = Array.isArray(commissions) && commissions.find(function (row) {
+      return row && row.commissionId === commissionId;
+    });
+    if (!commission) return Promise.resolve(null);
+    var worldIds = internal.worldWorkContent && internal.worldWorkContent.commissionIds;
+    var world = Array.isArray(worldIds) && worldIds.indexOf(commissionId) >= 0;
+    if (!world && commission.professionId !== professionId) return Promise.resolve(null);
+    return applyProfessionAction('CONSUME_FIRST_ARRIVAL', { professionId: professionId });
   }
 
   function professionViewModule() {
