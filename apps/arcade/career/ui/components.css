@@ -698,6 +698,26 @@ html.ac-career-ui-scroll-lock body {
   }
 }
 
+/* Short PWA viewports keep the primary port action above the fixed footer. */
+@media (max-height: 620px) {
+  .ac-career-ui__panel {
+    gap: var(--ac-career-ui-space-2);
+    padding: 12px;
+  }
+
+  .ac-career-ui__body > .ac-career-ui__stack {
+    gap: var(--ac-career-ui-space-3);
+  }
+
+  .ac-career-ui .harbor {
+    height: 64px;
+  }
+
+  .ac-career-ui__footer {
+    padding-top: var(--ac-career-ui-space-2);
+  }
+}
+
 @media (max-width: 360px) {
   .ac-career-ui__panel {
     border-radius: var(--ac-career-ui-panel-radius);
