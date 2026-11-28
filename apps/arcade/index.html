@@ -925,6 +925,8 @@
          0.13.2：checkForUpdate() 返回的 version 是「线上最新版本」，以前误用页面自身的
          ARCADE_VERSION（已安装版本），导致提示里显示的是旧版本号。 */
       let updateDismissed = false;
+      let autoUpdateCheck = null;
+      let lastAutoUpdateCheck = 0;
       function showUpdateBanner(version) {
         if (!dom.updateBanner) return;
         updateDismissed = false;
@@ -943,6 +945,22 @@
       }
       function hideUpdateBanner() {
         if (dom.updateBanner) dom.updateBanner.hidden = true;
+      }
+      async function checkForUpdateOnOpen() {
+        if (!dom.updateBanner || !A.Offline.supported || document.hidden) return;
+        /* 主动打开或恢复首页时核对线上版本；频繁切后台不重复请求。 */
+        const now = Date.now();
+        if (autoUpdateCheck || now - lastAutoUpdateCheck < 60000) return;
+        lastAutoUpdateCheck = now;
+        autoUpdateCheck = Promise.resolve()
+          .then(() => A.Offline.checkForUpdate())
+          .then((result) => {
+            if (result?.updateFound) showUpdateBanner(result.version);
+          }, () => {
+            /* 自动检查失败保持安静；联网后可手动重试。 */
+          })
+          .finally(() => { autoUpdateCheck = null; });
+        return autoUpdateCheck;
       }
       if (dom.updateBanner) {
         if (A.Offline.supported) {
@@ -988,6 +1006,11 @@
         dom.updateDismiss.addEventListener('click', () => {
           updateDismissed = true;
           hideUpdateBanner();
+        });
+        checkForUpdateOnOpen();
+        window.addEventListener('pageshow', checkForUpdateOnOpen);
+        document.addEventListener('visibilitychange', () => {
+          if (!document.hidden) checkForUpdateOnOpen();
         });
       }
 

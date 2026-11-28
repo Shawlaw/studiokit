@@ -14,6 +14,7 @@
  *   arcade-sw-update-ready(0.24.1) → 横幅文案含两个版本 → 新 SW 接管后页面未刷新时
  *   仍判为「有更新」→ 按钮提示含新版本号。
  * - PU-07 线上版本读取失败时不谎报「已是最新」：按钮提示「检查更新失败」。
+ * - PU-08 新 SW 已由其他页面激活后，再次打开旧首页无需点击即显示更新横幅。
  *
  * 零 npm 依赖：复用 tools/lib/arcade_cdp.mjs；端口默认 8797 / 9367（临时副本服务器 8798）。
  * 运行：node tools/arcade_pwa_update_test.mjs [--port=8797] [--cdp-port=9367]
@@ -272,6 +273,23 @@ async function main() {
     assert(toast.indexOf('发现新版本 v0.24.1') !== -1 && toast.indexOf('当前 v0.24.0') !== -1,
       '检查更新按钮提示应显示新版本与当前版本: ' + JSON.stringify(toast));
     record('PU-06 真实发版链路：返回线上最新版本 + SW 主动广播 + 横幅/提示双版本 + 刷新前后均判有更新', true);
+
+    /* ---------- PU-08 新 SW 已激活，旧首页重新打开也必须自动提示 ----------
+       不调用 checkForUpdate、不点击按钮：仅重新打开首页。旧实现只依赖
+       updatefound/controllerchange，此时新 SW 早已激活，旧页面不会收到事件。 */
+    await cdp.navigate(TEMP_BASE + '/apps/arcade/');
+    await cdp.waitFor('!!(window.Arcade && Arcade.Offline && navigator.serviceWorker.controller)', { timeout: 20000 });
+    await cdp.waitFor(`(() => {
+      const banner = document.querySelector('[data-update-banner]');
+      return !!banner && !banner.hidden && document.querySelector('[data-update-text]').textContent.indexOf('0.24.1') !== -1;
+    })()`, { timeout: 15000 });
+    const automatic = await cdp.evaluate(`(() => {
+      const text = document.querySelector('[data-update-text]').textContent;
+      const sw = document.querySelector('[data-hall-version]').textContent;
+      return { text, sw };
+    })()`);
+    assert(automatic.text.indexOf('当前 v0.24.0') !== -1, '自动横幅缺少当前版本: ' + JSON.stringify(automatic));
+    record('PU-08 再次打开旧首页自动显示更新横幅，无需手动检查', true);
 
     /* ---------- PU-07 线上版本读取失败：不得谎报「已是最新」 ----------
        回到与 SW 完全同步的主站点（0.13.2），只拦截页面读取 sw.js 的请求，
