@@ -1054,8 +1054,9 @@ const viewportRuns = [];
 for (const width of [320, 390]) {
   const page = await renderLongPort();
   const inner = Math.min(440, width - 24) - 32;
-  const exitButtons = all(page.body, (node) => node.tagName === 'BUTTON' && node.textContent === '离开港口');
-  const buttons = all(page.body, (node) => node.tagName === 'BUTTON');
+  const exitButtons = all(page.panel, (node) => node.tagName === 'BUTTON' && node.textContent === '离开港口');
+  const footer = page.panel.querySelector('.ac-career-ui__footer');
+  const buttons = all(footer, (node) => node.tagName === 'BUTTON');
   const inlineStyles = all(page.section, (node) => !!node.getAttribute('style'));
   viewportRuns.push({ width, inner, signature: journalSignature(page.section), page });
   check(width + 'px 结构：单内部滚动 body、长列表不截断、底部仍可退出', (() => {
@@ -1063,7 +1064,8 @@ for (const width of [320, 390]) {
     return page.timeline.children.length === 24 &&
       page.section.parentNode.getAttribute('role') === 'tabpanel' &&
       page.timeline.parentNode === page.section &&
-      exitButtons.length === 1 &&
+      exitButtons.length === 1 && !!footer && !footer.hidden &&
+      page.body.contains(footer) === false &&
       buttons[buttons.length - 1] === exitButtons[0] &&
       inlineStyles.length === 0 &&
       inner >= 264 && inner <= 408;
