@@ -843,13 +843,15 @@ async function phaseEntry(page) {
     const harbor = panel.querySelector('svg.harbor');
     const npc = panel.querySelector('[data-npc-state]');
     const r = leave ? leave.getBoundingClientRect() : null;
+    const sr = start ? start.getBoundingClientRect() : null;
     return {
       mode: dialog.getAttribute('data-invitation-mode'),
       created: dialog.getAttribute('data-invitation-created'),
       harbor: !!harbor,
       npcState: npc ? npc.getAttribute('data-npc-state') : null,
       leave: leave ? { text: (leave.textContent || '').trim(), w: Math.round(r.width), h: Math.round(r.height), visible: leave.getClientRects().length > 0 } : null,
-      startFirst: !!start,
+      /* 第一份工作必须出现在到港面板上，并且只由玩家显式点击（run 仍为 null）。 */
+      startFirst: start ? { text: (start.textContent || '').trim(), w: Math.round(sr.width), h: Math.round(sr.height), visible: start.getClientRects().length > 0 } : null,
       town: !!document.querySelector('[data-career-panel="town"]'),
       mailbox: !!document.querySelector('[data-career-panel="mailbox"]'),
       panels: Array.from(document.querySelectorAll('[data-career-panel]')).map((node) => node.getAttribute('data-career-panel')),
@@ -858,10 +860,12 @@ async function phaseEntry(page) {
     };
   })()`);
   record(
-    'ENTRY 触控「去港口看看」打开 0.23 首次到港叙事面板（P03）、信箱收起、不自动接单',
+    'ENTRY 触控「去港口看看」打开 0.23 首次到港叙事面板（P03）、带第一份工作的显式动作、信箱收起、不自动接单',
     !!(arrival && arrival.mode === 'freshIntro' && arrival.created === 'true' && arrival.harbor && arrival.npcState === 'first' &&
       arrival.leave && arrival.leave.visible && arrival.leave.text === (PENDULUM_PROFESSION.exitLabel || '暂时离开港口') &&
-      arrival.leave.w >= 44 && arrival.leave.h >= 44 && arrival.startFirst === false &&
+      arrival.leave.w >= 44 && arrival.leave.h >= 44 &&
+      arrival.startFirst && arrival.startFirst.visible && arrival.startFirst.text === (PENDULUM_PROFESSION.firstActionLabel || '接受这份工作') &&
+      arrival.startFirst.w >= 44 && arrival.startFirst.h >= 44 &&
       arrival.town === false && arrival.mailbox === false && JSON.stringify(arrival.panels) === '["arrival"]' &&
       arrival.run === null && EARLY_READING_STAGES.indexOf(arrival.stage) >= 0 && portHit.w >= 44 && portHit.h >= 44),
     det(['state=' + JSON.stringify(arrival), 'touch=' + JSON.stringify(portHit)])
