@@ -1,6 +1,6 @@
 # 街机厅 Arcade
 
-**版本 `0.24.1` / SW `studiokit-arcade-0.24.1-v1`（发布状态见集成记录）**｜本次累计升级的生产基线为 `0.21.2`（2026-11-26 已双端发布，main `bc50e61`，Actions `45858201941` 全绿，双端 91/91 一致；修复首页告示板弹窗、钱包标题、弹窗滚动层级与游戏标题栏留白）｜进度 / 局内 / 游玩统计 / 积分记录 / 挑战记录 / 游戏数据 meta 的 Schema 均为 `v1`；0.15 新增独立生涯 IndexedDB（`studiokit:arcade:career` v1，11 stores），不改变既有 localStorage 键；生涯内容 `contentVersion` 仍为 `0.18.0`。本轮恢复生涯设置、统一三级弹窗与滚动留白、补上 PWA 首页自动更新提示；不新增 key / store / schema，不改经典玩法数值。设计见 [`DESIGN-0.24.1.md`](DESIGN-0.24.1.md)，状态见 [`INTEGRATION-0.24.1.md`](../../docs/arcade-life/INTEGRATION-0.24.1.md)；累计功能见 [`DESIGN-0.24.0.md`](DESIGN-0.24.0.md)。
+**版本 `0.24.1` / SW `studiokit-arcade-0.24.1-v1`（2026-11-29 已双端发布，main `5a20785`，Actions `46175355611` 全绿，双端 111/111 一致）**｜本次累计升级的生产基线为 `0.21.2`（2026-11-26 已双端发布，main `bc50e61`，Actions `45858201941` 全绿，双端 91/91 一致；修复首页告示板弹窗、钱包标题、弹窗滚动层级与游戏标题栏留白）｜进度 / 局内 / 游玩统计 / 积分记录 / 挑战记录 / 游戏数据 meta 的 Schema 均为 `v1`；0.15 新增独立生涯 IndexedDB（`studiokit:arcade:career` v1，11 stores），不改变既有 localStorage 键；生涯内容 `contentVersion` 仍为 `0.18.0`。本轮恢复生涯设置、统一三级弹窗与滚动留白、补上 PWA 首页自动更新提示；不新增 key / store / schema，不改经典玩法数值。设计见 [`DESIGN-0.24.1.md`](DESIGN-0.24.1.md)，状态见 [`INTEGRATION-0.24.1.md`](../../docs/arcade-life/INTEGRATION-0.24.1.md)；累计功能见 [`DESIGN-0.24.0.md`](DESIGN-0.24.0.md)。
 
 16 款竖屏小游戏合集的纯前端实现：加载后完全本地游玩，自带自研轻量物理引擎（重力、AABB 与圆碰撞、单向平台、单摆积分、塔体倾斜力矩），所有游戏由简到难、随时可暂停，并把未完成的局内进度自动保存在本机。支持全屏/沉浸、可安装 PWA、离线预载、游玩统计、积分记录与分享；连续有效游玩 20 分钟只温柔提醒一次，**没有签到、每日奖励、付费抽奖、内购或广告**。
 
@@ -309,7 +309,7 @@ node tools/arcade_stage_solver.mjs --stages=docs/arcade/stages-0.8.json  # 影�
 | 0.22.0 | [`DESIGN-0.22.0.md`](DESIGN-0.22.0.md) | 本地发布准备：职业独立发现、统一披露与世界通用工作界面（GATE_PASSED / RELEASE_READY，未发布；release 41/41，not full；状态见 INTEGRATION-0.22.0） |
 | 0.23.0 | [`DESIGN-0.23.0.md`](DESIGN-0.23.0.md) | 本地发布准备：折光港统一生涯界面与 16 职业短叙事（GATE_PASSED / RELEASE_READY，未发布；状态见 INTEGRATION-0.23.0；UI 契约见 ADR-0.23-ui） |
 | 0.24.0 | [`DESIGN-0.24.0.md`](DESIGN-0.24.0.md) | 世界主线替代路线叙事化、双方接受的可选职业交汇、经历筛选与回读、章节前置解释（release 51/51；契约见 ADR-0.24-world，状态见 INTEGRATION-0.24.0） |
-| 0.24.1 | [`DESIGN-0.24.1.md`](DESIGN-0.24.1.md) | 发布准备：恢复生涯设置、统一弹窗与滚动留白、PWA 首页自动更新提示（状态见 INTEGRATION-0.24.1） |
+| 0.24.1 | [`DESIGN-0.24.1.md`](DESIGN-0.24.1.md) | 恢复生涯设置、统一弹窗与滚动留白、PWA 首页自动更新提示（已双端发布；状态见 INTEGRATION-0.24.1） |
 
 ### 回滚要点
 

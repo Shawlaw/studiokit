@@ -32,12 +32,12 @@
 
 ## 工具一览
 
-以下三个工具均已双端发布、注册表状态为 `available`；Rounded Image 仅为规划项，**尚未实现**。Arcade 当前发布准备版本为 **0.24.1** / SW `studiokit-arcade-0.24.1-v1`：在已发布 0.24.0 基础上恢复生涯封存 / 解冻 / 重置入口，统一生涯弹窗与滚动布局，并补上 PWA 首页自动更新提示；不改既有存储与玩法基线。0.24.0 已发布（main `6744a3d`），本轮状态见 [`INTEGRATION-0.24.1.md`](docs/arcade-life/INTEGRATION-0.24.1.md)。
+以下三个工具均已双端发布、注册表状态为 `available`；Rounded Image 仅为规划项，**尚未实现**。Arcade 当前版本为 **0.24.1** / SW `studiokit-arcade-0.24.1-v1`（2026-11-29 已双端发布，main `5a20785`，Actions `46175355611` 全绿，双端 111/111 一致）：在 0.24.0 基础上恢复生涯封存 / 解冻 / 重置入口，统一生涯弹窗与滚动布局，并补上 PWA 首页自动更新提示；不改既有存储与玩法基线。状态见 [`INTEGRATION-0.24.1.md`](docs/arcade-life/INTEGRATION-0.24.1.md)。
 
 | 工具 | 版本 | 状态 | 入口 | 一句话说明 |
 | --- | --- | --- | --- | --- |
 | ◎ **Badge Studio** | `2.2.1` | `available` | [`apps/badge-studio/`](apps/badge-studio/) | 同心圆徽章工作台：弧形文字排版、多方案并排对比、透明 PNG / SVG 导出 |
-| 🕹 **街机厅 Arcade** | `0.24.1`（发布准备） | `available` | [`apps/arcade/`](apps/arcade/) | 16 款竖屏小游戏（13 款带 6 关挑战 + 三款平和棋牌），支持全屏、暂停、本地续玩、分享与离线预载；本轮恢复生涯设置、统一弹窗布局并自动提示 PWA 更新 |
+| 🕹 **街机厅 Arcade** | `0.24.1`（已双端发布） | `available` | [`apps/arcade/`](apps/arcade/) | 16 款竖屏小游戏（13 款带 6 关挑战 + 三款平和棋牌），支持全屏、暂停、本地续玩、分享与离线预载；本轮恢复生涯设置、统一弹窗布局并自动提示 PWA 更新 |
 | 🍽 **Venue Compare** | `0.2.0` | `available` | [`apps/restaurant-compare/`](apps/restaurant-compare/) | 餐厅考察对比：地图标注 + 横向对比表 + 外部链接备注，导出可转发的独立 HTML |
 | ▧ **Rounded Image** | — | `planned` | — | 预留给图片圆角工具，原始规格待恢复或重新定义；**当前没有实现** |
 

@@ -373,13 +373,13 @@ Owner 在 iPhone 主屏 PWA（Cloudflare Pages）复测 0.13.2：星海/2048/俄
 - [x] 双端发布：提交 `b3a8c7e`；Actions run `45007754972` 四 job 全绿；`tools/verify_deploy.py` **41/41** 双端一致；线上实测 CF 无后缀 URL `currentGame=block-drop`、游玩 1.6s 记到 1606ms，诊断页 iframe「计时正常」
 - [ ] 真机复验：iOS 主屏 PWA 更新后「计时自检」应显示计时正常，累计/积分记录时长不再为 0（UNVERIFIED）
 
-## Arcade 0.24.1 发布批次（2026-11-29，Owner 授权 fast-forward 发布）
+## Arcade 0.24.1 发布批次（2026-11-29，已双端发布）
 
 - [x] 在已发布 0.24.0 上恢复折光港与首页的生涯设置入口，沿用封存 / 解冻 / 完全重置 API。
 - [x] 统一三级生涯弹窗标题栏、面板与滚动留白；修复港口刷新后的设置关闭回焦。
 - [x] 首页初次打开与恢复时自动核对线上版本，覆盖新 SW 已激活但旧页面未收到事件的缺口。
 - [x] 版本链 0.24.1 / SW `studiokit-arcade-0.24.1-v1`；不新增 key / store / schema，不改经典玩法或生涯内容版本。
-- [ ] release 门禁、fast-forward 推送与双端部署证据见 `docs/arcade-life/INTEGRATION-0.24.1.md`。
+- [x] release 51/51（not full）、fast-forward main `5a20785`、Actions `46175355611` 全绿、双端 111/111 一致；证据见 `docs/arcade-life/INTEGRATION-0.24.1.md`。
 
 ## Arcade 0.24.0 本地发布准备批次（2026-11-28，GATE_PASSED / RELEASE_READY，未发布）
 
@@ -414,7 +414,7 @@ Owner 在 iPhone 主屏 PWA（Cloudflare Pages）复测 0.13.2：星海/2048/俄
 
 ## Now
 
-当前发布准备版本：Arcade 0.24.1 / SW `studiokit-arcade-0.24.1-v1`（发布状态见 `docs/arcade-life/INTEGRATION-0.24.1.md`）。0.24.0 已由 `6744a3d` 合入 `main` 并完成双端发布。
+当前已发布版本：Arcade 0.24.1 / SW `studiokit-arcade-0.24.1-v1`（2026-11-29 双端发布，main `5a20785`，Actions `46175355611`，双端 111/111 一致；见 `docs/arcade-life/INTEGRATION-0.24.1.md`）。
 
 1. **Arcade 0.24.1 发布收尾**：release 门禁、fast-forward 推送与双端部署验证待回填；full / 真机 / 真人仍 UNVERIFIED。
 2. **Arcade 0.24.0 真机 / 真人 / full 收尾**（已双端发布）：复查修正后 release 51/51、真实流程 645/645；full / 真机 / 真人仍 UNVERIFIED，不写 ALL GATES PASSED。

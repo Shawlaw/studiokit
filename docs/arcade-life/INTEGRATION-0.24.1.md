@@ -39,7 +39,10 @@
 
 ## 4. 部署验证
 
-待 fast-forward 推送后记录 main 提交、Actions run、双端 `verify_deploy.py` 文件数与线上浏览器结果。未完成前不写 PUBLISHED。
+- 已 fast-forward 合入并推送 `main`：发布提交 `5a20785`。
+- [Actions `46175355611`](https://github.com/Shawlaw/studiokit/actions/runs/46175355611) 的 Validate and build、Arcade static gates、Deploy GitHub Pages、Deploy Cloudflare Pages、Verify both deployments 全部成功。
+- 本地 `verify_deploy.py`：**111/111** 文件在 GitHub Pages 与 Cloudflare Pages 逐字节一致；Arcade 0.24.1、Badge 2.2.1、Venue 0.2.0。
+- 两端线上 Chromium：首页版本 0.24.1、16 张游戏卡、更新按钮可见、无更新时横幅隐藏、页面标题正确。
 
 ## 5. 未验证项
 
