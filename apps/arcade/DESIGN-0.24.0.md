@@ -101,8 +101,8 @@
 本轮（T25 前半，只做纯文本/静态校验与纯 Node 复跑；不启动 Chrome，不跑 release / full / watch；未 push、未发布）：
 
 - `node tools/career_world_narrative_contract_test.mjs` **166/166**（T20 契约层 158/158 → T24 加性字段后 166/166）
-- `node tools/career_world_narrative_test.mjs` **179/179**（T22 内容/resolver 163/163 → T24 后 179/179）
-- `node tools/career_journal_experience_test.mjs` **59/59**（T23 49/49 → T24 后 59/59）
+- `node tools/career_world_narrative_test.mjs` **180/180**（T22 内容/resolver 163/163 → T24 后 179/179）
+- `node tools/career_journal_experience_test.mjs` **60/60**（T23 49/49 → T24 后 59/59）
 - `node tools/career_world_route_narrative_test.mjs` **80/80**、`node tools/career_route_planner_test.mjs` **214/214**、`node tools/career_economy_balance_test.mjs` **47/47**、`node tools/career_world_work_test.mjs` **400/400**
 - `node tools/career_legacy_baseline_test.mjs` **78/78**（版本链一致性）、`node tools/career_profession_extension_test.mjs` **92/92**（`sw.js VERSION === engine ARCADE_VERSION`）
 - `py -3 tools/validate_site.py` PASS、`py -3 tools/check_readme_links.py` PASS、`git diff --check` PASS

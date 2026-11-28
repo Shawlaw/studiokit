@@ -1,7 +1,7 @@
 # Arcade 0.24.0 集成与验证
 
 - 状态：**本地发布准备，未发布**（未获 `OWNER_AUTHORIZATION: PUBLISH_TO_MAIN`，未 push、未打 tag、未部署）
-- 门禁状态：**待 L3（lead）**。本轮只做纯文本 / 静态校验与纯 Node 复跑，没有浏览器、release、full、watch 结论；不写 GATE_PASSED、不写 ALL GATES PASSED。
+- 门禁状态：**GATE_PASSED / RELEASE_READY（本地发布准备，未发布）**。L3 release profile 在同一 SHA 通过 51/51；浏览器证据为 flow 624/624、mobile 334/334、smoke 119/119；独立复审 PASS（无 Blocker / 无 Major）。不写 PUBLISHED / ALL GATES PASSED，full / 真机 / 真人 / 线上仍 UNVERIFIED。
 - 设计 / 回滚：[`DESIGN-0.24.0.md`](../../apps/arcade/DESIGN-0.24.0.md)；数据 / 叙事契约：[`ADR-0.24-world.md`](ADR-0.24-world.md)（T20 冻结，T24 增补 §9）、[`tools/career_world_narrative_schema.json`](../../tools/career_world_narrative_schema.json)
 - 基线：0.23.0 候选 `79301da`（GATE_PASSED / RELEASE_READY，本地发布准备，未发布；其 L3 为 47/47 `release passed (not full)`，见 [`INTEGRATION-0.23.0.md`](INTEGRATION-0.23.0.md)）；0.24 开发分支自 `cf81f12` 起基于该候选。版本链 0.24.0，SW `studiokit-arcade-0.24.0-v1`。
 - 冻结边界：IDB v1 / 11 stores、经典 localStorage key、`contentVersion 0.18.0`、`professionVersion 1`、`rulesetVersion`、经典玩法数值与封存 / 导入 / 重置语义全部不变。
@@ -31,8 +31,8 @@
 只做纯文本 / 静态校验与纯 Node 复跑；未启动 Chrome，未跑 release / full / watch，未 push。下列计数均为本轮在 HEAD 实际运行结果（退出码 0）：
 
 - `node tools/career_world_narrative_contract_test.mjs` **166/166**
-- `node tools/career_world_narrative_test.mjs` **179/179**
-- `node tools/career_journal_experience_test.mjs` **59/59**
+- `node tools/career_world_narrative_test.mjs` **180/180**
+- `node tools/career_journal_experience_test.mjs` **60/60**
 - `node tools/career_world_route_narrative_test.mjs` **80/80**
 - `node tools/career_route_planner_test.mjs` **214/214**
 - `node tools/career_economy_balance_test.mjs` **47/47**
@@ -46,13 +46,15 @@
 
 历史时点计数（分别在对应提交上复跑，不是本轮 HEAD 数字）：T20 `158/158`（`202d116`）、T22 `163/163`（`b54fc4a`）、T23 `49/49`（`e581fae`）；T21 的 `80/80` 与其同轮 214/214、400/400、47/47、158/158、54/54 来自提交 `7164c4c` 的记录，其中 80/80 与 214/214 本轮在 HEAD 复跑一致。
 
-## 4. 未验证项（UNVERIFIED，留给 L3 / lead）
+## 4. 未验证项（UNVERIFIED）
 
-- **release profile 与 full profile**：0.24 尚未跑 `py -3 tools/arcade_run_all_gates.py` 的任何 profile；没有 release / full 结论。
-- **浏览器门禁**：`arcade_smoke`、`career_flow_e2e`、`career_pwa_offline`、`arcade_pwa_update`、`arcade_calm_games`、`arcade_interaction`、`arcade_zen_scores`、`career_discovery_accessibility`、`career_passive_entry` 等含版本字面量的测试本轮**只改字面量、未运行**（需 Chrome）。
-- **真机**：iOS / Android 触控、PWA 安装与更新、离线往返；**真人**：叙事可读性与交汇触发体感；**线上**：未部署，无 CI、无 Actions、无 `verify_deploy.py` 结果。
-- **门禁登记（事实）**：`tools/arcade_run_all_gates.py` 已在 static 段登记 4 个 0.24 纯 Node 套件（world narrative contract / world narrative / world route narrative / journal experience，均为 static 类，默认进入 static / release / full 三个 profile）；因此 release profile 的条目数预期从 0.23 的 47 增至 **51**（0.23 的 47 + 4），实际条目与结果以 L3 运行为准。本任务未改该文件。
+- **浏览器门禁（已在 0.24.0 版本链之后实跑）**：`career_flow_e2e` **624/624**（150.1s，含 46 条 0.24 交汇/经历/章节指引 gate）、`career_mobile_016` **334/334**（131.0s）、`arcade_smoke` **119/119**（370.3s）；证据 SHA 为 `83e867d` + 已提交的 flow 测试 `349a304`，版本链之后由 L3 的 51/51 覆盖同一批 Chrome 门禁（`arcade_pwa_update`、`career_pwa_offline` 等）。
+- **L3**：`py -3 tools/arcade_run_all_gates.py --profile release` 在 `c5712e5` **51/51 PASS**，2964.331s，`verdict: release passed (not full)`、`fully_passed: false`；日志 `execution/T25-release-gate-024.log`。门禁条目数由 0.23 的 47 增至 51（新增 4 个 0.24 纯 Node 套件），与本节登记一致。
+- **独立复审**：`execution/V024-review.md` 判定 PASS（无 Blocker / 无 Major，6 条 Minor 属文档口径与覆盖缺口）；其中「179/179 → 180/180、59/59 → 60/60」的计数已在本记录更正。
+- **真机**：iOS / Android 触控、PWA 安装与更新、离线往返；**真人**：叙事可读性与交汇触发体感；**线上**：未部署，无 CI、无 Actions、无 `verify_deploy.py` 结果；full profile 未运行。
+- **已知内容边界（如实记录，不伪造数据）**：`journalWhitelist` 的 7 条 `world:*` 目前没有运行期写入方（唯一写入方是交汇 `RECORD_STORY_EVENT`），属预留；因真实内容没有 `professionId` 事件，经历页「按职业筛选」在真实数据下不出现筛选组（有数据时才出现），T24 E2E 已按此如实断言。
 - **本任务改动面**：`tools/verify_deploy.py` 的 `PATHS` 追加 `career/world-narrative.js`、`career/content/world-narrative.json`、`career/ui/journal.js` 与 `apps/arcade/DESIGN-0.24.0.md`（当前 110 条），发布时的逐文件计数会相应增加。
+- **ADR 决策**：`ADR-interfaces.md` 的 §24 不追加 0.24 接口章节；0.24 的接口/数据契约以 `ADR-0.24-world.md` + `ADR-0.23-ui.md` 为准（避免同一契约两处维护）。
 
 ## 5. 发布准备
 

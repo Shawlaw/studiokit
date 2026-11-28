@@ -3,7 +3,7 @@
 - 状态：**FROZEN_FOR_T21_T23**（T20 契约层；实现必须按本 ADR，任何字段/语义变更先改本 ADR 并由 lead 串行确认）
 - 文件：`docs/arcade-life/ADR-0.24-world.md`（本 ADR 的唯一路径；`ADR-interfaces.md` 的 §24 由 lead 在 T25 追加）
 - 日期：2026-11-28
-- 分支 / 基线：`feat/arcade-career-024`，基线 `dd7eb03`（0.23 候选 `GATE_PASSED / RELEASE_READY`，未发布、未 push）
+- 分支 / 基线：`feat/arcade-career-024`，基线 `79301da`（0.23.0 收口 `GATE_PASSED / RELEASE_READY`，release 47/47 not full；未发布、未 push）
 - 版本链（T25 收口）：Arcade 0.24.0；状态与门禁结论以 [`INTEGRATION-0.24.0.md`](INTEGRATION-0.24.0.md) 为准（本地发布准备，未发布，门禁状态待 L3）。
 - 任务：Arcade 0.24 T20。**本文只产出契约与数据设计**：未修改 runtime、内容 JSON、bridge loader、版本链；未运行浏览器、release、full、watch；未 push。
 - 本任务新增且只新增三个文件：本 ADR、`tools/career_world_narrative_schema.json`、`tools/career_world_narrative_contract_test.mjs`。**未追加** `ADR-interfaces.md` §24，也未登记 gate（§24 与 gate 注册属 lead/T25 串行收口）。
@@ -395,7 +395,7 @@ schema 文件的 `samples.crossover` 覆盖真实 registry 的 16 个职业各 1
 
 - 本任务实际运行：`node tools/career_world_narrative_contract_test.mjs`（纯 Node、零依赖、不启浏览器、不写仓库，158/158 通过、退出码 0，重复运行结果一致）、`node --check` 语法检查，以及只读的 `py -3 tools/validate_site.py`（PASS）。未运行 `build_site.py`、arcade smoke、release、full、watch 与任何浏览器/真机路径。
 - 本文所有 `[F]` 断言都可在 §2 引用的文件里逐条核对；所有 `[I]` 断言由 schema 文件与契约测试机械可验；`[U]` 项在 T21–T25 验证前保持 UNVERIFIED。
-- 未 push、未打 tag、未创建 release、未部署；0.23 仍为本地 `GATE_PASSED / RELEASE_READY`（未发布）。
+- 未 push、未打 tag、未创建 release、未部署；0.23.0 为本地 `GATE_PASSED / RELEASE_READY`（未发布），0.24.0 同口径收口。
 
 ## 9. T24 增补：世界叙事可见化（加性、向后兼容）
 
